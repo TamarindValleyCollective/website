@@ -1,0 +1,146 @@
+---
+const navItems = [
+  { label: 'About TVC', href: '/about' },
+  { label: 'Our Journey', href: '/our-journey' },
+  { label: 'Visit TVC', href: '/visit' },
+  { label: 'The TVC Ecosystem', href: '/ecosystem' },
+  { label: 'Biodiversity', href: '/biodiversity' },
+  { label: 'Upcoming Events', href: '/events' },
+  { label: 'Contact Us', href: '/contact' },
+];
+
+const currentPath = Astro.url.pathname;
+---
+
+<header class="nav">
+  <div class="wrapper nav__inner">
+    <a class="nav__brand" href="/">
+      <img src="/images/brand/tvc-logo-mark.png" alt="Tamarind Valley Collective" width="40" height="40" />
+      <span>Tamarind Valley Collective</span>
+    </a>
+
+    <button class="nav__toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-menu" aria-label="Toggle menu">
+      <span></span><span></span><span></span>
+    </button>
+
+    <nav class="nav__menu" id="nav-menu">
+      {navItems.map((item) => (
+        <a
+          href={item.href}
+          class:list={['nav__link', { 'is-active': currentPath === item.href || currentPath.startsWith(item.href + '/') }]}
+        >
+          {item.label}
+        </a>
+      ))}
+    </nav>
+  </div>
+</header>
+
+<style>
+  .nav {
+    background: #fff;
+    border-bottom: 1px solid var(--tvc-line);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+
+  .nav__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+
+  .nav__brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: var(--tvc-green-dark);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.05rem;
+  }
+
+  .nav__brand img {
+    border-radius: 50%;
+  }
+
+  .nav__menu {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    flex-wrap: wrap;
+  }
+
+  .nav__link {
+    text-decoration: none;
+    color: var(--tvc-ink);
+    font-weight: 600;
+    font-size: 0.92rem;
+    padding: 6px 0;
+    border-bottom: 2px solid transparent;
+  }
+
+  .nav__link:hover {
+    color: var(--tvc-green);
+  }
+
+  .nav__link.is-active {
+    color: var(--tvc-green);
+    border-bottom-color: var(--tvc-orange);
+  }
+
+  .nav__toggle {
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    background: none;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+  }
+
+  .nav__toggle span {
+    width: 22px;
+    height: 2px;
+    background: var(--tvc-green-dark);
+    display: block;
+  }
+
+  @media (max-width: 860px) {
+    .nav__toggle {
+      display: flex;
+    }
+
+    .nav__menu {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: #fff;
+      border-bottom: 1px solid var(--tvc-line);
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 12px 24px 20px;
+      gap: 14px;
+    }
+
+    .nav__menu.is-open {
+      display: flex;
+    }
+  }
+</style>
+
+<script>
+  const toggle = document.getElementById('nav-toggle');
+  const menu = document.getElementById('nav-menu');
+
+  toggle?.addEventListener('click', () => {
+    const isOpen = menu?.classList.toggle('is-open');
+    toggle.setAttribute('aria-expanded', String(Boolean(isOpen)));
+  });
+</script>

@@ -1,0 +1,87 @@
+---
+const footerLinks = [
+  { label: 'Visit TVC', href: '/visit' },
+  { label: 'How to Reach', href: '/visit/how-to-reach' },
+  { label: 'Contact', href: '/contact' },
+  { label: 'Resource Centre', href: '/resource-centre' },
+  { label: 'Want to Join?', href: '/about#join' },
+];
+
+const socialLinks = [
+  { label: 'Facebook', href: 'https://www.facebook.com/farm.tvc' },
+  { label: 'Twitter', href: 'https://twitter.com/TVCFarm' },
+  { label: 'Instagram', href: 'https://www.instagram.com/tamarindvalleycollective/' },
+];
+
+const year = new Date().getFullYear();
+---
+
+<footer class="footer">
+  <div class="wrapper footer__inner">
+    <a class="footer__brand" href="/">
+      <img src="/images/brand/tvc-logo-mark.png" alt="Tamarind Valley Collective" width="52" height="52" />
+    </a>
+
+    <nav class="footer__nav">
+      {footerLinks.map((link) => (
+        <a href={link.href}>{link.label}</a>
+      ))}
+    </nav>
+
+    <div class="footer__social">
+      {socialLinks.map((link) => (
+        <a href={link.href} target="_blank" rel="noopener noreferrer">{link.label}</a>
+      ))}
+    </div>
+
+    <p class="footer__copy">© {year} Tamarind Valley Collective. All rights reserved.</p>
+  </div>
+</footer>
+
+<style>
+  .footer {
+    background: var(--tvc-green-dark);
+    color: #eef5ee;
+    margin-top: 64px;
+  }
+
+  .footer__inner {
+    padding: 40px 24px 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    text-align: center;
+  }
+
+  .footer__brand img {
+    border-radius: 50%;
+  }
+
+  .footer__nav,
+  .footer__social {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 18px;
+  }
+
+  .footer__nav a,
+  .footer__social a {
+    color: #eef5ee;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .footer__nav a:hover,
+  .footer__social a:hover {
+    color: var(--tvc-orange);
+  }
+
+  .footer__copy {
+    font-size: 0.8rem;
+    color: #b9d0bc;
+    margin: 0;
+  }
+</style>

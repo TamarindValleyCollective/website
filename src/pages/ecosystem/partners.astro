@@ -1,0 +1,45 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+import Pending from '../../components/Pending.astro';
+import { getCollection } from 'astro:content';
+
+const partners = await getCollection('partners');
+---
+
+<BaseLayout title="Partners" description="Organizations Tamarind Valley Collective partners with.">
+  <PageHero eyebrow="Partners" title="Who we work with" />
+  <section class="section wrapper">
+    <Pending note="These partner entries only had a name and logo on the old site — no written description of the partnership. Linger (hospitality/bookings) is referenced elsewhere on the site; the others need real copy." />
+    <div class="grid">
+      {partners.map((p) => (
+        <a class="card" href={`/ecosystem/partners/${p.id}`}>
+          {p.data.coverImage && <img src={p.data.coverImage} alt={p.data.title} />}
+          <h3>{p.data.title}</h3>
+        </a>
+      ))}
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-top: 16px;
+  }
+
+  .grid a {
+    text-decoration: none;
+    color: inherit;
+    text-align: center;
+  }
+
+  .grid img {
+    width: 100px;
+    height: 100px;
+    object-fit: contain;
+    margin: 0 auto 12px;
+  }
+</style>

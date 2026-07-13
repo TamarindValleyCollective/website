@@ -1,0 +1,87 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHero from '../components/PageHero.astro';
+import Pending from '../components/Pending.astro';
+---
+
+<BaseLayout title="Contact Us" description="Get in touch with Tamarind Valley Collective — phone, location, and social media.">
+  <PageHero eyebrow="Contact Us" title="Get in touch" />
+
+  <section class="section wrapper contact-grid">
+    <div>
+      <h3>Phone</h3>
+      <p>Madhav — <a href="tel:+917406307309">+91 74063 07309</a><br />Praveen — <a href="tel:+919663521827">+91 96635 21827</a></p>
+
+      <h3>Address</h3>
+      <p>Tamarind Valley Collective<br />Thaggatti village, near Kanakapura<br />Karnataka/Tamil Nadu border, India</p>
+
+      <h3>Social</h3>
+      <p>
+        <a href="https://www.facebook.com/farm.tvc" target="_blank" rel="noopener noreferrer">Facebook</a> ·
+        <a href="https://twitter.com/TVCFarm" target="_blank" rel="noopener noreferrer">Twitter</a> ·
+        <a href="https://www.instagram.com/tamarindvalleycollective/" target="_blank" rel="noopener noreferrer">Instagram</a>
+      </p>
+
+      <h3>Location</h3>
+      <div class="map-embed">
+        <iframe
+          loading="lazy"
+          src="https://www.google.com/maps/d/u/0/embed?mid=1b_d-2ZOwDBRTJjbDZ2ovJ7QsdPiqnYrA"
+          width="100%"
+          height="360"
+          style="border:0"
+          title="Map to Tamarind Valley Collective"
+        ></iframe>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Join our newsletter</h3>
+      <Pending note="No newsletter signup existed on the old site — this needs a real form backend (e.g. a hosted form service) before it can go live. The form below is a placeholder, not yet wired up." />
+      <form class="newsletter-form">
+        <label for="email">Email address</label>
+        <input id="email" type="email" name="email" placeholder="you@example.com" disabled />
+        <button class="button" type="button" disabled>Subscribe</button>
+      </form>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .contact-grid {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap: 32px;
+  }
+
+  .contact-grid h3 {
+    margin-top: 24px;
+  }
+
+  .contact-grid h3:first-child {
+    margin-top: 0;
+  }
+
+  .map-embed iframe {
+    border-radius: var(--radius);
+  }
+
+  .newsletter-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .newsletter-form input {
+    padding: 10px 14px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 999px;
+  }
+
+  @media (max-width: 780px) {
+    .contact-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

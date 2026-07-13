@@ -1,0 +1,115 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+
+const itineraries = [
+  {
+    name: 'Picnic at the Farm',
+    desc: 'A quiet, relaxed day.',
+    schedule: [
+      ['09:00', 'Arrive at the farm'],
+      ['09:30', 'Breakfast'],
+      ['10:30', 'Farm Tour / Foraging'],
+      ['12:00', 'Juice / Drink & Relax'],
+      ['12:30', 'Farming 101'],
+      ['13:30', 'Lunch'],
+      ['14:30', 'Board Games / Discussions'],
+      ['16:30', 'Tea / Coffee'],
+      ['17:00', 'Depart'],
+    ],
+  },
+  {
+    name: 'Hiking Adventure',
+    desc: 'A more active day.',
+    schedule: [
+      ['09:00', 'Arrive at the farm'],
+      ['09:30', 'Breakfast'],
+      ['10:30', 'Hiking'],
+      ['13:00', 'Re-hydrate and recover'],
+      ['13:30', 'Lunch'],
+      ['14:30', 'Land Restoration & Agriculture / Discussions'],
+      ['16:30', 'Tea / Coffee'],
+      ['17:00', 'Depart'],
+    ],
+  },
+  {
+    name: 'Do Nothing',
+    desc: 'Exactly what it sounds like.',
+    schedule: [
+      ['09:00', 'Arrive at the farm'],
+      ['09:30', 'Breakfast'],
+      ['10:30', 'Board Games / Discussions / Take a nap'],
+      ['13:30', 'Lunch'],
+      ['14:30', 'Nap / Discussions / Board Games'],
+      ['16:30', 'Tea / Coffee'],
+      ['17:00', 'Depart'],
+    ],
+  },
+];
+---
+
+<BaseLayout title="Day Visit" description="Three ways to spend a day at Tamarind Valley Collective: a relaxed picnic, a hiking adventure, or doing absolutely nothing.">
+  <PageHero eyebrow="Visit TVC" title="Day Visit" intro="Choose between a quiet, relaxed day or a more active one." />
+
+  <section class="section wrapper">
+    <div class="itinerary-grid">
+      {itineraries.map((it) => (
+        <div class="card">
+          <h3>{it.name}</h3>
+          <p class="desc">{it.desc}</p>
+          <table>
+            <tbody>
+              {it.schedule.map(([time, activity]) => (
+                <tr>
+                  <td class="time">{time}</td>
+                  <td>{activity}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+
+    <div class="booking-cta">
+      <p>Bookings for day visits are handled by our hospitality partner, Linger.</p>
+      <a class="button" href="https://tamarindvalleycollective-farmstay.linger.in/day-trippicnic-at-the-farm/" target="_blank" rel="noopener noreferrer">Book via Linger</a>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .itinerary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+  }
+
+  .desc {
+    color: var(--tvc-ink-soft);
+    margin-bottom: 14px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+  }
+
+  td {
+    padding: 6px 0;
+    border-top: 1px dashed var(--tvc-line);
+  }
+
+  td.time {
+    font-variant-numeric: tabular-nums;
+    color: var(--tvc-green);
+    font-weight: 600;
+    width: 70px;
+  }
+
+  .booking-cta {
+    margin-top: 32px;
+    text-align: center;
+  }
+</style>

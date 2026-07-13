@@ -1,0 +1,92 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+
+const trails = [
+  {
+    name: 'The Temple Trail',
+    image: '/images/pages/trekking/temple-trail.jpg',
+    distance: '~3 km round trip · a couple of hours',
+    desc: "Climbs to the Chikkamma Doddamma Temple at the top of the hill, past the farm's housing clusters. From the top you can see the farms below and Thagatti village in the distance on one side, dense forest on the other. Go in the evening for a beautiful sunset.",
+  },
+  {
+    name: 'The Watering Hole Trail',
+    image: '/images/pages/trekking/watering-hole.jpg',
+    distance: '~2.1 km one way · a little over 2 hours',
+    desc: "Leads to a small pond with water most of the year. You'll see pug marks from herbivores like deer and wild boar — no big cats seen so far — and maybe a rabbit or peacock crossing your path. Takes you deeper into the forest through narrow undergrowth passages.",
+  },
+  {
+    name: 'The Top of the Hill Trail',
+    image: '/images/pages/trekking/hilltop.jpg',
+    distance: '~3 km one way, 6.5 km round trip · 3+ hours',
+    desc: 'The longest trail, climbing gradually through forest, bamboo clusters, and flower blooms during the rains, to a panoramic view of the area. Best done early morning; getting caught out after dark on the way back can be risky.',
+  },
+];
+---
+
+<BaseLayout title="Trekking Trails" description="Three trails into the forest adjacent to Tamarind Valley Collective — the Temple Trail, the Watering Hole Trail, and the Top of the Hill Trail.">
+  <PageHero eyebrow="Visit TVC" title="Trekking: Trails of TVC" image="/images/pages/trekking/hero.jpg" imageAlt="A forest trail near the farm" />
+
+  <section class="section wrapper">
+    <p>Visiting TVC isn't limited to the farm itself — you can trek out onto beautiful trails leading into the adjacent forest. This is elephant territory, so plan your hike with our local in-charge rather than heading out on your own.</p>
+
+    <div class="trail-list">
+      {trails.map((t) => (
+        <div class="trail card">
+          <img src={t.image} alt={t.name} />
+          <div>
+            <h3>{t.name}</h3>
+            <p class="distance">{t.distance}</p>
+            <p>{t.desc}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <p>You can also do shorter walks in the upper wildlife corridor, along the periphery of the large canopy food forest, or through the Kavery 2 area to learn about native and planted species helping rejuvenate the land.</p>
+
+    <div class="booking-cta">
+      <a class="button" href="https://tamarindvalleycollective-farmstay.linger.in/" target="_blank" rel="noopener noreferrer">Pricing &amp; booking via Linger</a>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .trail-list {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    margin: 24px 0;
+  }
+
+  .trail {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+
+  .trail img {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    border-radius: var(--radius);
+  }
+
+  .distance {
+    color: var(--tvc-orange);
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+
+  @media (max-width: 640px) {
+    .trail {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .booking-cta {
+    margin-top: 24px;
+    text-align: center;
+  }
+</style>

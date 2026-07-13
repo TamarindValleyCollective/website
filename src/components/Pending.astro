@@ -1,0 +1,21 @@
+---
+interface Props {
+  note: string;
+}
+
+const { note } = Astro.props;
+---
+
+<p class="pending"><strong>Content pending:</strong> {note}</p>
+
+<style>
+  .pending {
+    background: var(--tvc-orange-tint);
+    border: 1px dashed var(--tvc-orange);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    font-size: 0.92rem;
+    color: var(--tvc-ink);
+    max-width: 60ch;
+  }
+</style>

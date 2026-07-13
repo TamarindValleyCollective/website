@@ -1,0 +1,116 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHero from '../components/PageHero.astro';
+import Pending from '../components/Pending.astro';
+
+const staff = [
+  { name: 'Madhavan', role: 'Farm lead & naturalist', bio: "A passionate naturalist who has been tirelessly working on rejuvenating the farm, documenting the flora and fauna, gathering seeds from the forest, maintaining a nursery, and nurturing the ecosystem. He knows every tree, bird, and reptile you'll run into at the farm, and lives on-site with his wife Krithika and daughter Sashrika." },
+  { name: 'Ramdoss', role: 'Master craftsman', bio: 'A master craftsman when it comes to making bamboo baskets, grown up in the Odhipuram/Thagatti village.' },
+  { name: 'Gundappa', role: 'Forest guide', bio: 'Knows the forest like the back of his hand — the elephant paths and the local stories.' },
+  { name: 'Yellaraju', role: 'Runner', bio: 'Always ready to run to the village on the moped.' },
+  { name: 'Chikkama', role: 'Kitchen', bio: 'Manages the kitchen and the local recipes that shape every meal at the farm.' },
+];
+---
+
+<BaseLayout title="About TVC" description="Why Tamarind Valley Collective exists, what we stand for, and the people — founding members, other members, and local staff — behind it.">
+  <PageHero
+    eyebrow="About TVC"
+    title="Why TVC?"
+    intro="A collective of 53 families regenerating a 100-acre farm through permaculture, and the community — on and off the farm — that makes it possible."
+  />
+
+  <section class="section wrapper">
+    <h2>What we stand for</h2>
+    <Pending note="The old site's dedicated 'Vision and Objectives' page was never filled in beyond the page shell. The paragraphs below are pulled from the farm's own introduction elsewhere on the old site — worth expanding into a fuller vision statement." />
+    <p>As the name indicates, TVC is a collective of like-minded people who have come together to evolve a sustainable living concept. We are currently <a href="#members">53 families</a> that care about the degradation of natural resources globally and would like to experiment with a living style that reduces consumption and incorporates naturally supported cyclical systems.</p>
+    <p>TVC is a 100-acre farm collectively owned by these families. Due to exploitative farming practices, the farmland was degraded when we bought it. Since 2017, the community has been using permaculture principles to regenerate the farm's fertility naturally.</p>
+
+    <h3>Farming, the TVC way</h3>
+    <p>One of the core principles of the community is to practice sustainable farming — meeting current food needs without harming the environment or compromising future generations' ability to meet theirs, using methods like crop rotation, integrated pest management, water conservation, and reducing chemical inputs to create resilient food systems.</p>
+
+    <div class="two-col">
+      <div class="card">
+        <h4>Core principles &amp; goals</h4>
+        <ul>
+          <li><strong>Environmental health:</strong> protecting soil, water, air, and biodiversity.</li>
+          <li><strong>Economic profitability:</strong> ensuring the farm remains viable long-term.</li>
+          <li><strong>Social equity:</strong> fair treatment for farm workers and communities.</li>
+          <li><strong>Resource efficiency:</strong> minimizing non-renewable inputs and waste.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>Common practices</h4>
+        <ul>
+          <li><strong>Crop rotation</strong> to replenish soil nutrients.</li>
+          <li><strong>Integrated pest management</strong> using natural predators.</li>
+          <li><strong>Cover crops</strong> to prevent erosion and improve soil.</li>
+          <li><strong>Water conservation</strong> via drip irrigation and rainwater harvesting.</li>
+          <li><strong>Composting &amp; mulching</strong> to build soil organic matter.</li>
+          <li><strong>Agroecology</strong> — designing the farm to mimic natural ecosystems.</li>
+        </ul>
+      </div>
+    </div>
+
+    <p>Industrial agriculture often prioritizes high yields through monocultures and heavy chemical use. Sustainable farming aims for a holistic system instead — producing healthy food while regenerating natural resources and supporting local economies.</p>
+  </section>
+
+  <section class="section section--tint" id="members">
+    <div class="wrapper">
+      <h2>Founding core members &amp; other members</h2>
+      <Pending note="The old site's member directory page literally says “Coming soon.” It was meant to list all 53 member families as clickable cards, split between founding core members and other members — that build is still outstanding." />
+    </div>
+  </section>
+
+  <section class="section wrapper">
+    <h2>Our local staff and community</h2>
+    <p>The day-to-day activities at the farm are managed by a small, dedicated team living on-site.</p>
+    <div class="staff-grid">
+      {staff.map((s) => (
+        <div class="card">
+          <h4>{s.name}</h4>
+          <p class="staff-role">{s.role}</p>
+          <p>{s.bio}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section class="section section--tint" id="join">
+    <div class="wrapper join">
+      <h2>Interested in becoming a member?</h2>
+      <p>We're happy to share what we've learned and invite you to reach out if you'd like to help spread the message — or explore joining the collective.</p>
+      <a class="button" href="/contact">Get in touch</a>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .two-col {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+    margin: 24px 0;
+  }
+
+  .staff-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+  }
+
+  .staff-role {
+    color: var(--tvc-orange);
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: 10px;
+  }
+
+  .join {
+    text-align: center;
+    max-width: 60ch;
+    margin: 0 auto;
+  }
+</style>

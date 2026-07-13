@@ -1,0 +1,20 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import PageHero from '../../../components/PageHero.astro';
+import { getCollection, render } from 'astro:content';
+
+export async function getStaticPaths() {
+  const partners = await getCollection('partners');
+  return partners.map((partner) => ({ params: { slug: partner.id }, props: { partner } }));
+}
+
+const { partner } = Astro.props;
+const { Content } = await render(partner);
+---
+
+<BaseLayout title={partner.data.title} description={partner.data.excerpt}>
+  <PageHero eyebrow="Partners" title={partner.data.title} image={partner.data.coverImage} imageAlt={partner.data.title} />
+  <article class="section wrapper prose">
+    <Content />
+  </article>
+</BaseLayout>

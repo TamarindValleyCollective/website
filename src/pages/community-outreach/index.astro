@@ -1,0 +1,43 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+import { getCollection } from 'astro:content';
+
+const posts = await getCollection('communityOutreach');
+---
+
+<BaseLayout title="Community Outreach" description="Work TVC has done with the local community around the farm.">
+  <PageHero eyebrow="Our Journey" title="Community Outreach" intro="All the work we've done with the local people around the farm." />
+  <section class="section wrapper">
+    <div class="grid">
+      {posts.map((p) => (
+        <a class="card" href={`/community-outreach/${p.id}`}>
+          {p.data.coverImage && <img src={p.data.coverImage} alt={p.data.title} />}
+          <h3>{p.data.title}</h3>
+          <p>{p.data.excerpt}</p>
+        </a>
+      ))}
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 20px;
+  }
+
+  .grid a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .grid img {
+    border-radius: var(--radius) var(--radius) 0 0;
+    margin: -24px -24px 16px;
+    width: calc(100% + 48px);
+    height: 160px;
+    object-fit: cover;
+  }
+</style>

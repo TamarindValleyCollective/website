@@ -1,0 +1,164 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHero from '../components/PageHero.astro';
+import Pending from '../components/Pending.astro';
+
+const activities = [
+  { name: 'Farm Tour', desc: 'A ~2 hour walk through the kitchen garden, the water works, the food forest, and the trees and birds along the way.' },
+  { name: 'Bird Watching', desc: 'Over 100 species have been sighted at the farm — early morning is best for spotting and identifying them.' },
+  { name: 'Basket Making', desc: "Our expert basket maker Ramdoss can teach you bamboo craft — this needs advance notice so we can set it up." },
+  { name: 'Star Gazing', desc: 'With very little light pollution in the valley, clear nights make for fantastic stargazing.' },
+  { name: 'Chop & Drop', desc: "An integral part of our permaculture system — happy to hand you a machete if you'd like to help." },
+  { name: 'Board Games', desc: "A relaxed way to spend time with family and friends when you'd rather save your energy." },
+  { name: 'Campfire', desc: 'Weather permitting, we can light a campfire and set up a small vegetarian barbeque.' },
+];
+
+const faqs = [
+  { q: 'How can I plan my visit?', a: 'Linger is our hospitality partner and handles bookings — reach out to them for availability and any other details you need to plan your visit.' },
+  { q: 'Is the place senior friendly?', a: "There's a fair bit of walking — the camp site is a 5-7 minute walk from the parking lot. Fine for active seniors, but not the most accessible place." },
+  { q: 'How about food?', a: 'Food is included in the charges. Meals are freshly prepared and mostly vegetarian; non-veg on request. What you get depends on seasonality and availability — no à la carte options.' },
+  { q: 'What is the best time to visit?', a: "June to January is best. It's mostly pleasant during these months, though it can feel warm without a breeze." },
+  { q: 'What is the wildlife scene?', a: 'There are no hard boundaries — rabbits and wild boar are common visitors. Elephants visit in the dry season, drawn by the tamarind and ragi.' },
+];
+---
+
+<BaseLayout title="Visit TVC" description="Day trips, overnight camps, workshops, and volunteering at Tamarind Valley Collective — what to expect, activities, and how to plan your visit.">
+  <PageHero
+    eyebrow="Visit TVC"
+    title="Come spend time on the farm"
+    intro="We're on a hillslope facing west with stunning sunset views across the valley. Depending on the season, you'll see everything from deep green foliage to a golden brown hillside."
+  />
+
+  <section class="section wrapper">
+    <h2>What to expect</h2>
+    <h3>The food</h3>
+    <p>We keep the food as local as possible, cooked using recipes from the local community that runs our kitchen — ragi mudde, tangy rasam and sambhar with farm-harvested tamarind, soppu from whatever greens are in season, and seasonal fruit depending on what the elephants and monkeys have left us.</p>
+
+    <h3>The facilities</h3>
+    <p>Tented accommodation across the Malabar hut (two tents + common space) and the Banyan hut (one tent + deck), plus two bamboo huts and dome tents for a more adventurous camping experience — all weatherproof and usable year-round. Common toilets with western closets, a closed shower and an open one, and minimal lighting (grid + solar backup) to keep the impact on the environment low.</p>
+
+    <h3>Activities</h3>
+    <div class="activity-grid">
+      {activities.map((a) => (
+        <div class="card">
+          <h4>{a.name}</h4>
+          <p>{a.desc}</p>
+        </div>
+      ))}
+    </div>
+    <p>Plus <a href="/visit/trekking-trails">hiking on three trails</a> into the adjacent forest.</p>
+  </section>
+
+  <section class="section section--tint">
+    <div class="wrapper">
+      <h2>Choose how you visit</h2>
+      <div class="visit-options">
+        <a class="card" href="/visit/day-visit">
+          <h3>Day Visit</h3>
+          <p>Picnic at the Farm, a Hiking Adventure, or a Do Nothing day — hour-by-hour itineraries.</p>
+        </a>
+        <a class="card" href="/visit/camping">
+          <h3>Overnight Camping</h3>
+          <p>A two-day stay with a hike to the sunset viewpoint, campfire, and a guided farm tour.</p>
+        </a>
+        <div class="card">
+          <h3>Team &amp; Group Events</h3>
+          <p>The site accommodates up to 20 people — a great spot for team outings, brainstorming sessions, or leadership programs, with facilitators from the community available on request.</p>
+        </div>
+        <div class="card">
+          <h3>Workshops &amp; Retreats</h3>
+          <p>In-depth sessions on Permaculture Design Principles, Bamboo Basket Making, Growing Your Own Food, and the Economics of Farming. We also partner with outside hosts running their own retreats.</p>
+        </div>
+        <div class="card">
+          <h3>Volunteering</h3>
+          <p>Learn by doing — contribute to day-to-day farm activities (chopping, planting, digging, sowing, harvesting). Accommodation is in the guest house, charged for basic food and stay.</p>
+        </div>
+        <a class="card" href="/visit/how-to-reach">
+          <h3>How to Reach</h3>
+          <p>Directions from both the Tamil Nadu and Karnataka sides.</p>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section wrapper">
+    <h2>Nearby attractions</h2>
+    <p>The Cauvery river is just over 10 km away. <strong>Hogenekal Falls</strong> is about 55 km / 1.5 hours, winding through Anchetty, Natrapalayam and Bingundala. <strong>Chunchi Falls / Mekedatu</strong> is about 53 km / 1.25 hours — a good detour via Kanakapura on the way to or from the farm.</p>
+  </section>
+
+  <section class="section section--tint">
+    <div class="wrapper">
+      <h2>Etiquette &amp; precautions</h2>
+      <div class="two-col">
+        <div>
+          <h4>Etiquette</h4>
+          <ul>
+            <li>Treat the farm staff and local villagers with respect, including their right of way.</li>
+            <li>Watch for domestic animals (cows, goats, hens) when driving in.</li>
+            <li>No alcohol or other intoxicants at the farm.</li>
+            <li>Avoid littering plastic — take it back with you or hand it to farm staff.</li>
+            <li>Avoid trampling saplings or damaging plants.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Precautions</h4>
+          <ul>
+            <li>The farm is in the elephant corridor — don't wander into the jungle without farm staff.</li>
+            <li>You may encounter reptiles; leave them undisturbed and inform staff if you're concerned.</li>
+            <li>It can get hot — wear a hat and carry water on walks and hikes.</li>
+            <li>If staying overnight, keep your tent/room closed and dark from 6:30–7:30pm, when bugs are drawn to light.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section wrapper">
+    <h2>FAQ</h2>
+    <div class="faq-list">
+      {faqs.map((f) => (
+        <details>
+          <summary>{f.q}</summary>
+          <p>{f.a}</p>
+        </details>
+      ))}
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .activity-grid,
+  .visit-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 18px;
+    margin: 16px 0;
+  }
+
+  .visit-options a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 24px;
+  }
+
+  .faq-list details {
+    border-bottom: 1px solid var(--tvc-line);
+    padding: 14px 0;
+  }
+
+  .faq-list summary {
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--tvc-green-dark);
+  }
+
+  .faq-list p {
+    margin-top: 10px;
+    color: var(--tvc-ink-soft);
+  }
+</style>

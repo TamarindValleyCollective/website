@@ -1,0 +1,20 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHero from '../components/PageHero.astro';
+import BiodiversityExplorer from '../components/biodiversity/BiodiversityExplorer.astro';
+---
+
+<BaseLayout
+  title="Biodiversity"
+  description="Live biodiversity sightings from the TVC farm's iNaturalist project — birds, insects, plants, and more, mapped to where they were spotted."
+>
+  <PageHero
+    eyebrow="Live from iNaturalist"
+    title="Biodiversity at TVC"
+    intro="Every observation below is fetched live from our iNaturalist project — filter by group, see where each sighting was made on the farm, and browse related species."
+  />
+
+  <section class="section wrapper">
+    <BiodiversityExplorer />
+  </section>
+</BaseLayout>

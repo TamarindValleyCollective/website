@@ -1,0 +1,165 @@
+/* Self-hosted display face — echoes the logo's rounded, hand-lettered warmth
+   without literally mimicking the wordmark's script. Variable weight range
+   500-700 in a single file (Google serves Quicksand as one variable woff2
+   across requested static weights); avoids a Google Fonts CDN call at runtime. */
+@font-face {
+  font-family: 'Quicksand';
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+  src: url('/fonts/quicksand-variable.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Design tokens sampled directly from TVC-Logo-2.png / FULL-Logo-Master-PNG.png */
+:root {
+  --tvc-green: #17723b;
+  --tvc-green-dark: #0f5029;
+  --tvc-green-tint: #e8f2ea;
+  --tvc-orange: #f78520;
+  --tvc-orange-tint: #fdead3;
+  --tvc-cream: #faf7ee;
+  --tvc-ink: #22291f;
+  --tvc-ink-soft: #57604f;
+  --tvc-line: #e2ddc9;
+
+  --font-display: 'Quicksand', -apple-system, 'Segoe UI', sans-serif;
+  --font-body: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  --radius: 14px;
+  --shadow-soft: 0 4px 18px rgba(23, 114, 59, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--tvc-cream);
+  color: var(--tvc-ink);
+  font-family: var(--font-body);
+  line-height: 1.6;
+  font-size: 1rem;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--tvc-green-dark);
+  line-height: 1.2;
+  text-wrap: balance;
+  margin: 0 0 0.5em;
+}
+
+h1 {
+  font-size: clamp(2rem, 4vw, 2.9rem);
+}
+
+h2 {
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+}
+
+h3 {
+  font-size: 1.3rem;
+}
+
+p {
+  margin: 0 0 1em;
+  max-width: 68ch;
+}
+
+a {
+  color: var(--tvc-green);
+}
+
+a:hover {
+  color: var(--tvc-orange);
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--tvc-orange);
+  outline-offset: 2px;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+.wrapper {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.section {
+  padding: 56px 0;
+}
+
+.section--tint {
+  background: var(--tvc-green-tint);
+}
+
+.card {
+  background: #fff;
+  border: 1px solid var(--tvc-line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  padding: 24px;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--tvc-orange);
+  color: #fff;
+  font-weight: 600;
+  padding: 12px 22px;
+  border-radius: 999px;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.button:hover {
+  background: var(--tvc-green);
+  color: #fff;
+}
+
+.button--outline {
+  background: transparent;
+  color: var(--tvc-green);
+  border: 2px solid var(--tvc-green);
+}
+
+.button--outline:hover {
+  background: var(--tvc-green);
+  color: #fff;
+}
+
+.eyebrow {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  color: var(--tvc-orange);
+}
+
+@media (max-width: 640px) {
+  .section {
+    padding: 40px 0;
+  }
+}

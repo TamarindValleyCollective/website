@@ -1,0 +1,39 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+import { getCollection, render } from 'astro:content';
+
+export async function getStaticPaths() {
+  const events = await getCollection('events');
+  return events.map((event) => ({ params: { slug: event.id }, props: { event } }));
+}
+
+const { event } = Astro.props;
+const { Content } = await render(event);
+const formatDate = (d: Date) => d.toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
+---
+
+<BaseLayout title={event.data.title} description={event.data.excerpt}>
+  <PageHero eyebrow={formatDate(event.data.date)} title={event.data.title} image={event.data.coverImage} imageAlt={event.data.title} />
+  <article class="section wrapper prose">
+    <Content />
+  </article>
+</BaseLayout>
+
+<style>
+  .prose :global(h2) {
+    margin-top: 32px;
+  }
+
+  .prose :global(blockquote) {
+    border-left: 4px solid var(--tvc-orange);
+    padding-left: 20px;
+    font-style: italic;
+    color: var(--tvc-ink-soft);
+  }
+
+  .prose :global(img) {
+    border-radius: var(--radius);
+    margin: 16px 0;
+  }
+</style>

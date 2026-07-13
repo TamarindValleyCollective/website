@@ -1,0 +1,161 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const gallery = [
+  { src: '/images/pages/home/gallery-1.jpg', caption: 'Camp Site' },
+  { src: '/images/pages/home/gallery-2.jpg', caption: 'Hiking View' },
+  { src: '/images/pages/home/gallery-3.jpg', caption: 'Farm Produce' },
+  { src: '/images/pages/home/gallery-4.jpg', caption: 'Morning' },
+  { src: '/images/pages/home/gallery-5.jpg', caption: 'The Camp' },
+];
+---
+
+<BaseLayout title="Home" description="Tamarind Valley Collective — a 100-acre permaculture farm collectively owned by 53 families, regenerating degraded farmland near Kanakapura since 2017.">
+  <img class="home-hero" src="/images/pages/home/hero.jpg" alt="Panoramic view of the Tamarind Valley Collective farm" />
+
+  <section class="section wrapper">
+    <p class="eyebrow">Tamarind Valley Collective</p>
+    <h1>A collective regenerating a degraded farm, together.</h1>
+
+    <p class="dropcap">As the name indicates, it is a collective of like-minded people who have come together to evolve a sustainable living concept. We are currently <a href="/about#members">53 families</a> that care about the degradation of natural resources globally and would like to experiment with a living style that reduces consumption and incorporates naturally supported cyclical systems.</p>
+
+    <p>TVC is a 100-acre farm collectively owned by these families. Due to exploitative farming practices, the farmland was degraded when we bought it. Since 2017, the community has been using permaculture principles to regenerate the farm's fertility naturally.</p>
+
+    <blockquote>
+      <p>“Modern research divides nature into tiny pieces and conducts tests that conform neither with natural law nor with practical experience. The results are arranged for the convenience of research, not according to the needs of the farmer.”</p>
+      <cite>— Masanobu Fukuoka</cite>
+    </blockquote>
+  </section>
+
+  <section class="section section--tint">
+    <div class="wrapper">
+      <div class="gallery">
+        {gallery.map((g) => (
+          <figure>
+            <img src={g.src} alt={g.caption} loading="lazy" />
+            <figcaption>{g.caption}</figcaption>
+          </figure>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section wrapper">
+    <blockquote class="msg">
+      <p>"Have you ever woken up in the morning and looked out of the window, or gone out and looked at the trees and the spring dawn? Live with it. Listen to all the sounds, to the whisper, the slight breeze among the leaves... When you have such communion with nature, then your relationship with another person becomes simple, clear, without conflict."</p>
+      <cite>— J. Krishnamurti</cite>
+    </blockquote>
+
+    <blockquote class="msg">
+      <p>“The soil is the great connector of lives, the source and destination of all. It is the healer and restorer and resurrector, by which disease passes into health, age into youth, death into life. Without proper care for it we can have no community, because without proper care for it we can have no life.”</p>
+      <cite>― Wendell Berry</cite>
+    </blockquote>
+  </section>
+
+  <section class="section section--tint">
+    <div class="wrapper quicklinks">
+      <a class="card quicklink" href="/about">
+        <h3>About TVC</h3>
+        <p>Why TVC exists, what we stand for, and the people behind it.</p>
+      </a>
+      <a class="card quicklink" href="/our-journey">
+        <h3>Our Journey</h3>
+        <p>From a degraded farm to a regenerating ecosystem.</p>
+      </a>
+      <a class="card quicklink" href="/visit">
+        <h3>Visit TVC</h3>
+        <p>Day trips, overnight camps, workshops, and volunteering.</p>
+      </a>
+      <a class="card quicklink" href="/biodiversity">
+        <h3>Biodiversity</h3>
+        <p>Explore birds, insects, and plants spotted on the farm — live from iNaturalist.</p>
+      </a>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .home-hero {
+    width: 100%;
+    max-height: 480px;
+    object-fit: cover;
+  }
+
+  .dropcap:first-letter {
+    font-family: var(--font-display);
+    font-size: 3.2rem;
+    font-weight: 700;
+    float: left;
+    line-height: 0.8;
+    margin: 6px 8px 0 0;
+    color: var(--tvc-green);
+  }
+
+  blockquote {
+    border-left: 4px solid var(--tvc-orange);
+    margin: 32px 0;
+    padding: 4px 24px;
+    font-size: 1.15rem;
+    font-style: italic;
+    color: var(--tvc-ink);
+  }
+
+  blockquote cite {
+    display: block;
+    margin-top: 8px;
+    font-size: 0.9rem;
+    font-style: normal;
+    color: var(--tvc-ink-soft);
+  }
+
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 18px;
+  }
+
+  .gallery figure {
+    margin: 0;
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: #fff;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .gallery img {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+  }
+
+  .gallery figcaption {
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .msg {
+    max-width: 74ch;
+  }
+
+  .quicklinks {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+  }
+
+  .quicklink {
+    text-decoration: none;
+    display: block;
+  }
+
+  .quicklink h3 {
+    margin-bottom: 8px;
+  }
+
+  .quicklink p {
+    color: var(--tvc-ink-soft);
+    margin: 0;
+    font-size: 0.92rem;
+  }
+</style>
