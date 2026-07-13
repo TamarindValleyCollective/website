@@ -3,9 +3,9 @@ const navItems = [
   { label: 'About TVC', href: '/about' },
   { label: 'Our Journey', href: '/our-journey' },
   { label: 'Visit TVC', href: '/visit' },
-  { label: 'The TVC Ecosystem', href: '/ecosystem' },
+  { label: 'Ecosystem', href: '/ecosystem' },
   { label: 'Biodiversity', href: '/biodiversity' },
-  { label: 'Upcoming Events', href: '/events' },
+  { label: 'Events', href: '/events' },
   { label: 'Contact Us', href: '/contact' },
 ];
 
@@ -15,7 +15,7 @@ const currentPath = Astro.url.pathname;
 <header class="nav">
   <div class="wrapper nav__inner">
     <a class="nav__brand" href="/">
-      <img src="/images/brand/tvc-logo-mark.png" alt="Tamarind Valley Collective" width="40" height="40" />
+      <img src="/images/brand/tvc-logo-mark.png" alt="Tamarind Valley Collective" width="56" height="56" />
       <span>Tamarind Valley Collective</span>
     </a>
 
@@ -56,12 +56,14 @@ const currentPath = Astro.url.pathname;
   .nav__brand {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     text-decoration: none;
     color: var(--tvc-green-dark);
     font-family: var(--font-display);
     font-weight: 700;
-    font-size: 1.05rem;
+    font-size: 1.1rem;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .nav__brand img {
@@ -71,17 +73,19 @@ const currentPath = Astro.url.pathname;
   .nav__menu {
     display: flex;
     align-items: center;
-    gap: 22px;
+    gap: 16px;
     flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .nav__link {
     text-decoration: none;
     color: var(--tvc-ink);
     font-weight: 600;
-    font-size: 0.92rem;
+    font-size: 0.88rem;
     padding: 6px 0;
     border-bottom: 2px solid transparent;
+    white-space: nowrap;
   }
 
   .nav__link:hover {

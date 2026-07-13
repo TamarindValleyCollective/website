@@ -10,33 +10,87 @@ interface Props {
 const { eyebrow, title, intro, image, imageAlt = '' } = Astro.props;
 ---
 
-<section class="hero">
-  {image && <img class="hero__image" src={image} alt={imageAlt} />}
-  <div class="wrapper hero__content">
-    {eyebrow && <p class="eyebrow">{eyebrow}</p>}
-    <h1>{title}</h1>
-    {intro && <p class="hero__intro">{intro}</p>}
-  </div>
-</section>
+{image ? (
+  <section class="hero hero--image">
+    <img class="hero__image" src={image} alt={imageAlt} />
+    <div class="hero__scrim"></div>
+    <div class="wrapper hero__content">
+      {eyebrow && <p class="eyebrow eyebrow--light">{eyebrow}</p>}
+      <h1>{title}</h1>
+      {intro && <p class="hero__intro">{intro}</p>}
+    </div>
+  </section>
+) : (
+  <section class="hero hero--plain">
+    <div class="wrapper hero__content">
+      {eyebrow && <p class="eyebrow">{eyebrow}</p>}
+      <h1>{title}</h1>
+      {intro && <p class="hero__intro hero__intro--dark">{intro}</p>}
+    </div>
+  </section>
+)}
 
 <style>
-  .hero {
+  .hero--image {
     position: relative;
+    min-height: 420px;
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
   }
 
   .hero__image {
+    position: absolute;
+    inset: 0;
     width: 100%;
-    max-height: 420px;
+    height: 100%;
     object-fit: cover;
   }
 
+  .hero__scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(15, 26, 18, 0.15) 0%, rgba(15, 26, 18, 0.75) 100%);
+  }
+
   .hero__content {
-    padding: 40px 24px 8px;
+    position: relative;
+    padding-top: 60px;
+    padding-bottom: 48px;
+  }
+
+  .hero--plain .hero__content {
+    padding-top: 64px;
+    padding-bottom: 16px;
+  }
+
+  .hero--image h1 {
+    color: #fff;
+    max-width: 20ch;
+  }
+
+  .hero--plain h1 {
+    max-width: 22ch;
+  }
+
+  .eyebrow--light {
+    color: #ffd8a8;
   }
 
   .hero__intro {
-    font-size: 1.1rem;
+    font-size: 1.15rem;
+    color: #eef2ea;
+    max-width: 62ch;
+    margin-top: 10px;
+  }
+
+  .hero__intro--dark {
     color: var(--tvc-ink-soft);
-    max-width: 70ch;
+  }
+
+  @media (max-width: 640px) {
+    .hero--image {
+      min-height: 320px;
+    }
   }
 </style>
