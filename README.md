@@ -1,43 +1,47 @@
-# Astro Starter Kit: Minimal
+# Tamarind Valley Collective — website
 
-```sh
-npm create astro@latest -- --template minimal
-```
+The website for [Tamarind Valley Collective](https://tvc.farm) (TVC), a 100-acre permaculture farm collectively owned by 53 families, regenerating degraded land near Kanakapura since 2017.
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+This is an Astro rebuild of the original site (previously a [Publii](https://getpublii.com/) static export — that export is kept alongside this project as source material for content and images still being migrated over).
 
-## 🚀 Project Structure
+## What's here
 
-Inside of your Astro project, you'll see the following folders and files:
+- **Static, no backend.** Every page is prerendered at build time; content lives in Markdown, not a CMS or database.
+- **Live Biodiversity/Ecosystem explorer** (`/ecosystem`) — fetches sightings client-side from the farm's [iNaturalist project](https://www.inaturalist.org/) on every page load, with filters, a gallery view, and a map view.
+- **Content collections** for the things that change over time: `events`, `partners`, `products`, `community-outreach` (see `src/content.config.ts` for schemas).
+- **Google Maps / My Maps embeds** for directions and the farm layout, and a YouTube embed for the aerial drone flyover.
+- **In Pictures** (`/in-pictures`) — a photo archive plus a link to the community-maintained Google Photos album for anything more recent (Google Photos albums can't be iframed — they send `X-Frame-Options: SAMEORIGIN` — so that's a link-out card, not an embed).
+
+## Adding an upcoming event
+
+Copy `src/content/events/_template.md`, rename it to something like `2026-03-15-your-event-name.md` (the filename becomes the URL), fill in the fields, and delete the `draft: true` line. It'll show up on `/events` on the next build — no code changes needed. Any other new `.md` file in that folder works the same way.
+
+## Project structure
 
 ```text
 /
-├── public/
+├── public/                  static assets (images, fonts, PDFs) served as-is
 ├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
+│   ├── components/          Nav, Footer, PageHero, Pending, and the biodiversity explorer
+│   ├── content/              markdown content collections (events, partners, products, community-outreach)
+│   ├── content.config.ts     collection schemas
+│   ├── layouts/               BaseLayout wraps every page (Nav + Footer + <head>)
+│   ├── pages/                 file-based routes
+│   └── styles/global.css      design tokens (colors, type, spacing) and shared base styles
+└── astro.config.mjs          includes the /biodiversity -> /ecosystem redirect
 ```
 
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+## Development
 
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
+```sh
+npm install
+npm run dev          # starts a dev server at localhost:4321 (add --background to run detached)
+npm run build         # builds the static site to ./dist
+npm run preview       # serves the build locally to sanity-check before deploying
+```
 
-Any static assets, like images, can be placed in the `public/` directory.
+Managing a background dev server: `npm run astro -- dev stop`, `npm run astro -- dev status`, `npm run astro -- dev logs`.
 
-## 🧞 Commands
+## Design system
 
-All commands are run from the root of the project, from a terminal:
-
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+Self-hosted variable fonts: **Fraunces** for display/headings, **Inter** for body/UI text, and **Quicksand** kept only for the nav wordmark next to the logo mark. Brand colors (green, orange, cream) are sampled from the logo and defined as CSS custom properties in `src/styles/global.css`.
