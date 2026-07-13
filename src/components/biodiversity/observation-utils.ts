@@ -1,6 +1,15 @@
 const API = 'https://api.inaturalist.org/v1/observations';
 const PROJECT_SLUG = 'biodiversity-at-tvc';
 
+// iNaturalist's default photo.url points at the "square" size (~75px) —
+// fine for a tiny map-pin popup, but visibly blurry stretched across a
+// 200-300px grid card. "small" (~240px) is the right size for card
+// thumbnails without paying for "medium"'s much larger download on a page
+// showing dozens of them at once.
+export function thumbUrl(url: string): string {
+  return url.replace('square', 'small');
+}
+
 export interface Photo {
   id: number;
   url: string;

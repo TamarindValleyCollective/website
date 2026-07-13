@@ -54,6 +54,13 @@ const { eyebrow, title, intro, image, imageAlt = '' } = Astro.props;
   }
 
   .hero__content {
+    /* Without an explicit width, a flex item shrinks to fit its content
+       *before* `margin: 0 auto` centers it — so a short heading would
+       center as a narrow box instead of sitting flush at the same left
+       edge every other .wrapper on the site uses. width:100% forces it to
+       fill the flex container first, so the max-width/auto-margin centering
+       behaves exactly like normal block-flow .wrapper usage everywhere else. */
+    width: 100%;
     position: relative;
     padding-top: 60px;
     padding-bottom: 48px;

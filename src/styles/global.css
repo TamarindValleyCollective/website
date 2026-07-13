@@ -74,7 +74,14 @@ h3 {
 
 p {
   margin: 0 0 1em;
-  max-width: 68ch;
+}
+
+/* Long-form article content (event/outreach detail pages) gets a narrower
+   reading column deliberately — everywhere else, paragraphs should fill
+   their section like the card grids and boxes around them do, not stop
+   short and leave a lopsided gap. */
+.prose p {
+  max-width: 72ch;
 }
 
 a {

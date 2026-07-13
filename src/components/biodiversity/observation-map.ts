@@ -1,6 +1,6 @@
 import L from 'leaflet';
 import type { Observation } from './observation-utils';
-import { toLatLng } from './observation-utils';
+import { toLatLng, thumbUrl } from './observation-utils';
 
 // Marker colors keyed by iconic taxon — matches the filter chip colors so the
 // map and the chips read as one system.
@@ -44,7 +44,7 @@ export function initMap(containerId: string, observations: Observation[], onSele
     if (!latLng) continue;
 
     const marker = L.marker(latLng, { icon: dotIcon(colorFor(obs.taxon?.iconic_taxon_name ?? null)) });
-    const thumb = obs.photos[0]?.url ?? '';
+    const thumb = obs.photos[0] ? thumbUrl(obs.photos[0].url) : '';
     const name = obs.taxon?.preferred_common_name || obs.taxon?.name || 'Unidentified';
 
     marker.bindPopup(
