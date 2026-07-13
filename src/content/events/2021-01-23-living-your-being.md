@@ -1,7 +1,7 @@
 ---
 title: "2021 : Jan 23 - Living your Being"
 date: 2021-01-23
-excerpt: "A daylong workshop was conducted with learnings based on the couple’s (Ranjan &amp; Reva) pursuit to find their own normal. Reva and Ranjan of Primalise have been living in an (almost) off-grid mud house - with no furniture and appliances. They are attempting to go back to being "
+excerpt: "A daylong workshop was conducted with learnings based on the couple’s (Ranjan & Reva) pursuit to find their own normal. Reva and Ranjan of Primalise have been living in an (almost) off-grid mud house - with no furniture and appliances. They are attempting to go back to being "
 coverImage: "/images/events/2021-01-23-living-your-being/hero.jpeg"
 tags: ["workshop"]
 ---
