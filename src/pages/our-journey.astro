@@ -47,6 +47,19 @@ const outreachPosts = await getCollection('communityOutreach');
           title="TVC farm plans and design map"
         ></iframe>
       </div>
+
+      <h3>Aerial view</h3>
+      <p>A drone flight over the farm, showing the land, the food forest, and the surrounding hills from above.</p>
+      <div class="video-embed">
+        <iframe
+          loading="lazy"
+          src="https://www.youtube.com/embed/ixHNXOiQ9vM"
+          title="TVC Aerial View"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen
+        ></iframe>
+      </div>
     </div>
   </section>
 
@@ -103,6 +116,24 @@ const outreachPosts = await getCollection('communityOutreach');
     width: 100%;
     max-width: 640px;
     border-radius: var(--radius);
+  }
+
+  .video-embed {
+    position: relative;
+    width: 100%;
+    max-width: 640px;
+    aspect-ratio: 16 / 9;
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .video-embed iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
   }
 
   .outreach-grid {
