@@ -25,15 +25,35 @@ import PageHero from '../../components/PageHero.astro';
     <h3>Location</h3>
     <p>The farm is in the village of Thaggatti in Tamil Nadu, about 7 km from Hunsanahalli, the border town in Karnataka, and adjacent to the Thaggatti Reserve Forest.</p>
     <p>The area's history is documented by renowned hunter-turned-conservationist <a href="https://en.wikipedia.org/wiki/Kenneth_Anderson_(writer)#Jungle_folk" target="_blank" rel="noopener noreferrer">Kenneth Anderson</a>, in his story "Man-eater of Jowlagiri" — the places he mentions are well documented by fans of his writing, and he also references the village of Anchetty in another account, "Sher Khan and the Bettamugalam Man-eater."</p>
-    <img src="/images/pages/location/map.png" alt="Map showing TVC bordering the Thaggatti Reserve Forest" />
+    <div class="map-embed">
+      <iframe
+        loading="lazy"
+        src="https://www.google.com/maps?q=The+Tamarind+Collective,+Thaggatti&t=p&z=12&output=embed"
+        width="100%"
+        height="420"
+        style="border:0"
+        title="Map showing TVC bordering the Thaggatti Reserve Forest"
+      ></iframe>
+    </div>
     <p class="caption">TVC bordering the Thaggatti Reserve Forest</p>
   </section>
 </BaseLayout>
 
 <style>
+  .map-embed {
+    margin-top: 20px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .map-embed iframe {
+    display: block;
+  }
+
   .caption {
     font-size: 0.85rem;
     color: var(--tvc-ink-soft);
-    margin-top: -8px;
+    margin-top: 10px;
   }
 </style>
