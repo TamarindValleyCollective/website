@@ -23,7 +23,12 @@ const { eyebrow, title, intro, image, imageAlt = '' } = Astro.props;
 ) : (
   <section class="hero hero--plain">
     <div class="wrapper hero__content">
-      {eyebrow && <p class="eyebrow">{eyebrow}</p>}
+      {eyebrow && (
+        <p class="eyebrow">
+          {eyebrow}
+          <span class="eyebrow__rule" aria-hidden="true"></span>
+        </p>
+      )}
       <h1>{title}</h1>
       {intro && <p class="hero__intro hero__intro--dark">{intro}</p>}
     </div>
@@ -66,9 +71,19 @@ const { eyebrow, title, intro, image, imageAlt = '' } = Astro.props;
     padding-bottom: 48px;
   }
 
+  /* Pages without a photo (Ecosystem, About, Visit...) had nothing to give
+     the header visual weight, so it read as an unstyled void bleeding into
+     the section below on the same cream background. The tint band + rule
+     borrow the accent already used for section--tint elsewhere, giving the
+     hero its own presence without introducing a new color. */
+  .hero--plain {
+    background: var(--tvc-green-tint);
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
   .hero--plain .hero__content {
-    padding-top: 64px;
-    padding-bottom: 16px;
+    padding-top: 88px;
+    padding-bottom: 56px;
   }
 
   .hero--image h1 {
@@ -82,6 +97,15 @@ const { eyebrow, title, intro, image, imageAlt = '' } = Astro.props;
 
   .eyebrow--light {
     color: #ffd8a8;
+  }
+
+  .eyebrow__rule {
+    display: block;
+    width: 40px;
+    height: 3px;
+    margin-top: 14px;
+    background: var(--tvc-orange);
+    border-radius: 2px;
   }
 
   .hero__intro {
@@ -98,6 +122,11 @@ const { eyebrow, title, intro, image, imageAlt = '' } = Astro.props;
   @media (max-width: 640px) {
     .hero--image {
       min-height: 320px;
+    }
+
+    .hero--plain .hero__content {
+      padding-top: 56px;
+      padding-bottom: 40px;
     }
   }
 </style>
