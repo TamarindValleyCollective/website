@@ -6,8 +6,6 @@ coverImage: "/images/events/2022-08-27-3bs-and-1h-biodiversity-walk/hero.png"
 tags: ["biodiversity", "walk"]
 ---
 
-[Pay & Register](https://www.frchg.in/JVMp2mK) 
-
 #### **Event Summary**
 
 Spend Saturday evening and Sunday at [Tamarind Valley Collective](https://tvc.farm/how-to-reach.html). Explore the vast property. Enjoy guided tours with our naturalists to watch and identify birds, butterflies, insects, and plants.
@@ -43,8 +41,6 @@ Madhav (Farm Manager at TVC. Our in house expert)
 Full event (1 night, 1 day): [INR 3200/-](https://www.frchg.in/JVMp2mK)
 
 Children below 10: Free
-
-[Pay & Register](https://www.frchg.in/JVMp2mK) 
 
 #### Any questions?
 
@@ -119,4 +115,3 @@ We have some amiable dogs with them at the farm. For any reason, if you feel unc
 
 We have a common food hut/pergola where you can keep your things, have food, etc. It also has charging points for the phone. We usually prepare simple food and are happy to share it with the guests.
 
-[Pay & Register](https://www.frchg.in/JVMp2mK)

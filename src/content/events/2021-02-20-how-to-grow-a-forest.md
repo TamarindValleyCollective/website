@@ -1,12 +1,12 @@
 ---
 title: "2021 : Feb 20 - How to grow a forest"
 date: 2021-02-20
-excerpt: "20 Feb 2021 - How to grow a forest Register Forests are self sustaining eco-systems. As part of our plan at TVC, we have left aside roughly 30% of our land to develop it as a wild life corridor. But getting to a self sustaining ecosystem may not be as easy as you think. This one "
+excerpt: "20 Feb 2021 - How to grow a forest. Forests are self sustaining eco-systems. As part of our plan at TVC, we have left aside roughly 30% of our land to develop it as a wild life corridor. But getting to a self sustaining ecosystem may not be as easy as you think. This one "
 coverImage: "/images/events/2021-02-20-how-to-grow-a-forest/hero.jpeg"
 tags: ["workshop", "permaculture"]
 ---
 
-## 20 Feb 2021 - How to grow a forest        [Register](https://www.instamojo.com/workadda/how-to-grow-a-forest/?fbclid=IwAR3eYXnjEmSpowypla5n2BWiBkIym_rENgCLRsw58qExgONYOYzhV6XKPbk)
+## 20 Feb 2021 - How to grow a forest
 
 Forests are self sustaining eco-systems. As part of our plan at TVC, we have left aside roughly 30% of our land to develop it as a wild life corridor. But getting to a self sustaining ecosystem may not be as easy as you think. This one day workshop will take you through our journey, answer questions around a forest eco-system and how you can build one (at a small scale and with a low budget)
 
@@ -27,8 +27,6 @@ The workshop will be conducted by **Praveen Ram.**
 Having worked for wildlife conservation, he has walked pristine and virgin forests of around Mysore, Chamarajanagar and Kodagu. In the process he understood how the eco-systems work and their symbiotic relationships. Trees, shrubs and plants form the core of any healthy eco system. He believes that in a forests we must try to mimic these systems as much.
 
 **Cost : INT 1,500 / Person**
-
-[Register](https://www.instamojo.com/workadda/how-to-grow-a-forest/?fbclid=IwAR3eYXnjEmSpowypla5n2BWiBkIym_rENgCLRsw58qExgONYOYzhV6XKPbk)
 
 The cost is an all inclusive cost. Please carry your water bottle, a cap, sun-glasses and sun-screen. The hands-on session can be quite laborious and if you are not able to do it yourself, you can choose to watch and learn ![🙂](https://static.xx.fbcdn.net/images/emoji.php/v9/t4c/1/16/1f642.png)
 

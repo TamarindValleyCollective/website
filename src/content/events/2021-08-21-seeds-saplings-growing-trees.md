@@ -1,12 +1,10 @@
 ---
 title: "2021: Aug 21 - Of Seeds and Saplings and Growing trees"
 date: 2021-08-21
-excerpt: "Register One of the primary dreams for any new farm owner is to plant and grow trees. We envision having a large canopy of trees providing not just visual appeal but also produce clean air to breath. If you are new to setting up a farm then you will have lots of questions. What t"
+excerpt: "One of the primary dreams for any new farm owner is to plant and grow trees. We envision having a large canopy of trees providing not just visual appeal but also produce clean air to breath. If you are new to setting up a farm then you will have lots of questions. What t"
 coverImage: "/images/events/2021-08-21-seeds-saplings-growing-trees/hero.jpeg"
 tags: ["workshop"]
 ---
-
-[Register](https://www.instamojo.com/workadda/of-seeds-and-saplings-and-growing-trees/) 
 
 One of the primary dreams for any new farm owner is to plant and grow trees. We envision having a large canopy of trees providing not just visual appeal but also produce clean air to breath. If you are new to setting up a farm then you will have lots of questions. What trees to grow? How to grow them? Should I buy from nurseries or just grow them from seeds?  This one day workshop will take you through our journey, answer questions around how you could grow ecologically pioneer species saplings at your farm.
 
@@ -50,4 +48,3 @@ We have some amiable dogs with them at the farm. For any reason, if you feel unc
 
 We have a common food hut/pergola where you can keep your things, have food, etc. It also has charging points for the phone. We usually prepare simple food and are happy to share it with the guests. 
 
-[Register](https://www.instamojo.com/workadda/of-seeds-and-saplings-and-growing-trees/)

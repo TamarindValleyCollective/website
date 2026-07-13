@@ -1,12 +1,10 @@
 ---
 title: "2021: Sep 25 - Traditional Craft of Making Bamboo Basket"
 date: 2021-09-25
-excerpt: "Register The traditional craft of making baskets has been slowly fading away as plastic and other material have replaced them. However, as a community we our attempt has been to move towards more sustainable material. The workshop is a hands on exercise to help the participants g"
+excerpt: "The traditional craft of making baskets has been slowly fading away as plastic and other material have replaced them. However, as a community we our attempt has been to move towards more sustainable material. The workshop is a hands on exercise to help the participants g"
 coverImage: "/images/events/2021-09-25-bamboo-basket-making/hero.jpeg"
 tags: ["craft", "workshop"]
 ---
-
-[Register](https://workadda.stores.instamojo.com/product/2926877/traditional-craft-of-making-bamboo-basket/) 
 
 The traditional craft of making baskets has been slowly fading away as plastic and other material have replaced them. However, as a community we our attempt has been to move towards more sustainable material. The workshop is a hands on exercise to help the participants get introduced to the craft. You take home the basket that you make.
 
@@ -35,8 +33,6 @@ The following will be the agenda for the day
 05:00 - Onward Wrap up and leave
 
 The cost is an all inclusive cost. Please carry a sharp knife with you. Also carry your water bottle, a cap, sun-glasses and sun-screen. The hands-on session can be quite laborious and if you are not able to do it yourself, you can choose to watch and learn ![????](https://static.xx.fbcdn.net/images/emoji.php/v9/ta5/1.5/16/1f642.png)
-
-[Register](https://workadda.stores.instamojo.com/product/2926877/traditional-craft-of-making-bamboo-basket/) 
 
 **What to expect?**
 

@@ -1,7 +1,7 @@
 ---
 title: "2023: Jan 08 - Walk, Pick & Cook"
 date: 2023-01-08
-excerpt: "Walk, Pick & Cook Forage in the wild for edible weeds and healthy local food with Suresh Kumar of Surjapura Curries Pay & Register If you are using your mobile app - please scan the following QR code and make payment of INR 1600."
+excerpt: "Walk, Pick & Cook Forage in the wild for edible weeds and healthy local food with Suresh Kumar of Surjapura Curries. If you are using your mobile app - please scan the following QR code and make payment of INR 1600."
 coverImage: "/images/events/2023-01-08-walk-pick-and-cook/hero.jpeg"
 tags: ["workshop", "food"]
 ---
@@ -12,11 +12,7 @@ Forage in the wild for edible weeds and healthy local food with
 
 **Suresh Kumar** of [Surjapura Curries](https://www.facebook.com/profile.php?id=100071208986585)
 
-[Pay & Register](https://www.frchg.in/B47DbZT) 
-
 ![](https://tvc.farm/media/posts/40/WhatsApp-Image-2022-11-29-at-4.17.23-PM-2.jpeg)
-
-[Pay & Register](https://www.frchg.in/B47DbZT) 
 
 If you are using your mobile app - please scan the following QR code and make payment of INR 1600.
 
