@@ -2,15 +2,14 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
 import Pending from '../components/Pending.astro';
+import BiodiversityExplorer from '../components/biodiversity/BiodiversityExplorer.astro';
 ---
 
-<BaseLayout title="The TVC Ecosystem" description="Birds, trees, geography, and weather at Tamarind Valley Collective.">
-  <PageHero eyebrow="The TVC Ecosystem" title="What lives here" intro="From over 100 bird species to the food forest itself — the farm's ecosystem is still being documented." />
+<BaseLayout title="The TVC Ecosystem" description="Live biodiversity sightings, birds, trees, geography, and weather at Tamarind Valley Collective.">
+  <PageHero eyebrow="The TVC Ecosystem" title="What lives here" intro="From over 100 bird species to the food forest itself — explore live sightings below, filed alongside everything else we know about the farm's ecosystem." />
 
   <section class="section wrapper">
-    <h2>Birds</h2>
-    <p>Over 100 species of birds have been sighted at the farm. The old site's bird photos live in a <a href="https://photos.google.com/share/AF1QipPBzHETbG_HIKlpJG55OtCBanE_lGzFn4kzB8guZ7OCVRxVjqMcWvSEV9NXusiSPw" target="_blank" rel="noopener noreferrer">shared Google Photos album</a> — but the best way to explore what's actually been seen (birds included) is our live biodiversity explorer.</p>
-    <a class="button" href="/biodiversity">Explore live sightings →</a>
+    <BiodiversityExplorer />
   </section>
 
   <section class="section section--tint">
@@ -22,7 +21,7 @@ import Pending from '../components/Pending.astro';
 
   <section class="section wrapper">
     <h2>Trees &amp; Plants</h2>
-    <Pending note="No dedicated old-site page — what exists is scattered across other pages (the food forest, land design). Worth consolidating into its own page here, and cross-referencing the Plants entries on the biodiversity explorer." />
+    <Pending note="No dedicated old-site page — what exists is scattered across other pages (the food forest, land design). Worth consolidating into its own page here, and cross-referencing the Plants entries in the explorer above." />
   </section>
 
   <section class="section section--tint">
