@@ -4,7 +4,7 @@ import PageHero from '../../components/PageHero.astro';
 import { getCollection, render } from 'astro:content';
 
 export async function getStaticPaths() {
-  const events = await getCollection('events');
+  const events = await getCollection('events', (e) => !e.data.draft);
   return events.map((event) => ({ params: { slug: event.id }, props: { event } }));
 }
 

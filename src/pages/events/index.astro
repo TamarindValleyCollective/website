@@ -3,7 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../../components/PageHero.astro';
 import { getCollection } from 'astro:content';
 
-const allEvents = (await getCollection('events')).sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+const allEvents = (await getCollection('events', (e) => !e.data.draft)).sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
 const now = new Date();
 const upcoming = allEvents.filter((e) => e.data.date >= now);
 const past = allEvents.filter((e) => e.data.date < now);

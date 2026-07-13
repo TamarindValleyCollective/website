@@ -10,6 +10,10 @@ const events = defineCollection({
     coverImage: z.string().optional(),
     organizer: z.string().optional(),
     tags: z.array(z.string()).default([]),
+    // Lets a placeholder/template event file sit in this folder without
+    // showing up on the site - flip to false (or delete the line) once the
+    // real details are filled in. See _template.md in this collection.
+    draft: z.boolean().default(false),
   }),
 });
 
