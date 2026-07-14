@@ -1,7 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
-import Pending from '../components/Pending.astro';
 import { getCollection } from 'astro:content';
 
 const products = await getCollection('products');
@@ -43,13 +42,6 @@ const outreach = await getCollection('communityOutreach');
           <p>{o.data.excerpt}</p>
         </a>
       ))}
-    </div>
-  </section>
-
-  <section class="section section--tint">
-    <div class="wrapper">
-      <h2>KANS</h2>
-      <Pending note="The structure doc names 'KANS' here but no source material exists anywhere on the old site — confirm what it stands for and source or write this content." />
     </div>
   </section>
 </BaseLayout>
