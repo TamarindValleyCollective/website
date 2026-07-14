@@ -307,6 +307,14 @@
     border-radius: 6px;
     margin-bottom: 6px;
   }
+
+  :global(.detail-photo) {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: 8px;
+    margin: 12px 0;
+  }
 </style>
 
 <script>
@@ -439,7 +447,7 @@
     detailContentEl.innerHTML = `
       <h2 id="detail-title">${name}</h2>
       ${scientific ? `<p>${scientific}</p>` : ''}
-      ${photo ? `<img src="${photo.url.replace('square', 'medium')}" alt="${name}" style="width:100%;border-radius:8px;margin:12px 0;" />` : ''}
+      ${photo ? `<img class="detail-photo" src="${photo.url.replace('square', 'medium')}" alt="${name}" />` : ''}
       ${photo ? `<p class="attribution" style="font-size:0.82rem;color:var(--tvc-ink-soft);">${photo.attribution}${photo.license_code ? ` · <a href="https://creativecommons.org/licenses/${photo.license_code.replace('cc-', '')}/4.0/" target="_blank" rel="noopener noreferrer">${photo.license_code.toUpperCase()}</a>` : ''}</p>` : ''}
       <p><strong>Observed:</strong> ${o.observed_on ?? 'Unknown date'}</p>
       <p><strong>Location:</strong> ${o.place_guess ?? 'On the farm'}</p>
