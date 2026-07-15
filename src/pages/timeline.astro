@@ -1,9 +1,11 @@
 ---
 // Standalone, single-viewport page: intentionally skips BaseLayout's
 // Footer so the whole experience fits one screen with no page scroll.
-// Only the month carousel inside JourneyTimeline scrolls internally.
+// Only the month carousel inside JourneyTimelineStandalone scrolls internally.
+// Named "Standalone" to avoid colliding with the separate JourneyTimeline.astro
+// used on /our-journey.
 import Nav from '../components/Nav.astro';
-import JourneyTimeline from '../components/JourneyTimeline.astro';
+import JourneyTimeline from '../components/JourneyTimelineStandalone.astro';
 import '../styles/global.css';
 ---
 
