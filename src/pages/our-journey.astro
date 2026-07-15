@@ -5,6 +5,45 @@ import Pending from '../components/Pending.astro';
 import { getCollection } from 'astro:content';
 
 const outreachPosts = await getCollection('communityOutreach');
+
+// Sourced from a community member's account of the farm's history (issue #2),
+// photos downloaded locally from the GitHub comment's attachments.
+const timeline = [
+  { date: 'March 2017', html: `TVC began as a seed idea from a few people who came together after several trial and errors. The seed group had a common thread of living sustainably and doing so as a community. To realize this, we needed help with a real estate developer and that is where we tied up with <a href="https://wecommunities.in/" target="_blank" rel="noopener noreferrer">WeCommunities</a>. In fact, TVC was the first project of WeCommunities. The seed group choose to setup the community in Tamil Nadu near the village <a href="https://ta.wikipedia.org/wiki/%E0%AE%A4%E0%AE%95%E0%AF%8D%E0%AE%95%E0%AE%9F%E0%AF%8D%E0%AE%9F%E0%AE%BF" target="_blank" rel="noopener noreferrer">Thakkatti (Thaggatti)</a>. Our first visit to the site was in the month of March 2017. Here's a picture from then.`, images: [{ src: '/images/journey/journey-01.jpg', alt: 'March 2017' }] },
+  { date: 'July 2017', html: `The land was barren and the top soil was devoid of any organic matter. Our initial focus was on increasing the organic matter in the soil. One of the first things that we did was to fence off the land as much as possible to prevent over grazing. What we learnt was that over grazing prevents land recovery. This alone must have worked magic as we saw the land starting to recover slowly. We used to get organic matter from outside via tractor loads initially to seed the farm. We started to plant trees in a small area of the overall land that we named Kaveri plot. Here is a picture from July 2017.`, images: [{ src: '/images/journey/journey-02.jpg', alt: 'July 2017' }] },
+  { date: 'May 2019', html: `Our architects for home design was <a href="https://www.biome-solutions.com/" target="_blank" rel="noopener noreferrer">Biome Environmental Solutions</a>. Our consultants for Permaculture design was <a href="https://ananas.design/" target="_blank" rel="noopener noreferrer">Ananas</a>. Ananas built the first GAIA Map for TVC in May 2019.`, images: [{ src: '/images/journey/journey-03.jpg', alt: 'May 2019' }] },
+  { date: 'Jan 2018', html: `We started with 10 members with the intention of growing to a maximum of 60 members and 100 acres of land. New members joined over time and our last member joined us in 2024. We are 53 member strong community today. First structure in the form of a mud hut was built in Jan 2018. This was completely made of mud and built by hand.`, images: [{ src: '/images/journey/journey-04.jpg', alt: 'Jan 2018' }] },
+  { date: null, html: `We also conducted our first camp site stay.`, images: [{ src: '/images/journey/journey-05.jpg', alt: 'TVC farm' }] },
+  { date: 'July 2018', html: `Construction of first farmer's quarters started in July 2018.`, images: [{ src: '/images/journey/journey-06.jpg', alt: 'July 2018' }] },
+  { date: 'Jan 2019', html: `Ideation workshop at the farm with Ananas in Jan 2019.`, images: [{ src: '/images/journey/journey-07.jpg', alt: 'Jan 2019' }] },
+  { date: 'May 2019', html: `Annual member meetup in the city in May 2019. We meet twice a year, in the city on May 01st and at the farm on Nov 01st.`, images: [{ src: '/images/journey/journey-08.jpg', alt: 'May 2019' }] },
+  { date: 'Nov 2019', html: `We started looking at logo options for our community in Nov 2019. Here are some initial renders made by Sunita, one of our members.`, images: [{ src: '/images/journey/journey-09.jpg', alt: 'Nov 2019' }, { src: '/images/journey/journey-10.jpg', alt: 'Nov 2019' }, { src: '/images/journey/journey-11.jpg', alt: 'Nov 2019' }] },
+  { date: 'Mar 2020', html: `The solar shed was set up in Mar 2020.`, images: [{ src: '/images/journey/journey-12.jpg', alt: 'Mar 2020' }, { src: '/images/journey/journey-13.jpg', alt: 'Mar 2020' }, { src: '/images/journey/journey-14.jpg', alt: 'Mar 2020' }] },
+  { date: 'Jun 2020', html: `Our farm manager Madhavan got married to Krithika in Jun 2020.`, images: [{ src: '/images/journey/journey-15.jpg', alt: 'Jun 2020' }] },
+  { date: 'Oct 2020', html: `After three years, the farm showed real signs of reviving from its degraded state. The team brought some natural inputs from outside — mulberry sticks left over from harvest, banana waste — to start natural regeneration by adding them to the soil as carbon material. 2020 was generous in terms of grass growth, and the team was able to use it as ground cover.`, images: [{ src: '/images/pages/journey/transformation.jpg', alt: 'The transformation of the farm' }] },
+  { date: 'Jan 2021', html: `First cow at TVC in Jan 2021.`, images: [{ src: '/images/journey/journey-16.jpg', alt: 'Jan 2021' }] },
+  { date: 'Aug 2021', html: `Laying of water lines to water the farm in Aug 2021.`, images: [{ src: '/images/journey/journey-17.jpg', alt: 'Aug 2021' }] },
+  { date: 'Sep 2021', html: `Krithika joins as a teacher in the local village school in Sep 2021.`, images: [{ src: '/images/journey/journey-18.jpg', alt: 'Sep 2021' }] },
+  { date: 'Dec 2021', html: `We did a DIY solar panel installation to provide power backup to Madhavan's house in Dec 2021.`, images: [{ src: '/images/journey/journey-19.jpg', alt: 'Dec 2021' }] },
+  { date: 'May 2022', html: `We had our May meet-up in 2022 in Reva and Ranjan's home.`, images: [{ src: '/images/journey/journey-20.jpg', alt: 'May 2022' }] },
+  { date: '2nd Oct 2022', html: `Puja to mark the event for initiation of home construction for the community members on 2nd Oct 2022.`, images: [{ src: '/images/journey/journey-21.jpg', alt: '2nd Oct 2022' }, { src: '/images/journey/journey-22.jpg', alt: '2nd Oct 2022' }] },
+  { date: 'Nov 2022', html: `Meetup at the farm in Nov 2022. Suresh also conducted a food foraging exercise for the community.`, images: [{ src: '/images/journey/journey-23.jpg', alt: 'Nov 2022' }, { src: '/images/journey/journey-24.jpg', alt: 'Nov 2022' }] },
+  { date: 'Mar 2023', html: `Ground breaking for home construction in Mar 2023.`, images: [{ src: '/images/journey/journey-25.jpg', alt: 'Mar 2023' }] },
+  { date: 'Sep 2023', html: `Vijay and Sunita engage with the local school in Odhipuram in Sep 2023.`, images: [{ src: '/images/journey/journey-26.jpg', alt: 'Sep 2023' }] },
+  { date: 'April 2024', html: `Foundations being laid for the initial homes in April 2024.`, images: [{ src: '/images/journey/journey-27.jpg', alt: 'April 2024' }] },
+  { date: 'May 2024', html: `Annual gathering in the city in May 2024 was at Good Earth Malhar.`, images: [{ src: '/images/journey/journey-28.jpg', alt: 'May 2024' }] },
+  { date: null, html: `An elephant destroyed our structure around the mud hut in search of food.`, images: [{ src: '/images/journey/journey-29.jpg', alt: 'TVC farm' }] },
+  { date: 'May 2024', html: `We began our earth works for water harvesting in May 2024.`, images: [{ src: '/images/journey/journey-30.jpg', alt: 'May 2024' }] },
+  { date: 'Nov 2024', html: `Meetup at the farm in Nov 2024 when we invited documentary film maker <a href="https://www.trailingwild.com/sumanth-kuduvalli/" target="_blank" rel="noopener noreferrer">Sumanth Kuduvalli</a> on the making of his film "<a href="https://youtu.be/ltY0EAMABKA?si=45YWVgEGBxgo3fNj" target="_blank" rel="noopener noreferrer">Land of the Blackbuck: A story of hope and resilience</a>".`, images: [{ src: '/images/journey/journey-31.jpg', alt: 'Nov 2024' }] },
+  { date: 'December 2024', html: `4th Edition of 3Bs&1H@TVC with Deepa Mohan in December 2024.`, images: [{ src: '/images/journey/journey-32.jpg', alt: 'December 2024' }, { src: '/images/journey/journey-33.jpg', alt: 'December 2024' }] },
+  { date: 'Mar 2025', html: `We had a wild fire burn through our land. Despite all the firelines created, sometimes these fires breach the lines and burn through a lot of vegetation. Mar 2025.`, images: [{ src: '/images/journey/journey-34.jpg', alt: 'Mar 2025' }] },
+  { date: 'April 2025', html: `Elephants visit us again in April 2025.`, images: [{ src: '/images/journey/journey-35.jpg', alt: 'April 2025' }] },
+  { date: 'May 2025', html: `Another large project for water works to help us capture water in May 2025.`, images: [{ src: '/images/journey/journey-36.jpg', alt: 'May 2025' }] },
+  { date: 'July 2025', html: `Our transformer was stolen in July 2025.`, images: [{ src: '/images/journey/journey-37.jpg', alt: 'July 2025' }] },
+  { date: 'Aug 2025', html: `Our May meetup got pushed to Aug 2025 due to availability conflicts of various members.`, images: [{ src: '/images/journey/journey-38.jpg', alt: 'Aug 2025' }] },
+  { date: 'Aug 2025', html: `5th Edition of 3Bs&1H conducted in Aug 2025.`, images: [{ src: '/images/journey/journey-39.jpg', alt: 'Aug 2025' }, { src: '/images/journey/journey-40.jpg', alt: 'Aug 2025' }] },
+  { date: 'Aug 2025', html: `Home construction makes steady progress. Aug 2025.`, images: [{ src: '/images/journey/journey-41.jpg', alt: 'Aug 2025' }] },
+];
 ---
 
 <BaseLayout title="Our Journey" description="From a degraded 100-acre farm to a regenerating ecosystem — the founding, the design, and the outreach along the way.">
@@ -23,43 +62,53 @@ const outreachPosts = await getCollection('communityOutreach');
       <p>Nature does not hurry, yet everything is accomplished.</p>
       <cite>— Lao Tzu</cite>
     </blockquote>
-
-    <h3>2020, October</h3>
-    <p>After three years, the farm showed real signs of reviving from its degraded state. The team brought some natural inputs from outside — mulberry sticks left over from harvest, banana waste — to start natural regeneration by adding them to the soil as carbon material. 2020 was generous in terms of grass growth, and the team was able to use it as ground cover.</p>
-    <img src="/images/pages/journey/transformation.jpg" alt="The transformation of the farm" />
-    <p class="caption">The transformation</p>
-
-    <Pending note="The old site's History & Timeline page had year markers going back to 2016 (founding) through 2021, but each entry was left empty beyond the heading — the detailed founding and initial-intervention story for each year still needs to be written." />
   </section>
 
   <section class="section section--tint">
     <div class="wrapper">
-      <h2>The design</h2>
-      <p>The farm's regeneration follows permaculture and regenerative design principles: a wildlife corridor higher on the hill closer to the forest is left to grow by itself, food forests combine supporting plants with fruit-bearing trees, and the rest is actively cultivated. The last several years have been dedicated to land rejuvenation, letting vegetation grow in whatever form it takes.</p>
-      <p>The farm's layout — the housing clusters, the food forest zones, the water works — is mapped out below.</p>
-      <div class="map-embed">
-        <iframe
-          loading="lazy"
-          src="https://www.google.com/maps/d/u/0/embed?mid=1b_d-2ZOwDBRTJjbDZ2ovJ7QsdPiqnYrA"
-          width="640"
-          height="480"
-          style="border:0"
-          title="TVC farm plans and design map"
-        ></iframe>
+      <h2>Timeline</h2>
+      <div class="timeline">
+        {timeline.map((entry) => (
+          <div class="timeline-entry">
+            {entry.date && <p class="timeline-date">{entry.date}</p>}
+            <p set:html={entry.html} />
+            <div class="timeline-images">
+              {entry.images.map((img) => (
+                <img src={img.src} alt={img.alt} loading="lazy" />
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
+    </div>
+  </section>
 
-      <h3>Aerial view</h3>
-      <p>A drone flight over the farm, showing the land, the food forest, and the surrounding hills from above.</p>
-      <div class="video-embed">
-        <iframe
-          loading="lazy"
-          src="https://www.youtube.com/embed/ixHNXOiQ9vM"
-          title="TVC Aerial View"
-          frameborder="0"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowfullscreen
-        ></iframe>
-      </div>
+  <section class="section wrapper">
+    <h2>The design</h2>
+    <p>The farm's regeneration follows permaculture and regenerative design principles: a wildlife corridor higher on the hill closer to the forest is left to grow by itself, food forests combine supporting plants with fruit-bearing trees, and the rest is actively cultivated. The last several years have been dedicated to land rejuvenation, letting vegetation grow in whatever form it takes.</p>
+    <p>The farm's layout — the housing clusters, the food forest zones, the water works — is mapped out below.</p>
+    <div class="map-embed">
+      <iframe
+        loading="lazy"
+        src="https://www.google.com/maps/d/u/0/embed?mid=1b_d-2ZOwDBRTJjbDZ2ovJ7QsdPiqnYrA"
+        width="640"
+        height="480"
+        style="border:0"
+        title="TVC farm plans and design map"
+      ></iframe>
+    </div>
+
+    <h3>Aerial view</h3>
+    <p>A drone flight over the farm, showing the land, the food forest, and the surrounding hills from above.</p>
+    <div class="video-embed">
+      <iframe
+        loading="lazy"
+        src="https://www.youtube.com/embed/ixHNXOiQ9vM"
+        title="TVC Aerial View"
+        frameborder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowfullscreen
+      ></iframe>
     </div>
   </section>
 
@@ -110,6 +159,41 @@ const outreachPosts = await getCollection('communityOutreach');
     font-size: 0.85rem;
     color: var(--tvc-ink-soft);
     margin-top: -8px;
+  }
+
+  .timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    margin-top: 20px;
+  }
+
+  .timeline-entry {
+    border-left: 3px solid var(--tvc-orange);
+    padding-left: 20px;
+  }
+
+  .timeline-date {
+    font-weight: 700;
+    color: var(--tvc-green-dark);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-size: 0.85rem;
+    margin: 0 0 6px;
+  }
+
+  .timeline-images {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .timeline-images img {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: var(--radius);
   }
 
   .map-embed iframe {
