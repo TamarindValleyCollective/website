@@ -1,14 +1,40 @@
 ---
 const navItems = [
-  { label: 'About TVC', href: '/about' },
-  { label: 'Our Journey', href: '/our-journey' },
-  { label: 'Visit TVC', href: '/visit' },
+  {
+    label: 'About TVC',
+    children: [
+      { label: 'Overview', href: '/about' },
+      { label: 'In Pictures', href: '/in-pictures' },
+      { label: 'Partners', href: '/ecosystem/partners' },
+      { label: 'Resource Centre', href: '/resource-centre' },
+    ],
+  },
+  {
+    label: 'Our Journey',
+    children: [
+      { label: 'Overview', href: '/our-journey' },
+      { label: 'The Design', href: '/our-journey/design' },
+      { label: 'Community Outreach', href: '/community-outreach' },
+    ],
+  },
+  {
+    label: 'Visit TVC',
+    children: [
+      { label: 'Overview', href: '/visit' },
+      { label: 'Day Visit', href: '/visit/day-visit' },
+      { label: 'Overnight Camping', href: '/visit/camping' },
+      { label: 'Trekking Trails', href: '/visit/trekking-trails' },
+      { label: 'How to Reach', href: '/visit/how-to-reach' },
+    ],
+  },
   { label: 'Biodiversity', href: '/ecosystem' },
   { label: 'Events', href: '/events' },
   { label: 'Contact Us', href: '/contact' },
 ];
 
 const currentPath = Astro.url.pathname;
+const isActive = (href: string) => currentPath === href || currentPath.startsWith(href + '/');
+const isSectionActive = (children: { href: string }[]) => children.some((child) => isActive(child.href));
 ---
 
 <header class="nav">
@@ -24,12 +50,31 @@ const currentPath = Astro.url.pathname;
 
     <nav class="nav__menu" id="nav-menu">
       {navItems.map((item) => (
-        <a
-          href={item.href}
-          class:list={['nav__link', { 'is-active': currentPath === item.href || currentPath.startsWith(item.href + '/') }]}
-        >
-          {item.label}
-        </a>
+        item.children ? (
+          <div class="nav__item">
+            <button
+              type="button"
+              class:list={['nav__link', 'nav__link--toggle', { 'is-active': isSectionActive(item.children) }]}
+              aria-haspopup="true"
+            >
+              {item.label}
+              <svg class="nav__caret" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+                <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <div class="nav__dropdown">
+              {item.children.map((child) => (
+                <a href={child.href} class:list={['nav__sublink', { 'is-active': isActive(child.href) }]}>
+                  {child.label}
+                </a>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <a href={item.href} class:list={['nav__link', { 'is-active': isActive(item.href) }]}>
+            {item.label}
+          </a>
+        )
       ))}
     </nav>
   </div>
@@ -77,7 +122,14 @@ const currentPath = Astro.url.pathname;
     justify-content: flex-end;
   }
 
+  .nav__item {
+    position: relative;
+  }
+
   .nav__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     text-decoration: none;
     color: var(--tvc-ink);
     font-weight: 600;
@@ -87,6 +139,16 @@ const currentPath = Astro.url.pathname;
     white-space: nowrap;
   }
 
+  .nav__link--toggle {
+    appearance: none;
+    -webkit-appearance: none;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-family: inherit;
+    cursor: default;
+  }
+
   .nav__link:hover {
     color: var(--tvc-green);
   }
@@ -94,6 +156,56 @@ const currentPath = Astro.url.pathname;
   .nav__link.is-active {
     color: var(--tvc-green);
     border-bottom-color: var(--tvc-orange);
+  }
+
+  .nav__caret {
+    color: var(--tvc-ink-soft);
+    transition: transform 0.15s ease;
+  }
+
+  .nav__item:hover .nav__caret,
+  .nav__item:focus-within .nav__caret {
+    transform: rotate(180deg);
+  }
+
+  .nav__dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    flex-direction: column;
+    min-width: 210px;
+    background: #fff;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+    padding: 8px;
+    z-index: 60;
+  }
+
+  .nav__item:hover .nav__dropdown,
+  .nav__item:focus-within .nav__dropdown {
+    display: flex;
+  }
+
+  .nav__sublink {
+    display: block;
+    text-decoration: none;
+    color: var(--tvc-ink);
+    font-weight: 600;
+    font-size: 0.85rem;
+    padding: 8px 12px;
+    border-radius: 8px;
+    white-space: nowrap;
+  }
+
+  .nav__sublink:hover {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+  }
+
+  .nav__sublink.is-active {
+    color: var(--tvc-green);
   }
 
   .nav__toggle {
@@ -127,13 +239,37 @@ const currentPath = Astro.url.pathname;
       background: #fff;
       border-bottom: 1px solid var(--tvc-line);
       flex-direction: column;
-      align-items: flex-start;
+      align-items: stretch;
       padding: 12px 24px 20px;
-      gap: 14px;
+      gap: 4px;
+      max-height: calc(100vh - 100%);
+      overflow-y: auto;
     }
 
     .nav__menu.is-open {
       display: flex;
+    }
+
+    .nav__item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .nav__link {
+      padding: 10px 0;
+    }
+
+    .nav__dropdown {
+      display: flex;
+      position: static;
+      border: none;
+      box-shadow: none;
+      padding: 0 0 6px 16px;
+      min-width: 0;
+    }
+
+    .nav__sublink {
+      padding: 8px 0;
     }
   }
 </style>

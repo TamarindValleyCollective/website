@@ -3,6 +3,55 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
 import Pending from '../components/Pending.astro';
 import BiodiversityExplorer from '../components/biodiversity/BiodiversityExplorer.astro';
+
+// Rainfall is logged daily at the farm; sourced from the community's shared rainfall log (issue #5).
+// Agricultural year runs April–March. 2026-27 is the current, in-progress year.
+const rainfall2025 = [
+  { month: 'Apr', mm: 154 },
+  { month: 'May', mm: 119.8 },
+  { month: 'Jun', mm: 18.2 },
+  { month: 'Jul', mm: 21 },
+  { month: 'Aug', mm: 71.4 },
+  { month: 'Sep', mm: 87.2 },
+  { month: 'Oct', mm: 126.9 },
+  { month: 'Nov', mm: 0 },
+  { month: 'Dec', mm: 0 },
+  { month: 'Jan', mm: 0 },
+  { month: 'Feb', mm: 0 },
+  { month: 'Mar', mm: 0 },
+];
+const rainfall2026 = [
+  { month: 'Apr', mm: 0 },
+  { month: 'May', mm: 119 },
+  { month: 'Jun', mm: 40 },
+  { month: 'Jul', mm: 7.6 }, // partial month, still logging
+];
+
+const monsoonToDate = 166.6; // 2026-27, Apr 1 – Jul 15
+const sameSpanLastYear = 303.0; // 2025-26, Apr 1 – Jul 15
+const monsoonDeltaPct = Math.round(((monsoonToDate - sameSpanLastYear) / sameSpanLastYear) * 100);
+
+const chartWidth = 720;
+const chartHeight = 220;
+const chartPadLeft = 36;
+const chartPadBottom = 26;
+const plotWidth = chartWidth - chartPadLeft - 12;
+const plotHeight = chartHeight - chartPadBottom - 10;
+const maxMm = 160; // rounded above the 154mm peak
+const yTicks = [0, 50, 100, 150];
+const bandWidth = plotWidth / rainfall2025.length;
+const barWidth = Math.min(24, bandWidth * 0.55);
+const peakMonth = rainfall2025.reduce((a, b) => (b.mm > a.mm ? b : a));
+
+const bars = rainfall2025.map((d, i) => {
+  const barHeight = (d.mm / maxMm) * plotHeight;
+  return {
+    ...d,
+    x: chartPadLeft + i * bandWidth + (bandWidth - barWidth) / 2,
+    y: 10 + (plotHeight - barHeight),
+    height: Math.max(barHeight, d.mm > 0 ? 2 : 0),
+  };
+});
 ---
 
 <BaseLayout title="The TVC Ecosystem" description="Live biodiversity sightings, birds, trees, geography, and weather at Tamarind Valley Collective.">
@@ -10,13 +59,6 @@ import BiodiversityExplorer from '../components/biodiversity/BiodiversityExplore
 
   <section class="section wrapper">
     <BiodiversityExplorer />
-  </section>
-
-  <section class="section section--tint">
-    <div class="wrapper">
-      <h2>Snakes</h2>
-      <Pending note="No content existed on the old site for this — genuinely new to write." />
-    </div>
   </section>
 
   <section class="section wrapper">
@@ -27,7 +69,156 @@ import BiodiversityExplorer from '../components/biodiversity/BiodiversityExplore
   <section class="section section--tint">
     <div class="wrapper">
       <h2>Geography, landscape &amp; weather</h2>
-      <Pending note="The old site's 'Soil and Weather Conditions' page was never filled in beyond the page shell — rainfall and temperature data still need to be written up." />
+      <p>The farm sits on a west-facing hillslope near Kanakapura, close to the Tamil Nadu–Karnataka border, with sunset views across the valley. Rainfall is logged daily on-site and follows the region's monsoon pattern: wet from April through October, dry the rest of the year.</p>
+
+      <div class="stat-tile">
+        <p class="stat-label">This monsoon so far <span class="stat-sublabel">(1 Apr – 15 Jul 2026)</span></p>
+        <p class="stat-value">{monsoonToDate.toFixed(1)}<span class="stat-unit">mm</span></p>
+        <p class="stat-delta">{Math.abs(monsoonDeltaPct)}% {monsoonDeltaPct < 0 ? 'less' : 'more'} than the same stretch last year ({sameSpanLastYear.toFixed(1)}mm)</p>
+      </div>
+
+      <h3>Monthly rainfall, 2025–26</h3>
+      <svg class="rainfall-chart" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="Monthly rainfall in millimetres for the 2025-26 agricultural year, peaking at 154mm in April and tapering to no rain from November through March">
+        {yTicks.map((tick) => {
+          const ty = 10 + (plotHeight - (tick / maxMm) * plotHeight);
+          return (
+            <g>
+              <line x1={chartPadLeft} x2={chartWidth - 12} y1={ty} y2={ty} class="grid-line" />
+              <text x={chartPadLeft - 8} y={ty + 4} class="axis-label" text-anchor="end">{tick}</text>
+            </g>
+          );
+        })}
+        {bars.map((b) => (
+          <g>
+            <rect x={b.x} y={b.y} width={barWidth} height={b.height} rx="4" class="bar" />
+            {b.month === peakMonth.month && (
+              <text x={b.x + barWidth / 2} y={b.y - 8} class="bar-value" text-anchor="middle">{b.mm}mm</text>
+            )}
+            <text x={b.x + barWidth / 2} y={chartHeight - 6} class="axis-label" text-anchor="middle">{b.month}</text>
+          </g>
+        ))}
+      </svg>
+
+      <details class="rainfall-table-details">
+        <summary>Full monthly figures (2025–26 and 2026–27 to date)</summary>
+        <table class="rainfall-table">
+          <thead>
+            <tr><th>Month</th><th>2025–26</th><th>2026–27</th></tr>
+          </thead>
+          <tbody>
+            {rainfall2025.map((d, i) => (
+              <tr>
+                <td>{d.month}</td>
+                <td>{d.mm.toFixed(1)}mm</td>
+                <td>{rainfall2026[i] ? `${rainfall2026[i].mm.toFixed(1)}mm${i === rainfall2026.length - 1 ? ' (to date)' : ''}` : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
     </div>
   </section>
 </BaseLayout>
+
+<style>
+  .stat-tile {
+    background: #fff;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+    padding: 20px 24px;
+    max-width: 360px;
+    margin: 20px 0;
+  }
+
+  .stat-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+    margin: 0;
+  }
+
+  .stat-sublabel {
+    font-weight: 400;
+  }
+
+  .stat-value {
+    font-family: var(--font-display, inherit);
+    font-size: 2.4rem;
+    font-weight: 700;
+    color: var(--tvc-green-dark);
+    margin: 4px 0;
+    line-height: 1;
+  }
+
+  .stat-unit {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-left: 4px;
+    color: var(--tvc-ink-soft);
+  }
+
+  .stat-delta {
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+    margin: 0;
+  }
+
+  .rainfall-chart {
+    width: 100%;
+    max-width: 720px;
+    height: auto;
+    margin-top: 8px;
+  }
+
+  .rainfall-chart .bar {
+    fill: var(--tvc-green);
+  }
+
+  .rainfall-chart .grid-line {
+    stroke: var(--tvc-line);
+    stroke-width: 1;
+  }
+
+  .rainfall-chart .axis-label {
+    font-size: 11px;
+    fill: var(--tvc-ink-soft);
+  }
+
+  .rainfall-chart .bar-value {
+    font-size: 12px;
+    font-weight: 700;
+    fill: var(--tvc-ink);
+  }
+
+  .rainfall-table-details {
+    margin-top: 20px;
+  }
+
+  .rainfall-table-details summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--tvc-green-dark);
+  }
+
+  .rainfall-table {
+    width: 100%;
+    max-width: 480px;
+    border-collapse: collapse;
+    margin-top: 12px;
+    font-size: 0.9rem;
+  }
+
+  .rainfall-table th,
+  .rainfall-table td {
+    text-align: left;
+    padding: 6px 12px 6px 0;
+    border-bottom: 1px solid var(--tvc-line);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rainfall-table th {
+    color: var(--tvc-ink-soft);
+    font-weight: 600;
+  }
+</style>

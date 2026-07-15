@@ -12,7 +12,7 @@ const { partner } = Astro.props;
 const { Content } = await render(partner);
 ---
 
-<BaseLayout title={partner.data.title} description={partner.data.excerpt}>
+<BaseLayout title={partner.data.title} description={partner.data.excerpt} image={partner.data.coverImage}>
   <PageHero eyebrow="Partners" title={partner.data.title} image={partner.data.coverImage} imageAlt={partner.data.title} />
   <article class="section wrapper prose">
     <Content />

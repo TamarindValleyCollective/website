@@ -1,14 +1,12 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
-import Pending from '../components/Pending.astro';
 import { getCollection } from 'astro:content';
 
-const products = await getCollection('products');
 const outreach = await getCollection('communityOutreach');
 ---
 
-<BaseLayout title="Resource Centre" description="Lantana furniture, farm produce, and learning programs from Tamarind Valley Collective.">
+<BaseLayout title="Resource Centre" description="Lantana furniture and learning programs from Tamarind Valley Collective.">
   <PageHero eyebrow="Resource Centre" title="Resource Centre" />
 
   <section class="section wrapper">
@@ -20,36 +18,16 @@ const outreach = await getCollection('communityOutreach');
 
   <section class="section section--tint">
     <div class="wrapper">
-      <h2>Produce</h2>
+      <h2>Learning programs</h2>
       <div class="grid">
-        {products.map((p) => (
-          <a class="card" href={`/ecosystem/products/${p.id}`}>
-            {p.data.coverImage && <img src={p.data.coverImage} alt={p.data.title} />}
-            <h4>{p.data.title}</h4>
-            <p>{p.data.excerpt}</p>
+        {outreach.map((o) => (
+          <a class="card" href={`/community-outreach/${o.id}`}>
+            {o.data.coverImage && <img src={o.data.coverImage} alt={o.data.title} />}
+            <h4>{o.data.title}</h4>
+            <p>{o.data.excerpt}</p>
           </a>
         ))}
       </div>
-    </div>
-  </section>
-
-  <section class="section wrapper">
-    <h2>Learning programs</h2>
-    <div class="grid">
-      {outreach.map((o) => (
-        <a class="card" href={`/community-outreach/${o.id}`}>
-          {o.data.coverImage && <img src={o.data.coverImage} alt={o.data.title} />}
-          <h4>{o.data.title}</h4>
-          <p>{o.data.excerpt}</p>
-        </a>
-      ))}
-    </div>
-  </section>
-
-  <section class="section section--tint">
-    <div class="wrapper">
-      <h2>KANS</h2>
-      <Pending note="The structure doc names 'KANS' here but no source material exists anywhere on the old site — confirm what it stands for and source or write this content." />
     </div>
   </section>
 </BaseLayout>

@@ -1,0 +1,727 @@
+---
+// Horizontal "wire" timeline, adapted from a Claude-artifact draft (dark,
+// wire-and-icon design) built on an expanded account of the same history as
+// issue #2 — reworked here to the site's fonts and a validated dark-mode
+// palette instead of the artifact's own colors. Images downloaded locally
+// under public/images/journey/.
+const ICONS: Record<number, string> = {
+  2017: `<svg viewBox="0 0 24 24"><path d="M12 21V10"/><path d="M12 10c0-4.2-3.1-6.4-7.2-6.4 0 4.2 3.1 7.4 7.2 6.4z"/><path d="M12 10c0-4.2 3.1-6.4 7.2-6.4 0 4.2-3.1 7.4-7.2 6.4z"/></svg>`,
+  2018: `<svg viewBox="0 0 24 24"><path d="M3.5 20h17"/><path d="M5 20 12 6l7 14"/><path d="M9.5 20v-5.5h5V20"/></svg>`,
+  2019: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.3"/><path d="M15.2 8.8l-2.1 5.6-5.6 2 2.1-5.6 5.6-2z"/></svg>`,
+  2020: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.3v3M12 18.7v3M4.3 4.3l2.1 2.1M17.6 17.6l2.1 2.1M2.3 12h3M18.7 12h3M4.3 19.7l2.1-2.1M17.6 6.4l2.1-2.1"/></svg>`,
+  2021: `<svg viewBox="0 0 24 24"><path d="M12 4v9"/><line x1="4.5" y1="13" x2="19.5" y2="13"/><path d="M12 13c-1.2 3.2-3.2 4.3-5.4 8.5M12 13c1.2 3.2 3.2 4.3 5.4 8.5M12 13v8.5"/></svg>`,
+  2022: `<svg viewBox="0 0 24 24"><path d="M12 2.5v11.5"/><path d="M8 10.5c0 4 1.7 6.4 4 8.5 2.3-2.1 4-4.5 4-8.5a4 4 0 00-8 0z"/></svg>`,
+  2023: `<svg viewBox="0 0 24 24"><path d="M13 2 4.5 13.5h5.8L9 21.5l9.5-12.6h-5.8L13 2z"/></svg>`,
+  2024: `<svg viewBox="0 0 24 24"><path d="M6.8 15.2a3.9 3.9 0 010-7.8 5 5 0 019.6-1.4 4.4 4.4 0 01-.6 9.2H6.8z"/><path d="M8.7 18.3l-1.4 2.8M12.4 18.3l-1.4 2.8M16.1 18.3l-1.4 2.8"/></svg>`,
+  2025: `<svg viewBox="0 0 24 24"><path d="M12 2.2c1.1 3.8-2.6 5-2.6 8.6a2.6 2.6 0 005.2 0c0-1.3-.9-1.8-.9-3.1 1.8 1 2.7 3.2 2.7 5a4.4 4.4 0 01-8.8 0c0-4.6 3.5-5.6 4.4-10.5z"/></svg>`,
+  2026: `<svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7"/><path d="M6 10.2v10.3h5v-6h2v6h5V10.2"/></svg>`,
+};
+
+const DATA = [
+  { year: 2017, label: `Seeding Beginnings`, narrative: `TVC began as a seed idea among ten founders who shared one goal: living sustainably, together. Partnering with WeCommunities — their first project — the group chose a barren plot near Thakkatti village in Tamil Nadu. Fencing stopped the overgrazing that had stripped the soil, and members began trucking in organic matter to seed a small area they named the Kaveri plot. A permaculture course at Navadarshanam shaped their thinking, but the year ended hard: an unusually fierce monsoon washed away the season's first earthwork and much of what had been planted.`, events: [
+    { month: 'Mar', title: `First visit to the site`, type: 'neutral', text: `The seed group — later ten members strong — made its first visit to the land near Thakkatti village, Tamil Nadu, in partnership with real-estate developer WeCommunities. TVC was WeCommunities' first project.`, images: ['/images/journey/journey-01.jpg'] },
+    { month: 'Jun', title: `First earthwork to store water`, type: 'water', text: `The barren, organically depleted land got its first earthwork built to help capture and hold water on site.`, images: ['/images/journey/journey-45.jpg'] },
+    { month: 'Jul', title: `Planting begins at the Kaveri plot`, type: 'leaf', text: `Fencing to stop overgrazing was already letting the land recover. Members began planting trees on a section they named the Kaveri plot, seeding it with organic matter trucked in from outside.`, images: ['/images/journey/journey-02.jpg'] },
+    { month: 'Sep', title: `Permaculture course at Navadarshanam`, type: 'leaf', text: `A large group of members attended a Permaculture course held exclusively for TVC at Navadarshanam, guided by design consultants Ananas.`, images: ['/images/journey/journey-42.jpg'] },
+    { month: 'Oct', title: `Monsoon washes the earthwork away`, type: 'ember', text: `An unusually heavy north-east monsoon hit the greater Krishnagiri district, with nearby stations logging 20–40mm in single 24-hour spells. The deluge destroyed the June earthwork and washed away much of what had been planted.`, images: ['/images/journey/journey-48.jpg'] },
+  ]},
+  { year: 2018, label: `First Structures`, narrative: `With the land recovering, TVC put up its first physical structures. A mud hut, built entirely by hand, became the community's first shelter, and members held their first overnight stay at the farm that same January. By July, construction had begun on the farmer's quarters — the first sign of permanent life on site.`, events: [
+    { month: 'Jan', title: `First mud hut, built by hand`, type: 'ochre', text: `TVC's first structure went up — a hut built entirely of mud, entirely by hand.`, images: ['/images/journey/journey-04.jpg'] },
+    { month: 'Jan', title: `First campsite stay`, type: 'leaf', text: `Members held their first overnight camp stay at the farm.`, images: ['/images/journey/journey-05.jpg'] },
+    { month: 'Jul', title: `Farmer's quarters construction begins`, type: 'ochre', text: `Work began on the first farmer's quarters at the site.`, images: ['/images/journey/journey-06.jpg'] },
+  ]},
+  { year: 2019, label: `Finding Form`, narrative: `Design work deepened in 2019. Permaculture consultants Ananas ran an ideation workshop at the farm in January and delivered the community's first GAIA design map in May. The city meet-up rhythm was now established — May in town, November at the farm — and by year's end, member Sunita's early sketches had grown into TVC's finalized logo.`, events: [
+    { month: 'Jan', title: `Ideation workshop with Ananas`, type: 'leaf', text: `Ananas ran an ideation workshop at the farm to shape the site's design direction.`, images: ['/images/journey/journey-07.jpg'] },
+    { month: 'May', title: `First GAIA map delivered`, type: 'leaf', text: `Ananas delivered TVC's first GAIA permaculture design map.`, images: ['/images/journey/journey-03.jpg'] },
+    { month: 'May', title: `Annual city meet-up`, type: 'neutral', text: `Members gathered in the city for the twice-yearly meet-up — the pattern settled into May 1st in the city and November 1st at the farm.`, images: ['/images/journey/journey-08.jpg'] },
+    { month: 'Nov', title: `Logo exploration begins`, type: 'neutral', text: `Member Sunita produced the first set of logo concept renders for the community.`, images: ['/images/journey/journey-09.jpg', '/images/journey/journey-10.jpg', '/images/journey/journey-11.jpg'] },
+    { month: 'Dec', title: `Logo finalized`, type: 'ochre', text: `The community's current logo was finalized.`, images: ['/images/journey/journey-49.jpg'] },
+  ]},
+  { year: 2020, label: `Solar Vows`, narrative: `Even as the world slowed down, TVC kept building. A solar shed went up in March, giving the farm its first dedicated power source. And in a quieter, happier turn, farm manager Madhavan married Krithika in June.`, events: [
+    { month: 'Mar', title: `Solar shed set up`, type: 'ochre', text: `A dedicated solar shed was installed at the farm to provide power.`, images: ['/images/journey/journey-12.jpg', '/images/journey/journey-13.jpg', '/images/journey/journey-14.jpg'] },
+    { month: 'Jun', title: `Madhavan & Krithika's wedding`, type: 'leaf', text: `Farm manager Madhavan married Krithika.`, images: ['/images/journey/journey-15.jpg'] },
+  ]},
+  { year: 2021, label: `Growing Roots`, narrative: `The farm took on more life this year. Its first cow arrived in January, water lines were laid in August to properly irrigate the land, and Krithika began teaching at the local village school in September. By December, members had wired up a DIY solar backup system for Madhavan's house.`, events: [
+    { month: 'Jan', title: `First cow at TVC`, type: 'leaf', text: `The farm welcomed its first cow.`, images: ['/images/journey/journey-16.jpg'] },
+    { month: 'Aug', title: `Water lines laid to the farm`, type: 'water', text: `Water lines were laid to irrigate the farm.`, images: ['/images/journey/journey-17.jpg'] },
+    { month: 'Sep', title: `Krithika joins the village school`, type: 'leaf', text: `Krithika began teaching at the local village school.`, images: ['/images/journey/journey-18.jpg'] },
+    { month: 'Dec', title: `DIY solar backup for Madhavan's house`, type: 'ochre', text: `Members completed a DIY solar panel install to give Madhavan's house power backup.`, images: ['/images/journey/journey-19.jpg'] },
+  ]},
+  { year: 2022, label: `Ground Breaking`, narrative: `2022 was a year of gathering and groundwork. The May meet-up moved to Reva and Ranjan's home in the city, and in November, Suresh led a food-foraging walk at the farm. But the year's biggest milestone came in October: a puja marking the official start of home construction for community members.`, events: [
+    { month: 'May', title: `Meet-up at Reva & Ranjan's home`, type: 'neutral', text: `The May city meet-up was hosted at Reva and Ranjan's home.`, images: ['/images/journey/journey-20.jpg'] },
+    { month: 'Oct', title: `Puja marks the start of home construction`, type: 'ochre', text: `On October 2nd, a puja was held to mark the beginning of home construction for community members.`, images: ['/images/journey/journey-21.jpg', '/images/journey/journey-22.jpg'] },
+    { month: 'Nov', title: `Farm meet-up & food foraging`, type: 'leaf', text: `Members gathered at the farm; Suresh led a food-foraging exercise for the community.`, images: ['/images/journey/journey-23.jpg', '/images/journey/journey-24.jpg'] },
+  ]},
+  { year: 2023, label: `Power Arrives`, narrative: `Construction became real in 2023. Ground broke for the first member homes in March, and in July, a 100 KW transformer finally brought grid power to TVC. Community ties with the surrounding villages grew too, as Vijay and Sunita began working with the local school in Odipuram.`, events: [
+    { month: 'Mar', title: `Ground-breaking for home construction`, type: 'ochre', text: `Construction of member homes officially broke ground.`, images: ['/images/journey/journey-25.jpg'] },
+    { month: 'Jul', title: `Power arrives at TVC`, type: 'ochre', text: `A 100 KW transformer was installed, bringing grid power to TVC for the first time.`, images: [] },
+    { month: 'Sep', title: `Engaging the Odipuram school`, type: 'leaf', text: `Vijay and Sunita began engaging with the local school in Odipuram.`, images: ['/images/journey/journey-26.jpg'] },
+  ]},
+  { year: 2024, label: `Testing Ground`, narrative: `This year tested the community as much as it rewarded it. Home foundations were laid in April, but May also brought an elephant that tore through the original mud hut's structure — even as new water-harvesting earthworks began nearby. September's downpour undid years of repair work, washing out the very same bund the community had first lost back in 2017. Still, the year closed on warmer notes: a November meet-up with filmmaker Sumanth Kuduvalli, and the fourth edition of 3Bs&1H with naturalist Deepa Mohan in December.`, events: [
+    { month: 'Apr', title: `Foundations laid for the first homes`, type: 'ochre', text: `Foundation work began for the community's first homes.`, images: ['/images/journey/journey-27.jpg'] },
+    { month: 'May', title: `Annual gathering at Good Earth Malhar`, type: 'neutral', text: `The May city meet-up was held at Good Earth Malhar.`, images: ['/images/journey/journey-28.jpg'] },
+    { month: 'May', title: `An elephant damages the mud hut`, type: 'ember', text: `An elephant searching for food destroyed the structure surrounding the original mud hut.`, images: ['/images/journey/journey-29.jpg'] },
+    { month: 'May', title: `Earthworks begin for water harvesting`, type: 'water', text: `New earthworks got underway for capturing and harvesting water on site.`, images: ['/images/journey/journey-30.jpg'] },
+    { month: 'Sep', title: `The rebuilt bund washes out again`, type: 'ember', text: `An unusually heavy downpour washed out the reinforced bund that had replaced the one lost back in 2017 — a frustrating repeat of history.`, images: ['/images/journey/journey-44.jpg'] },
+    { month: 'Nov', title: `Meet-up with filmmaker Sumanth Kuduvalli`, type: 'leaf', text: `At the farm meet-up, documentary filmmaker Sumanth Kuduvalli spoke about making "Land of the Blackbuck: A Story of Hope and Resilience."`, images: ['/images/journey/journey-31.jpg'] },
+    { month: 'Dec', title: `4th Edition of 3Bs&1H, with Deepa Mohan`, type: 'leaf', text: `TVC hosted the fourth edition of its 3Bs&1H gathering with naturalist Deepa Mohan.`, images: ['/images/journey/journey-32.jpg', '/images/journey/journey-33.jpg'] },
+  ]},
+  { year: 2025, label: `Under Siege`, narrative: `If 2024 tested TVC, 2025 pressed harder. A wildfire breached the farm's fire lines in March, elephants returned in April, and in July, the community's transformer — installed only two years before — was stolen outright. Yet the work continued: a bigger water-harvesting project got underway in May, the fifth 3Bs&1H gathering ran in August, and home construction kept inching forward.`, events: [
+    { month: 'Mar', title: `Wildfire burns through the land`, type: 'ember', text: `A wildfire breached the farm's fire lines, burning through a significant stretch of vegetation.`, images: ['/images/journey/journey-34.jpg'] },
+    { month: 'Apr', title: `Elephants visit again`, type: 'ember', text: `Elephants returned to the land for another visit.`, images: ['/images/journey/journey-35.jpg'] },
+    { month: 'May', title: `A larger water-harvesting project`, type: 'water', text: `TVC undertook a larger project to capture and hold water on the land.`, images: ['/images/journey/journey-36.jpg'] },
+    { month: 'Jul', title: `The transformer is stolen`, type: 'ember', text: `TVC's transformer — installed just two years earlier — was stolen.`, images: ['/images/journey/journey-37.jpg'] },
+    { month: 'Aug', title: `May meet-up, postponed to August`, type: 'neutral', text: `Scheduling conflicts pushed the usual May meet-up to August.`, images: ['/images/journey/journey-38.jpg'] },
+    { month: 'Aug', title: `5th Edition of 3Bs&1H`, type: 'leaf', text: `The community held the fifth edition of its 3Bs&1H gathering.`, images: ['/images/journey/journey-39.jpg', '/images/journey/journey-40.jpg'] },
+    { month: 'Aug', title: `Home construction, steady progress`, type: 'ochre', text: `Construction of member homes continued to make steady progress.`, images: ['/images/journey/journey-41.jpg'] },
+  ]},
+  { year: 2026, label: `First Home`, narrative: `Nine years in, TVC's first home was finally ready. On March 15th, the community celebrated a house warming for Ram & Krishna — the same day its new pottery wheel was inaugurated with a workshop led by Ravi Varma. In May, members finally held the long-delayed 2019 city meet-up, hosted by Kiran & Zainab.`, events: [
+    { month: 'Mar', title: `First home completed — house warming`, type: 'ochre', text: `On March 15th, TVC celebrated its first completed home with a house warming for Ram & Krishna.`, images: ['/images/journey/journey-46.jpg', '/images/journey/journey-51.jpg', '/images/journey/journey-47.jpg'] },
+    { month: 'Mar', title: `Pottery wheel inaugurated`, type: 'leaf', text: `The same day, TVC inaugurated its pottery wheel with a first workshop led by Ravi Varma.`, images: ['/images/journey/journey-50.jpg'] },
+    { month: 'May', title: `The delayed 2019 city meet-up, at last`, type: 'neutral', text: `Members finally held the long-postponed 2019 city meet-up, hosted by Kiran & Zainab.`, images: ['/images/journey/journey-43.jpg'] },
+  ]},
+];
+
+const DEFAULT_YEAR = 2026;
+---
+
+<div class="jt2" data-default-year={DEFAULT_YEAR}>
+  <div class="jt2-wire-outer">
+    <div class="jt2-wire" role="tablist" aria-label="Select a year">
+      <div class="jt2-wireline" aria-hidden="true"></div>
+      {DATA.map((y, i) => (
+        <button
+          type="button"
+          class="jt2-stop"
+          class:list={[i % 2 === 0 ? 'up' : 'down']}
+          data-year={y.year}
+          role="tab"
+          aria-selected={y.year === DEFAULT_YEAR ? 'true' : 'false'}
+        >
+          <span class="jt2-tick" aria-hidden="true"></span>
+          <span class="jt2-dot" aria-hidden="true"></span>
+          <span class="jt2-labelblock">
+            <span class="jt2-icon" set:html={ICONS[y.year]} />
+            <span class="jt2-word">{y.label}</span>
+            <span class="jt2-yr">{y.year}</span>
+          </span>
+        </button>
+      ))}
+    </div>
+  </div>
+
+  <div class="jt2-detail" id="jt2-detail">
+    {DATA.map((y) => (
+      <div class="jt2-panel" data-year-panel={y.year} hidden={y.year !== DEFAULT_YEAR}>
+        <div class="jt2-narrative">
+          <div class="jt2-headrow">
+            <span class="jt2-icon-lg" set:html={ICONS[y.year]} />
+            <span class="jt2-eyebrow">{y.label}</span>
+          </div>
+          <h3>{y.year}</h3>
+          <p>{y.narrative}</p>
+        </div>
+        <div class="jt2-months">
+          <p class="jt2-seclabel">Month by month</p>
+          <div class="jt2-strip">
+            {y.events.map((e) => (
+              <button type="button" class="jt2-card" data-month={e.month} data-title={e.title} data-text={e.text} data-images={JSON.stringify(e.images)}>
+                {e.images[0] ? (
+                  <img class="jt2-thumb" src={e.images[0]} alt={e.title} loading="lazy" />
+                ) : (
+                  <span class="jt2-thumb-fallback">No photo</span>
+                )}
+                <span class="jt2-cardmeta">
+                  <span class="jt2-month"><span class:list={['jt2-dotsm', `type-${e.type}`]}></span>{e.month} {y.year}</span>
+                  <span class="jt2-title">{e.title}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+</div>
+
+<div class="jt2-modal-backdrop" id="jt2-modal-backdrop">
+  <div class="jt2-modal-wrap">
+    <button class="jt2-modal-close" id="jt2-modal-close" aria-label="Close">✕</button>
+    <div class="jt2-modal" id="jt2-modal"></div>
+  </div>
+</div>
+
+<script>
+  const root = document.querySelector<HTMLElement>('.jt2')!;
+  const stops = Array.from(root.querySelectorAll<HTMLButtonElement>('.jt2-stop'));
+  const panels = Array.from(root.querySelectorAll<HTMLElement>('.jt2-panel'));
+  const modalBackdrop = document.getElementById('jt2-modal-backdrop')!;
+  const modal = document.getElementById('jt2-modal')!;
+  const modalClose = document.getElementById('jt2-modal-close')!;
+
+  function selectYear(year: string) {
+    stops.forEach((s) => {
+      const active = s.dataset.year === year;
+      s.classList.toggle('active', active);
+      s.setAttribute('aria-selected', String(active));
+    });
+    panels.forEach((p) => {
+      p.hidden = p.dataset.yearPanel !== year;
+    });
+  }
+
+  stops.forEach((stop) => {
+    stop.addEventListener('click', () => selectYear(stop.dataset.year!));
+  });
+
+  function openModal(card: HTMLButtonElement) {
+    const images: string[] = JSON.parse(card.dataset.images || '[]');
+    const title = card.dataset.title || '';
+    const text = card.dataset.text || '';
+    const month = card.dataset.month || '';
+    modal.innerHTML = `
+      ${images.length ? `<div class="jt2-modal-imgs">${images.map((src) => `<img src="${src}" alt="${title}" />`).join('')}</div>` : ''}
+      <div class="jt2-modal-body">
+        <p class="jt2-month-tag">${month}</p>
+        <h3>${title}</h3>
+        <p>${text}</p>
+      </div>
+    `;
+    modalBackdrop.classList.add('open');
+  }
+
+  function closeModal() {
+    modalBackdrop.classList.remove('open');
+  }
+
+  root.querySelectorAll<HTMLButtonElement>('.jt2-card').forEach((card) => {
+    card.addEventListener('click', () => openModal(card));
+  });
+
+  modalClose.addEventListener('click', closeModal);
+  modalBackdrop.addEventListener('click', (ev) => {
+    if (ev.target === modalBackdrop) closeModal();
+  });
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') closeModal();
+  });
+</script>
+
+<style>
+  .jt2 {
+    --jt-bg: #16140f;
+    --jt-surface: rgba(242, 234, 217, 0.045);
+    --jt-cream: #f2ead9;
+    --jt-cream-dim: #a89c82;
+    --jt-line: rgba(242, 234, 217, 0.14);
+    --jt-line-strong: rgba(242, 234, 217, 0.32);
+    --jt-accent: #d9a441;
+    --jt-ochre: #c98500;
+    --jt-leaf: #2f9e4f;
+    --jt-water: #3987e5;
+    --jt-ember: #e66767;
+    --jt-neutral: #a89c82;
+
+    background: var(--jt-bg);
+    color: var(--jt-cream);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow-soft);
+  }
+
+  /* ---------------- wire ---------------- */
+  .jt2-wire-outer {
+    padding: 32px clamp(16px, 3vw, 40px) 0;
+  }
+
+  .jt2-wire {
+    position: relative;
+    display: flex;
+    height: 150px;
+  }
+
+  .jt2-wireline {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 2px;
+    background: linear-gradient(to right, rgba(47, 158, 79, 0.25), var(--jt-line-strong) 8%, var(--jt-line-strong) 92%, rgba(217, 164, 65, 0.4));
+  }
+
+  .jt2-stop {
+    appearance: none;
+    -webkit-appearance: none;
+    background: none;
+    border: none;
+    font: inherit;
+    flex: 1;
+    position: relative;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .jt2-stop:focus-visible .jt2-dot {
+    outline: 2px solid var(--jt-accent);
+    outline-offset: 3px;
+  }
+
+  .jt2-dot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--jt-bg);
+    border: 2px solid var(--jt-line-strong);
+    transform: translate(-50%, -50%);
+    transition: all 0.25s ease;
+    z-index: 2;
+  }
+
+  .jt2-stop:hover .jt2-dot {
+    border-color: var(--jt-cream-dim);
+  }
+
+  .jt2-stop.active .jt2-dot {
+    background: var(--jt-accent);
+    border-color: var(--jt-accent);
+    transform: translate(-50%, -50%) scale(1.35);
+    box-shadow: 0 0 0 5px rgba(217, 164, 65, 0.16);
+  }
+
+  .jt2-tick {
+    position: absolute;
+    left: 50%;
+    width: 2px;
+    background: var(--jt-line-strong);
+    transform: translateX(-50%);
+    transition: background 0.25s ease;
+  }
+
+  .jt2-stop.up .jt2-tick {
+    top: 32%;
+    height: 18%;
+  }
+
+  .jt2-stop.down .jt2-tick {
+    top: 50%;
+    height: 18%;
+  }
+
+  .jt2-stop.active .jt2-tick {
+    background: var(--jt-accent);
+  }
+
+  .jt2-labelblock {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    width: max-content;
+    max-width: 120px;
+    text-align: center;
+  }
+
+  .jt2-stop.up .jt2-labelblock {
+    top: 0;
+  }
+
+  .jt2-stop.down .jt2-labelblock {
+    bottom: 0;
+  }
+
+  .jt2-icon {
+    color: var(--jt-cream-dim);
+    line-height: 0;
+    transition: color 0.2s ease, transform 0.2s ease;
+  }
+
+  .jt2-icon :global(svg) {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    display: block;
+  }
+
+  .jt2-stop.active .jt2-icon {
+    color: var(--jt-accent);
+    transform: scale(1.1);
+  }
+
+  .jt2-word {
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--jt-cream-dim);
+    line-height: 1.25;
+  }
+
+  .jt2-yr {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 19px;
+    color: var(--jt-cream);
+    line-height: 1;
+  }
+
+  .jt2-stop.active .jt2-word,
+  .jt2-stop.active .jt2-yr {
+    color: var(--jt-accent);
+  }
+
+  /* ---------------- detail panel ---------------- */
+  .jt2-detail {
+    border-top: 1px solid var(--jt-line);
+    margin-top: 20px;
+    padding: 24px clamp(16px, 3vw, 40px) 32px;
+  }
+
+  .jt2-panel {
+    display: flex;
+    gap: clamp(20px, 3vw, 40px);
+    min-height: 340px;
+  }
+
+  /* [hidden] must win over the display:flex above — same-specificity author
+     rules beat the UA stylesheet's [hidden]{display:none}, so this needs to
+     come after and be explicit, or every panel stacks and paints at once. */
+  .jt2-panel[hidden] {
+    display: none;
+  }
+
+  .jt2-narrative {
+    flex: 0 0 30%;
+    max-width: 380px;
+    min-width: 220px;
+  }
+
+  .jt2-headrow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .jt2-icon-lg {
+    color: var(--jt-accent);
+    line-height: 0;
+  }
+
+  .jt2-icon-lg :global(svg) {
+    width: 26px;
+    height: 26px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    display: block;
+  }
+
+  .jt2-eyebrow {
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--jt-accent);
+  }
+
+  .jt2-narrative h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 34px;
+    margin: 0 0 12px;
+    line-height: 1;
+    color: var(--jt-cream);
+  }
+
+  .jt2-narrative p {
+    font-size: 14.5px;
+    line-height: 1.62;
+    color: var(--jt-cream-dim);
+    margin: 0;
+  }
+
+  .jt2-months {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .jt2-seclabel {
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--jt-cream-dim);
+    margin: 0 0 10px;
+  }
+
+  .jt2-strip {
+    flex: 1;
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scroll-snap-type: x proximity;
+  }
+
+  .jt2-strip::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .jt2-strip::-webkit-scrollbar-thumb {
+    background: var(--jt-line-strong);
+    border-radius: 4px;
+  }
+
+  .jt2-card {
+    appearance: none;
+    -webkit-appearance: none;
+    scroll-snap-align: start;
+    flex: 0 0 auto;
+    width: 190px;
+    background: var(--jt-surface);
+    border: 1px solid var(--jt-line);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+  }
+
+  .jt2-card:hover {
+    border-color: var(--jt-line-strong);
+    transform: translateY(-3px);
+  }
+
+  .jt2-thumb {
+    width: 100%;
+    height: 130px;
+    object-fit: cover;
+    display: block;
+  }
+
+  .jt2-thumb-fallback {
+    width: 100%;
+    height: 130px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--jt-cream-dim);
+  }
+
+  .jt2-cardmeta {
+    padding: 9px 11px 11px;
+  }
+
+  .jt2-month {
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--jt-cream-dim);
+  }
+
+  .jt2-dotsm {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+    display: inline-block;
+  }
+
+  .jt2-dotsm.type-water { background: var(--jt-water); }
+  .jt2-dotsm.type-ember { background: var(--jt-ember); }
+  .jt2-dotsm.type-ochre { background: var(--jt-ochre); }
+  .jt2-dotsm.type-leaf { background: var(--jt-leaf); }
+  .jt2-dotsm.type-neutral { background: var(--jt-neutral); }
+
+  .jt2-title {
+    display: block;
+    font-size: 13px;
+    line-height: 1.3;
+    margin-top: 5px;
+    color: var(--jt-cream);
+  }
+
+  @media (max-width: 760px) {
+    .jt2-wire-outer {
+      padding: 24px 16px 0;
+      overflow-x: auto;
+    }
+
+    .jt2-wire {
+      width: max-content;
+      min-width: 100%;
+      height: 110px;
+    }
+
+    .jt2-stop {
+      flex: 0 0 62px;
+    }
+
+    .jt2-stop.up .jt2-labelblock,
+    .jt2-stop.down .jt2-labelblock {
+      top: auto;
+      bottom: 0;
+    }
+
+    .jt2-word {
+      display: none;
+    }
+
+    .jt2-labelblock {
+      max-width: 60px;
+    }
+
+    .jt2-stop.up .jt2-tick,
+    .jt2-stop.down .jt2-tick {
+      top: 50%;
+      height: 18%;
+    }
+
+    .jt2-panel {
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .jt2-narrative {
+      max-width: none;
+    }
+
+    .jt2-narrative h3 {
+      font-size: 28px;
+    }
+  }
+</style>
+
+<style is:global>
+  .jt2-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 8, 6, 0.8);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 4vh 4vw;
+  }
+
+  .jt2-modal-backdrop.open {
+    display: flex;
+  }
+
+  .jt2-modal-wrap {
+    position: relative;
+    max-width: 720px;
+    width: 100%;
+  }
+
+  .jt2-modal {
+    background: #1e1a14;
+    border: 1px solid rgba(242, 234, 217, 0.32);
+    border-radius: 14px;
+    max-height: 88vh;
+    overflow-y: auto;
+    color: #f2ead9;
+  }
+
+  .jt2-modal-imgs {
+    display: flex;
+    height: 40vh;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .jt2-modal-imgs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .jt2-modal-imgs img {
+    flex: 0 0 100%;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    scroll-snap-align: start;
+    display: block;
+  }
+
+  .jt2-modal-body {
+    padding: 22px 26px 26px;
+  }
+
+  .jt2-month-tag {
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #d9a441;
+    margin: 0;
+  }
+
+  .jt2-modal-body h3 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 22px;
+    margin: 8px 0 10px;
+    line-height: 1.25;
+    color: #f2ead9;
+  }
+
+  .jt2-modal-body p:not(.jt2-month-tag) {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #cfc4ab;
+    margin: 0;
+  }
+
+  .jt2-modal-close {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(242, 234, 217, 0.32);
+    color: #f2ead9;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+  }
+
+  .jt2-modal-close:hover {
+    border-color: #d9a441;
+    color: #d9a441;
+  }
+</style>

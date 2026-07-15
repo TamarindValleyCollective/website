@@ -1,0 +1,67 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+---
+
+<BaseLayout title="The Design" description="How TVC's land is laid out — the wildlife corridor, food forests, cultivated zones, and water works — plus a drone flyover of the farm." image="/images/pages/home/hero.jpg">
+  <PageHero
+    eyebrow="Our Journey"
+    title="The design"
+    image="/images/pages/home/hero.jpg"
+    imageAlt="Aerial view of the farm's layout, with housing clusters and zones labeled"
+  />
+
+  <section class="section wrapper">
+    <p>The farm's regeneration follows permaculture and regenerative design principles: a wildlife corridor higher on the hill closer to the forest is left to grow by itself, food forests combine supporting plants with fruit-bearing trees, and the rest is actively cultivated. The last several years have been dedicated to land rejuvenation, letting vegetation grow in whatever form it takes.</p>
+    <p>The farm's layout — the housing clusters, the food forest zones, the water works — is mapped out below.</p>
+    <div class="map-embed">
+      <iframe
+        loading="lazy"
+        src="https://www.google.com/maps/d/u/0/embed?mid=1b_d-2ZOwDBRTJjbDZ2ovJ7QsdPiqnYrA"
+        width="640"
+        height="480"
+        style="border:0"
+        title="TVC farm plans and design map"
+      ></iframe>
+    </div>
+
+    <h3>Aerial view</h3>
+    <p>A drone flight over the farm, showing the land, the food forest, and the surrounding hills from above.</p>
+    <div class="video-embed">
+      <iframe
+        loading="lazy"
+        src="https://www.youtube.com/embed/ixHNXOiQ9vM"
+        title="TVC Aerial View"
+        frameborder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowfullscreen
+      ></iframe>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .map-embed iframe {
+    width: 100%;
+    max-width: 640px;
+    border-radius: var(--radius);
+  }
+
+  .video-embed {
+    position: relative;
+    width: 100%;
+    max-width: 640px;
+    aspect-ratio: 16 / 9;
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .video-embed iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+</style>

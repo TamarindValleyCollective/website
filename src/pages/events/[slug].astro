@@ -13,7 +13,7 @@ const { Content } = await render(event);
 const formatDate = (d: Date) => d.toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
 ---
 
-<BaseLayout title={event.data.title} description={event.data.excerpt}>
+<BaseLayout title={event.data.title} description={event.data.excerpt} image={event.data.coverImage}>
   <PageHero eyebrow={formatDate(event.data.date)} title={event.data.title} image={event.data.coverImage} imageAlt={event.data.title} />
   <article class="section wrapper prose">
     <Content />

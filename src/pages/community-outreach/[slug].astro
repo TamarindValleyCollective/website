@@ -12,7 +12,7 @@ const { post } = Astro.props;
 const { Content } = await render(post);
 ---
 
-<BaseLayout title={post.data.title} description={post.data.excerpt}>
+<BaseLayout title={post.data.title} description={post.data.excerpt} image={post.data.coverImage}>
   <PageHero eyebrow="Community Outreach" title={post.data.title} image={post.data.coverImage} imageAlt={post.data.title} />
   <article class="section wrapper prose">
     <Content />

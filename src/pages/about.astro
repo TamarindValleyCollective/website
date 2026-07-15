@@ -1,7 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
-import Pending from '../components/Pending.astro';
 
 const staff = [
   { name: 'Madhavan', role: 'Farm lead & naturalist', bio: "A passionate naturalist who has been tirelessly working on rejuvenating the farm, documenting the flora and fauna, gathering seeds from the forest, maintaining a nursery, and nurturing the ecosystem. He knows every tree, bird, and reptile you'll run into at the farm, and lives on-site with his wife Krithika and daughter Sashrika." },
@@ -10,6 +9,74 @@ const staff = [
   { name: 'Yellaraju', role: 'Runner', bio: 'Always ready to run to the village on the moped.' },
   { name: 'Chikkama', role: 'Kitchen', bio: 'Manages the kitchen and the local recipes that shape every meal at the farm.' },
 ];
+
+// Sourced from the community's earlier syntropic.in/member directory; Madhav & Krithika
+// omitted here since they're already listed above under local staff.
+const members = [
+  { name: 'Abhinav & Divya', bio: 'Abhinav works for VMware. Divya is an engineer, now teaching baking as well as taking orders from home.', photo: '/images/members/abhinav-and-divya.jpg' },
+  { name: 'Akash Gehani', bio: 'Akash runs his startup Instamojo. Toshal is a software professional.', photo: '/images/members/akash-gehani.jpg' },
+  { name: 'Amit Gupta', bio: '', photo: null },
+  { name: 'Amit & Jayashree', bio: '', photo: null },
+  { name: 'Anand & Devi', bio: '', photo: null },
+  { name: 'Om & Pavithra', bio: '', photo: null },
+  { name: 'Ananth & Manasa', bio: 'Ananth is a program manager with Amazon. Manasa is a marketing manager with Citrix, with interests in traveling, fitness among other things.', photo: '/images/members/ananth-and-manasa.jpg' },
+  { name: 'Anil & Roopa', bio: '', photo: null },
+  { name: 'Ankur & Kavitha', bio: 'Ankur and Kavitha are faculty at IIM Ahmedabad in Public Policy and Computer Science respectively.', photo: '/images/members/ankur-and-kavitha.jpg' },
+  { name: 'Anu & Balu', bio: 'Balu is a techie, works with McAfee. Anu is in the education space, cofounded Tide Learning, which works in the early childhood and primary education area.', photo: '/images/members/anu-and-balu.jpg' },
+  { name: 'Arun & Uthara', bio: 'Arun heads the strategy division in Grameen Koota (MFI.) Uthara is discovering social change through 2 NGOs - Buzz Women and Avantika Foundation.', photo: '/images/members/arun-and-uthara.jpg' },
+  { name: 'Ashirwad & Harshadha', bio: 'Ashirwad is an IT professional. Harshada is an Ayurvedic doctor by education and also a passionate cook.', photo: '/images/members/ashirwad-and-harshadha.jpg' },
+  { name: 'Aunindo & Manoshi', bio: '', photo: null },
+  { name: 'Sundar & Anitha', bio: 'Sundar is an IT professional who is also into wildlife, herpetology, biking and languages. Anitha is also a nature lover, loves to grow vegetables, do composting etc..', photo: '/images/members/sundar-and-anitha.jpg' },
+  { name: 'Rajavel & Vidhya', bio: 'Rajavel is now a teacher in the field of software design. Vidhya is an early childhood special educator and has interests in dance, fitness and gardening.', photo: '/images/members/rajavel-and-vidhya.jpg' },
+  { name: 'Divya & Sudhir', bio: 'Sudhir works with ThoughtWorks. Divya heads the NGO arm of Saahas.', photo: '/images/members/divya-and-sudhir.jpg' },
+  { name: 'Harishri Babuji', bio: '', photo: null },
+  { name: 'Kaushik Raghunath', bio: '', photo: null },
+  { name: 'K B Pradeep', bio: 'Pradeep is a chip designer by profession, also a public policy enthusiast. Ramya is a Doctor.', photo: '/images/members/k-b-pradeep.jpg' },
+  { name: 'Kiran & Zainab', bio: 'Zainab and Kiran live in Kodihalli and work in Indiranagar.', photo: '/images/members/kiran-and-zainab.jpg' },
+  { name: 'Ram & Krishna', bio: 'Ram worked in Philips Software/TP Vision. Krishna is with Azim Premji Foundation, working as Technology Portfolio lead for the University (APU). She also publishes the podcast New Indian Woman.', photo: '/images/members/ram-and-krishna.jpg' },
+  { name: 'Lakshmi Pillai', bio: '', photo: null },
+  { name: 'Nirmal & Shalini', bio: 'Nirmal is a System Architect doing R&D for an Aerospace company. Shalini works for a not for profit foundation supporting human rights organizations globally.', photo: '/images/members/nirmal-and-shalini.jpg' },
+  { name: 'Nishant & Neeti', bio: '', photo: null },
+  { name: 'Pradeep Kumar Dileep', bio: '', photo: null },
+  { name: 'Rajesh & Renuka', bio: 'Rajesh works for Equal Experts. Renuka has interests in permaculture, with vast amount of knowledge on trees and plants.', photo: '/images/members/rajesh-and-renuka.jpg' },
+  { name: 'Rajiv & Kritika', bio: 'Rajiv moved out of corporate & now engages with Deshpande Foundation and Rainmatter Foundation in their journeys. Krithika leads the marketing division at Saahas Zero Waste.', photo: '/images/members/rajiv-and-kritika.jpg' },
+  { name: 'Ramesh & Sarika', bio: 'Sarika is a Food Technologist & Ramesh is a techie. Both of them together run Food Safety Works, a company which helps implement Food Safety Management Systems.', photo: '/images/members/ramesh-and-sarika.jpg' },
+  { name: 'Ramjee & Harshadha', bio: 'Ramjee is a tech enthusiast, runs his AI/ML startup. Harshada is a civil/env engineer.', photo: '/images/members/ramjee-and-harshadha.jpg' },
+  { name: 'Reva & Ranjan', bio: 'Reva and Ranjan run Primalise, a firm that works in the area of socio-cultural and natural systems.', photo: '/images/members/reva-and-ranjan.jpg' },
+  { name: 'Rishi & Renjana', bio: '', photo: null },
+  { name: 'Sameer & Shubha', bio: 'Sameer runs Linger Liesures and Beforest. Shubha works on water sustainability as part of Biome.', photo: '/images/members/sameer-and-shubha.jpg' },
+  { name: 'Sameet & Soumya', bio: '', photo: null },
+  { name: 'Sandeep & Supriya', bio: 'Sandeep runs a Sales Enablement SaaS startup. Supriya after a corporate career in Finance, is running her own food biz now.', photo: '/images/members/sandeep-and-supriya.jpg' },
+  { name: 'Sanket & Surabhi', bio: 'Sanket works in software, and aspires to be a writer. Surabhi works for HP, also busy dealing with kids and pursuing her hobbies.', photo: '/images/members/sanket-and-surabhi.jpg' },
+  { name: 'Shalini & Amit Jain', bio: 'Amit is a Program Manager at HPE. Shalini enjoys baking, gardening, and anything that challenges her creative mind.', photo: '/images/members/shalini-and-amit-jain.jpg' },
+  { name: 'Shameek & Gitanjali', bio: 'Shameek and Gitanjali run the venture Farmizen. Gitanjali also runs an urban gardening business - GreenMyLife.', photo: '/images/members/shameek-and-gitanjali.jpg' },
+  { name: 'Sharath & Deepa', bio: 'Sharath works for Shell, specializing in Infrastructure Security and Cloud. Deepa works for Sobis Software managing their global help desk.', photo: '/images/members/sharath-and-deepa.jpg' },
+  { name: 'Shashi & Shobha', bio: 'Sashi works as a Salesforce consultant for Digile. Shobha is a lawyer by education and an artist by choice.', photo: '/images/members/shashi-and-shobha.jpg' },
+  { name: 'Shubh & Ranjini', bio: 'Shubh is a techie, works for RJT. Ranjini is a teacher at COMMITS (by day) and a writer (by night.)', photo: '/images/members/shubh-and-ranjini.jpg' },
+  { name: 'Sree & Prameela', bio: '', photo: null },
+  { name: 'Suneetha Krishnaveni', bio: 'Suneetha is making a living in Oslo, while dreaming of getting back to our roots. Iyappan and Krishnaveni are Suneetha’s parents.', photo: '/images/members/suneetha-krishnaveni.jpg' },
+  { name: 'Swami & Vidhya', bio: 'Swami worked for Capgemini, Srividya quit her IT career and is currently a montessorian & special educator.', photo: '/images/members/swami-and-vidhya.jpg' },
+  { name: 'Swayambhu & Mukthi', bio: 'Swayambhu is working with McAfee. Mukti teaches in an engineering college.', photo: '/images/members/swayambhu-and-mukthi.jpg' },
+  { name: 'Tarang Puranik', bio: '', photo: null },
+  { name: 'Thejesh & Anjana', bio: 'Thejesh is a technologist from Bangalore. Anjana is a writer and editor from Thrissur. She heads communications at CSEI @Atree.', photo: '/images/members/thejesh-and-anjana.jpg' },
+  { name: 'Udhay & Lavanya', bio: 'Udhay helps entrepreneurs articulate their vision better, and explain this vision to investors. Lavanya manages too many things, including the sanitation aspects of their apartment association.', photo: '/images/members/udhay-and-lavanya.jpg' },
+  { name: 'Vasu Mishra', bio: '', photo: null },
+  { name: 'Vidya Atherya', bio: '', photo: null },
+  { name: 'Vijay & Sunita', bio: 'Vijay is an Electrical Engineer and designs energy efficient solutions for industrial and residential use. Sunita is an artist with many creative learnings.', photo: '/images/members/vijay-and-sunita.jpg' },
+  { name: 'Vij & Piya', bio: 'Vij is a software engineer, currently with Google, Bangalore. Piya graduated from the School of Architecture and Planning (SPA). She runs a startup in the financial inclusion space that publishes an app called MeraBills.', photo: '/images/members/vij-and-piya.jpg' },
+  { name: 'Vishnu Kumar Agrawal', bio: '', photo: null },
+  { name: 'Shilpa Rao', bio: '', photo: null },
+  { name: 'Shataparna & Deb', bio: 'Deb is a technologist. Shataparna is a molecular biologist. Both are quintessential Bengalis!', photo: '/images/members/shataparna-and-deb.jpg' },
+];
+
+function initials(name: string) {
+  const parts = name.split('&').map((p) => p.trim()).filter(Boolean);
+  if (parts.length > 1) {
+    return parts.map((p) => p.split(/\s+/)[0][0]).join('').toUpperCase();
+  }
+  const words = parts[0].split(/\s+/);
+  return (words[0][0] + (words[1]?.[0] ?? '')).toUpperCase();
+}
 ---
 
 <BaseLayout title="About TVC" description="Why Tamarind Valley Collective exists, what we stand for, and the people — founding members, other members, and local staff — behind it.">
@@ -21,7 +88,13 @@ const staff = [
 
   <section class="section wrapper">
     <h2>What we stand for</h2>
-    <Pending note="The old site's dedicated 'Vision and Objectives' page was never filled in beyond the page shell. The paragraphs below are pulled from the farm's own introduction elsewhere on the old site — worth expanding into a fuller vision statement." />
+
+    <h3>Vision</h3>
+    <p>To be a model regenerative farm community — stewarding land as one ecosystem, sharing knowledge freely, and proving that a small, disciplined community can create outsized positive impact.</p>
+
+    <h3>Mission</h3>
+    <p>We unite individuals committed to sustainable living to build a low-energy, permaculture farm that connects rather than competes with nature, ensuring a fair share for birds and beasts alongside our own. Through shared labor, native seed banking, and disciplined land stewardship, we aim to demonstrate that regenerative farming can uplift both ecosystems and neighboring communities.</p>
+
     <p>As the name indicates, TVC is a collective of like-minded people who have come together to evolve a sustainable living concept. We are currently <a href="#members">53 families</a> that care about the degradation of natural resources globally and would like to experiment with a living style that reduces consumption and incorporates naturally supported cyclical systems.</p>
     <p>TVC is a 100-acre farm collectively owned by these families. Due to exploitative farming practices, the farmland was degraded when we bought it. Since 2017, the community has been using permaculture principles to regenerate the farm's fertility naturally.</p>
 
@@ -56,8 +129,21 @@ const staff = [
 
   <section class="section section--tint" id="members">
     <div class="wrapper">
-      <h2>Founding core members &amp; other members</h2>
-      <Pending note="The old site's member directory page literally says “Coming soon.” It was meant to list all 53 member families as clickable cards, split between founding core members and other members — that build is still outstanding." />
+      <h2>Member families</h2>
+      <p>The 53 families who make up the collective — most joined between the founding in 2017 and today.</p>
+      <div class="members-grid">
+        {members.map((m) => (
+          <div class="member-card">
+            {m.photo ? (
+              <img src={m.photo} alt={m.name} class="member-photo" loading="lazy" />
+            ) : (
+              <div class="member-photo member-photo--placeholder" aria-hidden="true">{initials(m.name)}</div>
+            )}
+            <h4>{m.name}</h4>
+            {m.bio && <p>{m.bio}</p>}
+          </div>
+        ))}
+      </div>
     </div>
   </section>
 
@@ -96,6 +182,52 @@ const staff = [
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 20px;
     margin: 24px 0;
+  }
+
+  .members-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 18px;
+    margin-top: 20px;
+  }
+
+  .member-card {
+    background: #fff;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+    padding: 16px;
+    text-align: center;
+  }
+
+  .member-card h4 {
+    font-size: 0.88rem;
+    margin: 0;
+  }
+
+  .member-card p {
+    font-size: 0.78rem;
+    color: var(--tvc-ink-soft);
+    margin: 6px 0 0;
+  }
+
+  .member-photo {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin: 0 auto 10px;
+    display: block;
+  }
+
+  .member-photo--placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+    font-weight: 700;
+    font-size: 1rem;
   }
 
   .staff-grid {
