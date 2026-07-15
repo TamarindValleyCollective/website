@@ -49,7 +49,21 @@ const entries = [
   { year: '2025', date: 'Aug 2025', cat: 'structure', title: `Home construction, steady progress`, paras: [`The first homes continued to take shape.`], images: ['/images/journey/journey-41.jpg'] },
 ];
 
-const years = [...new Set(entries.map((e) => e.year))];
+// Reverse chronological: newest year first, newest entry within a year first.
+const years = [...new Set(entries.map((e) => e.year))].reverse();
+
+let side = 0;
+const grouped = years.map((year) => {
+  const yearEntries = entries
+    .filter((e) => e.year === year)
+    .reverse()
+    .map((e) => {
+      const s = side % 2 === 0 ? 'left' : 'right';
+      side++;
+      return { ...e, side: s };
+    });
+  return { year, entries: yearEntries };
+});
 ---
 
 <div class="jt-meta">
@@ -69,35 +83,33 @@ const years = [...new Set(entries.map((e) => e.year))];
 </div>
 
 <div class="jt-timeline" id="jt-timeline">
-  {years.map((year) => {
-    const yearEntries = entries.filter((e) => e.year === year);
-    return (
-      <div class="jt-yeargroup" data-year={year}>
-        <div class="jt-yearmark">
-          <div class="jt-yearring">{year}</div>
-          <span class="jt-count">{yearEntries.length} {yearEntries.length === 1 ? 'entry' : 'entries'}</span>
-        </div>
-        {yearEntries.map((e) => (
-          <div class="jt-entry" data-cat={e.cat}>
-            <div class="jt-node" style={`--dot:${colorByCat[e.cat]}`}></div>
-            <div class="jt-card">
-              <div class="jt-card-top">
-                <span class="jt-date">{e.date}</span>
-                <span class="jt-tag" style={`--dot:${colorByCat[e.cat]}`}><span class="jt-dot"></span>{categories.find((c) => c.cat === e.cat)?.label}</span>
-              </div>
-              <h3>{e.title}</h3>
-              {e.paras.map((p) => <p set:html={p} />)}
-              {e.images.length > 0 && (
-                <div class={`jt-imgrow ${e.images.length > 1 ? 'multi' : ''}`}>
-                  {e.images.map((src) => <img src={src} alt={e.title} loading="lazy" />)}
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+  <div class="jt-spine" aria-hidden="true"></div>
+  {grouped.map(({ year, entries: yearEntries }) => (
+    <div class="jt-yeargroup" data-year={year}>
+      <div class="jt-yearmark">
+        <div class="jt-yearring">{year}</div>
+        <span class="jt-count">{yearEntries.length} {yearEntries.length === 1 ? 'entry' : 'entries'}</span>
       </div>
-    );
-  })}
+      {yearEntries.map((e) => (
+        <div class={`jt-entry jt-entry--${e.side}`} data-cat={e.cat}>
+          <div class="jt-node" style={`--dot:${colorByCat[e.cat]}`}></div>
+          <div class="jt-card">
+            <div class="jt-card-top">
+              <span class="jt-date">{e.date}</span>
+              <span class="jt-tag" style={`--dot:${colorByCat[e.cat]}`}><span class="jt-dot"></span>{categories.find((c) => c.cat === e.cat)?.label}</span>
+            </div>
+            <h3>{e.title}</h3>
+            {e.paras.map((p) => <p set:html={p} />)}
+            {e.images.length > 0 && (
+              <div class={`jt-imgrow ${e.images.length > 1 ? 'multi' : ''}`}>
+                {e.images.map((src) => <img src={src} alt={e.title} loading="lazy" />)}
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  ))}
 </div>
 
 <script>
@@ -197,9 +209,16 @@ const years = [...new Set(entries.map((e) => e.year))];
 
   .jt-timeline {
     position: relative;
-    border-left: 2px solid var(--tvc-line);
-    padding-left: 28px;
-    margin-left: 6px;
+  }
+
+  .jt-spine {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--tvc-line);
+    transform: translateX(-50%);
   }
 
   .jt-yeargroup.jt-hidden {
@@ -207,10 +226,13 @@ const years = [...new Set(entries.map((e) => e.year))];
   }
 
   .jt-yearmark {
+    position: relative;
+    z-index: 2;
     display: flex;
-    align-items: baseline;
-    gap: 12px;
-    margin: 40px 0 18px;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin: 48px 0 24px;
   }
 
   .jt-yeargroup:first-child .jt-yearmark {
@@ -219,42 +241,114 @@ const years = [...new Set(entries.map((e) => e.year))];
 
   .jt-yearring {
     font-family: var(--font-display);
-    font-weight: 600;
-    font-size: 1.4rem;
+    font-weight: 700;
+    font-size: 1.15rem;
     color: var(--tvc-green-dark);
+    background: var(--tvc-cream);
+    border: 2px solid var(--tvc-green);
+    border-radius: 999px;
+    padding: 8px 24px;
+    box-shadow: var(--shadow-soft);
   }
 
   .jt-count {
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     color: var(--tvc-ink-soft);
   }
 
   .jt-entry {
     position: relative;
-    margin-bottom: 20px;
+    display: grid;
+    grid-template-columns: 1fr 44px 1fr;
+    align-items: start;
+    margin-bottom: 24px;
   }
 
   .jt-entry.jt-hidden {
     display: none;
   }
 
+  .jt-entry--left .jt-card {
+    grid-column: 1;
+    margin-right: 22px;
+  }
+
+  .jt-entry--right .jt-card {
+    grid-column: 3;
+    margin-left: 22px;
+  }
+
   .jt-node {
-    position: absolute;
-    left: -33px;
-    top: 6px;
-    width: 10px;
-    height: 10px;
+    grid-column: 2;
+    justify-self: center;
+    margin-top: 22px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
     background: var(--dot);
-    border: 2px solid var(--tvc-cream);
+    border: 3px solid var(--tvc-cream);
+    position: relative;
+    z-index: 2;
   }
 
   .jt-card {
+    position: relative;
     background: #fff;
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
     padding: 18px 22px;
+  }
+
+  .jt-entry--left .jt-card::after,
+  .jt-entry--right .jt-card::after {
+    content: '';
+    position: absolute;
+    top: 26px;
+    width: 22px;
+    height: 2px;
+    background: var(--tvc-line);
+  }
+
+  .jt-entry--left .jt-card::after {
+    right: -22px;
+  }
+
+  .jt-entry--right .jt-card::after {
+    left: -22px;
+  }
+
+  @media (max-width: 760px) {
+    .jt-spine {
+      left: 6px;
+    }
+
+    .jt-yearmark {
+      align-items: flex-start;
+      margin-left: -2px;
+    }
+
+    .jt-entry {
+      display: block;
+      padding-left: 28px;
+    }
+
+    .jt-node {
+      position: absolute;
+      left: 0;
+      top: 22px;
+      margin-top: 0;
+    }
+
+    .jt-entry--left .jt-card,
+    .jt-entry--right .jt-card {
+      margin: 0;
+    }
+
+    .jt-entry--left .jt-card::after,
+    .jt-entry--right .jt-card::after {
+      display: none;
+    }
   }
 
   .jt-card-top {
