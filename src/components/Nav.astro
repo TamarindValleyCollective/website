@@ -4,11 +4,17 @@ const navItems = [
     label: 'About TVC',
     href: '/about',
     children: [
-      { label: 'Community Outreach', href: '/community-outreach' },
       { label: 'In Pictures', href: '/in-pictures' },
     ],
   },
-  { label: 'Our Journey', href: '/our-journey' },
+  {
+    label: 'Our Journey',
+    href: '/our-journey',
+    children: [
+      { label: 'The Design', href: '/our-journey/design' },
+      { label: 'Community Outreach', href: '/community-outreach' },
+    ],
+  },
   {
     label: 'Visit TVC',
     href: '/visit',
