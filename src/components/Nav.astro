@@ -2,8 +2,8 @@
 const navItems = [
   {
     label: 'About TVC',
-    href: '/about',
     children: [
+      { label: 'Overview', href: '/about' },
       { label: 'In Pictures', href: '/in-pictures' },
       { label: 'Partners', href: '/ecosystem/partners' },
       { label: 'Resource Centre', href: '/resource-centre' },
@@ -11,16 +11,16 @@ const navItems = [
   },
   {
     label: 'Our Journey',
-    href: '/our-journey',
     children: [
+      { label: 'Overview', href: '/our-journey' },
       { label: 'The Design', href: '/our-journey/design' },
       { label: 'Community Outreach', href: '/community-outreach' },
     ],
   },
   {
     label: 'Visit TVC',
-    href: '/visit',
     children: [
+      { label: 'Overview', href: '/visit' },
       { label: 'Day Visit', href: '/visit/day-visit' },
       { label: 'Overnight Camping', href: '/visit/camping' },
       { label: 'Trekking Trails', href: '/visit/trekking-trails' },
@@ -34,6 +34,7 @@ const navItems = [
 
 const currentPath = Astro.url.pathname;
 const isActive = (href: string) => currentPath === href || currentPath.startsWith(href + '/');
+const isSectionActive = (children: { href: string }[]) => children.some((child) => isActive(child.href));
 ---
 
 <header class="nav">
@@ -51,12 +52,16 @@ const isActive = (href: string) => currentPath === href || currentPath.startsWit
       {navItems.map((item) => (
         item.children ? (
           <div class="nav__item">
-            <a href={item.href} class:list={['nav__link', { 'is-active': isActive(item.href) }]}>
+            <button
+              type="button"
+              class:list={['nav__link', 'nav__link--toggle', { 'is-active': isSectionActive(item.children) }]}
+              aria-haspopup="true"
+            >
               {item.label}
               <svg class="nav__caret" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
                 <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
-            </a>
+            </button>
             <div class="nav__dropdown">
               {item.children.map((child) => (
                 <a href={child.href} class:list={['nav__sublink', { 'is-active': isActive(child.href) }]}>
@@ -132,6 +137,17 @@ const isActive = (href: string) => currentPath === href || currentPath.startsWit
     padding: 6px 0;
     border-bottom: 2px solid transparent;
     white-space: nowrap;
+  }
+
+  .nav__link--toggle {
+    appearance: none;
+    -webkit-appearance: none;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font: inherit;
+    font-weight: 600;
+    cursor: default;
   }
 
   .nav__link:hover {
