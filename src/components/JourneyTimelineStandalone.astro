@@ -1,723 +1,855 @@
 ---
-// Standalone interactive timeline built from src/content/events — a
-// horizontal year "wire" that collapses to a two-word summary per year,
-// expands one year's detail panel at a time, and carousels through that
-// year's events by month. No page scroll: everything here fits the height
-// its parent hands it via flex, and only the month carousel scrolls (via
-// snap + arrow buttons) internally.
-const ICONS: Record<number, string> = {
-  2020: `<svg viewBox="0 0 24 24"><path d="M3 20h18"/><path d="M4 20 11 6h2l7 14"/><path d="M9.5 20 12 14.5 14.5 20"/></svg>`,
-  2021: `<svg viewBox="0 0 24 24"><path d="M12 21V9"/><path d="M12 9c0-3.6-2.7-5.5-6.2-5.5 0 3.6 2.7 6.4 6.2 5.5z"/><path d="M12 9c0-3.6 2.7-5.5 6.2-5.5 0 3.6-2.7 6.4-6.2 5.5z"/></svg>`,
-  2022: `<svg viewBox="0 0 24 24"><circle cx="7" cy="13" r="4"/><circle cx="17" cy="13" r="4"/><path d="M11 13h2"/><path d="M9.5 9.5 12 6l2.5 3.5"/></svg>`,
-  2023: `<svg viewBox="0 0 24 24"><path d="M5 11a7 7 0 0 1 14 0z"/><path d="M4 11h16"/><path d="M6 11c0 4 2 7 6 8 4-1 6-4 6-8"/></svg>`,
-  2024: `<svg viewBox="0 0 24 24"><circle cx="8" cy="9" r="2.6"/><circle cx="16" cy="9" r="2.6"/><path d="M3.5 19c.6-3 2.3-4.6 4.5-4.6s3.9 1.6 4.5 4.6"/><path d="M11.5 19c.6-3 2.3-4.6 4.5-4.6s3.9 1.6 4.5 4.6"/></svg>`,
-};
-
-interface EventCard {
-  month: string;
-  title: string;
-  text: string;
-  image?: string;
+// Faithful port of tvc_timeline.html into an Astro component. Kept as
+// close to the original markup/CSS/JS as possible (same class/id names,
+// prefixed with "tl-" to avoid clashing with the rest of the site, and
+// wrapped in .tl-root so the color variables — declared once there —
+// reach both the inline app and the modal overlay, which is a sibling
+// of .tl-app, not a descendant of it, since it's position:fixed).
+interface MonthEntry {
+  m: string;
+  t: string;
+  imgs: string[];
+  // Per-image captions, same length as imgs — shown in place of the
+  // month's single `t` as the photo carousel is swiped. Omit to just
+  // repeat `t` for every photo (the default when one caption covers
+  // the whole month's single event).
+  imgCaptions?: string[];
+  // Per-image object-fit override, same length as imgs. Real farm
+  // photography looks best cropped to fill the frame ('cover', the
+  // default); flat graphics like the logo need 'contain' so nothing
+  // gets cropped off.
+  imgFit?: ('cover' | 'contain')[];
 }
 
 interface YearEntry {
   year: number;
-  label: string;
-  narrative: string;
-  events: EventCard[];
+  icon: string;
+  summary: string;
+  intro: string;
+  months: MonthEntry[];
 }
 
-const DATA: YearEntry[] = [
+const YEARS: YearEntry[] = [
   {
-    year: 2020,
-    label: 'First Gathering',
-    narrative: `TVC's first on-site gathering combined a camp night with a visioning session for the community's future — an early ritual that set the tone for the years of shared building ahead.`,
-    events: [
-      { month: 'Oct', title: 'Camp Night & Visioning', text: `A camp night and visioning session held at the farm on Oct 31 & Nov 1, bringing members together on-site.`, image: '/images/events/2020-10-31-camp-night-and-visioning/hero.jpeg' },
+    year: 2017, icon: '🌱', summary: 'Seed planted',
+    intro: "TVC began as a seed idea from a group who wanted to live sustainably as a community. WeCommunities came on as our real-estate development partner — TVC was their very first project. The group chose a site in Tamil Nadu near the village of Thakkatti, starting with 10 members and a plan to grow to 60 members and 100 acres. (Our 53rd and most recent member joined in 2024 — we're 53 strong today.)",
+    months: [
+      { m: 'March', t: 'First visit to the site. The land was barren, its topsoil stripped of organic matter.', imgs: ['/images/journey/journey-01.jpg'] },
+      { m: 'June', t: 'The first earthwork was built to help store water on the land.', imgs: ['/images/journey/journey-45.jpg'] },
+      { m: 'July', t: 'Planting began in the Kaveri plot, a small section set aside for trees. Biome Environmental Solutions joined as home-design architects, and Ananas as our permaculture design consultants.', imgs: ['/images/journey/journey-02.jpg'] },
+      { m: 'September', t: 'A large group of members attended a Permaculture course held exclusively for TVC at Navadarshanam. Fencing the land to prevent overgrazing let it begin recovering on its own.', imgs: ['/images/journey/journey-42.jpg'] },
+      { m: 'October', t: 'An unusually heavy north-east monsoon washed away the June earthwork and much of what had been planted. Nearby stations logged 20–40mm of rain within single 24-hour periods.', imgs: ['/images/journey/journey-48.jpg'] },
     ],
   },
   {
-    year: 2021,
-    label: 'Workshop Season',
-    narrative: `The year TVC opened its gates to hands-on learning — five workshops across regenerative living, forest-building, seed-saving, bamboo craft, and permaculture design with design consultants Ananas.`,
-    events: [
-      { month: 'Jan', title: 'Living Your Being', text: `A daylong workshop with Ranjan & Reva of Primalise, drawn from their pursuit of an (almost) off-grid, low-appliance life.`, image: '/images/events/2021-01-23-living-your-being/hero.jpeg' },
-      { month: 'Feb', title: 'How to Grow a Forest', text: `A workshop on building a self-sustaining forest ecosystem, led by wildlife-conservation veteran Praveen Ram.`, image: '/images/events/2021-02-20-how-to-grow-a-forest/hero.jpeg' },
-      { month: 'Aug', title: 'Seeds, Saplings & Growing Trees', text: `A hands-on day on germination, seedling care, and sapling planting for new farm owners.`, image: '/images/events/2021-08-21-seeds-saplings-growing-trees/hero.jpeg' },
-      { month: 'Sep', title: 'Bamboo Basket Making', text: `A traditional bamboo-basket weaving workshop run by Ramdhas — participants took home the basket they wove.`, image: '/images/events/2021-09-25-bamboo-basket-making/hero.jpeg' },
-      { month: 'Nov', title: 'Intro to Regenerative Thinking', text: `A 1.5-day permaculture-design workshop in partnership with Ananas, mixing concepts with on-ground observation.`, image: '/images/events/2021-11-27-introduction-to-regenerative-thinking/hero.jpeg' },
+    year: 2018, icon: '🧱', summary: 'First structure',
+    intro: '',
+    months: [
+      { m: 'January', t: 'Our first structure — a mud hut built entirely by hand — went up, and we held our first camp-site stay.', imgs: ['/images/journey/journey-04.jpg', '/images/journey/journey-05.jpg'], imgCaptions: ['Our first structure — a mud hut built entirely by hand — went up.', 'We held our first camp-site stay.'] },
+      { m: 'July', t: "Construction began on the first farmer's quarters.", imgs: ['/images/journey/journey-06.jpg'] },
     ],
   },
   {
-    year: 2022,
-    label: 'Biodiversity Begins',
-    narrative: `TVC launched its 3Bs&1H biodiversity walks with naturalist Deepa Mohan, running the dusk-to-dawn format twice this year, and hosted a week-long computing retreat built around the classic text SICP.`,
-    events: [
-      { month: 'Aug', title: '3Bs & 1H Biodiversity Walk', text: `Dusk-to-dawn birds/butterflies/bees walks with naturalists Deepa Mohan, Subbu, and farm manager Madhav.`, image: '/images/events/2022-08-27-3bs-and-1h-biodiversity-walk/hero.png' },
-      { month: 'Dec', title: '3Bs & 1H Biodiversity Walk', text: `A second edition of the biodiversity walk, again guided by Deepa Mohan and the TVC team.`, image: '/images/events/2022-12-03-3bs-and-1h-biodiversity-walk/hero.jpg' },
-      { month: 'Dec', title: 'The Lambda Retreat', text: `A week-long deep dive into SICP and the nature of computation, led by Anand Chitipothu.`, image: '/images/events/2022-12-16-the-lambda-retreat/hero.png' },
+    year: 2019, icon: '🎨', summary: 'Identity formed',
+    intro: '',
+    months: [
+      { m: 'January', t: 'An ideation workshop at the farm with Ananas.', imgs: ['/images/journey/journey-07.jpg'] },
+      { m: 'May', t: "Ananas delivered TVC's first GAIA Map. We also held our annual city meet-up — the community gathers twice a year, in the city on May 1st and at the farm on Nov 1st.", imgs: ['/images/journey/journey-03.jpg', '/images/journey/journey-08.jpg'], imgCaptions: ["Ananas delivered TVC's first GAIA Map.", 'Our annual city meet-up — the community gathers twice a year, in the city on May 1st and at the farm on Nov 1st.'] },
+      { m: 'July', t: 'Madhavan joined TVC as our Farm Manager.', imgs: ['https://github.com/user-attachments/assets/bd86d5aa-b744-45a8-9da6-10f04c636c12'] },
+      { m: 'November', t: 'We began exploring logo options — member Sunita produced the first renders.', imgs: ['/images/journey/journey-09.jpg', '/images/journey/journey-10.jpg', '/images/journey/journey-11.jpg'], imgFit: ['contain', 'contain', 'contain'] },
+      { m: 'December', t: 'Our current logo was finalized.', imgs: ['/images/journey/journey-49.jpg'], imgFit: ['contain'] },
     ],
   },
   {
-    year: 2023,
-    label: 'Foraging Feast',
-    narrative: `The community foraged wild, edible weeds around the farm and cooked them into a shared meal with Suresh Kumar of Surjapura Curries — turning what grows wild into what's for lunch.`,
-    events: [
-      { month: 'Jan', title: 'Walk, Pick & Cook', text: `Foraging edible weeds and healthy local food in the wild, with Suresh Kumar of Surjapura Curries.`, image: '/images/events/2023-01-08-walk-pick-and-cook/hero.jpeg' },
+    year: 2020, icon: '☀️', summary: 'Solar power',
+    intro: '',
+    months: [
+      { m: 'March', t: 'The solar shed was set up.', imgs: ['/images/journey/journey-12.jpg', '/images/journey/journey-13.jpg', '/images/journey/journey-14.jpg'] },
+      { m: 'June', t: 'Farm Manager Madhavan married Kritika.', imgs: ['/images/journey/journey-15.jpg'] },
     ],
   },
   {
-    year: 2024,
-    label: 'Volunteers Arrive',
-    narrative: `Seven years into the journey, TVC opened a dedicated Volunteer Day for newcomers to get hands-on with farm life, and closed the year with another 3Bs&1H biodiversity walk.`,
-    events: [
-      { month: 'Nov', title: 'Volunteer Day @ TVC', text: `Twenty volunteers came to see the farm's transformation and get hands-on farming experience, seven years in.` },
-      { month: 'Dec', title: '3Bs & 1H Biodiversity Walk', text: `The dusk-to-dawn biodiversity walk returned once more, with Deepa Mohan and the TVC team.`, image: '/images/events/2024-12-21-3bs-and-1h-biodiversity-walk/hero.jpg' },
+    year: 2021, icon: '🐄', summary: 'Farm grows',
+    intro: '',
+    months: [
+      { m: 'January', t: "TVC's first cow arrived.", imgs: ['/images/journey/journey-16.jpg'] },
+      { m: 'August', t: 'Water lines were laid to irrigate the farm.', imgs: ['/images/journey/journey-17.jpg'] },
+      { m: 'September', t: 'Kritika joined the local village school as a teacher.', imgs: ['/images/journey/journey-18.jpg'] },
+      { m: 'December', t: "A DIY solar panel install gave Madhavan's house power backup.", imgs: ['/images/journey/journey-19.jpg'] },
+    ],
+  },
+  {
+    year: 2022, icon: '🙏', summary: 'Building begins',
+    intro: '',
+    months: [
+      { m: 'May', t: "Our May meet-up was hosted at Reva and Ranjan's home.", imgs: ['/images/journey/journey-20.jpg'] },
+      { m: 'October', t: 'A puja marked the start of home construction for community members.', imgs: ['/images/journey/journey-21.jpg', '/images/journey/journey-22.jpg'] },
+      { m: 'November', t: 'Meet-up at the farm; Suresh led a food-foraging exercise for the community.', imgs: ['/images/journey/journey-23.jpg', '/images/journey/journey-24.jpg'], imgCaptions: ['Meet-up at the farm.', 'Suresh led a food-foraging exercise for the community.'] },
+    ],
+  },
+  {
+    year: 2023, icon: '⚡', summary: 'Power arrives',
+    intro: '',
+    months: [
+      { m: 'March', t: 'Ground was broken for home construction.', imgs: ['/images/journey/journey-25.jpg'] },
+      { m: 'July', t: 'Power reached TVC with the installation of a 100kW transformer.', imgs: [] },
+      { m: 'September', t: 'Vijay and Sunita began engaging with the local school in Odipuram.', imgs: ['/images/journey/journey-26.jpg'] },
+    ],
+  },
+  {
+    year: 2024, icon: '🏗️', summary: 'Foundations laid',
+    intro: '',
+    months: [
+      { m: 'April', t: 'Foundations were laid for the first homes.', imgs: ['/images/journey/journey-27.jpg'] },
+      { m: 'May', t: 'Annual city gathering at Good Earth Malhar. An elephant damaged structures near the mud hut while foraging for food. Earthworks for water harvesting began.', imgs: ['/images/journey/journey-28.jpg', '/images/journey/journey-29.jpg', '/images/journey/journey-30.jpg'], imgCaptions: ['Annual city gathering at Good Earth Malhar.', 'An elephant damaged structures near the mud hut while foraging for food.', 'Earthworks for water harvesting began.'] },
+      { m: 'September', t: 'Another unusually heavy downpour washed out the reinforced bund — the same spot lost back in 2017.', imgs: ['/images/journey/journey-44.jpg'] },
+      { m: 'November', t: 'Meet-up at the farm with documentary filmmaker Sumanth Kuduvalli, discussing his film "Land of the Blackbuck." Broadband internet — 4 BSNL fibre connections — finally arrived at the farm.', imgs: ['/images/journey/journey-31.jpg'] },
+      { m: 'December', t: '4th edition of 3Bs&1H at TVC, with Deepa Mohan.', imgs: ['/images/journey/journey-32.jpg', '/images/journey/journey-33.jpg'] },
+    ],
+  },
+  {
+    year: 2025, icon: '🔥', summary: 'Trials & growth',
+    intro: '',
+    months: [
+      { m: 'March', t: 'A wildfire breached our fire lines and burned through a lot of vegetation.', imgs: ['/images/journey/journey-34.jpg'] },
+      { m: 'April', t: 'Elephants visited us again.', imgs: ['/images/journey/journey-35.jpg'] },
+      { m: 'May', t: 'A large water-works project to help capture more water.', imgs: ['/images/journey/journey-36.jpg'] },
+      { m: 'July', t: 'Our transformer was stolen.', imgs: ['/images/journey/journey-37.jpg'] },
+      { m: 'August', t: "May's meet-up, delayed to August, finally took place. We held the 5th edition of 3Bs&1H, and home construction made steady progress.", imgs: ['/images/journey/journey-38.jpg', '/images/journey/journey-39.jpg', '/images/journey/journey-40.jpg', '/images/journey/journey-41.jpg'], imgCaptions: ["May's meet-up, delayed to August, finally took place.", 'The 5th edition of 3Bs&1H.', 'The 5th edition of 3Bs&1H.', 'Home construction made steady progress.'] },
+    ],
+  },
+  {
+    year: 2026, icon: '🏡', summary: 'First home',
+    intro: '',
+    months: [
+      { m: 'March', t: "Our first home was completed — housewarming for Ram & Krishna's home on March 15th. We also inaugurated the pottery wheel with a first workshop led by Ravi Varma.", imgs: ['/images/journey/journey-46.jpg', '/images/journey/journey-51.jpg', '/images/journey/journey-47.jpg', '/images/journey/journey-50.jpg'], imgCaptions: ["Our first home was completed — housewarming for Ram & Krishna's home on March 15th.", "Our first home was completed — housewarming for Ram & Krishna's home on March 15th.", "Our first home was completed — housewarming for Ram & Krishna's home on March 15th.", 'We also inaugurated the pottery wheel with a first workshop led by Ravi Varma.'] },
+      { m: 'May', t: 'Our long-delayed 2019 city meet-up finally happened, hosted by member couple Kiran & Zainab.', imgs: ['/images/journey/journey-43.jpg'] },
     ],
   },
 ];
-
-const DEFAULT_YEAR = DATA[DATA.length - 1].year;
 ---
 
-<div class="tvc-tl" data-default-year={DEFAULT_YEAR}>
-  <div class="tvc-tl-wire" role="tablist" aria-label="Select a year">
-    <div class="tvc-tl-line" aria-hidden="true"></div>
-    {DATA.map((y, i) => (
-      <button
-        type="button"
-        class="tvc-tl-stop"
-        class:list={[i % 2 === 0 ? 'up' : 'down']}
-        data-year={y.year}
-        role="tab"
-        aria-selected={y.year === DEFAULT_YEAR ? 'true' : 'false'}
-      >
-        <span class="tvc-tl-tick" aria-hidden="true"></span>
-        <span class="tvc-tl-dot" aria-hidden="true"></span>
-        <span class="tvc-tl-labelblock">
-          <span class="tvc-tl-icon" set:html={ICONS[y.year]} />
-          <span class="tvc-tl-word">{y.label}</span>
-          <span class="tvc-tl-yr">{y.year}</span>
-        </span>
-      </button>
-    ))}
-  </div>
-
-  <div class="tvc-tl-nav">
-    <button type="button" class="tvc-tl-arrow" id="tvc-tl-prev-year" aria-label="Previous year">‹</button>
-    <span class="tvc-tl-navhint">Click a year, or use the arrows to step through</span>
-    <button type="button" class="tvc-tl-arrow" id="tvc-tl-next-year" aria-label="Next year">›</button>
-  </div>
-
-  <div class="tvc-tl-detail">
-    {DATA.map((y) => (
-      <div class="tvc-tl-panel" data-year-panel={y.year} hidden={y.year !== DEFAULT_YEAR}>
-        <div class="tvc-tl-narrative">
-          <span class="tvc-tl-eyebrow">{y.label}</span>
-          <h3>{y.year}</h3>
-          <p>{y.narrative}</p>
+<div class="tl-root">
+  <div class="tl-app" id="tl-app">
+    <header class="tl-app-header">
+      <h1>TVC — Our Journey</h1>
+      <p>Tap a year to explore the story, month by month</p>
+    </header>
+    <p class="tl-app-summary">Nine years ago, ten founders fenced off a barren, overgrazed plot near Thakkatti village and started regenerating it — one earthwork, one workshop, one hard-won season at a time. Along the way: a mud hut built by hand, a wildfire, a couple of elephant visits, a stolen transformer, and — this year — our very first completed home. Tap any year below to relive it, month by month.</p>
+    <div class="tl-stage" id="tl-stage">
+      <div class="tl-timeline-scroll" id="tl-timeline-scroll">
+        <div class="tl-timeline" id="tl-timeline">
+          {YEARS.map((y, i) => (
+            <button type="button" class="tl-year-node" data-index={i}>
+              <div class="tl-dot">{y.icon}</div>
+              <div class="tl-yr">{y.year}</div>
+              <div class="tl-lbl">{y.summary}</div>
+            </button>
+          ))}
         </div>
-        <div class="tvc-tl-months">
-          <div class="tvc-tl-strip-wrap">
-            <button type="button" class="tvc-tl-carousel-btn prev" data-carousel-prev aria-label="Previous month">‹</button>
-            <div class="tvc-tl-strip" data-strip>
-              {y.events.map((e) => (
-                <button type="button" class="tvc-tl-card" data-title={e.title} data-text={e.text} data-image={e.image ?? ''} data-month={e.month} data-year={y.year}>
-                  {e.image ? (
-                    <img class="tvc-tl-thumb" src={e.image} alt={e.title} loading="lazy" />
-                  ) : (
-                    <span class="tvc-tl-thumb-fallback">No photo</span>
-                  )}
-                  <span class="tvc-tl-cardmeta">
-                    <span class="tvc-tl-month">{e.month} {y.year}</span>
-                    <span class="tvc-tl-title">{e.title}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-            <button type="button" class="tvc-tl-carousel-btn next" data-carousel-next aria-label="Next month">›</button>
+      </div>
+    </div>
+    <div class="tl-hint">← scroll or swipe to see all years →</div>
+  </div>
+
+  <div class="tl-overlay" id="tl-overlay">
+    <div class="tl-modal" id="tl-modal" role="dialog" aria-modal="true">
+      <div class="tl-modal-head">
+        <div class="tl-m-icon" id="tl-m-icon"></div>
+        <div class="tl-m-titles">
+          <div class="tl-m-year" id="tl-m-year"></div>
+          <div class="tl-m-summary" id="tl-m-summary"></div>
+        </div>
+        <button type="button" class="tl-nav-btn" id="tl-prev-year" aria-label="Previous year">‹</button>
+        <button type="button" class="tl-nav-btn" id="tl-next-year" aria-label="Next year">›</button>
+        <button type="button" class="tl-close-btn" id="tl-close-btn" aria-label="Close">✕</button>
+      </div>
+      <div class="tl-modal-body">
+        <div class="tl-track-wrap" id="tl-track-wrap">
+          <div class="tl-month-track" id="tl-month-track"></div>
+          <div class="tl-car-arrows tl-month-arrows" id="tl-month-arrows">
+            <button type="button" id="tl-month-prev" aria-label="Previous month">‹</button>
+            <button type="button" id="tl-month-next" aria-label="Next month">›</button>
           </div>
         </div>
       </div>
-    ))}
-  </div>
-</div>
-
-<div class="tvc-tl-modal-backdrop" id="tvc-tl-modal-backdrop">
-  <div class="tvc-tl-modal-wrap">
-    <button class="tvc-tl-modal-close" id="tvc-tl-modal-close" aria-label="Close">✕</button>
-    <div class="tvc-tl-modal" id="tvc-tl-modal"></div>
-  </div>
-</div>
-
-<script>
-  const root = document.querySelector<HTMLElement>('.tvc-tl')!;
-  const years = Array.from(root.querySelectorAll<HTMLButtonElement>('.tvc-tl-stop')).map((s) => s.dataset.year!);
-  const stops = Array.from(root.querySelectorAll<HTMLButtonElement>('.tvc-tl-stop'));
-  const panels = Array.from(root.querySelectorAll<HTMLElement>('.tvc-tl-panel'));
-  const prevYearBtn = document.getElementById('tvc-tl-prev-year')!;
-  const nextYearBtn = document.getElementById('tvc-tl-next-year')!;
-  const modalBackdrop = document.getElementById('tvc-tl-modal-backdrop')!;
-  const modal = document.getElementById('tvc-tl-modal')!;
-  const modalClose = document.getElementById('tvc-tl-modal-close')!;
-
-  let activeYear = root.dataset.defaultYear!;
-
-  function selectYear(year: string) {
-    activeYear = year;
-    stops.forEach((s) => {
-      const active = s.dataset.year === year;
-      s.classList.toggle('active', active);
-      s.setAttribute('aria-selected', String(active));
-      if (active) s.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
-    });
-    panels.forEach((p) => {
-      p.hidden = p.dataset.yearPanel !== year;
-    });
-  }
-
-  stops.forEach((stop) => {
-    stop.addEventListener('click', () => selectYear(stop.dataset.year!));
-  });
-
-  function stepYear(delta: number) {
-    const i = years.indexOf(activeYear);
-    const next = years[Math.min(years.length - 1, Math.max(0, i + delta))];
-    selectYear(next);
-  }
-
-  prevYearBtn.addEventListener('click', () => stepYear(-1));
-  nextYearBtn.addEventListener('click', () => stepYear(1));
-
-  root.addEventListener('keydown', (ev) => {
-    if (ev.key === 'ArrowLeft') stepYear(-1);
-    if (ev.key === 'ArrowRight') stepYear(1);
-  });
-
-  // Month carousel: snap-scroll strip driven by prev/next arrow buttons,
-  // one card-width at a time, in addition to native touch swipe/scroll.
-  root.querySelectorAll<HTMLElement>('.tvc-tl-strip-wrap').forEach((wrap) => {
-    const strip = wrap.querySelector<HTMLElement>('[data-strip]')!;
-    const prevBtn = wrap.querySelector<HTMLButtonElement>('[data-carousel-prev]')!;
-    const nextBtn = wrap.querySelector<HTMLButtonElement>('[data-carousel-next]')!;
-    const scrollByCard = (dir: number) => {
-      const card = strip.querySelector<HTMLElement>('.tvc-tl-card');
-      const amount = card ? card.offsetWidth + 14 : 200;
-      strip.scrollBy({ left: dir * amount, behavior: 'smooth' });
-    };
-    prevBtn.addEventListener('click', () => scrollByCard(-1));
-    nextBtn.addEventListener('click', () => scrollByCard(1));
-  });
-
-  function openModal(card: HTMLButtonElement) {
-    const image = card.dataset.image || '';
-    const title = card.dataset.title || '';
-    const text = card.dataset.text || '';
-    const month = card.dataset.month || '';
-    const year = card.dataset.year || '';
-    modal.innerHTML = `
-      ${image ? `<img class="tvc-tl-modal-img" src="${image}" alt="${title}" />` : ''}
-      <div class="tvc-tl-modal-body">
-        <p class="tvc-tl-month-tag">${month} ${year}</p>
-        <h3>${title}</h3>
-        <p>${text}</p>
+      <div class="tl-modal-foot">
+        <div class="tl-car-dots" id="tl-month-dots"></div>
+        <span class="tl-foot-lbl" id="tl-foot-label"></span>
       </div>
-    `;
-    modalBackdrop.classList.add('open');
+    </div>
+  </div>
+</div>
+
+<script define:vars={{ YEARS }}>
+  let activeYearIndex = -1;
+  let currentSlides = [];
+
+  const root = document.querySelector('.tl-root');
+  const timelineEl = root.querySelector('#tl-timeline');
+  const overlay = root.querySelector('#tl-overlay');
+  const monthTrack = root.querySelector('#tl-month-track');
+  const monthDots = root.querySelector('#tl-month-dots');
+  const footLabel = root.querySelector('#tl-foot-label');
+  const mIcon = root.querySelector('#tl-m-icon');
+  const mYear = root.querySelector('#tl-m-year');
+  const mSummary = root.querySelector('#tl-m-summary');
+  const prevYearBtn = root.querySelector('#tl-prev-year');
+  const nextYearBtn = root.querySelector('#tl-next-year');
+  const monthPrevBtn = root.querySelector('#tl-month-prev');
+  const monthNextBtn = root.querySelector('#tl-month-next');
+
+  function buildSlides(y) {
+    const slides = [];
+    if (y.intro) slides.push({ label: 'Overview', text: y.intro, imgs: [] });
+    y.months.forEach((mo) => slides.push({ label: mo.m, text: mo.t, imgs: mo.imgs || [], imgCaptions: mo.imgCaptions, imgFit: mo.imgFit }));
+    return slides;
+  }
+
+  function renderPhotoCarousel(imgs, label, imgFit) {
+    const fitFor = (idx) => (imgFit && imgFit[idx]) || 'cover';
+    const imgStyle = (idx) => {
+      const fit = fitFor(idx);
+      return `object-fit:${fit};${fit === 'contain' ? 'background:var(--tl-sand-2);' : ''}`;
+    };
+    if (imgs.length === 1) {
+      return `<div class="tl-carousel"><div class="tl-car-track"><img loading="lazy" src="${imgs[0]}" alt="${label} photo" style="${imgStyle(0)}"></div></div>`;
+    }
+    const imgsHtml = imgs.map((src, idx) => `<img loading="lazy" src="${src}" alt="${label} photo" style="${imgStyle(idx)}">`).join('');
+    const dotsHtml = imgs.map((_, idx) => `<span class="${idx === 0 ? 'on' : ''}"></span>`).join('');
+    return `<div class="tl-carousel">
+      <div class="tl-car-track">${imgsHtml}</div>
+      <div class="tl-car-arrows"><button class="tl-c-prev" aria-label="Previous photo">‹</button><button class="tl-c-next" aria-label="Next photo">›</button></div>
+      <div class="tl-car-dots">${dotsHtml}</div>
+    </div>`;
+  }
+
+  function captionsFor(slide) {
+    if (slide.imgCaptions && slide.imgCaptions.length === slide.imgs.length) return slide.imgCaptions;
+    return slide.imgs.length > 0 ? slide.imgs.map(() => slide.text) : [slide.text];
+  }
+
+  function renderSlide(slide) {
+    const hasImgs = slide.imgs && slide.imgs.length > 0;
+    const captions = captionsFor(slide);
+    return `<div class="tl-month-slide ${hasImgs ? '' : 'tl-no-img'}" data-captions="${encodeURIComponent(JSON.stringify(captions))}">
+      <h3>${slide.label}</h3>
+      <p class="tl-caption-text">${captions[0]}</p>
+      ${hasImgs ? `<div class="tl-car-wrap">${renderPhotoCarousel(slide.imgs, slide.label, slide.imgFit)}</div>` : ''}
+    </div>`;
+  }
+
+  function wirePhotoCarousels(container) {
+    container.querySelectorAll('.tl-carousel').forEach((car) => {
+      const track = car.querySelector('.tl-car-track');
+      const dots = car.querySelectorAll('.tl-car-dots span');
+      const prev = car.querySelector('.tl-c-prev');
+      const next = car.querySelector('.tl-c-next');
+      const slideEl = car.closest('.tl-month-slide');
+      const captionEl = slideEl ? slideEl.querySelector('.tl-caption-text') : null;
+      let captions = [];
+      try { captions = JSON.parse(decodeURIComponent(slideEl?.dataset.captions || '%5B%5D')); } catch (e) { captions = []; }
+      function updateCaption(i) {
+        if (captionEl && captions[i] !== undefined) captionEl.textContent = captions[i];
+      }
+      if (!track || track.children.length < 2) return;
+      function scrollToIndex(i) {
+        track.scrollTo({ left: track.clientWidth * i, behavior: 'smooth' });
+      }
+      prev && prev.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const i = Math.round(track.scrollLeft / track.clientWidth);
+        scrollToIndex(Math.max(0, i - 1));
+      });
+      next && next.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const i = Math.round(track.scrollLeft / track.clientWidth);
+        scrollToIndex(Math.min(track.children.length - 1, i + 1));
+      });
+      track.addEventListener('scroll', () => {
+        const i = Math.round(track.scrollLeft / track.clientWidth);
+        dots.forEach((d, idx) => d.classList.toggle('on', idx === i));
+        updateCaption(i);
+      });
+    });
+  }
+
+  function updateMonthUI() {
+    const w = monthTrack.clientWidth || 1;
+    const i = Math.max(0, Math.min(currentSlides.length - 1, Math.round(monthTrack.scrollLeft / w)));
+    monthDots.querySelectorAll('span').forEach((d, idx) => d.classList.toggle('on', idx === i));
+    footLabel.textContent = `${currentSlides[i] ? currentSlides[i].label : ''} · ${i + 1}/${currentSlides.length}`;
+    monthPrevBtn.disabled = i === 0;
+    monthNextBtn.disabled = i === currentSlides.length - 1;
+  }
+
+  function goToMonth(i) {
+    i = Math.max(0, Math.min(currentSlides.length - 1, i));
+    monthTrack.scrollTo({ left: monthTrack.clientWidth * i, behavior: 'smooth' });
+  }
+
+  function openYear(i) {
+    activeYearIndex = i;
+    const y = YEARS[i];
+    root.querySelectorAll('.tl-year-node').forEach((n) => n.classList.remove('active'));
+    root.querySelector(`.tl-year-node[data-index="${i}"]`).classList.add('active');
+
+    mIcon.textContent = y.icon;
+    mYear.textContent = y.year;
+    mSummary.textContent = y.summary;
+
+    currentSlides = buildSlides(y);
+    monthTrack.innerHTML = currentSlides.map(renderSlide).join('');
+    wirePhotoCarousels(monthTrack);
+
+    monthDots.innerHTML = currentSlides.map((_, idx) => `<span class="${idx === 0 ? 'on' : ''}"></span>`).join('');
+
+    prevYearBtn.disabled = i === 0;
+    nextYearBtn.disabled = i === YEARS.length - 1;
+
+    overlay.classList.add('open');
+
+    requestAnimationFrame(() => {
+      monthTrack.scrollTo({ left: 0, behavior: 'auto' });
+      updateMonthUI();
+    });
+
+    const activeNode = root.querySelector(`.tl-year-node[data-index="${i}"]`);
+    activeNode.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
   }
 
   function closeModal() {
-    modalBackdrop.classList.remove('open');
+    overlay.classList.remove('open');
+    root.querySelectorAll('.tl-year-node').forEach((n) => n.classList.remove('active'));
+    activeYearIndex = -1;
   }
 
-  root.querySelectorAll<HTMLButtonElement>('.tvc-tl-card').forEach((card) => {
-    card.addEventListener('click', () => openModal(card));
+  timelineEl.querySelectorAll('.tl-year-node').forEach((node) => {
+    node.addEventListener('click', () => openYear(Number(node.dataset.index)));
   });
 
-  modalClose.addEventListener('click', closeModal);
-  modalBackdrop.addEventListener('click', (ev) => {
-    if (ev.target === modalBackdrop) closeModal();
+  monthTrack.addEventListener('scroll', () => {
+    window.clearTimeout(monthTrack._t);
+    monthTrack._t = window.setTimeout(updateMonthUI, 60);
   });
-  document.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Escape') closeModal();
+  monthPrevBtn.addEventListener('click', () => {
+    const w = monthTrack.clientWidth || 1;
+    const i = Math.round(monthTrack.scrollLeft / w);
+    goToMonth(i - 1);
+  });
+  monthNextBtn.addEventListener('click', () => {
+    const w = monthTrack.clientWidth || 1;
+    const i = Math.round(monthTrack.scrollLeft / w);
+    goToMonth(i + 1);
+  });
+
+  root.querySelector('#tl-close-btn').addEventListener('click', closeModal);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+  prevYearBtn.addEventListener('click', () => { if (activeYearIndex > 0) openYear(activeYearIndex - 1); });
+  nextYearBtn.addEventListener('click', () => { if (activeYearIndex < YEARS.length - 1) openYear(activeYearIndex + 1); });
+
+  document.addEventListener('keydown', (e) => {
+    if (!overlay.classList.contains('open')) return;
+    if (e.key === 'Escape') closeModal();
+    if (e.key === 'ArrowRight') {
+      const w = monthTrack.clientWidth || 1;
+      goToMonth(Math.round(monthTrack.scrollLeft / w) + 1);
+    }
+    if (e.key === 'ArrowLeft') {
+      const w = monthTrack.clientWidth || 1;
+      goToMonth(Math.round(monthTrack.scrollLeft / w) - 1);
+    }
+  });
+
+  window.addEventListener('resize', () => {
+    if (overlay.classList.contains('open')) {
+      const w = monthTrack.clientWidth || 1;
+      const i = Math.round(monthTrack.scrollLeft / w);
+      monthTrack.scrollTo({ left: w * i, behavior: 'auto' });
+    }
   });
 </script>
 
 <style>
-  .tvc-tl {
+  .tl-root {
+    --tl-green-dark: #2f4a3c;
+    --tl-green: #4c7a5f;
+    --tl-green-light: #8fb89b;
+    --tl-sand: #f6f1e7;
+    --tl-sand-2: #efe7d6;
+    --tl-brown: #7a5c3e;
+    --tl-ink: #2b2a26;
+    --tl-muted: #6b675d;
+    --tl-white: #fffdf9;
+
+    height: 100%;
     display: flex;
     flex-direction: column;
-    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color: var(--tl-ink);
+  }
+
+  .tl-app {
+    flex: 1 1 auto;
     min-height: 0;
-    background: var(--tvc-green-dark);
-    color: var(--tvc-cream);
-    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
-    box-shadow: var(--shadow-soft);
+    background: var(--tl-sand);
   }
 
-  /* ---------------- wire ---------------- */
-  .tvc-tl-wire {
-    position: relative;
-    display: flex;
-    height: clamp(96px, 14vh, 130px);
+  .tl-app-header {
     flex: 0 0 auto;
-    padding: 0 clamp(14px, 3vw, 36px);
-  }
-
-  .tvc-tl-line {
-    position: absolute;
-    left: clamp(14px, 3vw, 36px);
-    right: clamp(14px, 3vw, 36px);
-    top: 50%;
-    height: 2px;
-    background: rgba(250, 247, 238, 0.25);
-  }
-
-  .tvc-tl-stop {
-    appearance: none;
-    background: none;
-    border: none;
-    font: inherit;
-    flex: 1;
-    position: relative;
-    cursor: pointer;
-    padding: 0;
-    color: inherit;
-  }
-
-  .tvc-tl-stop:focus-visible .tvc-tl-dot {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 3px;
-  }
-
-  .tvc-tl-dot {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: var(--tvc-green-dark);
-    border: 2px solid rgba(250, 247, 238, 0.4);
-    transform: translate(-50%, -50%);
-    transition: all 0.2s ease;
-    z-index: 2;
-  }
-
-  .tvc-tl-stop.active .tvc-tl-dot {
-    background: var(--tvc-orange);
-    border-color: var(--tvc-orange);
-    transform: translate(-50%, -50%) scale(1.35);
-    box-shadow: 0 0 0 5px rgba(247, 133, 32, 0.22);
-  }
-
-  .tvc-tl-tick {
-    position: absolute;
-    left: 50%;
-    width: 2px;
-    background: rgba(250, 247, 238, 0.4);
-    transform: translateX(-50%);
-  }
-
-  .tvc-tl-stop.up .tvc-tl-tick {
-    top: 30%;
-    height: 20%;
-  }
-
-  .tvc-tl-stop.down .tvc-tl-tick {
-    top: 50%;
-    height: 20%;
-  }
-
-  .tvc-tl-stop.active .tvc-tl-tick {
-    background: var(--tvc-orange);
-  }
-
-  .tvc-tl-labelblock {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-    width: max-content;
-    max-width: 110px;
     text-align: center;
+    padding: clamp(10px, 2.5vh, 22px) 12px clamp(4px, 1vh, 8px);
   }
 
-  .tvc-tl-stop.up .tvc-tl-labelblock {
-    top: 0;
-  }
-
-  .tvc-tl-stop.down .tvc-tl-labelblock {
-    bottom: 0;
-  }
-
-  .tvc-tl-icon {
-    color: rgba(250, 247, 238, 0.7);
-    line-height: 0;
-  }
-
-  .tvc-tl-icon :global(svg) {
-    width: 18px;
-    height: 18px;
-    stroke: currentColor;
-    fill: none;
-    stroke-width: 1.6;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    display: block;
-    margin: 0 auto;
-  }
-
-  .tvc-tl-stop.active .tvc-tl-icon {
-    color: var(--tvc-orange);
-  }
-
-  .tvc-tl-word {
-    font-weight: 600;
-    font-size: 0.68rem;
-    letter-spacing: 0.02em;
-    color: rgba(250, 247, 238, 0.75);
-    line-height: 1.2;
-  }
-
-  .tvc-tl-yr {
-    font-family: var(--font-display);
-    font-weight: 600;
-    font-size: 1.05rem;
-    color: var(--tvc-cream);
-    line-height: 1;
-  }
-
-  .tvc-tl-stop.active .tvc-tl-word,
-  .tvc-tl-stop.active .tvc-tl-yr {
-    color: var(--tvc-orange);
-  }
-
-  /* ---------------- carousel nav ---------------- */
-  .tvc-tl-nav {
-    flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    padding: 4px 0 10px;
-  }
-
-  .tvc-tl-navhint {
-    font-size: 0.72rem;
-    color: rgba(250, 247, 238, 0.55);
-  }
-
-  .tvc-tl-arrow {
-    appearance: none;
-    background: rgba(250, 247, 238, 0.08);
-    border: 1px solid rgba(250, 247, 238, 0.25);
-    color: var(--tvc-cream);
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 1.1rem;
-    line-height: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .tvc-tl-arrow:hover {
-    border-color: var(--tvc-orange);
-    color: var(--tvc-orange);
-  }
-
-  /* ---------------- detail panel ---------------- */
-  .tvc-tl-detail {
-    flex: 1 1 auto;
-    min-height: 0;
-    border-top: 1px solid rgba(250, 247, 238, 0.15);
-    padding: clamp(12px, 2vh, 24px) clamp(14px, 3vw, 36px);
-  }
-
-  .tvc-tl-panel {
-    display: flex;
-    gap: clamp(18px, 3vw, 36px);
-    height: 100%;
-    min-height: 0;
-  }
-
-  .tvc-tl-panel[hidden] {
-    display: none;
-  }
-
-  .tvc-tl-narrative {
-    flex: 0 0 30%;
-    max-width: 340px;
-    min-width: 200px;
-    overflow-y: auto;
-  }
-
-  .tvc-tl-eyebrow {
-    font-weight: 700;
-    font-size: 0.7rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--tvc-orange);
-  }
-
-  .tvc-tl-narrative h3 {
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: clamp(1.6rem, 3vh, 2.2rem);
-    margin: 4px 0 8px;
-    line-height: 1;
-    color: var(--tvc-cream);
-  }
-
-  .tvc-tl-narrative p {
-    font-size: 0.9rem;
-    line-height: 1.55;
-    color: rgba(250, 247, 238, 0.75);
+  .tl-app-header h1 {
     margin: 0;
+    font-size: clamp(20px, 4vw, 32px);
+    font-weight: 700;
+    color: var(--tl-green-dark);
+    letter-spacing: 0.5px;
+    font-family: inherit;
   }
 
-  .tvc-tl-months {
+  .tl-app-header p {
+    margin: 4px 0 0;
+    font-size: clamp(11px, 1.8vw, 14px);
+    color: var(--tl-muted);
+  }
+
+  .tl-app-summary {
+    flex: 0 0 auto;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 0 clamp(16px, 4vw, 24px);
+    text-align: center;
+    font-size: clamp(12.5px, 1.6vw, 14.5px);
+    line-height: 1.6;
+    color: var(--tl-ink);
+  }
+
+  .tl-stage {
     flex: 1 1 auto;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-  }
-
-  .tvc-tl-strip-wrap {
+    min-height: 0;
     display: flex;
     align-items: center;
-    gap: 8px;
+    position: relative;
   }
 
-  .tvc-tl-carousel-btn {
-    appearance: none;
-    flex: 0 0 auto;
-    background: rgba(250, 247, 238, 0.08);
-    border: 1px solid rgba(250, 247, 238, 0.25);
-    color: var(--tvc-cream);
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 1.2rem;
-    line-height: 1;
-  }
-
-  .tvc-tl-carousel-btn:hover {
-    border-color: var(--tvc-orange);
-    color: var(--tvc-orange);
-  }
-
-  .tvc-tl-strip {
-    flex: 1;
-    display: flex;
-    gap: 14px;
+  .tl-timeline-scroll {
+    width: 100%;
     overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
     scroll-snap-type: x proximity;
-    padding-bottom: 4px;
+    padding: 0 6vw;
   }
 
-  .tvc-tl-strip::-webkit-scrollbar {
-    height: 5px;
+  .tl-timeline-scroll::-webkit-scrollbar {
+    height: 6px;
   }
 
-  .tvc-tl-strip::-webkit-scrollbar-thumb {
-    background: rgba(250, 247, 238, 0.3);
+  .tl-timeline-scroll::-webkit-scrollbar-thumb {
+    background: var(--tl-green-light);
     border-radius: 4px;
   }
 
-  .tvc-tl-card {
-    appearance: none;
-    scroll-snap-align: start;
-    flex: 0 0 auto;
-    width: clamp(130px, 16vw, 170px);
-    background: rgba(250, 247, 238, 0.06);
-    border: 1px solid rgba(250, 247, 238, 0.18);
-    border-radius: 12px;
+  .tl-timeline {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: max-content;
+    gap: clamp(18px, 3.4vw, 48px);
+    padding: clamp(30px, 7vh, 60px) 4px clamp(50px, 9vh, 80px);
+  }
+
+  .tl-timeline::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 3px;
+    background: linear-gradient(to right, var(--tl-green-light), var(--tl-green), var(--tl-green-light));
+    transform: translateY(-50%);
+    z-index: 0;
+    border-radius: 3px;
+  }
+
+  .tl-year-node {
+    position: relative;
+    z-index: 1;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    align-items: center;
     cursor: pointer;
-    padding: 0;
-    text-align: left;
+    width: clamp(64px, 9vw, 92px);
+    scroll-snap-align: center;
+    background: none;
+    border: none;
     font: inherit;
     color: inherit;
-    transition: transform 0.15s ease, border-color 0.15s ease;
+    padding: 0;
   }
 
-  .tvc-tl-card:hover {
-    transform: translateY(-2px);
-    border-color: var(--tvc-orange);
-  }
-
-  .tvc-tl-thumb {
-    width: 100%;
-    height: clamp(70px, 10vh, 100px);
-    object-fit: cover;
-    display: block;
-  }
-
-  .tvc-tl-thumb-fallback {
-    width: 100%;
-    height: clamp(70px, 10vh, 100px);
+  .tl-year-node .tl-dot {
+    width: clamp(50px, 7vw, 68px);
+    height: clamp(50px, 7vw, 68px);
+    border-radius: 50%;
+    background: var(--tl-white);
+    border: 3px solid var(--tl-green);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: rgba(250, 247, 238, 0.5);
+    font-size: clamp(20px, 3vw, 28px);
+    transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
   }
 
-  .tvc-tl-cardmeta {
-    padding: 8px 10px 10px;
+  .tl-year-node .tl-yr {
+    margin-top: 8px;
+    font-size: clamp(12px, 1.7vw, 14px);
+    font-weight: 700;
+    color: var(--tl-green-dark);
   }
 
-  .tvc-tl-month {
-    display: block;
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: rgba(250, 247, 238, 0.55);
+  .tl-year-node .tl-lbl {
+    margin-top: 2px;
+    font-size: clamp(10px, 1.5vw, 12px);
+    color: var(--tl-muted);
+    text-align: center;
+    line-height: 1.2;
+    max-width: 90px;
   }
 
-  .tvc-tl-title {
-    display: block;
-    font-size: 0.8rem;
-    line-height: 1.3;
-    margin-top: 4px;
-    color: var(--tvc-cream);
+  .tl-year-node:hover .tl-dot {
+    transform: translateY(-3px);
   }
 
-  @media (max-width: 760px) {
-    .tvc-tl-wire {
-      overflow-x: auto;
-      overflow-y: hidden;
-      padding: 0 10px;
-      height: 90px;
-    }
+  .tl-year-node.active .tl-dot {
+    background: var(--tl-green);
+    color: var(--tl-white);
+    transform: scale(1.12) translateY(-4px);
+    box-shadow: 0 4px 14px rgba(47, 74, 60, 0.35);
+  }
 
-    .tvc-tl-word {
-      display: none;
-    }
+  .tl-year-node.active .tl-yr {
+    color: var(--tl-brown);
+  }
 
-    .tvc-tl-panel {
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .tvc-tl-narrative {
-      flex: 0 0 auto;
-      max-width: none;
-    }
-
-    .tvc-tl-narrative h3 {
-      font-size: 1.4rem;
-    }
-
-    .tvc-tl-narrative p {
-      font-size: 0.82rem;
-      -webkit-line-clamp: 4;
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-
-    .tvc-tl-navhint {
-      display: none;
-    }
+  .tl-hint {
+    flex: 0 0 auto;
+    text-align: center;
+    font-size: 11.5px;
+    color: var(--tl-muted);
+    padding-bottom: 6px;
   }
 </style>
 
 <style is:global>
-  .tvc-tl-modal-backdrop {
+  .tl-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(15, 20, 12, 0.82);
+    background: rgba(30, 28, 22, 0.55);
     display: none;
     align-items: center;
     justify-content: center;
     z-index: 200;
-    padding: 4vh 4vw;
+    padding: 16px;
   }
 
-  .tvc-tl-modal-backdrop.open {
+  .tl-overlay.open {
     display: flex;
   }
 
-  .tvc-tl-modal-wrap {
-    position: relative;
-    max-width: 640px;
-    width: 100%;
+  .tl-modal {
+    background: var(--tl-white, #fffdf9);
+    width: min(640px, 100%);
+    height: min(640px, 86vh, 86dvh);
+    border-radius: 18px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
   }
 
-  .tvc-tl-modal {
-    background: var(--tvc-cream);
-    border-radius: 14px;
-    max-height: 88vh;
-    overflow-y: auto;
+  .tl-modal-head {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    background: var(--tl-green-dark, #2f4a3c);
+    color: var(--tl-white, #fffdf9);
   }
 
-  .tvc-tl-modal-img {
-    width: 100%;
-    max-height: 42vh;
-    object-fit: cover;
-    display: block;
+  .tl-modal-head .tl-m-icon {
+    font-size: 26px;
   }
 
-  .tvc-tl-modal-body {
-    padding: 22px 26px 26px;
+  .tl-modal-head .tl-m-titles {
+    flex: 1;
+    min-width: 0;
   }
 
-  .tvc-tl-month-tag {
+  .tl-modal-head .tl-m-year {
+    font-size: 18px;
     font-weight: 700;
-    font-size: 0.7rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--tvc-orange);
-    margin: 0;
   }
 
-  .tvc-tl-modal-body h3 {
-    margin: 8px 0 10px;
+  .tl-modal-head .tl-m-summary {
+    font-size: 12px;
+    opacity: 0.85;
   }
 
-  .tvc-tl-modal-body p:not(.tvc-tl-month-tag) {
-    font-size: 0.92rem;
-    line-height: 1.6;
-    color: var(--tvc-ink-soft);
-    margin: 0;
-  }
-
-  .tvc-tl-modal-close {
-    position: absolute;
-    top: 12px;
-    right: 14px;
-    background: rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.4);
-    color: #fff;
+  .tl-nav-btn {
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    color: var(--tl-white, #fffdf9);
     width: 30px;
     height: 30px;
     border-radius: 50%;
-    cursor: pointer;
     font-size: 16px;
-    line-height: 1;
+    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
+    flex: 0 0 auto;
+  }
+
+  .tl-nav-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  .tl-nav-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+
+  .tl-close-btn {
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    color: var(--tl-white, #fffdf9);
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    font-size: 17px;
+    cursor: pointer;
+    flex: 0 0 auto;
+  }
+
+  .tl-close-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  .tl-modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .tl-track-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .tl-month-track {
+    height: 100%;
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .tl-month-track::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tl-month-slide {
+    flex: 0 0 100%;
+    min-width: 0;
+    height: 100%;
+    scroll-snap-align: center;
+    box-sizing: border-box;
+    padding: 14px 18px 6px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .tl-month-slide h3 {
+    flex: 0 0 auto;
+    margin: 0 0 5px;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--tl-brown, #7a5c3e);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .tl-month-slide p {
+    flex: 0 0 auto;
+    margin: 0 0 8px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--tl-ink, #2b2a26);
+  }
+
+  .tl-month-slide.tl-no-img {
+    justify-content: center;
+  }
+
+  .tl-car-wrap {
+    flex: 1 1 auto;
+    min-height: 110px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .tl-carousel {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .tl-car-track {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    gap: 8px;
+    border-radius: 10px;
+    scrollbar-width: none;
+  }
+
+  .tl-car-track::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tl-car-track img {
+    width: 100%;
+    flex: 0 0 100%;
+    scroll-snap-align: center;
+    height: 100%;
+    min-height: 100px;
+    object-fit: cover;
+    border-radius: 10px;
+    background: var(--tl-sand-2, #efe7d6);
+    display: block;
+  }
+
+  .tl-car-arrows {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    transform: translateY(-50%);
+    pointer-events: none;
+    padding: 0 4px;
     z-index: 2;
   }
 
-  .tvc-tl-modal-close:hover {
-    border-color: var(--tvc-orange);
-    color: var(--tvc-orange);
+  .tl-car-arrows button {
+    pointer-events: auto;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0, 0, 0, 0.45);
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #tl-month-arrows button {
+    width: 34px;
+    height: 34px;
+    font-size: 17px;
+    background: rgba(47, 74, 60, 0.55);
+  }
+
+  .tl-car-dots {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    margin-top: 6px;
+  }
+
+  .tl-car-dots span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--tl-green-light, #8fb89b);
+    opacity: 0.5;
+  }
+
+  .tl-car-dots span.on {
+    opacity: 1;
+    background: var(--tl-green, #4c7a5f);
+  }
+
+  .tl-modal-foot {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 18px 10px;
+    border-top: 1px solid var(--tl-sand-2, #efe7d6);
+    background: var(--tl-white, #fffdf9);
+  }
+
+  #tl-month-dots span {
+    width: 8px;
+    height: 8px;
+    background: var(--tl-sand-2, #efe7d6);
+    border: 1px solid var(--tl-brown, #7a5c3e);
+    opacity: 1;
+  }
+
+  #tl-month-dots span.on {
+    background: var(--tl-brown, #7a5c3e);
+  }
+
+  #tl-month-dots {
+    margin-top: 0;
+  }
+
+  .tl-foot-lbl {
+    font-size: 12px;
+    color: var(--tl-muted, #6b675d);
+    white-space: nowrap;
+  }
+
+  @media (max-width: 520px) {
+    .tl-modal {
+      width: 100%;
+      height: 92dvh;
+      max-height: 92dvh;
+      border-radius: 14px 14px 0 0;
+      align-self: flex-end;
+    }
+
+    .tl-overlay {
+      align-items: flex-end;
+      padding: 0;
+    }
   }
 </style>

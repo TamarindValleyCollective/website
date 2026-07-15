@@ -23,13 +23,7 @@ import '../styles/global.css';
   <body class="tl-page-body">
     <Nav />
     <main class="tl-page-main">
-      <div class="tl-page-header">
-        <span class="eyebrow">Our Journey</span>
-        <h1>Year by year</h1>
-      </div>
-      <div class="tl-page-timeline">
-        <JourneyTimeline />
-      </div>
+      <JourneyTimeline />
     </main>
   </body>
 </html>
@@ -40,6 +34,7 @@ import '../styles/global.css';
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    background: #f6f1e7;
   }
 
   .tl-page-main {
@@ -47,23 +42,13 @@ import '../styles/global.css';
     min-height: 0;
     display: flex;
     flex-direction: column;
-    max-width: 1200px;
-    width: 100%;
-    margin: 0 auto;
-    padding: clamp(10px, 2vh, 20px) 20px;
   }
 
-  .tl-page-header {
-    flex: 0 0 auto;
-    margin-bottom: clamp(8px, 1.5vh, 14px);
-  }
-
-  .tl-page-header h1 {
-    margin: 2px 0 0;
-    font-size: clamp(1.4rem, 2.6vw, 2rem);
-  }
-
-  .tl-page-timeline {
+  /* .tl-root is JourneyTimelineStandalone's own root element — it lives
+     across the component boundary, so it needs :global() to be reached
+     from here. Without flex-grow it would size to content instead of
+     filling .tl-page-main, leaving a blank gap below it on short viewports. */
+  .tl-page-main :global(.tl-root) {
     flex: 1 1 auto;
     min-height: 0;
   }
@@ -73,10 +58,6 @@ import '../styles/global.css';
       height: auto;
       min-height: 100dvh;
       overflow: visible;
-    }
-
-    .tl-page-main {
-      min-height: 0;
     }
   }
 </style>
