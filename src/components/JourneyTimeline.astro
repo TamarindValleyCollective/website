@@ -1,0 +1,317 @@
+---
+// Content and structure adapted from a Claude-artifact draft built on the same
+// community account used in issue #2, reorganized into 33 dated, categorized
+// moments. Images downloaded locally under public/images/journey/.
+const categories = [
+  { cat: 'founding', label: 'Founding', color: '#b9821f' },
+  { cat: 'land', label: 'Land & Farm', color: '#17723b' },
+  { cat: 'structure', label: 'Structures', color: '#9a4e1c' },
+  { cat: 'infrastructure', label: 'Infrastructure', color: '#1d5fa8' },
+  { cat: 'community', label: 'Community', color: '#8c3d78' },
+  { cat: 'nature', label: 'Nature & Setbacks', color: '#a2472f' },
+];
+const colorByCat = Object.fromEntries(categories.map((c) => [c.cat, c.color]));
+
+const entries = [
+  { year: '2016', date: '2016', cat: 'founding', title: `A seed idea`, paras: [`TVC began as an idea among a handful of people who'd already tried, and failed, at living communally elsewhere. What they shared was one conviction: sustainable living had to be practiced together, not alone.`, `To turn that into an actual piece of land, the group partnered with <a href="https://wecommunities.in/" target="_blank" rel="noopener noreferrer">WeCommunities</a> — TVC became their very first project.`], images: [] },
+  { year: '2017', date: 'Mar 2017', cat: 'land', title: `First visit to the site`, paras: [`The search settled on a plot near the village of <a href="https://ta.wikipedia.org/wiki/%E0%AE%A4%E0%AE%95%E0%AF%8D%E0%AE%95%E0%AE%9F%E0%AF%8D%E0%AE%9F%E0%AE%BF" target="_blank" rel="noopener noreferrer">Thakkatti (Thaggatti)</a> in Tamil Nadu. What the group found was barren — years of overgrazing had stripped the topsoil of organic matter.`], images: ['/images/journey/journey-01.jpg'] },
+  { year: '2017', date: 'Jul 2017', cat: 'land', title: `Fencing the land, planting the first trees`, paras: [`Before anything could grow back, the grazing had to stop. Fencing off the land turned out to be the single biggest lever for recovery — freed from constant pressure, the soil began healing on its own.`, `Organic matter was trucked in from outside to jump-start things, and the first trees went into a section the group named the Kaveri plot.`], images: ['/images/journey/journey-02.jpg'] },
+  { year: '2018', date: 'Jan 2018', cat: 'structure', title: `First structure — a hand-built mud hut`, paras: [`The community's first building was a mud hut, raised entirely by hand from the land's own earth. Around the same time, members held their first overnight camp stay on site — an early taste of what living there might feel like.`], images: ['/images/journey/journey-04.jpg', '/images/journey/journey-05.jpg'] },
+  { year: '2018', date: 'Jul 2018', cat: 'structure', title: `Farmer's quarters begin`, paras: [`With a caretaker joining full-time, construction started on dedicated farmer's quarters — the first permanent living space built for someone to stay on-site year-round.`, `Home design for the community would go on to be led by <a href="https://www.biome-solutions.com/" target="_blank" rel="noopener noreferrer">Biome Environmental Solutions</a>.`], images: ['/images/journey/journey-06.jpg'] },
+  { year: '2019', date: 'Jan 2019', cat: 'community', title: `Ideation workshop with Ananas`, paras: [`Permaculture consultants <a href="https://ananas.design/" target="_blank" rel="noopener noreferrer">Ananas</a> ran a workshop at the farm to help members think through how the land could be laid out — the seed of what would become a formal design.`], images: ['/images/journey/journey-07.jpg'] },
+  { year: '2019', date: 'May 2019', cat: 'land', title: `The first permaculture map`, paras: [`Ananas delivered TVC's first GAIA map, translating the workshop's ideas into an actual land-use plan for water, planting zones, and future homesites.`], images: ['/images/journey/journey-03.jpg'] },
+  { year: '2019', date: 'May 2019', cat: 'community', title: `A twice-yearly rhythm begins`, paras: [`Members gathered in the city for what became a standing tradition: a meetup every May 1st in town, and every November 1st back at the farm.`], images: ['/images/journey/journey-08.jpg'] },
+  { year: '2019', date: 'Nov 2019', cat: 'community', title: `Choosing a logo`, paras: [`Member Sunita produced the community's first logo renders, kicking off the process of settling on a visual identity for the group.`], images: ['/images/journey/journey-09.jpg', '/images/journey/journey-10.jpg', '/images/journey/journey-11.jpg'] },
+  { year: '2020', date: 'Mar 2020', cat: 'infrastructure', title: `The solar shed goes up`, paras: [`A dedicated solar shed brought the farm's first real power infrastructure online.`], images: ['/images/journey/journey-12.jpg', '/images/journey/journey-13.jpg', '/images/journey/journey-14.jpg'] },
+  { year: '2020', date: 'Jun 2020', cat: 'community', title: `Madhavan marries Krithika`, paras: [`Farm manager Madhavan married Krithika — a milestone for the small team living on-site full time, and the start of a partnership that would shape the years ahead.`], images: ['/images/journey/journey-15.jpg'] },
+  { year: '2020', date: 'Oct 2020', cat: 'land', title: `Real signs of recovery`, paras: [`Three years in, the farm showed real signs of reviving from its degraded state. The team brought in natural inputs — mulberry sticks left over from harvest, banana waste — to start rebuilding the soil's carbon content. A generous year for grass growth meant plenty of ground cover to work with.`], images: ['/images/pages/journey/transformation.jpg'] },
+  { year: '2021', date: 'Jan 2021', cat: 'land', title: `The first cow arrives`, paras: [`Livestock joined the farm for the first time.`], images: ['/images/journey/journey-16.jpg'] },
+  { year: '2021', date: 'Aug 2021', cat: 'infrastructure', title: `Water lines laid to the farm`, paras: [`Piped water lines extended irrigation across the growing planted area.`], images: ['/images/journey/journey-17.jpg'] },
+  { year: '2021', date: 'Sep 2021', cat: 'community', title: `Krithika joins the village school`, paras: [`Krithika began teaching at the local village school, deepening the community's ties with its neighbors.`], images: ['/images/journey/journey-18.jpg'] },
+  { year: '2021', date: 'Dec 2021', cat: 'infrastructure', title: `A DIY solar backup for Madhavan's house`, paras: [`Members built a do-it-yourself solar installation to give Madhavan's house power backup.`], images: ['/images/journey/journey-19.jpg'] },
+  { year: '2022', date: 'May 2022', cat: 'community', title: `May meetup at Reva and Ranjan's home`, paras: [`The city gathering that year was hosted at member Reva and Ranjan's home.`], images: ['/images/journey/journey-20.jpg'] },
+  { year: '2022', date: '2 Oct 2022', cat: 'structure', title: `A puja marks the start of home construction`, paras: [`A puja held on October 2nd formally marked the beginning of home construction for community members — the shift from shared farm infrastructure toward individual houses.`], images: ['/images/journey/journey-21.jpg', '/images/journey/journey-22.jpg'] },
+  { year: '2022', date: 'Nov 2022', cat: 'community', title: `Farm meetup and a foraging walk`, paras: [`At that year's farm meetup, member Suresh led a food-foraging exercise for the community.`], images: ['/images/journey/journey-23.jpg', '/images/journey/journey-24.jpg'] },
+  { year: '2023', date: 'Mar 2023', cat: 'structure', title: `Ground breaking for home construction`, paras: [`Six months after the puja, ground was formally broken for the first homes.`], images: ['/images/journey/journey-25.jpg'] },
+  { year: '2023', date: 'Sep 2023', cat: 'community', title: `Engaging with the school in Odhipuram`, paras: [`Members Vijay and Sunita began working with the local school in Odhipuram, extending the community's outreach beyond Krithika's own classroom.`], images: ['/images/journey/journey-26.jpg'] },
+  { year: '2024', date: 'Apr 2024', cat: 'structure', title: `Foundations laid for the first homes`, paras: [`Foundation work began on the community's initial homes.`], images: ['/images/journey/journey-27.jpg'] },
+  { year: '2024', date: 'May 2024', cat: 'community', title: `Annual gathering at Good Earth Malhar`, paras: [`That year's city gathering was held at Good Earth Malhar.`], images: ['/images/journey/journey-28.jpg'] },
+  { year: '2024', date: 'May 2024', cat: 'nature', title: `An elephant visits — and does some damage`, paras: [`An elephant foraging for food came through and destroyed a structure near the mud hut — a reminder of how close the farm sits to a wildlife corridor.`], images: ['/images/journey/journey-29.jpg'] },
+  { year: '2024', date: 'May 2024', cat: 'infrastructure', title: `Earthworks begin for water harvesting`, paras: [`A larger push to capture and hold water on the land got underway.`], images: ['/images/journey/journey-30.jpg'] },
+  { year: '2024', date: 'Nov 2024', cat: 'community', title: `A filmmaker visits the farm`, paras: [`Documentary filmmaker <a href="https://www.trailingwild.com/sumanth-kuduvalli/" target="_blank" rel="noopener noreferrer">Sumanth Kuduvalli</a> joined the November meetup to talk about his film, <a href="https://youtu.be/ltY0EAMABKA" target="_blank" rel="noopener noreferrer">Land of the Blackbuck: A Story of Hope and Resilience</a>.`], images: ['/images/journey/journey-31.jpg'] },
+  { year: '2024', date: 'Dec 2024', cat: 'community', title: `3Bs & 1H, 4th edition — with Deepa Mohan`, paras: [`The community's recurring 3Bs & 1H gathering returned for a fourth time, hosted with naturalist Deepa Mohan.`], images: ['/images/journey/journey-32.jpg', '/images/journey/journey-33.jpg'] },
+  { year: '2025', date: 'Mar 2025', cat: 'nature', title: `Wildfire breaches the firelines`, paras: [`Despite firelines cut around the property, a wildfire broke through and burned a significant amount of vegetation — a recurring risk the community works around every dry season.`], images: ['/images/journey/journey-34.jpg'] },
+  { year: '2025', date: 'Apr 2025', cat: 'nature', title: `Elephants return`, paras: [`Elephants passed through the land again.`], images: ['/images/journey/journey-35.jpg'] },
+  { year: '2025', date: 'May 2025', cat: 'infrastructure', title: `A second major water-harvesting push`, paras: [`Another large earthworks project got underway to help capture more water across the land.`], images: ['/images/journey/journey-36.jpg'] },
+  { year: '2025', date: 'Jul 2025', cat: 'nature', title: `The farm's transformer is stolen`, paras: [`A setback: the transformer serving the property was stolen.`], images: ['/images/journey/journey-37.jpg'] },
+  { year: '2025', date: 'Aug 2025', cat: 'community', title: `The May meetup, delayed to August`, paras: [`Scheduling conflicts among members pushed that year's city gathering back to August.`], images: ['/images/journey/journey-38.jpg'] },
+  { year: '2025', date: 'Aug 2025', cat: 'community', title: `3Bs & 1H, 5th edition`, paras: [`The gathering series returned for a fifth time.`], images: ['/images/journey/journey-39.jpg', '/images/journey/journey-40.jpg'] },
+  { year: '2025', date: 'Aug 2025', cat: 'structure', title: `Home construction, steady progress`, paras: [`The first homes continued to take shape.`], images: ['/images/journey/journey-41.jpg'] },
+];
+
+const years = [...new Set(entries.map((e) => e.year))];
+---
+
+<div class="jt-meta">
+  <span><strong>2016</strong> — seed idea</span>
+  <span><strong>2025</strong> — homes under construction</span>
+  <span><strong>53</strong> member households</span>
+</div>
+
+<div class="jt-filterbar" id="jt-filterbar">
+  <span class="jt-filter-label">Filter</span>
+  {categories.map((c) => (
+    <button type="button" class="jt-chip active" data-cat={c.cat} style={`--dot:${c.color}`}>
+      <span class="jt-dot"></span>{c.label}
+    </button>
+  ))}
+  <button type="button" class="jt-chip jt-reset" id="jt-reset">Reset</button>
+</div>
+
+<div class="jt-timeline" id="jt-timeline">
+  {years.map((year) => {
+    const yearEntries = entries.filter((e) => e.year === year);
+    return (
+      <div class="jt-yeargroup" data-year={year}>
+        <div class="jt-yearmark">
+          <div class="jt-yearring">{year}</div>
+          <span class="jt-count">{yearEntries.length} {yearEntries.length === 1 ? 'entry' : 'entries'}</span>
+        </div>
+        {yearEntries.map((e) => (
+          <div class="jt-entry" data-cat={e.cat}>
+            <div class="jt-node" style={`--dot:${colorByCat[e.cat]}`}></div>
+            <div class="jt-card">
+              <div class="jt-card-top">
+                <span class="jt-date">{e.date}</span>
+                <span class="jt-tag" style={`--dot:${colorByCat[e.cat]}`}><span class="jt-dot"></span>{categories.find((c) => c.cat === e.cat)?.label}</span>
+              </div>
+              <h3>{e.title}</h3>
+              {e.paras.map((p) => <p set:html={p} />)}
+              {e.images.length > 0 && (
+                <div class={`jt-imgrow ${e.images.length > 1 ? 'multi' : ''}`}>
+                  {e.images.map((src) => <img src={src} alt={e.title} loading="lazy" />)}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  })}
+</div>
+
+<script>
+  const filterbar = document.getElementById('jt-filterbar')!;
+  const resetBtn = document.getElementById('jt-reset')!;
+  const chips = Array.from(filterbar.querySelectorAll<HTMLButtonElement>('.jt-chip[data-cat]'));
+  const entries = Array.from(document.querySelectorAll<HTMLElement>('.jt-entry'));
+  const yearGroups = Array.from(document.querySelectorAll<HTMLElement>('.jt-yeargroup'));
+
+  function applyFilter() {
+    const activeCats = chips.filter((c) => c.classList.contains('active')).map((c) => c.dataset.cat);
+    const allActive = activeCats.length === chips.length;
+    entries.forEach((entry) => {
+      const show = allActive || activeCats.includes(entry.dataset.cat);
+      entry.classList.toggle('jt-hidden', !show);
+    });
+    yearGroups.forEach((group) => {
+      const anyVisible = Array.from(group.querySelectorAll<HTMLElement>('.jt-entry')).some((e) => !e.classList.contains('jt-hidden'));
+      group.classList.toggle('jt-hidden', !anyVisible);
+    });
+  }
+
+  chips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      chip.classList.toggle('active');
+      applyFilter();
+    });
+  });
+
+  resetBtn.addEventListener('click', () => {
+    chips.forEach((c) => c.classList.add('active'));
+    applyFilter();
+  });
+</script>
+
+<style>
+  .jt-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 24px;
+    font-size: 0.9rem;
+    color: var(--tvc-ink-soft);
+    margin: 12px 0 24px;
+  }
+
+  .jt-meta strong {
+    color: var(--tvc-green-dark);
+  }
+
+  .jt-filterbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 32px;
+  }
+
+  .jt-filter-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tvc-ink-soft);
+    margin-right: 4px;
+  }
+
+  .jt-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--tvc-line);
+    background: #fff;
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 0.82rem;
+    font-family: var(--font-body);
+    color: var(--tvc-ink-soft);
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+  }
+
+  .jt-chip:not(.active) {
+    opacity: 0.4;
+  }
+
+  .jt-chip .jt-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--dot);
+    flex-shrink: 0;
+  }
+
+  .jt-reset {
+    border-style: dashed;
+  }
+
+  .jt-timeline {
+    position: relative;
+    border-left: 2px solid var(--tvc-line);
+    padding-left: 28px;
+    margin-left: 6px;
+  }
+
+  .jt-yeargroup.jt-hidden {
+    display: none;
+  }
+
+  .jt-yearmark {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin: 40px 0 18px;
+  }
+
+  .jt-yeargroup:first-child .jt-yearmark {
+    margin-top: 0;
+  }
+
+  .jt-yearring {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.4rem;
+    color: var(--tvc-green-dark);
+  }
+
+  .jt-count {
+    font-size: 0.8rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .jt-entry {
+    position: relative;
+    margin-bottom: 20px;
+  }
+
+  .jt-entry.jt-hidden {
+    display: none;
+  }
+
+  .jt-node {
+    position: absolute;
+    left: -33px;
+    top: 6px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--dot);
+    border: 2px solid var(--tvc-cream);
+  }
+
+  .jt-card {
+    background: #fff;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+    padding: 18px 22px;
+  }
+
+  .jt-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+
+  .jt-date {
+    font-size: 0.78rem;
+    color: var(--tvc-ink-soft);
+    font-weight: 600;
+  }
+
+  .jt-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-weight: 700;
+    color: var(--tvc-ink-soft);
+  }
+
+  .jt-card h3 {
+    font-size: 1.15rem;
+    margin: 0 0 8px;
+  }
+
+  .jt-card p {
+    margin: 0 0 8px;
+    color: var(--tvc-ink-soft);
+  }
+
+  .jt-card p:last-of-type {
+    margin-bottom: 0;
+  }
+
+  .jt-imgrow {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .jt-imgrow img {
+    flex: 1 1 0;
+    min-width: 0;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: 8px;
+  }
+
+  .jt-imgrow:not(.multi) img {
+    flex: 0 1 320px;
+  }
+</style>
