@@ -12,7 +12,7 @@ const { product } = Astro.props;
 const { Content } = await render(product);
 ---
 
-<BaseLayout title={product.data.title} description={product.data.excerpt}>
+<BaseLayout title={product.data.title} description={product.data.excerpt} image={product.data.coverImage}>
   <PageHero eyebrow="Resource Centre" title={product.data.title} image={product.data.coverImage} imageAlt={product.data.title} />
   <article class="section wrapper prose">
     <Content />
