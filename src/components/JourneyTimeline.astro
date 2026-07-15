@@ -1,0 +1,723 @@
+---
+// Standalone interactive timeline built from src/content/events — a
+// horizontal year "wire" that collapses to a two-word summary per year,
+// expands one year's detail panel at a time, and carousels through that
+// year's events by month. No page scroll: everything here fits the height
+// its parent hands it via flex, and only the month carousel scrolls (via
+// snap + arrow buttons) internally.
+const ICONS: Record<number, string> = {
+  2020: `<svg viewBox="0 0 24 24"><path d="M3 20h18"/><path d="M4 20 11 6h2l7 14"/><path d="M9.5 20 12 14.5 14.5 20"/></svg>`,
+  2021: `<svg viewBox="0 0 24 24"><path d="M12 21V9"/><path d="M12 9c0-3.6-2.7-5.5-6.2-5.5 0 3.6 2.7 6.4 6.2 5.5z"/><path d="M12 9c0-3.6 2.7-5.5 6.2-5.5 0 3.6-2.7 6.4-6.2 5.5z"/></svg>`,
+  2022: `<svg viewBox="0 0 24 24"><circle cx="7" cy="13" r="4"/><circle cx="17" cy="13" r="4"/><path d="M11 13h2"/><path d="M9.5 9.5 12 6l2.5 3.5"/></svg>`,
+  2023: `<svg viewBox="0 0 24 24"><path d="M5 11a7 7 0 0 1 14 0z"/><path d="M4 11h16"/><path d="M6 11c0 4 2 7 6 8 4-1 6-4 6-8"/></svg>`,
+  2024: `<svg viewBox="0 0 24 24"><circle cx="8" cy="9" r="2.6"/><circle cx="16" cy="9" r="2.6"/><path d="M3.5 19c.6-3 2.3-4.6 4.5-4.6s3.9 1.6 4.5 4.6"/><path d="M11.5 19c.6-3 2.3-4.6 4.5-4.6s3.9 1.6 4.5 4.6"/></svg>`,
+};
+
+interface EventCard {
+  month: string;
+  title: string;
+  text: string;
+  image?: string;
+}
+
+interface YearEntry {
+  year: number;
+  label: string;
+  narrative: string;
+  events: EventCard[];
+}
+
+const DATA: YearEntry[] = [
+  {
+    year: 2020,
+    label: 'First Gathering',
+    narrative: `TVC's first on-site gathering combined a camp night with a visioning session for the community's future — an early ritual that set the tone for the years of shared building ahead.`,
+    events: [
+      { month: 'Oct', title: 'Camp Night & Visioning', text: `A camp night and visioning session held at the farm on Oct 31 & Nov 1, bringing members together on-site.`, image: '/images/events/2020-10-31-camp-night-and-visioning/hero.jpeg' },
+    ],
+  },
+  {
+    year: 2021,
+    label: 'Workshop Season',
+    narrative: `The year TVC opened its gates to hands-on learning — five workshops across regenerative living, forest-building, seed-saving, bamboo craft, and permaculture design with design consultants Ananas.`,
+    events: [
+      { month: 'Jan', title: 'Living Your Being', text: `A daylong workshop with Ranjan & Reva of Primalise, drawn from their pursuit of an (almost) off-grid, low-appliance life.`, image: '/images/events/2021-01-23-living-your-being/hero.jpeg' },
+      { month: 'Feb', title: 'How to Grow a Forest', text: `A workshop on building a self-sustaining forest ecosystem, led by wildlife-conservation veteran Praveen Ram.`, image: '/images/events/2021-02-20-how-to-grow-a-forest/hero.jpeg' },
+      { month: 'Aug', title: 'Seeds, Saplings & Growing Trees', text: `A hands-on day on germination, seedling care, and sapling planting for new farm owners.`, image: '/images/events/2021-08-21-seeds-saplings-growing-trees/hero.jpeg' },
+      { month: 'Sep', title: 'Bamboo Basket Making', text: `A traditional bamboo-basket weaving workshop run by Ramdhas — participants took home the basket they wove.`, image: '/images/events/2021-09-25-bamboo-basket-making/hero.jpeg' },
+      { month: 'Nov', title: 'Intro to Regenerative Thinking', text: `A 1.5-day permaculture-design workshop in partnership with Ananas, mixing concepts with on-ground observation.`, image: '/images/events/2021-11-27-introduction-to-regenerative-thinking/hero.jpeg' },
+    ],
+  },
+  {
+    year: 2022,
+    label: 'Biodiversity Begins',
+    narrative: `TVC launched its 3Bs&1H biodiversity walks with naturalist Deepa Mohan, running the dusk-to-dawn format twice this year, and hosted a week-long computing retreat built around the classic text SICP.`,
+    events: [
+      { month: 'Aug', title: '3Bs & 1H Biodiversity Walk', text: `Dusk-to-dawn birds/butterflies/bees walks with naturalists Deepa Mohan, Subbu, and farm manager Madhav.`, image: '/images/events/2022-08-27-3bs-and-1h-biodiversity-walk/hero.png' },
+      { month: 'Dec', title: '3Bs & 1H Biodiversity Walk', text: `A second edition of the biodiversity walk, again guided by Deepa Mohan and the TVC team.`, image: '/images/events/2022-12-03-3bs-and-1h-biodiversity-walk/hero.jpg' },
+      { month: 'Dec', title: 'The Lambda Retreat', text: `A week-long deep dive into SICP and the nature of computation, led by Anand Chitipothu.`, image: '/images/events/2022-12-16-the-lambda-retreat/hero.png' },
+    ],
+  },
+  {
+    year: 2023,
+    label: 'Foraging Feast',
+    narrative: `The community foraged wild, edible weeds around the farm and cooked them into a shared meal with Suresh Kumar of Surjapura Curries — turning what grows wild into what's for lunch.`,
+    events: [
+      { month: 'Jan', title: 'Walk, Pick & Cook', text: `Foraging edible weeds and healthy local food in the wild, with Suresh Kumar of Surjapura Curries.`, image: '/images/events/2023-01-08-walk-pick-and-cook/hero.jpeg' },
+    ],
+  },
+  {
+    year: 2024,
+    label: 'Volunteers Arrive',
+    narrative: `Seven years into the journey, TVC opened a dedicated Volunteer Day for newcomers to get hands-on with farm life, and closed the year with another 3Bs&1H biodiversity walk.`,
+    events: [
+      { month: 'Nov', title: 'Volunteer Day @ TVC', text: `Twenty volunteers came to see the farm's transformation and get hands-on farming experience, seven years in.` },
+      { month: 'Dec', title: '3Bs & 1H Biodiversity Walk', text: `The dusk-to-dawn biodiversity walk returned once more, with Deepa Mohan and the TVC team.`, image: '/images/events/2024-12-21-3bs-and-1h-biodiversity-walk/hero.jpg' },
+    ],
+  },
+];
+
+const DEFAULT_YEAR = DATA[DATA.length - 1].year;
+---
+
+<div class="tvc-tl" data-default-year={DEFAULT_YEAR}>
+  <div class="tvc-tl-wire" role="tablist" aria-label="Select a year">
+    <div class="tvc-tl-line" aria-hidden="true"></div>
+    {DATA.map((y, i) => (
+      <button
+        type="button"
+        class="tvc-tl-stop"
+        class:list={[i % 2 === 0 ? 'up' : 'down']}
+        data-year={y.year}
+        role="tab"
+        aria-selected={y.year === DEFAULT_YEAR ? 'true' : 'false'}
+      >
+        <span class="tvc-tl-tick" aria-hidden="true"></span>
+        <span class="tvc-tl-dot" aria-hidden="true"></span>
+        <span class="tvc-tl-labelblock">
+          <span class="tvc-tl-icon" set:html={ICONS[y.year]} />
+          <span class="tvc-tl-word">{y.label}</span>
+          <span class="tvc-tl-yr">{y.year}</span>
+        </span>
+      </button>
+    ))}
+  </div>
+
+  <div class="tvc-tl-nav">
+    <button type="button" class="tvc-tl-arrow" id="tvc-tl-prev-year" aria-label="Previous year">‹</button>
+    <span class="tvc-tl-navhint">Click a year, or use the arrows to step through</span>
+    <button type="button" class="tvc-tl-arrow" id="tvc-tl-next-year" aria-label="Next year">›</button>
+  </div>
+
+  <div class="tvc-tl-detail">
+    {DATA.map((y) => (
+      <div class="tvc-tl-panel" data-year-panel={y.year} hidden={y.year !== DEFAULT_YEAR}>
+        <div class="tvc-tl-narrative">
+          <span class="tvc-tl-eyebrow">{y.label}</span>
+          <h3>{y.year}</h3>
+          <p>{y.narrative}</p>
+        </div>
+        <div class="tvc-tl-months">
+          <div class="tvc-tl-strip-wrap">
+            <button type="button" class="tvc-tl-carousel-btn prev" data-carousel-prev aria-label="Previous month">‹</button>
+            <div class="tvc-tl-strip" data-strip>
+              {y.events.map((e) => (
+                <button type="button" class="tvc-tl-card" data-title={e.title} data-text={e.text} data-image={e.image ?? ''} data-month={e.month} data-year={y.year}>
+                  {e.image ? (
+                    <img class="tvc-tl-thumb" src={e.image} alt={e.title} loading="lazy" />
+                  ) : (
+                    <span class="tvc-tl-thumb-fallback">No photo</span>
+                  )}
+                  <span class="tvc-tl-cardmeta">
+                    <span class="tvc-tl-month">{e.month} {y.year}</span>
+                    <span class="tvc-tl-title">{e.title}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+            <button type="button" class="tvc-tl-carousel-btn next" data-carousel-next aria-label="Next month">›</button>
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+</div>
+
+<div class="tvc-tl-modal-backdrop" id="tvc-tl-modal-backdrop">
+  <div class="tvc-tl-modal-wrap">
+    <button class="tvc-tl-modal-close" id="tvc-tl-modal-close" aria-label="Close">✕</button>
+    <div class="tvc-tl-modal" id="tvc-tl-modal"></div>
+  </div>
+</div>
+
+<script>
+  const root = document.querySelector<HTMLElement>('.tvc-tl')!;
+  const years = Array.from(root.querySelectorAll<HTMLButtonElement>('.tvc-tl-stop')).map((s) => s.dataset.year!);
+  const stops = Array.from(root.querySelectorAll<HTMLButtonElement>('.tvc-tl-stop'));
+  const panels = Array.from(root.querySelectorAll<HTMLElement>('.tvc-tl-panel'));
+  const prevYearBtn = document.getElementById('tvc-tl-prev-year')!;
+  const nextYearBtn = document.getElementById('tvc-tl-next-year')!;
+  const modalBackdrop = document.getElementById('tvc-tl-modal-backdrop')!;
+  const modal = document.getElementById('tvc-tl-modal')!;
+  const modalClose = document.getElementById('tvc-tl-modal-close')!;
+
+  let activeYear = root.dataset.defaultYear!;
+
+  function selectYear(year: string) {
+    activeYear = year;
+    stops.forEach((s) => {
+      const active = s.dataset.year === year;
+      s.classList.toggle('active', active);
+      s.setAttribute('aria-selected', String(active));
+      if (active) s.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+    });
+    panels.forEach((p) => {
+      p.hidden = p.dataset.yearPanel !== year;
+    });
+  }
+
+  stops.forEach((stop) => {
+    stop.addEventListener('click', () => selectYear(stop.dataset.year!));
+  });
+
+  function stepYear(delta: number) {
+    const i = years.indexOf(activeYear);
+    const next = years[Math.min(years.length - 1, Math.max(0, i + delta))];
+    selectYear(next);
+  }
+
+  prevYearBtn.addEventListener('click', () => stepYear(-1));
+  nextYearBtn.addEventListener('click', () => stepYear(1));
+
+  root.addEventListener('keydown', (ev) => {
+    if (ev.key === 'ArrowLeft') stepYear(-1);
+    if (ev.key === 'ArrowRight') stepYear(1);
+  });
+
+  // Month carousel: snap-scroll strip driven by prev/next arrow buttons,
+  // one card-width at a time, in addition to native touch swipe/scroll.
+  root.querySelectorAll<HTMLElement>('.tvc-tl-strip-wrap').forEach((wrap) => {
+    const strip = wrap.querySelector<HTMLElement>('[data-strip]')!;
+    const prevBtn = wrap.querySelector<HTMLButtonElement>('[data-carousel-prev]')!;
+    const nextBtn = wrap.querySelector<HTMLButtonElement>('[data-carousel-next]')!;
+    const scrollByCard = (dir: number) => {
+      const card = strip.querySelector<HTMLElement>('.tvc-tl-card');
+      const amount = card ? card.offsetWidth + 14 : 200;
+      strip.scrollBy({ left: dir * amount, behavior: 'smooth' });
+    };
+    prevBtn.addEventListener('click', () => scrollByCard(-1));
+    nextBtn.addEventListener('click', () => scrollByCard(1));
+  });
+
+  function openModal(card: HTMLButtonElement) {
+    const image = card.dataset.image || '';
+    const title = card.dataset.title || '';
+    const text = card.dataset.text || '';
+    const month = card.dataset.month || '';
+    const year = card.dataset.year || '';
+    modal.innerHTML = `
+      ${image ? `<img class="tvc-tl-modal-img" src="${image}" alt="${title}" />` : ''}
+      <div class="tvc-tl-modal-body">
+        <p class="tvc-tl-month-tag">${month} ${year}</p>
+        <h3>${title}</h3>
+        <p>${text}</p>
+      </div>
+    `;
+    modalBackdrop.classList.add('open');
+  }
+
+  function closeModal() {
+    modalBackdrop.classList.remove('open');
+  }
+
+  root.querySelectorAll<HTMLButtonElement>('.tvc-tl-card').forEach((card) => {
+    card.addEventListener('click', () => openModal(card));
+  });
+
+  modalClose.addEventListener('click', closeModal);
+  modalBackdrop.addEventListener('click', (ev) => {
+    if (ev.target === modalBackdrop) closeModal();
+  });
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') closeModal();
+  });
+</script>
+
+<style>
+  .tvc-tl {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    background: var(--tvc-green-dark);
+    color: var(--tvc-cream);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow-soft);
+  }
+
+  /* ---------------- wire ---------------- */
+  .tvc-tl-wire {
+    position: relative;
+    display: flex;
+    height: clamp(96px, 14vh, 130px);
+    flex: 0 0 auto;
+    padding: 0 clamp(14px, 3vw, 36px);
+  }
+
+  .tvc-tl-line {
+    position: absolute;
+    left: clamp(14px, 3vw, 36px);
+    right: clamp(14px, 3vw, 36px);
+    top: 50%;
+    height: 2px;
+    background: rgba(250, 247, 238, 0.25);
+  }
+
+  .tvc-tl-stop {
+    appearance: none;
+    background: none;
+    border: none;
+    font: inherit;
+    flex: 1;
+    position: relative;
+    cursor: pointer;
+    padding: 0;
+    color: inherit;
+  }
+
+  .tvc-tl-stop:focus-visible .tvc-tl-dot {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 3px;
+  }
+
+  .tvc-tl-dot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--tvc-green-dark);
+    border: 2px solid rgba(250, 247, 238, 0.4);
+    transform: translate(-50%, -50%);
+    transition: all 0.2s ease;
+    z-index: 2;
+  }
+
+  .tvc-tl-stop.active .tvc-tl-dot {
+    background: var(--tvc-orange);
+    border-color: var(--tvc-orange);
+    transform: translate(-50%, -50%) scale(1.35);
+    box-shadow: 0 0 0 5px rgba(247, 133, 32, 0.22);
+  }
+
+  .tvc-tl-tick {
+    position: absolute;
+    left: 50%;
+    width: 2px;
+    background: rgba(250, 247, 238, 0.4);
+    transform: translateX(-50%);
+  }
+
+  .tvc-tl-stop.up .tvc-tl-tick {
+    top: 30%;
+    height: 20%;
+  }
+
+  .tvc-tl-stop.down .tvc-tl-tick {
+    top: 50%;
+    height: 20%;
+  }
+
+  .tvc-tl-stop.active .tvc-tl-tick {
+    background: var(--tvc-orange);
+  }
+
+  .tvc-tl-labelblock {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    width: max-content;
+    max-width: 110px;
+    text-align: center;
+  }
+
+  .tvc-tl-stop.up .tvc-tl-labelblock {
+    top: 0;
+  }
+
+  .tvc-tl-stop.down .tvc-tl-labelblock {
+    bottom: 0;
+  }
+
+  .tvc-tl-icon {
+    color: rgba(250, 247, 238, 0.7);
+    line-height: 0;
+  }
+
+  .tvc-tl-icon :global(svg) {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    display: block;
+    margin: 0 auto;
+  }
+
+  .tvc-tl-stop.active .tvc-tl-icon {
+    color: var(--tvc-orange);
+  }
+
+  .tvc-tl-word {
+    font-weight: 600;
+    font-size: 0.68rem;
+    letter-spacing: 0.02em;
+    color: rgba(250, 247, 238, 0.75);
+    line-height: 1.2;
+  }
+
+  .tvc-tl-yr {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.05rem;
+    color: var(--tvc-cream);
+    line-height: 1;
+  }
+
+  .tvc-tl-stop.active .tvc-tl-word,
+  .tvc-tl-stop.active .tvc-tl-yr {
+    color: var(--tvc-orange);
+  }
+
+  /* ---------------- carousel nav ---------------- */
+  .tvc-tl-nav {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 4px 0 10px;
+  }
+
+  .tvc-tl-navhint {
+    font-size: 0.72rem;
+    color: rgba(250, 247, 238, 0.55);
+  }
+
+  .tvc-tl-arrow {
+    appearance: none;
+    background: rgba(250, 247, 238, 0.08);
+    border: 1px solid rgba(250, 247, 238, 0.25);
+    color: var(--tvc-cream);
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .tvc-tl-arrow:hover {
+    border-color: var(--tvc-orange);
+    color: var(--tvc-orange);
+  }
+
+  /* ---------------- detail panel ---------------- */
+  .tvc-tl-detail {
+    flex: 1 1 auto;
+    min-height: 0;
+    border-top: 1px solid rgba(250, 247, 238, 0.15);
+    padding: clamp(12px, 2vh, 24px) clamp(14px, 3vw, 36px);
+  }
+
+  .tvc-tl-panel {
+    display: flex;
+    gap: clamp(18px, 3vw, 36px);
+    height: 100%;
+    min-height: 0;
+  }
+
+  .tvc-tl-panel[hidden] {
+    display: none;
+  }
+
+  .tvc-tl-narrative {
+    flex: 0 0 30%;
+    max-width: 340px;
+    min-width: 200px;
+    overflow-y: auto;
+  }
+
+  .tvc-tl-eyebrow {
+    font-weight: 700;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--tvc-orange);
+  }
+
+  .tvc-tl-narrative h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(1.6rem, 3vh, 2.2rem);
+    margin: 4px 0 8px;
+    line-height: 1;
+    color: var(--tvc-cream);
+  }
+
+  .tvc-tl-narrative p {
+    font-size: 0.9rem;
+    line-height: 1.55;
+    color: rgba(250, 247, 238, 0.75);
+    margin: 0;
+  }
+
+  .tvc-tl-months {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .tvc-tl-strip-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .tvc-tl-carousel-btn {
+    appearance: none;
+    flex: 0 0 auto;
+    background: rgba(250, 247, 238, 0.08);
+    border: 1px solid rgba(250, 247, 238, 0.25);
+    color: var(--tvc-cream);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.2rem;
+    line-height: 1;
+  }
+
+  .tvc-tl-carousel-btn:hover {
+    border-color: var(--tvc-orange);
+    color: var(--tvc-orange);
+  }
+
+  .tvc-tl-strip {
+    flex: 1;
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    padding-bottom: 4px;
+  }
+
+  .tvc-tl-strip::-webkit-scrollbar {
+    height: 5px;
+  }
+
+  .tvc-tl-strip::-webkit-scrollbar-thumb {
+    background: rgba(250, 247, 238, 0.3);
+    border-radius: 4px;
+  }
+
+  .tvc-tl-card {
+    appearance: none;
+    scroll-snap-align: start;
+    flex: 0 0 auto;
+    width: clamp(130px, 16vw, 170px);
+    background: rgba(250, 247, 238, 0.06);
+    border: 1px solid rgba(250, 247, 238, 0.18);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+  }
+
+  .tvc-tl-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--tvc-orange);
+  }
+
+  .tvc-tl-thumb {
+    width: 100%;
+    height: clamp(70px, 10vh, 100px);
+    object-fit: cover;
+    display: block;
+  }
+
+  .tvc-tl-thumb-fallback {
+    width: 100%;
+    height: clamp(70px, 10vh, 100px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgba(250, 247, 238, 0.5);
+  }
+
+  .tvc-tl-cardmeta {
+    padding: 8px 10px 10px;
+  }
+
+  .tvc-tl-month {
+    display: block;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(250, 247, 238, 0.55);
+  }
+
+  .tvc-tl-title {
+    display: block;
+    font-size: 0.8rem;
+    line-height: 1.3;
+    margin-top: 4px;
+    color: var(--tvc-cream);
+  }
+
+  @media (max-width: 760px) {
+    .tvc-tl-wire {
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 0 10px;
+      height: 90px;
+    }
+
+    .tvc-tl-word {
+      display: none;
+    }
+
+    .tvc-tl-panel {
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .tvc-tl-narrative {
+      flex: 0 0 auto;
+      max-width: none;
+    }
+
+    .tvc-tl-narrative h3 {
+      font-size: 1.4rem;
+    }
+
+    .tvc-tl-narrative p {
+      font-size: 0.82rem;
+      -webkit-line-clamp: 4;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .tvc-tl-navhint {
+      display: none;
+    }
+  }
+</style>
+
+<style is:global>
+  .tvc-tl-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 20, 12, 0.82);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 4vh 4vw;
+  }
+
+  .tvc-tl-modal-backdrop.open {
+    display: flex;
+  }
+
+  .tvc-tl-modal-wrap {
+    position: relative;
+    max-width: 640px;
+    width: 100%;
+  }
+
+  .tvc-tl-modal {
+    background: var(--tvc-cream);
+    border-radius: 14px;
+    max-height: 88vh;
+    overflow-y: auto;
+  }
+
+  .tvc-tl-modal-img {
+    width: 100%;
+    max-height: 42vh;
+    object-fit: cover;
+    display: block;
+  }
+
+  .tvc-tl-modal-body {
+    padding: 22px 26px 26px;
+  }
+
+  .tvc-tl-month-tag {
+    font-weight: 700;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--tvc-orange);
+    margin: 0;
+  }
+
+  .tvc-tl-modal-body h3 {
+    margin: 8px 0 10px;
+  }
+
+  .tvc-tl-modal-body p:not(.tvc-tl-month-tag) {
+    font-size: 0.92rem;
+    line-height: 1.6;
+    color: var(--tvc-ink-soft);
+    margin: 0;
+  }
+
+  .tvc-tl-modal-close {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    color: #fff;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+  }
+
+  .tvc-tl-modal-close:hover {
+    border-color: var(--tvc-orange);
+    color: var(--tvc-orange);
+  }
+</style>

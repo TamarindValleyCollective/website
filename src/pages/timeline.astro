@@ -1,0 +1,80 @@
+---
+// Standalone, single-viewport page: intentionally skips BaseLayout's
+// Footer so the whole experience fits one screen with no page scroll.
+// Only the month carousel inside JourneyTimeline scrolls internally.
+import Nav from '../components/Nav.astro';
+import JourneyTimeline from '../components/JourneyTimeline.astro';
+import '../styles/global.css';
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="From a degraded 100-acre farm to a regenerating ecosystem — year by year." />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="generator" content={Astro.generator} />
+    <title>Our Journey, Year by Year · Tamarind Valley Collective</title>
+  </head>
+  <body class="tl-page-body">
+    <Nav />
+    <main class="tl-page-main">
+      <div class="tl-page-header">
+        <span class="eyebrow">Our Journey</span>
+        <h1>Year by year</h1>
+      </div>
+      <div class="tl-page-timeline">
+        <JourneyTimeline />
+      </div>
+    </main>
+  </body>
+</html>
+
+<style>
+  .tl-page-body {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .tl-page-main {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+    padding: clamp(10px, 2vh, 20px) 20px;
+  }
+
+  .tl-page-header {
+    flex: 0 0 auto;
+    margin-bottom: clamp(8px, 1.5vh, 14px);
+  }
+
+  .tl-page-header h1 {
+    margin: 2px 0 0;
+    font-size: clamp(1.4rem, 2.6vw, 2rem);
+  }
+
+  .tl-page-timeline {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  @media (max-width: 760px) {
+    .tl-page-body {
+      height: auto;
+      min-height: 100dvh;
+      overflow: visible;
+    }
+
+    .tl-page-main {
+      min-height: 0;
+    }
+  }
+</style>
