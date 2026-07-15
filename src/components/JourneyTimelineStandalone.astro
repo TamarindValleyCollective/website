@@ -371,8 +371,12 @@ ERAS.forEach((era) => {
     const i = Math.max(0, Math.min(currentSlides.length - 1, Math.round(monthTrack.scrollLeft / w)));
     monthDots.querySelectorAll('span').forEach((d, idx) => d.classList.toggle('on', idx === i));
     footLabel.textContent = `${currentSlides[i] ? currentSlides[i].label : ''} · ${i + 1}/${currentSlides.length}`;
-    monthPrevBtn.disabled = i === 0;
-    monthNextBtn.disabled = i === currentSlides.length - 1;
+    // Only disable at a true dead end (first month of the first year, or
+    // last month of the last year) — otherwise stepMonth() should be able
+    // to carry the button click across into the next/previous year, and a
+    // disabled button never fires a click at all.
+    monthPrevBtn.disabled = i === 0 && activeYearIndex === 0;
+    monthNextBtn.disabled = i === currentSlides.length - 1 && activeYearIndex === ERAS[activeEra].years.length - 1;
   }
 
   function goToMonth(i) {
@@ -380,7 +384,7 @@ ERAS.forEach((era) => {
     monthTrack.scrollTo({ left: monthTrack.clientWidth * i, behavior: 'smooth' });
   }
 
-  function openYear(eraIdx, i) {
+  function openYear(eraIdx, i, atEnd) {
     activeEra = eraIdx;
     activeYearIndex = i;
     const y = ERAS[eraIdx].years[i];
@@ -403,13 +407,36 @@ ERAS.forEach((era) => {
 
     overlay.classList.add('open');
 
+    // Landing on a year via "slide past the edge into the previous year"
+    // should drop you on its LAST month, so continuing to swipe backward
+    // reads as one continuous motion rather than restarting from January.
     requestAnimationFrame(() => {
-      monthTrack.scrollTo({ left: 0, behavior: 'auto' });
+      const targetIndex = atEnd ? currentSlides.length - 1 : 0;
+      monthTrack.scrollTo({ left: monthTrack.clientWidth * targetIndex, behavior: 'auto' });
       updateMonthUI();
     });
 
     const activeNode = root.querySelector(`.tl-year-node[data-era="${eraIdx}"][data-index="${i}"]`);
     activeNode.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }
+
+  // Shared by the month arrow buttons, the keyboard, and touch-swipe: step
+  // one month in `delta`'s direction, but if that would go past the first
+  // or last month of the current year, cross into the adjacent year instead
+  // (landing on its last month when stepping backward) — so browsing feels
+  // like one continuous timeline instead of a wall you hit at each year's
+  // edge and have to close the modal to get past.
+  function stepMonth(delta) {
+    const w = monthTrack.clientWidth || 1;
+    const i = Math.round(monthTrack.scrollLeft / w);
+    const next = i + delta;
+    if (next < 0) {
+      if (activeYearIndex > 0) openYear(activeEra, activeYearIndex - 1, true);
+    } else if (next > currentSlides.length - 1) {
+      if (activeYearIndex < ERAS[activeEra].years.length - 1) openYear(activeEra, activeYearIndex + 1, false);
+    } else {
+      goToMonth(next);
+    }
   }
 
   function closeModal() {
@@ -426,16 +453,28 @@ ERAS.forEach((era) => {
     window.clearTimeout(monthTrack._t);
     monthTrack._t = window.setTimeout(updateMonthUI, 60);
   });
-  monthPrevBtn.addEventListener('click', () => {
+  monthPrevBtn.addEventListener('click', () => stepMonth(-1));
+  monthNextBtn.addEventListener('click', () => stepMonth(1));
+
+  // Touch swipe past the first/last month crosses into the adjacent year.
+  // Only fires at the boundary slide and only for a deliberate over-swipe
+  // (past a distance threshold) in the direction that would otherwise do
+  // nothing, so it doesn't interfere with normal swiping between months.
+  let monthTouchStartX = 0;
+  monthTrack.addEventListener('touchstart', (e) => {
+    monthTouchStartX = e.touches[0].clientX;
+  }, { passive: true });
+  monthTrack.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - monthTouchStartX;
     const w = monthTrack.clientWidth || 1;
     const i = Math.round(monthTrack.scrollLeft / w);
-    goToMonth(i - 1);
-  });
-  monthNextBtn.addEventListener('click', () => {
-    const w = monthTrack.clientWidth || 1;
-    const i = Math.round(monthTrack.scrollLeft / w);
-    goToMonth(i + 1);
-  });
+    const threshold = 40;
+    if (i === 0 && dx > threshold) {
+      if (activeYearIndex > 0) openYear(activeEra, activeYearIndex - 1, true);
+    } else if (i === currentSlides.length - 1 && dx < -threshold) {
+      if (activeYearIndex < ERAS[activeEra].years.length - 1) openYear(activeEra, activeYearIndex + 1, false);
+    }
+  }, { passive: true });
 
   root.querySelector('#tl-close-btn').addEventListener('click', closeModal);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
@@ -445,14 +484,8 @@ ERAS.forEach((era) => {
   document.addEventListener('keydown', (e) => {
     if (!overlay.classList.contains('open')) return;
     if (e.key === 'Escape') closeModal();
-    if (e.key === 'ArrowRight') {
-      const w = monthTrack.clientWidth || 1;
-      goToMonth(Math.round(monthTrack.scrollLeft / w) + 1);
-    }
-    if (e.key === 'ArrowLeft') {
-      const w = monthTrack.clientWidth || 1;
-      goToMonth(Math.round(monthTrack.scrollLeft / w) - 1);
-    }
+    if (e.key === 'ArrowRight') stepMonth(1);
+    if (e.key === 'ArrowLeft') stepMonth(-1);
   });
 
   window.addEventListener('resize', () => {
