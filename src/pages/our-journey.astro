@@ -2,7 +2,6 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
 import Pending from '../components/Pending.astro';
-import JourneyTimeline from '../components/JourneyTimeline.astro';
 ---
 
 <BaseLayout title="Our Journey" description="From a degraded 100-acre farm to a regenerating ecosystem — the founding, the design, and the outreach along the way." image="/images/pages/journey/hero.jpg">
@@ -23,15 +22,13 @@ import JourneyTimeline from '../components/JourneyTimeline.astro';
     </blockquote>
   </section>
 
-  <section class="section section--tint">
-    <div class="wrapper">
-      <h2>Timeline</h2>
-      <JourneyTimeline />
-    </div>
-  </section>
-
   <section class="section wrapper">
     <div class="explore-grid">
+      <a class="card explore-card" href="/timeline">
+        <h3>Timeline</h3>
+        <p>Nine years, year by year — tap through the story from a barren plot in 2017 to our first completed home, with photos for every month.</p>
+        <span class="explore-link">Explore the timeline →</span>
+      </a>
       <a class="card explore-card" href="/our-journey/design">
         <h3>The design</h3>
         <p>The permaculture principles behind the farm's layout — the wildlife corridor, food forests, and water works — plus a drone flyover.</p>
