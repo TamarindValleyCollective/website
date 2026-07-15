@@ -86,28 +86,35 @@ const grouped = years.map((year) => {
   <div class="jt-spine" aria-hidden="true"></div>
   {grouped.map(({ year, entries: yearEntries }) => (
     <div class="jt-yeargroup" data-year={year}>
-      <div class="jt-yearmark">
-        <div class="jt-yearring">{year}</div>
-        <span class="jt-count">{yearEntries.length} {yearEntries.length === 1 ? 'entry' : 'entries'}</span>
-      </div>
-      {yearEntries.map((e) => (
-        <div class={`jt-entry jt-entry--${e.side}`} data-cat={e.cat}>
-          <div class="jt-node" style={`--dot:${colorByCat[e.cat]}`}></div>
-          <div class="jt-card">
-            <div class="jt-card-top">
-              <span class="jt-date">{e.date}</span>
-              <span class="jt-tag" style={`--dot:${colorByCat[e.cat]}`}><span class="jt-dot"></span>{categories.find((c) => c.cat === e.cat)?.label}</span>
-            </div>
-            <h3>{e.title}</h3>
-            {e.paras.map((p) => <p set:html={p} />)}
-            {e.images.length > 0 && (
-              <div class={`jt-imgrow ${e.images.length > 1 ? 'multi' : ''}`}>
-                {e.images.map((src) => <img src={src} alt={e.title} loading="lazy" />)}
-              </div>
-            )}
-          </div>
+      <button type="button" class="jt-yearmark" aria-expanded="false" aria-controls={`jt-entries-${year}`}>
+        <div class="jt-yearring">
+          {year}
+          <svg class="jt-chevron" width="12" height="8" viewBox="0 0 12 8" fill="none"><path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
-      ))}
+        <span class="jt-count">{yearEntries.length} {yearEntries.length === 1 ? 'entry' : 'entries'}</span>
+      </button>
+      <div class="jt-entries" id={`jt-entries-${year}`}>
+        <div class="jt-entries-inner">
+          {yearEntries.map((e) => (
+            <div class={`jt-entry jt-entry--${e.side}`} data-cat={e.cat}>
+              <div class="jt-node" style={`--dot:${colorByCat[e.cat]}`}></div>
+              <div class="jt-card">
+                <div class="jt-card-top">
+                  <span class="jt-date">{e.date}</span>
+                  <span class="jt-tag" style={`--dot:${colorByCat[e.cat]}`}><span class="jt-dot"></span>{categories.find((c) => c.cat === e.cat)?.label}</span>
+                </div>
+                <h3>{e.title}</h3>
+                {e.paras.map((p) => <p set:html={p} />)}
+                {e.images.length > 0 && (
+                  <div class={`jt-imgrow ${e.images.length > 1 ? 'multi' : ''}`}>
+                    {e.images.map((src) => <img src={src} alt={e.title} loading="lazy" />)}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   ))}
 </div>
@@ -118,6 +125,12 @@ const grouped = years.map((year) => {
   const chips = Array.from(filterbar.querySelectorAll<HTMLButtonElement>('.jt-chip[data-cat]'));
   const entries = Array.from(document.querySelectorAll<HTMLElement>('.jt-entry'));
   const yearGroups = Array.from(document.querySelectorAll<HTMLElement>('.jt-yeargroup'));
+  const yearButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.jt-yearmark'));
+
+  function setPanelHeight(group: HTMLElement, open: boolean) {
+    const panel = group.querySelector<HTMLElement>('.jt-entries')!;
+    panel.style.maxHeight = open ? `${panel.scrollHeight}px` : '0px';
+  }
 
   function applyFilter() {
     const activeCats = chips.filter((c) => c.classList.contains('active')).map((c) => c.dataset.cat);
@@ -129,6 +142,7 @@ const grouped = years.map((year) => {
     yearGroups.forEach((group) => {
       const anyVisible = Array.from(group.querySelectorAll<HTMLElement>('.jt-entry')).some((e) => !e.classList.contains('jt-hidden'));
       group.classList.toggle('jt-hidden', !anyVisible);
+      if (group.classList.contains('jt-open')) setPanelHeight(group, true);
     });
   }
 
@@ -142,6 +156,31 @@ const grouped = years.map((year) => {
   resetBtn.addEventListener('click', () => {
     chips.forEach((c) => c.classList.add('active'));
     applyFilter();
+  });
+
+  yearButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const group = btn.closest<HTMLElement>('.jt-yeargroup')!;
+      const isOpen = group.classList.contains('jt-open');
+
+      yearGroups.forEach((g) => {
+        g.classList.remove('jt-open');
+        g.querySelector('.jt-yearmark')?.setAttribute('aria-expanded', 'false');
+        setPanelHeight(g, false);
+      });
+
+      if (!isOpen) {
+        group.classList.add('jt-open');
+        btn.setAttribute('aria-expanded', 'true');
+        setPanelHeight(group, true);
+        group.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
+  });
+
+  window.addEventListener('resize', () => {
+    const openGroup = yearGroups.find((g) => g.classList.contains('jt-open'));
+    if (openGroup) setPanelHeight(openGroup, true);
   });
 </script>
 
@@ -226,20 +265,26 @@ const grouped = years.map((year) => {
   }
 
   .jt-yearmark {
+    appearance: none;
+    -webkit-appearance: none;
+    background: none;
+    border: none;
+    font: inherit;
+    cursor: pointer;
     position: relative;
     z-index: 2;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 4px;
-    margin: 48px 0 24px;
-  }
-
-  .jt-yeargroup:first-child .jt-yearmark {
-    margin-top: 0;
+    width: 100%;
+    padding: 10px 0;
   }
 
   .jt-yearring {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
     font-family: var(--font-display);
     font-weight: 700;
     font-size: 1.15rem;
@@ -247,13 +292,37 @@ const grouped = years.map((year) => {
     background: var(--tvc-cream);
     border: 2px solid var(--tvc-green);
     border-radius: 999px;
-    padding: 8px 24px;
+    padding: 8px 20px;
     box-shadow: var(--shadow-soft);
+    transition: background 0.15s ease;
+  }
+
+  .jt-yearmark:hover .jt-yearring {
+    background: var(--tvc-green-tint);
+  }
+
+  .jt-chevron {
+    color: var(--tvc-green);
+    transition: transform 0.25s ease;
+  }
+
+  .jt-yeargroup.jt-open .jt-chevron {
+    transform: rotate(180deg);
   }
 
   .jt-count {
     font-size: 0.78rem;
     color: var(--tvc-ink-soft);
+  }
+
+  .jt-entries {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s ease;
+  }
+
+  .jt-entries-inner {
+    padding-top: 28px;
   }
 
   .jt-entry {
