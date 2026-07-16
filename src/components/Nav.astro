@@ -273,6 +273,23 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
       padding: 8px 0;
     }
   }
+
+  /* Logo mark + "Tamarind Valley Collective" wordmark + the hamburger button
+     don't all fit on one line below ~420px (older/smaller phones, e.g. a
+     320px-wide viewport) — .nav__brand has flex-shrink:0 and white-space:
+     nowrap, so instead of wrapping or clipping it pushed the toggle button
+     off-screen and forced a page-wide horizontal scrollbar. Drop the
+     wordmark text at this width; the logo alone still links home. */
+  @media (max-width: 420px) {
+    .nav__brand span {
+      display: none;
+    }
+
+    .nav__brand img {
+      width: 44px;
+      height: 44px;
+    }
+  }
 </style>
 
 <script>
