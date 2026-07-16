@@ -1,0 +1,364 @@
+---
+// Site-wide chat widget. Talks to netlify/functions/chat.mts, which answers
+// strictly from the site's own content (see that file's system prompt) —
+// this component only handles the UI/conversation state, no content logic.
+---
+
+<div class="cw-root" id="cw-root">
+  <button type="button" class="cw-toggle" id="cw-toggle" aria-label="Open chat" aria-expanded="false">
+    <img src="/images/brand/tvc-logo-mark.png" alt="" />
+  </button>
+
+  <div class="cw-panel" id="cw-panel" hidden role="dialog" aria-label="TVC website assistant" aria-modal="false">
+    <div class="cw-head">
+      <img src="/images/brand/tvc-logo-mark.png" alt="" class="cw-head-logo" />
+      <div class="cw-head-titles">
+        <span class="cw-head-title">TVC Assistant</span>
+        <span class="cw-head-sub">Answers from this website</span>
+      </div>
+      <button type="button" class="cw-close" id="cw-close" aria-label="Close chat">✕</button>
+    </div>
+    <div class="cw-messages" id="cw-messages"></div>
+    <form class="cw-form" id="cw-form">
+      <input type="text" id="cw-input" class="cw-input" placeholder="Ask about TVC…" autocomplete="off" maxlength="2000" />
+      <button type="submit" class="cw-send" id="cw-send" aria-label="Send">➤</button>
+    </form>
+  </div>
+</div>
+
+<script>
+  const root = document.getElementById('cw-root')!;
+  const toggle = document.getElementById('cw-toggle') as HTMLButtonElement;
+  const panel = document.getElementById('cw-panel') as HTMLElement;
+  const closeBtn = document.getElementById('cw-close') as HTMLButtonElement;
+  const messagesEl = document.getElementById('cw-messages') as HTMLElement;
+  const form = document.getElementById('cw-form') as HTMLFormElement;
+  const input = document.getElementById('cw-input') as HTMLInputElement;
+  const sendBtn = document.getElementById('cw-send') as HTMLButtonElement;
+
+  interface ChatMessage {
+    role: 'user' | 'assistant';
+    content: string;
+  }
+
+  const history: ChatMessage[] = [];
+  let open = false;
+  let sending = false;
+
+  function addBubble(role: 'user' | 'assistant', text: string) {
+    const bubble = document.createElement('div');
+    bubble.className = `cw-bubble cw-bubble--${role}`;
+    bubble.textContent = text;
+    messagesEl.appendChild(bubble);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return bubble;
+  }
+
+  function addTyping() {
+    const bubble = document.createElement('div');
+    bubble.className = 'cw-bubble cw-bubble--assistant cw-typing';
+    bubble.innerHTML = '<span></span><span></span><span></span>';
+    messagesEl.appendChild(bubble);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return bubble;
+  }
+
+  function openPanel() {
+    open = true;
+    panel.hidden = false;
+    toggle.setAttribute('aria-expanded', 'true');
+    if (!messagesEl.childElementCount) {
+      addBubble('assistant', "Hi! I'm the TVC website assistant — ask me anything about the farm, and I'll answer using what's on this site.");
+    }
+    input.focus();
+  }
+
+  function closePanel() {
+    open = false;
+    panel.hidden = true;
+    toggle.setAttribute('aria-expanded', 'false');
+  }
+
+  toggle.addEventListener('click', () => (open ? closePanel() : openPanel()));
+  closeBtn.addEventListener('click', closePanel);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && open) closePanel();
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const message = input.value.trim();
+    if (!message || sending) return;
+
+    sending = true;
+    sendBtn.disabled = true;
+    input.value = '';
+    addBubble('user', message);
+    const typingBubble = addTyping();
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ message, history }),
+      });
+      const data = await res.json();
+      typingBubble.remove();
+
+      if (!res.ok) {
+        addBubble('assistant', data.error || 'Something went wrong. Please try again.');
+      } else {
+        addBubble('assistant', data.reply);
+        history.push({ role: 'user', content: message });
+        history.push({ role: 'assistant', content: data.reply });
+      }
+    } catch {
+      typingBubble.remove();
+      addBubble('assistant', "I couldn't reach the server. Please check your connection and try again.");
+    } finally {
+      sending = false;
+      sendBtn.disabled = false;
+      input.focus();
+    }
+  });
+</script>
+
+<style>
+  .cw-root {
+    position: fixed;
+    right: clamp(14px, 3vw, 28px);
+    bottom: clamp(14px, 3vw, 28px);
+    z-index: 100;
+  }
+
+  .cw-toggle {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid var(--tvc-line);
+    box-shadow: var(--shadow-soft);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .cw-toggle:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 22px rgba(34, 41, 31, 0.18);
+  }
+
+  .cw-toggle img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .cw-panel {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 14px);
+    width: min(360px, calc(100vw - 32px));
+    height: min(520px, calc(100vh - 120px));
+    background: var(--tvc-cream);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: 0 16px 40px rgba(34, 41, 31, 0.22);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .cw-panel[hidden] {
+    display: none;
+  }
+
+  .cw-head {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--tvc-green-dark);
+    color: #fff;
+  }
+
+  .cw-head-logo {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+  }
+
+  .cw-head-titles {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+  }
+
+  .cw-head-title {
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+
+  .cw-head-sub {
+    font-size: 0.72rem;
+    opacity: 0.8;
+  }
+
+  .cw-close {
+    flex: 0 0 auto;
+    appearance: none;
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    color: #fff;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .cw-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  .cw-messages {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .cw-form {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 8px;
+    padding: 10px;
+    border-top: 1px solid var(--tvc-line);
+    background: #fff;
+  }
+
+  .cw-input {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid var(--tvc-line);
+    border-radius: 999px;
+    padding: 9px 14px;
+    font: inherit;
+    font-size: 0.88rem;
+    color: var(--tvc-ink);
+    background: var(--tvc-cream);
+  }
+
+  .cw-input:focus {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 1px;
+  }
+
+  .cw-send {
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: none;
+    background: var(--tvc-orange);
+    color: #fff;
+    cursor: pointer;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .cw-send:hover {
+    background: var(--tvc-green);
+  }
+
+  .cw-send:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  @media (max-width: 480px) {
+    .cw-panel {
+      width: calc(100vw - 24px);
+      height: min(70dvh, 560px);
+    }
+  }
+</style>
+
+<style is:global>
+  /* Message bubbles are created via document.createElement at runtime, so
+     they never receive Astro's scoping attribute — a scoped <style> block
+     above would silently fail to match them. */
+  .cw-bubble {
+    max-width: 85%;
+    padding: 9px 12px;
+    border-radius: 12px;
+    font-size: 0.88rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+  }
+
+  .cw-bubble--user {
+    align-self: flex-end;
+    background: var(--tvc-green);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+
+  .cw-bubble--assistant {
+    align-self: flex-start;
+    background: #fff;
+    color: var(--tvc-ink);
+    border: 1px solid var(--tvc-line);
+    border-bottom-left-radius: 4px;
+  }
+
+  .cw-typing {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    padding: 12px 14px;
+  }
+
+  .cw-typing span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--tvc-ink-soft);
+    opacity: 0.5;
+    animation: cw-blink 1.2s infinite ease-in-out;
+  }
+
+  .cw-typing span:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .cw-typing span:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  @keyframes cw-blink {
+    0%, 80%, 100% {
+      opacity: 0.3;
+    }
+    40% {
+      opacity: 1;
+    }
+  }
+</style>

@@ -1,0 +1,17 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+# This project's `astro dev` always daemonizes (see CLAUDE.md/AGENTS.md) —
+# it's meant to be started separately with `astro dev --background`. Telling
+# Netlify Dev not to spawn its own framework command and just proxy to the
+# already-running server avoids it mistaking that daemonized exit for a
+# crash and tearing the whole `netlify dev` session down.
+[dev]
+  framework = "#custom"
+  targetPort = 4321
+  command = "tail -f /dev/null"

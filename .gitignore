@@ -2,6 +2,8 @@
 dist/
 # generated types
 .astro/
+# generated chat-widget content corpus (rebuilt by `npm run build`)
+netlify/functions/site-content.json
 
 # dependencies
 node_modules/
@@ -22,3 +24,10 @@ pnpm-debug.log*
 
 # jetbrains setting folder
 .idea/
+
+# Local Netlify folder
+.netlify
+
+# Deno lockfile from Netlify Dev's Edge Functions bootstrap (we don't use
+# Edge Functions, just regular ones — this is purely a local dev artifact)
+deno.lock

@@ -7,12 +7,13 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build": "astro build && node scripts/build-chat-context.mjs",
     "preview": "astro preview",
     "astro": "astro"
   },
   "dependencies": {
     "astro": "^7.0.7",
+    "cheerio": "^1.2.0",
     "leaflet": "^1.9.4"
   },
   "devDependencies": {

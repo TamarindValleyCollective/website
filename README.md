@@ -6,8 +6,9 @@ This is an Astro rebuild of the original site (previously a [Publii](https://get
 
 ## What's here
 
-- **Static, no backend.** Every page is prerendered at build time; content lives in Markdown, not a CMS or database.
+- **Static site, one small serverless exception.** Every page is prerendered at build time; content lives in Markdown, not a CMS or database. The one exception is the chat widget's backend (below), a single Netlify Function — the rest of the site has no server at all.
 - **Live Biodiversity/Ecosystem explorer** (`/ecosystem`) — fetches sightings client-side from the farm's [iNaturalist project](https://www.inaturalist.org/) on every page load, with filters, a gallery view, and a map view.
+- **Site-wide chat widget** (bottom-right on every page, `src/components/ChatWidget.astro` + `netlify/functions/chat.mts`) — answers questions using *only* the website's own content, never general knowledge. `scripts/build-chat-context.mjs` runs after every `astro build`, strips nav/footer boilerplate from the prerendered HTML in `dist/`, and writes the remaining page text to `netlify/functions/site-content.json` (gitignored, regenerated every build). The Function stuffs that whole corpus into the system prompt for each request to the Anthropic API — simple and reliable at this site's size, though it means every request re-sends the full corpus rather than doing retrieval/embeddings, worth revisiting if the site's content grows much larger. Requires an `ANTHROPIC_API_KEY` — see Development below.
 - **Year-by-year timeline** (`/timeline`, `src/components/JourneyTimelineStandalone.astro`) — a standalone, single-viewport page: a horizontal "wire" of years that opens a modal with that year's story and a month-by-month photo carousel. Data is grouped into **eras** (currently just one, "Founding," 2017–2026) rather than one flat, ever-lengthening row of years — with a single era the picker never renders and that era's timeline shows directly, but the moment a second era gets real content the era-picker appears automatically and each era becomes its own selectable chapter. Icons are hand-drawn monoline SVGs, not emoji — different emoji glyphs render at inconsistent visual sizes even at the same font-size, which used to throw the row out of alignment.
 - **Content collections** for the things that change over time: `events`, `partners`, `products`, `community-outreach` (see `src/content.config.ts` for schemas).
 - **Google Maps / My Maps embeds** for directions and the farm layout, and a YouTube embed for the aerial drone flyover.
@@ -23,12 +24,15 @@ Copy `src/content/events/_template.md`, rename it to something like `2026-03-15-
 /
 ├── public/                  static assets (images, fonts, PDFs) served as-is
 ├── src/
-│   ├── components/          Nav, Footer, PageHero, Pending, and the biodiversity explorer
+│   ├── components/          Nav, Footer, PageHero, Pending, ChatWidget, and the biodiversity explorer
 │   ├── content/              markdown content collections (events, partners, products, community-outreach)
 │   ├── content.config.ts     collection schemas
-│   ├── layouts/               BaseLayout wraps every page (Nav + Footer + <head>)
+│   ├── layouts/               BaseLayout wraps every page (Nav + Footer + ChatWidget + <head>)
 │   ├── pages/                 file-based routes
 │   └── styles/global.css      design tokens (colors, type, spacing) and shared base styles
+├── netlify/functions/chat.mts  the one serverless piece — see "Chat widget" below
+├── scripts/build-chat-context.mjs  post-build step that feeds the chat widget its content
+├── netlify.toml              Netlify build/functions/dev config
 └── astro.config.mjs          includes the /biodiversity -> /ecosystem redirect
 ```
 
@@ -42,6 +46,20 @@ npm run preview       # serves the build locally to sanity-check before deployin
 ```
 
 Managing a background dev server: `npm run astro -- dev stop`, `npm run astro -- dev status`, `npm run astro -- dev logs`.
+
+### Chat widget (Netlify Functions + Anthropic API)
+
+The chat widget needs an `ANTHROPIC_API_KEY` (get one at [console.anthropic.com](https://console.anthropic.com)):
+
+- **Production:** set it in Netlify's dashboard under Site settings → Environment variables. Never commit a real key.
+- **Local testing:** copy `.env.example` to `.env` and fill in the key, then use the [Netlify CLI](https://developers.netlify.com/cli/get-started/) (`npm install -g netlify-cli`) instead of the plain Astro dev server, since `astro dev` alone doesn't run Netlify Functions:
+  ```sh
+  astro dev --background   # start Astro's own dev server first
+  netlify dev               # proxies it and serves the Function alongside it
+  ```
+  `netlify.toml`'s `[dev]` block points Netlify Dev at the already-running Astro server (`targetPort = 4321`) instead of trying to launch its own, since this project's `astro dev` always daemonizes rather than staying in the foreground.
+
+Without a key set, the widget still works — it just replies with a friendly "chat isn't configured yet" message instead of erroring.
 
 ## Design system
 
