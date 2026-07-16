@@ -35,21 +35,23 @@ import PageHero from '../components/PageHero.astro';
     </div>
 
     <div class="card">
-      <h3>Join our newsletter</h3>
-      <p>Occasional updates on events, volunteering, and life at the farm.</p>
+      <h3>Join Friends of TVC</h3>
+      <p>Share your name and phone number and we'll add you to the Friends of TVC WhatsApp group — occasional updates on events, volunteering, and life at the farm.</p>
       <form
-        class="newsletter-form"
-        name="newsletter"
+        class="signup-form"
+        name="friends-of-tvc"
         method="POST"
         action="/contact/thanks"
         data-netlify="true"
         data-netlify-honeypot="bot-field"
       >
-        <input type="hidden" name="form-name" value="newsletter" />
-        <p class="newsletter-hp"><label>Don't fill this out: <input name="bot-field" /></label></p>
-        <label for="email">Email address</label>
-        <input id="email" type="email" name="email" placeholder="you@example.com" required />
-        <button class="button" type="submit">Subscribe</button>
+        <input type="hidden" name="form-name" value="friends-of-tvc" />
+        <p class="signup-hp"><label>Don't fill this out: <input name="bot-field" /></label></p>
+        <label for="name">Name</label>
+        <input id="name" type="text" name="name" placeholder="Your name" autocomplete="name" required />
+        <label for="phone">Phone number</label>
+        <input id="phone" type="tel" name="phone" placeholder="+91 98765 43210" autocomplete="tel" required />
+        <button class="button" type="submit">Join the group</button>
       </form>
     </div>
   </section>
@@ -74,14 +76,14 @@ import PageHero from '../components/PageHero.astro';
     border-radius: var(--radius);
   }
 
-  .newsletter-form {
+  .signup-form {
     display: flex;
     flex-direction: column;
     gap: 10px;
     margin-top: 12px;
   }
 
-  .newsletter-form input {
+  .signup-form input {
     padding: 10px 14px;
     border: 1px solid var(--tvc-line);
     border-radius: 999px;
@@ -89,7 +91,7 @@ import PageHero from '../components/PageHero.astro';
 
   /* Netlify Forms spam honeypot — off-screen, not display:none (some bots
      skip hidden fields, but few check for visibility via position). */
-  .newsletter-hp {
+  .signup-hp {
     position: absolute;
     left: -9999px;
   }

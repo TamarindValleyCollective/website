@@ -10,7 +10,7 @@
 **tvc.farm is live**, running this Astro rebuild on Netlify (behind Cloudflare for DNS/CDN).
 The site is almost entirely static (prerendered HTML/CSS/JS, no server at request time), with
 two deliberate exceptions that need a small serverless backend: the site-wide chat assistant
-and the newsletter signup form. Both are deployed; see
+and the Friends of TVC signup form. Both are deployed; see
 [Current Production Status](#current-production-status) — the chat assistant just needs its
 API key set to give real answers.
 
@@ -35,14 +35,14 @@ flowchart TD
     subgraph HOST["3 · Hosting: Netlify — LIVE"]
         CDN["Static CDN<br/>Serves dist/ — everything except<br/>the two exceptions to the right"]
         APIFN["Netlify Function: /api/chat<br/>Deployed and responding, but<br/>ANTHROPIC_API_KEY not yet set —<br/>replies with a friendly fallback message"]
-        FORMS["Netlify Forms<br/>Live — captures /contact newsletter<br/>signups, no custom backend needed"]
+        FORMS["Netlify Forms<br/>Live — captures /contact Friends of TVC<br/>signups (name + phone), no custom backend needed"]
     end
 
     CF["Cloudflare<br/>DNS + CDN for tvc.farm,<br/>proxies to Netlify"]
 
     subgraph BROWSER["4 · Visitor's Browser"]
         CHATW["ChatWidget.astro<br/>Floating widget, site logo.<br/>Calls /api/chat"]
-        NEWS["Newsletter form<br/>Plain HTML POST,<br/>data-netlify=true + honeypot"]
+        NEWS["Friends of TVC form<br/>Plain HTML POST,<br/>data-netlify=true + honeypot"]
         BIODIV["BiodiversityExplorer<br/>Fetches sightings directly from<br/>iNaturalist's public API"]
         TIMELINE["Timeline / other pages<br/>Era-based year timeline, event listings —<br/>pure static, no calls out"]
     end
@@ -113,7 +113,8 @@ On every push to `main`, Netlify runs:
   `ANTHROPIC_API_KEY` environment variable has not been set in the Netlify dashboard yet, so it
   currently replies with a friendly "not configured yet" message instead of a real answer. Once
   the key is set, no further deploy is needed — the function will pick it up immediately.
-- **Netlify Forms** — live. Detects the newsletter signup form at build time
+- **Netlify Forms** — live. Detects the Friends of TVC signup form (name + phone, collected so
+  TVC can add people to the "Friends of TVC" WhatsApp group by hand) at build time
   (`data-netlify="true"`) and captures submissions with no custom backend code required;
   confirmed live at `/contact`, redirecting to `/contact/thanks` on success.
 
@@ -128,8 +129,9 @@ function.
 
 - **ChatWidget** — floating widget using the site logo; sends the visitor's question to
   `/api/chat`. Live, but see the Netlify Function note above.
-- **Newsletter form** — live. Plain HTML form submission with a spam honeypot field,
-  redirecting to a confirmation page on success.
+- **Friends of TVC form** — live. Collects name + phone number (no email/newsletter — signups
+  are added to the "Friends of TVC" WhatsApp group by hand). Plain HTML form submission with a
+  spam honeypot field, redirecting to a confirmation page on success.
 - **BiodiversityExplorer** — fetches live biodiversity sightings directly from iNaturalist's
   public API on every page load; no TVC backend involved.
 - **Timeline and other pages** — the era-based year-by-year story, event listings, and the
@@ -151,7 +153,7 @@ function.
 | Year-by-year interactive timeline (`/timeline`) | ✅ Live |
 | Chat widget UI | ✅ Live |
 | Chat widget's actual AI responses | ⚠️ Deployed, but `ANTHROPIC_API_KEY` isn't set yet — needs to be added in Netlify's dashboard (Site settings → Environment variables) |
-| Newsletter signup (Netlify Forms) | ✅ Live — confirmed at `/contact`, with `/contact/thanks` as the confirmation page |
+| Friends of TVC signup (Netlify Forms) | ✅ Live — confirmed at `/contact`, with `/contact/thanks` as the confirmation page |
 
 The one remaining gap: set `ANTHROPIC_API_KEY` in Netlify's environment variables to activate
 real chat responses. No further deploy needed once it's set — the function picks it up
