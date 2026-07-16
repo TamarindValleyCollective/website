@@ -248,11 +248,13 @@ ERAS.forEach((era) => {
         <div class="tl-m-icon" id="tl-m-icon"></div>
         <div class="tl-m-titles">
           <div class="tl-m-year" id="tl-m-year"></div>
-          <div class="tl-m-summary" id="tl-m-summary"></div>
+          <div class="tl-m-month" id="tl-m-month"></div>
         </div>
-        <button type="button" class="tl-nav-btn" id="tl-prev-year" aria-label="Previous year">‹</button>
-        <button type="button" class="tl-nav-btn" id="tl-next-year" aria-label="Next year">›</button>
-        <button type="button" class="tl-close-btn" id="tl-close-btn" aria-label="Close">✕</button>
+        <div class="tl-modal-nav">
+          <button type="button" class="tl-nav-btn" id="tl-prev-year" aria-label="Previous year">‹</button>
+          <button type="button" class="tl-nav-btn" id="tl-next-year" aria-label="Next year">›</button>
+          <button type="button" class="tl-close-btn" id="tl-close-btn" aria-label="Close">✕</button>
+        </div>
       </div>
       <div class="tl-modal-body">
         <div class="tl-track-wrap" id="tl-track-wrap">
@@ -283,7 +285,7 @@ ERAS.forEach((era) => {
   const footLabel = root.querySelector('#tl-foot-label');
   const mIcon = root.querySelector('#tl-m-icon');
   const mYear = root.querySelector('#tl-m-year');
-  const mSummary = root.querySelector('#tl-m-summary');
+  const mMonth = root.querySelector('#tl-m-month');
   const prevYearBtn = root.querySelector('#tl-prev-year');
   const nextYearBtn = root.querySelector('#tl-next-year');
   const monthPrevBtn = root.querySelector('#tl-month-prev');
@@ -291,86 +293,76 @@ ERAS.forEach((era) => {
   const eraPicker = root.querySelector('#tl-era-picker');
   const eraPanels = Array.from(root.querySelectorAll('.tl-era-panel'));
 
+  // One slide per photo (not per month) — a month with several photos used
+  // to nest its own inner carousel inside the outer month-by-month track,
+  // which meant two independent horizontal scrollers stacked on each other.
+  // Flattening every photo into its own slide on the single outer track
+  // gives one continuous, unambiguous swipe gesture for the whole year.
   function buildSlides(y) {
     const slides = [];
-    if (y.intro) slides.push({ label: 'Overview', text: y.intro, imgs: [] });
-    y.months.forEach((mo) => slides.push({ label: mo.m, text: mo.t, imgs: mo.imgs || [], imgCaptions: mo.imgCaptions, imgFit: mo.imgFit }));
+    if (y.intro) slides.push({ label: 'Overview', year: y.year, text: y.intro, img: null });
+    y.months.forEach((mo) => {
+      const imgs = mo.imgs || [];
+      if (imgs.length === 0) {
+        slides.push({ label: mo.m, year: y.year, text: mo.t, img: null });
+        return;
+      }
+      const captions = (mo.imgCaptions && mo.imgCaptions.length === imgs.length) ? mo.imgCaptions : null;
+      imgs.forEach((src, idx) => {
+        slides.push({
+          label: mo.m,
+          year: y.year,
+          text: captions ? captions[idx] : mo.t,
+          img: src,
+          fit: (mo.imgFit && mo.imgFit[idx]) || 'cover',
+        });
+      });
+    });
     return slides;
   }
 
-  function renderPhotoCarousel(imgs, label, imgFit) {
-    const fitFor = (idx) => (imgFit && imgFit[idx]) || 'cover';
-    const imgStyle = (idx) => {
-      const fit = fitFor(idx);
-      return `object-fit:${fit};${fit === 'contain' ? 'background:var(--tl-sand-2);' : ''}`;
-    };
-    if (imgs.length === 1) {
-      return `<div class="tl-carousel"><div class="tl-car-track"><img loading="lazy" src="${imgs[0]}" alt="${label} photo" style="${imgStyle(0)}"></div></div>`;
-    }
-    const imgsHtml = imgs.map((src, idx) => `<img loading="lazy" src="${src}" alt="${label} photo" style="${imgStyle(idx)}">`).join('');
-    const dotsHtml = imgs.map((_, idx) => `<span class="${idx === 0 ? 'on' : ''}"></span>`).join('');
-    return `<div class="tl-carousel">
-      <div class="tl-car-track">${imgsHtml}</div>
-      <div class="tl-car-arrows"><button class="tl-c-prev" aria-label="Previous photo">‹</button><button class="tl-c-next" aria-label="Next photo">›</button></div>
-      <div class="tl-car-dots">${dotsHtml}</div>
-    </div>`;
-  }
-
-  function captionsFor(slide) {
-    if (slide.imgCaptions && slide.imgCaptions.length === slide.imgs.length) return slide.imgCaptions;
-    return slide.imgs.length > 0 ? slide.imgs.map(() => slide.text) : [slide.text];
-  }
-
   function renderSlide(slide) {
-    const hasImgs = slide.imgs && slide.imgs.length > 0;
-    const captions = captionsFor(slide);
-    return `<div class="tl-month-slide ${hasImgs ? '' : 'tl-no-img'}" data-captions="${encodeURIComponent(JSON.stringify(captions))}">
-      <h3>${slide.label}</h3>
-      <p class="tl-caption-text">${captions[0]}</p>
-      ${hasImgs ? `<div class="tl-car-wrap">${renderPhotoCarousel(slide.imgs, slide.label, slide.imgFit)}</div>` : ''}
+    if (!slide.img) {
+      return `<div class="tl-month-slide tl-no-img"><p class="tl-caption-standalone">${slide.text}</p></div>`;
+    }
+    const fitStyle = slide.fit === 'contain' ? 'object-fit:contain;background:var(--tl-sand-2);' : 'object-fit:cover;';
+    return `<div class="tl-month-slide">
+      <div class="tl-slide-media">
+        <img loading="lazy" src="${slide.img}" alt="${slide.label} photo" style="${fitStyle}">
+        <div class="tl-slide-caption"><p>${slide.text}</p></div>
+      </div>
     </div>`;
   }
 
-  function wirePhotoCarousels(container) {
-    container.querySelectorAll('.tl-carousel').forEach((car) => {
-      const track = car.querySelector('.tl-car-track');
-      const dots = car.querySelectorAll('.tl-car-dots span');
-      const prev = car.querySelector('.tl-c-prev');
-      const next = car.querySelector('.tl-c-next');
-      const slideEl = car.closest('.tl-month-slide');
-      const captionEl = slideEl ? slideEl.querySelector('.tl-caption-text') : null;
-      let captions = [];
-      try { captions = JSON.parse(decodeURIComponent(slideEl?.dataset.captions || '%5B%5D')); } catch (e) { captions = []; }
-      function updateCaption(i) {
-        if (captionEl && captions[i] !== undefined) captionEl.textContent = captions[i];
-      }
-      if (!track || track.children.length < 2) return;
-      function scrollToIndex(i) {
-        track.scrollTo({ left: track.clientWidth * i, behavior: 'smooth' });
-      }
-      prev && prev.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const i = Math.round(track.scrollLeft / track.clientWidth);
-        scrollToIndex(Math.max(0, i - 1));
-      });
-      next && next.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const i = Math.round(track.scrollLeft / track.clientWidth);
-        scrollToIndex(Math.min(track.children.length - 1, i + 1));
-      });
-      track.addEventListener('scroll', () => {
-        const i = Math.round(track.scrollLeft / track.clientWidth);
-        dots.forEach((d, idx) => d.classList.toggle('on', idx === i));
-        updateCaption(i);
-      });
-    });
+  // Briefly highlights an element when the text it just received differs
+  // from what it showed before — a quick fade/slide-in "pop" so a month or
+  // year change registers even when the user's eyes are on the photo, not
+  // the header. Restarting a CSS animation requires a reflow in between
+  // removing and re-adding the class, otherwise the browser no-ops it.
+  function flashHeader(el) {
+    el.classList.remove('tl-flash');
+    void el.offsetWidth;
+    el.classList.add('tl-flash');
   }
 
   function updateMonthUI() {
     const w = monthTrack.clientWidth || 1;
     const i = Math.max(0, Math.min(currentSlides.length - 1, Math.round(monthTrack.scrollLeft / w)));
     monthDots.querySelectorAll('span').forEach((d, idx) => d.classList.toggle('on', idx === i));
-    footLabel.textContent = `${currentSlides[i] ? currentSlides[i].label : ''} · ${i + 1}/${currentSlides.length}`;
+
+    const slide = currentSlides[i];
+    const monthLabel = slide ? slide.label : '';
+    const yearLabel = slide ? String(slide.year) : '';
+    if (monthLabel && monthLabel !== mMonth.textContent) {
+      mMonth.textContent = monthLabel;
+      flashHeader(mMonth);
+    }
+    if (yearLabel && yearLabel !== mYear.textContent) {
+      mYear.textContent = yearLabel;
+      flashHeader(mYear);
+    }
+
+    footLabel.textContent = `${i + 1} / ${currentSlides.length}`;
     // Only disable at a true dead end (first month of the first year, or
     // last month of the last year) — otherwise stepMonth() should be able
     // to carry the button click across into the next/previous year, and a
@@ -394,11 +386,14 @@ ERAS.forEach((era) => {
 
     mIcon.innerHTML = y.icon;
     mYear.textContent = y.year;
-    mSummary.textContent = y.summary;
+    flashHeader(mYear);
 
     currentSlides = buildSlides(y);
     monthTrack.innerHTML = currentSlides.map(renderSlide).join('');
-    wirePhotoCarousels(monthTrack);
+
+    const landingSlide = atEnd ? currentSlides[currentSlides.length - 1] : currentSlides[0];
+    mMonth.textContent = landingSlide ? landingSlide.label : '';
+    flashHeader(mMonth);
 
     monthDots.innerHTML = currentSlides.map((_, idx) => `<span class="${idx === 0 ? 'on' : ''}"></span>`).join('');
 
@@ -910,8 +905,13 @@ ERAS.forEach((era) => {
 
   .tl-modal {
     background: var(--tl-white, #fffdf9);
-    width: min(640px, 100%);
-    height: min(640px, 86vh, 86dvh);
+    /* Previously capped at a flat 640x640 regardless of viewport, which
+       left it looking small and boxed-in on large desktop screens. Scaling
+       with clamp() lets it grow with the window (up to a sensible max, so
+       it doesn't sprawl absurdly wide on ultrawide monitors) while the
+       640px floor keeps it exactly as it was on small windows. */
+    width: clamp(min(640px, 100%), 55vw, 960px);
+    height: clamp(min(600px, 86vh, 86dvh), 80vh, 840px);
     border-radius: 18px;
     display: flex;
     flex-direction: column;
@@ -920,9 +920,11 @@ ERAS.forEach((era) => {
   }
 
   .tl-modal-head {
+    position: relative;
     flex: 0 0 auto;
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 10px;
     padding: 14px 16px;
     background: var(--tl-green-dark, #2f4a3c);
@@ -932,6 +934,7 @@ ERAS.forEach((era) => {
   .tl-modal-head .tl-m-icon {
     display: flex;
     line-height: 0;
+    flex: 0 0 auto;
   }
 
   .tl-modal-head .tl-m-icon svg {
@@ -945,19 +948,57 @@ ERAS.forEach((era) => {
     display: block;
   }
 
+  .tl-modal-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+  }
+
+  /* The one place month/year is shown — centered across the whole header
+     bar (not just the space between the icon and buttons) via absolute
+     positioning, since the icon and button-group widths differ and a
+     flex-centered middle column would drift off true-center otherwise.
+     This header is the only fixed element while photos scroll underneath,
+     so it's the one spot that's always in view. */
   .tl-modal-head .tl-m-titles {
-    flex: 1;
-    min-width: 0;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
   }
 
   .tl-modal-head .tl-m-year {
-    font-size: 18px;
+    font-size: 19px;
     font-weight: 700;
   }
 
-  .tl-modal-head .tl-m-summary {
-    font-size: 12px;
-    opacity: 0.85;
+  .tl-modal-head .tl-m-month {
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffd8a8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Quick fade/slide-in "pop" so a month or year change registers even
+     when the user's eyes are on the photo, not the header text. */
+  @keyframes tl-header-flash {
+    0% {
+      opacity: 0.25;
+      transform: translateY(-3px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .tl-m-year.tl-flash,
+  .tl-m-month.tl-flash {
+    animation: tl-header-flash 0.4s ease-out;
   }
 
   .tl-nav-btn {
@@ -1036,75 +1077,63 @@ ERAS.forEach((era) => {
     height: 100%;
     scroll-snap-align: center;
     box-sizing: border-box;
-    padding: 14px 18px 6px;
+    padding: 14px 14px 6px;
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
-  }
-
-  .tl-month-slide h3 {
-    flex: 0 0 auto;
-    margin: 0 0 5px;
-    font-size: 13.5px;
-    font-weight: 700;
-    color: var(--tl-brown, #7a5c3e);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .tl-month-slide p {
-    flex: 0 0 auto;
-    margin: 0 0 8px;
-    font-size: 13.5px;
-    line-height: 1.5;
-    color: var(--tl-ink, #2b2a26);
   }
 
   .tl-month-slide.tl-no-img {
     justify-content: center;
+    padding: 14px 24px;
   }
 
-  .tl-car-wrap {
-    flex: 1 1 auto;
-    min-height: 110px;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .tl-carousel {
+  /* The photo fills the slide; the narration sits directly on top of it as
+     a caption bar rather than in a separate text block above — captions
+     placed apart from the photo were easy to skip past while swiping, since
+     attention was on the image. Anchoring the text to the photo itself
+     means it's seen together with it, not instead of it. */
+  .tl-slide-media {
     position: relative;
     flex: 1 1 auto;
     min-height: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .tl-car-track {
-    flex: 1 1 auto;
-    min-height: 0;
-    display: flex;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    -webkit-overflow-scrolling: touch;
-    gap: 8px;
-    border-radius: 10px;
-    scrollbar-width: none;
-  }
-
-  .tl-car-track::-webkit-scrollbar {
-    display: none;
-  }
-
-  .tl-car-track img {
-    width: 100%;
-    flex: 0 0 100%;
-    scroll-snap-align: center;
-    height: 100%;
-    min-height: 100px;
-    object-fit: cover;
-    border-radius: 10px;
+    border-radius: 12px;
+    overflow: hidden;
     background: var(--tl-sand-2, #efe7d6);
+  }
+
+  .tl-slide-media img {
+    width: 100%;
+    height: 100%;
     display: block;
+  }
+
+  .tl-slide-caption {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 34px 14px 12px;
+    background: linear-gradient(to top, rgba(20, 24, 18, 0.78), rgba(20, 24, 18, 0));
+  }
+
+  .tl-slide-caption p {
+    margin: 0;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.45;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  }
+
+  /* Month slides with no photo (e.g. "power reached TVC" with no image on
+     file) fall back to plain narration text, styled a little larger since
+     it's carrying the whole slide on its own. */
+  .tl-caption-standalone {
+    margin: 0;
+    text-align: center;
+    font-size: 15.5px;
+    line-height: 1.6;
+    color: var(--tl-ink, #2b2a26);
   }
 
   .tl-car-arrows {
@@ -1190,8 +1219,9 @@ ERAS.forEach((era) => {
   }
 
   .tl-foot-lbl {
-    font-size: 12px;
-    color: var(--tl-muted, #6b675d);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--tl-brown, #7a5c3e);
     white-space: nowrap;
   }
 
