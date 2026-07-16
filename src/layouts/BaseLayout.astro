@@ -2,6 +2,7 @@
 import Nav from '../components/Nav.astro';
 import Footer from '../components/Footer.astro';
 import ChatWidget from '../components/ChatWidget.astro';
+import JsonLd from '../components/JsonLd.astro';
 import '../styles/global.css';
 
 interface Props {
@@ -15,6 +16,10 @@ interface Props {
   // hardcoded 1200x630), which is why only the logo showed up there.
   imageWidth?: number;
   imageHeight?: number;
+  // Extra JSON-LD objects (Event, Article, FAQPage, BreadcrumbList, ...) a
+  // page contributes on top of the sitewide Organization/WebSite graph
+  // below.
+  schema?: Record<string, unknown>[];
 }
 
 const {
@@ -23,11 +28,51 @@ const {
   image = '/images/pages/home/hero.jpg',
   imageWidth = 4204,
   imageHeight = 1330,
+  schema = [],
 } = Astro.props;
 
 const pageTitle = `${title} · Tamarind Valley Collective`;
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 const socialImageURL = new URL(image, Astro.site);
+
+// Shared across every page so Google can resolve the same Organization
+// entity everywhere (Event organizers, Article publishers, the knowledge
+// panel) instead of re-describing it inconsistently per page.
+const siteURL = new URL('/', Astro.site).toString();
+const organizationId = `${siteURL}#organization`;
+const siteGraph = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      '@id': organizationId,
+      name: 'Tamarind Valley Collective',
+      url: siteURL,
+      logo: new URL('/images/brand/tvc-logo-mark.png', Astro.site).toString(),
+      description: 'Tamarind Valley Collective — a 100-acre permaculture farm and community in the hills near Kanakapura.',
+      telephone: '+91 74063 07309',
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: 'Thaggatti village',
+        addressLocality: 'Kanakapura',
+        addressRegion: 'Karnataka',
+        addressCountry: 'IN',
+      },
+      sameAs: [
+        'https://www.facebook.com/farm.tvc',
+        'https://twitter.com/TVCFarm',
+        'https://www.instagram.com/tamarindvalleycollective/',
+      ],
+    },
+    {
+      '@type': 'WebSite',
+      '@id': `${siteURL}#website`,
+      url: siteURL,
+      name: 'Tamarind Valley Collective',
+      publisher: { '@id': organizationId },
+    },
+  ],
+};
 ---
 
 <html lang="en">
@@ -57,6 +102,8 @@ const socialImageURL = new URL(image, Astro.site);
     <meta name="twitter:title" content={pageTitle} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={socialImageURL} />
+
+    <JsonLd items={[siteGraph, ...schema]} />
   </head>
   <body>
     <Nav />

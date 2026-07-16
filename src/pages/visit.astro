@@ -20,9 +20,19 @@ const faqs = [
   { q: 'What is the best time to visit?', a: "June to January is best. It's mostly pleasant during these months, though it can feel warm without a breeze." },
   { q: 'What is the wildlife scene?', a: 'There are no hard boundaries — rabbits and wild boar are common visitors. Elephants visit in the dry season, drawn by the tamarind and ragi.' },
 ];
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map((f) => ({
+    '@type': 'Question',
+    name: f.q,
+    acceptedAnswer: { '@type': 'Answer', text: f.a },
+  })),
+};
 ---
 
-<BaseLayout title="Visit TVC" description="Day trips, overnight camps, workshops, and volunteering at Tamarind Valley Collective — what to expect, activities, and how to plan your visit.">
+<BaseLayout title="Visit TVC" description="Day trips, overnight camps, workshops, and volunteering at Tamarind Valley Collective — what to expect, activities, and how to plan your visit." schema={[faqSchema]}>
   <PageHero
     eyebrow="Visit TVC"
     title="Come spend time on the farm"

@@ -1,0 +1,14 @@
+---
+// Escaping `<` prevents a value containing a literal "</script>" from
+// breaking out of the script tag - JSON.stringify alone doesn't guard
+// against that.
+interface Props {
+  items: Record<string, unknown>[];
+}
+
+const { items } = Astro.props;
+---
+
+{items.map((item) => (
+  <script type="application/ld+json" set:html={JSON.stringify(item).replace(/</g, '\\u003c')} />
+))}

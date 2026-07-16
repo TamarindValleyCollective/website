@@ -10,9 +10,34 @@ export async function getStaticPaths() {
 
 const { post } = Astro.props;
 const { Content } = await render(post);
+
+const articleSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  headline: post.data.title,
+  datePublished: post.data.date.toISOString().slice(0, 10),
+  description: post.data.excerpt,
+  image: post.data.coverImage ? new URL(post.data.coverImage, Astro.site).toString() : undefined,
+  author: { '@type': 'Organization', name: 'Tamarind Valley Collective' },
+  publisher: {
+    '@type': 'Organization',
+    name: 'Tamarind Valley Collective',
+    logo: { '@type': 'ImageObject', url: new URL('/images/brand/tvc-logo-mark.png', Astro.site).toString() },
+  },
+};
+
+const breadcrumbSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Home', item: new URL('/', Astro.site).toString() },
+    { '@type': 'ListItem', position: 2, name: 'Community Outreach', item: new URL('/community-outreach', Astro.site).toString() },
+    { '@type': 'ListItem', position: 3, name: post.data.title },
+  ],
+};
 ---
 
-<BaseLayout title={post.data.title} description={post.data.excerpt} image={post.data.coverImage}>
+<BaseLayout title={post.data.title} description={post.data.excerpt} image={post.data.coverImage} schema={[articleSchema, breadcrumbSchema]}>
   <PageHero eyebrow="Community Outreach" title={post.data.title} image={post.data.coverImage} imageAlt={post.data.title} />
   <article class="section wrapper prose">
     <Content />
