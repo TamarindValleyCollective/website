@@ -202,8 +202,17 @@
     text-align: left;
     padding: 0;
     font: inherit;
-    display: block;
     width: 100%;
+    /* The grid stretches every card to the row's tallest height (its photo),
+       so a card with no photo on file (a handful of observations have none)
+       is shorter content sitting inside a taller box. Browsers vertically
+       center a <button>'s content by default as part of its internal
+       rendering as a form control — that centering survives even under
+       `display: block`, so it has to be overridden explicitly here to get
+       plain top alignment instead. */
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
   }
 
   :global(.obs-card img) {
