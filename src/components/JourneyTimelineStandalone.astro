@@ -824,6 +824,13 @@ ERAS.forEach((era) => {
     text-align: center;
     line-height: 1.2;
     max-width: 90px;
+    /* .tl-timeline centers each node vertically as a whole flex item —
+       a summary that wraps to 2 lines (e.g. "Foundations laid") makes
+       that node taller than its one-line siblings, so centering shifts
+       its dot upward off the shared wire line. Reserving 2 lines' worth
+       of height for every label keeps every node's total height equal
+       regardless of wrap, so every dot lands on the line. */
+    min-height: 2.4em;
   }
 
   .tl-year-node:hover .tl-dot {
