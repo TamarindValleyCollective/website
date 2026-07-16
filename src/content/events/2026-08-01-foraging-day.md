@@ -11,6 +11,14 @@ Step into nature, learn, cook, and eat what the earth gives you.
 
 Join **[@foragingtrailsandtales](https://www.instagram.com/foragingtrailsandtales/)** for a Saturday of foraging, cooking, and eating together at Tamarind Valley Collective.
 
+<figure class="poster">
+
+![Foraging Day event poster with the full schedule, pricing, and registration details](/images/events/2026-08-01-foraging-day/poster.jpeg)
+
+<figcaption>The original event poster</figcaption>
+
+</figure>
+
 ## Schedule
 
 | Time | Activity |

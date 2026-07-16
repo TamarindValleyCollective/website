@@ -78,4 +78,23 @@ const formatDate = (d: Date) => d.toLocaleDateString('en-IN', { year: 'numeric',
   .prose :global(.cta .button) {
     margin: 12px 0;
   }
+
+  .prose :global(.poster) {
+    width: 100%;
+    max-width: 360px;
+    margin: 16px auto 32px;
+  }
+
+  .prose :global(.poster img) {
+    margin: 0;
+    box-shadow: var(--shadow-soft);
+    border: 1px solid var(--tvc-line);
+  }
+
+  .prose :global(.poster figcaption) {
+    margin-top: 8px;
+    text-align: center;
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
+  }
 </style>
