@@ -140,8 +140,15 @@ img {
   padding: 0 24px;
 }
 
+/* Longhand top/bottom only — deliberately not the `padding` shorthand.
+   .section and .wrapper are combined on the same element in ~20 pages
+   (`class="section wrapper"`), and since .section is declared after
+   .wrapper here, a shorthand `padding` would silently overwrite
+   .wrapper's `padding: 0 24px` entirely (shorthands don't merge),
+   wiping out the side margins on every page that does this. */
 .section {
-  padding: var(--space-section) 0;
+  padding-top: var(--space-section);
+  padding-bottom: var(--space-section);
 }
 
 .section--tint {
@@ -198,6 +205,7 @@ img {
 
 @media (max-width: 640px) {
   .section {
-    padding: var(--space-section-sm) 0;
+    padding-top: var(--space-section-sm);
+    padding-bottom: var(--space-section-sm);
   }
 }
