@@ -1,7 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
-import Pending from '../components/Pending.astro';
 ---
 
 <BaseLayout title="Contact Us" description="Get in touch with Tamarind Valley Collective — phone, location, and social media.">
@@ -37,11 +36,20 @@ import Pending from '../components/Pending.astro';
 
     <div class="card">
       <h3>Join our newsletter</h3>
-      <Pending note="No newsletter signup existed on the old site — this needs a real form backend (e.g. a hosted form service) before it can go live. The form below is a placeholder, not yet wired up." />
-      <form class="newsletter-form">
+      <p>Occasional updates on events, volunteering, and life at the farm.</p>
+      <form
+        class="newsletter-form"
+        name="newsletter"
+        method="POST"
+        action="/contact/thanks"
+        data-netlify="true"
+        data-netlify-honeypot="bot-field"
+      >
+        <input type="hidden" name="form-name" value="newsletter" />
+        <p class="newsletter-hp"><label>Don't fill this out: <input name="bot-field" /></label></p>
         <label for="email">Email address</label>
-        <input id="email" type="email" name="email" placeholder="you@example.com" disabled />
-        <button class="button" type="button" disabled>Subscribe</button>
+        <input id="email" type="email" name="email" placeholder="you@example.com" required />
+        <button class="button" type="submit">Subscribe</button>
       </form>
     </div>
   </section>
@@ -77,6 +85,13 @@ import Pending from '../components/Pending.astro';
     padding: 10px 14px;
     border: 1px solid var(--tvc-line);
     border-radius: 999px;
+  }
+
+  /* Netlify Forms spam honeypot — off-screen, not display:none (some bots
+     skip hidden fields, but few check for visibility via position). */
+  .newsletter-hp {
+    position: absolute;
+    left: -9999px;
   }
 
   @media (max-width: 780px) {
