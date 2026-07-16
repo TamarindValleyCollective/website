@@ -10,9 +10,28 @@ export async function getStaticPaths() {
 
 const { partner } = Astro.props;
 const { Content } = await render(partner);
+
+const partnerSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: partner.data.title,
+  url: partner.data.url,
+  description: partner.data.excerpt,
+  logo: partner.data.coverImage ? new URL(partner.data.coverImage, Astro.site).toString() : undefined,
+};
+
+const breadcrumbSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Home', item: new URL('/', Astro.site).toString() },
+    { '@type': 'ListItem', position: 2, name: 'Partners', item: new URL('/ecosystem/partners', Astro.site).toString() },
+    { '@type': 'ListItem', position: 3, name: partner.data.title },
+  ],
+};
 ---
 
-<BaseLayout title={partner.data.title} description={partner.data.excerpt} image={partner.data.coverImage}>
+<BaseLayout title={partner.data.title} description={partner.data.excerpt} image={partner.data.coverImage} schema={[partnerSchema, breadcrumbSchema]}>
   <PageHero eyebrow="Partners" title={partner.data.title} image={partner.data.coverImage} imageAlt={partner.data.title} />
   <article class="section wrapper prose">
     <Content />
