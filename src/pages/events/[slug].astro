@@ -36,4 +36,46 @@ const formatDate = (d: Date) => d.toLocaleDateString('en-IN', { year: 'numeric',
     border-radius: var(--radius);
     margin: 16px 0;
   }
+
+  .prose :global(table) {
+    width: 100%;
+    max-width: 72ch;
+    border-collapse: collapse;
+    margin: 16px 0 32px;
+  }
+
+  .prose :global(th),
+  .prose :global(td) {
+    text-align: left;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .prose :global(th) {
+    font-family: var(--font-body);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 0.78rem;
+    color: var(--tvc-orange);
+  }
+
+  .prose :global(td:first-child) {
+    color: var(--tvc-ink-soft);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .prose :global(.cta) {
+    max-width: 72ch;
+    margin: 32px 0;
+  }
+
+  .prose :global(.cta h3) {
+    margin-top: 0;
+  }
+
+  .prose :global(.cta .button) {
+    margin: 12px 0;
+  }
 </style>
