@@ -11,6 +11,26 @@
 
 ---
 
+### 2026-07-16 18:57 — Replace newsletter signup with "Friends of TVC" WhatsApp signup
+**Requested by:** Rajesh
+
+**Ask:** "We will not have a news letter. We can aonly collect name & phone number t add them to
+a whatsapp group 'Friends of TVC'. Need a way to collect thes in place of newsletter sign up in
+the contact us."
+
+**Change:** Replaced the `/contact` page's email newsletter form with a "Join Friends of TVC"
+form collecting name and phone number instead, kept on the same Netlify Forms plumbing (just
+renamed the form to `friends-of-tvc`, swapped the single email field for name + phone fields).
+Updated the `/contact/thanks` confirmation copy and `ARCHITECTURE.md`'s mentions of the
+newsletter form to describe its new purpose (submissions get added to the "Friends of TVC"
+WhatsApp group by hand — no automated WhatsApp integration). Verified the built form's `name`
+attribute and hidden `form-name` field still match (required for Netlify's build-time form
+detection) and checked both pages on desktop and mobile.
+
+Commit: `36a98de`
+
+---
+
 ### 2026-07-16 17:49 — Fix Biodiversity tile alignment
 **Requested by:** Sharath Jeppu
 
