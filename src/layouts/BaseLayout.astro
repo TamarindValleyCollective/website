@@ -8,12 +8,21 @@ interface Props {
   title: string;
   description?: string;
   image?: string;
+  // The actual pixel dimensions of `image`. og:image:width/height must
+  // match the real file — WhatsApp's link-preview crawler silently
+  // discards the image and falls back to the apple-touch-icon when they
+  // don't (the home hero is a 4204x1330 panorama, nowhere near a lazily
+  // hardcoded 1200x630), which is why only the logo showed up there.
+  imageWidth?: number;
+  imageHeight?: number;
 }
 
 const {
   title,
   description = 'Tamarind Valley Collective — a 100-acre permaculture farm and community in the hills near Kanakapura.',
   image = '/images/pages/home/hero.jpg',
+  imageWidth = 4204,
+  imageHeight = 1330,
 } = Astro.props;
 
 const pageTitle = `${title} · Tamarind Valley Collective`;
@@ -40,8 +49,8 @@ const socialImageURL = new URL(image, Astro.site);
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalURL} />
     <meta property="og:image" content={socialImageURL} />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
+    <meta property="og:image:width" content={imageWidth} />
+    <meta property="og:image:height" content={imageHeight} />
 
     <!-- Twitter/X card -->
     <meta name="twitter:card" content="summary_large_image" />
