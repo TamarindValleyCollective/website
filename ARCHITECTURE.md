@@ -10,9 +10,9 @@
 **tvc.farm is live**, running this Astro rebuild on Netlify (behind Cloudflare for DNS/CDN).
 The site is almost entirely static (prerendered HTML/CSS/JS, no server at request time), with
 two deliberate exceptions that need a small serverless backend: the site-wide chat assistant
-and the newsletter signup form. See [Current Production Status](#current-production-status)
-for the exact state of each — one is deployed but not fully configured yet, and the other
-hasn't shipped yet at all.
+and the newsletter signup form. Both are deployed; see
+[Current Production Status](#current-production-status) — the chat assistant just needs its
+API key set to give real answers.
 
 ## Diagram
 
@@ -35,7 +35,7 @@ flowchart TD
     subgraph HOST["3 · Hosting: Netlify — LIVE"]
         CDN["Static CDN<br/>Serves dist/ — everything except<br/>the two exceptions to the right"]
         APIFN["Netlify Function: /api/chat<br/>Deployed and responding, but<br/>ANTHROPIC_API_KEY not yet set —<br/>replies with a friendly fallback message"]
-        FORMS["Netlify Forms<br/>NOT YET DEPLOYED — built locally,<br/>not yet committed/pushed"]
+        FORMS["Netlify Forms<br/>Live — captures /contact newsletter<br/>signups, no custom backend needed"]
     end
 
     CF["Cloudflare<br/>DNS + CDN for tvc.farm,<br/>proxies to Netlify"]
@@ -62,24 +62,21 @@ flowchart TD
     BIODIV -.-> INAT
     APIFN -.-> ANTHROPIC
     CHATW --> APIFN
-    NEWS -.-> FORMS
+    NEWS --> FORMS
 
     classDef staticStyle fill:#e8f2ea,stroke:#17723b,color:#0f5029
     classDef netlifyStyle fill:#fdead3,stroke:#f78520,color:#9a5310
     classDef externalStyle fill:#f6f1e7,stroke:#c9c2a8,color:#22291f
-    classDef pendingStyle fill:#fbeaea,stroke:#c0392b,color:#a5281c,stroke-dasharray: 4 3
     classDef cfStyle fill:#fef3e0,stroke:#e8891c,color:#7a4a00
 
-    class PAGES,COMPONENTS,CONTENT,CHATW,BIODIV,TIMELINE,CDN staticStyle
-    class FUNC_SRC,SCRIPT_SRC,APIFN,ANTHROPIC netlifyStyle
+    class PAGES,COMPONENTS,CONTENT,CHATW,NEWS,BIODIV,TIMELINE,CDN staticStyle
+    class FUNC_SRC,SCRIPT_SRC,APIFN,FORMS,ANTHROPIC netlifyStyle
     class INAT,GMAPS,YT,GPHOTOS externalStyle
-    class FORMS,NEWS pendingStyle
     class CF cfStyle
 ```
 
-**Legend:** 🟢 static / no server required · 🟠 live and depends on Netlify specifically
-(Functions) · ⬜ external third-party service · 🔴 dashed = built but not yet deployed · 🟡
-Cloudflare (DNS/CDN layer in front of Netlify).
+**Legend:** 🟢 static / no server required · 🟠 depends on Netlify specifically (Functions or
+Forms) · ⬜ external third-party service · 🟡 Cloudflare (DNS/CDN layer in front of Netlify).
 
 ## Layer-by-layer detail
 
@@ -116,9 +113,9 @@ On every push to `main`, Netlify runs:
   `ANTHROPIC_API_KEY` environment variable has not been set in the Netlify dashboard yet, so it
   currently replies with a friendly "not configured yet" message instead of a real answer. Once
   the key is set, no further deploy is needed — the function will pick it up immediately.
-- **Netlify Forms** — **not yet live.** The newsletter form markup and `/contact/thanks`
-  confirmation page exist locally but were never committed/pushed, so Netlify has never seen a
-  `data-netlify="true"` form to detect at build time.
+- **Netlify Forms** — live. Detects the newsletter signup form at build time
+  (`data-netlify="true"`) and captures submissions with no custom backend code required;
+  confirmed live at `/contact`, redirecting to `/contact/thanks` on success.
 
 ### Cloudflare (in front of Netlify)
 
@@ -131,9 +128,8 @@ function.
 
 - **ChatWidget** — floating widget using the site logo; sends the visitor's question to
   `/api/chat`. Live, but see the Netlify Function note above.
-- **Newsletter form** — not yet live (see above). Once committed and deployed, it's a plain
-  HTML form submission with a spam honeypot field, redirecting to a confirmation page on
-  success.
+- **Newsletter form** — live. Plain HTML form submission with a spam honeypot field,
+  redirecting to a confirmation page on success.
 - **BiodiversityExplorer** — fetches live biodiversity sightings directly from iNaturalist's
   public API on every page load; no TVC backend involved.
 - **Timeline and other pages** — the era-based year-by-year story, event listings, and the
@@ -155,9 +151,8 @@ function.
 | Year-by-year interactive timeline (`/timeline`) | ✅ Live |
 | Chat widget UI | ✅ Live |
 | Chat widget's actual AI responses | ⚠️ Deployed, but `ANTHROPIC_API_KEY` isn't set yet — needs to be added in Netlify's dashboard (Site settings → Environment variables) |
-| Newsletter signup (Netlify Forms) | ❌ Not deployed — built locally, not yet committed/pushed |
+| Newsletter signup (Netlify Forms) | ✅ Live — confirmed at `/contact`, with `/contact/thanks` as the confirmation page |
 
-To finish closing the gaps above: (1) set `ANTHROPIC_API_KEY` in Netlify's environment
-variables to activate real chat responses, and (2) commit and push the newsletter form changes
-(`src/pages/contact.astro`, `src/pages/contact/thanks.astro`) so Netlify Forms picks them up on
-the next build.
+The one remaining gap: set `ANTHROPIC_API_KEY` in Netlify's environment variables to activate
+real chat responses. No further deploy needed once it's set — the function picks it up
+immediately.
