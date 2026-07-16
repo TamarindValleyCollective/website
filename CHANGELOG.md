@@ -11,6 +11,24 @@
 
 ---
 
+### 2026-07-16 17:49 — Fix Biodiversity tile alignment
+**Requested by:** Sharath Jeppu
+
+**Ask:** "There is a tile alignment issue in the Biodiversity page. Align all the tiles to the
+top."
+
+**Change:** Found that the 4 observations (out of 109) with no photo on file rendered visibly
+shorter than their photo-having row neighbors, and their caption ended up vertically centered
+in the middle of the tile instead of flush at the top — a `<button>`'s content is centered by
+default even under `display: block`. Fixed by setting `.obs-card` to `display: flex;
+flex-direction: column; justify-content: flex-start;` in `BiodiversityExplorer.astro`. Verified
+locally by loading all 109 observations and confirming each of the 4 affected tiles now sits
+flush with its row's top edge.
+
+Commit: `f5fed1f`
+
+---
+
 ### 2026-07-16 17:33 — Improve the Our Journey timeline modal
 **Requested by:** Sharath Jeppu
 
