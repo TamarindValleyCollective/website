@@ -1,3 +1,10 @@
+## Architecture documentation
+
+`ARCHITECTURE.md` documents the site's current architecture (hosting, data flow, external
+services, serverless functions) with a Mermaid diagram. **Update it in the same change**
+whenever something affects that picture — a new integration, a new function, a hosting
+change, a new external service call, etc. Don't let it drift from what's actually in the repo.
+
 ## Development
 
 When starting the dev server, use background mode:
