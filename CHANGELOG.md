@@ -11,6 +11,33 @@
 
 ---
 
+### 2026-07-16 17:33 — Improve the Our Journey timeline modal
+**Requested by:** Sharath Jeppu
+
+**Ask:** Three related requests in sequence: "In the page our journey so farm, the year and
+the month gets lost while navigating across the pictures. Can they be made more prominent...
+Show me locally first"; then "The month and year appear twice which is redundant. Just keep it
+in the green header and centre it. Also within the same month if there are multiple pictures,
+there are two separate sliders to scroll. Can this be unified?"; then "The narration also gets
+lost in the display and users tend not to read it. Is there a way this can be improved?"; and
+finally "the window is a little small on a large screen. Can this be fixed?"
+
+**Change:** Made the modal header show a live, centered "Year / Month" readout (with a brief
+highlight animation on change) as the single source of that information, removing the
+duplicate text that used to also appear inside each slide. Flattened the nested per-month
+photo carousel and the outer month track — previously two separate scrollers stacked on each
+other — into one unified slider, one slide per photo. Moved each photo's narration onto the
+photo itself as an overlaid caption bar instead of a separate text block above it, so it can't
+be swiped past unseen. Scaled the modal's size with the viewport (up to 960×840) instead of a
+flat 640×640 cap that looked small on large screens, leaving small windows and the mobile
+bottom-sheet layout unaffected. Verified locally at each step (build + browser walkthroughs of
+month/year transitions, year-boundary crossing, contain-fit images, no-photo months, and mobile
+width) before committing.
+
+Commit: `929659b`
+
+---
+
 ### 2026-07-16 16:44 — Fix outdated favicon and link-preview logo
 **Requested by:** Sharath Jeppu
 
