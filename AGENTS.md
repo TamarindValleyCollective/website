@@ -5,6 +5,15 @@ services, serverless functions) with a Mermaid diagram. **Update it in the same 
 whenever something affects that picture — a new integration, a new function, a hosting
 change, a new external service call, etc. Don't let it drift from what's actually in the repo.
 
+## Change log
+
+`CHANGELOG.md` tracks every website change requested through and made by the assistant.
+**Add an entry in the same change** whenever a change discussed in a conversation is committed
+and pushed to `main` — new entries go at the top, with: date/time (from the commit), who
+requested it, a short summary of the ask (quote the user's request where practical), a summary
+of what actually changed, and the commit hash(es). Skip entries for changes that were never
+pushed (e.g. pure evaluation/advice, or work explicitly not committed).
+
 ## Development
 
 When starting the dev server, use background mode:
