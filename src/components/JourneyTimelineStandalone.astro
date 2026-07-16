@@ -515,20 +515,23 @@ ERAS.forEach((era) => {
 
 <style>
   .tl-root {
-    --tl-green-dark: #2f4a3c;
-    --tl-green: #4c7a5f;
-    --tl-green-light: #8fb89b;
-    --tl-sand: #f6f1e7;
-    --tl-sand-2: #efe7d6;
-    --tl-brown: #7a5c3e;
-    --tl-ink: #2b2a26;
-    --tl-muted: #6b675d;
-    --tl-white: #fffdf9;
+    /* Mapped onto the site's own design tokens (src/styles/global.css)
+       rather than bespoke colors, so this reads as part of the same
+       site instead of an embedded widget with its own palette. */
+    --tl-green-dark: var(--tvc-green-dark);
+    --tl-green: var(--tvc-green);
+    --tl-green-light: color-mix(in srgb, var(--tvc-green) 45%, white);
+    --tl-sand: var(--tvc-cream);
+    --tl-sand-2: var(--tvc-line);
+    --tl-brown: var(--tvc-orange);
+    --tl-ink: var(--tvc-ink);
+    --tl-muted: var(--tvc-ink-soft);
+    --tl-white: #fff;
 
     height: 100%;
     display: flex;
     flex-direction: column;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-family: var(--font-body);
     color: var(--tl-ink);
   }
 
@@ -553,7 +556,7 @@ ERAS.forEach((era) => {
     font-weight: 700;
     color: var(--tl-green-dark);
     letter-spacing: 0.5px;
-    font-family: inherit;
+    font-family: var(--font-display);
   }
 
   .tl-era-picker {
@@ -821,6 +824,13 @@ ERAS.forEach((era) => {
     text-align: center;
     line-height: 1.2;
     max-width: 90px;
+    /* .tl-timeline centers each node vertically as a whole flex item —
+       a summary that wraps to 2 lines (e.g. "Foundations laid") makes
+       that node taller than its one-line siblings, so centering shifts
+       its dot upward off the shared wire line. Reserving 2 lines' worth
+       of height for every label keeps every node's total height equal
+       regardless of wrap, so every dot lands on the line. */
+    min-height: 2.4em;
   }
 
   .tl-year-node:hover .tl-dot {

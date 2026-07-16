@@ -1,63 +1,46 @@
 ---
-// Standalone, single-viewport page: intentionally skips BaseLayout's
-// Footer so the whole experience fits one screen with no page scroll.
-// Only the month carousel inside JourneyTimelineStandalone scrolls internally.
-// Named "Standalone" to avoid colliding with the separate JourneyTimeline.astro
-// used on /our-journey.
-import Nav from '../components/Nav.astro';
+// Uses BaseLayout like every other page — Nav, Footer, ChatWidget, and the
+// standard meta tags all come from there now. The interactive timeline
+// itself stays visually "contained" (most of the viewport, not a long
+// scroll through every card) via a bounded-height wrapper below, rather
+// than literally locking the whole page to 100dvh — that made the page
+// diverge from the rest of the site (no footer ever reachable, no chat
+// widget). A little natural scroll to reach the footer is how every other
+// page here behaves.
+import BaseLayout from '../layouts/BaseLayout.astro';
 import JourneyTimeline from '../components/JourneyTimelineStandalone.astro';
-import '../styles/global.css';
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="From a degraded 100-acre farm to a regenerating ecosystem — year by year." />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <meta name="generator" content={Astro.generator} />
-    <title>Our Journey So Far · Tamarind Valley Collective</title>
-  </head>
-  <body class="tl-page-body">
-    <Nav />
-    <main class="tl-page-main">
-      <JourneyTimeline />
-    </main>
-  </body>
-</html>
+<BaseLayout title="Our Journey So Far" description="From a degraded 100-acre farm to a regenerating ecosystem — year by year." image="/images/pages/journey/hero.jpg" imageWidth={1280} imageHeight={960}>
+  <div class="timeline-page">
+    <JourneyTimeline />
+  </div>
+</BaseLayout>
 
 <style>
-  .tl-page-body {
-    height: 100dvh;
+  .timeline-page {
+    height: 82vh;
+    min-height: 600px;
+    max-height: 900px;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    background: #f6f1e7;
-  }
-
-  .tl-page-main {
-    flex: 1 1 auto;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
+    background: var(--tvc-cream);
   }
 
   /* .tl-root is JourneyTimelineStandalone's own root element — it lives
      across the component boundary, so it needs :global() to be reached
      from here. Without flex-grow it would size to content instead of
-     filling .tl-page-main, leaving a blank gap below it on short viewports. */
-  .tl-page-main :global(.tl-root) {
+     filling .timeline-page, leaving a blank gap below it on short viewports. */
+  .timeline-page :global(.tl-root) {
     flex: 1 1 auto;
     min-height: 0;
   }
 
   @media (max-width: 760px) {
-    .tl-page-body {
+    .timeline-page {
       height: auto;
-      min-height: 100dvh;
-      overflow: visible;
+      min-height: 640px;
+      max-height: none;
     }
   }
 </style>
