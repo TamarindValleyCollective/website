@@ -11,6 +11,27 @@
 
 ---
 
+### 2026-07-18 05:29 — Activate the chat assistant's AI responses
+**Requested by:** Sharath Jeppu
+
+**Ask:** "I would like to enable the site chatbot with the anthropic key" — the chat widget and
+its Netlify Function backend (`chat.mts`) were already built and deployed (see the 2026-07-16
+09:32 entry below), but had been waiting on an `ANTHROPIC_API_KEY` to actually respond.
+
+**Change:** Configuration only, no code change. Linked the local repo to the `tvc-farm` Netlify
+site (ownership had recently moved to the `contact@tvc.farm` account), then set
+`ANTHROPIC_API_KEY` as a Netlify environment variable (Builds/Functions/Runtime scope,
+production context) via the Netlify dashboard. An initial key attempt was rejected by Anthropic
+with `401 invalid x-api-key`; a second, freshly generated key also failed the same way at first
+because the already-running function hadn't picked up the new value — triggering a fresh
+`netlify deploy --prod` refreshed it. Verified end-to-end with live requests to both
+`tvc.farm/api/chat` and the underlying `tvc-farm.netlify.app/api/chat`, confirming grounded
+replies sourced from the site's own content (e.g. farm description, upcoming events).
+
+No commit — this was a Netlify environment-variable/deploy change, not a source change.
+
+---
+
 ### 2026-07-17 07:46 — Fix Foraging Day payment link
 **Requested by:** Rajesh
 
