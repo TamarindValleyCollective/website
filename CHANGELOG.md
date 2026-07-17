@@ -11,6 +11,21 @@
 
 ---
 
+### 2026-07-17 07:46 — Fix Foraging Day payment link
+**Requested by:** Rajesh
+
+**Ask:** "The 'Pay & register' link in the current upcoming event in 2026-08-01-foraging-day is
+wrong. It should be 'https://rzp.io/rzp/Pry5rI8r'."
+
+**Change:** The event page's "Pay & register" button pointed at an invalid/placeholder Razorpay
+link (`rzp.io/rzp/ForageTVC`). Replaced with the correct link. Confirmed no other references to
+the old link existed anywhere in the codebase, and checked the corrected URL is present in the
+built HTML.
+
+Commit: `66614ab`
+
+---
+
 ### 2026-07-16 18:57 — Replace newsletter signup with "Friends of TVC" WhatsApp signup
 **Requested by:** Rajesh
 
