@@ -41,7 +41,7 @@ Join **[@foragingtrailsandtales](https://www.instagram.com/foragingtrailsandtale
 
 **₹2,250 per person**
 
-<a class="button" href="https://rzp.io/rzp/ForageTVC">Pay & register →</a>
+<a class="button" href="https://rzp.io/rzp/Pry5rI8r">Pay & register →</a>
 
 Or message **[+91 85480 65772](https://wa.me/918548065772)** on WhatsApp to register.
 
