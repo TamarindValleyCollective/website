@@ -11,6 +11,42 @@
 
 ---
 
+### 2026-07-18 — Bigger overlapping timeline photo cards, a click-to-detail lightbox, and a smooth carousel
+**Requested by:** Sharath Jeppu
+
+**Ask:** "The picture tiles on the timeline page are too small especially on a large screen. Can
+they be larger and the horizantal scroll be a carousal of overlapping pictures. The user should
+also be able to click on a picture to see details and then exit easily." Followed by three rounds
+of refinement: "The animation between the transition of overlapped pictures when is not smooth.
+Can this be fixed?" and "One small change. For tiles that don't have a picture, have the text
+rendered instead in the middle of the box."
+
+**Change:** Reworked the per-year month carousel on `/timeline`. Cards grew from a fixed 300×260px
+to a fluid `clamp(260px, 42vw, 620px)` × `clamp(220px, 30vw, 440px)`, so they scale up
+meaningfully on large screens instead of capping out small. Cards now overlap via negative
+margin into a fanned stack, with the focused card scaling up and brightening (and its neighbors
+receding) as you scroll — tracked live every animation frame rather than only after scrolling
+stops, so the effect sweeps continuously instead of popping in late. Clicking any photo opens a
+new shared lightbox (full-size image, complete caption, prev/next through that year's photos,
+closable via an X button, clicking outside, or Escape, with focus returned to the card on close);
+on-card captions are now truncated to a teaser (3 lines) since the full text lives in the
+lightbox. Cards with no photo for a month get centered text instead of a caption pinned to the
+bottom, since there's no image to anchor it to.
+
+Along the way, found that the arrow-button navigation was jumping instantly with no animation at
+all — native `scrollTo({behavior:'smooth'})` was silently not animating on this track (not just
+"getting fought" by `scroll-snap-type:mandatory` as previously assumed; verified it does nothing
+even with snap disabled first). Replaced it with a hand-rolled `requestAnimationFrame` tween that
+eases the scroll position directly, which can't be silently dropped, and which respects
+`prefers-reduced-motion`. Verified on desktop and mobile — card sizing, the overlapping/fanning
+motion, lightbox open/close/prev/next including on a no-photo-adjacent card, keyboard
+(Enter/Space to open, arrows to navigate, Escape to close), and touch swipe not misfiring the
+lightbox open.
+
+**Commits:** `518ebdb`
+
+---
+
 ### 2026-07-18 — Restructure the main nav into Explore/Engage, add breadcrumbs everywhere
 **Requested by:** Sharath Jeppu
 
