@@ -14,6 +14,7 @@ export const EXPLORE_LINKS: SiteLink[] = [
   { label: 'The Design', href: '/our-journey/design' },
   { label: 'In Pictures', href: '/in-pictures' },
   { label: 'Biodiversity', href: '/ecosystem' },
+  { label: 'Geography & Weather', href: '/ecosystem/geography' },
   { label: 'Community Outreach', href: '/community-outreach' },
   { label: 'Resource Centre', href: '/resource-centre' },
   { label: 'Partners', href: '/ecosystem/partners' },
