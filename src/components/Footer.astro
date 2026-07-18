@@ -1,14 +1,4 @@
 ---
-const footerLinks = [
-  { label: 'Visit TVC', href: '/visit' },
-  { label: 'How to Reach', href: '/visit/how-to-reach' },
-  { label: 'Contact', href: '/contact' },
-  { label: 'Resource Centre', href: '/resource-centre' },
-  { label: 'In Pictures', href: '/in-pictures' },
-  { label: 'Partners', href: '/ecosystem/partners' },
-  { label: 'Community Outreach', href: '/community-outreach' },
-];
-
 const socialLinks = [
   { label: 'Facebook', href: 'https://www.facebook.com/farm.tvc' },
   { label: 'Twitter', href: 'https://twitter.com/TVCFarm' },
@@ -22,20 +12,14 @@ const year = new Date().getFullYear();
   <div class="wrapper footer__inner">
     <a class="footer__brand" href="/">
       <img src="/images/brand/tvc-logo-mark.png" alt="Tamarind Valley Collective" width="52" height="52" />
+      <span>Tamarind Valley Collective</span>
     </a>
-
-    <nav class="footer__nav">
-      {footerLinks.map((link) => (
-        <a href={link.href}>{link.label}</a>
-      ))}
-    </nav>
-
+    <p class="footer__blurb">A 100-acre permaculture farm collectively owned by 53 families, regenerating degraded land near Kanakapura since 2017.</p>
     <div class="footer__social">
       {socialLinks.map((link) => (
         <a href={link.href} target="_blank" rel="noopener noreferrer">{link.label}</a>
       ))}
     </div>
-
     <p class="footer__copy">© {year} Tamarind Valley Collective. All rights reserved.</p>
   </div>
 </footer>
@@ -52,15 +36,32 @@ const year = new Date().getFullYear();
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 18px;
+    gap: 14px;
     text-align: center;
+  }
+
+  .footer__brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    color: #fff;
+    font-family: var(--font-wordmark);
+    font-weight: 700;
+    font-size: 1.1rem;
   }
 
   .footer__brand img {
     border-radius: 50%;
   }
 
-  .footer__nav,
+  .footer__blurb {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #b9d0bc;
+    max-width: 46ch;
+  }
+
   .footer__social {
     display: flex;
     flex-wrap: wrap;
@@ -68,7 +69,6 @@ const year = new Date().getFullYear();
     gap: 18px;
   }
 
-  .footer__nav a,
   .footer__social a {
     color: #eef5ee;
     text-decoration: none;
@@ -76,7 +76,6 @@ const year = new Date().getFullYear();
     font-weight: 600;
   }
 
-  .footer__nav a:hover,
   .footer__social a:hover {
     color: var(--tvc-orange);
   }

@@ -1,0 +1,67 @@
+---
+import { sectionFor } from '../data/site-map';
+
+interface Props {
+  pathname: string;
+  pageTitle: string;
+}
+
+const { pathname, pageTitle } = Astro.props;
+
+// No section (the homepage itself, or a page outside Explore/Engage) means
+// there's no useful trail to show — skip rendering rather than show a
+// half-empty breadcrumb.
+const section = pathname === '/' ? null : sectionFor(pathname);
+---
+
+{section && (
+  <nav class="breadcrumbs" aria-label="Breadcrumb">
+    <div class="wrapper breadcrumbs__inner">
+      <a href="/">Home</a>
+      <span class="breadcrumbs__sep" aria-hidden="true">/</span>
+      <a href={section.href}>{section.label}</a>
+      <span class="breadcrumbs__sep" aria-hidden="true">/</span>
+      <span class="breadcrumbs__current" aria-current="page">{pageTitle}</span>
+    </div>
+  </nav>
+)}
+
+<style>
+  .breadcrumbs {
+    background: #fff;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .breadcrumbs__inner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    font-size: 0.82rem;
+    flex-wrap: wrap;
+  }
+
+  .breadcrumbs a {
+    color: var(--tvc-ink-soft);
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  .breadcrumbs a:hover {
+    color: var(--tvc-green);
+  }
+
+  .breadcrumbs__sep {
+    color: var(--tvc-line);
+  }
+
+  .breadcrumbs__current {
+    color: var(--tvc-ink);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 60ch;
+  }
+</style>

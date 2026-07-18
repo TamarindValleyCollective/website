@@ -1,36 +1,14 @@
 ---
+import { EXPLORE_LINKS, ENGAGE_LINKS } from '../data/site-map';
+
+// Mirrors the homepage's own Explore/Engage fork (src/pages/index.astro) so
+// the nav reads as the same map wherever you are on the site, not a
+// different grouping than the one you land on at "/". Explore is wide
+// (10 items) because it's every informational page on the site — see
+// .nav__dropdown--wide below for the two-column treatment that needs.
 const navItems = [
-  {
-    label: 'About TVC',
-    children: [
-      { label: 'Overview', href: '/about' },
-      { label: 'In Pictures', href: '/in-pictures' },
-      { label: 'Partners', href: '/ecosystem/partners' },
-      { label: 'Resource Centre', href: '/resource-centre' },
-    ],
-  },
-  {
-    label: 'Our Journey',
-    children: [
-      { label: 'Overview', href: '/our-journey' },
-      { label: 'Timeline', href: '/timeline' },
-      { label: 'The Design', href: '/our-journey/design' },
-      { label: 'Community Outreach', href: '/community-outreach' },
-    ],
-  },
-  {
-    label: 'Visit TVC',
-    children: [
-      { label: 'Overview', href: '/visit' },
-      { label: 'Day Visit', href: '/visit/day-visit' },
-      { label: 'Overnight Camping', href: '/visit/camping' },
-      { label: 'Trekking Trails', href: '/visit/trekking-trails' },
-      { label: 'How to Reach', href: '/visit/how-to-reach' },
-    ],
-  },
-  { label: 'Biodiversity', href: '/ecosystem' },
-  { label: 'Events', href: '/events' },
-  { label: 'Contact Us', href: '/contact' },
+  { label: 'Explore', wide: true, children: EXPLORE_LINKS },
+  { label: 'Engage', wide: false, children: ENGAGE_LINKS },
 ];
 
 const currentPath = Astro.url.pathname;
@@ -63,7 +41,7 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
                 <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
-            <div class="nav__dropdown">
+            <div class:list={['nav__dropdown', { 'nav__dropdown--wide': item.wide }]}>
               {item.children.map((child) => (
                 <a href={child.href} class:list={['nav__sublink', { 'is-active': isActive(child.href) }]}>
                   {child.label}
@@ -189,6 +167,19 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
     display: flex;
   }
 
+  /* Explore has 10 items — a single column runs uncomfortably tall, so it
+     gets a two-column grid instead. Declared after the rules above so it
+     wins the display:flex vs display:grid tie on hover/focus. */
+  .nav__dropdown--wide {
+    grid-template-columns: repeat(2, minmax(170px, 1fr));
+    min-width: 360px;
+  }
+
+  .nav__item:hover .nav__dropdown--wide,
+  .nav__item:focus-within .nav__dropdown--wide {
+    display: grid;
+  }
+
   .nav__sublink {
     display: block;
     text-decoration: none;
@@ -266,6 +257,12 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
       border: none;
       box-shadow: none;
       padding: 0 0 6px 16px;
+      min-width: 0;
+    }
+
+    .nav__dropdown--wide {
+      display: flex;
+      grid-template-columns: none;
       min-width: 0;
     }
 

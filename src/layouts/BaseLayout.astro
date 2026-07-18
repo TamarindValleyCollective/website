@@ -1,5 +1,6 @@
 ---
 import Nav from '../components/Nav.astro';
+import Breadcrumbs from '../components/Breadcrumbs.astro';
 import Footer from '../components/Footer.astro';
 import ChatWidget from '../components/ChatWidget.astro';
 import JsonLd from '../components/JsonLd.astro';
@@ -107,6 +108,7 @@ const siteGraph = {
   </head>
   <body>
     <Nav />
+    <Breadcrumbs pathname={Astro.url.pathname} pageTitle={title} />
     <main>
       <slot />
     </main>
