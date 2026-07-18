@@ -1,30 +1,29 @@
 ---
-// Faithful port of tvc_timeline.html into an Astro component. Kept as
-// close to the original markup/CSS/JS as possible (same class/id names,
-// prefixed with "tl-" to avoid clashing with the rest of the site, and
-// wrapped in .tl-root so the color variables — declared once there —
-// reach both the inline app and the modal overlay, which is a sibling
-// of .tl-app, not a descendant of it, since it's position:fixed).
+// Full-bleed scrollytelling redesign of the "Our Journey" timeline, replacing
+// the earlier click-a-dot-to-open-a-modal version. Each year is now its own
+// full-viewport section with a real hero photo; a year's months live as a
+// swipeable carousel directly in that section instead of behind a click.
+// Reached via three rounds of live-rendered comparisons before this was
+// built — see CHANGELOG.md.
 //
-// Structured around "eras" so this scales past a single flat year row:
-// each era owns its own poem + year timeline. With exactly one era (today),
-// the era-picker never renders and the single era's panel shows directly —
-// pixel-identical to a flat single-row timeline. The moment a second era
-// gets real years, the picker appears automatically and eras become
-// selectable chapters instead of one ever-lengthening row.
+// Structured around "eras" so this scales past a single flat year row: each
+// era owns its own poem + year sections. With exactly one era (today), it
+// renders directly — no era-picker. The moment a second era gets real
+// years, this needs a picker step before the hero (not built yet, since
+// there's nothing to pick between).
 interface MonthEntry {
   m: string;
   t: string;
   imgs: string[];
   // Per-image captions, same length as imgs — shown in place of the
-  // month's single `t` as the photo carousel is swiped. Omit to just
-  // repeat `t` for every photo (the default when one caption covers
-  // the whole month's single event).
+  // month's single `t` as the carousel is swiped. Omit to just repeat `t`
+  // for every photo (the default when one caption covers the whole
+  // month's single event).
   imgCaptions?: string[];
   // Per-image object-fit override, same length as imgs. Real farm
   // photography looks best cropped to fill the frame ('cover', the
-  // default); flat graphics like the logo need 'contain' so nothing
-  // gets cropped off.
+  // default); flat graphics like the logo need 'contain' so nothing gets
+  // cropped off.
   imgFit?: ('cover' | 'contain')[];
 }
 
@@ -40,17 +39,16 @@ interface Era {
   key: string;
   name: string;
   range: string;
-  // Poem stanzas for this era's landing view. Each string is one stanza;
-  // internal line breaks are literal "\n" and rendered via CSS
-  // white-space: pre-line rather than embedded <br/> markup.
+  // Poem stanzas for this era's hero. Each string is one stanza; internal
+  // line breaks are literal "\n" and rendered via CSS white-space: pre-line
+  // rather than embedded <br/> markup.
   poem: string[];
   years: YearEntry[];
 }
 
 // Consistent monoline SVG icons (24x24 viewBox, single stroke weight) instead
 // of raw emoji — different emoji glyphs render at wildly different visual
-// sizes/baselines even at the same font-size, which is why the dots looked
-// misaligned; a shared icon style guarantees they line up.
+// sizes/baselines even at the same font-size.
 const ICONS: Record<number, string> = {
   2017: `<svg viewBox="0 0 24 24"><path d="M12 21V10"/><path d="M12 10c0-4.2-3.1-6.4-7.2-6.4 0 4.2 3.1 7.4 7.2 6.4z"/><path d="M12 10c0-4.2 3.1-6.4 7.2-6.4 0 4.2-3.1 7.4-7.2 6.4z"/></svg>`,
   2018: `<svg viewBox="0 0 24 24"><path d="M3.5 20h17"/><path d="M5 20 12 6l7 14"/><path d="M9.5 20v-5.5h5V20"/></svg>`,
@@ -171,1072 +169,652 @@ const ERAS: Era[] = [
     poem: [
       'Nine years back, ten hands and a fence line\nheld a barren field near Thakkatti behind.\nEarthwork by earthwork, one workshop, one season —\nthe soil slowly remembered its reason.',
       'A mud hut rose by hand. A wildfire came and went.\nElephants wandered through, uninvited, unbent.\nA transformer vanished one restless July night —\nstill, somehow, the years kept turning out right.',
-      'Nine winters deep in, our first true home now stands.\nTap a year below — and walk it through, hand in hand.',
+      'Nine winters deep in, our first true home now stands.\nScroll below — and walk it through, hand in hand.',
     ],
     years: FOUNDING_YEARS,
   },
   // The next era (e.g. "Growth", 2027–2036) gets appended here once it has
-  // real years/content. The moment ERAS.length > 1, the era-picker below
-  // renders automatically and each era becomes its own selectable chapter
-  // instead of one ever-lengthening row of dots.
+  // real years/content.
 ];
 
-// Swap each year's placeholder emoji for its consistent SVG icon (looked up
-// by year) so both the template below and the client script — which only
-// receives ERAS via define:vars, not this module-scope ICONS map — render
-// the same markup.
 ERAS.forEach((era) => {
   era.years.forEach((y) => {
     y.icon = ICONS[y.year];
   });
 });
----
 
-<div class="tl-root">
-  <div class="tl-app" id="tl-app">
-    <header class="tl-app-header">
-      <h1>Our Journey So Far</h1>
-    </header>
+// Flatten a year's months into one carousel card per photo (or one
+// text-only card for a photo-less month) — the same flattening the old
+// modal used, so a month with several photos doesn't need its own nested
+// scroller inside the year's carousel.
+interface YearCard {
+  month: string;
+  text: string;
+  img: string | null;
+  fit: 'cover' | 'contain';
+}
 
-    {ERAS.length > 1 && (
-      <div class="tl-era-picker" id="tl-era-picker">
-        {ERAS.map((era, ei) => (
-          <button type="button" class="tl-era-card" data-era={ei}>
-            <h2>{era.name}</h2>
-            <p>{era.range}</p>
-          </button>
-        ))}
-      </div>
-    )}
-
-    {ERAS.map((era, ei) => (
-      <div class="tl-era-panel" data-era-panel={ei} hidden={ERAS.length > 1}>
-        {ERAS.length > 1 && (
-          <button type="button" class="tl-era-back" data-era-back>← All eras</button>
-        )}
-        <div class="tl-app-poem">
-          {era.poem.map((stanza) => <p>{stanza}</p>)}
-        </div>
-        <div class="tl-connector" aria-hidden="true">
-          <span class="tl-connector-line"></span>
-          <span class="tl-connector-icon">🌱</span>
-          <span class="tl-connector-line"></span>
-        </div>
-        <p class="tl-invite" aria-hidden="true">↓ tap a year to begin ↓</p>
-        <div class="tl-stage">
-          <div class="tl-timeline-scroll">
-            <div class="tl-timeline">
-              {era.years.map((y, i) => (
-                <button type="button" class="tl-year-node" data-era={ei} data-index={i} style={`--tl-pulse-delay: ${i * 0.18}s`}>
-                  <div class="tl-dot"><span class="tl-dot-ring"></span><span class="tl-dot-icon" set:html={y.icon} /></div>
-                  <div class="tl-yr">{y.year}</div>
-                  <div class="tl-lbl">{y.summary}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    ))}
-
-    <div class="tl-hint">← scroll or swipe to see all years →</div>
-  </div>
-
-  <div class="tl-overlay" id="tl-overlay">
-    <div class="tl-modal" id="tl-modal" role="dialog" aria-modal="true">
-      <div class="tl-modal-head">
-        <div class="tl-m-icon" id="tl-m-icon"></div>
-        <div class="tl-m-titles">
-          <div class="tl-m-year" id="tl-m-year"></div>
-          <div class="tl-m-month" id="tl-m-month"></div>
-        </div>
-        <div class="tl-modal-nav">
-          <button type="button" class="tl-nav-btn" id="tl-prev-year" aria-label="Previous year">‹</button>
-          <button type="button" class="tl-nav-btn" id="tl-next-year" aria-label="Next year">›</button>
-          <button type="button" class="tl-close-btn" id="tl-close-btn" aria-label="Close">✕</button>
-        </div>
-      </div>
-      <div class="tl-modal-body">
-        <div class="tl-track-wrap" id="tl-track-wrap">
-          <div class="tl-month-track" id="tl-month-track"></div>
-          <div class="tl-car-arrows tl-month-arrows" id="tl-month-arrows">
-            <button type="button" id="tl-month-prev" aria-label="Previous month">‹</button>
-            <button type="button" id="tl-month-next" aria-label="Next month">›</button>
-          </div>
-        </div>
-      </div>
-      <div class="tl-modal-foot">
-        <div class="tl-car-dots" id="tl-month-dots"></div>
-        <span class="tl-foot-lbl" id="tl-foot-label"></span>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script define:vars={{ ERAS }}>
-  let activeEra = 0;
-  let activeYearIndex = -1;
-  let currentSlides = [];
-
-  const root = document.querySelector('.tl-root');
-  const overlay = root.querySelector('#tl-overlay');
-  const monthTrack = root.querySelector('#tl-month-track');
-  const monthDots = root.querySelector('#tl-month-dots');
-  const footLabel = root.querySelector('#tl-foot-label');
-  const mIcon = root.querySelector('#tl-m-icon');
-  const mYear = root.querySelector('#tl-m-year');
-  const mMonth = root.querySelector('#tl-m-month');
-  const prevYearBtn = root.querySelector('#tl-prev-year');
-  const nextYearBtn = root.querySelector('#tl-next-year');
-  const monthPrevBtn = root.querySelector('#tl-month-prev');
-  const monthNextBtn = root.querySelector('#tl-month-next');
-  const eraPicker = root.querySelector('#tl-era-picker');
-  const eraPanels = Array.from(root.querySelectorAll('.tl-era-panel'));
-
-  // One slide per photo (not per month) — a month with several photos used
-  // to nest its own inner carousel inside the outer month-by-month track,
-  // which meant two independent horizontal scrollers stacked on each other.
-  // Flattening every photo into its own slide on the single outer track
-  // gives one continuous, unambiguous swipe gesture for the whole year.
-  function buildSlides(y) {
-    const slides = [];
-    if (y.intro) slides.push({ label: 'Overview', year: y.year, text: y.intro, img: null });
-    y.months.forEach((mo) => {
-      const imgs = mo.imgs || [];
-      if (imgs.length === 0) {
-        slides.push({ label: mo.m, year: y.year, text: mo.t, img: null });
-        return;
-      }
-      const captions = (mo.imgCaptions && mo.imgCaptions.length === imgs.length) ? mo.imgCaptions : null;
-      imgs.forEach((src, idx) => {
-        slides.push({
-          label: mo.m,
-          year: y.year,
-          text: captions ? captions[idx] : mo.t,
-          img: src,
-          fit: (mo.imgFit && mo.imgFit[idx]) || 'cover',
-        });
+function buildYearCards(year: YearEntry): YearCard[] {
+  const cards: YearCard[] = [];
+  year.months.forEach((mo) => {
+    const imgs = mo.imgs || [];
+    if (imgs.length === 0) {
+      cards.push({ month: mo.m, text: mo.t, img: null, fit: 'cover' });
+      return;
+    }
+    const captions = mo.imgCaptions && mo.imgCaptions.length === imgs.length ? mo.imgCaptions : null;
+    imgs.forEach((src, idx) => {
+      cards.push({
+        month: mo.m,
+        text: captions ? captions[idx] : mo.t,
+        img: src,
+        fit: (mo.imgFit && mo.imgFit[idx]) || 'cover',
       });
     });
-    return slides;
-  }
+  });
+  return cards;
+}
 
-  function renderSlide(slide) {
-    if (!slide.img) {
-      return `<div class="tl-month-slide tl-no-img"><p class="tl-caption-standalone">${slide.text}</p></div>`;
-    }
-    const fitStyle = slide.fit === 'contain' ? 'object-fit:contain;background:var(--tl-sand-2);' : 'object-fit:cover;';
-    return `<div class="tl-month-slide">
-      <div class="tl-slide-media">
-        <img loading="lazy" src="${slide.img}" alt="${slide.label} photo" style="${fitStyle}">
-        <div class="tl-slide-caption"><p>${slide.text}</p></div>
+const activeEra = ERAS[0];
+const yearSections = activeEra.years.map((y) => ({
+  ...y,
+  cards: buildYearCards(y),
+}));
+---
+
+<div class="jt-root">
+  <div class="jt-rail" aria-hidden="true"><div class="jt-rail-fill" id="jt-rail-fill"></div></div>
+
+  <nav class="jt-index" id="jt-index" aria-label="Jump to a year">
+    <p class="jt-index-title">Our Journey</p>
+    {yearSections.map((y, i) => (
+      <button type="button" class="jt-index-item" data-target={`jt-y-${i}`}>
+        <span class="jt-index-num">{String(i).padStart(2, '0')}</span>
+        <span class="jt-index-dash" aria-hidden="true"></span>
+        <span class="jt-index-label">{y.year} — {y.summary}</span>
+      </button>
+    ))}
+  </nav>
+
+  <section class="jt-hero">
+    <p class="jt-hero-eyebrow">Tamarind Valley Collective · Est. {activeEra.years[0].year}</p>
+    <div class="jt-hero-poem">
+      {activeEra.poem.map((stanza) => <p>{stanza}</p>)}
+    </div>
+    <div class="jt-scroll-cue" aria-hidden="true">
+      <span class="jt-scroll-cue-line"></span>
+      Scroll
+    </div>
+  </section>
+
+  {yearSections.map((y, i) => (
+    <section class="jt-year" id={`jt-y-${i}`} data-year-index={i}>
+      <div class="jt-year-bg" aria-hidden="true">
+        {y.cards.find((c) => c.img) && <img src={y.cards.find((c) => c.img)!.img!} alt="" loading="lazy" />}
       </div>
-    </div>`;
-  }
+      <div class="jt-year-head">
+        <p class="jt-year-eyebrow" data-eyebrow={i}>{y.cards[0].month} {y.year}</p>
+        <p class="jt-year-num">{y.year}</p>
+        <p class="jt-year-summary">{y.summary}</p>
+      </div>
+      <div class="jt-carousel-wrap">
+        <div class="jt-carousel" data-carousel={i} tabindex="0" role="group" aria-label={`${y.year} months`}>
+          {y.cards.map((c) => (
+            c.img ? (
+              <div class="jt-card">
+                <img
+                  src={c.img}
+                  alt={`${c.month} ${y.year} photo`}
+                  loading="lazy"
+                  style={c.fit === 'contain' ? 'object-fit:contain;background:var(--jt-surface);' : ''}
+                />
+                <div class="jt-card-text">
+                  <p class="jt-card-month">{c.month}</p>
+                  <p class="jt-card-body">{c.text}</p>
+                </div>
+              </div>
+            ) : (
+              <div class="jt-card jt-card--no-photo">
+                <div class="jt-card-text">
+                  <p class="jt-card-month">{c.month}</p>
+                  <p class="jt-card-body">{c.text}</p>
+                </div>
+              </div>
+            )
+          ))}
+        </div>
+        <div class="jt-carousel-controls">
+          <button type="button" class="jt-car-btn" data-prev={i} aria-label={`Previous month in ${y.year}`}>‹</button>
+          <button type="button" class="jt-car-btn" data-next={i} aria-label={`Next month in ${y.year}`}>›</button>
+          <div class="jt-car-dots" data-dots={i}>
+            {y.cards.map((_, ci) => <span class={ci === 0 ? 'on' : ''}></span>)}
+          </div>
+        </div>
+      </div>
+    </section>
+  ))}
+</div>
 
-  // Briefly highlights an element when the text it just received differs
-  // from what it showed before — a quick fade/slide-in "pop" so a month or
-  // year change registers even when the user's eyes are on the photo, not
-  // the header. Restarting a CSS animation requires a reflow in between
-  // removing and re-adding the class, otherwise the browser no-ops it.
-  function flashHeader(el) {
-    el.classList.remove('tl-flash');
-    void el.offsetWidth;
-    el.classList.add('tl-flash');
-  }
+<script>
+  const root = document.querySelector('.jt-root')!;
+  const railFill = root.querySelector('#jt-rail-fill') as HTMLElement;
+  const indexItems = Array.from(root.querySelectorAll('.jt-index-item')) as HTMLButtonElement[];
+  const yearSectionEls = Array.from(root.querySelectorAll('.jt-year')) as HTMLElement[];
 
-  function updateMonthUI() {
-    const w = monthTrack.clientWidth || 1;
-    const i = Math.max(0, Math.min(currentSlides.length - 1, Math.round(monthTrack.scrollLeft / w)));
-    monthDots.querySelectorAll('span').forEach((d, idx) => d.classList.toggle('on', idx === i));
-
-    const slide = currentSlides[i];
-    const monthLabel = slide ? slide.label : '';
-    const yearLabel = slide ? String(slide.year) : '';
-    if (monthLabel && monthLabel !== mMonth.textContent) {
-      mMonth.textContent = monthLabel;
-      flashHeader(mMonth);
-    }
-    if (yearLabel && yearLabel !== mYear.textContent) {
-      mYear.textContent = yearLabel;
-      flashHeader(mYear);
-    }
-
-    footLabel.textContent = `${i + 1} / ${currentSlides.length}`;
-    // Only disable at a true dead end (first month of the first year, or
-    // last month of the last year) — otherwise stepMonth() should be able
-    // to carry the button click across into the next/previous year, and a
-    // disabled button never fires a click at all.
-    monthPrevBtn.disabled = i === 0 && activeYearIndex === 0;
-    monthNextBtn.disabled = i === currentSlides.length - 1 && activeYearIndex === ERAS[activeEra].years.length - 1;
-  }
-
-  function goToMonth(i) {
-    i = Math.max(0, Math.min(currentSlides.length - 1, i));
-    monthTrack.scrollTo({ left: monthTrack.clientWidth * i, behavior: 'smooth' });
-  }
-
-  function openYear(eraIdx, i, atEnd) {
-    activeEra = eraIdx;
-    activeYearIndex = i;
-    const y = ERAS[eraIdx].years[i];
-    root.classList.add('engaged');
-    root.querySelectorAll('.tl-year-node').forEach((n) => n.classList.remove('active'));
-    root.querySelector(`.tl-year-node[data-era="${eraIdx}"][data-index="${i}"]`).classList.add('active');
-
-    mIcon.innerHTML = y.icon;
-    mYear.textContent = y.year;
-    flashHeader(mYear);
-
-    currentSlides = buildSlides(y);
-    monthTrack.innerHTML = currentSlides.map(renderSlide).join('');
-
-    const landingSlide = atEnd ? currentSlides[currentSlides.length - 1] : currentSlides[0];
-    mMonth.textContent = landingSlide ? landingSlide.label : '';
-    flashHeader(mMonth);
-
-    monthDots.innerHTML = currentSlides.map((_, idx) => `<span class="${idx === 0 ? 'on' : ''}"></span>`).join('');
-
-    prevYearBtn.disabled = i === 0;
-    nextYearBtn.disabled = i === ERAS[eraIdx].years.length - 1;
-
-    overlay.classList.add('open');
-
-    // Landing on a year via "slide past the edge into the previous year"
-    // should drop you on its LAST month, so continuing to swipe backward
-    // reads as one continuous motion rather than restarting from January.
-    requestAnimationFrame(() => {
-      const targetIndex = atEnd ? currentSlides.length - 1 : 0;
-      monthTrack.scrollTo({ left: monthTrack.clientWidth * targetIndex, behavior: 'auto' });
-      updateMonthUI();
-    });
-
-    const activeNode = root.querySelector(`.tl-year-node[data-era="${eraIdx}"][data-index="${i}"]`);
-    activeNode.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-  }
-
-  // Shared by the month arrow buttons, the keyboard, and touch-swipe: step
-  // one month in `delta`'s direction, but if that would go past the first
-  // or last month of the current year, cross into the adjacent year instead
-  // (landing on its last month when stepping backward) — so browsing feels
-  // like one continuous timeline instead of a wall you hit at each year's
-  // edge and have to close the modal to get past.
-  function stepMonth(delta) {
-    const w = monthTrack.clientWidth || 1;
-    const i = Math.round(monthTrack.scrollLeft / w);
-    const next = i + delta;
-    if (next < 0) {
-      if (activeYearIndex > 0) openYear(activeEra, activeYearIndex - 1, true);
-    } else if (next > currentSlides.length - 1) {
-      if (activeYearIndex < ERAS[activeEra].years.length - 1) openYear(activeEra, activeYearIndex + 1, false);
-    } else {
-      goToMonth(next);
-    }
-  }
-
-  function closeModal() {
-    overlay.classList.remove('open');
-    root.querySelectorAll('.tl-year-node').forEach((n) => n.classList.remove('active'));
-    activeYearIndex = -1;
-  }
-
-  root.querySelectorAll('.tl-year-node').forEach((node) => {
-    node.addEventListener('click', () => openYear(Number(node.dataset.era), Number(node.dataset.index)));
-  });
-
-  monthTrack.addEventListener('scroll', () => {
-    window.clearTimeout(monthTrack._t);
-    monthTrack._t = window.setTimeout(updateMonthUI, 60);
-  });
-  monthPrevBtn.addEventListener('click', () => stepMonth(-1));
-  monthNextBtn.addEventListener('click', () => stepMonth(1));
-
-  // Touch swipe past the first/last month crosses into the adjacent year.
-  // Only fires at the boundary slide and only for a deliberate over-swipe
-  // (past a distance threshold) in the direction that would otherwise do
-  // nothing, so it doesn't interfere with normal swiping between months.
-  let monthTouchStartX = 0;
-  monthTrack.addEventListener('touchstart', (e) => {
-    monthTouchStartX = e.touches[0].clientX;
-  }, { passive: true });
-  monthTrack.addEventListener('touchend', (e) => {
-    const dx = e.changedTouches[0].clientX - monthTouchStartX;
-    const w = monthTrack.clientWidth || 1;
-    const i = Math.round(monthTrack.scrollLeft / w);
-    const threshold = 40;
-    if (i === 0 && dx > threshold) {
-      if (activeYearIndex > 0) openYear(activeEra, activeYearIndex - 1, true);
-    } else if (i === currentSlides.length - 1 && dx < -threshold) {
-      if (activeYearIndex < ERAS[activeEra].years.length - 1) openYear(activeEra, activeYearIndex + 1, false);
-    }
-  }, { passive: true });
-
-  root.querySelector('#tl-close-btn').addEventListener('click', closeModal);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
-  prevYearBtn.addEventListener('click', () => { if (activeYearIndex > 0) openYear(activeEra, activeYearIndex - 1); });
-  nextYearBtn.addEventListener('click', () => { if (activeYearIndex < ERAS[activeEra].years.length - 1) openYear(activeEra, activeYearIndex + 1); });
-
-  document.addEventListener('keydown', (e) => {
-    if (!overlay.classList.contains('open')) return;
-    if (e.key === 'Escape') closeModal();
-    if (e.key === 'ArrowRight') stepMonth(1);
-    if (e.key === 'ArrowLeft') stepMonth(-1);
-  });
-
-  window.addEventListener('resize', () => {
-    if (overlay.classList.contains('open')) {
-      const w = monthTrack.clientWidth || 1;
-      const i = Math.round(monthTrack.scrollLeft / w);
-      monthTrack.scrollTo({ left: w * i, behavior: 'auto' });
-    }
-  });
-
-  // Era picker: only present in the DOM when there's more than one era with
-  // content (see the ERAS.length > 1 guards in the template above).
-  eraPicker?.querySelectorAll('.tl-era-card').forEach((card) => {
-    card.addEventListener('click', () => {
-      const ei = Number(card.dataset.era);
-      eraPicker.hidden = true;
-      eraPanels.forEach((p) => { p.hidden = Number(p.dataset.eraPanel) !== ei; });
+  indexItems.forEach((item) => {
+    item.addEventListener('click', () => {
+      document.getElementById(item.dataset.target!)?.scrollIntoView({ behavior: 'smooth' });
     });
   });
-  root.querySelectorAll('[data-era-back]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      eraPanels.forEach((p) => { p.hidden = true; });
-      if (eraPicker) eraPicker.hidden = false;
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        const idx = yearSectionEls.indexOf(entry.target as HTMLElement);
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in-view');
+          indexItems.forEach((it) => it.classList.remove('active'));
+          indexItems[idx]?.classList.add('active');
+        }
+      });
+    },
+    { threshold: 0.5 },
+  );
+  yearSectionEls.forEach((s) => observer.observe(s));
+
+  window.addEventListener(
+    'scroll',
+    () => {
+      const total = document.documentElement.scrollHeight - window.innerHeight;
+      const pct = total > 0 ? Math.min(100, Math.max(0, (window.scrollY / total) * 100)) : 0;
+      if (railFill) railFill.style.height = `${pct}%`;
+    },
+    { passive: true },
+  );
+
+  // Per-year carousel: scroll-snap track + arrows + dots + a synced
+  // "current month" eyebrow label, mirroring the old modal's month
+  // carousel but living inline instead of behind a click.
+  yearSectionEls.forEach((section, yi) => {
+    const carEl = section.querySelector(`[data-carousel="${yi}"]`) as HTMLElement;
+    const dotsEl = section.querySelector(`[data-dots="${yi}"]`) as HTMLElement;
+    const eyebrowEl = section.querySelector(`[data-eyebrow="${yi}"]`) as HTMLElement;
+    const prevBtn = section.querySelector(`[data-prev="${yi}"]`) as HTMLButtonElement;
+    const nextBtn = section.querySelector(`[data-next="${yi}"]`) as HTMLButtonElement;
+    const cards = Array.from(carEl.children) as HTMLElement[];
+    const months = cards.map((c) => c.querySelector('.jt-card-month')?.textContent || '');
+
+    function currentIndex(): number {
+      const w = cards[0].getBoundingClientRect().width + 16;
+      return Math.max(0, Math.min(cards.length - 1, Math.round(carEl.scrollLeft / w)));
+    }
+
+    function goTo(i: number) {
+      i = Math.max(0, Math.min(cards.length - 1, i));
+      const w = cards[0].getBoundingClientRect().width + 16;
+      // 'smooth' here fights this track's scroll-snap-type: mandatory —
+      // the snap machinery can cancel the animation mid-flight and leave
+      // scrollLeft unchanged. 'auto' sidesteps it; native swipe/trackpad
+      // scrolling still feels smooth via the snap points themselves.
+      carEl.scrollTo({ left: w * i, behavior: 'auto' });
+    }
+
+    function updateUI() {
+      const i = currentIndex();
+      dotsEl.querySelectorAll('span').forEach((d, di) => d.classList.toggle('on', di === i));
+      const yearLabel = section.querySelector('.jt-year-num')?.textContent || '';
+      eyebrowEl.textContent = `${months[i]} ${yearLabel}`;
+      prevBtn.disabled = i === 0;
+      nextBtn.disabled = i === cards.length - 1;
+    }
+
+    let scrollTimer: number;
+    carEl.addEventListener(
+      'scroll',
+      () => {
+        window.clearTimeout(scrollTimer);
+        scrollTimer = window.setTimeout(updateUI, 60);
+      },
+      { passive: true },
+    );
+
+    prevBtn.addEventListener('click', () => goTo(currentIndex() - 1));
+    nextBtn.addEventListener('click', () => goTo(currentIndex() + 1));
+
+    carEl.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') goTo(currentIndex() + 1);
+      if (e.key === 'ArrowLeft') goTo(currentIndex() - 1);
     });
+
+    updateUI();
   });
 </script>
 
-<style>
-  .tl-root {
-    /* Mapped onto the site's own design tokens (src/styles/global.css)
-       rather than bespoke colors, so this reads as part of the same
-       site instead of an embedded widget with its own palette. */
-    --tl-green-dark: var(--tvc-green-dark);
-    --tl-green: var(--tvc-green);
-    --tl-green-light: color-mix(in srgb, var(--tvc-green) 45%, white);
-    --tl-sand: var(--tvc-cream);
-    --tl-sand-2: var(--tvc-line);
-    --tl-brown: var(--tvc-orange);
-    --tl-ink: var(--tvc-ink);
-    --tl-muted: var(--tvc-ink-soft);
-    --tl-white: #fff;
+<style define:vars={{
+  'jt-green': 'var(--tvc-green)',
+  'jt-orange': 'var(--tvc-orange)',
+}}>
+  /* This page commits deliberately to its own dark, immersive palette —
+     distinct from the site's usual cream editorial pages — the way this
+     feature has its own "chapter" feel. Accent colors still map onto the
+     site's real green/orange tokens so it doesn't feel like an unrelated
+     embedded widget; only the ground (near-black vs. cream) is different. */
+  .jt-root {
+    --jt-bg: #0e1710;
+    --jt-bg-soft: #14201a;
+    --jt-surface: #1c2a21;
+    --jt-line: rgba(251, 250, 246, 0.14);
+    --jt-cream: #fbfaf6;
+    --jt-text-soft: rgba(251, 250, 246, 0.6);
 
-    height: 100%;
-    display: flex;
-    flex-direction: column;
+    position: relative;
+    background: var(--jt-bg);
+    color: var(--jt-cream);
     font-family: var(--font-body);
-    color: var(--tl-ink);
   }
 
-  .tl-app {
-    flex: 1 1 auto;
-    min-height: 0;
+  /* ---------- Sidebar index ---------- */
+  .jt-index {
+    position: fixed;
+    left: 40px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 50;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    background: var(--tl-sand);
+    gap: 2px;
   }
 
-  .tl-app-header {
-    flex: 0 0 auto;
-    text-align: center;
-    padding: clamp(10px, 2.5vh, 22px) 12px clamp(4px, 1vh, 8px);
-  }
-
-  .tl-app-header h1 {
-    margin: 0;
-    font-size: clamp(20px, 4vw, 32px);
-    font-weight: 700;
-    color: var(--tl-green-dark);
-    letter-spacing: 0.5px;
+  .jt-index-title {
     font-family: var(--font-display);
+    font-style: italic;
+    font-size: 13px;
+    color: var(--jt-text-soft);
+    margin: 0 0 16px;
   }
 
-  .tl-era-picker {
-    flex: 1 1 auto;
-    min-height: 0;
+  .jt-index-item {
     display: flex;
     align-items: center;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: clamp(16px, 3vw, 28px);
-    padding: 16px;
-  }
-
-  .tl-era-picker[hidden] {
-    display: none;
-  }
-
-  .tl-era-card {
-    appearance: none;
-    background: var(--tl-white);
-    border: 2px solid var(--tl-green-light);
-    border-radius: 16px;
-    padding: 24px 30px;
-    min-width: 180px;
-    text-align: center;
+    gap: 12px;
+    padding: 7px 0;
     cursor: pointer;
-    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
-  }
-
-  .tl-era-card:hover {
-    transform: translateY(-3px);
-    border-color: #f78520;
-    box-shadow: 0 8px 20px rgba(247, 133, 32, 0.18);
-  }
-
-  .tl-era-card h2 {
-    margin: 0 0 4px;
-    font-family: var(--font-display, inherit);
-    font-size: 20px;
-    color: var(--tl-green-dark);
-  }
-
-  .tl-era-card p {
-    margin: 0;
-    font-size: 13px;
-    color: var(--tl-muted);
-  }
-
-  .tl-era-panel {
-    flex: 1 1 auto;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .tl-era-panel[hidden] {
-    display: none;
-  }
-
-  .tl-era-back {
-    appearance: none;
+    opacity: 0.4;
+    transition: opacity 0.35s ease;
     background: none;
     border: none;
-    align-self: center;
-    color: var(--tl-muted);
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    padding: 4px 8px;
-    margin-bottom: 2px;
+    color: inherit;
+    font: inherit;
+    text-align: left;
   }
 
-  .tl-era-back:hover {
-    color: #f78520;
-  }
+  .jt-index-item.active { opacity: 1; }
 
-  .tl-app-poem {
+  .jt-index-num {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--jt-text-soft);
+    width: 34px;
     flex: 0 0 auto;
-    max-width: 560px;
-    margin: 0 auto;
-    padding: 0 clamp(16px, 4vw, 24px);
+    transition: color 0.35s ease;
+  }
+
+  .jt-index-item.active .jt-index-num { color: var(--jt-orange); }
+
+  .jt-index-dash {
+    width: 14px;
+    height: 1px;
+    background: var(--jt-line);
+    transition: width 0.35s ease, background 0.35s ease;
+    flex: 0 0 auto;
+  }
+
+  .jt-index-item.active .jt-index-dash {
+    width: 26px;
+    background: var(--jt-green);
+  }
+
+  .jt-index-label {
+    font-size: 12px;
+    color: var(--jt-cream);
+    white-space: nowrap;
+  }
+
+  @media (max-width: 980px) {
+    .jt-index { display: none; }
+  }
+
+  /* ---------- Progress rail ---------- */
+  .jt-rail {
+    position: fixed;
+    right: 28px;
+    top: 12%;
+    bottom: 12%;
+    width: 2px;
+    background: var(--jt-line);
+    z-index: 50;
+  }
+
+  .jt-rail-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: linear-gradient(to bottom, var(--jt-green), var(--jt-orange));
+    height: 0%;
+    transition: height 0.15s linear;
+  }
+
+  @media (max-width: 980px) {
+    .jt-rail { display: none; }
+  }
+
+  /* ---------- Hero ---------- */
+  .jt-hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     text-align: center;
-    font-family: var(--font-display, inherit);
+    padding: 90px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .jt-hero::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 30%, rgba(76, 168, 107, 0.18), transparent 60%);
+  }
+
+  .jt-hero-eyebrow {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--jt-orange);
+    margin: 0 0 30px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .jt-hero-poem {
+    max-width: 560px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .jt-hero-poem p {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: clamp(17px, 2.4vw, 22px);
+    line-height: 1.55;
+    color: var(--jt-cream);
+    white-space: pre-line;
+    margin: 0 0 22px;
+  }
+
+  .jt-hero-poem p:last-child {
+    margin-bottom: 0;
+    color: var(--jt-green);
+    font-weight: 600;
+    font-style: normal;
+  }
+
+  .jt-scroll-cue {
+    margin-top: 46px;
+    font-size: 12px;
+    color: var(--jt-text-soft);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .jt-scroll-cue-line {
+    width: 1px;
+    height: 40px;
+    background: linear-gradient(to bottom, var(--jt-green), transparent);
+    animation: jt-cue-move 1.8s ease-in-out infinite;
+  }
+
+  @keyframes jt-cue-move {
+    0% { transform: scaleY(0); transform-origin: top; }
+    50% { transform: scaleY(1); transform-origin: top; }
+    50.01% { transform-origin: bottom; }
+    100% { transform: scaleY(0); transform-origin: bottom; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .jt-scroll-cue-line { animation: none; transform: scaleY(1); }
+  }
+
+  /* ---------- Year sections ---------- */
+  .jt-year {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 34px;
+    position: relative;
+    padding: 90px 40px 70px min(260px, 20vw);
+    border-top: 1px solid var(--jt-line);
+    overflow: hidden;
+  }
+
+  @media (max-width: 980px) {
+    .jt-year { padding: 70px 24px; }
+  }
+
+  .jt-year-bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+
+  .jt-year-bg img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.18;
+    filter: saturate(0.7) contrast(1.05);
+    transform: scale(1.08);
+    transition: transform 8s ease;
+  }
+
+  .jt-year.in-view .jt-year-bg img { transform: scale(1); }
+
+  .jt-year-bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, var(--jt-bg) 8%, rgba(14, 23, 16, 0.6) 50%, rgba(14, 23, 16, 0.25) 100%);
+  }
+
+  .jt-year-head {
+    position: relative;
+    z-index: 1;
+    max-width: 640px;
+  }
+
+  .jt-year-eyebrow {
+    font-size: 12px;
+    color: var(--jt-orange);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin: 0 0 8px;
+    font-weight: 700;
+  }
+
+  .jt-year-num {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(52px, 8.5vw, 112px);
+    line-height: 0.95;
+    color: var(--jt-cream);
+    margin: 0 0 6px;
+    opacity: 0.96;
+  }
+
+  .jt-year-summary {
+    font-family: var(--font-display);
+    font-size: clamp(20px, 2.6vw, 27px);
+    color: var(--jt-green);
+    margin: 0;
     font-style: italic;
   }
 
-  .tl-app-poem p {
-    margin: 0 0 clamp(8px, 1.4vh, 12px);
-    font-size: clamp(13px, 1.7vw, 15.5px);
-    line-height: 1.55;
-    color: var(--tl-ink);
-    white-space: pre-line;
-  }
-
-  .tl-app-poem p:last-child {
-    margin-bottom: 0;
-    color: var(--tl-green-dark);
-    font-weight: 600;
-  }
-
-  .tl-connector {
-    flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    max-width: 280px;
-    margin: clamp(10px, 2vh, 18px) auto;
-    padding: 0 16px;
-  }
-
-  .tl-connector-line {
-    flex: 1 1 auto;
-    height: 1px;
-    background: linear-gradient(to right, transparent, var(--tl-green-light));
-  }
-
-  .tl-connector-line + .tl-connector-icon + .tl-connector-line {
-    background: linear-gradient(to left, transparent, var(--tl-green-light));
-  }
-
-  .tl-connector-icon {
-    flex: 0 0 auto;
-    font-size: 16px;
-    line-height: 1;
-  }
-
-  .tl-stage {
-    flex: 1 1 auto;
-    min-height: 0;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding-top: clamp(4px, 1vh, 12px);
-    position: relative;
-  }
-
-  .tl-timeline-scroll {
-    width: 100%;
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    scroll-snap-type: x proximity;
-    padding: 0 6vw;
-  }
-
-  .tl-timeline-scroll::-webkit-scrollbar {
-    height: 6px;
-  }
-
-  .tl-timeline-scroll::-webkit-scrollbar-thumb {
-    background: var(--tl-green-light);
-    border-radius: 4px;
-  }
-
-  .tl-timeline {
-    position: relative;
-    display: flex;
-    align-items: center;
-    min-width: max-content;
-    gap: clamp(18px, 3.4vw, 48px);
-    padding: clamp(30px, 7vh, 60px) 4px clamp(50px, 9vh, 80px);
-  }
-
-  .tl-timeline::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 50%;
-    height: 3px;
-    background: linear-gradient(to right, var(--tl-green-light), var(--tl-green), var(--tl-green-light));
-    transform: translateY(-50%);
-    z-index: 0;
-    border-radius: 3px;
-  }
-
-  .tl-year-node {
+  /* ---------- Month carousel ---------- */
+  .jt-carousel-wrap {
     position: relative;
     z-index: 1;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .jt-carousel {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    cursor: pointer;
-    width: clamp(64px, 9vw, 92px);
-    scroll-snap-align: center;
-    background: none;
-    border: none;
-    font: inherit;
-    color: inherit;
-    padding: 0;
-  }
-
-  .tl-year-node .tl-dot {
-    position: relative;
-    width: clamp(50px, 7vw, 68px);
-    height: clamp(50px, 7vw, 68px);
-    border-radius: 50%;
-    background: var(--tl-white);
-    border: 3px solid var(--tl-green);
-    color: var(--tl-green-dark);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, color 0.18s ease;
-  }
-
-  .tl-dot-icon {
-    display: flex;
-    line-height: 0;
-  }
-
-  .tl-dot-icon :global(svg) {
-    width: clamp(22px, 3.2vw, 30px);
-    height: clamp(22px, 3.2vw, 30px);
-    stroke: currentColor;
-    fill: none;
-    stroke-width: 1.7;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    display: block;
-  }
-
-  .tl-dot-ring {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    border: 2px solid #f78520;
-    animation: tl-pulse-ring 2.6s ease-out infinite;
-    animation-delay: var(--tl-pulse-delay, 0s);
-    pointer-events: none;
-  }
-
-  @keyframes tl-pulse-ring {
-    0% {
-      transform: scale(1);
-      opacity: 0.65;
-    }
-    75% {
-      transform: scale(1.55);
-      opacity: 0;
-    }
-    100% {
-      transform: scale(1.55);
-      opacity: 0;
-    }
-  }
-
-  .tl-root.engaged .tl-dot-ring {
-    animation: none;
-    display: none;
-  }
-
-  .tl-year-node .tl-yr {
-    margin-top: 8px;
-    font-size: clamp(12px, 1.7vw, 14px);
-    font-weight: 700;
-    color: var(--tl-green-dark);
-  }
-
-  .tl-year-node .tl-lbl {
-    margin-top: 2px;
-    font-size: clamp(10px, 1.5vw, 12px);
-    color: var(--tl-muted);
-    text-align: center;
-    line-height: 1.2;
-    max-width: 90px;
-    /* .tl-timeline centers each node vertically as a whole flex item —
-       a summary that wraps to 2 lines (e.g. "Foundations laid") makes
-       that node taller than its one-line siblings, so centering shifts
-       its dot upward off the shared wire line. Reserving 2 lines' worth
-       of height for every label keeps every node's total height equal
-       regardless of wrap, so every dot lands on the line. */
-    min-height: 2.4em;
-  }
-
-  .tl-year-node:hover .tl-dot {
-    transform: translateY(-4px) scale(1.08);
-    border-color: #f78520;
-    box-shadow: 0 6px 16px rgba(247, 133, 32, 0.28);
-  }
-
-  .tl-year-node:active .tl-dot {
-    transform: translateY(-1px) scale(0.98);
-  }
-
-  .tl-year-node.active .tl-dot {
-    background: var(--tl-green);
-    color: var(--tl-white);
-    transform: scale(1.12) translateY(-4px);
-    box-shadow: 0 4px 14px rgba(47, 74, 60, 0.35);
-  }
-
-  .tl-year-node.active .tl-yr {
-    color: var(--tl-brown);
-  }
-
-  .tl-hint {
-    flex: 0 0 auto;
-    text-align: center;
-    font-size: 11.5px;
-    color: var(--tl-muted);
-    padding-bottom: 6px;
-  }
-
-  .tl-invite {
-    flex: 0 0 auto;
-    margin: 0 0 4px;
-    text-align: center;
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    color: #f78520;
-    animation: tl-bounce 1.8s ease-in-out infinite;
-    transition: opacity 0.3s ease, height 0.3s ease, margin 0.3s ease;
-  }
-
-  @keyframes tl-bounce {
-    0%, 100% {
-      transform: translateY(0);
-    }
-    50% {
-      transform: translateY(4px);
-    }
-  }
-
-  .tl-root.engaged .tl-invite {
-    opacity: 0;
-    height: 0;
-    margin: 0;
-    overflow: hidden;
-    animation: none;
-  }
-</style>
-
-<style is:global>
-  .tl-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(30, 28, 22, 0.55);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 200;
-    padding: 16px;
-  }
-
-  .tl-overlay.open {
-    display: flex;
-  }
-
-  .tl-modal {
-    background: var(--tl-white, #fffdf9);
-    /* Previously capped at a flat 640x640 regardless of viewport, which
-       left it looking small and boxed-in on large desktop screens. Scaling
-       with clamp() lets it grow with the window (up to a sensible max, so
-       it doesn't sprawl absurdly wide on ultrawide monitors) while the
-       640px floor keeps it exactly as it was on small windows. */
-    width: clamp(min(640px, 100%), 55vw, 960px);
-    height: clamp(min(600px, 86vh, 86dvh), 80vh, 840px);
-    border-radius: 18px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
-  }
-
-  .tl-modal-head {
-    position: relative;
-    flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 14px 16px;
-    background: var(--tl-green-dark, #2f4a3c);
-    color: var(--tl-white, #fffdf9);
-  }
-
-  .tl-modal-head .tl-m-icon {
-    display: flex;
-    line-height: 0;
-    flex: 0 0 auto;
-  }
-
-  .tl-modal-head .tl-m-icon svg {
-    width: 26px;
-    height: 26px;
-    stroke: currentColor;
-    fill: none;
-    stroke-width: 1.7;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    display: block;
-  }
-
-  .tl-modal-nav {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex: 0 0 auto;
-  }
-
-  /* The one place month/year is shown — centered across the whole header
-     bar (not just the space between the icon and buttons) via absolute
-     positioning, since the icon and button-group widths differ and a
-     flex-centered middle column would drift off true-center otherwise.
-     This header is the only fixed element while photos scroll underneath,
-     so it's the one spot that's always in view. */
-  .tl-modal-head .tl-m-titles {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    text-align: center;
-    pointer-events: none;
-  }
-
-  .tl-modal-head .tl-m-year {
-    font-size: 19px;
-    font-weight: 700;
-  }
-
-  .tl-modal-head .tl-m-month {
-    font-size: 14px;
-    font-weight: 700;
-    color: #ffd8a8;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  /* Quick fade/slide-in "pop" so a month or year change registers even
-     when the user's eyes are on the photo, not the header text. */
-  @keyframes tl-header-flash {
-    0% {
-      opacity: 0.25;
-      transform: translateY(-3px);
-    }
-    100% {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .tl-m-year.tl-flash,
-  .tl-m-month.tl-flash {
-    animation: tl-header-flash 0.4s ease-out;
-  }
-
-  .tl-nav-btn {
-    background: rgba(255, 255, 255, 0.15);
-    border: none;
-    color: var(--tl-white, #fffdf9);
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    font-size: 16px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 auto;
-  }
-
-  .tl-nav-btn:hover {
-    background: rgba(255, 255, 255, 0.3);
-  }
-
-  .tl-nav-btn:disabled {
-    opacity: 0.3;
-    cursor: default;
-  }
-
-  .tl-close-btn {
-    background: rgba(255, 255, 255, 0.15);
-    border: none;
-    color: var(--tl-white, #fffdf9);
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    font-size: 17px;
-    cursor: pointer;
-    flex: 0 0 auto;
-  }
-
-  .tl-close-btn:hover {
-    background: rgba(255, 255, 255, 0.3);
-  }
-
-  .tl-modal-body {
-    flex: 1 1 auto;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    padding: 0;
-    overflow: hidden;
-  }
-
-  .tl-track-wrap {
-    flex: 1 1 auto;
-    min-height: 0;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .tl-month-track {
-    height: 100%;
-    display: flex;
+    gap: 16px;
     overflow-x: auto;
-    overflow-y: hidden;
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
+    padding: 4px 4px 10px;
     scrollbar-width: none;
-  }
-
-  .tl-month-track::-webkit-scrollbar {
-    display: none;
-  }
-
-  .tl-month-slide {
-    flex: 0 0 100%;
+    width: 100%;
     min-width: 0;
-    height: 100%;
-    scroll-snap-align: center;
-    box-sizing: border-box;
-    padding: 14px 14px 6px;
-    display: flex;
-    flex-direction: column;
   }
 
-  .tl-month-slide.tl-no-img {
-    justify-content: center;
-    padding: 14px 24px;
+  .jt-carousel::-webkit-scrollbar { display: none; }
+
+  .jt-carousel:focus-visible {
+    outline: 2px solid var(--jt-orange);
+    outline-offset: 4px;
   }
 
-  /* The photo fills the slide; the narration sits directly on top of it as
-     a caption bar rather than in a separate text block above — captions
-     placed apart from the photo were easy to skip past while swiping, since
-     attention was on the image. Anchoring the text to the photo itself
-     means it's seen together with it, not instead of it. */
-  .tl-slide-media {
-    position: relative;
-    flex: 1 1 auto;
-    min-height: 0;
-    border-radius: 12px;
+  .jt-card {
+    flex: 0 0 auto;
+    width: min(300px, 74vw);
+    height: 260px;
+    border-radius: 10px;
     overflow: hidden;
-    background: var(--tl-sand-2, #efe7d6);
+    position: relative;
+    scroll-snap-align: start;
+    background: var(--jt-bg-soft);
+    border: 1px solid var(--jt-line);
   }
 
-  .tl-slide-media img {
+  .jt-card img {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
-    display: block;
+    object-fit: cover;
   }
 
-  .tl-slide-caption {
+  .jt-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(8, 12, 7, 0.92) 0%, rgba(8, 12, 7, 0.25) 55%, rgba(8, 12, 7, 0) 78%);
+  }
+
+  .jt-card-text {
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-    padding: 34px 14px 12px;
-    background: linear-gradient(to top, rgba(20, 24, 18, 0.78), rgba(20, 24, 18, 0));
-  }
-
-  .tl-slide-caption p {
-    margin: 0;
-    color: #fff;
-    font-size: 14px;
-    font-weight: 500;
-    line-height: 1.45;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
-  }
-
-  /* Month slides with no photo (e.g. "power reached TVC" with no image on
-     file) fall back to plain narration text, styled a little larger since
-     it's carrying the whole slide on its own. */
-  .tl-caption-standalone {
-    margin: 0;
-    text-align: center;
-    font-size: 15.5px;
-    line-height: 1.6;
-    color: var(--tl-ink, #2b2a26);
-  }
-
-  .tl-car-arrows {
-    position: absolute;
-    top: 50%;
-    left: 0;
-    right: 0;
-    display: flex;
-    justify-content: space-between;
-    transform: translateY(-50%);
-    pointer-events: none;
-    padding: 0 4px;
     z-index: 2;
+    padding: 16px;
   }
 
-  .tl-car-arrows button {
-    pointer-events: auto;
-    width: 28px;
-    height: 28px;
+  .jt-card-month {
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--jt-orange);
+    margin: 0 0 6px;
+    font-weight: 700;
+  }
+
+  .jt-card-body {
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: rgba(251, 250, 246, 0.9);
+    margin: 0;
+  }
+
+  /* No-photo card: no image layer, a textured solid ground instead, and
+     the narration becomes the whole card rather than a caption pinned to
+     a photo. */
+  .jt-card--no-photo {
+    background: radial-gradient(ellipse at 30% 30%, rgba(76, 168, 107, 0.28), transparent 65%), var(--tvc-green-dark, #0f5029);
+    display: flex;
+    align-items: flex-end;
+  }
+
+  .jt-card--no-photo::after { display: none; }
+
+  .jt-card--no-photo .jt-card-text { position: static; padding: 20px; }
+
+  .jt-card--no-photo .jt-card-body {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 14px;
+    color: var(--jt-cream);
+  }
+
+  .jt-carousel-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .jt-car-btn {
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
-    border: none;
-    background: rgba(0, 0, 0, 0.45);
-    color: #fff;
+    border: 1px solid var(--jt-line);
+    background: rgba(251, 250, 246, 0.06);
+    color: var(--jt-cream);
     font-size: 14px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-  }
-
-  #tl-month-arrows button {
-    width: 34px;
-    height: 34px;
-    font-size: 17px;
-    background: rgba(47, 74, 60, 0.55);
-  }
-
-  .tl-car-dots {
     flex: 0 0 auto;
-    display: flex;
-    justify-content: center;
-    gap: 5px;
-    margin-top: 6px;
+    transition: background 0.2s ease, border-color 0.2s ease;
   }
 
-  .tl-car-dots span {
+  .jt-car-btn:hover { background: rgba(251, 250, 246, 0.14); border-color: var(--jt-green); }
+
+  .jt-car-btn:disabled { opacity: 0.3; cursor: default; }
+
+  .jt-car-dots {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+  }
+
+  .jt-car-dots span {
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--tl-green-light, #8fb89b);
-    opacity: 0.5;
+    background: var(--jt-line);
+    transition: background 0.2s ease, transform 0.2s ease;
   }
 
-  .tl-car-dots span.on {
-    opacity: 1;
-    background: var(--tl-green, #4c7a5f);
-  }
-
-  .tl-modal-foot {
-    flex: 0 0 auto;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 18px 10px;
-    border-top: 1px solid var(--tl-sand-2, #efe7d6);
-    background: var(--tl-white, #fffdf9);
-  }
-
-  #tl-month-dots span {
-    width: 8px;
-    height: 8px;
-    background: var(--tl-sand-2, #efe7d6);
-    border: 1px solid var(--tl-brown, #7a5c3e);
-    opacity: 1;
-  }
-
-  #tl-month-dots span.on {
-    background: var(--tl-brown, #7a5c3e);
-  }
-
-  #tl-month-dots {
-    margin-top: 0;
-  }
-
-  .tl-foot-lbl {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--tl-brown, #7a5c3e);
-    white-space: nowrap;
-  }
-
-  @media (max-width: 520px) {
-    .tl-modal {
-      width: 100%;
-      height: 92dvh;
-      max-height: 92dvh;
-      border-radius: 14px 14px 0 0;
-      align-self: flex-end;
-    }
-
-    .tl-overlay {
-      align-items: flex-end;
-      padding: 0;
-    }
+  .jt-car-dots span.on {
+    background: var(--jt-orange);
+    transform: scale(1.3);
   }
 </style>
