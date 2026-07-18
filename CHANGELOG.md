@@ -11,6 +11,39 @@
 
 ---
 
+### 2026-07-18 06:58 — Redesign the Our Journey timeline as a full-bleed scrollytelling page
+**Requested by:** Sharath Jeppu
+
+**Ask:** "The current deployment of the timeline page is not engaging enough. At first glance
+most people don't realize that they need to click to see the details. Can you design something
+like the https://compsych.konpo.co" — followed by a round of comparing rendered options ("wouldn't
+a full bleed year be better? ... Can you render both for me to compare?"), then "I like the
+scrollytelling version better, and months as a lighter carousel within a year sounds
+promising. Can you render and show?", a design tweak pasted in by the user, two more open
+questions ("How will option 2 render if there is no picture? ... can the timeline markers be
+more granular than a year"), and finally "lets build it."
+
+**Change:** Replaced the click-a-year-dot-to-open-a-modal timeline with a full-viewport-per-year
+page: a fixed sidebar index and progress rail track scroll position, and each year's months now
+live as a swipeable in-section carousel instead of hidden behind a click — the small icon-dots
+didn't read as clickable, and nothing hinted at the photos behind them. Reached this design
+through several rounds of live-rendered Artifact comparisons (photo-tile cards vs. full-bleed
+takeover, a scrollytelling structure, then months-as-carousel-within-a-year) before building it
+for real, using the actual per-month photos and narration already in the data — not the
+mockups' simplified one-photo-per-year placeholders. Months with no photo on file (July 2023,
+the one real example) get a text-only card instead of an empty image. Removed the old
+bounded-height page wrapper since this design scrolls naturally; footer and chat widget stay
+reachable exactly as on every other page, just after a longer scroll. Along the way, fixed a
+real bug where the carousel's arrow buttons did nothing — `scrollTo({behavior:'smooth'})` was
+being silently cancelled by `scroll-snap-type:mandatory` on the same element, a known browser
+conflict — by switching arrow-triggered scrolls to `behavior:'auto'`. Verified locally on desktop
+and mobile: real photos render per month, the no-photo fallback, carousel arrows/swipe, sidebar
+navigation, and footer/chat-widget reachability after scrolling through all 10 years.
+
+Commit: `9945c29`
+
+---
+
 ### 2026-07-18 06:12 — Render chat widget replies as formatted Markdown
 **Requested by:** Sharath Jeppu
 
