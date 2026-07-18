@@ -11,6 +11,27 @@
 
 ---
 
+### 2026-07-18 06:12 — Render chat widget replies as formatted Markdown
+**Requested by:** Sharath Jeppu
+
+**Ask:** "Can the text formatting in the chat bot be richer. It is rendering plain text" — the
+assistant's replies (bold, bullet/numbered lists, links) were showing as literal
+`**`/`-`/`[text](url)` syntax instead of formatted content.
+
+**Change:** `ChatWidget.astro` now parses the assistant's Markdown-style replies into real HTML
+(bold, bulleted/numbered lists, links) instead of rendering them as plain text; user-typed
+messages are unaffected. Because this text originates from an LLM response, it's treated as
+untrusted input: everything is HTML-escaped before any tag is introduced, and link targets are
+allow-listed to `https://`, `mailto:`, and relative site paths (external links additionally get
+`target="_blank" rel="noopener noreferrer"`) — verified this blocks `<script>` injection and
+`javascript:`/`data:` URL schemes. Verified end-to-end on a Netlify draft deploy (isolated from
+production): bold, both list types, and both internal/external links all rendered correctly
+against real assistant replies, with no console errors.
+
+Commit: `5d7db87`
+
+---
+
 ### 2026-07-18 05:29 — Activate the chat assistant's AI responses
 **Requested by:** Sharath Jeppu
 
