@@ -11,6 +11,26 @@
 
 ---
 
+### 2026-07-18 — Add a custom 404 page
+**Requested by:** Rajesh Thiagarajan
+
+**Ask:** "for the website we do not have a good 404 page. Please design a 404 page that is a bit
+humorous (something like lost in the wilderness of the farm)."
+
+**Change:** Added `src/pages/404.astro` — a wooden trail-signpost illustration (inline SVG, hand
+built from the brand's green/orange/wood palette) with one arm pointing back to the farmhouse and
+one to the trails, a bird perched on top, and a "404" tag dangling loose off a nail with a gentle
+swing (respects `prefers-reduced-motion`). Copy leans into the farm/wilderness voice ("You've
+wandered off the map," a goat-knocked-the-trail-marker joke) with CTAs back to `/` and
+`/visit/trekking-trails`. Added an opt-in `noindex` prop to `BaseLayout.astro` so crawlers don't
+index the dead end. Astro emits this as `dist/404.html` at the build root, which Netlify serves
+automatically as the site's custom error page — verified locally that unmatched routes return a
+404 status and that the production build produces the file in the right place.
+
+**Commits:** `e446234`
+
+---
+
 ### 2026-07-18 — Remove the Trees & Plants stub, move Geography & Weather to its own page
 **Requested by:** Sharath Jeppu
 
