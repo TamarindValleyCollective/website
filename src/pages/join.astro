@@ -1,0 +1,92 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHero from '../components/PageHero.astro';
+---
+
+<BaseLayout title="Joining the Collective" description="How membership at Tamarind Valley Collective actually works — community size, private transactions between members, and what matters to us in a new member.">
+  <PageHero
+    eyebrow="Membership"
+    title="Joining the Collective"
+    intro="TVC isn't actively recruiting — but a spot occasionally opens. Here's how that actually works, and what matters to us."
+  />
+
+  <section class="section wrapper prose">
+    <h2>We're not really recruiting</h2>
+    <p>TVC is <a href="/about#members">53 families</a> on 100 acres — that's likely close to as large as this community will ever get. We are unlikely to expand membership, and there's no waitlist or application process in the usual sense.</p>
+
+    <h2>How a spot occasionally opens</h2>
+    <p>From time to time, for personal reasons, a member family decides to move on. When that happens, it isn't the collective selling a spot — it's a private transaction directly between that family and whoever takes their place. TVC isn't a party to the sale and doesn't broker it.</p>
+
+    <h2>This isn't a financial investment</h2>
+    <p>TVC doesn't offer a financial return — it offers a different, non-monetary one, and it's different for each member. For some it's the community itself; for others it's the social impact of the work here; for others still, it's simply living in harmony with nature. There's no single right answer, but it matters that you find your own — the members you'll talk to before joining value very different things about being here, and it's worth understanding why.</p>
+
+    <h2>What we do care about</h2>
+    <p>What matters to us is that whoever joins genuinely understands what they're signing up for — the shared labor, the land stewardship, the way decisions get made together, the responsibilities of being one of the families here. This isn't a real-estate transaction to us; it's who joins our community.</p>
+
+    <h2>How to start</h2>
+    <p>The way in is conversation, not a form. Before any transaction is discussed, we ask anyone seriously interested to engage with at least 2 existing members to understand their respective reasons for being a part of the community — so you can relate to what draws people here, and what's actually expected of a member.</p>
+
+    <div class="member-pair">
+      <figure>
+        <img src="/images/members/reva-and-ranjan.jpg" alt="Reva and Ranjan, TVC member family" loading="lazy" />
+        <figcaption>Reva &amp; Ranjan</figcaption>
+      </figure>
+      <figure>
+        <img src="/images/members/rajiv-and-kritika.jpg" alt="Rajiv and Kritika, TVC member family" loading="lazy" />
+        <figcaption>Rajiv &amp; Kritika</figcaption>
+      </figure>
+      <p class="member-pair__note">Two of the 53 member families you might end up talking to.</p>
+    </div>
+  </section>
+
+  <section class="section section--tint">
+    <div class="wrapper join-cta">
+      <h2>Ready to start the conversation?</h2>
+      <p>Reach out and we'll help connect you with member families to begin.</p>
+      <a class="button" href="/contact">Get in touch</a>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .join-cta {
+    text-align: center;
+    max-width: 60ch;
+    margin: 0 auto;
+  }
+
+  .member-pair {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .member-pair figure {
+    margin: 0;
+    text-align: center;
+  }
+
+  .member-pair img {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .member-pair figcaption {
+    font-size: 0.8rem;
+    color: var(--tvc-ink-soft);
+    margin-top: 6px;
+  }
+
+  .member-pair__note {
+    margin: 0;
+    color: var(--tvc-ink-soft);
+    font-size: 0.9rem;
+    font-style: italic;
+  }
+</style>

@@ -1,19 +1,66 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 
-const gallery = [
-  { src: '/images/pages/home/gallery-1.jpg', caption: 'Camp Site' },
-  { src: '/images/pages/home/gallery-2.jpg', caption: 'Hiking View' },
-  { src: '/images/pages/home/gallery-3.jpg', caption: 'Farm Produce' },
-  { src: '/images/pages/home/gallery-4.jpg', caption: 'Morning' },
-  { src: '/images/pages/home/gallery-5.jpg', caption: 'The Camp' },
-];
-
 const principles = [
   { name: 'Environmental Health', desc: 'Protecting soil, water, air, and biodiversity.' },
   { name: 'Economic Profitability', desc: 'Ensuring the farm remains viable for the long term.' },
   { name: 'Social Equity', desc: 'Fair treatment for farm workers and communities.' },
   { name: 'Resource Efficiency', desc: 'Minimizing non-renewable inputs and waste.' },
+];
+
+const exploreCards = [
+  { href: '/about', title: 'About TVC', desc: 'Why TVC exists, what we stand for, and the people behind it.', img: '/images/pages/home/gallery-1.jpg' },
+  { href: '/our-journey', title: 'Our Journey', desc: 'From a degraded farm to a regenerating ecosystem.', img: '/images/pages/journey/hero.jpg' },
+  { href: '/timeline', title: 'Timeline', desc: 'Walk through nine years, month by month, in photos.', img: '/images/pages/journey/transformation.jpg' },
+  { href: '/in-pictures', title: 'In Pictures', desc: "Pictures are worth 10,000 words — an old proverb, still true.", img: '/images/pages/in-pictures/2017-02/0644E35B-70C7-4000-90E3-3EB64D924471.jpeg' },
+  { href: '/ecosystem', title: 'Biodiversity', desc: 'Over 100 bird species — live sightings from iNaturalist.', img: '/images/events/2024-12-21-3bs-and-1h-biodiversity-walk/hero.jpg' },
+  { href: '/community-outreach', title: 'Community Outreach', desc: 'Work with the local community in Odhipuram and Thagatti village.', img: '/images/community-outreach/stem-experiential-learning-classes.jpeg' },
+  { href: '/resource-centre', title: 'Resource Centre', desc: 'Lantana furniture and learning programs from TVC.', img: '/images/products/tamarind-chutney.jpeg' },
+  { href: '/ecosystem/partners', title: 'Partners', desc: 'Organizations we work with, from hospitality to permaculture design.', img: '/images/pages/history/hero.jpg' },
+  { href: '/events', title: 'Events', desc: 'Camps, workshops, biodiversity walks, and retreats — upcoming and past.', img: '/images/events/2026-08-01-foraging-day/hero.jpeg' },
+];
+
+const engageRungs = [
+  {
+    step: '01',
+    href: '/visit/day-visit',
+    tag: 'Visit us — a day trip',
+    title: 'Come for a day',
+    desc: 'A farm tour, bird watching, star gazing, board games by the fire — a Picnic, a Hike, or a Do Nothing day, hour by hour.',
+    cta: 'Plan a day visit →',
+    img: '/images/pages/home/gallery-2.jpg',
+    tone: 'tone-1',
+  },
+  {
+    step: '02',
+    href: '/visit/camping',
+    tag: 'Stay with us — overnight',
+    title: 'Spend the night',
+    desc: 'A two-day stay under some of the darkest skies around — sunset hike, campfire, and a guided farm tour.',
+    cta: 'Book an overnight stay →',
+    img: '/images/pages/while-at-farm/hero.jpg',
+    tone: 'tone-2',
+  },
+  {
+    step: '03',
+    href: '/visit',
+    tag: 'Work with us — events & volunteering',
+    title: 'Bring your team, or your hands',
+    desc: 'Team outings for up to 20, workshops on permaculture and bamboo craft, or volunteer — chopping, planting, harvesting.',
+    cta: 'See events & volunteering →',
+    img: '/images/pages/home/gallery-3.jpg',
+    tone: 'tone-3',
+  },
+  {
+    step: '04',
+    href: '/join',
+    tag: 'Joining the collective',
+    title: 'A note on membership',
+    desc: "We're not really recruiting — 53 families is likely as large as we'll get. Occasionally a member moves on, and their place passes privately to someone new. Here's how that actually works.",
+    cta: 'Read how it works →',
+    img: '/images/members/reva-and-ranjan.jpg',
+    tone: 'tone-4',
+  },
 ];
 ---
 
@@ -25,24 +72,40 @@ const principles = [
       <p class="eyebrow eyebrow--light">A community rooted in the land</p>
       <h1>Living with Nature at TVC</h1>
       <p class="hero__intro">A 100-acre farm collectively owned by 53 families, regenerating degraded land through permaculture since 2017.</p>
-      <div class="hero__ctas">
-        <a class="button" href="/visit">Experience TVC</a>
-        <a class="button button--ghost" href="/about#join">Explore Joining the Collective</a>
+    </div>
+  </section>
+
+  <section class="section fork-section">
+    <div class="wrapper">
+      <div class="fork-head">
+        <p class="eyebrow center">How would you like to spend time here?</p>
+        <h2>Explore, or engage</h2>
+        <p>Learn about the land and the people, or come experience it yourself — from a first visit to joining the collective.</p>
+      </div>
+      <div class="doors">
+        <a class="door door--explore" href="#explore">
+          <img src="/images/pages/journey/hero.jpg" alt="" />
+          <div class="door__inner">
+            <span class="door__tag">Learn</span>
+            <h3>Explore TVC</h3>
+            <p>Our story, the land, the journey so far, and the life it holds — nine years of it.</p>
+            <span class="door__arrow">See everything ↓</span>
+          </div>
+        </a>
+        <a class="door door--engage" href="#engage">
+          <img src="/images/pages/while-at-farm/hero.jpg" alt="" />
+          <div class="door__inner">
+            <span class="door__tag">Take part</span>
+            <h3>Engage with TVC</h3>
+            <p>Visit for a day, stay the night, work alongside us, or learn how membership works.</p>
+            <span class="door__arrow">Find your level ↓</span>
+          </div>
+        </a>
       </div>
     </div>
   </section>
 
-  <section class="section">
-    <div class="wrapper split">
-      <img class="split__image" src="/images/pages/home/gallery-1.jpg" alt="Volunteers planting a sapling" />
-      <div class="split__text">
-        <p class="eyebrow">The Community</p>
-        <h2>Building foundations for tomorrow</h2>
-        <p>As the name indicates, it is a collective of like-minded people who have come together to evolve a sustainable living concept. We are currently <a href="/about#members">53 families</a> that care about the degradation of natural resources globally and would like to experiment with a living style that reduces consumption and incorporates naturally supported cyclical systems.</p>
-        <p>TVC is a 100-acre farm collectively owned by these families. Due to exploitative farming practices, the farmland was degraded when we bought it. Since 2017, the community has been using permaculture principles to regenerate the farm's fertility naturally.</p>
-      </div>
-    </div>
-
+  <section class="section section--tint principles-section">
     <div class="wrapper">
       <div class="principle-grid">
         {principles.map((p) => (
@@ -56,25 +119,47 @@ const principles = [
     </div>
   </section>
 
-  <section class="section section--tint">
+  <section class="section explore-section" id="explore">
     <div class="wrapper">
-      <p class="eyebrow center">In pictures</p>
-      <div class="gallery">
-        {gallery.map((g) => (
-          <figure>
-            <img src={g.src} alt={g.caption} loading="lazy" />
-            <figcaption>{g.caption}</figcaption>
-          </figure>
+      <div class="section-label"><span class="dot dot--explore"></span><h2>Explore</h2><span class="section-label__hint">Every informational page on the site</span></div>
+      <div class="explore-grid">
+        {exploreCards.map((c) => (
+          <a class="explore-card" href={c.href}>
+            <img src={c.img} alt="" loading="lazy" />
+            <div class="explore-card__body">
+              <h4>{c.title}</h4>
+              <p>{c.desc}</p>
+            </div>
+          </a>
         ))}
       </div>
-      <p class="gallery-more"><a href="/in-pictures">See more photos →</a></p>
+    </div>
+  </section>
+
+  <section class="section section--tint engage-section" id="engage">
+    <div class="wrapper">
+      <div class="section-label"><span class="dot dot--engage"></span><h2>Engage</h2><span class="section-label__hint">Four levels, one ladder</span></div>
+      <div class="ladder">
+        {engageRungs.map((r) => (
+          <a class:list={['rung', r.tone]} href={r.href}>
+            <div class="rung__step">{r.step}</div>
+            <div class="rung__media"><img src={r.img} alt="" loading="lazy" /></div>
+            <div class="rung__text">
+              <span class="rung__tag">{r.tag}</span>
+              <h3>{r.title}</h3>
+              <p>{r.desc}</p>
+              <span class="rung__cta">{r.cta}</span>
+            </div>
+          </a>
+        ))}
+      </div>
     </div>
   </section>
 
   <section class="section">
     <div class="wrapper quote-pair">
       <blockquote>
-        <p>“Modern research divides nature into tiny pieces and conducts tests that conform neither with natural law nor with practical experience. The results are arranged for the convenience of research, not according to the needs of the farmer.”</p>
+        <p>"Modern research divides nature into tiny pieces and conducts tests that conform neither with natural law nor with practical experience. The results are arranged for the convenience of research, not according to the needs of the farmer."</p>
         <cite>— Masanobu Fukuoka</cite>
       </blockquote>
       <blockquote>
@@ -83,33 +168,12 @@ const principles = [
       </blockquote>
     </div>
   </section>
-
-  <section class="section section--tint">
-    <div class="wrapper quicklinks">
-      <a class="card quicklink" href="/about">
-        <h3>About TVC</h3>
-        <p>Why TVC exists, what we stand for, and the people behind it.</p>
-      </a>
-      <a class="card quicklink" href="/our-journey">
-        <h3>Our Journey</h3>
-        <p>From a degraded farm to a regenerating ecosystem.</p>
-      </a>
-      <a class="card quicklink" href="/visit">
-        <h3>Visit TVC</h3>
-        <p>Day trips, overnight camps, workshops, and volunteering.</p>
-      </a>
-      <a class="card quicklink" href="/ecosystem">
-        <h3>Ecosystem</h3>
-        <p>Explore birds, insects, and plants spotted on the farm — live from iNaturalist.</p>
-      </a>
-    </div>
-  </section>
 </BaseLayout>
 
 <style>
   .hero {
     position: relative;
-    min-height: 560px;
+    min-height: 480px;
     display: flex;
     align-items: center;
     overflow: hidden;
@@ -126,24 +190,24 @@ const principles = [
   .hero__scrim {
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, rgba(15, 26, 18, 0.35) 0%, rgba(15, 26, 18, 0.7) 100%);
+    background: linear-gradient(180deg, rgba(15, 26, 18, 0.35) 0%, rgba(15, 26, 18, 0.72) 100%);
   }
 
   .hero__content {
     position: relative;
     text-align: center;
-    max-width: 760px;
+    max-width: 720px;
     margin: 0 auto;
   }
 
   .hero h1 {
     color: #fff;
-    font-size: clamp(2.4rem, 5vw, 3.4rem);
+    font-size: clamp(2.2rem, 5vw, 3.2rem);
   }
 
   .hero__intro {
     color: #eef2ea;
-    font-size: 1.2rem;
+    font-size: 1.15rem;
     max-width: 56ch;
     margin: 14px auto 0;
   }
@@ -157,105 +221,343 @@ const principles = [
     display: block;
   }
 
-  .hero__ctas {
-    display: flex;
-    justify-content: center;
-    gap: 16px;
-    margin-top: 28px;
+  /* --- fork --- */
+  .fork-head {
+    text-align: center;
+    max-width: 620px;
+    margin: 0 auto 40px;
   }
 
-  .button--ghost {
-    background: transparent;
-    color: #fff;
-    border: 2px solid #fff;
+  .fork-head h2 {
+    margin: 10px 0 12px;
   }
 
-  .button--ghost:hover {
-    background: #fff;
-    color: var(--tvc-green-dark);
+  .fork-head p {
+    color: var(--tvc-ink-soft);
+    margin: 0;
   }
 
-  .split {
+  .doors {
     display: grid;
-    grid-template-columns: 1fr 1.2fr;
-    gap: 48px;
-    align-items: center;
-    margin-bottom: 48px;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
   }
 
-  .split__image {
+  .door {
+    position: relative;
+    border-radius: 18px;
+    overflow: hidden;
+    min-height: 300px;
+    display: flex;
+    align-items: flex-end;
+    text-decoration: none;
+    box-shadow: var(--shadow-soft);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .door:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 34px rgba(34, 41, 31, 0.22);
+  }
+
+  .door img {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
-    max-height: 420px;
     object-fit: cover;
-    border-radius: var(--radius);
+  }
+
+  .door::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+
+  .door--explore::after {
+    background: linear-gradient(180deg, rgba(15, 40, 30, 0.15) 0%, rgba(10, 26, 20, 0.86) 100%);
+  }
+
+  .door--engage::after {
+    background: linear-gradient(180deg, rgba(60, 32, 8, 0.12) 0%, rgba(58, 26, 4, 0.86) 100%);
+  }
+
+  .door__inner {
+    position: relative;
+    z-index: 1;
+    padding: 32px;
+    color: #fff;
+    width: 100%;
+  }
+
+  .door__tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    margin-bottom: 14px;
+  }
+
+  .door--explore .door__tag {
+    background: rgba(255, 255, 255, 0.16);
+    color: #d7ecd9;
+  }
+
+  .door--engage .door__tag {
+    background: var(--tvc-orange);
+    color: #2a1400;
+  }
+
+  .door h3 {
+    color: #fff;
+    font-size: 1.6rem;
+    margin-bottom: 8px;
+  }
+
+  .door p {
+    color: rgba(255, 255, 255, 0.86);
+    font-size: 0.95rem;
+    max-width: 42ch;
+    margin: 0;
+  }
+
+  .door__arrow {
+    margin-top: 16px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    display: block;
+  }
+
+  /* --- principles (condensed from the previous full-width card grid) --- */
+  .principles-section {
+    padding-top: 48px;
+    padding-bottom: 48px;
   }
 
   .principle-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 20px;
   }
 
   .principle-card {
     text-align: center;
-    padding: 24px 16px;
+    padding: 12px 16px;
   }
 
   .principle-card__icon {
     display: inline-block;
-    width: 44px;
-    height: 44px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     background: var(--tvc-orange);
-    margin-bottom: 14px;
+    margin-bottom: 12px;
   }
 
   .principle-card h4 {
     margin-bottom: 6px;
+    font-size: 1.05rem;
   }
 
   .principle-card p {
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     color: var(--tvc-ink-soft);
     margin: 0 auto;
   }
 
-  .gallery {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 18px;
+  /* --- section labels --- */
+  .section-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 30px;
   }
 
-  .gallery figure {
+  .section-label h2 {
     margin: 0;
+  }
+
+  .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .dot--explore {
+    background: var(--tvc-green);
+  }
+
+  .dot--engage {
+    background: var(--tvc-orange);
+  }
+
+  .section-label__hint {
+    font-size: 0.78rem;
+    color: var(--tvc-ink-soft);
+    letter-spacing: 0.02em;
+  }
+
+  /* --- explore grid --- */
+  .explore-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+
+  .explore-card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
     border-radius: var(--radius);
     overflow: hidden;
     background: #fff;
-    box-shadow: var(--shadow-soft);
+    border: 1px solid var(--tvc-line);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
   }
 
-  .gallery img {
+  .explore-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-soft);
+    border-color: var(--tvc-green);
+  }
+
+  .explore-card img {
     width: 100%;
-    height: 180px;
+    height: 140px;
     object-fit: cover;
   }
 
-  .gallery figcaption {
-    padding: 10px 14px;
-    font-size: 0.85rem;
+  .explore-card__body {
+    padding: 16px 18px 18px;
+  }
+
+  .explore-card__body h4 {
+    font-size: 1.02rem;
+    color: var(--tvc-green-dark);
+    margin-bottom: 6px;
+  }
+
+  .explore-card__body p {
+    font-size: 0.86rem;
     color: var(--tvc-ink-soft);
+    margin: 0;
   }
 
-  .gallery-more {
+  /* --- engage ladder --- */
+  .ladder {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .rung {
+    display: grid;
+    grid-template-columns: 70px 1.1fr 1.4fr;
+    align-items: center;
+    gap: 28px;
+    border-radius: 18px;
+    padding: 26px 30px;
+    text-decoration: none;
+    color: inherit;
+    box-shadow: var(--shadow-soft);
+    transition: transform 0.18s ease;
+  }
+
+  .rung:hover {
+    transform: translateX(4px);
+  }
+
+  .rung__step {
+    font-family: var(--font-display);
+    font-size: 2.2rem;
+    font-weight: 700;
     text-align: center;
-    margin: 20px 0 0;
   }
 
-  .gallery-more a {
-    font-weight: 600;
+  .rung__media {
+    border-radius: 12px;
+    overflow: hidden;
+    height: 96px;
+    position: relative;
   }
 
+  .rung__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .rung__text h3 {
+    font-size: 1.2rem;
+    margin-bottom: 6px;
+  }
+
+  .rung__text p {
+    font-size: 0.9rem;
+    color: var(--tvc-ink-soft);
+    margin: 0;
+  }
+
+  .rung__cta {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    margin-top: 10px;
+    display: inline-block;
+  }
+
+  .rung__tag {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.7;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .tone-1 {
+    background: #fff;
+    border: 1px solid var(--tvc-line);
+  }
+  .tone-1 .rung__step { color: var(--tvc-green); }
+  .tone-1 .rung__cta { color: var(--tvc-green-dark); }
+
+  .tone-2 {
+    background: var(--tvc-green-tint);
+    border: 1px solid rgba(23, 114, 59, 0.25);
+  }
+  .tone-2 .rung__step { color: var(--tvc-green-dark); }
+  .tone-2 .rung__cta { color: var(--tvc-green-dark); }
+
+  .tone-3 {
+    background: var(--tvc-orange-tint);
+    border: 1px solid rgba(247, 133, 32, 0.3);
+  }
+  .tone-3 .rung__step { color: #b85e10; }
+  .tone-3 .rung__cta { color: #b85e10; }
+
+  /* Rung 4 is deliberately the quiet one — a muted stone tone instead of
+     continuing the green-to-orange escalation, so it reads as "read this
+     carefully" rather than "click here to apply" (TVC isn't recruiting). */
+  .tone-4 {
+    background: #efece2;
+    border: 1px solid var(--tvc-line);
+  }
+  .tone-4 .rung__step { color: var(--tvc-ink-soft); }
+  .tone-4 .rung__cta { color: var(--tvc-green-dark); }
+  .tone-4 .rung__media::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(34, 41, 31, 0.28);
+  }
+
+  /* --- quotes --- */
   .quote-pair {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
@@ -279,29 +581,37 @@ const principles = [
     color: var(--tvc-ink-soft);
   }
 
-  .quicklinks {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 20px;
+  @media (max-width: 860px) {
+    .doors {
+      grid-template-columns: 1fr;
+    }
+
+    .explore-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .rung {
+      grid-template-columns: 52px 1fr;
+      grid-template-areas: 'step media' 'text text';
+    }
+
+    .rung__step {
+      grid-area: step;
+      font-size: 1.5rem;
+    }
+
+    .rung__media {
+      grid-area: media;
+    }
+
+    .rung__text {
+      grid-area: text;
+      margin-top: 8px;
+    }
   }
 
-  .quicklink {
-    text-decoration: none;
-    display: block;
-  }
-
-  .quicklink h3 {
-    margin-bottom: 8px;
-  }
-
-  .quicklink p {
-    color: var(--tvc-ink-soft);
-    margin: 0;
-    font-size: 0.92rem;
-  }
-
-  @media (max-width: 780px) {
-    .split {
+  @media (max-width: 560px) {
+    .explore-grid {
       grid-template-columns: 1fr;
     }
   }
