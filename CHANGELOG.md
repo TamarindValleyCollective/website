@@ -11,6 +11,48 @@
 
 ---
 
+### 2026-07-18 — Redesign the homepage around Explore/Engage, add a Joining the Collective page
+**Requested by:** Sharath Jeppu
+
+**Ask:** "I would like to redesign the landing page. Here's my thought process. There are
+different levels of engagement Visit us (day trip) Stay with us (over night stay) Work with us
+(conduct events, volunteer, etc) Join us (become a member) Also, People would like to explore or
+engage. So the landing page should start with this. Exploration should link to all the
+information sections of the website while engagement should lead to all CTA sections of the
+website. No section should be missed in this process Can you mock up this to be an engaging
+landing page. Mockup a couple of options to consider" — followed by picking "Concept A" (a
+two-doors fork into Explore/Engage), then "I would like to add a section related to 'Become a
+part of the collective'... it is unlikely that our community size will be more than what we are
+today... The transaction will be directly between the seller and the buyer and the community
+will only be involved in ensuring that the buyer has a full understanding of the ethos... The
+process will involve engaging with atleast 2 of the existing members to understand this first,"
+clarified as its own page rather than a homepage section, three copy revisions (softening
+"expand membership" language, re-articulating the "talk to 2 members" step, and adding that TVC
+isn't a financial investment — each member values it differently), and finally "Yes, go ahead
+and build it."
+
+**Change:** Replaced the homepage with a fork-first structure: a hero, then an "Explore, or
+engage" choice between two doors. Explore leads to a 9-card grid covering every informational
+page on the site (About, Our Journey, Timeline, In Pictures, Biodiversity, Community Outreach,
+Resource Centre, Partners, Events). Engage leads to a 4-rung ladder — Day Visit, Overnight
+Camping, Work with us (events & volunteering, linking to the existing `/visit` hub), and Join —
+each rung visually escalating (white → green tint → orange tint) except the Join rung, which is
+deliberately muted/quiet rather than continuing the escalation, since TVC isn't actively
+recruiting. Kept the existing principles grid and closing quotes, condensing the former into a
+lighter strip — this content existed only on the homepage and wasn't duplicated anywhere else on
+the site. Built a new `/join` page with the honest membership explanation (community size is
+effectively capped, spot transfers are private transactions directly between members with TVC
+only ensuring the buyer understands the ethos, TVC isn't a financial investment and means
+something different to each member, and joining starts with talking to at least 2 current
+members) alongside real photos of two member families. Replaced the old thin `id="join"` section
+on `/about` with a short teaser pointing to `/join` instead of straight to `/contact`. Verified
+locally on desktop and mobile — hero, doors, explore grid, engage ladder, and the new `/join`
+page all render with real site content and images.
+
+**Commits:** `6c4ed07`
+
+---
+
 ### 2026-07-18 06:58 — Redesign the Our Journey timeline as a full-bleed scrollytelling page
 **Requested by:** Sharath Jeppu
 
