@@ -11,6 +11,30 @@
 
 ---
 
+### 2026-07-18 — Remove the Trees & Plants stub, move Geography & Weather to its own page
+**Requested by:** Sharath Jeppu
+
+**Ask:** "In the ecosystem page, delete the section on Trees & Plants since it is already covered
+in the inaturalist integration. Also move the geography, landscape and weather into a new page.
+This page will get more subsections later."
+
+**Change:** Removed the "Trees & Plants" section from `/ecosystem` — it was an unfilled `Pending`
+placeholder, and the content it was meant to cover (plants, trees) is already live in the
+iNaturalist-backed biodiversity explorer above it. Moved "Geography, landscape & weather" (the
+intro text, the monsoon-to-date stat tile, the monthly rainfall chart, and the full rainfall
+table) to a new page at `/ecosystem/geography` — a new landing point for a section that's
+expected to grow further subsections over time, rather than staying a subsection wedged into the
+biodiversity page. `/ecosystem` now links out to it via a teaser card. Added the new page to the
+shared Explore nav dropdown and site-map data, so it shows up in the nav and gets a correct
+"Home / Explore / Geography & Weather" breadcrumb automatically. Fixed a bug caught along the
+way: HTML entities like `&amp;` render correctly in plain template text but leak through
+literally when passed via a component prop (e.g. `title="Geography &amp; Weather"`) — component
+props need a literal `&` since Astro escapes those safely on its own.
+
+**Commits:** `177051a`
+
+---
+
 ### 2026-07-18 — Bigger overlapping timeline photo cards, a click-to-detail lightbox, and a smooth carousel
 **Requested by:** Sharath Jeppu
 
