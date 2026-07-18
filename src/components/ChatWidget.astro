@@ -45,10 +45,106 @@
   let open = false;
   let sending = false;
 
+  // The assistant replies in a light subset of Markdown (bold, links, lists).
+  // Rendered as HTML instead of plain text so it reads as formatted content
+  // instead of literal asterisks/brackets. Everything is HTML-escaped before
+  // any tag is introduced, and link targets are allow-listed, since this text
+  // originates from an LLM response and must be treated as untrusted input.
+  function escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function sanitizeUrl(url: string): string | null {
+    const trimmed = url.trim();
+    if (/^https:\/\//i.test(trimmed) || /^mailto:/i.test(trimmed) || /^\//.test(trimmed)) {
+      return trimmed;
+    }
+    return null;
+  }
+
+  function formatInline(text: string): string {
+    let out = escapeHtml(text);
+    out = out.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (match, label: string, url: string) => {
+      const safe = sanitizeUrl(url);
+      if (!safe) return label;
+      const external = /^https:\/\//i.test(safe) ? ' target="_blank" rel="noopener noreferrer"' : '';
+      return `<a href="${safe}"${external}>${label}</a>`;
+    });
+    out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
+    out = out.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+    return out;
+  }
+
+  function formatMessage(text: string): string {
+    const lines = text.split('\n');
+    const html: string[] = [];
+    let paragraph: string[] = [];
+
+    const flushParagraph = () => {
+      if (paragraph.length) {
+        html.push(`<p>${paragraph.map(formatInline).join('<br>')}</p>`);
+        paragraph = [];
+      }
+    };
+
+    let i = 0;
+    while (i < lines.length) {
+      const bullet = /^\s*[-*]\s+(.*)$/.exec(lines[i]);
+      const numbered = /^\s*\d+\.\s+(.*)$/.exec(lines[i]);
+
+      if (bullet) {
+        flushParagraph();
+        const items: string[] = [];
+        while (i < lines.length) {
+          const m = /^\s*[-*]\s+(.*)$/.exec(lines[i]);
+          if (!m) break;
+          items.push(`<li>${formatInline(m[1])}</li>`);
+          i++;
+        }
+        html.push(`<ul>${items.join('')}</ul>`);
+        continue;
+      }
+
+      if (numbered) {
+        flushParagraph();
+        const items: string[] = [];
+        while (i < lines.length) {
+          const m = /^\s*\d+\.\s+(.*)$/.exec(lines[i]);
+          if (!m) break;
+          items.push(`<li>${formatInline(m[1])}</li>`);
+          i++;
+        }
+        html.push(`<ol>${items.join('')}</ol>`);
+        continue;
+      }
+
+      if (lines[i].trim() === '') {
+        flushParagraph();
+        i++;
+        continue;
+      }
+
+      paragraph.push(lines[i]);
+      i++;
+    }
+    flushParagraph();
+    return html.join('');
+  }
+
   function addBubble(role: 'user' | 'assistant', text: string) {
     const bubble = document.createElement('div');
     bubble.className = `cw-bubble cw-bubble--${role}`;
-    bubble.textContent = text;
+    if (role === 'assistant') {
+      bubble.innerHTML = formatMessage(text);
+    } else {
+      bubble.textContent = text;
+    }
     messagesEl.appendChild(bubble);
     messagesEl.scrollTop = messagesEl.scrollHeight;
     return bubble;
@@ -311,7 +407,6 @@
     border-radius: 12px;
     font-size: 0.88rem;
     line-height: 1.45;
-    white-space: pre-wrap;
   }
 
   .cw-bubble--user {
@@ -319,6 +414,7 @@
     background: var(--tvc-green);
     color: #fff;
     border-bottom-right-radius: 4px;
+    white-space: pre-wrap;
   }
 
   .cw-bubble--assistant {
@@ -327,6 +423,53 @@
     color: var(--tvc-ink);
     border: 1px solid var(--tvc-line);
     border-bottom-left-radius: 4px;
+  }
+
+  .cw-bubble--assistant p {
+    margin: 0;
+  }
+
+  .cw-bubble--assistant p + p {
+    margin-top: 0.6em;
+  }
+
+  .cw-bubble--assistant ul,
+  .cw-bubble--assistant ol {
+    margin: 0.4em 0;
+    padding-left: 1.3em;
+  }
+
+  .cw-bubble--assistant ul + p,
+  .cw-bubble--assistant ol + p,
+  .cw-bubble--assistant p + ul,
+  .cw-bubble--assistant p + ol {
+    margin-top: 0.6em;
+  }
+
+  .cw-bubble--assistant li {
+    margin: 0.15em 0;
+  }
+
+  .cw-bubble--assistant a {
+    color: var(--tvc-green-dark);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .cw-bubble--assistant a:hover {
+    color: var(--tvc-orange);
+  }
+
+  .cw-bubble--assistant strong {
+    font-weight: 700;
+  }
+
+  .cw-bubble--assistant code {
+    background: var(--tvc-cream);
+    border: 1px solid var(--tvc-line);
+    border-radius: 4px;
+    padding: 0.1em 0.35em;
+    font-size: 0.85em;
   }
 
   .cw-typing {
