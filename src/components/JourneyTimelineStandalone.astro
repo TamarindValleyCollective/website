@@ -261,13 +261,16 @@ const yearSections = activeEra.years.map((y) => ({
         <div class="jt-carousel" data-carousel={i} tabindex="0" role="group" aria-label={`${y.year} months`}>
           {y.cards.map((c) => (
             c.img ? (
-              <div class="jt-card">
+              <div class="jt-card" role="button" tabindex="0" aria-label={`View photo — ${c.month} ${y.year}`}>
                 <img
                   src={c.img}
                   alt={`${c.month} ${y.year} photo`}
                   loading="lazy"
                   style={c.fit === 'contain' ? 'object-fit:contain;background:var(--jt-surface);' : ''}
                 />
+                <span class="jt-card-hint" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3H4v5M15 3h5v5M9 21H4v-5M15 21h5v-5"/></svg>
+                </span>
                 <div class="jt-card-text">
                   <p class="jt-card-month">{c.month}</p>
                   <p class="jt-card-body">{c.text}</p>
@@ -293,6 +296,21 @@ const yearSections = activeEra.years.map((y) => ({
       </div>
     </section>
   ))}
+
+  <div class="jt-lightbox" id="jt-lightbox" aria-hidden="true">
+    <button type="button" class="jt-lb-close" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 5l14 14M19 5L5 19"/></svg>
+    </button>
+    <button type="button" class="jt-lb-nav jt-lb-prev" aria-label="Previous photo">‹</button>
+    <button type="button" class="jt-lb-nav jt-lb-next" aria-label="Next photo">›</button>
+    <div class="jt-lb-stage">
+      <img class="jt-lb-img" src="" alt="" />
+      <div class="jt-lb-caption">
+        <p class="jt-lb-month"></p>
+        <p class="jt-lb-body"></p>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -300,6 +318,41 @@ const yearSections = activeEra.years.map((y) => ({
   const railFill = root.querySelector('#jt-rail-fill') as HTMLElement;
   const indexItems = Array.from(root.querySelectorAll('.jt-index-item')) as HTMLButtonElement[];
   const yearSectionEls = Array.from(root.querySelectorAll('.jt-year')) as HTMLElement[];
+
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function easeOutCubic(t: number): number {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  // Hand-rolled animation of scrollLeft, used instead of native
+  // `scrollTo({behavior:'smooth'})` — see the note in goTo() below for why.
+  // Snap is turned off for the duration: scroll-snap-type:mandatory can
+  // treat each in-progress frame of the tween as an uncommitted gesture
+  // and yank scrollLeft back toward the start, which fights a manual
+  // tween just as it fought the native one.
+  function animateScrollLeft(el: HTMLElement, target: number, duration = 380) {
+    const start = el.scrollLeft;
+    const change = target - start;
+    if (change === 0) return;
+    if (prefersReducedMotion) {
+      el.scrollLeft = target;
+      return;
+    }
+    const prevSnap = el.style.scrollSnapType;
+    el.style.scrollSnapType = 'none';
+    const startTime = performance.now();
+    function step(now: number) {
+      const t = Math.min(1, (now - startTime) / duration);
+      el.scrollLeft = start + change * easeOutCubic(t);
+      if (t < 1) {
+        requestAnimationFrame(step);
+      } else {
+        el.style.scrollSnapType = prevSnap;
+      }
+    }
+    requestAnimationFrame(step);
+  }
 
   indexItems.forEach((item) => {
     item.addEventListener('click', () => {
@@ -334,7 +387,68 @@ const yearSections = activeEra.years.map((y) => ({
 
   // Per-year carousel: scroll-snap track + arrows + dots + a synced
   // "current month" eyebrow label, mirroring the old modal's month
-  // carousel but living inline instead of behind a click.
+  // carousel but living inline instead of behind a click. Cards overlap
+  // (negative margin, see CSS) and scale up when active/adjacent for the
+  // "fanned stack" look — clicking a photo card opens the shared lightbox
+  // below instead of navigating away.
+  const lightbox = document.getElementById('jt-lightbox') as HTMLElement;
+  const lbImg = lightbox.querySelector('.jt-lb-img') as HTMLImageElement;
+  const lbMonth = lightbox.querySelector('.jt-lb-month') as HTMLElement;
+  const lbBody = lightbox.querySelector('.jt-lb-body') as HTMLElement;
+  const lbClose = lightbox.querySelector('.jt-lb-close') as HTMLButtonElement;
+  const lbPrev = lightbox.querySelector('.jt-lb-prev') as HTMLButtonElement;
+  const lbNext = lightbox.querySelector('.jt-lb-next') as HTMLButtonElement;
+
+  let lbPhotoCards: HTMLElement[] = [];
+  let lbPos = 0;
+  let lastFocused: HTMLElement | null = null;
+
+  function renderLightbox() {
+    const card = lbPhotoCards[lbPos];
+    const img = card.querySelector('img') as HTMLImageElement;
+    lbImg.src = img.src;
+    lbImg.alt = img.alt;
+    lbMonth.textContent = card.querySelector('.jt-card-month')?.textContent || '';
+    lbBody.textContent = card.querySelector('.jt-card-body')?.textContent || '';
+    lbPrev.disabled = lbPos === 0;
+    lbNext.disabled = lbPos === lbPhotoCards.length - 1;
+  }
+
+  function openLightbox(photoCards: HTMLElement[], card: HTMLElement, trigger: HTMLElement) {
+    lbPhotoCards = photoCards;
+    lbPos = photoCards.indexOf(card);
+    lastFocused = trigger;
+    renderLightbox();
+    lightbox.classList.add('is-open');
+    lightbox.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    lbClose.focus();
+  }
+
+  function closeLightbox() {
+    lightbox.classList.remove('is-open');
+    lightbox.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    lastFocused?.focus();
+  }
+
+  lbClose.addEventListener('click', closeLightbox);
+  lightbox.addEventListener('click', (e) => {
+    if (e.target === lightbox) closeLightbox();
+  });
+  lbPrev.addEventListener('click', () => {
+    if (lbPos > 0) { lbPos--; renderLightbox(); }
+  });
+  lbNext.addEventListener('click', () => {
+    if (lbPos < lbPhotoCards.length - 1) { lbPos++; renderLightbox(); }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (!lightbox.classList.contains('is-open')) return;
+    if (e.key === 'Escape') closeLightbox();
+    if (e.key === 'ArrowRight') lbNext.click();
+    if (e.key === 'ArrowLeft') lbPrev.click();
+  });
+
   yearSectionEls.forEach((section, yi) => {
     const carEl = section.querySelector(`[data-carousel="${yi}"]`) as HTMLElement;
     const dotsEl = section.querySelector(`[data-dots="${yi}"]`) as HTMLElement;
@@ -343,20 +457,30 @@ const yearSections = activeEra.years.map((y) => ({
     const nextBtn = section.querySelector(`[data-next="${yi}"]`) as HTMLButtonElement;
     const cards = Array.from(carEl.children) as HTMLElement[];
     const months = cards.map((c) => c.querySelector('.jt-card-month')?.textContent || '');
+    const photoCards = cards.filter((c) => !c.classList.contains('jt-card--no-photo'));
+
+    // Cards overlap via negative margin, so the step between snap points
+    // isn't a fixed card-width-plus-gap — measure the real DOM distance
+    // between two consecutive cards instead of assuming one.
+    function step(): number {
+      return cards.length > 1 ? cards[1].offsetLeft - cards[0].offsetLeft : cards[0].getBoundingClientRect().width;
+    }
 
     function currentIndex(): number {
-      const w = cards[0].getBoundingClientRect().width + 16;
+      const w = step();
       return Math.max(0, Math.min(cards.length - 1, Math.round(carEl.scrollLeft / w)));
     }
 
     function goTo(i: number) {
       i = Math.max(0, Math.min(cards.length - 1, i));
-      const w = cards[0].getBoundingClientRect().width + 16;
-      // 'smooth' here fights this track's scroll-snap-type: mandatory —
-      // the snap machinery can cancel the animation mid-flight and leave
-      // scrollLeft unchanged. 'auto' sidesteps it; native swipe/trackpad
-      // scrolling still feels smooth via the snap points themselves.
-      carEl.scrollTo({ left: w * i, behavior: 'auto' });
+      // Native `scrollTo({behavior:'smooth'})` doesn't reliably animate on
+      // this track — verified it silently no-ops even with scroll-snap
+      // turned off first, not just "gets fought" by snap as previously
+      // assumed. Driving scrollLeft by hand every frame sidesteps the
+      // native smooth-scroll implementation entirely, so it can't be
+      // silently dropped; scroll-snap only re-asserts once a gesture
+      // settles, and the target is already a valid snap point.
+      animateScrollLeft(carEl, step() * i);
     }
 
     function updateUI() {
@@ -366,14 +490,28 @@ const yearSections = activeEra.years.map((y) => ({
       eyebrowEl.textContent = `${months[i]} ${yearLabel}`;
       prevBtn.disabled = i === 0;
       nextBtn.disabled = i === cards.length - 1;
+      cards.forEach((c, ci) => {
+        c.classList.toggle('is-active', ci === i);
+        c.classList.toggle('is-near', Math.abs(ci - i) === 1);
+      });
     }
 
-    let scrollTimer: number;
+    // rAF-throttled rather than debounced-after-stop: the old version only
+    // updated is-active/is-near once scrolling fully settled, so a smooth
+    // scroll (or a drag) landed on the new card with no transition — the
+    // scale/fade would just snap in 60ms later. Tracking scroll position
+    // every frame instead makes the fan-forward effect sweep continuously
+    // through the stack as you scroll, animated or dragged.
+    let rafPending = false;
     carEl.addEventListener(
       'scroll',
       () => {
-        window.clearTimeout(scrollTimer);
-        scrollTimer = window.setTimeout(updateUI, 60);
+        if (rafPending) return;
+        rafPending = true;
+        requestAnimationFrame(() => {
+          rafPending = false;
+          updateUI();
+        });
       },
       { passive: true },
     );
@@ -384,6 +522,36 @@ const yearSections = activeEra.years.map((y) => ({
     carEl.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowRight') goTo(currentIndex() + 1);
       if (e.key === 'ArrowLeft') goTo(currentIndex() - 1);
+    });
+
+    // A touch/trackpad drag-scroll ends with a native 'click' on release —
+    // guard against that opening the lightbox unintentionally by only
+    // treating it as a tap when the pointer barely moved.
+    let downX = 0;
+    let downY = 0;
+    let dragged = false;
+    carEl.addEventListener('pointerdown', (e) => {
+      downX = e.clientX;
+      downY = e.clientY;
+      dragged = false;
+    });
+    carEl.addEventListener('pointermove', (e) => {
+      if (Math.abs(e.clientX - downX) > 6 || Math.abs(e.clientY - downY) > 6) dragged = true;
+    });
+
+    cards.forEach((cardEl) => {
+      if (cardEl.classList.contains('jt-card--no-photo')) return;
+      const open = () => {
+        if (dragged) return;
+        openLightbox(photoCards, cardEl, cardEl);
+      };
+      cardEl.addEventListener('click', open);
+      cardEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openLightbox(photoCards, cardEl, cardEl);
+        }
+      });
     });
 
     updateUI();
@@ -681,11 +849,10 @@ const yearSections = activeEra.years.map((y) => ({
 
   .jt-carousel {
     display: flex;
-    gap: 16px;
     overflow-x: auto;
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
-    padding: 4px 4px 10px;
+    padding: 20px 4px 10px;
     scrollbar-width: none;
     width: 100%;
     min-width: 0;
@@ -698,16 +865,47 @@ const yearSections = activeEra.years.map((y) => ({
     outline-offset: 4px;
   }
 
+  /* Cards overlap into a fanned stack: each one (after the first) pulls
+     left into its neighbor via negative margin, and JS toggles is-active/
+     is-near as the carousel scrolls so the focused card pops forward
+     (scale + shadow + top z-index) while the rest recede. */
   .jt-card {
     flex: 0 0 auto;
-    width: min(300px, 74vw);
-    height: 260px;
-    border-radius: 10px;
+    width: clamp(260px, 42vw, 620px);
+    height: clamp(220px, 30vw, 440px);
+    border-radius: 14px;
     overflow: hidden;
     position: relative;
     scroll-snap-align: start;
     background: var(--jt-bg-soft);
     border: 1px solid var(--jt-line);
+    cursor: pointer;
+    transform: scale(0.82);
+    filter: brightness(0.65);
+    z-index: 1;
+    transition: transform 0.4s ease, filter 0.4s ease, box-shadow 0.4s ease;
+  }
+
+  .jt-card:not(:first-child) {
+    margin-left: clamp(-90px, -10vw, -40px);
+  }
+
+  .jt-card.is-near {
+    transform: scale(0.92);
+    filter: brightness(0.85);
+    z-index: 3;
+  }
+
+  .jt-card.is-active {
+    transform: scale(1);
+    filter: brightness(1);
+    z-index: 6;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  }
+
+  .jt-card:focus-visible {
+    outline: 2px solid var(--jt-orange);
+    outline-offset: 3px;
   }
 
   .jt-card img {
@@ -725,29 +923,66 @@ const yearSections = activeEra.years.map((y) => ({
     background: linear-gradient(to top, rgba(8, 12, 7, 0.92) 0%, rgba(8, 12, 7, 0.25) 55%, rgba(8, 12, 7, 0) 78%);
   }
 
+  .jt-card-hint {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 3;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: rgba(8, 12, 7, 0.55);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--jt-cream);
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+
+  .jt-card-hint svg { width: 15px; height: 15px; }
+
+  .jt-card:hover .jt-card-hint,
+  .jt-card:focus-visible .jt-card-hint,
+  .jt-card.is-active .jt-card-hint {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
   .jt-card-text {
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
     z-index: 2;
-    padding: 16px;
+    padding: 22px;
   }
 
   .jt-card-month {
-    font-size: 10.5px;
+    font-size: 11.5px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--jt-orange);
-    margin: 0 0 6px;
+    margin: 0 0 7px;
     font-weight: 700;
   }
 
   .jt-card-body {
-    font-size: 12.5px;
+    font-size: 14px;
     line-height: 1.5;
     color: rgba(251, 250, 246, 0.9);
     margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  @media (max-width: 640px) {
+    .jt-card-text { padding: 16px; }
+    .jt-card-body { font-size: 12.5px; -webkit-line-clamp: 2; }
   }
 
   /* No-photo card: no image layer, a textured solid ground instead, and
@@ -756,18 +991,31 @@ const yearSections = activeEra.years.map((y) => ({
   .jt-card--no-photo {
     background: radial-gradient(ellipse at 30% 30%, rgba(76, 168, 107, 0.28), transparent 65%), var(--tvc-green-dark, #0f5029);
     display: flex;
-    align-items: flex-end;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
   }
 
   .jt-card--no-photo::after { display: none; }
 
-  .jt-card--no-photo .jt-card-text { position: static; padding: 20px; }
+  .jt-card--no-photo .jt-card-text { position: static; padding: 28px; }
 
   .jt-card--no-photo .jt-card-body {
     font-family: var(--font-display);
     font-style: italic;
     font-size: 14px;
     color: var(--jt-cream);
+    /* No lightbox for these (there's no photo to detail) — the on-card
+       text is the only place to read it, so unlike photo cards it isn't
+       clamped. */
+    display: block;
+    -webkit-line-clamp: unset;
+    overflow: visible;
+  }
+
+  .jt-card--no-photo,
+  .jt-card--no-photo:hover {
+    cursor: default;
   }
 
   .jt-carousel-controls {
@@ -816,5 +1064,119 @@ const yearSections = activeEra.years.map((y) => ({
   .jt-car-dots span.on {
     background: var(--jt-orange);
     transform: scale(1.3);
+  }
+
+  /* ---------- Lightbox ---------- */
+  .jt-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(6, 9, 6, 0.94);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 24px;
+  }
+
+  .jt-lightbox.is-open {
+    display: flex;
+  }
+
+  .jt-lb-stage {
+    position: relative;
+    max-width: min(1100px, 92vw);
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .jt-lb-img {
+    max-width: 100%;
+    max-height: min(76vh, 800px);
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: 6px;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  }
+
+  .jt-lb-caption {
+    margin-top: 20px;
+    text-align: center;
+    max-width: 62ch;
+  }
+
+  .jt-lb-month {
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--jt-orange);
+    font-weight: 700;
+    margin: 0 0 8px;
+  }
+
+  .jt-lb-body {
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--jt-cream);
+    margin: 0;
+  }
+
+  .jt-lb-close,
+  .jt-lb-nav {
+    position: fixed;
+    background: rgba(251, 250, 246, 0.08);
+    border: 1px solid var(--jt-line);
+    color: var(--jt-cream);
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+
+  .jt-lb-close:hover,
+  .jt-lb-nav:hover {
+    background: rgba(251, 250, 246, 0.18);
+    border-color: var(--jt-green);
+  }
+
+  .jt-lb-close {
+    top: 20px;
+    right: 20px;
+    width: 44px;
+    height: 44px;
+  }
+
+  .jt-lb-close svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .jt-lb-nav {
+    top: 50%;
+    transform: translateY(-50%);
+    width: 52px;
+    height: 52px;
+    font-size: 24px;
+  }
+
+  .jt-lb-prev { left: 20px; }
+  .jt-lb-next { right: 20px; }
+
+  .jt-lb-nav:disabled {
+    opacity: 0.25;
+    cursor: default;
+  }
+
+  @media (max-width: 640px) {
+    .jt-lightbox { padding: 24px 16px; }
+    .jt-lb-close { top: 12px; right: 12px; width: 38px; height: 38px; }
+    .jt-lb-nav { width: 42px; height: 42px; }
+    .jt-lb-prev { left: 8px; }
+    .jt-lb-next { right: 8px; }
+    .jt-lb-body { font-size: 13.5px; }
   }
 </style>
