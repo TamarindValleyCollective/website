@@ -11,6 +11,41 @@
 
 ---
 
+### 2026-07-18 — Restructure the main nav into Explore/Engage, add breadcrumbs everywhere
+**Requested by:** Sharath Jeppu
+
+**Ask:** "Can the main nav be restructured based on how the website is now structred? I tend to
+hit the brower back button after navigating to a page. It would be good to always have a website
+map to navigate in and out of pages. Propose a solution to solve this" — a proposal was floated
+(restructure the nav dropdowns to mirror Explore/Engage, add breadcrumbs to every page, and
+expand the footer into a full sitemap), then "Build all three," followed by feedback after
+seeing the built footer: "The footer is too big. Not really a fan. Is there a reason why it
+makes sense to have all the pages listed in the footer?" — resolved by trimming the footer back
+to just brand/blurb/social/copyright, since the nav dropdowns already list every page and don't
+need a second copy of the same list.
+
+**Change:** Added `src/data/site-map.ts` as a single source of truth for the site's Explore/
+Engage link groups and path-prefix classification, so the nav, breadcrumbs, and any future
+consumer can't drift out of sync with each other or with the homepage's own Explore/Engage
+sections. Replaced the nav's old About TVC/Our Journey/Visit TVC/Biodiversity/Events/Contact
+grouping with two dropdowns — Explore (10 items, two-column) and Engage (7 items) — matching the
+homepage fork exactly, so the same map is visible (nav is sticky) no matter where you scroll on
+any page. Added a new `Breadcrumbs` component, wired into `BaseLayout` so every page automatically
+gets a `Home / Explore|Engage / {page title}` trail computed from the URL path and the page's own
+title prop — no per-page wiring needed, and it works on dynamic slug pages (events, partners,
+community outreach posts) for free. The middle breadcrumb segment links to `/#explore` or
+`/#engage` on the homepage. Left the footer close to its original shape (brand, blurb, social
+links, copyright) after the sitemap version proved redundant with the now-comprehensive nav.
+Along the way, hit and resolved a stale Vite dev-server module cache that was serving an old
+version of the footer's scoped CSS after the edit — a dev server restart cleared it; not a
+production concern since a fresh `astro build` doesn't carry over stale in-memory HMR state.
+Verified nav dropdowns, breadcrumb trails (including a dynamic event page), and the footer on
+desktop and mobile.
+
+**Commits:** `8cdff81`
+
+---
+
 ### 2026-07-18 — Redesign the homepage around Explore/Engage, add a Joining the Collective page
 **Requested by:** Sharath Jeppu
 
