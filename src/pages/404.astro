@@ -1,0 +1,155 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="Page Not Found"
+  description="You've wandered off the trail — this page doesn't exist on the farm's 100 acres. Head back to the farmhouse or find the trails."
+  noindex
+>
+  <section class="lost section wrapper">
+    <p class="eyebrow">Lost on the trail?</p>
+    <h1>You've wandered off the map.</h1>
+    <p class="lost__intro">
+      This path doesn't lead anywhere on our 100 acres — a goat probably knocked the trail marker loose, or you took a
+      wrong turn past the tamarind grove. Either way, nothing out here but hillside.
+    </p>
+
+    <div class="signpost" role="img" aria-label="A wooden trail signpost in a field, with one arm pointing to the farmhouse, one to the trails, and a loose sign reading 404 dangling off a nail, while a bird perches on top">
+      <svg viewBox="0 0 440 300" xmlns="http://www.w3.org/2000/svg" class="signpost__svg" aria-hidden="true">
+        <!-- distant tree line -->
+        <g opacity="0.5">
+          <ellipse cx="62" cy="222" rx="40" ry="30" fill="var(--tvc-green-tint)" />
+          <rect x="58" y="222" width="8" height="26" rx="3" fill="var(--tvc-line)" />
+          <ellipse cx="386" cy="230" rx="34" ry="26" fill="var(--tvc-green-tint)" />
+          <rect x="382" y="230" width="7" height="22" rx="3" fill="var(--tvc-line)" />
+        </g>
+
+        <!-- ground -->
+        <path d="M0 252 Q 120 240 220 250 T 440 248 V300 H0 Z" fill="var(--tvc-green-tint)" />
+        <path d="M0 252 Q 120 240 220 250 T 440 248" fill="none" stroke="var(--tvc-line)" stroke-width="2" />
+
+        <!-- grass tufts -->
+        <g stroke="var(--tvc-green)" stroke-width="3" stroke-linecap="round">
+          <path d="M40 254 q4 -14 0 -18 M46 254 q6 -12 2 -20 M52 254 q2 -13 -2 -17" />
+          <path d="M330 250 q4 -14 0 -18 M336 250 q6 -12 2 -20 M342 250 q2 -13 -2 -17" />
+          <path d="M270 256 q3 -10 0 -14 M275 256 q5 -9 1 -15" />
+        </g>
+
+        <!-- signpost -->
+        <g transform="rotate(-2 220 150)">
+          <rect x="212" y="70" width="14" height="182" rx="5" fill="#96633b" />
+          <rect x="216" y="70" width="2.5" height="182" fill="#7d4f2c" opacity="0.6" />
+
+          <!-- lower arm: trails (green, outline echo) -->
+          <g transform="rotate(6 219 168)">
+            <path d="M219 158 h96 l16 12 -16 12 h-96 z" fill="var(--tvc-green)" />
+            <text x="267" y="174" text-anchor="middle" font-family="Inter, sans-serif" font-weight="700" font-size="14" fill="#fff" letter-spacing="0.3">TRAILS →</text>
+          </g>
+
+          <!-- upper arm: farmhouse (orange, echoes primary button) -->
+          <g transform="rotate(-7 219 110)">
+            <path d="M219 100 h-104 l-16 12 16 12 h104 z" fill="var(--tvc-orange)" />
+            <text x="167" y="116" text-anchor="middle" font-family="Inter, sans-serif" font-weight="700" font-size="14" fill="#fff" letter-spacing="0.3">← FARMHOUSE</text>
+          </g>
+
+          <!-- nail + dangling broken 404 tag -->
+          <circle cx="219" cy="200" r="3" fill="var(--tvc-ink-soft)" />
+          <g class="signpost__tag" transform="rotate(14 219 200)">
+            <line x1="219" y1="200" x2="223" y2="215" stroke="var(--tvc-ink-soft)" stroke-width="1.5" />
+            <rect x="197" y="213" width="52" height="34" rx="4" fill="var(--tvc-cream)" stroke="var(--tvc-ink)" stroke-width="2" />
+            <text x="223" y="237" font-family="Fraunces, serif" font-weight="700" font-size="20" fill="var(--tvc-ink)" text-anchor="middle">404</text>
+          </g>
+
+          <!-- bird on top of the post -->
+          <g transform="translate(219 66)">
+            <path d="M-9 6 Q -9 -8 4 -6 Q 12 -5 10 3 Q 8 8 0 8 Q -6 8 -9 6 Z" fill="var(--tvc-ink)" />
+            <path d="M9 -1 L17 1 L9 4 Z" fill="var(--tvc-orange)" />
+            <path d="M-8 6 Q -14 10 -18 8" fill="none" stroke="var(--tvc-ink)" stroke-width="2" stroke-linecap="round" />
+          </g>
+        </g>
+      </svg>
+    </div>
+
+    <div class="lost__actions">
+      <a class="button" href="/">Back to the Farmhouse</a>
+      <a class="button button--outline" href="/visit/trekking-trails">Explore the Trails</a>
+    </div>
+
+    <p class="lost__aside">Typed the address? Double-check it — our hens spell better than autocorrect.</p>
+  </section>
+</BaseLayout>
+
+<style>
+  .lost {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 72px;
+  }
+
+  .lost .eyebrow {
+    margin: 0 0 10px;
+  }
+
+  .lost h1 {
+    max-width: 16ch;
+  }
+
+  .lost__intro {
+    max-width: 52ch;
+    color: var(--tvc-ink-soft);
+    font-size: 1.05rem;
+    margin-top: 4px;
+  }
+
+  .signpost {
+    width: 100%;
+    max-width: 400px;
+    margin: 20px 0 8px;
+  }
+
+  .signpost__svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  .signpost__tag {
+    transform-origin: 219px 200px;
+    animation: swing 5s ease-in-out infinite;
+  }
+
+  @keyframes swing {
+    0%, 100% { transform: rotate(14deg); }
+    50% { transform: rotate(19deg); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .signpost__tag {
+      animation: none;
+    }
+  }
+
+  .lost__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 20px;
+  }
+
+  .lost__aside {
+    margin-top: 24px;
+    font-size: 0.88rem;
+    font-style: italic;
+    color: var(--tvc-ink-soft);
+  }
+
+  @media (max-width: 640px) {
+    .lost {
+      padding-top: 48px;
+    }
+  }
+</style>
