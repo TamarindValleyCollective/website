@@ -7,8 +7,8 @@ import { getCollection } from 'astro:content';
 const photos = (await getCollection('photos')).sort((a, b) => b.data.takenAt.valueOf() - a.data.takenAt.valueOf());
 ---
 
-<BaseLayout title="In Pictures" description="Photos of Tamarind Valley Collective — the land, the community, and daily life at the farm, from 2017 to today." image="/images/pages/in-pictures/2017-02/0644E35B-70C7-4000-90E3-3EB64D924471.jpeg" imageWidth={768} imageHeight={574}>
-  <PageHero eyebrow="About TVC" title="In Pictures" intro="Pictures are worth 10,000 words — an old proverb, still true. Curated highlights below, with camera and location details where we have them." image="/images/pages/in-pictures/2017-02/0644E35B-70C7-4000-90E3-3EB64D924471.jpeg" imageAlt="An early camping trip at the farm" />
+<BaseLayout title="In Pictures" description="Photos of Tamarind Valley Collective — the land, the community, and daily life at the farm, from 2017 to today." image="https://media.tvc.farm/photos/2024/2024-08-18-img-1880-display.jpg" imageWidth={4032} imageHeight={3024}>
+  <PageHero eyebrow="About TVC" title="In Pictures" intro="Pictures are worth 10,000 words — an old proverb, still true. Curated highlights below, with camera and location details where we have them." image="https://media.tvc.farm/photos/2024/2024-08-18-img-1880-display.jpg" imageAlt="A child climbing a tree at the farm" />
 
   <div class="wrapper">
     <PhotoGallery photos={photos} />
