@@ -1,0 +1,804 @@
+---
+// Renders the curated `photos` collection: date + camera filter chips (each
+// independently combinable, AND logic - not a single shared active-tag like
+// the Events page filters, since date and camera are genuinely different
+// facets), a Grid/Map view toggle, and a lightbox with a Flickr-style EXIF
+// panel and a per-photo location map. The Map view and the lightbox's mini
+// map both reuse initPhotoMap from ./photo-map.ts (Leaflet + OpenStreetMap,
+// same library already used on /ecosystem - see observation-map.ts).
+//
+// The grid is server-rendered with real <img> tags and simple data-year/
+// data-camera attributes for filtering (same pattern as the Events page).
+// Full per-photo detail (gps/camera/exif) ships as one JSON payload for the
+// lightbox and map, since those nested objects don't flatten cleanly into
+// data-attributes the way flat tags do.
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  photos: CollectionEntry<'photos'>[];
+}
+
+const { photos } = Astro.props;
+
+const formatDate = (d: Date) => d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+const cameraOf = (p: CollectionEntry<'photos'>) => (p.data.camera ? `${p.data.camera.make} ${p.data.camera.model}` : null);
+
+const years = [...new Set(photos.map((p) => p.data.takenAt.getFullYear()))].sort((a, b) => b - a);
+const cameras = [...new Set(photos.map(cameraOf).filter((c): c is string => Boolean(c)))].sort();
+
+const photosJson = photos.map((p) => ({
+  slug: p.id,
+  src: p.data.src,
+  thumbSrc: p.data.thumbSrc ?? p.data.src,
+  caption: p.data.caption,
+  takenAt: p.data.takenAt.toISOString(),
+  gps: p.data.gps ?? null,
+  camera: p.data.camera ?? null,
+  exif: p.data.exif ?? null,
+}));
+// `</script>` inside a caption would otherwise terminate this tag early.
+const photosJsonSafe = JSON.stringify(photosJson).replace(/<\/script/gi, '<\\/script');
+---
+
+<div class="photo-gallery" id="photo-gallery">
+  <div class="controls">
+    <div class="filter-groups">
+      <div>
+        <p class="filter-group__label">Filter by date</p>
+        <div class="chips" id="date-chips">
+          <button type="button" class="chip is-active" data-year="all">All years</button>
+          {years.map((y) => <button type="button" class="chip" data-year={y}>{y}</button>)}
+        </div>
+      </div>
+      <div>
+        <p class="filter-group__label">Filter by camera</p>
+        <div class="chips" id="camera-chips">
+          <button type="button" class="chip is-active" data-camera="all">All cameras</button>
+          {cameras.map((c) => <button type="button" class="chip" data-camera={c}>{c}</button>)}
+        </div>
+      </div>
+    </div>
+    <div class="view-toggle">
+      <button type="button" class="view-toggle__btn is-active" data-view="grid">Grid</button>
+      <button type="button" class="view-toggle__btn" data-view="map">Map</button>
+    </div>
+    <p class="result-count" id="result-count"></p>
+  </div>
+
+  <section id="grid-section">
+    <div class="archive-grid" id="archive-grid">
+      {photos.map((p) => (
+        <div
+          class="photo-tile"
+          data-slug={p.id}
+          data-year={p.data.takenAt.getFullYear()}
+          data-camera={cameraOf(p) ?? ''}
+        >
+          <img src={p.data.thumbSrc ?? p.data.src} alt={p.data.caption} loading="lazy" />
+          <div class="photo-tile__badges">
+            {p.data.gps && <span class="badge" title="Has location data">📍</span>}
+            {p.data.camera && <span class="badge" title="Has camera data">📷</span>}
+          </div>
+        </div>
+      ))}
+    </div>
+    <p class="empty-state" id="grid-empty" hidden>No photos match that filter.</p>
+  </section>
+
+  <section id="map-section" hidden>
+    <div class="map-view">
+      <div class="map-canvas" id="photo-map"></div>
+      <div class="map-sidebar">
+        <h3>Geotagged photos</h3>
+        <p id="map-sidebar-count"></p>
+        <div class="map-sidebar-list" id="map-sidebar-list"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="lightbox" id="lightbox" hidden>
+  <div class="lightbox-panel">
+    <div class="lightbox-image">
+      <button type="button" class="lightbox-close" id="lb-close" aria-label="Close">✕</button>
+      <button type="button" class="lightbox-nav lightbox-prev" id="lb-prev" aria-label="Previous photo">‹</button>
+      <button type="button" class="lightbox-nav lightbox-next" id="lb-next" aria-label="Next photo">›</button>
+      <img id="lb-img" src="" alt="" />
+    </div>
+    <div class="lightbox-detail">
+      <div>
+        <p class="date" id="lb-date"></p>
+        <p class="caption" id="lb-caption"></p>
+      </div>
+      <div id="lb-exif-wrap"></div>
+      <div id="lb-map-wrap"></div>
+    </div>
+  </div>
+</div>
+
+<script type="application/json" id="photos-data" set:html={photosJsonSafe} />
+
+<style>
+  .controls {
+    padding: 20px 0;
+    border-top: 1px solid var(--tvc-line);
+    border-bottom: 1px solid var(--tvc-line);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .filter-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .filter-group__label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--tvc-ink-soft);
+    margin: 0 0 8px;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .chip {
+    appearance: none;
+    border: 1px solid var(--tvc-line);
+    background: #fff;
+    color: var(--tvc-ink-soft);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+
+  .chip:hover {
+    border-color: var(--tvc-green);
+    color: var(--tvc-green-dark);
+  }
+
+  .chip.is-active {
+    background: var(--tvc-green);
+    border-color: var(--tvc-green);
+    color: #fff;
+  }
+
+  .view-toggle {
+    display: inline-flex;
+    border: 1px solid var(--tvc-line);
+    border-radius: 999px;
+    padding: 3px;
+    background: #fff;
+    flex-shrink: 0;
+  }
+
+  .view-toggle__btn {
+    appearance: none;
+    border: none;
+    background: none;
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--tvc-ink-soft);
+    padding: 7px 16px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .view-toggle__btn.is-active {
+    background: var(--tvc-green-dark);
+    color: #fff;
+  }
+
+  .result-count {
+    width: 100%;
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
+    margin: 4px 0 0;
+  }
+
+  #grid-section,
+  #map-section {
+    padding: 24px 0;
+  }
+
+  .archive-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 6px;
+  }
+
+  .photo-tile {
+    position: relative;
+    display: block;
+    overflow: hidden;
+    border-radius: 6px;
+    cursor: pointer;
+    background: var(--tvc-line);
+  }
+
+  .photo-tile img {
+    width: 100%;
+    height: 190px;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.3s ease;
+  }
+
+  .photo-tile:hover img {
+    transform: scale(1.05);
+  }
+
+  .photo-tile__badges {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 4px;
+  }
+
+  .badge {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(15, 26, 18, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 11px;
+    backdrop-filter: blur(2px);
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--tvc-ink-soft);
+  }
+
+  /* ---- map view ---- */
+  .map-view {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 20px;
+  }
+
+  .map-canvas {
+    height: 480px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--tvc-line);
+    background: var(--tvc-green-tint);
+  }
+
+  .map-sidebar h3 {
+    font-size: 1.05rem;
+    margin: 0 0 6px;
+  }
+
+  .map-sidebar p {
+    font-size: 0.86rem;
+    color: var(--tvc-ink-soft);
+    margin: 0 0 14px;
+  }
+
+  .map-sidebar-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 420px;
+    overflow-y: auto;
+  }
+
+  /* ---- lightbox ---- */
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(15, 20, 14, 0.92);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .lightbox[hidden] {
+    display: none;
+  }
+
+  .lightbox-panel {
+    background: #fff;
+    border-radius: 18px;
+    max-width: 1000px;
+    width: 100%;
+    max-height: 90vh;
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    overflow: hidden;
+  }
+
+  .lightbox-image {
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+    position: relative;
+  }
+
+  .lightbox-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    max-height: 90vh;
+  }
+
+  .lightbox-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    z-index: 2;
+  }
+
+  .lightbox-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.4);
+    color: #fff;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+  }
+
+  .lightbox-prev {
+    left: 12px;
+  }
+
+  .lightbox-next {
+    right: 12px;
+  }
+
+  .lightbox-detail {
+    padding: 26px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .lightbox-detail .date {
+    color: var(--tvc-orange);
+    font-weight: 700;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin: 0 0 6px;
+  }
+
+  .lightbox-detail .caption {
+    color: var(--tvc-ink);
+    font-size: 1rem;
+    margin: 0;
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+
+  @media (max-width: 760px) {
+    .lightbox-panel {
+      grid-template-columns: 1fr;
+      overflow-y: auto;
+    }
+    .lightbox-image {
+      min-height: 240px;
+    }
+    .map-view {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 620px) {
+    .controls {
+      flex-direction: column;
+    }
+  }
+</style>
+
+<style is:global>
+  /* Global for two reasons: Leaflet's own marker/popup markup (below) is
+     injected outside Astro's scoped-style reach regardless, and the map
+     sidebar list + lightbox EXIF panel/mini-map are built via innerHTML in
+     the client script - Astro's scoped-style data attribute only lands on
+     elements present in the server-rendered HTML, not ones a script creates
+     afterward, so those need to be global too or they render unstyled. */
+  .map-sidebar-item {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 8px;
+    border-radius: 10px;
+    cursor: pointer;
+    background: none;
+    border: none;
+    text-align: left;
+    font-family: inherit;
+  }
+
+  .map-sidebar-item:hover {
+    background: var(--tvc-green-tint);
+  }
+
+  .map-sidebar-item img {
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  .map-sidebar-item .meta {
+    font-size: 0.8rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .map-sidebar-item .meta strong {
+    display: block;
+    color: var(--tvc-ink);
+    font-size: 0.86rem;
+    font-weight: 600;
+  }
+
+  .exif-panel {
+    border: 1px solid var(--tvc-line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .exif-panel__head {
+    background: var(--tvc-green-tint);
+    padding: 10px 14px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--tvc-green-dark);
+  }
+
+  .exif-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    font-size: 0.86rem;
+  }
+
+  .exif-cell {
+    padding: 10px 14px;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .exif-cell:nth-child(odd) {
+    border-right: 1px solid var(--tvc-line);
+  }
+
+  .exif-cell .label {
+    display: block;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--tvc-ink-soft);
+    margin-bottom: 2px;
+  }
+
+  .exif-cell .value {
+    font-variant-numeric: tabular-nums;
+    font-size: 0.88rem;
+    color: var(--tvc-ink);
+  }
+
+  .exif-empty {
+    border: 1px dashed var(--tvc-line);
+    border-radius: 12px;
+    padding: 16px;
+    font-size: 0.84rem;
+    color: var(--tvc-ink-soft);
+    text-align: center;
+  }
+
+  .mini-map {
+    height: 160px;
+    border-radius: 12px;
+    border: 1px solid var(--tvc-line);
+    overflow: hidden;
+  }
+
+  .photo-marker__thumb {
+    display: block;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 3px solid var(--tvc-orange);
+    box-shadow: 0 4px 12px rgba(34, 41, 31, 0.25);
+    overflow: hidden;
+    background: #fff;
+  }
+
+  .photo-marker__thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .photo-popup {
+    text-align: center;
+    font-size: 0.86rem;
+  }
+
+  .photo-popup img {
+    width: 100%;
+    max-width: 160px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+  }
+
+  .photo-popup a {
+    color: var(--tvc-green-dark);
+    font-weight: 600;
+  }
+</style>
+
+<script>
+  import 'leaflet/dist/leaflet.css';
+  import { initPhotoMap } from './photo-map';
+
+  interface PhotoData {
+    slug: string;
+    src: string;
+    thumbSrc: string;
+    caption: string;
+    takenAt: string;
+    gps: { lat: number; lng: number } | null;
+    camera: { make: string; model: string; lens?: string } | null;
+    exif: { aperture?: string; shutterSpeed?: string; iso?: string; focalLength?: string } | null;
+  }
+
+  const dataEl = document.getElementById('photos-data');
+  const PHOTOS: PhotoData[] = dataEl ? JSON.parse(dataEl.textContent ?? '[]') : [];
+  const byslug = new Map(PHOTOS.map((p) => [p.slug, p]));
+
+  function formatDate(iso: string) {
+    return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
+  let activeYear = 'all';
+  let activeCamera = 'all';
+  let activeView: 'grid' | 'map' = 'grid';
+  let currentSlug: string | null = null;
+  let mapInitialized = false;
+
+  const tiles = Array.from(document.querySelectorAll<HTMLElement>('.photo-tile'));
+
+  function matches(el: HTMLElement) {
+    const yearOk = activeYear === 'all' || el.dataset.year === activeYear;
+    const cameraOk = activeCamera === 'all' || el.dataset.camera === activeCamera;
+    return yearOk && cameraOk;
+  }
+
+  function visibleSlugs() {
+    return tiles.filter(matches).map((el) => el.dataset.slug!);
+  }
+
+  function renderGrid() {
+    let visibleCount = 0;
+    tiles.forEach((el) => {
+      const show = matches(el);
+      el.hidden = !show;
+      if (show) visibleCount++;
+    });
+    const emptyEl = document.getElementById('grid-empty');
+    if (emptyEl) emptyEl.hidden = visibleCount > 0;
+  }
+
+  function renderResultCount() {
+    const parts = [];
+    if (activeYear !== 'all') parts.push(String(activeYear));
+    if (activeCamera !== 'all') parts.push(activeCamera);
+    const el = document.getElementById('result-count');
+    if (!el) return;
+    el.textContent =
+      parts.length === 0
+        ? `${PHOTOS.length} photos`
+        : `${visibleSlugs().length} of ${PHOTOS.length} photos — ${parts.join(' + ')}`;
+  }
+
+  let photoMap: ReturnType<typeof initPhotoMap> | null = null;
+
+  function renderMapSidebar() {
+    const geo = visibleSlugs()
+      .map((slug) => byslug.get(slug))
+      .filter((p): p is PhotoData => Boolean(p?.gps));
+
+    const countEl = document.getElementById('map-sidebar-count');
+    if (countEl) countEl.textContent = `${geo.length} of ${visibleSlugs().length} shown photos have location data.`;
+
+    const listEl = document.getElementById('map-sidebar-list');
+    if (listEl) {
+      listEl.innerHTML = geo
+        .map(
+          (p) => `
+        <button type="button" class="map-sidebar-item" data-slug="${p.slug}">
+          <img src="${p.thumbSrc}" alt="" />
+          <span class="meta"><strong>${formatDate(p.takenAt)}</strong>${p.caption}</span>
+        </button>`
+        )
+        .join('');
+      listEl.querySelectorAll<HTMLButtonElement>('.map-sidebar-item').forEach((btn) => {
+        btn.addEventListener('click', () => openLightbox(btn.dataset.slug!));
+      });
+    }
+    return geo;
+  }
+
+  function initOrRefreshMap() {
+    const geo = renderMapSidebar();
+    if (photoMap) {
+      photoMap.remove();
+    }
+    photoMap = initPhotoMap('photo-map', geo, (slug) => openLightbox(slug));
+  }
+
+  function render() {
+    renderGrid();
+    renderResultCount();
+    if (activeView === 'map') initOrRefreshMap();
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('#date-chips .chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      activeYear = chip.dataset.year ?? 'all';
+      document
+        .querySelectorAll('#date-chips .chip')
+        .forEach((c) => c.classList.toggle('is-active', (c as HTMLElement).dataset.year === activeYear));
+      render();
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('#camera-chips .chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      activeCamera = chip.dataset.camera ?? 'all';
+      document
+        .querySelectorAll('#camera-chips .chip')
+        .forEach((c) => c.classList.toggle('is-active', (c as HTMLElement).dataset.camera === activeCamera));
+      render();
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('.view-toggle__btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      activeView = (btn.dataset.view as 'grid' | 'map') ?? 'grid';
+      document.querySelectorAll('.view-toggle__btn').forEach((b) => b.classList.toggle('is-active', b === btn));
+      const gridSection = document.getElementById('grid-section');
+      const mapSection = document.getElementById('map-section');
+      if (gridSection) gridSection.hidden = activeView !== 'grid';
+      if (mapSection) mapSection.hidden = activeView !== 'map';
+      if (activeView === 'map') {
+        // Leaflet can't size itself correctly inside a container that was
+        // `hidden` at init time - (re)initialize on first switch to Map,
+        // same lazy-init pattern as the /ecosystem biodiversity map.
+        initOrRefreshMap();
+        mapInitialized = true;
+      }
+    });
+  });
+
+  tiles.forEach((el) => {
+    el.addEventListener('click', () => openLightbox(el.dataset.slug!));
+  });
+
+  function openLightbox(slug: string) {
+    currentSlug = slug;
+    renderLightbox();
+    const lb = document.getElementById('lightbox');
+    if (lb) lb.hidden = false;
+  }
+
+  function closeLightbox() {
+    const lb = document.getElementById('lightbox');
+    if (lb) lb.hidden = true;
+  }
+
+  function renderLightbox() {
+    const p = byslug.get(currentSlug!);
+    if (!p) return;
+
+    (document.getElementById('lb-img') as HTMLImageElement).src = p.src;
+    (document.getElementById('lb-img') as HTMLImageElement).alt = p.caption;
+    const dateEl = document.getElementById('lb-date');
+    if (dateEl) dateEl.textContent = formatDate(p.takenAt);
+    const captionEl = document.getElementById('lb-caption');
+    if (captionEl) captionEl.textContent = p.caption;
+
+    const exifWrap = document.getElementById('lb-exif-wrap');
+    if (exifWrap) {
+      if (p.camera) {
+        const e = p.exif ?? {};
+        exifWrap.innerHTML = `
+          <div class="exif-panel">
+            <div class="exif-panel__head">📷 ${p.camera.make} ${p.camera.model}</div>
+            <div class="exif-grid">
+              <div class="exif-cell"><span class="label">Aperture</span><span class="value">${e.aperture ?? '—'}</span></div>
+              <div class="exif-cell"><span class="label">Shutter speed</span><span class="value">${e.shutterSpeed ?? '—'}</span></div>
+              <div class="exif-cell"><span class="label">ISO</span><span class="value">${e.iso ?? '—'}</span></div>
+              <div class="exif-cell"><span class="label">Focal length</span><span class="value">${e.focalLength ?? '—'}</span></div>
+            </div>
+          </div>`;
+      } else {
+        exifWrap.innerHTML = `<div class="exif-empty">No camera data available for this photo.</div>`;
+      }
+    }
+
+    const mapWrap = document.getElementById('lb-map-wrap');
+    if (mapWrap) {
+      if (p.gps) {
+        mapWrap.innerHTML = `<div class="mini-map" id="lb-mini-map"></div>`;
+        // Deferred so the container has real layout dimensions before Leaflet measures it.
+        requestAnimationFrame(() => {
+          initPhotoMap('lb-mini-map', [{ slug: p.slug, src: p.src, thumbSrc: p.thumbSrc, caption: p.caption, gps: p.gps! }], () => {});
+        });
+      } else {
+        mapWrap.innerHTML = '';
+      }
+    }
+  }
+
+  document.getElementById('lb-close')?.addEventListener('click', closeLightbox);
+  document.getElementById('lb-prev')?.addEventListener('click', () => {
+    const slugs = PHOTOS.map((p) => p.slug);
+    const idx = slugs.indexOf(currentSlug!);
+    currentSlug = slugs[(idx - 1 + slugs.length) % slugs.length];
+    renderLightbox();
+  });
+  document.getElementById('lb-next')?.addEventListener('click', () => {
+    const slugs = PHOTOS.map((p) => p.slug);
+    const idx = slugs.indexOf(currentSlug!);
+    currentSlug = slugs[(idx + 1) % slugs.length];
+    renderLightbox();
+  });
+  document.getElementById('lightbox')?.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).id === 'lightbox') closeLightbox();
+  });
+  document.addEventListener('keydown', (e) => {
+    const lb = document.getElementById('lightbox');
+    if (!lb || lb.hidden) return;
+    if (e.key === 'Escape') closeLightbox();
+    if (e.key === 'ArrowLeft') document.getElementById('lb-prev')?.click();
+    if (e.key === 'ArrowRight') document.getElementById('lb-next')?.click();
+  });
+
+  renderResultCount();
+</script>
