@@ -1,7 +1,8 @@
 ---
-title: "2020 : Oct 31 & Nov 1 - TVC: Camp Night & Visioning"
+title: "TVC: Camp Night & Visioning"
 date: 2020-10-31
-excerpt: "2020 : Oct 31 & Nov 1 - TVC: Camp Night & Visioning"
+endDate: 2020-11-01
+excerpt: "An overnight camp and community visioning session at the farm."
 coverImage: "/images/events/2020-10-31-camp-night-and-visioning/hero.jpeg"
 tags: ["camping", "community"]
 ---

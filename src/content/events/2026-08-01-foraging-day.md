@@ -1,5 +1,5 @@
 ---
-title: "2026: Aug 01 - Foraging Day with Foraging Trails & Tales"
+title: "Foraging Day with Foraging Trails & Tales"
 date: 2026-08-01
 excerpt: "A full day of foraging, cooking, and eating together at Tamarind Valley Collective with Foraging Trails & Tales — a guided foraging walk, a hands-on cooking workshop, and a farm-to-table lunch."
 coverImage: "/images/events/2026-08-01-foraging-day/hero.jpeg"

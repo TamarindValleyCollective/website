@@ -1,5 +1,5 @@
 ---
-title: "2021: Sep 25 - Traditional Craft of Making Bamboo Basket"
+title: "Traditional Craft of Making Bamboo Basket"
 date: 2021-09-25
 excerpt: "The traditional craft of making baskets has been slowly fading away as plastic and other material have replaced them. However, as a community we our attempt has been to move towards more sustainable material. The workshop is a hands on exercise to help the participants g"
 coverImage: "/images/events/2021-09-25-bamboo-basket-making/hero.jpeg"

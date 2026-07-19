@@ -1,6 +1,7 @@
 ---
-title: "2022: Dec 11/16 - The Lambda Retreat"
-date: 2022-12-16
+title: "The Lambda Retreat"
+date: 2022-12-11
+endDate: 2022-12-16
 excerpt: "A week long exploration into the nature of computation, abstractions, programming paradigms and programming languages. “My aim is to show that the heavenly machine is not a kind of divine, live being, but a kind of clockwork...' — Johannes Kepler (letter to Herwart von Hohenburg,"
 coverImage: "/images/events/2022-12-16-the-lambda-retreat/hero.png"
 tags: ["retreat"]

@@ -6,6 +6,9 @@ const events = defineCollection({
   schema: z.object({
     title: z.string(),
     date: z.coerce.date(),
+    // Multi-day events only - the event runs from `date` through `endDate`
+    // inclusive. Omit for single-day events.
+    endDate: z.coerce.date().optional(),
     excerpt: z.string(),
     coverImage: z.string().optional(),
     organizer: z.string().optional(),

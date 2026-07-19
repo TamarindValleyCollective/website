@@ -1,6 +1,7 @@
 ---
-title: "2021: Nov 27/28 - Introduction to Regenerative Thinking: A short take on Permaculture"
+title: "Introduction to Regenerative Thinking: A Short Take on Permaculture"
 date: 2021-11-27
+endDate: 2021-11-28
 excerpt: "Dates: 27th and 28th November. This is a 1.5 days workshop being conducted in partnership with team Ananas (https://ananas.design/) who helped us with the design of our farm based on permaculture. The workshop will involve understanding the concepts as well as doing on gr"
 coverImage: "/images/events/2021-11-27-introduction-to-regenerative-thinking/hero.jpeg"
 tags: ["workshop", "permaculture"]

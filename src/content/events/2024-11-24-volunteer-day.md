@@ -1,5 +1,5 @@
 ---
-title: "2024: Nov 24 - Volunteer Day @ TVC"
+title: "Volunteer Day @ TVC"
 date: 2024-11-24
 excerpt: "It is now 7 years since we started this journey so we thought we will invite volunteers to come see the transformation. This year we are opening this event to 20 volunteers/enthusiasts who would like to come visit us and understand about the project, get some hands on experience "
 tags: ["volunteering"]

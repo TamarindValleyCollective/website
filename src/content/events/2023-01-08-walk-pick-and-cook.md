@@ -1,5 +1,5 @@
 ---
-title: "2023: Jan 08 - Walk, Pick & Cook"
+title: "Walk, Pick & Cook"
 date: 2023-01-08
 excerpt: "Walk, Pick & Cook Forage in the wild for edible weeds and healthy local food with Suresh Kumar of Surjapura Curries. If you are using your mobile app - please scan the following QR code and make payment of INR 1600."
 coverImage: "/images/events/2023-01-08-walk-pick-and-cook/hero.jpeg"

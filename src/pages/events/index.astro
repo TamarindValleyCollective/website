@@ -2,64 +2,304 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../../components/PageHero.astro';
 import { getCollection } from 'astro:content';
+import { formatDateRange, durationTag, durationDays, daysUntil, countdownLabel } from '../../utils/events';
 
 const allEvents = (await getCollection('events', (e) => !e.data.draft)).sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
-const now = new Date();
-const upcoming = allEvents.filter((e) => e.data.date >= now);
-const past = allEvents.filter((e) => e.data.date < now);
+const today = new Date();
+const upcoming = allEvents.filter((e) => e.data.date >= today);
+const past = allEvents.filter((e) => e.data.date < today);
 
-const formatDate = (d: Date) => d.toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
+// Every filterable tag, derived from real content rather than hardcoded -
+// content tags (workshop, biodiversity, ...) alphabetically, duration tags
+// (Day event, Overnight event (N days)) sorted shortest-first.
+const contentTags = [...new Set(allEvents.flatMap((e) => e.data.tags))].sort();
+const durationTagDays = new Map<string, number>();
+allEvents.forEach((e) => {
+  const tag = durationTag(e.data.date, e.data.endDate);
+  if (!durationTagDays.has(tag)) durationTagDays.set(tag, durationDays(e.data.date, e.data.endDate));
+});
+const durationTags = [...durationTagDays.entries()].sort((a, b) => a[1] - b[1]).map(([tag]) => tag);
+
+function tagsAttr(e: (typeof allEvents)[number]) {
+  return [...e.data.tags, durationTag(e.data.date, e.data.endDate)].join('|');
+}
 ---
 
-<BaseLayout title="Events" description="Upcoming and past events at Tamarind Valley Collective — camps, workshops, biodiversity walks, and retreats." image="/images/events/2026-08-01-foraging-day/hero.jpeg" imageWidth={720} imageHeight={480}>
-  <PageHero eyebrow="Events" title="Upcoming & Past Events" image="/images/events/2026-08-01-foraging-day/hero.jpeg" imageAlt="A group foraging walk through the farm's greenery" />
+<BaseLayout title="Camps, Workshops & Gatherings" description="Upcoming and past events at Tamarind Valley Collective — camps, workshops, biodiversity walks, and retreats." image="/images/events/2026-08-01-foraging-day/hero.jpeg" imageWidth={720} imageHeight={480}>
+  <PageHero eyebrow="Events" title="Camps, Workshops & Gatherings" intro="Nine years of camps, workshops, biodiversity walks, and retreats — from a single afternoon to a week at a time." image="/images/events/2026-08-01-foraging-day/hero.jpeg" imageAlt="A group foraging walk through the farm's greenery" />
 
   <section class="section wrapper">
     <h2>Upcoming</h2>
-    {upcoming.length > 0 ? (
-      <div class="grid">
-        {upcoming.map((e) => (
-          <a class="card" href={`/events/${e.id}`}>
-            {e.data.coverImage && <img src={e.data.coverImage} alt={e.data.title} />}
-            <p class="date">{formatDate(e.data.date)}</p>
-            <h3>{e.data.title}</h3>
-            <p>{e.data.excerpt}</p>
-            {e.data.tags.length > 0 && (
-              <ul class="tags">
-                {e.data.tags.map((t) => <li class="tag">{t}</li>)}
-              </ul>
-            )}
-          </a>
-        ))}
-      </div>
-    ) : (
-      <p>No events currently planned — check back soon.</p>
-    )}
+    <p class="section-hint">The next thing happening at the farm.</p>
+    <div class="upcoming-list" id="upcoming-list">
+      {upcoming.length > 0 ? (
+        upcoming.map((e) => {
+          const daysAway = daysUntil(e.data.date, today);
+          return (
+            <a class="upcoming-card" href={`/events/${e.id}`} data-tags={tagsAttr(e)}>
+              <div class="countdown">
+                <span class="countdown__num">{countdownLabel(daysAway)}</span>
+              </div>
+              <div class:list={['upcoming-card__media', { 'upcoming-card__media--empty': !e.data.coverImage }]}>
+                {e.data.coverImage && <img src={e.data.coverImage} alt={e.data.title} />}
+              </div>
+              <div>
+                <p class="date">{formatDateRange(e.data.date, e.data.endDate)}</p>
+                <h3>{e.data.title}</h3>
+                <p class="excerpt">{e.data.excerpt}</p>
+                <ul class="tags">
+                  {e.data.tags.map((t) => <li class="tag">{t}</li>)}
+                  <li class="tag tag--duration">{durationTag(e.data.date, e.data.endDate)}</li>
+                </ul>
+              </div>
+            </a>
+          );
+        })
+      ) : (
+        <p class="empty-upcoming">No events currently planned — check back soon.</p>
+      )}
+    </div>
   </section>
+
+  <div class="controls wrapper">
+    <div class="filter-groups">
+      <div>
+        <p class="filter-group__label">Filter by type</p>
+        <div class="chips" id="tag-chips">
+          <button type="button" class="chip is-active" data-tag="all">All</button>
+          {contentTags.map((t) => <button type="button" class="chip" data-tag={t}>{t}</button>)}
+        </div>
+      </div>
+      <div>
+        <p class="filter-group__label">Length</p>
+        <div class="chips" id="duration-chips">
+          {durationTags.map((t) => <button type="button" class="chip chip--duration" data-tag={t}>{t}</button>)}
+        </div>
+      </div>
+    </div>
+    <div class="view-toggle">
+      <button type="button" class="view-toggle__btn is-active" data-view="grid">Grid</button>
+      <button type="button" class="view-toggle__btn" data-view="timeline">Timeline</button>
+    </div>
+    <p class="result-count" id="result-count"></p>
+  </div>
 
   <section class="section section--tint">
     <div class="wrapper">
-      <h2>Past events</h2>
-      <div class="grid">
+      <h2>Past</h2>
+      <p class="section-hint">Nine years of it, newest first.</p>
+
+      <div class="grid" id="grid-past">
         {past.map((e) => (
-          <a class="card" href={`/events/${e.id}`}>
+          <a class="card" href={`/events/${e.id}`} data-tags={tagsAttr(e)}>
             {e.data.coverImage && <img src={e.data.coverImage} alt={e.data.title} />}
-            <p class="date">{formatDate(e.data.date)}</p>
+            <p class="date">{formatDateRange(e.data.date, e.data.endDate)}</p>
             <h3>{e.data.title}</h3>
-            <p>{e.data.excerpt}</p>
-            {e.data.tags.length > 0 && (
-              <ul class="tags">
-                {e.data.tags.map((t) => <li class="tag">{t}</li>)}
-              </ul>
-            )}
+            <p class="excerpt">{e.data.excerpt}</p>
+            <ul class="tags">
+              {e.data.tags.map((t) => <li class="tag">{t}</li>)}
+              <li class="tag tag--duration">{durationTag(e.data.date, e.data.endDate)}</li>
+            </ul>
           </a>
         ))}
       </div>
+
+      <div class="timeline" id="timeline-past" hidden>
+        {past.map((e) => (
+          <div class="tl-item" data-tags={tagsAttr(e)}>
+            <p class="date">{formatDateRange(e.data.date, e.data.endDate)}</p>
+            <h3><a href={`/events/${e.id}`}>{e.data.title}</a></h3>
+            <p class="excerpt">{e.data.excerpt}</p>
+            <ul class="tags">
+              {e.data.tags.map((t) => <li class="tag">{t}</li>)}
+              <li class="tag tag--duration">{durationTag(e.data.date, e.data.endDate)}</li>
+            </ul>
+          </div>
+        ))}
+      </div>
+
+      <p class="empty-state" id="past-empty" hidden>No past events match that filter.</p>
     </div>
   </section>
 </BaseLayout>
 
 <style>
+  .section-hint {
+    color: var(--tvc-ink-soft);
+    font-size: 0.92rem;
+    margin: -8px 0 20px;
+  }
+
+  /* ---- upcoming highlight ---- */
+  .upcoming-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .upcoming-card {
+    display: grid;
+    grid-template-columns: 130px 140px 1fr;
+    align-items: center;
+    gap: 24px;
+    background: #fff;
+    border: 1px solid rgba(247, 133, 32, 0.35);
+    border-radius: 18px;
+    padding: 22px 26px;
+    box-shadow: var(--shadow-soft);
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.15s ease;
+  }
+
+  .upcoming-card:hover {
+    transform: translateY(-2px);
+  }
+
+  .countdown { text-align: center; }
+
+  .countdown__num {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--tvc-orange);
+    line-height: 1.15;
+  }
+
+  .upcoming-card__media {
+    height: 96px;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .upcoming-card__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .upcoming-card__media--empty {
+    background: linear-gradient(135deg, var(--tvc-green-tint), var(--tvc-orange-tint));
+  }
+
+  .upcoming-card h3 {
+    font-size: 1.15rem;
+    margin: 0 0 6px;
+  }
+
+  .upcoming-card .excerpt {
+    font-size: 0.9rem;
+    color: var(--tvc-ink-soft);
+    margin: 0 0 10px;
+  }
+
+  .empty-upcoming {
+    border: 1px dashed var(--tvc-line);
+    border-radius: 14px;
+    padding: 22px 26px;
+    color: var(--tvc-ink-soft);
+  }
+
+  /* ---- controls ---- */
+  .controls {
+    padding: 24px 0;
+    border-top: 1px solid var(--tvc-line);
+    border-bottom: 1px solid var(--tvc-line);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .filter-groups {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+  }
+
+  .filter-group__label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--tvc-ink-soft);
+    margin: 0 0 8px;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .chip {
+    appearance: none;
+    border: 1px solid var(--tvc-line);
+    background: #fff;
+    color: var(--tvc-ink-soft);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+
+  .chip:hover {
+    border-color: var(--tvc-green);
+    color: var(--tvc-green-dark);
+  }
+
+  .chip.is-active {
+    background: var(--tvc-green);
+    border-color: var(--tvc-green);
+    color: #fff;
+  }
+
+  .chip--duration.is-active {
+    background: var(--tvc-orange);
+    border-color: var(--tvc-orange);
+    color: #2a1400;
+  }
+
+  .view-toggle {
+    display: inline-flex;
+    border: 1px solid var(--tvc-line);
+    border-radius: 999px;
+    padding: 3px;
+    background: #fff;
+    flex-shrink: 0;
+  }
+
+  .view-toggle__btn {
+    appearance: none;
+    border: none;
+    background: none;
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--tvc-ink-soft);
+    padding: 7px 16px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .view-toggle__btn.is-active {
+    background: var(--tvc-green-dark);
+    color: #fff;
+  }
+
+  .result-count {
+    width: 100%;
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
+    margin: 4px 0 0;
+  }
+
+  /* ---- grid ---- */
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -80,6 +320,11 @@ const formatDate = (d: Date) => d.toLocaleDateString('en-IN', { year: 'numeric',
     object-fit: cover;
   }
 
+  .card .excerpt {
+    color: var(--tvc-ink-soft);
+    margin: 0 0 4px;
+  }
+
   .tags {
     display: flex;
     flex-wrap: wrap;
@@ -98,6 +343,11 @@ const formatDate = (d: Date) => d.toLocaleDateString('en-IN', { year: 'numeric',
     font-weight: 600;
   }
 
+  .tag--duration {
+    background: var(--tvc-orange-tint);
+    color: #a85712;
+  }
+
   .date {
     color: var(--tvc-orange);
     font-weight: 600;
@@ -106,4 +356,144 @@ const formatDate = (d: Date) => d.toLocaleDateString('en-IN', { year: 'numeric',
     letter-spacing: 0.03em;
     margin-bottom: 4px;
   }
+
+  /* ---- timeline ---- */
+  .timeline {
+    position: relative;
+    padding-left: 28px;
+    margin-top: 20px;
+  }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 6px;
+    bottom: 6px;
+    width: 2px;
+    background: var(--tvc-line);
+  }
+
+  .tl-item {
+    position: relative;
+    padding: 0 0 30px 22px;
+  }
+
+  .tl-item::before {
+    content: '';
+    position: absolute;
+    left: -22px;
+    top: 6px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid var(--tvc-green);
+  }
+
+  .tl-item h3 {
+    font-size: 1.12rem;
+    margin: 0 0 6px;
+  }
+
+  .tl-item h3 a {
+    color: var(--tvc-ink);
+    text-decoration: none;
+  }
+
+  .tl-item h3 a:hover {
+    color: var(--tvc-green-dark);
+  }
+
+  .tl-item .excerpt {
+    color: var(--tvc-ink-soft);
+    margin: 0;
+    max-width: 62ch;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--tvc-ink-soft);
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+
+  @media (max-width: 700px) {
+    .upcoming-card {
+      grid-template-columns: 1fr;
+      text-align: left;
+    }
+    .countdown { text-align: left; }
+  }
+
+  @media (max-width: 620px) {
+    .controls { flex-direction: column; }
+    .view-toggle { align-self: flex-start; }
+  }
 </style>
+
+<script>
+  const chips = Array.from(document.querySelectorAll<HTMLButtonElement>('.chip'));
+  const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.view-toggle__btn'));
+  const upcomingItems = Array.from(document.querySelectorAll<HTMLElement>('#upcoming-list [data-tags]'));
+  const pastItems = Array.from(document.querySelectorAll<HTMLElement>('#grid-past [data-tags], #timeline-past [data-tags]'));
+  const gridPast = document.getElementById('grid-past');
+  const timelinePast = document.getElementById('timeline-past');
+  const pastEmpty = document.getElementById('past-empty');
+  const resultCount = document.getElementById('result-count');
+  const totalCount = upcomingItems.length + pastItems.length / 2; // each past item is rendered twice (grid + timeline)
+
+  let activeTag = 'all';
+  let activeView: 'grid' | 'timeline' = 'grid';
+
+  function matches(el: HTMLElement) {
+    if (activeTag === 'all') return true;
+    return (el.dataset.tags ?? '').split('|').includes(activeTag);
+  }
+
+  function render() {
+    let visiblePast = 0;
+    upcomingItems.forEach((el) => {
+      el.hidden = !matches(el);
+    });
+    pastItems.forEach((el) => {
+      const show = matches(el);
+      el.hidden = !show;
+      if (show && el.closest('#grid-past')) visiblePast++;
+    });
+
+    if (gridPast) gridPast.hidden = activeView !== 'grid';
+    if (timelinePast) timelinePast.hidden = activeView !== 'timeline';
+    if (pastEmpty) pastEmpty.hidden = visiblePast > 0;
+
+    if (resultCount) {
+      resultCount.textContent =
+        activeTag === 'all' ? `${totalCount} events total` : `Filtered to "${activeTag}"`;
+    }
+  }
+
+  chips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const tag = chip.dataset.tag ?? 'all';
+      activeTag = activeTag === tag ? 'all' : tag;
+      chips.forEach((c) => {
+        const t = c.dataset.tag ?? 'all';
+        c.classList.toggle('is-active', t === activeTag || (activeTag === 'all' && t === 'all'));
+      });
+      render();
+    });
+  });
+
+  viewButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      activeView = (btn.dataset.view as 'grid' | 'timeline') ?? 'grid';
+      viewButtons.forEach((b) => b.classList.toggle('is-active', b === btn));
+      render();
+    });
+  });
+
+  render();
+</script>

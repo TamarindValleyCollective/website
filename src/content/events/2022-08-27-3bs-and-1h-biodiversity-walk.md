@@ -1,7 +1,8 @@
 ---
-title: "2022: Aug 27/28 - 3Bs and 1H - Dusk to Dawn: Biodiversity Walks@TVC (Birds/Butterflies/Bees)"
+title: "3Bs and 1H - Dusk to Dawn: Biodiversity Walks@TVC (Birds/Butterflies/Bees)"
 date: 2022-08-27
-excerpt: "TVC - Tamarind Valley Collective : Even. Dusk to Dawn: Biodiversity Walks@TVC."
+endDate: 2022-08-28
+excerpt: "Farm stay, campfire, and guided walks to watch and identify birds, butterflies, insects, and plants — dusk to dawn."
 coverImage: "/images/events/2022-08-27-3bs-and-1h-biodiversity-walk/hero.png"
 tags: ["biodiversity", "walk"]
 ---

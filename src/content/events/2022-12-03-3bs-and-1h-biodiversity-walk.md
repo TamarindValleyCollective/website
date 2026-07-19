@@ -1,7 +1,8 @@
 ---
-title: "2022: Dec 3/4 - 3Bs and 1H - Dusk to Dawn: Biodiversity Walks@TVC (Birds/Butterflies/Bees)"
+title: "3Bs and 1H - Dusk to Dawn: Biodiversity Walks@TVC (Birds/Butterflies/Bees)"
 date: 2022-12-03
-excerpt: "Event Summary Spend Saturday evening and Sunday at Tamarind Valley Collective. Explore the vast property. Enjoy guided tours with our naturalists to watch and identify birds, butterflies, insects, and plants. Pics courtesy - Deepa Mohan (here) Limited to 20 participants. Deepa Mo"
+endDate: 2022-12-04
+excerpt: "Spend Saturday evening and Sunday exploring the property, with guided naturalist tours to watch and identify birds, butterflies, insects, and plants. Limited to 20 participants."
 coverImage: "/images/events/2022-12-03-3bs-and-1h-biodiversity-walk/hero.jpg"
 tags: ["biodiversity", "walk"]
 ---
