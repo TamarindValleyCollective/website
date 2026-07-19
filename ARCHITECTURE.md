@@ -7,12 +7,13 @@
 
 ## Overview
 
-**tvc.farm is live**, running this Astro rebuild on Netlify (behind Cloudflare for DNS/CDN).
-The site is almost entirely static (prerendered HTML/CSS/JS, no server at request time), with
-two deliberate exceptions that need a small serverless backend: the site-wide chat assistant
-and the Friends of TVC signup form. Both are deployed; see
-[Current Production Status](#current-production-status) — the chat assistant just needs its
-API key set to give real answers.
+**tvc.farm is live**, running this Astro rebuild on Netlify (behind Cloudflare for DNS/CDN),
+under the Netlify account owned by `contact@tvc.farm` (ownership moved there from a personal
+account on 2026-07-18). The site is almost entirely static (prerendered HTML/CSS/JS, no server
+at request time), with two deliberate exceptions that need a small serverless backend: the
+site-wide chat assistant and the Friends of TVC signup form. Both are fully live; see
+[Current Production Status](#current-production-status) — the chat assistant's
+`ANTHROPIC_API_KEY` was set on 2026-07-18, and it now answers with real, grounded responses.
 
 ## Diagram
 
@@ -34,7 +35,7 @@ flowchart TD
 
     subgraph HOST["3 · Hosting: Netlify — LIVE"]
         CDN["Static CDN<br/>Serves dist/ — everything except<br/>the two exceptions to the right"]
-        APIFN["Netlify Function: /api/chat<br/>Deployed and responding, but<br/>ANTHROPIC_API_KEY not yet set —<br/>replies with a friendly fallback message"]
+        APIFN["Netlify Function: /api/chat<br/>Deployed and live —<br/>ANTHROPIC_API_KEY set, calls the<br/>Anthropic API for grounded answers"]
         FORMS["Netlify Forms<br/>Live — captures /contact Friends of TVC<br/>signups (name + phone), no custom backend needed"]
     end
 
@@ -106,13 +107,16 @@ On every push to `main`, Netlify runs:
 
 ### 3. Hosting — Netlify (live)
 
+The Netlify project is owned by the `contact@tvc.farm` account (moved there from a personal
+account on 2026-07-18).
+
 - **Static CDN** — serves every prerendered page directly; the large majority of the site
   needs nothing more than this. Confirmed live via response headers
   (`cache-status: "Netlify Edge"`, `x-nf-request-id`).
-- **Netlify Function** — `chat.mts` is deployed and responding at `/api/chat`, but the
-  `ANTHROPIC_API_KEY` environment variable has not been set in the Netlify dashboard yet, so it
-  currently replies with a friendly "not configured yet" message instead of a real answer. Once
-  the key is set, no further deploy is needed — the function will pick it up immediately.
+- **Netlify Function** — `chat.mts` is deployed and live at `/api/chat`. The
+  `ANTHROPIC_API_KEY` environment variable was set in the Netlify dashboard on 2026-07-18;
+  verified directly against production (`POST https://tvc.farm/api/chat`) returning real,
+  grounded answers sourced from the site's own content.
 - **Netlify Forms** — live. Detects the Friends of TVC signup form (name + phone, collected so
   TVC can add people to the "Friends of TVC" WhatsApp group by hand) at build time
   (`data-netlify="true"`) and captures submissions with no custom backend code required;
@@ -128,7 +132,7 @@ function.
 ### 4. Visitor's Browser
 
 - **ChatWidget** — floating widget using the site logo; sends the visitor's question to
-  `/api/chat`. Live, but see the Netlify Function note above.
+  `/api/chat` and gets back a real, grounded answer.
 - **Friends of TVC form** — live. Collects name + phone number (no email/newsletter — signups
   are added to the "Friends of TVC" WhatsApp group by hand). Plain HTML form submission with a
   spam honeypot field, redirecting to a confirmation page on success.
@@ -152,9 +156,8 @@ function.
 | Member list fix (Shataparna & Deb removed) | ✅ Live |
 | Year-by-year interactive timeline (`/our-journey/timeline`) | ✅ Live |
 | Chat widget UI | ✅ Live |
-| Chat widget's actual AI responses | ⚠️ Deployed, but `ANTHROPIC_API_KEY` isn't set yet — needs to be added in Netlify's dashboard (Site settings → Environment variables) |
+| Chat widget's actual AI responses | ✅ Live — `ANTHROPIC_API_KEY` set 2026-07-18; verified with real requests against `tvc.farm/api/chat` returning grounded answers |
 | Friends of TVC signup (Netlify Forms) | ✅ Live — confirmed at `/contact`, with `/contact/thanks` as the confirmation page |
 
-The one remaining gap: set `ANTHROPIC_API_KEY` in Netlify's environment variables to activate
-real chat responses. No further deploy needed once it's set — the function picks it up
-immediately.
+No known gaps — every feature above is confirmed live in production. The Netlify project itself
+is owned by the `contact@tvc.farm` account (moved there from a personal account on 2026-07-18).
