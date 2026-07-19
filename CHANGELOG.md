@@ -11,6 +11,29 @@
 
 ---
 
+### 2026-07-19 — Sync ARCHITECTURE.md with the Anthropic key activation and Netlify account move
+**Requested by:** Sharath Jeppu
+
+**Ask:** "The Anthropic API key was updated yeterday. This is not reflecting in the documentation.
+Also, the netlify account has been changed from Rajesh's personal account to the one that is
+owned by contact@tvc.farm. Update all documentation files."
+
+**Change:** Both facts were already true in production and captured in this changelog's
+2026-07-18 05:29 entry, but `ARCHITECTURE.md` — the diagram and status doc, not this log — had
+never been updated to match, so it still described the chat function as waiting on its API key.
+Verified current behavior directly against production first (`POST https://tvc.farm/api/chat`
+now returns real, grounded answers instead of the "not configured yet" fallback), then updated
+`ARCHITECTURE.md` throughout: the Overview, the Mermaid diagram's `/api/chat` node, the Hosting
+section, the Visitor's Browser section, and the Current Production Status table now all show the
+chat assistant as fully live, and note the Netlify project is owned by `contact@tvc.farm`
+(moved from a personal account on 2026-07-18). Removed the now-resolved "remaining gap" callout.
+`README.md` wasn't touched — its `ANTHROPIC_API_KEY` mentions are generic setup instructions, not
+a status claim, so they weren't stale.
+
+**Commits:** `313632a`
+
+---
+
 ### 2026-07-19 — Give every page a photo hero, matching Our Journey's style; fix the Biodiversity picture
 **Requested by:** Sharath Jeppu
 
