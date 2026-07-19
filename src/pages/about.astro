@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
+import { PRINCIPLES } from '../data/principles';
 
 const staff = [
   { name: 'Madhavan', role: 'Farm lead & naturalist', bio: "A passionate naturalist who has been tirelessly working on rejuvenating the farm, documenting the flora and fauna, gathering seeds from the forest, maintaining a nursery, and nurturing the ecosystem. He knows every tree, bird, and reptile you'll run into at the farm, and lives on-site with his wife Krithika and daughter Sashrika." },
@@ -78,11 +79,13 @@ function initials(name: string) {
 }
 ---
 
-<BaseLayout title="About TVC" description="Why Tamarind Valley Collective exists, what we stand for, and the people — founding members, other members, and local staff — behind it.">
+<BaseLayout title="About TVC" description="Why Tamarind Valley Collective exists, what we stand for, and the people — founding members, other members, and local staff — behind it." image="/images/pages/home/gallery-1.jpg" imageWidth={768} imageHeight={576}>
   <PageHero
     eyebrow="About TVC"
     title="Why TVC?"
     intro="A collective of 53 families regenerating a 100-acre farm through permaculture, and the community — on and off the farm — that makes it possible."
+    image="/images/pages/home/gallery-1.jpg"
+    imageAlt="Aerial view of TVC's thatched huts on the hillside"
   />
 
   <section class="section wrapper">
@@ -104,10 +107,9 @@ function initials(name: string) {
       <div class="card">
         <h4>Core principles &amp; goals</h4>
         <ul>
-          <li><strong>Environmental health:</strong> protecting soil, water, air, and biodiversity.</li>
-          <li><strong>Economic profitability:</strong> ensuring the farm remains viable long-term.</li>
-          <li><strong>Social equity:</strong> fair treatment for farm workers and communities.</li>
-          <li><strong>Resource efficiency:</strong> minimizing non-renewable inputs and waste.</li>
+          {PRINCIPLES.map((p) => (
+            <li><strong>{p.name}:</strong> {p.desc}</li>
+          ))}
         </ul>
       </div>
       <div class="card">

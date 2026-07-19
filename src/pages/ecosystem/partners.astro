@@ -6,8 +6,8 @@ import { getCollection } from 'astro:content';
 const partners = await getCollection('partners');
 ---
 
-<BaseLayout title="Partners" description="Organizations Tamarind Valley Collective partners with.">
-  <PageHero eyebrow="Partners" title="Who we work with" />
+<BaseLayout title="Partners" description="Organizations Tamarind Valley Collective partners with." image="/images/pages/history/hero.jpg" imageWidth={1536} imageHeight={922}>
+  <PageHero eyebrow="Partners" title="Who we work with" image="/images/pages/history/hero.jpg" imageAlt="A thatched hut against the forested hillside" />
   <section class="section wrapper">
     <div class="grid">
       {partners.map((p) => (

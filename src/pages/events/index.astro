@@ -11,8 +11,8 @@ const past = allEvents.filter((e) => e.data.date < now);
 const formatDate = (d: Date) => d.toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
 ---
 
-<BaseLayout title="Events" description="Upcoming and past events at Tamarind Valley Collective — camps, workshops, biodiversity walks, and retreats.">
-  <PageHero eyebrow="Events" title="Upcoming & Past Events" />
+<BaseLayout title="Events" description="Upcoming and past events at Tamarind Valley Collective — camps, workshops, biodiversity walks, and retreats." image="/images/events/2026-08-01-foraging-day/hero.jpeg" imageWidth={720} imageHeight={480}>
+  <PageHero eyebrow="Events" title="Upcoming & Past Events" image="/images/events/2026-08-01-foraging-day/hero.jpeg" imageAlt="A group foraging walk through the farm's greenery" />
 
   <section class="section wrapper">
     <h2>Upcoming</h2>
