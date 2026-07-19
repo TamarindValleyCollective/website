@@ -51,11 +51,53 @@ const breadcrumbSchema = {
 <BaseLayout title={event.data.title} description={event.data.excerpt} image={event.data.coverImage} schema={[eventSchema, breadcrumbSchema]}>
   <PageHero eyebrow={formatDate(event.data.date)} title={event.data.title} image={event.data.coverImage} imageAlt={event.data.title} />
   <article class="section wrapper prose">
+    {(event.data.organizer || event.data.tags.length > 0) && (
+      <div class="meta">
+        {event.data.organizer && <p class="organizer">Organized by {event.data.organizer}</p>}
+        {event.data.tags.length > 0 && (
+          <ul class="tags">
+            {event.data.tags.map((t) => <li class="tag">{t}</li>)}
+          </ul>
+        )}
+      </div>
+    )}
     <Content />
   </article>
 </BaseLayout>
 
 <style>
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .organizer {
+    margin: 0;
+    color: var(--tvc-ink-soft);
+    font-size: 0.9rem;
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .tag {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 0.76rem;
+    font-weight: 600;
+  }
+
   .prose :global(h2) {
     margin-top: 32px;
   }
