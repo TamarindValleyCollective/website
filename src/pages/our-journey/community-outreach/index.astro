@@ -1,17 +1,17 @@
 ---
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import PageHero from '../../components/PageHero.astro';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import PageHero from '../../../components/PageHero.astro';
 import { getCollection } from 'astro:content';
 
 const posts = await getCollection('communityOutreach');
 ---
 
-<BaseLayout title="Community Outreach" description="Work TVC has done with the local community around the farm, in Odhipuram and Thagatti village.">
-  <PageHero eyebrow="Our Journey" title="Community Outreach" intro="Work with the local community around the farm, in Odhipuram and Thagatti village." />
+<BaseLayout title="Community Outreach" description="Work TVC has done with the local community around the farm, in Odhipuram and Thagatti village." image="/images/community-outreach/stem-experiential-learning-classes.jpeg" imageWidth={1280} imageHeight={960}>
+  <PageHero eyebrow="Our Journey" title="Community Outreach" intro="Work with the local community around the farm, in Odhipuram and Thagatti village." image="/images/community-outreach/stem-experiential-learning-classes.jpeg" imageAlt="A STEM class in session at the local village school" />
   <section class="section wrapper">
     <div class="grid">
       {posts.map((p) => (
-        <a class="card" href={`/community-outreach/${p.id}`}>
+        <a class="card" href={`/our-journey/community-outreach/${p.id}`}>
           {p.data.coverImage && <img src={p.data.coverImage} alt={p.data.title} />}
           <h3>{p.data.title}</h3>
           <p>{p.data.excerpt}</p>

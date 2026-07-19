@@ -1,7 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
-import Pending from '../components/Pending.astro';
 ---
 
 <BaseLayout title="Our Journey" description="From a degraded 100-acre farm to a regenerating ecosystem — the founding, the design, and the outreach along the way." image="/images/pages/journey/hero.jpg" imageWidth={1280} imageHeight={960}>
@@ -24,7 +23,7 @@ import Pending from '../components/Pending.astro';
 
   <section class="section wrapper">
     <div class="explore-grid">
-      <a class="card explore-card" href="/timeline">
+      <a class="card explore-card" href="/our-journey/timeline">
         <h3>Timeline</h3>
         <p>Nine years, year by year — tap through the story from a barren plot in 2017 to our first completed home, with photos for every month.</p>
         <span class="explore-link">Explore the timeline →</span>
@@ -34,18 +33,11 @@ import Pending from '../components/Pending.astro';
         <p>The permaculture principles behind the farm's layout — the wildlife corridor, food forests, and water works — plus a drone flyover.</p>
         <span class="explore-link">See the design →</span>
       </a>
-      <a class="card explore-card" href="/community-outreach">
+      <a class="card explore-card" href="/our-journey/community-outreach">
         <h3>Community engagement &amp; outreach</h3>
         <p>Our work with the local community around the farm, in Odhipuram and Thagatti village.</p>
         <span class="explore-link">See our outreach →</span>
       </a>
-    </div>
-  </section>
-
-  <section class="section section--tint">
-    <div class="wrapper">
-      <h2>What the future holds</h2>
-      <Pending note="No old-site content exists for this yet — it's genuinely new to write." />
     </div>
   </section>
 </BaseLayout>

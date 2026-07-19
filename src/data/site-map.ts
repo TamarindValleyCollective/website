@@ -10,12 +10,9 @@ export interface SiteLink {
 export const EXPLORE_LINKS: SiteLink[] = [
   { label: 'About TVC', href: '/about' },
   { label: 'Our Journey', href: '/our-journey' },
-  { label: 'Timeline', href: '/timeline' },
-  { label: 'The Design', href: '/our-journey/design' },
   { label: 'In Pictures', href: '/in-pictures' },
   { label: 'Biodiversity', href: '/ecosystem' },
   { label: 'Geography & Weather', href: '/ecosystem/geography' },
-  { label: 'Community Outreach', href: '/community-outreach' },
   { label: 'Resource Centre', href: '/resource-centre' },
   { label: 'Partners', href: '/ecosystem/partners' },
   { label: 'Events', href: '/events' },
@@ -37,10 +34,8 @@ export const ENGAGE_LINKS: SiteLink[] = [
 export const EXPLORE_PREFIXES = [
   '/about',
   '/our-journey',
-  '/timeline',
   '/in-pictures',
   '/ecosystem',
-  '/community-outreach',
   '/resource-centre',
   '/events',
 ];
