@@ -10,8 +10,8 @@ This is an Astro rebuild of the original site (previously a [Publii](https://get
 - **Live Biodiversity/Ecosystem explorer** (`/ecosystem`) — fetches sightings client-side from the farm's [iNaturalist project](https://www.inaturalist.org/) on every page load, with filters, a gallery view, and a map view.
 - **Site-wide chat widget** (bottom-right on every page, `src/components/ChatWidget.astro` + `netlify/functions/chat.mts`) — answers questions using *only* the website's own content, never general knowledge. `scripts/build-chat-context.mjs` runs after every `astro build`, strips nav/footer boilerplate from the prerendered HTML in `dist/`, and writes the remaining page text to `netlify/functions/site-content.json` (gitignored, regenerated every build). The Function stuffs that whole corpus into the system prompt for each request to the Anthropic API — simple and reliable at this site's size, though it means every request re-sends the full corpus rather than doing retrieval/embeddings, worth revisiting if the site's content grows much larger. Requires an `ANTHROPIC_API_KEY` — see Development below.
 - **Year-by-year timeline** (`/our-journey/timeline`, `src/components/JourneyTimelineStandalone.astro`) — nested under Our Journey rather than a top-level nav item: a horizontal "wire" of years that opens a modal with that year's story and a month-by-month photo carousel. Data is grouped into **eras** (currently just one, "Founding," 2017–2026) rather than one flat, ever-lengthening row of years — with a single era the picker never renders and that era's timeline shows directly, but the moment a second era gets real content the era-picker appears automatically and each era becomes its own selectable chapter. Icons are hand-drawn monoline SVGs, not emoji — different emoji glyphs render at inconsistent visual sizes even at the same font-size, which used to throw the row out of alignment.
-- **Newsletter signup** (`/contact`) — a plain HTML form submitted via [Netlify Forms](https://docs.netlify.com/manage/forms/setup/) (`data-netlify="true"` plus a honeypot field), so it only actually works once deployed on Netlify. Redirects to `/contact/thanks` on success.
-- **Content collections** for the things that change over time: `events`, `partners`, `products`, `community-outreach` (see `src/content.config.ts` for schemas).
+- **"Friends of TVC" signup** (`/contact`) — a plain HTML form (name + phone number, no email/newsletter) submitted via [Netlify Forms](https://docs.netlify.com/manage/forms/setup/) (`data-netlify="true"` plus a honeypot field), so it only actually works once deployed on Netlify. Submissions get added to the "Friends of TVC" WhatsApp group by hand. Redirects to `/contact/thanks` on success.
+- **Content collections** for the things that change over time: `events`, `partners`, `community-outreach` (see `src/content.config.ts` for schemas).
 - **Google Maps / My Maps embeds** for directions and the farm layout, and a YouTube embed for the aerial drone flyover.
 - **In Pictures** (`/in-pictures`) — a photo archive plus a link to the community-maintained Google Photos album for anything more recent (Google Photos albums can't be iframed — they send `X-Frame-Options: SAMEORIGIN` — so that's a link-out card, not an embed).
 
@@ -25,10 +25,10 @@ Copy `src/content/events/_template.md`, rename it to something like `2026-03-15-
 /
 ├── public/                  static assets (images, fonts, PDFs) served as-is
 ├── src/
-│   ├── components/          Nav, Footer, PageHero, Pending, ChatWidget, and the biodiversity explorer
-│   ├── content/              markdown content collections (events, partners, products, community-outreach)
+│   ├── components/          Nav, Footer, Breadcrumbs, PageHero, JsonLd, ChatWidget, and the biodiversity explorer
+│   ├── content/              markdown content collections (events, partners, community-outreach)
 │   ├── content.config.ts     collection schemas
-│   ├── layouts/               BaseLayout wraps every page (Nav + Footer + ChatWidget + <head>)
+│   ├── layouts/               BaseLayout wraps every page (Nav + Breadcrumbs + Footer + ChatWidget + JsonLd + <head>)
 │   ├── pages/                 file-based routes
 │   └── styles/global.css      design tokens (colors, type, spacing) and shared base styles
 ├── netlify/functions/chat.mts  the one serverless piece — see "Chat widget" below

@@ -7,11 +7,17 @@ const exploreCards = [
   { href: '/our-journey', title: 'Our Journey', desc: 'From a degraded farm to a regenerating ecosystem, walked year by year in photos.', img: '/images/pages/journey/hero.jpg' },
   { href: '/in-pictures', title: 'In Pictures', desc: "Pictures are worth 10,000 words — an old proverb, still true.", img: '/images/pages/in-pictures/2017-02/0644E35B-70C7-4000-90E3-3EB64D924471.jpeg' },
   { href: '/ecosystem', title: 'Biodiversity', desc: 'Over 100 bird species — live sightings from iNaturalist.', img: '/images/pages/trekking/watering-hole.jpg' },
+  { href: '/ecosystem/geography', title: 'Geography & Weather', desc: 'The land TVC sits on, and the rainfall and monsoon patterns that shape it.', img: '/images/pages/home/gallery-4.jpg' },
   { href: '/resource-centre', title: 'Resource Centre', desc: 'Lantana furniture and learning programs from TVC.', img: '/images/products/tamarind-chutney.jpeg' },
-  { href: '/ecosystem/partners', title: 'Partners', desc: 'Organizations we work with, from hospitality to permaculture design.', img: '/images/pages/history/hero.jpg' },
   { href: '/events', title: 'Events', desc: 'Camps, workshops, biodiversity walks, and retreats — upcoming and past.', img: '/images/events/2026-08-01-foraging-day/hero.jpeg' },
 ];
 
+// Deliberately 4 curated rungs, not a 1:1 mirror of every ENGAGE_LINKS page
+// the way exploreCards mirrors EXPLORE_LINKS — this ladder is "levels of
+// engagement" (day visit → overnight → work with us → join), not a page
+// index. Trekking Trails and How to Reach are folded into the "Come for a
+// day"/"Spend the night" rungs they support; Contact Us has no rung since
+// it isn't a level of engagement in its own right.
 const engageRungs = [
   {
     step: '01',

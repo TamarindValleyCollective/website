@@ -14,7 +14,6 @@ export const EXPLORE_LINKS: SiteLink[] = [
   { label: 'Biodiversity', href: '/ecosystem' },
   { label: 'Geography & Weather', href: '/ecosystem/geography' },
   { label: 'Resource Centre', href: '/resource-centre' },
-  { label: 'Partners', href: '/ecosystem/partners' },
   { label: 'Events', href: '/events' },
 ];
 

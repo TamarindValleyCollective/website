@@ -20,9 +20,9 @@ site-wide chat assistant and the Friends of TVC signup form. Both are fully live
 ```mermaid
 flowchart TD
     subgraph SRC["1 · Source — github.com/TamarindValleyCollective/website (main)"]
-        PAGES["src/pages/*.astro<br/>File-based routes: Home, About, Visit,<br/>Events, Ecosystem, Timeline, Contact, etc."]
+        PAGES["src/pages/*.astro<br/>File-based routes: Home, About, Visit,<br/>Events, Ecosystem, Our Journey, Contact, etc."]
         COMPONENTS["src/components/<br/>Nav, Footer, PageHero, ChatWidget,<br/>JourneyTimelineStandalone, BiodiversityExplorer"]
-        CONTENT["src/content/*<br/>Markdown collections: events, partners,<br/>products, community-outreach"]
+        CONTENT["src/content/*<br/>Markdown collections: events, partners,<br/>community-outreach"]
         FUNC_SRC["netlify/functions/chat.mts<br/>Serverless function, calls Anthropic API server-side"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
     end
@@ -45,7 +45,7 @@ flowchart TD
         CHATW["ChatWidget.astro<br/>Floating widget, site logo.<br/>Calls /api/chat"]
         NEWS["Friends of TVC form<br/>Plain HTML POST,<br/>data-netlify=true + honeypot"]
         BIODIV["BiodiversityExplorer<br/>Fetches sightings directly from<br/>iNaturalist's public API"]
-        TIMELINE["Timeline / other pages<br/>Era-based year timeline, event listings —<br/>pure static, no calls out"]
+        TIMELINE["Our Journey / other pages<br/>Era-based year timeline, event listings —<br/>pure static, no calls out"]
     end
 
     subgraph EXTERNAL["External services (called directly by the browser)"]
@@ -84,11 +84,11 @@ Forms) · ⬜ external third-party service · 🟡 Cloudflare (DNS/CDN layer in 
 ### 1. Source (GitHub)
 
 - **`src/pages/*.astro`** — file-based routes for every page: Home, About, Visit, Events,
-  Ecosystem, Timeline, Contact, and their sub-pages.
+  Ecosystem, Our Journey, Contact, and their sub-pages.
 - **`src/components/`** — shared UI: Nav, Footer, PageHero, the ChatWidget, the year-by-year
   `JourneyTimelineStandalone` component, and the live `BiodiversityExplorer`.
 - **`src/content/`** — Markdown content collections that change over time without touching
-  code: `events`, `partners`, `products`, `community-outreach`.
+  code: `events`, `partners`, `community-outreach`.
 - **`netlify/functions/chat.mts`** — the one serverless function, powering the chat widget.
 - **`scripts/build-chat-context.mjs`** — post-build script that prepares the chat widget's
   knowledge base.
@@ -138,8 +138,8 @@ function.
   spam honeypot field, redirecting to a confirmation page on success.
 - **BiodiversityExplorer** — fetches live biodiversity sightings directly from iNaturalist's
   public API on every page load; no TVC backend involved.
-- **Timeline and other pages** — the era-based year-by-year story, event listings, and the
-  rest of the site are pure static content with no external calls.
+- **Our Journey timeline and other pages** — the era-based year-by-year story, event listings,
+  and the rest of the site are pure static content with no external calls.
 - A few pages also embed third-party content directly: Google Maps/My Maps (directions and
   farm layout), YouTube (aerial drone flyover), and a link out to a community-maintained
   Google Photos album (which can't be embedded — that service sends its own
@@ -151,7 +151,7 @@ function.
 
 | Feature | Status |
 |---|---|
-| Static pages (Home, About, Visit, Events, Ecosystem, Timeline, etc.) | ✅ Live |
+| Static pages (Home, About, Visit, Events, Ecosystem, Our Journey, etc.) | ✅ Live |
 | Corrected link-preview images (WhatsApp/iMessage OG fix) | ✅ Live |
 | Member list fix (Shataparna & Deb removed) | ✅ Live |
 | Year-by-year interactive timeline (`/our-journey/timeline`) | ✅ Live |

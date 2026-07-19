@@ -4,7 +4,7 @@ import { EXPLORE_LINKS, ENGAGE_LINKS } from '../data/site-map';
 // Mirrors the homepage's own Explore/Engage fork (src/pages/index.astro) so
 // the nav reads as the same map wherever you are on the site, not a
 // different grouping than the one you land on at "/". Explore is wide
-// (10 items) because it's every informational page on the site — see
+// (7 items) because it's every informational page on the site — see
 // .nav__dropdown--wide below for the two-column treatment that needs.
 const navItems = [
   { label: 'Explore', wide: true, children: EXPLORE_LINKS },
@@ -167,7 +167,7 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
     display: flex;
   }
 
-  /* Explore has 10 items — a single column runs uncomfortably tall, so it
+  /* Explore has 7 items — a single column runs uncomfortably tall, so it
      gets a two-column grid instead. Declared after the rules above so it
      wins the display:flex vs display:grid tie on hover/focus. */
   .nav__dropdown--wide {
