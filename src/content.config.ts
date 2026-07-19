@@ -27,23 +27,13 @@ const communityOutreach = defineCollection({
   }),
 });
 
-const products = defineCollection({
-  loader: glob({ pattern: '**/*.md', base: './src/content/products' }),
-  schema: z.object({
-    title: z.string(),
-    excerpt: z.string(),
-    coverImage: z.string().optional(),
-  }),
-});
-
 const partners = defineCollection({
   loader: glob({ pattern: '**/*.md', base: './src/content/partners' }),
   schema: z.object({
     title: z.string(),
-    url: z.string().url().optional(),
     excerpt: z.string(),
     coverImage: z.string().optional(),
   }),
 });
 
-export const collections = { events, communityOutreach, products, partners };
+export const collections = { events, communityOutreach, partners };

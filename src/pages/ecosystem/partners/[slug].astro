@@ -15,7 +15,6 @@ const partnerSchema = {
   '@context': 'https://schema.org',
   '@type': 'Organization',
   name: partner.data.title,
-  url: partner.data.url,
   description: partner.data.excerpt,
   logo: partner.data.coverImage ? new URL(partner.data.coverImage, Astro.site).toString() : undefined,
 };
