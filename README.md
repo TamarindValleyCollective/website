@@ -11,13 +11,24 @@ This is an Astro rebuild of the original site (previously a [Publii](https://get
 - **Site-wide chat widget** (bottom-right on every page, `src/components/ChatWidget.astro` + `netlify/functions/chat.mts`) — answers questions using *only* the website's own content, never general knowledge. `scripts/build-chat-context.mjs` runs after every `astro build`, strips nav/footer boilerplate from the prerendered HTML in `dist/`, and writes the remaining page text to `netlify/functions/site-content.json` (gitignored, regenerated every build). The Function stuffs that whole corpus into the system prompt for each request to the Anthropic API — simple and reliable at this site's size, though it means every request re-sends the full corpus rather than doing retrieval/embeddings, worth revisiting if the site's content grows much larger. Requires an `ANTHROPIC_API_KEY` — see Development below.
 - **Year-by-year timeline** (`/our-journey/timeline`, `src/components/JourneyTimelineStandalone.astro`) — nested under Our Journey rather than a top-level nav item: a horizontal "wire" of years that opens a modal with that year's story and a month-by-month photo carousel. Data is grouped into **eras** (currently just one, "Founding," 2017–2026) rather than one flat, ever-lengthening row of years — with a single era the picker never renders and that era's timeline shows directly, but the moment a second era gets real content the era-picker appears automatically and each era becomes its own selectable chapter. Icons are hand-drawn monoline SVGs, not emoji — different emoji glyphs render at inconsistent visual sizes even at the same font-size, which used to throw the row out of alignment.
 - **"Friends of TVC" signup** (`/contact`) — a plain HTML form (name + phone number, no email/newsletter) submitted via [Netlify Forms](https://docs.netlify.com/manage/forms/setup/) (`data-netlify="true"` plus a honeypot field), so it only actually works once deployed on Netlify. Submissions get added to the "Friends of TVC" WhatsApp group by hand. Redirects to `/contact/thanks` on success.
-- **Content collections** for the things that change over time: `events`, `partners`, `community-outreach` (see `src/content.config.ts` for schemas).
+- **Content collections** for the things that change over time: `events`, `partners`, `community-outreach`, `photos` (see `src/content.config.ts` for schemas).
 - **Google Maps / My Maps embeds** for directions and the farm layout, and a YouTube embed for the aerial drone flyover.
-- **In Pictures** (`/in-pictures`) — a photo archive plus a link to the community-maintained Google Photos album for anything more recent (Google Photos albums can't be iframed — they send `X-Frame-Options: SAMEORIGIN` — so that's a link-out card, not an embed).
+- **In Pictures** (`/in-pictures`, `src/components/photos/PhotoGallery.astro`) — the curated photo archive: date and camera-model filter chips (independently combinable), a Grid/Map view toggle (the map reuses the Leaflet + OpenStreetMap setup from the biodiversity explorer, adapted for photo-thumbnail pins — see `src/components/photos/photo-map.ts`), and a lightbox with a Flickr-style EXIF panel (camera, aperture, shutter speed, ISO, focal length) plus a per-photo location map. EXIF/GPS render when present and degrade gracefully when not, since older photos (WhatsApp-forwarded, etc.) typically have none. Images are hosted on Cloudflare R2 (`media.tvc.farm`) rather than committed to the repo — see "Curating new photos" below.
 
 ## Adding an upcoming event
 
 Copy `src/content/events/_template.md`, rename it to something like `2026-03-15-your-event-name.md` (the filename becomes the URL), fill in the fields, and delete the `draft: true` line. It'll show up on `/events` on the next build — no code changes needed. Any other new `.md` file in that folder works the same way.
+
+## Curating new photos
+
+Photo selection happens offline (pick the good ones yourself, however you like) — `scripts/curate-photos.mjs` handles the rest:
+
+```sh
+node scripts/curate-photos.mjs ./path/to/selected-photos --dry-run   # preview first
+node scripts/curate-photos.mjs ./path/to/selected-photos             # extracts EXIF/GPS, uploads to R2, writes content entries
+```
+
+Requires R2 credentials in a local `.env` (see `.env.example`) — never committed, and never needed as a Netlify environment variable, since curation runs locally and the site only ever embeds the public `media.tvc.farm` URLs the script produces. JPEG/PNG only for now (convert HEIC first). Captions come out as a placeholder derived from the filename — review and rewrite them before committing the generated `src/content/photos/*.md` files.
 
 ## Project structure
 

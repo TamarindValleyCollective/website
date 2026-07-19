@@ -19,10 +19,14 @@ site-wide chat assistant and the Friends of TVC signup form. Both are fully live
 
 ```mermaid
 flowchart TD
+    subgraph CURATE["0 · Offline photo curation — local machine, not part of the build"]
+        SCRIPT_CURATE["scripts/curate-photos.mjs<br/>Extracts EXIF/GPS, resizes via sharp,<br/>uploads to R2, writes photos/*.md"]
+    end
+
     subgraph SRC["1 · Source — github.com/TamarindValleyCollective/website (main)"]
         PAGES["src/pages/*.astro<br/>File-based routes: Home, About, Visit,<br/>Events, Ecosystem, Our Journey, Contact, etc."]
-        COMPONENTS["src/components/<br/>Nav, Footer, PageHero, ChatWidget,<br/>JourneyTimelineStandalone, BiodiversityExplorer"]
-        CONTENT["src/content/*<br/>Markdown collections: events, partners,<br/>community-outreach"]
+        COMPONENTS["src/components/<br/>Nav, Footer, PageHero, ChatWidget,<br/>JourneyTimelineStandalone, BiodiversityExplorer,<br/>PhotoGallery"]
+        CONTENT["src/content/*<br/>Markdown collections: events, partners,<br/>community-outreach, photos"]
         FUNC_SRC["netlify/functions/chat.mts<br/>Serverless function, calls Anthropic API server-side"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
     end
@@ -45,6 +49,7 @@ flowchart TD
         CHATW["ChatWidget.astro<br/>Floating widget, site logo.<br/>Calls /api/chat"]
         NEWS["Friends of TVC form<br/>Plain HTML POST,<br/>data-netlify=true + honeypot"]
         BIODIV["BiodiversityExplorer<br/>Fetches sightings directly from<br/>iNaturalist's public API"]
+        PHOTOS["PhotoGallery (/in-pictures)<br/>Filters, Grid/Map toggle, lightbox —<br/>images served directly from R2"]
         TIMELINE["Our Journey / other pages<br/>Era-based year timeline, event listings —<br/>pure static, no calls out"]
     end
 
@@ -52,8 +57,8 @@ flowchart TD
         INAT["iNaturalist API"]
         GMAPS["Google Maps / My Maps (iframe)"]
         YT["YouTube (iframe)"]
-        GPHOTOS["Google Photos (link-out only)"]
         ANTHROPIC["Anthropic Claude API<br/>(via chat.mts only)"]
+        R2["Cloudflare R2<br/>media.tvc.farm — curated photo storage,<br/>served directly to the browser"]
     end
 
     SRC --> BUILD
@@ -62,6 +67,9 @@ flowchart TD
     CF --> BROWSER
     BIODIV -.-> INAT
     APIFN -.-> ANTHROPIC
+    PHOTOS -.-> R2
+    SCRIPT_CURATE -.->|"S3-compatible upload"| R2
+    SCRIPT_CURATE -->|"writes"| CONTENT
     CHATW --> APIFN
     NEWS --> FORMS
 
@@ -70,28 +78,38 @@ flowchart TD
     classDef externalStyle fill:#f6f1e7,stroke:#c9c2a8,color:#22291f
     classDef cfStyle fill:#fef3e0,stroke:#e8891c,color:#7a4a00
 
-    class PAGES,COMPONENTS,CONTENT,CHATW,NEWS,BIODIV,TIMELINE,CDN staticStyle
+    class PAGES,COMPONENTS,CONTENT,CHATW,NEWS,BIODIV,PHOTOS,TIMELINE,CDN staticStyle
     class FUNC_SRC,SCRIPT_SRC,APIFN,FORMS,ANTHROPIC netlifyStyle
-    class INAT,GMAPS,YT,GPHOTOS externalStyle
+    class INAT,GMAPS,YT,R2 externalStyle
     class CF cfStyle
+    class SCRIPT_CURATE cfStyle
 ```
 
 **Legend:** 🟢 static / no server required · 🟠 depends on Netlify specifically (Functions or
-Forms) · ⬜ external third-party service · 🟡 Cloudflare (DNS/CDN layer in front of Netlify).
+Forms) · ⬜ external third-party service (includes R2, which is a Cloudflare product but plays
+the role of an external media store here, not part of the Netlify hosting path) · 🟡 Cloudflare
+(DNS/CDN layer in front of Netlify, and the offline curation step, since it uploads to R2 - not
+part of the Netlify build).
 
 ## Layer-by-layer detail
 
 ### 1. Source (GitHub)
 
 - **`src/pages/*.astro`** — file-based routes for every page: Home, About, Visit, Events,
-  Ecosystem, Our Journey, Contact, and their sub-pages.
+  Ecosystem, Our Journey, Contact, In Pictures, and their sub-pages.
 - **`src/components/`** — shared UI: Nav, Footer, PageHero, the ChatWidget, the year-by-year
-  `JourneyTimelineStandalone` component, and the live `BiodiversityExplorer`.
+  `JourneyTimelineStandalone` component, the live `BiodiversityExplorer`, and `PhotoGallery`
+  (In Pictures - filters, Grid/Map toggle, lightbox; its map, `photo-map.ts`, reuses the same
+  Leaflet + OpenStreetMap setup as the biodiversity map, adapted for photo-thumbnail pins).
 - **`src/content/`** — Markdown content collections that change over time without touching
-  code: `events`, `partners`, `community-outreach`.
+  code: `events`, `partners`, `community-outreach`, `photos` (the last one populated by the
+  offline curation script below, not authored by hand).
 - **`netlify/functions/chat.mts`** — the one serverless function, powering the chat widget.
 - **`scripts/build-chat-context.mjs`** — post-build script that prepares the chat widget's
   knowledge base.
+- **`scripts/curate-photos.mjs`** — run locally, not part of the Netlify build. Reads a folder
+  of already-selected photos, extracts EXIF/GPS, uploads a display and thumbnail size of each to
+  Cloudflare R2, and writes one `src/content/photos/*.md` entry per photo.
 
 ### 2. Build
 
@@ -129,6 +147,17 @@ the `server: cloudflare` header alongside Netlify's own `x-nf-request-id`). This
 layer only, not an application host — Netlify remains the origin serving the actual site and
 function.
 
+### Cloudflare R2 (curated photo storage)
+
+Separate from the above — same Cloudflare account, different product. The `tvc-photos` R2
+bucket holds the display and thumbnail JPEGs `scripts/curate-photos.mjs` uploads, served
+publicly at `media.tvc.farm` (a custom domain connected directly to the bucket, so it's on
+Cloudflare's edge like the rest of the site, just not proxied through Netlify). The site never
+talks to R2's API — pages just embed the public `media.tvc.farm/...` URLs the curation script
+already baked into each photo's content-collection entry, the same way any other static image
+URL works. No Netlify environment variable is involved; the upload credentials only ever need
+to exist on whichever machine runs the curation script.
+
 ### 4. Visitor's Browser
 
 - **ChatWidget** — floating widget using the site logo; sends the visitor's question to
@@ -138,12 +167,14 @@ function.
   spam honeypot field, redirecting to a confirmation page on success.
 - **BiodiversityExplorer** — fetches live biodiversity sightings directly from iNaturalist's
   public API on every page load; no TVC backend involved.
+- **PhotoGallery** (`/in-pictures`) — date/camera filter chips and a Grid/Map view toggle over
+  the `photos` content collection (server-rendered, no fetch involved); photo files themselves
+  load directly from `media.tvc.farm` (R2). The Map view and the lightbox's per-photo mini map
+  both use the same Leaflet + OpenStreetMap tiles as the biodiversity map.
 - **Our Journey timeline and other pages** — the era-based year-by-year story, event listings,
   and the rest of the site are pure static content with no external calls.
 - A few pages also embed third-party content directly: Google Maps/My Maps (directions and
-  farm layout), YouTube (aerial drone flyover), and a link out to a community-maintained
-  Google Photos album (which can't be embedded — that service sends its own
-  `X-Frame-Options: SAMEORIGIN` header).
+  farm layout) and YouTube (aerial drone flyover).
 
 ## Current Production Status
 
