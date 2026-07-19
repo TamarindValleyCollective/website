@@ -21,6 +21,7 @@ site-wide chat assistant and the Friends of TVC signup form. Both are fully live
 flowchart TD
     subgraph CURATE["0 · Offline photo curation — local machine, not part of the build"]
         SCRIPT_CURATE["scripts/curate-photos.mjs<br/>Extracts EXIF/GPS, resizes via sharp,<br/>uploads to R2, writes photos/*.md"]
+        SCRIPT_CAPTION["scripts/caption-photos.mjs<br/>Sends each thumbnail to Claude,<br/>backfills draft captions into photos/*.md"]
     end
 
     subgraph SRC["1 · Source — github.com/TamarindValleyCollective/website (main)"]
@@ -57,7 +58,7 @@ flowchart TD
         INAT["iNaturalist API"]
         GMAPS["Google Maps / My Maps (iframe)"]
         YT["YouTube (iframe)"]
-        ANTHROPIC["Anthropic Claude API<br/>(via chat.mts only)"]
+        ANTHROPIC["Anthropic Claude API<br/>(chat.mts server-side,<br/>and caption-photos.mjs locally)"]
         R2["Cloudflare R2<br/>media.tvc.farm — curated photo storage,<br/>served directly to the browser"]
     end
 
@@ -70,6 +71,8 @@ flowchart TD
     PHOTOS -.-> R2
     SCRIPT_CURATE -.->|"S3-compatible upload"| R2
     SCRIPT_CURATE -->|"writes"| CONTENT
+    SCRIPT_CAPTION -.->|"vision request per photo"| ANTHROPIC
+    SCRIPT_CAPTION -->|"backfills caption:"| CONTENT
     CHATW --> APIFN
     NEWS --> FORMS
 
@@ -77,19 +80,20 @@ flowchart TD
     classDef netlifyStyle fill:#fdead3,stroke:#f78520,color:#9a5310
     classDef externalStyle fill:#f6f1e7,stroke:#c9c2a8,color:#22291f
     classDef cfStyle fill:#fef3e0,stroke:#e8891c,color:#7a4a00
+    classDef localStyle fill:#eef0f5,stroke:#6b7280,color:#374151
 
     class PAGES,COMPONENTS,CONTENT,CHATW,NEWS,BIODIV,PHOTOS,TIMELINE,CDN staticStyle
     class FUNC_SRC,SCRIPT_SRC,APIFN,FORMS,ANTHROPIC netlifyStyle
     class INAT,GMAPS,YT,R2 externalStyle
     class CF cfStyle
-    class SCRIPT_CURATE cfStyle
+    class SCRIPT_CURATE,SCRIPT_CAPTION localStyle
 ```
 
 **Legend:** 🟢 static / no server required · 🟠 depends on Netlify specifically (Functions or
 Forms) · ⬜ external third-party service (includes R2, which is a Cloudflare product but plays
 the role of an external media store here, not part of the Netlify hosting path) · 🟡 Cloudflare
-(DNS/CDN layer in front of Netlify, and the offline curation step, since it uploads to R2 - not
-part of the Netlify build).
+DNS/CDN layer in front of Netlify · ⚪ runs locally on a contributor's machine, outside the
+Netlify build (the offline photo curation and captioning scripts).
 
 ## Layer-by-layer detail
 
@@ -110,6 +114,10 @@ part of the Netlify build).
 - **`scripts/curate-photos.mjs`** — run locally, not part of the Netlify build. Reads a folder
   of already-selected photos, extracts EXIF/GPS, uploads a display and thumbnail size of each to
   Cloudflare R2, and writes one `src/content/photos/*.md` entry per photo.
+- **`scripts/caption-photos.mjs`** — also run locally. Backfills a draft `caption:` for any
+  `photos/*.md` entry still carrying the filename-derived placeholder, by sending that photo's
+  thumbnail to the Anthropic API (vision) and writing back a short literal description. Drafts
+  are meant to be reviewed/rewritten by hand before publishing, not used as final copy.
 
 ### 2. Build
 
@@ -157,6 +165,11 @@ talks to R2's API — pages just embed the public `media.tvc.farm/...` URLs the 
 already baked into each photo's content-collection entry, the same way any other static image
 URL works. No Netlify environment variable is involved; the upload credentials only ever need
 to exist on whichever machine runs the curation script.
+
+`scripts/caption-photos.mjs` calls the Anthropic API directly from the same local machine (using
+the same `ANTHROPIC_API_KEY` that `netlify dev` uses for local chat-widget testing) to draft
+captions — this is unrelated to R2, just another offline step in the same curation workflow, and
+never touches Netlify either.
 
 ### 4. Visitor's Browser
 
