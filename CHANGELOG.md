@@ -11,6 +11,70 @@
 
 ---
 
+### 2026-07-19 — Give every page a photo hero, matching Our Journey's style; fix the Biodiversity picture
+**Requested by:** Sharath Jeppu
+
+**Ask:** "The picture in teh hero banner looks nice on the Our Journey page. Can this be made
+consistant across all the other pages. Also, choose a better picture for biodiversity. The
+poster does not render well in a landscape orientation."
+
+**Change:** `PageHero` has always supported two variants: a photo hero (image + scrim + white
+title text, as used on Our Journey) and a flat "plain" hero with no photo. 13 pages were still on
+the plain variant — `about`, `contact` and `contact/thanks`, `ecosystem`, `ecosystem/geography`,
+`ecosystem/partners`, `events`, `in-pictures`, `join`, `resource-centre`, `visit`,
+`visit/camping`, `visit/day-visit`, and `our-journey/community-outreach`. Gave each a photo,
+reusing the image the homepage already associates with that destination wherever one existed
+(e.g. `visit/camping` now uses the same sunflower photo its homepage "Spend the night" card links
+through to), so the teaser and the landing page always agree — the same pattern Our Journey
+itself already followed. Also set each page's `BaseLayout` `image`/`imageWidth`/`imageHeight` to
+match, improving social-sharing previews along the way.
+
+The old Biodiversity hero source was `events/2024-12-21-3bs-and-1h-biodiversity-walk/hero.jpg` —
+a portrait (1080×1375) event poster with its title, schedule, and pricing baked into the image as
+text. Cropped into a wide landscape banner via `object-fit: cover`, most of that text was lost.
+Replaced it with a real landscape photo (1384×1038) of a forest watering hole, and updated the
+homepage's Biodiversity thumbnail to match.
+
+**Commits:** `a9d3a14`
+
+---
+
+### 2026-07-19 — Nest Timeline, Community Outreach, and Design under Our Journey; fix duplicate content across pages
+**Requested by:** Sharath Jeppu
+
+**Ask:** Across three follow-up messages: "The Our Journey and Timeline can be collapsed into one
+section under journey instead of having a separate section for timeline"; "The community outreach
+section can also be collapsed into this instead appearing seperate. Also, remove the section of
+what the future holds"; and "There are duplicate content in different sections. for example,
+resource centre and our journey both lead to the community outreach section. Can you identify
+such inconsistencies and fix them?"
+
+**Change:** Timeline and Community Outreach were separate top-level Explore nav items and
+homepage cards despite being entirely children of Our Journey — and unlike their sibling
+`/our-journey/design`, neither was even nested in its URL. Moved both to `/our-journey/timeline`
+and `/our-journey/community-outreach`, delisted them from the top-level Explore nav dropdown and
+the homepage's Explore grid (each is still reachable via its card on the Journey page itself), and
+added redirects from the old `/timeline` and `/community-outreach` URLs (including individual
+outreach post slugs). Removed the empty "What the future holds" `Pending` stub from the Journey
+page. Extended the same de-listing to "The Design," found to have the identical problem.
+
+A follow-up audit for duplicate/miscategorized content (prompted by noticing Resource Centre and
+Our Journey both linking to Community Outreach) found: Resource Centre was fully re-listing every
+Community Outreach post as its own card grid instead of linking to the now-canonical listing page
+— replaced with a one-line teaser and link. `visit.astro`'s "What to expect" section carried a
+near-verbatim copy of the land-layout paragraph that's the whole point of `/our-journey/design` —
+shortened to a link. The homepage and About page each hardcoded the same "Core principles" list
+independently, risking drift — extracted both into `src/data/principles.ts` so they render from
+one source, and added a link from the homepage section to `/about` for the fuller treatment.
+
+Also found and flagged (not fixed, pending a decision): an orphaned `/ecosystem/products/[slug]`
+route left over from an earlier "drop Produce" cleanup — its `products` content collection has no
+files and nothing links to it.
+
+**Commits:** `a72cf77`
+
+---
+
 ### 2026-07-18 — Add a custom 404 page
 **Requested by:** Rajesh Thiagarajan
 

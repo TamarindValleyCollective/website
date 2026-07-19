@@ -150,7 +150,7 @@ function.
 | Static pages (Home, About, Visit, Events, Ecosystem, Timeline, etc.) | ✅ Live |
 | Corrected link-preview images (WhatsApp/iMessage OG fix) | ✅ Live |
 | Member list fix (Shataparna & Deb removed) | ✅ Live |
-| Year-by-year interactive timeline (`/timeline`) | ✅ Live |
+| Year-by-year interactive timeline (`/our-journey/timeline`) | ✅ Live |
 | Chat widget UI | ✅ Live |
 | Chat widget's actual AI responses | ⚠️ Deployed, but `ANTHROPIC_API_KEY` isn't set yet — needs to be added in Netlify's dashboard (Site settings → Environment variables) |
 | Friends of TVC signup (Netlify Forms) | ✅ Live — confirmed at `/contact`, with `/contact/thanks` as the confirmation page |
