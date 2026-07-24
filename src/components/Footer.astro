@@ -9,9 +9,9 @@ const year = new Date().getFullYear();
 ---
 
 <footer class="footer">
-  <div class="wrapper footer__inner">
+  <div class="wrapper footer__top">
     <a class="footer__brand" href="/">
-      <img src="/images/brand/tvc-logo-mark.png" alt="Tamarind Valley Collective" width="52" height="52" />
+      <img src="/images/brand/tvc-logo-mark.png" alt="Tamarind Valley Collective" width="36" height="36" />
       <span>Tamarind Valley Collective</span>
     </a>
     <p class="footer__blurb">A 100-acre permaculture farm collectively owned by 53 families, regenerating degraded land near Kanakapura since 2017.</p>
@@ -20,6 +20,8 @@ const year = new Date().getFullYear();
         <a href={link.href} target="_blank" rel="noopener noreferrer">{link.label}</a>
       ))}
     </div>
+  </div>
+  <div class="wrapper footer__bottom">
     <p class="footer__copy">© {year} Tamarind Valley Collective. All rights reserved.</p>
     <p class="footer__legal">
       <a href="/privacy">Privacy &amp; Cookies</a>
@@ -36,24 +38,25 @@ const year = new Date().getFullYear();
     margin-top: 64px;
   }
 
-  .footer__inner {
-    padding: 40px 24px 32px;
+  .footer__top {
+    padding: 20px 24px;
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 14px;
-    text-align: center;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px 24px;
   }
 
   .footer__brand {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     text-decoration: none;
     color: #fff;
     font-family: var(--font-wordmark);
     font-weight: 700;
-    font-size: 1.1rem;
+    font-size: 0.95rem;
+    flex-shrink: 0;
   }
 
   .footer__brand img {
@@ -62,22 +65,23 @@ const year = new Date().getFullYear();
 
   .footer__blurb {
     margin: 0;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: #b9d0bc;
     max-width: 46ch;
+    flex: 1 1 320px;
   }
 
   .footer__social {
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
-    gap: 18px;
+    gap: 16px;
+    flex-shrink: 0;
   }
 
   .footer__social a {
     color: #eef5ee;
     text-decoration: none;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     font-weight: 600;
   }
 
@@ -85,8 +89,18 @@ const year = new Date().getFullYear();
     color: var(--tvc-orange);
   }
 
+  .footer__bottom {
+    padding: 10px 24px;
+    border-top: 1px solid rgba(238, 245, 238, 0.12);
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 6px 16px;
+  }
+
   .footer__copy {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: #b9d0bc;
     margin: 0;
   }
@@ -94,9 +108,8 @@ const year = new Date().getFullYear();
   .footer__legal {
     display: flex;
     align-items: center;
-    justify-content: center;
     gap: 8px;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: #b9d0bc;
     margin: 0;
   }
@@ -117,13 +130,38 @@ const year = new Date().getFullYear();
     padding: 0;
     color: #eef5ee;
     font: inherit;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     text-decoration: underline;
     cursor: pointer;
   }
 
   .footer__legal button:hover {
     color: var(--tvc-orange);
+  }
+
+  @media (max-width: 640px) {
+    .footer__top {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 20px 24px 14px;
+    }
+
+    .footer__blurb {
+      max-width: 40ch;
+      flex: 0 1 auto;
+    }
+
+    .footer__social {
+      justify-content: center;
+    }
+
+    .footer__bottom {
+      flex-direction: column;
+      justify-content: center;
+      text-align: center;
+      padding: 12px 24px 20px;
+    }
   }
 </style>
 
