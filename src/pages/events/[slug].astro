@@ -1,8 +1,10 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../../components/PageHero.astro';
+import AddToCalendar from '../../components/AddToCalendar.astro';
 import { getCollection, render } from 'astro:content';
 import { formatDateRange, durationTag } from '../../utils/events';
+import { icsDataUri, googleCalendarUrl } from '../../utils/calendar';
 
 export async function getStaticPaths() {
   const events = await getCollection('events', (e) => !e.data.draft);
@@ -11,6 +13,17 @@ export async function getStaticPaths() {
 
 const { event } = Astro.props;
 const { Content } = await render(event);
+
+// Only worth offering on events that haven't happened yet -- adding a past
+// event to your calendar is a dead end, not a conversion.
+const isUpcoming = event.data.date >= new Date();
+const calendarEvent = {
+  uid: event.id,
+  title: event.data.title,
+  description: event.data.excerpt,
+  date: event.data.date,
+  endDate: event.data.endDate,
+};
 
 const eventSchema = {
   '@context': 'https://schema.org',
@@ -59,6 +72,13 @@ const breadcrumbSchema = {
         <li class="tag tag--duration">{durationTag(event.data.date, event.data.endDate)}</li>
       </ul>
     </div>
+    {isUpcoming && (
+      <AddToCalendar
+        googleUrl={googleCalendarUrl(calendarEvent)}
+        icsHref={icsDataUri(calendarEvent)}
+        icsFilename={`${event.id}.ics`}
+      />
+    )}
     <Content />
   </article>
 </BaseLayout>

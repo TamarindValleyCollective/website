@@ -1,0 +1,86 @@
+---
+interface Props {
+  googleUrl: string;
+  icsHref: string;
+  icsFilename: string;
+}
+
+const { googleUrl, icsHref, icsFilename } = Astro.props;
+---
+
+<div class="add-to-cal">
+  <button type="button" class="button button--outline add-to-cal__toggle" aria-haspopup="true" aria-expanded="false">
+    Add to calendar
+  </button>
+  <div class="add-to-cal__menu" hidden>
+    <a href={googleUrl} target="_blank" rel="noopener noreferrer">Google Calendar</a>
+    <a href={icsHref} download={icsFilename}>Apple / Outlook (.ics)</a>
+  </div>
+</div>
+
+<style>
+  .add-to-cal {
+    position: relative;
+    display: inline-block;
+  }
+
+  .add-to-cal__menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 10;
+    background: #fff;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+    padding: 6px;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .add-to-cal__menu[hidden] {
+    display: none;
+  }
+
+  .add-to-cal__menu a {
+    display: block;
+    padding: 9px 12px;
+    border-radius: 8px;
+    color: var(--tvc-ink);
+    text-decoration: none;
+    font-size: 0.88rem;
+    font-weight: 600;
+  }
+
+  .add-to-cal__menu a:hover {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green);
+  }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('.add-to-cal').forEach((widget) => {
+    const toggle = widget.querySelector<HTMLButtonElement>('.add-to-cal__toggle')!;
+    const menu = widget.querySelector<HTMLElement>('.add-to-cal__menu')!;
+
+    function close() {
+      menu.hidden = true;
+      toggle.setAttribute('aria-expanded', 'false');
+    }
+
+    toggle.addEventListener('click', () => {
+      const willOpen = menu.hidden;
+      menu.hidden = !willOpen;
+      toggle.setAttribute('aria-expanded', String(willOpen));
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!widget.contains(e.target as Node)) close();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+    });
+  });
+</script>
