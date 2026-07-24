@@ -66,7 +66,7 @@ const YEARS_REGENERATING = new Date().getFullYear() - 2017;
 </style>
 
 <script>
-  import { fetchAllObservations } from './biodiversity/observation-utils';
+  import { fetchAllObservations, isWithinBoundary } from './biodiversity/observation-utils';
 
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -116,9 +116,11 @@ const YEARS_REGENERATING = new Date().getFullYear() - 2017;
   // Reuses BiodiversityExplorer's own fetch + localStorage cache (10-minute
   // TTL) -- if a visitor already opened /ecosystem this session, this
   // resolves instantly from cache instead of hitting iNaturalist again.
+  // Same taxon + boundary filtering as that page too, so this count can't
+  // drift from what /ecosystem itself shows.
   fetchAllObservations()
     .then((observations) => {
-      const identified = observations.filter((o) => o.taxon != null);
+      const identified = observations.filter((o) => o.taxon != null && isWithinBoundary(o.geojson));
       const speciesCount = new Set(identified.map((o) => o.taxon!.id)).size;
       speciesEl.dataset.value = String(speciesCount);
       speciesEl.dataset.ready = 'true';

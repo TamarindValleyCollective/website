@@ -473,6 +473,7 @@
     fetchAllObservations,
     groupByIconicTaxon,
     groupByParentTaxon,
+    isWithinBoundary,
     labelForIconicTaxon,
     thumbUrl,
     type Observation,
@@ -757,9 +758,14 @@
     try {
       // Drop findings with no identification at all -- an unidentified
       // observation isn't a "what lives here" answer, so it doesn't belong
-      // in a showcase of species. This affects stats/chips/map too, not
-      // just the grid, since they're all derived from allObservations.
-      allObservations = (await fetchAllObservations()).filter((o) => o.taxon != null);
+      // in a showcase of species. Also restrict to the TVC property
+      // boundary itself -- the iNaturalist project also picks up sightings
+      // from the adjoining reserve forest and a few further-flung outliers.
+      // Both affect stats/chips/map too, not just the grid, since they're
+      // all derived from allObservations.
+      allObservations = (await fetchAllObservations())
+        .filter((o) => o.taxon != null)
+        .filter((o) => isWithinBoundary(o.geojson));
       if (allObservations.length === 0) {
         showState('empty');
         return;

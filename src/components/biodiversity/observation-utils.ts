@@ -1,3 +1,5 @@
+import { TVC_BOUNDARY } from './tvc-boundary';
+
 const API = 'https://api.inaturalist.org/v1/observations';
 const PROJECT_SLUG = 'biodiversity-at-tvc';
 
@@ -66,6 +68,31 @@ export function toLatLng(geojson: Observation['geojson']): [number, number] | nu
   if (!geojson || !Array.isArray(geojson.coordinates) || geojson.coordinates.length !== 2) return null;
   const [lng, lat] = geojson.coordinates;
   return [lat, lng];
+}
+
+// Ray-casting (even-odd rule) point-in-polygon test. TVC_BOUNDARY is a
+// simple (non-self-intersecting) polygon, which is all this needs to handle.
+function isPointInPolygon(lat: number, lng: number, polygon: [number, number][]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [latI, lngI] = polygon[i];
+    const [latJ, lngJ] = polygon[j];
+    const crosses = latI > lat !== latJ > lat && lng < ((lngJ - lngI) * (lat - latI)) / (latJ - latI) + lngI;
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
+// The iNaturalist project casts a slightly wider net than the actual
+// property — it also picks up sightings from the adjoining reserve forest
+// and the odd far-off one (e.g. a sloth bear a few km away). Observations
+// with no coordinates (location obscured/hidden by the observer, which
+// iNaturalist allows for sensitive species) can't be verified as on the
+// property, so they're excluded too rather than assumed in.
+export function isWithinBoundary(geojson: Observation['geojson']): boolean {
+  const latLng = toLatLng(geojson);
+  if (!latLng) return false;
+  return isPointInPolygon(latLng[0], latLng[1], TVC_BOUNDARY);
 }
 
 // The raw API response has many fields we never use (identifications, flags,

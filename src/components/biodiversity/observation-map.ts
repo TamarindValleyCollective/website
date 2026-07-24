@@ -1,6 +1,7 @@
 import L from 'leaflet';
 import type { Observation } from './observation-utils';
 import { toLatLng, thumbUrl } from './observation-utils';
+import { TVC_BOUNDARY } from './tvc-boundary';
 
 // Marker colors keyed by iconic taxon — matches the filter chip colors so the
 // map and the chips read as one system.
@@ -37,6 +38,15 @@ export function initMap(containerId: string, observations: Observation[], onSele
     maxZoom: 19,
   }).addTo(map);
 
+  // Shows what "within the boundary" means for the sightings plotted here —
+  // observations outside this outline have already been filtered out
+  // upstream (see isWithinBoundary in observation-utils.ts).
+  const boundary = L.polygon(TVC_BOUNDARY, {
+    color: '#17723b',
+    weight: 2,
+    fill: false,
+  }).addTo(map);
+
   const markers: L.Marker[] = [];
 
   for (const obs of observations) {
@@ -66,7 +76,9 @@ export function initMap(containerId: string, observations: Observation[], onSele
     const group = L.featureGroup(markers);
     map.fitBounds(group.getBounds().pad(0.2));
   } else {
-    map.setView([12.35, 77.65], 13);
+    // No markers for the current filter — fall back to framing the
+    // boundary itself rather than an arbitrary fixed point/zoom.
+    map.fitBounds(boundary.getBounds().pad(0.1));
   }
 
   return map;
