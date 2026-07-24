@@ -1,0 +1,101 @@
+---
+// The Events page already computes this same countdown, but it's only
+// visible to someone who clicks through there -- this surfaces it on the
+// homepage itself, for anyone who'd never otherwise notice an event coming up.
+import { getCollection } from 'astro:content';
+import { formatDateRange, daysUntil, countdownLabel } from '../utils/events';
+
+const allEvents = await getCollection('events', (e) => !e.data.draft);
+const today = new Date();
+const nextEvent = allEvents
+  .filter((e) => e.data.date >= today)
+  .sort((a, b) => a.data.date.valueOf() - b.data.date.valueOf())[0];
+---
+
+{nextEvent && (
+  <section class="whats-next">
+    <div class="wrapper whats-next__inner">
+      <div class="whats-next__text">
+        <span class="whats-next__eyebrow">Coming up</span>
+        <h3 class="whats-next__title">{nextEvent.data.title}</h3>
+        <span class="whats-next__date">{formatDateRange(nextEvent.data.date, nextEvent.data.endDate)}</span>
+      </div>
+      <span class="whats-next__countdown">{countdownLabel(daysUntil(nextEvent.data.date, today))}</span>
+      <a class="button whats-next__cta" href={`/events/${nextEvent.id}`}>See details →</a>
+    </div>
+  </section>
+)}
+
+<style>
+  .whats-next {
+    background: var(--tvc-orange-tint);
+    border-top: 1px solid rgba(246, 133, 32, 0.25);
+    border-bottom: 1px solid rgba(246, 133, 32, 0.25);
+    padding: 18px 0;
+  }
+
+  .whats-next__inner {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .whats-next__text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .whats-next__eyebrow {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tvc-orange-strong, #a85712);
+    margin-bottom: 2px;
+  }
+
+  .whats-next__title {
+    margin: 0;
+    font-size: 1.05rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .whats-next__date {
+    display: block;
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
+    margin-top: 2px;
+  }
+
+  .whats-next__countdown {
+    flex-shrink: 0;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--tvc-orange-strong, #a85712);
+    white-space: nowrap;
+  }
+
+  .whats-next__cta {
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 640px) {
+    .whats-next__inner {
+      flex-wrap: wrap;
+    }
+
+    .whats-next__countdown {
+      order: 3;
+    }
+
+    .whats-next__cta {
+      order: 4;
+      width: 100%;
+      text-align: center;
+    }
+  }
+</style>
