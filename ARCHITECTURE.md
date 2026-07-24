@@ -52,6 +52,7 @@ flowchart TD
         BIODIV["BiodiversityExplorer<br/>Fetches sightings directly from<br/>iNaturalist's public API"]
         PHOTOS["PhotoGallery (/in-pictures)<br/>Filters, Grid/Map toggle, lightbox —<br/>images served directly from R2"]
         TIMELINE["Our Journey / other pages<br/>Era-based year timeline, event listings —<br/>pure static, no calls out"]
+        GA["Google Analytics (GA4)<br/>Loaded from BaseLayout on every page,<br/>skipped on localhost"]
     end
 
     subgraph EXTERNAL["External services (called directly by the browser)"]
@@ -60,6 +61,7 @@ flowchart TD
         YT["YouTube (iframe)"]
         ANTHROPIC["Anthropic Claude API<br/>(chat.mts server-side,<br/>and caption-photos.mjs locally)"]
         R2["Cloudflare R2<br/>media.tvc.farm — curated photo storage,<br/>served directly to the browser"]
+        GTAG["Google Analytics<br/>googletagmanager.com/gtag/js"]
     end
 
     SRC --> BUILD
@@ -69,6 +71,7 @@ flowchart TD
     BIODIV -.-> INAT
     APIFN -.-> ANTHROPIC
     PHOTOS -.-> R2
+    GA -.-> GTAG
     SCRIPT_CURATE -.->|"S3-compatible upload"| R2
     SCRIPT_CURATE -->|"writes"| CONTENT
     SCRIPT_CAPTION -.->|"vision request per photo"| ANTHROPIC
@@ -82,9 +85,9 @@ flowchart TD
     classDef cfStyle fill:#fef3e0,stroke:#e8891c,color:#7a4a00
     classDef localStyle fill:#eef0f5,stroke:#6b7280,color:#374151
 
-    class PAGES,COMPONENTS,CONTENT,CHATW,NEWS,BIODIV,PHOTOS,TIMELINE,CDN staticStyle
+    class PAGES,COMPONENTS,CONTENT,CHATW,NEWS,BIODIV,PHOTOS,TIMELINE,GA,CDN staticStyle
     class FUNC_SRC,SCRIPT_SRC,APIFN,FORMS,ANTHROPIC netlifyStyle
-    class INAT,GMAPS,YT,R2 externalStyle
+    class INAT,GMAPS,YT,R2,GTAG externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION localStyle
 ```
@@ -188,6 +191,11 @@ never touches Netlify either.
   and the rest of the site are pure static content with no external calls.
 - A few pages also embed third-party content directly: Google Maps/My Maps (directions and
   farm layout) and YouTube (aerial drone flyover).
+- **Google Analytics (GA4)** — loaded from `BaseLayout.astro`, so it's on every page site-wide;
+  not tied to any one component. Measurement ID `G-795FTPB47P`. Skips loading entirely when
+  `location.hostname` is `localhost`/`127.0.0.1`, so local dev browsing never pollutes
+  production traffic data. No consent banner — revisit if EU/UK visitor volume becomes
+  significant enough to need one.
 
 ## Current Production Status
 
@@ -202,6 +210,7 @@ never touches Netlify either.
 | Chat widget UI | ✅ Live |
 | Chat widget's actual AI responses | ✅ Live — `ANTHROPIC_API_KEY` set 2026-07-18; verified with real requests against `tvc.farm/api/chat` returning grounded answers |
 | Friends of TVC signup (Netlify Forms) | ✅ Live — confirmed at `/contact`, with `/contact/thanks` as the confirmation page |
+| Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost |
 
 No known gaps — every feature above is confirmed live in production. The Netlify project itself
 is owned by the `contact@tvc.farm` account (moved there from a personal account on 2026-07-18).

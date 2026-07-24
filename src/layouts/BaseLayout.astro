@@ -82,6 +82,22 @@ const siteGraph = {
 
 <html lang="en">
   <head>
+    <!-- Google Analytics (GA4). Skipped on localhost so local/dev browsing
+         never pollutes production traffic data. -->
+    <script is:inline>
+      (function () {
+        if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=G-795FTPB47P';
+        document.head.appendChild(s);
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { window.dataLayer.push(arguments); }
+        window.gtag = gtag;
+        gtag('js', new Date());
+        gtag('config', 'G-795FTPB47P');
+      })();
+    </script>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
