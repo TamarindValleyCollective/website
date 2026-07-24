@@ -2,6 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
 import PhotoGallery from '../components/photos/PhotoGallery.astro';
+import OnThisDay from '../components/photos/OnThisDay.astro';
 import { getCollection } from 'astro:content';
 
 const photos = (await getCollection('photos')).sort((a, b) => b.data.takenAt.valueOf() - a.data.takenAt.valueOf());
@@ -11,6 +12,7 @@ const photos = (await getCollection('photos')).sort((a, b) => b.data.takenAt.val
   <PageHero eyebrow="About TVC" title="In Pictures" intro="Pictures are worth 10,000 words — an old proverb, still true. Curated highlights below, with camera and location details where we have them." image="https://media.tvc.farm/photos/2024/2024-08-18-img-1880-display.jpg" imageAlt="A child climbing a tree at the farm" />
 
   <div class="wrapper">
+    <OnThisDay photos={photos} />
     <PhotoGallery photos={photos} />
   </div>
 </BaseLayout>

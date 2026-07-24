@@ -1,0 +1,129 @@
+---
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  photos: CollectionEntry<'photos'>[];
+}
+
+const { photos } = Astro.props;
+
+const WINDOW_DAYS = 7;
+const today = new Date();
+
+function dayDiff(a: Date, b: Date): number {
+  const ay = new Date(2000, a.getMonth(), a.getDate());
+  const by = new Date(2000, b.getMonth(), b.getDate());
+  let diff = Math.abs((ay.getTime() - by.getTime()) / 86_400_000);
+  if (diff > 182) diff = 365 - diff;
+  return diff;
+}
+
+// Only photos with real camera EXIF -- photos with no EXIF get a synthetic
+// YYYY-MM-01 fallback takenAt (see curate-photos.mjs), which isn't an actual
+// "taken around this time of year" fact and would be misleading to include.
+const matches = photos
+  .filter((p) => p.data.camera && dayDiff(p.data.takenAt, today) <= WINDOW_DAYS)
+  .sort((a, b) => a.data.takenAt.valueOf() - b.data.takenAt.valueOf());
+
+const dateFmt: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', year: 'numeric' };
+---
+
+{matches.length > 0 && (
+  <section class="otd">
+    <div class="otd__head">
+      <span class="dot"></span>
+      <h2>From the archive</h2>
+      <span class="otd__hint">Photos from around this time of year, in years past</span>
+    </div>
+    <div class="otd__grid">
+      {matches.map((p) => (
+        <a class="otd__item" href={p.data.src} target="_blank" rel="noopener noreferrer">
+          <img src={p.data.thumbSrc ?? p.data.src} alt={p.data.caption} loading="lazy" />
+          <div class="otd__caption">
+            <p>{p.data.caption}</p>
+            <span>{p.data.takenAt.toLocaleDateString('en-IN', dateFmt)}</span>
+          </div>
+        </a>
+      ))}
+    </div>
+  </section>
+)}
+
+<style>
+  .otd {
+    margin-bottom: 48px;
+  }
+
+  .otd__head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .otd__head h2 {
+    margin: 0;
+  }
+
+  .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--tvc-orange);
+    flex-shrink: 0;
+  }
+
+  .otd__hint {
+    font-size: 0.78rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .otd__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 16px;
+  }
+
+  .otd__item {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--tvc-surface, #fff);
+    border: 1px solid var(--tvc-line);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .otd__item:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .otd__item img {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+  }
+
+  .otd__caption {
+    padding: 10px 12px;
+  }
+
+  .otd__caption p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--tvc-ink);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .otd__caption span {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.74rem;
+    color: var(--tvc-ink-soft);
+  }
+</style>
