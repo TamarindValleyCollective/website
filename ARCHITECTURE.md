@@ -53,6 +53,7 @@ flowchart TD
         PHOTOS["PhotoGallery (/in-pictures)<br/>Filters, Grid/Map toggle, lightbox —<br/>images served directly from R2"]
         TIMELINE["Our Journey / other pages<br/>Era-based year timeline, event listings —<br/>pure static, no calls out"]
         GA["Google Analytics (GA4)<br/>Loaded from BaseLayout, consent-gated by<br/>CookieConsent, skipped on localhost"]
+        WEATHER["WeatherWidget (/ecosystem/geography)<br/>Fetches current conditions from<br/>Open-Meteo, no API key"]
     end
 
     subgraph EXTERNAL["External services (called directly by the browser)"]
@@ -62,6 +63,7 @@ flowchart TD
         ANTHROPIC["Anthropic Claude API<br/>(chat.mts server-side,<br/>and caption-photos.mjs locally)"]
         R2["Cloudflare R2<br/>media.tvc.farm — curated photo storage,<br/>served directly to the browser"]
         GTAG["Google Analytics<br/>googletagmanager.com/gtag/js"]
+        METEO["Open-Meteo API<br/>Free, no key required"]
     end
 
     SRC --> BUILD
@@ -72,6 +74,7 @@ flowchart TD
     APIFN -.-> ANTHROPIC
     PHOTOS -.-> R2
     GA -.-> GTAG
+    WEATHER -.-> METEO
     SCRIPT_CURATE -.->|"S3-compatible upload"| R2
     SCRIPT_CURATE -->|"writes"| CONTENT
     SCRIPT_CAPTION -.->|"vision request per photo"| ANTHROPIC
@@ -85,9 +88,9 @@ flowchart TD
     classDef cfStyle fill:#fef3e0,stroke:#e8891c,color:#7a4a00
     classDef localStyle fill:#eef0f5,stroke:#6b7280,color:#374151
 
-    class PAGES,COMPONENTS,CONTENT,CHATW,NEWS,BIODIV,PHOTOS,TIMELINE,GA,CDN staticStyle
+    class PAGES,COMPONENTS,CONTENT,CHATW,NEWS,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,CDN staticStyle
     class FUNC_SRC,SCRIPT_SRC,APIFN,FORMS,ANTHROPIC netlifyStyle
-    class INAT,GMAPS,YT,R2,GTAG externalStyle
+    class INAT,GMAPS,YT,R2,GTAG,METEO externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION localStyle
 ```
@@ -202,6 +205,9 @@ never touches Netlify either.
   link, calls `.revoke()`, which sets gtag's own `ga-disable-<id>` flag — the standard kill
   switch, needed because a script already injected earlier in the session can't be
   un-injected. `/privacy` documents what's collected and links back to this same control.
+- **WeatherWidget** (`/ecosystem/geography`) — fetches current temperature/humidity/conditions
+  for the farm's coordinates from Open-Meteo (free, no API key) on page load, cached in
+  `localStorage` for 15 minutes. Hides itself if the fetch fails rather than showing broken UI.
 
 ## Current Production Status
 
@@ -217,6 +223,7 @@ never touches Netlify either.
 | Chat widget's actual AI responses | ✅ Live — `ANTHROPIC_API_KEY` set 2026-07-18; verified with real requests against `tvc.farm/api/chat` returning grounded answers |
 | Friends of TVC signup (Netlify Forms) | ✅ Live — confirmed at `/contact`, with `/contact/thanks` as the confirmation page |
 | Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy` |
+| Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
 
 No known gaps — every feature above is confirmed live in production. The Netlify project itself
 is owned by the `contact@tvc.farm` account (moved there from a personal account on 2026-07-18).

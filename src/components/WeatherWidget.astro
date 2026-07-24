@@ -1,0 +1,149 @@
+---
+// Live current-conditions fetched client-side from Open-Meteo (no API key,
+// free for this volume of use) -- same farm coordinates already used
+// elsewhere in the codebase for the biodiversity map's default view.
+---
+
+<div class="weather-widget" id="weather-widget" hidden>
+  <div class="weather-widget__temp">
+    <span id="weather-icon" class="weather-widget__icon" aria-hidden="true"></span>
+    <span id="weather-temp" class="weather-widget__value"></span>
+  </div>
+  <div class="weather-widget__details">
+    <p id="weather-condition" class="weather-widget__condition"></p>
+    <p id="weather-humidity" class="weather-widget__humidity"></p>
+  </div>
+</div>
+
+<style>
+  .weather-widget {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: #fff;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+    padding: 16px 22px;
+    max-width: 360px;
+    margin: 20px 0;
+  }
+
+  .weather-widget[hidden] {
+    display: none;
+  }
+
+  .weather-widget__temp {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .weather-widget__icon {
+    font-size: 2rem;
+    line-height: 1;
+  }
+
+  .weather-widget__value {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--tvc-green-dark);
+    line-height: 1;
+  }
+
+  .weather-widget__details {
+    min-width: 0;
+  }
+
+  .weather-widget__condition {
+    margin: 0;
+    font-weight: 600;
+    font-size: 0.92rem;
+    color: var(--tvc-ink);
+  }
+
+  .weather-widget__humidity {
+    margin: 2px 0 0;
+    font-size: 0.8rem;
+    color: var(--tvc-ink-soft);
+  }
+</style>
+
+<script>
+  const LAT = 12.35;
+  const LNG = 77.65;
+  const CACHE_KEY = 'tvc-weather-cache';
+  const CACHE_TTL_MS = 15 * 60 * 1000;
+
+  // WMO weather codes (https://open-meteo.com/en/docs), condensed to what's
+  // realistically seen at this location.
+  const CODE_INFO: Record<number, { icon: string; label: string }> = {
+    0: { icon: '☀️', label: 'Clear sky' },
+    1: { icon: '🌤️', label: 'Mostly clear' },
+    2: { icon: '⛅', label: 'Partly cloudy' },
+    3: { icon: '☁️', label: 'Overcast' },
+    45: { icon: '🌫️', label: 'Fog' },
+    48: { icon: '🌫️', label: 'Fog' },
+    51: { icon: '🌦️', label: 'Light drizzle' },
+    53: { icon: '🌦️', label: 'Drizzle' },
+    55: { icon: '🌦️', label: 'Dense drizzle' },
+    61: { icon: '🌧️', label: 'Light rain' },
+    63: { icon: '🌧️', label: 'Rain' },
+    65: { icon: '🌧️', label: 'Heavy rain' },
+    80: { icon: '🌧️', label: 'Rain showers' },
+    81: { icon: '🌧️', label: 'Rain showers' },
+    82: { icon: '⛈️', label: 'Violent rain showers' },
+    95: { icon: '⛈️', label: 'Thunderstorm' },
+    96: { icon: '⛈️', label: 'Thunderstorm with hail' },
+    99: { icon: '⛈️', label: 'Thunderstorm with hail' },
+  };
+
+  interface CurrentWeather {
+    temperature_2m: number;
+    relative_humidity_2m: number;
+    weather_code: number;
+  }
+
+  async function fetchWeather(): Promise<CurrentWeather> {
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Date.now() - parsed.fetchedAt < CACHE_TTL_MS) return parsed.data;
+      } catch {
+        // fall through to a fresh fetch
+      }
+    }
+
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LNG}&current=temperature_2m,relative_humidity_2m,weather_code&timezone=Asia%2FKolkata`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Open-Meteo error ${res.status}`);
+    const json = await res.json();
+    const data: CurrentWeather = json.current;
+
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ fetchedAt: Date.now(), data }));
+    } catch {
+      // caching is a nice-to-have, not a requirement
+    }
+
+    return data;
+  }
+
+  (async () => {
+    const widget = document.getElementById('weather-widget')!;
+    try {
+      const data = await fetchWeather();
+      const info = CODE_INFO[data.weather_code] ?? { icon: '🌡️', label: 'Current conditions' };
+      document.getElementById('weather-icon')!.textContent = info.icon;
+      document.getElementById('weather-temp')!.textContent = `${Math.round(data.temperature_2m)}°C`;
+      document.getElementById('weather-condition')!.textContent = info.label;
+      document.getElementById('weather-humidity')!.textContent = `${Math.round(data.relative_humidity_2m)}% humidity`;
+      widget.hidden = false;
+    } catch (err) {
+      console.warn('Could not load live weather', err);
+    }
+  })();
+</script>

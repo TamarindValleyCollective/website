@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../../components/PageHero.astro';
+import WeatherWidget from '../../components/WeatherWidget.astro';
 
 // Rainfall is logged daily at the farm; sourced from the community's shared rainfall log (issue #5).
 // Agricultural year runs April–March. 2026-27 is the current, in-progress year.
@@ -58,6 +59,8 @@ const bars = rainfall2025.map((d, i) => {
   <section class="section wrapper">
     <h2>Geography &amp; landscape</h2>
     <p>The farm sits on a west-facing hillslope near Kanakapura, close to the Tamil Nadu–Karnataka border, with sunset views across the valley. Rainfall is logged daily on-site and follows the region's monsoon pattern: wet from April through October, dry the rest of the year.</p>
+
+    <WeatherWidget />
 
     <div class="stat-tile">
       <p class="stat-label">This monsoon so far <span class="stat-sublabel">(1 Apr – 15 Jul 2026)</span></p>
