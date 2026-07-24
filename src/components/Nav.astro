@@ -3,12 +3,12 @@ import { EXPLORE_LINKS, ENGAGE_LINKS } from '../data/site-map';
 
 // Mirrors the homepage's own Explore/Engage fork (src/pages/index.astro) so
 // the nav reads as the same map wherever you are on the site, not a
-// different grouping than the one you land on at "/". Explore is wide
-// (7 items) because it's every informational page on the site — see
+// different grouping than the one you land on at "/". Both are wide
+// (7 items each) because a single column runs uncomfortably tall — see
 // .nav__dropdown--wide below for the two-column treatment that needs.
 const navItems = [
   { label: 'Explore', wide: true, children: EXPLORE_LINKS },
-  { label: 'Engage', wide: false, children: ENGAGE_LINKS },
+  { label: 'Engage', wide: true, children: ENGAGE_LINKS },
 ];
 
 const currentPath = Astro.url.pathname;
@@ -167,6 +167,14 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
     display: flex;
   }
 
+  /* The rightmost nav item sits close to the viewport edge, so a dropdown
+     growing rightward from its left edge can overflow off-screen — anchor
+     it to its own right edge instead so it grows back towards the menu. */
+  .nav__item:last-child .nav__dropdown {
+    left: auto;
+    right: 0;
+  }
+
   /* Explore has 7 items — a single column runs uncomfortably tall, so it
      gets a two-column grid instead. Declared after the rules above so it
      wins the display:flex vs display:grid tie on hover/focus. */
@@ -231,6 +239,14 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
       background: #fff;
       border-bottom: 1px solid var(--tvc-line);
       flex-direction: column;
+      /* Undo the base rule's flex-wrap: wrap and justify-content: flex-end
+         — those exist for the desktop row layout. Left as flex-end here,
+         content taller than the max-height below overflows upward past
+         the container's top edge (unreachable, since scrollTop can't go
+         negative) instead of scrolling normally; flex-wrap: wrap instead
+         splits Explore/Engage into two side-by-side columns. */
+      flex-wrap: nowrap;
+      justify-content: flex-start;
       align-items: stretch;
       padding: 12px 24px 20px;
       gap: 4px;
