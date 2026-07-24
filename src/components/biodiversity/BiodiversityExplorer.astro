@@ -24,6 +24,11 @@
       </div>
     </div>
 
+    <div class="contributor-filter" id="contributor-filter" hidden>
+      <span>Showing observations by <strong id="contributor-filter-name"></strong></span>
+      <button type="button" id="contributor-filter-clear">Clear ✕</button>
+    </div>
+
     <div class="explorer__map-wrap" id="map-view" hidden>
       <div id="observation-map"></div>
     </div>
@@ -174,6 +179,42 @@
     color: #fff;
   }
 
+  .contributor-filter {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: var(--tvc-green-tint);
+    border: 1px solid rgba(24, 114, 60, 0.25);
+    border-radius: 999px;
+    padding: 8px 8px 8px 18px;
+    margin-bottom: 20px;
+    font-size: 0.85rem;
+    color: var(--tvc-ink);
+  }
+
+  .contributor-filter[hidden] {
+    display: none;
+  }
+
+  .contributor-filter #contributor-filter-clear {
+    appearance: none;
+    -webkit-appearance: none;
+    border: none;
+    background: #fff;
+    color: var(--tvc-ink-soft);
+    font-weight: 600;
+    font-size: 0.78rem;
+    padding: 6px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .contributor-filter #contributor-filter-clear:hover {
+    background: var(--tvc-ink);
+    color: #fff;
+  }
+
   .explorer__map-wrap {
     margin-bottom: 24px;
   }
@@ -215,11 +256,47 @@
     justify-content: flex-start;
   }
 
+  :global(.obs-card__media) {
+    position: relative;
+  }
+
   :global(.obs-card img) {
     width: 100%;
     aspect-ratio: 1 / 1;
     object-fit: cover;
     border-radius: 4px;
+  }
+
+  /* A real <button>, nested inside .obs-card's own click target — .obs-card
+     had to become a div[role=button] rather than a <button> for this to be
+     valid HTML (buttons can't nest), see the click handler for the
+     stopPropagation() that keeps this from also opening the detail panel. */
+  :global(.obs-card__observer) {
+    position: absolute;
+    left: 6px;
+    top: 6px;
+    appearance: none;
+    -webkit-appearance: none;
+    border: none;
+    background: rgba(23, 41, 31, 0.72);
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.7rem;
+    padding: 4px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    max-width: calc(100% - 12px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :global(.obs-card__observer:hover) {
+    background: var(--tvc-orange);
+  }
+
+  :global(.obs-card__observer.is-active) {
+    background: var(--tvc-orange);
   }
 
   :global(.obs-card__body) {
@@ -356,10 +433,14 @@
   const overlayEl = document.getElementById('detail-overlay')!;
   const detailContentEl = document.getElementById('detail-content')!;
   const detailCloseEl = document.getElementById('detail-close')!;
+  const contributorFilterEl = document.getElementById('contributor-filter')!;
+  const contributorFilterNameEl = document.getElementById('contributor-filter-name')!;
+  const contributorFilterClearBtn = document.getElementById('contributor-filter-clear')!;
 
   let allObservations: Observation[] = [];
   let byParent: Map<number, Observation[]> = new Map();
   let activeFilter: string | null = null;
+  let activeContributor: string | null = null;
   let visibleCount = PAGE_SIZE;
   let mapInitialized = false;
 
@@ -416,8 +497,24 @@
   }
 
   function filteredObservations(): Observation[] {
-    if (!activeFilter) return allObservations;
-    return allObservations.filter((o) => (o.taxon?.iconic_taxon_name ?? 'Unknown') === activeFilter);
+    let obs = allObservations;
+    if (activeFilter) obs = obs.filter((o) => (o.taxon?.iconic_taxon_name ?? 'Unknown') === activeFilter);
+    if (activeContributor) obs = obs.filter((o) => o.user.login === activeContributor);
+    return obs;
+  }
+
+  // Toggle: clicking the observer overlay on a card that's already the
+  // active filter clears it -- once filtered, every visible card's overlay
+  // shows the same observer, so re-clicking any of them is the obvious
+  // "undo". The pill in the controls row is the more discoverable clear
+  // affordance. Filtering is keyed on login (stable/unique); displayName is
+  // only for what the indicator pill shows.
+  function setContributorFilter(login: string | null, displayName?: string) {
+    activeContributor = activeContributor === login ? null : login;
+    visibleCount = PAGE_SIZE;
+    contributorFilterEl.hidden = !activeContributor;
+    contributorFilterNameEl.textContent = activeContributor ? (displayName ?? activeContributor) : '';
+    renderGrid();
   }
 
   function renderGrid() {
@@ -425,14 +522,26 @@
     const visible = obs.slice(0, visibleCount);
     gridEl.innerHTML = '';
     for (const o of visible) {
-      const card = document.createElement('button');
-      card.type = 'button';
+      // A div, not a <button> -- the observer handle below is a real nested
+      // <button>, and buttons can't contain buttons. role/tabindex/keydown
+      // restore the same keyboard behavior a native <button> gets for free.
+      const card = document.createElement('div');
       card.className = 'obs-card';
+      card.setAttribute('role', 'button');
+      card.tabIndex = 0;
       const thumb = o.photos[0] ? thumbUrl(o.photos[0].url) : '';
       const name = o.taxon?.preferred_common_name || o.taxon?.name || 'Unidentified';
       const scientific = o.taxon?.name && o.taxon.name !== name ? o.taxon.name : '';
+      const login = o.user.login;
+      const observerName = o.user.name || login;
+      const isActiveObserver = login && login === activeContributor;
       card.innerHTML = `
-        ${thumb ? `<img src="${thumb}" alt="${name}" loading="lazy" />` : ''}
+        ${thumb ? `
+          <div class="obs-card__media">
+            <img src="${thumb}" alt="${name}" loading="lazy" />
+            ${login ? `<button type="button" class="obs-card__observer${isActiveObserver ? ' is-active' : ''}" title="Filter by ${observerName}">${observerName}</button>` : ''}
+          </div>
+        ` : ''}
         <div class="obs-card__body">
           <p class="obs-card__name">${name}</p>
           ${scientific ? `<p class="obs-card__scientific">${scientific}</p>` : ''}
@@ -440,6 +549,16 @@
         </div>
       `;
       card.addEventListener('click', () => openDetail(o));
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openDetail(o);
+        }
+      });
+      card.querySelector('.obs-card__observer')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setContributorFilter(login, observerName);
+      });
       gridEl.appendChild(card);
     }
     const remaining = obs.length - visible.length;
@@ -494,6 +613,8 @@
     renderGrid();
   });
 
+  contributorFilterClearBtn.addEventListener('click', () => setContributorFilter(null));
+
   galleryBtn.addEventListener('click', () => {
     galleryBtn.classList.add('is-active');
     mapBtn.classList.remove('is-active');
@@ -521,7 +642,11 @@
   async function load() {
     showState('loading');
     try {
-      allObservations = await fetchAllObservations();
+      // Drop findings with no identification at all -- an unidentified
+      // observation isn't a "what lives here" answer, so it doesn't belong
+      // in a showcase of species. This affects stats/chips/map too, not
+      // just the grid, since they're all derived from allObservations.
+      allObservations = (await fetchAllObservations()).filter((o) => o.taxon != null);
       if (allObservations.length === 0) {
         showState('empty');
         return;
