@@ -1,0 +1,75 @@
+---
+// Compact live temperature shown site-wide in the header, linking through
+// to the Weather page for the full picture (condition, humidity, rainfall).
+// Shares WeatherWidget's fetch + 15-minute localStorage cache (see
+// utils/weather.ts) -- rendered on every page since Nav is global, but that
+// cache means at most one real Open-Meteo call per visit, not one per page.
+---
+
+<a href="/ecosystem/geography" class="header-weather" id="header-weather" hidden aria-label="Current temperature at the farm — see the Weather page">
+  <span id="header-weather-icon" class="header-weather__icon" aria-hidden="true"></span>
+  <span id="header-weather-temp" class="header-weather__temp"></span>
+</a>
+
+<style>
+  .header-weather {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    text-decoration: none;
+    color: var(--tvc-ink);
+    font-weight: 600;
+    font-size: 0.85rem;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--tvc-green-tint);
+    flex-shrink: 0;
+  }
+
+  .header-weather:hover {
+    background: var(--tvc-line);
+  }
+
+  /* [hidden] must win over the display: inline-flex rule above -- without
+     this, the link still renders (and eats pointer events) before the
+     temperature has loaded, since both rules have equal specificity and
+     this one needs to come last. */
+  .header-weather[hidden] {
+    display: none;
+  }
+
+  .header-weather__icon {
+    font-size: 1rem;
+    line-height: 1;
+  }
+
+  .header-weather__temp {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Hidden below the nav's own hamburger breakpoint -- the mobile header is
+     already tight (logo, wordmark, toggle button), and the Weather page is
+     still one tap away via the menu. */
+  @media (max-width: 860px) {
+    .header-weather {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  import { fetchWeather, iconFor } from '../utils/weather';
+
+  (async () => {
+    const link = document.getElementById('header-weather') as HTMLAnchorElement | null;
+    if (!link) return;
+    try {
+      const data = await fetchWeather();
+      document.getElementById('header-weather-icon')!.textContent = iconFor(data.weather_code);
+      document.getElementById('header-weather-temp')!.textContent = `${Math.round(data.temperature_2m)}°C`;
+      link.hidden = false;
+    } catch (err) {
+      console.warn('Could not load live weather for header', err);
+    }
+  })();
+</script>

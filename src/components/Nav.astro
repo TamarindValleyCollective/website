@@ -1,5 +1,6 @@
 ---
 import { EXPLORE_LINKS, ENGAGE_LINKS } from '../data/site-map';
+import HeaderWeather from './HeaderWeather.astro';
 
 // Mirrors the homepage's own Explore/Engage fork (src/pages/index.astro) so
 // the nav reads as the same map wherever you are on the site, not a
@@ -18,10 +19,13 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
 
 <header class="nav">
   <div class="wrapper nav__inner">
-    <a class="nav__brand" href="/">
-      <img src="/images/brand/tvc-logo-mark.png" alt="Tamarind Valley Collective" width="56" height="56" />
-      <span>Tamarind Valley Collective</span>
-    </a>
+    <div class="nav__left">
+      <a class="nav__brand" href="/">
+        <img src="/images/brand/tvc-logo-mark.png" alt="Tamarind Valley Collective" width="56" height="56" />
+        <span>Tamarind Valley Collective</span>
+      </a>
+      <HeaderWeather />
+    </div>
 
     <button class="nav__toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-menu" aria-label="Toggle menu">
       <span></span><span></span><span></span>
@@ -74,6 +78,17 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
     justify-content: space-between;
     padding-top: 14px;
     padding-bottom: 14px;
+  }
+
+  /* Groups brand + HeaderWeather as one flex item so nav__inner's
+     space-between still splits cleanly into "everything on the left" vs.
+     the menu on the right, instead of spreading three items across the
+     bar with the weather chip stranded in the middle. */
+  .nav__left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
   }
 
   .nav__brand {

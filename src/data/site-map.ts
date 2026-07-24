@@ -12,7 +12,7 @@ export const EXPLORE_LINKS: SiteLink[] = [
   { label: 'Our Journey', href: '/our-journey' },
   { label: 'In Pictures', href: '/in-pictures' },
   { label: 'Biodiversity', href: '/ecosystem' },
-  { label: 'Geography & Weather', href: '/ecosystem/geography' },
+  { label: 'Weather', href: '/ecosystem/geography' },
   { label: 'Resource Centre', href: '/resource-centre' },
   { label: 'Events', href: '/events' },
 ];
