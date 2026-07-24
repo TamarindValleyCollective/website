@@ -5,21 +5,25 @@
 ---
 
 <div class="weather-widget" id="weather-widget" hidden>
-  <div class="weather-widget__temp">
-    <span id="weather-icon" class="weather-widget__icon" aria-hidden="true"></span>
-    <span id="weather-temp" class="weather-widget__value"></span>
+  <p class="weather-widget__location">Tamarind Valley Collective</p>
+  <div class="weather-widget__row">
+    <div class="weather-widget__temp">
+      <span id="weather-icon" class="weather-widget__icon" aria-hidden="true"></span>
+      <span id="weather-temp" class="weather-widget__value"></span>
+    </div>
+    <div class="weather-widget__details">
+      <p id="weather-condition" class="weather-widget__condition"></p>
+      <p id="weather-humidity" class="weather-widget__humidity"></p>
+    </div>
   </div>
-  <div class="weather-widget__details">
-    <p id="weather-condition" class="weather-widget__condition"></p>
-    <p id="weather-humidity" class="weather-widget__humidity"></p>
-  </div>
+  <p id="weather-updated" class="weather-widget__updated"></p>
 </div>
 
 <style>
   .weather-widget {
     display: flex;
-    align-items: center;
-    gap: 16px;
+    flex-direction: column;
+    gap: 10px;
     background: #fff;
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
@@ -31,6 +35,21 @@
 
   .weather-widget[hidden] {
     display: none;
+  }
+
+  .weather-widget__location {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--tvc-ink-soft);
+  }
+
+  .weather-widget__row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
   }
 
   .weather-widget__temp {
@@ -69,6 +88,12 @@
     font-size: 0.8rem;
     color: var(--tvc-ink-soft);
   }
+
+  .weather-widget__updated {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--tvc-ink-soft);
+  }
 </style>
 
 <script>
@@ -101,9 +126,25 @@
   };
 
   interface CurrentWeather {
+    time: string;
     temperature_2m: number;
     relative_humidity_2m: number;
     weather_code: number;
+  }
+
+  // `time` comes back as a naive "YYYY-MM-DDTHH:MM" with no UTC offset --
+  // it's already the farm's Asia/Kolkata wall-clock time (that's what the
+  // API's timezone= param controls), not UTC. Parsing it with `new Date()`
+  // would make the browser reinterpret those digits as *its own* local
+  // time, showing the wrong hour to any visitor outside IST. Pulling the
+  // hour/minute out of the string directly sidesteps that entirely.
+  function formatFarmTime(isoLocal: string): string {
+    const timePart = isoLocal.split('T')[1] ?? '';
+    const [hourStr, minute] = timePart.split(':');
+    let hour = Number(hourStr);
+    const suffix = hour >= 12 ? 'PM' : 'AM';
+    hour = hour % 12 || 12;
+    return `${hour}:${minute} ${suffix} IST`;
   }
 
   async function fetchWeather(): Promise<CurrentWeather> {
@@ -141,6 +182,7 @@
       document.getElementById('weather-temp')!.textContent = `${Math.round(data.temperature_2m)}°C`;
       document.getElementById('weather-condition')!.textContent = info.label;
       document.getElementById('weather-humidity')!.textContent = `${Math.round(data.relative_humidity_2m)}% humidity`;
+      document.getElementById('weather-updated')!.textContent = `As of ${formatFarmTime(data.time)}`;
       widget.hidden = false;
     } catch (err) {
       console.warn('Could not load live weather', err);
