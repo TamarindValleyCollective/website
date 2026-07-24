@@ -443,6 +443,19 @@
   let activeContributor: string | null = null;
   let visibleCount = PAGE_SIZE;
   let mapInitialized = false;
+  let mapInstance: ReturnType<typeof initMap> | null = null;
+
+  // Rebuilds the map from the current filters. Leaflet has no "swap the
+  // markers" API cheap enough to bother with here, so this just tears down
+  // and re-initializes -- fine for ~100 markers, and it's not visible
+  // happening if the map tab isn't the one currently open. A no-op before
+  // the map has ever been opened; it'll pick up whatever filters are active
+  // the first time it is (see the view-map click handler below).
+  function refreshMap() {
+    if (!mapInitialized) return;
+    mapInstance?.remove();
+    mapInstance = initMap('observation-map', filteredObservations(), openDetail);
+  }
 
   function showState(state: 'loading' | 'ready' | 'empty' | 'error') {
     statusEl.hidden = state !== 'loading';
@@ -494,6 +507,7 @@
       el.classList.toggle('is-active', el.dataset.taxon === (iconicTaxon ?? ''));
     });
     renderGrid();
+    refreshMap();
   }
 
   function filteredObservations(): Observation[] {
@@ -515,6 +529,7 @@
     contributorFilterEl.hidden = !activeContributor;
     contributorFilterNameEl.textContent = activeContributor ? (displayName ?? activeContributor) : '';
     renderGrid();
+    refreshMap();
   }
 
   function renderGrid() {
@@ -634,7 +649,7 @@
       // Map init is deferred until first shown — its container has zero
       // height while `hidden`, so Leaflet can't size itself correctly earlier.
       requestAnimationFrame(() => {
-        initMap('observation-map', allObservations, openDetail);
+        mapInstance = initMap('observation-map', filteredObservations(), openDetail);
       });
     }
   });
