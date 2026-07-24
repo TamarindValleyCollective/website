@@ -1,0 +1,127 @@
+---
+---
+
+<div class="cookie-banner" id="cookie-banner" role="dialog" aria-live="polite" aria-label="Cookie consent" hidden>
+  <div class="cookie-banner__inner">
+    <p class="cookie-banner__text">
+      We'd like to use Google Analytics to understand how visitors use this site. We won't set
+      analytics cookies unless you say it's okay — see our <a href="/privacy">Privacy &amp; Cookies</a> page for what that means.
+    </p>
+    <div class="cookie-banner__actions">
+      <button type="button" class="button button--outline" id="cookie-reject">Reject</button>
+      <button type="button" class="button" id="cookie-accept">Accept</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .cookie-banner {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 200;
+    background: #fff;
+    border-top: 1px solid var(--tvc-line);
+    box-shadow: var(--shadow-soft);
+    padding: 18px 24px;
+  }
+
+  .cookie-banner[hidden] {
+    display: none;
+  }
+
+  .cookie-banner__inner {
+    max-width: 1120px;
+    margin: 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .cookie-banner__text {
+    margin: 0;
+    font-size: 0.88rem;
+    color: var(--tvc-ink-soft);
+    max-width: 62ch;
+    flex: 1 1 320px;
+  }
+
+  .cookie-banner__text a {
+    font-weight: 600;
+  }
+
+  .cookie-banner__actions {
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  /* Same visual weight for both — a GDPR-compliant banner can't make
+     "Reject" harder to notice or act on than "Accept". */
+  .cookie-banner__actions .button,
+  .cookie-banner__actions .button--outline {
+    padding: 10px 18px;
+    font-size: 0.88rem;
+  }
+
+  @media (max-width: 640px) {
+    .cookie-banner__inner {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .cookie-banner__actions {
+      justify-content: flex-end;
+    }
+  }
+</style>
+
+<script>
+  declare global {
+    interface Window {
+      tvcAnalytics?: { load: () => void; revoke: () => void };
+    }
+  }
+
+  const CONSENT_KEY = 'tvc-cookie-consent';
+  const banner = document.getElementById('cookie-banner') as HTMLElement;
+  const acceptBtn = document.getElementById('cookie-accept') as HTMLButtonElement;
+  const rejectBtn = document.getElementById('cookie-reject') as HTMLButtonElement;
+
+  function show() {
+    banner.hidden = false;
+  }
+
+  function hide() {
+    banner.hidden = true;
+  }
+
+  acceptBtn.addEventListener('click', () => {
+    localStorage.setItem(CONSENT_KEY, 'granted');
+    window.tvcAnalytics?.load();
+    hide();
+  });
+
+  rejectBtn.addEventListener('click', () => {
+    localStorage.setItem(CONSENT_KEY, 'denied');
+    window.tvcAnalytics?.revoke();
+    hide();
+  });
+
+  // Footer's "Cookie preferences" link re-opens this banner from anywhere on
+  // the site, without a page reload, so consent can be withdrawn/changed as
+  // easily as it was given.
+  window.addEventListener('tvc:open-cookie-preferences', show);
+
+  const stored = localStorage.getItem(CONSENT_KEY);
+  if (stored === 'granted') {
+    window.tvcAnalytics?.load();
+  } else if (stored === 'denied') {
+    window.tvcAnalytics?.revoke();
+  } else {
+    show();
+  }
+</script>

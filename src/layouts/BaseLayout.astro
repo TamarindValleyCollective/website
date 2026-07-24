@@ -3,6 +3,7 @@ import Nav from '../components/Nav.astro';
 import Breadcrumbs from '../components/Breadcrumbs.astro';
 import Footer from '../components/Footer.astro';
 import ChatWidget from '../components/ChatWidget.astro';
+import CookieConsent from '../components/CookieConsent.astro';
 import JsonLd from '../components/JsonLd.astro';
 import '../styles/global.css';
 
@@ -82,20 +83,39 @@ const siteGraph = {
 
 <html lang="en">
   <head>
-    <!-- Google Analytics (GA4). Skipped on localhost so local/dev browsing
-         never pollutes production traffic data. -->
+    <!-- Google Analytics (GA4) — consent-gated. Doesn't load until the visitor
+         accepts the cookie banner (see CookieConsent.astro), skipped
+         entirely on localhost so local/dev browsing never pollutes
+         production traffic data. window.tvcAnalytics is the interface the
+         banner calls into: .load() on Accept (or on return visits that
+         already granted consent), .revoke() on Reject/withdrawal, using
+         gtag's own documented `ga-disable-<id>` kill switch since a script
+         already injected earlier in the session can't be un-injected. -->
     <script is:inline>
       (function () {
+        var GA_ID = 'G-795FTPB47P';
         if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return;
-        var s = document.createElement('script');
-        s.async = true;
-        s.src = 'https://www.googletagmanager.com/gtag/js?id=G-795FTPB47P';
-        document.head.appendChild(s);
-        window.dataLayer = window.dataLayer || [];
-        function gtag() { window.dataLayer.push(arguments); }
-        window.gtag = gtag;
-        gtag('js', new Date());
-        gtag('config', 'G-795FTPB47P');
+        window['ga-disable-' + GA_ID] = true;
+
+        function loadGA() {
+          window['ga-disable-' + GA_ID] = false;
+          if (window.gtag) return;
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+          document.head.appendChild(s);
+          window.dataLayer = window.dataLayer || [];
+          function gtag() { window.dataLayer.push(arguments); }
+          window.gtag = gtag;
+          gtag('js', new Date());
+          gtag('config', GA_ID);
+        }
+
+        function revokeGA() {
+          window['ga-disable-' + GA_ID] = true;
+        }
+
+        window.tvcAnalytics = { load: loadGA, revoke: revokeGA };
       })();
     </script>
     <meta charset="utf-8" />
@@ -135,5 +155,6 @@ const siteGraph = {
     </main>
     <Footer />
     <ChatWidget />
+    <CookieConsent />
   </body>
 </html>

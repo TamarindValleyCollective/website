@@ -21,6 +21,11 @@ const year = new Date().getFullYear();
       ))}
     </div>
     <p class="footer__copy">© {year} Tamarind Valley Collective. All rights reserved.</p>
+    <p class="footer__legal">
+      <a href="/privacy">Privacy &amp; Cookies</a>
+      <span aria-hidden="true">·</span>
+      <button type="button" id="footer-cookie-prefs">Cookie preferences</button>
+    </p>
   </div>
 </footer>
 
@@ -85,4 +90,45 @@ const year = new Date().getFullYear();
     color: #b9d0bc;
     margin: 0;
   }
+
+  .footer__legal {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: #b9d0bc;
+    margin: 0;
+  }
+
+  .footer__legal a {
+    color: #eef5ee;
+  }
+
+  .footer__legal a:hover {
+    color: var(--tvc-orange);
+  }
+
+  .footer__legal button {
+    appearance: none;
+    -webkit-appearance: none;
+    background: none;
+    border: none;
+    padding: 0;
+    color: #eef5ee;
+    font: inherit;
+    font-size: 0.8rem;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .footer__legal button:hover {
+    color: var(--tvc-orange);
+  }
 </style>
+
+<script>
+  document.getElementById('footer-cookie-prefs')?.addEventListener('click', () => {
+    window.dispatchEvent(new Event('tvc:open-cookie-preferences'));
+  });
+</script>

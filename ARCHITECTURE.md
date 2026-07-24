@@ -26,7 +26,7 @@ flowchart TD
 
     subgraph SRC["1 · Source — github.com/TamarindValleyCollective/website (main)"]
         PAGES["src/pages/*.astro<br/>File-based routes: Home, About, Visit,<br/>Events, Ecosystem, Our Journey, Contact, etc."]
-        COMPONENTS["src/components/<br/>Nav, Footer, PageHero, ChatWidget,<br/>JourneyTimelineStandalone, BiodiversityExplorer,<br/>PhotoGallery"]
+        COMPONENTS["src/components/<br/>Nav, Footer, PageHero, ChatWidget,<br/>CookieConsent, JourneyTimelineStandalone,<br/>BiodiversityExplorer, PhotoGallery"]
         CONTENT["src/content/*<br/>Markdown collections: events, partners,<br/>community-outreach, photos"]
         FUNC_SRC["netlify/functions/chat.mts<br/>Serverless function, calls Anthropic API server-side"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
@@ -52,7 +52,7 @@ flowchart TD
         BIODIV["BiodiversityExplorer<br/>Fetches sightings directly from<br/>iNaturalist's public API"]
         PHOTOS["PhotoGallery (/in-pictures)<br/>Filters, Grid/Map toggle, lightbox —<br/>images served directly from R2"]
         TIMELINE["Our Journey / other pages<br/>Era-based year timeline, event listings —<br/>pure static, no calls out"]
-        GA["Google Analytics (GA4)<br/>Loaded from BaseLayout on every page,<br/>skipped on localhost"]
+        GA["Google Analytics (GA4)<br/>Loaded from BaseLayout, consent-gated by<br/>CookieConsent, skipped on localhost"]
     end
 
     subgraph EXTERNAL["External services (called directly by the browser)"]
@@ -191,11 +191,17 @@ never touches Netlify either.
   and the rest of the site are pure static content with no external calls.
 - A few pages also embed third-party content directly: Google Maps/My Maps (directions and
   farm layout) and YouTube (aerial drone flyover).
-- **Google Analytics (GA4)** — loaded from `BaseLayout.astro`, so it's on every page site-wide;
-  not tied to any one component. Measurement ID `G-795FTPB47P`. Skips loading entirely when
-  `location.hostname` is `localhost`/`127.0.0.1`, so local dev browsing never pollutes
-  production traffic data. No consent banner — revisit if EU/UK visitor volume becomes
-  significant enough to need one.
+- **Google Analytics (GA4)** — loaded from `BaseLayout.astro`, so the loader is on every page
+  site-wide; not tied to any one component. Measurement ID `G-795FTPB47P`. Skips loading
+  entirely when `location.hostname` is `localhost`/`127.0.0.1`, so local dev browsing never
+  pollutes production traffic data. Consent-gated: the loader only exposes
+  `window.tvcAnalytics.load()`/`.revoke()` and does nothing on its own — `CookieConsent.astro`
+  (rendered site-wide from `BaseLayout`) shows a banner on first visit and only calls `.load()`
+  after the visitor accepts, storing the choice in `localStorage` (`tvc-cookie-consent`) so it
+  isn't asked again. Rejecting, or later withdrawing via the footer's "Cookie preferences"
+  link, calls `.revoke()`, which sets gtag's own `ga-disable-<id>` flag — the standard kill
+  switch, needed because a script already injected earlier in the session can't be
+  un-injected. `/privacy` documents what's collected and links back to this same control.
 
 ## Current Production Status
 
@@ -210,7 +216,7 @@ never touches Netlify either.
 | Chat widget UI | ✅ Live |
 | Chat widget's actual AI responses | ✅ Live — `ANTHROPIC_API_KEY` set 2026-07-18; verified with real requests against `tvc.farm/api/chat` returning grounded answers |
 | Friends of TVC signup (Netlify Forms) | ✅ Live — confirmed at `/contact`, with `/contact/thanks` as the confirmation page |
-| Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost |
+| Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy` |
 
 No known gaps — every feature above is confirmed live in production. The Netlify project itself
 is owned by the `contact@tvc.farm` account (moved there from a personal account on 2026-07-18).

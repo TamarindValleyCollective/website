@@ -1,0 +1,35 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHero from '../components/PageHero.astro';
+---
+
+<BaseLayout title="Privacy & Cookies" description="What Tamarind Valley Collective collects when you visit this site, which cookies we use, and how to change your choice.">
+  <PageHero eyebrow="Legal" title="Privacy & Cookies" intro="What this site collects when you visit, and the choices you have about it." />
+
+  <section class="section wrapper prose">
+    <h2>Cookies and analytics</h2>
+    <p>This site uses <strong>Google Analytics (GA4)</strong> to understand how visitors use it — which pages get read, roughly how many people visit, and so on. It sets cookies to do that.</p>
+    <p>We don't turn this on until you say it's okay. The banner shown on your first visit lets you Accept or Reject on equal footing; if you reject, no analytics cookies are set and no data is sent to Google. You can change your mind at any time via <strong>Cookie preferences</strong> in the footer of any page.</p>
+    <p>Google Analytics doesn't collect your name, email, or anything else that identifies you personally, and IP addresses aren't stored against your data. We don't use it for advertising or retargeting, and we don't sell or share this data with anyone beyond Google's role in providing the analytics service itself.</p>
+
+    <h2>The chat assistant</h2>
+    <p>The chat widget sends what you type to Anthropic's Claude API to generate a reply, grounded only in this site's own published content. TVC doesn't store your chat messages — the function that relays them to Anthropic is stateless and keeps nothing after it responds. Anthropic's own handling of API requests is governed by their <a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noopener noreferrer">privacy policy</a>.</p>
+
+    <h2>Friends of TVC signup</h2>
+    <p>If you submit the "Join Friends of TVC" form on the <a href="/contact">Contact page</a>, we collect your name and phone number. This is used only to add you to the "Friends of TVC" WhatsApp group by hand — it isn't used for anything else, and isn't shared beyond that.</p>
+
+    <h2>Other services this site talks to</h2>
+    <p>A few pages load content directly from third parties, each governed by that party's own privacy practices rather than ours:</p>
+    <ul>
+      <li>The <a href="/ecosystem">Biodiversity</a> page fetches live sightings from the public iNaturalist API.</li>
+      <li>Photos on <a href="/in-pictures">In Pictures</a> load from Cloudflare R2 (media.tvc.farm), TVC's own photo storage.</li>
+      <li>Some pages embed Google Maps/My Maps for directions, or YouTube for video.</li>
+    </ul>
+
+    <h2>Your choices</h2>
+    <p>You can reject analytics cookies outright, or accept and later withdraw consent — both take effect immediately via the cookie banner or the <strong>Cookie preferences</strong> link in the footer. Declining doesn't affect your ability to use any part of the site.</p>
+
+    <h2>Questions</h2>
+    <p>For anything about this page or your data, reach out at <a href="mailto:contact@tvc.farm">contact@tvc.farm</a>.</p>
+  </section>
+</BaseLayout>
