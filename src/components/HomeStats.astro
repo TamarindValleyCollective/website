@@ -1,0 +1,132 @@
+---
+const YEARS_REGENERATING = new Date().getFullYear() - 2017;
+---
+
+<section class="home-stats" id="home-stats">
+  <div class="wrapper home-stats__grid">
+    <div class="home-stat">
+      <p class="home-stat__value" data-count-to="100">0</p>
+      <p class="home-stat__label">Acres</p>
+    </div>
+    <div class="home-stat">
+      <p class="home-stat__value" data-count-to={YEARS_REGENERATING}>0</p>
+      <p class="home-stat__label">Years regenerating</p>
+    </div>
+    <div class="home-stat">
+      <p class="home-stat__value" data-count-to="53">0</p>
+      <p class="home-stat__label">Member families</p>
+    </div>
+    <div class="home-stat">
+      <p class="home-stat__value" id="home-stat-species">—</p>
+      <p class="home-stat__label">Species observed</p>
+    </div>
+  </div>
+</section>
+
+<style>
+  .home-stats {
+    background: var(--tvc-green-tint);
+    border-top: 1px solid var(--tvc-line);
+    border-bottom: 1px solid var(--tvc-line);
+    padding: 36px 0;
+  }
+
+  .home-stats__grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+    text-align: center;
+  }
+
+  .home-stat__value {
+    font-family: var(--font-display);
+    font-size: clamp(1.8rem, 4vw, 2.6rem);
+    font-weight: 700;
+    color: var(--tvc-green);
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+
+  .home-stat__label {
+    margin: 6px 0 0;
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+  }
+
+  @media (max-width: 640px) {
+    .home-stats__grid {
+      grid-template-columns: repeat(2, 1fr);
+      row-gap: 28px;
+    }
+  }
+</style>
+
+<script>
+  import { fetchAllObservations } from './biodiversity/observation-utils';
+
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function animateValue(el: HTMLElement, to: number, duration = 1200) {
+    if (reduceMotion) {
+      el.textContent = String(to);
+      return;
+    }
+    const start = performance.now();
+    function tick(now: number) {
+      const progress = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      el.textContent = String(Math.round(to * eased));
+      if (progress < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  const section = document.getElementById('home-stats')!;
+  const staticEls = [...section.querySelectorAll<HTMLElement>('[data-count-to]')];
+  const speciesEl = document.getElementById('home-stat-species')!;
+  let played = false;
+
+  function playEntrance() {
+    if (played) return;
+    played = true;
+    for (const el of staticEls) {
+      animateValue(el, Number(el.dataset.countTo));
+    }
+    // Species count depends on the iNaturalist fetch below -- animate it
+    // immediately if that's already resolved by the time this section
+    // becomes visible, otherwise animateSpecies() (below) does it the
+    // moment the fetch completes instead.
+    if (speciesEl.dataset.ready === 'true') {
+      animateValue(speciesEl, Number(speciesEl.dataset.value));
+    }
+  }
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((e) => e.isIntersecting)) playEntrance();
+    },
+    { threshold: 0.4 }
+  );
+  observer.observe(section);
+
+  // Reuses BiodiversityExplorer's own fetch + localStorage cache (10-minute
+  // TTL) -- if a visitor already opened /ecosystem this session, this
+  // resolves instantly from cache instead of hitting iNaturalist again.
+  fetchAllObservations()
+    .then((observations) => {
+      const identified = observations.filter((o) => o.taxon != null);
+      const speciesCount = new Set(identified.map((o) => o.taxon!.id)).size;
+      speciesEl.dataset.value = String(speciesCount);
+      speciesEl.dataset.ready = 'true';
+      if (played) animateValue(speciesEl, speciesCount);
+    })
+    .catch(() => {
+      // Live count is a nice-to-have -- if iNaturalist is unreachable, fall
+      // back to a plain label rather than leaving a stuck "—".
+      speciesEl.textContent = '100+';
+    });
+</script>

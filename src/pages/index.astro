@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import HomeStats from '../components/HomeStats.astro';
 import { PRINCIPLES } from '../data/principles';
 
 const exploreCards = [
@@ -72,6 +73,8 @@ const engageRungs = [
       <p class="hero__intro">A 100-acre farm collectively owned by 53 families, regenerating degraded land through permaculture since 2017.</p>
     </div>
   </section>
+
+  <HomeStats />
 
   <section class="section fork-section">
     <div class="wrapper">
