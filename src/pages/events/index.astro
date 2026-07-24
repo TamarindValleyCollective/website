@@ -41,7 +41,7 @@ function tagsAttr(e: (typeof allEvents)[number]) {
                 <span class="countdown__num">{countdownLabel(daysAway)}</span>
               </div>
               <div class:list={['upcoming-card__media', { 'upcoming-card__media--empty': !e.data.coverImage }]}>
-                {e.data.coverImage && <img src={e.data.coverImage} alt={e.data.title} />}
+                {e.data.coverImage && <img src={e.data.coverImage} alt={e.data.title} loading="lazy" />}
               </div>
               <div>
                 <p class="date">{formatDateRange(e.data.date, e.data.endDate)}</p>
@@ -92,7 +92,7 @@ function tagsAttr(e: (typeof allEvents)[number]) {
       <div class="grid" id="grid-past">
         {past.map((e) => (
           <a class="card" href={`/events/${e.id}`} data-tags={tagsAttr(e)}>
-            {e.data.coverImage && <img src={e.data.coverImage} alt={e.data.title} />}
+            {e.data.coverImage && <img src={e.data.coverImage} alt={e.data.title} loading="lazy" />}
             <p class="date">{formatDateRange(e.data.date, e.data.endDate)}</p>
             <h3>{e.data.title}</h3>
             <p class="excerpt">{e.data.excerpt}</p>

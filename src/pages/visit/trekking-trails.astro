@@ -33,7 +33,7 @@ const trails = [
     <div class="trail-list">
       {trails.map((t) => (
         <div class="trail card">
-          <img src={t.image} alt={t.name} />
+          <img src={t.image} alt={t.name} loading="lazy" />
           <div>
             <h3>{t.name}</h3>
             <p class="distance">{t.distance}</p>
