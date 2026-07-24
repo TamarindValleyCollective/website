@@ -1,7 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
-import BeforeAfterSlider from '../components/BeforeAfterSlider.astro';
 ---
 
 <BaseLayout title="Our Journey" description="From a degraded 100-acre farm to a regenerating ecosystem — the founding, the design, and the outreach along the way." image="/images/pages/journey/hero.jpg" imageWidth={1280} imageHeight={960}>
@@ -20,16 +19,6 @@ import BeforeAfterSlider from '../components/BeforeAfterSlider.astro';
       <p>Nature does not hurry, yet everything is accomplished.</p>
       <cite>— Lao Tzu</cite>
     </blockquote>
-
-    <BeforeAfterSlider
-      before="/images/journey/journey-01.jpg"
-      beforeAlt="The land in 2017 — barren, stripped topsoil, sparse scrub"
-      beforeLabel="2017"
-      after="/images/pages/home/hero.jpg"
-      afterAlt="The land today — dense forest cover across the same hillside"
-      afterLabel="Today"
-    />
-    <p class="slider-caption">Drag to compare — the same hillside, nine years apart.</p>
   </section>
 
   <section class="section wrapper">
@@ -67,13 +56,6 @@ import BeforeAfterSlider from '../components/BeforeAfterSlider.astro';
     font-style: normal;
     color: var(--tvc-ink-soft);
     font-size: 0.9rem;
-  }
-
-  .slider-caption {
-    text-align: center;
-    color: var(--tvc-ink-soft);
-    font-size: 0.85rem;
-    margin: 12px 0 0;
   }
 
   .explore-grid {
