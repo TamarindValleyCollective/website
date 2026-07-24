@@ -16,6 +16,8 @@
   <div class="explorer__body" id="explorer-body" hidden>
     <div class="stats" id="explorer-stats"></div>
 
+    <div class="leaderboard" id="leaderboard" role="group" aria-label="Top contributors"></div>
+
     <div class="explorer__controls">
       <div class="explorer__chips" id="explorer-chips" role="group" aria-label="Filter by group"></div>
       <div class="view-toggle" role="group" aria-label="View">
@@ -116,6 +118,67 @@
     margin: 6px 0 0;
     font-variant-numeric: tabular-nums;
     line-height: 1;
+  }
+
+  .leaderboard {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+
+  :global(.leaderboard__item) {
+    appearance: none;
+    -webkit-appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--tvc-line);
+    background: #fff;
+    color: var(--tvc-ink-soft);
+    padding: 5px 12px 5px 6px;
+    border-radius: 999px;
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  :global(.leaderboard__item:hover) {
+    border-color: var(--tvc-orange);
+  }
+
+  :global(.leaderboard__item.is-active) {
+    background: var(--tvc-ink);
+    border-color: var(--tvc-ink);
+    color: #fff;
+  }
+
+  :global(.leaderboard__rank) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green);
+    font-size: 0.7rem;
+    font-weight: 700;
+  }
+
+  :global(.leaderboard__item.is-active .leaderboard__rank) {
+    background: var(--tvc-orange);
+    color: #fff;
+  }
+
+  :global(.leaderboard__count) {
+    color: var(--tvc-ink-soft);
+    font-weight: 500;
+  }
+
+  :global(.leaderboard__item.is-active .leaderboard__count) {
+    color: #e8f2ea;
   }
 
   .explorer__controls {
@@ -436,6 +499,10 @@
   const contributorFilterEl = document.getElementById('contributor-filter')!;
   const contributorFilterNameEl = document.getElementById('contributor-filter-name')!;
   const contributorFilterClearBtn = document.getElementById('contributor-filter-clear')!;
+  const leaderboardEl = document.getElementById('leaderboard')!;
+
+  const RANK_MEDALS: Record<number, string> = { 0: '🥇', 1: '🥈', 2: '🥉' };
+  const TOP_CONTRIBUTOR_COUNT = 5;
 
   let allObservations: Observation[] = [];
   let byParent: Map<number, Observation[]> = new Map();
@@ -475,6 +542,36 @@
     statsEl.innerHTML = stats
       .map((s) => `<div class="stat"><p class="stat__label">${s.label}</p><p class="stat__value">${s.value}</p></div>`)
       .join('');
+  }
+
+  // Ranked by total contributions across the whole dataset -- deliberately
+  // not affected by the active taxon/observer filters, same as the stats
+  // row above, so it stays a stable "who's contributed the most" reference
+  // rather than jumping around as someone filters the grid. Doubles as a
+  // shortcut into the existing observer filter -- clicking an entry is the
+  // same setContributorFilter() the per-card overlay button uses.
+  function renderLeaderboard() {
+    const counts = new Map<string, { name: string; count: number }>();
+    for (const o of allObservations) {
+      const login = o.user.login;
+      if (!login) continue;
+      const entry = counts.get(login) ?? { name: o.user.name || login, count: 0 };
+      entry.count += 1;
+      counts.set(login, entry);
+    }
+    const top = [...counts.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, TOP_CONTRIBUTOR_COUNT);
+
+    leaderboardEl.innerHTML = '';
+    if (top.length === 0) return;
+
+    top.forEach(([login, { name, count }], i) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = `leaderboard__item${login === activeContributor ? ' is-active' : ''}`;
+      item.innerHTML = `<span class="leaderboard__rank">${RANK_MEDALS[i] ?? i + 1}</span> ${name} <span class="leaderboard__count">· ${count}</span>`;
+      item.addEventListener('click', () => setContributorFilter(login, name));
+      leaderboardEl.appendChild(item);
+    });
   }
 
   function renderChips(groups: Map<string, Observation[]>) {
@@ -530,6 +627,7 @@
     contributorFilterNameEl.textContent = activeContributor ? (displayName ?? activeContributor) : '';
     renderGrid();
     refreshMap();
+    renderLeaderboard();
   }
 
   function renderGrid() {
@@ -669,6 +767,7 @@
       byParent = groupByParentTaxon(allObservations);
       const groups = groupByIconicTaxon(allObservations);
       renderStats();
+      renderLeaderboard();
       renderChips(groups);
       renderGrid();
       showState('ready');
