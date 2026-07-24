@@ -5,6 +5,7 @@ excerpt: "A full day of foraging, cooking, and eating together at Tamarind Valle
 coverImage: "/images/events/2026-08-01-foraging-day/hero.jpeg"
 organizer: "Foraging Trails & Tales"
 tags: ["workshop", "food", "foraging"]
+draft: true
 ---
 
 Step into nature, learn, cook, and eat what the earth gives you.
