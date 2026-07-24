@@ -45,6 +45,10 @@
   let open = false;
   let sending = false;
 
+  // Shown once, on first open, to lower the friction of typing a first
+  // question into a widget that's easy to just... close.
+  const SUGGESTED_PROMPTS = ['How do I visit?', "What's the next event?", 'How does membership work?'];
+
   // The assistant replies in a light subset of Markdown (bold, links, lists).
   // Rendered as HTML instead of plain text so it reads as formatted content
   // instead of literal asterisks/brackets. Everything is HTML-escaped before
@@ -159,12 +163,31 @@
     return bubble;
   }
 
+  function addSuggestedPrompts() {
+    const wrap = document.createElement('div');
+    wrap.className = 'cw-suggestions';
+    for (const prompt of SUGGESTED_PROMPTS) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'cw-suggestion';
+      chip.textContent = prompt;
+      chip.addEventListener('click', () => {
+        wrap.remove();
+        sendMessage(prompt);
+      });
+      wrap.appendChild(chip);
+    }
+    messagesEl.appendChild(wrap);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
   function openPanel() {
     open = true;
     panel.hidden = false;
     toggle.setAttribute('aria-expanded', 'true');
     if (!messagesEl.childElementCount) {
       addBubble('assistant', "Hi! I'm the TVC website assistant — ask me anything about the farm, and I'll answer using what's on this site.");
+      addSuggestedPrompts();
     }
     input.focus();
   }
@@ -182,10 +205,9 @@
     if (e.key === 'Escape' && open) closePanel();
   });
 
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const message = input.value.trim();
+  async function sendMessage(message: string) {
     if (!message || sending) return;
+    document.querySelector('.cw-suggestions')?.remove();
 
     sending = true;
     sendBtn.disabled = true;
@@ -217,6 +239,11 @@
       sendBtn.disabled = false;
       input.focus();
     }
+  }
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    sendMessage(input.value.trim());
   });
 </script>
 
@@ -470,6 +497,33 @@
     border-radius: 4px;
     padding: 0.1em 0.35em;
     font-size: 0.85em;
+  }
+
+  .cw-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-self: flex-start;
+    max-width: 100%;
+  }
+
+  .cw-suggestion {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid var(--tvc-line);
+    background: #fff;
+    color: var(--tvc-green-dark);
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .cw-suggestion:hover {
+    background: var(--tvc-green-tint);
+    border-color: var(--tvc-green);
   }
 
   .cw-typing {
