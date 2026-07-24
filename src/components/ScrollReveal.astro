@@ -1,0 +1,82 @@
+---
+// Site-wide fade/slide-in for .section elements as they scroll into view.
+// Rendered once from BaseLayout so every page gets it with no per-page
+// wiring -- .section is already the common structural class nearly every
+// page uses for its top-level content blocks (confirmed neither
+// JourneyTimelineStandalone nor BiodiversityExplorer use it, so their own
+// custom scroll effects aren't touched by this).
+---
+
+<style is:global>
+  /* Hidden state only applies once JS has actually set up the observer
+     (documentElement gets .js-reveal-ready below) -- so with JS disabled
+     or slow to load, content is visible by default instead of stuck at
+     opacity:0. */
+  .js-reveal-ready .section {
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+
+  .js-reveal-ready .section.is-revealed {
+    opacity: 1;
+    transform: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .js-reveal-ready .section {
+      opacity: 1;
+      transform: none;
+      transition: none;
+    }
+  }
+</style>
+
+<script>
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    document.documentElement.classList.add('js-reveal-ready');
+
+    const pending = new Set(document.querySelectorAll<HTMLElement>('.section'));
+
+    function reveal(el: HTMLElement) {
+      el.classList.add('is-revealed');
+      pending.delete(el);
+      observer.unobserve(el);
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) reveal(entry.target as HTMLElement);
+        }
+      },
+      { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
+    );
+
+    pending.forEach((el) => observer.observe(el));
+
+    // Safety net for IntersectionObserver's real gap: it only fires on a
+    // detected intersection *change* between rendered frames, so a fast or
+    // instant scroll (a big trackpad flick, dragging the scrollbar, a
+    // "skip to section" link) can carry a section through the viewport
+    // without the browser ever rendering a frame where it intersected --
+    // leaving it stuck invisible even though the visitor scrolled right
+    // past it. Verified this actually happens with a 30-tick wheel scroll
+    // in testing, not just a hypothetical.
+    //
+    // A scroll event always fires once the motion settles, so this
+    // reveals anything whose top has reached the viewport by now --
+    // deliberately not requiring rect.bottom > 0 too, since a section
+    // already scrolled past (bottom above the viewport) has still been
+    // seen and should stay revealed, not wait to be scrolled back to.
+    function sweepPending() {
+      if (pending.size === 0) return;
+      const vh = window.innerHeight;
+      for (const el of [...pending]) {
+        if (el.getBoundingClientRect().top < vh) reveal(el);
+      }
+    }
+
+    window.addEventListener('scroll', sweepPending, { passive: true });
+  }
+</script>
