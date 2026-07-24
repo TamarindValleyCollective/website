@@ -71,7 +71,7 @@ export function toLatLng(geojson: Observation['geojson']): [number, number] | nu
 // The raw API response has many fields we never use (identifications, flags,
 // full user profile stats, etc). Mapping down to just what the UI needs keeps
 // the in-memory/cached payload small — the full payload for ~104 observations
-// serializes to ~5MB, which is enough to hit sessionStorage's quota in some
+// serializes to ~5MB, which is enough to hit localStorage's quota in some
 // browsers, so trimming it isn't just tidiness, it's what keeps caching working.
 function toObservation(raw: any): Observation {
   return {
@@ -104,7 +104,9 @@ function toObservation(raw: any): Observation {
 
 export async function fetchAllObservations(): Promise<Observation[]> {
   const cacheKey = `tvc-biodiversity-cache-${PROJECT_SLUG}`;
-  const cached = sessionStorage.getItem(cacheKey);
+  // localStorage, not sessionStorage — same 10-minute freshness window below,
+  // just shared across tabs and reopens instead of dying with the tab.
+  const cached = localStorage.getItem(cacheKey);
   if (cached) {
     try {
       const parsed = JSON.parse(cached);
@@ -135,9 +137,9 @@ export async function fetchAllObservations(): Promise<Observation[]> {
   // never take down the actual page, which is why it's isolated in its own
   // try/catch rather than sharing the caller's error handling.
   try {
-    sessionStorage.setItem(cacheKey, JSON.stringify({ fetchedAt: Date.now(), observations: all }));
+    localStorage.setItem(cacheKey, JSON.stringify({ fetchedAt: Date.now(), observations: all }));
   } catch (err) {
-    console.warn('Could not cache iNaturalist observations in sessionStorage:', err);
+    console.warn('Could not cache iNaturalist observations in localStorage:', err);
   }
 
   return all;
