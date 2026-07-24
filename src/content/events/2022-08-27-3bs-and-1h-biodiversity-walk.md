@@ -3,7 +3,7 @@ title: "3Bs and 1H - Dusk to Dawn: Biodiversity Walks@TVC (Birds/Butterflies/Bee
 date: 2022-08-27
 endDate: 2022-08-28
 excerpt: "Farm stay, campfire, and guided walks to watch and identify birds, butterflies, insects, and plants — dusk to dawn."
-coverImage: "/images/events/2022-08-27-3bs-and-1h-biodiversity-walk/hero.png"
+coverImage: "/images/events/2022-08-27-3bs-and-1h-biodiversity-walk/hero.jpg"
 tags: ["biodiversity", "walk"]
 ---
 
