@@ -151,7 +151,15 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
     display: none;
     position: absolute;
     top: 100%;
-    left: 0;
+    /* Centered under its own trigger, not left-anchored — a fixed-side
+       anchor makes Explore and Engage hang in opposite directions (one
+       growing right, the rightmost one forced left to avoid overflowing
+       off-screen) instead of matching. Centering is the one rule that
+       reads the same for every item; --dropdown-shift (set by the script
+       below, only when needed) nudges it back on-screen at narrower
+       desktop widths where centering alone would still clip an edge item. */
+    left: 50%;
+    transform: translateX(calc(-50% + var(--dropdown-shift, 0px)));
     flex-direction: column;
     min-width: 210px;
     background: #fff;
@@ -165,14 +173,6 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
   .nav__item:hover .nav__dropdown,
   .nav__item:focus-within .nav__dropdown {
     display: flex;
-  }
-
-  /* The rightmost nav item sits close to the viewport edge, so a dropdown
-     growing rightward from its left edge can overflow off-screen — anchor
-     it to its own right edge instead so it grows back towards the menu. */
-  .nav__item:last-child .nav__dropdown {
-    left: auto;
-    right: 0;
   }
 
   /* Explore has 7 items — a single column runs uncomfortably tall, so it
@@ -270,6 +270,10 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
     .nav__dropdown {
       display: flex;
       position: static;
+      /* transform isn't gated by position: static the way left/right are —
+         without resetting it, the desktop centering translate would still
+         shift this static-flow mobile dropdown sideways by half its width. */
+      transform: none;
       border: none;
       box-shadow: none;
       padding: 0 0 6px 16px;
@@ -312,5 +316,33 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
   toggle?.addEventListener('click', () => {
     const isOpen = menu?.classList.toggle('is-open');
     toggle.setAttribute('aria-expanded', String(Boolean(isOpen)));
+  });
+
+  // Dropdowns center under their own trigger by default (see .nav__dropdown
+  // in the style block above) -- consistent for every item, but at
+  // desktop widths where a trigger sits close to the viewport edge,
+  // centering alone can still clip the dropdown off-screen. Nudge it back
+  // on-screen via a CSS variable rather than reverting to a fixed
+  // left/right anchor, which is what made Explore and Engage misalign in
+  // the first place.
+  const EDGE_PADDING = 12;
+
+  function clampDropdown(item: Element) {
+    const dropdown = item.querySelector<HTMLElement>('.nav__dropdown');
+    if (!dropdown) return;
+    dropdown.style.removeProperty('--dropdown-shift');
+    const rect = dropdown.getBoundingClientRect();
+    let shift = 0;
+    if (rect.left < EDGE_PADDING) {
+      shift = EDGE_PADDING - rect.left;
+    } else if (rect.right > window.innerWidth - EDGE_PADDING) {
+      shift = window.innerWidth - EDGE_PADDING - rect.right;
+    }
+    if (shift !== 0) dropdown.style.setProperty('--dropdown-shift', `${shift}px`);
+  }
+
+  document.querySelectorAll('.nav__item').forEach((item) => {
+    item.addEventListener('mouseenter', () => clampDropdown(item));
+    item.addEventListener('focusin', () => clampDropdown(item));
   });
 </script>
