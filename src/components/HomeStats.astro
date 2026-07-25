@@ -4,45 +4,96 @@ const YEARS_REGENERATING = new Date().getFullYear() - 2017;
 
 <section class="home-stats" id="home-stats">
   <div class="wrapper home-stats__grid">
-    <div class="home-stat">
+    <a class="home-stat" href="/about">
       <p class="home-stat__value" data-count-to="100">0</p>
       <p class="home-stat__label">Acres</p>
-    </div>
-    <div class="home-stat">
+    </a>
+    <a class="home-stat" href="/our-journey">
       <p class="home-stat__value" data-count-to={YEARS_REGENERATING}>0</p>
       <p class="home-stat__label">Years regenerating</p>
-    </div>
-    <div class="home-stat">
+    </a>
+    <a class="home-stat" href="/about#members">
       <p class="home-stat__value" data-count-to="53">0</p>
       <p class="home-stat__label">Member families</p>
-    </div>
-    <div class="home-stat">
+    </a>
+    <a class="home-stat" href="/ecosystem">
       <p class="home-stat__value" id="home-stat-species">—</p>
       <p class="home-stat__label">Species observed</p>
-    </div>
+    </a>
   </div>
 </section>
 
 <style>
+  /* Overlaid on the hero image (a positioned ancestor — see .hero in
+     index.astro) rather than sitting in normal flow below it. */
   .home-stats {
-    background: var(--tvc-green-tint);
-    border-top: 1px solid var(--tvc-line);
-    border-bottom: 1px solid var(--tvc-line);
-    padding: 36px 0;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+    padding-bottom: clamp(20px, 4vw, 40px);
   }
 
   .home-stats__grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 24px;
+    gap: 16px;
+    /* Reserves clearance for the fixed chat bubble (ChatWidget.astro:
+       58px circle, offset clamp(14px, 3vw, 28px) from the corner) so the
+       last tile's text never sits underneath it — this bar can end up
+       right at the bottom of the viewport on first load since it's
+       pinned to the hero, unlike the old in-flow section further down
+       the page where that corner was already scrolled past. */
+    padding-right: clamp(84px, 9vw, 100px);
+  }
+
+  /* Apple's "material" look (Control Center, Big Sur widgets): a heavily
+     blurred, saturation-boosted glass pane over the hero image, not a flat
+     translucent tint — the saturate() is what keeps it from reading as
+     plain frosted plastic. The inset highlight is what sells "glass" over
+     "frosted plastic": a bright sliver along the top edge as if catching
+     light, fading immediately, the way a real beveled pane would. */
+  .home-stat {
+    position: relative;
+    display: block;
     text-align: center;
+    text-decoration: none;
+    color: inherit;
+    padding: 18px 12px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.32);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.18),
+      inset 0 1px 1px rgba(255, 255, 255, 0.5),
+      inset 0 0 24px rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    transition: transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  }
+
+  /* A much bolder hover state than a plain glass tint shift — against a
+     busy, variably-bright photo, a subtle change is easy to miss (this is
+     what prompted the redo: cursor:pointer alone wasn't enough of a
+     signal). The orange border matches the site's existing hover
+     convention for clickable cards (see .explore-card / .rung). */
+  .home-stat:hover,
+  .home-stat:focus-visible {
+    transform: translateY(-5px);
+    background: rgba(255, 255, 255, 0.3);
+    border-color: var(--tvc-orange);
+    box-shadow:
+      0 12px 36px rgba(0, 0, 0, 0.28),
+      inset 0 1px 1px rgba(255, 255, 255, 0.6),
+      inset 0 0 24px rgba(255, 255, 255, 0.08);
   }
 
   .home-stat__value {
     font-family: var(--font-display);
-    font-size: clamp(1.8rem, 4vw, 2.6rem);
+    font-size: clamp(1.6rem, 3.4vw, 2.4rem);
     font-weight: 700;
-    color: var(--tvc-green);
+    color: #fff;
     margin: 0;
     font-variant-numeric: tabular-nums;
     line-height: 1;
@@ -50,17 +101,33 @@ const YEARS_REGENERATING = new Date().getFullYear() - 2017;
 
   .home-stat__label {
     margin: 6px 0 0;
-    font-size: 0.82rem;
-    color: var(--tvc-ink-soft);
+    font-size: 0.76rem;
+    color: rgba(255, 255, 255, 0.82);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     font-weight: 600;
   }
 
   @media (max-width: 640px) {
+    .home-stats {
+      padding-bottom: 16px;
+    }
+
     .home-stats__grid {
       grid-template-columns: repeat(2, 1fr);
-      row-gap: 28px;
+      gap: 10px;
+      /* Symmetric clearance instead of the desktop right-only reserve
+         above — one-sided padding here left the 2-column grid visibly
+         off-centre. Still enough on the right to clear the chat bubble
+         (58px circle + up to 28px offset, per the comment above) at
+         mobile's smaller clamp values. */
+      padding-left: 76px;
+      padding-right: 76px;
+    }
+
+    .home-stat {
+      padding: 14px 10px;
+      border-radius: 12px;
     }
   }
 </style>

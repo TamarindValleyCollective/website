@@ -65,17 +65,19 @@ const engageRungs = [
 ---
 
 <BaseLayout title="Home" description="Tamarind Valley Collective — a 100-acre permaculture farm collectively owned by 53 families, regenerating degraded farmland near Kanakapura since 2017.">
+  <div class="hero-bg" id="hero-bg">
+    <img class="hero-bg__image" id="hero-image" src="/images/pages/home/hero.jpg" alt="Panoramic view of the Tamarind Valley Collective farm" />
+    <div class="hero-bg__scrim" id="hero-scrim"></div>
+  </div>
+
   <section class="hero">
-    <img class="hero__image" src="/images/pages/home/hero.jpg" alt="Panoramic view of the Tamarind Valley Collective farm" />
-    <div class="hero__scrim"></div>
     <div class="wrapper hero__content">
       <p class="eyebrow eyebrow--light">A community rooted in the land</p>
       <h1>Living with Nature at TVC</h1>
       <p class="hero__intro">A 100-acre farm collectively owned by 53 families, regenerating degraded land through permaculture since 2017.</p>
     </div>
+    <HomeStats />
   </section>
-
-  <HomeStats />
 
   <WhatsNextBanner />
 
@@ -176,26 +178,43 @@ const engageRungs = [
 </BaseLayout>
 
 <style>
-  .hero {
-    position: relative;
-    min-height: 480px;
-    display: flex;
-    align-items: center;
-    overflow: hidden;
+  /* A fixed full-viewport backdrop, not part of .hero's own box — sits
+     behind the entire page (z-index below everything, including sections
+     that come after the hero) so all real content, starting with the
+     hero's own heading/intro/stats, just scrolls normally over it rather
+     than being pinned or animated itself. The script below fades this
+     layer out over the first stretch of scroll; nothing else is touched. */
+  .hero-bg {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
   }
 
-  .hero__image {
+  .hero-bg__image {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
+    will-change: opacity;
   }
 
-  .hero__scrim {
+  .hero-bg__scrim {
     position: absolute;
     inset: 0;
     background: linear-gradient(180deg, rgba(15, 26, 18, 0.35) 0%, rgba(15, 26, 18, 0.72) 100%);
+    will-change: opacity;
+  }
+
+  .hero {
+    position: relative;
+    /* Taller than before (was 480px) so the stats bar overlaid at the
+       bottom (see HomeStats.astro) has room without crowding the
+       vertically centered heading/intro above it. */
+    min-height: 640px;
+    display: flex;
+    align-items: center;
   }
 
   .hero__content {
@@ -227,6 +246,18 @@ const engageRungs = [
   }
 
   /* --- fork --- */
+  .fork-section {
+    /* .section has no background of its own (transparent by default —
+       see global.css), which is fine normally but not here: this is the
+       first section after the hero, and the hero's picture is a fixed
+       backdrop behind the whole page (see .hero-bg) that's often still
+       mid-fade by the time this section scrolls into view. Without an
+       opaque background, this section's own dark text would sit directly
+       on top of that photo and become unreadable in places. */
+    position: relative;
+    background: var(--tvc-cream);
+  }
+
   .fork-head {
     text-align: center;
     max-width: 620px;
@@ -630,3 +661,49 @@ const engageRungs = [
     }
   }
 </style>
+
+<script>
+  // Fades the fixed background image+scrim out over the first stretch of
+  // scroll -- the page's actual content (hero heading/intro/stats, and
+  // everything after) is normal, unanimated document flow that simply
+  // scrolls over this backdrop, per the brief: only the background
+  // picture fades, nothing in the foreground does.
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const imageEl = document.getElementById('hero-image');
+  const scrimEl = document.getElementById('hero-scrim');
+
+  // Smoothstep ease -- a linear opacity ramp reads as mechanical; this
+  // makes the same scroll distance feel like a deliberate, settling fade.
+  function ease(t) {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
+
+  if (imageEl && scrimEl && !reduceMotion) {
+    let ticking = false;
+
+    function update() {
+      ticking = false;
+      // Fully faded by one viewport height of scroll -- roughly the point
+      // the hero's own content has scrolled out of view anyway, so the
+      // backdrop is gone by the time it'd otherwise show through gaps in
+      // whatever comes next. Recomputed each time rather than cached, so
+      // a resize (e.g. rotating a tablet) doesn't leave a stale distance.
+      const fadeDistance = window.innerHeight;
+      const progress = Math.min(Math.max(window.scrollY / fadeDistance, 0), 1);
+      const opacity = String(1 - ease(progress));
+      imageEl.style.opacity = opacity;
+      scrimEl.style.opacity = opacity;
+    }
+
+    function onScroll() {
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(update);
+      }
+    }
+
+    update();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+  }
+</script>
