@@ -5,11 +5,13 @@ const PROJECT_SLUG = 'biodiversity-at-tvc';
 
 // iNaturalist's default photo.url points at the "square" size (~75px) —
 // fine for a tiny map-pin popup, but visibly blurry stretched across a
-// 200-300px grid card. "small" (~240px) is the right size for card
-// thumbnails without paying for "medium"'s much larger download on a page
-// showing dozens of them at once.
+// 200-300px grid card even before accounting for retina/high-DPI screens,
+// which need ~2x the CSS pixel size in actual source resolution. "small"
+// (~240px) still fell short there; "medium" (~500px) is what the detail
+// panel's own larger photo view already uses and reads sharp, so grid
+// cards use the same size now.
 export function thumbUrl(url: string): string {
-  return url.replace('square', 'small');
+  return url.replace('square', 'medium');
 }
 
 export interface Photo {
