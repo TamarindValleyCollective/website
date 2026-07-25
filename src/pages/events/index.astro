@@ -202,6 +202,12 @@ function tagsAttr(e: (typeof allEvents)[number]) {
 
   /* ---- controls ---- */
   .controls {
+    /* This band sits between two .section blocks but isn't one itself -
+       needs the same opaque background they get from global.css, or the
+       page's fixed, still-fading hero photo (see PageHero.astro) shows
+       through behind the filter chips for however much of this section
+       falls within the first viewport-height of scroll. */
+    background: var(--tvc-cream);
     padding: 24px 0;
     border-top: 1px solid var(--tvc-line);
     border-bottom: 1px solid var(--tvc-line);
