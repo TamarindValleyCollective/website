@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
+import { FARM_AREA_ACRES } from '../data/site-facts';
 ---
 
 <BaseLayout title="Join the Collective" description="How membership at Tamarind Valley Collective actually works — community size, private transactions between members, and what matters to us in a new member." image="/images/pages/home/hero.jpg" imageWidth={4204} imageHeight={1330}>
@@ -14,7 +15,7 @@ import PageHero from '../components/PageHero.astro';
 
   <section class="section wrapper prose">
     <h2>We're not really recruiting</h2>
-    <p>TVC is <a href="/about#members">53 families</a> on 100 acres — that's likely close to as large as this community will ever get. We are unlikely to expand membership, and there's no waitlist or application process in the usual sense.</p>
+    <p>TVC is <a href="/about#members">53 families</a> on {FARM_AREA_ACRES} acres — that's likely close to as large as this community will ever get. We are unlikely to expand membership, and there's no waitlist or application process in the usual sense.</p>
 
     <h2>How a spot occasionally opens</h2>
     <p>From time to time, for personal reasons, a member family decides to move on. When that happens, it isn't the collective selling a spot — it's a private transaction directly between that family and whoever takes their place. TVC isn't a party to the sale and doesn't broker it.</p>

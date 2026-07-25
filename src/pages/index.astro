@@ -3,6 +3,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import HomeStats from '../components/HomeStats.astro';
 import WhatsNextBanner from '../components/WhatsNextBanner.astro';
 import { PRINCIPLES } from '../data/principles';
+import { FARM_AREA_ACRES } from '../data/site-facts';
 
 const exploreCards = [
   { href: '/about', title: 'About TVC', desc: 'Why TVC exists, what we stand for, and the people behind it.', img: '/images/pages/home/gallery-1.jpg' },
@@ -64,7 +65,7 @@ const engageRungs = [
 ];
 ---
 
-<BaseLayout title="Home" description="Tamarind Valley Collective — a 100-acre permaculture farm collectively owned by 53 families, regenerating degraded farmland near Kanakapura since 2017.">
+<BaseLayout title="Home" description={`Tamarind Valley Collective — a ${FARM_AREA_ACRES}-acre permaculture farm collectively owned by 53 families, regenerating degraded farmland near Kanakapura since 2017.`}>
   <div class="hero-bg" id="hero-bg">
     <img class="hero-bg__image" id="hero-image" src="/images/pages/home/hero.jpg" alt="Panoramic view of the Tamarind Valley Collective farm" />
     <div class="hero-bg__scrim" id="hero-scrim"></div>
@@ -74,7 +75,7 @@ const engageRungs = [
     <div class="wrapper hero__content">
       <p class="eyebrow eyebrow--light">A community rooted in the land</p>
       <h1>Living with Nature at TVC</h1>
-      <p class="hero__intro">A 100-acre farm collectively owned by 53 families, regenerating degraded land through permaculture since 2017.</p>
+      <p class="hero__intro">A {FARM_AREA_ACRES}-acre farm collectively owned by 53 families, regenerating degraded land through permaculture since 2017.</p>
     </div>
     <HomeStats />
   </section>

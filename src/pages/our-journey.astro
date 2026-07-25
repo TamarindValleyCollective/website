@@ -1,9 +1,10 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
+import { FARM_AREA_ACRES } from '../data/site-facts';
 ---
 
-<BaseLayout title="Our Journey" description="From a degraded 100-acre farm to a regenerating ecosystem — the founding, the design, and the outreach along the way." image="/images/pages/journey/hero.jpg" imageWidth={1280} imageHeight={960}>
+<BaseLayout title="Our Journey" description={`From a degraded ${FARM_AREA_ACRES}-acre farm to a regenerating ecosystem — the founding, the design, and the outreach along the way.`} image="/images/pages/journey/hero.jpg" imageWidth={1280} imageHeight={960}>
   <PageHero
     eyebrow="Our Journey"
     title="From degraded farmland to a regenerating ecosystem"
@@ -13,7 +14,7 @@ import PageHero from '../components/PageHero.astro';
 
   <section class="section wrapper">
     <h2>Early days</h2>
-    <p>TVC is a 100-acre farm collectively owned by 53 families. Due to exploitative farming practices, the farmland was degraded when the collective bought it. Since 2017, the community has been using permaculture principles to regenerate the farm's fertility naturally.</p>
+    <p>TVC is a {FARM_AREA_ACRES}-acre farm collectively owned by 53 families. Due to exploitative farming practices, the farmland was degraded when the collective bought it. Since 2017, the community has been using permaculture principles to regenerate the farm's fertility naturally.</p>
 
     <blockquote>
       <p>Nature does not hurry, yet everything is accomplished.</p>

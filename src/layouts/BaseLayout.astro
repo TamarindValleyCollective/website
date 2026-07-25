@@ -6,6 +6,7 @@ import ChatWidget from '../components/ChatWidget.astro';
 import CookieConsent from '../components/CookieConsent.astro';
 import ScrollReveal from '../components/ScrollReveal.astro';
 import JsonLd from '../components/JsonLd.astro';
+import { FARM_AREA_ACRES } from '../data/site-facts';
 import '../styles/global.css';
 
 interface Props {
@@ -30,7 +31,7 @@ interface Props {
 
 const {
   title,
-  description = 'Tamarind Valley Collective — a 100-acre permaculture farm and community in the hills near Kanakapura.',
+  description = `Tamarind Valley Collective — a ${FARM_AREA_ACRES}-acre permaculture farm and community in the hills near Kanakapura.`,
   image = '/images/pages/home/hero.jpg',
   imageWidth = 4204,
   imageHeight = 1330,
@@ -56,7 +57,7 @@ const siteGraph = {
       name: 'Tamarind Valley Collective',
       url: siteURL,
       logo: new URL('/images/brand/tvc-logo-mark.png', Astro.site).toString(),
-      description: 'Tamarind Valley Collective — a 100-acre permaculture farm and community in the hills near Kanakapura.',
+      description: `Tamarind Valley Collective — a ${FARM_AREA_ACRES}-acre permaculture farm and community in the hills near Kanakapura.`,
       telephone: '+91 74063 07309',
       address: {
         '@type': 'PostalAddress',

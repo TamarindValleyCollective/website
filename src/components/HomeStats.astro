@@ -1,11 +1,13 @@
 ---
+import { FARM_AREA_ACRES } from '../data/site-facts';
+
 const YEARS_REGENERATING = new Date().getFullYear() - 2017;
 ---
 
 <section class="home-stats" id="home-stats">
   <div class="wrapper home-stats__grid">
     <a class="home-stat" href="/about">
-      <p class="home-stat__value" data-count-to="100">0</p>
+      <p class="home-stat__value" data-count-to={FARM_AREA_ACRES}>0</p>
       <p class="home-stat__label">Acres</p>
     </a>
     <a class="home-stat" href="/our-journey">

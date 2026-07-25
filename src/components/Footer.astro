@@ -1,4 +1,6 @@
 ---
+import { FARM_AREA_ACRES } from '../data/site-facts';
+
 const socialLinks = [
   { label: 'Facebook', href: 'https://www.facebook.com/farm.tvc' },
   { label: 'Twitter', href: 'https://twitter.com/TVCFarm' },
@@ -14,7 +16,7 @@ const year = new Date().getFullYear();
       <img src="/images/brand/tvc-logo-mark.png" alt="Tamarind Valley Collective" width="36" height="36" />
       <span>Tamarind Valley Collective</span>
     </a>
-    <p class="footer__blurb">A 100-acre permaculture farm collectively owned by 53 families, regenerating degraded land near Kanakapura since 2017.</p>
+    <p class="footer__blurb">A {FARM_AREA_ACRES}-acre permaculture farm collectively owned by 53 families, regenerating degraded land near Kanakapura since 2017.</p>
     <div class="footer__social">
       {socialLinks.map((link) => (
         <a href={link.href} target="_blank" rel="noopener noreferrer">{link.label}</a>
