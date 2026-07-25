@@ -218,6 +218,22 @@ const engageRungs = [
     align-items: center;
   }
 
+  /* Narrow phones (iPhone 15 Pro Max and smaller: ~430px and down) wrap
+     the heading/intro onto more lines, growing .hero__content tall enough
+     that centering it within the full 640px box left as little as ~3px
+     of clearance above the stats bar overlaid at the bottom -- on a real
+     device that's indistinguishable from true overlap. padding-bottom
+     shrinks the region .hero centers content within (without moving the
+     absolutely-positioned stats bar, which is still anchored to .hero's
+     own bottom edge), reserving guaranteed clearance regardless of
+     exactly how many lines the heading/intro wrap to. */
+  @media (max-width: 640px) {
+    .hero {
+      min-height: 700px;
+      padding-bottom: 160px;
+    }
+  }
+
   .hero__content {
     position: relative;
     text-align: center;
