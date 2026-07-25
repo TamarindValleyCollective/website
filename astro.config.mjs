@@ -28,7 +28,18 @@ export default defineConfig({
     '/our-journey/community-outreach': '/people/community-outreach',
     '/our-journey/community-outreach/[slug]': '/people/community-outreach/[slug]',
     '/our-journey/design': '/about/design',
-    '/ecosystem/partners': '/people/partners',
-    '/ecosystem/partners/[slug]': '/people/partners/[slug]',
+    // Partners never got its own page in the first place: each of the 5
+    // partners is only 88-130 words, so the whole listing+detail-page
+    // structure (first at /ecosystem/partners, then briefly at
+    // /people/partners) was more scaffolding than the content warranted -
+    // folded into a single section directly on /people instead, linking
+    // straight out to each partner's own site. The two per-partner
+    // (/.../[slug]) redirects live in netlify.toml instead of here --
+    // Astro's own redirects config requires a dynamic source to redirect
+    // to a route with a matching [slug] param, which no longer exists now
+    // that individual partner pages are gone; Netlify's redirect rules
+    // don't have that restriction.
+    '/ecosystem/partners': '/people#partners',
+    '/people/partners': '/people#partners',
   },
 });

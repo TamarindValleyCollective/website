@@ -1,23 +1,37 @@
 ---
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import PageHero from '../../../components/PageHero.astro';
-import { getCollection } from 'astro:content';
+import { getCollection, render } from 'astro:content';
 
 const posts = await getCollection('communityOutreach');
+
+// A grid of cards reads as sparse/empty with just one entry in it (the
+// same issue Our Journey's Timeline card had) -- show that one post's
+// content directly instead of making it a click-through. Once there's
+// real volume here, this naturally reverts to the grid.
+const singlePost = posts.length === 1 ? posts[0] : null;
+const Content = singlePost ? (await render(singlePost)).Content : null;
 ---
 
 <BaseLayout title="Community Outreach" description="Work TVC has done with the local community around the farm, in Odhipuram and Thaggatti village." image="/images/community-outreach/stem-experiential-learning-classes.jpeg" imageWidth={1280} imageHeight={960}>
   <PageHero eyebrow="People" title="Community Outreach" intro="Work with the local community around the farm, in Odhipuram and Thaggatti village." image="/images/community-outreach/stem-experiential-learning-classes.jpeg" imageAlt="A STEM class in session at the local village school" />
   <section class="section wrapper">
-    <div class="grid">
-      {posts.map((p) => (
-        <a class="card" href={`/people/community-outreach/${p.id}`}>
-          {p.data.coverImage && <img src={p.data.coverImage} alt={p.data.title} loading="lazy" />}
-          <h3>{p.data.title}</h3>
-          <p>{p.data.excerpt}</p>
-        </a>
-      ))}
-    </div>
+    {singlePost && Content ? (
+      <article class="prose">
+        <h2>{singlePost.data.title}</h2>
+        <Content />
+      </article>
+    ) : (
+      <div class="grid">
+        {posts.map((p) => (
+          <a class="card" href={`/people/community-outreach/${p.id}`}>
+            {p.data.coverImage && <img src={p.data.coverImage} alt={p.data.title} loading="lazy" />}
+            <h3>{p.data.title}</h3>
+            <p>{p.data.excerpt}</p>
+          </a>
+        ))}
+      </div>
+    )}
     <p class="cta-line">Want to work with the community on an initiative aligned with the farm's ethos? <a href="/contact">Reach out</a>.</p>
   </section>
 </BaseLayout>
@@ -40,6 +54,11 @@ const posts = await getCollection('communityOutreach');
     width: calc(100% + 48px);
     height: 160px;
     object-fit: cover;
+  }
+
+  .prose :global(img) {
+    border-radius: var(--radius);
+    margin: 16px 0;
   }
 
   .cta-line {

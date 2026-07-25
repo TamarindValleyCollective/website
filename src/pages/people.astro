@@ -1,6 +1,9 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
+import { getCollection } from 'astro:content';
+
+const partners = await getCollection('partners');
 
 const staff = [
   { name: 'Madhavan', role: 'Farm lead & naturalist', bio: "A passionate naturalist who has been tirelessly working on rejuvenating the farm, documenting the flora and fauna, gathering seeds from the forest, maintaining a nursery, and nurturing the ecosystem. He knows every tree, bird, and reptile you'll run into at the farm, and lives on-site with his wife Krithika and daughter Sashrika." },
@@ -121,10 +124,18 @@ function initials(name: string) {
     </div>
   </section>
 
-  <section class="section wrapper">
+  <section class="section wrapper" id="partners">
     <h2>Partners &amp; collaborators</h2>
     <p>Beyond the farm's own community, a handful of organizations have supported TVC along the way — from hospitality to permaculture design.</p>
-    <a class="button button--outline" href="/people/partners">Meet our partners →</a>
+    <div class="partners-grid">
+      {partners.map((p) => (
+        <a class="partner-card" href={p.data.url} target="_blank" rel="noopener noreferrer">
+          {p.data.coverImage && <img src={p.data.coverImage} alt={p.data.title} loading="lazy" />}
+          <h4>{p.data.title}</h4>
+          <p>{p.data.excerpt}</p>
+        </a>
+      ))}
+    </div>
   </section>
 
   <section class="section section--tint">
@@ -205,6 +216,52 @@ function initials(name: string) {
     text-transform: uppercase;
     letter-spacing: 0.03em;
     margin-bottom: 10px;
+  }
+
+  /* Each partner links straight out to its own site (see the url field on
+     the partners collection) rather than to a TVC-hosted detail page --
+     with only 88-130 words of content per partner, a dedicated route
+     wasn't earning its keep. */
+  .partners-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+  }
+
+  .partner-card {
+    display: block;
+    background: #fff;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+    padding: 20px;
+    text-align: center;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .partner-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(34, 41, 31, 0.14);
+  }
+
+  .partner-card img {
+    width: 100px;
+    height: 100px;
+    object-fit: contain;
+    margin: 0 auto 12px;
+  }
+
+  .partner-card h4 {
+    margin: 0;
+  }
+
+  .partner-card p {
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+    margin: 8px 0 0;
   }
 
   .join {

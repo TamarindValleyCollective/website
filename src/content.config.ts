@@ -36,6 +36,13 @@ const partners = defineCollection({
     title: z.string(),
     excerpt: z.string(),
     coverImage: z.string().optional(),
+    // Rendered as a compact card directly on /people (see the "Partners &
+    // collaborators" section there) rather than each partner getting its
+    // own page - with 88-130 words of content per partner, a dedicated
+    // route, breadcrumb, and Organization schema per partner was more
+    // scaffolding than the content warranted. This links straight out to
+    // the partner's own site instead.
+    url: z.string().url(),
   }),
 });
 
