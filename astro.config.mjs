@@ -12,8 +12,12 @@ export default defineConfig({
     // Timeline was a top-level nav item and homepage card despite being
     // entirely a child of Our Journey (unlike its sibling /our-journey/design,
     // it wasn't even nested in the URL) - nested it properly and de-listed it
-    // as its own "section" so it's reachable only via the Journey page.
-    '/timeline': '/our-journey/timeline',
+    // as its own "section" so it's reachable only via the Journey page. Later
+    // folded directly into /our-journey itself (see the comment on
+    // JourneyTimelineStandalone.astro) rather than living behind a click, so
+    // both old URLs now land on the same page.
+    '/timeline': '/our-journey',
+    '/our-journey/timeline': '/our-journey',
     // Content reorg: split "who's part of TVC" (member families, local
     // staff, partners, community outreach) out of About TVC and Our
     // Journey into its own /people section, since neither page was really

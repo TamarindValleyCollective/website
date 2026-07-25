@@ -4,7 +4,17 @@
 // full-viewport section with a real hero photo; a year's months live as a
 // swipeable carousel directly in that section instead of behind a click.
 // Reached via three rounds of live-rendered comparisons before this was
-// built — see CHANGELOG.md.
+// built — see CHANGELOG.md. Rendered directly on /our-journey below the
+// "Early days" intro (merged from a standalone /our-journey/timeline page)
+// rather than behind a click-through link.
+//
+// Colors run through the site's real --tvc-* tokens (cream ground, ink text,
+// green/orange accents) instead of a bespoke dark palette an earlier version
+// used — the immersive full-viewport photo sections and fanned-card carousel
+// are what make this "cool," not a departure from the site's own look. Text
+// sitting directly on a photo (carousel cards, the lightbox) still uses
+// light text over a dark scrim, the same convention PageHero's image variant
+// already uses site-wide — only the page's own "ground" now matches.
 //
 // Structured around "eras" so this scales past a single flat year row: each
 // era owns its own poem + year sections. With exactly one era (today), it
@@ -375,6 +385,24 @@ const yearSections = activeEra.years.map((y) => ({
   );
   yearSectionEls.forEach((s) => observer.observe(s));
 
+  // The sidebar index and progress rail are fixed to the viewport, vertically
+  // centered (top: 50%) so they can stay put while scrolling — but this
+  // component no longer always spans the whole page, so a plain "is
+  // .jt-root on screen at all" (or even "has the viewport's center point
+  // reached .jt-root") check isn't enough: on a short hero + tall viewport,
+  // .jt-root's top edge can cross the vertical center of the screen while
+  // the hero above it is still the dominant thing on screen, showing the
+  // chrome too early. Only show it once .jt-root has scrolled to fully cover
+  // the viewport (its top has reached or passed the very top of the screen),
+  // i.e. once the timeline itself is genuinely what's on screen.
+  function updateChromeVisibility() {
+    const rect = root.getBoundingClientRect();
+    root.classList.toggle('jt-in-view', rect.top <= 0 && rect.bottom >= window.innerHeight);
+  }
+  updateChromeVisibility();
+  window.addEventListener('scroll', updateChromeVisibility, { passive: true });
+  window.addEventListener('resize', updateChromeVisibility);
+
   window.addEventListener(
     'scroll',
     () => {
@@ -562,26 +590,32 @@ const yearSections = activeEra.years.map((y) => ({
   'jt-green': 'var(--tvc-green)',
   'jt-orange': 'var(--tvc-orange)',
 }}>
-  /* This page commits deliberately to its own dark, immersive palette —
-     distinct from the site's usual cream editorial pages — the way this
-     feature has its own "chapter" feel. Accent colors still map onto the
-     site's real green/orange tokens so it doesn't feel like an unrelated
-     embedded widget; only the ground (near-black vs. cream) is different. */
+  /* Ground and text now run through the site's own tokens (cream/ink)
+     rather than a bespoke dark palette, so this reads as part of the same
+     site rather than an embedded widget. Text sitting on a real photo
+     (carousel cards, the lightbox) is the exception — it keeps light text
+     on a dark scrim, same as PageHero's image variant elsewhere. */
   .jt-root {
-    --jt-bg: #0e1710;
-    --jt-bg-soft: #14201a;
-    --jt-surface: #1c2a21;
-    --jt-line: rgba(251, 250, 246, 0.14);
-    --jt-cream: #fbfaf6;
-    --jt-text-soft: rgba(251, 250, 246, 0.6);
+    --jt-bg: var(--tvc-cream);
+    --jt-bg-soft: #fff;
+    --jt-surface: var(--tvc-cream);
+    --jt-line: var(--tvc-line);
+    --jt-ink: var(--tvc-ink);
+    --jt-ink-soft: var(--tvc-ink-soft);
+    --jt-on-photo: #fbfaf6;
 
     position: relative;
     background: var(--jt-bg);
-    color: var(--jt-cream);
+    color: var(--jt-ink);
     font-family: var(--font-body);
   }
 
   /* ---------- Sidebar index ---------- */
+  /* Fixed to the viewport rather than scoped to .jt-root, so — now that this
+     component sits partway down /our-journey instead of being the whole
+     page — it stays hidden (opacity/pointer-events) until .jt-root itself
+     scrolls into view (toggled via IntersectionObserver below) rather than
+     floating over the hero/intro content above it. */
   .jt-index {
     position: fixed;
     left: 40px;
@@ -591,13 +625,21 @@ const yearSections = activeEra.years.map((y) => ({
     display: flex;
     flex-direction: column;
     gap: 2px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .jt-root.jt-in-view .jt-index {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   .jt-index-title {
     font-family: var(--font-display);
     font-style: italic;
     font-size: 13px;
-    color: var(--jt-text-soft);
+    color: var(--jt-ink-soft);
     margin: 0 0 16px;
   }
 
@@ -622,7 +664,7 @@ const yearSections = activeEra.years.map((y) => ({
     font-family: var(--font-display);
     font-weight: 700;
     font-size: 13px;
-    color: var(--jt-text-soft);
+    color: var(--jt-ink-soft);
     width: 34px;
     flex: 0 0 auto;
     transition: color 0.35s ease;
@@ -645,7 +687,7 @@ const yearSections = activeEra.years.map((y) => ({
 
   .jt-index-label {
     font-size: 12px;
-    color: var(--jt-cream);
+    color: var(--jt-ink);
     white-space: nowrap;
   }
 
@@ -662,6 +704,12 @@ const yearSections = activeEra.years.map((y) => ({
     width: 2px;
     background: var(--jt-line);
     z-index: 50;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .jt-root.jt-in-view .jt-rail {
+    opacity: 1;
   }
 
   .jt-rail-fill {
@@ -679,14 +727,18 @@ const yearSections = activeEra.years.map((y) => ({
   }
 
   /* ---------- Hero ---------- */
+  /* Not min-height: 100vh — this used to be the very first thing on the
+     page, so filling a whole screen before the poem read as an intentional
+     title beat. Now it follows PageHero's own photo, and stretching to a
+     full extra viewport just left a dead gap of empty cream between the
+     two. Sized to its own content instead. */
   .jt-hero {
-    min-height: 100vh;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     text-align: center;
-    padding: 90px 24px;
+    padding: 100px 24px 90px;
     position: relative;
     overflow: hidden;
   }
@@ -720,7 +772,7 @@ const yearSections = activeEra.years.map((y) => ({
     font-style: italic;
     font-size: clamp(17px, 2.4vw, 22px);
     line-height: 1.55;
-    color: var(--jt-cream);
+    color: var(--jt-ink);
     white-space: pre-line;
     margin: 0 0 22px;
   }
@@ -735,7 +787,7 @@ const yearSections = activeEra.years.map((y) => ({
   .jt-scroll-cue {
     margin-top: 46px;
     font-size: 12px;
-    color: var(--jt-text-soft);
+    color: var(--jt-ink-soft);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     display: flex;
@@ -803,7 +855,7 @@ const yearSections = activeEra.years.map((y) => ({
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(90deg, var(--jt-bg) 8%, rgba(14, 23, 16, 0.6) 50%, rgba(14, 23, 16, 0.25) 100%);
+    background: linear-gradient(90deg, var(--jt-bg) 8%, rgba(250, 247, 238, 0.82) 45%, rgba(250, 247, 238, 0.3) 100%);
   }
 
   .jt-year-head {
@@ -826,7 +878,7 @@ const yearSections = activeEra.years.map((y) => ({
     font-weight: 700;
     font-size: clamp(52px, 8.5vw, 112px);
     line-height: 0.95;
-    color: var(--jt-cream);
+    color: var(--jt-ink);
     margin: 0 0 6px;
     opacity: 0.96;
   }
@@ -900,7 +952,7 @@ const yearSections = activeEra.years.map((y) => ({
     transform: scale(1);
     filter: brightness(1);
     z-index: 6;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+    box-shadow: 0 24px 60px rgba(34, 41, 31, 0.35);
   }
 
   .jt-card:focus-visible {
@@ -936,7 +988,7 @@ const yearSections = activeEra.years.map((y) => ({
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--jt-cream);
+    color: var(--jt-on-photo);
     opacity: 0;
     transform: translateY(-4px);
     transition: opacity 0.2s ease, transform 0.2s ease;
@@ -1004,7 +1056,7 @@ const yearSections = activeEra.years.map((y) => ({
     font-family: var(--font-display);
     font-style: italic;
     font-size: 14px;
-    color: var(--jt-cream);
+    color: var(--jt-on-photo);
     /* No lightbox for these (there's no photo to detail) — the on-card
        text is the only place to read it, so unlike photo cards it isn't
        clamped. */
@@ -1032,8 +1084,8 @@ const yearSections = activeEra.years.map((y) => ({
     height: 30px;
     border-radius: 50%;
     border: 1px solid var(--jt-line);
-    background: rgba(251, 250, 246, 0.06);
-    color: var(--jt-cream);
+    background: rgba(34, 41, 31, 0.04);
+    color: var(--jt-ink);
     font-size: 14px;
     cursor: pointer;
     display: flex;
@@ -1043,7 +1095,7 @@ const yearSections = activeEra.years.map((y) => ({
     transition: background 0.2s ease, border-color 0.2s ease;
   }
 
-  .jt-car-btn:hover { background: rgba(251, 250, 246, 0.14); border-color: var(--jt-green); }
+  .jt-car-btn:hover { background: var(--tvc-green-tint); border-color: var(--jt-green); }
 
   .jt-car-btn:disabled { opacity: 0.3; cursor: default; }
 
@@ -1119,7 +1171,7 @@ const yearSections = activeEra.years.map((y) => ({
   .jt-lb-body {
     font-size: 15px;
     line-height: 1.6;
-    color: var(--jt-cream);
+    color: var(--jt-on-photo);
     margin: 0;
   }
 
@@ -1127,8 +1179,8 @@ const yearSections = activeEra.years.map((y) => ({
   .jt-lb-nav {
     position: fixed;
     background: rgba(251, 250, 246, 0.08);
-    border: 1px solid var(--jt-line);
-    color: var(--jt-cream);
+    border: 1px solid rgba(251, 250, 246, 0.3);
+    color: var(--jt-on-photo);
     border-radius: 50%;
     cursor: pointer;
     display: flex;
