@@ -51,6 +51,11 @@ const Content = singlePost ? (await render(singlePost)).Content : null;
   .grid img {
     border-radius: var(--radius) var(--radius) 0 0;
     margin: -28px -28px 16px;
+    /* Global img { max-width: 100% } would otherwise clamp this calc'd
+       width right back down to 100%, undoing the negative-margin bleed on
+       the right edge (the left edge looks fine regardless, since the
+       margin offset alone doesn't depend on width). */
+    max-width: none;
     width: calc(100% + 56px);
     height: 160px;
     object-fit: cover;
