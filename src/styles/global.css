@@ -146,7 +146,14 @@ img {
    .wrapper here, a shorthand `padding` would silently overwrite
    .wrapper's `padding: 0 24px` entirely (shorthands don't merge),
    wiping out the side margins on every page that does this. */
+/* Explicit background rather than relying on the transparent default
+   showing body's own cream through it — looks identical either way
+   normally, but PageHero's image variant now pins its photo behind the
+   whole page as a fixed, fading backdrop (see PageHero.astro), and a truly
+   transparent section would let that backdrop bleed through during the
+   fade instead of being safely covered by this section's own content. */
 .section {
+  background: var(--tvc-cream);
   padding-top: var(--space-section);
   padding-bottom: var(--space-section);
 }

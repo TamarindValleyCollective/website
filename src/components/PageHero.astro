@@ -11,15 +11,19 @@ const { eyebrow, title, intro, image, imageAlt = '' } = Astro.props;
 ---
 
 {image ? (
-  <section class="hero hero--image">
-    <img class="hero__image" src={image} alt={imageAlt} />
-    <div class="hero__scrim"></div>
-    <div class="wrapper hero__content">
-      {eyebrow && <p class="eyebrow eyebrow--light">{eyebrow}</p>}
-      <h1>{title}</h1>
-      {intro && <p class="hero__intro">{intro}</p>}
+  <>
+    <div class="hero-bg">
+      <img class="hero-bg__image" src={image} alt={imageAlt} />
+      <div class="hero-bg__scrim"></div>
     </div>
-  </section>
+    <section class="hero hero--image">
+      <div class="wrapper hero__content">
+        {eyebrow && <p class="eyebrow eyebrow--light">{eyebrow}</p>}
+        <h1>{title}</h1>
+        {intro && <p class="hero__intro">{intro}</p>}
+      </div>
+    </section>
+  </>
 ) : (
   <section class="hero hero--plain">
     <div class="wrapper hero__content">
@@ -36,26 +40,47 @@ const { eyebrow, title, intro, image, imageAlt = '' } = Astro.props;
 )}
 
 <style>
-  .hero--image {
-    position: relative;
-    min-height: 420px;
-    display: flex;
-    align-items: flex-end;
-    overflow: hidden;
+  /* Pinned behind the whole page (fixed, z-index below everything) rather
+     than living inside .hero--image's own box, so the photo doesn't simply
+     scroll away with the hero the way normal in-flow content does — it
+     stays put and fades out over the first stretch of scroll instead, the
+     same technique (and the same reason) as the homepage's own hero — see
+     the script at the bottom of this file. Tried an un-faded, hard-cut
+     version first: it either bled through the page's own content (a plain
+     .section has no background of its own — see global.css) or, once made
+     tall enough to avoid that, left the hero's own white-on-photo text
+     needing a full extra viewport of "just image" beneath it before a safe
+     cutoff point, pushing real content much further down every page. The
+     fade sidesteps both — by the time it completes, the hero's own (short)
+     box has long since scrolled out of view. */
+  .hero-bg {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
   }
 
-  .hero__image {
+  .hero-bg__image {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
+    will-change: opacity;
   }
 
-  .hero__scrim {
+  .hero-bg__scrim {
     position: absolute;
     inset: 0;
     background: linear-gradient(180deg, rgba(15, 26, 18, 0.15) 0%, rgba(15, 26, 18, 0.75) 100%);
+    will-change: opacity;
+  }
+
+  .hero--image {
+    position: relative;
+    min-height: 420px;
+    display: flex;
+    align-items: flex-end;
   }
 
   .hero__content {
@@ -130,3 +155,42 @@ const { eyebrow, title, intro, image, imageAlt = '' } = Astro.props;
     }
   }
 </style>
+
+<script>
+  // Fades the fixed background image+scrim out over the first stretch of
+  // scroll, identical to the homepage's own hero (see index.astro) — kept
+  // as a separate copy here rather than a shared import since Astro
+  // components can't share a <script> across files without a bundled
+  // module, and this is only ~20 lines.
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const imageEl = document.querySelector('.hero-bg__image') as HTMLElement | null;
+  const scrimEl = document.querySelector('.hero-bg__scrim') as HTMLElement | null;
+
+  function ease(t: number): number {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
+
+  if (imageEl && scrimEl && !reduceMotion) {
+    let ticking = false;
+
+    function update() {
+      ticking = false;
+      const fadeDistance = window.innerHeight;
+      const progress = Math.min(Math.max(window.scrollY / fadeDistance, 0), 1);
+      const opacity = String(1 - ease(progress));
+      imageEl!.style.opacity = opacity;
+      scrimEl!.style.opacity = opacity;
+    }
+
+    function onScroll() {
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(update);
+      }
+    }
+
+    update();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+  }
+</script>
