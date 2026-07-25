@@ -9,6 +9,7 @@ export interface SiteLink {
 
 export const EXPLORE_LINKS: SiteLink[] = [
   { label: 'About TVC', href: '/about' },
+  { label: 'People', href: '/people' },
   { label: 'Our Journey', href: '/our-journey' },
   { label: 'In Pictures', href: '/in-pictures' },
   { label: 'Biodiversity', href: '/ecosystem' },
@@ -32,6 +33,7 @@ export const ENGAGE_LINKS: SiteLink[] = [
 // as belonging to Explore or Engage, for the breadcrumb trail.
 export const EXPLORE_PREFIXES = [
   '/about',
+  '/people',
   '/our-journey',
   '/in-pictures',
   '/ecosystem',

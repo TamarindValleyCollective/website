@@ -14,11 +14,21 @@ export default defineConfig({
     // it wasn't even nested in the URL) - nested it properly and de-listed it
     // as its own "section" so it's reachable only via the Journey page.
     '/timeline': '/our-journey/timeline',
-    // Community Outreach was likewise a top-level nav item despite being
-    // entirely a child of Our Journey (its own PageHero eyebrow already read
-    // "Our Journey") - nested it under /our-journey/ alongside Timeline and
-    // The Design, and de-listed it as its own top-level "section".
-    '/community-outreach': '/our-journey/community-outreach',
-    '/community-outreach/[slug]': '/our-journey/community-outreach/[slug]',
+    // Content reorg: split "who's part of TVC" (member families, local
+    // staff, partners, community outreach) out of About TVC and Our
+    // Journey into its own /people section, since neither page was really
+    // about those topics - and moved The Design from Our Journey to About
+    // TVC, since it's a present-tense description of the farm's layout,
+    // not a historical journey milestone. Redirects point straight at the
+    // final destination rather than chaining through intermediate stops
+    // (e.g. /community-outreach went to /our-journey/community-outreach
+    // once already - now goes directly to /people/community-outreach).
+    '/community-outreach': '/people/community-outreach',
+    '/community-outreach/[slug]': '/people/community-outreach/[slug]',
+    '/our-journey/community-outreach': '/people/community-outreach',
+    '/our-journey/community-outreach/[slug]': '/people/community-outreach/[slug]',
+    '/our-journey/design': '/about/design',
+    '/ecosystem/partners': '/people/partners',
+    '/ecosystem/partners/[slug]': '/people/partners/[slug]',
   },
 });

@@ -11,7 +11,7 @@ const partners = await getCollection('partners');
   <section class="section wrapper">
     <div class="grid">
       {partners.map((p) => (
-        <a class="card" href={`/ecosystem/partners/${p.id}`}>
+        <a class="card" href={`/people/partners/${p.id}`}>
           {p.data.coverImage && <img src={p.data.coverImage} alt={p.data.title} loading="lazy" />}
           <h3>{p.data.title}</h3>
           <p>{p.data.excerpt}</p>
