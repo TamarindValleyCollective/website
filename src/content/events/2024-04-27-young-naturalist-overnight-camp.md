@@ -3,6 +3,7 @@ title: "Young Naturalist Overnight Camp"
 date: 2024-04-27
 endDate: 2024-04-28
 excerpt: "A camp for parents and kids (6–10 years) — a guided farm walk, hands-on cooking, storytelling, star gazing, and journaling."
+coverImage: "/images/events/2024-04-27-young-naturalist-overnight-camp/hero.jpg"
 tags: ["camping", "food", "stargazing"]
 ---
 

@@ -3,6 +3,7 @@ title: "3Bs&1H@TVC - 5th Edition"
 date: 2025-08-30
 endDate: 2025-08-31
 excerpt: "The 5th edition of TVC's biodiversity walks — birds, butterflies, bees, and a moth screen, with naturalist Deepa Mohan."
+coverImage: "/images/events/2025-08-30-3bs-and-1h-5th-edition/hero.jpg"
 tags: ["biodiversity", "walk"]
 ---
 

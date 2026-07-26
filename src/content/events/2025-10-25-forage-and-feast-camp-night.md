@@ -3,6 +3,7 @@ title: "Forage & Feast: Camp Night"
 date: 2025-10-25
 endDate: 2025-10-26
 excerpt: "A camp night on foraging — walk, gather, cook, and eat what the land offers, with Foraging Trails and Tales."
+coverImage: "/images/events/2025-10-25-forage-and-feast-camp-night/hero.jpg"
 organizer: "Foraging Trails and Tales"
 tags: ["workshop", "food", "foraging"]
 ---
