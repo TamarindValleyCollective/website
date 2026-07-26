@@ -14,12 +14,13 @@ at request time), with a small set of deliberate exceptions that need a serverle
 two Netlify Functions (the site-wide chat assistant, and the event-interest counter backing
 past events' "Want this to happen again?" widget), Netlify Blobs (public storage for that same
 counter — the site's only *readable* server-side state; everything else below is write-only),
-and Netlify Forms (the Friends of TVC signup, the Host an Event inquiry, and — when an email is
-given — the event-interest widget). The chat assistant and the Friends of TVC and Host an
-Event forms are deployed; see [Current Production Status](#current-production-status) — the
-chat assistant's `ANTHROPIC_API_KEY` was set on 2026-07-18, and it now answers with real,
-grounded responses. The event-interest Function, its Blobs store, and its own Forms path are
-built but not yet pushed/deployed.
+and Netlify Forms (the Friends of TVC signup, the Host an Event inquiry, the shared Visit
+inquiry form on the camping/day-visit/trekking pages, and — when an email is given — the
+event-interest widget). The chat assistant and the Friends of TVC and Host an Event forms are
+deployed; see [Current Production Status](#current-production-status) — the chat assistant's
+`ANTHROPIC_API_KEY` was set on 2026-07-18, and it now answers with real, grounded responses.
+The event-interest Function, its Blobs store, its own Forms path, and the Visit inquiry form
+are built but not yet pushed/deployed.
 
 ## Diagram
 
@@ -50,7 +51,7 @@ flowchart TD
         APIFN["Netlify Function: /api/chat<br/>Deployed and live —<br/>ANTHROPIC_API_KEY set, calls the<br/>Anthropic API for grounded answers"]
         APIFN2["Netlify Function: /api/event-interest<br/>Built, not yet deployed —<br/>reads/writes the per-event count below"]
         BLOBS["Netlify Blobs: 'event-interest' store<br/>One JSON record per past event id —<br/>{count, emails[]}. Reset via<br/>netlify blobs:delete event-interest &lt;id&gt;"]
-        FORMS["Netlify Forms<br/>Captures /contact Friends of TVC signups,<br/>/visit/host-an-event inquiries, and<br/>event-interest submissions with an email"]
+        FORMS["Netlify Forms<br/>Captures /contact Friends of TVC signups,<br/>/visit/host-an-event inquiries,<br/>/visit camping·day-visit·trekking inquiries,<br/>and event-interest submissions with an email"]
     end
 
     CF["Cloudflare<br/>DNS + CDN for tvc.farm,<br/>proxies to Netlify"]
@@ -59,6 +60,7 @@ flowchart TD
         CHATW["ChatWidget.astro<br/>Floating widget, site logo.<br/>Calls /api/chat"]
         NEWS["Friends of TVC form<br/>Plain HTML POST,<br/>data-netlify=true + honeypot"]
         HOSTFORM["Host an Event inquiry form<br/>Plain HTML POST,<br/>data-netlify=true + honeypot"]
+        BOOKING["Visit inquiry form (camping,<br/>day-visit, trekking pages)<br/>One shared form + WhatsApp link,<br/>data-netlify=true + honeypot"]
         INTEREST["Event interest widget (past events)<br/>Reads/writes /api/event-interest;<br/>if an email is given, also POSTs<br/>into Netlify Forms"]
         BIODIV["BiodiversityExplorer<br/>Fetches sightings directly from<br/>iNaturalist's public API"]
         PHOTOS["PhotoGallery (/in-pictures)<br/>Filters, Grid/Map toggle, lightbox —<br/>images served directly from R2"]
@@ -93,6 +95,7 @@ flowchart TD
     CHATW --> APIFN
     NEWS --> FORMS
     HOSTFORM --> FORMS
+    BOOKING --> FORMS
     INTEREST --> APIFN2
     APIFN2 --> BLOBS
     INTEREST -.->|"only when an email is given"| FORMS
@@ -103,7 +106,7 @@ flowchart TD
     classDef cfStyle fill:#fef3e0,stroke:#e8891c,color:#7a4a00
     classDef localStyle fill:#eef0f5,stroke:#6b7280,color:#374151
 
-    class PAGES,COMPONENTS,CONTENT,CHATW,NEWS,HOSTFORM,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,CDN staticStyle
+    class PAGES,COMPONENTS,CONTENT,CHATW,NEWS,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,CDN staticStyle
     class FUNC_SRC,FUNC_SRC2,SCRIPT_SRC,APIFN,APIFN2,BLOBS,FORMS,ANTHROPIC netlifyStyle
     class INAT,GMAPS,YT,R2,GTAG,METEO externalStyle
     class CF cfStyle
@@ -172,15 +175,22 @@ account on 2026-07-18).
   below. Auto-provisioned per-site, no setup or environment variable needed. Reset a specific
   event's record with `netlify blobs:delete event-interest <event-id>` (see README.md).
 - **Netlify Forms** — live. Detects each `data-netlify="true"` form at build time and captures
-  submissions with no custom backend code required. Three things use it: the Friends of TVC
+  submissions with no custom backend code required. Four things use it: the Friends of TVC
   signup (name + phone, collected so TVC can add people to the "Friends of TVC" WhatsApp
   group by hand) at `/contact`, confirmed live, redirecting to `/contact/thanks` on success;
   the Host an Event inquiry (name, org, contact details, event type, headcount, dates,
   message) at `/visit/host-an-event`, redirecting to `/visit/host-an-event/thanks` — pushed to
   `main` and deployed, but not independently re-verified against production the way the
-  Friends of TVC form and `chat.mts` were; and the event-interest widget's optional-email path
-  (an AJAX POST, not a page-navigating form submit, only fired when a visitor gives an email)
-  — built but not yet pushed.
+  Friends of TVC form and `chat.mts` were; the Visit inquiry form
+  (`src/components/BookingInquiry.astro`), one shared `visit-inquiry` Netlify Form reused on
+  `/visit/camping`, `/visit/day-visit`, and `/visit/trekking-trails` with a hidden `type`
+  field noting which page it came from, redirecting to `/visit/thanks` — replaces the old
+  external "Book via Linger" redirect, with pricing/inclusions now published on TVC's own
+  pages and a WhatsApp link offered alongside the form; needs a one-time manual step in the
+  Netlify dashboard to add two email notifications (`stay@linger.in` and `contact@tvc.farm`)
+  — built but not yet pushed; and the event-interest widget's optional-email path (an AJAX
+  POST, not a page-navigating form submit, only fired when a visitor gives an email) — also
+  built but not yet pushed.
 
 ### Cloudflare (in front of Netlify)
 
@@ -212,6 +222,12 @@ never touches Netlify either.
 - **Friends of TVC form** — live. Collects name + phone number (no email/newsletter — signups
   are added to the "Friends of TVC" WhatsApp group by hand). Plain HTML form submission with a
   spam honeypot field, redirecting to a confirmation page on success.
+- **Visit inquiry** (`/visit/camping`, `/visit/day-visit`, `/visit/trekking-trails`) — built,
+  not yet deployed. Each page presents its own pricing/inclusions plus a shared
+  `BookingInquiry.astro` block: a plain HTML form (name, email, phone, dates, headcount,
+  message, plus an itinerary picker on the Day Visit page) submitting to the same
+  `visit-inquiry` Netlify Form, and a `wa.me` WhatsApp link pre-filled with a page-specific
+  message. Replaces the previous external redirect to Linger's own booking pages.
 - **BiodiversityExplorer** — fetches live biodiversity sightings directly from iNaturalist's
   public API on every page load; no TVC backend involved.
 - **PhotoGallery** (`/in-pictures`) — date/camera filter chips and a Grid/Map view toggle over
@@ -251,11 +267,12 @@ never touches Netlify either.
 | Chat widget's actual AI responses | ✅ Live — `ANTHROPIC_API_KEY` set 2026-07-18; verified with real requests against `tvc.farm/api/chat` returning grounded answers |
 | Friends of TVC signup (Netlify Forms) | ✅ Live — confirmed at `/contact`, with `/contact/thanks` as the confirmation page |
 | Host an Event inquiry form (Netlify Forms) | 🟢 Deployed (pushed to `main`) — same Netlify Forms mechanism as the Friends of TVC signup, at `/visit/host-an-event`; not independently re-verified against production the way the Friends of TVC form was |
+| Visit inquiry form + WhatsApp CTA (Netlify Forms) | 🆕 Built, not yet pushed — replaces the "Book via Linger" redirect on `/visit/camping`, `/visit/day-visit`, `/visit/trekking-trails`; needs a one-time Netlify dashboard step to add email notifications to `stay@linger.in` and `contact@tvc.farm` |
 | Event interest widget + counter (Netlify Function, Blobs, Forms) | 🆕 Built, not yet pushed — "Want this to happen again?" on past event pages (`/events/<slug>`), public count via `/api/event-interest` + Netlify Blobs, optional-email entries via Netlify Forms |
 | Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy` |
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
 
-No known gaps beyond the event interest feature awaiting a push/deploy — every other feature
-above is either confirmed live in production or (Host an Event) deployed via a push to `main`
-without a separate direct-production check. The Netlify project itself is owned by the
+No known gaps beyond the event interest feature and the Visit inquiry form awaiting a
+push/deploy — every other feature above is either confirmed live in production or (Host an
+Event) deployed via a push to `main` without a separate direct-production check. The Netlify project itself is owned by the
 `contact@tvc.farm` account (moved there from a personal account on 2026-07-18).

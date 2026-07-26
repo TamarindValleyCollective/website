@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../../components/PageHero.astro';
+import BookingInquiry from '../../components/BookingInquiry.astro';
 
 const trails = [
   {
@@ -45,9 +46,11 @@ const trails = [
 
     <p>You can also do shorter walks in the upper wildlife corridor, along the periphery of the large canopy food forest, or through the Kavery 2 area to learn about native and planted species helping rejuvenate the land.</p>
 
-    <div class="booking-cta">
-      <a class="button" href="https://tamarindvalleycollective-farmstay.linger.in/" target="_blank" rel="noopener noreferrer">Pricing &amp; booking via Linger</a>
-    </div>
+    <BookingInquiry
+      type="Trekking"
+      whatsappMessage="Hi! I'd like to plan a guided trek at TVC."
+      note="Treks are arranged as part of a day visit or overnight stay with our local in-charge — send an inquiry or message us to plan yours."
+    />
   </section>
 </BaseLayout>
 
@@ -83,10 +86,5 @@ const trails = [
     .trail {
       grid-template-columns: 1fr;
     }
-  }
-
-  .booking-cta {
-    margin-top: 24px;
-    text-align: center;
   }
 </style>

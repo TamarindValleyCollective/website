@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../../components/PageHero.astro';
+import BookingInquiry from '../../components/BookingInquiry.astro';
 
 const itineraries = [
   {
@@ -71,10 +72,14 @@ const itineraries = [
       ))}
     </div>
 
-    <div class="booking-cta">
-      <p>Bookings for day visits are handled by our hospitality partner, Linger.</p>
-      <a class="button" href="https://tamarindvalleycollective-farmstay.linger.in/day-trippicnic-at-the-farm/" target="_blank" rel="noopener noreferrer">Book via Linger</a>
-    </div>
+    <p class="pricing-note">₹1,200 per person, ₹650 per child under 10 — includes breakfast, lunch, tea/coffee, and the activities in your chosen itinerary above. Confirm current pricing and availability when you send your inquiry below.</p>
+
+    <BookingInquiry
+      type="Day Visit"
+      packageOptions={['Picnic at the Farm', 'Hiking Adventure', 'Do Nothing']}
+      whatsappMessage="Hi! I'd like to know more about a day visit to TVC."
+      note="Day visits are coordinated with our hospitality partner, Linger — send an inquiry or message us and we'll take it from there."
+    />
   </section>
 </BaseLayout>
 
@@ -108,8 +113,9 @@ const itineraries = [
     width: 70px;
   }
 
-  .booking-cta {
-    margin-top: 32px;
-    text-align: center;
+  .pricing-note {
+    margin-top: 24px;
+    color: var(--tvc-ink-soft);
+    font-size: 0.9rem;
   }
 </style>

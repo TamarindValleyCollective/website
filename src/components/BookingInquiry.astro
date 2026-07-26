@@ -1,0 +1,149 @@
+---
+interface Props {
+  type: string;
+  whatsappMessage: string;
+  packageOptions?: string[];
+  note?: string;
+}
+
+const { type, whatsappMessage, packageOptions, note } = Astro.props;
+
+const WHATSAPP_NUMBER = '918548065772';
+const whatsappHref = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappMessage)}`;
+const fieldId = type.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+---
+
+<div class="booking-inquiry">
+  {note && <p class="note">{note}</p>}
+  <div class="inquiry-options">
+    <form
+      class="inquiry-form card"
+      name="visit-inquiry"
+      method="POST"
+      action="/visit/thanks"
+      data-netlify="true"
+      data-netlify-honeypot="bot-field"
+    >
+      <input type="hidden" name="form-name" value="visit-inquiry" />
+      <input type="hidden" name="type" value={type} />
+      <p class="inquiry-hp"><label>Don't fill this out: <input name="bot-field" /></label></p>
+
+      {packageOptions && (
+        <div class="field-package">
+          <label for={`${fieldId}-package`}>Which itinerary?</label>
+          <select id={`${fieldId}-package`} name="package" required>
+            <option value="">Choose one</option>
+            {packageOptions.map((opt) => <option value={opt}>{opt}</option>)}
+          </select>
+        </div>
+      )}
+
+      <div class="inquiry-grid">
+        <div>
+          <label for={`${fieldId}-name`}>Name</label>
+          <input id={`${fieldId}-name`} type="text" name="name" placeholder="Your name" autocomplete="name" required />
+        </div>
+        <div>
+          <label for={`${fieldId}-email`}>Email</label>
+          <input id={`${fieldId}-email`} type="email" name="email" placeholder="you@example.com" autocomplete="email" required />
+        </div>
+        <div>
+          <label for={`${fieldId}-phone`}>Phone (optional)</label>
+          <input id={`${fieldId}-phone`} type="tel" name="phone" placeholder="+91 98765 43210" autocomplete="tel" />
+        </div>
+        <div>
+          <label for={`${fieldId}-people`}>Number of people</label>
+          <input id={`${fieldId}-people`} type="text" name="people" placeholder="e.g. 2 adults, 1 child" />
+        </div>
+      </div>
+
+      <label for={`${fieldId}-dates`}>Preferred dates</label>
+      <input id={`${fieldId}-dates`} type="text" name="dates" placeholder="e.g. a weekend in December, or flexible" />
+
+      <label for={`${fieldId}-message`}>Anything else? (optional)</label>
+      <textarea id={`${fieldId}-message`} name="message" rows="3" placeholder="Any questions or extra details"></textarea>
+
+      <button class="button" type="submit">Send inquiry</button>
+    </form>
+
+    <div class="whatsapp-cta">
+      <p>Prefer to chat? Message us directly:</p>
+      <a class="button button--outline" href={whatsappHref} target="_blank" rel="noopener noreferrer">Message us on WhatsApp</a>
+    </div>
+  </div>
+</div>
+
+<style>
+  .booking-inquiry {
+    margin-top: 32px;
+  }
+
+  .note {
+    margin-bottom: 16px;
+  }
+
+  .inquiry-options {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+
+  .inquiry-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .inquiry-form label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-bottom: 4px;
+  }
+
+  .inquiry-form input,
+  .inquiry-form select,
+  .inquiry-form textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 10px;
+    font: inherit;
+    background: #fff;
+  }
+
+  .inquiry-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+  }
+
+  .inquiry-form button {
+    align-self: flex-start;
+  }
+
+  .whatsapp-cta {
+    padding: 20px;
+    border: 1px dashed var(--tvc-line);
+    border-radius: var(--radius);
+    text-align: center;
+  }
+
+  .whatsapp-cta p {
+    margin-bottom: 12px;
+  }
+
+  /* Netlify Forms spam honeypot - off-screen, not display:none (some bots
+     skip hidden fields, but few check for visibility via position). */
+  .inquiry-hp {
+    position: absolute;
+    left: -9999px;
+  }
+
+  @media (max-width: 780px) {
+    .inquiry-options {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
