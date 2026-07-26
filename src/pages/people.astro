@@ -6,11 +6,11 @@ import { getCollection } from 'astro:content';
 const partners = await getCollection('partners');
 
 const staff = [
-  { name: 'Madhavan', role: 'Farm lead & naturalist', bio: "A passionate naturalist who has been tirelessly working on rejuvenating the farm, documenting the flora and fauna, gathering seeds from the forest, maintaining a nursery, and nurturing the ecosystem. He knows every tree, bird, and reptile you'll run into at the farm, and lives on-site with his wife Krithika and daughter Sashrika." },
+  { name: 'Madhavan', role: 'Farm lead & naturalist', bio: "A passionate naturalist who has been tirelessly working on rejuvenating the land, documenting the flora and fauna, gathering seeds from the forest, maintaining a nursery, and nurturing the ecosystem. He knows every tree, bird, and reptile you'll run into here, and lives on-site with his wife Krithika and daughter Sashrika." },
   { name: 'Ramdoss', role: 'Master craftsman', bio: 'A master craftsman when it comes to making bamboo baskets, grown up in the Odhipuram/Thaggatti village.' },
   { name: 'Gundappa', role: 'Forest guide', bio: 'Knows the forest like the back of his hand — the elephant paths and the local stories.' },
   { name: 'Yellaraju', role: 'Runner', bio: 'Always ready to run to the village on the moped.' },
-  { name: 'Chikkama', role: 'Kitchen', bio: 'Manages the kitchen and the local recipes that shape every meal at the farm.' },
+  { name: 'Chikkama', role: 'Kitchen', bio: 'Manages the kitchen and the local recipes that shape every meal here.' },
 ];
 
 // Sourced from the community's earlier syntropic.in/member directory; Madhav & Krithika
@@ -81,11 +81,11 @@ function initials(name: string) {
 }
 ---
 
-<BaseLayout title="People" description="The people of Tamarind Valley Collective — the 53 member families, the local staff who run the farm day to day, our partners, and our work with the neighboring community." image="/images/members/reva-and-ranjan.jpg" imageWidth={768} imageHeight={576}>
+<BaseLayout title="People" description="The people of Tamarind Valley Collective — the 53 member families, the local staff who run things day to day, our partners, and our work with the neighboring community." image="/images/members/reva-and-ranjan.jpg" imageWidth={768} imageHeight={576}>
   <PageHero
     eyebrow="People"
     title="Who's part of TVC"
-    intro="The member families who own the farm collectively, the local staff who run it day to day, and the partners and neighboring community who make it all work."
+    intro="The member families who own the land collectively, the local staff who run it day to day, and the partners and neighboring community who make it all work."
     image="/images/members/reva-and-ranjan.jpg"
     imageAlt="Two of TVC's member families at the farm"
   />
@@ -111,7 +111,7 @@ function initials(name: string) {
   <section class="section section--tint">
     <div class="wrapper">
       <h2>Our local staff</h2>
-      <p>The day-to-day activities at the farm are managed by a small, dedicated team living on-site.</p>
+      <p>The day-to-day activities at TVC are managed by a small, dedicated team living on-site.</p>
       <div class="staff-grid">
         {staff.map((s) => (
           <div class="card">
@@ -126,7 +126,7 @@ function initials(name: string) {
 
   <section class="section wrapper" id="partners">
     <h2>Partners &amp; collaborators</h2>
-    <p>Beyond the farm's own community, a handful of organizations have supported TVC along the way — from hospitality to permaculture design.</p>
+    <p>Beyond TVC's own community, a handful of organizations have supported us along the way — from hospitality to permaculture design.</p>
     <div class="partners-grid">
       {partners.map((p) => (
         <a class="partner-card" href={p.data.url} target="_blank" rel="noopener noreferrer">
@@ -141,7 +141,7 @@ function initials(name: string) {
   <section class="section section--tint">
     <div class="wrapper">
       <h2>Community outreach</h2>
-      <p>Our ongoing work with the local community around the farm, in Odhipuram and Thaggatti village.</p>
+      <p>Our ongoing work with the local community around TVC, in Odhipuram and Thaggatti village.</p>
       <a class="button button--outline" href="/people/community-outreach">See our outreach →</a>
     </div>
   </section>

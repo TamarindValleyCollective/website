@@ -16,7 +16,7 @@ const proofEvents = (await getCollection('events', (e) => proofIds.includes(e.id
 
 <BaseLayout
   title="Host Your Event at TVC"
-  description="Bring your retreat, workshop, or camp to Tamarind Valley Collective — a 98-acre hillslope farm with some of the darkest skies around, on-site camping, and a track record hosting everything from biodiversity walks to a week-long computation retreat."
+  description="Bring your retreat, workshop, or camp to Tamarind Valley Collective — a 98-acre hillslope in the Melagiri Hills with some of the darkest skies around, on-site camping, and a track record hosting everything from biodiversity walks to a week-long computation retreat."
   image="/images/pages/home/gallery-4.jpg"
   imageWidth={1280}
   imageHeight={960}
@@ -24,14 +24,14 @@ const proofEvents = (await getCollection('events', (e) => proofIds.includes(e.id
   <PageHero
     eyebrow="Visit TVC"
     title="Host Your Event at TVC"
-    intro="A working farm, a hillslope with some of the darkest skies around, and room to camp — the setting for team outings, workshops, retreats, and camps of every kind."
+    intro="98 acres of hill country, some of the darkest skies around, and room to camp — the setting for team outings, workshops, retreats, and camps of every kind."
     image="/images/pages/home/gallery-4.jpg"
-    imageAlt="Sunset over the hills surrounding the farm"
+    imageAlt="Sunset over the Melagiri Hills"
   />
 
   <section class="section wrapper">
     <h2>Why here</h2>
-    <p>TVC is a {FARM_AREA_ACRES}-acre permaculture farm on a west-facing hillslope, an hour or two outside Bangalore depending on where you're coming from — far enough to feel like a real break, close enough to reach for a weekend. The valley measures just 31.8 μcd/m² of artificial brightness, so on a clear night the stars and galaxies are bright and unmistakable — a real draw whether you're running a stargazing session or just want a group to disconnect for a few days.</p>
+    <p>TVC is {FARM_AREA_ACRES} acres of the Melagiri Hills, on a west-facing hillslope an hour or two outside Bangalore depending on where you're coming from — far enough to feel like a real break, close enough to reach for a weekend. The valley measures just 31.8 μcd/m² of artificial brightness, so on a clear night the stars and galaxies are bright and unmistakable — a real draw whether you're running a stargazing session or just want a group to disconnect for a few days.</p>
     <p>That disconnection is literal, not just a figure of speech: there's WiFi via BSNL, which should tell you all you need to know about its reliability, and power is grid-fed with a solar backup and a generator for the rare bad day. Bring a hotspot if your event genuinely needs guaranteed connectivity — otherwise, treat the unreliability as part of the pitch.</p>
   </section>
 
@@ -42,7 +42,7 @@ const proofEvents = (await getCollection('events', (e) => proofIds.includes(e.id
       <div class="track-grid">
         <div class="card">
           <h3>Nature, wellness &amp; biodiversity</h3>
-          <p>Biodiversity walks, birding, foraging, wellness retreats, or a workshop on permaculture design, bamboo craft, or growing your own food — the farm's food forest, water works, and forest edge are the whole point. Over 100 bird species have been recorded here.</p>
+          <p>Biodiversity walks, birding, foraging, wellness retreats, or a workshop on permaculture design, bamboo craft, or growing your own food — the land's food forest, water works, and forest edge are the whole point. Over 100 bird species have been recorded here.</p>
           {proofEvents[1] && (
             <a class="track-proof" href={`/events/${proofEvents[1].id}`}>
               Proof it works: {proofEvents[1].data.title} ({formatDateRange(proofEvents[1].data.date, proofEvents[1].data.endDate)}) →
@@ -68,7 +68,7 @@ const proofEvents = (await getCollection('events', (e) => proofIds.includes(e.id
 
   <section class="section wrapper">
     <h2>What's here</h2>
-    <p>Tented accommodation across the Malabar hut (two tents, each fitting up to 3 adults), the Banyan hut (one tent + deck), two bamboo huts, and dome tents — the site accommodates up to 20 people overnight. There's a lunch hut next to the kitchen for group meals, sessions, or just sitting and talking. Food is freshly prepared and mostly vegetarian, sourced from the farm as far as possible, with non-veg on request. Common toilets have western closets and showers (no hot water on tap, but the kitchen can heat some up).</p>
+    <p>Tented accommodation across the Malabar hut (two tents, each fitting up to 3 adults), the Banyan hut (one tent + deck), two bamboo huts, and dome tents — the site accommodates up to 20 people overnight. There's a lunch hut next to the kitchen for group meals, sessions, or just sitting and talking. Food is freshly prepared and mostly vegetarian, sourced on-site as far as possible, with non-veg on request. Common toilets have western closets and showers (no hot water on tap, but the kitchen can heat some up).</p>
     <p>Day-only events aren't capped at 20 — that limit is specifically the overnight camping capacity. Get in touch with your headcount and we'll work out what fits.</p>
   </section>
 
