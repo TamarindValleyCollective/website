@@ -208,7 +208,13 @@ function tagsAttr(e: (typeof allEvents)[number]) {
        through behind the filter chips for however much of this section
        falls within the first viewport-height of scroll. */
     background: var(--tvc-cream);
-    padding: 24px 0;
+    /* Longhand top/bottom only, same reason .section in global.css does
+       this - .controls is combined with .wrapper on the same element
+       (`class="controls wrapper"`), and a shorthand `padding` here would
+       silently overwrite .wrapper's `padding: 0 24px` entirely (shorthands
+       don't merge), flattening the left/right edges against the viewport. */
+    padding-top: 24px;
+    padding-bottom: 24px;
     border-top: 1px solid var(--tvc-line);
     border-bottom: 1px solid var(--tvc-line);
     display: flex;
