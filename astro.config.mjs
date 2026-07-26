@@ -1,9 +1,18 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
+import sitemap from '@astrojs/sitemap';
 
 // https://astro.build/config
 export default defineConfig({
   site: 'https://tvc.farm',
+  integrations: [
+    sitemap({
+      // Excludes the noindex'd pages (see BaseLayout's `noindex` prop) -
+      // listing a URL in the sitemap while also telling crawlers not to
+      // index it is a mixed signal search engines don't need.
+      filter: (page) => !page.includes('/404') && !page.includes('/thanks'),
+    }),
+  ],
   redirects: {
     // Ecosystem and Biodiversity were separate nav items covering the same
     // ground - merged into one page at /ecosystem with the live explorer
