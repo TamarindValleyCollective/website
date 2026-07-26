@@ -187,10 +187,9 @@ account on 2026-07-18).
   `/visit/camping`, `/visit/day-visit`, and `/visit/trekking-trails` with a hidden `type`
   field noting which page it came from, redirecting to `/visit/thanks` — replaces the old
   external "Book via Linger" redirect, with pricing/inclusions now published on TVC's own
-  pages and a WhatsApp link offered alongside the form; pushed to `main` and deployed, but
-  still needs a one-time manual step in the Netlify dashboard to add two email notifications
-  (`stay@linger.in` and `contact@tvc.farm`) — Site configuration → Notifications → Add
-  notification → Email notification → event type "Form submission notification"; and the
+  pages and a WhatsApp link offered alongside the form; pushed to `main` and deployed, with
+  both email notifications (`stay@linger.in` and `contact@tvc.farm`) now set up in the
+  Netlify dashboard under Site configuration → Notifications; and the
   event-interest widget's optional-email path (an AJAX POST, not a page-navigating form
   submit, only fired when a visitor gives an email) — also
   built but not yet pushed.
@@ -270,7 +269,7 @@ never touches Netlify either.
 | Chat widget's actual AI responses | ✅ Live — `ANTHROPIC_API_KEY` set 2026-07-18; verified with real requests against `tvc.farm/api/chat` returning grounded answers |
 | Friends of TVC signup (Netlify Forms) | ✅ Live — confirmed at `/contact`, with `/contact/thanks` as the confirmation page |
 | Host an Event inquiry form (Netlify Forms) | 🟢 Deployed (pushed to `main`) — same Netlify Forms mechanism as the Friends of TVC signup, at `/visit/host-an-event`; not independently re-verified against production the way the Friends of TVC form was |
-| Visit inquiry form + WhatsApp CTA (Netlify Forms) | 🟢 Deployed (pushed to `main`) — replaces the "Book via Linger" redirect on `/visit/camping`, `/visit/day-visit`, `/visit/trekking-trails`; not independently re-verified against production; still needs a one-time Netlify dashboard step (Site configuration → Notifications) to add email notifications to `stay@linger.in` and `contact@tvc.farm` |
+| Visit inquiry form + WhatsApp CTA (Netlify Forms) | 🟢 Deployed (pushed to `main`), both email notifications configured — replaces the "Book via Linger" redirect on `/visit/camping`, `/visit/day-visit`, `/visit/trekking-trails`; not independently re-verified against production |
 | Event interest widget + counter (Netlify Function, Blobs, Forms) | 🆕 Built, not yet pushed — "Want this to happen again?" on past event pages (`/events/<slug>`), public count via `/api/event-interest` + Netlify Blobs, optional-email entries via Netlify Forms |
 | Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy` |
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
