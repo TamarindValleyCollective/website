@@ -16,11 +16,12 @@ past events' "Want this to happen again?" widget), Netlify Blobs (public storage
 counter — the site's only *readable* server-side state; everything else below is write-only),
 and Netlify Forms (the Friends of TVC signup, the Host an Event inquiry, the shared Visit
 inquiry form on the camping/day-visit/trekking pages, and — when an email is given — the
-event-interest widget). The chat assistant and the Friends of TVC and Host an Event forms are
-deployed; see [Current Production Status](#current-production-status) — the chat assistant's
+event-interest widget). The chat assistant, the Friends of TVC form, the Host an Event form,
+and the Visit inquiry form are deployed; see
+[Current Production Status](#current-production-status) — the chat assistant's
 `ANTHROPIC_API_KEY` was set on 2026-07-18, and it now answers with real, grounded responses.
-The event-interest Function, its Blobs store, its own Forms path, and the Visit inquiry form
-are built but not yet pushed/deployed.
+The event-interest Function, its Blobs store, and its own Forms path are built but not yet
+pushed/deployed.
 
 ## Diagram
 
@@ -186,10 +187,12 @@ account on 2026-07-18).
   `/visit/camping`, `/visit/day-visit`, and `/visit/trekking-trails` with a hidden `type`
   field noting which page it came from, redirecting to `/visit/thanks` — replaces the old
   external "Book via Linger" redirect, with pricing/inclusions now published on TVC's own
-  pages and a WhatsApp link offered alongside the form; needs a one-time manual step in the
-  Netlify dashboard to add two email notifications (`stay@linger.in` and `contact@tvc.farm`)
-  — built but not yet pushed; and the event-interest widget's optional-email path (an AJAX
-  POST, not a page-navigating form submit, only fired when a visitor gives an email) — also
+  pages and a WhatsApp link offered alongside the form; pushed to `main` and deployed, but
+  still needs a one-time manual step in the Netlify dashboard to add two email notifications
+  (`stay@linger.in` and `contact@tvc.farm`) — Site configuration → Notifications → Add
+  notification → Email notification → event type "Form submission notification"; and the
+  event-interest widget's optional-email path (an AJAX POST, not a page-navigating form
+  submit, only fired when a visitor gives an email) — also
   built but not yet pushed.
 
 ### Cloudflare (in front of Netlify)
@@ -222,8 +225,8 @@ never touches Netlify either.
 - **Friends of TVC form** — live. Collects name + phone number (no email/newsletter — signups
   are added to the "Friends of TVC" WhatsApp group by hand). Plain HTML form submission with a
   spam honeypot field, redirecting to a confirmation page on success.
-- **Visit inquiry** (`/visit/camping`, `/visit/day-visit`, `/visit/trekking-trails`) — built,
-  not yet deployed. Each page presents its own pricing/inclusions plus a shared
+- **Visit inquiry** (`/visit/camping`, `/visit/day-visit`, `/visit/trekking-trails`) — pushed
+  to `main` and deployed. Each page presents its own pricing/inclusions plus a shared
   `BookingInquiry.astro` block: a plain HTML form (name, email, phone, dates, headcount,
   message, plus an itinerary picker on the Day Visit page) submitting to the same
   `visit-inquiry` Netlify Form, and a `wa.me` WhatsApp link pre-filled with a page-specific
@@ -267,12 +270,12 @@ never touches Netlify either.
 | Chat widget's actual AI responses | ✅ Live — `ANTHROPIC_API_KEY` set 2026-07-18; verified with real requests against `tvc.farm/api/chat` returning grounded answers |
 | Friends of TVC signup (Netlify Forms) | ✅ Live — confirmed at `/contact`, with `/contact/thanks` as the confirmation page |
 | Host an Event inquiry form (Netlify Forms) | 🟢 Deployed (pushed to `main`) — same Netlify Forms mechanism as the Friends of TVC signup, at `/visit/host-an-event`; not independently re-verified against production the way the Friends of TVC form was |
-| Visit inquiry form + WhatsApp CTA (Netlify Forms) | 🆕 Built, not yet pushed — replaces the "Book via Linger" redirect on `/visit/camping`, `/visit/day-visit`, `/visit/trekking-trails`; needs a one-time Netlify dashboard step to add email notifications to `stay@linger.in` and `contact@tvc.farm` |
+| Visit inquiry form + WhatsApp CTA (Netlify Forms) | 🟢 Deployed (pushed to `main`) — replaces the "Book via Linger" redirect on `/visit/camping`, `/visit/day-visit`, `/visit/trekking-trails`; not independently re-verified against production; still needs a one-time Netlify dashboard step (Site configuration → Notifications) to add email notifications to `stay@linger.in` and `contact@tvc.farm` |
 | Event interest widget + counter (Netlify Function, Blobs, Forms) | 🆕 Built, not yet pushed — "Want this to happen again?" on past event pages (`/events/<slug>`), public count via `/api/event-interest` + Netlify Blobs, optional-email entries via Netlify Forms |
 | Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy` |
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
 
-No known gaps beyond the event interest feature and the Visit inquiry form awaiting a
-push/deploy — every other feature above is either confirmed live in production or (Host an
-Event) deployed via a push to `main` without a separate direct-production check. The Netlify project itself is owned by the
+No known gaps beyond the event interest feature awaiting a push/deploy — every other feature
+above is either confirmed live in production or (Host an Event, Visit inquiry) deployed via a
+push to `main` without a separate direct-production check. The Netlify project itself is owned by the
 `contact@tvc.farm` account (moved there from a personal account on 2026-07-18).
