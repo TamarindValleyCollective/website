@@ -16,12 +16,10 @@ past events' "Want this to happen again?" widget), Netlify Blobs (public storage
 counter — the site's only *readable* server-side state; everything else below is write-only),
 and Netlify Forms (the Friends of TVC signup, the Host an Event inquiry, the shared Visit
 inquiry form on the camping/day-visit/trekking pages, and — when an email is given — the
-event-interest widget). The chat assistant, the Friends of TVC form, the Host an Event form,
-and the Visit inquiry form are deployed; see
+event-interest widget). All of the above are deployed; see
 [Current Production Status](#current-production-status) — the chat assistant's
-`ANTHROPIC_API_KEY` was set on 2026-07-18, and it now answers with real, grounded responses.
-The event-interest Function, its Blobs store, and its own Forms path are built but not yet
-pushed/deployed.
+`ANTHROPIC_API_KEY` was set on 2026-07-18, and it now answers with real, grounded responses,
+and `/api/event-interest` responds live in production.
 
 ## Diagram
 
@@ -50,7 +48,7 @@ flowchart TD
     subgraph HOST["3 · Hosting: Netlify — LIVE"]
         CDN["Static CDN<br/>Serves dist/ — everything except<br/>the exceptions to the right"]
         APIFN["Netlify Function: /api/chat<br/>Deployed and live —<br/>ANTHROPIC_API_KEY set, calls the<br/>Anthropic API for grounded answers"]
-        APIFN2["Netlify Function: /api/event-interest<br/>Built, not yet deployed —<br/>reads/writes the per-event count below"]
+        APIFN2["Netlify Function: /api/event-interest<br/>Deployed and live —<br/>reads/writes the per-event count below"]
         BLOBS["Netlify Blobs: 'event-interest' store<br/>One JSON record per past event id —<br/>{count, emails[]}. Reset via<br/>netlify blobs:delete event-interest &lt;id&gt;"]
         FORMS["Netlify Forms<br/>Captures /contact Friends of TVC signups,<br/>/visit/host-an-event inquiries,<br/>/visit camping·day-visit·trekking inquiries,<br/>and event-interest submissions with an email"]
     end
@@ -167,10 +165,10 @@ account on 2026-07-18).
 - **Netlify Functions** — two. `chat.mts` is deployed and live at `/api/chat`; the
   `ANTHROPIC_API_KEY` environment variable was set in the Netlify dashboard on 2026-07-18,
   verified directly against production (`POST https://tvc.farm/api/chat`) returning real,
-  grounded answers sourced from the site's own content. `event-interest.mts` is built but not
-  yet deployed — serves `/api/event-interest`, reading/writing Netlify Blobs to back the "Want
-  this to happen again?" widget on past event pages, no environment variable needed.
-- **Netlify Blobs** — built, not yet deployed. One store (`event-interest`), one JSON record
+  grounded answers sourced from the site's own content. `event-interest.mts` is deployed and
+  live — serves `/api/event-interest`, reading/writing Netlify Blobs to back the "Want this to
+  happen again?" widget on past event pages, no environment variable needed.
+- **Netlify Blobs** — live. One store (`event-interest`), one JSON record
   per past event id (`{count, emails[]}`), written only by `event-interest.mts` — the site's
   only piece of server-side state that's publicly *readable*, unlike the write-only Forms
   below. Auto-provisioned per-site, no setup or environment variable needed. Reset a specific
@@ -191,8 +189,7 @@ account on 2026-07-18).
   both email notifications (`stay@linger.in` and `contact@tvc.farm`) now set up in the
   Netlify dashboard under Site configuration → Notifications; and the
   event-interest widget's optional-email path (an AJAX POST, not a page-navigating form
-  submit, only fired when a visitor gives an email) — also
-  built but not yet pushed.
+  submit, only fired when a visitor gives an email) — also deployed and live.
 
 ### Cloudflare (in front of Netlify)
 
@@ -270,11 +267,11 @@ never touches Netlify either.
 | Friends of TVC signup (Netlify Forms) | ✅ Live — confirmed at `/contact`, with `/contact/thanks` as the confirmation page |
 | Host an Event inquiry form (Netlify Forms) | 🟢 Deployed (pushed to `main`) — same Netlify Forms mechanism as the Friends of TVC signup, at `/visit/host-an-event`; not independently re-verified against production the way the Friends of TVC form was |
 | Visit inquiry form + WhatsApp CTA (Netlify Forms) | 🟢 Deployed (pushed to `main`), both email notifications configured — replaces the "Book via Linger" redirect on `/visit/camping`, `/visit/day-visit`, `/visit/trekking-trails`; not independently re-verified against production |
-| Event interest widget + counter (Netlify Function, Blobs, Forms) | 🆕 Built, not yet pushed — "Want this to happen again?" on past event pages (`/events/<slug>`), public count via `/api/event-interest` + Netlify Blobs, optional-email entries via Netlify Forms |
+| Event interest widget + counter (Netlify Function, Blobs, Forms) | ✅ Live — "Want this to happen again?" on past event pages (`/events/<slug>`), public count via `/api/event-interest` + Netlify Blobs, optional-email entries via Netlify Forms; verified `/api/event-interest` responds live in production |
 | Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy` |
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
 
-No known gaps beyond the event interest feature awaiting a push/deploy — every other feature
-above is either confirmed live in production or (Host an Event, Visit inquiry) deployed via a
-push to `main` without a separate direct-production check. The Netlify project itself is owned by the
-`contact@tvc.farm` account (moved there from a personal account on 2026-07-18).
+No known gaps remain — every feature above is either confirmed live in production or (Host an
+Event, Visit inquiry) deployed via a push to `main` without a separate direct-production check.
+The Netlify project itself is owned by the `contact@tvc.farm` account (moved there from a
+personal account on 2026-07-18).
