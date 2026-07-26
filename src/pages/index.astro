@@ -16,12 +16,15 @@ const exploreCards = [
   { href: '/events', title: 'Events', desc: 'Camps, workshops, biodiversity walks, and retreats — upcoming and past.', img: '/images/events/2026-08-01-foraging-day/hero.jpeg' },
 ];
 
-// Deliberately 4 curated rungs, not a 1:1 mirror of every ENGAGE_LINKS page
+// Deliberately 5 curated rungs, not a 1:1 mirror of every ENGAGE_LINKS page
 // the way exploreCards mirrors EXPLORE_LINKS — this ladder is "levels of
-// engagement" (day visit → overnight → work with us → join), not a page
-// index. Trekking Trails and How to Reach are folded into the "Come for a
-// day"/"Spend the night" rungs they support; Contact Us has no rung since
-// it isn't a level of engagement in its own right.
+// engagement" (day visit → overnight → work with us → host an event →
+// join), not a page index. Trekking Trails and How to Reach are folded
+// into the "Come for a day"/"Spend the night" rungs they support; Contact
+// Us has no rung since it isn't a level of engagement in its own right.
+// Host an Event breaks that "not a page index" rule on purpose — it's a
+// revenue goal, not just another page, so it gets the same homepage
+// prominence as the other paid stays.
 const engageRungs = [
   {
     step: '01',
@@ -55,13 +58,23 @@ const engageRungs = [
   },
   {
     step: '04',
+    href: '/visit/host-an-event',
+    tag: 'Bring your own — retreats & camps',
+    title: 'Host your event here',
+    desc: "Nature retreats, biodiversity walks, or a week-long deep-focus tech camp like The Lambda Retreat — bring your own event, camping included.",
+    cta: 'See how to host an event →',
+    img: '/images/pages/trekking/hilltop.jpg',
+    tone: 'tone-4',
+  },
+  {
+    step: '05',
     href: '/join',
     tag: 'Joining the collective',
     title: 'A note on membership',
     desc: "We're not really recruiting — 53 families is likely as large as we'll get. Occasionally a member moves on, and their place passes privately to someone new. Here's how that actually works.",
     cta: 'Read how it works →',
     img: '/images/members/reva-and-ranjan.jpg',
-    tone: 'tone-4',
+    tone: 'tone-5',
   },
 ];
 ---
@@ -604,16 +617,26 @@ const engageRungs = [
   .tone-3 .rung__step { color: #b85e10; }
   .tone-3 .rung__cta { color: #b85e10; }
 
-  /* Rung 4 is deliberately the quiet one — a muted stone tone instead of
+  /* Host an Event gets a green-to-orange gradient instead of a flat tint —
+     the two colors standing for the two audiences the pitch names (nature
+     retreats, tech camps), one card. */
+  .tone-4 {
+    background: linear-gradient(135deg, var(--tvc-green-tint), var(--tvc-orange-tint));
+    border: 1px solid var(--tvc-line);
+  }
+  .tone-4 .rung__step { color: var(--tvc-green-dark); }
+  .tone-4 .rung__cta { color: #b85e10; }
+
+  /* Rung 5 is deliberately the quiet one — a muted stone tone instead of
      continuing the green-to-orange escalation, so it reads as "read this
      carefully" rather than "click here to apply" (TVC isn't recruiting). */
-  .tone-4 {
+  .tone-5 {
     background: #efece2;
     border: 1px solid var(--tvc-line);
   }
-  .tone-4 .rung__step { color: var(--tvc-ink-soft); }
-  .tone-4 .rung__cta { color: var(--tvc-green-dark); }
-  .tone-4 .rung__media::after {
+  .tone-5 .rung__step { color: var(--tvc-ink-soft); }
+  .tone-5 .rung__cta { color: var(--tvc-green-dark); }
+  .tone-5 .rung__media::after {
     content: '';
     position: absolute;
     inset: 0;

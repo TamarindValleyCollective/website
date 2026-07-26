@@ -41,7 +41,7 @@ flowchart TD
     subgraph HOST["3 · Hosting: Netlify — LIVE"]
         CDN["Static CDN<br/>Serves dist/ — everything except<br/>the two exceptions to the right"]
         APIFN["Netlify Function: /api/chat<br/>Deployed and live —<br/>ANTHROPIC_API_KEY set, calls the<br/>Anthropic API for grounded answers"]
-        FORMS["Netlify Forms<br/>Live — captures /contact Friends of TVC<br/>signups (name + phone), no custom backend needed"]
+        FORMS["Netlify Forms<br/>Captures /contact Friends of TVC signups<br/>and /visit/host-an-event inquiries, no custom backend needed"]
     end
 
     CF["Cloudflare<br/>DNS + CDN for tvc.farm,<br/>proxies to Netlify"]
@@ -49,6 +49,7 @@ flowchart TD
     subgraph BROWSER["4 · Visitor's Browser"]
         CHATW["ChatWidget.astro<br/>Floating widget, site logo.<br/>Calls /api/chat"]
         NEWS["Friends of TVC form<br/>Plain HTML POST,<br/>data-netlify=true + honeypot"]
+        HOSTFORM["Host an Event inquiry form<br/>Plain HTML POST,<br/>data-netlify=true + honeypot"]
         BIODIV["BiodiversityExplorer<br/>Fetches sightings directly from<br/>iNaturalist's public API"]
         PHOTOS["PhotoGallery (/in-pictures)<br/>Filters, Grid/Map toggle, lightbox —<br/>images served directly from R2"]
         TIMELINE["Our Journey / other pages<br/>Era-based year timeline, event listings —<br/>pure static, no calls out"]
@@ -81,6 +82,7 @@ flowchart TD
     SCRIPT_CAPTION -->|"backfills caption:"| CONTENT
     CHATW --> APIFN
     NEWS --> FORMS
+    HOSTFORM --> FORMS
 
     classDef staticStyle fill:#e8f2ea,stroke:#17723b,color:#0f5029
     classDef netlifyStyle fill:#fdead3,stroke:#f78520,color:#9a5310
@@ -88,7 +90,7 @@ flowchart TD
     classDef cfStyle fill:#fef3e0,stroke:#e8891c,color:#7a4a00
     classDef localStyle fill:#eef0f5,stroke:#6b7280,color:#374151
 
-    class PAGES,COMPONENTS,CONTENT,CHATW,NEWS,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,CDN staticStyle
+    class PAGES,COMPONENTS,CONTENT,CHATW,NEWS,HOSTFORM,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,CDN staticStyle
     class FUNC_SRC,SCRIPT_SRC,APIFN,FORMS,ANTHROPIC netlifyStyle
     class INAT,GMAPS,YT,R2,GTAG,METEO externalStyle
     class CF cfStyle
@@ -149,10 +151,13 @@ account on 2026-07-18).
   `ANTHROPIC_API_KEY` environment variable was set in the Netlify dashboard on 2026-07-18;
   verified directly against production (`POST https://tvc.farm/api/chat`) returning real,
   grounded answers sourced from the site's own content.
-- **Netlify Forms** — live. Detects the Friends of TVC signup form (name + phone, collected so
-  TVC can add people to the "Friends of TVC" WhatsApp group by hand) at build time
-  (`data-netlify="true"`) and captures submissions with no custom backend code required;
-  confirmed live at `/contact`, redirecting to `/contact/thanks` on success.
+- **Netlify Forms** — live. Detects each `data-netlify="true"` form at build time and captures
+  submissions with no custom backend code required. Two forms use it: the Friends of TVC
+  signup (name + phone, collected so TVC can add people to the "Friends of TVC" WhatsApp
+  group by hand) at `/contact`, confirmed live, redirecting to `/contact/thanks` on success;
+  and the Host an Event inquiry (name, org, contact details, event type, headcount, dates,
+  message) at `/visit/host-an-event`, redirecting to `/visit/host-an-event/thanks` — added but
+  not yet deployed, so not yet confirmed live the way the Friends of TVC form is.
 
 ### Cloudflare (in front of Netlify)
 
@@ -222,8 +227,10 @@ never touches Netlify either.
 | Chat widget UI | ✅ Live |
 | Chat widget's actual AI responses | ✅ Live — `ANTHROPIC_API_KEY` set 2026-07-18; verified with real requests against `tvc.farm/api/chat` returning grounded answers |
 | Friends of TVC signup (Netlify Forms) | ✅ Live — confirmed at `/contact`, with `/contact/thanks` as the confirmation page |
+| Host an Event inquiry form (Netlify Forms) | 🆕 Added, not yet deployed — same Netlify Forms mechanism as the Friends of TVC signup, at `/visit/host-an-event` |
 | Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy` |
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
 
-No known gaps — every feature above is confirmed live in production. The Netlify project itself
-is owned by the `contact@tvc.farm` account (moved there from a personal account on 2026-07-18).
+No known gaps beyond the Host an Event inquiry form awaiting deployment — every other feature
+above is confirmed live in production. The Netlify project itself is owned by the
+`contact@tvc.farm` account (moved there from a personal account on 2026-07-18).

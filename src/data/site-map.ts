@@ -22,6 +22,7 @@ export const ENGAGE_LINKS: SiteLink[] = [
   { label: 'Visit TVC', href: '/visit' },
   { label: 'Day Visit', href: '/visit/day-visit' },
   { label: 'Overnight Camping', href: '/visit/camping' },
+  { label: 'Host an Event', href: '/visit/host-an-event' },
   { label: 'Trekking Trails', href: '/visit/trekking-trails' },
   { label: 'How to Reach', href: '/visit/how-to-reach' },
   { label: 'Join the Collective', href: '/join' },
