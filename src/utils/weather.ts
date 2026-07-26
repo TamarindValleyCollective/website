@@ -2,8 +2,9 @@
 // HeaderWeather (the compact site-wide nav display) -- same farm
 // coordinates, same cache, same "current conditions" shape, so the two
 // can't drift apart or double the API calls in the same session.
-export const LAT = 12.35;
-export const LNG = 77.65;
+// Matches the farm's Google Business Profile pin exactly (verified 2026-07-26).
+export const LAT = 12.3506875;
+export const LNG = 77.6473125;
 
 const CACHE_KEY = 'tvc-weather-cache';
 const CACHE_TTL_MS = 15 * 60 * 1000;
