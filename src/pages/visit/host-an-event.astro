@@ -24,7 +24,7 @@ const proofEvents = (await getCollection('events', (e) => proofIds.includes(e.id
   <PageHero
     eyebrow="Visit TVC"
     title="Host Your Event at TVC"
-    intro="A working farm, a hillslope with some of the darkest skies around, and room to camp — a setting that's worked for nature retreats and deep-focus tech camps alike."
+    intro="A working farm, a hillslope with some of the darkest skies around, and room to camp — the setting for team outings, workshops, retreats, and camps of every kind."
     image="/images/pages/home/gallery-4.jpg"
     imageAlt="Sunset over the hills surrounding the farm"
   />
@@ -37,12 +37,12 @@ const proofEvents = (await getCollection('events', (e) => proofIds.includes(e.id
 
   <section class="section section--tint">
     <div class="wrapper">
-      <h2>Who this is for</h2>
-      <p class="section-hint">Two kinds of groups tend to get the most out of the farm — and we've hosted both.</p>
+      <h2>What's possible here</h2>
+      <p class="section-hint">Who runs the event doesn't matter as much as whether the setting fits it — here's what's worked, and what we're open to.</p>
       <div class="track-grid">
         <div class="card">
           <h3>Nature, wellness &amp; biodiversity</h3>
-          <p>Biodiversity walks, birding, foraging, permaculture workshops, wellness retreats — the farm's food forest, water works, and forest edge are the whole point. Over 100 bird species have been recorded here.</p>
+          <p>Biodiversity walks, birding, foraging, wellness retreats, or a workshop on permaculture design, bamboo craft, or growing your own food — the farm's food forest, water works, and forest edge are the whole point. Over 100 bird species have been recorded here.</p>
           {proofEvents[1] && (
             <a class="track-proof" href={`/events/${proofEvents[1].id}`}>
               Proof it works: {proofEvents[1].data.title} ({formatDateRange(proofEvents[1].data.date, proofEvents[1].data.endDate)}) →
@@ -57,6 +57,10 @@ const proofEvents = (await getCollection('events', (e) => proofIds.includes(e.id
               Proof it works: {proofEvents[0].data.title} ({formatDateRange(proofEvents[0].data.date, proofEvents[0].data.endDate)}) →
             </a>
           )}
+        </div>
+        <div class="card">
+          <h3>Team offsites &amp; anything else</h3>
+          <p>Team outings, brainstorming sessions, leadership programs — facilitators from the community are available on request. Or something we haven't listed here: if your event needs a quiet, off-grid setting for a few days, tell us about it and we'll work out whether it fits.</p>
         </div>
       </div>
     </div>
@@ -107,7 +111,7 @@ const proofEvents = (await getCollection('events', (e) => proofIds.includes(e.id
               <option value="Nature, wellness, or biodiversity retreat">Nature, wellness, or biodiversity retreat</option>
               <option value="Tech, maker, or deep-focus camp">Tech, maker, or deep-focus camp</option>
               <option value="Team offsite">Team offsite</option>
-              <option value="Other">Other</option>
+              <option value="Something else">Something else</option>
             </select>
           </div>
           <div>
