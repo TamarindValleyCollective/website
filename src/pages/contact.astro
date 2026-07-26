@@ -25,13 +25,14 @@ import PageHero from '../components/PageHero.astro';
       <div class="map-embed">
         <iframe
           loading="lazy"
-          src="https://www.google.com/maps/d/u/0/embed?mid=1b_d-2ZOwDBRTJjbDZ2ovJ7QsdPiqnYrA"
+          src="https://www.google.com/maps?cid=12716822598495943685&output=embed"
           width="100%"
           height="360"
           style="border:0"
-          title="Map to Tamarind Valley Collective"
+          title="Tamarind Valley Collective on Google Maps"
         ></iframe>
       </div>
+      <p class="caption">Pulled directly from our <a href="https://www.google.com/maps?cid=12716822598495943685" target="_blank" rel="noopener noreferrer">Google Business Profile</a> — see reviews and get directions there too.</p>
     </div>
 
     <div class="card">
@@ -74,6 +75,12 @@ import PageHero from '../components/PageHero.astro';
 
   .map-embed iframe {
     border-radius: var(--radius);
+  }
+
+  .caption {
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+    margin-top: 10px;
   }
 
   .signup-form {
