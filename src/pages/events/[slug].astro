@@ -80,7 +80,124 @@ const breadcrumbSchema = {
       />
     )}
     <Content />
+
+    {!isUpcoming && (
+      event.data.interestNote ? (
+        <div class="interest-widget card interest-widget--closed">
+          <p>
+            {event.data.interestNote}
+            {event.data.interestNoteHref && <> <a href={event.data.interestNoteHref}>See it here →</a></>}
+          </p>
+        </div>
+      ) : (
+        <div class="interest-widget card" data-event={event.id} data-event-title={event.data.title}>
+          <h3>Want this to happen again?</h3>
+          <p>Let us know and we'll factor it into what we plan next.</p>
+          <form class="interest-form">
+            <input type="email" name="email" placeholder="you@example.com (optional)" aria-label="Email (optional)" />
+            <button type="submit" class="button">I'm interested</button>
+          </form>
+          <p class="interest-count" hidden></p>
+        </div>
+      )
+    )}
+
+    {/* Static form for Netlify's build-time bot to detect and register -- the
+        actual submission (see the script below) is an AJAX POST mirroring
+        these same fields, not a direct submit of this hidden form. Present
+        on every past event page regardless of interestNote, so detection
+        doesn't depend on any one specific page. */}
+    {!isUpcoming && (
+      <form name="event-interest" data-netlify="true" data-netlify-honeypot="bot-field" hidden>
+        <input type="text" name="event" />
+        <input type="text" name="event-title" />
+        <input type="email" name="email" />
+        <input name="bot-field" />
+      </form>
+    )}
   </article>
+
+  {!isUpcoming && !event.data.interestNote && (
+  <script>
+    const widget = document.querySelector<HTMLElement>('.interest-widget[data-event]');
+
+    if (widget) {
+      const eventId = widget.dataset.event!;
+      const eventTitle = widget.dataset.eventTitle ?? '';
+      const form = widget.querySelector<HTMLFormElement>('.interest-form');
+      const emailInput = widget.querySelector<HTMLInputElement>('input[name="email"]');
+      const submitBtn = widget.querySelector<HTMLButtonElement>('button[type="submit"]');
+      const countEl = widget.querySelector<HTMLElement>('.interest-count');
+      const storageKey = `tvc-event-interest-${eventId}`;
+
+      function showCount(count: number) {
+        if (!countEl) return;
+        countEl.textContent = count === 1 ? '1 person wants this again.' : `${count} people want this again.`;
+        countEl.hidden = false;
+      }
+
+      function markRegistered() {
+        form?.setAttribute('hidden', '');
+        if (!widget!.querySelector('.interest-done')) {
+          const done = document.createElement('p');
+          done.className = 'interest-done';
+          done.textContent = "You're in — we'll factor this into what we plan next.";
+          form?.insertAdjacentElement('afterend', done);
+        }
+      }
+
+      fetch(`/api/event-interest?event=${encodeURIComponent(eventId)}`)
+        .then((r) => r.json())
+        .then((data) => showCount(data.count ?? 0))
+        .catch(() => {});
+
+      if (localStorage.getItem(storageKey)) {
+        markRegistered();
+      }
+
+      form?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (submitBtn) submitBtn.disabled = true;
+        const email = emailInput?.value.trim() ?? '';
+
+        try {
+          const res = await fetch('/api/event-interest', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ event: eventId, email }),
+          });
+          const data = await res.json();
+
+          if (res.ok) {
+            showCount(data.count);
+            localStorage.setItem(storageKey, '1');
+            markRegistered();
+
+            if (email && !data.deduped) {
+              // Fire-and-forget: gives the farm team an actionable entry via
+              // the same Netlify Forms mechanism as /contact and
+              // /visit/host-an-event -- see the hidden form above.
+              fetch('/', {
+                method: 'POST',
+                headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                  'form-name': 'event-interest',
+                  event: eventId,
+                  'event-title': eventTitle,
+                  email,
+                }).toString(),
+              }).catch(() => {});
+            }
+          }
+        } catch {
+          // Leave the form enabled so they can retry.
+        } finally {
+          if (submitBtn) submitBtn.disabled = false;
+        }
+      });
+    }
+  </script>
+  )}
 </BaseLayout>
 
 <style>
@@ -196,5 +313,55 @@ const breadcrumbSchema = {
     text-align: center;
     font-size: 0.82rem;
     color: var(--tvc-ink-soft);
+  }
+
+  /* Not inside .prose's reading column -- a UI card, not article content. */
+  .interest-widget {
+    max-width: 72ch;
+    margin-top: 40px;
+  }
+
+  .interest-widget h3 {
+    margin-top: 0;
+  }
+
+  .interest-widget--closed p {
+    margin: 0;
+  }
+
+  .interest-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  /* [hidden] must win over the display: flex rule above -- without this,
+     setting the hidden attribute after a successful submit (see the script
+     below) has no visible effect, since both rules have equal specificity
+     and this one needs to come last. Same fix as .header-weather[hidden]
+     in HeaderWeather.astro. */
+  .interest-form[hidden] {
+    display: none;
+  }
+
+  .interest-form input {
+    flex: 1 1 220px;
+    padding: 10px 14px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 999px;
+    font: inherit;
+  }
+
+  .interest-count {
+    margin: 12px 0 0;
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .interest-done {
+    margin: 12px 0 0;
+    font-weight: 600;
+    color: var(--tvc-green-dark);
   }
 </style>

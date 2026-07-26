@@ -10,10 +10,16 @@
 **tvc.farm is live**, running this Astro rebuild on Netlify (behind Cloudflare for DNS/CDN),
 under the Netlify account owned by `contact@tvc.farm` (ownership moved there from a personal
 account on 2026-07-18). The site is almost entirely static (prerendered HTML/CSS/JS, no server
-at request time), with two deliberate exceptions that need a small serverless backend: the
-site-wide chat assistant and the Friends of TVC signup form. Both are fully live; see
-[Current Production Status](#current-production-status) — the chat assistant's
-`ANTHROPIC_API_KEY` was set on 2026-07-18, and it now answers with real, grounded responses.
+at request time), with a small set of deliberate exceptions that need a serverless backend:
+two Netlify Functions (the site-wide chat assistant, and the event-interest counter backing
+past events' "Want this to happen again?" widget), Netlify Blobs (public storage for that same
+counter — the site's only *readable* server-side state; everything else below is write-only),
+and Netlify Forms (the Friends of TVC signup, the Host an Event inquiry, and — when an email is
+given — the event-interest widget). The chat assistant and the Friends of TVC and Host an
+Event forms are deployed; see [Current Production Status](#current-production-status) — the
+chat assistant's `ANTHROPIC_API_KEY` was set on 2026-07-18, and it now answers with real,
+grounded responses. The event-interest Function, its Blobs store, and its own Forms path are
+built but not yet pushed/deployed.
 
 ## Diagram
 
@@ -29,6 +35,7 @@ flowchart TD
         COMPONENTS["src/components/<br/>Nav, Footer, PageHero, ChatWidget,<br/>CookieConsent, JourneyTimelineStandalone,<br/>BiodiversityExplorer, PhotoGallery"]
         CONTENT["src/content/*<br/>Markdown collections: events, partners,<br/>community-outreach, photos"]
         FUNC_SRC["netlify/functions/chat.mts<br/>Serverless function, calls Anthropic API server-side"]
+        FUNC_SRC2["netlify/functions/event-interest.mts<br/>Serverless function, reads/writes Netlify Blobs"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
     end
 
@@ -39,9 +46,11 @@ flowchart TD
     end
 
     subgraph HOST["3 · Hosting: Netlify — LIVE"]
-        CDN["Static CDN<br/>Serves dist/ — everything except<br/>the two exceptions to the right"]
+        CDN["Static CDN<br/>Serves dist/ — everything except<br/>the exceptions to the right"]
         APIFN["Netlify Function: /api/chat<br/>Deployed and live —<br/>ANTHROPIC_API_KEY set, calls the<br/>Anthropic API for grounded answers"]
-        FORMS["Netlify Forms<br/>Captures /contact Friends of TVC signups<br/>and /visit/host-an-event inquiries, no custom backend needed"]
+        APIFN2["Netlify Function: /api/event-interest<br/>Built, not yet deployed —<br/>reads/writes the per-event count below"]
+        BLOBS["Netlify Blobs: 'event-interest' store<br/>One JSON record per past event id —<br/>{count, emails[]}. Reset via<br/>netlify blobs:delete event-interest &lt;id&gt;"]
+        FORMS["Netlify Forms<br/>Captures /contact Friends of TVC signups,<br/>/visit/host-an-event inquiries, and<br/>event-interest submissions with an email"]
     end
 
     CF["Cloudflare<br/>DNS + CDN for tvc.farm,<br/>proxies to Netlify"]
@@ -50,6 +59,7 @@ flowchart TD
         CHATW["ChatWidget.astro<br/>Floating widget, site logo.<br/>Calls /api/chat"]
         NEWS["Friends of TVC form<br/>Plain HTML POST,<br/>data-netlify=true + honeypot"]
         HOSTFORM["Host an Event inquiry form<br/>Plain HTML POST,<br/>data-netlify=true + honeypot"]
+        INTEREST["Event interest widget (past events)<br/>Reads/writes /api/event-interest;<br/>if an email is given, also POSTs<br/>into Netlify Forms"]
         BIODIV["BiodiversityExplorer<br/>Fetches sightings directly from<br/>iNaturalist's public API"]
         PHOTOS["PhotoGallery (/in-pictures)<br/>Filters, Grid/Map toggle, lightbox —<br/>images served directly from R2"]
         TIMELINE["Our Journey / other pages<br/>Era-based year timeline, event listings —<br/>pure static, no calls out"]
@@ -83,6 +93,9 @@ flowchart TD
     CHATW --> APIFN
     NEWS --> FORMS
     HOSTFORM --> FORMS
+    INTEREST --> APIFN2
+    APIFN2 --> BLOBS
+    INTEREST -.->|"only when an email is given"| FORMS
 
     classDef staticStyle fill:#e8f2ea,stroke:#17723b,color:#0f5029
     classDef netlifyStyle fill:#fdead3,stroke:#f78520,color:#9a5310
@@ -90,8 +103,8 @@ flowchart TD
     classDef cfStyle fill:#fef3e0,stroke:#e8891c,color:#7a4a00
     classDef localStyle fill:#eef0f5,stroke:#6b7280,color:#374151
 
-    class PAGES,COMPONENTS,CONTENT,CHATW,NEWS,HOSTFORM,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,CDN staticStyle
-    class FUNC_SRC,SCRIPT_SRC,APIFN,FORMS,ANTHROPIC netlifyStyle
+    class PAGES,COMPONENTS,CONTENT,CHATW,NEWS,HOSTFORM,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,CDN staticStyle
+    class FUNC_SRC,FUNC_SRC2,SCRIPT_SRC,APIFN,APIFN2,BLOBS,FORMS,ANTHROPIC netlifyStyle
     class INAT,GMAPS,YT,R2,GTAG,METEO externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION localStyle
@@ -147,17 +160,27 @@ account on 2026-07-18).
 - **Static CDN** — serves every prerendered page directly; the large majority of the site
   needs nothing more than this. Confirmed live via response headers
   (`cache-status: "Netlify Edge"`, `x-nf-request-id`).
-- **Netlify Function** — `chat.mts` is deployed and live at `/api/chat`. The
-  `ANTHROPIC_API_KEY` environment variable was set in the Netlify dashboard on 2026-07-18;
+- **Netlify Functions** — two. `chat.mts` is deployed and live at `/api/chat`; the
+  `ANTHROPIC_API_KEY` environment variable was set in the Netlify dashboard on 2026-07-18,
   verified directly against production (`POST https://tvc.farm/api/chat`) returning real,
-  grounded answers sourced from the site's own content.
+  grounded answers sourced from the site's own content. `event-interest.mts` is built but not
+  yet deployed — serves `/api/event-interest`, reading/writing Netlify Blobs to back the "Want
+  this to happen again?" widget on past event pages, no environment variable needed.
+- **Netlify Blobs** — built, not yet deployed. One store (`event-interest`), one JSON record
+  per past event id (`{count, emails[]}`), written only by `event-interest.mts` — the site's
+  only piece of server-side state that's publicly *readable*, unlike the write-only Forms
+  below. Auto-provisioned per-site, no setup or environment variable needed. Reset a specific
+  event's record with `netlify blobs:delete event-interest <event-id>` (see README.md).
 - **Netlify Forms** — live. Detects each `data-netlify="true"` form at build time and captures
-  submissions with no custom backend code required. Two forms use it: the Friends of TVC
+  submissions with no custom backend code required. Three things use it: the Friends of TVC
   signup (name + phone, collected so TVC can add people to the "Friends of TVC" WhatsApp
   group by hand) at `/contact`, confirmed live, redirecting to `/contact/thanks` on success;
-  and the Host an Event inquiry (name, org, contact details, event type, headcount, dates,
-  message) at `/visit/host-an-event`, redirecting to `/visit/host-an-event/thanks` — added but
-  not yet deployed, so not yet confirmed live the way the Friends of TVC form is.
+  the Host an Event inquiry (name, org, contact details, event type, headcount, dates,
+  message) at `/visit/host-an-event`, redirecting to `/visit/host-an-event/thanks` — pushed to
+  `main` and deployed, but not independently re-verified against production the way the
+  Friends of TVC form and `chat.mts` were; and the event-interest widget's optional-email path
+  (an AJAX POST, not a page-navigating form submit, only fired when a visitor gives an email)
+  — built but not yet pushed.
 
 ### Cloudflare (in front of Netlify)
 
@@ -227,10 +250,12 @@ never touches Netlify either.
 | Chat widget UI | ✅ Live |
 | Chat widget's actual AI responses | ✅ Live — `ANTHROPIC_API_KEY` set 2026-07-18; verified with real requests against `tvc.farm/api/chat` returning grounded answers |
 | Friends of TVC signup (Netlify Forms) | ✅ Live — confirmed at `/contact`, with `/contact/thanks` as the confirmation page |
-| Host an Event inquiry form (Netlify Forms) | 🆕 Added, not yet deployed — same Netlify Forms mechanism as the Friends of TVC signup, at `/visit/host-an-event` |
+| Host an Event inquiry form (Netlify Forms) | 🟢 Deployed (pushed to `main`) — same Netlify Forms mechanism as the Friends of TVC signup, at `/visit/host-an-event`; not independently re-verified against production the way the Friends of TVC form was |
+| Event interest widget + counter (Netlify Function, Blobs, Forms) | 🆕 Built, not yet pushed — "Want this to happen again?" on past event pages (`/events/<slug>`), public count via `/api/event-interest` + Netlify Blobs, optional-email entries via Netlify Forms |
 | Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy` |
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
 
-No known gaps beyond the Host an Event inquiry form awaiting deployment — every other feature
-above is confirmed live in production. The Netlify project itself is owned by the
+No known gaps beyond the event interest feature awaiting a push/deploy — every other feature
+above is either confirmed live in production or (Host an Event) deployed via a push to `main`
+without a separate direct-production check. The Netlify project itself is owned by the
 `contact@tvc.farm` account (moved there from a personal account on 2026-07-18).

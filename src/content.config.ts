@@ -17,6 +17,16 @@ const events = defineCollection({
     // showing up on the site - flip to false (or delete the line) once the
     // real details are filled in. See _template.md in this collection.
     draft: z.boolean().default(false),
+    // Closes the loop on a past event's "Want this to happen again?" widget
+    // (see [slug].astro) once the demand it captured has actually been
+    // acted on - set this and the widget is replaced by this note instead
+    // of continuing to solicit clicks for a need that's already been met.
+    // Plain text (not markdown) - pair with interestNoteHref to make it a
+    // link, e.g. pointing at the new event. The interest count itself
+    // lives in Netlify Blobs, not here - resetting it is a separate step
+    // (see netlify/functions/event-interest.mts).
+    interestNote: z.string().optional(),
+    interestNoteHref: z.string().optional(),
   }),
 });
 

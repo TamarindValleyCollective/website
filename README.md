@@ -6,11 +6,13 @@ This is an Astro rebuild of the original site (previously a [Publii](https://get
 
 ## What's here
 
-- **Static site, one small serverless exception.** Every page is prerendered at build time; content lives in Markdown, not a CMS or database. The one exception is the chat widget's backend (below), a single Netlify Function — the rest of the site has no server at all.
+- **Static site, two small serverless exceptions.** Every page is prerendered at build time; content lives in Markdown, not a CMS or database. The exceptions are the chat widget's backend and the event-interest counter (both below), each a single Netlify Function — the rest of the site has no server at all.
 - **Live Biodiversity/Ecosystem explorer** (`/ecosystem`) — fetches sightings client-side from the farm's [iNaturalist project](https://www.inaturalist.org/) on every page load, with filters, a gallery view, and a map view.
 - **Site-wide chat widget** (bottom-right on every page, `src/components/ChatWidget.astro` + `netlify/functions/chat.mts`) — answers questions using *only* the website's own content, never general knowledge. `scripts/build-chat-context.mjs` runs after every `astro build`, strips nav/footer boilerplate from the prerendered HTML in `dist/`, and writes the remaining page text to `netlify/functions/site-content.json` (gitignored, regenerated every build). The Function stuffs that whole corpus into the system prompt for each request to the Anthropic API — simple and reliable at this site's size, though it means every request re-sends the full corpus rather than doing retrieval/embeddings, worth revisiting if the site's content grows much larger. Requires an `ANTHROPIC_API_KEY` — see Development below.
 - **Year-by-year timeline** (`/our-journey/timeline`, `src/components/JourneyTimelineStandalone.astro`) — nested under Our Journey rather than a top-level nav item: a horizontal "wire" of years that opens a modal with that year's story and a month-by-month photo carousel. Data is grouped into **eras** (currently just one, "Founding," 2017–2026) rather than one flat, ever-lengthening row of years — with a single era the picker never renders and that era's timeline shows directly, but the moment a second era gets real content the era-picker appears automatically and each era becomes its own selectable chapter. Icons are hand-drawn monoline SVGs, not emoji — different emoji glyphs render at inconsistent visual sizes even at the same font-size, which used to throw the row out of alignment.
 - **"Friends of TVC" signup** (`/contact`) — a plain HTML form (name + phone number, no email/newsletter) submitted via [Netlify Forms](https://docs.netlify.com/manage/forms/setup/) (`data-netlify="true"` plus a honeypot field), so it only actually works once deployed on Netlify. Submissions get added to the "Friends of TVC" WhatsApp group by hand. Redirects to `/contact/thanks` on success.
+- **"Host an Event" inquiry** (`/visit/host-an-event`) — same Netlify Forms pattern as the Friends of TVC signup, for outside groups/organizers pitching their own retreat, workshop, or camp at the farm. Redirects to `/visit/host-an-event/thanks` on success.
+- **"Want this to happen again?" event interest** (past event pages, `src/pages/events/[slug].astro` + `netlify/functions/event-interest.mts`) — a one-click, optional-email widget on every past event that shows a live public count of interest ("N people want this again") and, if an email is given, also submits into Netlify Forms so the farm team gets an actionable, contactable entry. See "Event interest" below.
 - **Content collections** for the things that change over time: `events`, `partners`, `community-outreach`, `photos` (see `src/content.config.ts` for schemas).
 - **Google Maps / My Maps embeds** for directions and the farm layout, and a YouTube embed for the aerial drone flyover.
 - **In Pictures** (`/in-pictures`, `src/components/photos/PhotoGallery.astro`) — the curated photo archive: date and camera-model filter chips (independently combinable), a Grid/Map view toggle (the map reuses the Leaflet + OpenStreetMap setup from the biodiversity explorer, adapted for photo-thumbnail pins — see `src/components/photos/photo-map.ts`), and a lightbox with a Flickr-style EXIF panel (camera, aperture, shutter speed, ISO, focal length) plus a per-photo location map. EXIF/GPS render when present and degrade gracefully when not, since older photos (WhatsApp-forwarded, etc.) typically have none. Images are hosted on Cloudflare R2 (`media.tvc.farm`) rather than committed to the repo — see "Curating new photos" below.
@@ -42,7 +44,7 @@ Requires R2 credentials in a local `.env` (see `.env.example`) — never committ
 │   ├── layouts/               BaseLayout wraps every page (Nav + Breadcrumbs + Footer + ChatWidget + JsonLd + <head>)
 │   ├── pages/                 file-based routes
 │   └── styles/global.css      design tokens (colors, type, spacing) and shared base styles
-├── netlify/functions/chat.mts  the one serverless piece — see "Chat widget" below
+├── netlify/functions/         the two serverless pieces — chat.mts and event-interest.mts, see below
 ├── scripts/build-chat-context.mjs  post-build step that feeds the chat widget its content
 ├── netlify.toml              Netlify build/functions/dev config
 └── astro.config.mjs          includes the /biodiversity -> /ecosystem redirect
@@ -72,6 +74,25 @@ The chat widget needs an `ANTHROPIC_API_KEY` (get one at [console.anthropic.com]
   `netlify.toml`'s `[dev]` block points Netlify Dev at the already-running Astro server (`targetPort = 4321`) instead of trying to launch its own, since this project's `astro dev` always daemonizes rather than staying in the foreground.
 
 Without a key set, the widget still works — it just replies with a friendly "chat isn't configured yet" message instead of erroring.
+
+### Event interest (Netlify Functions + Netlify Blobs)
+
+The "Want this to happen again?" widget on past event pages needs no API key or environment
+variable — its storage (Netlify Blobs) is auto-provisioned per-site. Same local-testing setup
+as the chat widget above (`astro dev --background` then `netlify dev` — plain `astro dev`
+won't run either Function); the Netlify CLI emulates Blobs locally automatically.
+
+To reset a specific event's public count and interested-emails list — e.g. once it's actually
+been re-run and the demand has been acted on — no code or redeploy needed:
+
+```sh
+netlify blobs:delete event-interest <event-id>   # e.g. 2022-12-16-the-lambda-retreat
+```
+
+That silently zeroes the count, though — pair it with setting `interestNote` (and optionally
+`interestNoteHref`) on that event's frontmatter in `src/content/events/`, which replaces the
+widget with a static message instead of continuing to solicit clicks (see the comment on that
+field in `src/content.config.ts`).
 
 ## Design system
 
