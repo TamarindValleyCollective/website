@@ -818,7 +818,12 @@ const yearSections = activeEra.years.map((y) => ({
 
   /* ---------- Year sections ---------- */
   .jt-year {
-    min-height: 100vh;
+    /* Not min-height: 100vh - years with a short summary and a small
+       carousel (e.g. 2017) don't have enough content to fill a full
+       screen, which left large empty margins above/below on typical
+       laptop-height viewports. Sized to content instead, with a modest
+       floor just to keep very sparse years from feeling cramped. */
+    min-height: 60vh;
     display: flex;
     flex-direction: column;
     justify-content: center;
