@@ -14,12 +14,31 @@ site, new API/webhook usage, etc.
 
 ## Change log
 
-`CHANGELOG.md` tracks every website change requested through and made by the assistant.
-**Add an entry in the same change** whenever a change discussed in a conversation is committed
-and pushed to `main` — new entries go at the top, with: date/time (from the commit), who
-requested it, a short summary of the ask (quote the user's request where practical), a summary
-of what actually changed, and the commit hash(es). Skip entries for changes that were never
+`CHANGELOG.md` is a short index; the actual entries live one file per month under
+`CHANGELOG/YYYY-MM.md` (e.g. `CHANGELOG/2026-07.md`), newest month first, newest entry at the
+top of each file. **Add an entry in the same change** whenever a change discussed in a
+conversation is committed and pushed to `main` — skip entries for changes that were never
 pushed (e.g. pure evaluation/advice, or work explicitly not committed).
+
+**One line per entry**, not a table row and not a paragraph:
+
+```
+- **YYYY-MM-DD** Title (requester) — intent behind the ask in a few words, what actually
+  changed. `commit-hash(es)`
+```
+
+- **Title**: short, specific, what changed (not the literal ask).
+- **Requester**: first name is enough.
+- **Intent**: capture *why*, condensed to a clause — never quote the user's request verbatim
+  (typos, rambling, and multi-message back-and-forth included). If a whole conversation arc
+  matters for context, say so in a few words, don't transcribe it.
+- **What changed**: the key outcome/decision, not a step-by-step narration — enough that
+  someone skimming knows what to expect if they open the diff, not a substitute for it.
+- Keep it to one line. If a change genuinely needs more than that to be useful, that's a sign
+  it belongs in `ARCHITECTURE.md`/`RAZORPAY.md`/a dedicated doc instead, referenced briefly here.
+
+When a new month starts, create `CHANGELOG/YYYY-MM.md` (copy the previous month's header) and
+add it to the top of `CHANGELOG.md`'s list.
 
 ## Development
 
