@@ -5,7 +5,8 @@
 // just moves the Drive file to "Approved" — see
 // scripts/pull-approved-photos.mjs for the next step into the existing,
 // unmodified scripts/curate-photos.mjs pipeline. Deliberately unlinked from
-// nav; gated by netlify/functions/photo-pool.mts checking a shared secret.
+// nav; gated by Google Sign-In (see netlify/functions/photo-pool.mts) plus
+// a live curator allow-list, not a shared password.
 import BaseLayout from '../../layouts/BaseLayout.astro';
 ---
 
@@ -15,18 +16,23 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     <p class="hint">Review photos dropped into the shared Drive Inbox folder, then approve or reject each one.</p>
 
     <div id="gate" class="gate card">
-      <label for="secret-input">Shared secret</label>
-      <div class="gate-row">
-        <input id="secret-input" type="password" autocomplete="off" />
-        <button type="button" id="gate-submit" class="button">Enter</button>
-      </div>
-      <p id="gate-error" class="error" hidden>Incorrect secret.</p>
+      <p class="gate-copy">Sign in with the Google account you review photos with.</p>
+      <div id="g_id_signin"></div>
+      <p id="gate-error" class="error" hidden></p>
+    </div>
+
+    <div id="forbidden" class="gate card" hidden>
+      <p class="gate-copy">Signed in as <strong id="forbidden-email"></strong>, but this Google account isn't authorized to review photos.</p>
+      <p class="hint" style="margin: 4px 0 12px;">Ask an admin to add it to the curator list.</p>
+      <button type="button" id="use-different-account" class="button">Use a different account</button>
     </div>
 
     <p id="status" class="hint" hidden></p>
     <div id="grid" class="grid" hidden></div>
   </section>
 </BaseLayout>
+
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
 
 <style>
   .hint {
@@ -42,30 +48,15 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
 
   .gate {
-    max-width: 360px;
+    max-width: 400px;
     padding: 20px 24px;
     margin-bottom: 24px;
   }
 
-  .gate label {
-    display: block;
-    font-size: 0.82rem;
-    font-weight: 600;
+  .gate-copy {
+    font-size: 0.9rem;
     color: var(--tvc-ink-soft);
-    margin-bottom: 8px;
-  }
-
-  .gate-row {
-    display: flex;
-    gap: 8px;
-  }
-
-  .gate-row input {
-    flex: 1;
-    padding: 8px 12px;
-    border: 1px solid var(--tvc-line);
-    border-radius: 999px;
-    font: inherit;
+    margin: 0 0 14px;
   }
 
   .error {
@@ -253,7 +244,10 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 </style>
 
 <script>
-  const STORAGE_KEY = 'tvc-photo-pool-secret';
+  declare const google: any;
+
+  const STORAGE_KEY = 'tvc-photo-pool-idtoken';
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
   interface PoolPhotoExif {
     camera?: string;
@@ -276,25 +270,49 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
   const gate = document.getElementById('gate') as HTMLElement;
   const gateError = document.getElementById('gate-error') as HTMLElement;
-  const secretInput = document.getElementById('secret-input') as HTMLInputElement;
-  const gateSubmit = document.getElementById('gate-submit') as HTMLButtonElement;
+  const forbidden = document.getElementById('forbidden') as HTMLElement;
+  const forbiddenEmail = document.getElementById('forbidden-email') as HTMLElement;
+  const useDifferentAccountBtn = document.getElementById('use-different-account') as HTMLButtonElement;
   const statusEl = document.getElementById('status') as HTMLElement;
   const grid = document.getElementById('grid') as HTMLElement;
 
-  function getSecret(): string | null {
+  function getToken(): string | null {
     return sessionStorage.getItem(STORAGE_KEY);
   }
 
-  function clearSecret() {
+  function clearToken() {
     sessionStorage.removeItem(STORAGE_KEY);
+  }
+
+  // The ID token's payload is only decoded here for display (whose account
+  // is signed in) - the real, security-relevant verification happens
+  // server-side in photo-pool.mts against Google's own signing keys.
+  function decodeTokenEmail(token: string): string {
+    const payloadB64 = token.split('.')[1] ?? '';
+    const base64 = payloadB64.replace(/-/g, '+').replace(/_/g, '/').padEnd(payloadB64.length + ((4 - (payloadB64.length % 4)) % 4), '=');
+    try {
+      return JSON.parse(atob(base64)).email ?? 'unknown';
+    } catch {
+      return 'unknown';
+    }
   }
 
   function showGate(message?: string) {
     gate.hidden = false;
+    forbidden.hidden = true;
     statusEl.hidden = true;
     grid.hidden = true;
     gateError.hidden = !message;
     if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+
+  function showForbidden(token: string) {
+    gate.hidden = true;
+    statusEl.hidden = true;
+    grid.hidden = true;
+    forbidden.hidden = false;
+    forbiddenEmail.textContent = decodeTokenEmail(token);
   }
 
   function showStatus(message: string) {
@@ -303,15 +321,22 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
 
   async function authedFetch(input: string, init: RequestInit = {}): Promise<Response> {
-    const secret = getSecret();
+    const token = getToken();
     const res = await fetch(input, {
       ...init,
-      headers: { ...init.headers, 'x-photo-pool-secret': secret ?? '' },
+      headers: { ...init.headers, authorization: `Bearer ${token ?? ''}` },
     });
     if (res.status === 401) {
-      clearSecret();
-      showGate('Incorrect secret.');
+      clearToken();
+      showGate('Your session expired — sign in again.');
       throw new Error('Unauthorized');
+    }
+    if (res.status === 403) {
+      // Token is still valid, just not on the curator allow-list - don't
+      // clear it, that would just force a pointless re-sign-in that likely
+      // re-selects the same account and hits the identical 403 again.
+      showForbidden(token!);
+      throw new Error('Forbidden');
     }
     return res;
   }
@@ -468,6 +493,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
   async function loadPhotos() {
     gate.hidden = true;
+    forbidden.hidden = true;
     showStatus('Loading…');
     grid.hidden = true;
     grid.innerHTML = '';
@@ -490,25 +516,37 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       for (const photo of data.photos) {
         grid.appendChild(await renderCard(photo));
       }
-    } catch {
-      // authedFetch already showed the gate on a 401; anything else is a
-      // network failure worth surfacing.
-      if (getSecret()) showStatus('Failed to load the photo pool — try refreshing.');
+    } catch (err) {
+      // authedFetch already showed the gate (401) or the forbidden panel
+      // (403) for these two - re-showing a status message on top would just
+      // bury that UI. A 403 deliberately leaves the token in place (see
+      // authedFetch), so checking getToken() here can't tell them apart;
+      // anything else is a genuine network failure worth surfacing.
+      const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
+      if (!handled) showStatus('Failed to load the photo pool — try refreshing.');
     }
   }
 
-  gateSubmit.addEventListener('click', () => {
-    const value = secretInput.value.trim();
-    if (!value) return;
-    sessionStorage.setItem(STORAGE_KEY, value);
+  function handleCredentialResponse(response: { credential: string }) {
+    sessionStorage.setItem(STORAGE_KEY, response.credential);
     loadPhotos();
+  }
+
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: 'outline', size: 'large' });
+  }
+
+  useDifferentAccountBtn.addEventListener('click', () => {
+    clearToken();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
   });
 
-  secretInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') gateSubmit.click();
-  });
-
-  if (getSecret()) {
+  if (getToken()) {
     loadPhotos();
+  } else {
+    showGate();
   }
 </script>

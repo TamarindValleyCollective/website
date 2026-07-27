@@ -16,7 +16,12 @@ import { createSign } from 'node:crypto';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
-const SCOPE = 'https://www.googleapis.com/auth/drive';
+const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
+// Sheets access needs its own scope even for a spreadsheet this same service
+// account can already see via Drive — used by getAllowedEmails() below (the
+// photo-pool curator allow-list), which reuses this file's existing
+// JWT-signing/token-cache flow rather than a second, near-identical one.
+const SCOPE = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets.readonly';
 
 let cachedToken = null; // { accessToken, expiresAt }
 
@@ -141,4 +146,25 @@ export async function downloadFile(fileId) {
   const res = await driveFetch(`/files/${fileId}?alt=media`);
   if (!res.ok) throw new Error(`Drive files.get (download) failed: ${res.status} ${await res.text()}`);
   return res;
+}
+
+// Curator allow-list for the photo-pool dashboard: a one-column Sheet
+// (email per row, row 1 a header) instead of a static env var, so adding a
+// curator is just adding a row — no redeploy. A real Google Group isn't an
+// option here since curators are a mix of Workspace and personal Gmail
+// accounts, and group-membership APIs only work for accounts under a
+// Workspace domain you administer. Share the Sheet with this same service
+// account (view access is enough) rather than creating a second one.
+export async function getAllowedEmails(spreadsheetId, range = 'Sheet1!A:A') {
+  const token = await getAccessToken();
+  const res = await fetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(range)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Sheets values.get failed: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  const rows = (data.values ?? []).flat();
+  return rows
+    .slice(1) // header row
+    .map((email) => String(email).trim().toLowerCase())
+    .filter(Boolean);
 }

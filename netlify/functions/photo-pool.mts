@@ -6,12 +6,23 @@
 // scripts/pull-approved-photos.mjs for the next step (Approved -> local
 // folder -> the existing scripts/curate-photos.mjs pipeline, unchanged).
 //
-// Gated by a single shared secret (PHOTO_POOL_SHARED_SECRET), not real
-// per-user auth — acceptable here because an approval alone never
-// publishes anything to the live site; a human still has to run
-// curate-photos.mjs and push to git afterward. Worst case a leaked secret
-// lets someone reorder a review queue, not publish content.
-import { listFiles, getFile, moveFile, updateDescription, fetchThumbnail } from '../../scripts/lib/google-drive.mjs';
+// Gated by Google Sign-In: a curator authenticates with their own Google
+// account (client-side via Google Identity Services), and this Function
+// verifies the resulting ID token itself (google-id-token.mjs) before
+// checking the verified email against a live allow-list — a one-column
+// Google Sheet (getAllowedEmails in google-drive.mjs), not a static env var,
+// so adding a curator is just adding a row. A real Google Group isn't an
+// option since curators are a mix of Workspace and personal Gmail accounts;
+// group-membership APIs only work within a Workspace domain you administer.
+import {
+  listFiles,
+  getFile,
+  moveFile,
+  updateDescription,
+  fetchThumbnail,
+  getAllowedEmails,
+} from '../../scripts/lib/google-drive.mjs';
+import { verifyGoogleIdToken } from '../../scripts/lib/google-id-token.mjs';
 
 interface DriveImageMetadata {
   time?: string;
@@ -73,10 +84,56 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function checkAuth(req: Request): boolean {
-  const secret = process.env.PHOTO_POOL_SHARED_SECRET;
-  if (!secret) return false;
-  return req.headers.get('x-photo-pool-secret') === secret;
+type AuthResult = { ok: true; email: string } | { ok: false; status: 401 | 403 | 500; error: string };
+
+// Short cache so an admin adding a row to the allow-list Sheet takes effect
+// almost immediately, without hitting the Sheets API on every card load in
+// an active review session.
+const ALLOWED_EMAILS_TTL_MS = 2 * 60 * 1000;
+let cachedAllowedEmails: { emails: string[]; expiresAt: number } | null = null;
+
+async function getCachedAllowedEmails(): Promise<string[]> {
+  if (cachedAllowedEmails && cachedAllowedEmails.expiresAt > Date.now()) {
+    return cachedAllowedEmails.emails;
+  }
+  const sheetId = process.env.PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID;
+  if (!sheetId) throw new Error('Missing PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID');
+  const emails = await getAllowedEmails(sheetId);
+  cachedAllowedEmails = { emails, expiresAt: Date.now() + ALLOWED_EMAILS_TTL_MS };
+  return emails;
+}
+
+async function authenticate(req: Request): Promise<AuthResult> {
+  const authHeader = req.headers.get('authorization') ?? '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) return { ok: false, status: 401, error: 'Sign-in required' };
+
+  const clientId = process.env.PUBLIC_GOOGLE_CLIENT_ID;
+  if (!clientId) {
+    console.error('Missing PUBLIC_GOOGLE_CLIENT_ID');
+    return { ok: false, status: 500, error: 'Server misconfigured' };
+  }
+
+  let email: string;
+  try {
+    const payload = await verifyGoogleIdToken(token, { audience: clientId });
+    email = String(payload.email).toLowerCase();
+  } catch (err) {
+    console.error('ID token verification failed', err);
+    return { ok: false, status: 401, error: 'Invalid or expired session' };
+  }
+
+  try {
+    const allowed = await getCachedAllowedEmails();
+    if (!allowed.includes(email)) {
+      return { ok: false, status: 403, error: 'This Google account is not authorized to review photos' };
+    }
+  } catch (err) {
+    console.error('Failed to check the curator allow-list', err);
+    return { ok: false, status: 500, error: 'Server misconfigured' };
+  }
+
+  return { ok: true, email };
 }
 
 async function handleList(): Promise<Response> {
@@ -182,7 +239,8 @@ async function handleDescription(req: Request): Promise<Response> {
 }
 
 export default async (req: Request): Promise<Response> => {
-  if (!checkAuth(req)) return jsonResponse({ error: 'Unauthorized' }, 401);
+  const auth = await authenticate(req);
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
 
   const url = new URL(req.url);
 

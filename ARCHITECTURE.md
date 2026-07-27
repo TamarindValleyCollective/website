@@ -42,7 +42,7 @@ flowchart TD
         CONTENT["src/content/*<br/>Markdown collections: events, partners,<br/>community-outreach, photos"]
         FUNC_SRC["netlify/functions/chat.mts<br/>Serverless function, calls Anthropic API server-side"]
         FUNC_SRC2["netlify/functions/event-interest.mts<br/>Serverless function, reads/writes Netlify Blobs"]
-        FUNC_SRC3["netlify/functions/photo-pool.mts<br/>Serverless function, shared-secret gated —<br/>lists Inbox (+ uploader/EXIF/GPS/description),<br/>moves photos, saves descriptions"]
+        FUNC_SRC3["netlify/functions/photo-pool.mts<br/>Serverless function, Google Sign-In gated —<br/>verifies ID token, checks a Sheet-backed<br/>allow-list, lists Inbox (+ uploader/EXIF/GPS/<br/>description), moves photos, saves descriptions"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
     end
 
@@ -77,7 +77,7 @@ flowchart TD
     end
 
     subgraph INTERNAL5["5 · Internal tool — staff-only, not part of the public site flow"]
-        POOLDASH["Photo Pool dashboard (/internal/photo-pool)<br/>Password-gated client-side shell — shows uploader,<br/>EXIF/GPS, editable description; unlinked, noindex,<br/>sitemap-excluded"]
+        POOLDASH["Photo Pool dashboard (/internal/photo-pool)<br/>Google Sign-In gated client-side shell — shows uploader,<br/>EXIF/GPS, editable description; unlinked, noindex,<br/>sitemap-excluded"]
     end
 
     subgraph EXTERNAL["External services (called directly by the browser)"]
@@ -89,6 +89,8 @@ flowchart TD
         GTAG["Google Analytics<br/>googletagmanager.com/gtag/js"]
         METEO["Open-Meteo API<br/>Free, no key required"]
         GDRIVE["Google Drive API<br/>Shared Inbox/Approved/Rejected/Published<br/>folders — service-account auth,<br/>called server-side only (Function + local script)"]
+        GSHEET["Google Sheets API<br/>One-column curator allow-list —<br/>same service account, read-only,<br/>called server-side only (photo-pool.mts)"]
+        GIDTOKEN["Google Identity Services / OAuth<br/>Curator sign-in (browser) +<br/>ID token verification against<br/>Google's public JWKS (photo-pool.mts)"]
     end
 
     SRC --> BUILD
@@ -115,6 +117,9 @@ flowchart TD
     CF --> INTERNAL5
     POOLDASH --> APIFN3
     APIFN3 -.->|"list Inbox, proxy thumbnails,<br/>move on approve/reject"| GDRIVE
+    APIFN3 -.->|"read allow-list rows"| GSHEET
+    APIFN3 -.->|"verify curator's ID token"| GIDTOKEN
+    POOLDASH -.->|"Sign in with Google"| GIDTOKEN
 
     classDef staticStyle fill:#e8f2ea,stroke:#17723b,color:#0f5029
     classDef netlifyStyle fill:#fdead3,stroke:#f78520,color:#9a5310
@@ -124,7 +129,7 @@ flowchart TD
 
     class PAGES,INTERNALPAGE,COMPONENTS,CONTENT,CHATW,NEWS,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,CDN,POOLDASH staticStyle
     class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,SCRIPT_SRC,APIFN,APIFN2,APIFN3,BLOBS,FORMS,ANTHROPIC netlifyStyle
-    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE externalStyle
+    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL localStyle
 ```
@@ -142,7 +147,7 @@ Netlify build (the offline photo curation and captioning scripts).
 - **`src/pages/*.astro`** — file-based routes for every page: Home, About, Visit, Events,
   Ecosystem, Our Journey, Contact, In Pictures, and their sub-pages.
 - **`src/pages/internal/photo-pool.astro`** — unlinked, `noindex`, sitemap-excluded. A static
-  page whose only content is a password-gated client-side dashboard (see `netlify/functions/
+  page whose only content is a Google Sign-In gated client-side dashboard (see `netlify/functions/
   photo-pool.mts` below) for reviewing photos dropped into a shared Google Drive "Inbox" folder —
   each card shows the uploader (Drive's `lastModifyingUser`, falling back to `owners[0]`, since
   ownership doesn't reliably transfer across non-Workspace accounts), EXIF (camera, aperture,
@@ -159,17 +164,29 @@ Netlify build (the offline photo curation and captioning scripts).
 - **`netlify/functions/chat.mts`** — powers the chat widget.
 - **`netlify/functions/event-interest.mts`** — powers the "Want this to happen again?" widget
   (Netlify Blobs, see Hosting below).
-- **`netlify/functions/photo-pool.mts`** — backs `/internal/photo-pool`. Shared-secret gated
-  (`PHOTO_POOL_SHARED_SECRET`); lists images in the Drive "Inbox" folder (with uploader/EXIF/GPS/
-  description), proxies their thumbnails, saves an edited description to a file's Drive
-  `description` field on its own, and moves a file to "Approved" or "Rejected" on a curator's
-  decision. Drive itself is the state machine — no database. Normalizes
-  `imageMediaMetadata.time`, which Drive returns EXIF-formatted (`"2015:04:11 15:20:33"`) rather
-  than RFC 3339 like every other Drive timestamp — passing it straight to `Date` silently
-  produces "Invalid Date". Uses `scripts/lib/google-drive.mjs`'s hand-rolled service-account JWT
-  auth (Node's built-in `crypto`, no `googleapis`/`google-auth-library` dependency) rather than a
-  heavier client library, matching this repo's preference for small hand-rolled implementations
-  for well-defined tasks (see `src/utils/calendar.ts`'s ICS generation).
+- **`netlify/functions/photo-pool.mts`** — backs `/internal/photo-pool`. Gated by real Google
+  Sign-In rather than a shared password: a curator authenticates client-side via Google Identity
+  Services, and this Function verifies the resulting ID token itself
+  (`scripts/lib/google-id-token.mjs`) before checking the verified email against a live
+  allow-list — a one-column Google Sheet (`getAllowedEmails` in `google-drive.mjs`), not a static
+  env var, so adding a curator is just adding a row, no redeploy. A real Google Group wasn't an
+  option since curators are a mix of Workspace and personal Gmail accounts (group-membership APIs
+  only work within a Workspace domain you administer). Once authenticated and authorized, it
+  lists images in the Drive "Inbox" folder (with uploader/EXIF/GPS/description), proxies their
+  thumbnails, saves an edited description to a file's Drive `description` field on its own, and
+  moves a file to "Approved" or "Rejected" on a curator's decision. Drive itself is the state
+  machine — no database. Normalizes `imageMediaMetadata.time`, which Drive returns
+  EXIF-formatted (`"2015:04:11 15:20:33"`) rather than RFC 3339 like every other Drive
+  timestamp — passing it straight to `Date` silently produces "Invalid Date". Uses
+  `scripts/lib/google-drive.mjs`'s hand-rolled service-account JWT auth (Node's built-in
+  `crypto`, no `googleapis`/`google-auth-library` dependency) rather than a heavier client
+  library, matching this repo's preference for small hand-rolled implementations for
+  well-defined tasks (see `src/utils/calendar.ts`'s ICS generation).
+- **`scripts/lib/google-id-token.mjs`** — verifies a Google Identity Services ID token: fetches
+  and caches Google's JWKS, hardcodes the expected `RS256` algorithm (defense against
+  algorithm-confusion attacks), verifies the RSA signature via Node's built-in `crypto`, and
+  exact-matches `iss`/`aud`/`email_verified`. The reverse direction of `google-drive.mjs`'s JWT
+  *signing* — same hand-rolled, dependency-free approach.
 - **`scripts/build-chat-context.mjs`** — post-build script that prepares the chat widget's
   knowledge base.
 - **`scripts/curate-photos.mjs`** — run locally, not part of the Netlify build. Reads a folder
@@ -232,12 +249,20 @@ account on 2026-07-18).
   serves `/api/photo-pool` (+`/api/photo-pool/thumb`, +`/api/photo-pool/description`) — see
   [Internal tools](#5-internal-tools) below. `GDRIVE_SERVICE_ACCOUNT_EMAIL`,
   `GDRIVE_SERVICE_ACCOUNT_PRIVATE_KEY`, `GDRIVE_INBOX_FOLDER_ID`, `GDRIVE_APPROVED_FOLDER_ID`,
-  `GDRIVE_REJECTED_FOLDER_ID`, and `PHOTO_POOL_SHARED_SECRET` are all set as Netlify environment
-  variables across every deploy context, including production. `GDRIVE_SERVICE_ACCOUNT_PRIVATE_KEY`
-  needed a separate "Local development (Netlify CLI)" value too, since Netlify withholds
-  secret-scoped variables from `netlify dev`/CLI otherwise. Verified end-to-end against real
-  Drive folders via `netlify dev`; not yet independently re-verified against the live production
-  URL.
+  `GDRIVE_REJECTED_FOLDER_ID`, and `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID` (the curator allow-list
+  Sheet's id) are all set as Netlify environment variables across every deploy context, including
+  production. `PUBLIC_GOOGLE_CLIENT_ID` (the OAuth Client ID for Google Sign-In — not secret, it's
+  embedded in the dashboard's client-side JS either way) is also set, but scoped to the
+  **Builds** context specifically, since it needs to be present at `astro build` time or the
+  compiled page permanently embeds an empty string until the next rebuild.
+  `GDRIVE_SERVICE_ACCOUNT_PRIVATE_KEY` needed a separate "Local development (Netlify CLI)" value
+  too, since Netlify withholds secret-scoped variables from `netlify dev`/CLI otherwise; likewise
+  `PUBLIC_GOOGLE_CLIENT_ID` needs to be in the local `.env` file directly, since Netlify's env
+  injection only covers `netlify dev`'s own process, not the separately-running plain `astro dev`
+  server this project's `[dev]` config proxies to. Verified end-to-end via `netlify dev`,
+  including a real Google Sign-In (allow-listed account → dashboard loads; removed from the
+  allow-list → clean 403 "not authorized" with a "use a different account" recovery); not yet
+  independently re-verified against the live production URL.
 - **Netlify Blobs** — live. One store (`event-interest`), one JSON record
   per past event id (`{count, emails[]}`), written only by `event-interest.mts` — the site's
   only piece of server-side state that's publicly *readable*, unlike the write-only Forms
@@ -325,29 +350,38 @@ never touches Netlify either.
 ### 5. Internal tools
 
 - **Photo Pool dashboard** (`/internal/photo-pool`) — staff-only, not part of the public site:
-  unlinked from nav, `noindex`, excluded from the sitemap. A curator types a shared secret
-  (kept only in `sessionStorage`, sent as a header on every call, never a URL param) to see
-  photos sitting in a shared Google Drive "Inbox" folder — anyone with edit access to that
-  folder (staff, partners, volunteers) can drop photos in without needing any of this tooling
-  themselves. Each card shows who uploaded it, the EXIF/GPS Drive already extracted on upload
-  (camera, aperture, shutter speed, ISO, focal length, a Google Maps link for GPS), and an
-  editable description with its own "Save" button, independent of the approve/reject decision —
-  saving writes straight to the file's Drive `description` field. Approve/Reject buttons call
-  `/api/photo-pool`, which moves the Drive file to "Approved" or "Rejected" — Drive's own folder
-  location is the entire state machine, so a staffer dragging a file between folders directly in
-  Drive's UI works exactly the same as clicking a button here. Gated by a single shared secret
-  rather than real per-user auth, accepted because a decision alone never publishes anything to
-  the live site — a human still has to run `scripts/pull-approved-photos.mjs` then
-  `scripts/curate-photos.mjs` and `git push` afterward, so a leaked secret's worst case is
-  someone reordering a review queue or editing a description, not publishing content. A
-  curator's saved description becomes the photo's actual caption once published — see
-  `pull-approved-photos.mjs` and `curate-photos.mjs` above. **Fully configured, not yet
-  deployed**: Google Cloud service account, the four-folder Drive tree (Inbox/Approved/Rejected/
-  Published, `tvc-photo-pool@tvc-farm.iam.gserviceaccount.com` as Editor), and all Netlify env
-  vars (including a separate "Local development" value for the secret-scoped private key) are
-  set up; verified end-to-end via `netlify dev` against the real Drive folders — list, thumbnail
-  proxy, description save, approve/reject, download, and the caption sidecar all confirmed
-  working. Awaiting a push to `main` to actually go live.
+  unlinked from nav, `noindex`, excluded from the sitemap. A curator signs in with their own
+  Google account (Google Identity Services, an explicit "Sign in with Google" button, not the
+  silent One Tap prompt) to see photos sitting in a shared Google Drive "Inbox" folder — anyone
+  with edit access to that folder (staff, partners, volunteers) can drop photos in without
+  needing any of this tooling themselves. The resulting ID token is stored in `sessionStorage`
+  and sent as `Authorization: Bearer <token>` on every call; the server verifies it itself
+  (`google-id-token.mjs`) and checks the verified email against a live allow-list — a one-column
+  Google Sheet, not a static env var, so adding or removing a curator is a one-line edit, no
+  redeploy. A non-allow-listed (but validly signed-in) account gets a clear "this Google account
+  isn't authorized to review photos" message with a "use a different account" recovery, without
+  being signed out — an expired/invalid token instead re-shows the sign-in button. Each card
+  shows who uploaded it, the EXIF/GPS Drive already extracted on upload (camera, aperture,
+  shutter speed, ISO, focal length, a Google Maps link for GPS), and an editable description with
+  its own "Save" button, independent of the approve/reject decision — saving writes straight to
+  the file's Drive `description` field. Approve/Reject buttons call `/api/photo-pool`, which moves
+  the Drive file to "Approved" or "Rejected" — Drive's own folder location is the entire state
+  machine, so a staffer dragging a file between folders directly in Drive's UI works exactly the
+  same as clicking a button here. Real per-curator auth (rather than the shared secret this
+  replaced) means an approve/reject/description-edit is attributed to an actual signed-in person,
+  not "whoever had the password" — though a decision still never publishes anything to the live
+  site on its own: a human still has to run `scripts/pull-approved-photos.mjs` then
+  `scripts/curate-photos.mjs` and `git push` afterward. A curator's saved description becomes the
+  photo's actual caption once published — see `pull-approved-photos.mjs` and `curate-photos.mjs`
+  above. **Fully configured, not yet deployed**: Google Cloud service account, the four-folder
+  Drive tree (Inbox/Approved/Rejected/Published, `tvc-photo-pool@tvc-farm.iam.gserviceaccount.com`
+  as Editor), an OAuth 2.0 Client ID (Web application, published to Production — no verification
+  needed since it only requests non-sensitive `openid`/`email`/`profile` scopes), the curator
+  allow-list Sheet (shared view-only with the same service account, Sheets API enabled on the
+  project), and all Netlify env vars are set up; verified end-to-end via `netlify dev`, including
+  a real Google Sign-In with an allow-listed account (dashboard loads, list/thumbnail/approve/
+  reject/description all functional) and the same account removed from the allow-list (clean 403
+  with working recovery). Awaiting a push to `main` to actually go live.
 
 ## Current Production Status
 
@@ -367,7 +401,7 @@ never touches Netlify either.
 | Event interest widget + counter (Netlify Function, Blobs, Forms) | ✅ Live — "Want this to happen again?" on past event pages (`/events/<slug>`), public count via `/api/event-interest` + Netlify Blobs, optional-email entries via Netlify Forms; verified `/api/event-interest` responds live in production |
 | Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy` |
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
-| Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | 🟢 Fully configured (Drive folders, service account, all Netlify env vars) and verified end-to-end via `netlify dev` — not yet pushed to `main` |
+| Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | 🟢 Fully configured (Drive folders, service account, Google Sign-In OAuth client, curator allow-list Sheet, all Netlify env vars) and verified end-to-end via `netlify dev`, including real sign-in and the 403 not-authorized path — not yet pushed to `main` |
 
 No known gaps remain in what's deployed — every *deployed* feature above is either confirmed
 live in production or (Host an Event, Visit inquiry) pushed to `main` without a separate

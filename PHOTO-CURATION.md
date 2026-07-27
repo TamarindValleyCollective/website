@@ -16,8 +16,9 @@ by default) all work.
 
 ## 2. Reviewing photos
 
-Open the review dashboard: **tvc.farm/internal/photo-pool** (ask whoever manages the site for
-the access code if you don't already have it — it's a shared password, typed in once).
+Open the review dashboard: **tvc.farm/internal/photo-pool** and sign in with your own Google
+account. If you're not already on the curator list, ask whoever manages the site to add your
+email — it's a one-line addition to a shared Google Sheet, no redeploy needed.
 
 Every photo waiting in Inbox shows up as a card with:
 
@@ -70,8 +71,11 @@ the next deploy.
 
 ## Troubleshooting
 
-- **"Incorrect secret" right after typing it correctly** — the dashboard occasionally needs a
-  second attempt if the page just loaded; re-enter it.
+- **"This Google account isn't authorized to review photos"** — your account isn't on the
+  curator Sheet yet; ask an admin to add it, then use "Use a different account" (or just sign in
+  again) to retry.
+- **Sign-in seems to do nothing** — try again once the page has fully loaded; the sign-in button
+  needs Google's script to finish loading first.
 - **A photo you just approved doesn't show up when publishing** — check it actually landed in
   the `Approved` Drive folder, not still in `Inbox` (Reject also removes it from Inbox, into
   `Rejected` instead).
