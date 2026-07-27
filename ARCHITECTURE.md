@@ -162,6 +162,10 @@ account on 2026-07-18).
 - **Static CDN** — serves every prerendered page directly; the large majority of the site
   needs nothing more than this. Confirmed live via response headers
   (`cache-status: "Netlify Edge"`, `x-nf-request-id`).
+- **`syntropic.in` / `www.syntropic.in`** — an old member-directory domain, added as a domain
+  alias on this same Netlify project (2026-07-26) so its DNS zone (also managed on Netlify DNS)
+  and SSL certificate resolve. `netlify.toml` force-redirects both hostnames to `tvc.farm` with
+  a 301 rather than letting the alias silently mirror the site under a second hostname.
 - **Netlify Functions** — two. `chat.mts` is deployed and live at `/api/chat`; the
   `ANTHROPIC_API_KEY` environment variable was set in the Netlify dashboard on 2026-07-18,
   verified directly against production (`POST https://tvc.farm/api/chat`) returning real,

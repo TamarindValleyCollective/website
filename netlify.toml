@@ -31,3 +31,19 @@
   from = "/people/partners/*"
   to = "/people#partners"
   status = 301
+
+# syntropic.in (an old member-directory domain) is configured as a domain
+# alias on this same Netlify project so DNS/SSL resolve, but it should
+# redirect to tvc.farm rather than silently mirror the site under a second
+# hostname — a plain domain alias would do the latter without these rules.
+[[redirects]]
+  from = "https://syntropic.in/*"
+  to = "https://tvc.farm/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "https://www.syntropic.in/*"
+  to = "https://tvc.farm/:splat"
+  status = 301
+  force = true
