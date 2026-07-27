@@ -1,5 +1,5 @@
 ---
-import { FARM_AREA_ACRES } from '../data/site-facts';
+import { FARM_AREA_ACRES, LEGAL_ENTITY_NAME, LEGAL_ENTITY_CIN } from '../data/site-facts';
 
 const socialLinks = [
   { label: 'Facebook', href: 'https://www.facebook.com/farm.tvc' },
@@ -24,8 +24,12 @@ const year = new Date().getFullYear();
     </div>
   </div>
   <div class="wrapper footer__bottom">
-    <p class="footer__copy">© {year} Tamarind Valley Collective. All rights reserved.</p>
+    <p class="footer__copy">© {year} Tamarind Valley Collective, operated by {LEGAL_ENTITY_NAME} (CIN: {LEGAL_ENTITY_CIN}). All rights reserved.</p>
     <p class="footer__legal">
+      <a href="/terms">Terms &amp; Conditions</a>
+      <span aria-hidden="true">·</span>
+      <a href="/refund-policy">Refund Policy</a>
+      <span aria-hidden="true">·</span>
       <a href="/privacy">Privacy &amp; Cookies</a>
       <span aria-hidden="true">·</span>
       <button type="button" id="footer-cookie-prefs">Cookie preferences</button>

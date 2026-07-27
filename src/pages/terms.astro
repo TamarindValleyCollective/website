@@ -1,0 +1,50 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHero from '../components/PageHero.astro';
+import { LEGAL_ENTITY_NAME, LEGAL_ENTITY_CIN, LEGAL_ENTITY_PAN, LEGAL_ENTITY_ADDRESS } from '../data/site-facts';
+---
+
+<BaseLayout title="Terms & Conditions" description="Terms and conditions for visiting, booking, or hosting an event at Tamarind Valley Collective.">
+  <PageHero eyebrow="Legal" title="Terms & Conditions" intro="The terms that apply when you visit, book, or inquire with Tamarind Valley Collective." />
+
+  <section class="section wrapper prose">
+    <p><em>Last updated 2026-07-27.</em></p>
+
+    <h2>Who runs this site</h2>
+    <p>Tamarind Valley Collective ("TVC", "we", "us") is a brand operated by <strong>{LEGAL_ENTITY_NAME}</strong>, a company incorporated in India.</p>
+    <ul>
+      <li>CIN: {LEGAL_ENTITY_CIN}</li>
+      <li>PAN: {LEGAL_ENTITY_PAN}</li>
+      <li>Registered address: {LEGAL_ENTITY_ADDRESS}</li>
+    </ul>
+    <p>By using this site (<a href="https://tvc.farm">tvc.farm</a>) or booking a visit, stay, trek, or event with us, you agree to these terms.</p>
+
+    <h2>What we offer</h2>
+    <p>TVC hosts <a href="/visit/day-visit">day visits</a>, <a href="/visit/camping">overnight camping</a>, <a href="/visit/trekking-trails">guided treks</a>, and <a href="/visit/host-an-event">hosted events</a> (retreats, workshops, and camps run by outside groups) on our land in the Melagiri Hills. Pricing and inclusions for each are published on their respective pages and are current as of the last update to that page — always confirm exact pricing and availability with us directly before your visit, since rates can change.</p>
+
+    <h2>How booking works</h2>
+    <p>We don't currently take bookings or payment through this website. Instead:</p>
+    <ol>
+      <li>You send an inquiry — through the form on the relevant Visit page, via <a href="/contact">Contact</a>, or over WhatsApp/phone.</li>
+      <li>Our team gets back to you to confirm availability, exact pricing, and dates.</li>
+      <li>Once confirmed, payment is arranged directly with our team (bank transfer or UPI).</li>
+    </ol>
+    <p>A booking is only confirmed once our team has acknowledged it and payment (or an agreed deposit) has been received — an inquiry alone doesn't guarantee availability.</p>
+
+    <h2>On-site conduct and safety</h2>
+    <p>TVC borders the Thaggatti Reserve Forest and is elephant territory. Guests must follow safety guidance from our team and local in-charge at all times, particularly on treks — see <a href="/visit/trekking-trails">Trekking Trails</a>. TVC is not liable for injury, loss, or damage arising from a guest's failure to follow safety guidance or from participation in farm activities, hikes, or events at their own discretion.</p>
+    <p>Guests are expected to respect the land, the community living here, and other visitors. We may decline or end a visit for behavior that puts people, animals, or the land at risk.</p>
+
+    <h2>Cancellations and refunds</h2>
+    <p>See our <a href="/refund-policy">Cancellation &amp; Refund Policy</a> for the specific terms that apply to paid bookings.</p>
+
+    <h2>Changes to these terms</h2>
+    <p>We may update these terms from time to time as our offerings or policies change; the "last updated" date above reflects the latest revision. Continued use of the site after a change means you accept the updated terms.</p>
+
+    <h2>Governing law</h2>
+    <p>These terms are governed by the laws of India, and any disputes are subject to the exclusive jurisdiction of the courts in Bangalore, Karnataka.</p>
+
+    <h2>Contact</h2>
+    <p>Questions about these terms: <a href="mailto:contact@tvc.farm">contact@tvc.farm</a> or <a href="tel:+917406307309">+91 74063 07309</a>.</p>
+  </section>
+</BaseLayout>

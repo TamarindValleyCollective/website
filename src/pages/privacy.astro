@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
+import { LEGAL_ENTITY_NAME, LEGAL_ENTITY_CIN, LEGAL_ENTITY_PAN, LEGAL_ENTITY_ADDRESS } from '../data/site-facts';
 ---
 
 <BaseLayout title="Privacy & Cookies" description="What Tamarind Valley Collective collects when you visit this site, which cookies we use, and how to change your choice.">
@@ -18,6 +19,12 @@ import PageHero from '../components/PageHero.astro';
     <h2>Friends of TVC signup</h2>
     <p>If you submit the "Join Friends of TVC" form on the <a href="/contact">Contact page</a>, we collect your name and phone number. This is used only to add you to the "Friends of TVC" WhatsApp group by hand — it isn't used for anything else, and isn't shared beyond that.</p>
 
+    <h2>Visit and event inquiries</h2>
+    <p>The inquiry forms on the <a href="/visit/camping">Camping</a>, <a href="/visit/day-visit">Day Visit</a>, and <a href="/visit/trekking-trails">Trekking Trails</a> pages, and the <a href="/visit/host-an-event">Host an Event</a> page, collect your name, email, and the details of your inquiry (phone, dates, headcount, message are optional or context-dependent). This is used only to get back to you about your booking or event — it isn't used for marketing and isn't shared beyond our own team.</p>
+
+    <h2>Event interest</h2>
+    <p>On past event pages, clicking "Want this to happen again?" records an anonymous count with no personal data. If you optionally add your email to be notified, that email is stored so we can follow up if the event happens again, and isn't used for anything else.</p>
+
     <h2>Other services this site talks to</h2>
     <p>A few pages load content directly from third parties, each governed by that party's own privacy practices rather than ours:</p>
     <ul>
@@ -29,7 +36,10 @@ import PageHero from '../components/PageHero.astro';
     <h2>Your choices</h2>
     <p>You can reject analytics cookies outright, or accept and later withdraw consent — both take effect immediately via the cookie banner or the <strong>Cookie preferences</strong> link in the footer. Declining doesn't affect your ability to use any part of the site.</p>
 
+    <h2>Who runs this site</h2>
+    <p>Tamarind Valley Collective is operated by <strong>{LEGAL_ENTITY_NAME}</strong> (CIN: {LEGAL_ENTITY_CIN}, PAN: {LEGAL_ENTITY_PAN}), registered at {LEGAL_ENTITY_ADDRESS}.</p>
+
     <h2>Questions</h2>
-    <p>For anything about this page or your data, reach out at <a href="mailto:contact@tvc.farm">contact@tvc.farm</a>.</p>
+    <p>For anything about this page or your data, reach out at <a href="mailto:contact@tvc.farm">contact@tvc.farm</a>. See also our <a href="/terms">Terms &amp; Conditions</a> and <a href="/refund-policy">Cancellation &amp; Refund Policy</a>.</p>
   </section>
 </BaseLayout>

@@ -1,0 +1,62 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHero from '../components/PageHero.astro';
+import { LEGAL_ENTITY_NAME } from '../data/site-facts';
+---
+
+<BaseLayout title="Cancellation & Refund Policy" description="Cancellation and refund terms for paid bookings at Tamarind Valley Collective - day visits, camping, and hosted events.">
+  <PageHero eyebrow="Legal" title="Cancellation & Refund Policy" intro="What happens if you need to cancel or reschedule a paid booking." />
+
+  <section class="section wrapper prose">
+    <p><em>Last updated 2026-07-27.</em></p>
+
+    <p>This policy applies to paid bookings for <a href="/visit/day-visit">day visits</a>, <a href="/visit/camping">overnight camping</a>, and <a href="/visit/host-an-event">hosted events</a> at Tamarind Valley Collective, operated by {LEGAL_ENTITY_NAME}.</p>
+
+    <h2>Cancelling a confirmed booking</h2>
+    <table class="refund-table">
+      <tbody>
+        <tr><td>7 or more days before your visit</td><td>Full refund</td></tr>
+        <tr><td>3&ndash;6 days before your visit</td><td>50% refund</td></tr>
+        <tr><td>Less than 3 days before your visit</td><td>No refund</td></tr>
+      </tbody>
+    </table>
+    <p>To cancel, contact us at <a href="mailto:contact@tvc.farm">contact@tvc.farm</a> or <a href="tel:+917406307309">+91 74063 07309</a> as early as possible — the refund tier is based on when we receive your cancellation, not when you first booked.</p>
+
+    <h2>No-shows</h2>
+    <p>If you don't arrive for a confirmed booking without cancelling in advance, no refund is due.</p>
+
+    <h2>If we cancel</h2>
+    <p>Occasionally we may need to cancel or postpone a visit or event ourselves — for safety reasons (weather, wildlife activity, road access), illness, or other circumstances beyond our control. In that case, you'll get a full refund or the option to reschedule, whichever you prefer.</p>
+
+    <h2>How refunds are processed</h2>
+    <p>Since bookings are currently confirmed and paid for directly (bank transfer or UPI, arranged after your inquiry — see <a href="/terms">Terms &amp; Conditions</a>), refunds are processed the same way: back to the account or UPI ID the payment came from, within 7 business days of us confirming your cancellation.</p>
+
+    <h2>Rescheduling</h2>
+    <p>If you'd rather move your booking to a new date than cancel it, let us know — we'll do our best to accommodate this at no extra charge, subject to availability, and it doesn't count against the cancellation tiers above.</p>
+
+    <h2>Contact</h2>
+    <p>Questions about a specific booking or this policy: <a href="mailto:contact@tvc.farm">contact@tvc.farm</a> or <a href="tel:+917406307309">+91 74063 07309</a>.</p>
+  </section>
+</BaseLayout>
+
+<style>
+  .refund-table {
+    width: 100%;
+    max-width: 560px;
+    border-collapse: collapse;
+    margin: 16px 0;
+  }
+
+  .refund-table td {
+    padding: 10px 0;
+    border-top: 1px dashed var(--tvc-line);
+  }
+
+  .refund-table td:last-child {
+    text-align: right;
+    font-weight: 600;
+    color: var(--tvc-green);
+    white-space: nowrap;
+    padding-left: 16px;
+  }
+</style>
