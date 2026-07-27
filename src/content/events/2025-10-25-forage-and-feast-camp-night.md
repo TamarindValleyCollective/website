@@ -31,6 +31,6 @@ Tamarind Valley Collective (TVC) is an experiment to see if we can live off the 
 
 Full event (1 night, 1 day): INR 3,200. Children below 10: free. Limited to 20 participants.
 
-This is the first run of the foraging day format with [Foraging Trails and Tales](https://www.instagram.com/foragingtrailsandtales/) — see also the [next one](/events/2026-08-01-foraging-day).
+This is the first run of the foraging day format with [Foraging Trails and Tales](https://www.instagram.com/foragingtrailsandtales/).
 
 Hosted with our hospitality partner Linger.
