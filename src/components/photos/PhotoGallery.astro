@@ -26,6 +26,18 @@ const cameraOf = (p: CollectionEntry<'photos'>) => (p.data.camera ? `${p.data.ca
 const years = [...new Set(photos.map((p) => p.data.takenAt.getFullYear()))].sort((a, b) => b - a);
 const cameras = [...new Set(photos.map(cameraOf).filter((c): c is string => Boolean(c)))].sort();
 
+// Photos already arrive sorted newest-first, so grouping by year here keeps
+// the same overall order — the grid just gains a heading every time the
+// year changes, breaking the "one long undifferentiated wall" scroll up
+// into dated sections instead of introducing pagination/infinite-scroll.
+const photosByYear = new Map<number, CollectionEntry<'photos'>[]>();
+for (const p of photos) {
+  const year = p.data.takenAt.getFullYear();
+  const bucket = photosByYear.get(year);
+  if (bucket) bucket.push(p);
+  else photosByYear.set(year, [p]);
+}
+
 const photosJson = photos.map((p) => ({
   slug: p.id,
   src: p.data.src,
@@ -65,23 +77,32 @@ const photosJsonSafe = JSON.stringify(photosJson).replace(/<\/script/gi, '<\\/sc
     <p class="result-count" id="result-count"></p>
   </div>
 
+  <nav class="year-jump" aria-label="Jump to year">
+    {years.map((y) => <a href={`#year-${y}`} class="year-jump__link">{y}</a>)}
+  </nav>
+
   <section id="grid-section">
-    <div class="archive-grid" id="archive-grid">
-      {photos.map((p) => (
-        <div
-          class="photo-tile"
-          data-slug={p.id}
-          data-year={p.data.takenAt.getFullYear()}
-          data-camera={cameraOf(p) ?? ''}
-        >
-          <img src={p.data.thumbSrc ?? p.data.src} alt={p.data.caption} loading="lazy" />
-          <div class="photo-tile__badges">
-            {p.data.gps && <span class="badge" title="Has location data">📍</span>}
-            {p.data.camera && <span class="badge" title="Has camera data">📷</span>}
-          </div>
+    {years.map((year) => (
+      <div class="year-group" id={`year-${year}`} data-year={year}>
+        <h2 class="year-heading">{year}</h2>
+        <div class="archive-grid">
+          {photosByYear.get(year)!.map((p) => (
+            <div
+              class="photo-tile"
+              data-slug={p.id}
+              data-year={p.data.takenAt.getFullYear()}
+              data-camera={cameraOf(p) ?? ''}
+            >
+              <img src={p.data.thumbSrc ?? p.data.src} alt={p.data.caption} loading="lazy" />
+              <div class="photo-tile__badges">
+                {p.data.gps && <span class="badge" title="Has location data">📍</span>}
+                {p.data.camera && <span class="badge" title="Has camera data">📷</span>}
+              </div>
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
+      </div>
+    ))}
     <p class="empty-state" id="grid-empty" hidden>No photos match that filter.</p>
   </section>
 
@@ -214,6 +235,48 @@ const photosJsonSafe = JSON.stringify(photosJson).replace(/<\/script/gi, '<\\/sc
   #grid-section,
   #map-section {
     padding: 24px 0;
+  }
+
+  .year-jump {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 16px 0 0;
+  }
+
+  .year-jump__link {
+    appearance: none;
+    border: 1px solid var(--tvc-line);
+    background: #fff;
+    color: var(--tvc-ink-soft);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+
+  .year-jump__link:hover {
+    border-color: var(--tvc-green);
+    color: var(--tvc-green-dark);
+  }
+
+  .year-group + .year-group {
+    margin-top: 36px;
+  }
+
+  .year-heading {
+    /* Belt-and-suspenders alongside global.css's scroll-padding-top: this
+       covers scrollIntoView()-based jumps, the html-level rule covers
+       native #hash navigation - see the comment there for why both exist. */
+    scroll-margin-top: 100px;
+    font-family: var(--font-display);
+    font-size: 1.3rem;
+    color: var(--tvc-green-dark);
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--tvc-line);
   }
 
   .archive-grid {
@@ -613,12 +676,30 @@ const photosJsonSafe = JSON.stringify(photosJson).replace(/<\/script/gi, '<\\/sc
     return tiles.filter(matches).map((el) => el.dataset.slug!);
   }
 
+  const yearGroups = Array.from(document.querySelectorAll<HTMLElement>('.year-group'));
+  const yearJumpLinks = new Map(
+    Array.from(document.querySelectorAll<HTMLAnchorElement>('.year-jump__link')).map((a) => [
+      a.getAttribute('href')!.replace('#year-', ''),
+      a,
+    ])
+  );
+
   function renderGrid() {
     let visibleCount = 0;
     tiles.forEach((el) => {
       const show = matches(el);
       el.hidden = !show;
       if (show) visibleCount++;
+    });
+    // A year filter always leaves every other year's group empty by
+    // design, but a camera filter can just as easily zero out a year on
+    // its own - either way, hide the group (and its jump link) rather than
+    // showing a bare heading over nothing.
+    yearGroups.forEach((group) => {
+      const hasVisible = Array.from(group.querySelectorAll<HTMLElement>('.photo-tile')).some((t) => !t.hidden);
+      group.hidden = !hasVisible;
+      const link = yearJumpLinks.get(group.dataset.year ?? '');
+      if (link) link.hidden = !hasVisible;
     });
     const emptyEl = document.getElementById('grid-empty');
     if (emptyEl) emptyEl.hidden = visibleCount > 0;

@@ -71,6 +71,18 @@ body {
   padding: 0;
 }
 
+html {
+  /* Nav.astro is position: sticky at the top of the viewport (85px tall,
+     confirmed via getBoundingClientRect - the 15px above that is breathing
+     room). scroll-margin-top on an anchor target only affects
+     scrollIntoView() calls, not native same-page #hash navigation
+     (confirmed in Chrome) - scroll-padding-top on the scroll container is
+     what actually keeps a clicked anchor link's target from landing hidden
+     behind the sticky nav. Site-wide since any future #anchor link would
+     hit the same issue. */
+  scroll-padding-top: 100px;
+}
+
 body {
   background: var(--tvc-cream);
   color: var(--tvc-ink);
