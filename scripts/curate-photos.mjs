@@ -10,6 +10,21 @@
 // up with no camera/gps frontmatter, which the page already renders
 // gracefully.
 //
+// HEIC/HEIF (iPhone photos): exifr reads their EXIF directly, same as any
+// other format, but sharp's bundled libheif rejects most real iPhone photos
+// outright ("Security limit exceeded: Number of references in iref box") -
+// modern iPhones attach enough auxiliary images (thumbnail, depth map,
+// portrait/HDR data) to trip a hard-coded libheif limit sharp doesn't expose
+// a way to raise. heic-convert (a WASM libheif build with no such limit)
+// decodes the pixels to a JPEG buffer first; only that intermediate buffer
+// goes to sharp for the actual resize/thumbnail work. EXIF extraction is
+// unaffected either way since it never goes through sharp.
+//
+// If a photo has a sibling "<filename>.caption.txt" file next to it (written
+// by scripts/pull-approved-photos.mjs when a curator saved a description in
+// the /internal/photo-pool dashboard), its contents are used as the real
+// caption instead of the usual filename-derived placeholder.
+//
 // Usage:
 //   node scripts/curate-photos.mjs <folder-of-photos> [--dry-run]
 //
@@ -22,12 +37,13 @@
 // --dry-run parses EXIF and reports what would happen without uploading to
 // R2 or writing any content files - use it to sanity-check a batch first.
 
-import { readdir, writeFile, mkdir } from 'node:fs/promises';
+import { readdir, writeFile, mkdir, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import exifr from 'exifr';
 import sharp from 'sharp';
+import heicConvert from 'heic-convert';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,7 +53,8 @@ const contentDir = path.join(root, 'src', 'content', 'photos');
 const PUBLIC_BASE_URL = 'https://media.tvc.farm';
 const DISPLAY_MAX = 1600;
 const THUMB_MAX = 400;
-const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png']);
+const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.heic', '.heif']);
+const HEIC_EXTENSIONS = new Set(['.heic', '.heif']);
 
 const envPath = path.join(root, '.env');
 if (existsSync(envPath)) process.loadEnvFile(envPath);
@@ -105,6 +122,9 @@ async function processPhoto(filePath) {
   const filename = path.basename(filePath);
   const exif = await exifr.parse(filePath, { gps: true, tiff: true, exif: true, ifd0: true }).catch(() => null);
 
+  const captionSidecarPath = `${filePath}.caption.txt`;
+  const sidecarCaption = existsSync(captionSidecarPath) ? (await readFile(captionSidecarPath, 'utf-8')).trim() : null;
+
   const takenAt = exif?.DateTimeOriginal ?? exif?.CreateDate ?? (await import('node:fs/promises').then((fs) => fs.stat(filePath))).mtime;
 
   const gps =
@@ -124,7 +144,17 @@ async function processPhoto(filePath) {
       }
     : undefined;
 
-  const image = sharp(filePath).rotate(); // auto-orient from EXIF before resizing
+  // heic-convert already applies the HEIC container's own rotation/mirror
+  // transforms while decoding (HEIF stores those as box properties, not an
+  // EXIF Orientation tag the way JPEG does), so the JPEG buffer it produces
+  // needs no further rotation - .rotate() below is then a harmless no-op
+  // for it, same as for a JPEG with no Orientation tag.
+  const isHeic = HEIC_EXTENSIONS.has(path.extname(filePath).toLowerCase());
+  const sharpInput = isHeic
+    ? Buffer.from(await heicConvert({ buffer: await readFile(filePath), format: 'JPEG', quality: 0.92 }))
+    : filePath;
+
+  const image = sharp(sharpInput).rotate(); // auto-orient from EXIF before resizing
   const metadata = await image.metadata();
 
   const displayBuffer = await image.clone().resize({ width: DISPLAY_MAX, withoutEnlargement: true }).jpeg({ quality: 82 }).toBuffer();
@@ -142,11 +172,13 @@ async function processPhoto(filePath) {
     thumbKey,
     displayBuffer,
     thumbBuffer,
+    hasSidecarCaption: Boolean(sidecarCaption),
     frontmatter: {
       src: `${PUBLIC_BASE_URL}/${displayKey}`,
       thumbSrc: `${PUBLIC_BASE_URL}/${thumbKey}`,
-      // Placeholder - review and rewrite captions after running this script.
-      caption: filename.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' '),
+      // Curator-written caption if a .caption.txt sidecar exists; otherwise
+      // a filename-derived placeholder - review and rewrite after running.
+      caption: sidecarCaption || filename.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' '),
       takenAt: dateStr,
       width: metadata.width,
       height: metadata.height,
@@ -194,7 +226,7 @@ async function main() {
   const files = entries.filter((f) => IMAGE_EXTENSIONS.has(path.extname(f).toLowerCase()));
 
   if (files.length === 0) {
-    console.log(`No .jpg/.jpeg/.png files found in ${absSourceDir}. (HEIC isn't supported yet - convert to JPEG first.)`);
+    console.log(`No .jpg/.jpeg/.png/.heic/.heif files found in ${absSourceDir}.`);
     return;
   }
 
@@ -216,7 +248,11 @@ async function main() {
     if (result.frontmatter.gps) withGps++;
     if (result.frontmatter.camera) withCamera++;
 
-    const tags = [result.frontmatter.gps ? 'gps' : null, result.frontmatter.camera ? 'exif' : null].filter(Boolean);
+    const tags = [
+      result.frontmatter.gps ? 'gps' : null,
+      result.frontmatter.camera ? 'exif' : null,
+      result.hasSidecarCaption ? 'caption' : null,
+    ].filter(Boolean);
     console.log(`${dryRun ? '[dry-run] ' : ''}✓ ${file} -> ${result.slug} ${tags.length ? `(${tags.join(', ')})` : '(no EXIF)'}`);
 
     if (dryRun) continue;

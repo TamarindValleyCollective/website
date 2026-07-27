@@ -11,31 +11,38 @@
 under the Netlify account owned by `contact@tvc.farm` (ownership moved there from a personal
 account on 2026-07-18). The site is almost entirely static (prerendered HTML/CSS/JS, no server
 at request time), with a small set of deliberate exceptions that need a serverless backend:
-two Netlify Functions (the site-wide chat assistant, and the event-interest counter backing
-past events' "Want this to happen again?" widget), Netlify Blobs (public storage for that same
-counter — the site's only *readable* server-side state; everything else below is write-only),
-and Netlify Forms (the Friends of TVC signup, the Host an Event inquiry, the shared Visit
-inquiry form on the camping/day-visit/trekking pages, and — when an email is given — the
-event-interest widget). All of the above are deployed; see
-[Current Production Status](#current-production-status) — the chat assistant's
+three Netlify Functions (the site-wide chat assistant, the event-interest counter backing past
+events' "Want this to happen again?" widget, and `/api/photo-pool` backing the internal,
+unlinked photo review dashboard at `/internal/photo-pool`), Netlify Blobs (public storage for
+the event-interest counter — the site's only *readable* server-side state that isn't gated
+behind a secret; everything else below is either write-only or, for photo-pool, gated), and
+Netlify Forms (the Friends of TVC signup, the Host an Event inquiry, the shared Visit inquiry
+form on the camping/day-visit/trekking pages, and — when an email is given — the event-interest
+widget). See [Current Production Status](#current-production-status) — the chat assistant's
 `ANTHROPIC_API_KEY` was set on 2026-07-18, and it now answers with real, grounded responses,
-and `/api/event-interest` responds live in production.
+`/api/event-interest` responds live in production, and `/api/photo-pool`'s Google Cloud service
+account, Drive folder tree, and Netlify env vars (all deploy contexts, including production) are
+fully configured and verified end-to-end via local dev — not yet independently re-verified
+against the live production URL.
 
 ## Diagram
 
 ```mermaid
 flowchart TD
     subgraph CURATE["0 · Offline photo curation — local machine, not part of the build"]
-        SCRIPT_CURATE["scripts/curate-photos.mjs<br/>Extracts EXIF/GPS, resizes via sharp,<br/>uploads to R2, writes photos/*.md"]
+        SCRIPT_PULL["scripts/pull-approved-photos.mjs<br/>Downloads Drive 'Approved' folder locally,<br/>writes a caption sidecar per curator description,<br/>moves each file to 'Published' after download"]
+        SCRIPT_CURATE["scripts/curate-photos.mjs<br/>Extracts EXIF/GPS, converts HEIC via heic-convert,<br/>resizes via sharp, uploads to R2, writes photos/*.md"]
         SCRIPT_CAPTION["scripts/caption-photos.mjs<br/>Sends each thumbnail to Claude,<br/>backfills draft captions into photos/*.md"]
     end
 
     subgraph SRC["1 · Source — github.com/TamarindValleyCollective/website (main)"]
         PAGES["src/pages/*.astro<br/>File-based routes: Home, About, Visit,<br/>Events, Ecosystem, Our Journey, Contact, etc."]
+        INTERNALPAGE["src/pages/internal/photo-pool.astro<br/>Unlinked, noindex — photo review dashboard shell"]
         COMPONENTS["src/components/<br/>Nav, Footer, PageHero, ChatWidget,<br/>CookieConsent, JourneyTimelineStandalone,<br/>BiodiversityExplorer, PhotoGallery"]
         CONTENT["src/content/*<br/>Markdown collections: events, partners,<br/>community-outreach, photos"]
         FUNC_SRC["netlify/functions/chat.mts<br/>Serverless function, calls Anthropic API server-side"]
         FUNC_SRC2["netlify/functions/event-interest.mts<br/>Serverless function, reads/writes Netlify Blobs"]
+        FUNC_SRC3["netlify/functions/photo-pool.mts<br/>Serverless function, shared-secret gated —<br/>lists Inbox (+ uploader/EXIF/GPS/description),<br/>moves photos, saves descriptions"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
     end
 
@@ -49,6 +56,7 @@ flowchart TD
         CDN["Static CDN<br/>Serves dist/ — everything except<br/>the exceptions to the right"]
         APIFN["Netlify Function: /api/chat<br/>Deployed and live —<br/>ANTHROPIC_API_KEY set, calls the<br/>Anthropic API for grounded answers"]
         APIFN2["Netlify Function: /api/event-interest<br/>Deployed and live —<br/>reads/writes the per-event count below"]
+        APIFN3["Netlify Function: /api/photo-pool<br/>(+/thumb, +/description)<br/>Configured — Drive service account + folder IDs<br/>set as Netlify env vars for all deploy contexts"]
         BLOBS["Netlify Blobs: 'event-interest' store<br/>One JSON record per past event id —<br/>{count, emails[]}. Reset via<br/>netlify blobs:delete event-interest &lt;id&gt;"]
         FORMS["Netlify Forms<br/>Captures /contact Friends of TVC signups,<br/>/visit/host-an-event inquiries,<br/>/visit camping·day-visit·trekking inquiries,<br/>and event-interest submissions with an email"]
     end
@@ -68,6 +76,10 @@ flowchart TD
         WEATHER["WeatherWidget (/ecosystem/geography)<br/>Fetches current conditions from<br/>Open-Meteo, no API key"]
     end
 
+    subgraph INTERNAL5["5 · Internal tool — staff-only, not part of the public site flow"]
+        POOLDASH["Photo Pool dashboard (/internal/photo-pool)<br/>Password-gated client-side shell — shows uploader,<br/>EXIF/GPS, editable description; unlinked, noindex,<br/>sitemap-excluded"]
+    end
+
     subgraph EXTERNAL["External services (called directly by the browser)"]
         INAT["iNaturalist API"]
         GMAPS["Google Maps / My Maps (iframe)"]
@@ -76,6 +88,7 @@ flowchart TD
         R2["Cloudflare R2<br/>media.tvc.farm — curated photo storage,<br/>served directly to the browser"]
         GTAG["Google Analytics<br/>googletagmanager.com/gtag/js"]
         METEO["Open-Meteo API<br/>Free, no key required"]
+        GDRIVE["Google Drive API<br/>Shared Inbox/Approved/Rejected/Published<br/>folders — service-account auth,<br/>called server-side only (Function + local script)"]
     end
 
     SRC --> BUILD
@@ -91,6 +104,7 @@ flowchart TD
     SCRIPT_CURATE -->|"writes"| CONTENT
     SCRIPT_CAPTION -.->|"vision request per photo"| ANTHROPIC
     SCRIPT_CAPTION -->|"backfills caption:"| CONTENT
+    SCRIPT_PULL -.->|"download + move files"| GDRIVE
     CHATW --> APIFN
     NEWS --> FORMS
     HOSTFORM --> FORMS
@@ -98,6 +112,9 @@ flowchart TD
     INTEREST --> APIFN2
     APIFN2 --> BLOBS
     INTEREST -.->|"only when an email is given"| FORMS
+    CF --> INTERNAL5
+    POOLDASH --> APIFN3
+    APIFN3 -.->|"list Inbox, proxy thumbnails,<br/>move on approve/reject"| GDRIVE
 
     classDef staticStyle fill:#e8f2ea,stroke:#17723b,color:#0f5029
     classDef netlifyStyle fill:#fdead3,stroke:#f78520,color:#9a5310
@@ -105,11 +122,11 @@ flowchart TD
     classDef cfStyle fill:#fef3e0,stroke:#e8891c,color:#7a4a00
     classDef localStyle fill:#eef0f5,stroke:#6b7280,color:#374151
 
-    class PAGES,COMPONENTS,CONTENT,CHATW,NEWS,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,CDN staticStyle
-    class FUNC_SRC,FUNC_SRC2,SCRIPT_SRC,APIFN,APIFN2,BLOBS,FORMS,ANTHROPIC netlifyStyle
-    class INAT,GMAPS,YT,R2,GTAG,METEO externalStyle
+    class PAGES,INTERNALPAGE,COMPONENTS,CONTENT,CHATW,NEWS,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,CDN,POOLDASH staticStyle
+    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,SCRIPT_SRC,APIFN,APIFN2,APIFN3,BLOBS,FORMS,ANTHROPIC netlifyStyle
+    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE externalStyle
     class CF cfStyle
-    class SCRIPT_CURATE,SCRIPT_CAPTION localStyle
+    class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL localStyle
 ```
 
 **Legend:** 🟢 static / no server required · 🟠 depends on Netlify specifically (Functions or
@@ -124,6 +141,14 @@ Netlify build (the offline photo curation and captioning scripts).
 
 - **`src/pages/*.astro`** — file-based routes for every page: Home, About, Visit, Events,
   Ecosystem, Our Journey, Contact, In Pictures, and their sub-pages.
+- **`src/pages/internal/photo-pool.astro`** — unlinked, `noindex`, sitemap-excluded. A static
+  page whose only content is a password-gated client-side dashboard (see `netlify/functions/
+  photo-pool.mts` below) for reviewing photos dropped into a shared Google Drive "Inbox" folder —
+  each card shows the uploader (Drive's `lastModifyingUser`, falling back to `owners[0]`, since
+  ownership doesn't reliably transfer across non-Workspace accounts), EXIF (camera, aperture,
+  shutter speed, ISO, focal length) and GPS (linked out to Google Maps) that Drive already
+  extracts server-side on upload, and an editable description saved independently of the
+  Approve/Reject decision via its own "Save" action.
 - **`src/components/`** — shared UI: Nav, Footer, PageHero, the ChatWidget, the year-by-year
   `JourneyTimelineStandalone` component, the live `BiodiversityExplorer`, and `PhotoGallery`
   (In Pictures - filters, Grid/Map toggle, lightbox; its map, `photo-map.ts`, reuses the same
@@ -131,16 +156,48 @@ Netlify build (the offline photo curation and captioning scripts).
 - **`src/content/`** — Markdown content collections that change over time without touching
   code: `events`, `partners`, `community-outreach`, `photos` (the last one populated by the
   offline curation script below, not authored by hand).
-- **`netlify/functions/chat.mts`** — the one serverless function, powering the chat widget.
+- **`netlify/functions/chat.mts`** — powers the chat widget.
+- **`netlify/functions/event-interest.mts`** — powers the "Want this to happen again?" widget
+  (Netlify Blobs, see Hosting below).
+- **`netlify/functions/photo-pool.mts`** — backs `/internal/photo-pool`. Shared-secret gated
+  (`PHOTO_POOL_SHARED_SECRET`); lists images in the Drive "Inbox" folder (with uploader/EXIF/GPS/
+  description), proxies their thumbnails, saves an edited description to a file's Drive
+  `description` field on its own, and moves a file to "Approved" or "Rejected" on a curator's
+  decision. Drive itself is the state machine — no database. Normalizes
+  `imageMediaMetadata.time`, which Drive returns EXIF-formatted (`"2015:04:11 15:20:33"`) rather
+  than RFC 3339 like every other Drive timestamp — passing it straight to `Date` silently
+  produces "Invalid Date". Uses `scripts/lib/google-drive.mjs`'s hand-rolled service-account JWT
+  auth (Node's built-in `crypto`, no `googleapis`/`google-auth-library` dependency) rather than a
+  heavier client library, matching this repo's preference for small hand-rolled implementations
+  for well-defined tasks (see `src/utils/calendar.ts`'s ICS generation).
 - **`scripts/build-chat-context.mjs`** — post-build script that prepares the chat widget's
   knowledge base.
 - **`scripts/curate-photos.mjs`** — run locally, not part of the Netlify build. Reads a folder
   of already-selected photos, extracts EXIF/GPS, uploads a display and thumbnail size of each to
-  Cloudflare R2, and writes one `src/content/photos/*.md` entry per photo.
+  Cloudflare R2, and writes one `src/content/photos/*.md` entry per photo — still just expects an
+  "already hand-picked" local folder, wherever that folder came from (by hand, or via
+  `pull-approved-photos.mjs` below). Handles HEIC/HEIF (iPhone photos): `exifr`'s EXIF extraction
+  is format-agnostic and needed no changes, but `sharp`'s bundled libheif rejects most real
+  iPhone photos outright (`Security limit exceeded: Number of references in iref box` — modern
+  iPhones attach enough auxiliary images, thumbnail/depth map/portrait/HDR data, to trip a
+  hard-coded libheif limit sharp doesn't expose a way to raise), so HEIC input is decoded to a
+  JPEG buffer via `heic-convert` (a WASM libheif build with no such limit) before sharp ever sees
+  it. Also picks up a curator-written caption: if a photo has a sibling `<filename>.caption.txt`
+  (written by `pull-approved-photos.mjs`), its contents become the real caption instead of the
+  usual filename-derived placeholder.
 - **`scripts/caption-photos.mjs`** — also run locally. Backfills a draft `caption:` for any
   `photos/*.md` entry still carrying the filename-derived placeholder, by sending that photo's
   thumbnail to the Anthropic API (vision) and writing back a short literal description. Drafts
   are meant to be reviewed/rewritten by hand before publishing, not used as final copy.
+- **`scripts/pull-approved-photos.mjs`** — run locally. Downloads everything a curator approved
+  via `/internal/photo-pool` (Drive's "Approved" folder) into a local folder, writing a
+  `<filename>.caption.txt` sidecar alongside any photo whose Drive `description` field was
+  filled in during review, then moving each file to "Published" in Drive right after its own
+  download succeeds. Prints a reminder to run `curate-photos.mjs` against that folder next —
+  never invokes it itself.
+- **`scripts/lib/google-drive.mjs`** — shared Drive REST client (auth, list, get, move, download)
+  used by both `photo-pool.mts` and `pull-approved-photos.mjs`. Plain ESM, not TypeScript, so
+  both a bundled Netlify Function and a plain `node`-run script can import it directly.
 
 ### 2. Build
 
@@ -166,12 +223,21 @@ account on 2026-07-18).
   alias on this same Netlify project (2026-07-26) so its DNS zone (also managed on Netlify DNS)
   and SSL certificate resolve. `netlify.toml` force-redirects both hostnames to `tvc.farm` with
   a 301 rather than letting the alias silently mirror the site under a second hostname.
-- **Netlify Functions** — two. `chat.mts` is deployed and live at `/api/chat`; the
+- **Netlify Functions** — three. `chat.mts` is deployed and live at `/api/chat`; the
   `ANTHROPIC_API_KEY` environment variable was set in the Netlify dashboard on 2026-07-18,
   verified directly against production (`POST https://tvc.farm/api/chat`) returning real,
   grounded answers sourced from the site's own content. `event-interest.mts` is deployed and
   live — serves `/api/event-interest`, reading/writing Netlify Blobs to back the "Want this to
-  happen again?" widget on past event pages, no environment variable needed.
+  happen again?" widget on past event pages, no environment variable needed. `photo-pool.mts`
+  serves `/api/photo-pool` (+`/api/photo-pool/thumb`, +`/api/photo-pool/description`) — see
+  [Internal tools](#5-internal-tools) below. `GDRIVE_SERVICE_ACCOUNT_EMAIL`,
+  `GDRIVE_SERVICE_ACCOUNT_PRIVATE_KEY`, `GDRIVE_INBOX_FOLDER_ID`, `GDRIVE_APPROVED_FOLDER_ID`,
+  `GDRIVE_REJECTED_FOLDER_ID`, and `PHOTO_POOL_SHARED_SECRET` are all set as Netlify environment
+  variables across every deploy context, including production. `GDRIVE_SERVICE_ACCOUNT_PRIVATE_KEY`
+  needed a separate "Local development (Netlify CLI)" value too, since Netlify withholds
+  secret-scoped variables from `netlify dev`/CLI otherwise. Verified end-to-end against real
+  Drive folders via `netlify dev`; not yet independently re-verified against the live production
+  URL.
 - **Netlify Blobs** — live. One store (`event-interest`), one JSON record
   per past event id (`{count, emails[]}`), written only by `event-interest.mts` — the site's
   only piece of server-side state that's publicly *readable*, unlike the write-only Forms
@@ -256,6 +322,33 @@ never touches Netlify either.
   for the farm's coordinates from Open-Meteo (free, no API key) on page load, cached in
   `localStorage` for 15 minutes. Hides itself if the fetch fails rather than showing broken UI.
 
+### 5. Internal tools
+
+- **Photo Pool dashboard** (`/internal/photo-pool`) — staff-only, not part of the public site:
+  unlinked from nav, `noindex`, excluded from the sitemap. A curator types a shared secret
+  (kept only in `sessionStorage`, sent as a header on every call, never a URL param) to see
+  photos sitting in a shared Google Drive "Inbox" folder — anyone with edit access to that
+  folder (staff, partners, volunteers) can drop photos in without needing any of this tooling
+  themselves. Each card shows who uploaded it, the EXIF/GPS Drive already extracted on upload
+  (camera, aperture, shutter speed, ISO, focal length, a Google Maps link for GPS), and an
+  editable description with its own "Save" button, independent of the approve/reject decision —
+  saving writes straight to the file's Drive `description` field. Approve/Reject buttons call
+  `/api/photo-pool`, which moves the Drive file to "Approved" or "Rejected" — Drive's own folder
+  location is the entire state machine, so a staffer dragging a file between folders directly in
+  Drive's UI works exactly the same as clicking a button here. Gated by a single shared secret
+  rather than real per-user auth, accepted because a decision alone never publishes anything to
+  the live site — a human still has to run `scripts/pull-approved-photos.mjs` then
+  `scripts/curate-photos.mjs` and `git push` afterward, so a leaked secret's worst case is
+  someone reordering a review queue or editing a description, not publishing content. A
+  curator's saved description becomes the photo's actual caption once published — see
+  `pull-approved-photos.mjs` and `curate-photos.mjs` above. **Fully configured, not yet
+  deployed**: Google Cloud service account, the four-folder Drive tree (Inbox/Approved/Rejected/
+  Published, `tvc-photo-pool@tvc-farm.iam.gserviceaccount.com` as Editor), and all Netlify env
+  vars (including a separate "Local development" value for the secret-scoped private key) are
+  set up; verified end-to-end via `netlify dev` against the real Drive folders — list, thumbnail
+  proxy, description save, approve/reject, download, and the caption sidecar all confirmed
+  working. Awaiting a push to `main` to actually go live.
+
 ## Current Production Status
 
 **tvc.farm is live on this codebase**, verified directly against the production site:
@@ -274,8 +367,11 @@ never touches Netlify either.
 | Event interest widget + counter (Netlify Function, Blobs, Forms) | ✅ Live — "Want this to happen again?" on past event pages (`/events/<slug>`), public count via `/api/event-interest` + Netlify Blobs, optional-email entries via Netlify Forms; verified `/api/event-interest` responds live in production |
 | Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy` |
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
+| Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | 🟢 Fully configured (Drive folders, service account, all Netlify env vars) and verified end-to-end via `netlify dev` — not yet pushed to `main` |
 
-No known gaps remain — every feature above is either confirmed live in production or (Host an
-Event, Visit inquiry) deployed via a push to `main` without a separate direct-production check.
+No known gaps remain in what's deployed — every *deployed* feature above is either confirmed
+live in production or (Host an Event, Visit inquiry) pushed to `main` without a separate
+direct-production check. The Photo Pool dashboard is the one exception: fully built, configured,
+and verified locally, awaiting a push to actually deploy.
 The Netlify project itself is owned by the `contact@tvc.farm` account (moved there from a
 personal account on 2026-07-18).

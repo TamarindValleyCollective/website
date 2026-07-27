@@ -1,0 +1,514 @@
+---
+// Internal review dashboard for the photo-pool feature: staff/partners drop
+// event photos into a shared Google Drive "Inbox" folder, and a curator
+// approves/rejects them here before they ever reach the site. Approving
+// just moves the Drive file to "Approved" — see
+// scripts/pull-approved-photos.mjs for the next step into the existing,
+// unmodified scripts/curate-photos.mjs pipeline. Deliberately unlinked from
+// nav; gated by netlify/functions/photo-pool.mts checking a shared secret.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Photo Pool" description="Internal photo review dashboard." noindex>
+  <section class="section wrapper">
+    <h1>Photo Pool</h1>
+    <p class="hint">Review photos dropped into the shared Drive Inbox folder, then approve or reject each one.</p>
+
+    <div id="gate" class="gate card">
+      <label for="secret-input">Shared secret</label>
+      <div class="gate-row">
+        <input id="secret-input" type="password" autocomplete="off" />
+        <button type="button" id="gate-submit" class="button">Enter</button>
+      </div>
+      <p id="gate-error" class="error" hidden>Incorrect secret.</p>
+    </div>
+
+    <p id="status" class="hint" hidden></p>
+    <div id="grid" class="grid" hidden></div>
+  </section>
+</BaseLayout>
+
+<style>
+  .hint {
+    color: var(--tvc-ink-soft);
+    margin: -8px 0 24px;
+  }
+
+  .card {
+    background: #fff;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .gate {
+    max-width: 360px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+  }
+
+  .gate label {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+    margin-bottom: 8px;
+  }
+
+  .gate-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .gate-row input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 999px;
+    font: inherit;
+  }
+
+  .error {
+    color: #b3261e;
+    font-size: 0.85rem;
+    margin: 10px 0 0;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 20px;
+  }
+
+  .photo-card {
+    padding: 14px;
+  }
+
+  .photo-card img {
+    width: 100%;
+    height: 160px;
+    object-fit: cover;
+    border-radius: calc(var(--radius) - 6px);
+    background: var(--tvc-green-tint);
+    display: block;
+  }
+
+  .photo-card .no-thumb {
+    width: 100%;
+    height: 160px;
+    border-radius: calc(var(--radius) - 6px);
+    background: var(--tvc-orange-tint);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--tvc-ink-soft);
+    font-size: 0.8rem;
+    text-align: center;
+    padding: 8px;
+  }
+
+  .photo-card .name {
+    font-weight: 600;
+    font-size: 0.88rem;
+    margin: 10px 0 2px;
+    word-break: break-word;
+  }
+
+  .photo-card .date {
+    color: var(--tvc-ink-soft);
+    font-size: 0.78rem;
+    margin: 0;
+  }
+
+  .photo-card .uploader {
+    color: var(--tvc-ink-soft);
+    font-size: 0.78rem;
+    margin: 2px 0 8px;
+  }
+
+  .photo-card .exif {
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    font-size: 0.76rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .photo-card .exif li {
+    background: var(--tvc-cream);
+    border-radius: 999px;
+    padding: 2px 8px;
+  }
+
+  .photo-card .exif-empty {
+    background: none !important;
+    padding: 0 !important;
+    font-style: italic;
+  }
+
+  .photo-card .exif a {
+    color: var(--tvc-green-dark);
+    text-decoration: none;
+  }
+
+  .photo-card .exif a:hover {
+    text-decoration: underline;
+  }
+
+  .photo-card .desc-label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tvc-ink-soft);
+    margin-bottom: 4px;
+  }
+
+  .photo-card .desc-row {
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+  }
+
+  .photo-card .desc-input {
+    flex: 1;
+    min-height: 52px;
+    padding: 6px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 10px;
+    font: inherit;
+    font-size: 0.82rem;
+    resize: vertical;
+  }
+
+  .photo-card .save-desc {
+    flex: 0 0 auto;
+    border: 1px solid var(--tvc-line);
+    background: #fff;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.78rem;
+    cursor: pointer;
+  }
+
+  .photo-card .save-desc:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .photo-card .desc-status {
+    display: block;
+    font-size: 0.74rem;
+    color: var(--tvc-ink-soft);
+    margin: 4px 0 12px;
+    min-height: 1em;
+  }
+
+  .photo-card .actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .photo-card button {
+    flex: 1;
+    appearance: none;
+    border: 1px solid var(--tvc-line);
+    background: #fff;
+    border-radius: 999px;
+    padding: 6px 0;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+
+  .photo-card .approve {
+    color: var(--tvc-green-dark);
+    border-color: var(--tvc-green);
+  }
+
+  .photo-card .approve:hover {
+    background: var(--tvc-green-tint);
+  }
+
+  .photo-card .reject {
+    color: #b3261e;
+    border-color: #e8b4af;
+  }
+
+  .photo-card .reject:hover {
+    background: #fbebe9;
+  }
+
+  .photo-card button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+</style>
+
+<script>
+  const STORAGE_KEY = 'tvc-photo-pool-secret';
+
+  interface PoolPhotoExif {
+    camera?: string;
+    aperture?: string;
+    shutterSpeed?: string;
+    iso?: string;
+    focalLength?: string;
+    gps?: { lat: number; lng: number };
+  }
+
+  interface PoolPhoto {
+    id: string;
+    name: string;
+    takenAt: string;
+    thumbUrl: string;
+    description: string;
+    uploader?: { name?: string; email?: string };
+    exif?: PoolPhotoExif;
+  }
+
+  const gate = document.getElementById('gate') as HTMLElement;
+  const gateError = document.getElementById('gate-error') as HTMLElement;
+  const secretInput = document.getElementById('secret-input') as HTMLInputElement;
+  const gateSubmit = document.getElementById('gate-submit') as HTMLButtonElement;
+  const statusEl = document.getElementById('status') as HTMLElement;
+  const grid = document.getElementById('grid') as HTMLElement;
+
+  function getSecret(): string | null {
+    return sessionStorage.getItem(STORAGE_KEY);
+  }
+
+  function clearSecret() {
+    sessionStorage.removeItem(STORAGE_KEY);
+  }
+
+  function showGate(message?: string) {
+    gate.hidden = false;
+    statusEl.hidden = true;
+    grid.hidden = true;
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+  }
+
+  function showStatus(message: string) {
+    statusEl.hidden = false;
+    statusEl.textContent = message;
+  }
+
+  async function authedFetch(input: string, init: RequestInit = {}): Promise<Response> {
+    const secret = getSecret();
+    const res = await fetch(input, {
+      ...init,
+      headers: { ...init.headers, 'x-photo-pool-secret': secret ?? '' },
+    });
+    if (res.status === 401) {
+      clearSecret();
+      showGate('Incorrect secret.');
+      throw new Error('Unauthorized');
+    }
+    return res;
+  }
+
+  async function renderCard(photo: PoolPhoto): Promise<HTMLElement> {
+    const card = document.createElement('div');
+    card.className = 'photo-card card';
+
+    let mediaEl: HTMLElement;
+    try {
+      const thumbRes = await authedFetch(photo.thumbUrl);
+      if (thumbRes.ok) {
+        const blob = await thumbRes.blob();
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(blob);
+        img.alt = photo.name;
+        mediaEl = img;
+      } else {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'no-thumb';
+        placeholder.textContent = 'No preview yet';
+        mediaEl = placeholder;
+      }
+    } catch {
+      const placeholder = document.createElement('div');
+      placeholder.className = 'no-thumb';
+      placeholder.textContent = 'No preview yet';
+      mediaEl = placeholder;
+    }
+
+    const name = document.createElement('p');
+    name.className = 'name';
+    name.textContent = photo.name;
+
+    const date = document.createElement('p');
+    date.className = 'date';
+    date.textContent = new Date(photo.takenAt).toLocaleString();
+
+    const uploader = document.createElement('p');
+    uploader.className = 'uploader';
+    uploader.textContent = photo.uploader
+      ? `Uploaded by ${photo.uploader.name ?? photo.uploader.email ?? 'unknown'}`
+      : 'Uploader unknown';
+
+    const exifList = document.createElement('ul');
+    exifList.className = 'exif';
+    const e = photo.exif;
+    const exifLines = [e?.camera, e?.aperture, e?.shutterSpeed, e?.iso, e?.focalLength].filter(Boolean) as string[];
+    if (exifLines.length === 0 && !e?.gps) {
+      const li = document.createElement('li');
+      li.className = 'exif-empty';
+      li.textContent = 'No EXIF data';
+      exifList.appendChild(li);
+    } else {
+      for (const line of exifLines) {
+        const li = document.createElement('li');
+        li.textContent = line;
+        exifList.appendChild(li);
+      }
+      if (e?.gps) {
+        const li = document.createElement('li');
+        const link = document.createElement('a');
+        link.href = `https://www.google.com/maps?q=${e.gps.lat},${e.gps.lng}`;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = `📍 ${e.gps.lat.toFixed(5)}, ${e.gps.lng.toFixed(5)}`;
+        li.appendChild(link);
+        exifList.appendChild(li);
+      }
+    }
+
+    const descLabel = document.createElement('label');
+    descLabel.className = 'desc-label';
+    descLabel.textContent = 'Description';
+
+    const descInput = document.createElement('textarea');
+    descInput.className = 'desc-input';
+    descInput.value = photo.description;
+    descInput.placeholder = 'What\'s happening in this photo?';
+
+    const descRow = document.createElement('div');
+    descRow.className = 'desc-row';
+
+    const saveDescBtn = document.createElement('button');
+    saveDescBtn.className = 'save-desc';
+    saveDescBtn.textContent = 'Save';
+    saveDescBtn.disabled = true;
+
+    const descStatus = document.createElement('span');
+    descStatus.className = 'desc-status';
+
+    descInput.addEventListener('input', () => {
+      saveDescBtn.disabled = descInput.value === photo.description;
+      descStatus.textContent = '';
+    });
+
+    saveDescBtn.addEventListener('click', async () => {
+      saveDescBtn.disabled = true;
+      descStatus.textContent = 'Saving…';
+      try {
+        const res = await authedFetch('/api/photo-pool/description', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ id: photo.id, description: descInput.value }),
+        });
+        if (!res.ok) throw new Error('Request failed');
+        photo.description = descInput.value;
+        descStatus.textContent = 'Saved.';
+      } catch {
+        saveDescBtn.disabled = false;
+        descStatus.textContent = 'Failed to save — try again.';
+      }
+    });
+
+    descRow.append(descInput, saveDescBtn);
+
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+
+    const approveBtn = document.createElement('button');
+    approveBtn.className = 'approve';
+    approveBtn.textContent = 'Approve';
+
+    const rejectBtn = document.createElement('button');
+    rejectBtn.className = 'reject';
+    rejectBtn.textContent = 'Reject';
+
+    async function decide(decision: 'approve' | 'reject') {
+      approveBtn.disabled = true;
+      rejectBtn.disabled = true;
+      try {
+        const res = await authedFetch('/api/photo-pool', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ id: photo.id, decision }),
+        });
+        if (!res.ok) throw new Error('Request failed');
+        card.remove();
+        if (!grid.children.length) showStatus('Inbox is empty.');
+      } catch {
+        approveBtn.disabled = false;
+        rejectBtn.disabled = false;
+        showStatus(`Failed to ${decision} "${photo.name}" — try again.`);
+      }
+    }
+
+    approveBtn.addEventListener('click', () => decide('approve'));
+    rejectBtn.addEventListener('click', () => decide('reject'));
+
+    actions.append(approveBtn, rejectBtn);
+    card.append(mediaEl, name, date, uploader, exifList, descLabel, descRow, descStatus, actions);
+    return card;
+  }
+
+  async function loadPhotos() {
+    gate.hidden = true;
+    showStatus('Loading…');
+    grid.hidden = true;
+    grid.innerHTML = '';
+
+    try {
+      const res = await authedFetch('/api/photo-pool');
+      if (!res.ok) {
+        showStatus('Failed to load the photo pool — try refreshing.');
+        return;
+      }
+      const data = (await res.json()) as { photos: PoolPhoto[] };
+
+      if (data.photos.length === 0) {
+        showStatus('Inbox is empty.');
+        return;
+      }
+
+      statusEl.hidden = true;
+      grid.hidden = false;
+      for (const photo of data.photos) {
+        grid.appendChild(await renderCard(photo));
+      }
+    } catch {
+      // authedFetch already showed the gate on a 401; anything else is a
+      // network failure worth surfacing.
+      if (getSecret()) showStatus('Failed to load the photo pool — try refreshing.');
+    }
+  }
+
+  gateSubmit.addEventListener('click', () => {
+    const value = secretInput.value.trim();
+    if (!value) return;
+    sessionStorage.setItem(STORAGE_KEY, value);
+    loadPhotos();
+  });
+
+  secretInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') gateSubmit.click();
+  });
+
+  if (getSecret()) {
+    loadPhotos();
+  }
+</script>

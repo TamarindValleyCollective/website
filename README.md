@@ -31,7 +31,9 @@ node scripts/curate-photos.mjs ./path/to/selected-photos --dry-run   # preview f
 node scripts/curate-photos.mjs ./path/to/selected-photos             # extracts EXIF/GPS, uploads to R2, writes content entries
 ```
 
-Requires R2 credentials in a local `.env` (see `.env.example`) — never committed, and never needed as a Netlify environment variable, since curation runs locally and the site only ever embeds the public `media.tvc.farm` URLs the script produces. JPEG/PNG only for now (convert HEIC first). Captions come out as a placeholder derived from the filename — review and rewrite them before committing the generated `src/content/photos/*.md` files.
+Requires R2 credentials in a local `.env` (see `.env.example`) — never committed, and never needed as a Netlify environment variable, since curation runs locally and the site only ever embeds the public `media.tvc.farm` URLs the script produces. Accepts JPEG, PNG, and HEIC/HEIF (iPhone's default format — decoded via `heic-convert`, since `sharp`'s bundled libheif rejects most real iPhone photos outright). Captions come out as a placeholder derived from the filename — review and rewrite them before committing the generated `src/content/photos/*.md` files.
+
+Photos don't have to be hand-picked into a local folder first — staff/partners/volunteers can instead drop them into a shared Google Drive folder and a curator reviews/approves them through a web dashboard (with EXIF/GPS, uploader, and an editable caption) before they ever reach this step. See **[PHOTO-CURATION.md](./PHOTO-CURATION.md)** for that workflow.
 
 ## Project structure
 
