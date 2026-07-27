@@ -124,6 +124,14 @@ const faqSchema = {
   </section>
 
   <section class="section wrapper">
+    <h2>What visitors say</h2>
+    <div class="review-cta card">
+      <p>Read what past guests have to say about their stay at TVC, or share your own experience.</p>
+      <a class="button" href="https://www.google.com/maps?cid=12716822598495943685" target="_blank" rel="noopener noreferrer">Read reviews on Google →</a>
+    </div>
+  </section>
+
+  <section class="section wrapper">
     <h2>FAQ</h2>
     <div class="faq-list">
       {faqs.map((f) => (
@@ -169,6 +177,16 @@ const faqSchema = {
 
   .faq-list p {
     margin-top: 10px;
+    color: var(--tvc-ink-soft);
+  }
+
+  .review-cta {
+    max-width: 560px;
+    text-align: center;
+  }
+
+  .review-cta p {
+    margin: 0 0 16px;
     color: var(--tvc-ink-soft);
   }
 </style>
