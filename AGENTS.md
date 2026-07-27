@@ -5,6 +5,13 @@ services, serverless functions) with a Mermaid diagram. **Update it in the same 
 whenever something affects that picture — a new integration, a new function, a hosting
 change, a new external service call, etc. Don't let it drift from what's actually in the repo.
 
+## Razorpay documentation
+
+`RAZORPAY.md` documents what we actually do with Razorpay — payment links in use, the site's
+online-checkout status, and what the connected Razorpay MCP server can do on request. **Update
+it in the same change** whenever that changes — a new payment link, real checkout added to the
+site, new API/webhook usage, etc.
+
 ## Change log
 
 `CHANGELOG.md` tracks every website change requested through and made by the assistant.
