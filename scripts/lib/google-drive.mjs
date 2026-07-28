@@ -18,10 +18,13 @@ const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
 // Sheets access needs its own scope even for a spreadsheet this same service
-// account can already see via Drive — used by getAllowedEmails() below (the
-// photo-pool curator allow-list), which reuses this file's existing
-// JWT-signing/token-cache flow rather than a second, near-identical one.
-const SCOPE = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets.readonly';
+// account can already see via Drive — used by getAllowedEmails() and
+// appendSheetRow() below, which reuse this file's existing JWT-signing/
+// token-cache flow rather than a second, near-identical one. Full (not
+// .readonly) spreadsheets scope, since appendSheetRow() needs write access —
+// actual access is still gated per-spreadsheet by whichever Sheets this
+// service account has been explicitly shared on, not by the scope alone.
+const SCOPE = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets';
 
 let cachedToken = null; // { accessToken, expiresAt }
 
@@ -167,4 +170,24 @@ export async function getAllowedEmails(spreadsheetId, range = 'Sheet1!A:A') {
     .slice(1) // header row
     .map((email) => String(email).trim().toLowerCase())
     .filter(Boolean);
+}
+
+// Appends one row to the end of a sheet/range — used by netlify/functions/
+// enquiry.mts to log membership/general enquiries. valueInputOption=USER_ENTERED
+// (rather than RAW) so a plain ISO timestamp string still renders as
+// Sheets' native date/time type instead of literal text, same as pasting it
+// in by hand would. Share the target spreadsheet with this same service
+// account (Editor access, not just view) before pointing an env var at it.
+export async function appendSheetRow(spreadsheetId, range, values) {
+  const token = await getAccessToken();
+  const res = await fetch(
+    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ values: [values] }),
+    }
+  );
+  if (!res.ok) throw new Error(`Sheets values.append failed: ${res.status} ${await res.text()}`);
+  return res.json();
 }

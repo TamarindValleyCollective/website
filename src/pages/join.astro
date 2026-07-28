@@ -43,19 +43,95 @@ import { FARM_AREA_ACRES } from '../data/site-facts';
   </section>
 
   <section class="section section--tint">
-    <div class="wrapper join-cta">
+    <div class="wrapper join-form-wrap">
       <h2>Ready to start the conversation?</h2>
-      <p>Reach out and we'll help connect you with member families to begin.</p>
-      <a class="button" href="/contact">Get in touch</a>
+      <p>If you'd like us to keep you in mind should a spot open, tell us a bit about yourself.</p>
+      <form
+        class="enquiry-form card"
+        name="membership-enquiry"
+        method="POST"
+        action="/contact/thanks"
+        data-netlify="true"
+        data-netlify-honeypot="bot-field"
+      >
+        <input type="hidden" name="form-name" value="membership-enquiry" />
+        <p class="enquiry-hp"><label>Don't fill this out: <input name="bot-field" /></label></p>
+        <div class="enquiry-grid">
+          <div>
+            <label for="membership-name">Name</label>
+            <input id="membership-name" type="text" name="name" placeholder="Your name" autocomplete="name" required />
+          </div>
+          <div>
+            <label for="membership-email">Email</label>
+            <input id="membership-email" type="email" name="email" placeholder="you@example.com" autocomplete="email" required />
+          </div>
+          <div>
+            <label for="membership-phone">Phone (optional)</label>
+            <input id="membership-phone" type="tel" name="phone" placeholder="+91 98765 43210" autocomplete="tel" />
+          </div>
+        </div>
+        <label for="membership-message">Tell us about yourself and why TVC interests you</label>
+        <textarea id="membership-message" name="message" rows="4" required></textarea>
+        <button class="button" type="submit">Send enquiry</button>
+      </form>
+      <p class="join-other-reason">Reaching out for a different reason? <a href="/contact">Visit our Contact page →</a></p>
     </div>
   </section>
 </BaseLayout>
 
 <style>
-  .join-cta {
-    text-align: center;
-    max-width: 60ch;
+  .join-form-wrap {
+    max-width: 640px;
     margin: 0 auto;
+    text-align: center;
+  }
+
+  .enquiry-form {
+    text-align: left;
+    margin-top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .enquiry-form label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-bottom: 4px;
+  }
+
+  .enquiry-form input,
+  .enquiry-form textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 10px;
+    font: inherit;
+    background: #fff;
+  }
+
+  .enquiry-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+  }
+
+  .enquiry-form button {
+    align-self: flex-start;
+  }
+
+  /* Netlify Forms spam honeypot — off-screen, not display:none (some bots
+     skip hidden fields, but few check for visibility via position). */
+  .enquiry-hp {
+    position: absolute;
+    left: -9999px;
+  }
+
+  .join-other-reason {
+    margin-top: 20px;
+    color: var(--tvc-ink-soft);
+    font-size: 0.9rem;
   }
 
   .member-pair {
@@ -93,3 +169,27 @@ import { FARM_AREA_ACRES } from '../data/site-facts';
     font-style: italic;
   }
 </style>
+
+<script>
+  // Netlify Forms handles the actual email for the form above (native
+  // submission, no preventDefault — see its data-netlify attribute). This
+  // only adds the second requirement Netlify Forms can't do on its own:
+  // logging the same enquiry as a row in a Google Sheet
+  // (netlify/functions/enquiry.mts). navigator.sendBeacon fires a
+  // fire-and-forget POST designed to survive the page navigating away right
+  // after — unlike a plain fetch() issued in the same submit handler, which
+  // isn't guaranteed to complete once the browser starts navigating.
+  document.querySelector<HTMLFormElement>('form[name="membership-enquiry"]')?.addEventListener('submit', (e) => {
+    const form = e.target as HTMLFormElement;
+    const data = new FormData(form);
+    const payload = {
+      formType: 'membership',
+      name: data.get('name'),
+      email: data.get('email'),
+      phone: data.get('phone'),
+      message: data.get('message'),
+      botField: data.get('bot-field'),
+    };
+    navigator.sendBeacon('/api/enquiry', new Blob([JSON.stringify(payload)], { type: 'application/json' }));
+  });
+</script>
