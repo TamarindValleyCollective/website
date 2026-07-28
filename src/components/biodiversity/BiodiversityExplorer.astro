@@ -16,7 +16,13 @@
   <div class="explorer__body" id="explorer-body" hidden>
     <div class="stats" id="explorer-stats"></div>
 
-    <div class="leaderboard" id="leaderboard" role="group" aria-label="Top contributors"></div>
+    <div class="leaderboard-row">
+      <div class="leaderboard" id="leaderboard" role="group" aria-label="Top contributors"></div>
+      <label class="quality-toggle" title="Only show iNaturalist's community-verified &quot;Research Grade&quot; identifications">
+        <input type="checkbox" id="research-grade-toggle" />
+        Research grade only
+      </label>
+    </div>
 
     <div class="explorer__controls">
       <div class="explorer__chips" id="explorer-chips" role="group" aria-label="Filter by group"></div>
@@ -120,11 +126,36 @@
     line-height: 1;
   }
 
+  .leaderboard-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+
   .leaderboard {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-bottom: 24px;
+  }
+
+  .quality-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .quality-toggle input {
+    accent-color: var(--tvc-green);
+    cursor: pointer;
   }
 
   :global(.leaderboard__item) {
@@ -510,14 +541,21 @@
   const contributorFilterNameEl = document.getElementById('contributor-filter-name')!;
   const contributorFilterClearBtn = document.getElementById('contributor-filter-clear')!;
   const leaderboardEl = document.getElementById('leaderboard')!;
+  const researchGradeToggle = document.getElementById('research-grade-toggle') as HTMLInputElement;
 
   const RANK_MEDALS: Record<number, string> = { 0: '🥇', 1: '🥈', 2: '🥉' };
   const TOP_CONTRIBUTOR_COUNT = 5;
 
+  // baseObservations is the full fetched-and-boundary-filtered set;
+  // allObservations is the working set everything else (stats, leaderboard,
+  // chips, grid, map) reads from. Kept separate so toggling "Research grade
+  // only" can rebuild allObservations without re-fetching.
+  let baseObservations: Observation[] = [];
   let allObservations: Observation[] = [];
   let byParent: Map<number, Observation[]> = new Map();
   let activeFilter: string | null = null;
   let activeContributor: string | null = null;
+  let researchGradeOnly = false;
   let visibleCount = PAGE_SIZE;
   let mapInitialized = false;
   let mapInstance: ReturnType<typeof initMap> | null = null;
@@ -539,6 +577,29 @@
     bodyEl.hidden = state !== 'ready';
     emptyEl.hidden = state !== 'empty';
     errorEl.hidden = state !== 'error';
+  }
+
+  // Rebuilds the whole working set from baseObservations, applying (or
+  // lifting) the research-grade filter. Unlike the taxon/observer filters,
+  // this changes what counts as "the data" -- so stats, leaderboard, and
+  // chips are rebuilt too, not just the grid/map -- and any taxon/observer
+  // filter is cleared rather than left pointing at a chip or contributor
+  // that may no longer exist in the narrower set.
+  function applyQualityFilter() {
+    allObservations = researchGradeOnly
+      ? baseObservations.filter((o) => o.quality_grade === 'research')
+      : baseObservations;
+    activeFilter = null;
+    activeContributor = null;
+    visibleCount = PAGE_SIZE;
+    contributorFilterEl.hidden = true;
+    byParent = groupByParentTaxon(allObservations);
+    const groups = groupByIconicTaxon(allObservations);
+    renderStats();
+    renderLeaderboard();
+    renderChips(groups);
+    renderGrid();
+    refreshMap();
   }
 
   function renderStats() {
@@ -738,6 +799,11 @@
 
   contributorFilterClearBtn.addEventListener('click', () => setContributorFilter(null));
 
+  researchGradeToggle.addEventListener('change', () => {
+    researchGradeOnly = researchGradeToggle.checked;
+    applyQualityFilter();
+  });
+
   galleryBtn.addEventListener('click', () => {
     galleryBtn.classList.add('is-active');
     mapBtn.classList.remove('is-active');
@@ -770,21 +836,16 @@
       // in a showcase of species. Also restrict to the TVC property
       // boundary itself -- the iNaturalist project also picks up sightings
       // from the adjoining reserve forest and a few further-flung outliers.
-      // Both affect stats/chips/map too, not just the grid, since they're
-      // all derived from allObservations.
-      allObservations = (await fetchAllObservations())
+      // Both affect stats/chips/map too, not just the grid, since everything
+      // is derived from allObservations via applyQualityFilter() below.
+      baseObservations = (await fetchAllObservations())
         .filter((o) => o.taxon != null)
         .filter((o) => isWithinBoundary(o.geojson));
-      if (allObservations.length === 0) {
+      if (baseObservations.length === 0) {
         showState('empty');
         return;
       }
-      byParent = groupByParentTaxon(allObservations);
-      const groups = groupByIconicTaxon(allObservations);
-      renderStats();
-      renderLeaderboard();
-      renderChips(groups);
-      renderGrid();
+      applyQualityFilter();
       showState('ready');
     } catch (err) {
       console.error('Failed to load iNaturalist observations', err);
