@@ -27,10 +27,14 @@ replaced by a direct invite link to that same group — no form, no manual step.
 `/api/event-interest` responds live in production, and `/api/photo-pool`'s Google Cloud service
 account, Drive folder tree, and Netlify env vars (all deploy contexts, including production) are
 fully configured and verified end-to-end via local dev — not yet independently re-verified
-against the live production URL. `/api/enquiry` is code-complete but not yet configured: it needs
-its own Google Sheets (created and shared Editor-access with the service account) and Netlify env
-vars (`MEMBERSHIP_ENQUIRY_SHEET_ID`, `GENERAL_ENQUIRY_SHEET_ID`), plus a dashboard notification
-for each new form name so `contact@tvc.farm` actually receives the emails.
+against the live production URL. `/api/enquiry` is **live and verified**: its two Google Sheets
+are created, shared Editor-access with the service account, and their ids set as
+`MEMBERSHIP_ENQUIRY_SHEET_ID`/`GENERAL_ENQUIRY_SHEET_ID` — a direct `POST` to
+`https://tvc.farm/api/enquiry` for each form type appended a real row successfully. No custom
+Netlify notification rule was needed for the email side either: this site's Netlify account is
+itself owned by `contact@tvc.farm`, and Netlify emails the account owner on every form submission
+by default, with no per-form rule configured — the custom "Email notification" rule setting (which
+prompted a plan upgrade) is only for *additional* recipients beyond the owner, not required here.
 
 ## Diagram
 
@@ -65,7 +69,7 @@ flowchart TD
         APIFN["Netlify Function: /api/chat<br/>Deployed and live —<br/>ANTHROPIC_API_KEY set, calls the<br/>Anthropic API for grounded answers"]
         APIFN2["Netlify Function: /api/event-interest<br/>Deployed and live —<br/>reads/writes the per-event count below"]
         APIFN3["Netlify Function: /api/photo-pool<br/>(+/thumb, +/description)<br/>Configured — Drive service account + folder IDs<br/>set as Netlify env vars for all deploy contexts"]
-        APIFN4["Netlify Function: /api/enquiry<br/>Code-complete, not yet configured —<br/>needs MEMBERSHIP_ENQUIRY_SHEET_ID /<br/>GENERAL_ENQUIRY_SHEET_ID env vars + Sheets<br/>shared Editor-access with the service account"]
+        APIFN4["Netlify Function: /api/enquiry<br/>Live and verified — Sheet ids set,<br/>Sheets shared Editor-access with the<br/>service account, real appends confirmed"]
         BLOBS["Netlify Blobs: 'event-interest' store<br/>One JSON record per past event id —<br/>{count, emails[]}. Reset via<br/>netlify blobs:delete event-interest &lt;id&gt;"]
         FORMS["Netlify Forms<br/>Captures /contact membership + general<br/>enquiries, /visit/host-an-event inquiries,<br/>/visit camping·day-visit·trekking inquiries,<br/>and event-interest submissions with an email"]
     end
@@ -198,8 +202,9 @@ Netlify build (the offline photo curation and captioning scripts).
   library, matching this repo's preference for small hand-rolled implementations for
   well-defined tasks (see `src/utils/calendar.ts`'s ICS generation).
 - **`netlify/functions/enquiry.mts`** — backs the membership enquiry form (bottom of `/join`)
-  and the general enquiry form (`/contact`). Each form submits natively via Netlify Forms (email, via a dashboard notification
-  to `contact@tvc.farm` — same mechanism as the Visit inquiry form); this Function exists purely
+  and the general enquiry form (`/contact`). Each form submits natively via Netlify Forms (email —
+  no custom notification rule needed, since Netlify emails the account owner by default on every
+  submission, and that owner already is `contact@tvc.farm`); this Function exists purely
   for the one thing Netlify Forms can't do on its own — logging the same enquiry as a row in a
   Google Sheet, one sheet per form type. The page fires it via `navigator.sendBeacon` alongside
   the form's own native submission (rather than intercepting/replacing it), since `sendBeacon` is
@@ -290,10 +295,10 @@ account on 2026-07-18).
   including a real Google Sign-In (allow-listed account → dashboard loads; removed from the
   allow-list → clean 403 "not authorized" with a "use a different account" recovery); not yet
   independently re-verified against the live production URL. `enquiry.mts` serves `/api/enquiry` —
-  code-complete but **not yet configured**: needs its own `MEMBERSHIP_ENQUIRY_SHEET_ID` and
-  `GENERAL_ENQUIRY_SHEET_ID` env vars, each pointing at a Google Sheet shared Editor-access with
-  the same `GDRIVE_SERVICE_ACCOUNT_EMAIL` service account photo-pool uses (view access isn't
-  enough here, since this path writes).
+  **live and verified**: `MEMBERSHIP_ENQUIRY_SHEET_ID` and `GENERAL_ENQUIRY_SHEET_ID` are set,
+  each pointing at a Google Sheet shared Editor-access with the same `GDRIVE_SERVICE_ACCOUNT_EMAIL`
+  service account photo-pool uses (view access isn't enough here, since this path writes) — a
+  direct `POST` against the live production URL for each form type appended a real row.
 - **Netlify Blobs** — live. One store (`event-interest`), one JSON record
   per past event id (`{count, emails[]}`), written only by `event-interest.mts` — the site's
   only piece of server-side state that's publicly *readable*, unlike the write-only Forms
@@ -303,10 +308,9 @@ account on 2026-07-18).
   submissions with no custom backend code required. Five things use it: the membership enquiry
   form (name, email, phone, message) at the bottom of `/join` and the general enquiry form (same
   fields, plus a WhatsApp link) at `/contact`, both redirecting to `/contact/thanks` on success —
-  code-complete and deployed, but each still needs `contact@tvc.farm` added as a notification
-  recipient for that specific form name in the Netlify dashboard (Site configuration →
-  Notifications) before the email side actually reaches anyone, and each also fires
-  `/api/enquiry` (see above) to log a Sheets row; the Host an Event inquiry
+  live, no custom notification rule needed (this site's Netlify account is itself owned by
+  `contact@tvc.farm`, and Netlify emails the account owner by default on every submission), and
+  each also fires `/api/enquiry` (see above) to log a Sheets row; the Host an Event inquiry
   (name, org, contact details, event type, headcount, dates, message) at `/visit/host-an-event`,
   redirecting to `/visit/host-an-event/thanks` — pushed to `main` and deployed, but not
   independently re-verified against production; the Visit inquiry form
@@ -352,8 +356,8 @@ never touches Netlify either.
 - **Friends of TVC** — live. A direct invite link to the WhatsApp group (no form, no manual
   step) — replaces the old name + phone signup that TVC had to action by hand.
 - **Membership enquiry form** (bottom of `/join`, below the existing "how membership works"
-  content) and **general enquiry form** (`/contact`) — code-complete, deployed, awaiting
-  dashboard notification setup (see Hosting above). Each is a plain HTML form (name, email,
+  content) and **general enquiry form** (`/contact`) — live and verified end-to-end (see Hosting
+  above). Each is a plain HTML form (name, email,
   optional phone, message) with a spam honeypot, submitting natively via Netlify Forms and, via
   `navigator.sendBeacon`, also logging a row to that form's own Google Sheet through
   `/api/enquiry`. The general enquiry form additionally offers a `wa.me` WhatsApp link straight
@@ -439,7 +443,7 @@ never touches Netlify either.
 | Chat widget UI | ✅ Live |
 | Chat widget's actual AI responses | ✅ Live — `ANTHROPIC_API_KEY` set 2026-07-18; verified with real requests against `tvc.farm/api/chat` returning grounded answers |
 | Friends of TVC WhatsApp group (direct invite link) | ✅ Live — `/contact` links straight to the group, no form or manual step |
-| Membership + general enquiry forms (Netlify Forms + `/api/enquiry`) | 🟡 Code-complete, pushed to `main` — needs `MEMBERSHIP_ENQUIRY_SHEET_ID`/`GENERAL_ENQUIRY_SHEET_ID` env vars (Sheets shared Editor-access with the service account) and a Netlify dashboard notification to `contact@tvc.farm` for each new form name before enquiries actually reach anyone |
+| Membership + general enquiry forms (Netlify Forms + `/api/enquiry`) | ✅ Live — Sheet ids set and shared with the service account, verified with real `POST`s against production for both form types; email relies on Netlify's default owner notification (the account owner already is `contact@tvc.farm`), no custom notification rule needed |
 | Host an Event inquiry form (Netlify Forms) | 🟢 Deployed (pushed to `main`) — same Netlify Forms mechanism as the Visit inquiry form, at `/visit/host-an-event`; not independently re-verified against production |
 | Visit inquiry form + WhatsApp CTA (Netlify Forms) | 🟢 Deployed (pushed to `main`), both email notifications configured — replaces the "Book via Linger" redirect on `/visit/camping`, `/visit/day-visit`, `/visit/trekking-trails`; not independently re-verified against production |
 | Event interest widget + counter (Netlify Function, Blobs, Forms) | ✅ Live — "Want this to happen again?" on past event pages (`/events/<slug>`), public count via `/api/event-interest` + Netlify Blobs, optional-email entries via Netlify Forms; verified `/api/event-interest` responds live in production |
@@ -447,11 +451,10 @@ never touches Netlify either.
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
 | Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | 🟢 Fully configured (Drive folders, service account, Google Sign-In OAuth client, curator allow-list Sheet, all Netlify env vars) and verified end-to-end via `netlify dev`, including real sign-in and the 403 not-authorized path — not yet pushed to `main` |
 
-Two known gaps remain in what's deployed. The Photo Pool dashboard: fully built, configured, and
-verified locally, awaiting a push to actually deploy. The membership/general enquiry forms: code
-pushed to `main` and live, but the Sheets-logging half (`/api/enquiry`) needs its two Sheet IDs
-and the email-notification half needs a Netlify dashboard recipient added per form — until then,
-submissions succeed (Netlify Forms captures them either way) but nobody at TVC is notified.
+One known gap remains in what's deployed: the Photo Pool dashboard, fully built, configured, and
+verified locally, awaiting a push to actually deploy. The membership/general enquiry forms are
+fully live — Sheets logging verified with real production `POST`s, and email needs no separate
+setup since Netlify's default owner notification already reaches `contact@tvc.farm`.
 Every other *deployed* feature above is either confirmed live in production or (Host an Event,
 Visit inquiry) pushed to `main` without a separate direct-production check.
 The Netlify project itself is owned by the `contact@tvc.farm` account (moved there from a
