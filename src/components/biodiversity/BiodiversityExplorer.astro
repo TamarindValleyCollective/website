@@ -422,9 +422,9 @@
   .detail-panel {
     background: #fff;
     border-radius: var(--radius);
-    max-width: 560px;
+    max-width: 760px;
     width: 100%;
-    max-height: 85vh;
+    max-height: 90vh;
     overflow-y: auto;
     padding: 28px;
     position: relative;
@@ -463,6 +463,15 @@
     object-fit: cover;
     border-radius: 8px;
     margin: 12px 0;
+  }
+
+  :global(.detail-photo-link) {
+    display: block;
+    cursor: zoom-in;
+  }
+
+  :global(.detail-photo-link:hover .detail-photo) {
+    opacity: 0.92;
   }
 </style>
 
@@ -689,7 +698,7 @@
     detailContentEl.innerHTML = `
       <h2 id="detail-title">${name}</h2>
       ${scientific ? `<p>${scientific}</p>` : ''}
-      ${photo ? `<img class="detail-photo" src="${photo.url.replace('square', 'medium')}" alt="${name}" />` : ''}
+      ${photo ? `<a class="detail-photo-link" href="${photo.url.replace('square', 'original')}" target="_blank" rel="noopener noreferrer" title="Open full-size photo"><img class="detail-photo" src="${photo.url.replace('square', 'large')}" alt="${name}" /></a>` : ''}
       ${photo ? `<p class="attribution" style="font-size:0.82rem;color:var(--tvc-ink-soft);">${photo.attribution}${photo.license_code ? ` · <a href="https://creativecommons.org/licenses/${photo.license_code.replace('cc-', '')}/4.0/" target="_blank" rel="noopener noreferrer">${photo.license_code.toUpperCase()}</a>` : ''}</p>` : ''}
       <p><strong>Observed:</strong> ${o.observed_on ?? 'Unknown date'}</p>
       <p><strong>Location:</strong> ${o.place_guess ?? 'On the property'}</p>
