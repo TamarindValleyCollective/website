@@ -56,11 +56,13 @@ flowchart TD
         FUNC_SRC3["netlify/functions/photo-pool.mts<br/>Serverless function, Google Sign-In gated —<br/>verifies ID token, checks a Sheet-backed<br/>allow-list, lists Inbox (+ uploader/EXIF/GPS/<br/>description), moves photos, saves descriptions"]
         FUNC_SRC4["netlify/functions/enquiry.mts<br/>Serverless function — appends a row to a<br/>Google Sheet per membership/general enquiry,<br/>fired via sendBeacon alongside each form's<br/>own native Netlify Forms submission"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
+        SCRIPT_SRC2["scripts/build-search-index.mjs<br/>Reads every page's actual rendered<br/>title/description → dist/search-index.json<br/>for the client-side site search"]
     end
 
     subgraph BUILD["2 · Build — on push to main"]
         B1["npm run build<br/>→ astro build (prerenders every page)"]
         B2["→ build-chat-context.mjs<br/>writes site-content.json (gitignored)"]
+        B2B["→ build-search-index.mjs<br/>writes dist/search-index.json"]
         B3["Output: dist/ (static site) + bundled function<br/>netlify.toml declares build cmd, publish dir, functions dir"]
     end
 
@@ -78,6 +80,7 @@ flowchart TD
 
     subgraph BROWSER["4 · Visitor's Browser"]
         CHATW["ChatWidget.astro<br/>Floating widget, site logo.<br/>Calls /api/chat"]
+        SEARCH["SiteSearch.astro (in Nav)<br/>Fetches /search-index.json once,<br/>searches entirely client-side —<br/>no backend, no Function"]
         FRIENDS["Friends of TVC —<br/>direct WhatsApp group invite link,<br/>no form involved"]
         MEMBERFORM["Membership enquiry form (/join)<br/>data-netlify=true + honeypot,<br/>also sendBeacons to /api/enquiry"]
         GENERALFORM["General enquiry form (/contact)<br/>data-netlify=true + honeypot,<br/>also sendBeacons to /api/enquiry;<br/>plus a WhatsApp link to Madhavan"]
@@ -146,8 +149,8 @@ flowchart TD
     classDef cfStyle fill:#fef3e0,stroke:#e8891c,color:#7a4a00
     classDef localStyle fill:#eef0f5,stroke:#6b7280,color:#374151
 
-    class PAGES,INTERNALPAGE,COMPONENTS,CONTENT,CHATW,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,CDN,POOLDASH staticStyle
-    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,SCRIPT_SRC,APIFN,APIFN2,APIFN3,APIFN4,BLOBS,FORMS,ANTHROPIC netlifyStyle
+    class PAGES,INTERNALPAGE,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,CDN,POOLDASH staticStyle
+    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,BLOBS,FORMS,ANTHROPIC netlifyStyle
     class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL localStyle
@@ -220,6 +223,12 @@ Netlify build (the offline photo curation and captioning scripts).
   *signing* — same hand-rolled, dependency-free approach.
 - **`scripts/build-chat-context.mjs`** — post-build script that prepares the chat widget's
   knowledge base.
+- **`scripts/build-search-index.mjs`** — post-build script for the client-side site search
+  (`src/components/SiteSearch.astro`, rendered from `Nav.astro`). Walks `dist/` the same way
+  `build-chat-context.mjs` does, but keeps only each page's actual rendered `<title>`/`<meta
+  description>` (skipping anything marked `noindex`) rather than full page text, and writes the
+  result to `dist/search-index.json` — a plain static asset, not a Function, so the search box
+  fetches it once and matches/ranks entirely in the browser with no backend at all.
 - **`scripts/curate-photos.mjs`** — run locally, not part of the Netlify build. Reads a folder
   of already-selected photos, extracts EXIF/GPS, uploads a display and thumbnail size of each to
   Cloudflare R2, and writes one `src/content/photos/*.md` entry per photo — still just expects an
@@ -256,6 +265,10 @@ On every push to `main`, Netlify runs:
 2. `build-chat-context.mjs` — strips repeated Nav/Footer markup out of the built HTML and
    writes the remaining page text into a single JSON corpus (`site-content.json`, regenerated
    every build, gitignored).
+3. `build-search-index.mjs` — reads every page's `<title>`/`<meta description>` out of the same
+   built HTML and writes `dist/search-index.json`, the client-side site search's entire "index"
+   (not gitignored the way `site-content.json` is, since it needs to actually deploy as a static
+   asset rather than staying server-side-only).
 
 `netlify.toml` declares the build command, publish directory (`dist`), and functions directory
 (`netlify/functions`).
@@ -353,6 +366,10 @@ never touches Netlify either.
 
 - **ChatWidget** — floating widget using the site logo; sends the visitor's question to
   `/api/chat` and gets back a real, grounded answer.
+- **SiteSearch** (magnifying-glass icon in the nav, opens on click or the `/` key) — client-side
+  search over every non-`noindex` page's title/description, fetched once from
+  `/search-index.json` and matched/ranked in the browser; no Function, no external service.
+  Keyboard-navigable (↑/↓/Enter), Escape or clicking outside the panel closes it.
 - **Friends of TVC** — live. A direct invite link to the WhatsApp group (no form, no manual
   step) — replaces the old name + phone signup that TVC had to action by hand.
 - **Membership enquiry form** (bottom of `/join`, below the existing "how membership works"
@@ -449,6 +466,7 @@ never touches Netlify either.
 | Event interest widget + counter (Netlify Function, Blobs, Forms) | ✅ Live — "Want this to happen again?" on past event pages (`/events/<slug>`), public count via `/api/event-interest` + Netlify Blobs, optional-email entries via Netlify Forms; verified `/api/event-interest` responds live in production |
 | Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy` |
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
+| Site search (nav icon / `/` key) | 🟢 Deployed (pushed to `main`), verified via `astro build` + `astro preview` locally (42 pages indexed, keyboard nav, navigation on Enter) — not yet independently re-verified against the live production URL |
 | Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | 🟢 Fully configured (Drive folders, service account, Google Sign-In OAuth client, curator allow-list Sheet, all Netlify env vars) and verified end-to-end via `netlify dev`, including real sign-in and the 403 not-authorized path — not yet pushed to `main` |
 
 One known gap remains in what's deployed: the Photo Pool dashboard, fully built, configured, and

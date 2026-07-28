@@ -1,6 +1,7 @@
 ---
 import { EXPLORE_LINKS, ENGAGE_LINKS } from '../data/site-map';
 import HeaderWeather from './HeaderWeather.astro';
+import SiteSearch from './SiteSearch.astro';
 
 // Mirrors the homepage's own Explore/Engage fork (src/pages/index.astro) so
 // the nav reads as the same map wherever you are on the site, not a
@@ -27,39 +28,44 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
       <HeaderWeather />
     </div>
 
-    <button class="nav__toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-menu" aria-label="Toggle menu">
-      <span></span><span></span><span></span>
-    </button>
-
-    <nav class="nav__menu" id="nav-menu">
-      {navItems.map((item) => (
-        item.children ? (
-          <div class="nav__item">
-            <button
-              type="button"
-              class:list={['nav__link', 'nav__link--toggle', { 'is-active': isSectionActive(item.children) }]}
-              aria-haspopup="true"
-            >
-              {item.label}
-              <svg class="nav__caret" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
-                <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-            <div class:list={['nav__dropdown', { 'nav__dropdown--wide': item.wide }]}>
-              {item.children.map((child) => (
-                <a href={child.href} class:list={['nav__sublink', { 'is-active': isActive(child.href) }]}>
-                  {child.label}
-                </a>
-              ))}
+    <div class="nav__right">
+      <nav class="nav__menu" id="nav-menu">
+        {navItems.map((item) => (
+          item.children ? (
+            <div class="nav__item">
+              <button
+                type="button"
+                class:list={['nav__link', 'nav__link--toggle', { 'is-active': isSectionActive(item.children) }]}
+                aria-haspopup="true"
+              >
+                {item.label}
+                <svg class="nav__caret" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+                  <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+              <div class:list={['nav__dropdown', { 'nav__dropdown--wide': item.wide }]}>
+                {item.children.map((child) => (
+                  <a href={child.href} class:list={['nav__sublink', { 'is-active': isActive(child.href) }]}>
+                    {child.label}
+                  </a>
+                ))}
+              </div>
             </div>
-          </div>
-        ) : (
-          <a href={item.href} class:list={['nav__link', { 'is-active': isActive(item.href) }]}>
-            {item.label}
-          </a>
-        )
-      ))}
-    </nav>
+          ) : (
+            <a href={item.href} class:list={['nav__link', { 'is-active': isActive(item.href) }]}>
+              {item.label}
+            </a>
+          )
+        ))}
+      </nav>
+
+      <div class="nav__controls">
+        <SiteSearch />
+        <button class="nav__toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-menu" aria-label="Toggle menu">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -108,12 +114,30 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
     border-radius: 50%;
   }
 
+  /* Groups the menu + search/hamburger controls as one flex item, same
+     reason .nav__left groups brand+weather above — nav__inner's
+     space-between only cleanly splits into two sides if each side really
+     is a single item, and .nav__controls needs to stay visible even when
+     .nav__menu collapses behind the mobile hamburger. */
+  .nav__right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
   .nav__menu {
     display: flex;
     align-items: center;
     gap: 16px;
     flex-wrap: wrap;
     justify-content: flex-end;
+  }
+
+  .nav__controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
   }
 
   .nav__item {

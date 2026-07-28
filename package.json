@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build && node scripts/build-chat-context.mjs",
+    "build": "astro build && node scripts/build-chat-context.mjs && node scripts/build-search-index.mjs",
     "preview": "astro preview",
     "astro": "astro"
   },
