@@ -9,7 +9,7 @@ tags: ["biodiversity", "walk"]
 
 #### **Event Summary**
 
-Spend Saturday evening and Sunday at [Tamarind Valley Collective](https://tvc.farm/how-to-reach.html). Explore the vast property. Enjoy guided tours with our naturalists to watch and identify birds, butterflies, insects, and plants.
+Spend Saturday evening and Sunday at [Tamarind Valley Collective](/visit/how-to-reach). Explore the vast property. Enjoy guided tours with our naturalists to watch and identify birds, butterflies, insects, and plants.
 
 [![](https://tvc.farm/media/posts/42/gallery/296554433_10159296905638878_232680902793058517_n-thumbnail.jpg)](https://tvc.farm/media/posts/42/gallery/296554433_10159296905638878_232680902793058517_n.jpg)
 
@@ -102,7 +102,7 @@ Guest House (3 Adults)
 
 TVC is a ~ 100-acre permaculture farm run by 52 families experimenting with a living style that reduces consumption and incorporates naturally supported cyclical systems.
 
-Details about how to reach are here. Basic etiquettes while you are at the farm are listed [here](https://tvc.farm/how-to-reach.html).
+Details about how to reach are here. Basic etiquettes while you are at the farm are listed [here](/visit/how-to-reach).
 
 The farm is still in the regeneration phase. The weather is pleasant during Aug - Feb.
 

@@ -55,5 +55,12 @@ export default defineConfig({
     // don't have that restriction.
     '/ecosystem/partners': '/people#partners',
     '/people/partners': '/people#partners',
+    // Leftover URLs from the pre-Astro site (Google still has them indexed,
+    // and some migrated event content still links to them internally) -
+    // point them at their current equivalents instead of 404ing.
+    '/how-to-reach.html': '/visit/how-to-reach',
+    '/trekking-trails-of-tvc.html': '/visit/trekking-trails',
+    '/tvc-3bs-and-1h-dusk-to-dawn-biodiversity-walks-tvc-birdsbutterfliesinsects.html':
+      '/events/2022-08-27-3bs-and-1h-biodiversity-walk',
   },
 });
