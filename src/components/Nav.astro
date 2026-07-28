@@ -1,15 +1,17 @@
 ---
-import { EXPLORE_LINKS, ENGAGE_LINKS } from '../data/site-map';
+import { ABOUT_LINKS, ECOSYSTEM_LINKS, VISIT_LINKS, GET_INVOLVED_LINKS } from '../data/site-map';
 import HeaderWeather from './HeaderWeather.astro';
 
-// Mirrors the homepage's own Explore/Engage fork (src/pages/index.astro) so
-// the nav reads as the same map wherever you are on the site, not a
-// different grouping than the one you land on at "/". Both are wide
-// (7 items each) because a single column runs uncomfortably tall — see
-// .nav__dropdown--wide below for the two-column treatment that needs.
+// Four groups by visitor intent rather than site-map order — see
+// src/data/site-map.ts for the grouping rationale. None needs the
+// two-column treatment (.nav__dropdown--wide below, still available via
+// the `wide` flag for a future group that outgrows a single column); the
+// largest group here (Visit) tops out at 6 items.
 const navItems = [
-  { label: 'Explore', wide: true, children: EXPLORE_LINKS },
-  { label: 'Engage', wide: true, children: ENGAGE_LINKS },
+  { label: 'About', children: ABOUT_LINKS },
+  { label: 'Ecosystem', children: ECOSYSTEM_LINKS },
+  { label: 'Visit', children: VISIT_LINKS },
+  { label: 'Get Involved', children: GET_INVOLVED_LINKS },
 ];
 
 const currentPath = Astro.url.pathname;
@@ -39,6 +41,7 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
               type="button"
               class:list={['nav__link', 'nav__link--toggle', { 'is-active': isSectionActive(item.children) }]}
               aria-haspopup="true"
+              aria-expanded="false"
             >
               {item.label}
               <svg class="nav__caret" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
@@ -157,9 +160,15 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
     transition: transform 0.15s ease;
   }
 
-  .nav__item:hover .nav__caret,
-  .nav__item:focus-within .nav__caret {
-    transform: rotate(180deg);
+  /* Hover/focus-within only makes sense as a desktop reveal mechanism —
+     on mobile the same tap that would set :focus-within is also what
+     opens/closes the accordion below, so this is scoped above the
+     breakpoint to avoid the two mechanisms fighting each other. */
+  @media (min-width: 861px) {
+    .nav__item:hover .nav__caret,
+    .nav__item:focus-within .nav__caret {
+      transform: rotate(180deg);
+    }
   }
 
   .nav__dropdown {
@@ -167,12 +176,13 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
     position: absolute;
     top: 100%;
     /* Centered under its own trigger, not left-anchored — a fixed-side
-       anchor makes Explore and Engage hang in opposite directions (one
-       growing right, the rightmost one forced left to avoid overflowing
-       off-screen) instead of matching. Centering is the one rule that
-       reads the same for every item; --dropdown-shift (set by the script
-       below, only when needed) nudges it back on-screen at narrower
-       desktop widths where centering alone would still clip an edge item. */
+       anchor makes items hang in different directions depending on which
+       side of the row they sit on (growing right near the left edge,
+       forced left near the right edge to avoid overflowing off-screen)
+       instead of matching. Centering is the one rule that reads the same
+       for every item; --dropdown-shift (set by the script below, only when
+       needed) nudges it back on-screen at narrower desktop widths where
+       centering alone would still clip an edge item. */
     left: 50%;
     transform: translateX(calc(-50% + var(--dropdown-shift, 0px)));
     flex-direction: column;
@@ -185,22 +195,27 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
     z-index: 60;
   }
 
-  .nav__item:hover .nav__dropdown,
-  .nav__item:focus-within .nav__dropdown {
-    display: flex;
+  @media (min-width: 861px) {
+    .nav__item:hover .nav__dropdown,
+    .nav__item:focus-within .nav__dropdown {
+      display: flex;
+    }
   }
 
-  /* Explore has 7 items — a single column runs uncomfortably tall, so it
-     gets a two-column grid instead. Declared after the rules above so it
-     wins the display:flex vs display:grid tie on hover/focus. */
+  /* Opt-in via item.wide for a group with enough items that a single column
+     would run uncomfortably tall — a two-column grid instead. Declared after
+     the rules above so it wins the display:flex vs display:grid tie on
+     hover/focus. */
   .nav__dropdown--wide {
     grid-template-columns: repeat(2, minmax(170px, 1fr));
     min-width: 360px;
   }
 
-  .nav__item:hover .nav__dropdown--wide,
-  .nav__item:focus-within .nav__dropdown--wide {
-    display: grid;
+  @media (min-width: 861px) {
+    .nav__item:hover .nav__dropdown--wide,
+    .nav__item:focus-within .nav__dropdown--wide {
+      display: grid;
+    }
   }
 
   .nav__sublink {
@@ -259,7 +274,7 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
          content taller than the max-height below overflows upward past
          the container's top edge (unreachable, since scrollTop can't go
          negative) instead of scrolling normally; flex-wrap: wrap instead
-         splits Explore/Engage into two side-by-side columns. */
+         splits the nav items into side-by-side columns. */
       flex-wrap: nowrap;
       justify-content: flex-start;
       align-items: stretch;
@@ -282,8 +297,16 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
       padding: 10px 0;
     }
 
+    .nav__link--toggle {
+      cursor: pointer;
+    }
+
+    /* Collapsed by default — .nav__item.is-open (toggled by the click
+       handler below) is what reveals a group's links, so a phone-sized
+       menu with four groups doesn't force scrolling past every group just
+       to reach the last one. */
     .nav__dropdown {
-      display: flex;
+      display: none;
       position: static;
       /* transform isn't gated by position: static the way left/right are —
          without resetting it, the desktop centering translate would still
@@ -296,9 +319,16 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
     }
 
     .nav__dropdown--wide {
-      display: flex;
       grid-template-columns: none;
       min-width: 0;
+    }
+
+    .nav__item.is-open .nav__dropdown {
+      display: flex;
+    }
+
+    .nav__item.is-open .nav__caret {
+      transform: rotate(180deg);
     }
 
     .nav__sublink {
@@ -331,6 +361,29 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
   toggle?.addEventListener('click', () => {
     const isOpen = menu?.classList.toggle('is-open');
     toggle.setAttribute('aria-expanded', String(Boolean(isOpen)));
+  });
+
+  // Below 861px, .nav__dropdown is collapsed by default (see the media
+  // query above) and each group becomes an accordion panel instead of an
+  // always-open list — closing every other panel first keeps only one
+  // group's links on screen at a time. Desktop keeps its existing
+  // hover/focus-within reveal untouched (gated to >=861px), so this only
+  // runs where that mechanism doesn't apply.
+  const MOBILE_QUERY = '(max-width: 860px)';
+
+  document.querySelectorAll<HTMLButtonElement>('.nav__link--toggle').forEach((toggleButton) => {
+    toggleButton.addEventListener('click', () => {
+      if (!window.matchMedia(MOBILE_QUERY).matches) return;
+      const item = toggleButton.closest('.nav__item');
+      if (!item) return;
+      const willOpen = !item.classList.contains('is-open');
+      document.querySelectorAll('.nav__item.is-open').forEach((openItem) => {
+        openItem.classList.remove('is-open');
+        openItem.querySelector('.nav__link--toggle')?.setAttribute('aria-expanded', 'false');
+      });
+      item.classList.toggle('is-open', willOpen);
+      toggleButton.setAttribute('aria-expanded', String(willOpen));
+    });
   });
 
   // Dropdowns center under their own trigger by default (see .nav__dropdown
