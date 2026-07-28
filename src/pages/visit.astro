@@ -13,7 +13,7 @@ const activities = [
 ];
 
 const faqs = [
-  { q: 'How can I plan my visit?', a: 'Linger is our hospitality partner and handles bookings — reach out to them for availability and any other details you need to plan your visit.' },
+  { q: 'How can I plan my visit?', a: "Fill in the enquiry form on the relevant page below (or message us on WhatsApp) — we coordinate the stay with our hospitality partner, Linger, from there." },
   { q: 'Is the place senior friendly?', a: "There's a fair bit of walking — the camp site is a 5-7 minute walk from the parking lot. Fine for active seniors, but not the most accessible place." },
   { q: 'How about food?', a: 'Food is included in the charges. Meals are freshly prepared and mostly vegetarian; non-veg on request. What you get depends on seasonality and availability — no à la carte options.' },
   { q: 'What is the best time to visit?', a: "June to January is best. It's mostly pleasant during these months, though it can feel warm without a breeze." },
@@ -79,10 +79,10 @@ const faqSchema = {
           <h3>Events at TVC</h3>
           <p>Team outings, workshops on permaculture and bamboo craft, nature retreats, tech camps — up to 20 people, with camping included.</p>
         </a>
-        <div class="card">
+        <a class="card" href="/contact">
           <h3>Volunteering</h3>
           <p>Learn by doing — contribute to day-to-day farm activities (chopping, planting, digging, sowing, harvesting). Accommodation is in the guest house, charged for basic food and stay.</p>
-        </div>
+        </a>
         <a class="card" href="/visit/how-to-reach">
           <h3>How to Reach</h3>
           <p>Directions from both the Tamil Nadu and Karnataka sides.</p>
@@ -145,10 +145,20 @@ const faqSchema = {
 </BaseLayout>
 
 <style>
-  .activity-grid,
-  .visit-options {
+  .activity-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 18px;
+    margin: 16px 0;
+  }
+
+  /* Capped at 3 columns (not auto-fit) so 5 cards wrap 3+2 instead of
+     stranding a lone 5th card alone on a mostly-empty row 2 at desktop
+     widths — auto-fit's "however many fit" doesn't account for how many
+     items there actually are. */
+  .visit-options {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(230px, 1fr));
     gap: 18px;
     margin: 16px 0;
   }
@@ -156,6 +166,12 @@ const faqSchema = {
   .visit-options a {
     text-decoration: none;
     color: inherit;
+  }
+
+  @media (max-width: 780px) {
+    .visit-options {
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    }
   }
 
   .two-col {
