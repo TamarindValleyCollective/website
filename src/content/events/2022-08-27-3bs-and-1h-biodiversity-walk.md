@@ -102,7 +102,7 @@ Guest House (3 Adults)
 
 #### What to expect?
 
-TVC is a ~ 100-acre permaculture farm run by 52 families experimenting with a living style that reduces consumption and incorporates naturally supported cyclical systems.
+TVC is a ~ 98-acre permaculture farm run by 53 families experimenting with a living style that reduces consumption and incorporates naturally supported cyclical systems.
 
 Details about how to reach are here. Basic etiquettes while you are at the farm are listed [here](/visit/how-to-reach).
 

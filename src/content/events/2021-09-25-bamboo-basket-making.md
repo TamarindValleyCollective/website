@@ -36,7 +36,7 @@ The cost is an all inclusive cost. Please carry a sharp knife with you. Also car
 
 **What to expect?**
 
-TVC is a 100-acre permaculture farm run by 52 families experimenting with a living style that reduces consumption and incorporates naturally supported cyclical systems.
+TVC is a 98-acre permaculture farm run by 53 families experimenting with a living style that reduces consumption and incorporates naturally supported cyclical systems.
 
 The farm is still in the regeneration phase. The weather is pleasant during Aug - Feb. March to July are hot months, with day temperatures reaching 38+ degrees. The area of the farm is large and has multiple terrains. You should be able to drive up to the entrance of the farm. Access to various parts of the farm is on foot, and you be comfortable with that. We have farm staff staying in the farm quarters and will take care of you while you are at the farm.
 
