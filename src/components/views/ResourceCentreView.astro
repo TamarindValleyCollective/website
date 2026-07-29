@@ -1,0 +1,84 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../PageHero.astro';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+import { type Locale } from '../../i18n/utils';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+
+const content = {
+  en: {
+    metaTitle: 'Resource Centre',
+    metaDescription: 'Lantana furniture and learning programs from Tamarind Valley Collective.',
+    heroTitle: 'Resource Centre',
+    heroImageAlt: 'Jars of farm-made tamarind chutney',
+    lantanaHeading: 'Lantana Furniture',
+    lantanaText: 'We support a local initiative creating useful items from Lantana — an invasive plant that has affected the growth of native vegetation.',
+    lantanaContactPre: 'To place an order, contact',
+    lantanaContactName: 'Vivek Garady',
+    catalogueLink: 'View the catalogue (PDF) →',
+    learningHeading: 'Learning programs',
+    learningTextPre: 'Workshops and classes run with the local community — the full list lives on our',
+    learningLinkText: 'Community Outreach',
+    learningTextPost: 'page.',
+    learningLink: 'See our learning programs →',
+  },
+  kn: {
+    metaTitle: 'ಸಂಪನ್ಮೂಲ ಕೇಂದ್ರ',
+    metaDescription: 'ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ನ ಲ್ಯಾಂಟಾನಾ ಪೀಠೋಪಕರಣ ಮತ್ತು ಕಲಿಕಾ ಕಾರ್ಯಕ್ರಮಗಳು.',
+    heroTitle: 'ಸಂಪನ್ಮೂಲ ಕೇಂದ್ರ',
+    heroImageAlt: 'ಫಾರ್ಮ್-ತಯಾರಿಸಿದ ಹುಣಸೆ ಚಟ್ನಿಯ ಜಾಡಿಗಳು',
+    lantanaHeading: 'ಲ್ಯಾಂಟಾನಾ ಪೀಠೋಪಕರಣ',
+    lantanaText: 'ಲ್ಯಾಂಟಾನಾದಿಂದ ಉಪಯುಕ್ತ ವಸ್ತುಗಳನ್ನು ತಯಾರಿಸುವ ಸ್ಥಳೀಯ ಉಪಕ್ರಮವನ್ನು ನಾವು ಬೆಂಬಲಿಸುತ್ತೇವೆ — ಇದು ಸ್ಥಳೀಯ ಸಸ್ಯವರ್ಗದ ಬೆಳವಣಿಗೆಯ ಮೇಲೆ ಪರಿಣಾಮ ಬೀರಿದ ಆಕ್ರಮಣಕಾರಿ ಸಸ್ಯವಾಗಿದೆ.',
+    lantanaContactPre: 'ಆರ್ಡರ್ ಮಾಡಲು, ಸಂಪರ್ಕಿಸಿ',
+    lantanaContactName: 'ವಿವೇಕ್ ಗರಡಿ',
+    catalogueLink: 'ಕ್ಯಾಟಲಾಗ್ ನೋಡಿ (PDF) →',
+    learningHeading: 'ಕಲಿಕಾ ಕಾರ್ಯಕ್ರಮಗಳು',
+    learningTextPre: 'ಸ್ಥಳೀಯ ಸಮುದಾಯದೊಂದಿಗೆ ನಡೆಸಲಾಗುವ ಕಾರ್ಯಾಗಾರಗಳು ಮತ್ತು ತರಗತಿಗಳು — ಸಂಪೂರ್ಣ ಪಟ್ಟಿ ನಮ್ಮ',
+    learningLinkText: 'ಸಮುದಾಯ ಪ್ರಭಾವ',
+    learningTextPost: 'ಪುಟದಲ್ಲಿ ಇದೆ.',
+    learningLink: 'ನಮ್ಮ ಕಲಿಕಾ ಕಾರ್ಯಕ್ರಮಗಳನ್ನು ನೋಡಿ →',
+  },
+  ta: {
+    metaTitle: 'வள மையம்',
+    metaDescription: 'டமரிண்ட் வேலி கலெக்டிவின் லாண்டானா தளபாடங்கள் மற்றும் கற்றல் திட்டங்கள்.',
+    heroTitle: 'வள மையம்',
+    heroImageAlt: 'பண்ணையில் தயாரிக்கப்பட்ட புளி துவையல் ஜாடிகள்',
+    lantanaHeading: 'லாண்டானா தளபாடங்கள்',
+    lantanaText: 'லாண்டானாவிலிருந்து பயனுள்ள பொருட்களை உருவாக்கும் உள்ளூர் முயற்சியை நாங்கள் ஆதரிக்கிறோம் — இது உள்நாட்டு தாவரங்களின் வளர்ச்சியை பாதித்த ஒரு படையெடுப்பு தாவரம்.',
+    lantanaContactPre: 'ஆர்டர் செய்ய, தொடர்பு கொள்ளவும்',
+    lantanaContactName: 'விவேக் கரடி',
+    catalogueLink: 'பட்டியலைப் பார்க்கவும் (PDF) →',
+    learningHeading: 'கற்றல் திட்டங்கள்',
+    learningTextPre: 'உள்ளூர் சமூகத்துடன் நடத்தப்படும் பயிலரங்குகள் மற்றும் வகுப்புகள் — முழு பட்டியல் எங்கள்',
+    learningLinkText: 'சமூக நல செயல்பாடு',
+    learningTextPost: 'பக்கத்தில் உள்ளது.',
+    learningLink: 'எங்கள் கற்றல் திட்டங்களைப் பார்க்கவும் →',
+  },
+} as const;
+
+const c = content[lang];
+---
+
+<BaseLayout lang={lang} title={c.metaTitle} description={c.metaDescription} image="/images/products/tamarind-chutney.jpeg" imageWidth={1280} imageHeight={960}>
+  <PageHero eyebrow={c.heroTitle} title={c.heroTitle} image="/images/products/tamarind-chutney.jpeg" imageAlt={c.heroImageAlt} />
+
+  <section class="section wrapper">
+    <h2>{c.lantanaHeading}</h2>
+    <p>{c.lantanaText}</p>
+    <p>{c.lantanaContactPre} <strong>{c.lantanaContactName}</strong> — <a href="mailto:Vivek.Garady@gmail.com">Vivek.Garady@gmail.com</a>.</p>
+    <a class="button button--outline" href="/files/lantana-furniture-catalogue.pdf" target="_blank" rel="noopener noreferrer">{c.catalogueLink}</a>
+  </section>
+
+  <section class="section section--tint">
+    <div class="wrapper">
+      <h2>{c.learningHeading}</h2>
+      <p>{c.learningTextPre} <a href={getRelativeLocaleUrl(lang, '/people/community-outreach')}>{c.learningLinkText}</a> {c.learningTextPost}</p>
+      <a class="button button--outline" href={getRelativeLocaleUrl(lang, '/people/community-outreach')}>{c.learningLink}</a>
+    </div>
+  </section>
+</BaseLayout>

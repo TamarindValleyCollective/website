@@ -1,18 +1,5 @@
 ---
-import BaseLayout from '../layouts/BaseLayout.astro';
-import PageHero from '../components/PageHero.astro';
-import PhotoGallery from '../components/photos/PhotoGallery.astro';
-import OnThisDay from '../components/photos/OnThisDay.astro';
-import { getCollection } from 'astro:content';
-
-const photos = (await getCollection('photos')).sort((a, b) => b.data.takenAt.valueOf() - a.data.takenAt.valueOf());
+import InPicturesView from '../components/views/InPicturesView.astro';
 ---
 
-<BaseLayout title="In Pictures" description="Photos of Tamarind Valley Collective — the land, the community, and daily life at TVC, from 2017 to today." image="https://media.tvc.farm/photos/2024/2024-08-18-img-1880-display.jpg" imageWidth={4032} imageHeight={3024}>
-  <PageHero eyebrow="About TVC" title="In Pictures" intro="Pictures are worth 10,000 words — an old proverb, still true. Curated highlights below, with camera and location details where we have them." image="https://media.tvc.farm/photos/2024/2024-08-18-img-1880-display.jpg" imageAlt="A child climbing a tree at TVC" />
-
-  <section class="section wrapper">
-    <OnThisDay photos={photos} />
-    <PhotoGallery photos={photos} />
-  </section>
-</BaseLayout>
+<InPicturesView lang="en" />

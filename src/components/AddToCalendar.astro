@@ -1,20 +1,33 @@
 ---
+import type { Locale } from '../i18n/utils';
+
 interface Props {
   googleUrl: string;
   icsHref: string;
   icsFilename: string;
+  lang?: Locale;
 }
 
-const { googleUrl, icsHref, icsFilename } = Astro.props;
+const { googleUrl, icsHref, icsFilename, lang = 'en' } = Astro.props;
+
+// Only used from src/components/views/EventDetailView.astro, so a small
+// local dict here (rather than an i18n/*.ts entry) is enough - kept next to
+// the three strings it covers instead of adding cross-file indirection.
+const text: Record<Locale, { toggle: string; google: string; ics: string }> = {
+  en: { toggle: 'Add to calendar', google: 'Google Calendar', ics: 'Apple / Outlook (.ics)' },
+  kn: { toggle: 'ಕ್ಯಾಲೆಂಡರ್‌ಗೆ ಸೇರಿಸಿ', google: 'ಗೂಗಲ್ ಕ್ಯಾಲೆಂಡರ್', ics: 'ಆಪಲ್ / ಔಟ್‌ಲುಕ್ (.ics)' },
+  ta: { toggle: 'கேலெண்டரில் சேர்க்கவும்', google: 'Google Calendar', ics: 'Apple / Outlook (.ics)' },
+};
+const t = text[lang];
 ---
 
 <div class="add-to-cal">
   <button type="button" class="button button--outline add-to-cal__toggle" aria-haspopup="true" aria-expanded="false">
-    Add to calendar
+    {t.toggle}
   </button>
   <div class="add-to-cal__menu" hidden>
-    <a href={googleUrl} target="_blank" rel="noopener noreferrer">Google Calendar</a>
-    <a href={icsHref} download={icsFilename}>Apple / Outlook (.ics)</a>
+    <a href={googleUrl} target="_blank" rel="noopener noreferrer">{t.google}</a>
+    <a href={icsHref} download={icsFilename}>{t.ics}</a>
   </div>
 </div>
 

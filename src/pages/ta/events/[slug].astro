@@ -1,0 +1,13 @@
+---
+import EventDetailView from '../../../components/views/EventDetailView.astro';
+import { getCollection } from 'astro:content';
+
+export async function getStaticPaths() {
+  const events = await getCollection('events', (e) => !e.data.draft && e.id.startsWith('ta/'));
+  return events.map((event) => ({ params: { slug: event.id.replace(/^ta\//, '') }, props: { event } }));
+}
+
+const { event } = Astro.props;
+---
+
+<EventDetailView lang="ta" event={event} />

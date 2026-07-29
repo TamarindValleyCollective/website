@@ -1,0 +1,254 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../PageHero.astro';
+import BookingInquiry from '../BookingInquiry.astro';
+import { useTranslations, type Locale } from '../../i18n/utils';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+
+// Itinerary names double as the BookingInquiry packageOptions dropdown, so
+// each locale's `itineraries[].name` here is what visitors will actually see
+// and select in the form - keep the 3 names consistent between the card
+// headings and the options array passed to BookingInquiry below.
+const content = {
+  en: {
+    metaDescription: 'Three ways to spend a day at Tamarind Valley Collective: a relaxed picnic, a hiking adventure, or doing absolutely nothing.',
+    heroEyebrow: 'Visit TVC',
+    heroTitle: 'Day Visit',
+    heroIntro: 'Choose between a quiet, relaxed day or a more active one.',
+    itineraries: [
+      {
+        name: 'Picnic at the Farm',
+        desc: 'A quiet, relaxed day.',
+        schedule: [
+          ['09:00', 'Arrive at TVC'],
+          ['09:30', 'Breakfast'],
+          ['10:30', 'Farm Tour / Foraging'],
+          ['12:00', 'Juice / Drink & Relax'],
+          ['12:30', 'Farming 101'],
+          ['13:30', 'Lunch'],
+          ['14:30', 'Board Games / Discussions'],
+          ['16:30', 'Tea / Coffee'],
+          ['17:00', 'Depart'],
+        ],
+      },
+      {
+        name: 'Hiking Adventure',
+        desc: 'A more active day.',
+        schedule: [
+          ['09:00', 'Arrive at TVC'],
+          ['09:30', 'Breakfast'],
+          ['10:30', 'Hiking'],
+          ['13:00', 'Re-hydrate and recover'],
+          ['13:30', 'Lunch'],
+          ['14:30', 'Land Restoration & Agriculture / Discussions'],
+          ['16:30', 'Tea / Coffee'],
+          ['17:00', 'Depart'],
+        ],
+      },
+      {
+        name: 'Do Nothing',
+        desc: 'Exactly what it sounds like.',
+        schedule: [
+          ['09:00', 'Arrive at TVC'],
+          ['09:30', 'Breakfast'],
+          ['10:30', 'Board Games / Discussions / Take a nap'],
+          ['13:30', 'Lunch'],
+          ['14:30', 'Nap / Discussions / Board Games'],
+          ['16:30', 'Tea / Coffee'],
+          ['17:00', 'Depart'],
+        ],
+      },
+    ],
+    pricingNote: '₹1,200 per person, ₹650 per child under 10 — includes breakfast, lunch, tea/coffee, and the activities in your chosen itinerary above. Confirm current pricing and availability when you send your inquiry below.',
+    bookingWhatsapp: "Hi! I'd like to know more about a day visit to TVC.",
+    bookingNote: "Day visits are coordinated with our hospitality partner, Linger — send an inquiry or message us and we'll take it from there.",
+  },
+  kn: {
+    metaDescription: 'ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ನಲ್ಲಿ ಒಂದು ದಿನ ಕಳೆಯಲು ಮೂರು ವಿಧಾನಗಳು: ಶಾಂತ ಪಿಕ್‌ನಿಕ್, ಚಾರಣ ಸಾಹಸ, ಅಥವಾ ಸಂಪೂರ್ಣವಾಗಿ ಏನೂ ಮಾಡದಿರುವುದು.',
+    heroEyebrow: 'TVC ಗೆ ಭೇಟಿ ನೀಡಿ',
+    heroTitle: 'ಒಂದು ದಿನದ ಭೇಟಿ',
+    heroIntro: 'ಶಾಂತ, ವಿಶ್ರಾಂತ ದಿನ ಅಥವಾ ಹೆಚ್ಚು ಸಕ್ರಿಯ ದಿನದ ನಡುವೆ ಆಯ್ಕೆಮಾಡಿ.',
+    itineraries: [
+      {
+        name: 'ಫಾರ್ಮ್‌ನಲ್ಲಿ ಪಿಕ್‌ನಿಕ್',
+        desc: 'ಒಂದು ಶಾಂತ, ವಿಶ್ರಾಂತ ದಿನ.',
+        schedule: [
+          ['09:00', 'TVC ಗೆ ಆಗಮನ'],
+          ['09:30', 'ಉಪಾಹಾರ'],
+          ['10:30', 'ಫಾರ್ಮ್ ಪ್ರವಾಸ / ಆಹಾರ ಹುಡುಕಾಟ'],
+          ['12:00', 'ಜ್ಯೂಸ್ / ಪಾನೀಯ ಮತ್ತು ವಿಶ್ರಾಂತಿ'],
+          ['12:30', 'ಕೃಷಿ 101'],
+          ['13:30', 'ಊಟ'],
+          ['14:30', 'ಬೋರ್ಡ್ ಗೇಮ್ಸ್ / ಚರ್ಚೆಗಳು'],
+          ['16:30', 'ಚಹಾ / ಕಾಫಿ'],
+          ['17:00', 'ನಿರ್ಗಮನ'],
+        ],
+      },
+      {
+        name: 'ಚಾರಣ ಸಾಹಸ',
+        desc: 'ಹೆಚ್ಚು ಸಕ್ರಿಯ ದಿನ.',
+        schedule: [
+          ['09:00', 'TVC ಗೆ ಆಗಮನ'],
+          ['09:30', 'ಉಪಾಹಾರ'],
+          ['10:30', 'ಚಾರಣ'],
+          ['13:00', 'ಪುನಃ ಜಲಸಂಚಯನ ಮತ್ತು ಚೇತರಿಕೆ'],
+          ['13:30', 'ಊಟ'],
+          ['14:30', 'ಭೂ ಪುನರುಜ್ಜೀವನ ಮತ್ತು ಕೃಷಿ / ಚರ್ಚೆಗಳು'],
+          ['16:30', 'ಚಹಾ / ಕಾಫಿ'],
+          ['17:00', 'ನಿರ್ಗಮನ'],
+        ],
+      },
+      {
+        name: 'ಏನೂ ಮಾಡದಿರುವುದು',
+        desc: 'ಹೆಸರೇ ಸೂಚಿಸುವಂತೆ ನಿಖರವಾಗಿ.',
+        schedule: [
+          ['09:00', 'TVC ಗೆ ಆಗಮನ'],
+          ['09:30', 'ಉಪಾಹಾರ'],
+          ['10:30', 'ಬೋರ್ಡ್ ಗೇಮ್ಸ್ / ಚರ್ಚೆಗಳು / ನಿದ್ದೆ ಮಾಡಿ'],
+          ['13:30', 'ಊಟ'],
+          ['14:30', 'ನಿದ್ದೆ / ಚರ್ಚೆಗಳು / ಬೋರ್ಡ್ ಗೇಮ್ಸ್'],
+          ['16:30', 'ಚಹಾ / ಕಾಫಿ'],
+          ['17:00', 'ನಿರ್ಗಮನ'],
+        ],
+      },
+    ],
+    pricingNote: 'ಪ್ರತಿ ವ್ಯಕ್ತಿಗೆ ₹1,200, 10 ವರ್ಷದೊಳಗಿನ ಪ್ರತಿ ಮಗುವಿಗೆ ₹650 — ಉಪಾಹಾರ, ಊಟ, ಚಹಾ/ಕಾಫಿ, ಮತ್ತು ಮೇಲಿನ ನಿಮ್ಮ ಆಯ್ಕೆಯ ಪ್ರಯಾಣ ಯೋಜನೆಯ ಚಟುವಟಿಕೆಗಳನ್ನು ಒಳಗೊಂಡಿದೆ. ಕೆಳಗೆ ನಿಮ್ಮ ವಿಚಾರಣೆಯನ್ನು ಕಳುಹಿಸುವಾಗ ಪ್ರಸ್ತುತ ಬೆಲೆ ಮತ್ತು ಲಭ್ಯತೆಯನ್ನು ಖಚಿತಪಡಿಸಿಕೊಳ್ಳಿ.',
+    bookingWhatsapp: 'ಹಾಯ್! TVC ಗೆ ಒಂದು ದಿನದ ಭೇಟಿಯ ಬಗ್ಗೆ ಇನ್ನಷ್ಟು ತಿಳಿಯಲು ಬಯಸುತ್ತೇನೆ.',
+    bookingNote: 'ಒಂದು ದಿನದ ಭೇಟಿಗಳನ್ನು ನಮ್ಮ ಆತಿಥ್ಯ ಪಾಲುದಾರ Linger ಜೊತೆ ಸಂಯೋಜಿಸಲಾಗುತ್ತದೆ — ವಿಚಾರಣೆ ಕಳುಹಿಸಿ ಅಥವಾ ನಮಗೆ ಸಂದೇಶ ಕಳುಹಿಸಿ, ನಾವು ಅಲ್ಲಿಂದ ನಿರ್ವಹಿಸುತ್ತೇವೆ.',
+  },
+  ta: {
+    metaDescription: 'டமரிண்ட் வேலி கலெக்டிவில் ஒரு நாளைக் கழிக்க மூன்று வழிகள்: ஒரு நிதானமான உணவுவிருந்து, ஒரு மலையேற்ற சாகசம், அல்லது முற்றிலும் எதுவும் செய்யாமல் இருப்பது.',
+    heroEyebrow: 'TVC-ஐ பார்வையிடுங்கள்',
+    heroTitle: 'ஒரு நாள் பயணம்',
+    heroIntro: 'அமைதியான, நிதானமான நாள் அல்லது மேலும் சுறுசுறுப்பான நாளுக்கு இடையே தேர்ந்தெடுக்கவும்.',
+    itineraries: [
+      {
+        name: 'பண்ணையில் உணவுவிருந்து',
+        desc: 'ஒரு அமைதியான, நிதானமான நாள்.',
+        schedule: [
+          ['09:00', 'TVC-க்கு வருகை'],
+          ['09:30', 'காலை உணவு'],
+          ['10:30', 'பண்ணை சுற்றுலா / உணவு தேடல்'],
+          ['12:00', 'ஜூஸ் / பானம் & ஓய்வு'],
+          ['12:30', 'விவசாயம் 101'],
+          ['13:30', 'மதிய உணவு'],
+          ['14:30', 'போர்டு விளையாட்டுகள் / உரையாடல்கள்'],
+          ['16:30', 'தேநீர் / காபி'],
+          ['17:00', 'புறப்பாடு'],
+        ],
+      },
+      {
+        name: 'மலையேற்ற சாகசம்',
+        desc: 'ஒரு மேலும் சுறுசுறுப்பான நாள்.',
+        schedule: [
+          ['09:00', 'TVC-க்கு வருகை'],
+          ['09:30', 'காலை உணவு'],
+          ['10:30', 'மலையேற்றம்'],
+          ['13:00', 'நீரேற்றம் மற்றும் மீட்பு'],
+          ['13:30', 'மதிய உணவு'],
+          ['14:30', 'நில மீட்பு மற்றும் விவசாயம் / உரையாடல்கள்'],
+          ['16:30', 'தேநீர் / காபி'],
+          ['17:00', 'புறப்பாடு'],
+        ],
+      },
+      {
+        name: 'ஏதும் செய்யாதிருத்தல்',
+        desc: 'பெயர் சொல்வது போலவே சரியாக.',
+        schedule: [
+          ['09:00', 'TVC-க்கு வருகை'],
+          ['09:30', 'காலை உணவு'],
+          ['10:30', 'போர்டு விளையாட்டுகள் / உரையாடல்கள் / தூக்கம்'],
+          ['13:30', 'மதிய உணவு'],
+          ['14:30', 'தூக்கம் / உரையாடல்கள் / போர்டு விளையாட்டுகள்'],
+          ['16:30', 'தேநீர் / காபி'],
+          ['17:00', 'புறப்பாடு'],
+        ],
+      },
+    ],
+    pricingNote: 'ஒரு நபருக்கு ₹1,200, 10 வயதுக்குட்பட்ட ஒரு குழந்தைக்கு ₹650 — காலை உணவு, மதிய உணவு, தேநீர்/காபி, மற்றும் மேலே நீங்கள் தேர்ந்தெடுத்த பயணத் திட்டத்தின் செயல்பாடுகள் அடங்கும். கீழே உங்கள் விசாரணையை அனுப்பும்போது தற்போதைய விலை மற்றும் கிடைக்கும் தன்மையை உறுதிப்படுத்தவும்.',
+    bookingWhatsapp: 'வணக்கம்! TVC-க்கு ஒரு நாள் பயணம் பற்றி மேலும் அறிய விரும்புகிறேன்.',
+    bookingNote: 'ஒரு நாள் பயணங்கள் எங்கள் விருந்தோம்பல் கூட்டாளர் Linger உடன் ஒருங்கிணைக்கப்படுகின்றன — விசாரணையை அனுப்பவும் அல்லது எங்களுக்கு செய்தி அனுப்பவும், நாங்கள் அங்கிருந்து கவனித்துக்கொள்வோம்.',
+  },
+} as const;
+
+const c = content[lang];
+const packageOptions = c.itineraries.map((it) => it.name);
+---
+
+<BaseLayout lang={lang} title={t('nav.dayVisit')} description={c.metaDescription} image="/images/pages/home/gallery-2.jpg" imageWidth={768} imageHeight={329}>
+  <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} intro={c.heroIntro} image="/images/pages/home/gallery-2.jpg" imageAlt="Visitors taking in the valley view from a hilltop" />
+
+  <section class="section wrapper">
+    <div class="itinerary-grid">
+      {c.itineraries.map((it) => (
+        <div class="card">
+          <h3>{it.name}</h3>
+          <p class="desc">{it.desc}</p>
+          <table>
+            <tbody>
+              {it.schedule.map(([time, activity]) => (
+                <tr>
+                  <td class="time">{time}</td>
+                  <td>{activity}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+
+    <p class="pricing-note">{c.pricingNote}</p>
+
+    <BookingInquiry
+      lang={lang}
+      type="Day Visit"
+      packageOptions={packageOptions}
+      whatsappMessage={c.bookingWhatsapp}
+      note={c.bookingNote}
+    />
+  </section>
+</BaseLayout>
+
+<style>
+  .itinerary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+  }
+
+  .desc {
+    color: var(--tvc-ink-soft);
+    margin-bottom: 14px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+  }
+
+  td {
+    padding: 6px 0;
+    border-top: 1px dashed var(--tvc-line);
+  }
+
+  td.time {
+    font-variant-numeric: tabular-nums;
+    color: var(--tvc-green);
+    font-weight: 600;
+    width: 70px;
+  }
+
+  .pricing-note {
+    margin-top: 24px;
+    color: var(--tvc-ink-soft);
+    font-size: 0.9rem;
+  }
+</style>

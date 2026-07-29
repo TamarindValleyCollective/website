@@ -1,16 +1,30 @@
 ---
+import { useTranslations, DEFAULT_LOCALE, type Locale } from '../i18n/utils';
+
 interface Props {
   type: string;
   whatsappMessage: string;
   packageOptions?: string[];
   note?: string;
+  lang?: Locale;
 }
 
-const { type, whatsappMessage, packageOptions, note } = Astro.props;
+const { type, whatsappMessage, packageOptions, note, lang = DEFAULT_LOCALE } = Astro.props;
+const t = useTranslations(lang);
 
 const WHATSAPP_NUMBER = '918548065772';
 const whatsappHref = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappMessage)}`;
 const fieldId = type.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+// English field slugs kept as-is regardless of locale - itinerary names
+// (packageOptions) are supplied pre-translated by the caller, but their
+// slugified form is only used as a stable HTML id, never shown.
+const fieldLabels = {
+  en: { itinerary: 'Which itinerary?', people: 'Number of people', peoplePlaceholder: 'e.g. 2 adults, 1 child', dates: 'Preferred dates', datesPlaceholder: 'e.g. a weekend in December, or flexible', anythingElse: 'Anything else? (optional)', anythingElsePlaceholder: 'Any questions or extra details' },
+  kn: { itinerary: 'ಯಾವ ಪ್ರಯಾಣ ಯೋಜನೆ?', people: 'ಜನರ ಸಂಖ್ಯೆ', peoplePlaceholder: 'ಉದಾ. 2 ವಯಸ್ಕರು, 1 ಮಗು', dates: 'ಆದ್ಯತೆಯ ದಿನಾಂಕಗಳು', datesPlaceholder: 'ಉದಾ. ಡಿಸೆಂಬರ್‌ನಲ್ಲಿ ಒಂದು ವಾರಾಂತ್ಯ, ಅಥವಾ ಹೊಂದಿಕೊಳ್ಳುವ', anythingElse: 'ಬೇರೆ ಏನಾದರೂ? (ಐಚ್ಛಿಕ)', anythingElsePlaceholder: 'ಯಾವುದೇ ಪ್ರಶ್ನೆಗಳು ಅಥವಾ ಹೆಚ್ಚಿನ ವಿವರಗಳು' },
+  ta: { itinerary: 'எந்த பயணத் திட்டம்?', people: 'நபர்களின் எண்ணிக்கை', peoplePlaceholder: 'எ.கா. 2 பெரியவர்கள், 1 குழந்தை', dates: 'விருப்பமான தேதிகள்', datesPlaceholder: 'எ.கா. டிசம்பரில் ஒரு வார இறுதி, அல்லது நெகிழ்வானது', anythingElse: 'வேறு ஏதேனும்? (விருப்பம்)', anythingElsePlaceholder: 'ஏதேனும் கேள்விகள் அல்லது கூடுதல் விவரங்கள்' },
+} as const;
+const f = fieldLabels[lang];
 ---
 
 <div class="booking-inquiry">
@@ -26,13 +40,13 @@ const fieldId = type.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     >
       <input type="hidden" name="form-name" value="visit-inquiry" />
       <input type="hidden" name="type" value={type} />
-      <p class="inquiry-hp"><label>Don't fill this out: <input name="bot-field" /></label></p>
+      <p class="inquiry-hp"><label>{t('forms.honeypotLabel')} <input name="bot-field" /></label></p>
 
       {packageOptions && (
         <div class="field-package">
-          <label for={`${fieldId}-package`}>Which itinerary?</label>
+          <label for={`${fieldId}-package`}>{f.itinerary}</label>
           <select id={`${fieldId}-package`} name="package" required>
-            <option value="">Choose one</option>
+            <option value="">{t('forms.chooseOne')}</option>
             {packageOptions.map((opt) => <option value={opt}>{opt}</option>)}
           </select>
         </div>
@@ -40,35 +54,35 @@ const fieldId = type.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
       <div class="inquiry-grid">
         <div>
-          <label for={`${fieldId}-name`}>Name</label>
-          <input id={`${fieldId}-name`} type="text" name="name" placeholder="Your name" autocomplete="name" required />
+          <label for={`${fieldId}-name`}>{t('forms.name')}</label>
+          <input id={`${fieldId}-name`} type="text" name="name" placeholder={t('forms.namePlaceholder')} autocomplete="name" required />
         </div>
         <div>
-          <label for={`${fieldId}-email`}>Email</label>
+          <label for={`${fieldId}-email`}>{t('forms.email')}</label>
           <input id={`${fieldId}-email`} type="email" name="email" placeholder="you@example.com" autocomplete="email" required />
         </div>
         <div>
-          <label for={`${fieldId}-phone`}>Phone (optional)</label>
+          <label for={`${fieldId}-phone`}>{t('forms.phoneOptional')}</label>
           <input id={`${fieldId}-phone`} type="tel" name="phone" placeholder="+91 98765 43210" autocomplete="tel" />
         </div>
         <div>
-          <label for={`${fieldId}-people`}>Number of people</label>
-          <input id={`${fieldId}-people`} type="text" name="people" placeholder="e.g. 2 adults, 1 child" />
+          <label for={`${fieldId}-people`}>{f.people}</label>
+          <input id={`${fieldId}-people`} type="text" name="people" placeholder={f.peoplePlaceholder} />
         </div>
       </div>
 
-      <label for={`${fieldId}-dates`}>Preferred dates</label>
-      <input id={`${fieldId}-dates`} type="text" name="dates" placeholder="e.g. a weekend in December, or flexible" />
+      <label for={`${fieldId}-dates`}>{f.dates}</label>
+      <input id={`${fieldId}-dates`} type="text" name="dates" placeholder={f.datesPlaceholder} />
 
-      <label for={`${fieldId}-message`}>Anything else? (optional)</label>
-      <textarea id={`${fieldId}-message`} name="message" rows="3" placeholder="Any questions or extra details"></textarea>
+      <label for={`${fieldId}-message`}>{f.anythingElse}</label>
+      <textarea id={`${fieldId}-message`} name="message" rows="3" placeholder={f.anythingElsePlaceholder}></textarea>
 
-      <button class="button" type="submit">Send inquiry</button>
+      <button class="button" type="submit">{t('forms.sendInquiry')}</button>
     </form>
 
     <div class="whatsapp-cta">
-      <p>Prefer to chat? Message our visit-bookings line directly:</p>
-      <a class="button button--outline" href={whatsappHref} target="_blank" rel="noopener noreferrer">Message us on WhatsApp</a>
+      <p>{t('forms.preferChat')}</p>
+      <a class="button button--outline" href={whatsappHref} target="_blank" rel="noopener noreferrer">{t('forms.messageOnWhatsapp')}</a>
     </div>
   </div>
 </div>

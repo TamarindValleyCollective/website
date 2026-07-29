@@ -5,36 +5,170 @@
 // would do something that sounds similar but actually runs server-side per
 // request (needs `output: 'server'` + a Vercel function), which would break
 // with the rest of this site staying fully static. Don't "fix" this into SSR.
+//
+// UI chrome (labels, buttons, empty/error states) is translated per `lang`
+// below. Species/taxon names themselves come live from the iNaturalist API
+// in English only and are left as-is — those are proper/scientific names,
+// not UI text. Strings the client <script> needs at runtime are passed down
+// via data-* attributes (see data-strings below), same pattern as
+// WeatherWidget/SiteSearch, since the script can't call t() directly.
+import { type Locale } from '../../i18n/utils';
+
+interface Props {
+  lang?: Locale;
+}
+
+const { lang = 'en' } = Astro.props;
+
+const content = {
+  en: {
+    loading: 'Loading live sightings from iNaturalist…',
+    topContributorsAria: 'Top contributors',
+    researchGradeTitle: 'Only show iNaturalist’s community-verified "Research Grade" identifications',
+    researchGradeLabel: 'Research grade only',
+    filterByGroupAria: 'Filter by group',
+    viewAria: 'View',
+    gallery: 'Gallery',
+    mapView: 'Map view',
+    showingObservationsBy: 'Showing observations by',
+    clear: 'Clear ✕',
+    noObservations: 'No observations found for this project yet.',
+    loadError: "Couldn't load live observations right now.",
+    tryAgain: 'Try again',
+    closeAria: 'Close',
+    statObservations: 'Observations',
+    statSpecies: 'Species',
+    statContributors: 'Contributors',
+    allChip: 'All',
+    loadMore: 'Load more',
+    left: 'left',
+    filterByPrefix: 'Filter by',
+    observed: 'Observed:',
+    location: 'Location:',
+    onProperty: 'On the property',
+    unknownDate: 'Unknown date',
+    observer: 'Observer:',
+    viewOnINaturalist: 'View on iNaturalist →',
+    relatedHeading: 'Related sightings',
+    relatedText: 'Other observations in the same genus.',
+    unidentified: 'Unidentified',
+  },
+  kn: {
+    loading: 'iNaturalist ನಿಂದ ನೇರ ಪ್ರೇಕ್ಷಣೆಗಳನ್ನು ಲೋಡ್ ಮಾಡಲಾಗುತ್ತಿದೆ…',
+    topContributorsAria: 'ಪ್ರಮುಖ ಕೊಡುಗೆದಾರರು',
+    researchGradeTitle: 'iNaturalist ನ ಸಮುದಾಯ-ಪರಿಶೀಲಿಸಿದ "ಸಂಶೋಧನಾ ದರ್ಜೆ" ಗುರುತಿಸುವಿಕೆಗಳನ್ನು ಮಾತ್ರ ತೋರಿಸಿ',
+    researchGradeLabel: 'ಸಂಶೋಧನಾ ದರ್ಜೆ ಮಾತ್ರ',
+    filterByGroupAria: 'ಗುಂಪಿನ ಮೂಲಕ ಫಿಲ್ಟರ್ ಮಾಡಿ',
+    viewAria: 'ವೀಕ್ಷಣೆ',
+    gallery: 'ಗ್ಯಾಲರಿ',
+    mapView: 'ನಕ್ಷೆ ವೀಕ್ಷಣೆ',
+    showingObservationsBy: 'ಇವರ ಪ್ರೇಕ್ಷಣೆಗಳನ್ನು ತೋರಿಸಲಾಗುತ್ತಿದೆ',
+    clear: 'ತೆರವುಗೊಳಿಸಿ ✕',
+    noObservations: 'ಈ ಯೋಜನೆಗೆ ಇನ್ನೂ ಯಾವುದೇ ಪ್ರೇಕ್ಷಣೆಗಳು ಕಂಡುಬಂದಿಲ್ಲ.',
+    loadError: 'ಈಗ ನೇರ ಪ್ರೇಕ್ಷಣೆಗಳನ್ನು ಲೋಡ್ ಮಾಡಲಾಗಲಿಲ್ಲ.',
+    tryAgain: 'ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ',
+    closeAria: 'ಮುಚ್ಚಿ',
+    statObservations: 'ಪ್ರೇಕ್ಷಣೆಗಳು',
+    statSpecies: 'ಪ್ರಭೇದಗಳು',
+    statContributors: 'ಕೊಡುಗೆದಾರರು',
+    allChip: 'ಎಲ್ಲಾ',
+    loadMore: 'ಇನ್ನಷ್ಟು ಲೋಡ್ ಮಾಡಿ',
+    left: 'ಉಳಿದಿದೆ',
+    filterByPrefix: 'ಇವರ ಮೂಲಕ ಫಿಲ್ಟರ್ ಮಾಡಿ',
+    observed: 'ಗಮನಿಸಲಾಗಿದೆ:',
+    location: 'ಸ್ಥಳ:',
+    onProperty: 'ಆಸ್ತಿಯಲ್ಲಿ',
+    unknownDate: 'ಅಜ್ಞಾತ ದಿನಾಂಕ',
+    observer: 'ವೀಕ್ಷಕರು:',
+    viewOnINaturalist: 'iNaturalist ನಲ್ಲಿ ನೋಡಿ →',
+    relatedHeading: 'ಸಂಬಂಧಿತ ಪ್ರೇಕ್ಷಣೆಗಳು',
+    relatedText: 'ಅದೇ ಜಾತಿಯ ಇತರ ಪ್ರೇಕ್ಷಣೆಗಳು.',
+    unidentified: 'ಗುರುತಿಸಲಾಗದ',
+  },
+  ta: {
+    loading: 'iNaturalist இலிருந்து நேரடி காட்சிகள் ஏற்றப்படுகின்றன…',
+    topContributorsAria: 'முதன்மை பங்களிப்பாளர்கள்',
+    researchGradeTitle: 'iNaturalist இன் சமூக-சரிபார்க்கப்பட்ட "ஆராய்ச்சி தர" அடையாளங்களை மட்டும் காட்டு',
+    researchGradeLabel: 'ஆராய்ச்சி தரம் மட்டும்',
+    filterByGroupAria: 'குழுவின் மூலம் வடிகட்டு',
+    viewAria: 'காட்சி',
+    gallery: 'கேலரி',
+    mapView: 'வரைபடக் காட்சி',
+    showingObservationsBy: 'இவரின் காட்சிகள் காட்டப்படுகின்றன',
+    clear: 'அழி ✕',
+    noObservations: 'இந்த திட்டத்திற்கு இதுவரை காட்சிகள் எதுவும் கிடைக்கவில்லை.',
+    loadError: 'இப்போது நேரடி காட்சிகளை ஏற்ற முடியவில்லை.',
+    tryAgain: 'மீண்டும் முயற்சிக்கவும்',
+    closeAria: 'மூடு',
+    statObservations: 'காட்சிகள்',
+    statSpecies: 'இனங்கள்',
+    statContributors: 'பங்களிப்பாளர்கள்',
+    allChip: 'அனைத்தும்',
+    loadMore: 'மேலும் ஏற்று',
+    left: 'மீதம்',
+    filterByPrefix: 'இதன் மூலம் வடிகட்டு',
+    observed: 'கவனிக்கப்பட்டது:',
+    location: 'இடம்:',
+    onProperty: 'சொத்தில்',
+    unknownDate: 'தெரியாத தேதி',
+    observer: 'கவனிப்பாளர்:',
+    viewOnINaturalist: 'iNaturalist இல் பார்க்கவும் →',
+    relatedHeading: 'தொடர்புடைய காட்சிகள்',
+    relatedText: 'அதே இனத்தின் மற்ற காட்சிகள்.',
+    unidentified: 'அடையாளம் தெரியாத',
+  },
+} as const;
+
+const c = content[lang];
+const strings = {
+  statObservations: c.statObservations,
+  statSpecies: c.statSpecies,
+  statContributors: c.statContributors,
+  allChip: c.allChip,
+  loadMore: c.loadMore,
+  left: c.left,
+  filterByPrefix: c.filterByPrefix,
+  observed: c.observed,
+  location: c.location,
+  onProperty: c.onProperty,
+  unknownDate: c.unknownDate,
+  observer: c.observer,
+  viewOnINaturalist: c.viewOnINaturalist,
+  relatedHeading: c.relatedHeading,
+  relatedText: c.relatedText,
+  unidentified: c.unidentified,
+};
+const stringsJsonSafe = JSON.stringify(strings).replace(/<\/script/gi, '<\\/script');
 ---
 
-<div class="explorer" id="biodiversity-explorer">
+<div class="explorer" id="biodiversity-explorer" data-lang={lang}>
   <div class="explorer__status" id="explorer-status" role="status">
     <div class="skeleton"></div>
-    <p>Loading live sightings from iNaturalist…</p>
+    <p>{c.loading}</p>
   </div>
 
   <div class="explorer__body" id="explorer-body" hidden>
     <div class="stats" id="explorer-stats"></div>
 
     <div class="leaderboard-row">
-      <div class="leaderboard" id="leaderboard" role="group" aria-label="Top contributors"></div>
-      <label class="quality-toggle" title="Only show iNaturalist's community-verified &quot;Research Grade&quot; identifications">
+      <div class="leaderboard" id="leaderboard" role="group" aria-label={c.topContributorsAria}></div>
+      <label class="quality-toggle" title={c.researchGradeTitle}>
         <input type="checkbox" id="research-grade-toggle" />
-        Research grade only
+        {c.researchGradeLabel}
       </label>
     </div>
 
     <div class="explorer__controls">
-      <div class="explorer__chips" id="explorer-chips" role="group" aria-label="Filter by group"></div>
-      <div class="view-toggle" role="group" aria-label="View">
-        <button type="button" class="view-toggle__btn is-active" id="view-gallery">Gallery</button>
-        <button type="button" class="view-toggle__btn" id="view-map">Map view</button>
+      <div class="explorer__chips" id="explorer-chips" role="group" aria-label={c.filterByGroupAria}></div>
+      <div class="view-toggle" role="group" aria-label={c.viewAria}>
+        <button type="button" class="view-toggle__btn is-active" id="view-gallery">{c.gallery}</button>
+        <button type="button" class="view-toggle__btn" id="view-map">{c.mapView}</button>
       </div>
     </div>
 
     <div class="contributor-filter" id="contributor-filter" hidden>
-      <span>Showing observations by <strong id="contributor-filter-name"></strong></span>
-      <button type="button" id="contributor-filter-clear">Clear ✕</button>
+      <span>{c.showingObservationsBy} <strong id="contributor-filter-name"></strong></span>
+      <button type="button" id="contributor-filter-clear">{c.clear}</button>
     </div>
 
     <div class="explorer__map-wrap" id="map-view" hidden>
@@ -44,24 +178,26 @@
     <div class="explorer__grid" id="explorer-grid"></div>
 
     <div class="load-more-wrap" id="load-more-wrap" hidden>
-      <button type="button" class="button button--outline" id="load-more">Load more</button>
+      <button type="button" class="button button--outline" id="load-more">{c.loadMore}</button>
     </div>
   </div>
 
   <div class="explorer__empty" id="explorer-empty" hidden>
-    <p>No observations found for this project yet.</p>
+    <p>{c.noObservations}</p>
   </div>
 
   <div class="explorer__error" id="explorer-error" hidden>
-    <p>Couldn't load live observations right now. <button type="button" id="explorer-retry" class="button button--outline">Try again</button></p>
+    <p>{c.loadError} <button type="button" id="explorer-retry" class="button button--outline">{c.tryAgain}</button></p>
   </div>
 
   <div class="detail-overlay" id="detail-overlay" hidden>
     <div class="detail-panel" role="dialog" aria-modal="true" aria-labelledby="detail-title">
-      <button type="button" class="detail-close" id="detail-close" aria-label="Close">✕</button>
+      <button type="button" class="detail-close" id="detail-close" aria-label={c.closeAria}>✕</button>
       <div id="detail-content"></div>
     </div>
   </div>
+
+  <script type="application/json" id="biodiversity-strings" set:html={stringsJsonSafe} />
 </div>
 
 <style>
@@ -519,6 +655,13 @@
     type Observation,
   } from './observation-utils';
 
+  type Lang = 'en' | 'kn' | 'ta';
+
+  const rootEl = document.getElementById('biodiversity-explorer')!;
+  const LANG = (rootEl.dataset.lang as Lang) || 'en';
+  const stringsEl = document.getElementById('biodiversity-strings');
+  const STR: Record<string, string> = stringsEl ? JSON.parse(stringsEl.textContent ?? '{}') : {};
+
   const PAGE_SIZE = 24;
 
   const statusEl = document.getElementById('explorer-status')!;
@@ -569,7 +712,7 @@
   function refreshMap() {
     if (!mapInitialized) return;
     mapInstance?.remove();
-    mapInstance = initMap('observation-map', filteredObservations(), openDetail);
+    mapInstance = initMap('observation-map', filteredObservations(), openDetail, LANG);
   }
 
   function showState(state: 'loading' | 'ready' | 'empty' | 'error') {
@@ -606,9 +749,9 @@
     const speciesCount = new Set(allObservations.map((o) => o.taxon?.id).filter(Boolean)).size;
     const contributorCount = new Set(allObservations.map((o) => o.user.login).filter(Boolean)).size;
     const stats = [
-      { label: 'Observations', value: allObservations.length },
-      { label: 'Species', value: speciesCount },
-      { label: 'Contributors', value: contributorCount },
+      { label: STR.statObservations, value: allObservations.length },
+      { label: STR.statSpecies, value: speciesCount },
+      { label: STR.statContributors, value: contributorCount },
     ];
     statsEl.innerHTML = stats
       .map((s) => `<div class="stat"><p class="stat__label">${s.label}</p><p class="stat__value">${s.value}</p></div>`)
@@ -651,7 +794,7 @@
     allChip.className = 'chip is-active';
     allChip.type = 'button';
     allChip.dataset.taxon = '';
-    allChip.textContent = `All · ${allObservations.length}`;
+    allChip.textContent = `${STR.allChip} · ${allObservations.length}`;
     allChip.addEventListener('click', () => setFilter(null));
     chipsEl.appendChild(allChip);
 
@@ -661,7 +804,7 @@
       chip.className = 'chip';
       chip.type = 'button';
       chip.dataset.taxon = iconicTaxon;
-      chip.textContent = `${labelForIconicTaxon(iconicTaxon)} · ${obs.length}`;
+      chip.textContent = `${labelForIconicTaxon(iconicTaxon, LANG)} · ${obs.length}`;
       chip.addEventListener('click', () => setFilter(iconicTaxon));
       chipsEl.appendChild(chip);
     }
@@ -714,7 +857,7 @@
       card.setAttribute('role', 'button');
       card.tabIndex = 0;
       const thumb = o.photos[0] ? thumbUrl(o.photos[0].url) : '';
-      const name = o.taxon?.preferred_common_name || o.taxon?.name || 'Unidentified';
+      const name = o.taxon?.preferred_common_name || o.taxon?.name || STR.unidentified;
       const scientific = o.taxon?.name && o.taxon.name !== name ? o.taxon.name : '';
       const login = o.user.login;
       const observerName = o.user.name || login;
@@ -723,13 +866,13 @@
         ${thumb ? `
           <div class="obs-card__media">
             <img src="${thumb}" alt="${name}" loading="lazy" />
-            ${login ? `<button type="button" class="obs-card__observer${isActiveObserver ? ' is-active' : ''}" title="Filter by ${observerName}">${observerName}</button>` : ''}
+            ${login ? `<button type="button" class="obs-card__observer${isActiveObserver ? ' is-active' : ''}" title="${STR.filterByPrefix} ${observerName}">${observerName}</button>` : ''}
           </div>
         ` : ''}
         <div class="obs-card__body">
           <p class="obs-card__name">${name}</p>
           ${scientific ? `<p class="obs-card__scientific">${scientific}</p>` : ''}
-          <p class="obs-card__group">${labelForIconicTaxon(o.taxon?.iconic_taxon_name ?? null)}</p>
+          <p class="obs-card__group">${labelForIconicTaxon(o.taxon?.iconic_taxon_name ?? null, LANG)}</p>
         </div>
       `;
       card.addEventListener('click', () => openDetail(o));
@@ -747,11 +890,11 @@
     }
     const remaining = obs.length - visible.length;
     loadMoreWrap.hidden = remaining <= 0;
-    loadMoreBtn.textContent = `Load more · ${remaining} left`;
+    loadMoreBtn.textContent = `${STR.loadMore} · ${remaining} ${STR.left}`;
   }
 
   function openDetail(o: Observation) {
-    const name = o.taxon?.preferred_common_name || o.taxon?.name || 'Unidentified';
+    const name = o.taxon?.preferred_common_name || o.taxon?.name || STR.unidentified;
     const scientific = o.taxon?.name && o.taxon.name !== name ? `<em>${o.taxon.name}</em>` : '';
     const photo = o.photos[0];
     const related = o.taxon?.parent_id != null ? (byParent.get(o.taxon.parent_id) ?? []).filter((r) => r.id !== o.id) : [];
@@ -761,13 +904,13 @@
       ${scientific ? `<p>${scientific}</p>` : ''}
       ${photo ? `<a class="detail-photo-link" href="${photo.url.replace('square', 'original')}" target="_blank" rel="noopener noreferrer" title="Open full-size photo"><img class="detail-photo" src="${photo.url.replace('square', 'large')}" alt="${name}" /></a>` : ''}
       ${photo ? `<p class="attribution" style="font-size:0.82rem;color:var(--tvc-ink-soft);">${photo.attribution}${photo.license_code ? ` · <a href="https://creativecommons.org/licenses/${photo.license_code.replace('cc-', '')}/4.0/" target="_blank" rel="noopener noreferrer">${photo.license_code.toUpperCase()}</a>` : ''}</p>` : ''}
-      <p><strong>Observed:</strong> ${o.observed_on ?? 'Unknown date'}</p>
-      <p><strong>Location:</strong> ${o.place_guess ?? 'On the property'}</p>
-      <p><strong>Observer:</strong> <a href="https://www.inaturalist.org/people/${o.user.login}" target="_blank" rel="noopener noreferrer">${o.user.name || o.user.login}</a></p>
-      <p><a href="${o.uri}" target="_blank" rel="noopener noreferrer">View on iNaturalist →</a></p>
+      <p><strong>${STR.observed}</strong> ${o.observed_on ?? STR.unknownDate}</p>
+      <p><strong>${STR.location}</strong> ${o.place_guess ?? STR.onProperty}</p>
+      <p><strong>${STR.observer}</strong> <a href="https://www.inaturalist.org/people/${o.user.login}" target="_blank" rel="noopener noreferrer">${o.user.name || o.user.login}</a></p>
+      <p><a href="${o.uri}" target="_blank" rel="noopener noreferrer">${STR.viewOnINaturalist}</a></p>
       ${related.length > 0 ? `
-        <h3>Related sightings</h3>
-        <p style="font-size:0.85rem;color:var(--tvc-ink-soft);">Other observations in the same genus.</p>
+        <h3>${STR.relatedHeading}</h3>
+        <p style="font-size:0.85rem;color:var(--tvc-ink-soft);">${STR.relatedText}</p>
         <div class="related-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;">
           ${related.slice(0, 8).map((r) => `<img data-related-id="${r.id}" src="${r.photos[0] ? thumbUrl(r.photos[0].url) : ''}" alt="${r.taxon?.preferred_common_name || r.taxon?.name || ''}" style="width:100%;height:70px;object-fit:cover;border-radius:6px;cursor:pointer;" />`).join('')}
         </div>
@@ -823,7 +966,7 @@
       // Map init is deferred until first shown — its container has zero
       // height while `hidden`, so Leaflet can't size itself correctly earlier.
       requestAnimationFrame(() => {
-        mapInstance = initMap('observation-map', filteredObservations(), openDetail);
+        mapInstance = initMap('observation-map', filteredObservations(), openDetail, LANG);
       });
     }
   });

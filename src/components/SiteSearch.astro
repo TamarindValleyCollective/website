@@ -6,9 +6,17 @@
 // trigger button sits naturally in the header bar's flex row; the overlay
 // itself is position:fixed, so its place in the DOM doesn't matter for
 // where it actually appears on screen.
+import { useTranslations, DEFAULT_LOCALE, type Locale } from '../i18n/utils';
+
+interface Props {
+  lang?: Locale;
+}
+
+const { lang = DEFAULT_LOCALE } = Astro.props;
+const t = useTranslations(lang);
 ---
 
-<button type="button" id="site-search-trigger" class="search-trigger" aria-label="Search the site">
+<button type="button" id="site-search-trigger" class="search-trigger" aria-label={t('search.trigger')}>
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
     <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.6" />
     <path d="M16 16L12.5 12.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
@@ -22,15 +30,22 @@
         <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.6" />
         <path d="M16 16L12.5 12.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
       </svg>
-      <input id="site-search-input" type="text" placeholder="Search tvc.farm…" autocomplete="off" spellcheck="false" />
-      <button type="button" id="site-search-close" aria-label="Close search">
+      <input id="site-search-input" type="text" placeholder={t('search.placeholder')} autocomplete="off" spellcheck="false" />
+      <button type="button" id="site-search-close" aria-label={t('search.close')}>
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
           <path d="M1 1L13 13M13 1L1 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
         </svg>
       </button>
     </div>
     <ul id="site-search-results" class="search-results"></ul>
-    <p id="site-search-status" class="search-status" hidden></p>
+    <p
+      id="site-search-status"
+      class="search-status"
+      hidden
+      data-msg-unavailable={t('search.unavailable')}
+      data-msg-no-results={t('search.noResults')}
+      data-msg-loading={t('search.loading')}
+    ></p>
   </div>
 </div>
 
@@ -249,7 +264,7 @@
     activeIndex = -1;
 
     if (loadFailed) {
-      statusEl.textContent = "Search isn't available right now.";
+      statusEl.textContent = statusEl.dataset.msgUnavailable ?? '';
       statusEl.hidden = false;
       return;
     }
@@ -259,7 +274,7 @@
       return;
     }
     if (currentResults.length === 0) {
-      statusEl.textContent = 'No results.';
+      statusEl.textContent = statusEl.dataset.msgNoResults ?? '';
       statusEl.hidden = false;
       return;
     }
@@ -292,7 +307,10 @@
     input.value = '';
     input.focus();
     if (!index && !loadFailed) {
-      statusEl && (statusEl.hidden = false) && (statusEl.textContent = 'Loading…');
+      if (statusEl) {
+        statusEl.textContent = statusEl.dataset.msgLoading ?? '';
+        statusEl.hidden = false;
+      }
       await loadIndex();
       if (statusEl) statusEl.hidden = true;
     }

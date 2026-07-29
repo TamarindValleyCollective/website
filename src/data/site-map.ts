@@ -4,29 +4,33 @@
 
 export interface SiteLink {
   label: string;
+  // Dictionary key under `nav.*` (src/i18n/{en,kn,ta}.ts) - lets Nav/Footer/
+  // the homepage render a translated label instead of the English `label`
+  // fallback above, without this file needing to know about locales itself.
+  key: string;
   href: string;
 }
 
 export const EXPLORE_LINKS: SiteLink[] = [
-  { label: 'About TVC', href: '/about' },
-  { label: 'People', href: '/people' },
-  { label: 'Our Journey', href: '/our-journey' },
-  { label: 'In Pictures', href: '/in-pictures' },
-  { label: 'Biodiversity', href: '/ecosystem' },
-  { label: 'Weather', href: '/ecosystem/geography' },
-  { label: 'Resource Centre', href: '/resource-centre' },
-  { label: 'Events', href: '/events' },
+  { label: 'About TVC', key: 'about', href: '/about' },
+  { label: 'People', key: 'people', href: '/people' },
+  { label: 'Our Journey', key: 'ourJourney', href: '/our-journey' },
+  { label: 'In Pictures', key: 'inPictures', href: '/in-pictures' },
+  { label: 'Biodiversity', key: 'biodiversity', href: '/ecosystem' },
+  { label: 'Weather', key: 'weather', href: '/ecosystem/geography' },
+  { label: 'Resource Centre', key: 'resourceCentre', href: '/resource-centre' },
+  { label: 'Events', key: 'events', href: '/events' },
 ];
 
 export const ENGAGE_LINKS: SiteLink[] = [
-  { label: 'Visit TVC', href: '/visit' },
-  { label: 'Day Visit', href: '/visit/day-visit' },
-  { label: 'Overnight Camping', href: '/visit/camping' },
-  { label: 'Host an Event', href: '/visit/host-an-event' },
-  { label: 'Trekking Trails', href: '/visit/trekking-trails' },
-  { label: 'How to Reach', href: '/visit/how-to-reach' },
-  { label: 'Join the Collective', href: '/join' },
-  { label: 'Contact Us', href: '/contact' },
+  { label: 'Visit TVC', key: 'visitTvc', href: '/visit' },
+  { label: 'Day Visit', key: 'dayVisit', href: '/visit/day-visit' },
+  { label: 'Overnight Camping', key: 'camping', href: '/visit/camping' },
+  { label: 'Host an Event', key: 'hostAnEvent', href: '/visit/host-an-event' },
+  { label: 'Trekking Trails', key: 'trekkingTrails', href: '/visit/trekking-trails' },
+  { label: 'How to Reach', key: 'howToReach', href: '/visit/how-to-reach' },
+  { label: 'Join the Collective', key: 'join', href: '/join' },
+  { label: 'Contact Us', key: 'contact', href: '/contact' },
 ];
 
 // Path prefixes used to classify a page (including dynamic slug pages, which

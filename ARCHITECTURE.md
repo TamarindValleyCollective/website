@@ -257,6 +257,51 @@ Netlify build (the offline photo curation and captioning scripts).
   `pull-approved-photos.mjs`, and `enquiry.mts`. Plain ESM, not TypeScript, so both a bundled
   Netlify Function and a plain `node`-run script can import it directly.
 
+### 1a. Localization (Kannada / Tamil)
+
+The site is being localized into Kannada (`kn`) and Tamil (`ta`) alongside the existing English
+content, using Astro's built-in i18n routing (`astro.config.mjs`'s `i18n` block: `defaultLocale:
+'en'`, `locales: ['en', 'kn', 'ta']`, `routing.prefixDefaultLocale: false`). English keeps its
+existing unprefixed URLs (`/about`); Kannada and Tamil live under `/kn/...` and `/ta/...`, with a
+parallel `src/pages/kn/` and `src/pages/ta/` tree mirroring `src/pages/`. This is a build-time,
+static-generation concern only — it doesn't add a hosting dependency or change the diagram above,
+just multiplies the number of prerendered pages.
+
+- **`src/i18n/{en,kn,ta}.ts`** — flat translation dictionaries (nav/footer/forms/cookie-banner/
+  search/chat-widget/weather-widget strings, shared across many pages) plus **`src/i18n/utils.ts`**,
+  which exports `useTranslations(lang)` (a `t(key, params?)` dot-path lookup with `{token}`
+  interpolation, falling back to the English entry if a kn/ta key is missing), `SUPPORTED_LOCALES`,
+  `DEFAULT_LOCALE`, and `stripLocalePrefix()`. Page-specific prose (the bulk of the actual
+  translated copy) lives inline in each page's own view component instead, as a `content = { en,
+  kn, ta }` object — see `src/components/views/AboutView.astro` for the canonical pattern.
+- **`src/components/views/*View.astro`** — one per page, taking a `lang` prop; the actual
+  `src/pages/**/*.astro` files (English at the bare path, plus `kn/`/`ta/` mirrors) are thin
+  wrappers rendering the matching view with `lang="en"`/`"kn"`/`"ta"`.
+- **`src/i18n/reviewStatus.ts`** — every kn/ta string is an initial AI-drafted pass, not
+  final/reviewed copy. `TranslationNotice.astro` (rendered from `BaseLayout` whenever
+  `lang !== 'en'` and that locale's `reviewStatus` flag is still `false`) shows a small banner
+  saying so; flipping a locale's flag to `true` once a native speaker has reviewed everything
+  removes the banner site-wide with no other code changes. See `TRANSLATIONS_REVIEW.md` for the
+  reviewer's checklist.
+- **`BaseLayout.astro`** sets `<html lang>`, emits `hreflang` alternate `<link>` tags (`en`/`kn`/
+  `ta`/`x-default`) for every page that exists in all three locales, and accepts a `translated`
+  prop (default `true`) for the handful of pages that deliberately stay English-only — `/privacy`,
+  `/terms`, `/refund-policy`, and `/404` (legal boilerplate and an error page; skipped by explicit
+  product decision, not an oversight) — which suppresses those alternates and points the language
+  switcher at that locale's homepage instead of a nonexistent translated URL.
+- **`LanguageSwitcher.astro`** (in `Nav.astro`) — a `<select>` of the 3 locales using
+  `getRelativeLocaleUrl()` against the current locale-stripped path, so switching languages lands
+  on the equivalent page rather than bouncing to the homepage.
+- **Content collections** — `events` and `community-outreach` (which have a full markdown body)
+  get sibling locale files, e.g. `src/content/events/kn/<slug>.md`, matching the English entry's
+  slug so the URL stays identical across locales; `photos` and `partners` (short frontmatter
+  fields only, no body) instead get optional `caption_kn`/`caption_ta` and
+  `title_kn`/`excerpt_kn`/`title_ta`/`excerpt_ta` fields added directly to the existing files,
+  falling back to the English field when a translation isn't filled in yet.
+- **ChatWidget** — the widget sends the visitor's current `lang` alongside each message;
+  `chat.mts`'s system prompt instructs Claude to reply in that language while still grounding
+  itself in the (English-only) site-content corpus — no need to translate the corpus itself.
+
 ### 2. Build
 
 On every push to `main`, Netlify runs:

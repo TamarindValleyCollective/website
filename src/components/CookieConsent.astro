@@ -1,15 +1,20 @@
 ---
+import { useTranslations, DEFAULT_LOCALE, type Locale } from '../i18n/utils';
+
+interface Props {
+  lang?: Locale;
+}
+
+const { lang = DEFAULT_LOCALE } = Astro.props;
+const t = useTranslations(lang);
 ---
 
 <div class="cookie-banner" id="cookie-banner" role="dialog" aria-live="polite" aria-label="Cookie consent" hidden>
   <div class="cookie-banner__inner">
-    <p class="cookie-banner__text">
-      We'd like to use Google Analytics to understand how visitors use this site. We won't set
-      analytics cookies unless you say it's okay — see our <a href="/privacy">Privacy &amp; Cookies</a> page for what that means.
-    </p>
+    <p class="cookie-banner__text" set:html={t('cookie.text')} />
     <div class="cookie-banner__actions">
-      <button type="button" class="button button--outline" id="cookie-reject">Reject</button>
-      <button type="button" class="button" id="cookie-accept">Accept</button>
+      <button type="button" class="button button--outline" id="cookie-reject">{t('cookie.reject')}</button>
+      <button type="button" class="button" id="cookie-accept">{t('cookie.accept')}</button>
     </div>
   </div>
 </div>

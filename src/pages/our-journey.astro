@@ -1,17 +1,5 @@
 ---
-import BaseLayout from '../layouts/BaseLayout.astro';
-import PageHero from '../components/PageHero.astro';
-import JourneyTimeline from '../components/JourneyTimelineStandalone.astro';
-import { FARM_AREA_ACRES } from '../data/site-facts';
+import OurJourneyView from '../components/views/OurJourneyView.astro';
 ---
 
-<BaseLayout title="Our Journey" description={`From ${FARM_AREA_ACRES} degraded acres to a regenerating ecosystem, walked year by year in photos.`} image="/images/pages/journey/hero.jpg" imageWidth={1280} imageHeight={960}>
-  <PageHero
-    eyebrow="Our Journey"
-    title="From degraded land to a regenerating ecosystem"
-    image="/images/pages/journey/hero.jpg"
-    imageAlt="Early view of the land during its restoration"
-  />
-
-  <JourneyTimeline />
-</BaseLayout>
+<OurJourneyView lang="en" />

@@ -1,0 +1,307 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../PageHero.astro';
+import WeatherWidget from '../WeatherWidget.astro';
+import { type Locale } from '../../i18n/utils';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+
+// Rainfall is logged daily at the farm; sourced from the community's shared rainfall log (issue #5).
+// Agricultural year runs April–March. 2026-27 is the current, in-progress year.
+const rainfall2025 = [
+  { month: 'Apr', mm: 154 },
+  { month: 'May', mm: 119.8 },
+  { month: 'Jun', mm: 18.2 },
+  { month: 'Jul', mm: 21 },
+  { month: 'Aug', mm: 71.4 },
+  { month: 'Sep', mm: 87.2 },
+  { month: 'Oct', mm: 126.9 },
+  { month: 'Nov', mm: 0 },
+  { month: 'Dec', mm: 0 },
+  { month: 'Jan', mm: 0 },
+  { month: 'Feb', mm: 0 },
+  { month: 'Mar', mm: 0 },
+];
+const rainfall2026 = [
+  { month: 'Apr', mm: 0 },
+  { month: 'May', mm: 119 },
+  { month: 'Jun', mm: 40 },
+  { month: 'Jul', mm: 7.6 }, // partial month, still logging
+];
+
+const monsoonToDate = 166.6; // 2026-27, Apr 1 – Jul 15
+const sameSpanLastYear = 303.0; // 2025-26, Apr 1 – Jul 15
+const monsoonDeltaPct = Math.round(((monsoonToDate - sameSpanLastYear) / sameSpanLastYear) * 100);
+
+const chartWidth = 720;
+const chartHeight = 220;
+const chartPadLeft = 36;
+const chartPadBottom = 26;
+const plotWidth = chartWidth - chartPadLeft - 12;
+const plotHeight = chartHeight - chartPadBottom - 10;
+const maxMm = 160; // rounded above the 154mm peak
+const yTicks = [0, 50, 100, 150];
+const bandWidth = plotWidth / rainfall2025.length;
+const barWidth = Math.min(24, bandWidth * 0.55);
+const peakMonth = rainfall2025.reduce((a, b) => (b.mm > a.mm ? b : a));
+
+const bars = rainfall2025.map((d, i) => {
+  const barHeight = (d.mm / maxMm) * plotHeight;
+  return {
+    ...d,
+    x: chartPadLeft + i * bandWidth + (bandWidth - barWidth) / 2,
+    y: 10 + (plotHeight - barHeight),
+    height: Math.max(barHeight, d.mm > 0 ? 2 : 0),
+  };
+});
+
+// Month abbreviations for the chart axis and table - calendar month names
+// are ordinary translatable prose, not machine-parsed dates, so unlike the
+// day-numbers/years elsewhere on this page these do get localized.
+const MONTH_ABBR: Record<Locale, Record<string, string>> = {
+  en: { Apr: 'Apr', May: 'May', Jun: 'Jun', Jul: 'Jul', Aug: 'Aug', Sep: 'Sep', Oct: 'Oct', Nov: 'Nov', Dec: 'Dec', Jan: 'Jan', Feb: 'Feb', Mar: 'Mar' },
+  kn: { Apr: 'ಏಪ್ರಿ', May: 'ಮೇ', Jun: 'ಜೂನ್', Jul: 'ಜುಲೈ', Aug: 'ಆಗ', Sep: 'ಸೆಪ್ಟೆಂ', Oct: 'ಅಕ್ಟೋ', Nov: 'ನವೆಂ', Dec: 'ಡಿಸೆಂ', Jan: 'ಜನ', Feb: 'ಫೆಬ್ರ', Mar: 'ಮಾರ್ಚ್' },
+  ta: { Apr: 'ஏப்', May: 'மே', Jun: 'ஜூன்', Jul: 'ஜூலை', Aug: 'ஆக', Sep: 'செப்', Oct: 'அக்', Nov: 'நவ', Dec: 'டிச', Jan: 'ஜன', Feb: 'பிப்', Mar: 'மார்' },
+};
+const monthAbbr = (month: string) => MONTH_ABBR[lang][month] ?? month;
+
+// Page-local template substitution, same {token} convention as
+// useTranslations()'s t() - kept local since this page's copy (with its
+// computed peak-rainfall figure) isn't shared chrome and doesn't belong in
+// src/i18n/*.ts.
+function fmt(template: string, params: Record<string, string | number>): string {
+  return Object.entries(params).reduce((s, [k, v]) => s.replaceAll(`{${k}}`, String(v)), template);
+}
+
+const content = {
+  en: {
+    metaTitle: 'Weather',
+    metaDescription: 'The land TVC sits on, and the rainfall and monsoon patterns that shape it.',
+    heroEyebrow: 'The TVC Ecosystem',
+    heroTitle: 'Weather',
+    heroIntro: "The land's physical setting, and how rainfall and the seasons move through it.",
+    heroImageAlt: 'Sunset over the Melagiri Hills',
+    geographyHeading: 'Geography & landscape',
+    geographyText: "TVC sits on a west-facing hillslope near Kanakapura, close to the Tamil Nadu–Karnataka border, with sunset views across the valley. It's part of the Melagiri Hills, the range where the Eastern and Western Ghats meet — a geographic seam that makes the range biodiversity-rich and, for wildlife moving between habitats, a through-route rather than a dead end. Rainfall is logged daily on-site and follows the region's monsoon pattern: wet from April through October, dry the rest of the year.",
+    monsoonLabel: 'This monsoon so far',
+    monsoonSublabel: '(1 {apr} – 15 {jul} 2026)',
+    monsoonDeltaLess: 'less',
+    monsoonDeltaMore: 'more',
+    monsoonDeltaSuffix: 'than the same stretch last year ({mm}mm)',
+    chartHeading: 'Monthly rainfall, 2025–26',
+    chartAriaLabel: 'Monthly rainfall in millimetres for the 2025-26 agricultural year, peaking at {peak}mm in April and tapering to no rain from November through March',
+    tableSummary: 'Full monthly figures (2025–26 and 2026–27 to date)',
+    tableMonth: 'Month',
+    toDate: '(to date)',
+  },
+  kn: {
+    metaTitle: 'ಹವಾಮಾನ',
+    metaDescription: 'TVC ಇರುವ ಭೂಮಿ, ಮತ್ತು ಅದನ್ನು ರೂಪಿಸುವ ಮಳೆ ಮತ್ತು ಮಾನ್ಸೂನ್ ಮಾದರಿಗಳು.',
+    heroEyebrow: 'TVC ಪರಿಸರ ವ್ಯವಸ್ಥೆ',
+    heroTitle: 'ಹವಾಮಾನ',
+    heroIntro: 'ಭೂಮಿಯ ಭೌತಿಕ ಸ್ವರೂಪ, ಮತ್ತು ಮಳೆ ಮತ್ತು ಋತುಗಳು ಅದರ ಮೂಲಕ ಹೇಗೆ ಚಲಿಸುತ್ತವೆ.',
+    heroImageAlt: 'ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ ಮೇಲೆ ಸೂರ್ಯಾಸ್ತ',
+    geographyHeading: 'ಭೂಗೋಳ ಮತ್ತು ಭೂದೃಶ್ಯ',
+    geographyText: 'TVC ಕನಕಪುರದ ಬಳಿ, ತಮಿಳುನಾಡು–ಕರ್ನಾಟಕ ಗಡಿಗೆ ಸಮೀಪದಲ್ಲಿ, ಕಣಿವೆಯಾದ್ಯಂತ ಸೂರ್ಯಾಸ್ತದ ನೋಟಗಳೊಂದಿಗೆ ಪಶ್ಚಿಮಾಭಿಮುಖ ಗುಡ್ಡದ ಇಳಿಜಾರಿನಲ್ಲಿದೆ. ಇದು ಪೂರ್ವ ಮತ್ತು ಪಶ್ಚಿಮ ಘಟ್ಟಗಳು ಸಂಧಿಸುವ ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ ಶ್ರೇಣಿಯ ಭಾಗ — ಈ ಭೌಗೋಳಿಕ ಸಂಧಿಯು ಶ್ರೇಣಿಯನ್ನು ಜೀವವೈವಿಧ್ಯ-ಸಮೃದ್ಧವಾಗಿಸುತ್ತದೆ ಮತ್ತು ಆವಾಸಸ್ಥಾನಗಳ ನಡುವೆ ಚಲಿಸುವ ವನ್ಯಜೀವಿಗಳಿಗೆ ಇದು ಕೊನೆಗೊಳ್ಳುವ ಸ್ಥಳಕ್ಕಿಂತ ಹಾದುಹೋಗುವ ಮಾರ್ಗವಾಗಿದೆ. ಮಳೆಯನ್ನು ಸ್ಥಳದಲ್ಲೇ ಪ್ರತಿದಿನ ದಾಖಲಿಸಲಾಗುತ್ತದೆ ಮತ್ತು ಇದು ಪ್ರದೇಶದ ಮಾನ್ಸೂನ್ ಮಾದರಿಯನ್ನು ಅನುಸರಿಸುತ್ತದೆ: ಏಪ್ರಿಲ್‌ನಿಂದ ಅಕ್ಟೋಬರ್‌ವರೆಗೆ ಆರ್ದ್ರ, ಉಳಿದ ವರ್ಷ ಶುಷ್ಕ.',
+    monsoonLabel: 'ಈ ಮಾನ್ಸೂನ್ ಇಲ್ಲಿಯವರೆಗೆ',
+    monsoonSublabel: '(1 {apr} – 15 {jul} 2026)',
+    monsoonDeltaLess: 'ಕಡಿಮೆ',
+    monsoonDeltaMore: 'ಹೆಚ್ಚು',
+    monsoonDeltaSuffix: 'ಕಳೆದ ವರ್ಷದ ಇದೇ ಅವಧಿಗಿಂತ ({mm}ಮಿಮೀ)',
+    chartHeading: 'ಮಾಸಿಕ ಮಳೆ, 2025–26',
+    chartAriaLabel: '2025-26 ಕೃಷಿ ವರ್ಷದ ಮಾಸಿಕ ಮಳೆ ಮಿಲಿಮೀಟರ್‌ಗಳಲ್ಲಿ, ಏಪ್ರಿಲ್‌ನಲ್ಲಿ {peak}ಮಿಮೀ ಗರಿಷ್ಠ ಮಟ್ಟ ತಲುಪಿ, ನವೆಂಬರ್‌ನಿಂದ ಮಾರ್ಚ್‌ವರೆಗೆ ಮಳೆ ಇಲ್ಲದಂತೆ ಕಡಿಮೆಯಾಗುತ್ತದೆ',
+    tableSummary: 'ಪೂರ್ಣ ಮಾಸಿಕ ಅಂಕಿಅಂಶಗಳು (2025–26 ಮತ್ತು 2026–27 ಇಲ್ಲಿಯವರೆಗೆ)',
+    tableMonth: 'ತಿಂಗಳು',
+    toDate: '(ಇಲ್ಲಿಯವರೆಗೆ)',
+  },
+  ta: {
+    metaTitle: 'வானிலை',
+    metaDescription: 'TVC அமைந்துள்ள நிலம், அதை வடிவமைக்கும் மழை மற்றும் பருவமழை முறைகள்.',
+    heroEyebrow: 'TVC சூழலமைப்பு',
+    heroTitle: 'வானிலை',
+    heroIntro: 'நிலத்தின் இயற்பியல் அமைப்பு, மற்றும் மழை மற்றும் பருவங்கள் அதன் வழியாக எவ்வாறு நகர்கின்றன.',
+    heroImageAlt: 'மேலகிரி மலைகளின் மேல் சூரிய அஸ்தமனம்',
+    geographyHeading: 'புவியியல் மற்றும் நிலப்பரப்பு',
+    geographyText: 'TVC கனகபுரா அருகே, தமிழ்நாடு–கர்நாடக எல்லைக்கு அருகில், பள்ளத்தாக்கு முழுவதும் சூரிய அஸ்தமன காட்சிகளுடன் மேற்கு நோக்கிய மலைச்சரிவில் அமைந்துள்ளது. இது கிழக்கு மற்றும் மேற்கு தொடர்ச்சி மலைகள் சந்திக்கும் மேலகிரி மலைத்தொடரின் ஒரு பகுதி — இந்த புவியியல் சந்திப்பு தொடரை பல்லுயிர் செழிப்பானதாக ஆக்குகிறது, மேலும் வாழ்விடங்களுக்கு இடையே நகரும் வனவிலங்குகளுக்கு இது ஒரு முடிவிடமாக இல்லாமல் ஒரு கடந்து செல்லும் பாதையாக உள்ளது. மழை தளத்திலேயே தினமும் பதிவு செய்யப்படுகிறது, மேலும் இது பிராந்தியத்தின் பருவமழை முறையைப் பின்பற்றுகிறது: ஏப்ரல் முதல் அக்டோபர் வரை ஈரம், மீதமுள்ள ஆண்டு உலர்ந்தது.',
+    monsoonLabel: 'இந்த பருவமழை இதுவரை',
+    monsoonSublabel: '(1 {apr} – 15 {jul} 2026)',
+    monsoonDeltaLess: 'குறைவு',
+    monsoonDeltaMore: 'அதிகம்',
+    monsoonDeltaSuffix: 'கடந்த ஆண்டு இதே காலகட்டத்தை விட ({mm}மிமீ)',
+    chartHeading: 'மாதாந்திர மழைப்பொழிவு, 2025–26',
+    chartAriaLabel: '2025-26 விவசாய ஆண்டிற்கான மாதாந்திர மழைப்பொழிவு மில்லிமீட்டரில், ஏப்ரலில் {peak}மிமீ உச்சத்தை எட்டி, நவம்பர் முதல் மார்ச் வரை மழையின்றி குறைகிறது',
+    tableSummary: 'முழு மாதாந்திர புள்ளிவிவரங்கள் (2025–26 மற்றும் 2026–27 இதுவரை)',
+    tableMonth: 'மாதம்',
+    toDate: '(இதுவரை)',
+  },
+} as const;
+
+const c = content[lang];
+const monsoonSublabel = fmt(c.monsoonSublabel, { apr: monthAbbr('Apr'), jul: monthAbbr('Jul') });
+const monsoonDelta = fmt(c.monsoonDeltaSuffix, { mm: sameSpanLastYear.toFixed(1) });
+const chartAriaLabel = fmt(c.chartAriaLabel, { peak: peakMonth.mm });
+---
+
+<BaseLayout lang={lang} title={c.metaTitle} description={c.metaDescription} image="/images/pages/home/gallery-4.jpg" imageWidth={1280} imageHeight={960}>
+  <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} intro={c.heroIntro} image="/images/pages/home/gallery-4.jpg" imageAlt={c.heroImageAlt} />
+
+  <section class="section wrapper">
+    <h2>{c.geographyHeading}</h2>
+    <p>{c.geographyText}</p>
+
+    <WeatherWidget lang={lang} />
+
+    <div class="stat-tile">
+      <p class="stat-label">{c.monsoonLabel} <span class="stat-sublabel">{monsoonSublabel}</span></p>
+      <p class="stat-value">{monsoonToDate.toFixed(1)}<span class="stat-unit">mm</span></p>
+      <p class="stat-delta">{Math.abs(monsoonDeltaPct)}% {monsoonDeltaPct < 0 ? c.monsoonDeltaLess : c.monsoonDeltaMore} {monsoonDelta}</p>
+    </div>
+
+    <h3>{c.chartHeading}</h3>
+    <svg class="rainfall-chart" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label={chartAriaLabel}>
+      {yTicks.map((tick) => {
+        const ty = 10 + (plotHeight - (tick / maxMm) * plotHeight);
+        return (
+          <g>
+            <line x1={chartPadLeft} x2={chartWidth - 12} y1={ty} y2={ty} class="grid-line" />
+            <text x={chartPadLeft - 8} y={ty + 4} class="axis-label" text-anchor="end">{tick}</text>
+          </g>
+        );
+      })}
+      {bars.map((b) => (
+        <g>
+          <rect x={b.x} y={b.y} width={barWidth} height={b.height} rx="4" class="bar" />
+          {b.month === peakMonth.month && (
+            <text x={b.x + barWidth / 2} y={b.y - 8} class="bar-value" text-anchor="middle">{b.mm}mm</text>
+          )}
+          <text x={b.x + barWidth / 2} y={chartHeight - 6} class="axis-label" text-anchor="middle">{monthAbbr(b.month)}</text>
+        </g>
+      ))}
+    </svg>
+
+    <details class="rainfall-table-details">
+      <summary>{c.tableSummary}</summary>
+      <table class="rainfall-table">
+        <thead>
+          <tr><th>{c.tableMonth}</th><th>2025–26</th><th>2026–27</th></tr>
+        </thead>
+        <tbody>
+          {rainfall2025.map((d, i) => (
+            <tr>
+              <td>{monthAbbr(d.month)}</td>
+              <td>{d.mm.toFixed(1)}mm</td>
+              <td>{rainfall2026[i] ? `${rainfall2026[i].mm.toFixed(1)}mm${i === rainfall2026.length - 1 ? ` ${c.toDate}` : ''}` : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </details>
+  </section>
+</BaseLayout>
+
+<style>
+  .stat-tile {
+    background: #fff;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+    padding: 20px 24px;
+    max-width: 360px;
+    margin: 20px 0;
+  }
+
+  .stat-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+    margin: 0;
+  }
+
+  .stat-sublabel {
+    font-weight: 400;
+  }
+
+  .stat-value {
+    font-family: var(--font-display, inherit);
+    font-size: 2.4rem;
+    font-weight: 700;
+    color: var(--tvc-green-dark);
+    margin: 4px 0;
+    line-height: 1;
+  }
+
+  .stat-unit {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-left: 4px;
+    color: var(--tvc-ink-soft);
+  }
+
+  .stat-delta {
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+    margin: 0;
+  }
+
+  .rainfall-chart {
+    width: 100%;
+    max-width: 720px;
+    height: auto;
+    margin-top: 8px;
+  }
+
+  .rainfall-chart .bar {
+    fill: var(--tvc-green);
+  }
+
+  .rainfall-chart .grid-line {
+    stroke: var(--tvc-line);
+    stroke-width: 1;
+  }
+
+  .rainfall-chart .axis-label {
+    font-size: 11px;
+    fill: var(--tvc-ink-soft);
+  }
+
+  .rainfall-chart .bar-value {
+    font-size: 12px;
+    font-weight: 700;
+    fill: var(--tvc-ink);
+  }
+
+  .rainfall-table-details {
+    margin-top: 20px;
+  }
+
+  .rainfall-table-details summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--tvc-green-dark);
+  }
+
+  .rainfall-table {
+    width: 100%;
+    max-width: 480px;
+    border-collapse: collapse;
+    margin-top: 12px;
+    font-size: 0.9rem;
+  }
+
+  .rainfall-table th,
+  .rainfall-table td {
+    text-align: left;
+    padding: 6px 12px 6px 0;
+    border-bottom: 1px solid var(--tvc-line);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rainfall-table th {
+    color: var(--tvc-ink-soft);
+    font-weight: 600;
+  }
+</style>

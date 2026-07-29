@@ -3,25 +3,57 @@
 // visible to someone who clicks through there -- this surfaces it on the
 // homepage itself, for anyone who'd never otherwise notice an event coming up.
 import { getCollection } from 'astro:content';
-import { formatDateRange, daysUntil, countdownLabel } from '../utils/events';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+import { formatDateRange, daysUntil } from '../utils/events';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/utils';
 
-const allEvents = await getCollection('events', (e) => !e.data.draft);
+interface Props {
+  lang?: Locale;
+}
+
+const { lang = DEFAULT_LOCALE } = Astro.props;
+
+// The events collection glob (src/content.config.ts) picks up translated
+// copies under kn/ and ta/ subfolders too, whose id is prefixed like
+// "kn/2020-10-31-...". Restrict to root-level (canonical, undated-prefix)
+// entries here so `nextEvent.id` below is always the bare slug - the href
+// re-adds the current `lang` prefix itself via getRelativeLocaleUrl, so a
+// locale-prefixed id would double up.
+const allEvents = await getCollection('events', (e) => !e.data.draft && !e.id.includes('/'));
 const today = new Date();
 const nextEvent = allEvents
   .filter((e) => e.data.date >= today)
   .sort((a, b) => a.data.date.valueOf() - b.data.date.valueOf())[0];
+
+// Countdown text is reproduced locally (rather than importing
+// countdownLabel from ../utils/events, which is shared with the
+// English-only events pages) so translating it here doesn't touch that
+// shared util - only the day-count math (daysUntil, no UI text) is reused.
+const labels = {
+  en: { eyebrow: 'Coming up', cta: 'See details →', today: 'Today', tomorrow: 'Tomorrow', daysToGo: '{n} days to go' },
+  kn: { eyebrow: 'ಮುಂಬರುವುದು', cta: 'ವಿವರಗಳನ್ನು ನೋಡಿ →', today: 'ಇಂದು', tomorrow: 'ನಾಳೆ', daysToGo: '{n} ದಿನಗಳು ಬಾಕಿ' },
+  ta: { eyebrow: 'வரவிருப்பது', cta: 'விவரங்களைக் காண்க →', today: 'இன்று', tomorrow: 'நாளை', daysToGo: '{n} நாட்களில்' },
+} as const;
+
+const l = labels[lang];
+
+function countdownText(daysAway: number): string {
+  if (daysAway <= 0) return l.today;
+  if (daysAway === 1) return l.tomorrow;
+  return l.daysToGo.replace('{n}', String(daysAway));
+}
 ---
 
 {nextEvent && (
   <section class="whats-next">
     <div class="wrapper whats-next__inner">
       <div class="whats-next__text">
-        <span class="whats-next__eyebrow">Coming up</span>
+        <span class="whats-next__eyebrow">{l.eyebrow}</span>
         <h3 class="whats-next__title">{nextEvent.data.title}</h3>
         <span class="whats-next__date">{formatDateRange(nextEvent.data.date, nextEvent.data.endDate)}</span>
       </div>
-      <span class="whats-next__countdown">{countdownLabel(daysUntil(nextEvent.data.date, today))}</span>
-      <a class="button whats-next__cta" href={`/events/${nextEvent.id}`}>See details →</a>
+      <span class="whats-next__countdown">{countdownText(daysUntil(nextEvent.data.date, today))}</span>
+      <a class="button whats-next__cta" href={getRelativeLocaleUrl(lang, `/events/${nextEvent.id}`)}>{l.cta}</a>
     </div>
   </section>
 )}

@@ -1,11 +1,30 @@
 ---
 import type { CollectionEntry } from 'astro:content';
+import { type Locale } from '../../i18n/utils';
 
 interface Props {
   photos: CollectionEntry<'photos'>[];
+  lang?: Locale;
 }
 
-const { photos } = Astro.props;
+const { photos, lang = 'en' } = Astro.props;
+
+// Prefers the per-locale caption when a translator has filled it in;
+// falls back to the (always-present) English caption otherwise - same
+// fallback PhotoGallery.astro uses, kept as its own copy here since this
+// component doesn't otherwise share code with it.
+const captionFor = (p: CollectionEntry<'photos'>) => {
+  if (lang === 'kn') return p.data.caption_kn ?? p.data.caption;
+  if (lang === 'ta') return p.data.caption_ta ?? p.data.caption;
+  return p.data.caption;
+};
+
+const content = {
+  en: { heading: 'From the archive', hint: 'Photos from around this time of year, in years past' },
+  kn: { heading: 'ಆರ್ಕೈವ್‌ನಿಂದ', hint: 'ಈ ಸಮಯದ ಸುತ್ತಮುತ್ತಲಿನ ಫೋಟೋಗಳು, ಕಳೆದ ವರ್ಷಗಳಿಂದ' },
+  ta: { heading: 'காப்பகத்திலிருந்து', hint: 'கடந்த ஆண்டுகளில், இந்த நேரத்தில் எடுக்கப்பட்ட புகைப்படங்கள்' },
+} as const;
+const c = content[lang];
 
 const WINDOW_DAYS = 7;
 const today = new Date();
@@ -32,15 +51,15 @@ const dateFmt: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', yea
   <section class="otd">
     <div class="otd__head">
       <span class="dot"></span>
-      <h2>From the archive</h2>
-      <span class="otd__hint">Photos from around this time of year, in years past</span>
+      <h2>{c.heading}</h2>
+      <span class="otd__hint">{c.hint}</span>
     </div>
     <div class="otd__grid">
       {matches.map((p) => (
         <a class="otd__item" href={p.data.src} target="_blank" rel="noopener noreferrer">
-          <img src={p.data.thumbSrc ?? p.data.src} alt={p.data.caption} loading="lazy" />
+          <img src={p.data.thumbSrc ?? p.data.src} alt={captionFor(p)} loading="lazy" />
           <div class="otd__caption">
-            <p>{p.data.caption}</p>
+            <p>{captionFor(p)}</p>
             <span>{p.data.takenAt.toLocaleDateString('en-IN', dateFmt)}</span>
           </div>
         </a>

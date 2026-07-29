@@ -1,0 +1,50 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../PageHero.astro';
+import { type Locale } from '../../i18n/utils';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+
+const content = {
+  en: {
+    pageTitle: 'Thanks',
+    metaDescription: 'Thanks for reaching out to Tamarind Valley Collective.',
+    heroEyebrow: 'Contact Us',
+    heroTitle: 'Message received',
+    bodyText: "Thanks for reaching out — we've received your message and will get back to you soon.",
+    backLink: '← Back to Contact',
+  },
+  kn: {
+    pageTitle: 'ಧನ್ಯವಾದಗಳು',
+    metaDescription: 'ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್ ಅನ್ನು ಸಂಪರ್ಕಿಸಿದ್ದಕ್ಕೆ ಧನ್ಯವಾದಗಳು.',
+    heroEyebrow: 'ನಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸಿ',
+    heroTitle: 'ಸಂದೇಶ ಸ್ವೀಕರಿಸಲಾಗಿದೆ',
+    bodyText: 'ಸಂಪರ್ಕಿಸಿದ್ದಕ್ಕೆ ಧನ್ಯವಾದಗಳು — ನಿಮ್ಮ ಸಂದೇಶ ನಮಗೆ ತಲುಪಿದೆ ಮತ್ತು ನಾವು ಶೀಘ್ರದಲ್ಲೇ ನಿಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸುತ್ತೇವೆ.',
+    backLink: '← ಸಂಪರ್ಕ ಪುಟಕ್ಕೆ ಹಿಂತಿರುಗಿ',
+  },
+  ta: {
+    pageTitle: 'நன்றி',
+    metaDescription: 'டமரிண்ட் வேலி கலெக்டிவை தொடர்பு கொண்டதற்கு நன்றி.',
+    heroEyebrow: 'எங்களை தொடர்பு கொள்ளுங்கள்',
+    heroTitle: 'செய்தி பெறப்பட்டது',
+    bodyText: 'தொடர்பு கொண்டதற்கு நன்றி — உங்கள் செய்தி எங்களுக்குக் கிடைத்துவிட்டது, விரைவில் உங்களைத் தொடர்பு கொள்வோம்.',
+    backLink: '← தொடர்பு பக்கத்திற்குத் திரும்பு',
+  },
+} as const;
+
+const c = content[lang];
+---
+
+<BaseLayout lang={lang} title={c.pageTitle} description={c.metaDescription} image="/images/pages/location/hero.png" imageWidth={1177} imageHeight={673} noindex>
+  <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} image="/images/pages/location/hero.png" imageAlt="Map showing TVC's location on the Tamil Nadu–Karnataka border" />
+
+  <section class="section wrapper">
+    <p>{c.bodyText}</p>
+    <p><a href={getRelativeLocaleUrl(lang, '/contact')}>{c.backLink}</a></p>
+  </section>
+</BaseLayout>

@@ -1,0 +1,23 @@
+---
+import { useTranslations, type Locale } from '../i18n/utils';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+---
+
+<p class="translation-notice">{t('translationNotice.text')}</p>
+
+<style>
+  .translation-notice {
+    margin: 0;
+    padding: 8px 24px;
+    background: var(--tvc-orange-tint);
+    color: #a85712;
+    font-size: 0.82rem;
+    text-align: center;
+  }
+</style>

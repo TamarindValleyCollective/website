@@ -1,0 +1,145 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../PageHero.astro';
+import { useTranslations, type Locale } from '../../i18n/utils';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+
+// "Kenneth Anderson", the Kenneth Anderson Nature Society, and the story
+// titles ("Man-eater of Jowlagiri", "Sher Khan and the Bettamugalam
+// Man-eater") are kept untranslated as proper nouns/titles across all 3
+// locales, per the assignment brief - only the surrounding prose is
+// translated.
+const content = {
+  en: {
+    metaDescription: 'Directions to Tamarind Valley Collective from the Tamil Nadu and Karnataka sides, plus a bit of history about the surrounding forest.',
+    heroEyebrow: 'Visit TVC',
+    heroTitle: 'How to Reach',
+    introText: 'Search for "The Tamarind Collective" on Google Maps to get directions. TVC can be reached from the Tamil Nadu side (via Tenkannikottai or Thally) or from the Karnataka side (via Hunasanahalli).',
+    comingFrom: [
+      'Coming from east of the Silk Board–Hosur highway (Whitefield, Outer Ring Road, HSR Layout, etc.) — use the Tamil Nadu side route.',
+      'Coming from west of the Silk Board–Hosur highway (Jayanagar, JP Nagar, Bannerghatta Road) — use the Karnataka side route.',
+    ],
+    tipLabel: 'Tip:',
+    tipText: 'load the driving directions while you have WiFi so the route buffers — cell reception near TVC is poor across all providers.',
+    directionsHeading: 'Karnataka side directions',
+    directions: [
+      'At Kanakapura, take a sharp left turn towards Kodihalli.',
+      "After about 5–6 km, take another quick left (you'll cross the Arkavathi River).",
+      'Take another left once you reach Kodihalli.',
+      'Take a left again before reaching Thaggatti village — look for the BSNL phone tower; the turn is a narrow cement bund after the primary school, next to the hand pump.',
+    ],
+    locationHeading: 'Location',
+    locationText: 'TVC is in the village of Thaggatti in Tamil Nadu, about 7 km from Hunsanahalli, the border town in Karnataka, and adjacent to the Thaggatti Reserve Forest — part of the Melagiri hills, where the Eastern and Western Ghats meet.',
+    historyText: 'The area\'s history is documented by renowned hunter-turned-conservationist <a href="https://en.wikipedia.org/wiki/Kenneth_Anderson_(writer)#Jungle_folk" target="_blank" rel="noopener noreferrer">Kenneth Anderson</a>, in his story "Man-eater of Jowlagiri" — one of many tales set in these hills, whose legacy the Kenneth Anderson Nature Society carries on today. The places he mentions are well documented by fans of his writing, and he also references the village of Anchetty in another account, "Sher Khan and the Bettamugalam Man-eater."',
+    mapCaption: 'TVC bordering the Thaggatti Reserve Forest',
+    mapTitle: 'Map showing TVC bordering the Thaggatti Reserve Forest',
+  },
+  kn: {
+    metaDescription: 'ತಮಿಳುನಾಡು ಮತ್ತು ಕರ್ನಾಟಕ ಎರಡೂ ಕಡೆಗಳಿಂದ ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ಗೆ ದಿಕ್ಕುಗಳು, ಜೊತೆಗೆ ಸುತ್ತಮುತ್ತಲಿನ ಅರಣ್ಯದ ಬಗ್ಗೆ ಸ್ವಲ್ಪ ಇತಿಹಾಸ.',
+    heroEyebrow: 'TVC ಗೆ ಭೇಟಿ ನೀಡಿ',
+    heroTitle: 'ತಲುಪುವುದು ಹೇಗೆ',
+    introText: 'ದಿಕ್ಕುಗಳನ್ನು ಪಡೆಯಲು Google Maps ನಲ್ಲಿ "The Tamarind Collective" ಅನ್ನು ಹುಡುಕಿ. TVC ಅನ್ನು ತಮಿಳುನಾಡು ಕಡೆಯಿಂದ (ತೆಂಕಣಿಕೊಟ್ಟೈ ಅಥವಾ ತಳ್ಳಿ ಮೂಲಕ) ಅಥವಾ ಕರ್ನಾಟಕ ಕಡೆಯಿಂದ (ಹುಣಸನಹಳ್ಳಿ ಮೂಲಕ) ತಲುಪಬಹುದು.',
+    comingFrom: [
+      'ಸಿಲ್ಕ್ ಬೋರ್ಡ್-ಹೊಸೂರು ಹೆದ್ದಾರಿಯ ಪೂರ್ವದಿಂದ ಬರುತ್ತಿದ್ದರೆ (ವೈಟ್‌ಫೀಲ್ಡ್, ಔಟರ್ ರಿಂಗ್ ರೋಡ್, HSR ಲೇಔಟ್, ಇತ್ಯಾದಿ) — ತಮಿಳುನಾಡು ಕಡೆಯ ಮಾರ್ಗವನ್ನು ಬಳಸಿ.',
+      'ಸಿಲ್ಕ್ ಬೋರ್ಡ್-ಹೊಸೂರು ಹೆದ್ದಾರಿಯ ಪಶ್ಚಿಮದಿಂದ ಬರುತ್ತಿದ್ದರೆ (ಜಯನಗರ, JP ನಗರ, ಬನ್ನೇರುಘಟ್ಟ ರಸ್ತೆ) — ಕರ್ನಾಟಕ ಕಡೆಯ ಮಾರ್ಗವನ್ನು ಬಳಸಿ.',
+    ],
+    tipLabel: 'ಸಲಹೆ:',
+    tipText: 'ವೈಫೈ ಇರುವಾಗ ಡ್ರೈವಿಂಗ್ ದಿಕ್ಕುಗಳನ್ನು ಲೋಡ್ ಮಾಡಿ ಇದರಿಂದ ಮಾರ್ಗವು ಬಫರ್ ಆಗುತ್ತದೆ — TVC ಬಳಿ ಸೆಲ್ ರಿಸೆಪ್ಶನ್ ಎಲ್ಲಾ ಸೇವಾ ಪೂರೈಕೆದಾರರಲ್ಲೂ ಕಳಪೆಯಾಗಿದೆ.',
+    directionsHeading: 'ಕರ್ನಾಟಕ ಕಡೆಯ ದಿಕ್ಕುಗಳು',
+    directions: [
+      'ಕನಕಪುರದಲ್ಲಿ, ಕೊಡಿಹಳ್ಳಿ ಕಡೆಗೆ ತೀಕ್ಷ್ಣವಾದ ಎಡ ತಿರುವು ತೆಗೆದುಕೊಳ್ಳಿ.',
+      'ಸುಮಾರು 5–6 ಕಿ.ಮೀ ನಂತರ, ಇನ್ನೊಂದು ಶೀಘ್ರ ಎಡ ತಿರುವು ತೆಗೆದುಕೊಳ್ಳಿ (ನೀವು ಅರ್ಕಾವತಿ ನದಿಯನ್ನು ದಾಟುತ್ತೀರಿ).',
+      'ಕೊಡಿಹಳ್ಳಿ ತಲುಪಿದ ನಂತರ ಇನ್ನೊಂದು ಎಡ ತಿರುವು ತೆಗೆದುಕೊಳ್ಳಿ.',
+      'ತಗ್ಗಟ್ಟಿ ಗ್ರಾಮ ತಲುಪುವ ಮೊದಲು ಮತ್ತೆ ಎಡ ತಿರುವು ತೆಗೆದುಕೊಳ್ಳಿ — BSNL ಫೋನ್ ಟವರ್‌ಗಾಗಿ ಹುಡುಕಿ; ತಿರುವು ಪ್ರಾಥಮಿಕ ಶಾಲೆಯ ನಂತರ, ಕೈ ಪಂಪ್‌ನ ಪಕ್ಕದಲ್ಲಿ ಕಿರಿದಾದ ಸಿಮೆಂಟ್ ಬಂಡ್ ಆಗಿದೆ.',
+    ],
+    locationHeading: 'ಸ್ಥಳ',
+    locationText: 'TVC ತಮಿಳುನಾಡಿನ ತಗ್ಗಟ್ಟಿ ಗ್ರಾಮದಲ್ಲಿದೆ, ಕರ್ನಾಟಕದ ಗಡಿ ಪಟ್ಟಣವಾದ ಹುಣಸನಹಳ್ಳಿಯಿಂದ ಸುಮಾರು 7 ಕಿ.ಮೀ ದೂರದಲ್ಲಿ, ಮತ್ತು ತಗ್ಗಟ್ಟಿ ಮೀಸಲು ಅರಣ್ಯದ ಪಕ್ಕದಲ್ಲಿದೆ — ಪೂರ್ವ ಮತ್ತು ಪಶ್ಚಿಮ ಘಟ್ಟಗಳು ಸಂಧಿಸುವ ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ ಭಾಗ.',
+    historyText: 'ಈ ಪ್ರದೇಶದ ಇತಿಹಾಸವನ್ನು ಪ್ರಸಿದ್ಧ ಬೇಟೆಗಾರ-ಪರಿಸರ ಸಂರಕ್ಷಣಾಕಾರ <a href="https://en.wikipedia.org/wiki/Kenneth_Anderson_(writer)#Jungle_folk" target="_blank" rel="noopener noreferrer">Kenneth Anderson</a> ಅವರು ತಮ್ಮ "Man-eater of Jowlagiri" ಕಥೆಯಲ್ಲಿ ದಾಖಲಿಸಿದ್ದಾರೆ — ಈ ಬೆಟ್ಟಗಳಲ್ಲಿ ನಡೆಯುವ ಅನೇಕ ಕಥೆಗಳಲ್ಲಿ ಒಂದು, ಇದರ ಪರಂಪರೆಯನ್ನು Kenneth Anderson Nature Society ಇಂದಿಗೂ ಮುಂದುವರಿಸುತ್ತಿದೆ. ಅವರು ಉಲ್ಲೇಖಿಸಿದ ಸ್ಥಳಗಳನ್ನು ಅವರ ಬರವಣಿಗೆಯ ಅಭಿಮಾನಿಗಳು ಚೆನ್ನಾಗಿ ದಾಖಲಿಸಿದ್ದಾರೆ, ಮತ್ತು ಅವರು ಇನ್ನೊಂದು ಕಥೆಯಾದ "Sher Khan and the Bettamugalam Man-eater" ನಲ್ಲಿ ಅಂಚೆಟ್ಟಿ ಗ್ರಾಮವನ್ನೂ ಉಲ್ಲೇಖಿಸುತ್ತಾರೆ.',
+    mapCaption: 'ತಗ್ಗಟ್ಟಿ ಮೀಸಲು ಅರಣ್ಯದ ಗಡಿಯಲ್ಲಿರುವ TVC',
+    mapTitle: 'ತಗ್ಗಟ್ಟಿ ಮೀಸಲು ಅರಣ್ಯದ ಗಡಿಯಲ್ಲಿರುವ TVC ತೋರಿಸುವ ನಕ್ಷೆ',
+  },
+  ta: {
+    metaDescription: 'தமிழ்நாடு மற்றும் கர்நாடகா இரு பக்கங்களிலிருந்தும் டமரிண்ட் வேலி கலெக்டிவுக்கான திசைகள், மேலும் சுற்றியுள்ள காட்டைப் பற்றிய சிறிது வரலாறு.',
+    heroEyebrow: 'TVC-ஐ பார்வையிடுங்கள்',
+    heroTitle: 'வழி எப்படி',
+    introText: 'திசைகளைப் பெற Google Maps-இல் "The Tamarind Collective" எனத் தேடுங்கள். TVC-ஐ தமிழ்நாடு பக்கத்திலிருந்து (தென்கண்ணிகோட்டை அல்லது தள்ளி வழியாக) அல்லது கர்நாடகா பக்கத்திலிருந்து (ஹுனசனஹள்ளி வழியாக) அடையலாம்.',
+    comingFrom: [
+      'சில்க் போர்டு–ஹொசூர் நெடுஞ்சாலையின் கிழக்கிலிருந்து வருகிறீர்கள் என்றால் (வைட்ஃபீல்டு, அவுட்டர் ரிங் ரோடு, HSR லேஅவுட், போன்றவை) — தமிழ்நாடு பக்க வழியைப் பயன்படுத்தவும்.',
+      'சில்க் போர்டு–ஹொசூர் நெடுஞ்சாலையின் மேற்கிலிருந்து வருகிறீர்கள் என்றால் (ஜெயநகர், JP நகர், பன்னேர்காட்டா சாலை) — கர்நாடகா பக்க வழியைப் பயன்படுத்தவும்.',
+    ],
+    tipLabel: 'குறிப்பு:',
+    tipText: 'வழி பஃபராகும்படி WiFi இருக்கும்போதே வாகன ஓட்டும் திசைகளை ஏற்றிக்கொள்ளுங்கள் — TVC அருகே அனைத்து சேவை வழங்குநர்களிடமும் செல்போன் சிக்னல் மோசமாக உள்ளது.',
+    directionsHeading: 'கர்நாடகா பக்க திசைகள்',
+    directions: [
+      'கனகபுராவில், கொடிஹள்ளி நோக்கி கூர்மையான இடது திருப்பம் எடுக்கவும்.',
+      'சுமார் 5–6 கி.மீ க்குப் பிறகு, மற்றொரு விரைவான இடது திருப்பம் எடுக்கவும் (நீங்கள் அர்காவதி நதியைக் கடப்பீர்கள்).',
+      'கொடிஹள்ளியை அடைந்தவுடன் மற்றொரு இடது திருப்பம் எடுக்கவும்.',
+      'தகட்டி கிராமத்தை அடைவதற்கு முன் மீண்டும் இடது திருப்பம் எடுக்கவும் — BSNL தொலைபேசி கோபுரத்தைத் தேடுங்கள்; திருப்பம் தொடக்கப்பள்ளிக்குப் பிறகு, கை பம்புக்கு அடுத்ததாக ஒரு குறுகிய சிமெண்ட் வரப்பு ஆகும்.',
+    ],
+    locationHeading: 'இருப்பிடம்',
+    locationText: 'TVC தமிழ்நாட்டின் தகட்டி கிராமத்தில் உள்ளது, கர்நாடகாவின் எல்லை நகரமான ஹுனசனஹள்ளியிலிருந்து சுமார் 7 கி.மீ தொலைவில், மேலும் தகட்டி ஒதுக்கு காட்டிற்கு அருகில் — கிழக்கு மற்றும் மேற்கு தொடர்ச்சி மலைகள் சந்திக்கும் மேலகிரி மலைகளின் ஒரு பகுதி.',
+    historyText: 'இப்பகுதியின் வரலாறு புகழ்பெற்ற வேட்டையாடியிலிருந்து பாதுகாவலராக மாறிய <a href="https://en.wikipedia.org/wiki/Kenneth_Anderson_(writer)#Jungle_folk" target="_blank" rel="noopener noreferrer">Kenneth Anderson</a> அவர்களால் அவரது "Man-eater of Jowlagiri" கதையில் ஆவணப்படுத்தப்பட்டுள்ளது — இந்த மலைகளில் நடக்கும் பல கதைகளில் ஒன்று, இதன் பாரம்பரியத்தை Kenneth Anderson Nature Society இன்றும் தொடர்கிறது. அவர் குறிப்பிடும் இடங்கள் அவரது எழுத்தின் ரசிகர்களால் நன்கு ஆவணப்படுத்தப்பட்டுள்ளன, மேலும் அவர் மற்றொரு கதையான "Sher Khan and the Bettamugalam Man-eater" இல் அஞ்செட்டி கிராமத்தையும் குறிப்பிடுகிறார்.',
+    mapCaption: 'தகட்டி ஒதுக்கு காட்டை ஒட்டியுள்ள TVC',
+    mapTitle: 'தகட்டி ஒதுக்கு காட்டை ஒட்டியுள்ள TVC-ஐ காட்டும் வரைபடம்',
+  },
+} as const;
+
+const c = content[lang];
+---
+
+<BaseLayout lang={lang} title={t('nav.howToReach')} description={c.metaDescription} image="/images/pages/how-to-reach/hero.png" imageWidth={1112} imageHeight={428}>
+  <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} image="/images/pages/how-to-reach/hero.png" imageAlt="Map directions to TVC" />
+
+  <section class="section wrapper">
+    <p>{c.introText}</p>
+    <ul>
+      {c.comingFrom.map((item) => <li>{item}</li>)}
+    </ul>
+    <p><strong>{c.tipLabel}</strong> {c.tipText}</p>
+
+    <h3>{c.directionsHeading}</h3>
+    <ol>
+      {c.directions.map((step) => <li>{step}</li>)}
+    </ol>
+
+    <h3>{c.locationHeading}</h3>
+    <p>{c.locationText}</p>
+    <p set:html={c.historyText} />
+    <div class="map-embed">
+      <iframe
+        loading="lazy"
+        src="https://www.google.com/maps?q=The+Tamarind+Collective,+Thaggatti&t=p&z=12&output=embed"
+        width="100%"
+        height="420"
+        style="border:0"
+        title={c.mapTitle}
+      ></iframe>
+    </div>
+    <p class="caption">{c.mapCaption}</p>
+  </section>
+</BaseLayout>
+
+<style>
+  .map-embed {
+    margin-top: 20px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .map-embed iframe {
+    display: block;
+  }
+
+  .caption {
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+    margin-top: 10px;
+  }
+</style>

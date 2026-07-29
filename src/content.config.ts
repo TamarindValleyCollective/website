@@ -53,6 +53,13 @@ const partners = defineCollection({
     // scaffolding than the content warranted. This links straight out to
     // the partner's own site instead.
     url: z.string().url(),
+    // Kannada/Tamil translations (AI-drafted, pending native-speaker review
+    // - see TRANSLATIONS_REVIEW.md). Optional so a partner card renders
+    // fine on the English fallback until these are filled in.
+    title_kn: z.string().optional(),
+    excerpt_kn: z.string().optional(),
+    title_ta: z.string().optional(),
+    excerpt_ta: z.string().optional(),
   }),
 });
 
@@ -67,6 +74,11 @@ const photos = defineCollection({
     src: z.string(),
     thumbSrc: z.string().optional(),
     caption: z.string(),
+    // Kannada/Tamil translations (AI-drafted, pending native-speaker review
+    // - see TRANSLATIONS_REVIEW.md). Optional so a caption falls back to
+    // English until these are filled in.
+    caption_kn: z.string().optional(),
+    caption_ta: z.string().optional(),
     takenAt: z.coerce.date(),
     width: z.number().optional(),
     height: z.number().optional(),

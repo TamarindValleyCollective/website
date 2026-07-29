@@ -1,0 +1,77 @@
+---
+import { getRelativeLocaleUrl } from 'astro:i18n';
+import { SUPPORTED_LOCALES, LOCALE_NAMES, useTranslations, stripLocalePrefix, type Locale } from '../i18n/utils';
+
+interface Props {
+  lang: Locale;
+  // False on the handful of English-only pages (legal boilerplate) - the
+  // switcher falls back to that locale's homepage instead of a nonexistent
+  // translated version of the current page.
+  translated?: boolean;
+}
+
+const { lang, translated = true } = Astro.props;
+const t = useTranslations(lang);
+
+// Strip the current locale prefix so switching languages lands on the
+// equivalent page (e.g. /kn/visit/camping -> /ta/visit/camping) instead of
+// bouncing back to the homepage.
+const barePath = translated ? stripLocalePrefix(Astro.url.pathname) : '/';
+const options = SUPPORTED_LOCALES.map((locale) => ({
+  locale,
+  name: LOCALE_NAMES[locale],
+  href: getRelativeLocaleUrl(locale, barePath),
+}));
+---
+
+<div class="lang-switcher">
+  <label class="lang-switcher__label" for="lang-switcher-select">{t('languageSwitcher.label')}</label>
+  <select id="lang-switcher-select" class="lang-switcher__select" aria-label={t('languageSwitcher.label')}>
+    {options.map((option) => (
+      <option value={option.href} selected={option.locale === lang}>{option.name}</option>
+    ))}
+  </select>
+</div>
+
+<style>
+  .lang-switcher {
+    display: flex;
+    align-items: center;
+  }
+
+  .lang-switcher__label {
+    /* Visible to screen readers, not sighted users — the select's own
+       options (English/ಕನ್ನಡ/தமிழ்) already communicate what it's for. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .lang-switcher__select {
+    appearance: none;
+    -webkit-appearance: none;
+    background: none;
+    border: 1px solid var(--tvc-line);
+    border-radius: 999px;
+    padding: 6px 26px 6px 12px;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--tvc-ink);
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23425446' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+  }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLSelectElement>('.lang-switcher__select').forEach((select) => {
+    select.addEventListener('change', () => {
+      window.location.href = select.value;
+    });
+  });
+</script>

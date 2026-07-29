@@ -1,6 +1,10 @@
 ---
 title: "WeCommunities"
 excerpt: "The real estate partner that helped found TVC — in fact, TVC was their very first project."
+title_kn: "ವಿಕಮ್ಯುನಿಟೀಸ್"
+excerpt_kn: "TVC ಸ್ಥಾಪನೆಗೆ ಸಹಾಯ ಮಾಡಿದ ರಿಯಲ್ ಎಸ್ಟೇಟ್ ಪಾಲುದಾರ — ವಾಸ್ತವವಾಗಿ, TVC ಅವರ ಮೊದಲ ಯೋಜನೆಯಾಗಿತ್ತು."
+title_ta: "வீகம்யூனிட்டீஸ்"
+excerpt_ta: "TVC நிறுவப்பட உதவிய ரியல் எஸ்டேட் கூட்டாளர் — உண்மையில், TVC அவர்களின் முதல் திட்டமாக இருந்தது."
 coverImage: "/images/partners/we-communities.png"
 url: "https://wecommunities.in/"
 ---

@@ -1,0 +1,50 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../PageHero.astro';
+import { type Locale } from '../../i18n/utils';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+
+const content = {
+  en: {
+    pageTitle: 'Thanks',
+    metaDescription: "We've received your event inquiry.",
+    heroEyebrow: 'Visit TVC',
+    heroTitle: "We've got your inquiry",
+    bodyText: "Thanks for reaching out about hosting your event at TVC — we'll get back to you within a few days with availability and a quote.",
+    backLink: '← Back to Host an Event',
+  },
+  kn: {
+    pageTitle: 'ಧನ್ಯವಾದಗಳು',
+    metaDescription: 'ನಿಮ್ಮ ಕಾರ್ಯಕ್ರಮದ ವಿಚಾರಣೆ ನಮಗೆ ತಲುಪಿದೆ.',
+    heroEyebrow: 'TVC ಗೆ ಭೇಟಿ ನೀಡಿ',
+    heroTitle: 'ನಿಮ್ಮ ವಿಚಾರಣೆ ನಮಗೆ ತಲುಪಿದೆ',
+    bodyText: 'TVC ನಲ್ಲಿ ನಿಮ್ಮ ಕಾರ್ಯಕ್ರಮವನ್ನು ಆಯೋಜಿಸುವ ಬಗ್ಗೆ ಸಂಪರ್ಕಿಸಿದ್ದಕ್ಕೆ ಧನ್ಯವಾದಗಳು — ಲಭ್ಯತೆ ಮತ್ತು ಉಲ್ಲೇಖದೊಂದಿಗೆ ನಾವು ಕೆಲವು ದಿನಗಳಲ್ಲಿ ನಿಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸುತ್ತೇವೆ.',
+    backLink: '← ಕಾರ್ಯಕ್ರಮ ಆಯೋಜಿಸುವ ಪುಟಕ್ಕೆ ಹಿಂತಿರುಗಿ',
+  },
+  ta: {
+    pageTitle: 'நன்றி',
+    metaDescription: 'உங்கள் நிகழ்வு விசாரணை எங்களுக்குக் கிடைத்துவிட்டது.',
+    heroEyebrow: 'TVC-க்கு வருகை தாருங்கள்',
+    heroTitle: 'உங்கள் விசாரணை எங்களுக்குக் கிடைத்தது',
+    bodyText: 'TVC-யில் உங்கள் நிகழ்வை நடத்துவது பற்றி தொடர்பு கொண்டதற்கு நன்றி — கிடைக்கும் தன்மை மற்றும் மதிப்பீட்டுடன் நாங்கள் சில நாட்களுக்குள் உங்களைத் தொடர்பு கொள்வோம்.',
+    backLink: '← நிகழ்வு நடத்தும் பக்கத்திற்குத் திரும்பு',
+  },
+} as const;
+
+const c = content[lang];
+---
+
+<BaseLayout lang={lang} title={c.pageTitle} description={c.metaDescription} image="/images/pages/home/gallery-4.jpg" imageWidth={1280} imageHeight={960} noindex>
+  <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} image="/images/pages/home/gallery-4.jpg" imageAlt="Sunset over the Melagiri Hills" />
+
+  <section class="section wrapper">
+    <p>{c.bodyText}</p>
+    <p><a href={getRelativeLocaleUrl(lang, '/visit/host-an-event')}>{c.backLink}</a></p>
+  </section>
+</BaseLayout>

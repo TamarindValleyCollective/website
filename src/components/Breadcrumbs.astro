@@ -1,25 +1,42 @@
 ---
 import { sectionFor } from '../data/site-map';
+import { useTranslations, stripLocalePrefix, type Locale } from '../i18n/utils';
+import { getRelativeLocaleUrl } from 'astro:i18n';
 
 interface Props {
   pathname: string;
   pageTitle: string;
+  lang: Locale;
 }
 
-const { pathname, pageTitle } = Astro.props;
+const { pathname, pageTitle, lang } = Astro.props;
+const t = useTranslations(lang);
 
 // No section (the homepage itself, or a page outside Explore/Engage) means
 // there's no useful trail to show — skip rendering rather than show a
-// half-empty breadcrumb.
-const section = pathname === '/' ? null : sectionFor(pathname);
+// half-empty breadcrumb. sectionFor() only knows about bare (locale-less)
+// paths, so strip the /kn or /ta prefix before matching.
+const barePathname = stripLocalePrefix(pathname);
+const section = barePathname === '/' ? null : sectionFor(barePathname);
+const sectionLabelKey = section?.label === 'Explore' ? 'nav.explore' : 'nav.engage';
+
+// getRelativeLocaleUrl unconditionally appends a trailing slash, which
+// would land after the hash (`/kn/#explore/`) and break the anchor if
+// passed the raw `/#explore` — split the hash off first and reattach it to
+// the already-slashed path instead.
+const sectionHref = section ? (() => {
+  const [bare, hash] = section.href.split('#');
+  const localized = getRelativeLocaleUrl(lang, bare || '/');
+  return hash ? `${localized}#${hash}` : localized;
+})() : '';
 ---
 
 {section && (
   <nav class="breadcrumbs" aria-label="Breadcrumb">
     <div class="wrapper breadcrumbs__inner">
-      <a href="/">Home</a>
+      <a href={getRelativeLocaleUrl(lang, '/')}>{t('common.home')}</a>
       <span class="breadcrumbs__sep" aria-hidden="true">/</span>
-      <a href={section.href}>{section.label}</a>
+      <a href={sectionHref}>{t(sectionLabelKey)}</a>
       <span class="breadcrumbs__sep" aria-hidden="true">/</span>
       <span class="breadcrumbs__current" aria-current="page">{pageTitle}</span>
     </div>

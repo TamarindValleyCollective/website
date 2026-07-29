@@ -1,0 +1,170 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../PageHero.astro';
+import BookingInquiry from '../BookingInquiry.astro';
+import { useTranslations, type Locale } from '../../i18n/utils';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+
+const content = {
+  en: {
+    metaDescription: 'Three trails into the forest adjacent to Tamarind Valley Collective — the Temple Trail, the Watering Hole Trail, and the Top of the Hill Trail.',
+    heroEyebrow: 'Visit TVC',
+    heroTitle: 'Trekking: Trails of TVC',
+    introText: "Visiting TVC isn't limited to the cultivated land — you can trek out onto beautiful trails leading into the adjacent forest. This is elephant territory — TVC sits inside the corridor connecting Bannerghatta National Park to the Cauvery — so plan your hike with our local in-charge rather than heading out on your own.",
+    trails: [
+      {
+        name: 'The Temple Trail',
+        image: '/images/pages/trekking/temple-trail.jpg',
+        distance: '~3 km round trip · a couple of hours',
+        desc: 'Climbs to the Chikkamma Doddamma Temple at the top of the hill, past our housing clusters. From the top you can see the farms below and Thaggatti village in the distance on one side, dense forest on the other. Go in the evening for a beautiful sunset.',
+      },
+      {
+        name: 'The Watering Hole Trail',
+        image: '/images/pages/trekking/watering-hole.jpg',
+        distance: '~2.1 km one way · a little over 2 hours',
+        desc: "Leads to a small pond with water most of the year. You'll see pug marks from herbivores like deer and wild boar — no big cats seen so far — and maybe a rabbit or peacock crossing your path. Takes you deeper into the forest through narrow undergrowth passages.",
+      },
+      {
+        name: 'The Top of the Hill Trail',
+        image: '/images/pages/trekking/hilltop.jpg',
+        distance: '~3 km one way, 6.5 km round trip · 3+ hours',
+        desc: 'The longest trail, climbing gradually through forest, bamboo clusters, and flower blooms during the rains, to a panoramic view of the area. Best done early morning; getting caught out after dark on the way back can be risky.',
+      },
+    ],
+    closingText: 'You can also do shorter walks in the upper wildlife corridor, along the periphery of the large canopy food forest, or through the Kavery 2 area to learn about native and planted species helping rejuvenate the land.',
+    bookingWhatsapp: "Hi! I'd like to plan a guided trek at TVC.",
+    bookingNote: 'Treks are arranged as part of a day visit or overnight stay with our local in-charge — send an inquiry or message us to plan yours.',
+  },
+  kn: {
+    metaDescription: 'ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ಗೆ ಪಕ್ಕದ ಅರಣ್ಯಕ್ಕೆ ಮೂರು ಮಾರ್ಗಗಳು — ದೇವಸ್ಥಾನ ಟ್ರೇಲ್, ವಾಟರಿಂಗ್ ಹೋಲ್ ಟ್ರೇಲ್, ಮತ್ತು ಬೆಟ್ಟದ ತುದಿ ಟ್ರೇಲ್.',
+    heroEyebrow: 'TVC ಗೆ ಭೇಟಿ ನೀಡಿ',
+    heroTitle: 'ಚಾರಣ: TVC ಯ ಮಾರ್ಗಗಳು',
+    introText: 'TVC ಗೆ ಭೇಟಿ ನೀಡುವುದು ಕೃಷಿ ಭೂಮಿಗೆ ಮಾತ್ರ ಸೀಮಿತವಾಗಿಲ್ಲ — ನೀವು ಪಕ್ಕದ ಅರಣ್ಯಕ್ಕೆ ಹೋಗುವ ಸುಂದರ ಮಾರ್ಗಗಳಲ್ಲಿ ಚಾರಣ ಮಾಡಬಹುದು. ಇದು ಆನೆ ಪ್ರದೇಶ — TVC ಬನ್ನೇರುಘಟ್ಟ ರಾಷ್ಟ್ರೀಯ ಉದ್ಯಾನವನ್ನು ಕಾವೇರಿಗೆ ಸಂಪರ್ಕಿಸುವ ಕಾರಿಡಾರ್‌ನೊಳಗೆ ಇದೆ — ಆದ್ದರಿಂದ ನಿಮ್ಮದೇ ಆಗಿ ಹೊರಡುವ ಬದಲು ನಮ್ಮ ಸ್ಥಳೀಯ ಉಸ್ತುವಾರಿಯೊಂದಿಗೆ ನಿಮ್ಮ ಚಾರಣವನ್ನು ಯೋಜಿಸಿ.',
+    trails: [
+      {
+        name: 'ದೇವಸ್ಥಾನ ಟ್ರೇಲ್',
+        image: '/images/pages/trekking/temple-trail.jpg',
+        distance: '~3 ಕಿ.ಮೀ ರೌಂಡ್ ಟ್ರಿಪ್ · ಕೆಲವು ಗಂಟೆಗಳು',
+        desc: 'ನಮ್ಮ ವಸತಿ ಸಮೂಹಗಳನ್ನು ದಾಟಿ, ಬೆಟ್ಟದ ತುದಿಯಲ್ಲಿರುವ ಚಿಕ್ಕಮ್ಮ ದೊಡ್ಡಮ್ಮ ದೇವಸ್ಥಾನಕ್ಕೆ ಏರುತ್ತದೆ. ಮೇಲಿನಿಂದ ನೀವು ಕೆಳಗಿನ ಫಾರ್ಮ್‌ಗಳನ್ನು ಮತ್ತು ದೂರದಲ್ಲಿ ಒಂದು ಬದಿಯಲ್ಲಿ ತಗ್ಗಟ್ಟಿ ಗ್ರಾಮವನ್ನು, ಇನ್ನೊಂದು ಬದಿಯಲ್ಲಿ ದಟ್ಟವಾದ ಅರಣ್ಯವನ್ನು ನೋಡಬಹುದು. ಸುಂದರ ಸೂರ್ಯಾಸ್ತಕ್ಕಾಗಿ ಸಂಜೆ ಹೋಗಿ.',
+      },
+      {
+        name: 'ವಾಟರಿಂಗ್ ಹೋಲ್ ಟ್ರೇಲ್',
+        image: '/images/pages/trekking/watering-hole.jpg',
+        distance: '~2.1 ಕಿ.ಮೀ ಒಂದೇ ದಾರಿ · 2 ಗಂಟೆಗಳಿಗಿಂತ ಸ್ವಲ್ಪ ಹೆಚ್ಚು',
+        desc: 'ವರ್ಷದ ಹೆಚ್ಚಿನ ಭಾಗ ನೀರಿರುವ ಒಂದು ಸಣ್ಣ ಕೊಳಕ್ಕೆ ಕರೆದೊಯ್ಯುತ್ತದೆ. ಜಿಂಕೆ ಮತ್ತು ಕಾಡುಹಂದಿಯಂತಹ ಸಸ್ಯಾಹಾರಿಗಳ ಹೆಜ್ಜೆ ಗುರುತುಗಳನ್ನು ನೀವು ನೋಡುತ್ತೀರಿ — ಇಲ್ಲಿಯವರೆಗೆ ದೊಡ್ಡ ಬೆಕ್ಕುಗಳು ಕಂಡುಬಂದಿಲ್ಲ — ಮತ್ತು ಬಹುಶಃ ಮೊಲ ಅಥವಾ ನವಿಲು ನಿಮ್ಮ ದಾರಿಯನ್ನು ದಾಟಬಹುದು. ಕಿರಿದಾದ ಪೊದೆ ಹಾದಿಗಳ ಮೂಲಕ ನಿಮ್ಮನ್ನು ಅರಣ್ಯದ ಆಳಕ್ಕೆ ಕೊಂಡೊಯ್ಯುತ್ತದೆ.',
+      },
+      {
+        name: 'ಬೆಟ್ಟದ ತುದಿ ಟ್ರೇಲ್',
+        image: '/images/pages/trekking/hilltop.jpg',
+        distance: '~3 ಕಿ.ಮೀ ಒಂದೇ ದಾರಿ, 6.5 ಕಿ.ಮೀ ರೌಂಡ್ ಟ್ರಿಪ್ · 3+ ಗಂಟೆಗಳು',
+        desc: 'ಅತ್ಯಂತ ಉದ್ದವಾದ ಮಾರ್ಗ, ಅರಣ್ಯ, ಬಿದಿರಿನ ಸಮೂಹಗಳು, ಮತ್ತು ಮಳೆಗಾಲದಲ್ಲಿ ಹೂವಿನ ಅರಳುವಿಕೆಗಳ ಮೂಲಕ ಕ್ರಮೇಣ ಏರಿ, ಪ್ರದೇಶದ ಪನೋರಮಿಕ್ ನೋಟಕ್ಕೆ ಕರೆದೊಯ್ಯುತ್ತದೆ. ಮುಂಜಾನೆ ಮಾಡುವುದು ಉತ್ತಮ; ಹಿಂತಿರುಗುವ ದಾರಿಯಲ್ಲಿ ಕತ್ತಲಾದ ನಂತರ ಸಿಕ್ಕಿಬೀಳುವುದು ಅಪಾಯಕಾರಿಯಾಗಬಹುದು.',
+      },
+    ],
+    closingText: 'ಭೂಮಿಯನ್ನು ಪುನಶ್ಚೇತನಗೊಳಿಸಲು ಸಹಾಯ ಮಾಡುವ ಸ್ಥಳೀಯ ಮತ್ತು ನೆಟ್ಟ ಪ್ರಭೇದಗಳ ಬಗ್ಗೆ ತಿಳಿಯಲು ನೀವು ಮೇಲಿನ ವನ್ಯಜೀವಿ ಕಾರಿಡಾರ್‌ನಲ್ಲಿ, ದೊಡ್ಡ ಮೇಲಾವರಣ ಆಹಾರ ಅರಣ್ಯದ ಪರಿಧಿಯ ಉದ್ದಕ್ಕೂ, ಅಥವಾ ಕಾವೇರಿ 2 ಪ್ರದೇಶದ ಮೂಲಕ ಕಡಿಮೆ ನಡಿಗೆಗಳನ್ನೂ ಮಾಡಬಹುದು.',
+    bookingWhatsapp: 'ಹಾಯ್! TVC ಯಲ್ಲಿ ಮಾರ್ಗದರ್ಶಿತ ಚಾರಣವನ್ನು ಯೋಜಿಸಲು ಬಯಸುತ್ತೇನೆ.',
+    bookingNote: 'ಚಾರಣಗಳನ್ನು ನಮ್ಮ ಸ್ಥಳೀಯ ಉಸ್ತುವಾರಿಯೊಂದಿಗೆ ಒಂದು ದಿನದ ಭೇಟಿ ಅಥವಾ ರಾತ್ರಿ ವಾಸ್ತವ್ಯದ ಭಾಗವಾಗಿ ಆಯೋಜಿಸಲಾಗುತ್ತದೆ — ನಿಮ್ಮದನ್ನು ಯೋಜಿಸಲು ವಿಚಾರಣೆ ಕಳುಹಿಸಿ ಅಥವಾ ನಮಗೆ ಸಂದೇಶ ಕಳುಹಿಸಿ.',
+  },
+  ta: {
+    metaDescription: 'டமரிண்ட் வேலி கலெக்டிவுக்கு அருகிலுள்ள காட்டிற்குள் மூன்று பாதைகள் — கோவில் பாதை, நீர்நிலைப் பாதை, மற்றும் மலை உச்சி பாதை.',
+    heroEyebrow: 'TVC-ஐ பார்வையிடுங்கள்',
+    heroTitle: 'மலையேற்றம்: TVC-யின் பாதைகள்',
+    introText: 'TVC-க்கு வருகை தருவது பயிரிடப்பட்ட நிலத்திற்கு மட்டும் மட்டுப்படுத்தப்படவில்லை — அருகிலுள்ள காட்டிற்குள் செல்லும் அழகான பாதைகளில் நீங்கள் மலையேறலாம். இது யானை பிரதேசம் — TVC பன்னேர்காட்டா தேசிய பூங்காவை காவேரியுடன் இணைக்கும் தாழ்வாரத்திற்குள் அமைந்துள்ளது — எனவே உங்கள் சொந்தமாக கிளம்புவதற்குப் பதிலாக எங்கள் உள்ளூர் பொறுப்பாளருடன் உங்கள் மலையேற்றத்தைத் திட்டமிடுங்கள்.',
+    trails: [
+      {
+        name: 'கோவில் பாதை',
+        image: '/images/pages/trekking/temple-trail.jpg',
+        distance: '~3 கி.மீ சுற்றுப் பயணம் · சில மணி நேரங்கள்',
+        desc: 'எங்கள் குடியிருப்பு தொகுப்புகளைக் கடந்து, மலை உச்சியில் உள்ள சிக்கம்மா தொட்டம்மா கோவிலுக்கு ஏறுகிறது. உச்சியிலிருந்து ஒரு பக்கத்தில் கீழே உள்ள பண்ணைகளையும் தொலைவில் தகட்டி கிராமத்தையும், மறுபக்கத்தில் அடர்ந்த காட்டையும் காணலாம். அழகான சூரிய அஸ்தமனத்திற்கு மாலையில் செல்லுங்கள்.',
+      },
+      {
+        name: 'நீர்நிலைப் பாதை',
+        image: '/images/pages/trekking/watering-hole.jpg',
+        distance: '~2.1 கி.மீ ஒரு வழி · 2 மணி நேரத்திற்கும் சற்று அதிகம்',
+        desc: 'ஆண்டின் பெரும்பாலான காலம் நீர் இருக்கும் ஒரு சிறிய குளத்திற்கு அழைத்துச் செல்கிறது. மான் மற்றும் காட்டுப்பன்றி போன்ற தாவரவகை உண்ணிகளின் கால் தடங்களை நீங்கள் காண்பீர்கள் — இதுவரை பெரிய பூனை இனங்கள் காணப்படவில்லை — மற்றும் ஒரு முயல் அல்லது மயில் உங்கள் பாதையைக் கடக்கக்கூடும். குறுகிய புதர் பாதைகள் வழியாக உங்களை காட்டின் ஆழத்திற்கு அழைத்துச் செல்கிறது.',
+      },
+      {
+        name: 'மலை உச்சி பாதை',
+        image: '/images/pages/trekking/hilltop.jpg',
+        distance: '~3 கி.மீ ஒரு வழி, 6.5 கி.மீ சுற்றுப் பயணம் · 3+ மணி நேரம்',
+        desc: 'மிக நீளமான பாதை, காடு, மூங்கில் தொகுப்புகள், மற்றும் மழைக்காலத்தில் பூக்கும் மலர்கள் வழியாக படிப்படியாக ஏறி, பகுதியின் பரந்த காட்சிக்கு அழைத்துச் செல்கிறது. அதிகாலையில் செய்வது சிறந்தது; திரும்பும் வழியில் இருட்டிய பின் சிக்கிக்கொள்வது ஆபத்தானதாக இருக்கலாம்.',
+      },
+    ],
+    closingText: 'நிலத்தை புத்துயிர் பெறச் செய்ய உதவும் உள்நாட்டு மற்றும் நடப்பட்ட இனங்களைப் பற்றி அறிய, மேல் வனவிலங்கு தாழ்வாரத்திலும், பெரிய விதானமுள்ள உணவு காட்டின் புற எல்லையிலும், அல்லது காவேரி 2 பகுதி வழியாகவும் குறுகிய நடைப்பயணங்களையும் நீங்கள் செய்யலாம்.',
+    bookingWhatsapp: 'வணக்கம்! TVC-யில் வழிகாட்டப்பட்ட மலையேற்றத்தை திட்டமிட விரும்புகிறேன்.',
+    bookingNote: 'மலையேற்றங்கள் எங்கள் உள்ளூர் பொறுப்பாளருடன் ஒரு நாள் பயணம் அல்லது இரவு தங்குமிடத்தின் ஒரு பகுதியாக ஏற்பாடு செய்யப்படுகின்றன — உங்களுடையதைத் திட்டமிட விசாரணையை அனுப்பவும் அல்லது எங்களுக்கு செய்தி அனுப்பவும்.',
+  },
+} as const;
+
+const c = content[lang];
+---
+
+<BaseLayout lang={lang} title={t('nav.trekkingTrails')} description={c.metaDescription} image="/images/pages/trekking/hero.jpg" imageWidth={1280} imageHeight={847}>
+  <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} image="/images/pages/trekking/hero.jpg" imageAlt="A forest trail in the Melagiri Hills" />
+
+  <section class="section wrapper">
+    <p>{c.introText}</p>
+
+    <div class="trail-list">
+      {c.trails.map((tr) => (
+        <div class="trail card">
+          <img src={tr.image} alt={tr.name} loading="lazy" />
+          <div>
+            <h3>{tr.name}</h3>
+            <p class="distance">{tr.distance}</p>
+            <p>{tr.desc}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <p>{c.closingText}</p>
+
+    <BookingInquiry
+      lang={lang}
+      type="Trekking"
+      whatsappMessage={c.bookingWhatsapp}
+      note={c.bookingNote}
+    />
+  </section>
+</BaseLayout>
+
+<style>
+  .trail-list {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    margin: 24px 0;
+  }
+
+  .trail {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+
+  .trail img {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    border-radius: var(--radius);
+  }
+
+  .distance {
+    color: var(--tvc-orange);
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+
+  @media (max-width: 640px) {
+    .trail {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

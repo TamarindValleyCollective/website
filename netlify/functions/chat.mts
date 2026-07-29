@@ -17,12 +17,23 @@ interface ChatMessage {
   content: string;
 }
 
-function buildSystemPrompt(): string {
+const LANGUAGE_NAMES: Record<string, string> = { en: 'English', kn: 'Kannada', ta: 'Tamil' };
+
+// The site itself is in the middle of being translated into Kannada/Tamil
+// (see src/i18n/) - the underlying corpus below stays English-only (it's
+// generated from the site's English content, see the comment above), but
+// the model is perfectly capable of answering in another language while
+// grounding itself in that same English source, so there's no need to wait
+// for the corpus itself to be translated.
+function buildSystemPrompt(lang: string): string {
   const corpus = siteContent.pages
     .map((p: { url: string; title: string; text: string }) => `## ${p.title} (${p.url})\n${p.text}`)
     .join('\n\n');
+  const languageName = LANGUAGE_NAMES[lang] ?? 'English';
 
   return `You are the assistant embedded on the Tamarind Valley Collective (TVC) website (tvc.farm), a 100-acre permaculture farm community near Kanakapura, India.
+
+Respond in ${languageName}, regardless of the language the WEBSITE CONTENT below happens to be written in.
 
 Answer ONLY using the WEBSITE CONTENT provided below. Do not use any outside knowledge, and do not guess or make up details that aren't in this content.
 
@@ -47,7 +58,7 @@ export default async (req: Request): Promise<Response> => {
     return jsonResponse({ error: 'Method not allowed' }, 405);
   }
 
-  let payload: { message?: string; history?: ChatMessage[] };
+  let payload: { message?: string; history?: ChatMessage[]; lang?: string };
   try {
     payload = await req.json();
   } catch {
@@ -82,7 +93,7 @@ export default async (req: Request): Promise<Response> => {
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 1024,
-        system: buildSystemPrompt(),
+        system: buildSystemPrompt(payload.lang ?? 'en'),
         messages,
       }),
     });

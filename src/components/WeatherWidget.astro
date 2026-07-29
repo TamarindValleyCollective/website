@@ -2,9 +2,17 @@
 // Live current-conditions fetched client-side from Open-Meteo (no API key,
 // free for this volume of use) -- same farm coordinates already used
 // elsewhere in the codebase for the biodiversity map's default view.
+import { useTranslations, DEFAULT_LOCALE, type Locale } from '../i18n/utils';
+
+interface Props {
+  lang?: Locale;
+}
+
+const { lang = DEFAULT_LOCALE } = Astro.props;
+const t = useTranslations(lang);
 ---
 
-<div class="weather-widget" id="weather-widget" hidden>
+<div class="weather-widget" id="weather-widget" hidden data-fmt-humidity={t('weather.humidityFormat')} data-fmt-as-of={t('weather.asOf')}>
   <p class="weather-widget__location">Tamarind Valley Collective</p>
   <div class="weather-widget__row">
     <div class="weather-widget__temp">
@@ -101,13 +109,14 @@
 
   (async () => {
     const widget = document.getElementById('weather-widget')!;
+    const lang = (widget.closest('html')?.lang || 'en') as 'en' | 'kn' | 'ta';
     try {
       const data = await fetchWeather();
       document.getElementById('weather-icon')!.textContent = iconFor(data.weather_code);
       document.getElementById('weather-temp')!.textContent = `${Math.round(data.temperature_2m)}°C`;
-      document.getElementById('weather-condition')!.textContent = labelFor(data.weather_code);
-      document.getElementById('weather-humidity')!.textContent = `${Math.round(data.relative_humidity_2m)}% humidity`;
-      document.getElementById('weather-updated')!.textContent = `As of ${formatFarmTime(data.time)}`;
+      document.getElementById('weather-condition')!.textContent = labelFor(data.weather_code, lang);
+      document.getElementById('weather-humidity')!.textContent = (widget.dataset.fmtHumidity ?? '{pct}% humidity').replace('{pct}', String(Math.round(data.relative_humidity_2m)));
+      document.getElementById('weather-updated')!.textContent = (widget.dataset.fmtAsOf ?? 'As of {time}').replace('{time}', formatFarmTime(data.time));
       widget.hidden = false;
     } catch (err) {
       console.warn('Could not load live weather', err);

@@ -2,28 +2,48 @@
 // Site-wide chat widget. Talks to netlify/functions/chat.mts, which answers
 // strictly from the site's own content (see that file's system prompt) —
 // this component only handles the UI/conversation state, no content logic.
+// `lang` is sent along with each request so the function can reply in the
+// visitor's language while still grounding itself in the (English) site
+// content corpus - see LANGUAGE_NAMES in chat.mts.
+import { useTranslations, DEFAULT_LOCALE, type Locale } from '../i18n/utils';
+
+interface Props {
+  lang?: Locale;
+}
+
+const { lang = DEFAULT_LOCALE } = Astro.props;
+const t = useTranslations(lang);
+const suggestions = [t('chat.suggestion1'), t('chat.suggestion2'), t('chat.suggestion3')];
 ---
 
-<div class="cw-root" id="cw-root">
-  <button type="button" class="cw-toggle" id="cw-toggle" aria-label="Open chat" aria-expanded="false">
+<div class="cw-root" id="cw-root" data-lang={lang}>
+  <button type="button" class="cw-toggle" id="cw-toggle" aria-label={t('chat.openAria')} aria-expanded="false">
     <img src="/images/brand/tvc-logo-mark.png" alt="" />
   </button>
 
-  <div class="cw-panel" id="cw-panel" hidden role="dialog" aria-label="TVC website assistant" aria-modal="false">
+  <div class="cw-panel" id="cw-panel" hidden role="dialog" aria-label={t('chat.dialogAria')} aria-modal="false">
     <div class="cw-head">
       <img src="/images/brand/tvc-logo-mark.png" alt="" class="cw-head-logo" />
       <div class="cw-head-titles">
-        <span class="cw-head-title">TVC Assistant</span>
-        <span class="cw-head-sub">Answers from this website</span>
+        <span class="cw-head-title">{t('chat.title')}</span>
+        <span class="cw-head-sub">{t('chat.subtitle')}</span>
       </div>
-      <button type="button" class="cw-close" id="cw-close" aria-label="Close chat">✕</button>
+      <button type="button" class="cw-close" id="cw-close" aria-label={t('chat.closeAria')}>✕</button>
     </div>
-    <div class="cw-messages" id="cw-messages"></div>
+    <div
+      class="cw-messages"
+      id="cw-messages"
+      data-welcome={t('chat.welcome')}
+      data-generic-error={t('chat.genericError')}
+      data-network-error={t('chat.networkError')}
+    ></div>
     <form class="cw-form" id="cw-form">
-      <input type="text" id="cw-input" class="cw-input" placeholder="Ask about TVC…" autocomplete="off" maxlength="2000" />
-      <button type="submit" class="cw-send" id="cw-send" aria-label="Send">➤</button>
+      <input type="text" id="cw-input" class="cw-input" placeholder={t('chat.placeholder')} autocomplete="off" maxlength="2000" />
+      <button type="submit" class="cw-send" id="cw-send" aria-label={t('chat.sendAria')}>➤</button>
     </form>
   </div>
+
+  <script type="application/json" id="cw-suggestions-data">{JSON.stringify(suggestions)}</script>
 </div>
 
 <script>
@@ -45,9 +65,12 @@
   let open = false;
   let sending = false;
 
+  const lang = root.dataset.lang ?? 'en';
+
   // Shown once, on first open, to lower the friction of typing a first
   // question into a widget that's easy to just... close.
-  const SUGGESTED_PROMPTS = ['How do I visit?', "What's the next event?", 'How does membership work?'];
+  const suggestionsData = document.getElementById('cw-suggestions-data')?.textContent ?? '[]';
+  const SUGGESTED_PROMPTS: string[] = JSON.parse(suggestionsData);
 
   // The assistant replies in a light subset of Markdown (bold, links, lists).
   // Rendered as HTML instead of plain text so it reads as formatted content
@@ -186,7 +209,7 @@
     panel.hidden = false;
     toggle.setAttribute('aria-expanded', 'true');
     if (!messagesEl.childElementCount) {
-      addBubble('assistant', "Hi! I'm the TVC website assistant — ask me anything about TVC, and I'll answer using what's on this site.");
+      addBubble('assistant', messagesEl.dataset.welcome ?? '');
       addSuggestedPrompts();
     }
     input.focus();
@@ -219,13 +242,13 @@
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ message, history }),
+        body: JSON.stringify({ message, history, lang }),
       });
       const data = await res.json();
       typingBubble.remove();
 
       if (!res.ok) {
-        addBubble('assistant', data.error || 'Something went wrong. Please try again.');
+        addBubble('assistant', data.error || messagesEl.dataset.genericError || '');
       } else {
         addBubble('assistant', data.reply);
         history.push({ role: 'user', content: message });
@@ -233,7 +256,7 @@
       }
     } catch {
       typingBubble.remove();
-      addBubble('assistant', "I couldn't reach the server. Please check your connection and try again.");
+      addBubble('assistant', messagesEl.dataset.networkError ?? '');
     } finally {
       sending = false;
       sendBtn.disabled = false;

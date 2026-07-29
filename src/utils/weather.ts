@@ -43,7 +43,30 @@ export function iconFor(weatherCode: number): string {
   return CODE_INFO[weatherCode]?.icon ?? '🌡️';
 }
 
-export function labelFor(weatherCode: number): string {
+// Kannada/Tamil condition labels, keyed the same as CODE_INFO above - kept
+// here rather than in src/i18n/*.ts since this module is imported directly
+// by client-side <script> tags (WeatherWidget/HeaderWeather), not just
+// server-rendered Astro components.
+const CODE_LABELS_KN: Record<number, string> = {
+  0: 'ಶುಭ್ರ ಆಕಾಶ', 1: 'ಬಹುತೇಕ ಶುಭ್ರ', 2: 'ಭಾಗಶಃ ಮೋಡ', 3: 'ಮೋಡ ಕವಿದ',
+  45: 'ಮಂಜು', 48: 'ಮಂಜು',
+  51: 'ಹಗುರ ತುಂತುರು ಮಳೆ', 53: 'ತುಂತುರು ಮಳೆ', 55: 'ದಟ್ಟ ತುಂತುರು ಮಳೆ',
+  61: 'ಹಗುರ ಮಳೆ', 63: 'ಮಳೆ', 65: 'ಭಾರೀ ಮಳೆ',
+  80: 'ಮಳೆ ಸಿಂಚನ', 81: 'ಮಳೆ ಸಿಂಚನ', 82: 'ತೀವ್ರ ಮಳೆ ಸಿಂಚನ',
+  95: 'ಗುಡುಗು ಸಹಿತ ಮಳೆ', 96: 'ಆಲಿಕಲ್ಲು ಸಹಿತ ಗುಡುಗು', 99: 'ಆಲಿಕಲ್ಲು ಸಹಿತ ಗುಡುಗು',
+};
+const CODE_LABELS_TA: Record<number, string> = {
+  0: 'தெளிவான வானம்', 1: 'பெரும்பாலும் தெளிவானது', 2: 'ஓரளவு மேகமூட்டம்', 3: 'மேகமூடிய வானம்',
+  45: 'பனிமூட்டம்', 48: 'பனிமூட்டம்',
+  51: 'லேசான தூறல்', 53: 'தூறல்', 55: 'அடர் தூறல்',
+  61: 'லேசான மழை', 63: 'மழை', 65: 'கனமழை',
+  80: 'மழை தூறல்கள்', 81: 'மழை தூறல்கள்', 82: 'கடுமையான மழை தூறல்கள்',
+  95: 'இடிமழை', 96: 'ஆலங்கட்டி இடிமழை', 99: 'ஆலங்கட்டி இடிமழை',
+};
+
+export function labelFor(weatherCode: number, lang: 'en' | 'kn' | 'ta' = 'en'): string {
+  if (lang === 'kn') return CODE_LABELS_KN[weatherCode] ?? CODE_INFO[weatherCode]?.label ?? 'ಪ್ರಸ್ತುತ ಸ್ಥಿತಿ';
+  if (lang === 'ta') return CODE_LABELS_TA[weatherCode] ?? CODE_INFO[weatherCode]?.label ?? 'தற்போதைய நிலை';
   return CODE_INFO[weatherCode]?.label ?? 'Current conditions';
 }
 

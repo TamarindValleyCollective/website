@@ -5,6 +5,13 @@ import sitemap from '@astrojs/sitemap';
 // https://astro.build/config
 export default defineConfig({
   site: 'https://tvc.farm',
+  i18n: {
+    defaultLocale: 'en',
+    locales: ['en', 'kn', 'ta'],
+    // English keeps its existing unprefixed URLs (no redirects, no SEO
+    // disruption) - only Kannada/Tamil get a /kn/ or /ta/ prefix.
+    routing: { prefixDefaultLocale: false },
+  },
   integrations: [
     sitemap({
       // Excludes the noindex'd pages (see BaseLayout's `noindex` prop) -
@@ -12,6 +19,10 @@ export default defineConfig({
       // index it is a mixed signal search engines don't need. /internal/ is
       // the unlinked, secret-gated photo-pool review dashboard.
       filter: (page) => !page.includes('/404') && !page.includes('/thanks') && !page.includes('/internal/'),
+      i18n: {
+        defaultLocale: 'en',
+        locales: { en: 'en-IN', kn: 'kn-IN', ta: 'ta-IN' },
+      },
     }),
   ],
   redirects: {

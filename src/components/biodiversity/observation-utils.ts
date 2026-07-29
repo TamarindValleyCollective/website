@@ -42,26 +42,62 @@ export interface Observation {
 }
 
 // The iconic taxa iNaturalist actually uses, mapped to friendly labels.
-// Only groups present in the fetched data are shown as filter chips.
-const ICONIC_TAXON_LABELS: Record<string, string> = {
-  Aves: 'Birds',
-  Insecta: 'Insects',
-  Plantae: 'Plants & Flowers',
-  Mammalia: 'Mammals',
-  Reptilia: 'Reptiles',
-  Amphibia: 'Amphibians',
-  Mollusca: 'Molluscs',
-  Arachnida: 'Arachnids',
-  Fungi: 'Fungi',
-  Chromista: 'Chromista',
-  Protozoa: 'Protozoa',
-  Animalia: 'Other Animals',
-  Unknown: 'Unidentified',
+// Only groups present in the fetched data are shown as filter chips. These
+// are UI chrome (group/category names), not the species' own common or
+// scientific names, so they're translated per-locale like any other label —
+// unlike the actual bird/species names the API returns, which stay as-is.
+const ICONIC_TAXON_LABELS: Record<'en' | 'kn' | 'ta', Record<string, string>> = {
+  en: {
+    Aves: 'Birds',
+    Insecta: 'Insects',
+    Plantae: 'Plants & Flowers',
+    Mammalia: 'Mammals',
+    Reptilia: 'Reptiles',
+    Amphibia: 'Amphibians',
+    Mollusca: 'Molluscs',
+    Arachnida: 'Arachnids',
+    Fungi: 'Fungi',
+    Chromista: 'Chromista',
+    Protozoa: 'Protozoa',
+    Animalia: 'Other Animals',
+    Unknown: 'Unidentified',
+  },
+  kn: {
+    Aves: 'ಪಕ್ಷಿಗಳು',
+    Insecta: 'ಕೀಟಗಳು',
+    Plantae: 'ಸಸ್ಯಗಳು ಮತ್ತು ಹೂವುಗಳು',
+    Mammalia: 'ಸಸ್ತನಿಗಳು',
+    Reptilia: 'ಸರೀಸೃಪಗಳು',
+    Amphibia: 'ಉಭಯಚರಗಳು',
+    Mollusca: 'ಮೃದ್ವಂಗಿಗಳು',
+    Arachnida: 'ಅರಾಕ್ನಿಡ್‌ಗಳು',
+    Fungi: 'ಶಿಲೀಂಧ್ರಗಳು',
+    Chromista: 'ಕ್ರೋಮಿಸ್ಟಾ',
+    Protozoa: 'ಪ್ರೊಟೊಜೋವಾ',
+    Animalia: 'ಇತರ ಪ್ರಾಣಿಗಳು',
+    Unknown: 'ಗುರುತಿಸಲಾಗದ',
+  },
+  ta: {
+    Aves: 'பறவைகள்',
+    Insecta: 'பூச்சிகள்',
+    Plantae: 'தாவரங்கள் மற்றும் மலர்கள்',
+    Mammalia: 'பாலூட்டிகள்',
+    Reptilia: 'ஊர்வன',
+    Amphibia: 'ஈரூர்வன',
+    Mollusca: 'மொல்லுஸ்கா',
+    Arachnida: 'சிலந்தி இனம்',
+    Fungi: 'பூஞ்சைகள்',
+    Chromista: 'குரோமிஸ்டா',
+    Protozoa: 'புரோட்டோசோவா',
+    Animalia: 'பிற விலங்குகள்',
+    Unknown: 'அடையாளம் தெரியாத',
+  },
 };
 
-export function labelForIconicTaxon(name: string | null): string {
-  if (!name) return 'Unidentified';
-  return ICONIC_TAXON_LABELS[name] ?? name;
+export function labelForIconicTaxon(name: string | null, lang: 'en' | 'kn' | 'ta' = 'en'): string {
+  const labels = ICONIC_TAXON_LABELS[lang] ?? ICONIC_TAXON_LABELS.en;
+  if (!name) return labels.Unknown;
+  return labels[name] ?? name;
 }
 
 // GeoJSON coordinate order is [lng, lat] — the opposite of Leaflet's L.marker([lat, lng]).

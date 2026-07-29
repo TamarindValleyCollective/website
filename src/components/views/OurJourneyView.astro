@@ -1,0 +1,48 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../PageHero.astro';
+import JourneyTimeline from '../JourneyTimelineStandalone.astro';
+import { FARM_AREA_ACRES } from '../../data/site-facts';
+import type { Locale } from '../../i18n/utils';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+
+// Only the page shell (hero) is translated here - the timeline itself
+// (JourneyTimelineStandalone) handles its own `lang` prop for its
+// structural chrome. See the i18n scope note at the top of that component
+// for why its yearly narrative content stays English-only in this pass.
+const content = {
+  en: {
+    metaDescription: `From ${FARM_AREA_ACRES} degraded acres to a regenerating ecosystem, walked year by year in photos.`,
+    heroEyebrow: 'Our Journey',
+    heroTitle: 'From degraded land to a regenerating ecosystem',
+  },
+  kn: {
+    metaDescription: `${FARM_AREA_ACRES} ಎಕರೆ ಅವನತಿ ಹೊಂದಿದ ಭೂಮಿಯಿಂದ ಪುನರುಜ್ಜೀವನಗೊಳ್ಳುತ್ತಿರುವ ಪರಿಸರ ವ್ಯವಸ್ಥೆಯವರೆಗೆ, ವರ್ಷದಿಂದ ವರ್ಷಕ್ಕೆ ಫೋಟೋಗಳಲ್ಲಿ ಸಾಗಿದ ಹಾದಿ.`,
+    heroEyebrow: 'ನಮ್ಮ ಪಯಣ',
+    heroTitle: 'ಅವನತಿ ಹೊಂದಿದ ಭೂಮಿಯಿಂದ ಪುನರುಜ್ಜೀವನಗೊಳ್ಳುತ್ತಿರುವ ಪರಿಸರ ವ್ಯವಸ್ಥೆಯವರೆಗೆ',
+  },
+  ta: {
+    metaDescription: `${FARM_AREA_ACRES} ஏக்கர் சிதைந்த நிலத்திலிருந்து மீட்டெடுக்கப்படும் சுற்றுச்சூழல் அமைப்பு வரை, ஆண்டுக்கு ஆண்டு புகைப்படங்களில் நடந்த பயணம்.`,
+    heroEyebrow: 'எங்கள் பயணம்',
+    heroTitle: 'சிதைந்த நிலத்திலிருந்து மீட்டெடுக்கப்படும் சுற்றுச்சூழல் அமைப்பு வரை',
+  },
+} as const;
+
+const c = content[lang];
+---
+
+<BaseLayout lang={lang} title={c.heroTitle} description={c.metaDescription} image="/images/pages/journey/hero.jpg" imageWidth={1280} imageHeight={960}>
+  <PageHero
+    eyebrow={c.heroEyebrow}
+    title={c.heroTitle}
+    image="/images/pages/journey/hero.jpg"
+    imageAlt="Early view of the land during its restoration"
+  />
+
+  <JourneyTimeline lang={lang} />
+</BaseLayout>

@@ -4,9 +4,18 @@
 // Shares WeatherWidget's fetch + 15-minute localStorage cache (see
 // utils/weather.ts) -- rendered on every page since Nav is global, but that
 // cache means at most one real Open-Meteo call per visit, not one per page.
+import { useTranslations, DEFAULT_LOCALE, type Locale } from '../i18n/utils';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+interface Props {
+  lang?: Locale;
+}
+
+const { lang = DEFAULT_LOCALE } = Astro.props;
+const t = useTranslations(lang);
 ---
 
-<a href="/ecosystem/geography" class="header-weather" id="header-weather" hidden aria-label="Current temperature at TVC — see the Weather page">
+<a href={getRelativeLocaleUrl(lang, '/ecosystem/geography')} class="header-weather" id="header-weather" hidden aria-label={t('weather.headerAriaLabel')}>
   <span id="header-weather-icon" class="header-weather__icon" aria-hidden="true"></span>
   <span id="header-weather-temp" class="header-weather__temp"></span>
 </a>

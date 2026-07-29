@@ -30,7 +30,19 @@ function dotIcon(color: string) {
   });
 }
 
-export function initMap(containerId: string, observations: Observation[], onSelect: (obs: Observation) => void) {
+const STRINGS: Record<'en' | 'kn' | 'ta', { unidentified: string; viewDetails: string }> = {
+  en: { unidentified: 'Unidentified', viewDetails: 'View details' },
+  kn: { unidentified: 'ಗುರುತಿಸಲಾಗದ', viewDetails: 'ವಿವರಗಳನ್ನು ನೋಡಿ' },
+  ta: { unidentified: 'அடையாளம் தெரியாத', viewDetails: 'விவரங்களைப் பார்க்கவும்' },
+};
+
+export function initMap(
+  containerId: string,
+  observations: Observation[],
+  onSelect: (obs: Observation) => void,
+  lang: 'en' | 'kn' | 'ta' = 'en'
+) {
+  const strings = STRINGS[lang] ?? STRINGS.en;
   const map = L.map(containerId, { scrollWheelZoom: false });
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -55,10 +67,10 @@ export function initMap(containerId: string, observations: Observation[], onSele
 
     const marker = L.marker(latLng, { icon: dotIcon(colorFor(obs.taxon?.iconic_taxon_name ?? null)) });
     const thumb = obs.photos[0] ? thumbUrl(obs.photos[0].url) : '';
-    const name = obs.taxon?.preferred_common_name || obs.taxon?.name || 'Unidentified';
+    const name = obs.taxon?.preferred_common_name || obs.taxon?.name || strings.unidentified;
 
     marker.bindPopup(
-      `<div class="obs-popup">${thumb ? `<img src="${thumb}" alt="${name}" />` : ''}<strong>${name}</strong><br /><a href="#" data-obs-id="${obs.id}">View details</a></div>`
+      `<div class="obs-popup">${thumb ? `<img src="${thumb}" alt="${name}" />` : ''}<strong>${name}</strong><br /><a href="#" data-obs-id="${obs.id}">${strings.viewDetails}</a></div>`
     );
     marker.on('popupopen', () => {
       const link = document.querySelector(`a[data-obs-id="${obs.id}"]`);

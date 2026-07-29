@@ -1,0 +1,298 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../PageHero.astro';
+import { useTranslations, type Locale } from '../../i18n/utils';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+
+const WHATSAPP_GROUP_URL = 'https://chat.whatsapp.com/90AI4NABZVZJUAo8p09IAD?s=cl&p=i&ilr=0';
+const MADHAVAN_WHATSAPP_NUMBER = '917406307309';
+const GOOGLE_MAPS_CID = 'https://www.google.com/maps?cid=12716822598495943685';
+
+const content = {
+  en: {
+    pageTitle: 'Contact Us',
+    metaDescription: 'Get in touch with Tamarind Valley Collective — the Friends of TVC WhatsApp group and general enquiries.',
+    heroEyebrow: 'Contact Us',
+    heroTitle: 'Get in touch',
+    friendsHeading: 'Friends of TVC',
+    friendsText: 'Want occasional updates on events, volunteering, and life at TVC? Join the Friends of TVC WhatsApp group — no form to fill in, just tap to join.',
+    friendsCta: 'Join on WhatsApp →',
+    generalHeading: 'General enquiries',
+    generalText: 'Press, partnerships, volunteering, or just a question — reach out below, or message Madhavan directly.',
+    whatsappPrefer: 'Prefer to chat? Message Madhavan directly:',
+    whatsappButton: 'Message Madhavan on WhatsApp',
+    whatsappGreeting: "Hi, I'd like to know more about TVC.",
+    phoneHeading: 'Phone',
+    phoneGeneral: 'Madhav — general enquiries:',
+    phoneVisit: 'Visit bookings:',
+    addressHeading: 'Address',
+    socialHeading: 'Social',
+    locationHeading: 'Location',
+    mapCaption: `Pulled directly from our <a href="${GOOGLE_MAPS_CID}" target="_blank" rel="noopener noreferrer">Google Business Profile</a> — see reviews and get directions there too.`,
+  },
+  kn: {
+    pageTitle: 'ನಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸಿ',
+    metaDescription: 'ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್ ಅನ್ನು ಸಂಪರ್ಕಿಸಿ — ಫ್ರೆಂಡ್ಸ್ ಆಫ್ TVC ವಾಟ್ಸಾಪ್ ಗುಂಪು ಮತ್ತು ಸಾಮಾನ್ಯ ವಿಚಾರಣೆಗಳು.',
+    heroEyebrow: 'ನಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸಿ',
+    heroTitle: 'ಸಂಪರ್ಕದಲ್ಲಿರಿ',
+    friendsHeading: 'ಫ್ರೆಂಡ್ಸ್ ಆಫ್ TVC',
+    friendsText: 'ಕಾರ್ಯಕ್ರಮಗಳು, ಸ್ವಯಂಸೇವೆ ಮತ್ತು TVC ಯಲ್ಲಿನ ಜೀವನದ ಬಗ್ಗೆ ಸಾಂದರ್ಭಿಕ ನವೀಕರಣಗಳು ಬೇಕೇ? ಫ್ರೆಂಡ್ಸ್ ಆಫ್ TVC ವಾಟ್ಸಾಪ್ ಗುಂಪಿಗೆ ಸೇರಿ — ಯಾವುದೇ ಫಾರ್ಮ್ ತುಂಬಿಸಬೇಕಿಲ್ಲ, ಬರೀ ಟ್ಯಾಪ್ ಮಾಡಿ ಸೇರಿ.',
+    friendsCta: 'ವಾಟ್ಸಾಪ್‌ನಲ್ಲಿ ಸೇರಿ →',
+    generalHeading: 'ಸಾಮಾನ್ಯ ವಿಚಾರಣೆಗಳು',
+    generalText: 'ಪತ್ರಿಕಾ, ಪಾಲುದಾರಿಕೆ, ಸ್ವಯಂಸೇವೆ, ಅಥವಾ ಬರೀ ಒಂದು ಪ್ರಶ್ನೆ — ಕೆಳಗೆ ಸಂಪರ್ಕಿಸಿ, ಅಥವಾ ನೇರವಾಗಿ ಮಾಧವನ್‌ಗೆ ಸಂದೇಶ ಕಳುಹಿಸಿ.',
+    whatsappPrefer: 'ಚಾಟ್ ಮಾಡಲು ಬಯಸುವಿರಾ? ನೇರವಾಗಿ ಮಾಧವನ್‌ಗೆ ಸಂದೇಶ ಕಳುಹಿಸಿ:',
+    whatsappButton: 'ವಾಟ್ಸಾಪ್‌ನಲ್ಲಿ ಮಾಧವನ್‌ಗೆ ಸಂದೇಶ ಕಳುಹಿಸಿ',
+    whatsappGreeting: 'ನಮಸ್ಕಾರ, ನಾನು TVC ಬಗ್ಗೆ ಇನ್ನಷ್ಟು ತಿಳಿದುಕೊಳ್ಳಲು ಬಯಸುತ್ತೇನೆ.',
+    phoneHeading: 'ಫೋನ್',
+    phoneGeneral: 'ಮಾಧವ್ — ಸಾಮಾನ್ಯ ವಿಚಾರಣೆಗಳು:',
+    phoneVisit: 'ಭೇಟಿ ಬುಕಿಂಗ್‌ಗಳು:',
+    addressHeading: 'ವಿಳಾಸ',
+    socialHeading: 'ಸಾಮಾಜಿಕ ಮಾಧ್ಯಮ',
+    locationHeading: 'ಸ್ಥಳ',
+    mapCaption: `ನಮ್ಮ <a href="${GOOGLE_MAPS_CID}" target="_blank" rel="noopener noreferrer">Google Business Profile</a>‌ನಿಂದ ನೇರವಾಗಿ ಪಡೆಯಲಾಗಿದೆ — ವಿಮರ್ಶೆಗಳನ್ನು ನೋಡಿ ಮತ್ತು ಅಲ್ಲಿಂದಲೂ ದಿಕ್ಕುಗಳನ್ನು ಪಡೆಯಿರಿ.`,
+  },
+  ta: {
+    pageTitle: 'எங்களை தொடர்பு கொள்ளுங்கள்',
+    metaDescription: 'டமரிண்ட் வேலி கலெக்டிவை தொடர்பு கொள்ளுங்கள் — ஃபிரெண்ட்ஸ் ஆஃப் TVC வாட்ஸ்அப் குழு மற்றும் பொது விசாரணைகள்.',
+    heroEyebrow: 'எங்களை தொடர்பு கொள்ளுங்கள்',
+    heroTitle: 'தொடர்பில் இருங்கள்',
+    friendsHeading: 'ஃபிரெண்ட்ஸ் ஆஃப் TVC',
+    friendsText: 'நிகழ்வுகள், தன்னார்வத் தொண்டு, மற்றும் TVC-யில் வாழ்க்கை பற்றி அவ்வப்போது புதுப்பிப்புகள் வேண்டுமா? ஃபிரெண்ட்ஸ் ஆஃப் TVC வாட்ஸ்அப் குழுவில் இணையுங்கள் — நிரப்ப வேண்டிய படிவம் இல்லை, தட்டி இணையுங்கள்.',
+    friendsCta: 'வாட்ஸ்அப்பில் இணையுங்கள் →',
+    generalHeading: 'பொது விசாரணைகள்',
+    generalText: 'பத்திரிகை, கூட்டாண்மைகள், தன்னார்வத் தொண்டு, அல்லது வெறும் ஒரு கேள்வி — கீழே தொடர்பு கொள்ளுங்கள், அல்லது நேரடியாக மாதவனுக்கு செய்தி அனுப்புங்கள்.',
+    whatsappPrefer: 'அரட்டையடிக்க விரும்புகிறீர்களா? நேரடியாக மாதவனுக்கு செய்தி அனுப்புங்கள்:',
+    whatsappButton: 'வாட்ஸ்அப்பில் மாதவனுக்கு செய்தி அனுப்புங்கள்',
+    whatsappGreeting: 'வணக்கம், TVC பற்றி மேலும் அறிய விரும்புகிறேன்.',
+    phoneHeading: 'தொலைபேசி',
+    phoneGeneral: 'மாதவ் — பொது விசாரணைகள்:',
+    phoneVisit: 'வருகை முன்பதிவுகள்:',
+    addressHeading: 'முகவரி',
+    socialHeading: 'சமூக ஊடகம்',
+    locationHeading: 'இடம்',
+    mapCaption: `எங்கள் <a href="${GOOGLE_MAPS_CID}" target="_blank" rel="noopener noreferrer">Google Business Profile</a>-இலிருந்து நேரடியாகப் பெறப்பட்டது — மதிப்புரைகளைப் பார்க்கவும், அங்கிருந்தும் திசைகளைப் பெறவும்.`,
+  },
+} as const;
+
+const c = content[lang];
+const madhavanWhatsappHref = `https://wa.me/${MADHAVAN_WHATSAPP_NUMBER}?text=${encodeURIComponent(c.whatsappGreeting)}`;
+---
+
+<BaseLayout lang={lang} title={c.pageTitle} description={c.metaDescription} image="/images/pages/location/hero.png" imageWidth={1177} imageHeight={673}>
+  <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} image="/images/pages/location/hero.png" imageAlt="Map showing TVC's location on the Tamil Nadu–Karnataka border" />
+
+  <section class="section wrapper contact-options">
+    <div class="card option-card">
+      <h2>{c.friendsHeading}</h2>
+      <p>{c.friendsText}</p>
+      <a class="button" href={WHATSAPP_GROUP_URL} target="_blank" rel="noopener noreferrer">{c.friendsCta}</a>
+    </div>
+
+    <div class="card option-card">
+      <h2>{c.generalHeading}</h2>
+      <p>{c.generalText}</p>
+      <div class="general-enquiry-layout">
+        <form
+          class="enquiry-form"
+          name="general-enquiry"
+          method="POST"
+          action={getRelativeLocaleUrl(lang, '/contact/thanks')}
+          data-netlify="true"
+          data-netlify-honeypot="bot-field"
+        >
+          <input type="hidden" name="form-name" value="general-enquiry" />
+          <p class="enquiry-hp"><label>{t('forms.honeypotLabel')} <input name="bot-field" /></label></p>
+          <div class="enquiry-grid">
+            <div>
+              <label for="general-name">{t('forms.name')}</label>
+              <input id="general-name" type="text" name="name" placeholder={t('forms.namePlaceholder')} autocomplete="name" required />
+            </div>
+            <div>
+              <label for="general-email">{t('forms.email')}</label>
+              <input id="general-email" type="email" name="email" placeholder="you@example.com" autocomplete="email" required />
+            </div>
+            <div>
+              <label for="general-phone">{t('forms.phoneOptional')}</label>
+              <input id="general-phone" type="tel" name="phone" placeholder="+91 98765 43210" autocomplete="tel" />
+            </div>
+          </div>
+          <label for="general-message">{t('forms.message')}</label>
+          <textarea id="general-message" name="message" rows="4" required></textarea>
+          <button class="button" type="submit">{t('forms.sendEnquiry')}</button>
+        </form>
+
+        <div class="whatsapp-cta">
+          <p>{c.whatsappPrefer}</p>
+          <a class="button button--outline" href={madhavanWhatsappHref} target="_blank" rel="noopener noreferrer">{c.whatsappButton}</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--tint wrapper contact-grid">
+    <div>
+      <h3>{c.phoneHeading}</h3>
+      <p>{c.phoneGeneral} <a href="tel:+917406307309">+91 74063 07309</a></p>
+      <p>{c.phoneVisit} <a href="tel:+918548065772">+91 85480 65772</a></p>
+
+      <h3>{c.addressHeading}</h3>
+      <p>Tamarind Valley Collective<br />Thaggatti village, near Kanakapura<br />Karnataka/Tamil Nadu border, India</p>
+
+      <h3>{c.socialHeading}</h3>
+      <p>
+        <a href="https://www.facebook.com/farm.tvc" target="_blank" rel="noopener noreferrer">Facebook</a> ·
+        <a href="https://twitter.com/TVCFarm" target="_blank" rel="noopener noreferrer">Twitter</a> ·
+        <a href="https://www.instagram.com/tamarindvalleycollective/" target="_blank" rel="noopener noreferrer">Instagram</a>
+      </p>
+    </div>
+
+    <div>
+      <h3>{c.locationHeading}</h3>
+      <div class="map-embed">
+        <iframe
+          loading="lazy"
+          src="https://www.google.com/maps?cid=12716822598495943685&output=embed"
+          width="100%"
+          height="360"
+          style="border:0"
+          title="Tamarind Valley Collective on Google Maps"
+        ></iframe>
+      </div>
+      <p class="caption" set:html={c.mapCaption} />
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .contact-options {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .option-card h2 {
+    margin-top: 0;
+  }
+
+  .general-enquiry-layout {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 20px;
+    align-items: start;
+    margin-top: 16px;
+  }
+
+  .enquiry-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .enquiry-form label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-bottom: 4px;
+  }
+
+  .enquiry-form input,
+  .enquiry-form textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 10px;
+    font: inherit;
+    background: #fff;
+  }
+
+  .enquiry-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+  }
+
+  .enquiry-form button {
+    align-self: flex-start;
+  }
+
+  .whatsapp-cta {
+    padding: 20px;
+    border: 1px dashed var(--tvc-line);
+    border-radius: var(--radius);
+    text-align: center;
+    margin-top: 16px;
+  }
+
+  .whatsapp-cta p {
+    margin-bottom: 12px;
+  }
+
+  /* Netlify Forms spam honeypot — off-screen, not display:none (some bots
+     skip hidden fields, but few check for visibility via position). */
+  .enquiry-hp {
+    position: absolute;
+    left: -9999px;
+  }
+
+  .contact-grid {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap: 32px;
+  }
+
+  .contact-grid h3 {
+    margin-top: 24px;
+  }
+
+  .contact-grid h3:first-child {
+    margin-top: 0;
+  }
+
+  .map-embed iframe {
+    border-radius: var(--radius);
+  }
+
+  .caption {
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+    margin-top: 10px;
+  }
+
+  @media (max-width: 780px) {
+    .general-enquiry-layout,
+    .contact-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<script>
+  // Netlify Forms handles the actual email for the form below (native
+  // submission, no preventDefault — see its data-netlify attribute). This
+  // only adds the second requirement Netlify Forms can't do on its own:
+  // logging the same enquiry as a row in a Google Sheet
+  // (netlify/functions/enquiry.mts). navigator.sendBeacon fires a
+  // fire-and-forget POST designed to survive the page navigating away right
+  // after — unlike a plain fetch() issued in the same submit handler, which
+  // isn't guaranteed to complete once the browser starts navigating.
+  document.querySelector<HTMLFormElement>('form[name="general-enquiry"]')?.addEventListener('submit', (e) => {
+    const form = e.target as HTMLFormElement;
+    const data = new FormData(form);
+    const payload = {
+      formType: 'general',
+      name: data.get('name'),
+      email: data.get('email'),
+      phone: data.get('phone'),
+      message: data.get('message'),
+      botField: data.get('bot-field'),
+    };
+    navigator.sendBeacon('/api/enquiry', new Blob([JSON.stringify(payload)], { type: 'application/json' }));
+  });
+</script>

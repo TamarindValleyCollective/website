@@ -1,6 +1,10 @@
 ---
 title: "Biome Solutions"
 excerpt: "The Bangalore architecture firm behind TVC's home design, working in ecological and sustainable design."
+title_kn: "ಬಯೋಮ್ ಸೊಲ್ಯೂಷನ್ಸ್"
+excerpt_kn: "TVC ಯ ಮನೆ ವಿನ್ಯಾಸದ ಹಿಂದಿನ ಬೆಂಗಳೂರು ವಾಸ್ತುಶಿಲ್ಪ ಸಂಸ್ಥೆ, ಪರಿಸರೀಯ ಮತ್ತು ಸುಸ್ಥಿರ ವಿನ್ಯಾಸದಲ್ಲಿ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತಿದೆ."
+title_ta: "பயோம் சொல்யூஷன்ஸ்"
+excerpt_ta: "TVC-யின் வீட்டு வடிவமைப்பின் பின்னணியில் உள்ள பெங்களூரு கட்டிடக்கலை நிறுவனம், சூழலியல் மற்றும் நிலைத்தன்மையான வடிவமைப்பில் செயல்படுகிறது."
 coverImage: "/images/partners/biome-solutions.png"
 url: "https://www.biome-solutions.com/"
 ---

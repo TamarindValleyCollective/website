@@ -22,7 +22,19 @@ function thumbIcon(url: string) {
   });
 }
 
-export function initPhotoMap(containerId: string, photos: MapPhoto[], onSelect: (slug: string) => void) {
+const VIEW_PHOTO_LABEL: Record<'en' | 'kn' | 'ta', string> = {
+  en: 'View photo',
+  kn: 'ಫೋಟೋ ನೋಡಿ',
+  ta: 'புகைப்படத்தைப் பார்க்கவும்',
+};
+
+export function initPhotoMap(
+  containerId: string,
+  photos: MapPhoto[],
+  onSelect: (slug: string) => void,
+  lang: 'en' | 'kn' | 'ta' = 'en'
+) {
+  const viewPhotoLabel = VIEW_PHOTO_LABEL[lang] ?? VIEW_PHOTO_LABEL.en;
   const map = L.map(containerId, { scrollWheelZoom: false });
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -37,7 +49,7 @@ export function initPhotoMap(containerId: string, photos: MapPhoto[], onSelect: 
     const marker = L.marker([photo.gps.lat, photo.gps.lng], { icon: thumbIcon(thumb) });
 
     marker.bindPopup(
-      `<div class="photo-popup"><img src="${thumb}" alt="" /><strong>${photo.caption}</strong><br /><a href="#" data-photo-slug="${photo.slug}">View photo</a></div>`
+      `<div class="photo-popup"><img src="${thumb}" alt="" /><strong>${photo.caption}</strong><br /><a href="#" data-photo-slug="${photo.slug}">${viewPhotoLabel}</a></div>`
     );
     marker.on('popupopen', () => {
       const link = document.querySelector(`a[data-photo-slug="${photo.slug}"]`);

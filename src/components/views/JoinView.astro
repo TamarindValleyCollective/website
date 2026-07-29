@@ -1,0 +1,298 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../PageHero.astro';
+import { FARM_AREA_ACRES } from '../../data/site-facts';
+import { useTranslations, type Locale } from '../../i18n/utils';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+
+// Inline links inside prose (set:html) are built up front so each locale's
+// text only needs to interpolate a ready-made, locale-aware href.
+const peopleHref = getRelativeLocaleUrl(lang, '/people#members');
+const contactHref = getRelativeLocaleUrl(lang, '/contact');
+
+const content = {
+  en: {
+    pageTitle: 'Join the Collective',
+    metaDescription:
+      'How membership at Tamarind Valley Collective actually works — community size, private transactions between members, and what matters to us in a new member.',
+    heroEyebrow: 'Membership',
+    heroTitle: 'Joining the Collective',
+    heroIntro: "TVC is unlikely to expand beyond its current 53 families — but a spot occasionally opens. Here's how that actually works, and what matters to us.",
+    section1Heading: "We're unlikely to expand",
+    section1Text: `TVC is <a href="${peopleHref}">53 families</a> on ${FARM_AREA_ACRES} acres — that's likely close to as large as this community will ever get. We are unlikely to expand membership, and there's no waitlist or application process in the usual sense.`,
+    section2Heading: 'How a spot occasionally opens',
+    section2Text:
+      "From time to time, for personal reasons, a member family decides to move on. When that happens, it isn't the collective selling a spot — it's a private transaction directly between that family and whoever takes their place. TVC isn't a party to the sale and doesn't broker it.",
+    section3Heading: "This isn't a financial investment",
+    section3Text:
+      "TVC doesn't offer a financial return — it offers a different, non-monetary one, and it's different for each member. For some it's the community itself; for others it's the social impact of the work here; for others still, it's simply living in harmony with nature. There's no single right answer, but it matters that you find your own — the members you'll talk to before joining value very different things about being here, and it's worth understanding why.",
+    section4Heading: 'What we do care about',
+    section4Text:
+      "What matters to us is that whoever joins genuinely understands what they're signing up for — the shared labor, the land stewardship, the way decisions get made together, the responsibilities of being one of the families here. This isn't a real-estate transaction to us; it's who joins our community.",
+    section5Heading: 'How to start',
+    section5Text:
+      'The way in is conversation, not a form. Before any transaction is discussed, we ask anyone seriously interested to engage with at least 2 existing members to understand their respective reasons for being a part of the community — so you can relate to what draws people here, and what\'s actually expected of a member.',
+    memberPairNote: 'Two of the 53 member families you might end up talking to.',
+    readyHeading: 'Ready to start the conversation?',
+    readyHint: "If you'd like us to keep you in mind should a spot open, tell us a bit about yourself.",
+    messageLabel: 'Tell us about yourself and why TVC interests you',
+    otherReasonText: 'Reaching out for a different reason?',
+    otherReasonLink: 'Visit our Contact page →',
+  },
+  kn: {
+    pageTitle: 'ಕಲೆಕ್ಟಿವ್‌ಗೆ ಸೇರಿ',
+    metaDescription:
+      'ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ನಲ್ಲಿ ಸದಸ್ಯತ್ವ ನಿಜವಾಗಿ ಹೇಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ — ಸಮುದಾಯದ ಗಾತ್ರ, ಸದಸ್ಯರ ನಡುವಿನ ಖಾಸಗಿ ವಹಿವಾಟುಗಳು, ಮತ್ತು ಹೊಸ ಸದಸ್ಯರಲ್ಲಿ ನಮಗೆ ಮುಖ್ಯವಾದದ್ದು ಏನು.',
+    heroEyebrow: 'ಸದಸ್ಯತ್ವ',
+    heroTitle: 'ಕಲೆಕ್ಟಿವ್‌ಗೆ ಸೇರುವುದು',
+    heroIntro: 'TVC ತನ್ನ ಪ್ರಸ್ತುತ 53 ಕುಟುಂಬಗಳನ್ನು ಮೀರಿ ವಿಸ್ತರಿಸುವ ಸಾಧ್ಯತೆ ಕಡಿಮೆ — ಆದರೆ ಒಂದು ಸ್ಥಾನ ಸಾಂದರ್ಭಿಕವಾಗಿ ತೆರೆಯುತ್ತದೆ. ಅದು ನಿಜವಾಗಿ ಹೇಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ, ಮತ್ತು ನಮಗೆ ಏನು ಮುಖ್ಯ ಎಂಬುದು ಇಲ್ಲಿದೆ.',
+    section1Heading: 'ನಾವು ವಿಸ್ತರಿಸುವ ಸಾಧ್ಯತೆ ಕಡಿಮೆ',
+    section1Text: `TVC ಎಂಬುದು ${FARM_AREA_ACRES} ಎಕರೆಗಳಲ್ಲಿ <a href="${peopleHref}">53 ಕುಟುಂಬಗಳು</a> — ಇದು ಈ ಸಮುದಾಯ ಎಂದಿಗೂ ತಲುಪಬಹುದಾದ ಗರಿಷ್ಠ ಗಾತ್ರಕ್ಕೆ ಹತ್ತಿರವಾಗಿರಬಹುದು. ನಾವು ಸದಸ್ಯತ್ವವನ್ನು ವಿಸ್ತರಿಸುವ ಸಾಧ್ಯತೆ ಕಡಿಮೆ, ಮತ್ತು ಸಾಮಾನ್ಯ ಅರ್ಥದಲ್ಲಿ ಯಾವುದೇ ಕಾಯುವ ಪಟ್ಟಿ ಅಥವಾ ಅರ್ಜಿ ಪ್ರಕ್ರಿಯೆ ಇಲ್ಲ.`,
+    section2Heading: 'ಒಂದು ಸ್ಥಾನ ಸಾಂದರ್ಭಿಕವಾಗಿ ಹೇಗೆ ತೆರೆಯುತ್ತದೆ',
+    section2Text:
+      'ಕಾಲಕಾಲಕ್ಕೆ, ವೈಯಕ್ತಿಕ ಕಾರಣಗಳಿಗಾಗಿ, ಒಂದು ಸದಸ್ಯ ಕುಟುಂಬ ಮುಂದೆ ಸಾಗಲು ನಿರ್ಧರಿಸುತ್ತದೆ. ಆಗ ಸಂಭವಿಸುವುದು ಕಲೆಕ್ಟಿವ್ ಒಂದು ಸ್ಥಾನವನ್ನು ಮಾರಾಟ ಮಾಡುವುದಲ್ಲ — ಅದು ಆ ಕುಟುಂಬ ಮತ್ತು ಅವರ ಸ್ಥಾನ ತೆಗೆದುಕೊಳ್ಳುವವರ ನಡುವಿನ ನೇರ ಖಾಸಗಿ ವಹಿವಾಟು. TVC ಈ ಮಾರಾಟದ ಪಕ್ಷಕಾರನಲ್ಲ ಮತ್ತು ಅದನ್ನು ಮಧ್ಯಸ್ಥಿಕೆ ಮಾಡುವುದಿಲ್ಲ.',
+    section3Heading: 'ಇದು ಆರ್ಥಿಕ ಹೂಡಿಕೆಯಲ್ಲ',
+    section3Text:
+      'TVC ಆರ್ಥಿಕ ಲಾಭವನ್ನು ನೀಡುವುದಿಲ್ಲ — ಅದು ಬೇರೆಯದೇ, ಹಣಕಾಸಿಗೆ ಸಂಬಂಧಿಸದ ಲಾಭವನ್ನು ನೀಡುತ್ತದೆ, ಮತ್ತು ಇದು ಪ್ರತಿ ಸದಸ್ಯರಿಗೂ ವಿಭಿನ್ನವಾಗಿದೆ. ಕೆಲವರಿಗೆ ಅದು ಸಮುದಾಯವೇ; ಇನ್ನು ಕೆಲವರಿಗೆ ಇಲ್ಲಿನ ಕೆಲಸದ ಸಾಮಾಜಿಕ ಪ್ರಭಾವ; ಮತ್ತೆ ಕೆಲವರಿಗೆ, ಅದು ಕೇವಲ ಪ್ರಕೃತಿಯೊಂದಿಗೆ ಸಾಮರಸ್ಯದಿಂದ ಬದುಕುವುದು. ಇಲ್ಲಿ ಒಂದೇ ಸರಿಯಾದ ಉತ್ತರ ಇಲ್ಲ, ಆದರೆ ನಿಮ್ಮದೇ ಉತ್ತರವನ್ನು ಕಂಡುಕೊಳ್ಳುವುದು ಮುಖ್ಯ — ಸೇರುವ ಮೊದಲು ನೀವು ಮಾತನಾಡುವ ಸದಸ್ಯರು ಇಲ್ಲಿ ಇರುವುದರ ಬಗ್ಗೆ ವಿಭಿನ್ನ ವಿಷಯಗಳನ್ನು ಮೌಲ್ಯಯುತವೆಂದು ಪರಿಗಣಿಸುತ್ತಾರೆ, ಮತ್ತು ಏಕೆ ಎಂದು ಅರ್ಥಮಾಡಿಕೊಳ್ಳುವುದು ಯೋಗ್ಯವಾಗಿದೆ.',
+    section4Heading: 'ನಮಗೆ ನಿಜವಾಗಿ ಮುಖ್ಯವಾದದ್ದು',
+    section4Text:
+      'ಸೇರುವವರು ತಾವು ಏನಕ್ಕೆ ಸಹಿ ಹಾಕುತ್ತಿದ್ದಾರೆ ಎಂಬುದನ್ನು ನಿಜವಾಗಿ ಅರ್ಥಮಾಡಿಕೊಳ್ಳಬೇಕು ಎಂಬುದೇ ನಮಗೆ ಮುಖ್ಯ — ಹಂಚಿಕೆಯ ಶ್ರಮ, ಭೂ ನಿರ್ವಹಣೆ, ಒಟ್ಟಾಗಿ ನಿರ್ಧಾರಗಳನ್ನು ತೆಗೆದುಕೊಳ್ಳುವ ವಿಧಾನ, ಇಲ್ಲಿನ ಕುಟುಂಬಗಳಲ್ಲಿ ಒಂದಾಗಿರುವ ಜವಾಬ್ದಾರಿಗಳು. ಇದು ನಮಗೆ ರಿಯಲ್-ಎಸ್ಟೇಟ್ ವಹಿವಾಟು ಅಲ್ಲ; ಇದು ನಮ್ಮ ಸಮುದಾಯಕ್ಕೆ ಯಾರು ಸೇರುತ್ತಾರೆ ಎಂಬುದು.',
+    section5Heading: 'ಪ್ರಾರಂಭಿಸುವುದು ಹೇಗೆ',
+    section5Text:
+      'ಇಲ್ಲಿಗೆ ಬರುವ ದಾರಿ ಸಂಭಾಷಣೆ, ಒಂದು ಅರ್ಜಿ ಫಾರ್ಮ್ ಅಲ್ಲ. ಯಾವುದೇ ವಹಿವಾಟಿನ ಬಗ್ಗೆ ಚರ್ಚಿಸುವ ಮೊದಲು, ಗಂಭೀರವಾಗಿ ಆಸಕ್ತಿ ಹೊಂದಿರುವ ಯಾರಾದರೂ ಕನಿಷ್ಠ 2 ಈಗಿನ ಸದಸ್ಯರೊಂದಿಗೆ ಸಂವಹನ ನಡೆಸಿ, ಸಮುದಾಯದ ಭಾಗವಾಗಿರಲು ಅವರ ಆಯಾ ಕಾರಣಗಳನ್ನು ಅರ್ಥಮಾಡಿಕೊಳ್ಳಬೇಕೆಂದು ನಾವು ಕೇಳುತ್ತೇವೆ — ಇದರಿಂದ ಜನರನ್ನು ಇಲ್ಲಿಗೆ ಸೆಳೆಯುವುದೇನು ಮತ್ತು ಸದಸ್ಯರಿಂದ ನಿಜವಾಗಿ ಏನನ್ನು ನಿರೀಕ್ಷಿಸಲಾಗುತ್ತದೆ ಎಂಬುದನ್ನು ನೀವು ಸಂಬಂಧಿಸಿಕೊಳ್ಳಬಹುದು.',
+    memberPairNote: '53 ಸದಸ್ಯ ಕುಟುಂಬಗಳಲ್ಲಿ ನೀವು ಮಾತನಾಡಬಹುದಾದ ಇಬ್ಬರು.',
+    readyHeading: 'ಸಂಭಾಷಣೆ ಪ್ರಾರಂಭಿಸಲು ಸಿದ್ಧರಿದ್ದೀರಾ?',
+    readyHint: 'ಒಂದು ಸ್ಥಾನ ತೆರೆದಾಗ ನಮಗೆ ನಿಮ್ಮನ್ನು ನೆನಪಿನಲ್ಲಿಟ್ಟುಕೊಳ್ಳಬೇಕೆಂದು ಬಯಸಿದರೆ, ನಿಮ್ಮ ಬಗ್ಗೆ ಸ್ವಲ್ಪ ತಿಳಿಸಿ.',
+    messageLabel: 'ನಿಮ್ಮ ಬಗ್ಗೆ ಮತ್ತು TVC ನಿಮಗೆ ಆಸಕ್ತಿ ಏಕೆ ಎಂಬುದನ್ನು ತಿಳಿಸಿ',
+    otherReasonText: 'ಬೇರೆ ಕಾರಣಕ್ಕಾಗಿ ಸಂಪರ್ಕಿಸುತ್ತಿದ್ದೀರಾ?',
+    otherReasonLink: 'ನಮ್ಮ ಸಂಪರ್ಕ ಪುಟಕ್ಕೆ ಭೇಟಿ ನೀಡಿ →',
+  },
+  ta: {
+    pageTitle: 'கலெக்டிவில் இணையுங்கள்',
+    metaDescription:
+      'டமரிண்ட் வேலி கலெக்டிவில் உறுப்பினர் நிலை உண்மையில் எப்படி வேலை செய்கிறது — சமூக அளவு, உறுப்பினர்களுக்கு இடையேயான தனிப்பட்ட பரிவர்த்தனைகள், மற்றும் புதிய உறுப்பினரிடம் நாங்கள் எதைக் கருதுகிறோம்.',
+    heroEyebrow: 'உறுப்பினர் நிலை',
+    heroTitle: 'கலெக்டிவில் இணைதல்',
+    heroIntro: 'TVC தற்போதைய 53 குடும்பங்களைத் தாண்டி விரிவடையும் வாய்ப்பு குறைவு — ஆனால் ஒரு இடம் அவ்வப்போது திறக்கும். அது உண்மையில் எப்படி வேலை செய்கிறது, மற்றும் எங்களுக்கு எது முக்கியம் என்பது இங்கே.',
+    section1Heading: 'நாங்கள் விரிவடையும் வாய்ப்பு குறைவு',
+    section1Text: `TVC என்பது ${FARM_AREA_ACRES} ஏக்கரில் <a href="${peopleHref}">53 குடும்பங்கள்</a> — இது இந்த சமூகம் எப்போதும் அடையக்கூடிய அதிகபட்ச அளவிற்கு நெருக்கமாக இருக்கலாம். நாங்கள் உறுப்பினர் எண்ணிக்கையை விரிவுபடுத்தும் வாய்ப்பு குறைவு, மற்றும் வழக்கமான அர்த்தத்தில் காத்திருப்பு பட்டியல் அல்லது விண்ணப்ப செயல்முறை எதுவும் இல்லை.`,
+    section2Heading: 'ஒரு இடம் அவ்வப்போது எப்படி திறக்கிறது',
+    section2Text:
+      'அவ்வப்போது, தனிப்பட்ட காரணங்களுக்காக, ஒரு உறுப்பினர் குடும்பம் முன்னேற முடிவு செய்கிறது. அப்போது நடப்பது கலெக்டிவ் ஒரு இடத்தை விற்பது அல்ல — அது அந்த குடும்பத்திற்கும் அவர்களின் இடத்தை எடுக்கும் நபருக்கும் இடையேயான நேரடி தனிப்பட்ட பரிவர்த்தனை. TVC இந்த விற்பனையில் ஒரு தரப்பினர் அல்ல, அதை நடத்தி வைக்கவும் இல்லை.',
+    section3Heading: 'இது ஒரு நிதி முதலீடு அல்ல',
+    section3Text:
+      'TVC ஒரு நிதி வருமானத்தை வழங்குவதில்லை — அது வேறு, பணம் சாராத ஒரு வருமானத்தை வழங்குகிறது, அது ஒவ்வொரு உறுப்பினருக்கும் வேறுபடுகிறது. சிலருக்கு அது சமூகமே; மற்றவர்களுக்கு இங்குள்ள வேலையின் சமூக தாக்கம்; இன்னும் சிலருக்கு, அது வெறுமனே இயற்கையுடன் இணக்கமாக வாழ்வது. இதற்கு ஒரே சரியான பதில் இல்லை, ஆனால் உங்கள் சொந்த பதிலைக் கண்டறிவது முக்கியம் — இணைவதற்கு முன் நீங்கள் பேசும் உறுப்பினர்கள் இங்கே இருப்பதைப் பற்றி மிகவும் வேறுபட்ட விஷயங்களை மதிக்கிறார்கள், அது ஏன் என்று புரிந்துகொள்வது மதிப்புள்ளது.',
+    section4Heading: 'நாங்கள் உண்மையிலேயே கருதுவது எது',
+    section4Text:
+      'இணைபவர் தாங்கள் எதற்கு உட்படுகிறார்கள் என்பதை உண்மையிலேயே புரிந்துகொள்வதே எங்களுக்கு முக்கியம் — பகிரப்பட்ட உழைப்பு, நில மேலாண்மை, முடிவுகள் ஒன்றாக எடுக்கப்படும் விதம், இங்குள்ள குடும்பங்களில் ஒன்றாக இருப்பதன் பொறுப்புகள். இது எங்களுக்கு ஒரு ரியல்-எஸ்டேட் பரிவர்த்தனை அல்ல; இது எங்கள் சமூகத்தில் யார் இணைகிறார்கள் என்பதாகும்.',
+    section5Heading: 'எப்படி தொடங்குவது',
+    section5Text:
+      'இங்கு வரும் வழி உரையாடல், ஒரு படிவம் அல்ல. எந்த பரிவர்த்தனையும் விவாதிக்கப்படுவதற்கு முன், தீவிரமாக ஆர்வமுள்ள எவரும் குறைந்தது 2 தற்போதைய உறுப்பினர்களுடன் ஈடுபட்டு, சமூகத்தின் ஒரு பகுதியாக இருப்பதற்கான அவர்களின் அந்தந்த காரணங்களைப் புரிந்துகொள்ள வேண்டும் என்று நாங்கள் கேட்கிறோம் — இதனால் மக்களை இங்கு ஈர்ப்பது என்ன, ஒரு உறுப்பினரிடமிருந்து உண்மையில் என்ன எதிர்பார்க்கப்படுகிறது என்பதை நீங்கள் தொடர்பு படுத்திக் கொள்ளலாம்.',
+    memberPairNote: 'நீங்கள் பேசக்கூடிய 53 உறுப்பினர் குடும்பங்களில் இருவர்.',
+    readyHeading: 'உரையாடலைத் தொடங்க தயாரா?',
+    readyHint: 'ஒரு இடம் திறக்கும்போது உங்களை நினைவில் வைத்திருக்க வேண்டும் என விரும்பினால், உங்களைப் பற்றி எங்களிடம் சிறிது சொல்லுங்கள்.',
+    messageLabel: 'உங்களைப் பற்றியும் TVC ஏன் உங்களுக்கு ஆர்வமூட்டுகிறது என்பதையும் சொல்லுங்கள்',
+    otherReasonText: 'வேறு காரணத்திற்காக தொடர்பு கொள்கிறீர்களா?',
+    otherReasonLink: 'எங்கள் தொடர்பு பக்கத்தைப் பாருங்கள் →',
+  },
+} as const;
+
+const c = content[lang];
+---
+
+<BaseLayout lang={lang} title={c.pageTitle} description={c.metaDescription} image="https://tvc.farm/images/journey/journey-43.jpg" imageWidth={1400} imageHeight={787}>
+  <PageHero
+    eyebrow={c.heroEyebrow}
+    title={c.heroTitle}
+    intro={c.heroIntro}
+    image="https://tvc.farm/images/journey/journey-43.jpg"
+    imageAlt="A large group of TVC members gathered together indoors"
+  />
+
+  <section class="section wrapper prose">
+    <h2>{c.section1Heading}</h2>
+    <p set:html={c.section1Text} />
+
+    <h2>{c.section2Heading}</h2>
+    <p>{c.section2Text}</p>
+
+    <h2>{c.section3Heading}</h2>
+    <p>{c.section3Text}</p>
+
+    <h2>{c.section4Heading}</h2>
+    <p>{c.section4Text}</p>
+
+    <h2>{c.section5Heading}</h2>
+    <p>{c.section5Text}</p>
+
+    <div class="member-pair">
+      <figure>
+        <img src="/images/members/reva-and-ranjan.jpg" alt="Reva and Ranjan, TVC member family" loading="lazy" />
+        <figcaption>Reva &amp; Ranjan</figcaption>
+      </figure>
+      <figure>
+        <img src="/images/members/rajiv-and-kritika.jpg" alt="Rajiv and Kritika, TVC member family" loading="lazy" />
+        <figcaption>Rajiv &amp; Kritika</figcaption>
+      </figure>
+      <p class="member-pair__note">{c.memberPairNote}</p>
+    </div>
+  </section>
+
+  <section class="section section--tint">
+    <div class="wrapper join-form-wrap">
+      <h2>{c.readyHeading}</h2>
+      <p>{c.readyHint}</p>
+      <form
+        class="enquiry-form card"
+        name="membership-enquiry"
+        method="POST"
+        action={getRelativeLocaleUrl(lang, '/contact/thanks')}
+        data-netlify="true"
+        data-netlify-honeypot="bot-field"
+      >
+        <input type="hidden" name="form-name" value="membership-enquiry" />
+        <p class="enquiry-hp"><label>{t('forms.honeypotLabel')} <input name="bot-field" /></label></p>
+        <div class="enquiry-grid">
+          <div>
+            <label for="membership-name">{t('forms.name')}</label>
+            <input id="membership-name" type="text" name="name" placeholder={t('forms.namePlaceholder')} autocomplete="name" required />
+          </div>
+          <div>
+            <label for="membership-email">{t('forms.email')}</label>
+            <input id="membership-email" type="email" name="email" placeholder="you@example.com" autocomplete="email" required />
+          </div>
+          <div>
+            <label for="membership-phone">{t('forms.phoneOptional')}</label>
+            <input id="membership-phone" type="tel" name="phone" placeholder="+91 98765 43210" autocomplete="tel" />
+          </div>
+        </div>
+        <label for="membership-message">{c.messageLabel}</label>
+        <textarea id="membership-message" name="message" rows="4" required></textarea>
+        <button class="button" type="submit">{t('forms.sendEnquiry')}</button>
+      </form>
+      <p class="join-other-reason">{c.otherReasonText} <a href={contactHref}>{c.otherReasonLink}</a></p>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .join-form-wrap {
+    max-width: 640px;
+    margin: 0 auto;
+    text-align: center;
+  }
+
+  .enquiry-form {
+    text-align: left;
+    margin-top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .enquiry-form label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-bottom: 4px;
+  }
+
+  .enquiry-form input,
+  .enquiry-form textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 10px;
+    font: inherit;
+    background: #fff;
+  }
+
+  .enquiry-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+  }
+
+  .enquiry-form button {
+    align-self: flex-start;
+  }
+
+  /* Netlify Forms spam honeypot — off-screen, not display:none (some bots
+     skip hidden fields, but few check for visibility via position). */
+  .enquiry-hp {
+    position: absolute;
+    left: -9999px;
+  }
+
+  .join-other-reason {
+    margin-top: 20px;
+    color: var(--tvc-ink-soft);
+    font-size: 0.9rem;
+  }
+
+  .member-pair {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .member-pair figure {
+    margin: 0;
+    text-align: center;
+  }
+
+  .member-pair img {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .member-pair figcaption {
+    font-size: 0.8rem;
+    color: var(--tvc-ink-soft);
+    margin-top: 6px;
+  }
+
+  .member-pair__note {
+    margin: 0;
+    color: var(--tvc-ink-soft);
+    font-size: 0.9rem;
+    font-style: italic;
+  }
+</style>
+
+<script>
+  // Netlify Forms handles the actual email for the form above (native
+  // submission, no preventDefault — see its data-netlify attribute). This
+  // only adds the second requirement Netlify Forms can't do on its own:
+  // logging the same enquiry as a row in a Google Sheet
+  // (netlify/functions/enquiry.mts). navigator.sendBeacon fires a
+  // fire-and-forget POST designed to survive the page navigating away right
+  // after — unlike a plain fetch() issued in the same submit handler, which
+  // isn't guaranteed to complete once the browser starts navigating.
+  document.querySelector<HTMLFormElement>('form[name="membership-enquiry"]')?.addEventListener('submit', (e) => {
+    const form = e.target as HTMLFormElement;
+    const data = new FormData(form);
+    const payload = {
+      formType: 'membership',
+      name: data.get('name'),
+      email: data.get('email'),
+      phone: data.get('phone'),
+      message: data.get('message'),
+      botField: data.get('bot-field'),
+    };
+    navigator.sendBeacon('/api/enquiry', new Blob([JSON.stringify(payload)], { type: 'application/json' }));
+  });
+</script>

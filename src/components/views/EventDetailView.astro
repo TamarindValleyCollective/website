@@ -1,0 +1,429 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../PageHero.astro';
+import AddToCalendar from '../AddToCalendar.astro';
+import { render, type CollectionEntry } from 'astro:content';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+import { formatDateRange, durationTag } from '../../utils/events';
+import { icsDataUri, googleCalendarUrl } from '../../utils/calendar';
+import { useTranslations, type Locale } from '../../i18n/utils';
+
+interface Props {
+  lang: Locale;
+  event: CollectionEntry<'events'>;
+}
+
+const { lang, event } = Astro.props;
+const t = useTranslations(lang);
+const { Content } = await render(event);
+
+// kn/ta translations live as sibling entries with a "kn/"/"ta/" id prefix
+// (see EventsIndexView.astro) - the interest-widget counter and the
+// "add to calendar" .ics UID key off this bare id instead, so a click from
+// any language page counts toward the same real-world event rather than
+// fragmenting the tally per locale.
+const canonicalId = event.id.replace(/^(kn|ta)\//, '');
+
+// Only worth offering on events that haven't happened yet -- adding a past
+// event to your calendar is a dead end, not a conversion.
+const isUpcoming = event.data.date >= new Date();
+const calendarEvent = {
+  uid: canonicalId,
+  title: event.data.title,
+  description: event.data.excerpt,
+  date: event.data.date,
+  endDate: event.data.endDate,
+};
+
+const eventSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Event',
+  name: event.data.title,
+  startDate: event.data.date.toISOString().slice(0, 10),
+  endDate: event.data.endDate ? event.data.endDate.toISOString().slice(0, 10) : undefined,
+  eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+  eventStatus: 'https://schema.org/EventScheduled',
+  description: event.data.excerpt,
+  image: event.data.coverImage ? new URL(event.data.coverImage, Astro.site).toString() : undefined,
+  location: {
+    '@type': 'Place',
+    name: 'Tamarind Valley Collective',
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: 'Thaggatti village',
+      addressLocality: 'Kanakapura',
+      addressRegion: 'Karnataka',
+      addressCountry: 'IN',
+    },
+  },
+  organizer: event.data.organizer
+    ? { '@type': 'Organization', name: event.data.organizer }
+    : { '@type': 'Organization', name: 'Tamarind Valley Collective', url: new URL(getRelativeLocaleUrl(lang, '/'), Astro.site).toString() },
+};
+
+const breadcrumbSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: t('common.home'), item: new URL(getRelativeLocaleUrl(lang, '/'), Astro.site).toString() },
+    { '@type': 'ListItem', position: 2, name: t('nav.events'), item: new URL(getRelativeLocaleUrl(lang, '/events'), Astro.site).toString() },
+    { '@type': 'ListItem', position: 3, name: event.data.title },
+  ],
+};
+
+const content = {
+  en: {
+    organizedBy: (organizer: string) => `Organized by ${organizer}`,
+    wantAgainHeading: 'Want this to happen again?',
+    wantAgainText: "Let us know and we'll factor it into what we plan next.",
+    emailPlaceholder: 'you@example.com (optional)',
+    emailAriaLabel: 'Email (optional)',
+    interestButton: "I'm interested",
+    seeItHere: 'See it here →',
+    msgCountSingular: '1 person wants this again.',
+    msgCountPluralTemplate: '{n} people want this again.',
+    msgRegistered: "You're in — we'll factor this into what we plan next.",
+  },
+  kn: {
+    organizedBy: (organizer: string) => `ಆಯೋಜಕರು: ${organizer}`,
+    wantAgainHeading: 'ಇದು ಮತ್ತೆ ನಡೆಯಬೇಕೆಂದು ಬಯಸುವಿರಾ?',
+    wantAgainText: 'ನಮಗೆ ತಿಳಿಸಿ, ಮುಂದಿನ ಯೋಜನೆಯಲ್ಲಿ ನಾವು ಇದನ್ನು ಪರಿಗಣಿಸುತ್ತೇವೆ.',
+    emailPlaceholder: 'you@example.com (ಐಚ್ಛಿಕ)',
+    emailAriaLabel: 'ಇಮೇಲ್ (ಐಚ್ಛಿಕ)',
+    interestButton: 'ನನಗೆ ಆಸಕ್ತಿ ಇದೆ',
+    seeItHere: 'ಇಲ್ಲಿ ನೋಡಿ →',
+    msgCountSingular: '1 ವ್ಯಕ್ತಿ ಇದು ಮತ್ತೆ ಆಗಬೇಕೆಂದು ಬಯಸುತ್ತಾರೆ.',
+    msgCountPluralTemplate: '{n} ಜನರು ಇದು ಮತ್ತೆ ಆಗಬೇಕೆಂದು ಬಯಸುತ್ತಾರೆ.',
+    msgRegistered: 'ನೀವು ಸೇರಿದ್ದೀರಿ — ಮುಂದಿನ ಯೋಜನೆಯಲ್ಲಿ ನಾವು ಇದನ್ನು ಪರಿಗಣಿಸುತ್ತೇವೆ.',
+  },
+  ta: {
+    organizedBy: (organizer: string) => `ஏற்பாட்டாளர்: ${organizer}`,
+    wantAgainHeading: 'இது மீண்டும் நடக்க வேண்டுமா?',
+    wantAgainText: 'எங்களுக்குத் தெரியப்படுத்துங்கள், அடுத்த திட்டமிடலில் இதைக் கருத்தில் கொள்வோம்.',
+    emailPlaceholder: 'you@example.com (விருப்பத்தேர்வு)',
+    emailAriaLabel: 'மின்னஞ்சல் (விருப்பத்தேர்வு)',
+    interestButton: 'எனக்கு ஆர்வம் உள்ளது',
+    seeItHere: 'இங்கே பாருங்கள் →',
+    msgCountSingular: '1 நபர் இது மீண்டும் நடக்க வேண்டும் என விரும்புகிறார்.',
+    msgCountPluralTemplate: '{n} பேர் இது மீண்டும் நடக்க வேண்டும் என விரும்புகிறார்கள்.',
+    msgRegistered: 'நீங்கள் இணைந்துவிட்டீர்கள் — அடுத்த திட்டமிடலில் இதைக் கருத்தில் கொள்வோம்.',
+  },
+} as const;
+
+const c = content[lang];
+---
+
+<BaseLayout lang={lang} title={event.data.title} description={event.data.excerpt} image={event.data.coverImage} schema={[eventSchema, breadcrumbSchema]}>
+  <PageHero eyebrow={formatDateRange(event.data.date, event.data.endDate, lang)} title={event.data.title} image={event.data.coverImage} imageAlt={event.data.title} />
+  <article class="section wrapper prose">
+    <div class="meta">
+      {event.data.organizer && <p class="organizer">{c.organizedBy(event.data.organizer)}</p>}
+      <ul class="tags">
+        {event.data.tags.map((t) => <li class="tag">{t}</li>)}
+        <li class="tag tag--duration">{durationTag(event.data.date, event.data.endDate, lang)}</li>
+      </ul>
+    </div>
+    {isUpcoming && (
+      <AddToCalendar
+        lang={lang}
+        googleUrl={googleCalendarUrl(calendarEvent)}
+        icsHref={icsDataUri(calendarEvent)}
+        icsFilename={`${canonicalId}.ics`}
+      />
+    )}
+    <Content />
+
+    {!isUpcoming && (
+      event.data.interestNote ? (
+        <div class="interest-widget card interest-widget--closed">
+          <p>
+            {event.data.interestNote}
+            {event.data.interestNoteHref && <> <a href={event.data.interestNoteHref}>{c.seeItHere}</a></>}
+          </p>
+        </div>
+      ) : (
+        <div
+          class="interest-widget card"
+          data-event={canonicalId}
+          data-event-title={event.data.title}
+          data-msg-count-singular={c.msgCountSingular}
+          data-msg-count-plural-template={c.msgCountPluralTemplate}
+          data-msg-registered={c.msgRegistered}
+        >
+          <h3>{c.wantAgainHeading}</h3>
+          <p>{c.wantAgainText}</p>
+          <form class="interest-form">
+            <input type="email" name="email" placeholder={c.emailPlaceholder} aria-label={c.emailAriaLabel} />
+            <button type="submit" class="button">{c.interestButton}</button>
+          </form>
+          <p class="interest-count" hidden></p>
+        </div>
+      )
+    )}
+
+    {/* Static form for Netlify's build-time bot to detect and register -- the
+        actual submission (see the script below) is an AJAX POST mirroring
+        these same fields, not a direct submit of this hidden form. Present
+        on every past event page regardless of interestNote, so detection
+        doesn't depend on any one specific page. Field names/labels are not
+        user-visible (the form is hidden), so left as-is across locales. */}
+    {!isUpcoming && (
+      <form name="event-interest" data-netlify="true" data-netlify-honeypot="bot-field" hidden>
+        <input type="text" name="event" />
+        <input type="text" name="event-title" />
+        <input type="email" name="email" />
+        <input name="bot-field" />
+      </form>
+    )}
+  </article>
+
+  {!isUpcoming && !event.data.interestNote && (
+  <script>
+    const widget = document.querySelector<HTMLElement>('.interest-widget[data-event]');
+
+    if (widget) {
+      const eventId = widget.dataset.event!;
+      const eventTitle = widget.dataset.eventTitle ?? '';
+      const form = widget.querySelector<HTMLFormElement>('.interest-form');
+      const emailInput = widget.querySelector<HTMLInputElement>('input[name="email"]');
+      const submitBtn = widget.querySelector<HTMLButtonElement>('button[type="submit"]');
+      const countEl = widget.querySelector<HTMLElement>('.interest-count');
+      const storageKey = `tvc-event-interest-${eventId}`;
+
+      function showCount(count: number) {
+        if (!countEl) return;
+        const singular = widget!.dataset.msgCountSingular ?? '';
+        const pluralTemplate = widget!.dataset.msgCountPluralTemplate ?? '';
+        countEl.textContent = count === 1 ? singular : pluralTemplate.replace('{n}', String(count));
+        countEl.hidden = false;
+      }
+
+      function markRegistered() {
+        form?.setAttribute('hidden', '');
+        if (!widget!.querySelector('.interest-done')) {
+          const done = document.createElement('p');
+          done.className = 'interest-done';
+          done.textContent = widget!.dataset.msgRegistered ?? '';
+          form?.insertAdjacentElement('afterend', done);
+        }
+      }
+
+      fetch(`/api/event-interest?event=${encodeURIComponent(eventId)}`)
+        .then((r) => r.json())
+        .then((data) => showCount(data.count ?? 0))
+        .catch(() => {});
+
+      if (localStorage.getItem(storageKey)) {
+        markRegistered();
+      }
+
+      form?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (submitBtn) submitBtn.disabled = true;
+        const email = emailInput?.value.trim() ?? '';
+
+        try {
+          const res = await fetch('/api/event-interest', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ event: eventId, email }),
+          });
+          const data = await res.json();
+
+          if (res.ok) {
+            showCount(data.count);
+            localStorage.setItem(storageKey, '1');
+            markRegistered();
+
+            if (email && !data.deduped) {
+              // Fire-and-forget: gives the farm team an actionable entry via
+              // the same Netlify Forms mechanism as /contact and
+              // /visit/host-an-event -- see the hidden form above.
+              fetch('/', {
+                method: 'POST',
+                headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                  'form-name': 'event-interest',
+                  event: eventId,
+                  'event-title': eventTitle,
+                  email,
+                }).toString(),
+              }).catch(() => {});
+            }
+          }
+        } catch {
+          // Leave the form enabled so they can retry.
+        } finally {
+          if (submitBtn) submitBtn.disabled = false;
+        }
+      });
+    }
+  </script>
+  )}
+</BaseLayout>
+
+<style>
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .organizer {
+    margin: 0;
+    color: var(--tvc-ink-soft);
+    font-size: 0.9rem;
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .tag {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 0.76rem;
+    font-weight: 600;
+  }
+
+  .tag--duration {
+    background: var(--tvc-orange-tint);
+    color: #a85712;
+  }
+
+  .prose :global(h2) {
+    margin-top: 32px;
+  }
+
+  .prose :global(blockquote) {
+    border-left: 4px solid var(--tvc-orange);
+    padding-left: 20px;
+    font-style: italic;
+    color: var(--tvc-ink-soft);
+  }
+
+  .prose :global(img) {
+    border-radius: var(--radius);
+    margin: 16px 0;
+  }
+
+  .prose :global(table) {
+    width: 100%;
+    max-width: 72ch;
+    border-collapse: collapse;
+    margin: 16px 0 32px;
+  }
+
+  .prose :global(th),
+  .prose :global(td) {
+    text-align: left;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .prose :global(th) {
+    font-family: var(--font-body);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 0.78rem;
+    color: var(--tvc-orange);
+  }
+
+  .prose :global(td:first-child) {
+    color: var(--tvc-ink-soft);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .prose :global(.cta) {
+    max-width: 72ch;
+    margin: 32px 0;
+  }
+
+  .prose :global(.cta h3) {
+    margin-top: 0;
+  }
+
+  .prose :global(.cta .button) {
+    margin: 12px 0;
+  }
+
+  .prose :global(.poster) {
+    width: 100%;
+    max-width: 360px;
+    margin: 16px auto 32px;
+  }
+
+  .prose :global(.poster img) {
+    margin: 0;
+    box-shadow: var(--shadow-soft);
+    border: 1px solid var(--tvc-line);
+  }
+
+  .prose :global(.poster figcaption) {
+    margin-top: 8px;
+    text-align: center;
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  /* Not inside .prose's reading column -- a UI card, not article content. */
+  .interest-widget {
+    max-width: 72ch;
+    margin-top: 40px;
+  }
+
+  .interest-widget h3 {
+    margin-top: 0;
+  }
+
+  .interest-widget--closed p {
+    margin: 0;
+  }
+
+  .interest-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  /* [hidden] must win over the display: flex rule above -- without this,
+     setting the hidden attribute after a successful submit (see the script
+     below) has no visible effect, since both rules have equal specificity
+     and this one needs to come last. Same fix as .header-weather[hidden]
+     in HeaderWeather.astro. */
+  .interest-form[hidden] {
+    display: none;
+  }
+
+  .interest-form input {
+    flex: 1 1 220px;
+    padding: 10px 14px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 999px;
+    font: inherit;
+  }
+
+  .interest-count {
+    margin: 12px 0 0;
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .interest-done {
+    margin: 12px 0 0;
+    font-weight: 600;
+    color: var(--tvc-green-dark);
+  }
+</style>

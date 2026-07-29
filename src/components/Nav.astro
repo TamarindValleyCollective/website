@@ -2,6 +2,19 @@
 import { EXPLORE_LINKS, ENGAGE_LINKS } from '../data/site-map';
 import HeaderWeather from './HeaderWeather.astro';
 import SiteSearch from './SiteSearch.astro';
+import LanguageSwitcher from './LanguageSwitcher.astro';
+import { useTranslations, stripLocalePrefix, type Locale } from '../i18n/utils';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+interface Props {
+  lang: Locale;
+  translated?: boolean;
+}
+
+const { lang, translated = true } = Astro.props;
+const t = useTranslations(lang);
+const homeHref = getRelativeLocaleUrl(lang, '/');
+const localizedHref = (href: string) => getRelativeLocaleUrl(lang, href);
 
 // Mirrors the homepage's own Explore/Engage fork (src/pages/index.astro) so
 // the nav reads as the same map wherever you are on the site, not a
@@ -9,11 +22,13 @@ import SiteSearch from './SiteSearch.astro';
 // (7 items each) because a single column runs uncomfortably tall — see
 // .nav__dropdown--wide below for the two-column treatment that needs.
 const navItems = [
-  { label: 'Explore', wide: true, children: EXPLORE_LINKS },
-  { label: 'Engage', wide: true, children: ENGAGE_LINKS },
+  { label: t('nav.explore'), wide: true, children: EXPLORE_LINKS },
+  { label: t('nav.engage'), wide: true, children: ENGAGE_LINKS },
 ];
 
-const currentPath = Astro.url.pathname;
+// Compared against the bare (locale-stripped) path so a Kannada/Tamil route
+// still highlights the right item.
+const currentPath = stripLocalePrefix(Astro.url.pathname);
 const isActive = (href: string) => currentPath === href || currentPath.startsWith(href + '/');
 const isSectionActive = (children: { href: string }[]) => children.some((child) => isActive(child.href));
 ---
@@ -21,11 +36,11 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
 <header class="nav">
   <div class="wrapper nav__inner">
     <div class="nav__left">
-      <a class="nav__brand" href="/">
+      <a class="nav__brand" href={homeHref}>
         <img src="/images/brand/tvc-logo-mark.png" alt="Tamarind Valley Collective" width="56" height="56" />
         <span>Tamarind Valley Collective</span>
       </a>
-      <HeaderWeather />
+      <HeaderWeather lang={lang} />
     </div>
 
     <div class="nav__right">
@@ -45,14 +60,14 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
               </button>
               <div class:list={['nav__dropdown', { 'nav__dropdown--wide': item.wide }]}>
                 {item.children.map((child) => (
-                  <a href={child.href} class:list={['nav__sublink', { 'is-active': isActive(child.href) }]}>
-                    {child.label}
+                  <a href={localizedHref(child.href)} class:list={['nav__sublink', { 'is-active': isActive(child.href) }]}>
+                    {t(`nav.${child.key}`)}
                   </a>
                 ))}
               </div>
             </div>
           ) : (
-            <a href={item.href} class:list={['nav__link', { 'is-active': isActive(item.href) }]}>
+            <a href={localizedHref(item.href)} class:list={['nav__link', { 'is-active': isActive(item.href) }]}>
               {item.label}
             </a>
           )
@@ -60,7 +75,8 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
       </nav>
 
       <div class="nav__controls">
-        <SiteSearch />
+        <LanguageSwitcher lang={lang} translated={translated} />
+        <SiteSearch lang={lang} />
         <button class="nav__toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-menu" aria-label="Toggle menu">
           <span></span><span></span><span></span>
         </button>

@@ -21,6 +21,19 @@
 // renders directly — no era-picker. The moment a second era gets real
 // years, this needs a picker step before the hero (not built yet, since
 // there's nothing to pick between).
+//
+// i18n scope: the surrounding chrome (index nav, scroll cue, aria-labels,
+// month names) is translated per `lang` below via `c` and `MONTH_NAMES`.
+// The yearly narrative itself (era poem, year summary/intro, month text)
+// is deliberately left English-only in every locale - with ~50 month
+// entries of hand-written prose across 10 years, a careful full
+// translation was out of scope for this pass. Flagged as follow-up work.
+import type { Locale } from '../i18n/utils';
+
+interface Props {
+  lang: Locale;
+}
+
 interface MonthEntry {
   m: string;
   t: string;
@@ -230,13 +243,86 @@ const yearSections = activeEra.years.map((y) => ({
   ...y,
   cards: buildYearCards(y),
 }));
+
+const { lang } = Astro.props;
+
+// Structural/UI chrome only - see the i18n scope note above the interfaces
+// for why the narrative content (poem, summaries, month text) stays English.
+const content = {
+  en: {
+    indexTitle: 'Our Journey',
+    ariaJumpToYear: 'Jump to a year',
+    heroEyebrowPrefix: 'Tamarind Valley Collective · Est.',
+    scrollCue: 'Scroll',
+    ariaClose: 'Close',
+    ariaPrevPhoto: 'Previous photo',
+    ariaNextPhoto: 'Next photo',
+    viewPhotoPrefix: 'View photo —',
+    monthsWord: 'months',
+    prevMonthIn: (year: number) => `Previous month in ${year}`,
+    nextMonthIn: (year: number) => `Next month in ${year}`,
+  },
+  kn: {
+    indexTitle: 'ನಮ್ಮ ಪಯಣ',
+    ariaJumpToYear: 'ಒಂದು ವರ್ಷಕ್ಕೆ ಜಿಗಿಯಿರಿ',
+    heroEyebrowPrefix: 'ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್ · ಸ್ಥಾಪನೆ',
+    scrollCue: 'ಸ್ಕ್ರಾಲ್ ಮಾಡಿ',
+    ariaClose: 'ಮುಚ್ಚಿ',
+    ariaPrevPhoto: 'ಹಿಂದಿನ ಫೋಟೋ',
+    ariaNextPhoto: 'ಮುಂದಿನ ಫೋಟೋ',
+    viewPhotoPrefix: 'ಫೋಟೋ ನೋಡಿ —',
+    monthsWord: 'ತಿಂಗಳುಗಳು',
+    prevMonthIn: (year: number) => `${year} ರಲ್ಲಿ ಹಿಂದಿನ ತಿಂಗಳು`,
+    nextMonthIn: (year: number) => `${year} ರಲ್ಲಿ ಮುಂದಿನ ತಿಂಗಳು`,
+  },
+  ta: {
+    indexTitle: 'எங்கள் பயணம்',
+    ariaJumpToYear: 'ஒரு வருடத்திற்குச் செல்லவும்',
+    heroEyebrowPrefix: 'டமரிண்ட் வேலி கலெக்டிவ் · நிறுவப்பட்டது',
+    scrollCue: 'ஸ்க்ரோல் செய்யவும்',
+    ariaClose: 'மூடு',
+    ariaPrevPhoto: 'முந்தைய புகைப்படம்',
+    ariaNextPhoto: 'அடுத்த புகைப்படம்',
+    viewPhotoPrefix: 'புகைப்படத்தைப் பார்க்க —',
+    monthsWord: 'மாதங்கள்',
+    prevMonthIn: (year: number) => `${year} இல் முந்தைய மாதம்`,
+    nextMonthIn: (year: number) => `${year} இல் அடுத்த மாதம்`,
+  },
+} as const;
+
+const c = content[lang];
+
+// Calendar month names, translated for display only - the underlying
+// `mo.m` data values (used as identifiers/keys throughout) stay the
+// English strings written in FOUNDING_YEARS above.
+const MONTH_NAMES: Record<Locale, Record<string, string>> = {
+  en: {
+    January: 'January', February: 'February', March: 'March', April: 'April',
+    May: 'May', June: 'June', July: 'July', August: 'August',
+    September: 'September', October: 'October', November: 'November', December: 'December',
+  },
+  kn: {
+    January: 'ಜನವರಿ', February: 'ಫೆಬ್ರವರಿ', March: 'ಮಾರ್ಚ್', April: 'ಏಪ್ರಿಲ್',
+    May: 'ಮೇ', June: 'ಜೂನ್', July: 'ಜುಲೈ', August: 'ಆಗಸ್ಟ್',
+    September: 'ಸೆಪ್ಟೆಂಬರ್', October: 'ಅಕ್ಟೋಬರ್', November: 'ನವೆಂಬರ್', December: 'ಡಿಸೆಂಬರ್',
+  },
+  ta: {
+    January: 'ஜனவரி', February: 'பிப்ரவரி', March: 'மார்ச்', April: 'ஏப்ரல்',
+    May: 'மே', June: 'ஜூன்', July: 'ஜூலை', August: 'ஆகஸ்ட்',
+    September: 'செப்டம்பர்', October: 'அக்டோபர்', November: 'நவம்பர்', December: 'டிசம்பர்',
+  },
+};
+
+function tm(month: string): string {
+  return MONTH_NAMES[lang][month] ?? month;
+}
 ---
 
 <div class="jt-root">
   <div class="jt-rail" aria-hidden="true"><div class="jt-rail-fill" id="jt-rail-fill"></div></div>
 
-  <nav class="jt-index" id="jt-index" aria-label="Jump to a year">
-    <p class="jt-index-title">Our Journey</p>
+  <nav class="jt-index" id="jt-index" aria-label={c.ariaJumpToYear}>
+    <p class="jt-index-title">{c.indexTitle}</p>
     {yearSections.map((y, i) => (
       <button type="button" class="jt-index-item" data-target={`jt-y-${i}`}>
         <span class="jt-index-num">{String(i).padStart(2, '0')}</span>
@@ -247,13 +333,13 @@ const yearSections = activeEra.years.map((y) => ({
   </nav>
 
   <section class="jt-hero">
-    <p class="jt-hero-eyebrow">Tamarind Valley Collective · Est. {activeEra.years[0].year}</p>
+    <p class="jt-hero-eyebrow">{c.heroEyebrowPrefix} {activeEra.years[0].year}</p>
     <div class="jt-hero-poem">
       {activeEra.poem.map((stanza) => <p>{stanza}</p>)}
     </div>
     <div class="jt-scroll-cue" aria-hidden="true">
       <span class="jt-scroll-cue-line"></span>
-      Scroll
+      {c.scrollCue}
     </div>
   </section>
 
@@ -263,42 +349,42 @@ const yearSections = activeEra.years.map((y) => ({
         {y.cards.find((c) => c.img) && <img src={y.cards.find((c) => c.img)!.img!} alt="" loading="lazy" />}
       </div>
       <div class="jt-year-head">
-        <p class="jt-year-eyebrow" data-eyebrow={i}>{y.cards[0].month} {y.year}</p>
+        <p class="jt-year-eyebrow" data-eyebrow={i}>{tm(y.cards[0].month)} {y.year}</p>
         <p class="jt-year-num">{y.year}</p>
         <p class="jt-year-summary">{y.summary}</p>
       </div>
       <div class="jt-carousel-wrap">
-        <div class="jt-carousel" data-carousel={i} tabindex="0" role="group" aria-label={`${y.year} months`}>
-          {y.cards.map((c) => (
-            c.img ? (
-              <div class="jt-card" role="button" tabindex="0" aria-label={`View photo — ${c.month} ${y.year}`}>
+        <div class="jt-carousel" data-carousel={i} tabindex="0" role="group" aria-label={`${y.year} ${c.monthsWord}`}>
+          {y.cards.map((card) => (
+            card.img ? (
+              <div class="jt-card" role="button" tabindex="0" aria-label={`${c.viewPhotoPrefix} ${tm(card.month)} ${y.year}`}>
                 <img
-                  src={c.img}
-                  alt={`${c.month} ${y.year} photo`}
+                  src={card.img}
+                  alt={`${tm(card.month)} ${y.year} photo`}
                   loading="lazy"
-                  style={c.fit === 'contain' ? 'object-fit:contain;background:var(--jt-surface);' : ''}
+                  style={card.fit === 'contain' ? 'object-fit:contain;background:var(--jt-surface);' : ''}
                 />
                 <span class="jt-card-hint" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3H4v5M15 3h5v5M9 21H4v-5M15 21h5v-5"/></svg>
                 </span>
                 <div class="jt-card-text">
-                  <p class="jt-card-month">{c.month}</p>
-                  <p class="jt-card-body">{c.text}</p>
+                  <p class="jt-card-month">{tm(card.month)}</p>
+                  <p class="jt-card-body">{card.text}</p>
                 </div>
               </div>
             ) : (
               <div class="jt-card jt-card--no-photo">
                 <div class="jt-card-text">
-                  <p class="jt-card-month">{c.month}</p>
-                  <p class="jt-card-body">{c.text}</p>
+                  <p class="jt-card-month">{tm(card.month)}</p>
+                  <p class="jt-card-body">{card.text}</p>
                 </div>
               </div>
             )
           ))}
         </div>
         <div class="jt-carousel-controls">
-          <button type="button" class="jt-car-btn" data-prev={i} aria-label={`Previous month in ${y.year}`}>‹</button>
-          <button type="button" class="jt-car-btn" data-next={i} aria-label={`Next month in ${y.year}`}>›</button>
+          <button type="button" class="jt-car-btn" data-prev={i} aria-label={c.prevMonthIn(y.year)}>‹</button>
+          <button type="button" class="jt-car-btn" data-next={i} aria-label={c.nextMonthIn(y.year)}>›</button>
           <div class="jt-car-dots" data-dots={i}>
             {y.cards.map((_, ci) => <span class={ci === 0 ? 'on' : ''}></span>)}
           </div>
@@ -308,11 +394,11 @@ const yearSections = activeEra.years.map((y) => ({
   ))}
 
   <div class="jt-lightbox" id="jt-lightbox" aria-hidden="true">
-    <button type="button" class="jt-lb-close" aria-label="Close">
+    <button type="button" class="jt-lb-close" aria-label={c.ariaClose}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 5l14 14M19 5L5 19"/></svg>
     </button>
-    <button type="button" class="jt-lb-nav jt-lb-prev" aria-label="Previous photo">‹</button>
-    <button type="button" class="jt-lb-nav jt-lb-next" aria-label="Next photo">›</button>
+    <button type="button" class="jt-lb-nav jt-lb-prev" aria-label={c.ariaPrevPhoto}>‹</button>
+    <button type="button" class="jt-lb-nav jt-lb-next" aria-label={c.ariaNextPhoto}>›</button>
     <div class="jt-lb-stage">
       <img class="jt-lb-img" src="" alt="" />
       <div class="jt-lb-caption">

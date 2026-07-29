@@ -13,12 +13,24 @@
 // lightbox and map, since those nested objects don't flatten cleanly into
 // data-attributes the way flat tags do.
 import type { CollectionEntry } from 'astro:content';
+import { type Locale } from '../../i18n/utils';
 
 interface Props {
   photos: CollectionEntry<'photos'>[];
+  lang?: Locale;
 }
 
-const { photos } = Astro.props;
+const { photos, lang = 'en' } = Astro.props;
+
+// Prefers the per-locale caption_kn/caption_ta field when a translator has
+// filled it in; falls back to the (always-present) English caption
+// otherwise, so pages don't blank out captions mid-rollout of the
+// translation pass covering the photos collection.
+const captionFor = (p: CollectionEntry<'photos'>) => {
+  if (lang === 'kn') return p.data.caption_kn ?? p.data.caption;
+  if (lang === 'ta') return p.data.caption_ta ?? p.data.caption;
+  return p.data.caption;
+};
 
 const formatDate = (d: Date) => d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 const cameraOf = (p: CollectionEntry<'photos'>) => (p.data.camera ? `${p.data.camera.make} ${p.data.camera.model}` : null);
@@ -42,7 +54,7 @@ const photosJson = photos.map((p) => ({
   slug: p.id,
   src: p.data.src,
   thumbSrc: p.data.thumbSrc ?? p.data.src,
-  caption: p.data.caption,
+  caption: captionFor(p),
   takenAt: p.data.takenAt.toISOString(),
   gps: p.data.gps ?? null,
   camera: p.data.camera ?? null,
@@ -50,34 +62,117 @@ const photosJson = photos.map((p) => ({
 }));
 // `</script>` inside a caption would otherwise terminate this tag early.
 const photosJsonSafe = JSON.stringify(photosJson).replace(/<\/script/gi, '<\\/script');
+
+// UI chrome only - the client <script> below reads these back via
+// data-attributes on #photo-gallery (same pattern as WeatherWidget/
+// SiteSearch), since it can't call t() directly. Photo captions themselves
+// are handled above via captionFor(), and species/place names elsewhere on
+// the site are proper nouns that stay in English regardless of lang.
+const content = {
+  en: {
+    filterByDate: 'Filter by date',
+    allYears: 'All years',
+    filterByCamera: 'Filter by camera',
+    allCameras: 'All cameras',
+    grid: 'Grid',
+    map: 'Map',
+    jumpToYear: 'Jump to year',
+    noPhotosMatch: 'No photos match that filter.',
+    geotaggedPhotos: 'Geotagged photos',
+    hasLocation: 'Has location data',
+    hasCamera: 'Has camera data',
+    close: 'Close',
+    previousPhoto: 'Previous photo',
+    nextPhoto: 'Next photo',
+    aperture: 'Aperture',
+    shutterSpeed: 'Shutter speed',
+    iso: 'ISO',
+    focalLength: 'Focal length',
+    noCameraData: 'No camera data available for this photo.',
+    photosWord: 'photos',
+    of: 'of',
+    shownPhotosHaveLocation: 'shown photos have location data.',
+  },
+  kn: {
+    filterByDate: 'ದಿನಾಂಕದ ಮೂಲಕ ಫಿಲ್ಟರ್ ಮಾಡಿ',
+    allYears: 'ಎಲ್ಲಾ ವರ್ಷಗಳು',
+    filterByCamera: 'ಕ್ಯಾಮೆರಾ ಮೂಲಕ ಫಿಲ್ಟರ್ ಮಾಡಿ',
+    allCameras: 'ಎಲ್ಲಾ ಕ್ಯಾಮೆರಾಗಳು',
+    grid: 'ಗ್ರಿಡ್',
+    map: 'ನಕ್ಷೆ',
+    jumpToYear: 'ವರ್ಷಕ್ಕೆ ಜಿಗಿ',
+    noPhotosMatch: 'ಆ ಫಿಲ್ಟರ್‌ಗೆ ಯಾವುದೇ ಫೋಟೋಗಳು ಹೊಂದಿಕೆಯಾಗುವುದಿಲ್ಲ.',
+    geotaggedPhotos: 'ಭೌಗೋಳಿಕ-ಟ್ಯಾಗ್ ಮಾಡಿದ ಫೋಟೋಗಳು',
+    hasLocation: 'ಸ್ಥಳ ಡೇಟಾ ಇದೆ',
+    hasCamera: 'ಕ್ಯಾಮೆರಾ ಡೇಟಾ ಇದೆ',
+    close: 'ಮುಚ್ಚಿ',
+    previousPhoto: 'ಹಿಂದಿನ ಫೋಟೋ',
+    nextPhoto: 'ಮುಂದಿನ ಫೋಟೋ',
+    aperture: 'ಅಪರ್ಚರ್',
+    shutterSpeed: 'ಶಟರ್ ವೇಗ',
+    iso: 'ISO',
+    focalLength: 'ಫೋಕಲ್ ಉದ್ದ',
+    noCameraData: 'ಈ ಫೋಟೋಗೆ ಯಾವುದೇ ಕ್ಯಾಮೆರಾ ಡೇಟಾ ಲಭ್ಯವಿಲ್ಲ.',
+    photosWord: 'ಫೋಟೋಗಳು',
+    of: 'ರಲ್ಲಿ',
+    shownPhotosHaveLocation: 'ತೋರಿಸಿದ ಫೋಟೋಗಳು ಸ್ಥಳ ಡೇಟಾ ಹೊಂದಿವೆ.',
+  },
+  ta: {
+    filterByDate: 'தேதி வாரியாக வடிகட்டு',
+    allYears: 'அனைத்து ஆண்டுகள்',
+    filterByCamera: 'கேமரா வாரியாக வடிகட்டு',
+    allCameras: 'அனைத்து கேமராக்கள்',
+    grid: 'கட்டம்',
+    map: 'வரைபடம்',
+    jumpToYear: 'ஆண்டிற்குச் செல்லவும்',
+    noPhotosMatch: 'அந்த வடிகட்டிக்கு பொருந்தும் புகைப்படங்கள் இல்லை.',
+    geotaggedPhotos: 'இருப்பிடக் குறியிடப்பட்ட புகைப்படங்கள்',
+    hasLocation: 'இருப்பிட தரவு உள்ளது',
+    hasCamera: 'கேமரா தரவு உள்ளது',
+    close: 'மூடு',
+    previousPhoto: 'முந்தைய புகைப்படம்',
+    nextPhoto: 'அடுத்த புகைப்படம்',
+    aperture: 'அப்பர்ச்சர்',
+    shutterSpeed: 'ஷட்டர் வேகம்',
+    iso: 'ISO',
+    focalLength: 'குவிய நீளம்',
+    noCameraData: 'இந்த புகைப்படத்திற்கு கேமரா தரவு இல்லை.',
+    photosWord: 'புகைப்படங்கள்',
+    of: '/',
+    shownPhotosHaveLocation: 'காட்டப்பட்ட புகைப்படங்களில் இருப்பிடத் தரவு உள்ளது.',
+  },
+} as const;
+
+const c = content[lang];
+const uiStringsJsonSafe = JSON.stringify(c).replace(/<\/script/gi, '<\\/script');
 ---
 
-<div class="photo-gallery" id="photo-gallery">
+<div class="photo-gallery" id="photo-gallery" data-strings={uiStringsJsonSafe}>
   <div class="controls">
     <div class="filter-groups">
       <div>
-        <p class="filter-group__label">Filter by date</p>
+        <p class="filter-group__label">{c.filterByDate}</p>
         <div class="chips" id="date-chips">
-          <button type="button" class="chip is-active" data-year="all">All years</button>
+          <button type="button" class="chip is-active" data-year="all">{c.allYears}</button>
           {years.map((y) => <button type="button" class="chip" data-year={y}>{y}</button>)}
         </div>
       </div>
       <div>
-        <p class="filter-group__label">Filter by camera</p>
+        <p class="filter-group__label">{c.filterByCamera}</p>
         <div class="chips" id="camera-chips">
-          <button type="button" class="chip is-active" data-camera="all">All cameras</button>
-          {cameras.map((c) => <button type="button" class="chip" data-camera={c}>{c}</button>)}
+          <button type="button" class="chip is-active" data-camera="all">{c.allCameras}</button>
+          {cameras.map((cam) => <button type="button" class="chip" data-camera={cam}>{cam}</button>)}
         </div>
       </div>
     </div>
     <div class="view-toggle">
-      <button type="button" class="view-toggle__btn is-active" data-view="grid">Grid</button>
-      <button type="button" class="view-toggle__btn" data-view="map">Map</button>
+      <button type="button" class="view-toggle__btn is-active" data-view="grid">{c.grid}</button>
+      <button type="button" class="view-toggle__btn" data-view="map">{c.map}</button>
     </div>
     <p class="result-count" id="result-count"></p>
   </div>
 
-  <nav class="year-jump" aria-label="Jump to year">
+  <nav class="year-jump" aria-label={c.jumpToYear}>
     {years.map((y) => <a href={`#year-${y}`} class="year-jump__link">{y}</a>)}
   </nav>
 
@@ -93,24 +188,24 @@ const photosJsonSafe = JSON.stringify(photosJson).replace(/<\/script/gi, '<\\/sc
               data-year={p.data.takenAt.getFullYear()}
               data-camera={cameraOf(p) ?? ''}
             >
-              <img src={p.data.thumbSrc ?? p.data.src} alt={p.data.caption} loading="lazy" />
+              <img src={p.data.thumbSrc ?? p.data.src} alt={captionFor(p)} loading="lazy" />
               <div class="photo-tile__badges">
-                {p.data.gps && <span class="badge" title="Has location data">📍</span>}
-                {p.data.camera && <span class="badge" title="Has camera data">📷</span>}
+                {p.data.gps && <span class="badge" title={c.hasLocation}>📍</span>}
+                {p.data.camera && <span class="badge" title={c.hasCamera}>📷</span>}
               </div>
             </div>
           ))}
         </div>
       </div>
     ))}
-    <p class="empty-state" id="grid-empty" hidden>No photos match that filter.</p>
+    <p class="empty-state" id="grid-empty" hidden>{c.noPhotosMatch}</p>
   </section>
 
   <section id="map-section" hidden>
     <div class="map-view">
       <div class="map-canvas" id="photo-map"></div>
       <div class="map-sidebar">
-        <h3>Geotagged photos</h3>
+        <h3>{c.geotaggedPhotos}</h3>
         <p id="map-sidebar-count"></p>
         <div class="map-sidebar-list" id="map-sidebar-list"></div>
       </div>
@@ -121,9 +216,9 @@ const photosJsonSafe = JSON.stringify(photosJson).replace(/<\/script/gi, '<\\/sc
 <div class="lightbox" id="lightbox" hidden>
   <div class="lightbox-panel">
     <div class="lightbox-image">
-      <button type="button" class="lightbox-close" id="lb-close" aria-label="Close">✕</button>
-      <button type="button" class="lightbox-nav lightbox-prev" id="lb-prev" aria-label="Previous photo">‹</button>
-      <button type="button" class="lightbox-nav lightbox-next" id="lb-next" aria-label="Next photo">›</button>
+      <button type="button" class="lightbox-close" id="lb-close" aria-label={c.close}>✕</button>
+      <button type="button" class="lightbox-nav lightbox-prev" id="lb-prev" aria-label={c.previousPhoto}>‹</button>
+      <button type="button" class="lightbox-nav lightbox-next" id="lb-next" aria-label={c.nextPhoto}>›</button>
       <img id="lb-img" src="" alt="" />
     </div>
     <div class="lightbox-detail">
@@ -654,6 +749,10 @@ const photosJsonSafe = JSON.stringify(photosJson).replace(/<\/script/gi, '<\\/sc
   const PHOTOS: PhotoData[] = dataEl ? JSON.parse(dataEl.textContent ?? '[]') : [];
   const byslug = new Map(PHOTOS.map((p) => [p.slug, p]));
 
+  const galleryRoot = document.getElementById('photo-gallery');
+  const LANG = ((galleryRoot?.closest('html')?.lang || 'en') as 'en' | 'kn' | 'ta');
+  const STR: Record<string, string> = galleryRoot?.dataset.strings ? JSON.parse(galleryRoot.dataset.strings) : {};
+
   function formatDate(iso: string) {
     return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
   }
@@ -713,8 +812,8 @@ const photosJsonSafe = JSON.stringify(photosJson).replace(/<\/script/gi, '<\\/sc
     if (!el) return;
     el.textContent =
       parts.length === 0
-        ? `${PHOTOS.length} photos`
-        : `${visibleSlugs().length} of ${PHOTOS.length} photos — ${parts.join(' + ')}`;
+        ? `${PHOTOS.length} ${STR.photosWord}`
+        : `${visibleSlugs().length} ${STR.of} ${PHOTOS.length} ${STR.photosWord} — ${parts.join(' + ')}`;
   }
 
   let photoMap: ReturnType<typeof initPhotoMap> | null = null;
@@ -725,7 +824,7 @@ const photosJsonSafe = JSON.stringify(photosJson).replace(/<\/script/gi, '<\\/sc
       .filter((p): p is PhotoData => Boolean(p?.gps));
 
     const countEl = document.getElementById('map-sidebar-count');
-    if (countEl) countEl.textContent = `${geo.length} of ${visibleSlugs().length} shown photos have location data.`;
+    if (countEl) countEl.textContent = `${geo.length} ${STR.of} ${visibleSlugs().length} ${STR.shownPhotosHaveLocation}`;
 
     const listEl = document.getElementById('map-sidebar-list');
     if (listEl) {
@@ -750,7 +849,7 @@ const photosJsonSafe = JSON.stringify(photosJson).replace(/<\/script/gi, '<\\/sc
     if (photoMap) {
       photoMap.remove();
     }
-    photoMap = initPhotoMap('photo-map', geo, (slug) => openLightbox(slug));
+    photoMap = initPhotoMap('photo-map', geo, (slug) => openLightbox(slug), LANG);
   }
 
   function render() {
@@ -832,14 +931,14 @@ const photosJsonSafe = JSON.stringify(photosJson).replace(/<\/script/gi, '<\\/sc
           <div class="exif-panel">
             <div class="exif-panel__head">📷 ${p.camera.make} ${p.camera.model}</div>
             <div class="exif-grid">
-              <div class="exif-cell"><span class="label">Aperture</span><span class="value">${e.aperture ?? '—'}</span></div>
-              <div class="exif-cell"><span class="label">Shutter speed</span><span class="value">${e.shutterSpeed ?? '—'}</span></div>
-              <div class="exif-cell"><span class="label">ISO</span><span class="value">${e.iso ?? '—'}</span></div>
-              <div class="exif-cell"><span class="label">Focal length</span><span class="value">${e.focalLength ?? '—'}</span></div>
+              <div class="exif-cell"><span class="label">${STR.aperture}</span><span class="value">${e.aperture ?? '—'}</span></div>
+              <div class="exif-cell"><span class="label">${STR.shutterSpeed}</span><span class="value">${e.shutterSpeed ?? '—'}</span></div>
+              <div class="exif-cell"><span class="label">${STR.iso}</span><span class="value">${e.iso ?? '—'}</span></div>
+              <div class="exif-cell"><span class="label">${STR.focalLength}</span><span class="value">${e.focalLength ?? '—'}</span></div>
             </div>
           </div>`;
       } else {
-        exifWrap.innerHTML = `<div class="exif-empty">No camera data available for this photo.</div>`;
+        exifWrap.innerHTML = `<div class="exif-empty">${STR.noCameraData}</div>`;
       }
     }
 
@@ -849,7 +948,7 @@ const photosJsonSafe = JSON.stringify(photosJson).replace(/<\/script/gi, '<\\/sc
         mapWrap.innerHTML = `<div class="mini-map" id="lb-mini-map"></div>`;
         // Deferred so the container has real layout dimensions before Leaflet measures it.
         requestAnimationFrame(() => {
-          initPhotoMap('lb-mini-map', [{ slug: p.slug, src: p.src, thumbSrc: p.thumbSrc, caption: p.caption, gps: p.gps! }], () => {});
+          initPhotoMap('lb-mini-map', [{ slug: p.slug, src: p.src, thumbSrc: p.thumbSrc, caption: p.caption, gps: p.gps! }], () => {}, LANG);
         });
       } else {
         mapWrap.innerHTML = '';

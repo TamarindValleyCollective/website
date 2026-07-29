@@ -1,0 +1,123 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../PageHero.astro';
+import { getCollection, render } from 'astro:content';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+import type { Locale } from '../../i18n/utils';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+
+// The communityOutreach collection has no locale suffix on the schema
+// (unlike photos/partners) since entries carry a full prose body - instead,
+// kn/ta translations live as sibling files under kn/ and ta/ subfolders
+// (id prefixed accordingly, e.g. "kn/stem-experiential-learning-classes").
+// Filter down to just this locale's entries, and strip the prefix to get
+// the bare slug shared across all three locales' routes.
+const allPosts = await getCollection('communityOutreach');
+const posts =
+  lang === 'en'
+    ? allPosts.filter((p) => !p.id.startsWith('kn/') && !p.id.startsWith('ta/'))
+    : allPosts.filter((p) => p.id.startsWith(`${lang}/`));
+
+function bareSlug(id: string) {
+  return id.replace(/^(kn|ta)\//, '');
+}
+
+// A grid of cards reads as sparse/empty with just one entry in it (the
+// same issue Our Journey's Timeline card had) -- show that one post's
+// content directly instead of making it a click-through. Once there's
+// real volume here, this naturally reverts to the grid.
+const singlePost = posts.length === 1 ? posts[0] : null;
+const Content = singlePost ? (await render(singlePost)).Content : null;
+
+const content = {
+  en: {
+    metaDescription: 'Work TVC has done with the local community around it, in Odhipuram and Thaggatti village.',
+    heroEyebrow: 'People',
+    heroTitle: 'Community Outreach',
+    heroIntro: 'Work with the local community around us, in Odhipuram and Thaggatti village.',
+    ctaPre: "Want to work with the community on an initiative aligned with TVC's ethos?",
+    ctaLinkText: 'Reach out',
+  },
+  kn: {
+    metaDescription: 'ಒಧಿಪುರಂ ಮತ್ತು ತಗ್ಗಟ್ಟಿ ಗ್ರಾಮಗಳಲ್ಲಿ, TVC ಸುತ್ತಮುತ್ತಲಿನ ಸ್ಥಳೀಯ ಸಮುದಾಯದೊಂದಿಗೆ ಮಾಡಿದ ಕೆಲಸ.',
+    heroEyebrow: 'ಜನರು',
+    heroTitle: 'ಸಮುದಾಯ ಸಂಪರ್ಕ',
+    heroIntro: 'ಒಧಿಪುರಂ ಮತ್ತು ತಗ್ಗಟ್ಟಿ ಗ್ರಾಮಗಳಲ್ಲಿ, ನಮ್ಮ ಸುತ್ತಮುತ್ತಲಿನ ಸ್ಥಳೀಯ ಸಮುದಾಯದೊಂದಿಗಿನ ಕೆಲಸ.',
+    ctaPre: 'TVC ಯ ಆಶಯಗಳಿಗೆ ಅನುಗುಣವಾದ ಒಂದು ಉಪಕ್ರಮದಲ್ಲಿ ಸಮುದಾಯದೊಂದಿಗೆ ಕೆಲಸ ಮಾಡಲು ಬಯಸುವಿರಾ?',
+    ctaLinkText: 'ಸಂಪರ್ಕಿಸಿ',
+  },
+  ta: {
+    metaDescription: 'ஓதிபுரம் மற்றும் தக்கட்டி கிராமங்களில், TVC-க்கு அருகிலுள்ள உள்ளூர் சமூகத்துடன் செய்த பணி.',
+    heroEyebrow: 'மக்கள்',
+    heroTitle: 'சமூக தொடர்பு',
+    heroIntro: 'ஓதிபுரம் மற்றும் தக்கட்டி கிராமங்களில், எங்களைச் சுற்றியுள்ள உள்ளூர் சமூகத்துடனான பணி.',
+    ctaPre: 'TVC-யின் நோக்கத்திற்கு ஏற்ற ஒரு முயற்சியில் சமூகத்துடன் இணைந்து பணியாற்ற விரும்புகிறீர்களா?',
+    ctaLinkText: 'தொடர்பு கொள்ளுங்கள்',
+  },
+} as const;
+
+const c = content[lang];
+---
+
+<BaseLayout lang={lang} title={c.heroTitle} description={c.metaDescription} image="/images/community-outreach/stem-experiential-learning-classes.jpeg" imageWidth={1280} imageHeight={960}>
+  <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} intro={c.heroIntro} image="/images/community-outreach/stem-experiential-learning-classes.jpeg" imageAlt="A STEM class in session at the local village school" />
+  <section class="section wrapper">
+    {singlePost && Content ? (
+      <article class="prose">
+        <h2>{singlePost.data.title}</h2>
+        <Content />
+      </article>
+    ) : (
+      <div class="grid">
+        {posts.map((p) => (
+          <a class="card" href={getRelativeLocaleUrl(lang, `/people/community-outreach/${bareSlug(p.id)}`)}>
+            {p.data.coverImage && <img src={p.data.coverImage} alt={p.data.title} loading="lazy" />}
+            <h3>{p.data.title}</h3>
+            <p>{p.data.excerpt}</p>
+          </a>
+        ))}
+      </div>
+    )}
+    <p class="cta-line">{c.ctaPre} <a href={getRelativeLocaleUrl(lang, '/contact')}>{c.ctaLinkText}</a></p>
+  </section>
+</BaseLayout>
+
+<style>
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 20px;
+  }
+
+  .grid a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .grid img {
+    border-radius: var(--radius) var(--radius) 0 0;
+    margin: -28px -28px 16px;
+    /* Global img { max-width: 100% } would otherwise clamp this calc'd
+       width right back down to 100%, undoing the negative-margin bleed on
+       the right edge (the left edge looks fine regardless, since the
+       margin offset alone doesn't depend on width). */
+    max-width: none;
+    width: calc(100% + 56px);
+    height: 160px;
+    object-fit: cover;
+  }
+
+  .prose :global(img) {
+    border-radius: var(--radius);
+    margin: 16px 0;
+  }
+
+  .cta-line {
+    margin-top: 20px;
+  }
+</style>

@@ -1,26 +1,52 @@
 ---
+import { getRelativeLocaleUrl } from 'astro:i18n';
 import { FARM_AREA_ACRES } from '../data/site-facts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/utils';
+
+interface Props {
+  lang?: Locale;
+}
+
+const { lang = DEFAULT_LOCALE } = Astro.props;
 
 const YEARS_REGENERATING = new Date().getFullYear() - 2017;
+
+// Only four short labels here (no shared i18n key for them yet) - kept as a
+// local dictionary rather than touching src/i18n/*.ts, per this pass's
+// constraints.
+const labels = {
+  en: { acres: 'Acres', years: 'Years', families: 'Families', species: 'Species' },
+  kn: { acres: 'ಎಕರೆಗಳು', years: 'ವರ್ಷಗಳು', families: 'ಕುಟುಂಬಗಳು', species: 'ಪ್ರಭೇದಗಳು' },
+  ta: { acres: 'ஏக்கர்கள்', years: 'ஆண்டுகள்', families: 'குடும்பங்கள்', species: 'இனங்கள்' },
+} as const;
+
+const l = labels[lang];
+
+// getRelativeLocaleUrl appends a trailing slash to whatever string it's
+// given (see astro/dist/i18n/index.js's appendForwardSlash), with no
+// awareness of a hash fragment - passing it '/people#members' directly
+// produces the broken '/people#members/'. Resolve the bare path, then
+// append the anchor after.
+const peopleHref = `${getRelativeLocaleUrl(lang, '/people')}#members`;
 ---
 
 <section class="home-stats" id="home-stats">
   <div class="wrapper home-stats__grid">
-    <a class="home-stat" href="/about">
+    <a class="home-stat" href={getRelativeLocaleUrl(lang, '/about')}>
       <p class="home-stat__value" data-count-to={FARM_AREA_ACRES}>0</p>
-      <p class="home-stat__label">Acres</p>
+      <p class="home-stat__label">{l.acres}</p>
     </a>
-    <a class="home-stat" href="/our-journey">
+    <a class="home-stat" href={getRelativeLocaleUrl(lang, '/our-journey')}>
       <p class="home-stat__value" data-count-to={YEARS_REGENERATING}>0</p>
-      <p class="home-stat__label">Years</p>
+      <p class="home-stat__label">{l.years}</p>
     </a>
-    <a class="home-stat" href="/people#members">
+    <a class="home-stat" href={peopleHref}>
       <p class="home-stat__value" data-count-to="53">0</p>
-      <p class="home-stat__label">Families</p>
+      <p class="home-stat__label">{l.families}</p>
     </a>
-    <a class="home-stat" href="/ecosystem">
+    <a class="home-stat" href={getRelativeLocaleUrl(lang, '/ecosystem')}>
       <p class="home-stat__value" id="home-stat-species">—</p>
-      <p class="home-stat__label">Species</p>
+      <p class="home-stat__label">{l.species}</p>
     </a>
   </div>
 </section>

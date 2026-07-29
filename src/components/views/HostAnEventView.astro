@@ -1,0 +1,324 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../PageHero.astro';
+import { getCollection } from 'astro:content';
+import { formatDateRange } from '../../utils/events';
+import { FARM_AREA_ACRES } from '../../data/site-facts';
+import { useTranslations, type Locale } from '../../i18n/utils';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+
+// Two concrete proof points, one per audience track below - not a general
+// events query, since the whole point is naming things that actually
+// happened rather than a generic "see our events" pointer. Event titles
+// themselves stay in English across locales (source data isn't translated) -
+// only the surrounding "Proof it works:" label is localized.
+const proofIds = ['2022-12-16-the-lambda-retreat', '2024-12-21-3bs-and-1h-biodiversity-walk'];
+const proofEvents = (await getCollection('events', (e) => proofIds.includes(e.id))).sort(
+  (a, b) => proofIds.indexOf(a.id) - proofIds.indexOf(b.id)
+);
+
+// Prose content for this page only - shared chrome (nav/footer/form field
+// labels) comes from src/i18n/*.ts via t() above.
+const content = {
+  en: {
+    pageTitle: 'Host Your Event at TVC',
+    metaDescription:
+      'Bring your retreat, workshop, or camp to Tamarind Valley Collective — a 98-acre hillslope in the Melagiri Hills with some of the darkest skies around, on-site camping, and a track record hosting everything from biodiversity walks to a week-long computation retreat.',
+    heroEyebrow: 'Visit TVC',
+    heroIntro:
+      '98 acres of hill country, some of the darkest skies around, and room to camp — the setting for team outings, workshops, retreats, and camps of every kind.',
+    whyHereHeading: 'Why here',
+    whyHereText1: `TVC is ${FARM_AREA_ACRES} acres of the Melagiri Hills, on a west-facing hillslope an hour or two outside Bangalore depending on where you're coming from — far enough to feel like a real break, close enough to reach for a weekend. The valley measures just 31.8 μcd/m² of artificial brightness, so on a clear night the stars and galaxies are bright and unmistakable — a real draw whether you're running a stargazing session or just want a group to disconnect for a few days.`,
+    whyHereText2:
+      "That disconnection is literal, not just a figure of speech: there's WiFi via BSNL, which should tell you all you need to know about its reliability, and power is grid-fed with a solar backup and a generator for the rare bad day. Bring a hotspot if your event genuinely needs guaranteed connectivity — otherwise, treat the unreliability as part of the pitch.",
+    possibleHeading: "What's possible here",
+    possibleHint: "Who runs the event doesn't matter as much as whether the setting fits it — here's what's worked, and what we're open to.",
+    track1Heading: 'Nature, wellness & biodiversity',
+    track1Text:
+      "Biodiversity walks, birding, foraging, wellness retreats, or a workshop on permaculture design, bamboo craft, or growing your own food — the land's food forest, water works, and forest edge are the whole point. Over 100 bird species have been recorded here.",
+    track2Heading: 'Tech, maker & deep-focus retreats',
+    track2Text:
+      'No open-plan office, no city noise, no reliable WiFi to half-pay-attention through — just a small group, a shared table, and days at a time to go deep on something hard.',
+    track3Heading: 'Team offsites & anything else',
+    track3Text:
+      "Team outings, brainstorming sessions, leadership programs — facilitators from the community are available on request. Or something we haven't listed here: if your event needs a quiet, off-grid setting for a few days, tell us about it and we'll work out whether it fits.",
+    proofLabel: 'Proof it works:',
+    whatsHereHeading: "What's here",
+    whatsHereText1:
+      "Tented accommodation across the Malabar hut (two tents, each fitting up to 3 adults), the Banyan hut (one tent + deck), two bamboo huts, and dome tents — the site accommodates up to 20 people overnight. There's a lunch hut next to the kitchen for group meals, sessions, or just sitting and talking. Food is freshly prepared and mostly vegetarian, sourced on-site as far as possible, with non-veg on request. Common toilets have western closets and showers (no hot water on tap, but the kitchen can heat some up).",
+    whatsHereText2:
+      "Day-only events aren't capped at 20 — that limit is specifically the overnight camping capacity. Get in touch with your headcount and we'll work out what fits.",
+    getInTouchHeading: 'Get in touch',
+    getInTouchHint: "Tell us about your event and we'll get back to you with availability and a quote.",
+    organizationLabel: 'Organization (optional)',
+    organizationPlaceholder: 'Group or organization name',
+    eventTypeLabel: 'Event type',
+    eventTypeOptions: ['Nature, wellness, or biodiversity retreat', 'Tech, maker, or deep-focus camp', 'Team offsite', 'Something else'],
+    groupSizeLabel: 'Expected group size',
+    groupSizePlaceholder: 'e.g. 15 people',
+    datesLabel: 'Preferred dates or season',
+    datesPlaceholder: 'e.g. a weekend in December, or flexible',
+    messageLabel: 'Tell us about your event',
+    messagePlaceholder: "What you're planning, and anything else we should know",
+  },
+  kn: {
+    pageTitle: 'TVC ನಲ್ಲಿ ನಿಮ್ಮ ಕಾರ್ಯಕ್ರಮವನ್ನು ಆಯೋಜಿಸಿ',
+    metaDescription:
+      'ನಿಮ್ಮ ರಿಟ್ರೀಟ್, ಕಾರ್ಯಾಗಾರ ಅಥವಾ ಶಿಬಿರವನ್ನು ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ಗೆ ತನ್ನಿ — ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳಲ್ಲಿ 98 ಎಕರೆಗಳ ಇಳಿಜಾರು, ಸುತ್ತಮುತ್ತಲಿನ ಅತ್ಯಂತ ಕತ್ತಲಾದ ಆಕಾಶ, ಸ್ಥಳದಲ್ಲೇ ಕ್ಯಾಂಪಿಂಗ್, ಮತ್ತು ಜೀವವೈವಿಧ್ಯ ನಡಿಗೆಗಳಿಂದ ಹಿಡಿದು ವಾರ-ಉದ್ದದ ಕಂಪ್ಯೂಟೇಶನ್ ರಿಟ್ರೀಟ್‌ವರೆಗೆ ಎಲ್ಲವನ್ನೂ ಆಯೋಜಿಸಿದ ಅನುಭವ.',
+    heroEyebrow: 'TVC ಗೆ ಭೇಟಿ ನೀಡಿ',
+    heroIntro:
+      '98 ಎಕರೆ ಬೆಟ್ಟ ಪ್ರದೇಶ, ಸುತ್ತಮುತ್ತಲಿನ ಅತ್ಯಂತ ಕತ್ತಲಾದ ಆಕಾಶ, ಮತ್ತು ಕ್ಯಾಂಪ್ ಮಾಡಲು ಸ್ಥಳ — ತಂಡದ ಪ್ರವಾಸಗಳು, ಕಾರ್ಯಾಗಾರಗಳು, ರಿಟ್ರೀಟ್‌ಗಳು ಮತ್ತು ಎಲ್ಲ ರೀತಿಯ ಶಿಬಿರಗಳಿಗೆ ಸೂಕ್ತ ಸ್ಥಳ.',
+    whyHereHeading: 'ಇಲ್ಲೇಕೆ',
+    whyHereText1: `TVC ಎಂಬುದು ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ ${FARM_AREA_ACRES} ಎಕರೆ ಭೂಮಿ, ಬೆಂಗಳೂರಿನಿಂದ ಒಂದೆರಡು ಗಂಟೆಗಳ ದೂರದಲ್ಲಿ ಪಶ್ಚಿಮಾಭಿಮುಖ ಇಳಿಜಾರಿನಲ್ಲಿದೆ — ನಿಜವಾದ ಬ್ರೇಕ್ ಎನಿಸುವಷ್ಟು ದೂರ, ವಾರಾಂತ್ಯಕ್ಕೆ ತಲುಪುವಷ್ಟು ಹತ್ತಿರ. ಈ ಕಣಿವೆಯಲ್ಲಿ ಕೃತಕ ಬೆಳಕು ಕೇವಲ 31.8 μcd/m² ಇದೆ, ಹಾಗಾಗಿ ಸ್ಪಷ್ಟ ರಾತ್ರಿಯಲ್ಲಿ ನಕ್ಷತ್ರಗಳು ಮತ್ತು ಗ್ಯಾಲಕ್ಸಿಗಳು ಪ್ರಕಾಶಮಾನವಾಗಿ, ಸ್ಪಷ್ಟವಾಗಿ ಕಾಣುತ್ತವೆ — ನೀವು ನಕ್ಷತ್ರ ವೀಕ್ಷಣಾ ಅಧಿವೇಶನ ನಡೆಸುತ್ತಿರಲಿ ಅಥವಾ ಒಂದು ಗುಂಪು ಕೆಲವು ದಿನ ಸಂಪರ್ಕ ಕಡಿದುಕೊಳ್ಳಲು ಬಯಸುತ್ತಿರಲಿ, ಇದೊಂದು ನಿಜವಾದ ಆಕರ್ಷಣೆ.`,
+    whyHereText2:
+      'ಆ ಸಂಪರ್ಕ ಕಡಿತ ಕೇವಲ ಮಾತಿನ ಮಾತಲ್ಲ, ಅಕ್ಷರಶಃ ನಿಜ: ಇಲ್ಲಿ BSNL ಮೂಲಕ ವೈಫೈ ಇದೆ, ಅದರ ವಿಶ್ವಾಸಾರ್ಹತೆಯ ಬಗ್ಗೆ ನಿಮಗೆ ಎಲ್ಲವೂ ತಿಳಿಸುತ್ತದೆ ಎಂಬ ಹೆಸರೇ, ಮತ್ತು ವಿದ್ಯುತ್ ಗ್ರಿಡ್‌ನಿಂದ ಪೂರೈಕೆಯಾಗುತ್ತದೆ, ಸೋಲಾರ್ ಬ್ಯಾಕಪ್ ಮತ್ತು ಅಪರೂಪದ ಕೆಟ್ಟ ದಿನಕ್ಕೆ ಜನರೇಟರ್ ಇದೆ. ನಿಮ್ಮ ಕಾರ್ಯಕ್ರಮಕ್ಕೆ ನಿಜವಾಗಿಯೂ ಖಚಿತ ಸಂಪರ್ಕ ಬೇಕಿದ್ದರೆ ಹಾಟ್‌ಸ್ಪಾಟ್ ತನ್ನಿ — ಇಲ್ಲದಿದ್ದರೆ, ಈ ಅನಿಶ್ಚಿತತೆಯನ್ನೇ ಆಕರ್ಷಣೆಯ ಭಾಗವಾಗಿ ಪರಿಗಣಿಸಿ.',
+    possibleHeading: 'ಇಲ್ಲಿ ಏನೆಲ್ಲಾ ಸಾಧ್ಯ',
+    possibleHint: 'ಕಾರ್ಯಕ್ರಮವನ್ನು ಯಾರು ನಡೆಸುತ್ತಾರೆ ಎಂಬುದಕ್ಕಿಂತ, ಈ ಸ್ಥಳ ಅದಕ್ಕೆ ಸೂಕ್ತವೇ ಎಂಬುದು ಮುಖ್ಯ — ಇದುವರೆಗೆ ಏನು ಕೆಲಸ ಮಾಡಿದೆ, ಮತ್ತು ನಾವು ಇನ್ನೇನಕ್ಕೆ ಸಿದ್ಧರಿದ್ದೇವೆ ಎಂಬುದು ಇಲ್ಲಿದೆ.',
+    track1Heading: 'ಪ್ರಕೃತಿ, ಸ್ವಾಸ್ಥ್ಯ ಮತ್ತು ಜೀವವೈವಿಧ್ಯ',
+    track1Text:
+      'ಜೀವವೈವಿಧ್ಯ ನಡಿಗೆಗಳು, ಪಕ್ಷಿ ವೀಕ್ಷಣೆ, ಆಹಾರ ಸಂಗ್ರಹಣೆ, ಸ್ವಾಸ್ಥ್ಯ ರಿಟ್ರೀಟ್‌ಗಳು, ಅಥವಾ ಪರ್ಮಾಕಲ್ಚರ್ ವಿನ್ಯಾಸ, ಬಿದಿರು ಕರಕುಶಲ ಅಥವಾ ಸ್ವಂತ ಆಹಾರ ಬೆಳೆಸುವ ಕುರಿತ ಕಾರ್ಯಾಗಾರ — ಭೂಮಿಯ ಆಹಾರ ಅರಣ್ಯ, ಜಲಕಾಮಗಾರಿಗಳು ಮತ್ತು ಅರಣ್ಯದಂಚು ಇದಕ್ಕೆ ಅಸಲಿ ಕಾರಣ. ಇಲ್ಲಿ 100ಕ್ಕೂ ಹೆಚ್ಚು ಪಕ್ಷಿ ಪ್ರಭೇದಗಳನ್ನು ದಾಖಲಿಸಲಾಗಿದೆ.',
+    track2Heading: 'ತಂತ್ರಜ್ಞಾನ, ಮೇಕರ್ ಮತ್ತು ಆಳ-ಗಮನ ರಿಟ್ರೀಟ್‌ಗಳು',
+    track2Text:
+      'ಓಪನ್-ಪ್ಲಾನ್ ಆಫೀಸ್ ಇಲ್ಲ, ನಗರದ ಗದ್ದಲವಿಲ್ಲ, ಅರೆಮನಸ್ಸಿನಿಂದ ಗಮನಿಸಬೇಕಾದ ವಿಶ್ವಾಸಾರ್ಹ ವೈಫೈ ಇಲ್ಲ — ಕೇವಲ ಒಂದು ಸಣ್ಣ ಗುಂಪು, ಹಂಚಿಕೆಯ ಮೇಜು, ಮತ್ತು ಕಷ್ಟದ ವಿಷಯದ ಆಳಕ್ಕೆ ಇಳಿಯಲು ಹಲವು ದಿನಗಳ ಸಮಯ.',
+    track3Heading: 'ತಂಡದ ಆಫ್‌ಸೈಟ್‌ಗಳು ಮತ್ತು ಇತರೆ',
+    track3Text:
+      'ತಂಡದ ಪ್ರವಾಸಗಳು, ಚಿಂತನ-ಮಂಥನ ಅಧಿವೇಶನಗಳು, ನಾಯಕತ್ವ ಕಾರ್ಯಕ್ರಮಗಳು — ಸಮುದಾಯದ ಸೌಲಭ್ಯಕಾರರು ವಿನಂತಿಯ ಮೇರೆಗೆ ಲಭ್ಯರಿದ್ದಾರೆ. ಅಥವಾ ಇಲ್ಲಿ ಪಟ್ಟಿ ಮಾಡದ ಬೇರೇನಾದರೂ: ನಿಮ್ಮ ಕಾರ್ಯಕ್ರಮಕ್ಕೆ ಕೆಲವು ದಿನಗಳ ಶಾಂತ, ಆಫ್-ಗ್ರಿಡ್ ಸ್ಥಳ ಬೇಕಿದ್ದರೆ, ನಮಗೆ ತಿಳಿಸಿ, ಅದು ಸೂಕ್ತವೇ ಎಂದು ನಾವು ನಿರ್ಧರಿಸೋಣ.',
+    proofLabel: 'ಇದು ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ ಎಂಬ ಪುರಾವೆ:',
+    whatsHereHeading: 'ಇಲ್ಲಿ ಏನಿದೆ',
+    whatsHereText1:
+      'ಮಲಬಾರ್ ಗುಡಿಸಲಿನಾದ್ಯಂತ (ಎರಡು ಟೆಂಟ್‌ಗಳು, ಪ್ರತಿಯೊಂದೂ 3 ವಯಸ್ಕರವರೆಗೆ ಹಿಡಿಸುತ್ತದೆ), ಬನ್ಯನ್ ಗುಡಿಸಲು (ಒಂದು ಟೆಂಟ್ + ಡೆಕ್), ಎರಡು ಬಿದಿರು ಗುಡಿಸಲುಗಳು, ಮತ್ತು ಡೋಮ್ ಟೆಂಟ್‌ಗಳಲ್ಲಿ ಟೆಂಟ್ ವಸತಿ — ಈ ಸ್ಥಳ ರಾತ್ರಿ ಉಳಿಯಲು 20 ಜನರವರೆಗೆ ಅವಕಾಶ ನೀಡುತ್ತದೆ. ಅಡುಗೆಮನೆಯ ಪಕ್ಕದಲ್ಲಿ ಗುಂಪು ಊಟ, ಅಧಿವೇಶನ, ಅಥವಾ ಬರೀ ಕುಳಿತು ಮಾತನಾಡಲು ಒಂದು ಲಂಚ್ ಹಟ್ ಇದೆ. ಆಹಾರವನ್ನು ತಾಜಾವಾಗಿ ತಯಾರಿಸಲಾಗುತ್ತದೆ, ಹೆಚ್ಚಾಗಿ ಸಸ್ಯಾಹಾರಿ, ಸಾಧ್ಯವಾದಷ್ಟು ಸ್ಥಳದಲ್ಲೇ ಸಂಗ್ರಹಿಸಲಾಗುತ್ತದೆ, ಮಾಂಸಾಹಾರ ಬೇಕಿದ್ದರೆ ವಿನಂತಿಯ ಮೇರೆಗೆ ಲಭ್ಯ. ಸಾಮಾನ್ಯ ಶೌಚಾಲಯಗಳಲ್ಲಿ ವೆಸ್ಟರ್ನ್ ಕಮೋಡ್ ಮತ್ತು ಶವರ್‌ಗಳಿವೆ (ನಳ್ಳಿಯಲ್ಲಿ ಬಿಸಿನೀರು ಇಲ್ಲ, ಆದರೆ ಅಡುಗೆಮನೆಯಲ್ಲಿ ಸ್ವಲ್ಪ ಬಿಸಿ ಮಾಡಿಕೊಡಬಹುದು).',
+    whatsHereText2:
+      'ಹಗಲು-ಮಾತ್ರದ ಕಾರ್ಯಕ್ರಮಗಳಿಗೆ 20ರ ಮಿತಿ ಇಲ್ಲ — ಆ ಮಿತಿ ನಿರ್ದಿಷ್ಟವಾಗಿ ರಾತ್ರಿ ಕ್ಯಾಂಪಿಂಗ್ ಸಾಮರ್ಥ್ಯಕ್ಕೆ ಸಂಬಂಧಿಸಿದ್ದು. ನಿಮ್ಮ ಜನಸಂಖ್ಯೆಯೊಂದಿಗೆ ನಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸಿ, ಏನು ಸೂಕ್ತ ಎಂದು ನಾವು ನಿರ್ಧರಿಸೋಣ.',
+    getInTouchHeading: 'ನಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸಿ',
+    getInTouchHint: 'ನಿಮ್ಮ ಕಾರ್ಯಕ್ರಮದ ಬಗ್ಗೆ ನಮಗೆ ತಿಳಿಸಿ, ಲಭ್ಯತೆ ಮತ್ತು ಉಲ್ಲೇಖದೊಂದಿಗೆ ನಾವು ನಿಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸುತ್ತೇವೆ.',
+    organizationLabel: 'ಸಂಸ್ಥೆ (ಐಚ್ಛಿಕ)',
+    organizationPlaceholder: 'ಗುಂಪು ಅಥವಾ ಸಂಸ್ಥೆಯ ಹೆಸರು',
+    eventTypeLabel: 'ಕಾರ್ಯಕ್ರಮದ ಪ್ರಕಾರ',
+    eventTypeOptions: ['ಪ್ರಕೃತಿ, ಸ್ವಾಸ್ಥ್ಯ, ಅಥವಾ ಜೀವವೈವಿಧ್ಯ ರಿಟ್ರೀಟ್', 'ತಂತ್ರಜ್ಞಾನ, ಮೇಕರ್, ಅಥವಾ ಆಳ-ಗಮನ ಶಿಬಿರ', 'ತಂಡದ ಆಫ್‌ಸೈಟ್', 'ಬೇರೇನಾದರೂ'],
+    groupSizeLabel: 'ನಿರೀಕ್ಷಿತ ಗುಂಪಿನ ಗಾತ್ರ',
+    groupSizePlaceholder: 'ಉದಾ. 15 ಜನರು',
+    datesLabel: 'ಆದ್ಯತೆಯ ದಿನಾಂಕಗಳು ಅಥವಾ ಋತು',
+    datesPlaceholder: 'ಉದಾ. ಡಿಸೆಂಬರ್‌ನಲ್ಲಿ ಒಂದು ವಾರಾಂತ್ಯ, ಅಥವಾ ಹೊಂದಿಕೊಳ್ಳುವ',
+    messageLabel: 'ನಿಮ್ಮ ಕಾರ್ಯಕ್ರಮದ ಬಗ್ಗೆ ನಮಗೆ ತಿಳಿಸಿ',
+    messagePlaceholder: 'ನೀವು ಯೋಜಿಸುತ್ತಿರುವುದು, ಮತ್ತು ನಾವು ತಿಳಿದುಕೊಳ್ಳಬೇಕಾದ ಇತರ ಸಂಗತಿಗಳು',
+  },
+  ta: {
+    pageTitle: 'TVC-யில் உங்கள் நிகழ்வை நடத்துங்கள்',
+    metaDescription:
+      'உங்கள் ரிட்ரீட், பட்டறை அல்லது முகாமை டமரிண்ட் வேலி கலெக்டிவுக்கு கொண்டு வாருங்கள் — மேலகிரி மலைகளில் 98 ஏக்கர் மலைச்சரிவு, சுற்றியுள்ள மிக இருண்ட வானம், இடத்திலேயே முகாமிடும் வசதி, மற்றும் பல்லுயிர் நடைப்பயணங்கள் முதல் ஒரு வார கம்ப்யூடேஷன் ரிட்ரீட் வரை அனைத்தையும் நடத்திய அனுபவம்.',
+    heroEyebrow: 'TVC-க்கு வருகை தாருங்கள்',
+    heroIntro:
+      '98 ஏக்கர் மலை நாடு, சுற்றியுள்ள மிக இருண்ட வானம், மற்றும் முகாமிட இடம் — குழு உல்லாசப் பயணங்கள், பட்டறைகள், ரிட்ரீட்கள், மற்றும் அனைத்து வகை முகாம்களுக்கும் ஏற்ற இடம்.',
+    whyHereHeading: 'ஏன் இங்கே',
+    whyHereText1: `TVC என்பது மேலகிரி மலைகளின் ${FARM_AREA_ACRES} ஏக்கர் நிலம், நீங்கள் எங்கிருந்து வருகிறீர்கள் என்பதைப் பொறுத்து பெங்களூருவிலிருந்து ஒன்று அல்லது இரண்டு மணி நேரத் தொலைவில் மேற்கு நோக்கிய மலைச்சரிவில் அமைந்துள்ளது — ஒரு உண்மையான இடைவெளியாக உணரும் அளவுக்கு தொலைவிலும், வார இறுதியில் சென்றடையக்கூடிய அளவுக்கு அருகிலும். இந்த பள்ளத்தாக்கில் செயற்கை வெளிச்சம் வெறும் 31.8 μcd/m² மட்டுமே, எனவே தெளிவான இரவில் நட்சத்திரங்களும் விண்மீன் திரள்களும் பிரகாசமாகவும் தெளிவாகவும் தெரிகின்றன — நீங்கள் நட்சத்திர பார்வை அமர்வை நடத்தினாலும் சரி, ஒரு குழு சில நாட்கள் துண்டிக்கப்பட விரும்பினாலும் சரி, இது ஒரு உண்மையான ஈர்ப்பு.`,
+    whyHereText2:
+      'அந்த துண்டிப்பு வெறும் சொல் அல்ல, உண்மையிலேயே அப்படித்தான்: இங்கே BSNL மூலம் வைஃபை உள்ளது, அதன் நம்பகத்தன்மையைப் பற்றி அந்த பெயரே உங்களுக்குத் தேவையான அனைத்தையும் சொல்லிவிடும், மற்றும் மின்சாரம் கிரிட் மூலம் வழங்கப்படுகிறது, சோலார் பேக்அப் மற்றும் அரிதான மோசமான நாளுக்கு ஒரு ஜெனரேட்டரும் உள்ளது. உங்கள் நிகழ்வுக்கு உண்மையிலேயே உறுதியான இணைப்பு தேவைப்பட்டால் ஹாட்ஸ்பாட் கொண்டு வாருங்கள் — இல்லையெனில், இந்த நம்பகத்தன்மையின்மையையே ஈர்ப்பின் ஒரு பகுதியாகக் கருதுங்கள்.',
+    possibleHeading: 'இங்கே என்னென்ன சாத்தியம்',
+    possibleHint: 'நிகழ்வை யார் நடத்துகிறார்கள் என்பதை விட, இந்த இடம் அதற்கு பொருந்துகிறதா என்பதே முக்கியம் — இதுவரை என்ன வேலை செய்துள்ளது, மற்றும் நாங்கள் எதற்கெல்லாம் திறந்திருக்கிறோம் என்பது இங்கே.',
+    track1Heading: 'இயற்கை, நல்வாழ்வு மற்றும் பல்லுயிர் பெருக்கம்',
+    track1Text:
+      'பல்லுயிர் நடைப்பயணங்கள், பறவை பார்வையிடல், உணவு சேகரிப்பு, நல்வாழ்வு ரிட்ரீட்கள், அல்லது இயற்கை வேளாண்மை வடிவமைப்பு, மூங்கில் கைவினை அல்லது சொந்தமாக உணவு வளர்ப்பது பற்றிய பட்டறை — நிலத்தின் உணவுக் காடு, நீர் பணிகள் மற்றும் காட்டு எல்லை ஆகியவையே இதன் முழுப் பொருள். இங்கே 100க்கும் மேற்பட்ட பறவை இனங்கள் பதிவு செய்யப்பட்டுள்ளன.',
+    track2Heading: 'தொழில்நுட்பம், மேக்கர் மற்றும் ஆழ்ந்த-கவனம் ரிட்ரீட்கள்',
+    track2Text:
+      'திறந்த அலுவலகம் இல்லை, நகர இரைச்சல் இல்லை, பாதி கவனத்துடன் கடக்க வேண்டிய நம்பகமான வைஃபை இல்லை — வெறும் ஒரு சிறிய குழு, பகிரப்பட்ட மேசை, மற்றும் கடினமான ஒன்றில் ஆழமாக இறங்க பல நாட்கள்.',
+    track3Heading: 'குழு ஆஃப்சைட்கள் மற்றும் மற்றவை',
+    track3Text:
+      'குழு உல்லாசப் பயணங்கள், சிந்தனை-மோதல் அமர்வுகள், தலைமைத்துவ திட்டங்கள் — சமூகத்தைச் சேர்ந்த வசதிகாரர்கள் கோரிக்கையின் பேரில் கிடைக்கிறார்கள். அல்லது இங்கே பட்டியலிடப்படாத வேறு ஏதேனும்: உங்கள் நிகழ்வுக்கு சில நாட்களுக்கு அமைதியான, ஆஃப்-கிரிட் இடம் தேவைப்பட்டால், எங்களிடம் சொல்லுங்கள், அது பொருந்துமா என்று நாங்கள் பார்ப்போம்.',
+    proofLabel: 'இது செயல்படுகிறது என்பதற்கான சான்று:',
+    whatsHereHeading: 'இங்கே என்ன இருக்கிறது',
+    whatsHereText1:
+      'மலபார் குடிசை முழுவதும் (இரண்டு கூடாரங்கள், ஒவ்வொன்றும் 3 பெரியவர்கள் வரை கொள்ளும்), பன்யன் குடிசை (ஒரு கூடாரம் + தளம்), இரண்டு மூங்கில் குடிசைகள், மற்றும் டோம் கூடாரங்களில் கூடார தங்குமிடம் — இந்த இடம் இரவில் தங்க 20 பேர் வரை இடமளிக்கும். சமையலறைக்கு அடுத்து குழு உணவு, அமர்வுகள், அல்லது வெறுமனே அமர்ந்து பேசுவதற்கான ஒரு லஞ்ச் ஹட் உள்ளது. உணவு புதிதாகத் தயாரிக்கப்படுகிறது, பெரும்பாலும் சைவம், முடிந்தவரை இடத்திலேயே பெறப்படுகிறது, கோரிக்கையின் பேரில் அசைவமும் கிடைக்கும். பொது கழிவறைகளில் மேற்கத்திய கழிப்பறைகளும் குளியலறைகளும் உள்ளன (குழாயில் சூடு நீர் இல்லை, ஆனால் சமையலறையில் கொஞ்சம் சூடாக்கிக் கொடுக்க முடியும்).',
+    whatsHereText2:
+      'பகல்-நேர நிகழ்வுகளுக்கு 20 என்ற வரம்பு இல்லை — அந்த வரம்பு குறிப்பாக இரவு முகாமிடும் திறனுக்கு மட்டுமே. உங்கள் தலைவண்ணத்துடன் எங்களைத் தொடர்பு கொள்ளுங்கள், எது பொருந்தும் என்று நாங்கள் பார்ப்போம்.',
+    getInTouchHeading: 'எங்களைத் தொடர்பு கொள்ளுங்கள்',
+    getInTouchHint: 'உங்கள் நிகழ்வைப் பற்றி எங்களிடம் சொல்லுங்கள், கிடைக்கும் தன்மை மற்றும் மதிப்பீட்டுடன் நாங்கள் உங்களைத் தொடர்பு கொள்வோம்.',
+    organizationLabel: 'நிறுவனம் (விருப்பம்)',
+    organizationPlaceholder: 'குழு அல்லது நிறுவனத்தின் பெயர்',
+    eventTypeLabel: 'நிகழ்வு வகை',
+    eventTypeOptions: ['இயற்கை, நல்வாழ்வு, அல்லது பல்லுயிர் ரிட்ரீட்', 'தொழில்நுட்பம், மேக்கர், அல்லது ஆழ்ந்த-கவனம் முகாம்', 'குழு ஆஃப்சைட்', 'வேறு ஏதேனும்'],
+    groupSizeLabel: 'எதிர்பார்க்கப்படும் குழு அளவு',
+    groupSizePlaceholder: 'எ.கா. 15 பேர்',
+    datesLabel: 'விருப்பமான தேதிகள் அல்லது பருவம்',
+    datesPlaceholder: 'எ.கா. டிசம்பரில் ஒரு வார இறுதி, அல்லது நெகிழ்வானது',
+    messageLabel: 'உங்கள் நிகழ்வைப் பற்றி எங்களிடம் சொல்லுங்கள்',
+    messagePlaceholder: 'நீங்கள் திட்டமிடுவது, மற்றும் நாங்கள் தெரிந்து கொள்ள வேண்டிய மற்ற விவரங்கள்',
+  },
+} as const;
+
+const c = content[lang];
+---
+
+<BaseLayout lang={lang} title={c.pageTitle} description={c.metaDescription} image="/images/pages/home/gallery-4.jpg" imageWidth={1280} imageHeight={960}>
+  <PageHero
+    eyebrow={c.heroEyebrow}
+    title={c.pageTitle}
+    intro={c.heroIntro}
+    image="/images/pages/home/gallery-4.jpg"
+    imageAlt="Sunset over the Melagiri Hills"
+  />
+
+  <section class="section wrapper">
+    <h2>{c.whyHereHeading}</h2>
+    <p>{c.whyHereText1}</p>
+    <p>{c.whyHereText2}</p>
+  </section>
+
+  <section class="section section--tint">
+    <div class="wrapper">
+      <h2>{c.possibleHeading}</h2>
+      <p class="section-hint">{c.possibleHint}</p>
+      <div class="track-grid">
+        <div class="card">
+          <h3>{c.track1Heading}</h3>
+          <p>{c.track1Text}</p>
+          {proofEvents[1] && (
+            <a class="track-proof" href={getRelativeLocaleUrl(lang, `/events/${proofEvents[1].id}`)}>
+              {c.proofLabel} {proofEvents[1].data.title} ({formatDateRange(proofEvents[1].data.date, proofEvents[1].data.endDate)}) →
+            </a>
+          )}
+        </div>
+        <div class="card">
+          <h3>{c.track2Heading}</h3>
+          <p>{c.track2Text}</p>
+          {proofEvents[0] && (
+            <a class="track-proof" href={getRelativeLocaleUrl(lang, `/events/${proofEvents[0].id}`)}>
+              {c.proofLabel} {proofEvents[0].data.title} ({formatDateRange(proofEvents[0].data.date, proofEvents[0].data.endDate)}) →
+            </a>
+          )}
+        </div>
+        <div class="card">
+          <h3>{c.track3Heading}</h3>
+          <p>{c.track3Text}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section wrapper">
+    <h2>{c.whatsHereHeading}</h2>
+    <p>{c.whatsHereText1}</p>
+    <p>{c.whatsHereText2}</p>
+  </section>
+
+  <section class="section section--tint">
+    <div class="wrapper">
+      <h2>{c.getInTouchHeading}</h2>
+      <p class="section-hint">{c.getInTouchHint}</p>
+      <form
+        class="inquiry-form card"
+        name="host-event-inquiry"
+        method="POST"
+        action={getRelativeLocaleUrl(lang, '/visit/host-an-event/thanks')}
+        data-netlify="true"
+        data-netlify-honeypot="bot-field"
+      >
+        <input type="hidden" name="form-name" value="host-event-inquiry" />
+        <p class="inquiry-hp"><label>{t('forms.honeypotLabel')} <input name="bot-field" /></label></p>
+
+        <div class="inquiry-grid">
+          <div>
+            <label for="name">{t('forms.name')}</label>
+            <input id="name" type="text" name="name" placeholder={t('forms.namePlaceholder')} autocomplete="name" required />
+          </div>
+          <div>
+            <label for="organization">{c.organizationLabel}</label>
+            <input id="organization" type="text" name="organization" placeholder={c.organizationPlaceholder} autocomplete="organization" />
+          </div>
+          <div>
+            <label for="email">{t('forms.email')}</label>
+            <input id="email" type="email" name="email" placeholder="you@example.com" autocomplete="email" required />
+          </div>
+          <div>
+            <label for="phone">{t('forms.phoneOptional')}</label>
+            <input id="phone" type="tel" name="phone" placeholder="+91 98765 43210" autocomplete="tel" />
+          </div>
+          <div>
+            <label for="event-type">{c.eventTypeLabel}</label>
+            <select id="event-type" name="event-type" required>
+              <option value="">{t('forms.chooseOne')}</option>
+              {c.eventTypeOptions.map((opt) => <option value={opt}>{opt}</option>)}
+            </select>
+          </div>
+          <div>
+            <label for="group-size">{c.groupSizeLabel}</label>
+            <input id="group-size" type="text" name="group-size" placeholder={c.groupSizePlaceholder} required />
+          </div>
+        </div>
+
+        <label for="dates">{c.datesLabel}</label>
+        <input id="dates" type="text" name="dates" placeholder={c.datesPlaceholder} />
+
+        <label for="message">{c.messageLabel}</label>
+        <textarea id="message" name="message" rows="4" placeholder={c.messagePlaceholder} required></textarea>
+
+        <button class="button" type="submit">{t('forms.sendInquiry')}</button>
+      </form>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .track-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+    margin-top: 16px;
+  }
+
+  .track-proof {
+    display: inline-block;
+    margin-top: 12px;
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+
+  .inquiry-form {
+    max-width: 640px;
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .inquiry-form label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-bottom: 4px;
+  }
+
+  .inquiry-form input,
+  .inquiry-form select,
+  .inquiry-form textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 10px;
+    font: inherit;
+    background: #fff;
+  }
+
+  .inquiry-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+  }
+
+  .inquiry-form button {
+    align-self: flex-start;
+  }
+
+  /* Netlify Forms spam honeypot - off-screen, not display:none (some bots
+     skip hidden fields, but few check for visibility via position). */
+  .inquiry-hp {
+    position: absolute;
+    left: -9999px;
+  }
+</style>

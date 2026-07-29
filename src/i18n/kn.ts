@@ -1,0 +1,98 @@
+// Kannada — AI-drafted first pass, pending native-speaker review (see
+// TRANSLATIONS_REVIEW.md and reviewStatus.ts). Any key missing here falls
+// back to en.ts automatically.
+export default {
+  common: {
+    home: 'ಮುಖಪುಟ',
+  },
+  nav: {
+    explore: 'ಅನ್ವೇಷಿಸಿ',
+    engage: 'ತೊಡಗಿಸಿಕೊಳ್ಳಿ',
+    about: 'TVC ಬಗ್ಗೆ',
+    people: 'ಜನರು',
+    ourJourney: 'ನಮ್ಮ ಪಯಣ',
+    inPictures: 'ಚಿತ್ರಗಳಲ್ಲಿ',
+    biodiversity: 'ಜೀವವೈವಿಧ್ಯ',
+    weather: 'ಹವಾಮಾನ',
+    resourceCentre: 'ಸಂಪನ್ಮೂಲ ಕೇಂದ್ರ',
+    events: 'ಕಾರ್ಯಕ್ರಮಗಳು',
+    visitTvc: 'TVC ಗೆ ಭೇಟಿ ನೀಡಿ',
+    dayVisit: 'ಒಂದು ದಿನದ ಭೇಟಿ',
+    camping: 'ರಾತ್ರಿ ವಾಸ್ತವ್ಯ ಶಿಬಿರ',
+    hostAnEvent: 'ಕಾರ್ಯಕ್ರಮ ಆಯೋಜಿಸಿ',
+    trekkingTrails: 'ಚಾರಣ ಮಾರ್ಗಗಳು',
+    howToReach: 'ತಲುಪುವುದು ಹೇಗೆ',
+    join: 'ಸಂಘಟನೆ ಸೇರಿ',
+    contact: 'ನಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸಿ',
+  },
+  footer: {
+    tagline: 'ಇದು ಒಂದು ಫಾರ್ಮ್ ಅಲ್ಲ. ಒಂದು ಪರಿಸರ ವ್ಯವಸ್ಥೆ.',
+    copyright: '© {year} ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್, {legalName} (CIN: {cin}) ಮೂಲಕ ನಿರ್ವಹಿಸಲ್ಪಡುತ್ತದೆ. ಎಲ್ಲಾ ಹಕ್ಕುಗಳನ್ನು ಕಾಯ್ದಿರಿಸಲಾಗಿದೆ.',
+    terms: 'ನಿಯಮಗಳು ಮತ್ತು ಷರತ್ತುಗಳು',
+    refundPolicy: 'ಮರುಪಾವತಿ ನೀತಿ',
+    privacy: 'ಗೌಪ್ಯತೆ ಮತ್ತು ಕುಕೀಸ್',
+    cookiePreferences: 'ಕುಕೀ ಆದ್ಯತೆಗಳು',
+  },
+  languageSwitcher: {
+    label: 'ಭಾಷೆ',
+  },
+  forms: {
+    name: 'ಹೆಸರು',
+    email: 'ಇಮೇಲ್',
+    phoneOptional: 'ಫೋನ್ (ಐಚ್ಛಿಕ)',
+    namePlaceholder: 'ನಿಮ್ಮ ಹೆಸರು',
+    message: 'ಸಂದೇಶ',
+    sendInquiry: 'ವಿಚಾರಣೆ ಕಳುಹಿಸಿ',
+    sendEnquiry: 'ವಿಚಾರಣೆ ಕಳುಹಿಸಿ',
+    chooseOne: 'ಒಂದನ್ನು ಆಯ್ಕೆಮಾಡಿ',
+    honeypotLabel: 'ಇದನ್ನು ಭರ್ತಿ ಮಾಡಬೇಡಿ:',
+    preferChat: 'ಚಾಟ್ ಮಾಡಲು ಬಯಸುವಿರಾ? ನಮ್ಮ ಭೇಟಿ-ಬುಕಿಂಗ್ ಲೈನ್‌ಗೆ ನೇರವಾಗಿ ಸಂದೇಶ ಕಳುಹಿಸಿ:',
+    messageOnWhatsapp: 'WhatsApp ನಲ್ಲಿ ನಮಗೆ ಸಂದೇಶ ಕಳುಹಿಸಿ',
+  },
+  translationNotice: {
+    text: 'ಈ ಪುಟವು ಕರಡು AI ಅನುವಾದವಾಗಿದ್ದು, ಸ್ಥಳೀಯ ಭಾಷಿಕರ ಪರಿಶೀಲನೆಗೆ ಬಾಕಿ ಇದೆ. ಕೆಲವು ಪದಪ್ರಯೋಗಗಳು ಅಪೂರ್ಣವಾಗಿರಬಹುದು.',
+  },
+  jsonLd: {
+    orgDescription:
+      'ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್ — ಕನಕಪುರದ ಬಳಿಯ ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ {acres} ಎಕರೆ ಭೂಮಿಯನ್ನು 2017ರಿಂದ 53 ಕುಟುಂಬಗಳು ಪರ್ಮಾಕಲ್ಚರ್ ಮತ್ತು ಮರುಅರಣ್ಯೀಕರಣದ ಮೂಲಕ ಪುನರುಜ್ಜೀವನಗೊಳಿಸುತ್ತಿವೆ.',
+  },
+  cookie: {
+    text: 'ಈ ಸೈಟ್ ಅನ್ನು ಸಂದರ್ಶಕರು ಹೇಗೆ ಬಳಸುತ್ತಾರೆ ಎಂಬುದನ್ನು ಅರ್ಥಮಾಡಿಕೊಳ್ಳಲು ನಾವು Google Analytics ಬಳಸಲು ಬಯಸುತ್ತೇವೆ. ನೀವು ಒಪ್ಪಿಗೆ ನೀಡುವವರೆಗೆ ನಾವು ಅನಾಲಿಟಿಕ್ಸ್ ಕುಕೀಗಳನ್ನು ಹೊಂದಿಸುವುದಿಲ್ಲ — ಇದರ ಅರ್ಥವೇನೆಂದು ತಿಳಿಯಲು ನಮ್ಮ <a href="/privacy">ಗೌಪ್ಯತೆ ಮತ್ತು ಕುಕೀಸ್</a> ಪುಟವನ್ನು ನೋಡಿ.',
+    reject: 'ತಿರಸ್ಕರಿಸಿ',
+    accept: 'ಒಪ್ಪಿಗೆ',
+  },
+  weather: {
+    humidityFormat: '{pct}% ಆರ್ದ್ರತೆ',
+    asOf: '{time} ರಂತೆ',
+    headerAriaLabel: 'TVC ಯಲ್ಲಿ ಪ್ರಸ್ತುತ ತಾಪಮಾನ — ಹವಾಮಾನ ಪುಟ ನೋಡಿ',
+  },
+  search: {
+    trigger: 'ಸೈಟ್ ಹುಡುಕಿ',
+    placeholder: 'tvc.farm ಹುಡುಕಿ…',
+    close: 'ಹುಡುಕಾಟ ಮುಚ್ಚಿ',
+    unavailable: 'ಹುಡುಕಾಟ ಸದ್ಯಕ್ಕೆ ಲಭ್ಯವಿಲ್ಲ.',
+    noResults: 'ಯಾವುದೇ ಫಲಿತಾಂಶಗಳಿಲ್ಲ.',
+    loading: 'ಲೋಡ್ ಆಗುತ್ತಿದೆ…',
+  },
+  chat: {
+    openAria: 'ಚಾಟ್ ತೆರೆಯಿರಿ',
+    title: 'TVC ಸಹಾಯಕ',
+    subtitle: 'ಈ ವೆಬ್‌ಸೈಟ್‌ನಿಂದ ಉತ್ತರಗಳು',
+    closeAria: 'ಚಾಟ್ ಮುಚ್ಚಿ',
+    dialogAria: 'TVC ವೆಬ್‌ಸೈಟ್ ಸಹಾಯಕ',
+    placeholder: 'TVC ಬಗ್ಗೆ ಕೇಳಿ…',
+    sendAria: 'ಕಳುಹಿಸಿ',
+    welcome: 'ನಮಸ್ಕಾರ! ನಾನು TVC ವೆಬ್‌ಸೈಟ್ ಸಹಾಯಕ — TVC ಬಗ್ಗೆ ಏನು ಬೇಕಾದರೂ ಕೇಳಿ, ಈ ಸೈಟ್‌ನಲ್ಲಿರುವ ಮಾಹಿತಿಯನ್ನು ಬಳಸಿ ನಾನು ಉತ್ತರಿಸುತ್ತೇನೆ.',
+    suggestion1: 'ನಾನು ಹೇಗೆ ಭೇಟಿ ನೀಡಬಹುದು?',
+    suggestion2: 'ಮುಂದಿನ ಕಾರ್ಯಕ್ರಮ ಯಾವುದು?',
+    suggestion3: 'ಸದಸ್ಯತ್ವ ಹೇಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ?',
+    genericError: 'ಏನೋ ತಪ್ಪಾಗಿದೆ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
+    networkError: 'ಸರ್ವರ್ ಅನ್ನು ತಲುಪಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ನಿಮ್ಮ ಸಂಪರ್ಕವನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
+  },
+  principles: {
+    environmentalHealth: { name: 'ಪರಿಸರ ಆರೋಗ್ಯ', desc: 'ಮಣ್ಣು, ನೀರು, ಗಾಳಿ ಮತ್ತು ಜೀವವೈವಿಧ್ಯವನ್ನು ರಕ್ಷಿಸುವುದು.' },
+    economicProfitability: { name: 'ಆರ್ಥಿಕ ಲಾಭದಾಯಕತೆ', desc: 'ಫಾರ್ಮ್ ದೀರ್ಘಕಾಲ ಬಾಳಿಕೆ ಬರುವಂತೆ ಖಚಿತಪಡಿಸುವುದು.' },
+    socialEquity: { name: 'ಸಾಮಾಜಿಕ ಸಮಾನತೆ', desc: 'ಫಾರ್ಮ್ ಕಾರ್ಮಿಕರು ಮತ್ತು ಸಮುದಾಯಗಳಿಗೆ ನ್ಯಾಯಯುತ ನಡವಳಿಕೆ.' },
+    resourceEfficiency: { name: 'ಸಂಪನ್ಮೂಲ ದಕ್ಷತೆ', desc: 'ನವೀಕರಿಸಲಾಗದ ಸಂಪನ್ಮೂಲಗಳ ಬಳಕೆ ಮತ್ತು ತ್ಯಾಜ್ಯವನ್ನು ಕಡಿಮೆ ಮಾಡುವುದು.' },
+  },
+} as const;

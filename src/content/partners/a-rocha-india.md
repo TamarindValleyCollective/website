@@ -1,6 +1,10 @@
 ---
 title: "A Rocha India"
 excerpt: "Conservation partner helping us manage our relationship with the elephants that visit from the adjoining corridor."
+title_kn: "ಎ ರೋಚಾ ಇಂಡಿಯಾ"
+excerpt_kn: "ಪಕ್ಕದ ಕಾರಿಡಾರ್‌ನಿಂದ ಭೇಟಿ ನೀಡುವ ಆನೆಗಳೊಂದಿಗಿನ ನಮ್ಮ ಸಂಬಂಧವನ್ನು ನಿರ್ವಹಿಸಲು ಸಹಾಯ ಮಾಡುವ ಸಂರಕ್ಷಣಾ ಪಾಲುದಾರ."
+title_ta: "ஏ ரோச்சா இந்தியா"
+excerpt_ta: "அருகிலுள்ள தாழ்வாரத்தில் இருந்து வரும் யானைகளுடனான எங்கள் உறவை நிர்வகிக்க உதவும் பாதுகாப்பு கூட்டாளர்."
 coverImage: "/images/partners/arocha.svg"
 url: "https://www.arocha.in/"
 ---

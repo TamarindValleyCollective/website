@@ -1,0 +1,13 @@
+---
+import CommunityOutreachDetailView from '../../../../components/views/CommunityOutreachDetailView.astro';
+import { getCollection } from 'astro:content';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('communityOutreach', (entry) => entry.id.startsWith('ta/'));
+  return posts.map((post) => ({ params: { slug: post.id.replace(/^ta\//, '') }, props: { post } }));
+}
+
+const { post } = Astro.props;
+---
+
+<CommunityOutreachDetailView lang="ta" post={post} />
