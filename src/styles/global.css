@@ -38,12 +38,19 @@
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* Design tokens sampled directly from TVC-Logo-2.png / FULL-Logo-Master-PNG.png */
+/* Design tokens sampled directly from TVC-Logo-2.png / FULL-Logo-Master-PNG.png.
+   --tvc-green/--tvc-orange are deliberately muted (desaturated from the raw
+   logo swatches) so the everyday accent pairing - links, eyebrows, hover
+   states, badges - reads calm and editorial rather than a saturated brand
+   palette. --tvc-orange-cta keeps the original vivid logo orange in reserve,
+   used only by .button, so real calls-to-action still pop against the
+   muted backdrop instead of blending into every other orange accent. */
 :root {
-  --tvc-green: #17723b;
-  --tvc-green-dark: #0f5029;
+  --tvc-green: #3d6e52;
+  --tvc-green-dark: #294a36;
   --tvc-green-tint: #e8f2ea;
-  --tvc-orange: #f78520;
+  --tvc-orange: #bd7248;
+  --tvc-orange-cta: #f78520;
   --tvc-orange-tint: #fdead3;
   --tvc-cream: #faf7ee;
   --tvc-ink: #22291f;
@@ -112,7 +119,10 @@ h2 {
 }
 
 h3 {
-  font-size: 1.3rem;
+  /* Floor matches the old fixed 1.3rem (no shrink on mobile); ceiling
+     bridges fluidly toward h2's floor instead of stopping short, so the
+     heading scale reads as one considered system top to bottom. */
+  font-size: clamp(1.3rem, 2.2vw, 1.6rem);
 }
 
 p {
@@ -185,16 +195,17 @@ img {
 .button {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  background: var(--tvc-orange);
+  gap: 10px;
+  background: var(--tvc-orange-cta);
   color: #fff;
   font-weight: 600;
-  padding: 12px 22px;
+  padding: 16px 30px;
   border-radius: 999px;
   text-decoration: none;
   border: none;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
 }
 
 .button:hover {
