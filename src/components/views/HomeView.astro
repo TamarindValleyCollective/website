@@ -184,7 +184,17 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
 
 <BaseLayout lang={lang} title={t('common.home')} description={c.metaDescription}>
   <div class="hero-bg" id="hero-bg">
-    <img class="hero-bg__image" id="hero-image" src="/images/pages/home/hero.jpg" alt="Panoramic view of the Tamarind Valley Collective's hills" />
+    <video
+      class="hero-bg__image"
+      id="hero-image"
+      src="/videos/home-hero.mp4"
+      poster="/images/pages/home/hero.jpg"
+      muted
+      loop
+      playsinline
+      preload="auto"
+      aria-label="Aerial view of the Tamarind Valley Collective's hills"
+    ></video>
     <div class="hero-bg__scrim" id="hero-scrim"></div>
   </div>
 
@@ -815,6 +825,14 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const imageEl = document.getElementById('hero-image');
   const scrimEl = document.getElementById('hero-scrim');
+
+  // No `autoplay` attribute in the markup on purpose -- reduced-motion
+  // visitors should just see the poster frame, never the moving video, so
+  // playback is only ever started here, gated on the same check the
+  // scroll-fade below is gated on.
+  if (imageEl instanceof HTMLVideoElement && !reduceMotion) {
+    imageEl.play().catch(() => {});
+  }
 
   // Smoothstep ease -- a linear opacity ramp reads as mechanical; this
   // makes the same scroll distance feel like a deliberate, settling fade.
