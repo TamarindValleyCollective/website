@@ -8,10 +8,6 @@ tags: ["workshop"]
 
 One of the primary dreams for any new farm owner is to plant and grow trees. We envision having a large canopy of trees providing not just visual appeal but also produce clean air to breath. If you are new to setting up a farm then you will have lots of questions. What trees to grow? How to grow them? Should I buy from nurseries or just grow them from seeds?  This one day workshop will take you through our journey, answer questions around how you could grow ecologically pioneer species saplings at your farm.
 
-![Seed bed preperation](https://tvc.farm/media/posts/29/saplings.jpeg)
-
-Nursery - Saplings bed preparation in progress
-
 **Following will be the schedule for the program**
 
 8:30-9:00 Arrival- Welcome, familiarize yourself with the place  

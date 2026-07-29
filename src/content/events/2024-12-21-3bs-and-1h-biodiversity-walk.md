@@ -11,20 +11,6 @@ tags: ["biodiversity", "walk"]
 
 Spend Saturday evening and Sunday at [Tamarind Valley Collective](/visit/how-to-reach). Explore the vast property. Enjoy guided tours with our naturalists to watch and identify birds, butterflies, insects, and plants.
 
-[![](https://tvc.farm/media/posts/42/gallery/296554433_10159296905638878_232680902793058517_n-thumbnail.jpg)](https://tvc.farm/media/posts/42/gallery/296554433_10159296905638878_232680902793058517_n.jpg)
-
-[![](https://tvc.farm/media/posts/42/gallery/296647943_10159296906038878_8178158234448754447_n-thumbnail.jpg)](https://tvc.farm/media/posts/42/gallery/296647943_10159296906038878_8178158234448754447_n.jpg)
-
-[![](https://tvc.farm/media/posts/42/gallery/296718150_10159296906373878_5815864716700108100_n-thumbnail.jpg)](https://tvc.farm/media/posts/42/gallery/296718150_10159296906373878_5815864716700108100_n.jpg)
-
-[![](https://tvc.farm/media/posts/42/gallery/296730157_10159296906948878_5966575643903767028_n-thumbnail.jpg)](https://tvc.farm/media/posts/42/gallery/296730157_10159296906948878_5966575643903767028_n.jpg)
-
-[![](https://tvc.farm/media/posts/42/gallery/296754503_10159296908308878_3148520501887430235_n-thumbnail.jpg)](https://tvc.farm/media/posts/42/gallery/296754503_10159296908308878_3148520501887430235_n.jpg)
-
-[![](https://tvc.farm/media/posts/42/gallery/296805376_10159296906323878_3356157412172491360_n-thumbnail.jpg)](https://tvc.farm/media/posts/42/gallery/296805376_10159296906323878_3356157412172491360_n.jpg)
-
-_Pics courtesy - Deepa Mohan ([here](https://www.facebook.com/photo/?fbid=10159296905893878&set=pcb.10159296914398878))_
-
 #### **Number of Attendees**
 
 Limited to 20 participants.
