@@ -60,12 +60,30 @@ the loop for either domain — it's registrar-only for both.
   ```
 - Cloudflare terminates the connection and proxies to Netlify, which serves the actual Astro
   site (visible via the `server: cloudflare` header alongside Netlify's own `x-nf-request-id`).
+  Both `tvc.farm` and `www.tvc.farm` are CNAMEd to `tvc.netlify.app` — but that specific
+  `*.netlify.app` hostname doesn't serve the site on its own (it 307s to Netlify's generic
+  "select-mode" page); the actual Netlify project's slug is `tvc-farm`
+  (`tvc-farm.netlify.app`, 200 OK). This isn't broken: Netlify's edge routes custom domains by
+  the request's `Host` header, not by which specific `*.netlify.app` alias reached it, so the
+  mismatch is a harmless leftover — most likely `tvc.netlify.app` was the project's original
+  default subdomain before a later rename to `tvc-farm`.
 - `media.tvc.farm` resolves to the same Cloudflare anycast IPs as the apex — it's a custom
   domain connected directly to the `tvc-photos` R2 bucket, proxied through Cloudflare's edge,
   but not routed through Netlify at all.
+- `docs.tvc.farm` → CNAME → `tvc-docs.pages.dev` (proxied) — a separate site entirely,
+  **Cloudflare Pages** running **Quartz** (confirmed via `<meta name="generator" content="Quartz"/>`
+  in the page source), most likely publishing an Obsidian vault. Not part of the Netlify hosting
+  path at all — no `x-nf-request-id` header on responses from this subdomain.
 - **Mail**: live MX records (`dig MX tvc.farm`) point to Google Workspace
   (`aspmx.l.google.com` and its alternates), set directly in Cloudflare's DNS zone — not the
   Mailgun-based "Email Forwarding" preset sitting inert in Squarespace's DNS panel (see above).
+  DKIM is configured (a `google._domainkey.tvc.farm` TXT record); Cloudflare's own DNS page
+  flags that **SPF and DMARC records are both missing** — worth adding, since DKIM alone doesn't
+  stop someone else from sending spoofed mail that claims to be from `@tvc.farm`. Other TXT
+  records on the apex handle Google/Bing/Apple domain-verification, unrelated to mail.
+- A handful of other `tvc.farm` subdomains exist for internal tooling, routed through a
+  Cloudflare Tunnel rather than exposed directly — intentionally not detailed here since this
+  repo is public; see the separate (non-repo) internal-infrastructure note for those.
 
 ## `syntropic.in`
 
