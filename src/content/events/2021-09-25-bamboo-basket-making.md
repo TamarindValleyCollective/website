@@ -32,7 +32,7 @@ The following will be the agenda for the day
 
 05:00 - Onward Wrap up and leave
 
-The cost is an all inclusive cost. Please carry a sharp knife with you. Also carry your water bottle, a cap, sun-glasses and sun-screen. The hands-on session can be quite laborious and if you are not able to do it yourself, you can choose to watch and learn ![????](https://static.xx.fbcdn.net/images/emoji.php/v9/ta5/1.5/16/1f642.png)
+The cost is an all inclusive cost. Please carry a sharp knife with you. Also carry your water bottle, a cap, sun-glasses and sun-screen. The hands-on session can be quite laborious and if you are not able to do it yourself, you can choose to watch and learn 🙂
 
 **What to expect?**
 

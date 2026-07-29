@@ -45,7 +45,7 @@ Children below 10: Free
 
 For reservations & any clarifications
 
-**reach out to : stay@linger.in or +91-85489 65772**
+**reach out to : stay@linger.in or +91-85480 65772**
 
 #### **Itinerary**
 

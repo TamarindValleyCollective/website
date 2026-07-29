@@ -30,7 +30,7 @@ Having worked for wildlife conservation, he has walked pristine and virgin fores
 
 **Cost : INT 1,650 / Person**
 
-The cost is an all inclusive cost. Please carry your water bottle, a cap, sun-glasses and sun-screen. The hands-on session can be quite laborious and if you are not able to do it yourself, you can choose to watch and learn ![🙂](https://static.xx.fbcdn.net/images/emoji.php/v9/t4c/1/16/1f642.png)
+The cost is an all inclusive cost. Please carry your water bottle, a cap, sun-glasses and sun-screen. The hands-on session can be quite laborious and if you are not able to do it yourself, you can choose to watch and learn 🙂
 
 ### What to expect?
 
