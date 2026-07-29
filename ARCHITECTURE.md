@@ -344,7 +344,9 @@ account on 2026-07-18).
 `tvc.farm`'s DNS resolves through Cloudflare, which proxies requests to Netlify (visible via
 the `server: cloudflare` header alongside Netlify's own `x-nf-request-id`). This is a DNS/CDN
 layer only, not an application host — Netlify remains the origin serving the actual site and
-function.
+function. `syntropic.in` (see below) does **not** go through Cloudflare at all — its DNS is
+hosted directly on Netlify DNS instead. See `DOMAINS.md` for the full registrar/DNS breakdown
+of both domains.
 
 ### Cloudflare R2 (curated photo storage)
 
