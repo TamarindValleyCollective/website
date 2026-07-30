@@ -53,10 +53,23 @@ async function main() {
   const files = await findHtmlFiles(distDir);
   const pages = [];
 
+  // Kannada/Tamil pages (see src/i18n) live under /kn/ and /ta/ and hold the
+  // same content as their English original, just translated - the chat
+  // system prompt already tells the model to answer in whatever language the
+  // visitor wants regardless of the corpus's own language, so indexing all
+  // three locale copies would only triple the corpus (and the per-request
+  // token bill) for zero extra grounding. Only the default-locale (English,
+  // unprefixed) pages are needed here.
+  const NON_DEFAULT_LOCALE_PREFIXES = ['/kn', '/ta'];
+  const isNonDefaultLocalePage = (urlPath) =>
+    NON_DEFAULT_LOCALE_PREFIXES.some((prefix) => urlPath === prefix || urlPath.startsWith(`${prefix}/`));
+
   for (const file of files) {
     const html = await readFile(file, 'utf-8');
     const urlPath = '/' + path.relative(distDir, file).replace(/index\.html$/, '').replace(/\\/g, '/');
-    const page = extractPage(html, urlPath === '/' ? '/' : `/${urlPath.replace(/^\/|\/$/g, '')}`);
+    const normalizedPath = urlPath === '/' ? '/' : `/${urlPath.replace(/^\/|\/$/g, '')}`;
+    if (isNonDefaultLocalePage(normalizedPath)) continue;
+    const page = extractPage(html, normalizedPath);
     if (page.text) pages.push(page);
   }
 

@@ -19,21 +19,14 @@ interface ChatMessage {
 
 const LANGUAGE_NAMES: Record<string, string> = { en: 'English', kn: 'Kannada', ta: 'Tamil' };
 
-// The site itself is in the middle of being translated into Kannada/Tamil
-// (see src/i18n/) - the underlying corpus below stays English-only (it's
-// generated from the site's English content, see the comment above), but
-// the model is perfectly capable of answering in another language while
-// grounding itself in that same English source, so there's no need to wait
-// for the corpus itself to be translated.
-function buildSystemPrompt(lang: string): string {
-  const corpus = siteContent.pages
-    .map((p: { url: string; title: string; text: string }) => `## ${p.title} (${p.url})\n${p.text}`)
-    .join('\n\n');
-  const languageName = LANGUAGE_NAMES[lang] ?? 'English';
-
-  return `You are the assistant embedded on the Tamarind Valley Collective (TVC) website (tvc.farm), a 100-acre permaculture farm community near Kanakapura, India.
-
-Respond in ${languageName}, regardless of the language the WEBSITE CONTENT below happens to be written in.
+// The corpus (site-content.json, ~30-40k tokens) is identical on every
+// request regardless of the visitor's language - only the trailing
+// "respond in X" instruction below varies. Splitting it into its own cached
+// block (rather than one long string) means repeat requests within the
+// cache window reuse it at a fraction of the input-token cost instead of
+// re-billing the whole corpus every single message. See MODEL/ANTHROPIC_API
+// call below for where cache_control actually gets attached.
+const STATIC_SYSTEM_PROMPT = `You are the assistant embedded on the Tamarind Valley Collective (TVC) website (tvc.farm), a 100-acre permaculture farm community near Kanakapura, India.
 
 Answer ONLY using the WEBSITE CONTENT provided below. Do not use any outside knowledge, and do not guess or make up details that aren't in this content.
 
@@ -42,8 +35,20 @@ If a question can't be answered from this content, say plainly that you don't ha
 Keep answers concise and conversational. When helpful, mention which page the information came from.
 
 --- WEBSITE CONTENT START ---
-${corpus}
+${siteContent.pages
+  .map((p: { url: string; title: string; text: string }) => `## ${p.title} (${p.url})\n${p.text}`)
+  .join('\n\n')}
 --- WEBSITE CONTENT END ---`;
+
+// The site itself is in the middle of being translated into Kannada/Tamil
+// (see src/i18n/) - the corpus above stays English-only (it's generated
+// from the site's English content, see the comment at the top of this
+// file), but the model is perfectly capable of answering in another
+// language while grounding itself in that same English source, so there's
+// no need to wait for the corpus itself to be translated.
+function buildLanguageInstruction(lang: string): string {
+  const languageName = LANGUAGE_NAMES[lang] ?? 'English';
+  return `Respond in ${languageName}, regardless of the language the WEBSITE CONTENT above happens to be written in.`;
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -93,7 +98,10 @@ export default async (req: Request): Promise<Response> => {
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 1024,
-        system: buildSystemPrompt(payload.lang ?? 'en'),
+        system: [
+          { type: 'text', text: STATIC_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+          { type: 'text', text: buildLanguageInstruction(payload.lang ?? 'en') },
+        ],
         messages,
       }),
     });
