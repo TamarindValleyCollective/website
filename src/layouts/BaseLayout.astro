@@ -161,6 +161,15 @@ const siteGraph = {
     </script>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Mobile browsers use this for native UI chrome color, including (on
+         some engines) the sliver revealed when position:fixed/sticky
+         elements briefly disagree with the visual viewport during
+         pinch-zoom - a real, video-confirmed bug on the kn/ta homepage
+         (see CHANGELOG/2026-07.md). Unlike giving html/body a
+         background-color, this doesn't touch the page's own stacking
+         contexts, so it can't repeat that fix's site-wide hero-image
+         regression - it's a separate, browser-chrome-level setting. -->
+    <meta name="theme-color" content="#faf7ee" />
     <meta name="description" content={pageDescription} />
     <link rel="canonical" href={canonicalURL} />
     {alternateLinks.map((alt) => (
