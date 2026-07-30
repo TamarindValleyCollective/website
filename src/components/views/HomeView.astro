@@ -831,7 +831,20 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
   // playback is only ever started here, gated on the same check the
   // scroll-fade below is gated on.
   if (imageEl instanceof HTMLVideoElement && !reduceMotion) {
-    imageEl.play().catch(() => {});
+    const video = imageEl;
+    video.play().catch(() => {
+      // Safari can reject this even for a muted, playsinline video -- iOS
+      // Low Power Mode disables all video autoplay outright, and Safari's
+      // own per-site "Auto-Play" setting can too. Neither blocks playback
+      // started from a user gesture, so retry on the visitor's first
+      // interaction instead of leaving the poster frame up for good.
+      const retry = () => {
+        video.play().catch(() => {});
+        events.forEach((e) => window.removeEventListener(e, retry));
+      };
+      const events = ['touchstart', 'scroll', 'click'];
+      events.forEach((e) => window.addEventListener(e, retry, { once: true, passive: true }));
+    });
   }
 
   // Smoothstep ease -- a linear opacity ramp reads as mechanical; this
