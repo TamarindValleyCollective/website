@@ -91,6 +91,15 @@ const { eyebrow, title, intro, image, imageAlt = '' } = Astro.props;
        fill the flex container first, so the max-width/auto-margin centering
        behaves exactly like normal block-flow .wrapper usage everywhere else. */
     width: 100%;
+    /* .hero--image is display:flex, and flex items default to
+       min-width:auto - a floor at their content's intrinsic min-content
+       width that doesn't respect a heading's own overflow-wrap:break-word.
+       Without this, a long unbroken word forces this box (and so the page)
+       wider than the viewport instead of wrapping - confirmed on
+       HomeView.astro's own hero (same pattern) with both a Kannada compound
+       word and an English word of equal width. Same fix as .nav__left /
+       .whats-next__text elsewhere in the codebase. */
+    min-width: 0;
     position: relative;
     padding-top: 60px;
     padding-bottom: 48px;

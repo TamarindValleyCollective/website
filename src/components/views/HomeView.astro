@@ -370,6 +370,16 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
     text-align: center;
     max-width: 720px;
     margin: 0 auto;
+    /* .hero is display:flex, and flex items default to min-width:auto - a
+       floor at their content's intrinsic min-content width that h1's own
+       overflow-wrap:break-word doesn't override for flex sizing purposes.
+       Without this, a long unbroken word (any language - confirmed with
+       both the Kannada hero heading and an English pseudo-word of the same
+       pixel width) forces this box wider than the viewport instead of
+       wrapping, causing a horizontal scroll invisible at 100% zoom but
+       exposed once a mobile browser's pinch-zoom reveals the true document
+       width. Same fix already used for .nav__left and .whats-next__text. */
+    min-width: 0;
   }
 
   .hero h1 {
