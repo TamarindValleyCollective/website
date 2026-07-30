@@ -12,6 +12,13 @@ online-checkout status, and what the connected Razorpay MCP server can do on req
 it in the same change** whenever that changes — a new payment link, real checkout added to the
 site, new API/webhook usage, etc.
 
+## Buffer documentation
+
+`BUFFER.md` documents what we actually do with Buffer — connected organization/channels, posts
+published or queued, and what the connected Buffer MCP server can do on request. **Update it in
+the same change** whenever that changes — a new connected channel, a new campaign posted, new
+API usage, etc.
+
 ## Change log
 
 `CHANGELOG.md` is a short index; the actual entries live one file per month under
