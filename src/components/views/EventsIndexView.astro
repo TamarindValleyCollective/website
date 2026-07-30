@@ -139,7 +139,7 @@ const c = content[lang];
                 <span class="countdown__num">{countdownLabel(daysAway, lang)}</span>
               </div>
               <div class:list={['upcoming-card__media', { 'upcoming-card__media--empty': !e.data.coverImage }]}>
-                {e.data.coverImage && <img src={e.data.coverImage} alt={e.data.title} loading="lazy" />}
+                {e.data.coverImage && <img src={e.data.coverImage} alt={e.data.coverImageAlt ?? e.data.title} loading="lazy" />}
               </div>
               <div>
                 <p class="date">{formatDateRange(e.data.date, e.data.endDate, lang)}</p>
@@ -190,7 +190,7 @@ const c = content[lang];
       <div class="grid" id="grid-past">
         {past.map((e) => (
           <a class="card" href={eventHref(e.id)} data-tags={tagsAttr(e)}>
-            {e.data.coverImage && <img src={e.data.coverImage} alt={e.data.title} loading="lazy" />}
+            {e.data.coverImage && <img src={e.data.coverImage} alt={e.data.coverImageAlt ?? e.data.title} loading="lazy" />}
             <p class="date">{formatDateRange(e.data.date, e.data.endDate, lang)}</p>
             <h3>{e.data.title}</h3>
             <p class="excerpt">{e.data.excerpt}</p>

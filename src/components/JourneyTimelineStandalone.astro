@@ -360,7 +360,7 @@ function tm(month: string): string {
               <div class="jt-card" role="button" tabindex="0" aria-label={`${c.viewPhotoPrefix} ${tm(card.month)} ${y.year}`}>
                 <img
                   src={card.img}
-                  alt={`${tm(card.month)} ${y.year} photo`}
+                  alt={card.text}
                   loading="lazy"
                   style={card.fit === 'contain' ? 'object-fit:contain;background:var(--jt-surface);' : ''}
                 />

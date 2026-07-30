@@ -832,7 +832,7 @@ const uiStringsJsonSafe = JSON.stringify(c).replace(/<\/script/gi, '<\\/script')
         .map(
           (p) => `
         <button type="button" class="map-sidebar-item" data-slug="${p.slug}">
-          <img src="${p.thumbSrc}" alt="" />
+          <img src="${p.thumbSrc}" alt="${p.caption}" />
           <span class="meta"><strong>${formatDate(p.takenAt)}</strong>${p.caption}</span>
         </button>`
         )

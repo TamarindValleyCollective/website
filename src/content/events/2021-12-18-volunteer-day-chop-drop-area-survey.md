@@ -3,6 +3,7 @@ title: "Volunteer Day@TVC: Chop & Drop; Area Survey"
 date: 2021-12-18
 excerpt: "Hands-on chop and drop mulching around the food forest, plus an area-wide survey of plant life, co-hosted with Beforest."
 coverImage: "/images/events/2021-12-18-volunteer-day-chop-drop-area-survey/hero.jpg"
+coverImageAlt: "Volunteers surveying and clearing a dry hillside plot at TVC."
 organizer: "Beforest"
 tags: ["volunteering"]
 ---

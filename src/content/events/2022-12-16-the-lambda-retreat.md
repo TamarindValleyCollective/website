@@ -4,6 +4,7 @@ date: 2022-12-11
 endDate: 2022-12-16
 excerpt: "A week long exploration into the nature of computation, abstractions, programming paradigms and programming languages. “My aim is to show that the heavenly machine is not a kind of divine, live being, but a kind of clockwork...' — Johannes Kepler (letter to Herwart von Hohenburg,"
 coverImage: "/images/events/2022-12-16-the-lambda-retreat/hero.png"
+coverImageAlt: "Hand-drawn Eval/Apply diagram — the classic SICP illustration of Lisp's evaluation cycle — on The Lambda Retreat's event graphic."
 tags: ["retreat"]
 ---
 

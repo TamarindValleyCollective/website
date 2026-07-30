@@ -12,10 +12,10 @@ export interface MapPhoto {
   gps: { lat: number; lng: number };
 }
 
-function thumbIcon(url: string) {
+function thumbIcon(url: string, alt: string) {
   return L.divIcon({
     className: 'photo-marker',
-    html: `<span class="photo-marker__thumb"><img src="${url}" alt="" loading="lazy" /></span>`,
+    html: `<span class="photo-marker__thumb"><img src="${url}" alt="${alt}" loading="lazy" /></span>`,
     iconSize: [36, 36],
     iconAnchor: [18, 36],
     popupAnchor: [0, -32],
@@ -46,10 +46,10 @@ export function initPhotoMap(
 
   for (const photo of photos) {
     const thumb = photo.thumbSrc ?? photo.src;
-    const marker = L.marker([photo.gps.lat, photo.gps.lng], { icon: thumbIcon(thumb) });
+    const marker = L.marker([photo.gps.lat, photo.gps.lng], { icon: thumbIcon(thumb, photo.caption) });
 
     marker.bindPopup(
-      `<div class="photo-popup"><img src="${thumb}" alt="" /><strong>${photo.caption}</strong><br /><a href="#" data-photo-slug="${photo.slug}">${viewPhotoLabel}</a></div>`
+      `<div class="photo-popup"><img src="${thumb}" alt="${photo.caption}" /><strong>${photo.caption}</strong><br /><a href="#" data-photo-slug="${photo.slug}">${viewPhotoLabel}</a></div>`
     );
     marker.on('popupopen', () => {
       const link = document.querySelector(`a[data-photo-slug="${photo.slug}"]`);

@@ -4,6 +4,7 @@ date: 2021-11-27
 endDate: 2021-11-28
 excerpt: "Dates: 27th and 28th November. This is a 1.5 days workshop being conducted in partnership with team Ananas (https://ananas.design/) who helped us with the design of our farm based on permaculture. The workshop will involve understanding the concepts as well as doing on gr"
 coverImage: "/images/events/2021-11-27-introduction-to-regenerative-thinking/hero.jpeg"
+coverImageAlt: "Event poster for Introduction to Regenerative Thinking, with a watercolor illustration of the Melagiri hills."
 tags: ["workshop", "permaculture"]
 ---
 

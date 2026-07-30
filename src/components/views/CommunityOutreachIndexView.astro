@@ -76,7 +76,7 @@ const c = content[lang];
       <div class="grid">
         {posts.map((p) => (
           <a class="card" href={getRelativeLocaleUrl(lang, `/people/community-outreach/${bareSlug(p.id)}`)}>
-            {p.data.coverImage && <img src={p.data.coverImage} alt={p.data.title} loading="lazy" />}
+            {p.data.coverImage && <img src={p.data.coverImage} alt={p.data.coverImageAlt ?? p.data.title} loading="lazy" />}
             <h3>{p.data.title}</h3>
             <p>{p.data.excerpt}</p>
           </a>

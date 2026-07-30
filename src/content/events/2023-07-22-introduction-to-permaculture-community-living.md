@@ -4,6 +4,7 @@ date: 2023-07-22
 endDate: 2023-07-23
 excerpt: "A 1-night/2-day introduction to TVC — why we chose permaculture as a design principle, the land's topology, water management, and community living."
 coverImage: "/images/events/2023-07-22-introduction-to-permaculture-community-living/hero.jpg"
+coverImageAlt: "Event poster for Introduction to Permaculture and Community Living, with a watercolor illustration of the Melagiri hills."
 tags: ["permaculture", "workshop", "camping"]
 ---
 

@@ -4,6 +4,7 @@ date: 2025-10-25
 endDate: 2025-10-26
 excerpt: "A camp night on foraging — walk, gather, cook, and eat what the land offers, with Foraging Trails and Tales."
 coverImage: "/images/events/2025-10-25-forage-and-feast-camp-night/hero.jpg"
+coverImageAlt: "Forage & Feast camp-night poster collage: a misty tree at sunrise, a forest foraging trail, the Malabar Hut cabin, and a wildlife identification chart."
 organizer: "Foraging Trails and Tales"
 tags: ["workshop", "food", "foraging"]
 ---

@@ -4,6 +4,7 @@ date: 2022-12-03
 endDate: 2022-12-04
 excerpt: "Spend Saturday evening and Sunday exploring the property, with guided naturalist tours to watch and identify birds, butterflies, insects, and plants. Limited to 20 participants."
 coverImage: "/images/events/2022-12-03-3bs-and-1h-biodiversity-walk/hero.jpg"
+coverImageAlt: "Event poster for the 3Bs&1H Dusk to Dawn Biodiversity Walk, with a close-up photo of two mating grass blue butterflies."
 tags: ["biodiversity", "walk"]
 ---
 

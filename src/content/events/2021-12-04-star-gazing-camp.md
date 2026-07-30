@@ -4,6 +4,7 @@ date: 2021-12-04
 endDate: 2021-12-05
 excerpt: "A night under a sky unpolluted by city lights, with a high-end astronomy telescope, an astronomer, campfire stories, and a farm walk."
 coverImage: "/images/events/2021-12-04-star-gazing-camp/hero.jpg"
+coverImageAlt: "Stargazing Camp event poster with a silhouette illustration of a family and telescope under a starry night sky."
 tags: ["camping", "stargazing"]
 ---
 

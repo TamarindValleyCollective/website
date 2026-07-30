@@ -3,6 +3,7 @@ title: "How to Grow a Forest"
 date: 2021-02-20
 excerpt: "20 Feb 2021 - How to grow a forest. Forests are self sustaining eco-systems. As part of our plan at TVC, we have left aside roughly 30% of our land to develop it as a wild life corridor. But getting to a self sustaining ecosystem may not be as easy as you think. This one "
 coverImage: "/images/events/2021-02-20-how-to-grow-a-forest/hero.jpeg"
+coverImageAlt: "Aerial view of a bare hillside plot at TVC being reshaped with terraces, hills in the background."
 tags: ["workshop", "permaculture"]
 ---
 

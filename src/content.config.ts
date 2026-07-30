@@ -11,6 +11,10 @@ const events = defineCollection({
     endDate: z.coerce.date().optional(),
     excerpt: z.string(),
     coverImage: z.string().optional(),
+    // Describes what's actually in the photo/poster, for the <img> alt
+    // attribute - falls back to the event title (see EventsIndexView /
+    // EventDetailView) when not set, same as before this field existed.
+    coverImageAlt: z.string().optional(),
     organizer: z.string().optional(),
     tags: z.array(z.string()).default([]),
     // Lets a placeholder/template event file sit in this folder without
@@ -37,6 +41,7 @@ const communityOutreach = defineCollection({
     date: z.coerce.date(),
     excerpt: z.string(),
     coverImage: z.string().optional(),
+    coverImageAlt: z.string().optional(),
   }),
 });
 

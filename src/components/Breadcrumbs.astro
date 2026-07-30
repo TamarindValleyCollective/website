@@ -2,6 +2,7 @@
 import { sectionFor } from '../data/site-map';
 import { useTranslations, stripLocalePrefix, type Locale } from '../i18n/utils';
 import { getRelativeLocaleUrl } from 'astro:i18n';
+import JsonLd from './JsonLd.astro';
 
 interface Props {
   pathname: string;
@@ -29,6 +30,21 @@ const sectionHref = section ? (() => {
   const localized = getRelativeLocaleUrl(lang, bare || '/');
   return hash ? `${localized}#${hash}` : localized;
 })() : '';
+
+// Mirrors the visual trail above 1:1 so the two never drift apart - same
+// three stops (Home / section / current page), just as schema.org
+// BreadcrumbList instead of markup. Last item's `item` URL is included too;
+// Google's guidance treats omitting it on the current page as optional, not
+// required.
+const breadcrumbSchema = section ? {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: t('common.home'), item: new URL(getRelativeLocaleUrl(lang, '/'), Astro.site).toString() },
+    { '@type': 'ListItem', position: 2, name: t(sectionLabelKey), item: new URL(sectionHref, Astro.site).toString() },
+    { '@type': 'ListItem', position: 3, name: pageTitle, item: new URL(pathname, Astro.site).toString() },
+  ],
+} : null;
 ---
 
 {section && (
@@ -42,6 +58,7 @@ const sectionHref = section ? (() => {
     </div>
   </nav>
 )}
+{breadcrumbSchema && <JsonLd items={[breadcrumbSchema]} />}
 
 <style>
   .breadcrumbs {

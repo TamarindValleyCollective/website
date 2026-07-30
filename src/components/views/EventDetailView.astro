@@ -6,7 +6,7 @@ import { render, type CollectionEntry } from 'astro:content';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import { formatDateRange, durationTag } from '../../utils/events';
 import { icsDataUri, googleCalendarUrl } from '../../utils/calendar';
-import { useTranslations, type Locale } from '../../i18n/utils';
+import type { Locale } from '../../i18n/utils';
 
 interface Props {
   lang: Locale;
@@ -14,7 +14,6 @@ interface Props {
 }
 
 const { lang, event } = Astro.props;
-const t = useTranslations(lang);
 const { Content } = await render(event);
 
 // kn/ta translations live as sibling entries with a "kn/"/"ta/" id prefix
@@ -61,16 +60,6 @@ const eventSchema = {
     : { '@type': 'Organization', name: 'Tamarind Valley Collective', url: new URL(getRelativeLocaleUrl(lang, '/'), Astro.site).toString() },
 };
 
-const breadcrumbSchema = {
-  '@context': 'https://schema.org',
-  '@type': 'BreadcrumbList',
-  itemListElement: [
-    { '@type': 'ListItem', position: 1, name: t('common.home'), item: new URL(getRelativeLocaleUrl(lang, '/'), Astro.site).toString() },
-    { '@type': 'ListItem', position: 2, name: t('nav.events'), item: new URL(getRelativeLocaleUrl(lang, '/events'), Astro.site).toString() },
-    { '@type': 'ListItem', position: 3, name: event.data.title },
-  ],
-};
-
 const content = {
   en: {
     organizedBy: (organizer: string) => `Organized by ${organizer}`,
@@ -113,8 +102,8 @@ const content = {
 const c = content[lang];
 ---
 
-<BaseLayout lang={lang} title={event.data.title} description={event.data.excerpt} image={event.data.coverImage} schema={[eventSchema, breadcrumbSchema]}>
-  <PageHero eyebrow={formatDateRange(event.data.date, event.data.endDate, lang)} title={event.data.title} image={event.data.coverImage} imageAlt={event.data.title} />
+<BaseLayout lang={lang} title={event.data.title} description={event.data.excerpt} image={event.data.coverImage} schema={[eventSchema]}>
+  <PageHero eyebrow={formatDateRange(event.data.date, event.data.endDate, lang)} title={event.data.title} image={event.data.coverImage} imageAlt={event.data.coverImageAlt ?? event.data.title} />
   <article class="section wrapper prose">
     <div class="meta">
       {event.data.organizer && <p class="organizer">{c.organizedBy(event.data.organizer)}</p>}
