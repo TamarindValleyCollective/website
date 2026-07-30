@@ -14,6 +14,12 @@ interface Props {
 const { lang = DEFAULT_LOCALE } = Astro.props;
 const t = useTranslations(lang);
 const suggestions = [t('chat.suggestion1'), t('chat.suggestion2'), t('chat.suggestion3')];
+// Astro doesn't evaluate {} expressions inside <script> tag bodies (their
+// contents are treated as raw JS/text to bundle, not as markup) - a bare
+// {JSON.stringify(suggestions)} here would render as that literal source
+// string instead of the JSON it looks like. set:html is required, same as
+// JsonLd.astro; the </script>-breakout escape mirrors that file too.
+const suggestionsJsonSafe = JSON.stringify(suggestions).replace(/<\/script/gi, '<\\/script');
 ---
 
 <div class="cw-root" id="cw-root" data-lang={lang}>
@@ -43,7 +49,7 @@ const suggestions = [t('chat.suggestion1'), t('chat.suggestion2'), t('chat.sugge
     </form>
   </div>
 
-  <script type="application/json" id="cw-suggestions-data">{JSON.stringify(suggestions)}</script>
+  <script type="application/json" id="cw-suggestions-data" set:html={suggestionsJsonSafe} />
 </div>
 
 <script>
