@@ -108,6 +108,13 @@ h4 {
   line-height: 1.15;
   text-wrap: balance;
   margin: 0 0 0.5em;
+  /* Kannada/Tamil compound words have no internal spaces to wrap at (e.g.
+     the homepage kn hero's "ಪುನರುಜ್ಜೀವನಗೊಳಿಸುವುದು" renders ~400px wide at
+     the hero's font-size) - without this, a single such word can be wider
+     than its container and overflow the page horizontally instead of
+     wrapping, invisible at 100% zoom but visible as dead space on the
+     right once zoomed out. English headings never hit this ceiling. */
+  overflow-wrap: break-word;
 }
 
 h1 {
