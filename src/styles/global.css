@@ -88,6 +88,16 @@ html {
      behind the sticky nav. Site-wide since any future #anchor link would
      hit the same issue. */
   scroll-padding-top: 100px;
+  /* Without this, <html> defaults to transparent, which mobile browsers
+     paint as raw black canvas. body already has the cream background
+     below, but position: fixed/sticky elements (Nav.astro, the hero's
+     fixed backdrop) can momentarily disagree about the viewport during
+     pinch-zoom on mobile, exposing a sliver beyond body's own box - seen
+     as a black notch next to the sticky nav specifically on kn/ta pages,
+     where TranslationNotice.astro adds extra height there that English
+     doesn't have. Matching body's color here means any such gap reads as
+     "same as the page" instead of a jarring void. */
+  background: var(--tvc-cream);
 }
 
 body {
