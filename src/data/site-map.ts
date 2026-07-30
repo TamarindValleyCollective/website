@@ -17,7 +17,8 @@ export const EXPLORE_LINKS: SiteLink[] = [
   { label: 'Our Journey', key: 'ourJourney', href: '/our-journey' },
   { label: 'In Pictures', key: 'inPictures', href: '/in-pictures' },
   { label: 'Biodiversity', key: 'biodiversity', href: '/ecosystem' },
-  { label: 'Weather', key: 'weather', href: '/ecosystem/geography' },
+  { label: 'Geography', key: 'landscape', href: '/ecosystem/landscape' },
+  { label: 'Weather', key: 'weather', href: '/ecosystem/weather' },
   { label: 'Resource Centre', key: 'resourceCentre', href: '/resource-centre' },
   { label: 'Events', key: 'events', href: '/events' },
 ];

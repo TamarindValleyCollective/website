@@ -1,0 +1,120 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../PageHero.astro';
+import { type Locale } from '../../i18n/utils';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+
+const content = {
+  en: {
+    metaTitle: 'Geography',
+    metaDescription: "TVC's physical setting in the Melagiri Hills, and its place in a wider wildlife corridor.",
+    heroEyebrow: 'The TVC Ecosystem',
+    heroTitle: 'Geography',
+    heroIntro: "The land's physical setting — where TVC sits, and its place in a wider wildlife corridor.",
+    heroImageAlt: 'Looking out over the valley from the hills above TVC',
+    introText: "TVC sits on a west-facing hillslope near Kanakapura, close to the Tamil Nadu–Karnataka border, with sunset views across the valley. It's part of the Melagiri Hills, the range where the Eastern and Western Ghats meet — a geographic seam that makes the range biodiversity-rich and, for wildlife moving between habitats, a through-route rather than a dead end.",
+    corridorHeading: 'Where this sits in the wider corridor',
+    corridorText: 'TVC sits inside a live elephant corridor connecting Bannerghatta National Park to the Cauvery — one link in a wider chain also tying in MM Hills, BR Hills, Sathyamangalam, and the Nilgiri Biosphere Reserve. More on what that means for the land and its wildlife on',
+    corridorAboutLink: 'About TVC',
+    corridorCaption: 'Marker positions are each protected area’s approximate reference point, shown here for scale and relative position — not a traced boundary.',
+  },
+  kn: {
+    metaTitle: 'ಭೂಗೋಳ',
+    metaDescription: 'TVC ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳಲ್ಲಿ ಎಲ್ಲಿದೆ, ಮತ್ತು ವಿಶಾಲ ವನ್ಯಜೀವಿ ಕಾರಿಡಾರ್‌ನಲ್ಲಿ ಅದರ ಸ್ಥಾನ.',
+    heroEyebrow: 'TVC ಪರಿಸರ ವ್ಯವಸ್ಥೆ',
+    heroTitle: 'ಭೂಗೋಳ',
+    heroIntro: 'ಭೂಮಿಯ ಭೌತಿಕ ಸ್ವರೂಪ — TVC ಎಲ್ಲಿ ನೆಲೆಗೊಂಡಿದೆ, ಮತ್ತು ವಿಶಾಲ ವನ್ಯಜೀವಿ ಕಾರಿಡಾರ್‌ನಲ್ಲಿ ಅದರ ಸ್ಥಾನ.',
+    heroImageAlt: 'TVC ಯ ಮೇಲಿನ ಬೆಟ್ಟಗಳಿಂದ ಕಣಿವೆಯ ನೋಟ',
+    introText: 'TVC ಕನಕಪುರದ ಬಳಿ, ತಮಿಳುನಾಡು–ಕರ್ನಾಟಕ ಗಡಿಗೆ ಸಮೀಪದಲ್ಲಿ, ಕಣಿವೆಯಾದ್ಯಂತ ಸೂರ್ಯಾಸ್ತದ ನೋಟಗಳೊಂದಿಗೆ ಪಶ್ಚಿಮಾಭಿಮುಖ ಗುಡ್ಡದ ಇಳಿಜಾರಿನಲ್ಲಿದೆ. ಇದು ಪೂರ್ವ ಮತ್ತು ಪಶ್ಚಿಮ ಘಟ್ಟಗಳು ಸಂಧಿಸುವ ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ ಶ್ರೇಣಿಯ ಭಾಗ — ಈ ಭೌಗೋಳಿಕ ಸಂಧಿಯು ಶ್ರೇಣಿಯನ್ನು ಜೀವವೈವಿಧ್ಯ-ಸಮೃದ್ಧವಾಗಿಸುತ್ತದೆ ಮತ್ತು ಆವಾಸಸ್ಥಾನಗಳ ನಡುವೆ ಚಲಿಸುವ ವನ್ಯಜೀವಿಗಳಿಗೆ ಇದು ಕೊನೆಗೊಳ್ಳುವ ಸ್ಥಳಕ್ಕಿಂತ ಹಾದುಹೋಗುವ ಮಾರ್ಗವಾಗಿದೆ.',
+    corridorHeading: 'ವಿಶಾಲ ಕಾರಿಡಾರ್‌ನಲ್ಲಿ ಇದು ಎಲ್ಲಿ ಸೇರಿಕೊಳ್ಳುತ್ತದೆ',
+    corridorText: 'TVC ಬನ್ನೇರುಘಟ್ಟ ರಾಷ್ಟ್ರೀಯ ಉದ್ಯಾನವನ್ನು ಕಾವೇರಿಗೆ ಸಂಪರ್ಕಿಸುವ ಜೀವಂತ ಆನೆ ಕಾರಿಡಾರ್‌ನ ಒಳಗಿದೆ — MM ಬೆಟ್ಟಗಳು, BR ಬೆಟ್ಟಗಳು, ಸತ್ಯಮಂಗಲಂ ಮತ್ತು ನೀಲಗಿರಿ ಜೀವಗೋಳ ಮೀಸಲು ಪ್ರದೇಶವನ್ನೂ ಜೋಡಿಸುವ ವಿಶಾಲ ಸರಪಳಿಯ ಒಂದು ಕೊಂಡಿ. ಭೂಮಿ ಮತ್ತು ಅದರ ವನ್ಯಜೀವಿಗಳಿಗೆ ಇದರ ಅರ್ಥವೇನೆಂದು ಹೆಚ್ಚಿನದನ್ನು',
+    corridorAboutLink: 'TVC ಬಗ್ಗೆ',
+    corridorCaption: 'ಗುರುತು ಸ್ಥಾನಗಳು ಪ್ರತಿ ಸಂರಕ್ಷಿತ ಪ್ರದೇಶದ ಅಂದಾಜು ಉಲ್ಲೇಖ ಬಿಂದುಗಳಾಗಿವೆ, ಪ್ರಮಾಣ ಮತ್ತು ಸಾಪೇಕ್ಷ ಸ್ಥಾನಕ್ಕಾಗಿ ಇಲ್ಲಿ ತೋರಿಸಲಾಗಿದೆ — ಇದು ಗುರುತಿಸಲಾದ ಗಡಿಯಲ್ಲ.',
+  },
+  ta: {
+    metaTitle: 'புவியியல்',
+    metaDescription: 'TVC மேலகிரி மலைகளில் எங்கே அமைந்துள்ளது, மற்றும் பரந்த வனவிலங்கு தாழ்வாரத்தில் அதன் இடம்.',
+    heroEyebrow: 'TVC சூழலமைப்பு',
+    heroTitle: 'புவியியல்',
+    heroIntro: 'நிலத்தின் இயற்பியல் அமைப்பு — TVC எங்கே அமைந்துள்ளது, மற்றும் பரந்த வனவிலங்கு தாழ்வாரத்தில் அதன் இடம்.',
+    heroImageAlt: 'TVC-யின் மேலுள்ள மலைகளிலிருந்து பள்ளத்தாக்கின் காட்சி',
+    introText: 'TVC கனகபுரா அருகே, தமிழ்நாடு–கர்நாடக எல்லைக்கு அருகில், பள்ளத்தாக்கு முழுவதும் சூரிய அஸ்தமன காட்சிகளுடன் மேற்கு நோக்கிய மலைச்சரிவில் அமைந்துள்ளது. இது கிழக்கு மற்றும் மேற்கு தொடர்ச்சி மலைகள் சந்திக்கும் மேலகிரி மலைத்தொடரின் ஒரு பகுதி — இந்த புவியியல் சந்திப்பு தொடரை பல்லுயிர் செழிப்பானதாக ஆக்குகிறது, மேலும் வாழ்விடங்களுக்கு இடையே நகரும் வனவிலங்குகளுக்கு இது ஒரு முடிவிடமாக இல்லாமல் ஒரு கடந்து செல்லும் பாதையாக உள்ளது.',
+    corridorHeading: 'இது பரந்த தாழ்வாரத்தில் எங்கே அமைந்துள்ளது',
+    corridorText: 'TVC பன்னேர்காட்டா தேசிய பூங்காவை காவேரியுடன் இணைக்கும் ஒரு வாழும் யானை தாழ்வாரத்திற்குள் அமைந்துள்ளது — MM மலைகள், BR மலைகள், சத்தியமங்கலம் மற்றும் நீலகிரி உயிர்க்கோள இருப்பையும் இணைக்கும் ஒரு பரந்த சங்கிலியின் ஒரு இணைப்பு. நிலத்திற்கும் அதன் வனவிலங்குகளுக்கும் இதன் பொருள் என்ன என்பது பற்றி மேலும்',
+    corridorAboutLink: 'TVC பற்றி',
+    corridorCaption: 'குறி இடங்கள் ஒவ்வொரு பாதுகாக்கப்பட்ட பகுதியின் தோராயமான குறிப்புப் புள்ளிகள் ஆகும், அளவு மற்றும் சார்பு நிலைக்காக இங்கே காட்டப்பட்டுள்ளன — இது ஒரு வரையப்பட்ட எல்லை அல்ல.',
+  },
+} as const;
+
+const c = content[lang];
+---
+
+<BaseLayout lang={lang} title={c.metaTitle} description={c.metaDescription} image="/images/pages/home/gallery-2.jpg" imageWidth={768} imageHeight={329}>
+  <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} intro={c.heroIntro} image="/images/pages/home/gallery-2.jpg" imageAlt={c.heroImageAlt} />
+
+  <section class="section wrapper">
+    <p>{c.introText}</p>
+
+    <h2>{c.corridorHeading}</h2>
+    <p>{c.corridorText} <a href={getRelativeLocaleUrl(lang, '/about')}>{c.corridorAboutLink}</a>.</p>
+    <div class="corridor-map-wrap">
+      <div id="corridor-map" data-lang={lang}></div>
+    </div>
+    <p class="map-caption">{c.corridorCaption}</p>
+  </section>
+</BaseLayout>
+
+<style>
+  .corridor-map-wrap {
+    margin: 16px 0 6px;
+  }
+
+  #corridor-map {
+    height: 340px;
+    width: 100%;
+    max-width: 720px;
+    border-radius: var(--radius);
+    z-index: 0;
+  }
+
+  .map-caption {
+    font-size: 0.78rem;
+    color: var(--tvc-ink-soft);
+    max-width: 720px;
+    margin: 0 0 20px;
+  }
+
+  :global(.corridor-marker span) {
+    display: block;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    width: 100%;
+    height: 100%;
+  }
+
+  :global(.corridor-marker--tvc span) {
+    background: var(--tvc-orange);
+  }
+
+  :global(.corridor-marker--landmark span) {
+    background: var(--tvc-green);
+  }
+</style>
+
+<script>
+  import 'leaflet/dist/leaflet.css';
+  import { initCorridorMap } from '../corridor-map';
+
+  const mapEl = document.getElementById('corridor-map');
+  if (mapEl) {
+    const lang = (mapEl.dataset.lang || 'en') as 'en' | 'kn' | 'ta';
+    initCorridorMap('corridor-map', lang);
+  }
+</script>

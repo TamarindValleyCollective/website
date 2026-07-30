@@ -37,6 +37,8 @@ export interface CurrentWeather {
   temperature_2m: number;
   relative_humidity_2m: number;
   weather_code: number;
+  elevation: number;
+  sunset: string;
 }
 
 export function iconFor(weatherCode: number): string {
@@ -96,11 +98,15 @@ export async function fetchWeather(): Promise<CurrentWeather> {
     }
   }
 
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LNG}&current=temperature_2m,relative_humidity_2m,weather_code&timezone=Asia%2FKolkata`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LNG}&current=temperature_2m,relative_humidity_2m,weather_code&daily=sunset&timezone=Asia%2FKolkata`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Open-Meteo error ${res.status}`);
   const json = await res.json();
-  const data: CurrentWeather = json.current;
+  // elevation and today's sunset ride along on the same call rather than a
+  // separate request -- Open-Meteo returns the DEM elevation at this point
+  // unprompted, and `daily` here is a single-day array since no forecast
+  // range was requested.
+  const data: CurrentWeather = { ...json.current, elevation: json.elevation, sunset: json.daily.sunset[0] };
 
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({ fetchedAt: Date.now(), data }));

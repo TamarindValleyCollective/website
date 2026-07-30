@@ -3,6 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import { useTranslations, type Locale } from '../../i18n/utils';
+import { NIGHT_SKY_BRIGHTNESS_UCD_M2 } from '../../data/site-facts';
 
 interface Props {
   lang: Locale;
@@ -33,7 +34,7 @@ const content = {
       { name: 'Farm Tour', desc: 'A ~2 hour walk through the kitchen garden, the water works, the food forest, and the trees and birds along the way.' },
       { name: 'Bird Watching', desc: 'Over 100 species have been sighted here — early morning is best for spotting and identifying them.' },
       { name: 'Basket Making', desc: "Our expert basket maker Ramdoss can teach you bamboo craft — this needs advance notice so we can set it up." },
-      { name: 'Star Gazing', desc: 'The valley measures just 31.8 μcd/m² of artificial brightness — on a clear night (most nights here), the stars and galaxies are bright and unmistakable.' },
+      { name: 'Star Gazing', desc: `The valley measures just ${NIGHT_SKY_BRIGHTNESS_UCD_M2} μcd/m² of artificial brightness — on a clear night (most nights here), the stars and galaxies are bright and unmistakable.` },
       { name: 'Chop & Drop', desc: "An integral part of our permaculture system — happy to hand you a machete if you'd like to help." },
       { name: 'Board Games', desc: "A relaxed way to spend time with family and friends when you'd rather save your energy." },
       { name: 'Campfire', desc: 'Weather permitting, we can light a campfire and set up a small vegetarian barbeque.' },
@@ -94,7 +95,7 @@ const content = {
       { name: 'ಫಾರ್ಮ್ ಪ್ರವಾಸ', desc: 'ಅಡುಗೆ ತೋಟ, ಜಲ ಕಾಮಗಾರಿಗಳು, ಆಹಾರ ಅರಣ್ಯ, ಮತ್ತು ದಾರಿಯುದ್ದಕ್ಕೂ ಇರುವ ಮರಗಳು ಮತ್ತು ಪಕ್ಷಿಗಳ ಮೂಲಕ ~2 ಗಂಟೆಗಳ ನಡಿಗೆ.' },
       { name: 'ಪಕ್ಷಿ ವೀಕ್ಷಣೆ', desc: 'ಇಲ್ಲಿ 100ಕ್ಕೂ ಹೆಚ್ಚು ಪ್ರಭೇದಗಳು ಕಂಡುಬಂದಿವೆ — ಅವುಗಳನ್ನು ಗುರುತಿಸಲು ಮತ್ತು ಗುರುತಿಸಲು ಮುಂಜಾನೆ ಉತ್ತಮ.' },
       { name: 'ಬುಟ್ಟಿ ನೇಯ್ಗೆ', desc: 'ನಮ್ಮ ಪರಿಣತ ಬುಟ್ಟಿ ನೇಯ್ಗಾರ ರಾಮ್‌ದಾಸ್ ನಿಮಗೆ ಬಿದಿರಿನ ಕರಕುಶಲತೆಯನ್ನು ಕಲಿಸಬಲ್ಲರು — ಇದನ್ನು ಸಿದ್ಧಪಡಿಸಲು ಮುಂಚಿತವಾಗಿ ಸೂಚನೆ ಬೇಕು.' },
-      { name: 'ನಕ್ಷತ್ರ ವೀಕ್ಷಣೆ', desc: 'ಕಣಿವೆಯಲ್ಲಿ ಕೇವಲ 31.8 μcd/m² ಕೃತಕ ಪ್ರಕಾಶಮಾನತೆ ಇದೆ — ಸ್ಪಷ್ಟ ರಾತ್ರಿಯಲ್ಲಿ (ಇಲ್ಲಿ ಹೆಚ್ಚಿನ ರಾತ್ರಿಗಳಂತೆ), ನಕ್ಷತ್ರಗಳು ಮತ್ತು ಗ್ಯಾಲಕ್ಸಿಗಳು ಪ್ರಕಾಶಮಾನವಾಗಿ ಮತ್ತು ಸ್ಪಷ್ಟವಾಗಿ ಕಾಣುತ್ತವೆ.' },
+      { name: 'ನಕ್ಷತ್ರ ವೀಕ್ಷಣೆ', desc: `ಕಣಿವೆಯಲ್ಲಿ ಕೇವಲ ${NIGHT_SKY_BRIGHTNESS_UCD_M2} μcd/m² ಕೃತಕ ಪ್ರಕಾಶಮಾನತೆ ಇದೆ — ಸ್ಪಷ್ಟ ರಾತ್ರಿಯಲ್ಲಿ (ಇಲ್ಲಿ ಹೆಚ್ಚಿನ ರಾತ್ರಿಗಳಂತೆ), ನಕ್ಷತ್ರಗಳು ಮತ್ತು ಗ್ಯಾಲಕ್ಸಿಗಳು ಪ್ರಕಾಶಮಾನವಾಗಿ ಮತ್ತು ಸ್ಪಷ್ಟವಾಗಿ ಕಾಣುತ್ತವೆ.` },
       { name: 'ಚಾಪ್ & ಡ್ರಾಪ್', desc: 'ನಮ್ಮ ಪರ್ಮಾಕಲ್ಚರ್ ವ್ಯವಸ್ಥೆಯ ಅವಿಭಾಜ್ಯ ಭಾಗ — ನೀವು ಸಹಾಯ ಮಾಡಲು ಬಯಸಿದರೆ ಸಂತೋಷದಿಂದ ಮಚ್ಚು ಕೊಡುತ್ತೇವೆ.' },
       { name: 'ಬೋರ್ಡ್ ಗೇಮ್ಸ್', desc: 'ನಿಮ್ಮ ಶಕ್ತಿಯನ್ನು ಉಳಿಸಲು ಬಯಸಿದಾಗ ಕುಟುಂಬ ಮತ್ತು ಸ್ನೇಹಿತರೊಂದಿಗೆ ಸಮಯ ಕಳೆಯಲು ಒಂದು ವಿಶ್ರಾಂತ ಮಾರ್ಗ.' },
       { name: 'ಕ್ಯಾಂಪ್‌ಫೈರ್', desc: 'ಹವಾಮಾನ ಅನುಮತಿಸಿದರೆ, ನಾವು ಕ್ಯಾಂಪ್‌ಫೈರ್ ಹಚ್ಚಿ ಸಣ್ಣ ಸಸ್ಯಾಹಾರಿ ಬಾರ್ಬೆಕ್ಯೂ ಸಿದ್ಧಪಡಿಸಬಹುದು.' },
@@ -155,7 +156,7 @@ const content = {
       { name: 'பண்ணை சுற்றுலா', desc: 'சமையல் தோட்டம், நீர் பணிகள், உணவு காடு, மற்றும் வழியில் உள்ள மரங்கள் மற்றும் பறவைகள் வழியாக ~2 மணி நேர நடை.' },
       { name: 'பறவை பார்வை', desc: '100க்கும் மேற்பட்ட இனங்கள் இங்கு காணப்பட்டுள்ளன — அவற்றைக் கண்டறிந்து அடையாளம் காண காலை நேரம் சிறந்தது.' },
       { name: 'கூடை நெசவு', desc: 'எங்கள் நிபுணத்துவமிக்க கூடை நெசவாளர் ராம்தாஸ் உங்களுக்கு மூங்கில் கைவினையைக் கற்பிக்க முடியும் — இதை ஏற்பாடு செய்ய முன்கூட்டியே அறிவிப்பு தேவை.' },
-      { name: 'நட்சத்திர பார்வை', desc: 'பள்ளத்தாக்கு வெறும் 31.8 μcd/m² செயற்கை பிரகாசத்தை அளவிடுகிறது — தெளிவான இரவில் (இங்கு பெரும்பாலான இரவுகள்), நட்சத்திரங்களும் விண்மீன் திரள்களும் பிரகாசமாகவும் தெளிவாகவும் தெரியும்.' },
+      { name: 'நட்சத்திர பார்வை', desc: `பள்ளத்தாக்கு வெறும் ${NIGHT_SKY_BRIGHTNESS_UCD_M2} μcd/m² செயற்கை பிரகாசத்தை அளவிடுகிறது — தெளிவான இரவில் (இங்கு பெரும்பாலான இரவுகள்), நட்சத்திரங்களும் விண்மீன் திரள்களும் பிரகாசமாகவும் தெளிவாகவும் தெரியும்.` },
       { name: 'சாப் & டிராப்', desc: 'எங்கள் இயற்கை வேளாண் அமைப்பின் ஒருங்கிணைந்த பகுதி — நீங்கள் உதவ விரும்பினால் மகிழ்ச்சியுடன் ஒரு வெட்டரிவாளைத் தருவோம்.' },
       { name: 'போர்டு விளையாட்டுகள்', desc: 'உங்கள் ஆற்றலைச் சேமிக்க விரும்பும்போது குடும்பம் மற்றும் நண்பர்களுடன் நேரத்தை செலவிட ஒரு நிதானமான வழி.' },
       { name: 'கேம்ப்ஃபயர்', desc: 'வானிலை அனுமதித்தால், நாங்கள் ஒரு கேம்ப்ஃபயர் ஏற்றி ஒரு சிறிய சைவ பார்பிக்யூவை ஏற்பாடு செய்யலாம்.' },

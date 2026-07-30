@@ -3,6 +3,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import WeatherWidget from '../WeatherWidget.astro';
 import { type Locale } from '../../i18n/utils';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+import { NIGHT_SKY_BRIGHTNESS_UCD_M2 } from '../../data/site-facts';
 
 interface Props {
   lang: Locale;
@@ -80,13 +82,12 @@ function fmt(template: string, params: Record<string, string | number>): string 
 const content = {
   en: {
     metaTitle: 'Weather',
-    metaDescription: 'The land TVC sits on, and the rainfall and monsoon patterns that shape it.',
+    metaDescription: 'Live weather at TVC, and the rainfall and monsoon patterns that shape the seasons.',
     heroEyebrow: 'The TVC Ecosystem',
     heroTitle: 'Weather',
-    heroIntro: "The land's physical setting, and how rainfall and the seasons move through it.",
+    heroIntro: 'Live conditions at TVC, and how rainfall moves through the year.',
     heroImageAlt: 'Sunset over the Melagiri Hills',
-    geographyHeading: 'Geography & landscape',
-    geographyText: "TVC sits on a west-facing hillslope near Kanakapura, close to the Tamil Nadu–Karnataka border, with sunset views across the valley. It's part of the Melagiri Hills, the range where the Eastern and Western Ghats meet — a geographic seam that makes the range biodiversity-rich and, for wildlife moving between habitats, a through-route rather than a dead end. Rainfall is logged daily on-site and follows the region's monsoon pattern: wet from April through October, dry the rest of the year.",
+    introText: "Rainfall is logged daily on-site and follows the region's monsoon pattern: wet from April through October, dry the rest of the year.",
     monsoonLabel: 'This monsoon so far',
     monsoonSublabel: '(1 {apr} – 15 {jul} 2026)',
     monsoonDeltaLess: 'less',
@@ -97,16 +98,18 @@ const content = {
     tableSummary: 'Full monthly figures (2025–26 and 2026–27 to date)',
     tableMonth: 'Month',
     toDate: '(to date)',
+    nightSkyStatLabel: 'Artificial sky brightness',
+    nightSkyStatSublabel: '(near-zero light pollution)',
+    nightSkyCta: 'See stargazing on the Visit page',
   },
   kn: {
     metaTitle: 'ಹವಾಮಾನ',
-    metaDescription: 'TVC ಇರುವ ಭೂಮಿ, ಮತ್ತು ಅದನ್ನು ರೂಪಿಸುವ ಮಳೆ ಮತ್ತು ಮಾನ್ಸೂನ್ ಮಾದರಿಗಳು.',
+    metaDescription: 'TVC ಯಲ್ಲಿ ನೇರ ಹವಾಮಾನ, ಮತ್ತು ಋತುಗಳನ್ನು ರೂಪಿಸುವ ಮಳೆ ಮತ್ತು ಮಾನ್ಸೂನ್ ಮಾದರಿಗಳು.',
     heroEyebrow: 'TVC ಪರಿಸರ ವ್ಯವಸ್ಥೆ',
     heroTitle: 'ಹವಾಮಾನ',
-    heroIntro: 'ಭೂಮಿಯ ಭೌತಿಕ ಸ್ವರೂಪ, ಮತ್ತು ಮಳೆ ಮತ್ತು ಋತುಗಳು ಅದರ ಮೂಲಕ ಹೇಗೆ ಚಲಿಸುತ್ತವೆ.',
+    heroIntro: 'TVC ಯಲ್ಲಿ ನೇರ ಪರಿಸ್ಥಿತಿಗಳು, ಮತ್ತು ವರ್ಷವಿಡೀ ಮಳೆ ಹೇಗೆ ಚಲಿಸುತ್ತದೆ.',
     heroImageAlt: 'ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ ಮೇಲೆ ಸೂರ್ಯಾಸ್ತ',
-    geographyHeading: 'ಭೂಗೋಳ ಮತ್ತು ಭೂದೃಶ್ಯ',
-    geographyText: 'TVC ಕನಕಪುರದ ಬಳಿ, ತಮಿಳುನಾಡು–ಕರ್ನಾಟಕ ಗಡಿಗೆ ಸಮೀಪದಲ್ಲಿ, ಕಣಿವೆಯಾದ್ಯಂತ ಸೂರ್ಯಾಸ್ತದ ನೋಟಗಳೊಂದಿಗೆ ಪಶ್ಚಿಮಾಭಿಮುಖ ಗುಡ್ಡದ ಇಳಿಜಾರಿನಲ್ಲಿದೆ. ಇದು ಪೂರ್ವ ಮತ್ತು ಪಶ್ಚಿಮ ಘಟ್ಟಗಳು ಸಂಧಿಸುವ ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ ಶ್ರೇಣಿಯ ಭಾಗ — ಈ ಭೌಗೋಳಿಕ ಸಂಧಿಯು ಶ್ರೇಣಿಯನ್ನು ಜೀವವೈವಿಧ್ಯ-ಸಮೃದ್ಧವಾಗಿಸುತ್ತದೆ ಮತ್ತು ಆವಾಸಸ್ಥಾನಗಳ ನಡುವೆ ಚಲಿಸುವ ವನ್ಯಜೀವಿಗಳಿಗೆ ಇದು ಕೊನೆಗೊಳ್ಳುವ ಸ್ಥಳಕ್ಕಿಂತ ಹಾದುಹೋಗುವ ಮಾರ್ಗವಾಗಿದೆ. ಮಳೆಯನ್ನು ಸ್ಥಳದಲ್ಲೇ ಪ್ರತಿದಿನ ದಾಖಲಿಸಲಾಗುತ್ತದೆ ಮತ್ತು ಇದು ಪ್ರದೇಶದ ಮಾನ್ಸೂನ್ ಮಾದರಿಯನ್ನು ಅನುಸರಿಸುತ್ತದೆ: ಏಪ್ರಿಲ್‌ನಿಂದ ಅಕ್ಟೋಬರ್‌ವರೆಗೆ ಆರ್ದ್ರ, ಉಳಿದ ವರ್ಷ ಶುಷ್ಕ.',
+    introText: 'ಮಳೆಯನ್ನು ಸ್ಥಳದಲ್ಲೇ ಪ್ರತಿದಿನ ದಾಖಲಿಸಲಾಗುತ್ತದೆ ಮತ್ತು ಇದು ಪ್ರದೇಶದ ಮಾನ್ಸೂನ್ ಮಾದರಿಯನ್ನು ಅನುಸರಿಸುತ್ತದೆ: ಏಪ್ರಿಲ್‌ನಿಂದ ಅಕ್ಟೋಬರ್‌ವರೆಗೆ ಆರ್ದ್ರ, ಉಳಿದ ವರ್ಷ ಶುಷ್ಕ.',
     monsoonLabel: 'ಈ ಮಾನ್ಸೂನ್ ಇಲ್ಲಿಯವರೆಗೆ',
     monsoonSublabel: '(1 {apr} – 15 {jul} 2026)',
     monsoonDeltaLess: 'ಕಡಿಮೆ',
@@ -117,16 +120,18 @@ const content = {
     tableSummary: 'ಪೂರ್ಣ ಮಾಸಿಕ ಅಂಕಿಅಂಶಗಳು (2025–26 ಮತ್ತು 2026–27 ಇಲ್ಲಿಯವರೆಗೆ)',
     tableMonth: 'ತಿಂಗಳು',
     toDate: '(ಇಲ್ಲಿಯವರೆಗೆ)',
+    nightSkyStatLabel: 'ಕೃತಕ ಆಕಾಶ ಪ್ರಕಾಶಮಾನತೆ',
+    nightSkyStatSublabel: '(ಬಹುತೇಕ ಶೂನ್ಯ ಬೆಳಕಿನ ಮಾಲಿನ್ಯ)',
+    nightSkyCta: 'ಭೇಟಿ ಪುಟದಲ್ಲಿ ನಕ್ಷತ್ರ ವೀಕ್ಷಣೆ ನೋಡಿ',
   },
   ta: {
     metaTitle: 'வானிலை',
-    metaDescription: 'TVC அமைந்துள்ள நிலம், அதை வடிவமைக்கும் மழை மற்றும் பருவமழை முறைகள்.',
+    metaDescription: 'TVC-யில் நேரடி வானிலை, மற்றும் பருவங்களை வடிவமைக்கும் மழை மற்றும் பருவமழை முறைகள்.',
     heroEyebrow: 'TVC சூழலமைப்பு',
     heroTitle: 'வானிலை',
-    heroIntro: 'நிலத்தின் இயற்பியல் அமைப்பு, மற்றும் மழை மற்றும் பருவங்கள் அதன் வழியாக எவ்வாறு நகர்கின்றன.',
+    heroIntro: 'TVC-யில் நேரடி நிலைமைகள், மற்றும் ஆண்டு முழுவதும் மழை எவ்வாறு நகர்கிறது.',
     heroImageAlt: 'மேலகிரி மலைகளின் மேல் சூரிய அஸ்தமனம்',
-    geographyHeading: 'புவியியல் மற்றும் நிலப்பரப்பு',
-    geographyText: 'TVC கனகபுரா அருகே, தமிழ்நாடு–கர்நாடக எல்லைக்கு அருகில், பள்ளத்தாக்கு முழுவதும் சூரிய அஸ்தமன காட்சிகளுடன் மேற்கு நோக்கிய மலைச்சரிவில் அமைந்துள்ளது. இது கிழக்கு மற்றும் மேற்கு தொடர்ச்சி மலைகள் சந்திக்கும் மேலகிரி மலைத்தொடரின் ஒரு பகுதி — இந்த புவியியல் சந்திப்பு தொடரை பல்லுயிர் செழிப்பானதாக ஆக்குகிறது, மேலும் வாழ்விடங்களுக்கு இடையே நகரும் வனவிலங்குகளுக்கு இது ஒரு முடிவிடமாக இல்லாமல் ஒரு கடந்து செல்லும் பாதையாக உள்ளது. மழை தளத்திலேயே தினமும் பதிவு செய்யப்படுகிறது, மேலும் இது பிராந்தியத்தின் பருவமழை முறையைப் பின்பற்றுகிறது: ஏப்ரல் முதல் அக்டோபர் வரை ஈரம், மீதமுள்ள ஆண்டு உலர்ந்தது.',
+    introText: 'மழை தளத்திலேயே தினமும் பதிவு செய்யப்படுகிறது, மேலும் இது பிராந்தியத்தின் பருவமழை முறையைப் பின்பற்றுகிறது: ஏப்ரல் முதல் அக்டோபர் வரை ஈரம், மீதமுள்ள ஆண்டு உலர்ந்தது.',
     monsoonLabel: 'இந்த பருவமழை இதுவரை',
     monsoonSublabel: '(1 {apr} – 15 {jul} 2026)',
     monsoonDeltaLess: 'குறைவு',
@@ -137,6 +142,9 @@ const content = {
     tableSummary: 'முழு மாதாந்திர புள்ளிவிவரங்கள் (2025–26 மற்றும் 2026–27 இதுவரை)',
     tableMonth: 'மாதம்',
     toDate: '(இதுவரை)',
+    nightSkyStatLabel: 'செயற்கை வான பிரகாசம்',
+    nightSkyStatSublabel: '(கிட்டத்தட்ட பூஜ்ஜிய ஒளி மாசுபாடு)',
+    nightSkyCta: 'விசிட் பக்கத்தில் நட்சத்திர பார்வையைப் பார்க்கவும்',
   },
 } as const;
 
@@ -150,18 +158,25 @@ const chartAriaLabel = fmt(c.chartAriaLabel, { peak: peakMonth.mm });
   <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} intro={c.heroIntro} image="/images/pages/home/gallery-4.jpg" imageAlt={c.heroImageAlt} />
 
   <section class="section wrapper">
-    <h2>{c.geographyHeading}</h2>
-    <p>{c.geographyText}</p>
+    <p>{c.introText}</p>
 
-    <WeatherWidget lang={lang} />
+    <div class="tile-row">
+      <WeatherWidget lang={lang} />
 
-    <div class="stat-tile">
-      <p class="stat-label">{c.monsoonLabel} <span class="stat-sublabel">{monsoonSublabel}</span></p>
-      <p class="stat-value">{monsoonToDate.toFixed(1)}<span class="stat-unit">mm</span></p>
-      <p class="stat-delta">{Math.abs(monsoonDeltaPct)}% {monsoonDeltaPct < 0 ? c.monsoonDeltaLess : c.monsoonDeltaMore} {monsoonDelta}</p>
+      <div class="stat-tile">
+        <p class="stat-label">{c.monsoonLabel} <span class="stat-sublabel">{monsoonSublabel}</span></p>
+        <p class="stat-value">{monsoonToDate.toFixed(1)}<span class="stat-unit">mm</span></p>
+        <p class="stat-delta">{Math.abs(monsoonDeltaPct)}% {monsoonDeltaPct < 0 ? c.monsoonDeltaLess : c.monsoonDeltaMore} {monsoonDelta}</p>
+      </div>
+
+      <div class="stat-tile">
+        <p class="stat-label">{c.nightSkyStatLabel} <span class="stat-sublabel">{c.nightSkyStatSublabel}</span></p>
+        <p class="stat-value">{NIGHT_SKY_BRIGHTNESS_UCD_M2}<span class="stat-unit">μcd/m²</span></p>
+        <p class="stat-delta"><a href={getRelativeLocaleUrl(lang, '/visit')}>{c.nightSkyCta}</a></p>
+      </div>
     </div>
 
-    <h3>{c.chartHeading}</h3>
+    <h2>{c.chartHeading}</h2>
     <svg class="rainfall-chart" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label={chartAriaLabel}>
       {yTicks.map((tick) => {
         const ty = 10 + (plotHeight - (tick / maxMm) * plotHeight);
@@ -204,6 +219,21 @@ const chartAriaLabel = fmt(c.chartAriaLabel, { peak: peakMonth.mm });
 </BaseLayout>
 
 <style>
+  .tile-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 20px;
+    margin: 20px 0;
+  }
+
+  .tile-row .stat-tile,
+  :global(.tile-row .weather-widget) {
+    flex: 1 1 260px;
+    max-width: 340px;
+    margin: 0;
+  }
+
   .stat-tile {
     background: #fff;
     border: 1px solid var(--tvc-line);

@@ -3,7 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import { getCollection } from 'astro:content';
 import { formatDateRange } from '../../utils/events';
-import { FARM_AREA_ACRES } from '../../data/site-facts';
+import { FARM_AREA_ACRES, NIGHT_SKY_BRIGHTNESS_UCD_M2 } from '../../data/site-facts';
 import { useTranslations, type Locale } from '../../i18n/utils';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 
@@ -35,7 +35,7 @@ const content = {
     heroIntro:
       '98 acres of hill country, some of the darkest skies around, and room to camp — the setting for team outings, workshops, retreats, and camps of every kind.',
     whyHereHeading: 'Why here',
-    whyHereText1: `TVC is ${FARM_AREA_ACRES} acres of the Melagiri Hills, on a west-facing hillslope an hour or two outside Bangalore depending on where you're coming from — far enough to feel like a real break, close enough to reach for a weekend. The valley measures just 31.8 μcd/m² of artificial brightness, so on a clear night the stars and galaxies are bright and unmistakable — a real draw whether you're running a stargazing session or just want a group to disconnect for a few days.`,
+    whyHereText1: `TVC is ${FARM_AREA_ACRES} acres of the Melagiri Hills, on a west-facing hillslope an hour or two outside Bangalore depending on where you're coming from — far enough to feel like a real break, close enough to reach for a weekend. The valley measures just ${NIGHT_SKY_BRIGHTNESS_UCD_M2} μcd/m² of artificial brightness, so on a clear night the stars and galaxies are bright and unmistakable — a real draw whether you're running a stargazing session or just want a group to disconnect for a few days.`,
     whyHereText2:
       "That disconnection is literal, not just a figure of speech: there's WiFi via BSNL, which should tell you all you need to know about its reliability, and power is grid-fed with a solar backup and a generator for the rare bad day. Bring a hotspot if your event genuinely needs guaranteed connectivity — otherwise, treat the unreliability as part of the pitch.",
     possibleHeading: "What's possible here",
@@ -76,7 +76,7 @@ const content = {
     heroIntro:
       '98 ಎಕರೆ ಬೆಟ್ಟ ಪ್ರದೇಶ, ಸುತ್ತಮುತ್ತಲಿನ ಅತ್ಯಂತ ಕತ್ತಲಾದ ಆಕಾಶ, ಮತ್ತು ಕ್ಯಾಂಪ್ ಮಾಡಲು ಸ್ಥಳ — ತಂಡದ ಪ್ರವಾಸಗಳು, ಕಾರ್ಯಾಗಾರಗಳು, ರಿಟ್ರೀಟ್‌ಗಳು ಮತ್ತು ಎಲ್ಲ ರೀತಿಯ ಶಿಬಿರಗಳಿಗೆ ಸೂಕ್ತ ಸ್ಥಳ.',
     whyHereHeading: 'ಇಲ್ಲೇಕೆ',
-    whyHereText1: `TVC ಎಂಬುದು ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ ${FARM_AREA_ACRES} ಎಕರೆ ಭೂಮಿ, ಬೆಂಗಳೂರಿನಿಂದ ಒಂದೆರಡು ಗಂಟೆಗಳ ದೂರದಲ್ಲಿ ಪಶ್ಚಿಮಾಭಿಮುಖ ಇಳಿಜಾರಿನಲ್ಲಿದೆ — ನಿಜವಾದ ಬ್ರೇಕ್ ಎನಿಸುವಷ್ಟು ದೂರ, ವಾರಾಂತ್ಯಕ್ಕೆ ತಲುಪುವಷ್ಟು ಹತ್ತಿರ. ಈ ಕಣಿವೆಯಲ್ಲಿ ಕೃತಕ ಬೆಳಕು ಕೇವಲ 31.8 μcd/m² ಇದೆ, ಹಾಗಾಗಿ ಸ್ಪಷ್ಟ ರಾತ್ರಿಯಲ್ಲಿ ನಕ್ಷತ್ರಗಳು ಮತ್ತು ಗ್ಯಾಲಕ್ಸಿಗಳು ಪ್ರಕಾಶಮಾನವಾಗಿ, ಸ್ಪಷ್ಟವಾಗಿ ಕಾಣುತ್ತವೆ — ನೀವು ನಕ್ಷತ್ರ ವೀಕ್ಷಣಾ ಅಧಿವೇಶನ ನಡೆಸುತ್ತಿರಲಿ ಅಥವಾ ಒಂದು ಗುಂಪು ಕೆಲವು ದಿನ ಸಂಪರ್ಕ ಕಡಿದುಕೊಳ್ಳಲು ಬಯಸುತ್ತಿರಲಿ, ಇದೊಂದು ನಿಜವಾದ ಆಕರ್ಷಣೆ.`,
+    whyHereText1: `TVC ಎಂಬುದು ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ ${FARM_AREA_ACRES} ಎಕರೆ ಭೂಮಿ, ಬೆಂಗಳೂರಿನಿಂದ ಒಂದೆರಡು ಗಂಟೆಗಳ ದೂರದಲ್ಲಿ ಪಶ್ಚಿಮಾಭಿಮುಖ ಇಳಿಜಾರಿನಲ್ಲಿದೆ — ನಿಜವಾದ ಬ್ರೇಕ್ ಎನಿಸುವಷ್ಟು ದೂರ, ವಾರಾಂತ್ಯಕ್ಕೆ ತಲುಪುವಷ್ಟು ಹತ್ತಿರ. ಈ ಕಣಿವೆಯಲ್ಲಿ ಕೃತಕ ಬೆಳಕು ಕೇವಲ ${NIGHT_SKY_BRIGHTNESS_UCD_M2} μcd/m² ಇದೆ, ಹಾಗಾಗಿ ಸ್ಪಷ್ಟ ರಾತ್ರಿಯಲ್ಲಿ ನಕ್ಷತ್ರಗಳು ಮತ್ತು ಗ್ಯಾಲಕ್ಸಿಗಳು ಪ್ರಕಾಶಮಾನವಾಗಿ, ಸ್ಪಷ್ಟವಾಗಿ ಕಾಣುತ್ತವೆ — ನೀವು ನಕ್ಷತ್ರ ವೀಕ್ಷಣಾ ಅಧಿವೇಶನ ನಡೆಸುತ್ತಿರಲಿ ಅಥವಾ ಒಂದು ಗುಂಪು ಕೆಲವು ದಿನ ಸಂಪರ್ಕ ಕಡಿದುಕೊಳ್ಳಲು ಬಯಸುತ್ತಿರಲಿ, ಇದೊಂದು ನಿಜವಾದ ಆಕರ್ಷಣೆ.`,
     whyHereText2:
       'ಆ ಸಂಪರ್ಕ ಕಡಿತ ಕೇವಲ ಮಾತಿನ ಮಾತಲ್ಲ, ಅಕ್ಷರಶಃ ನಿಜ: ಇಲ್ಲಿ BSNL ಮೂಲಕ ವೈಫೈ ಇದೆ, ಅದರ ವಿಶ್ವಾಸಾರ್ಹತೆಯ ಬಗ್ಗೆ ನಿಮಗೆ ಎಲ್ಲವೂ ತಿಳಿಸುತ್ತದೆ ಎಂಬ ಹೆಸರೇ, ಮತ್ತು ವಿದ್ಯುತ್ ಗ್ರಿಡ್‌ನಿಂದ ಪೂರೈಕೆಯಾಗುತ್ತದೆ, ಸೋಲಾರ್ ಬ್ಯಾಕಪ್ ಮತ್ತು ಅಪರೂಪದ ಕೆಟ್ಟ ದಿನಕ್ಕೆ ಜನರೇಟರ್ ಇದೆ. ನಿಮ್ಮ ಕಾರ್ಯಕ್ರಮಕ್ಕೆ ನಿಜವಾಗಿಯೂ ಖಚಿತ ಸಂಪರ್ಕ ಬೇಕಿದ್ದರೆ ಹಾಟ್‌ಸ್ಪಾಟ್ ತನ್ನಿ — ಇಲ್ಲದಿದ್ದರೆ, ಈ ಅನಿಶ್ಚಿತತೆಯನ್ನೇ ಆಕರ್ಷಣೆಯ ಭಾಗವಾಗಿ ಪರಿಗಣಿಸಿ.',
     possibleHeading: 'ಇಲ್ಲಿ ಏನೆಲ್ಲಾ ಸಾಧ್ಯ',
@@ -117,7 +117,7 @@ const content = {
     heroIntro:
       '98 ஏக்கர் மலை நாடு, சுற்றியுள்ள மிக இருண்ட வானம், மற்றும் முகாமிட இடம் — குழு உல்லாசப் பயணங்கள், பட்டறைகள், ரிட்ரீட்கள், மற்றும் அனைத்து வகை முகாம்களுக்கும் ஏற்ற இடம்.',
     whyHereHeading: 'ஏன் இங்கே',
-    whyHereText1: `TVC என்பது மேலகிரி மலைகளின் ${FARM_AREA_ACRES} ஏக்கர் நிலம், நீங்கள் எங்கிருந்து வருகிறீர்கள் என்பதைப் பொறுத்து பெங்களூருவிலிருந்து ஒன்று அல்லது இரண்டு மணி நேரத் தொலைவில் மேற்கு நோக்கிய மலைச்சரிவில் அமைந்துள்ளது — ஒரு உண்மையான இடைவெளியாக உணரும் அளவுக்கு தொலைவிலும், வார இறுதியில் சென்றடையக்கூடிய அளவுக்கு அருகிலும். இந்த பள்ளத்தாக்கில் செயற்கை வெளிச்சம் வெறும் 31.8 μcd/m² மட்டுமே, எனவே தெளிவான இரவில் நட்சத்திரங்களும் விண்மீன் திரள்களும் பிரகாசமாகவும் தெளிவாகவும் தெரிகின்றன — நீங்கள் நட்சத்திர பார்வை அமர்வை நடத்தினாலும் சரி, ஒரு குழு சில நாட்கள் துண்டிக்கப்பட விரும்பினாலும் சரி, இது ஒரு உண்மையான ஈர்ப்பு.`,
+    whyHereText1: `TVC என்பது மேலகிரி மலைகளின் ${FARM_AREA_ACRES} ஏக்கர் நிலம், நீங்கள் எங்கிருந்து வருகிறீர்கள் என்பதைப் பொறுத்து பெங்களூருவிலிருந்து ஒன்று அல்லது இரண்டு மணி நேரத் தொலைவில் மேற்கு நோக்கிய மலைச்சரிவில் அமைந்துள்ளது — ஒரு உண்மையான இடைவெளியாக உணரும் அளவுக்கு தொலைவிலும், வார இறுதியில் சென்றடையக்கூடிய அளவுக்கு அருகிலும். இந்த பள்ளத்தாக்கில் செயற்கை வெளிச்சம் வெறும் ${NIGHT_SKY_BRIGHTNESS_UCD_M2} μcd/m² மட்டுமே, எனவே தெளிவான இரவில் நட்சத்திரங்களும் விண்மீன் திரள்களும் பிரகாசமாகவும் தெளிவாகவும் தெரிகின்றன — நீங்கள் நட்சத்திர பார்வை அமர்வை நடத்தினாலும் சரி, ஒரு குழு சில நாட்கள் துண்டிக்கப்பட விரும்பினாலும் சரி, இது ஒரு உண்மையான ஈர்ப்பு.`,
     whyHereText2:
       'அந்த துண்டிப்பு வெறும் சொல் அல்ல, உண்மையிலேயே அப்படித்தான்: இங்கே BSNL மூலம் வைஃபை உள்ளது, அதன் நம்பகத்தன்மையைப் பற்றி அந்த பெயரே உங்களுக்குத் தேவையான அனைத்தையும் சொல்லிவிடும், மற்றும் மின்சாரம் கிரிட் மூலம் வழங்கப்படுகிறது, சோலார் பேக்அப் மற்றும் அரிதான மோசமான நாளுக்கு ஒரு ஜெனரேட்டரும் உள்ளது. உங்கள் நிகழ்வுக்கு உண்மையிலேயே உறுதியான இணைப்பு தேவைப்பட்டால் ஹாட்ஸ்பாட் கொண்டு வாருங்கள் — இல்லையெனில், இந்த நம்பகத்தன்மையின்மையையே ஈர்ப்பின் ஒரு பகுதியாகக் கருதுங்கள்.',
     possibleHeading: 'இங்கே என்னென்ன சாத்தியம்',

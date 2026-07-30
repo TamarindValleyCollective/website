@@ -12,7 +12,7 @@ const { lang = DEFAULT_LOCALE } = Astro.props;
 const t = useTranslations(lang);
 ---
 
-<div class="weather-widget" id="weather-widget" hidden data-fmt-humidity={t('weather.humidityFormat')} data-fmt-as-of={t('weather.asOf')}>
+<div class="weather-widget" id="weather-widget" hidden data-fmt-humidity={t('weather.humidityFormat')} data-fmt-as-of={t('weather.asOf')} data-fmt-sunset={t('weather.sunsetFormat')} data-elevation-label={t('weather.elevationLabel')}>
   <p class="weather-widget__location">Tamarind Valley Collective</p>
   <div class="weather-widget__row">
     <div class="weather-widget__temp">
@@ -23,6 +23,10 @@ const t = useTranslations(lang);
       <p id="weather-condition" class="weather-widget__condition"></p>
       <p id="weather-humidity" class="weather-widget__humidity"></p>
     </div>
+  </div>
+  <div class="weather-widget__extra">
+    <p id="weather-elevation" class="weather-widget__extra-item"></p>
+    <p id="weather-sunset" class="weather-widget__extra-item"></p>
   </div>
   <p id="weather-updated" class="weather-widget__updated"></p>
 </div>
@@ -102,6 +106,20 @@ const t = useTranslations(lang);
     font-size: 0.75rem;
     color: var(--tvc-ink-soft);
   }
+
+  .weather-widget__extra {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding-top: 10px;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .weather-widget__extra-item {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--tvc-ink-soft);
+  }
 </style>
 
 <script>
@@ -116,6 +134,8 @@ const t = useTranslations(lang);
       document.getElementById('weather-temp')!.textContent = `${Math.round(data.temperature_2m)}°C`;
       document.getElementById('weather-condition')!.textContent = labelFor(data.weather_code, lang);
       document.getElementById('weather-humidity')!.textContent = (widget.dataset.fmtHumidity ?? '{pct}% humidity').replace('{pct}', String(Math.round(data.relative_humidity_2m)));
+      document.getElementById('weather-elevation')!.textContent = `${widget.dataset.elevationLabel ?? 'Elevation'}: ${Math.round(data.elevation)}m`;
+      document.getElementById('weather-sunset')!.textContent = (widget.dataset.fmtSunset ?? 'Sunset today {time}').replace('{time}', formatFarmTime(data.sunset));
       document.getElementById('weather-updated')!.textContent = (widget.dataset.fmtAsOf ?? 'As of {time}').replace('{time}', formatFarmTime(data.time));
       widget.hidden = false;
     } catch (err) {

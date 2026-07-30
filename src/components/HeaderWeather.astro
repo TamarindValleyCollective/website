@@ -15,9 +15,21 @@ const { lang = DEFAULT_LOCALE } = Astro.props;
 const t = useTranslations(lang);
 ---
 
-<a href={getRelativeLocaleUrl(lang, '/ecosystem/geography')} class="header-weather" id="header-weather" hidden aria-label={t('weather.headerAriaLabel')}>
+<a href={getRelativeLocaleUrl(lang, '/ecosystem/weather')} class="header-weather" id="header-weather" hidden aria-label={t('weather.headerAriaLabel')}>
   <span id="header-weather-icon" class="header-weather__icon" aria-hidden="true"></span>
   <span id="header-weather-temp" class="header-weather__temp"></span>
+  <span class="header-weather__divider" aria-hidden="true"></span>
+  <svg class="header-weather__sunset-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 18a5 5 0 0 0-10 0"></path>
+    <line x1="12" y1="9" x2="12" y2="2"></line>
+    <line x1="4.22" y1="10.22" x2="5.64" y2="11.64"></line>
+    <line x1="1" y1="18" x2="3" y2="18"></line>
+    <line x1="21" y1="18" x2="23" y2="18"></line>
+    <line x1="18.36" y1="11.64" x2="19.78" y2="10.22"></line>
+    <polyline points="16 5 12 9 8 5"></polyline>
+    <line x1="1" y1="22" x2="23" y2="22"></line>
+  </svg>
+  <span id="header-weather-sunset" class="header-weather__temp"></span>
 </a>
 
 <style>
@@ -56,6 +68,19 @@ const t = useTranslations(lang);
     font-variant-numeric: tabular-nums;
   }
 
+  .header-weather__divider {
+    width: 1px;
+    height: 12px;
+    background: var(--tvc-line);
+  }
+
+  .header-weather__sunset-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    color: var(--tvc-ink-soft);
+  }
+
   /* Hidden below the nav's own hamburger breakpoint -- the mobile header is
      already tight (logo, wordmark, toggle button), and the Weather page is
      still one tap away via the menu. */
@@ -67,7 +92,7 @@ const t = useTranslations(lang);
 </style>
 
 <script>
-  import { fetchWeather, iconFor } from '../utils/weather';
+  import { fetchWeather, formatFarmTime, iconFor } from '../utils/weather';
 
   (async () => {
     const link = document.getElementById('header-weather') as HTMLAnchorElement | null;
@@ -76,6 +101,9 @@ const t = useTranslations(lang);
       const data = await fetchWeather();
       document.getElementById('header-weather-icon')!.textContent = iconFor(data.weather_code);
       document.getElementById('header-weather-temp')!.textContent = `${Math.round(data.temperature_2m)}°C`;
+      // Header space is tight, so drop the "IST" suffix formatFarmTime adds
+      // for the full Weather-page card -- the sunset icon already disambiguates.
+      document.getElementById('header-weather-sunset')!.textContent = formatFarmTime(data.sunset).replace(' IST', '');
       link.hidden = false;
     } catch (err) {
       console.warn('Could not load live weather for header', err);

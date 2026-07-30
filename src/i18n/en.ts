@@ -14,6 +14,7 @@ export default {
     ourJourney: 'Our Journey',
     inPictures: 'In Pictures',
     biodiversity: 'Biodiversity',
+    landscape: 'Geography',
     weather: 'Weather',
     resourceCentre: 'Resource Centre',
     events: 'Events',
@@ -65,7 +66,9 @@ export default {
   weather: {
     humidityFormat: '{pct}% humidity',
     asOf: 'As of {time}',
-    headerAriaLabel: 'Current temperature at TVC — see the Weather page',
+    headerAriaLabel: 'Current temperature and sunset time at TVC — see the Weather page',
+    elevationLabel: 'Elevation',
+    sunsetFormat: 'Sunset today {time}',
   },
   search: {
     trigger: 'Search the site',

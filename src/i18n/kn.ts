@@ -13,6 +13,7 @@ export default {
     ourJourney: 'ನಮ್ಮ ಪಯಣ',
     inPictures: 'ಚಿತ್ರಗಳಲ್ಲಿ',
     biodiversity: 'ಜೀವವೈವಿಧ್ಯ',
+    landscape: 'ಭೂಗೋಳ',
     weather: 'ಹವಾಮಾನ',
     resourceCentre: 'ಸಂಪನ್ಮೂಲ ಕೇಂದ್ರ',
     events: 'ಕಾರ್ಯಕ್ರಮಗಳು',
@@ -64,7 +65,9 @@ export default {
   weather: {
     humidityFormat: '{pct}% ಆರ್ದ್ರತೆ',
     asOf: '{time} ರಂತೆ',
-    headerAriaLabel: 'TVC ಯಲ್ಲಿ ಪ್ರಸ್ತುತ ತಾಪಮಾನ — ಹವಾಮಾನ ಪುಟ ನೋಡಿ',
+    headerAriaLabel: 'TVC ಯಲ್ಲಿ ಪ್ರಸ್ತುತ ತಾಪಮಾನ ಮತ್ತು ಸೂರ್ಯಾಸ್ತದ ಸಮಯ — ಹವಾಮಾನ ಪುಟ ನೋಡಿ',
+    elevationLabel: 'ಎತ್ತರ',
+    sunsetFormat: 'ಇಂದಿನ ಸೂರ್ಯಾಸ್ತ {time}',
   },
   search: {
     trigger: 'ಸೈಟ್ ಹುಡುಕಿ',

@@ -16,6 +16,14 @@
 // not a present-tense claim about the property's current size.
 export const FARM_AREA_ACRES = 98;
 
+// Sky brightness added by artificial light, in milli-candela per square
+// metre -- quoted on the Visit, Host-an-Event, and Geography/Weather pages
+// for the stargazing pitch. Sourced from a light-pollution map reading for
+// the valley; a negligible figure next to typical urban skies (Bangalore
+// runs several hundred times brighter), which is why stars and the Milky
+// Way stay visible to the naked eye on a clear night here.
+export const NIGHT_SKY_BRIGHTNESS_UCD_M2 = 31.8;
+
 // The registered legal entity operating the Tamarind Valley Collective
 // brand and this site - referenced on the Terms, Refund, and Privacy
 // pages, and the footer, for payment-gateway (Razorpay) compliance.

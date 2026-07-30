@@ -13,6 +13,7 @@ export default {
     ourJourney: 'எங்கள் பயணம்',
     inPictures: 'படங்களில்',
     biodiversity: 'பல்லுயிர் பெருக்கம்',
+    landscape: 'புவியியல்',
     weather: 'வானிலை',
     resourceCentre: 'வள மையம்',
     events: 'நிகழ்வுகள்',
@@ -64,7 +65,9 @@ export default {
   weather: {
     humidityFormat: '{pct}% ஈரப்பதம்',
     asOf: '{time} அன்று புதுப்பிக்கப்பட்டது',
-    headerAriaLabel: 'TVC-யில் தற்போதைய வெப்பநிலை — வானிலை பக்கத்தைப் பார்க்கவும்',
+    headerAriaLabel: 'TVC-யில் தற்போதைய வெப்பநிலை மற்றும் சூரிய அஸ்தமன நேரம் — வானிலை பக்கத்தைப் பார்க்கவும்',
+    elevationLabel: 'உயரம்',
+    sunsetFormat: 'இன்றைய சூரிய அஸ்தமனம் {time}',
   },
   search: {
     trigger: 'தளத்தைத் தேடு',
