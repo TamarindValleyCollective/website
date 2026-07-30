@@ -12,7 +12,7 @@ export interface SiteLink {
 }
 
 export const EXPLORE_LINKS: SiteLink[] = [
-  { label: 'About TVC', key: 'about', href: '/about' },
+  { label: 'About Us', key: 'about', href: '/about' },
   { label: 'People', key: 'people', href: '/people' },
   { label: 'Our Journey', key: 'ourJourney', href: '/our-journey' },
   { label: 'In Pictures', key: 'inPictures', href: '/in-pictures' },
@@ -24,7 +24,7 @@ export const EXPLORE_LINKS: SiteLink[] = [
 ];
 
 export const ENGAGE_LINKS: SiteLink[] = [
-  { label: 'Visit TVC', key: 'visitTvc', href: '/visit' },
+  { label: 'Visit Us', key: 'visitTvc', href: '/visit' },
   { label: 'Day Visit', key: 'dayVisit', href: '/visit/day-visit' },
   { label: 'Overnight Camping', key: 'camping', href: '/visit/camping' },
   { label: 'Host an Event', key: 'hostAnEvent', href: '/visit/host-an-event' },

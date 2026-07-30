@@ -9,7 +9,7 @@ export default {
   nav: {
     explore: 'Explore',
     engage: 'Engage',
-    about: 'About TVC',
+    about: 'About Us',
     people: 'People',
     ourJourney: 'Our Journey',
     inPictures: 'In Pictures',
@@ -18,7 +18,7 @@ export default {
     weather: 'Weather',
     resourceCentre: 'Resource Centre',
     events: 'Events',
-    visitTvc: 'Visit TVC',
+    visitTvc: 'Visit Us',
     dayVisit: 'Day Visit',
     camping: 'Overnight Camping',
     hostAnEvent: 'Host an Event',

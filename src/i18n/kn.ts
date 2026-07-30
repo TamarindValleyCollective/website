@@ -8,7 +8,7 @@ export default {
   nav: {
     explore: 'ಅನ್ವೇಷಿಸಿ',
     engage: 'ತೊಡಗಿಸಿಕೊಳ್ಳಿ',
-    about: 'TVC ಬಗ್ಗೆ',
+    about: 'ನಮ್ಮ ಬಗ್ಗೆ',
     people: 'ಜನರು',
     ourJourney: 'ನಮ್ಮ ಪಯಣ',
     inPictures: 'ಚಿತ್ರಗಳಲ್ಲಿ',
@@ -17,7 +17,7 @@ export default {
     weather: 'ಹವಾಮಾನ',
     resourceCentre: 'ಸಂಪನ್ಮೂಲ ಕೇಂದ್ರ',
     events: 'ಕಾರ್ಯಕ್ರಮಗಳು',
-    visitTvc: 'TVC ಗೆ ಭೇಟಿ ನೀಡಿ',
+    visitTvc: 'ನಮ್ಮನ್ನು ಭೇಟಿ ಮಾಡಿ',
     dayVisit: 'ಒಂದು ದಿನದ ಭೇಟಿ',
     camping: 'ರಾತ್ರಿ ವಾಸ್ತವ್ಯ ಶಿಬಿರ',
     hostAnEvent: 'ಕಾರ್ಯಕ್ರಮ ಆಯೋಜಿಸಿ',
