@@ -101,6 +101,15 @@ html {
 }
 
 body {
+  /* Establishes body's own stacking context so the fixed, z-index:-1 hero
+     background images (HomeView.astro, PageHero.astro) are compared
+     against body's content instead of against <html>'s own background
+     directly - without this, giving <html> a background-color (above)
+     makes browsers paint it as an opaque canvas layer that sits in front
+     of any negative-z-index descendant, hiding every hero photo site-wide.
+     isolation:isolate creates the stacking context with no layout effect,
+     unlike position:relative. */
+  isolation: isolate;
   background: var(--tvc-cream);
   color: var(--tvc-ink);
   font-family: var(--font-body);
