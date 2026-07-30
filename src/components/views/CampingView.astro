@@ -14,7 +14,6 @@ const t = useTranslations(lang);
 const content = {
   en: {
     metaDescription: 'A two-day overnight camp at Tamarind Valley Collective — arrival, a hike to the sunset viewpoint, campfire, and a guided farm tour the next morning.',
-    heroEyebrow: 'Visit Us',
     heroTitle: 'Overnight Camping',
     heroIntro: 'Everything you need for a memorable camp — tented accommodation, home-cooked meals, and a hike to catch the sunset.',
     day1Heading: 'Day 1',
@@ -38,7 +37,6 @@ const content = {
   },
   kn: {
     metaDescription: 'ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ನಲ್ಲಿ ಎರಡು ದಿನಗಳ ರಾತ್ರಿ ವಾಸ್ತವ್ಯ ಶಿಬಿರ — ಆಗಮನ, ಸೂರ್ಯಾಸ್ತದ ವೀಕ್ಷಣಾ ಸ್ಥಳಕ್ಕೆ ಚಾರಣ, ಕ್ಯಾಂಪ್‌ಫೈರ್, ಮತ್ತು ಮಾರನೆಯ ಬೆಳಿಗ್ಗೆ ಮಾರ್ಗದರ್ಶಿತ ಫಾರ್ಮ್ ಪ್ರವಾಸ.',
-    heroEyebrow: 'ನಮ್ಮನ್ನು ಭೇಟಿ ಮಾಡಿ',
     heroTitle: 'ರಾತ್ರಿ ವಾಸ್ತವ್ಯ ಶಿಬಿರ',
     heroIntro: 'ಸ್ಮರಣೀಯ ಶಿಬಿರಕ್ಕೆ ಬೇಕಾದ ಎಲ್ಲವೂ — ಟೆಂಟ್ ವಸತಿ, ಮನೆಯಲ್ಲಿ ಬೇಯಿಸಿದ ಊಟಗಳು, ಮತ್ತು ಸೂರ್ಯಾಸ್ತವನ್ನು ಕಾಣಲು ಚಾರಣ.',
     day1Heading: '1ನೇ ದಿನ',
@@ -62,7 +60,6 @@ const content = {
   },
   ta: {
     metaDescription: 'டமரிண்ட் வேலி கலெக்டிவில் இரண்டு நாள் இரவு தங்கும் முகாம் — வருகை, சூரிய அஸ்தமன பார்வையிடத்திற்கு மலையேற்றம், கேம்ப்ஃபயர், மற்றும் மறுநாள் காலை வழிகாட்டப்பட்ட பண்ணை சுற்றுலா.',
-    heroEyebrow: 'எங்களை பார்வையிடுங்கள்',
     heroTitle: 'இரவு தங்கும் முகாம்',
     heroIntro: 'மறக்க முடியாத முகாமிற்குத் தேவையான அனைத்தும் — கூடார தங்குமிடம், வீட்டில் சமைத்த உணவுகள், மற்றும் சூரிய அஸ்தமனத்தைக் காண மலையேற்றம்.',
     day1Heading: 'நாள் 1',
@@ -90,7 +87,7 @@ const c = content[lang];
 ---
 
 <BaseLayout lang={lang} title={t('nav.camping')} description={c.metaDescription} image="/images/pages/home/gallery-1.jpg" imageWidth={768} imageHeight={576}>
-  <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} intro={c.heroIntro} image="/images/pages/home/gallery-1.jpg" imageAlt="Aerial view of TVC's camping huts and firepit clearing on the hillside" />
+  <PageHero eyebrow={t('nav.visitTvc')} title={c.heroTitle} intro={c.heroIntro} image="/images/pages/home/gallery-1.jpg" imageAlt="Aerial view of TVC's camping huts and firepit clearing on the hillside" />
 
   <section class="section wrapper">
     <h2>{c.day1Heading}</h2>

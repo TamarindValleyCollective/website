@@ -4,13 +4,14 @@ import PageHero from '../PageHero.astro';
 import PhotoGallery from '../photos/PhotoGallery.astro';
 import OnThisDay from '../photos/OnThisDay.astro';
 import { getCollection } from 'astro:content';
-import { type Locale } from '../../i18n/utils';
+import { useTranslations, type Locale } from '../../i18n/utils';
 
 interface Props {
   lang: Locale;
 }
 
 const { lang } = Astro.props;
+const t = useTranslations(lang);
 
 const photos = (await getCollection('photos')).sort((a, b) => b.data.takenAt.valueOf() - a.data.takenAt.valueOf());
 
@@ -18,7 +19,6 @@ const content = {
   en: {
     metaTitle: 'In Pictures',
     metaDescription: 'Photos of Tamarind Valley Collective — the land, the community, and daily life at TVC, from 2017 to today.',
-    heroEyebrow: 'About Us',
     heroTitle: 'In Pictures',
     heroIntro: 'Pictures are worth 10,000 words — an old proverb, still true. Curated highlights below, with camera and location details where we have them.',
     heroImageAlt: 'A child climbing a tree at TVC',
@@ -26,7 +26,6 @@ const content = {
   kn: {
     metaTitle: 'ಚಿತ್ರಗಳಲ್ಲಿ',
     metaDescription: 'ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ನ ಫೋಟೋಗಳು — ಭೂಮಿ, ಸಮುದಾಯ, ಮತ್ತು 2017 ರಿಂದ ಇಂದಿನವರೆಗಿನ TVC ಯ ದೈನಂದಿನ ಜೀವನ.',
-    heroEyebrow: 'ನಮ್ಮ ಬಗ್ಗೆ',
     heroTitle: 'ಚಿತ್ರಗಳಲ್ಲಿ',
     heroIntro: 'ಚಿತ್ರಗಳು 10,000 ಪದಗಳಿಗೆ ಸಮ — ಒಂದು ಹಳೆಯ ಗಾದೆ, ಇನ್ನೂ ನಿಜ. ಕೆಳಗೆ ಆಯ್ದ ಮುಖ್ಯಾಂಶಗಳು, ನಮ್ಮಲ್ಲಿರುವಲ್ಲಿ ಕ್ಯಾಮೆರಾ ಮತ್ತು ಸ್ಥಳದ ವಿವರಗಳೊಂದಿಗೆ.',
     heroImageAlt: 'TVC ಯಲ್ಲಿ ಮರವನ್ನು ಹತ್ತುತ್ತಿರುವ ಮಗು',
@@ -34,7 +33,6 @@ const content = {
   ta: {
     metaTitle: 'படங்களில்',
     metaDescription: 'டமரிண்ட் வேலி கலெக்டிவின் புகைப்படங்கள் — நிலம், சமூகம், மற்றும் 2017 முதல் இன்று வரையிலான TVC-யின் அன்றாட வாழ்க்கை.',
-    heroEyebrow: 'எங்களைப் பற்றி',
     heroTitle: 'படங்களில்',
     heroIntro: 'படங்கள் 10,000 வார்த்தைகளுக்கு சமம் — ஒரு பழைய பழமொழி, இன்னும் உண்மை. கீழே தேர்ந்தெடுக்கப்பட்ட சிறப்பம்சங்கள், எங்களிடம் இருக்கும் இடத்தில் கேமரா மற்றும் இருப்பிட விவரங்களுடன்.',
     heroImageAlt: 'TVC-யில் மரம் ஏறும் குழந்தை',
@@ -45,7 +43,7 @@ const c = content[lang];
 ---
 
 <BaseLayout lang={lang} title={c.metaTitle} description={c.metaDescription} image="https://media.tvc.farm/photos/2024/2024-08-18-img-1880-display.jpg" imageWidth={4032} imageHeight={3024}>
-  <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} intro={c.heroIntro} image="https://media.tvc.farm/photos/2024/2024-08-18-img-1880-display.jpg" imageAlt={c.heroImageAlt} />
+  <PageHero eyebrow={t('nav.about')} title={c.heroTitle} intro={c.heroIntro} image="https://media.tvc.farm/photos/2024/2024-08-18-img-1880-display.jpg" imageAlt={c.heroImageAlt} />
 
   <section class="section wrapper">
     <OnThisDay photos={photos} lang={lang} />

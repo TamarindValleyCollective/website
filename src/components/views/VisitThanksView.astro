@@ -2,19 +2,19 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import { getRelativeLocaleUrl } from 'astro:i18n';
-import type { Locale } from '../../i18n/utils';
+import { useTranslations, type Locale } from '../../i18n/utils';
 
 interface Props {
   lang: Locale;
 }
 
 const { lang } = Astro.props;
+const t = useTranslations(lang);
 
 const content = {
   en: {
     title: 'Thanks',
     metaDescription: "We've received your inquiry.",
-    heroEyebrow: 'Visit Us',
     heroTitle: "We've got your inquiry",
     bodyText: "Thanks for reaching out — we'll get back to you shortly with availability and any details you asked about. If it's urgent, message us on WhatsApp and we'll reply faster.",
     backLink: '← Back to Visit',
@@ -22,7 +22,6 @@ const content = {
   kn: {
     title: 'ಧನ್ಯವಾದಗಳು',
     metaDescription: 'ನಿಮ್ಮ ವಿಚಾರಣೆಯನ್ನು ನಾವು ಸ್ವೀಕರಿಸಿದ್ದೇವೆ.',
-    heroEyebrow: 'ನಮ್ಮನ್ನು ಭೇಟಿ ಮಾಡಿ',
     heroTitle: 'ನಿಮ್ಮ ವಿಚಾರಣೆ ನಮಗೆ ತಲುಪಿದೆ',
     bodyText: 'ಸಂಪರ್ಕಿಸಿದ್ದಕ್ಕೆ ಧನ್ಯವಾದಗಳು — ಲಭ್ಯತೆ ಮತ್ತು ನೀವು ಕೇಳಿದ ಯಾವುದೇ ವಿವರಗಳೊಂದಿಗೆ ನಾವು ಶೀಘ್ರದಲ್ಲೇ ನಿಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸುತ್ತೇವೆ. ಇದು ತುರ್ತಾಗಿದ್ದರೆ, WhatsApp ನಲ್ಲಿ ನಮಗೆ ಸಂದೇಶ ಕಳುಹಿಸಿ, ನಾವು ವೇಗವಾಗಿ ಪ್ರತ್ಯುತ್ತರ ನೀಡುತ್ತೇವೆ.',
     backLink: '← ಭೇಟಿಗೆ ಹಿಂತಿರುಗಿ',
@@ -30,7 +29,6 @@ const content = {
   ta: {
     title: 'நன்றி',
     metaDescription: 'உங்கள் விசாரணையை நாங்கள் பெற்றுள்ளோம்.',
-    heroEyebrow: 'எங்களை பார்வையிடுங்கள்',
     heroTitle: 'உங்கள் விசாரணை எங்களுக்குக் கிடைத்துவிட்டது',
     bodyText: 'தொடர்பு கொண்டதற்கு நன்றி — கிடைக்கும் தன்மை மற்றும் நீங்கள் கேட்ட எந்த விவரங்களுடனும் விரைவில் உங்களைத் தொடர்பு கொள்வோம். அவசரமாக இருந்தால், WhatsApp-இல் எங்களுக்கு செய்தி அனுப்புங்கள், நாங்கள் வேகமாக பதிலளிப்போம்.',
     backLink: '← வருகைக்குத் திரும்பு',
@@ -41,7 +39,7 @@ const c = content[lang];
 ---
 
 <BaseLayout lang={lang} title={c.title} description={c.metaDescription} image="/images/pages/home/gallery-4.jpg" imageWidth={1280} imageHeight={960} noindex>
-  <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} image="/images/pages/home/gallery-4.jpg" imageAlt="Sunset over the Melagiri Hills" />
+  <PageHero eyebrow={t('nav.visitTvc')} title={c.heroTitle} image="/images/pages/home/gallery-4.jpg" imageAlt="Sunset over the Melagiri Hills" />
 
   <section class="section wrapper">
     <p>{c.bodyText}</p>

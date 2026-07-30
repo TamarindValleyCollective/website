@@ -31,7 +31,6 @@ const content = {
     pageTitle: 'Host Your Event at TVC',
     metaDescription:
       'Bring your retreat, workshop, or camp to Tamarind Valley Collective — a 98-acre hillslope in the Melagiri Hills with some of the darkest skies around, on-site camping, and a track record hosting everything from biodiversity walks to a week-long computation retreat.',
-    heroEyebrow: 'Visit Us',
     heroIntro:
       '98 acres of hill country, some of the darkest skies around, and room to camp — the setting for team outings, workshops, retreats, and camps of every kind.',
     whyHereHeading: 'Why here',
@@ -72,7 +71,6 @@ const content = {
     pageTitle: 'TVC ನಲ್ಲಿ ನಿಮ್ಮ ಕಾರ್ಯಕ್ರಮವನ್ನು ಆಯೋಜಿಸಿ',
     metaDescription:
       'ನಿಮ್ಮ ರಿಟ್ರೀಟ್, ಕಾರ್ಯಾಗಾರ ಅಥವಾ ಶಿಬಿರವನ್ನು ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ಗೆ ತನ್ನಿ — ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳಲ್ಲಿ 98 ಎಕರೆಗಳ ಇಳಿಜಾರು, ಸುತ್ತಮುತ್ತಲಿನ ಅತ್ಯಂತ ಕತ್ತಲಾದ ಆಕಾಶ, ಸ್ಥಳದಲ್ಲೇ ಕ್ಯಾಂಪಿಂಗ್, ಮತ್ತು ಜೀವವೈವಿಧ್ಯ ನಡಿಗೆಗಳಿಂದ ಹಿಡಿದು ವಾರ-ಉದ್ದದ ಕಂಪ್ಯೂಟೇಶನ್ ರಿಟ್ರೀಟ್‌ವರೆಗೆ ಎಲ್ಲವನ್ನೂ ಆಯೋಜಿಸಿದ ಅನುಭವ.',
-    heroEyebrow: 'ನಮ್ಮನ್ನು ಭೇಟಿ ಮಾಡಿ',
     heroIntro:
       '98 ಎಕರೆ ಬೆಟ್ಟ ಪ್ರದೇಶ, ಸುತ್ತಮುತ್ತಲಿನ ಅತ್ಯಂತ ಕತ್ತಲಾದ ಆಕಾಶ, ಮತ್ತು ಕ್ಯಾಂಪ್ ಮಾಡಲು ಸ್ಥಳ — ತಂಡದ ಪ್ರವಾಸಗಳು, ಕಾರ್ಯಾಗಾರಗಳು, ರಿಟ್ರೀಟ್‌ಗಳು ಮತ್ತು ಎಲ್ಲ ರೀತಿಯ ಶಿಬಿರಗಳಿಗೆ ಸೂಕ್ತ ಸ್ಥಳ.',
     whyHereHeading: 'ಇಲ್ಲೇಕೆ',
@@ -113,7 +111,6 @@ const content = {
     pageTitle: 'TVC-யில் உங்கள் நிகழ்வை நடத்துங்கள்',
     metaDescription:
       'உங்கள் ரிட்ரீட், பட்டறை அல்லது முகாமை டமரிண்ட் வேலி கலெக்டிவுக்கு கொண்டு வாருங்கள் — மேலகிரி மலைகளில் 98 ஏக்கர் மலைச்சரிவு, சுற்றியுள்ள மிக இருண்ட வானம், இடத்திலேயே முகாமிடும் வசதி, மற்றும் பல்லுயிர் நடைப்பயணங்கள் முதல் ஒரு வார கம்ப்யூடேஷன் ரிட்ரீட் வரை அனைத்தையும் நடத்திய அனுபவம்.',
-    heroEyebrow: 'எங்களை பார்வையிடுங்கள்',
     heroIntro:
       '98 ஏக்கர் மலை நாடு, சுற்றியுள்ள மிக இருண்ட வானம், மற்றும் முகாமிட இடம் — குழு உல்லாசப் பயணங்கள், பட்டறைகள், ரிட்ரீட்கள், மற்றும் அனைத்து வகை முகாம்களுக்கும் ஏற்ற இடம்.',
     whyHereHeading: 'ஏன் இங்கே',
@@ -157,7 +154,7 @@ const c = content[lang];
 
 <BaseLayout lang={lang} title={c.pageTitle} description={c.metaDescription} image="/images/pages/home/gallery-4.jpg" imageWidth={1280} imageHeight={960}>
   <PageHero
-    eyebrow={c.heroEyebrow}
+    eyebrow={t('nav.visitTvc')}
     title={c.pageTitle}
     intro={c.heroIntro}
     image="/images/pages/home/gallery-4.jpg"
