@@ -46,31 +46,25 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
     <div class="nav__right">
       <nav class="nav__menu" id="nav-menu">
         {navItems.map((item) => (
-          item.children ? (
-            <div class="nav__item">
-              <button
-                type="button"
-                class:list={['nav__link', 'nav__link--toggle', { 'is-active': isSectionActive(item.children) }]}
-                aria-haspopup="true"
-              >
-                {item.label}
-                <svg class="nav__caret" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
-                  <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </button>
-              <div class:list={['nav__dropdown', { 'nav__dropdown--wide': item.wide }]}>
-                {item.children.map((child) => (
-                  <a href={localizedHref(child.href)} class:list={['nav__sublink', { 'is-active': isActive(child.href) }]}>
-                    {t(`nav.${child.key}`)}
-                  </a>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <a href={localizedHref(item.href)} class:list={['nav__link', { 'is-active': isActive(item.href) }]}>
+          <div class="nav__item">
+            <button
+              type="button"
+              class:list={['nav__link', 'nav__link--toggle', { 'is-active': isSectionActive(item.children) }]}
+              aria-haspopup="true"
+            >
               {item.label}
-            </a>
-          )
+              <svg class="nav__caret" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+                <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <div class:list={['nav__dropdown', { 'nav__dropdown--wide': item.wide }]}>
+              {item.children.map((child) => (
+                <a href={localizedHref(child.href)} class:list={['nav__sublink', { 'is-active': isActive(child.href) }]}>
+                  {t(`nav.${child.key}`)}
+                </a>
+              ))}
+            </div>
+          </div>
         ))}
       </nav>
 

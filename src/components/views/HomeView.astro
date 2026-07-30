@@ -853,11 +853,13 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
 
   // Smoothstep ease -- a linear opacity ramp reads as mechanical; this
   // makes the same scroll distance feel like a deliberate, settling fade.
-  function ease(t) {
+  function ease(t: number) {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   }
 
   if (imageEl && scrimEl && !reduceMotion) {
+    const heroImage = imageEl;
+    const heroScrim = scrimEl;
     let ticking = false;
 
     function update() {
@@ -870,8 +872,8 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
       const fadeDistance = window.innerHeight;
       const progress = Math.min(Math.max(window.scrollY / fadeDistance, 0), 1);
       const opacity = String(1 - ease(progress));
-      imageEl.style.opacity = opacity;
-      scrimEl.style.opacity = opacity;
+      heroImage.style.opacity = opacity;
+      heroScrim.style.opacity = opacity;
     }
 
     function onScroll() {

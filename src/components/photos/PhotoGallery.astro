@@ -821,7 +821,7 @@ const uiStringsJsonSafe = JSON.stringify(c).replace(/<\/script/gi, '<\\/script')
   function renderMapSidebar() {
     const geo = visibleSlugs()
       .map((slug) => byslug.get(slug))
-      .filter((p): p is PhotoData => Boolean(p?.gps));
+      .filter((p): p is PhotoData & { gps: { lat: number; lng: number } } => Boolean(p?.gps));
 
     const countEl = document.getElementById('map-sidebar-count');
     if (countEl) countEl.textContent = `${geo.length} ${STR.of} ${visibleSlugs().length} ${STR.shownPhotosHaveLocation}`;
