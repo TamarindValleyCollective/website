@@ -88,28 +88,22 @@ html {
      behind the sticky nav. Site-wide since any future #anchor link would
      hit the same issue. */
   scroll-padding-top: 100px;
-  /* Without this, <html> defaults to transparent, which mobile browsers
-     paint as raw black canvas. body already has the cream background
-     below, but position: fixed/sticky elements (Nav.astro, the hero's
-     fixed backdrop) can momentarily disagree about the viewport during
-     pinch-zoom on mobile, exposing a sliver beyond body's own box - seen
-     as a black notch next to the sticky nav specifically on kn/ta pages,
-     where TranslationNotice.astro adds extra height there that English
-     doesn't have. Matching body's color here means any such gap reads as
-     "same as the page" instead of a jarring void. */
-  background: var(--tvc-cream);
 }
 
 body {
-  /* Establishes body's own stacking context so the fixed, z-index:-1 hero
-     background images (HomeView.astro, PageHero.astro) are compared
-     against body's content instead of against <html>'s own background
-     directly - without this, giving <html> a background-color (above)
-     makes browsers paint it as an opaque canvas layer that sits in front
-     of any negative-z-index descendant, hiding every hero photo site-wide.
-     isolation:isolate creates the stacking context with no layout effect,
-     unlike position:relative. */
-  isolation: isolate;
+  /* Tried giving <html> a background-color to fix a black gap that mobile
+     browsers can expose next to the sticky nav on kn/ta pages during
+     pinch-zoom (TranslationNotice.astro adds height there that English
+     doesn't have). That broke every hero photo site-wide instead (both
+     HomeView.astro's and PageHero.astro's fixed, z-index:-1 backgrounds
+     render behind an opaque <html> canvas layer). Giving body its own
+     stacking context via isolation:isolate fixed the photos back, but
+     also stopped browsers from using <html>'s background for that same
+     pinch-zoom canvas, bringing the gap right back - the two fixes fight
+     each other through under-specified, browser-heuristic behavior this
+     codebase can't reliably control. Reverted both rather than risk
+     another site-wide outage for what's a momentary, gesture-only
+     cosmetic gap; revisit with real-device testing before trying again. */
   background: var(--tvc-cream);
   color: var(--tvc-ink);
   font-family: var(--font-body);
