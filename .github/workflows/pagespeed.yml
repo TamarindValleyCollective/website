@@ -1,0 +1,70 @@
+name: PageSpeed Insights
+
+# Reports Lighthouse-equivalent scores (Performance, Accessibility, Best
+# Practices, SEO) for a few key pages, computed server-side by Google's
+# PageSpeed Insights API against the live production site. Chosen over
+# @netlify/plugin-lighthouse specifically to avoid pulling in that plugin's
+# bundled lighthouse/puppeteer-core chain, which currently carries several
+# high-severity transitive vulnerabilities (see npm audit) - this workflow
+# adds zero new npm dependencies. Report-only for now (doesn't fail the
+# job on a low score) until there's a real baseline to set thresholds
+# against.
+#
+# Optional: add a PAGESPEED_API_KEY repo secret (console.cloud.google.com,
+# enable the "PageSpeed Insights API") to raise the rate limit - works
+# without one, just more prone to 429s if run often.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Mondays, 03:00 UTC (~08:30 IST) - infrequent on purpose; PSI's
+    # keyless quota is low and scores don't move often for a mostly-static
+    # site like this one.
+    - cron: '0 3 * * 1'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run PageSpeed Insights for key pages
+        env:
+          PAGESPEED_API_KEY: ${{ secrets.PAGESPEED_API_KEY }}
+        run: |
+          set -uo pipefail
+
+          urls=(
+            "https://tvc.farm/"
+            "https://tvc.farm/visit"
+            "https://tvc.farm/events"
+          )
+
+          echo "## PageSpeed Insights — mobile" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Page | Performance | Accessibility | Best Practices | SEO |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+
+          for url in "${urls[@]}"; do
+            api_url="https://pagespeedonline.googleapis.com/pagespeedonline/v5/runPagespeed?url=${url}&strategy=mobile&category=performance&category=accessibility&category=best-practices&category=seo"
+            if [ -n "${PAGESPEED_API_KEY:-}" ]; then
+              api_url="${api_url}&key=${PAGESPEED_API_KEY}"
+            fi
+
+            response=$(curl -sS --max-time 90 "$api_url" || echo '{}')
+            error_message=$(echo "$response" | jq -r '.error.message // empty')
+
+            if [ -n "$error_message" ]; then
+              echo "| $url | error: $error_message | | | |" >> "$GITHUB_STEP_SUMMARY"
+              echo "::warning::PageSpeed Insights failed for $url — $error_message"
+              continue
+            fi
+
+            perf=$(echo "$response" | jq -r '((.lighthouseResult.categories.performance.score // "null") | if . == "null" then "—" else (. * 100 | round | tostring) + "%" end)')
+            a11y=$(echo "$response" | jq -r '((.lighthouseResult.categories.accessibility.score // "null") | if . == "null" then "—" else (. * 100 | round | tostring) + "%" end)')
+            bp=$(echo "$response" | jq -r '((.lighthouseResult.categories["best-practices"].score // "null") | if . == "null" then "—" else (. * 100 | round | tostring) + "%" end)')
+            seo=$(echo "$response" | jq -r '((.lighthouseResult.categories.seo.score // "null") | if . == "null" then "—" else (. * 100 | round | tostring) + "%" end)')
+
+            echo "| $url | $perf | $a11y | $bp | $seo |" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "_Report-only — doesn't fail the build. See the workflow file to add score thresholds once there's a baseline._" >> "$GITHUB_STEP_SUMMARY"
