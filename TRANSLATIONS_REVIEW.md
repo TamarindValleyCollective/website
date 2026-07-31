@@ -23,6 +23,11 @@ can go live before the other.
   namedrop ("Works for VMware") with little actual prose to translate, and about 20 of the 53
   have no bio at all. Section headings, intros, CTAs, and all 5 local-staff bios (which have
   fuller prose) **are** translated.
+- **`src/components/views/PartnersIndexView.astro`** (`/people/partners`) — the expanded
+  per-partner profiles (the markdown body in each `src/content/partners/*.md`) are
+  **English-only** in all locales, follow-up work like the Our Journey narrative above. Hero
+  copy, the "Visit their site" CTA, and each partner's `title`/`excerpt` (used on the `/people`
+  teaser card) **are** translated.
 - **`src/components/biodiversity/BiodiversityExplorer.astro`** — one minor tooltip
   (`title="Open full-size photo"` on the detail-panel photo link) was left untranslated.
 - **Privacy, Terms, Refund Policy, and the 404 page** (`/privacy`, `/terms`, `/refund-policy`,
@@ -43,6 +48,7 @@ can go live before the other.
 ### Pages (each has an English/Kannada/Tamil version at the same path, `kn`/`ta` prefixed)
 - Home (`/`), About (`/about`), The Design (`/about/design`)
 - People (`/people`) — **except the 53 member bios, see Known gaps above**
+- Partners & collaborators (`/people/partners`) — **except the per-partner profiles, see Known gaps above**
 - Our Journey (`/our-journey`) — **except the yearly narrative, see Known gaps above**
 - In Pictures (`/in-pictures`), Biodiversity (`/ecosystem`), Weather (`/ecosystem/geography`)
 - Resource Centre (`/resource-centre`)

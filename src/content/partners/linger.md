@@ -9,6 +9,8 @@ coverImage: "/images/partners/linger.png"
 url: "https://linger.in/"
 ---
 
-Linger runs a collection of farmstays and rural retreats across India, built around slow travel — unhurried, unscheduled time at coffee estates, bush camps, and farms near Bangalore, in the Himalayas, and beyond.
+Linger runs a curated network of farmstays and rural retreats across India, built around slow travel — forgetting schedules, embracing spontaneity, and, as they put it, relearning how to do nothing. It's a deliberate counter to itinerary-driven tourism: no rush, no checklist, just time at a place.
+
+The network spans coffee country (Coorg, Chikmagalur, Sakleshpur), destinations within easy reach of Bangalore (Magadi, Krishnagiri Hills, Doddaballapura), and the Himalayas (Palampur, Kumaon, Corbett) — coffee estates, working farms, and converted heritage properties united by a shared "authentic, low-density, quiet" positioning rather than a single architectural style.
 
 Linger is TVC's hospitality partner and handles bookings for day visits and overnight stays — [TVC has its own listing on their platform](https://tamarindvalleycollective-farmstay.linger.in/), with directions, campsite details, and booking options.

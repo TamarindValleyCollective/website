@@ -9,6 +9,8 @@ coverImage: "/images/partners/arocha.svg"
 url: "https://www.arocha.in/"
 ---
 
-A Rocha India is a conservation charity that has worked in the Bannerghatta–Hosur Landscape — spanning Karnataka and Tamil Nadu — since 2003. Their Asian Elephant Conservation Program is the longest-running ecological study of elephants in the region, combining research on population and movement patterns with practical human-elephant conflict mitigation: land vulnerability assessments, barrier recommendations, and sensor-based early-warning systems for forest-edge communities.
+A Rocha India is a public charity and part of an international conservation network active in 22 countries across 5 continents. Its India chapter has worked the Bannerghatta–Hosur Landscape — ecologically sensitive Eastern Ghats terrain straddling south Karnataka and north Tamil Nadu — since 2003, running programs across five areas: elephant conservation, human-wildlife conflict mitigation, community livelihoods, environmental education, and land-use policy.
+
+The centerpiece is the Asian Elephant Conservation Program, the longest-running ecological study of elephants in the region. It combines research on population and movement patterns with practical conflict mitigation — land vulnerability assessments, barrier recommendations, and sensor-based early-warning systems for forest-edge communities — alongside livelihood and education work with the villages that share this landscape with the elephants.
 
 A Rocha India now partners with TVC to help manage our relationship with the elephants that pass through from the adjoining forest corridor — turning farm-level experience into part of their wider study, and their research into practical guidance for us.

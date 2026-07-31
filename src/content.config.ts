@@ -51,12 +51,12 @@ const partners = defineCollection({
     title: z.string(),
     excerpt: z.string(),
     coverImage: z.string().optional(),
-    // Rendered as a compact card directly on /people (see the "Partners &
-    // collaborators" section there) rather than each partner getting its
-    // own page - with 88-130 words of content per partner, a dedicated
-    // route, breadcrumb, and Organization schema per partner was more
-    // scaffolding than the content warranted. This links straight out to
-    // the partner's own site instead.
+    // Full markdown body is the expanded partner profile, rendered on the
+    // shared /people/partners listing page (PartnersIndexView.astro) - one
+    // page for all partners rather than a route per partner, since there
+    // are only 5 of them. `excerpt` is just the short card/teaser copy used
+    // on /people; `url` is the partner's own site, linked as a secondary CTA
+    // rather than the card's main click target.
     url: z.string().url(),
     // Kannada/Tamil translations (AI-drafted, pending native-speaker review
     // - see TRANSLATIONS_REVIEW.md). Optional so a partner card renders
