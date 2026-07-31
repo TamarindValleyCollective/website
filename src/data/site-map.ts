@@ -19,7 +19,17 @@ export interface SiteLink {
 
 export const EXPLORE_LINKS: SiteLink[] = [
   { label: 'About Us', key: 'about', href: '/about' },
-  { label: 'People', key: 'people', href: '/people' },
+  {
+    label: 'People',
+    key: 'people',
+    href: '/people',
+    children: [
+      { label: 'Member Families', key: 'members', href: '/people/members' },
+      { label: 'Local Staff', key: 'staff', href: '/people/staff' },
+      { label: 'Partners', key: 'partners', href: '/people/partners' },
+      { label: 'Community Outreach', key: 'communityOutreach', href: '/people/community-outreach' },
+    ],
+  },
   { label: 'Our Journey', key: 'ourJourney', href: '/our-journey' },
   { label: 'In Pictures', key: 'inPictures', href: '/in-pictures' },
   {

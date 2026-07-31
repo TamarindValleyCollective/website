@@ -14,7 +14,7 @@ const t = useTranslations(lang);
 
 // Inline links inside prose (set:html) are built up front so each locale's
 // text only needs to interpolate a ready-made, locale-aware href.
-const peopleHref = getRelativeLocaleUrl(lang, '/people#members');
+const peopleHref = getRelativeLocaleUrl(lang, '/people/members');
 const contactHref = getRelativeLocaleUrl(lang, '/contact');
 
 const content = {

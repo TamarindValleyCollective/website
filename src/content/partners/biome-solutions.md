@@ -7,10 +7,9 @@ title_ta: "பயோம் சொல்யூஷன்ஸ்"
 excerpt_ta: "TVC-யின் வீட்டு வடிவமைப்பின் பின்னணியில் உள்ள பெங்களூரு கட்டிடக்கலை நிறுவனம், சூழலியல் மற்றும் நிலைத்தன்மையான வடிவமைப்பில் செயல்படுகிறது."
 coverImage: "/images/partners/biome-solutions.png"
 url: "https://www.biome-solutions.com/"
+tvcConnection: "Has led home design for the TVC community from early on."
+tvcConnection_kn: "TVC ಸಮುದಾಯದ ಮನೆ ವಿನ್ಯಾಸವನ್ನು ಆರಂಭದಿಂದಲೂ ಮುನ್ನಡೆಸಿದೆ."
+tvcConnection_ta: "TVC சமூகத்தின் வீட்டு வடிவமைப்பை ஆரம்பத்திலிருந்தே வழிநடத்தியுள்ளது."
 ---
 
-Biome Environmental Solutions is a Bangalore-based architecture and design firm led by Vishwanath S and Chitra Vishwanath, as Founder & Director and Principal Architect & Founder/MD respectively. The firm's stated aim is to show that ecological design can be mainstream — relevant across geography, building type, and scale — rather than a niche practice reserved for a handful of showcase projects.
-
-Their portfolio runs from private homes to institutional and community-scale work: schools including The Yellow Train School, Buddhi School, and Mathru School for the Blind; the Mathru Centre for Developmental Disabilities; eco-lodges and retreats like Waghoba Ecolodge and VAY Retreats; the well-known Govardhan Eco Village; and university campus and village-scale master planning.
-
-Biome has led home design for the TVC community from early on, shaping how the farm's houses are built to sit lightly on the land alongside its regenerative farming.
+Biome Environmental Solutions is a Bangalore-based architecture and design firm led by Vishwanath S and Chitra Vishwanath, focused on making ecological design mainstream rather than a niche practice — from private homes to schools, eco-lodges, and village-scale master planning, including the well-known Govardhan Eco Village.

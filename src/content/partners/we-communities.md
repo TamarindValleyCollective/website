@@ -7,10 +7,9 @@ title_ta: "வீகம்யூனிட்டீஸ்"
 excerpt_ta: "TVC நிறுவப்பட உதவிய ரியல் எஸ்டேட் கூட்டாளர் — உண்மையில், TVC அவர்களின் முதல் திட்டமாக இருந்தது."
 coverImage: "/images/partners/we-communities.png"
 url: "https://wecommunities.in/"
+tvcConnection: "Helped found TVC in 2016 — TVC was their very first project."
+tvcConnection_kn: "2016 ರಲ್ಲಿ TVC ಸ್ಥಾಪನೆಗೆ ಸಹಾಯ ಮಾಡಿತು — TVC ಅವರ ಮೊದಲ ಯೋಜನೆಯಾಗಿತ್ತು."
+tvcConnection_ta: "2016 இல் TVC நிறுவப்பட உதவியது — TVC அவர்களின் முதல் திட்டமாக இருந்தது."
 ---
 
-WeCommunities develops sustainable residential farm communities across India — pairing eco-conscious housing with regenerative agriculture on large tracts of land, run on community-first decision-making about land stewardship and shared living. Before laying out a new site, the team studies "the laws of the land" to shape a farm design plan around agroforestry, ecological design, and natural building materials, aiming for homes that minimize ecological impact while running on renewable energy and locally sourced materials.
-
-The model has since grown into multiple collectives: Neemli Hillside Collective, a 100+ bigha agroforestry farm in the Aravalli range about 90 minutes from Gurgaon; Madakkal Ridges, a 70+ acre agroforestry and food forest collective near Bangalore; and Rose Valley Collective, also near Bangalore, with further sites planned. Member communities produce chemical-free vegetables and value-added products like pickles, oils, and dairy, and host farm visits and overnight stays of their own.
-
-TVC's founding group partnered with WeCommunities to turn a seed idea into an actual piece of land back in 2016 — TVC was their very first project, and the model that later grew into their current collectives.
+WeCommunities develops sustainable residential farm communities across India — pairing eco-conscious housing with regenerative agriculture on large tracts of land, run on community-first decision-making. The model has grown into multiple collectives, including Neemli Hillside near Gurgaon and Madakkal Ridges near Bangalore.

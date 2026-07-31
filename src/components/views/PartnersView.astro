@@ -27,29 +27,40 @@ function partnerTitle(p: (typeof partners)[number]) {
   return p.data.title;
 }
 
+// May contain simple inline HTML (e.g. Linger's link to TVC's own listing)
+// - rendered with set:html below, same as AboutView's inline prose links.
+function tvcConnection(p: (typeof partners)[number]) {
+  if (lang === 'kn') return p.data.tvcConnection_kn || p.data.tvcConnection;
+  if (lang === 'ta') return p.data.tvcConnection_ta || p.data.tvcConnection;
+  return p.data.tvcConnection;
+}
+
 // Page-specific prose only - shared chrome comes from src/i18n/*.ts via
 // t() in the components this page uses (BaseLayout, Nav, Footer).
 const content = {
   en: {
-    metaDescription: "TVC's partners and collaborators — conservation, land design, architecture, foraging, hospitality, and the real estate partner who helped found TVC.",
+    metaDescription: "TVC's partners — conservation, land design, architecture, foraging, hospitality, and the real estate partner who helped found TVC.",
     heroEyebrow: 'People',
-    heroTitle: 'Partners & collaborators',
+    heroTitle: 'Partners',
     heroIntro: "Beyond TVC's own community, a handful of organizations have supported us along the way — from hospitality to permaculture design.",
-    visitLink: 'Visit their site →',
+    tvcLabel: 'With TVC',
+    visitLink: 'Visit site ↗',
   },
   kn: {
-    metaDescription: 'TVC ಯ ಪಾಲುದಾರರು ಮತ್ತು ಸಹಯೋಗಿಗಳು — ಸಂರಕ್ಷಣೆ, ಭೂ ವಿನ್ಯಾಸ, ವಾಸ್ತುಶಿಲ್ಪ, ಫೊರೇಜಿಂಗ್, ಆತಿಥ್ಯ, ಮತ್ತು TVC ಸ್ಥಾಪನೆಗೆ ಸಹಾಯ ಮಾಡಿದ ರಿಯಲ್ ಎಸ್ಟೇಟ್ ಪಾಲುದಾರ.',
+    metaDescription: 'TVC ಯ ಪಾಲುದಾರರು — ಸಂರಕ್ಷಣೆ, ಭೂ ವಿನ್ಯಾಸ, ವಾಸ್ತುಶಿಲ್ಪ, ಫೊರೇಜಿಂಗ್, ಆತಿಥ್ಯ, ಮತ್ತು TVC ಸ್ಥಾಪನೆಗೆ ಸಹಾಯ ಮಾಡಿದ ರಿಯಲ್ ಎಸ್ಟೇಟ್ ಪಾಲುದಾರ.',
     heroEyebrow: 'ಜನರು',
-    heroTitle: 'ಪಾಲುದಾರರು ಮತ್ತು ಸಹಯೋಗಿಗಳು',
+    heroTitle: 'ಪಾಲುದಾರರು',
     heroIntro: 'TVC ಯ ಸ್ವಂತ ಸಮುದಾಯದ ಆಚೆಗೂ, ಕೆಲವು ಸಂಸ್ಥೆಗಳು ಆತಿಥ್ಯದಿಂದ ಪರ್ಮಾಕಲ್ಚರ್ ವಿನ್ಯಾಸದವರೆಗೆ ನಮಗೆ ಬೆಂಬಲ ನೀಡಿವೆ.',
-    visitLink: 'ಅವರ ಸೈಟ್‌ಗೆ ಭೇಟಿ ನೀಡಿ →',
+    tvcLabel: 'TVC ಜೊತೆ',
+    visitLink: 'ಸೈಟ್‌ಗೆ ಭೇಟಿ ↗',
   },
   ta: {
-    metaDescription: 'TVC-யின் கூட்டாளர்கள் மற்றும் ஒத்துழைப்பாளர்கள் — பாதுகாப்பு, நில வடிவமைப்பு, கட்டிடக்கலை, ஃபோரேஜிங், விருந்தோம்பல், மற்றும் TVC நிறுவப்பட உதவிய ரியல் எஸ்டேட் கூட்டாளர்.',
+    metaDescription: 'TVC-யின் கூட்டாளர்கள் — பாதுகாப்பு, நில வடிவமைப்பு, கட்டிடக்கலை, ஃபோரேஜிங், விருந்தோம்பல், மற்றும் TVC நிறுவப்பட உதவிய ரியல் எஸ்டேட் கூட்டாளர்.',
     heroEyebrow: 'மக்கள்',
-    heroTitle: 'கூட்டாளர்கள் மற்றும் ஒத்துழைப்பாளர்கள்',
+    heroTitle: 'கூட்டாளர்கள்',
     heroIntro: 'TVC-யின் சொந்த சமூகத்திற்கு அப்பால், சில அமைப்புகள் விருந்தோம்பலில் இருந்து இயற்கை வேளாண்மை வடிவமைப்பு வரை எங்களுக்கு ஆதரவளித்துள்ளன.',
-    visitLink: 'அவர்களின் தளத்தைப் பார்வையிடவும் →',
+    tvcLabel: 'TVC உடன்',
+    visitLink: 'தளத்தைப் பார்க்க ↗',
   },
 } as const;
 
@@ -63,14 +74,17 @@ const c = content[lang];
     <div class="partners-list">
       {partnersWithContent.map(({ entry: p, Content }) => (
         <article class="partner">
-          {p.data.coverImage && <img src={p.data.coverImage} alt={partnerTitle(p)} class="partner__logo" loading="lazy" />}
-          <div class="partner__body">
-            <h2>{partnerTitle(p)}</h2>
-            <div class="prose">
-              <Content />
+          <div class="partner__head">
+            {p.data.coverImage && <img src={p.data.coverImage} alt={partnerTitle(p)} class="partner__logo" loading="lazy" />}
+            <div class="partner__heading">
+              <h2>{partnerTitle(p)}</h2>
+              <a class="partner__sitelink" href={p.data.url} target="_blank" rel="noopener noreferrer">{c.visitLink}</a>
             </div>
-            <a class="button button--outline" href={p.data.url} target="_blank" rel="noopener noreferrer">{c.visitLink}</a>
           </div>
+          <div class="prose">
+            <Content />
+          </div>
+          <p class="partner__tvc"><span class="partner__tvc-label">{c.tvcLabel}</span> <span set:html={tvcConnection(p)} /></p>
         </article>
       ))}
     </div>
@@ -81,14 +95,11 @@ const c = content[lang];
   .partners-list {
     display: flex;
     flex-direction: column;
-    gap: 40px;
+    gap: 32px;
   }
 
   .partner {
-    display: grid;
-    grid-template-columns: 120px 1fr;
-    gap: 24px;
-    padding-bottom: 40px;
+    padding-bottom: 32px;
     border-bottom: 1px solid var(--tvc-line);
   }
 
@@ -97,32 +108,74 @@ const c = content[lang];
     padding-bottom: 0;
   }
 
+  .partner__head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 10px;
+  }
+
   .partner__logo {
-    width: 100%;
-    aspect-ratio: 1;
+    width: 48px;
+    height: 48px;
     object-fit: contain;
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
-    padding: 12px;
+    padding: 6px;
     background: #fff;
+    flex-shrink: 0;
   }
 
-  .partner__body h2 {
-    margin-bottom: 12px;
+  .partner__heading {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 12px;
   }
 
-  .partner__body .prose :global(p) {
-    margin: 0 0 12px;
+  .partner__heading h2 {
+    margin: 0;
+  }
+
+  .partner__sitelink {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--tvc-green-dark);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .partner__sitelink:hover {
+    text-decoration: underline;
+  }
+
+  .prose :global(p) {
+    margin: 0 0 10px;
     color: var(--tvc-ink-soft);
   }
 
-  .partner__body .button {
-    margin-top: 8px;
+  /* The one fact readers actually scan for on a partner listing - kept
+     visually distinct from the general-description prose above instead of
+     buried as its last sentence (see content.config.ts's tvcConnection
+     comment). */
+  .partner__tvc {
+    margin: 10px 0 0;
+    padding: 10px 14px;
+    background: var(--tvc-green-tint);
+    border-radius: var(--radius);
+    font-size: 0.92rem;
   }
 
-  @media (max-width: 560px) {
-    .partner {
-      grid-template-columns: 72px 1fr;
-    }
+  .partner__tvc-label {
+    font-weight: 700;
+    color: var(--tvc-green-dark);
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.03em;
+    margin-right: 4px;
+  }
+
+  .partner__tvc :global(a) {
+    color: var(--tvc-green-dark);
   }
 </style>
