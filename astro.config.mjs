@@ -28,8 +28,12 @@ export default defineConfig({
   redirects: {
     // Ecosystem and Biodiversity were separate nav items covering the same
     // ground - merged into one page at /ecosystem with the live explorer
-    // folded in as its flagship section.
-    '/biodiversity': '/ecosystem',
+    // folded in as its flagship section. Later split back apart: /ecosystem
+    // became a genuine hub page (corridor/food forest/farm overview, cards
+    // into its three leaves) and the live explorer moved to its own leaf at
+    // /ecosystem/biodiversity, alongside Geography and Weather - so this old
+    // pre-Astro URL now points at the page that actually holds that content.
+    '/biodiversity': '/ecosystem/biodiversity',
     // Timeline was a top-level nav item and homepage card despite being
     // entirely a child of Our Journey (unlike its sibling /our-journey/design,
     // it wasn't even nested in the URL) - nested it properly and de-listed it

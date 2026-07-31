@@ -12,6 +12,7 @@ export default {
     people: 'மக்கள்',
     ourJourney: 'எங்கள் பயணம்',
     inPictures: 'படங்களில்',
+    ecosystem: 'சூழலமைப்பு',
     biodiversity: 'பல்லுயிர் பெருக்கம்',
     landscape: 'நிலம்',
     weather: 'வானிலை',

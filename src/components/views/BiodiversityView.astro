@@ -1,0 +1,67 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../PageHero.astro';
+import BiodiversityExplorer from '../biodiversity/BiodiversityExplorer.astro';
+import { type Locale } from '../../i18n/utils';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+
+// Page-specific prose only - shared chrome comes from src/i18n/*.ts via t()
+// in the components this page uses (BiodiversityExplorer, BaseLayout).
+const content = {
+  en: {
+    metaTitle: 'Biodiversity',
+    metaDescription: 'Live biodiversity sightings and birds at Tamarind Valley Collective.',
+    heroEyebrow: 'The TVC Ecosystem',
+    heroTitle: 'What lives here',
+    heroIntro: "From over 100 bird species in the food forest itself — explore live sightings below, filed alongside everything else we know about the land's ecosystem.",
+    heroImageAlt: 'A forest watering hole on the property, where wildlife comes to drink',
+    corridorHeading: 'Part of a working wildlife corridor',
+    corridorText1: 'TVC sits inside the Melagiris’ elephant corridor (more on that connectivity, and a map of the wider chain, on',
+    corridorAboutLink: 'Geography',
+    corridorText2: ') — dry-deciduous and semi-evergreen habitat that’s home to elephants, gaur, leopards, and four-horned antelope, alongside the birdlife below.',
+  },
+  kn: {
+    metaTitle: 'ಜೀವವೈವಿಧ್ಯ',
+    metaDescription: 'ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ನಲ್ಲಿ ನೇರ ಜೀವವೈವಿಧ್ಯ ಪ್ರೇಕ್ಷಣೆಗಳು ಮತ್ತು ಪಕ್ಷಿಗಳು.',
+    heroEyebrow: 'TVC ಪರಿಸರ ವ್ಯವಸ್ಥೆ',
+    heroTitle: 'ಇಲ್ಲಿ ಏನಿದೆ',
+    heroIntro: 'ಆಹಾರ ಅರಣ್ಯದಲ್ಲಿಯೇ 100ಕ್ಕೂ ಹೆಚ್ಚು ಪಕ್ಷಿ ಪ್ರಭೇದಗಳಿಂದ — ಕೆಳಗೆ ನೇರ ಪ್ರೇಕ್ಷಣೆಗಳನ್ನು ಅನ್ವೇಷಿಸಿ, ಭೂಮಿಯ ಪರಿಸರ ವ್ಯವಸ್ಥೆಯ ಬಗ್ಗೆ ನಮಗೆ ತಿಳಿದಿರುವ ಎಲ್ಲದರ ಜೊತೆಗೆ ಸೇರಿಸಲಾಗಿದೆ.',
+    heroImageAlt: 'ಆಸ್ತಿಯಲ್ಲಿ ಒಂದು ಅರಣ್ಯ ನೀರಿನ ತೊಟ್ಟಿ, ಅಲ್ಲಿ ವನ್ಯಜೀವಿಗಳು ನೀರು ಕುಡಿಯಲು ಬರುತ್ತವೆ',
+    corridorHeading: 'ಕಾರ್ಯನಿರತ ವನ್ಯಜೀವಿ ಕಾರಿಡಾರ್‌ನ ಭಾಗ',
+    corridorText1: 'TVC ಮೇಲಗಿರಿಗಳ ಆನೆ ಕಾರಿಡಾರ್‌ನ ಒಳಗಿದೆ (ಆ ಸಂಪರ್ಕದ ಬಗ್ಗೆ ಹೆಚ್ಚಿನದನ್ನು ಮತ್ತು ವಿಶಾಲ ಸರಪಳಿಯ ನಕ್ಷೆಯನ್ನು',
+    corridorAboutLink: 'ಭೂಗೋಳ',
+    corridorText2: 'ಪುಟದಲ್ಲಿ ನೋಡಿ) — ಒಣ-ಪರ್ಣಪಾತಿ ಮತ್ತು ಅರೆ-ನಿತ್ಯಹರಿದ್ವರ್ಣ ಆವಾಸಸ್ಥಾನ, ಆನೆಗಳು, ಕಾಡುಕೋಣಗಳು, ಚಿರತೆಗಳು ಮತ್ತು ನಾಲ್ಕು-ಕೊಂಬಿನ ಜಿಂಕೆಗಳ ನೆಲೆ, ಕೆಳಗಿನ ಪಕ್ಷಿಸಂಪತ್ತಿನ ಜೊತೆಗೆ.',
+  },
+  ta: {
+    metaTitle: 'பல்லுயிர் தன்மை',
+    metaDescription: 'டமரிண்ட் வேலி கலெக்டிவில் நேரடி பல்லுயிர் காட்சிகள் மற்றும் பறவைகள்.',
+    heroEyebrow: 'TVC சூழலமைப்பு',
+    heroTitle: 'இங்கு என்ன வாழ்கிறது',
+    heroIntro: 'உணவுக் காட்டிலேயே 100க்கும் மேற்பட்ட பறவை இனங்களிலிருந்து — கீழே நேரடி காட்சிகளை ஆராயுங்கள், நிலத்தின் சூழலமைப்பு பற்றி எங்களுக்குத் தெரிந்த அனைத்துடனும் சேர்க்கப்பட்டுள்ளது.',
+    heroImageAlt: 'சொத்தில் உள்ள ஒரு காட்டு நீர்நிலை, அங்கு வனவிலங்குகள் தண்ணீர் அருந்த வருகின்றன',
+    corridorHeading: 'ஒரு செயல்படும் வனவிலங்கு தாழ்வாரத்தின் பகுதி',
+    corridorText1: 'TVC மேலகிரிகளின் யானை தாழ்வாரத்திற்குள் அமைந்துள்ளது (அந்த இணைப்பு பற்றி மேலும், மற்றும் பரந்த சங்கிலியின் வரைபடத்தை',
+    corridorAboutLink: 'புவியியல்',
+    corridorText2: 'பக்கத்தில் காணலாம்) — உலர்-இலையுதிர் மற்றும் அரை-பசுமை வாழ்விடம், யானைகள், காட்டெருமைகள், சிறுத்தைகள் மற்றும் நான்கு கொம்பு மான்களுக்கு உறைவிடம், கீழே உள்ள பறவை இனங்களுடன்.',
+  },
+} as const;
+
+const c = content[lang];
+---
+
+<BaseLayout lang={lang} title={c.metaTitle} description={c.metaDescription} image="/images/pages/trekking/watering-hole.jpg" imageWidth={1384} imageHeight={1038}>
+  <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} intro={c.heroIntro} image="/images/pages/trekking/watering-hole.jpg" imageAlt={c.heroImageAlt} />
+
+  <section class="section wrapper">
+    <h2>{c.corridorHeading}</h2>
+    <p>{c.corridorText1} <a href={getRelativeLocaleUrl(lang, '/ecosystem/landscape')}>{c.corridorAboutLink}</a>{c.corridorText2}</p>
+
+    <BiodiversityExplorer lang={lang} />
+  </section>
+</BaseLayout>
