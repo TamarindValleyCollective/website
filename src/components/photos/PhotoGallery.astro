@@ -481,11 +481,11 @@ const uiStringsJsonSafe = JSON.stringify(c).replace(/<\/script/gi, '<\\/script')
   .lightbox-panel {
     background: #fff;
     border-radius: 18px;
-    max-width: 1000px;
+    max-width: 1400px;
     width: 100%;
     max-height: 90vh;
     display: grid;
-    grid-template-columns: 1.4fr 1fr;
+    grid-template-columns: minmax(0, 1fr) 300px;
     overflow: hidden;
   }
 
@@ -543,11 +543,11 @@ const uiStringsJsonSafe = JSON.stringify(c).replace(/<\/script/gi, '<\\/script')
   }
 
   .lightbox-detail {
-    padding: 26px;
+    padding: 22px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 16px;
   }
 
   .lightbox-detail .date {
@@ -641,8 +641,8 @@ const uiStringsJsonSafe = JSON.stringify(c).replace(/<\/script/gi, '<\\/script')
 
   .exif-panel__head {
     background: var(--tvc-green-tint);
-    padding: 10px 14px;
-    font-size: 0.72rem;
+    padding: 8px 12px;
+    font-size: 0.7rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -656,7 +656,7 @@ const uiStringsJsonSafe = JSON.stringify(c).replace(/<\/script/gi, '<\\/script')
   }
 
   .exif-cell {
-    padding: 10px 14px;
+    padding: 7px 12px;
     border-top: 1px solid var(--tvc-line);
   }
 

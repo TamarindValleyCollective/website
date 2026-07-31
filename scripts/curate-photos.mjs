@@ -89,7 +89,10 @@ const s3 = dryRun
 // ---- EXIF field formatting -------------------------------------------------
 
 function formatAperture(fNumber) {
-  return typeof fNumber === 'number' ? `f/${fNumber}` : undefined;
+  // EXIF FNumber often arrives as an imprecise float (e.g. 1.7799999713880652
+  // from a rational conversion) - round to the 1 decimal place cameras
+  // actually report (f/1.8, f/2.8, ...) instead of baking in the noise.
+  return typeof fNumber === 'number' ? `f/${Math.round(fNumber * 10) / 10}` : undefined;
 }
 
 function formatShutterSpeed(exposureTime) {
