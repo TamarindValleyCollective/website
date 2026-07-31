@@ -9,6 +9,8 @@ coverImage: "/images/partners/foraging-trails-and-tales.png"
 url: "https://www.instagram.com/foragingtrailsandtales/"
 ---
 
-Foraging Trails and Tales is run by Subhashini and Archana, who lead people in search of wild edible greens — gathering, cooking, and sharing stories along the way. Subhashini documents wild plants and foraging finds; Archana, the venture's co-founder, brings the storytelling. Together their sessions range from foraging walks and identification workshops to hands-on cooking with whatever the land offers.
+Foraging Trails and Tales is run by Subhashini and Archana, who lead people in search of wild edible greens around Bengaluru — gathering, cooking, and sharing stories along the way. Subhashini documents wild plants and foraging finds; Archana, the venture's co-founder, brings the storytelling. Their sessions range from foraging walks at spots like Turahalli Tree Park to farm-to-table workshops that pair foraging with cooking instruction, run at partner farms including Chiguru Farm in Harohalli and Anemane Farm off Bannerghatta.
+
+Their ongoing "6-2 Forager's Club" builds foraging knowledge session by session — observation, plant identification, and sustainable harvesting practices — for a small, dedicated community that stays in touch over WhatsApp between walks.
 
 They ran TVC's first Forage & Feast camp night in October 2025 — a walk-gather-cook-eat overnight built around the farm's ethos of eating what grows naturally rather than only what's planted, followed by a foraging walk, communal cooking, and a bonfire dinner.

@@ -1,0 +1,128 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../PageHero.astro';
+import { getCollection, render } from 'astro:content';
+import { type Locale } from '../../i18n/utils';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+
+const partners = await getCollection('partners');
+// Each partner's markdown body is English-only (see content.config.ts) -
+// rendered as-is on every locale for now, same as the rest of this page's
+// AI-drafted-pending-review kn/ta chrome around it.
+const partnersWithContent = await Promise.all(
+  partners.map(async (p) => {
+    const { Content } = await render(p);
+    return { entry: p, Content };
+  })
+);
+
+function partnerTitle(p: (typeof partners)[number]) {
+  if (lang === 'kn') return p.data.title_kn || p.data.title;
+  if (lang === 'ta') return p.data.title_ta || p.data.title;
+  return p.data.title;
+}
+
+// Page-specific prose only - shared chrome comes from src/i18n/*.ts via
+// t() in the components this page uses (BaseLayout, Nav, Footer).
+const content = {
+  en: {
+    metaDescription: "TVC's partners and collaborators — conservation, land design, architecture, foraging, hospitality, and the real estate partner who helped found TVC.",
+    heroEyebrow: 'People',
+    heroTitle: 'Partners & collaborators',
+    heroIntro: "Beyond TVC's own community, a handful of organizations have supported us along the way — from hospitality to permaculture design.",
+    visitLink: 'Visit their site →',
+  },
+  kn: {
+    metaDescription: 'TVC ಯ ಪಾಲುದಾರರು ಮತ್ತು ಸಹಯೋಗಿಗಳು — ಸಂರಕ್ಷಣೆ, ಭೂ ವಿನ್ಯಾಸ, ವಾಸ್ತುಶಿಲ್ಪ, ಫೊರೇಜಿಂಗ್, ಆತಿಥ್ಯ, ಮತ್ತು TVC ಸ್ಥಾಪನೆಗೆ ಸಹಾಯ ಮಾಡಿದ ರಿಯಲ್ ಎಸ್ಟೇಟ್ ಪಾಲುದಾರ.',
+    heroEyebrow: 'ಜನರು',
+    heroTitle: 'ಪಾಲುದಾರರು ಮತ್ತು ಸಹಯೋಗಿಗಳು',
+    heroIntro: 'TVC ಯ ಸ್ವಂತ ಸಮುದಾಯದ ಆಚೆಗೂ, ಕೆಲವು ಸಂಸ್ಥೆಗಳು ಆತಿಥ್ಯದಿಂದ ಪರ್ಮಾಕಲ್ಚರ್ ವಿನ್ಯಾಸದವರೆಗೆ ನಮಗೆ ಬೆಂಬಲ ನೀಡಿವೆ.',
+    visitLink: 'ಅವರ ಸೈಟ್‌ಗೆ ಭೇಟಿ ನೀಡಿ →',
+  },
+  ta: {
+    metaDescription: 'TVC-யின் கூட்டாளர்கள் மற்றும் ஒத்துழைப்பாளர்கள் — பாதுகாப்பு, நில வடிவமைப்பு, கட்டிடக்கலை, ஃபோரேஜிங், விருந்தோம்பல், மற்றும் TVC நிறுவப்பட உதவிய ரியல் எஸ்டேட் கூட்டாளர்.',
+    heroEyebrow: 'மக்கள்',
+    heroTitle: 'கூட்டாளர்கள் மற்றும் ஒத்துழைப்பாளர்கள்',
+    heroIntro: 'TVC-யின் சொந்த சமூகத்திற்கு அப்பால், சில அமைப்புகள் விருந்தோம்பலில் இருந்து இயற்கை வேளாண்மை வடிவமைப்பு வரை எங்களுக்கு ஆதரவளித்துள்ளன.',
+    visitLink: 'அவர்களின் தளத்தைப் பார்வையிடவும் →',
+  },
+} as const;
+
+const c = content[lang];
+---
+
+<BaseLayout lang={lang} title={c.heroTitle} description={c.metaDescription} image="/images/members/reva-and-ranjan.jpg" imageWidth={768} imageHeight={576}>
+  <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} intro={c.heroIntro} />
+
+  <section class="section wrapper">
+    <div class="partners-list">
+      {partnersWithContent.map(({ entry: p, Content }) => (
+        <article class="partner">
+          {p.data.coverImage && <img src={p.data.coverImage} alt={partnerTitle(p)} class="partner__logo" loading="lazy" />}
+          <div class="partner__body">
+            <h2>{partnerTitle(p)}</h2>
+            <div class="prose">
+              <Content />
+            </div>
+            <a class="button button--outline" href={p.data.url} target="_blank" rel="noopener noreferrer">{c.visitLink}</a>
+          </div>
+        </article>
+      ))}
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .partners-list {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+  }
+
+  .partner {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 24px;
+    padding-bottom: 40px;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .partner:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .partner__logo {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: contain;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    padding: 12px;
+    background: #fff;
+  }
+
+  .partner__body h2 {
+    margin-bottom: 12px;
+  }
+
+  .partner__body .prose :global(p) {
+    margin: 0 0 12px;
+    color: var(--tvc-ink-soft);
+  }
+
+  .partner__body .button {
+    margin-top: 8px;
+  }
+
+  @media (max-width: 560px) {
+    .partner {
+      grid-template-columns: 72px 1fr;
+    }
+  }
+</style>

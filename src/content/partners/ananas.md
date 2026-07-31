@@ -9,6 +9,8 @@ coverImage: "/images/partners/ananas.png"
 url: "https://ananas.design/services"
 ---
 
-Ananas is a design and consulting studio working on regenerative land systems — masterplanning, site assessments, ongoing land stewardship, and hands-on implementation support, alongside workshops and educational walks. They work with landowners and communities across climates, adapting regenerative design principles to each site.
+Ananas is a Bangalore-based regenerative design studio working with land and people worldwide, adapting permaculture principles to each site's climate and ecosystem rather than applying one template everywhere. Their work spans four kinds of engagement: land design (masterplans and recommendations), ongoing management of a site over time, hands-on implementation support for earthworks and planting, and workshops or educational walks — with clients able to start anywhere from a one-time site visit to a full-scale transformation, in person or remotely.
+
+Design and implementation are run as separate engagements, timed to India's seasons: earthworks typically run December to March, planting May to August depending on the monsoon. Ananas also maintains its own nursery and publishes a journal documenting its projects.
 
 Ananas has been TVC's permaculture design partner since the early days: they ran an ideation workshop at the farm in January 2019, and delivered TVC's first GAIA map that May — the land-use plan that shaped water systems, planting zones, and future homesites.

@@ -57,19 +57,18 @@ export default defineConfig({
     '/our-journey/community-outreach': '/people/community-outreach',
     '/our-journey/community-outreach/[slug]': '/people/community-outreach/[slug]',
     '/our-journey/design': '/about/design',
-    // Partners never got its own page in the first place: each of the 5
-    // partners is only 88-130 words, so the whole listing+detail-page
-    // structure (first at /ecosystem/partners, then briefly at
-    // /people/partners) was more scaffolding than the content warranted -
-    // folded into a single section directly on /people instead, linking
-    // straight out to each partner's own site. The two per-partner
-    // (/.../[slug]) redirects live in netlify.toml instead of here --
+    // Partners didn't have its own page for a while: with only 88-130 words
+    // per partner, the earlier listing+detail-page structure (first at
+    // /ecosystem/partners, then briefly at /people/partners) was more
+    // scaffolding than the content warranted, so it got folded into a
+    // single section on /people. /people/partners is real again now that
+    // each partner has a full write-up (see PartnersView.astro) - /people
+    // keeps a short teaser section linking to it. The per-partner
+    // (/.../[slug]) redirects still live in netlify.toml, not here --
     // Astro's own redirects config requires a dynamic source to redirect
-    // to a route with a matching [slug] param, which no longer exists now
-    // that individual partner pages are gone; Netlify's redirect rules
-    // don't have that restriction.
-    '/ecosystem/partners': '/people#partners',
-    '/people/partners': '/people#partners',
+    // to a route with a matching [slug] param, and there's still no
+    // per-partner route (this is one listing page, not individual pages).
+    '/ecosystem/partners': '/people/partners',
     // Leftover URLs from the pre-Astro site (Google still has them indexed,
     // and some migrated event content still links to them internally) -
     // point them at their current equivalents instead of 404ing.

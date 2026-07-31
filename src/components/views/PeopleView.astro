@@ -1,7 +1,6 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
-import { getCollection } from 'astro:content';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import type { Locale } from '../../i18n/utils';
 
@@ -10,8 +9,6 @@ interface Props {
 }
 
 const { lang } = Astro.props;
-
-const partners = await getCollection('partners');
 
 // Structural copy for this page (headings, intros, CTAs) is fully
 // translated. The 5 local-staff bios are short and worth translating in
@@ -30,6 +27,7 @@ const content = {
     staffIntro: 'The day-to-day activities at TVC are managed by a small, dedicated team living on-site.',
     partnersHeading: 'Partners & collaborators',
     partnersIntro: "Beyond TVC's own community, a handful of organizations have supported us along the way — from hospitality to permaculture design.",
+    partnersLink: 'Meet our partners →',
     outreachHeading: 'Community outreach',
     outreachIntro: 'Our ongoing work with the local community around TVC, in Odhipuram and Thaggatti village.',
     outreachLink: 'See our outreach →',
@@ -48,6 +46,7 @@ const content = {
     staffIntro: 'TVC ಯ ದಿನನಿತ್ಯದ ಚಟುವಟಿಕೆಗಳನ್ನು ಸ್ಥಳದಲ್ಲೇ ವಾಸಿಸುವ ಒಂದು ಚಿಕ್ಕ, ಸಮರ್ಪಿತ ತಂಡವು ನಿರ್ವಹಿಸುತ್ತದೆ.',
     partnersHeading: 'ಪಾಲುದಾರರು ಮತ್ತು ಸಹಯೋಗಿಗಳು',
     partnersIntro: 'TVC ಯ ಸ್ವಂತ ಸಮುದಾಯದ ಆಚೆಗೂ, ಕೆಲವು ಸಂಸ್ಥೆಗಳು ಆತಿಥ್ಯದಿಂದ ಪರ್ಮಾಕಲ್ಚರ್ ವಿನ್ಯಾಸದವರೆಗೆ ನಮಗೆ ಬೆಂಬಲ ನೀಡಿವೆ.',
+    partnersLink: 'ನಮ್ಮ ಪಾಲುದಾರರನ್ನು ಭೇಟಿ ಮಾಡಿ →',
     outreachHeading: 'ಸಮುದಾಯ ಸಂಪರ್ಕ',
     outreachIntro: 'ಒಧಿಪುರಂ ಮತ್ತು ತಗ್ಗಟ್ಟಿ ಗ್ರಾಮಗಳಲ್ಲಿ, TVC ಸುತ್ತಮುತ್ತಲಿನ ಸ್ಥಳೀಯ ಸಮುದಾಯದೊಂದಿಗಿನ ನಮ್ಮ ನಿರಂತರ ಕೆಲಸ.',
     outreachLink: 'ನಮ್ಮ ಸಂಪರ್ಕ ಕಾರ್ಯ ನೋಡಿ →',
@@ -66,6 +65,7 @@ const content = {
     staffIntro: 'TVC-யின் அன்றாட நடவடிக்கைகளை பண்ணையிலேயே வசிக்கும் ஒரு சிறிய, அர்ப்பணிப்புள்ள குழு நிர்வகிக்கிறது.',
     partnersHeading: 'கூட்டாளர்கள் மற்றும் ஒத்துழைப்பாளர்கள்',
     partnersIntro: 'TVC-யின் சொந்த சமூகத்திற்கு அப்பால், சில அமைப்புகள் விருந்தோம்பலில் இருந்து இயற்கை வேளாண்மை வடிவமைப்பு வரை எங்களுக்கு ஆதரவளித்துள்ளன.',
+    partnersLink: 'எங்கள் கூட்டாளர்களைப் பார்க்கவும் →',
     outreachHeading: 'சமூக தொடர்பு',
     outreachIntro: 'ஓதிபுரம் மற்றும் தக்கட்டி கிராமங்களில், TVC-க்கு அருகிலுள்ள உள்ளூர் சமூகத்துடனான எங்கள் தொடர்ச்சியான பணி.',
     outreachLink: 'எங்கள் தொடர்பு பணியைப் பார்க்கவும் →',
@@ -183,20 +183,6 @@ function initials(name: string) {
   return (words[0][0] + (words[1]?.[0] ?? '')).toUpperCase();
 }
 
-// Partner cards prefer the AI-drafted Kannada/Tamil title/excerpt when a
-// parallel effort has filled them in on the partner's markdown frontmatter,
-// falling back to English until then (fields are optional on the schema).
-function partnerTitle(p: (typeof partners)[number]) {
-  if (lang === 'kn') return p.data.title_kn || p.data.title;
-  if (lang === 'ta') return p.data.title_ta || p.data.title;
-  return p.data.title;
-}
-
-function partnerExcerpt(p: (typeof partners)[number]) {
-  if (lang === 'kn') return p.data.excerpt_kn || p.data.excerpt;
-  if (lang === 'ta') return p.data.excerpt_ta || p.data.excerpt;
-  return p.data.excerpt;
-}
 ---
 
 <BaseLayout lang={lang} title={c.heroTitle} description={c.metaDescription} image="/images/members/reva-and-ranjan.jpg" imageWidth={768} imageHeight={576}>
@@ -245,15 +231,7 @@ function partnerExcerpt(p: (typeof partners)[number]) {
   <section class="section wrapper" id="partners">
     <h2>{c.partnersHeading}</h2>
     <p>{c.partnersIntro}</p>
-    <div class="partners-grid">
-      {partners.map((p) => (
-        <a class="partner-card" href={p.data.url} target="_blank" rel="noopener noreferrer">
-          {p.data.coverImage && <img src={p.data.coverImage} alt={partnerTitle(p)} loading="lazy" />}
-          <h4>{partnerTitle(p)}</h4>
-          <p>{partnerExcerpt(p)}</p>
-        </a>
-      ))}
-    </div>
+    <a class="button button--outline" href={getRelativeLocaleUrl(lang, '/people/partners')}>{c.partnersLink}</a>
   </section>
 
   <section class="section section--tint">
@@ -334,52 +312,6 @@ function partnerExcerpt(p: (typeof partners)[number]) {
     text-transform: uppercase;
     letter-spacing: 0.03em;
     margin-bottom: 10px;
-  }
-
-  /* Each partner links straight out to its own site (see the url field on
-     the partners collection) rather than to a TVC-hosted detail page --
-     with only 88-130 words of content per partner, a dedicated route
-     wasn't earning its keep. */
-  .partners-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 20px;
-    margin-top: 20px;
-  }
-
-  .partner-card {
-    display: block;
-    background: #fff;
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-soft);
-    padding: 20px;
-    text-align: center;
-    text-decoration: none;
-    color: inherit;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-  }
-
-  .partner-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(34, 41, 31, 0.14);
-  }
-
-  .partner-card img {
-    width: 100px;
-    height: 100px;
-    object-fit: contain;
-    margin: 0 auto 12px;
-  }
-
-  .partner-card h4 {
-    margin: 0;
-  }
-
-  .partner-card p {
-    font-size: 0.85rem;
-    color: var(--tvc-ink-soft);
-    margin: 8px 0 0;
   }
 
   .join {

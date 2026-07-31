@@ -9,6 +9,8 @@ coverImage: "/images/partners/arocha.svg"
 url: "https://www.arocha.in/"
 ---
 
-A Rocha India is a conservation charity that has worked in the Bannerghatta–Hosur Landscape — spanning Karnataka and Tamil Nadu — since 2003. Their Asian Elephant Conservation Program is the longest-running ecological study of elephants in the region, combining research on population and movement patterns with practical human-elephant conflict mitigation: land vulnerability assessments, barrier recommendations, and sensor-based early-warning systems for forest-edge communities.
+A Rocha India is the Indian arm of A Rocha, an international conservation network operating in 22 countries across five continents. Its national office and field study centre are in Bangalore, and since 2003 its focal geography has been the Bannerghatta–Hosur Landscape — the stretch of the Eastern Ghats spanning south Karnataka and north Tamil Nadu that TVC itself sits within.
 
-A Rocha India now partners with TVC to help manage our relationship with the elephants that pass through from the adjoining forest corridor — turning farm-level experience into part of their wider study, and their research into practical guidance for us.
+The organization's work here centers on its Asian Elephant Conservation Program, the longest-running ecological study of elephants in the region, combining research on population and movement patterns with practical human-elephant conflict mitigation: land vulnerability assessments, barrier recommendations, and sensor-based early-warning systems for forest-edge communities. Alongside it run monitoring and survey work, environmental education, afforestation and farming initiatives, and community health and hygiene programs — grouped under five pillars: land-use management, policy influence, coexistence strategies, community livelihoods, and environmental education.
+
+A Rocha India partners with TVC to help manage our relationship with the elephants that pass through from the adjoining forest corridor — turning farm-level experience into part of their wider study, and their research into practical guidance for us.
