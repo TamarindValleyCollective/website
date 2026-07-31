@@ -100,7 +100,7 @@ flowchart TD
 
     subgraph EXTERNAL["External services (called directly by the browser)"]
         INAT["iNaturalist API"]
-        GMAPS["Google Maps / My Maps (iframe)"]
+        GMAPS["Google Maps (iframe, directions only)"]
         YT["YouTube (iframe)"]
         ANTHROPIC["Anthropic Claude API<br/>(chat.mts server-side,<br/>and caption-photos.mjs locally)"]
         R2["Cloudflare R2<br/>media.tvc.farm — curated photo storage,<br/>served directly to the browser"]
@@ -439,10 +439,14 @@ never touches Netlify either.
   the `photos` content collection (server-rendered, no fetch involved); photo files themselves
   load directly from `media.tvc.farm` (R2). The Map view and the lightbox's per-photo mini map
   both use the same Leaflet + OpenStreetMap tiles as the biodiversity map.
+- **The Design page's layout map** (`/about/design`) — same Leaflet + OpenStreetMap tiles,
+  rendering the property boundary plus ~63 named structures/plots/zones from
+  `src/data/tvc-layout.ts` (a static snapshot exported from the community's working Google My
+  Maps, not a live fetch). Replaced a directly embedded Google My Maps iframe.
 - **Our Journey timeline and other pages** — the era-based year-by-year story, event listings,
   and the rest of the site are pure static content with no external calls.
-- A few pages also embed third-party content directly: Google Maps/My Maps (directions and
-  farm layout) and YouTube (aerial drone flyover).
+- A few pages also embed third-party content directly: Google Maps (directions on
+  Contact/How to Reach/Visit) and YouTube (aerial drone flyover).
 - **Google Analytics (GA4)** — loaded from `BaseLayout.astro`, so the loader is on every page
   site-wide; not tied to any one component. Measurement ID `G-795FTPB47P`. Skips loading
   entirely when `location.hostname` is `localhost`/`127.0.0.1`, so local dev browsing never
