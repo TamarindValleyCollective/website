@@ -9,6 +9,7 @@ export default {
     explore: 'ಅನ್ವೇಷಿಸಿ',
     engage: 'ತೊಡಗಿಸಿಕೊಳ್ಳಿ',
     about: 'ನಮ್ಮ ಬಗ್ಗೆ',
+    aboutDesign: 'ವಿನ್ಯಾಸ',
     people: 'ಜನರು',
     members: 'ಸದಸ್ಯರು',
     staff: 'ಸಿಬ್ಬಂದಿ',

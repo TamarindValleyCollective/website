@@ -18,7 +18,12 @@ export interface SiteLink {
 }
 
 export const EXPLORE_LINKS: SiteLink[] = [
-  { label: 'About Us', key: 'about', href: '/about' },
+  {
+    label: 'About Us',
+    key: 'about',
+    href: '/about',
+    children: [{ label: 'The Design', key: 'aboutDesign', href: '/about/design' }],
+  },
   {
     label: 'People',
     key: 'people',

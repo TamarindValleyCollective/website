@@ -10,6 +10,7 @@ export default {
     explore: 'Explore',
     engage: 'Engage',
     about: 'About Us',
+    aboutDesign: 'The Design',
     people: 'People',
     members: 'Members',
     staff: 'Staff',
