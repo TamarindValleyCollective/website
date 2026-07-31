@@ -9,6 +9,7 @@ export default {
     explore: 'ஆராயுங்கள்',
     engage: 'பங்கேற்பு',
     about: 'எங்களைப் பற்றி',
+    aboutDesign: 'வடிவமைப்பு',
     people: 'மக்கள்',
     members: 'உறுப்பினர்கள்',
     staff: 'ஊழியர்கள்',
