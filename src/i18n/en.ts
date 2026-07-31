@@ -13,6 +13,7 @@ export default {
     people: 'People',
     ourJourney: 'Our Journey',
     inPictures: 'In Pictures',
+    ecosystem: 'Ecosystem',
     biodiversity: 'Biodiversity',
     landscape: 'Geography',
     weather: 'Weather',

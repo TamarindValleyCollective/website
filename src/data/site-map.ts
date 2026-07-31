@@ -23,10 +23,11 @@ export const EXPLORE_LINKS: SiteLink[] = [
   { label: 'Our Journey', key: 'ourJourney', href: '/our-journey' },
   { label: 'In Pictures', key: 'inPictures', href: '/in-pictures' },
   {
-    label: 'Biodiversity',
-    key: 'biodiversity',
+    label: 'Ecosystem',
+    key: 'ecosystem',
     href: '/ecosystem',
     children: [
+      { label: 'Biodiversity', key: 'biodiversity', href: '/ecosystem/biodiversity' },
       { label: 'Geography', key: 'landscape', href: '/ecosystem/landscape' },
       { label: 'Weather', key: 'weather', href: '/ecosystem/weather' },
     ],

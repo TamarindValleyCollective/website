@@ -12,6 +12,7 @@ export default {
     people: 'ಜನರು',
     ourJourney: 'ನಮ್ಮ ಪಯಣ',
     inPictures: 'ಚಿತ್ರಗಳಲ್ಲಿ',
+    ecosystem: 'ಪರಿಸರ ವ್ಯವಸ್ಥೆ',
     biodiversity: 'ಜೀವವೈವಿಧ್ಯ',
     landscape: 'ಭೂಗೋಳ',
     weather: 'ಹವಾಮಾನ',
