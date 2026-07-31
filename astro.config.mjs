@@ -51,11 +51,15 @@ export default defineConfig({
     // not a historical journey milestone. Redirects point straight at the
     // final destination rather than chaining through intermediate stops
     // (e.g. /community-outreach went to /our-journey/community-outreach
-    // once already - now goes directly to /people/community-outreach).
-    '/community-outreach': '/people/community-outreach',
-    '/community-outreach/[slug]': '/people/community-outreach/[slug]',
-    '/our-journey/community-outreach': '/people/community-outreach',
-    '/our-journey/community-outreach/[slug]': '/people/community-outreach/[slug]',
+    // once already, then /people/community-outreach - now goes directly to
+    // /people/outreach, its current URL after "Community Outreach" was
+    // shortened to "Outreach").
+    '/community-outreach': '/people/outreach',
+    '/community-outreach/[slug]': '/people/outreach/[slug]',
+    '/our-journey/community-outreach': '/people/outreach',
+    '/our-journey/community-outreach/[slug]': '/people/outreach/[slug]',
+    '/people/community-outreach': '/people/outreach',
+    '/people/community-outreach/[slug]': '/people/outreach/[slug]',
     '/our-journey/design': '/about/design',
     // Partners didn't have its own page for a while: with only 88-130 words
     // per partner, the earlier listing+detail-page structure (first at
