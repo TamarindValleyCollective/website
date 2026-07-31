@@ -9,6 +9,12 @@ export interface SiteLink {
   // fallback above, without this file needing to know about locales itself.
   key: string;
   href: string;
+  // Sub-pages of this link (e.g. Ecosystem's Geography/Weather, Visit's
+  // Day Visit/Camping/...) - one level deep only. Rendered indented under
+  // their parent in Nav's dropdown instead of as flat top-level siblings,
+  // since they're genuinely children of that page's URL, not independent
+  // sections in their own right.
+  children?: SiteLink[];
 }
 
 export const EXPLORE_LINKS: SiteLink[] = [
@@ -16,20 +22,32 @@ export const EXPLORE_LINKS: SiteLink[] = [
   { label: 'People', key: 'people', href: '/people' },
   { label: 'Our Journey', key: 'ourJourney', href: '/our-journey' },
   { label: 'In Pictures', key: 'inPictures', href: '/in-pictures' },
-  { label: 'Biodiversity', key: 'biodiversity', href: '/ecosystem' },
-  { label: 'Geography', key: 'landscape', href: '/ecosystem/landscape' },
-  { label: 'Weather', key: 'weather', href: '/ecosystem/weather' },
+  {
+    label: 'Biodiversity',
+    key: 'biodiversity',
+    href: '/ecosystem',
+    children: [
+      { label: 'Geography', key: 'landscape', href: '/ecosystem/landscape' },
+      { label: 'Weather', key: 'weather', href: '/ecosystem/weather' },
+    ],
+  },
   { label: 'Resource Centre', key: 'resourceCentre', href: '/resource-centre' },
   { label: 'Events', key: 'events', href: '/events' },
 ];
 
 export const ENGAGE_LINKS: SiteLink[] = [
-  { label: 'Visit Us', key: 'visitTvc', href: '/visit' },
-  { label: 'Day Visit', key: 'dayVisit', href: '/visit/day-visit' },
-  { label: 'Overnight Camping', key: 'camping', href: '/visit/camping' },
-  { label: 'Host an Event', key: 'hostAnEvent', href: '/visit/host-an-event' },
-  { label: 'Trekking Trails', key: 'trekkingTrails', href: '/visit/trekking-trails' },
-  { label: 'How to Reach', key: 'howToReach', href: '/visit/how-to-reach' },
+  {
+    label: 'Visit Us',
+    key: 'visitTvc',
+    href: '/visit',
+    children: [
+      { label: 'Day Visit', key: 'dayVisit', href: '/visit/day-visit' },
+      { label: 'Overnight Camping', key: 'camping', href: '/visit/camping' },
+      { label: 'Host an Event', key: 'hostAnEvent', href: '/visit/host-an-event' },
+      { label: 'Trekking Trails', key: 'trekkingTrails', href: '/visit/trekking-trails' },
+      { label: 'How to Reach', key: 'howToReach', href: '/visit/how-to-reach' },
+    ],
+  },
   { label: 'Join the Collective', key: 'join', href: '/join' },
   { label: 'Contact Us', key: 'contact', href: '/contact' },
 ];

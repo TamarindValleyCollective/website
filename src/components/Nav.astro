@@ -18,12 +18,14 @@ const localizedHref = (href: string) => getRelativeLocaleUrl(lang, href);
 
 // Mirrors the homepage's own Explore/Engage fork (src/pages/index.astro) so
 // the nav reads as the same map wherever you are on the site, not a
-// different grouping than the one you land on at "/". Both are wide
-// (7 items each) because a single column runs uncomfortably tall — see
-// .nav__dropdown--wide below for the two-column treatment that needs.
+// different grouping than the one you land on at "/". Explore stays wide
+// (7 top-level items — a single column runs uncomfortably tall, see
+// .nav__dropdown--wide below for the two-column treatment); Engage is down
+// to 3 top-level items now that Visit's sub-pages nest under it, so a
+// single column reads better.
 const navItems = [
   { label: t('nav.explore'), wide: true, children: EXPLORE_LINKS },
-  { label: t('nav.engage'), wide: true, children: ENGAGE_LINKS },
+  { label: t('nav.engage'), wide: false, children: ENGAGE_LINKS },
 ];
 
 // Compared against the bare (locale-stripped) path so a Kannada/Tamil route
@@ -59,9 +61,23 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
             </button>
             <div class:list={['nav__dropdown', { 'nav__dropdown--wide': item.wide }]}>
               {item.children.map((child) => (
-                <a href={localizedHref(child.href)} class:list={['nav__sublink', { 'is-active': isActive(child.href) }]}>
-                  {t(`nav.${child.key}`)}
-                </a>
+                <div class="nav__subitem">
+                  <a href={localizedHref(child.href)} class:list={['nav__sublink', { 'is-active': isActive(child.href) }]}>
+                    {t(`nav.${child.key}`)}
+                  </a>
+                  {child.children && (
+                    <div class="nav__subgroup">
+                      {child.children.map((grandchild) => (
+                        <a
+                          href={localizedHref(grandchild.href)}
+                          class:list={['nav__subsublink', { 'is-active': isActive(grandchild.href) }]}
+                        >
+                          {t(`nav.${grandchild.key}`)}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </div>
@@ -254,6 +270,43 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
   }
 
   .nav__sublink.is-active {
+    color: var(--tvc-green);
+  }
+
+  .nav__subitem {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Indented, left-bordered list of a dropdown item's own sub-pages
+     (e.g. Ecosystem's Geography/Weather, Visit's Day Visit/Camping/...) —
+     reads as nested under that item instead of a flat sibling in the same
+     dropdown column. */
+  .nav__subgroup {
+    display: flex;
+    flex-direction: column;
+    margin: 2px 0 6px 20px;
+    padding-left: 10px;
+    border-left: 2px solid var(--tvc-line);
+  }
+
+  .nav__subsublink {
+    display: block;
+    text-decoration: none;
+    color: var(--tvc-ink-soft);
+    font-weight: 600;
+    font-size: 0.78rem;
+    padding: 6px 10px;
+    border-radius: 8px;
+    white-space: nowrap;
+  }
+
+  .nav__subsublink:hover {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+  }
+
+  .nav__subsublink.is-active {
     color: var(--tvc-green);
   }
 
