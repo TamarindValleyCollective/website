@@ -7,8 +7,9 @@ title_ta: "அனனாஸ்"
 excerpt_ta: "பெங்களூரு தளத்தை சேர்ந்த நில வடிவமைப்பு ஸ்டுடியோ — TVC-யின் இயற்கை வேளாண்மை ஆலோசகர்கள், அதன் முதல் GAIA வரைபடத்தை வழங்கியவர்கள்."
 coverImage: "/images/partners/ananas.png"
 url: "https://ananas.design/services"
+tvcConnection: "TVC's permaculture design partner since 2019 — delivered its first GAIA land-use map."
+tvcConnection_kn: "2019 ರಿಂದ TVC ಯ ಪರ್ಮಾಕಲ್ಚರ್ ವಿನ್ಯಾಸ ಪಾಲುದಾರ — ಇದರ ಮೊದಲ GAIA ಭೂ-ಬಳಕೆಯ ನಕ್ಷೆಯನ್ನು ರೂಪಿಸಿತು."
+tvcConnection_ta: "2019 முதல் TVC-யின் இயற்கை வேளாண்மை வடிவமைப்பு கூட்டாளர் — அதன் முதல் GAIA நில-பயன்பாட்டு வரைபடத்தை வழங்கியது."
 ---
 
-Ananas is a design and consulting studio working on regenerative land systems — masterplanning, site assessments, ongoing land stewardship, and hands-on implementation support, alongside workshops and educational walks. They work with landowners and communities across climates, adapting regenerative design principles to each site.
-
-Ananas has been TVC's permaculture design partner since the early days: they ran an ideation workshop at the farm in January 2019, and delivered TVC's first GAIA map that May — the land-use plan that shaped water systems, planting zones, and future homesites.
+Ananas is a Bangalore-based regenerative design studio working with land and people worldwide — masterplans, ongoing land management, hands-on implementation, and educational workshops, adapting permaculture principles to each site's climate rather than applying one template everywhere.

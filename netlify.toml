@@ -17,19 +17,20 @@
   command = "tail -f /dev/null"
 
 # Individual partner pages (/ecosystem/partners/<slug> and, briefly,
-# /people/partners/<slug>) were removed - each partner is folded into a
-# single section on /people instead (see astro.config.mjs for why).
-# Wildcard redirects here rather than in astro.config.mjs's `redirects`,
-# since Astro requires a dynamic source there to redirect to a route with
-# a matching [slug] param, and no such route exists anymore.
+# /people/partners/<slug>) were removed years ago - each partner's full
+# write-up now lives on the single /people/partners listing page instead
+# (see astro.config.mjs and content.config.ts for why there's still no
+# per-partner route). Wildcard redirects here rather than in astro.config.mjs's
+# `redirects`, since Astro requires a dynamic source there to redirect to a
+# route with a matching [slug] param, and no such route exists.
 [[redirects]]
   from = "/ecosystem/partners/*"
-  to = "/people#partners"
+  to = "/people/partners"
   status = 301
 
 [[redirects]]
   from = "/people/partners/*"
-  to = "/people#partners"
+  to = "/people/partners"
   status = 301
 
 # syntropic.in (an old member-directory domain) is configured as a domain

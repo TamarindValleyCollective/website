@@ -28,6 +28,18 @@ const navItems = [
   { label: t('nav.engage'), wide: false, children: ENGAGE_LINKS },
 ];
 
+// Wide dropdowns render as two independent flex columns rather than a
+// CSS grid - a grid locks matching rows in both columns to the same
+// height, so an item with nested children (People, Ecosystem) stretches
+// its shorter row-mate (About Us, Resource Centre) and leaves visible
+// dead space under it. Splitting into two separate column arrays up
+// front lets each column size to its own content.
+function dropdownColumns(children: typeof EXPLORE_LINKS, wide: boolean) {
+  if (!wide) return [children];
+  const half = Math.ceil(children.length / 2);
+  return [children.slice(0, half), children.slice(half)];
+}
+
 // Compared against the bare (locale-stripped) path so a Kannada/Tamil route
 // still highlights the right item.
 const currentPath = stripLocalePrefix(Astro.url.pathname);
@@ -60,23 +72,27 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
               </svg>
             </button>
             <div class:list={['nav__dropdown', { 'nav__dropdown--wide': item.wide }]}>
-              {item.children.map((child) => (
-                <div class="nav__subitem">
-                  <a href={localizedHref(child.href)} class:list={['nav__sublink', { 'is-active': isActive(child.href) }]}>
-                    {t(`nav.${child.key}`)}
-                  </a>
-                  {child.children && (
-                    <div class="nav__subgroup">
-                      {child.children.map((grandchild) => (
-                        <a
-                          href={localizedHref(grandchild.href)}
-                          class:list={['nav__subsublink', { 'is-active': isActive(grandchild.href) }]}
-                        >
-                          {t(`nav.${grandchild.key}`)}
-                        </a>
-                      ))}
+              {dropdownColumns(item.children, item.wide).map((column) => (
+                <div class="nav__col">
+                  {column.map((child) => (
+                    <div class="nav__subitem">
+                      <a href={localizedHref(child.href)} class:list={['nav__sublink', { 'is-active': isActive(child.href) }]}>
+                        {t(`nav.${child.key}`)}
+                      </a>
+                      {child.children && (
+                        <div class="nav__subgroup">
+                          {child.children.map((grandchild) => (
+                            <a
+                              href={localizedHref(grandchild.href)}
+                              class:list={['nav__subsublink', { 'is-active': isActive(grandchild.href) }]}
+                            >
+                              {t(`nav.${grandchild.key}`)}
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
+                  ))}
                 </div>
               ))}
             </div>
@@ -241,16 +257,23 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
   }
 
   /* Explore has 7 items — a single column runs uncomfortably tall, so it
-     gets a two-column grid instead. Declared after the rules above so it
-     wins the display:flex vs display:grid tie on hover/focus. */
+     splits into two side-by-side flex columns (see dropdownColumns() above)
+     rather than a CSS grid — a grid ties matching rows across both columns
+     to the same height, which stretched short items into dead space
+     whenever their row-mate had nested children. Declared after the rules
+     above so it wins the flex-direction tie on hover/focus. */
   .nav__dropdown--wide {
-    grid-template-columns: repeat(2, minmax(170px, 1fr));
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 4px;
     min-width: 360px;
   }
 
-  .nav__item:hover .nav__dropdown--wide,
-  .nav__item:focus-within .nav__dropdown--wide {
-    display: grid;
+  .nav__col {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 170px;
   }
 
   .nav__sublink {
@@ -383,8 +406,7 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
     }
 
     .nav__dropdown--wide {
-      display: flex;
-      grid-template-columns: none;
+      flex-direction: column;
       min-width: 0;
     }
 

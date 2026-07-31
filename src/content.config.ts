@@ -51,20 +51,30 @@ const partners = defineCollection({
     title: z.string(),
     excerpt: z.string(),
     coverImage: z.string().optional(),
-    // Rendered as a compact card directly on /people (see the "Partners &
-    // collaborators" section there) rather than each partner getting its
-    // own page - with 88-130 words of content per partner, a dedicated
-    // route, breadcrumb, and Organization schema per partner was more
-    // scaffolding than the content warranted. This links straight out to
-    // the partner's own site instead.
+    // The markdown body is each partner's general write-up (who they are,
+    // what they do in the world), rendered on /people/partners (see
+    // PartnersView.astro) - /people itself just teases the section with a
+    // link. A dedicated per-partner page was tried and dropped once already
+    // for being more scaffolding than 88-130 words of content warranted
+    // (see astro.config.mjs's /ecosystem/partners redirect comment); this
+    // is a single listing page with real write-ups, not a return to that
+    // per-partner structure.
     url: z.string().url(),
+    // The one-line "what they actually do with TVC" fact, kept separate
+    // from the general body above and rendered as its own callout on
+    // /people/partners - burying it as the last sentence of a paragraph
+    // made it easy to miss. May contain simple inline HTML (e.g. a link),
+    // rendered with set:html like AboutView's inline prose links.
+    tvcConnection: z.string(),
     // Kannada/Tamil translations (AI-drafted, pending native-speaker review
     // - see TRANSLATIONS_REVIEW.md). Optional so a partner card renders
     // fine on the English fallback until these are filled in.
     title_kn: z.string().optional(),
     excerpt_kn: z.string().optional(),
+    tvcConnection_kn: z.string().optional(),
     title_ta: z.string().optional(),
     excerpt_ta: z.string().optional(),
+    tvcConnection_ta: z.string().optional(),
   }),
 });
 

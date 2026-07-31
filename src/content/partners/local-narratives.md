@@ -7,8 +7,9 @@ title_ta: "லோக்கல் நேரட்டிவ்ஸ்"
 excerpt_ta: "இந்தியா முழுவதும், TVC உட்பட, சமூகம்-தலைமையிலான கற்றல் பயணங்களை இணைந்து உருவாக்கும் கிராமப்புற-அனுபவ பயணப் பங்காளர்."
 coverImage: "/images/partners/local-narratives.png"
 url: "https://www.local-narratives.com/"
+tvcConnection: "Brings visitors to TVC as part of its community-led rural-immersion journeys."
+tvcConnection_kn: "ಸಮುದಾಯ-ನೇತೃತ್ವದ ಗ್ರಾಮೀಣ-ಇಮ್ಮರ್ಷನ್ ಪ್ರಯಾಣಗಳ ಭಾಗವಾಗಿ TVC ಗೆ ಸಂದರ್ಶಕರನ್ನು ಕರೆತರುತ್ತದೆ."
+tvcConnection_ta: "சமூகம்-தலைமையிலான கிராமப்புற-அனுபவ பயணங்களின் ஒரு பகுதியாக TVC-க்கு பார்வையாளர்களை அழைத்து வருகிறது."
 ---
 
-Local Narratives designs immersive, community-led learning experiences across rural India. Each programme is co-created with local communities so that participants learn through culture, livelihoods, and everyday life rather than as passive observers — fostering meaningful connections while supporting community-led development.
-
-Local Narratives partners with TVC to bring visitors to the farm as part of these community-led journeys, connecting them with everyday life and land stewardship here alongside the wider rural-immersion experiences the partnership curates across India.
+Local Narratives designs immersive, community-led learning experiences across rural India, under the tagline "Live like a local" — connecting Indian and international youth with rural communities through fellowships, immersion programmes, and a "Become a Local Host" initiative that lets community members co-design the experiences themselves.

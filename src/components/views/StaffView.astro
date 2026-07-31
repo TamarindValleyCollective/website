@@ -1,0 +1,95 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../PageHero.astro';
+import type { Locale } from '../../i18n/utils';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+
+const content = {
+  en: {
+    metaDescription: 'The small, dedicated team who run TVC day to day, living on-site.',
+    heroEyebrow: 'People',
+    heroTitle: 'Local Staff',
+    heroIntro: 'The day-to-day activities at TVC are managed by a small, dedicated team living on-site.',
+  },
+  kn: {
+    metaDescription: 'TVC ಯ ದಿನನಿತ್ಯದ ಚಟುವಟಿಕೆಗಳನ್ನು ನಿರ್ವಹಿಸುವ, ಸ್ಥಳದಲ್ಲೇ ವಾಸಿಸುವ ಚಿಕ್ಕ, ಸಮರ್ಪಿತ ತಂಡ.',
+    heroEyebrow: 'ಜನರು',
+    heroTitle: 'ಸ್ಥಳೀಯ ಸಿಬ್ಬಂದಿ',
+    heroIntro: 'TVC ಯ ದಿನನಿತ್ಯದ ಚಟುವಟಿಕೆಗಳನ್ನು ಸ್ಥಳದಲ್ಲೇ ವಾಸಿಸುವ ಒಂದು ಚಿಕ್ಕ, ಸಮರ್ಪಿತ ತಂಡವು ನಿರ್ವಹಿಸುತ್ತದೆ.',
+  },
+  ta: {
+    metaDescription: 'TVC-யின் அன்றாட நடவடிக்கைகளை நிர்வகிக்கும், பண்ணையிலேயே வசிக்கும் சிறிய, அர்ப்பணிப்புள்ள குழு.',
+    heroEyebrow: 'மக்கள்',
+    heroTitle: 'உள்ளூர் ஊழியர்கள்',
+    heroIntro: 'TVC-யின் அன்றாட நடவடிக்கைகளை பண்ணையிலேயே வசிக்கும் ஒரு சிறிய, அர்ப்பணிப்புள்ள குழு நிர்வகிக்கிறது.',
+  },
+} as const;
+
+const c = content[lang];
+
+// Only 5 people with substantial, non-namedrop bios, so role + bio are
+// translated in full per locale (names are proper nouns and stay unchanged).
+const staffContent = {
+  en: [
+    { name: 'Madhavan', role: 'Farm lead & naturalist', bio: "A passionate naturalist who has been tirelessly working on rejuvenating the land, documenting the flora and fauna, gathering seeds from the forest, maintaining a nursery, and nurturing the ecosystem. He knows every tree, bird, and reptile you'll run into here, and lives on-site with his wife Krithika and daughter Shashtika." },
+    { name: 'Ramdoss', role: 'Master craftsman', bio: 'A master craftsman when it comes to making bamboo baskets, grown up in the Odhipuram/Thaggatti village.' },
+    { name: 'Gundappa', role: 'Forest guide', bio: 'Knows the forest like the back of his hand — the elephant paths and the local stories.' },
+    { name: 'Yellaraju', role: 'Runner', bio: 'Always ready to run to the village on the moped.' },
+    { name: 'Chikkama', role: 'Kitchen', bio: 'Manages the kitchen and the local recipes that shape every meal here.' },
+  ],
+  kn: [
+    { name: 'Madhavan', role: 'ಫಾರ್ಮ್ ಮುಖ್ಯಸ್ಥ ಮತ್ತು ಪ್ರಕೃತಿ ತಜ್ಞ', bio: 'ಭೂಮಿಯನ್ನು ಪುನರುಜ್ಜೀವನಗೊಳಿಸಲು ಅವಿರತವಾಗಿ ಶ್ರಮಿಸುತ್ತಿರುವ ಉತ್ಸಾಹಿ ಪ್ರಕೃತಿ ತಜ್ಞ — ಸಸ್ಯ ಮತ್ತು ಪ್ರಾಣಿ ಸಂಕುಲವನ್ನು ದಾಖಲಿಸುವುದು, ಅರಣ್ಯದಿಂದ ಬೀಜಗಳನ್ನು ಸಂಗ್ರಹಿಸುವುದು, ನರ್ಸರಿಯನ್ನು ನಿರ್ವಹಿಸುವುದು ಮತ್ತು ಪರಿಸರ ವ್ಯವಸ್ಥೆಯನ್ನು ಪೋಷಿಸುವುದು ಅವರ ಕೆಲಸ. ಇಲ್ಲಿ ಸಿಗುವ ಪ್ರತಿಯೊಂದು ಮರ, ಪಕ್ಷಿ ಮತ್ತು ಸರೀಸೃಪವನ್ನೂ ಅವರು ಬಲ್ಲರು, ಮತ್ತು ತಮ್ಮ ಪತ್ನಿ ಕೃತಿಕಾ ಹಾಗೂ ಮಗಳು ಶಾಷ್ಟಿಕಾ ಅವರೊಂದಿಗೆ ಸ್ಥಳದಲ್ಲೇ ವಾಸಿಸುತ್ತಾರೆ.' },
+    { name: 'Ramdoss', role: 'ಪ್ರವೀಣ ಕುಶಲಕರ್ಮಿ', bio: 'ಒಧಿಪುರಂ/ತಗ್ಗಟ್ಟಿ ಗ್ರಾಮದಲ್ಲಿ ಬೆಳೆದ, ಬಿದಿರಿನ ಬುಟ್ಟಿಗಳನ್ನು ತಯಾರಿಸುವಲ್ಲಿ ಪ್ರವೀಣ ಕುಶಲಕರ್ಮಿ.' },
+    { name: 'Gundappa', role: 'ಅರಣ್ಯ ಮಾರ್ಗದರ್ಶಿ', bio: 'ಆನೆಗಳ ಹಾದಿಗಳು ಮತ್ತು ಸ್ಥಳೀಯ ಕಥೆಗಳು ಸೇರಿದಂತೆ ಕಾಡನ್ನು ಅಂಗೈಯಂತೆ ಬಲ್ಲವರು.' },
+    { name: 'Yellaraju', role: 'ಓಡಾಟಗಾರ', bio: 'ಮೊಪೆಡ್‌ನಲ್ಲಿ ಗ್ರಾಮಕ್ಕೆ ಓಡಲು ಯಾವಾಗಲೂ ಸಿದ್ಧ.' },
+    { name: 'Chikkama', role: 'ಅಡುಗೆಮನೆ', bio: 'ಅಡುಗೆಮನೆಯನ್ನು ಮತ್ತು ಇಲ್ಲಿನ ಪ್ರತಿ ಊಟವನ್ನು ರೂಪಿಸುವ ಸ್ಥಳೀಯ ಪಾಕವಿಧಾನಗಳನ್ನು ನಿರ್ವಹಿಸುತ್ತಾರೆ.' },
+  ],
+  ta: [
+    { name: 'Madhavan', role: 'பண்ணை தலைவர் மற்றும் இயற்கை ஆர்வலர்', bio: 'நிலத்தை புத்துயிர் பெறச் செய்ய இடைவிடாது உழைக்கும் ஆர்வமுள்ள இயற்கையாளர் — தாவர, விலங்கினங்களை ஆவணப்படுத்துதல், காட்டிலிருந்து விதைகளை சேகரித்தல், நர்சரியை பராமரித்தல், சுற்றுச்சூழல் அமைப்பை வளர்த்தல் ஆகியவற்றை செய்கிறார். இங்கு காணக்கூடிய ஒவ்வொரு மரம், பறவை, ஊர்வனவற்றையும் அவருக்குத் தெரியும், மேலும் தன் மனைவி கிருதிகா மற்றும் மகள் சஷ்டிகாவுடன் பண்ணையிலேயே வசிக்கிறார்.' },
+    { name: 'Ramdoss', role: 'திறமையான கைவினைஞர்', bio: 'ஓதிபுரம்/தக்கட்டி கிராமத்தில் வளர்ந்த, மூங்கில் கூடைகள் தயாரிப்பதில் திறமையான கைவினைஞர்.' },
+    { name: 'Gundappa', role: 'காட்டு வழிகாட்டி', bio: 'யானைகளின் பாதைகள் மற்றும் உள்ளூர் கதைகள் உட்பட காட்டை உள்ளங்கை போல் அறிந்தவர்.' },
+    { name: 'Yellaraju', role: 'தூதுவர்', bio: 'மோப்பெடில் கிராமத்திற்கு ஓடிச் செல்ல எப்போதும் தயார்.' },
+    { name: 'Chikkama', role: 'சமையலறை', bio: 'சமையலறையையும், இங்குள்ள ஒவ்வொரு உணவையும் வடிவமைக்கும் உள்ளூர் சமையல் குறிப்புகளையும் நிர்வகிக்கிறார்.' },
+  ],
+} as const;
+
+const staff = staffContent[lang];
+---
+
+<BaseLayout lang={lang} title={c.heroTitle} description={c.metaDescription} image="/images/members/reva-and-ranjan.jpg" imageWidth={768} imageHeight={576}>
+  <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} intro={c.heroIntro} />
+
+  <section class="section wrapper">
+    <div class="staff-grid">
+      {staff.map((s) => (
+        <div class="card">
+          <h4>{s.name}</h4>
+          <p class="staff-role">{s.role}</p>
+          <p>{s.bio}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .staff-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+  }
+
+  .staff-role {
+    color: var(--tvc-orange);
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: 10px;
+  }
+</style>
