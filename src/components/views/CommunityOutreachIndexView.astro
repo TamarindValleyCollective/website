@@ -38,7 +38,7 @@ const content = {
   en: {
     metaDescription: 'Work TVC has done with the local community around it, in Odhipuram and Thaggatti village.',
     heroEyebrow: 'People',
-    heroTitle: 'Community Outreach',
+    heroTitle: 'Outreach',
     heroIntro: 'Work with the local community around us, in Odhipuram and Thaggatti village.',
     ctaPre: "Want to work with the community on an initiative aligned with TVC's ethos?",
     ctaLinkText: 'Reach out',
@@ -46,7 +46,7 @@ const content = {
   kn: {
     metaDescription: 'ಒಧಿಪುರಂ ಮತ್ತು ತಗ್ಗಟ್ಟಿ ಗ್ರಾಮಗಳಲ್ಲಿ, TVC ಸುತ್ತಮುತ್ತಲಿನ ಸ್ಥಳೀಯ ಸಮುದಾಯದೊಂದಿಗೆ ಮಾಡಿದ ಕೆಲಸ.',
     heroEyebrow: 'ಜನರು',
-    heroTitle: 'ಸಮುದಾಯ ಸಂಪರ್ಕ',
+    heroTitle: 'ಸಂಪರ್ಕ',
     heroIntro: 'ಒಧಿಪುರಂ ಮತ್ತು ತಗ್ಗಟ್ಟಿ ಗ್ರಾಮಗಳಲ್ಲಿ, ನಮ್ಮ ಸುತ್ತಮುತ್ತಲಿನ ಸ್ಥಳೀಯ ಸಮುದಾಯದೊಂದಿಗಿನ ಕೆಲಸ.',
     ctaPre: 'TVC ಯ ಆಶಯಗಳಿಗೆ ಅನುಗುಣವಾದ ಒಂದು ಉಪಕ್ರಮದಲ್ಲಿ ಸಮುದಾಯದೊಂದಿಗೆ ಕೆಲಸ ಮಾಡಲು ಬಯಸುವಿರಾ?',
     ctaLinkText: 'ಸಂಪರ್ಕಿಸಿ',
@@ -54,7 +54,7 @@ const content = {
   ta: {
     metaDescription: 'ஓதிபுரம் மற்றும் தக்கட்டி கிராமங்களில், TVC-க்கு அருகிலுள்ள உள்ளூர் சமூகத்துடன் செய்த பணி.',
     heroEyebrow: 'மக்கள்',
-    heroTitle: 'சமூக தொடர்பு',
+    heroTitle: 'தொடர்பு',
     heroIntro: 'ஓதிபுரம் மற்றும் தக்கட்டி கிராமங்களில், எங்களைச் சுற்றியுள்ள உள்ளூர் சமூகத்துடனான பணி.',
     ctaPre: 'TVC-யின் நோக்கத்திற்கு ஏற்ற ஒரு முயற்சியில் சமூகத்துடன் இணைந்து பணியாற்ற விரும்புகிறீர்களா?',
     ctaLinkText: 'தொடர்பு கொள்ளுங்கள்',
@@ -75,7 +75,7 @@ const c = content[lang];
     ) : (
       <div class="grid">
         {posts.map((p) => (
-          <a class="card" href={getRelativeLocaleUrl(lang, `/people/community-outreach/${bareSlug(p.id)}`)}>
+          <a class="card" href={getRelativeLocaleUrl(lang, `/people/outreach/${bareSlug(p.id)}`)}>
             {p.data.coverImage && <img src={p.data.coverImage} alt={p.data.coverImageAlt ?? p.data.title} loading="lazy" />}
             <h3>{p.data.title}</h3>
             <p>{p.data.excerpt}</p>

@@ -23,7 +23,7 @@ const content = {
     catalogueLink: 'View the catalogue (PDF) →',
     learningHeading: 'Learning programs',
     learningTextPre: 'Workshops and classes run with the local community — the full list lives on our',
-    learningLinkText: 'Community Outreach',
+    learningLinkText: 'Outreach',
     learningTextPost: 'page.',
     learningLink: 'See our learning programs →',
   },
@@ -39,7 +39,7 @@ const content = {
     catalogueLink: 'ಕ್ಯಾಟಲಾಗ್ ನೋಡಿ (PDF) →',
     learningHeading: 'ಕಲಿಕಾ ಕಾರ್ಯಕ್ರಮಗಳು',
     learningTextPre: 'ಸ್ಥಳೀಯ ಸಮುದಾಯದೊಂದಿಗೆ ನಡೆಸಲಾಗುವ ಕಾರ್ಯಾಗಾರಗಳು ಮತ್ತು ತರಗತಿಗಳು — ಸಂಪೂರ್ಣ ಪಟ್ಟಿ ನಮ್ಮ',
-    learningLinkText: 'ಸಮುದಾಯ ಪ್ರಭಾವ',
+    learningLinkText: 'ಸಂಪರ್ಕ',
     learningTextPost: 'ಪುಟದಲ್ಲಿ ಇದೆ.',
     learningLink: 'ನಮ್ಮ ಕಲಿಕಾ ಕಾರ್ಯಕ್ರಮಗಳನ್ನು ನೋಡಿ →',
   },
@@ -55,7 +55,7 @@ const content = {
     catalogueLink: 'பட்டியலைப் பார்க்கவும் (PDF) →',
     learningHeading: 'கற்றல் திட்டங்கள்',
     learningTextPre: 'உள்ளூர் சமூகத்துடன் நடத்தப்படும் பயிலரங்குகள் மற்றும் வகுப்புகள் — முழு பட்டியல் எங்கள்',
-    learningLinkText: 'சமூக நல செயல்பாடு',
+    learningLinkText: 'தொடர்பு',
     learningTextPost: 'பக்கத்தில் உள்ளது.',
     learningLink: 'எங்கள் கற்றல் திட்டங்களைப் பார்க்கவும் →',
   },
@@ -77,8 +77,8 @@ const c = content[lang];
   <section class="section section--tint">
     <div class="wrapper">
       <h2>{c.learningHeading}</h2>
-      <p>{c.learningTextPre} <a href={getRelativeLocaleUrl(lang, '/people/community-outreach')}>{c.learningLinkText}</a> {c.learningTextPost}</p>
-      <a class="button button--outline" href={getRelativeLocaleUrl(lang, '/people/community-outreach')}>{c.learningLink}</a>
+      <p>{c.learningTextPre} <a href={getRelativeLocaleUrl(lang, '/people/outreach')}>{c.learningLinkText}</a> {c.learningTextPost}</p>
+      <a class="button button--outline" href={getRelativeLocaleUrl(lang, '/people/outreach')}>{c.learningLink}</a>
     </div>
   </section>
 </BaseLayout>

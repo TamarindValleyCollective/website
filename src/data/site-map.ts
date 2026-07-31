@@ -24,10 +24,10 @@ export const EXPLORE_LINKS: SiteLink[] = [
     key: 'people',
     href: '/people',
     children: [
-      { label: 'Member Families', key: 'members', href: '/people/members' },
-      { label: 'Local Staff', key: 'staff', href: '/people/staff' },
+      { label: 'Members', key: 'members', href: '/people/members' },
+      { label: 'Staff', key: 'staff', href: '/people/staff' },
       { label: 'Partners', key: 'partners', href: '/people/partners' },
-      { label: 'Community Outreach', key: 'communityOutreach', href: '/people/community-outreach' },
+      { label: 'Outreach', key: 'communityOutreach', href: '/people/outreach' },
     ],
   },
   { label: 'Our Journey', key: 'ourJourney', href: '/our-journey' },
@@ -53,13 +53,13 @@ export const ENGAGE_LINKS: SiteLink[] = [
     href: '/visit',
     children: [
       { label: 'Day Visit', key: 'dayVisit', href: '/visit/day-visit' },
-      { label: 'Overnight Camping', key: 'camping', href: '/visit/camping' },
+      { label: 'Overnight Stay', key: 'camping', href: '/visit/camping' },
       { label: 'Host an Event', key: 'hostAnEvent', href: '/visit/host-an-event' },
       { label: 'Trekking Trails', key: 'trekkingTrails', href: '/visit/trekking-trails' },
       { label: 'How to Reach', key: 'howToReach', href: '/visit/how-to-reach' },
     ],
   },
-  { label: 'Join the Collective', key: 'join', href: '/join' },
+  { label: 'Join Us', key: 'join', href: '/join' },
   { label: 'Contact Us', key: 'contact', href: '/contact' },
 ];
 
