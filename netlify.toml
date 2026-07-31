@@ -125,6 +125,21 @@
   to = "/events/2022-08-27-3bs-and-1h-biodiversity-walk"
   status = 301
 
+[[redirects]]
+  from = "/lantana-furniture.html"
+  to = "/resource-centre"
+  status = 301
+
+[[redirects]]
+  from = "/vision-and-objectives.html"
+  to = "/about"
+  status = 301
+
+[[redirects]]
+  from = "/resource-center.html"
+  to = "/resource-centre"
+  status = 301
+
 # syntropic.in (an old member-directory domain) is configured as a domain
 # alias on this same Netlify project so DNS/SSL resolve, but it should
 # redirect to tvc.farm rather than silently mirror the site under a second
