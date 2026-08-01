@@ -5,7 +5,8 @@ Tracks changes requested through and made by the AI assistant — not a full rep
 
 Logs live one file per month under `CHANGELOG/`, newest month first:
 
-- [2026-07](CHANGELOG/2026-07.md) — current
+- [2026-08](CHANGELOG/2026-08.md) — current
+- [2026-07](CHANGELOG/2026-07.md)
 
 **Format** (see `AGENTS.md`'s "Change log" section for the full convention): one line per
 change — date, title, requester, the *intent* behind the ask in a few words (not a verbatim
