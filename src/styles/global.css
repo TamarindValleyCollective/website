@@ -218,7 +218,10 @@ img {
   align-items: center;
   gap: 10px;
   background: var(--tvc-orange-cta);
-  color: #fff;
+  /* White text on --tvc-orange-cta is only 2.52:1 (fails WCAG AA's 4.5:1
+     for this font size/weight) - dark ink text keeps the vivid orange
+     background but clears it at 5.93:1. */
+  color: var(--tvc-ink);
   font-weight: 600;
   padding: 16px 30px;
   border-radius: 999px;

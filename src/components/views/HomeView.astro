@@ -266,7 +266,7 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
           <a class="explore-card" href={getRelativeLocaleUrl(lang, card.href)}>
             <img src={card.img} alt="" loading="lazy" />
             <div class="explore-card__body">
-              <h4>{card.title}</h4>
+              <h3>{card.title}</h3>
               <p>{card.desc}</p>
             </div>
           </a>
@@ -639,7 +639,7 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
     padding: 16px 18px 18px;
   }
 
-  .explore-card__body h4 {
+  .explore-card__body h3 {
     font-size: 1.02rem;
     color: var(--tvc-green-dark);
     margin-bottom: 6px;

@@ -161,6 +161,11 @@ const siteGraph = {
     </script>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Fraunces is the --font-display face used by every page's hero
+         heading/intro (usually the LCP element) - preloading it lets the
+         browser fetch it before it discovers the font-face rule in the
+         parsed CSS, instead of waiting on that discovery. -->
+    <link rel="preload" href="/fonts/fraunces-variable.woff2" as="font" type="font/woff2" crossorigin />
     <meta name="description" content={pageDescription} />
     <link rel="canonical" href={canonicalURL} />
     {alternateLinks.map((alt) => (
