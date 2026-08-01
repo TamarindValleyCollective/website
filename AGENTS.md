@@ -57,6 +57,8 @@ astro dev --background
 
 Manage the background server with `astro dev stop`, `astro dev status`, and `astro dev logs`.
 
+Always render changes in the dev server and verify them with the user before closing it.
+
 ## Documentation
 
 Full documentation: https://docs.astro.build
