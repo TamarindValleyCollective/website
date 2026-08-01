@@ -28,6 +28,9 @@ can go live before the other.
 - **Privacy, Terms, Refund Policy, and the 404 page** (`/privacy`, `/terms`, `/refund-policy`,
   `/404`) are **intentionally English-only** — an explicit scope decision, not a gap. They have no
   `kn`/`ta` versions at all and don't need review.
+- **`/people/partners/ananas`** (`AnanasProjectView.astro`) — the whole page is English-only,
+  same situation as the Our Journey yearly narrative above: real prose worth translating
+  eventually, just not blocking the page shipping. No `kn`/`ta` route exists yet.
 
 ## What to review
 

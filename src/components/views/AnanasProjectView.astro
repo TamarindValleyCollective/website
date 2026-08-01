@@ -1,0 +1,250 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../PageHero.astro';
+
+// English-only, and deliberately not part of the `partners` collection --
+// see content.config.ts's comment on why per-partner pages were dropped
+// twice before. This one is additive: Ananas is the one partner with a
+// real multi-year project archive (design decks, land-use maps, planting
+// plans) to draw on, not a return to a per-partner listing pattern.
+
+const articleSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  headline: 'Ananas at TVC',
+  description: "How Ananas, TVC's permaculture design partner since 2017, has shaped the farm's land and water systems.",
+  image: new URL('/images/partners/ananas/syntropic-design-2020.jpg', Astro.site).toString(),
+  author: { '@type': 'Organization', name: 'Ananas', url: 'https://ananas.design/services' },
+  publisher: {
+    '@type': 'Organization',
+    name: 'Tamarind Valley Collective',
+    logo: { '@type': 'ImageObject', url: new URL('/images/brand/tvc-logo-mark.png', Astro.site).toString() },
+  },
+};
+---
+
+<BaseLayout
+  lang="en"
+  title="Ananas"
+  description="How Ananas, TVC's permaculture design partner since 2017, has shaped the farm's land and water systems — from the Final Design Document and GAIA map to zone-by-zone earthworks and planting design."
+  image="/images/partners/ananas/syntropic-design-2020.jpg"
+  imageWidth={1600}
+  imageHeight={1131}
+  schema={[articleSchema]}
+  translated={false}
+>
+  <PageHero
+    eyebrow="Partners"
+    title="Designing TVC's Land"
+    intro="A closer look at what Ananas has actually designed here, drawn from the project archive built up since 2017."
+  />
+
+  <article class="section wrapper prose">
+    <p>
+      Ananas is a Bangalore-based regenerative design studio and TVC's permaculture design
+      partner since 2017. The <a href="/people/partners">Partners page</a> covers who they are
+      in a couple of lines — this page is a closer look at what they've actually designed here,
+      drawn from the project archive of design decks, land-use maps, and planting plans built up
+      over several seasons of work.
+    </p>
+
+    <h2>2017: Earthworks and a nursery</h2>
+    <p>
+      The earliest recorded designs date to December 2017: an earthworks, irrigation, and
+      support-planting plan, a nursery sized to raise around 2,000 saplings a quarter, and a
+      multi-layered living fence doing several jobs at once — drought-tolerant native species,
+      water-catching "boomerangs," and a guild supporting everything planted around it.
+    </p>
+
+    <h2>2017–2018: The Farming Collective</h2>
+    <p>
+      Alongside the farm's own design, Ananas proposed "The Farming Collective," a broader
+      community-farming concept. The groundwork behind it is its own small archive: check-dam
+      and gully-plug studies, a riparian buffer-zone map protecting a stretch either side of the
+      farm's nullah while densely planting the zone beyond it, and planting guidelines for the
+      tree species suited to the site.
+    </p>
+
+    <h2>2019: An environmental study, then a full design document</h2>
+    <p>
+      2019 opened with a formal environmental study, which fed directly into April 2019's Final
+      Design Document — the most detailed single record in the archive. It broke the farm into
+      zones — Upper Arkavathy, Lower Arkavathy, and Kaveri, plus a dedicated forest-regeneration
+      test site — each with its own pre-monsoon task list, and set the engagement's headline
+      number: cutting water use from a baseline of 6.05 million litres a year by three-quarters
+      by 2020. Upper Arkavathy's own gardens were designed around alternating raised beds for
+      annuals and sunken beds for perennials, so the overflow from watering one recharges the
+      other.
+    </p>
+
+    <div class="plan-pair">
+      <figure class="poster">
+        <img
+          src="/images/partners/ananas/upper-arkavathy-plan.jpg"
+          alt="Upper Arkavathy zone plan from the Final Design Document, showing plots, ponds, and planting areas in color"
+          width="543"
+          height="598"
+          loading="lazy"
+        />
+        <figcaption>Upper Arkavathy zone plan</figcaption>
+      </figure>
+      <figure class="poster">
+        <img
+          src="/images/partners/ananas/kaveri-plan.jpg"
+          alt="Kaveri zone plan from the Final Design Document, showing numbered plots, ponds, and rocky areas in color"
+          width="739"
+          height="628"
+          loading="lazy"
+        />
+        <figcaption>Kaveri zone plan</figcaption>
+      </figure>
+    </div>
+
+    <figure class="poster">
+      <img
+        src="/images/partners/ananas/bed-section-diagram.jpg"
+        alt="Diagram of alternating raised beds for annuals and sunken beds for perennials, with interior trees and a pathway between them"
+        width="1024"
+        height="768"
+        loading="lazy"
+      />
+      <figcaption>Raised beds for annuals, sunken beds for perennials — the section Ananas proposed for Upper Arkavathy's gardens</figcaption>
+    </figure>
+
+    <h2>June 2019: The GAIA map</h2>
+    <p>
+      The GAIA map is the farm's master drawing — swales, sheet-flow spreaders, "boomerangs," a
+      traveling nursery, a wildlife buffer zone, causeways, forest-garden layers, gully
+      plugs/check dams, and hard fencing, each annotated directly on the site plan alongside the
+      zones it names (Upper and Lower Arkavathy, Upper and Lower Kaveri, the Temple Plot, and the
+      "Island to Nowhere").
+    </p>
+
+    <figure class="gaia-figure">
+      <a href="/images/partners/ananas/gaia-map.jpg" target="_blank" rel="noopener noreferrer">
+        <img
+          src="/images/partners/ananas/gaia-map.jpg"
+          alt="The GAIA land-use map, a fully annotated illustrated site plan of TVC showing zones, earthworks, planting systems, and design notes"
+          width="1800"
+          height="2563"
+          loading="lazy"
+        />
+      </a>
+      <figcaption>The GAIA land-use map — <a href="/images/partners/ananas/gaia-map.jpg" target="_blank" rel="noopener noreferrer">view full size ↗</a></figcaption>
+    </figure>
+
+    <h2>2020: A syntropic planting design</h2>
+    <p>
+      By April 2020 the design had moved into detailed bed-level planning: a syntropic
+      agroforestry layout alternating tree rows — high, medium, and low canopy — with biomass
+      rows and annual beds, fed by stone-lined channels and PVC piping off a shared water tank. A
+      system meant to build soil and yield food in the same footprint.
+    </p>
+
+    <figure class="poster poster--wide">
+      <img
+        src="/images/partners/ananas/syntropic-design-2020.jpg"
+        alt="TVC Syntropic bed design from April 2020, showing alternating tree rows, biomass rows, and annual beds with irrigation channels"
+        width="1600"
+        height="1131"
+        loading="lazy"
+      />
+      <figcaption>TVC Syntropic bed design, April 2020</figcaption>
+    </figure>
+
+    <h2>What's still on the ground</h2>
+    <p>
+      The throughline across all of it is water: earthworks that slow, spread, and sink rainfall
+      before growing anything on top of that base — food forest and living-fence planting, the
+      nursery that keeps propagating it, and the community process that turned drawings into a
+      farm actually run by resident families.
+    </p>
+
+    <p>
+      Read the short version on <a href="/people/partners">our Partners page</a>, or visit <a href="https://ananas.design/services" target="_blank" rel="noopener noreferrer">ananas.design</a>.
+    </p>
+  </article>
+</BaseLayout>
+
+<style>
+  .prose :global(img) {
+    border-radius: var(--radius);
+    margin: 16px 0;
+  }
+
+  .prose :global(h2) {
+    margin-top: 32px;
+  }
+
+  .plan-pair {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    max-width: 72ch;
+    margin: 16px 0 32px;
+  }
+
+  .plan-pair .poster {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+
+  @media (max-width: 640px) {
+    .plan-pair {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .prose :global(.poster) {
+    width: 100%;
+    max-width: 360px;
+    margin: 16px auto 32px;
+  }
+
+  /* The GAIA map is dense enough (small annotation text) that squeezing it
+     into the same 360px poster column as the other figures would make it
+     useless - let it run the full wrapper width instead, well past the
+     72ch text column, same as the plan pair breaks out to that column's
+     edge rather than staying inside prose's narrower default. It's
+     portrait (rotated from its original landscape scan), so full wrapper
+     width would just make it needlessly tall without adding legibility -
+     capped and centered instead, same idea as .poster--wide. */
+  .prose :global(.gaia-figure) {
+    width: 100%;
+    max-width: 720px;
+    margin: 16px auto 32px;
+  }
+
+  .prose :global(.gaia-figure img) {
+    margin: 0;
+    width: 100%;
+    height: auto;
+    box-shadow: var(--shadow-soft);
+    border: 1px solid var(--tvc-line);
+  }
+
+  .prose :global(.gaia-figure figcaption) {
+    margin-top: 8px;
+    text-align: center;
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .prose :global(.poster--wide) {
+    max-width: 620px;
+  }
+
+  .prose :global(.poster img) {
+    margin: 0;
+    box-shadow: var(--shadow-soft);
+    border: 1px solid var(--tvc-line);
+  }
+
+  .prose :global(.poster figcaption) {
+    margin-top: 8px;
+    text-align: center;
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
+  }
+</style>

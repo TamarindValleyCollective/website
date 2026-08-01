@@ -58,7 +58,11 @@ const partners = defineCollection({
     // for being more scaffolding than 88-130 words of content warranted
     // (see astro.config.mjs's /ecosystem/partners redirect comment); this
     // is a single listing page with real write-ups, not a return to that
-    // per-partner structure.
+    // per-partner structure. Ananas is the one deliberate exception - see
+    // src/pages/people/partners/ananas.astro - a hand-authored page (not a
+    // collection entry) added because that partner's actual project archive
+    // turned out to be worth a lot more than 88-130 words; it isn't a
+    // reopening of this collection's per-partner pattern.
     url: z.string().url(),
     // The one-line "what they actually do with TVC" fact, kept separate
     // from the general body above and rendered as its own callout on

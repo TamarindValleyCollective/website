@@ -70,8 +70,15 @@ export default defineConfig({
     // keeps a short teaser section linking to it. The per-partner
     // (/.../[slug]) redirects still live in netlify.toml, not here --
     // Astro's own redirects config requires a dynamic source to redirect
-    // to a route with a matching [slug] param, and there's still no
-    // per-partner route (this is one listing page, not individual pages).
+    // to a route with a matching [slug] param, and there was still no
+    // per-partner route (this is one listing page, not individual pages) --
+    // except Ananas: src/pages/people/partners/ananas.astro is a real,
+    // hand-authored page now (see AnanasProjectView.astro), added once that
+    // one partner's project archive turned out to be worth more than a
+    // paragraph. It's a one-off addition, not a reopening of the general
+    // per-partner pattern for every partner - the netlify.toml wildcard
+    // redirect below still applies to every other partner slug, and doesn't
+    // shadow this real page since it isn't `force`d (see that file).
     '/ecosystem/partners': '/people/partners',
     // Leftover URLs from the pre-Astro site (Google still has them indexed,
     // and some migrated event content still links to them internally) -

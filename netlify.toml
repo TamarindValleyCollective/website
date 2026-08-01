@@ -19,10 +19,15 @@
 # Individual partner pages (/ecosystem/partners/<slug> and, briefly,
 # /people/partners/<slug>) were removed years ago - each partner's full
 # write-up now lives on the single /people/partners listing page instead
-# (see astro.config.mjs and content.config.ts for why there's still no
-# per-partner route). Wildcard redirects here rather than in astro.config.mjs's
-# `redirects`, since Astro requires a dynamic source there to redirect to a
-# route with a matching [slug] param, and no such route exists.
+# (see astro.config.mjs and content.config.ts for the one deliberate
+# exception: /people/partners/ananas is a real page now). Wildcard redirects
+# here rather than in astro.config.mjs's `redirects`, since Astro requires a
+# dynamic source there to redirect to a route with a matching [slug] param,
+# and there's still no general per-partner route.
+#
+# Neither rule below is `force`d, so Netlify only applies them when no real
+# file exists at the requested path - /people/partners/ananas is served
+# directly and isn't swallowed by the second rule's wildcard.
 [[redirects]]
   from = "/ecosystem/partners/*"
   to = "/people/partners"
