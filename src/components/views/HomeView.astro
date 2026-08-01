@@ -893,7 +893,14 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
       }
     }
 
-    update();
+    // Skip the initial call when already at the top of the page: opacity is
+    // already 1 there by default CSS, so writing style.opacity = '1' would
+    // be a no-op visually - but it's an inline-style mutation on the page's
+    // own LCP element, and doing it here means the browser doesn't count
+    // that write as a delayed repaint of the largest contentful element
+    // (only triggers for the rarer case of loading already scrolled, e.g.
+    // scroll-restoring back/forward navigation or a mid-page #anchor link).
+    if (window.scrollY > 0) update();
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onScroll);
   }
