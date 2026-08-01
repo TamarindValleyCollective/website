@@ -208,17 +208,29 @@ const peopleHref = getRelativeLocaleUrl(lang, '/people/members');
   // resolves instantly from cache instead of hitting iNaturalist again.
   // Same taxon + boundary filtering as that page too, so this count can't
   // drift from what /ecosystem itself shows.
-  fetchAllObservations()
-    .then((observations) => {
-      const identified = observations.filter((o) => o.taxon != null && isWithinBoundary(o.geojson));
-      const speciesCount = new Set(identified.map((o) => o.taxon!.id)).size;
-      speciesEl.dataset.value = String(speciesCount);
-      speciesEl.dataset.ready = 'true';
-      if (played) animateValue(speciesEl, speciesCount);
-    })
-    .catch(() => {
-      // Live count is a nice-to-have -- if iNaturalist is unreachable, fall
-      // back to a plain label rather than leaving a stuck "—".
-      speciesEl.textContent = '100+';
-    });
+  function fetchSpeciesCount() {
+    fetchAllObservations()
+      .then((observations) => {
+        const identified = observations.filter((o) => o.taxon != null && isWithinBoundary(o.geojson));
+        const speciesCount = new Set(identified.map((o) => o.taxon!.id)).size;
+        speciesEl.dataset.value = String(speciesCount);
+        speciesEl.dataset.ready = 'true';
+        if (played) animateValue(speciesEl, speciesCount);
+      })
+      .catch(() => {
+        // Live count is a nice-to-have -- if iNaturalist is unreachable, fall
+        // back to a plain label rather than leaving a stuck "—".
+        speciesEl.textContent = '100+';
+      });
+  }
+
+  // This uncached request (first visit) runs ~470KB through iNaturalist's API
+  // -- deferred past `load` so it doesn't compete with the hero video/images
+  // for bandwidth during the page's critical initial-paint window. A repeat
+  // visit within the 10-minute cache window resolves instantly regardless.
+  if (document.readyState === 'complete') {
+    fetchSpeciesCount();
+  } else {
+    window.addEventListener('load', fetchSpeciesCount, { once: true });
+  }
 </script>
