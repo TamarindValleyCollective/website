@@ -3,7 +3,7 @@ import CommunityOutreachDetailView from '../../../../components/views/CommunityO
 import { getCollection } from 'astro:content';
 
 export async function getStaticPaths() {
-  const posts = await getCollection('communityOutreach', (entry) => entry.id.startsWith('ta/'));
+  const posts = await getCollection('communityOutreach', (entry) => entry.id.startsWith('ta/') && !entry.data.draft);
   return posts.map((post) => ({ params: { slug: post.id.replace(/^ta\//, '') }, props: { post } }));
 }
 

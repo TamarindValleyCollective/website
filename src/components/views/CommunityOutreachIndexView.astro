@@ -17,7 +17,7 @@ const { lang } = Astro.props;
 // (id prefixed accordingly, e.g. "kn/stem-experiential-learning-classes").
 // Filter down to just this locale's entries, and strip the prefix to get
 // the bare slug shared across all three locales' routes.
-const allPosts = await getCollection('communityOutreach');
+const allPosts = await getCollection('communityOutreach', (entry) => !entry.data.draft);
 const posts =
   lang === 'en'
     ? allPosts.filter((p) => !p.id.startsWith('kn/') && !p.id.startsWith('ta/'))

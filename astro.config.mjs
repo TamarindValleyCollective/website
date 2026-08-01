@@ -25,67 +25,15 @@ export default defineConfig({
       },
     }),
   ],
-  redirects: {
-    // Ecosystem and Biodiversity were separate nav items covering the same
-    // ground - merged into one page at /ecosystem with the live explorer
-    // folded in as its flagship section. Later split back apart: /ecosystem
-    // became a genuine hub page (corridor/food forest/farm overview, cards
-    // into its three leaves) and the live explorer moved to its own leaf at
-    // /ecosystem/biodiversity, alongside Geography and Weather - so this old
-    // pre-Astro URL now points at the page that actually holds that content.
-    '/biodiversity': '/ecosystem/biodiversity',
-    // Timeline was a top-level nav item and homepage card despite being
-    // entirely a child of Our Journey (unlike its sibling /our-journey/design,
-    // it wasn't even nested in the URL) - nested it properly and de-listed it
-    // as its own "section" so it's reachable only via the Journey page. Later
-    // folded directly into /our-journey itself (see the comment on
-    // JourneyTimelineStandalone.astro) rather than living behind a click, so
-    // both old URLs now land on the same page.
-    '/timeline': '/our-journey',
-    '/our-journey/timeline': '/our-journey',
-    // Content reorg: split "who's part of TVC" (member families, local
-    // staff, partners, community outreach) out of About TVC and Our
-    // Journey into its own /people section, since neither page was really
-    // about those topics - and moved The Design from Our Journey to About
-    // TVC, since it's a present-tense description of the farm's layout,
-    // not a historical journey milestone. Redirects point straight at the
-    // final destination rather than chaining through intermediate stops
-    // (e.g. /community-outreach went to /our-journey/community-outreach
-    // once already, then /people/community-outreach - now goes directly to
-    // /people/outreach, its current URL after "Community Outreach" was
-    // shortened to "Outreach").
-    '/community-outreach': '/people/outreach',
-    '/community-outreach/[slug]': '/people/outreach/[slug]',
-    '/our-journey/community-outreach': '/people/outreach',
-    '/our-journey/community-outreach/[slug]': '/people/outreach/[slug]',
-    '/people/community-outreach': '/people/outreach',
-    '/people/community-outreach/[slug]': '/people/outreach/[slug]',
-    '/our-journey/design': '/about/design',
-    // Partners didn't have its own page for a while: with only 88-130 words
-    // per partner, the earlier listing+detail-page structure (first at
-    // /ecosystem/partners, then briefly at /people/partners) was more
-    // scaffolding than the content warranted, so it got folded into a
-    // single section on /people. /people/partners is real again now that
-    // each partner has a full write-up (see PartnersView.astro) - /people
-    // keeps a short teaser section linking to it. The per-partner
-    // (/.../[slug]) redirects still live in netlify.toml, not here --
-    // Astro's own redirects config requires a dynamic source to redirect
-    // to a route with a matching [slug] param, and there was still no
-    // per-partner route (this is one listing page, not individual pages) --
-    // except Ananas: src/pages/people/partners/ananas.astro is a real,
-    // hand-authored page now (see AnanasProjectView.astro), added once that
-    // one partner's project archive turned out to be worth more than a
-    // paragraph. It's a one-off addition, not a reopening of the general
-    // per-partner pattern for every partner - the netlify.toml wildcard
-    // redirect below still applies to every other partner slug, and doesn't
-    // shadow this real page since it isn't `force`d (see that file).
-    '/ecosystem/partners': '/people/partners',
-    // Leftover URLs from the pre-Astro site (Google still has them indexed,
-    // and some migrated event content still links to them internally) -
-    // point them at their current equivalents instead of 404ing.
-    '/how-to-reach.html': '/visit/how-to-reach',
-    '/trekking-trails-of-tvc.html': '/visit/trekking-trails',
-    '/tvc-3bs-and-1h-dusk-to-dawn-biodiversity-walks-tvc-birdsbutterfliesinsects.html':
-      '/events/2022-08-27-3bs-and-1h-biodiversity-walk',
-  },
+  // All legacy-URL redirects (ecosystem/biodiversity split, the /people
+  // reorg, pre-Astro .html URLs, etc.) live in netlify.toml, not here.
+  // This project has no SSR adapter (static output), and Astro's own
+  // `redirects` config in static output doesn't produce a real HTTP
+  // redirect - it emits a static page with a client-side meta-refresh, a
+  // `noindex` tag, and a canonical link. Google can keep surfacing that
+  // 200-status stub (title: "Redirecting to: ...") in search results for
+  // a long time before it honors the weak signal and drops it - which is
+  // exactly the "dead link" symptom this was meant to fix in the first
+  // place (see the 2026-07-29 changelog entry). A real 301 in
+  // netlify.toml gets Google to consolidate onto the new URL fast.
 });

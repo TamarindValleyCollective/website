@@ -42,6 +42,10 @@ const communityOutreach = defineCollection({
     excerpt: z.string(),
     coverImage: z.string().optional(),
     coverImageAlt: z.string().optional(),
+    // For entries with no real copy yet (see issue #12) - excluded from the
+    // index listing and given no route, rather than shipping the
+    // placeholder body text as if it were real content.
+    draft: z.boolean().optional(),
   }),
 });
 

@@ -23,6 +23,13 @@
     transform: none;
   }
 
+  /* Sections already in view when the page loads (e.g. one sitting right at
+     the fold) skip the transition entirely - see the reveal-on-setup logic
+     below for why. */
+  .js-reveal-ready .section.is-revealed-instant {
+    transition: none;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .js-reveal-ready .section {
       opacity: 1;
@@ -38,7 +45,8 @@
 
     const pending = new Set(document.querySelectorAll<HTMLElement>('.section'));
 
-    function reveal(el: HTMLElement) {
+    function reveal(el: HTMLElement, instant = false) {
+      if (instant) el.classList.add('is-revealed-instant');
       el.classList.add('is-revealed');
       pending.delete(el);
       observer.unobserve(el);
@@ -52,6 +60,18 @@
       },
       { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
     );
+
+    // Whatever's already in view before the visitor has scrolled at all
+    // (e.g. a section sitting right at the fold on a short page like
+    // Ecosystem) gets revealed immediately, with no transition - otherwise
+    // the 0.5s fade+rise plays as an unwanted flash on page load instead of
+    // only during the reveal gesture of scrolling new content into view,
+    // and on a page with an image hero, that flash happens right on top of
+    // the still fully-visible (not yet scrolled-and-faded) photo.
+    const vh = window.innerHeight;
+    for (const el of [...pending]) {
+      if (el.getBoundingClientRect().top < vh) reveal(el, true);
+    }
 
     pending.forEach((el) => observer.observe(el));
 
