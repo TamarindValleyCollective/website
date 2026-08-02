@@ -61,8 +61,14 @@ const staffContent = {
 const staff = staffContent[lang];
 ---
 
-<BaseLayout lang={lang} title={c.heroTitle} description={c.metaDescription} image="/images/members/reva-and-ranjan.jpg" imageWidth={768} imageHeight={576}>
-  <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} intro={c.heroIntro} />
+<BaseLayout lang={lang} title={c.heroTitle} description={c.metaDescription} image="/images/pages/staff/hero.jpg" imageWidth={1280} imageHeight={963}>
+  <PageHero
+    eyebrow={c.heroEyebrow}
+    title={c.heroTitle}
+    intro={c.heroIntro}
+    image="/images/pages/staff/hero.jpg"
+    imageAlt="The TVC staff team standing together on the farm"
+  />
 
   <section class="section wrapper">
     <div class="staff-grid">
