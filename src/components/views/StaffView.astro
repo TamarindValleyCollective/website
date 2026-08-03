@@ -32,29 +32,273 @@ const content = {
 
 const c = content[lang];
 
-// Only 5 people with substantial, non-namedrop bios, so role + bio are
-// translated in full per locale (names are proper nouns and stay unchanged).
+// Each card is a photo plus one or two people (couples, and Ramdhas & his
+// son Elraju, share a single card and photo). Names are proper nouns and
+// stay unchanged across locales; role + bio are translated in full.
 const staffContent = {
   en: [
-    { name: 'Madhavan', role: 'Farm lead & naturalist', bio: "A passionate naturalist who has been tirelessly working on rejuvenating the land, documenting the flora and fauna, gathering seeds from the forest, maintaining a nursery, and nurturing the ecosystem. He knows every tree, bird, and reptile you'll run into here, and lives on-site with his wife Krithika and daughter Shashtika." },
-    { name: 'Ramdoss', role: 'Master craftsman', bio: 'A master craftsman when it comes to making bamboo baskets, grown up in the Odhipuram/Thaggatti village.' },
-    { name: 'Gundappa', role: 'Forest guide', bio: 'Knows the forest like the back of his hand — the elephant paths and the local stories.' },
-    { name: 'Yellaraju', role: 'Runner', bio: 'Always ready to run to the village on the moped.' },
-    { name: 'Chikkama', role: 'Kitchen', bio: 'Manages the kitchen and the local recipes that shape every meal here.' },
+    {
+      image: '/images/pages/staff/madhavan.jpg',
+      imageAlt: 'Madhavan holding his daughter Shashtika',
+      people: [
+        {
+          name: 'Madhavan',
+          role: 'Farm lead & naturalist',
+          bio: "A passionate naturalist who has been tirelessly working on rejuvenating the land, documenting the flora and fauna, gathering seeds from the forest, maintaining a nursery, and nurturing the ecosystem. He knows every tree, bird, and reptile you'll run into here, and lives on-site with his wife Krithika and daughter Shashtika.",
+        },
+      ],
+    },
+    {
+      image: '/images/pages/staff/ramdhas-elraju.jpg',
+      imageAlt: 'Ramdhas with his son Elraju',
+      people: [
+        {
+          name: 'Ramdhas',
+          role: 'Master craftsman',
+          bio: 'From the neighbouring village of Odhipuram, and with TVC from the very beginning. Deeply knowledgeable about local plants and trees, and a master of bamboo craft. Lost a leg in an accident at a stone quarry, but it hasn’t slowed him down. Speaks Kannada, Telugu, and Tamil.',
+        },
+        {
+          name: 'Elraju',
+          role: 'Village news bearer',
+          bio: 'Ramdhas’s son, and with TVC from the very beginning too. The first to know what’s happening in the village, and a favourite for his ghost stories. Humble through and through. Speaks Kannada, Tamil, and Telugu.',
+        },
+      ],
+    },
+    {
+      image: '/images/pages/staff/gundappa-mahadevamma.jpg',
+      imageAlt: 'Gundappa and Mahadevamma',
+      people: [
+        {
+          name: 'Gundappa',
+          role: 'Supervisor',
+          bio: 'From Odhipuram. Once a shepherd, he still knows the forest trees like old friends. Now TVC’s supervisor — always active, rarely resting, and soft-spoken with it. Speaks Kannada.',
+        },
+        {
+          name: 'Mahadevamma',
+          role: 'Farmhand',
+          bio: 'With TVC for 5 years. Quiet and focused — she minds her own work and knows a great deal about wild edible greens. Speaks Kannada.',
+        },
+      ],
+    },
+    {
+      image: '/images/pages/staff/puttappa-mahadevamma.jpg',
+      imageAlt: 'Puttappa and Mahadevamma',
+      people: [
+        {
+          name: 'Puttappa',
+          role: 'Plumber',
+          bio: 'From Odhipuram, with TVC for 4 years. Had migrated to Bangalore for work, and COVID brought his family back to the village. Skilled and a quick learner — TVC’s plumber. Speaks Kannada, Tamil, and a bit of Hindi.',
+        },
+        {
+          name: 'Mahadevamma',
+          role: 'Cook',
+          bio: 'Very quiet, and an amazing cook — quick with her work too. Speaks Kannada, Telugu, and Tamil.',
+        },
+      ],
+    },
+    {
+      image: '/images/pages/staff/chudesa-puttamadevi.jpg',
+      imageAlt: 'Chudesa and Puttamadevi',
+      people: [
+        {
+          name: 'Chudesa',
+          role: 'Drummer',
+          bio: 'From Odhipuram, with TVC for 2 years. The village’s official drummer for functions and festivals. Soft-spoken. Speaks Kannada.',
+        },
+        {
+          name: 'Puttamadevi',
+          role: 'Farmhand',
+          bio: 'With TVC for 6 months. Soft-spoken. Speaks Kannada.',
+        },
+      ],
+    },
+    {
+      image: '/images/pages/staff/chikkamma.jpg',
+      imageAlt: 'Chikkamma',
+      people: [
+        {
+          name: 'Chikkamma',
+          role: 'Cook',
+          bio: 'From Thagatty, with TVC for 7 years. An incredible cook — her rasam is a standout at every meal — and deeply knowledgeable about wild edible greens. Speaks Kannada, Telugu, and Tamil.',
+        },
+      ],
+    },
   ],
   kn: [
-    { name: 'Madhavan', role: 'ಫಾರ್ಮ್ ಮುಖ್ಯಸ್ಥ ಮತ್ತು ಪ್ರಕೃತಿ ತಜ್ಞ', bio: 'ಭೂಮಿಯನ್ನು ಪುನರುಜ್ಜೀವನಗೊಳಿಸಲು ಅವಿರತವಾಗಿ ಶ್ರಮಿಸುತ್ತಿರುವ ಉತ್ಸಾಹಿ ಪ್ರಕೃತಿ ತಜ್ಞ — ಸಸ್ಯ ಮತ್ತು ಪ್ರಾಣಿ ಸಂಕುಲವನ್ನು ದಾಖಲಿಸುವುದು, ಅರಣ್ಯದಿಂದ ಬೀಜಗಳನ್ನು ಸಂಗ್ರಹಿಸುವುದು, ನರ್ಸರಿಯನ್ನು ನಿರ್ವಹಿಸುವುದು ಮತ್ತು ಪರಿಸರ ವ್ಯವಸ್ಥೆಯನ್ನು ಪೋಷಿಸುವುದು ಅವರ ಕೆಲಸ. ಇಲ್ಲಿ ಸಿಗುವ ಪ್ರತಿಯೊಂದು ಮರ, ಪಕ್ಷಿ ಮತ್ತು ಸರೀಸೃಪವನ್ನೂ ಅವರು ಬಲ್ಲರು, ಮತ್ತು ತಮ್ಮ ಪತ್ನಿ ಕೃತಿಕಾ ಹಾಗೂ ಮಗಳು ಶಾಷ್ಟಿಕಾ ಅವರೊಂದಿಗೆ ಸ್ಥಳದಲ್ಲೇ ವಾಸಿಸುತ್ತಾರೆ.' },
-    { name: 'Ramdoss', role: 'ಪ್ರವೀಣ ಕುಶಲಕರ್ಮಿ', bio: 'ಒಧಿಪುರಂ/ತಗ್ಗಟ್ಟಿ ಗ್ರಾಮದಲ್ಲಿ ಬೆಳೆದ, ಬಿದಿರಿನ ಬುಟ್ಟಿಗಳನ್ನು ತಯಾರಿಸುವಲ್ಲಿ ಪ್ರವೀಣ ಕುಶಲಕರ್ಮಿ.' },
-    { name: 'Gundappa', role: 'ಅರಣ್ಯ ಮಾರ್ಗದರ್ಶಿ', bio: 'ಆನೆಗಳ ಹಾದಿಗಳು ಮತ್ತು ಸ್ಥಳೀಯ ಕಥೆಗಳು ಸೇರಿದಂತೆ ಕಾಡನ್ನು ಅಂಗೈಯಂತೆ ಬಲ್ಲವರು.' },
-    { name: 'Yellaraju', role: 'ಓಡಾಟಗಾರ', bio: 'ಮೊಪೆಡ್‌ನಲ್ಲಿ ಗ್ರಾಮಕ್ಕೆ ಓಡಲು ಯಾವಾಗಲೂ ಸಿದ್ಧ.' },
-    { name: 'Chikkama', role: 'ಅಡುಗೆಮನೆ', bio: 'ಅಡುಗೆಮನೆಯನ್ನು ಮತ್ತು ಇಲ್ಲಿನ ಪ್ರತಿ ಊಟವನ್ನು ರೂಪಿಸುವ ಸ್ಥಳೀಯ ಪಾಕವಿಧಾನಗಳನ್ನು ನಿರ್ವಹಿಸುತ್ತಾರೆ.' },
+    {
+      image: '/images/pages/staff/madhavan.jpg',
+      imageAlt: 'ಮಗಳು ಶಾಷ್ಟಿಕಾ ಅವರನ್ನು ಎತ್ತಿಕೊಂಡಿರುವ ಮಾಧವನ್',
+      people: [
+        {
+          name: 'Madhavan',
+          role: 'ಫಾರ್ಮ್ ಮುಖ್ಯಸ್ಥ ಮತ್ತು ಪ್ರಕೃತಿ ತಜ್ಞ',
+          bio: 'ಭೂಮಿಯನ್ನು ಪುನರುಜ್ಜೀವನಗೊಳಿಸಲು ಅವಿರತವಾಗಿ ಶ್ರಮಿಸುತ್ತಿರುವ ಉತ್ಸಾಹಿ ಪ್ರಕೃತಿ ತಜ್ಞ — ಸಸ್ಯ ಮತ್ತು ಪ್ರಾಣಿ ಸಂಕುಲವನ್ನು ದಾಖಲಿಸುವುದು, ಅರಣ್ಯದಿಂದ ಬೀಜಗಳನ್ನು ಸಂಗ್ರಹಿಸುವುದು, ನರ್ಸರಿಯನ್ನು ನಿರ್ವಹಿಸುವುದು ಮತ್ತು ಪರಿಸರ ವ್ಯವಸ್ಥೆಯನ್ನು ಪೋಷಿಸುವುದು ಅವರ ಕೆಲಸ. ಇಲ್ಲಿ ಸಿಗುವ ಪ್ರತಿಯೊಂದು ಮರ, ಪಕ್ಷಿ ಮತ್ತು ಸರೀಸೃಪವನ್ನೂ ಅವರು ಬಲ್ಲರು, ಮತ್ತು ತಮ್ಮ ಪತ್ನಿ ಕೃತಿಕಾ ಹಾಗೂ ಮಗಳು ಶಾಷ್ಟಿಕಾ ಅವರೊಂದಿಗೆ ಸ್ಥಳದಲ್ಲೇ ವಾಸಿಸುತ್ತಾರೆ.',
+        },
+      ],
+    },
+    {
+      image: '/images/pages/staff/ramdhas-elraju.jpg',
+      imageAlt: 'ಮಗ ಎಲ್ರಾಜು ಅವರೊಂದಿಗೆ ರಾಮದಾಸ್',
+      people: [
+        {
+          name: 'Ramdhas',
+          role: 'ಪ್ರವೀಣ ಕುಶಲಕರ್ಮಿ',
+          bio: 'ಪಕ್ಕದ ಒಧಿಪುರಂ ಗ್ರಾಮದವರು, ಆರಂಭದಿಂದಲೂ TVC ಯೊಂದಿಗಿದ್ದಾರೆ. ಸ್ಥಳೀಯ ಸಸ್ಯ ಮತ್ತು ಮರಗಳ ಬಗ್ಗೆ ಆಳವಾದ ಜ್ಞಾನ ಹೊಂದಿದ್ದು, ಬಿದಿರಿನ ಕರಕುಶಲತೆಯಲ್ಲಿ ಪ್ರವೀಣರು. ಕಲ್ಲುಗಣಿಯಲ್ಲಿ ಕೆಲಸ ಮಾಡುತ್ತಿದ್ದಾಗ ಅಪಘಾತದಲ್ಲಿ ಒಂದು ಕಾಲನ್ನು ಕಳೆದುಕೊಂಡರೂ, ಅವರ ಉತ್ಸಾಹ ಕುಗ್ಗಿಲ್ಲ. ಕನ್ನಡ, ತೆಲುಗು ಮತ್ತು ತಮಿಳು ಮಾತನಾಡುತ್ತಾರೆ.',
+        },
+        {
+          name: 'Elraju',
+          role: 'ಗ್ರಾಮದ ಸುದ್ದಿಗಾರ',
+          bio: 'ರಾಮದಾಸ್ ಅವರ ಮಗ, ಆರಂಭದಿಂದಲೂ TVC ಯೊಂದಿಗಿದ್ದಾರೆ. ಗ್ರಾಮದಲ್ಲಿ ಏನಾಗುತ್ತಿದೆ ಎಂಬುದನ್ನು ಮೊದಲು ತಿಳಿಯುವವರು, ಭೂತದ ಕಥೆಗಳನ್ನು ಹೇಳುವುದರಲ್ಲಿ ಅವರಿಗೆ ಎತ್ತಿದ ಕೈ. ಸಂಪೂರ್ಣ ವಿನಮ್ರ. ಕನ್ನಡ, ತಮಿಳು ಮತ್ತು ತೆಲುಗು ಮಾತನಾಡುತ್ತಾರೆ.',
+        },
+      ],
+    },
+    {
+      image: '/images/pages/staff/gundappa-mahadevamma.jpg',
+      imageAlt: 'ಗುಂಡಪ್ಪ ಮತ್ತು ಮಹಾದೇವಮ್ಮ',
+      people: [
+        {
+          name: 'Gundappa',
+          role: 'ಮೇಲ್ವಿಚಾರಕ',
+          bio: 'ಒಧಿಪುರಂ ಗ್ರಾಮದವರು. ಒಮ್ಮೆ ಕುರುಬರಾಗಿದ್ದವರು, ಇಂದಿಗೂ ಕಾಡಿನ ಮರಗಳನ್ನು ಹಳೆಯ ಸ್ನೇಹಿತರಂತೆ ಬಲ್ಲರು. ಈಗ TVC ಯ ಮೇಲ್ವಿಚಾರಕರು — ಯಾವಾಗಲೂ ಚಟುವಟಿಕೆಯಿಂದಿರುತ್ತಾರೆ, ವಿರಳವಾಗಿ ವಿಶ್ರಮಿಸುತ್ತಾರೆ, ಮತ್ತು ಮೃದು ಮಾತಿನವರು. ಕನ್ನಡ ಮಾತನಾಡುತ್ತಾರೆ.',
+        },
+        {
+          name: 'Mahadevamma',
+          role: 'ಕೃಷಿ ಕಾರ್ಮಿಕರು',
+          bio: 'TVC ಯೊಂದಿಗೆ 5 ವರ್ಷಗಳಿಂದ ಇದ್ದಾರೆ. ಶಾಂತ ಸ್ವಭಾವದವರು — ತಮ್ಮ ಪಾಡಿಗೆ ತಾವು ಕೆಲಸ ಮಾಡುತ್ತಾರೆ, ಮತ್ತು ಕಾಡಿನ ಖಾದ್ಯ ಸೊಪ್ಪುಗಳ ಬಗ್ಗೆ ಬಹಳ ತಿಳಿದಿದ್ದಾರೆ. ಕನ್ನಡ ಮಾತನಾಡುತ್ತಾರೆ.',
+        },
+      ],
+    },
+    {
+      image: '/images/pages/staff/puttappa-mahadevamma.jpg',
+      imageAlt: 'ಪುಟ್ಟಪ್ಪ ಮತ್ತು ಮಹಾದೇವಮ್ಮ',
+      people: [
+        {
+          name: 'Puttappa',
+          role: 'ಪ್ಲಂಬರ್',
+          bio: 'ಒಧಿಪುರಂ ಗ್ರಾಮದವರು, TVC ಯೊಂದಿಗೆ 4 ವರ್ಷಗಳಿಂದ ಇದ್ದಾರೆ. ಕೆಲಸಕ್ಕಾಗಿ ಬೆಂಗಳೂರಿಗೆ ವಲಸೆ ಹೋಗಿದ್ದರು, ಕೋವಿಡ್ ಅವರ ಕುಟುಂಬವನ್ನು ಗ್ರಾಮಕ್ಕೆ ಮರಳಿ ಕರೆತಂದಿತು. ಕುಶಲರು ಮತ್ತು ಬೇಗನೆ ಕಲಿಯುವವರು — TVC ಯ ಪ್ಲಂಬರ್. ಕನ್ನಡ, ತಮಿಳು ಮತ್ತು ಸ್ವಲ್ಪ ಹಿಂದಿ ಮಾತನಾಡುತ್ತಾರೆ.',
+        },
+        {
+          name: 'Mahadevamma',
+          role: 'ಅಡುಗೆ',
+          bio: 'ಬಹಳ ಮೌನಸ್ವಭಾವದವರು, ಅದ್ಭುತ ಅಡುಗೆಯವರು — ಕೆಲಸದಲ್ಲೂ ಬಹಳ ಚುರುಕು. ಕನ್ನಡ, ತೆಲುಗು ಮತ್ತು ತಮಿಳು ಮಾತನಾಡುತ್ತಾರೆ.',
+        },
+      ],
+    },
+    {
+      image: '/images/pages/staff/chudesa-puttamadevi.jpg',
+      imageAlt: 'ಚುಡೇಸ ಮತ್ತು ಪುಟ್ಟಮಾದೇವಿ',
+      people: [
+        {
+          name: 'Chudesa',
+          role: 'ಡೋಲು ವಾದಕ',
+          bio: 'ಒಧಿಪುರಂ ಗ್ರಾಮದವರು, TVC ಯೊಂದಿಗೆ 2 ವರ್ಷಗಳಿಂದ ಇದ್ದಾರೆ. ಕಾರ್ಯಕ್ರಮಗಳು ಮತ್ತು ಹಬ್ಬಗಳಿಗೆ ಗ್ರಾಮದ ಅಧಿಕೃತ ಡೋಲು ವಾದಕರು. ಮೃದು ಮಾತಿನವರು. ಕನ್ನಡ ಮಾತನಾಡುತ್ತಾರೆ.',
+        },
+        {
+          name: 'Puttamadevi',
+          role: 'ಕೃಷಿ ಕಾರ್ಮಿಕರು',
+          bio: 'TVC ಯೊಂದಿಗೆ 6 ತಿಂಗಳುಗಳಿಂದ ಇದ್ದಾರೆ. ಮೃದು ಮಾತಿನವರು. ಕನ್ನಡ ಮಾತನಾಡುತ್ತಾರೆ.',
+        },
+      ],
+    },
+    {
+      image: '/images/pages/staff/chikkamma.jpg',
+      imageAlt: 'ಚಿಕ್ಕಮ್ಮ',
+      people: [
+        {
+          name: 'Chikkamma',
+          role: 'ಅಡುಗೆ',
+          bio: 'ತಗ್ಗಟ್ಟಿ ಗ್ರಾಮದವರು, TVC ಯೊಂದಿಗೆ 7 ವರ್ಷಗಳಿಂದ ಇದ್ದಾರೆ. ಅದ್ಭುತ ಅಡುಗೆಯವರು — ಅವರ ಸಾರು ಪ್ರತಿ ಊಟದಲ್ಲೂ ವಿಶೇಷ — ಮತ್ತು ಕಾಡಿನ ಖಾದ್ಯ ಸೊಪ್ಪುಗಳ ಬಗ್ಗೆ ಆಳವಾದ ಜ್ಞಾನ ಹೊಂದಿದ್ದಾರೆ. ಕನ್ನಡ, ತೆಲುಗು ಮತ್ತು ತಮಿಳು ಮಾತನಾಡುತ್ತಾರೆ.',
+        },
+      ],
+    },
   ],
   ta: [
-    { name: 'Madhavan', role: 'பண்ணை தலைவர் மற்றும் இயற்கை ஆர்வலர்', bio: 'நிலத்தை புத்துயிர் பெறச் செய்ய இடைவிடாது உழைக்கும் ஆர்வமுள்ள இயற்கையாளர் — தாவர, விலங்கினங்களை ஆவணப்படுத்துதல், காட்டிலிருந்து விதைகளை சேகரித்தல், நர்சரியை பராமரித்தல், சுற்றுச்சூழல் அமைப்பை வளர்த்தல் ஆகியவற்றை செய்கிறார். இங்கு காணக்கூடிய ஒவ்வொரு மரம், பறவை, ஊர்வனவற்றையும் அவருக்குத் தெரியும், மேலும் தன் மனைவி கிருதிகா மற்றும் மகள் சஷ்டிகாவுடன் பண்ணையிலேயே வசிக்கிறார்.' },
-    { name: 'Ramdoss', role: 'திறமையான கைவினைஞர்', bio: 'ஓதிபுரம்/தக்கட்டி கிராமத்தில் வளர்ந்த, மூங்கில் கூடைகள் தயாரிப்பதில் திறமையான கைவினைஞர்.' },
-    { name: 'Gundappa', role: 'காட்டு வழிகாட்டி', bio: 'யானைகளின் பாதைகள் மற்றும் உள்ளூர் கதைகள் உட்பட காட்டை உள்ளங்கை போல் அறிந்தவர்.' },
-    { name: 'Yellaraju', role: 'தூதுவர்', bio: 'மோப்பெடில் கிராமத்திற்கு ஓடிச் செல்ல எப்போதும் தயார்.' },
-    { name: 'Chikkama', role: 'சமையலறை', bio: 'சமையலறையையும், இங்குள்ள ஒவ்வொரு உணவையும் வடிவமைக்கும் உள்ளூர் சமையல் குறிப்புகளையும் நிர்வகிக்கிறார்.' },
+    {
+      image: '/images/pages/staff/madhavan.jpg',
+      imageAlt: 'மகள் சஷ்டிகாவை தூக்கியிருக்கும் மாதவன்',
+      people: [
+        {
+          name: 'Madhavan',
+          role: 'பண்ணை தலைவர் மற்றும் இயற்கை ஆர்வலர்',
+          bio: 'நிலத்தை புத்துயிர் பெறச் செய்ய இடைவிடாது உழைக்கும் ஆர்வமுள்ள இயற்கையாளர் — தாவர, விலங்கினங்களை ஆவணப்படுத்துதல், காட்டிலிருந்து விதைகளை சேகரித்தல், நர்சரியை பராமரித்தல், சுற்றுச்சூழல் அமைப்பை வளர்த்தல் ஆகியவற்றை செய்கிறார். இங்கு காணக்கூடிய ஒவ்வொரு மரம், பறவை, ஊர்வனவற்றையும் அவருக்குத் தெரியும், மேலும் தன் மனைவி கிருதிகா மற்றும் மகள் சஷ்டிகாவுடன் பண்ணையிலேயே வசிக்கிறார்.',
+        },
+      ],
+    },
+    {
+      image: '/images/pages/staff/ramdhas-elraju.jpg',
+      imageAlt: 'மகன் எல்ராஜுவுடன் ராம்தாஸ்',
+      people: [
+        {
+          name: 'Ramdhas',
+          role: 'திறமையான கைவினைஞர்',
+          bio: 'அருகிலுள்ள ஓதிபுரம் கிராமத்தைச் சேர்ந்தவர், தொடக்கத்திலிருந்தே TVC-உடன் இருக்கிறார். உள்ளூர் தாவரங்கள் மற்றும் மரங்கள் குறித்து ஆழ்ந்த அறிவு கொண்டவர், மூங்கில் கைவினையில் திறமைசாலி. கல் குவாரியில் வேலை செய்யும்போது விபத்தில் ஒரு காலை இழந்தும், அவரது ஆர்வம் குறையவில்லை. கன்னடம், தெலுங்கு, தமிழ் பேசுவார்.',
+        },
+        {
+          name: 'Elraju',
+          role: 'கிராம செய்தியாளர்',
+          bio: 'ராம்தாஸின் மகன், தொடக்கத்திலிருந்தே TVC-உடன் இருக்கிறார். கிராமத்தில் என்ன நடக்கிறது என்பதை முதலில் அறிபவர், பேய் கதைகள் சொல்வதில் தனி ஆர்வம் கொண்டவர். முழுக்க முழுக்க பணிவானவர். கன்னடம், தமிழ், தெலுங்கு பேசுவார்.',
+        },
+      ],
+    },
+    {
+      image: '/images/pages/staff/gundappa-mahadevamma.jpg',
+      imageAlt: 'குண்டப்பா மற்றும் மகாதேவம்மா',
+      people: [
+        {
+          name: 'Gundappa',
+          role: 'மேற்பார்வையாளர்',
+          bio: 'ஓதிபுரம் கிராமத்தைச் சேர்ந்தவர். ஒரு காலத்தில் ஆடு மேய்ப்பவராக இருந்தார், இன்றும் காட்டு மரங்களை பழைய நண்பர்களைப் போல் அறிந்தவர். இப்போது TVC-யின் மேற்பார்வையாளர் — எப்போதும் சுறுசுறுப்பாக இருப்பார், அரிதாகவே ஓய்வெடுப்பார், மென்மையாகப் பேசுபவர். கன்னடம் பேசுவார்.',
+        },
+        {
+          name: 'Mahadevamma',
+          role: 'பண்ணைப் பணியாளர்',
+          bio: 'TVC-உடன் 5 ஆண்டுகளாக இருக்கிறார். அமைதியான, கவனம் செலுத்தும் இயல்பு — தன் வேலையில் மும்முரமாக இருப்பார், காட்டு உண்ணக்கூடிய கீரைகள் குறித்து நிறைய அறிந்தவர். கன்னடம் பேசுவார்.',
+        },
+      ],
+    },
+    {
+      image: '/images/pages/staff/puttappa-mahadevamma.jpg',
+      imageAlt: 'புட்டப்பா மற்றும் மகாதேவம்மா',
+      people: [
+        {
+          name: 'Puttappa',
+          role: 'பிளம்பர்',
+          bio: 'ஓதிபுரம் கிராமத்தைச் சேர்ந்தவர், TVC-உடன் 4 ஆண்டுகளாக இருக்கிறார். வேலைக்காக பெங்களூருவுக்கு குடிபெயர்ந்திருந்தார், கோவிட் அவரது குடும்பத்தை கிராமத்திற்கு திரும்பக் கொண்டு வந்தது. திறமைசாலி, விரைவாகக் கற்பவர் — TVC-யின் பிளம்பர். கன்னடம், தமிழ், சிறிது இந்தி பேசுவார்.',
+        },
+        {
+          name: 'Mahadevamma',
+          role: 'சமையல்',
+          bio: 'மிகவும் அமைதியானவர், அற்புதமான சமையல்காரர் — வேலையிலும் வேகமானவர். கன்னடம், தெலுங்கு, தமிழ் பேசுவார்.',
+        },
+      ],
+    },
+    {
+      image: '/images/pages/staff/chudesa-puttamadevi.jpg',
+      imageAlt: 'சுடேச மற்றும் புட்டமாதேவி',
+      people: [
+        {
+          name: 'Chudesa',
+          role: 'மேளம் இசைப்பவர்',
+          bio: 'ஓதிபுரம் கிராமத்தைச் சேர்ந்தவர், TVC-உடன் 2 ஆண்டுகளாக இருக்கிறார். விழாக்கள் மற்றும் நிகழ்ச்சிகளுக்கு கிராமத்தின் அதிகாரப்பூர்வ மேளம் இசைப்பவர். மென்மையாகப் பேசுபவர். கன்னடம் பேசுவார்.',
+        },
+        {
+          name: 'Puttamadevi',
+          role: 'பண்ணைப் பணியாளர்',
+          bio: 'TVC-உடன் 6 மாதங்களாக இருக்கிறார். மென்மையாகப் பேசுபவர். கன்னடம் பேசுவார்.',
+        },
+      ],
+    },
+    {
+      image: '/images/pages/staff/chikkamma.jpg',
+      imageAlt: 'சிக்கம்மா',
+      people: [
+        {
+          name: 'Chikkamma',
+          role: 'சமையல்',
+          bio: 'தக்கட்டி கிராமத்தைச் சேர்ந்தவர், TVC-உடன் 7 ஆண்டுகளாக இருக்கிறார். அற்புதமான சமையல்காரர் — அவரது ரசம் ஒவ்வொரு உணவிலும் தனித்து நிற்கும் — மேலும் காட்டு உண்ணக்கூடிய கீரைகள் குறித்து ஆழ்ந்த அறிவு கொண்டவர். கன்னடம், தெலுங்கு, தமிழ் பேசுவார்.',
+        },
+      ],
+    },
   ],
 } as const;
 
@@ -72,11 +316,20 @@ const staff = staffContent[lang];
 
   <section class="section wrapper">
     <div class="staff-grid">
-      {staff.map((s) => (
+      {staff.map((group) => (
         <div class="card">
-          <h4>{s.name}</h4>
-          <p class="staff-role">{s.role}</p>
-          <p>{s.bio}</p>
+          <div class="card-photo">
+            <img src={group.image} alt={group.imageAlt} loading="lazy" />
+          </div>
+          <div class="card-body">
+            {group.people.map((p) => (
+              <div class="person">
+                <h4>{p.name}</h4>
+                <p class="staff-role">{p.role}</p>
+                <p>{p.bio}</p>
+              </div>
+            ))}
+          </div>
         </div>
       ))}
     </div>
@@ -86,8 +339,40 @@ const staff = staffContent[lang];
 <style>
   .staff-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 24px;
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .card-photo {
+    aspect-ratio: 4 / 5;
+    overflow: hidden;
+    border-radius: 8px;
+    background: var(--tvc-green-tint);
+  }
+
+  .card-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 22%;
+  }
+
+  .card-body {
+    padding-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .person + .person {
+    padding-top: 14px;
+    border-top: 1px solid var(--tvc-line);
   }
 
   .staff-role {
