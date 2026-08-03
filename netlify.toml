@@ -246,6 +246,45 @@
   to = "/people/members"
   status = 301
 
+# Bare, extension-less siblings of the .html URLs above and two new ones -
+# found via Search Console's Pages report under Server error (5xx). This is
+# a fully static site (no SSR adapter, no middleware, no server-rendered
+# route), so nothing here could throw an application-level 500 for an
+# arbitrary path - most likely stale crawl records from a past outage
+# window, but real 301s fix it regardless of the original cause.
+[[redirects]]
+  from = "/day-visit.html"
+  to = "/visit/day-visit"
+  status = 301
+
+[[redirects]]
+  from = "/location"
+  to = "/contact"
+  status = 301
+
+[[redirects]]
+  from = "/resource-center"
+  to = "/resource-centre"
+  status = 301
+
+# Old site had one combined soil/climate page - now split into
+# /ecosystem/landscape (geography/terrain) and /ecosystem/weather; points
+# at the shared parent instead of picking one arbitrarily.
+[[redirects]]
+  from = "/soil-and-weather-conditions"
+  to = "/ecosystem"
+  status = 301
+
+[[redirects]]
+  from = "/member-profiles"
+  to = "/people/members"
+  status = 301
+
+[[redirects]]
+  from = "/birds-in-tvc"
+  to = "/ecosystem/biodiversity"
+  status = 301
+
 # Biome Solutions is a partner without its own page (the Ananas exception
 # noted above) - listed on the partners page instead.
 [[redirects]]
