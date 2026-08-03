@@ -333,7 +333,7 @@ const staff = staffContent[lang];
     <div class="staff-grid">
       {staff.map((group) => (
         <div class="card">
-          <div class="card-photo" style={group.image.includes('madhavan-krithika') ? 'aspect-ratio: 8 / 5' : undefined}>
+          <div class="card-photo">
             <img src={group.image} alt={group.imageAlt} loading="lazy" />
           </div>
           <div class="card-body">
@@ -365,7 +365,7 @@ const staff = staffContent[lang];
   }
 
   .card-photo {
-    aspect-ratio: 4 / 5;
+    aspect-ratio: 1 / 1;
     overflow: hidden;
     border-radius: 8px;
     background: var(--tvc-green-tint);
@@ -375,7 +375,7 @@ const staff = staffContent[lang];
     width: 100%;
     height: 100%;
     object-fit: cover;
-    object-position: center 22%;
+    object-position: center;
   }
 
   .card-body {
