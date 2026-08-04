@@ -2,6 +2,7 @@
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import { FARM_AREA_ACRES } from '../data/site-facts';
 import { DEFAULT_LOCALE, type Locale } from '../i18n/utils';
+import { fetchAllObservationsFresh, countSpeciesWithinBoundary } from './biodiversity/observation-utils';
 
 interface Props {
   lang?: Locale;
@@ -10,6 +11,23 @@ interface Props {
 const { lang = DEFAULT_LOCALE } = Astro.props;
 
 const YEARS_REGENERATING = new Date().getFullYear() - 2017;
+
+// Baked into the static HTML at build time (this runs in Node during
+// `astro build`, once per locale) so every visitor sees a real species
+// count on first paint -- not just ones with a warm browser cache from an
+// earlier visit. Previously this tile only ever got a number client-side,
+// deferred until after `window.load` to keep the ~470KB iNaturalist fetch
+// off the critical path; that's still true for freshness (the script below
+// still fetches live and corrects this number if it's changed since the
+// last deploy), but the *first* number a visitor sees no longer waits on
+// any of that. Falls back to null (renders "—", same as before) if the
+// build-time fetch fails -- a flaky external API must never fail the build.
+let speciesCount: number | null = null;
+try {
+  speciesCount = countSpeciesWithinBoundary(await fetchAllObservationsFresh());
+} catch (err) {
+  console.warn('Could not fetch iNaturalist species count at build time:', err);
+}
 
 // Only four short labels here (no shared i18n key for them yet) - kept as a
 // local dictionary rather than touching src/i18n/*.ts, per this pass's
@@ -40,7 +58,7 @@ const peopleHref = getRelativeLocaleUrl(lang, '/people/members');
       <p class="home-stat__label">{l.families}</p>
     </a>
     <a class="home-stat" href={getRelativeLocaleUrl(lang, '/ecosystem/biodiversity')}>
-      <p class="home-stat__value" id="home-stat-species">—</p>
+      <p class="home-stat__value" id="home-stat-species" data-count-to={speciesCount ?? undefined}>{speciesCount != null ? '0' : '—'}</p>
       <p class="home-stat__label">{l.species}</p>
     </a>
   </div>
@@ -156,12 +174,7 @@ const peopleHref = getRelativeLocaleUrl(lang, '/people/members');
 </style>
 
 <script>
-  import {
-    fetchAllObservations,
-    isWithinBoundary,
-    getCachedSpeciesCount,
-    setCachedSpeciesCount,
-  } from './biodiversity/observation-utils';
+  import { fetchAllObservations, countSpeciesWithinBoundary, getCachedSpeciesCount, setCachedSpeciesCount } from './biodiversity/observation-utils';
 
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -181,33 +194,31 @@ const peopleHref = getRelativeLocaleUrl(lang, '/people/members');
   }
 
   const section = document.getElementById('home-stats')!;
-  const staticEls = [...section.querySelectorAll<HTMLElement>('[data-count-to]')];
   const speciesEl = document.getElementById('home-stat-species')!;
   let played = false;
 
-  // Seed from the lightweight cache before anything else runs -- if a
-  // previous visit (to this page or /ecosystem/biodiversity) left a count
-  // behind, the entrance animation below counts straight up to it instead
-  // of the tile sitting on "—" until the deferred fetch resolves after
-  // `load`, which on a slow mobile connection can be several seconds away.
-  const cachedSpeciesCount = getCachedSpeciesCount();
-  if (cachedSpeciesCount != null) {
-    speciesEl.dataset.value = String(cachedSpeciesCount);
-    speciesEl.dataset.ready = 'true';
+  // Species normally already has data-count-to from the build-time bake
+  // (see HomeStats.astro's frontmatter) and needs nothing here. This only
+  // matters on the rare page where that build-time iNaturalist fetch
+  // failed: seed data-count-to from the same lightweight cache the
+  // deferred fetch below keeps warm, so at least a repeat visitor still
+  // gets the same instant/animated treatment as the other three tiles
+  // instead of a stuck "—".
+  if (speciesEl.dataset.countTo == null) {
+    const cachedSpeciesCount = getCachedSpeciesCount();
+    if (cachedSpeciesCount != null) speciesEl.dataset.countTo = String(cachedSpeciesCount);
   }
+  speciesEl.dataset.value = speciesEl.dataset.countTo ?? '';
 
   function playEntrance() {
     if (played) return;
     played = true;
-    for (const el of staticEls) {
+    // Queried fresh here (not a snapshot taken earlier) so that if the
+    // background fetch below sets data-count-to on speciesEl right before
+    // this fires, it's swept up in the same pass as the other three tiles
+    // rather than requiring its own separate animation call.
+    for (const el of section.querySelectorAll<HTMLElement>('[data-count-to]')) {
       animateValue(el, Number(el.dataset.countTo));
-    }
-    // Species count depends on the iNaturalist fetch below -- animate it
-    // immediately if that's already resolved by the time this section
-    // becomes visible, otherwise animateSpecies() (below) does it the
-    // moment the fetch completes instead.
-    if (speciesEl.dataset.ready === 'true') {
-      animateValue(speciesEl, Number(speciesEl.dataset.value));
     }
   }
 
@@ -219,39 +230,38 @@ const peopleHref = getRelativeLocaleUrl(lang, '/people/members');
   );
   observer.observe(section);
 
-  // Reuses BiodiversityExplorer's own fetch + localStorage cache (10-minute
-  // TTL) -- if a visitor already opened /ecosystem this session, this
-  // resolves instantly from cache instead of hitting iNaturalist again.
-  // Same taxon + boundary filtering as that page too, so this count can't
-  // drift from what /ecosystem itself shows.
+  // Confirms/corrects the build-time-baked (or cache-seeded) number against
+  // live data -- observations logged since the last deploy wouldn't be
+  // reflected in either of those yet. Reuses BiodiversityExplorer's own
+  // fetch + localStorage cache (10-minute TTL) and the same taxon +
+  // boundary filtering it uses, so this count can't drift from what
+  // /ecosystem itself shows.
   function fetchSpeciesCount() {
     fetchAllObservations()
       .then((observations) => {
-        const identified = observations.filter((o) => o.taxon != null && isWithinBoundary(o.geojson));
-        const speciesCount = new Set(identified.map((o) => o.taxon!.id)).size;
+        const speciesCount = countSpeciesWithinBoundary(observations);
         const priorValue = speciesEl.dataset.value;
         speciesEl.dataset.value = String(speciesCount);
-        speciesEl.dataset.ready = 'true';
         setCachedSpeciesCount(speciesCount);
-        if (!played) return;
-        // Entrance already animated -- either to a cached value (this fetch
-        // is just confirming/correcting it) or not at all yet for species
-        // specifically (first-ever visit, no cache). A cache correction
-        // should be quiet (no second count-up flourish over a number the
-        // visitor already read); a first reveal still gets the same
-        // count-up treatment as the other three tiles.
-        if (priorValue == null) {
-          animateValue(speciesEl, speciesCount);
-        } else if (priorValue !== String(speciesCount)) {
+        if (priorValue === String(speciesCount)) return;
+        if (played) {
+          // Already shown (build-time number, cached number, or a plain
+          // "—" that never got a count-to at all) -- correct it quietly,
+          // no second count-up flourish over a number the visitor may
+          // already have read.
           speciesEl.textContent = String(speciesCount);
+        } else {
+          // Entrance hasn't fired yet -- keep data-count-to in sync so
+          // playEntrance(), whenever it does fire, animates straight to
+          // the freshest number instead of a stale build-time/cached one.
+          speciesEl.dataset.countTo = String(speciesCount);
         }
       })
       .catch(() => {
         // Live count is a nice-to-have -- if iNaturalist is unreachable and
-        // there's no cached number already on screen, fall back to a plain
-        // label rather than leaving a stuck "—". A cached value, even a
-        // stale one, is still better than that generic fallback.
-        if (speciesEl.dataset.ready !== 'true') speciesEl.textContent = '100+';
+        // nothing else has put a number on screen, fall back to a plain
+        // label rather than leaving a stuck "—".
+        if (!speciesEl.dataset.value) speciesEl.textContent = '100+';
       });
   }
 
