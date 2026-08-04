@@ -191,12 +191,11 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
     <video
       class="hero-bg__image"
       id="hero-image"
-      src="/videos/home-hero.mp4"
       poster="/images/pages/home/hero.webp"
       muted
       loop
       playsinline
-      preload="auto"
+      preload="none"
       aria-label="Aerial view of the Tamarind Valley Collective's hills"
     ></video>
     <div class="hero-bg__scrim" id="hero-scrim"></div>
@@ -837,15 +836,25 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
   // scrolls over this backdrop, per the brief: only the background
   // picture fades, nothing in the foreground does.
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Matches the nav's own mobile/desktop split (Nav.astro's 860px dropdown
+  // breakpoint) -- below it, visitors never fetch the 500KB+ video at all,
+  // just the poster already required as the video's first frame. Mobile is
+  // exactly where this site's PageSpeed scores were suffering from the
+  // video's byte weight competing with critical-path requests (fonts, CSS)
+  // for bandwidth, and a moving background is the least missed thing on a
+  // small screen anyway.
+  const isDesktopWidth = window.matchMedia('(min-width: 860px)').matches;
   const imageEl = document.getElementById('hero-image');
   const scrimEl = document.getElementById('hero-scrim');
 
-  // No `autoplay` attribute in the markup on purpose -- reduced-motion
-  // visitors should just see the poster frame, never the moving video, so
-  // playback is only ever started here, gated on the same check the
-  // scroll-fade below is gated on.
-  if (imageEl instanceof HTMLVideoElement && !reduceMotion) {
+  // No `src` or `autoplay` attribute in the markup on purpose -- the src is
+  // only ever assigned here, so the browser never requests the video file
+  // unless this branch actually runs (reduced-motion and narrow-viewport
+  // visitors get just the poster frame set in markup, no video bytes
+  // downloaded at all).
+  if (imageEl instanceof HTMLVideoElement && !reduceMotion && isDesktopWidth) {
     const video = imageEl;
+    video.src = '/videos/home-hero.mp4';
     video.play().catch(() => {
       // Safari can reject this even for a muted, playsinline video -- iOS
       // Low Power Mode disables all video autoplay outright, and Safari's
