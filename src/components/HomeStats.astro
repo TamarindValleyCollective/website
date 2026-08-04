@@ -156,7 +156,12 @@ const peopleHref = getRelativeLocaleUrl(lang, '/people/members');
 </style>
 
 <script>
-  import { fetchAllObservations, isWithinBoundary } from './biodiversity/observation-utils';
+  import {
+    fetchAllObservations,
+    isWithinBoundary,
+    getCachedSpeciesCount,
+    setCachedSpeciesCount,
+  } from './biodiversity/observation-utils';
 
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -179,6 +184,17 @@ const peopleHref = getRelativeLocaleUrl(lang, '/people/members');
   const staticEls = [...section.querySelectorAll<HTMLElement>('[data-count-to]')];
   const speciesEl = document.getElementById('home-stat-species')!;
   let played = false;
+
+  // Seed from the lightweight cache before anything else runs -- if a
+  // previous visit (to this page or /ecosystem/biodiversity) left a count
+  // behind, the entrance animation below counts straight up to it instead
+  // of the tile sitting on "—" until the deferred fetch resolves after
+  // `load`, which on a slow mobile connection can be several seconds away.
+  const cachedSpeciesCount = getCachedSpeciesCount();
+  if (cachedSpeciesCount != null) {
+    speciesEl.dataset.value = String(cachedSpeciesCount);
+    speciesEl.dataset.ready = 'true';
+  }
 
   function playEntrance() {
     if (played) return;
@@ -213,14 +229,29 @@ const peopleHref = getRelativeLocaleUrl(lang, '/people/members');
       .then((observations) => {
         const identified = observations.filter((o) => o.taxon != null && isWithinBoundary(o.geojson));
         const speciesCount = new Set(identified.map((o) => o.taxon!.id)).size;
+        const priorValue = speciesEl.dataset.value;
         speciesEl.dataset.value = String(speciesCount);
         speciesEl.dataset.ready = 'true';
-        if (played) animateValue(speciesEl, speciesCount);
+        setCachedSpeciesCount(speciesCount);
+        if (!played) return;
+        // Entrance already animated -- either to a cached value (this fetch
+        // is just confirming/correcting it) or not at all yet for species
+        // specifically (first-ever visit, no cache). A cache correction
+        // should be quiet (no second count-up flourish over a number the
+        // visitor already read); a first reveal still gets the same
+        // count-up treatment as the other three tiles.
+        if (priorValue == null) {
+          animateValue(speciesEl, speciesCount);
+        } else if (priorValue !== String(speciesCount)) {
+          speciesEl.textContent = String(speciesCount);
+        }
       })
       .catch(() => {
-        // Live count is a nice-to-have -- if iNaturalist is unreachable, fall
-        // back to a plain label rather than leaving a stuck "—".
-        speciesEl.textContent = '100+';
+        // Live count is a nice-to-have -- if iNaturalist is unreachable and
+        // there's no cached number already on screen, fall back to a plain
+        // label rather than leaving a stuck "—". A cached value, even a
+        // stale one, is still better than that generic fallback.
+        if (speciesEl.dataset.ready !== 'true') speciesEl.textContent = '100+';
       });
   }
 
