@@ -167,6 +167,30 @@ function toObservation(raw: any): Observation {
   };
 }
 
+// The actual network round-trip, with no localStorage involved -- pulled out
+// of fetchAllObservations() below so it's also callable from an Astro
+// component's frontmatter, which runs in Node at build time (SSG) where
+// `localStorage` doesn't exist. HomeStats.astro uses this directly to bake
+// a real species count into the static homepage HTML for every visitor,
+// not just ones with a warm browser cache.
+export async function fetchAllObservationsFresh(): Promise<Observation[]> {
+  const all: Observation[] = [];
+  let page = 1;
+  // Defensive pagination loop — the whole project fits in one page today (100+
+  // results, per_page max 200), but this holds up if it grows past that.
+  while (true) {
+    const res = await fetch(
+      `${API}?project_id=${PROJECT_SLUG}&per_page=200&page=${page}&order_by=observed_on&order=desc`
+    );
+    if (!res.ok) throw new Error(`iNaturalist API error ${res.status}`);
+    const data = await res.json();
+    all.push(...data.results.map(toObservation));
+    if (all.length >= data.total_results || data.results.length === 0) break;
+    page += 1;
+  }
+  return all;
+}
+
 export async function fetchAllObservations(): Promise<Observation[]> {
   const cacheKey = `tvc-biodiversity-cache-${PROJECT_SLUG}`;
   // localStorage, not sessionStorage — same 10-minute freshness window below,
@@ -183,20 +207,7 @@ export async function fetchAllObservations(): Promise<Observation[]> {
     }
   }
 
-  const all: Observation[] = [];
-  let page = 1;
-  // Defensive pagination loop — the whole project fits in one page today (100+
-  // results, per_page max 200), but this holds up if it grows past that.
-  while (true) {
-    const res = await fetch(
-      `${API}?project_id=${PROJECT_SLUG}&per_page=200&page=${page}&order_by=observed_on&order=desc`
-    );
-    if (!res.ok) throw new Error(`iNaturalist API error ${res.status}`);
-    const data = await res.json();
-    all.push(...data.results.map(toObservation));
-    if (all.length >= data.total_results || data.results.length === 0) break;
-    page += 1;
-  }
+  const all = await fetchAllObservationsFresh();
 
   // Caching is a nice-to-have, not a requirement — a quota error here must
   // never take down the actual page, which is why it's isolated in its own
@@ -208,6 +219,14 @@ export async function fetchAllObservations(): Promise<Observation[]> {
   }
 
   return all;
+}
+
+// Shared by HomeStats.astro's build-time bake and its client-side refresh —
+// one definition of "species count" (taxon-identified, on-property
+// sightings only) so the two paths can never drift from each other.
+export function countSpeciesWithinBoundary(observations: Observation[]): number {
+  const identified = observations.filter((o) => o.taxon != null && isWithinBoundary(o.geojson));
+  return new Set(identified.map((o) => o.taxon!.id)).size;
 }
 
 // A tiny, dedicated cache just for the homepage's species-count stat tile —
