@@ -210,6 +210,37 @@ export async function fetchAllObservations(): Promise<Observation[]> {
   return all;
 }
 
+// A tiny, dedicated cache just for the homepage's species-count stat tile —
+// deliberately separate from the ~5MB raw-observations cache above. Reading
+// *that* cache means JSON-parsing the whole thing, which is exactly the
+// main-thread cost the homepage defers past `load` in the first place; this
+// one is a couple dozen bytes, cheap enough to read synchronously on every
+// page load so the stat tile can show a real number immediately instead of
+// a "—" placeholder, then let the background refresh correct it if stale.
+// No TTL check on read — any previously-seen count beats a blank tile, and
+// species counts don't swing dramatically minute to minute.
+const SPECIES_COUNT_CACHE_KEY = `tvc-species-count-${PROJECT_SLUG}`;
+
+export function getCachedSpeciesCount(): number | null {
+  try {
+    const cached = localStorage.getItem(SPECIES_COUNT_CACHE_KEY);
+    if (!cached) return null;
+    const parsed = JSON.parse(cached);
+    return typeof parsed.count === 'number' ? parsed.count : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setCachedSpeciesCount(count: number): void {
+  try {
+    localStorage.setItem(SPECIES_COUNT_CACHE_KEY, JSON.stringify({ count, cachedAt: Date.now() }));
+  } catch {
+    // Best-effort — a full localStorage quota just means the next visit
+    // falls back to the "—" placeholder again, not a broken page.
+  }
+}
+
 export function groupByIconicTaxon(observations: Observation[]): Map<string, Observation[]> {
   const groups = new Map<string, Observation[]>();
   for (const obs of observations) {
