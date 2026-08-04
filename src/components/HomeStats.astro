@@ -2,7 +2,7 @@
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import { FARM_AREA_ACRES } from '../data/site-facts';
 import { DEFAULT_LOCALE, type Locale } from '../i18n/utils';
-import { fetchAllObservationsFresh, countSpeciesWithinBoundary } from './biodiversity/observation-utils';
+import { fetchSpeciesCountFresh } from './biodiversity/species-count';
 
 interface Props {
   lang?: Locale;
@@ -24,7 +24,7 @@ const YEARS_REGENERATING = new Date().getFullYear() - 2017;
 // build-time fetch fails -- a flaky external API must never fail the build.
 let speciesCount: number | null = null;
 try {
-  speciesCount = countSpeciesWithinBoundary(await fetchAllObservationsFresh());
+  speciesCount = await fetchSpeciesCountFresh();
 } catch (err) {
   console.warn('Could not fetch iNaturalist species count at build time:', err);
 }
@@ -174,8 +174,8 @@ const peopleHref = getRelativeLocaleUrl(lang, '/people/members');
 </style>
 
 <script>
-  import { fetchAllObservations, countSpeciesWithinBoundary, getCachedSpeciesCount, setCachedSpeciesCount } from './biodiversity/observation-utils';
-
+  // No top-level `import` in this file, on purpose -- see the comment above
+  // refreshSpeciesCount() below for why.
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function animateValue(el: HTMLElement, to: number, duration = 1200) {
@@ -197,26 +197,15 @@ const peopleHref = getRelativeLocaleUrl(lang, '/people/members');
   const speciesEl = document.getElementById('home-stat-species')!;
   let played = false;
 
-  // Species normally already has data-count-to from the build-time bake
-  // (see HomeStats.astro's frontmatter) and needs nothing here. This only
-  // matters on the rare page where that build-time iNaturalist fetch
-  // failed: seed data-count-to from the same lightweight cache the
-  // deferred fetch below keeps warm, so at least a repeat visitor still
-  // gets the same instant/animated treatment as the other three tiles
-  // instead of a stuck "—".
-  if (speciesEl.dataset.countTo == null) {
-    const cachedSpeciesCount = getCachedSpeciesCount();
-    if (cachedSpeciesCount != null) speciesEl.dataset.countTo = String(cachedSpeciesCount);
-  }
   speciesEl.dataset.value = speciesEl.dataset.countTo ?? '';
 
   function playEntrance() {
     if (played) return;
     played = true;
-    // Queried fresh here (not a snapshot taken earlier) so that if the
-    // background fetch below sets data-count-to on speciesEl right before
-    // this fires, it's swept up in the same pass as the other three tiles
-    // rather than requiring its own separate animation call.
+    // Queried fresh here (not a snapshot taken earlier) so that if
+    // refreshSpeciesCount() below sets data-count-to on speciesEl right
+    // before this fires, it's swept up in the same pass as the other
+    // three tiles rather than requiring its own separate animation call.
     for (const el of section.querySelectorAll<HTMLElement>('[data-count-to]')) {
       animateValue(el, Number(el.dataset.countTo));
     }
@@ -230,39 +219,73 @@ const peopleHref = getRelativeLocaleUrl(lang, '/people/members');
   );
   observer.observe(section);
 
-  // Confirms/corrects the build-time-baked (or cache-seeded) number against
-  // live data -- observations logged since the last deploy wouldn't be
-  // reflected in either of those yet. Reuses BiodiversityExplorer's own
-  // fetch + localStorage cache (10-minute TTL) and the same taxon +
-  // boundary filtering it uses, so this count can't drift from what
-  // /ecosystem itself shows.
-  function fetchSpeciesCount() {
-    fetchAllObservations()
-      .then((observations) => {
-        const speciesCount = countSpeciesWithinBoundary(observations);
-        const priorValue = speciesEl.dataset.value;
-        speciesEl.dataset.value = String(speciesCount);
-        setCachedSpeciesCount(speciesCount);
-        if (priorValue === String(speciesCount)) return;
-        if (played) {
-          // Already shown (build-time number, cached number, or a plain
-          // "—" that never got a count-to at all) -- correct it quietly,
-          // no second count-up flourish over a number the visitor may
-          // already have read.
-          speciesEl.textContent = String(speciesCount);
-        } else {
-          // Entrance hasn't fired yet -- keep data-count-to in sync so
-          // playEntrance(), whenever it does fire, animates straight to
-          // the freshest number instead of a stale build-time/cached one.
-          speciesEl.dataset.countTo = String(speciesCount);
-        }
-      })
-      .catch(() => {
-        // Live count is a nice-to-have -- if iNaturalist is unreachable and
-        // nothing else has put a number on screen, fall back to a plain
-        // label rather than leaving a stuck "—".
-        if (!speciesEl.dataset.value) speciesEl.textContent = '100+';
-      });
+  // Confirms/corrects the build-time-baked number against live data --
+  // observations logged since the last deploy wouldn't be reflected in it
+  // yet -- or, if that build-time fetch failed, provides the number at all
+  // (seeded from cache first, then a live fetch). Reuses
+  // BiodiversityExplorer's own cached-observations data/TTL and the same
+  // taxon + boundary filtering it uses, so this count can't drift from what
+  // /ecosystem itself shows (see species-count.ts).
+  //
+  // The species-count import lives inside this function, as a dynamic
+  // import(), rather than at the top of the file -- a static top-level
+  // import here would force the browser to fetch and parse that module's
+  // whole dependency chain before ANY code in this module could run,
+  // IntersectionObserver setup above included, since ES modules resolve
+  // their full static import graph before executing a single line. On a
+  // slow/high-latency connection that's a multi-second sequential waterfall
+  // (each hop is its own round trip) -- confirmed via a real-device
+  // recording where all four stat tiles sat frozen at "0" for several
+  // seconds past first paint, unblocking only once that chain finished.
+  // This function already only ever runs deferred (after `load`), so
+  // pulling the import in dynamically here costs nothing on that path and
+  // keeps it off the one that matters. species-count.ts is also
+  // deliberately its own module rather than living in observation-utils.ts
+  // (which BiodiversityExplorer.astro statically imports alongside
+  // Leaflet) -- sharing that file would have re-coupled this dynamic
+  // import to Leaflet's ~165KB, which was confirmed happening (and is
+  // exactly the kind of regression this comment exists to stop someone
+  // from quietly reintroducing).
+  async function refreshSpeciesCount() {
+    const { fetchSpeciesCount, getCachedSpeciesCount, setCachedSpeciesCount } = await import('./biodiversity/species-count');
+
+    // Only matters if the build-time bake (see this file's frontmatter)
+    // failed -- seed from whatever the last successful fetch (this page or
+    // /ecosystem/biodiversity) left behind, so a repeat visitor isn't
+    // stuck on "—" while the live fetch below is in flight.
+    if (!speciesEl.dataset.value) {
+      const cached = getCachedSpeciesCount();
+      if (cached != null) {
+        speciesEl.dataset.value = String(cached);
+        if (played) speciesEl.textContent = String(cached);
+        else speciesEl.dataset.countTo = String(cached);
+      }
+    }
+
+    try {
+      const speciesCount = await fetchSpeciesCount();
+      const priorValue = speciesEl.dataset.value;
+      speciesEl.dataset.value = String(speciesCount);
+      setCachedSpeciesCount(speciesCount);
+      if (priorValue === String(speciesCount)) return;
+      if (played) {
+        // Already shown (build-time number, cached number, or a plain
+        // "—" that never got a count-to at all) -- correct it quietly, no
+        // second count-up flourish over a number the visitor may already
+        // have read.
+        speciesEl.textContent = String(speciesCount);
+      } else {
+        // Entrance hasn't fired yet -- keep data-count-to in sync so
+        // playEntrance(), whenever it does fire, animates straight to the
+        // freshest number instead of a stale build-time/cached one.
+        speciesEl.dataset.countTo = String(speciesCount);
+      }
+    } catch {
+      // Live count is a nice-to-have -- if iNaturalist is unreachable and
+      // nothing else has put a number on screen, fall back to a plain
+      // label rather than leaving a stuck "—".
+      if (!speciesEl.dataset.value) speciesEl.textContent = '100+';
+    }
   }
 
   // This uncached request (first visit) runs ~470KB through iNaturalist's API
@@ -270,8 +293,8 @@ const peopleHref = getRelativeLocaleUrl(lang, '/people/members');
   // for bandwidth during the page's critical initial-paint window. A repeat
   // visit within the 10-minute cache window resolves instantly regardless.
   if (document.readyState === 'complete') {
-    fetchSpeciesCount();
+    refreshSpeciesCount();
   } else {
-    window.addEventListener('load', fetchSpeciesCount, { once: true });
+    window.addEventListener('load', refreshSpeciesCount, { once: true });
   }
 </script>

@@ -167,30 +167,6 @@ function toObservation(raw: any): Observation {
   };
 }
 
-// The actual network round-trip, with no localStorage involved -- pulled out
-// of fetchAllObservations() below so it's also callable from an Astro
-// component's frontmatter, which runs in Node at build time (SSG) where
-// `localStorage` doesn't exist. HomeStats.astro uses this directly to bake
-// a real species count into the static homepage HTML for every visitor,
-// not just ones with a warm browser cache.
-export async function fetchAllObservationsFresh(): Promise<Observation[]> {
-  const all: Observation[] = [];
-  let page = 1;
-  // Defensive pagination loop — the whole project fits in one page today (100+
-  // results, per_page max 200), but this holds up if it grows past that.
-  while (true) {
-    const res = await fetch(
-      `${API}?project_id=${PROJECT_SLUG}&per_page=200&page=${page}&order_by=observed_on&order=desc`
-    );
-    if (!res.ok) throw new Error(`iNaturalist API error ${res.status}`);
-    const data = await res.json();
-    all.push(...data.results.map(toObservation));
-    if (all.length >= data.total_results || data.results.length === 0) break;
-    page += 1;
-  }
-  return all;
-}
-
 export async function fetchAllObservations(): Promise<Observation[]> {
   const cacheKey = `tvc-biodiversity-cache-${PROJECT_SLUG}`;
   // localStorage, not sessionStorage — same 10-minute freshness window below,
@@ -207,7 +183,20 @@ export async function fetchAllObservations(): Promise<Observation[]> {
     }
   }
 
-  const all = await fetchAllObservationsFresh();
+  const all: Observation[] = [];
+  let page = 1;
+  // Defensive pagination loop — the whole project fits in one page today (100+
+  // results, per_page max 200), but this holds up if it grows past that.
+  while (true) {
+    const res = await fetch(
+      `${API}?project_id=${PROJECT_SLUG}&per_page=200&page=${page}&order_by=observed_on&order=desc`
+    );
+    if (!res.ok) throw new Error(`iNaturalist API error ${res.status}`);
+    const data = await res.json();
+    all.push(...data.results.map(toObservation));
+    if (all.length >= data.total_results || data.results.length === 0) break;
+    page += 1;
+  }
 
   // Caching is a nice-to-have, not a requirement — a quota error here must
   // never take down the actual page, which is why it's isolated in its own
@@ -219,45 +208,6 @@ export async function fetchAllObservations(): Promise<Observation[]> {
   }
 
   return all;
-}
-
-// Shared by HomeStats.astro's build-time bake and its client-side refresh —
-// one definition of "species count" (taxon-identified, on-property
-// sightings only) so the two paths can never drift from each other.
-export function countSpeciesWithinBoundary(observations: Observation[]): number {
-  const identified = observations.filter((o) => o.taxon != null && isWithinBoundary(o.geojson));
-  return new Set(identified.map((o) => o.taxon!.id)).size;
-}
-
-// A tiny, dedicated cache just for the homepage's species-count stat tile —
-// deliberately separate from the ~5MB raw-observations cache above. Reading
-// *that* cache means JSON-parsing the whole thing, which is exactly the
-// main-thread cost the homepage defers past `load` in the first place; this
-// one is a couple dozen bytes, cheap enough to read synchronously on every
-// page load so the stat tile can show a real number immediately instead of
-// a "—" placeholder, then let the background refresh correct it if stale.
-// No TTL check on read — any previously-seen count beats a blank tile, and
-// species counts don't swing dramatically minute to minute.
-const SPECIES_COUNT_CACHE_KEY = `tvc-species-count-${PROJECT_SLUG}`;
-
-export function getCachedSpeciesCount(): number | null {
-  try {
-    const cached = localStorage.getItem(SPECIES_COUNT_CACHE_KEY);
-    if (!cached) return null;
-    const parsed = JSON.parse(cached);
-    return typeof parsed.count === 'number' ? parsed.count : null;
-  } catch {
-    return null;
-  }
-}
-
-export function setCachedSpeciesCount(count: number): void {
-  try {
-    localStorage.setItem(SPECIES_COUNT_CACHE_KEY, JSON.stringify({ count, cachedAt: Date.now() }));
-  } catch {
-    // Best-effort — a full localStorage quota just means the next visit
-    // falls back to the "—" placeholder again, not a broken page.
-  }
 }
 
 export function groupByIconicTaxon(observations: Observation[]): Map<string, Observation[]> {
