@@ -12,54 +12,11 @@ interface Props {
 
 const { lang } = Astro.props;
 
-// Rainfall is logged daily at the farm; sourced from the community's shared rainfall log (issue #5).
-// Agricultural year runs April–March. 2026-27 is the current, in-progress year.
-const rainfall2025 = [
-  { month: 'Apr', mm: 154 },
-  { month: 'May', mm: 119.8 },
-  { month: 'Jun', mm: 18.2 },
-  { month: 'Jul', mm: 21 },
-  { month: 'Aug', mm: 71.4 },
-  { month: 'Sep', mm: 87.2 },
-  { month: 'Oct', mm: 126.9 },
-  { month: 'Nov', mm: 0 },
-  { month: 'Dec', mm: 0 },
-  { month: 'Jan', mm: 0 },
-  { month: 'Feb', mm: 0 },
-  { month: 'Mar', mm: 0 },
-];
-const rainfall2026 = [
-  { month: 'Apr', mm: 0 },
-  { month: 'May', mm: 119 },
-  { month: 'Jun', mm: 40 },
-  { month: 'Jul', mm: 7.6 }, // partial month, still logging
-];
-
-const monsoonToDate = 166.6; // 2026-27, Apr 1 – Jul 15
-const sameSpanLastYear = 303.0; // 2025-26, Apr 1 – Jul 15
-const monsoonDeltaPct = Math.round(((monsoonToDate - sameSpanLastYear) / sameSpanLastYear) * 100);
-
-const chartWidth = 720;
-const chartHeight = 220;
-const chartPadLeft = 36;
-const chartPadBottom = 26;
-const plotWidth = chartWidth - chartPadLeft - 12;
-const plotHeight = chartHeight - chartPadBottom - 10;
-const maxMm = 160; // rounded above the 154mm peak
-const yTicks = [0, 50, 100, 150];
-const bandWidth = plotWidth / rainfall2025.length;
-const barWidth = Math.min(24, bandWidth * 0.55);
-const peakMonth = rainfall2025.reduce((a, b) => (b.mm > a.mm ? b : a));
-
-const bars = rainfall2025.map((d, i) => {
-  const barHeight = (d.mm / maxMm) * plotHeight;
-  return {
-    ...d,
-    x: chartPadLeft + i * bandWidth + (bandWidth - barWidth) / 2,
-    y: 10 + (plotHeight - barHeight),
-    height: Math.max(barHeight, d.mm > 0 ? 2 : 0),
-  };
-});
+// Rainfall is logged daily at the farm into a shared Google Sheet; the
+// numbers below (chart, table, "monsoon so far" stat) are fetched live from
+// it client-side via netlify/functions/rainfall.mts — see src/utils/
+// rainfall.ts — rather than hardcoded here, so a new row logged in the
+// Sheet shows up on the site without a code change or rebuild.
 
 // Month abbreviations for the chart axis and table - calendar month names
 // are ordinary translatable prose, not machine-parsed dates, so unlike the
@@ -69,15 +26,6 @@ const MONTH_ABBR: Record<Locale, Record<string, string>> = {
   kn: { Apr: 'ಏಪ್ರಿ', May: 'ಮೇ', Jun: 'ಜೂನ್', Jul: 'ಜುಲೈ', Aug: 'ಆಗ', Sep: 'ಸೆಪ್ಟೆಂ', Oct: 'ಅಕ್ಟೋ', Nov: 'ನವೆಂ', Dec: 'ಡಿಸೆಂ', Jan: 'ಜನ', Feb: 'ಫೆಬ್ರ', Mar: 'ಮಾರ್ಚ್' },
   ta: { Apr: 'ஏப்', May: 'மே', Jun: 'ஜூன்', Jul: 'ஜூலை', Aug: 'ஆக', Sep: 'செப்', Oct: 'அக்', Nov: 'நவ', Dec: 'டிச', Jan: 'ஜன', Feb: 'பிப்', Mar: 'மார்' },
 };
-const monthAbbr = (month: string) => MONTH_ABBR[lang][month] ?? month;
-
-// Page-local template substitution, same {token} convention as
-// useTranslations()'s t() - kept local since this page's copy (with its
-// computed peak-rainfall figure) isn't shared chrome and doesn't belong in
-// src/i18n/*.ts.
-function fmt(template: string, params: Record<string, string | number>): string {
-  return Object.entries(params).reduce((s, [k, v]) => s.replaceAll(`{${k}}`, String(v)), template);
-}
 
 const content = {
   en: {
@@ -89,15 +37,16 @@ const content = {
     heroImageAlt: 'Sunset over the Melagiri Hills',
     introText: "Rainfall is logged daily on-site and follows the region's monsoon pattern: wet from April through October, dry the rest of the year.",
     monsoonLabel: 'This monsoon so far',
-    monsoonSublabel: '(1 {apr} – 15 {jul} 2026)',
+    monsoonSublabel: '(1 {apr} – {cutoffDay} {cutoffMonth} {cutoffYear})',
     monsoonDeltaLess: 'less',
     monsoonDeltaMore: 'more',
     monsoonDeltaSuffix: 'than the same stretch last year ({mm}mm)',
-    chartHeading: 'Monthly rainfall, 2025–26',
-    chartAriaLabel: 'Monthly rainfall in millimetres for the 2025-26 agricultural year, peaking at {peak}mm in April and tapering to no rain from November through March',
-    tableSummary: 'Full monthly figures (2025–26 and 2026–27 to date)',
+    chartHeading: 'Monthly rainfall, {year}',
+    chartAriaLabel: 'Monthly rainfall in millimetres for the {year} agricultural year, peaking at {peak}mm in {peakMonth}',
+    tableSummary: 'Full monthly figures',
     tableMonth: 'Month',
     toDate: '(to date)',
+    rainfallUnavailable: "Rainfall data isn't available right now — please check back soon.",
     nightSkyStatLabel: 'Artificial sky brightness',
     nightSkyStatSublabel: '(near-zero light pollution)',
     nightSkyCta: 'See stargazing on the Visit page',
@@ -111,15 +60,16 @@ const content = {
     heroImageAlt: 'ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ ಮೇಲೆ ಸೂರ್ಯಾಸ್ತ',
     introText: 'ಮಳೆಯನ್ನು ಸ್ಥಳದಲ್ಲೇ ಪ್ರತಿದಿನ ದಾಖಲಿಸಲಾಗುತ್ತದೆ ಮತ್ತು ಇದು ಪ್ರದೇಶದ ಮಾನ್ಸೂನ್ ಮಾದರಿಯನ್ನು ಅನುಸರಿಸುತ್ತದೆ: ಏಪ್ರಿಲ್‌ನಿಂದ ಅಕ್ಟೋಬರ್‌ವರೆಗೆ ಆರ್ದ್ರ, ಉಳಿದ ವರ್ಷ ಶುಷ್ಕ.',
     monsoonLabel: 'ಈ ಮಾನ್ಸೂನ್ ಇಲ್ಲಿಯವರೆಗೆ',
-    monsoonSublabel: '(1 {apr} – 15 {jul} 2026)',
+    monsoonSublabel: '(1 {apr} – {cutoffDay} {cutoffMonth} {cutoffYear})',
     monsoonDeltaLess: 'ಕಡಿಮೆ',
     monsoonDeltaMore: 'ಹೆಚ್ಚು',
     monsoonDeltaSuffix: 'ಕಳೆದ ವರ್ಷದ ಇದೇ ಅವಧಿಗಿಂತ ({mm}ಮಿಮೀ)',
-    chartHeading: 'ಮಾಸಿಕ ಮಳೆ, 2025–26',
-    chartAriaLabel: '2025-26 ಕೃಷಿ ವರ್ಷದ ಮಾಸಿಕ ಮಳೆ ಮಿಲಿಮೀಟರ್‌ಗಳಲ್ಲಿ, ಏಪ್ರಿಲ್‌ನಲ್ಲಿ {peak}ಮಿಮೀ ಗರಿಷ್ಠ ಮಟ್ಟ ತಲುಪಿ, ನವೆಂಬರ್‌ನಿಂದ ಮಾರ್ಚ್‌ವರೆಗೆ ಮಳೆ ಇಲ್ಲದಂತೆ ಕಡಿಮೆಯಾಗುತ್ತದೆ',
-    tableSummary: 'ಪೂರ್ಣ ಮಾಸಿಕ ಅಂಕಿಅಂಶಗಳು (2025–26 ಮತ್ತು 2026–27 ಇಲ್ಲಿಯವರೆಗೆ)',
+    chartHeading: 'ಮಾಸಿಕ ಮಳೆ, {year}',
+    chartAriaLabel: '{year} ಕೃಷಿ ವರ್ಷದ ಮಾಸಿಕ ಮಳೆ ಮಿಲಿಮೀಟರ್‌ಗಳಲ್ಲಿ, {peakMonth}ನಲ್ಲಿ {peak}ಮಿಮೀ ಗರಿಷ್ಠ ಮಟ್ಟ ತಲುಪಿತು',
+    tableSummary: 'ಪೂರ್ಣ ಮಾಸಿಕ ಅಂಕಿಅಂಶಗಳು',
     tableMonth: 'ತಿಂಗಳು',
     toDate: '(ಇಲ್ಲಿಯವರೆಗೆ)',
+    rainfallUnavailable: 'ಮಳೆಯ ಮಾಹಿತಿ ಸದ್ಯಕ್ಕೆ ಲಭ್ಯವಿಲ್ಲ — ದಯವಿಟ್ಟು ಸ್ವಲ್ಪ ಸಮಯದ ನಂತರ ಪರಿಶೀಲಿಸಿ.',
     nightSkyStatLabel: 'ಕೃತಕ ಆಕಾಶ ಪ್ರಕಾಶಮಾನತೆ',
     nightSkyStatSublabel: '(ಬಹುತೇಕ ಶೂನ್ಯ ಬೆಳಕಿನ ಮಾಲಿನ್ಯ)',
     nightSkyCta: 'ಭೇಟಿ ಪುಟದಲ್ಲಿ ನಕ್ಷತ್ರ ವೀಕ್ಷಣೆ ನೋಡಿ',
@@ -133,15 +83,16 @@ const content = {
     heroImageAlt: 'மேலகிரி மலைகளின் மேல் சூரிய அஸ்தமனம்',
     introText: 'மழை தளத்திலேயே தினமும் பதிவு செய்யப்படுகிறது, மேலும் இது பிராந்தியத்தின் பருவமழை முறையைப் பின்பற்றுகிறது: ஏப்ரல் முதல் அக்டோபர் வரை ஈரம், மீதமுள்ள ஆண்டு உலர்ந்தது.',
     monsoonLabel: 'இந்த பருவமழை இதுவரை',
-    monsoonSublabel: '(1 {apr} – 15 {jul} 2026)',
+    monsoonSublabel: '(1 {apr} – {cutoffDay} {cutoffMonth} {cutoffYear})',
     monsoonDeltaLess: 'குறைவு',
     monsoonDeltaMore: 'அதிகம்',
     monsoonDeltaSuffix: 'கடந்த ஆண்டு இதே காலகட்டத்தை விட ({mm}மிமீ)',
-    chartHeading: 'மாதாந்திர மழைப்பொழிவு, 2025–26',
-    chartAriaLabel: '2025-26 விவசாய ஆண்டிற்கான மாதாந்திர மழைப்பொழிவு மில்லிமீட்டரில், ஏப்ரலில் {peak}மிமீ உச்சத்தை எட்டி, நவம்பர் முதல் மார்ச் வரை மழையின்றி குறைகிறது',
-    tableSummary: 'முழு மாதாந்திர புள்ளிவிவரங்கள் (2025–26 மற்றும் 2026–27 இதுவரை)',
+    chartHeading: 'மாதாந்திர மழைப்பொழிவு, {year}',
+    chartAriaLabel: '{year} விவசாய ஆண்டிற்கான மாதாந்திர மழைப்பொழிவு மில்லிமீட்டரில், {peakMonth}இல் {peak}மிமீ உச்சத்தை எட்டியது',
+    tableSummary: 'முழு மாதாந்திர புள்ளிவிவரங்கள்',
     tableMonth: 'மாதம்',
     toDate: '(இதுவரை)',
+    rainfallUnavailable: 'மழை தரவு இப்போது கிடைக்கவில்லை — சிறிது நேரம் கழித்து மீண்டும் பாருங்கள்.',
     nightSkyStatLabel: 'செயற்கை வான பிரகாசம்',
     nightSkyStatSublabel: '(கிட்டத்தட்ட பூஜ்ஜிய ஒளி மாசுபாடு)',
     nightSkyCta: 'விசிட் பக்கத்தில் நட்சத்திர பார்வையைப் பார்க்கவும்',
@@ -149,24 +100,35 @@ const content = {
 } as const;
 
 const c = content[lang];
-const monsoonSublabel = fmt(c.monsoonSublabel, { apr: monthAbbr('Apr'), jul: monthAbbr('Jul') });
-const monsoonDelta = fmt(c.monsoonDeltaSuffix, { mm: sameSpanLastYear.toFixed(1) });
-const chartAriaLabel = fmt(c.chartAriaLabel, { peak: peakMonth.mm });
+const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
 ---
 
 <BaseLayout lang={lang} title={c.metaTitle} description={c.metaDescription} image="/images/pages/home/gallery-4.jpg" imageWidth={1280} imageHeight={960}>
   <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} intro={c.heroIntro} image="/images/pages/home/gallery-4.jpg" imageAlt={c.heroImageAlt} />
 
-  <section class="section wrapper">
+  <section
+    class="section wrapper"
+    id="rainfall-section"
+    data-month-abbr={monthAbbrJson}
+    data-apr-label={MONTH_ABBR[lang].Apr}
+    data-fmt-monsoon-sublabel={c.monsoonSublabel}
+    data-fmt-delta={c.monsoonDeltaSuffix}
+    data-less={c.monsoonDeltaLess}
+    data-more={c.monsoonDeltaMore}
+    data-fmt-chart-heading={c.chartHeading}
+    data-fmt-aria-label={c.chartAriaLabel}
+    data-to-date={c.toDate}
+    data-unavailable={c.rainfallUnavailable}
+  >
     <p>{c.introText}</p>
 
     <div class="tile-row">
       <WeatherWidget lang={lang} />
 
       <div class="stat-tile">
-        <p class="stat-label">{c.monsoonLabel} <span class="stat-sublabel">{monsoonSublabel}</span></p>
-        <p class="stat-value">{monsoonToDate.toFixed(1)}<span class="stat-unit">mm</span></p>
-        <p class="stat-delta">{Math.abs(monsoonDeltaPct)}% {monsoonDeltaPct < 0 ? c.monsoonDeltaLess : c.monsoonDeltaMore} {monsoonDelta}</p>
+        <p class="stat-label">{c.monsoonLabel} <span class="stat-sublabel" id="rainfall-monsoon-sublabel"></span></p>
+        <p class="stat-value"><span id="rainfall-monsoon-value">–</span><span class="stat-unit">mm</span></p>
+        <p class="stat-delta" id="rainfall-monsoon-delta"></p>
       </div>
 
       <div class="stat-tile">
@@ -176,45 +138,26 @@ const chartAriaLabel = fmt(c.chartAriaLabel, { peak: peakMonth.mm });
       </div>
     </div>
 
-    <h2>{c.chartHeading}</h2>
-    <svg class="rainfall-chart" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label={chartAriaLabel}>
-      {yTicks.map((tick) => {
-        const ty = 10 + (plotHeight - (tick / maxMm) * plotHeight);
-        return (
-          <g>
-            <line x1={chartPadLeft} x2={chartWidth - 12} y1={ty} y2={ty} class="grid-line" />
-            <text x={chartPadLeft - 8} y={ty + 4} class="axis-label" text-anchor="end">{tick}</text>
-          </g>
-        );
-      })}
-      {bars.map((b) => (
-        <g>
-          <rect x={b.x} y={b.y} width={barWidth} height={b.height} rx="4" class="bar" />
-          {b.month === peakMonth.month && (
-            <text x={b.x + barWidth / 2} y={b.y - 8} class="bar-value" text-anchor="middle">{b.mm}mm</text>
-          )}
-          <text x={b.x + barWidth / 2} y={chartHeight - 6} class="axis-label" text-anchor="middle">{monthAbbr(b.month)}</text>
-        </g>
-      ))}
-    </svg>
+    <div id="rainfall-chart-section">
+      <h2 id="rainfall-chart-heading">&nbsp;</h2>
+      <svg class="rainfall-chart" id="rainfall-chart-svg" viewBox="0 0 720 220" role="img"></svg>
 
-    <details class="rainfall-table-details">
-      <summary>{c.tableSummary}</summary>
-      <table class="rainfall-table">
-        <thead>
-          <tr><th>{c.tableMonth}</th><th>2025–26</th><th>2026–27</th></tr>
-        </thead>
-        <tbody>
-          {rainfall2025.map((d, i) => (
+      <details class="rainfall-table-details">
+        <summary>{c.tableSummary}</summary>
+        <table class="rainfall-table">
+          <thead>
             <tr>
-              <td>{monthAbbr(d.month)}</td>
-              <td>{d.mm.toFixed(1)}mm</td>
-              <td>{rainfall2026[i] ? `${rainfall2026[i].mm.toFixed(1)}mm${i === rainfall2026.length - 1 ? ` ${c.toDate}` : ''}` : '—'}</td>
+              <th>{c.tableMonth}</th>
+              <th id="rainfall-table-head-chart"></th>
+              <th id="rainfall-table-head-current"></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </details>
+          </thead>
+          <tbody id="rainfall-table-body"></tbody>
+        </table>
+      </details>
+    </div>
+
+    <p class="rainfall-error" id="rainfall-error" hidden>{c.rainfallUnavailable}</p>
   </section>
 </BaseLayout>
 
@@ -284,21 +227,21 @@ const chartAriaLabel = fmt(c.chartAriaLabel, { peak: peakMonth.mm });
     margin-top: 8px;
   }
 
-  .rainfall-chart .bar {
+  .rainfall-chart :global(.bar) {
     fill: var(--tvc-green);
   }
 
-  .rainfall-chart .grid-line {
+  .rainfall-chart :global(.grid-line) {
     stroke: var(--tvc-line);
     stroke-width: 1;
   }
 
-  .rainfall-chart .axis-label {
+  .rainfall-chart :global(.axis-label) {
     font-size: 11px;
     fill: var(--tvc-ink-soft);
   }
 
-  .rainfall-chart .bar-value {
+  .rainfall-chart :global(.bar-value) {
     font-size: 12px;
     font-weight: 700;
     fill: var(--tvc-ink);
@@ -334,4 +277,165 @@ const chartAriaLabel = fmt(c.chartAriaLabel, { peak: peakMonth.mm });
     color: var(--tvc-ink-soft);
     font-weight: 600;
   }
+
+  .rainfall-error {
+    color: var(--tvc-ink-soft);
+    font-style: italic;
+  }
 </style>
+
+<script>
+  import { fetchRainfall, buildChartGeometry, type MonthlyEntry } from '../../utils/rainfall';
+
+  const MONTHS_AGRI_ORDER = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+  const svgNS = 'http://www.w3.org/2000/svg';
+
+  function fmt(template: string, params: Record<string, string | number>): string {
+    return Object.entries(params).reduce((s, [k, v]) => s.replaceAll(`{${k}}`, String(v)), template);
+  }
+
+  // The Sheet's own year labels use a plain hyphen ("2025-26"); the page's
+  // existing copy/table used an en dash, so keep matching that for display.
+  function formatYearLabel(label: string): string {
+    return label.replace('-', '–');
+  }
+
+  function renderChart(svg: SVGSVGElement, monthly: MonthlyEntry[], monthAbbr: (m: string) => string) {
+    const geometry = buildChartGeometry(monthly);
+    svg.setAttribute('viewBox', `0 0 ${geometry.chartWidth} ${geometry.chartHeight}`);
+    svg.setAttribute('aria-hidden', 'false');
+    svg.innerHTML = '';
+
+    for (const tick of geometry.yTicks) {
+      const ty = 10 + (geometry.plotHeight - (tick / geometry.maxMm) * geometry.plotHeight);
+
+      const line = document.createElementNS(svgNS, 'line');
+      line.setAttribute('x1', String(geometry.chartPadLeft));
+      line.setAttribute('x2', String(geometry.chartWidth - 12));
+      line.setAttribute('y1', String(ty));
+      line.setAttribute('y2', String(ty));
+      line.setAttribute('class', 'grid-line');
+      svg.appendChild(line);
+
+      const label = document.createElementNS(svgNS, 'text');
+      label.setAttribute('x', String(geometry.chartPadLeft - 8));
+      label.setAttribute('y', String(ty + 4));
+      label.setAttribute('class', 'axis-label');
+      label.setAttribute('text-anchor', 'end');
+      label.textContent = String(tick);
+      svg.appendChild(label);
+    }
+
+    for (const bar of geometry.bars) {
+      const rect = document.createElementNS(svgNS, 'rect');
+      rect.setAttribute('x', String(bar.x));
+      rect.setAttribute('y', String(bar.y));
+      rect.setAttribute('width', String(bar.width));
+      rect.setAttribute('height', String(bar.height));
+      rect.setAttribute('rx', '4');
+      rect.setAttribute('class', 'bar');
+      svg.appendChild(rect);
+
+      if (bar.month === geometry.peakMonth.month) {
+        const valueText = document.createElementNS(svgNS, 'text');
+        valueText.setAttribute('x', String(bar.x + bar.width / 2));
+        valueText.setAttribute('y', String(bar.y - 8));
+        valueText.setAttribute('class', 'bar-value');
+        valueText.setAttribute('text-anchor', 'middle');
+        valueText.textContent = `${bar.mm}mm`;
+        svg.appendChild(valueText);
+      }
+
+      const monthLabel = document.createElementNS(svgNS, 'text');
+      monthLabel.setAttribute('x', String(bar.x + bar.width / 2));
+      monthLabel.setAttribute('y', String(geometry.chartHeight - 6));
+      monthLabel.setAttribute('class', 'axis-label');
+      monthLabel.setAttribute('text-anchor', 'middle');
+      monthLabel.textContent = monthAbbr(bar.month);
+      svg.appendChild(monthLabel);
+    }
+
+    return geometry;
+  }
+
+  (async () => {
+    const section = document.getElementById('rainfall-section');
+    const svg = document.getElementById('rainfall-chart-svg') as SVGSVGElement | null;
+    const tableBody = document.getElementById('rainfall-table-body');
+    if (!section || !svg || !tableBody) return;
+
+    const monthAbbrMap: Record<string, string> = JSON.parse(section.dataset.monthAbbr || '{}');
+    const monthAbbr = (m: string) => monthAbbrMap[m] ?? m;
+
+    try {
+      const data = await fetchRainfall();
+      const chartMonthly = data.monthly[data.chartYear] ?? [];
+      const currentMonthly = data.monthly[data.currentYear] ?? [];
+
+      // Monsoon-to-date stat tile
+      document.getElementById('rainfall-monsoon-value')!.textContent =
+        data.monsoonToDate != null ? data.monsoonToDate.toFixed(1) : '—';
+      document.getElementById('rainfall-monsoon-sublabel')!.textContent = fmt(section.dataset.fmtMonsoonSublabel || '', {
+        apr: section.dataset.aprLabel || 'Apr',
+        cutoffDay: data.cutoffDay,
+        cutoffMonth: monthAbbr(data.cutoffMonth),
+        cutoffYear: data.cutoffCalendarYear,
+      });
+      if (data.monsoonToDate != null && data.sameSpanLastYear != null && data.sameSpanLastYear > 0) {
+        const deltaPct = Math.round(((data.monsoonToDate - data.sameSpanLastYear) / data.sameSpanLastYear) * 100);
+        const deltaWord = deltaPct < 0 ? section.dataset.less : section.dataset.more;
+        const deltaSuffix = fmt(section.dataset.fmtDelta || '', { mm: data.sameSpanLastYear.toFixed(1) });
+        document.getElementById('rainfall-monsoon-delta')!.textContent = `${Math.abs(deltaPct)}% ${deltaWord} ${deltaSuffix}`;
+      }
+
+      // Chart heading + bars (full prior agricultural year, always 12 months)
+      const geometry = renderChart(svg, chartMonthly, monthAbbr);
+      const chartYearLabel = formatYearLabel(data.chartYear);
+      document.getElementById('rainfall-chart-heading')!.textContent = fmt(section.dataset.fmtChartHeading || '', { year: chartYearLabel });
+      svg.setAttribute(
+        'aria-label',
+        fmt(section.dataset.fmtAriaLabel || '', { year: chartYearLabel, peak: geometry.peakMonth.mm, peakMonth: monthAbbr(geometry.peakMonth.month) })
+      );
+
+      // Full monthly table, both years side by side
+      document.getElementById('rainfall-table-head-chart')!.textContent = chartYearLabel;
+      document.getElementById('rainfall-table-head-current')!.textContent = formatYearLabel(data.currentYear);
+
+      const chartByMonth = new Map(chartMonthly.map((d) => [d.month, d.mm]));
+      const currentByMonth = new Map(currentMonthly.map((d) => [d.month, d.mm]));
+      const toDateLabel = section.dataset.toDate || '';
+
+      tableBody.innerHTML = '';
+      for (const month of MONTHS_AGRI_ORDER) {
+        const tr = document.createElement('tr');
+
+        const tdMonth = document.createElement('td');
+        tdMonth.textContent = monthAbbr(month);
+        tr.appendChild(tdMonth);
+
+        const tdChart = document.createElement('td');
+        tdChart.textContent = `${(chartByMonth.get(month) ?? 0).toFixed(1)}mm`;
+        tr.appendChild(tdChart);
+
+        const tdCurrent = document.createElement('td');
+        if (currentByMonth.has(month)) {
+          const suffix = month === data.cutoffMonth ? ` ${toDateLabel}` : '';
+          tdCurrent.textContent = `${currentByMonth.get(month)!.toFixed(1)}mm${suffix}`;
+        } else {
+          tdCurrent.textContent = '—';
+        }
+        tr.appendChild(tdCurrent);
+
+        tableBody.appendChild(tr);
+      }
+    } catch (err) {
+      console.warn('Could not load live rainfall data', err);
+      const chartSection = document.getElementById('rainfall-chart-section');
+      const errorEl = document.getElementById('rainfall-error');
+      const deltaEl = document.getElementById('rainfall-monsoon-delta');
+      if (chartSection) chartSection.hidden = true;
+      if (errorEl) errorEl.hidden = false;
+      if (deltaEl) deltaEl.textContent = section.dataset.unavailable || '';
+    }
+  })();
+</script>
