@@ -17,12 +17,20 @@ const t = useTranslations(lang);
 // Card/rung data is locale-agnostic (href, img, step, tone) - only the
 // prose per card/rung lives in the content object below, keyed by the same
 // index as its English counterpart.
+// Explore-grid cards render at a fixed 140px-tall strip (see .explore-card
+// img below), so five of these deliberately point at dedicated small
+// thumbnails instead of the same full-size hero/display photo other pages
+// use at their own real size — a PageSpeed pass (2026-08-04) found this
+// grid alone pulling in 1.6MB+ of oversized images on the homepage, the
+// worst single offender being the in-pictures thumb below (a 698KB "display"
+// R2 asset for a 362x140 card; the project's own curate-photos.mjs already
+// uploads a "-thumb" variant alongside every "-display" one).
 const exploreLinks = [
-  { href: '/about', img: '/images/pages/home/gallery-1.jpg' },
+  { href: '/about', img: '/images/pages/home/gallery-1-thumb.webp' },
   { href: '/people', img: '/images/members/ananth-and-manasa.jpg' },
-  { href: '/our-journey', img: '/images/pages/journey/hero.jpg' },
-  { href: '/in-pictures', img: 'https://media.tvc.farm/photos/2024/2024-08-18-img-1880-display.jpg' },
-  { href: '/ecosystem/biodiversity', img: '/images/pages/trekking/watering-hole.jpg' },
+  { href: '/our-journey', img: '/images/pages/journey/hero-thumb.webp' },
+  { href: '/in-pictures', img: 'https://media.tvc.farm/photos/2024/2024-08-18-img-1880-thumb.jpg' },
+  { href: '/ecosystem/biodiversity', img: '/images/pages/trekking/watering-hole-thumb.webp' },
   { href: '/ecosystem/landscape', img: '/images/pages/home/gallery-2.jpg' },
   { href: '/ecosystem/weather', img: '/images/pages/home/gallery-4.jpg' },
   { href: '/resource-centre', img: '/images/products/tamarind-chutney.jpeg' },
