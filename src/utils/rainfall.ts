@@ -18,6 +18,26 @@ export interface CalendarYearSeries {
   monthly: CalendarMonthEntry[];
 }
 
+// Running year-to-date total per year, for the chart's cumulative view.
+// Once a null month is hit (not yet reached, or before the Sheet's history
+// starts), every month after it stays null too — a "total so far" can't
+// exist past the point where the underlying data stops.
+export function toCumulative(calendarYears: CalendarYearSeries[]): CalendarYearSeries[] {
+  return calendarYears.map((y) => {
+    let running = 0;
+    let stopped = false;
+    const monthly: CalendarMonthEntry[] = y.monthly.map((m) => {
+      if (stopped || m.mm == null) {
+        stopped = true;
+        return { month: m.month, mm: null };
+      }
+      running += m.mm;
+      return { month: m.month, mm: running };
+    });
+    return { year: y.year, monthly };
+  });
+}
+
 export interface RainfallData {
   asOf: string;
   chartYear: string;
@@ -73,6 +93,11 @@ export interface YearLine {
   endPoint: LinePoint | null; // last real point — where the line's drawing stops
 }
 
+export interface MonthBound {
+  left: number;
+  right: number;
+}
+
 export interface LineChartGeometry {
   chartWidth: number;
   chartHeight: number;
@@ -82,7 +107,13 @@ export interface LineChartGeometry {
   plotHeight: number;
   maxMm: number;
   yTicks: number[];
-  monthX: number[]; // x position per calendar-month index (0=Jan..11=Dec)
+  monthX: number[]; // x position per calendar-month index (0=Jan..11=Dec) — a point on the line, not a band
+  // Each month's band for area/region marks (monsoon shading, hover hit-targets):
+  // centered on that month's point in monthX, spanning to the midpoint with
+  // its neighbors (or the chart edge for Jan/Dec) — so a mark built from
+  // this actually covers "the month of X", not "X's point to the next
+  // point's point".
+  monthBounds: MonthBound[];
   years: YearLine[];
 }
 
@@ -133,6 +164,13 @@ export function buildLineChartGeometry(calendarYears: CalendarYearSeries[]): Lin
   const plotHeight = chartHeight - chartPadTop - chartPadBottom;
 
   const monthX = CALENDAR_MONTH_ORDER.map((_, i) => chartPadLeft + (plotWidth * i) / (CALENDAR_MONTH_ORDER.length - 1));
+  const monthBounds: MonthBound[] = monthX.map((x, i) => {
+    const prev = monthX[i - 1];
+    const next = monthX[i + 1];
+    const left = prev !== undefined ? (prev + x) / 2 : chartPadLeft;
+    const right = next !== undefined ? (x + next) / 2 : chartWidth - chartPadRight;
+    return { left, right };
+  });
 
   let peak = 0;
   for (const y of calendarYears) for (const m of y.monthly) if (m.mm != null) peak = Math.max(peak, m.mm);
@@ -156,5 +194,5 @@ export function buildLineChartGeometry(calendarYears: CalendarYearSeries[]): Lin
     };
   });
 
-  return { chartWidth, chartHeight, chartPadLeft, chartPadTop, plotWidth, plotHeight, maxMm, yTicks, monthX, years };
+  return { chartWidth, chartHeight, chartPadLeft, chartPadTop, plotWidth, plotHeight, maxMm, yTicks, monthX, monthBounds, years };
 }
