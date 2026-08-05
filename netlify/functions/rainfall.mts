@@ -10,18 +10,20 @@
 //
 // The Sheet has two relevant tabs (a third, "Graph", is a chart the sheet
 // owner built for themselves and isn't read here):
-//  - "Rain data monthly": one row per month (Apr..Mar), one column per
-//    agricultural year (e.g. "2025-26") — the monthly totals used for the
-//    bar chart and the two-column table.
-//  - "Daily rain data": one block per agricultural year, day-of-month
-//    columns (1-31) per month row — only this tab has enough resolution to
-//    compare "this monsoon so far" against the *same* stretch last year
-//    (Apr 1 through today's date in both years), rather than comparing a
-//    partial year against a other year's full total.
+//  - "Rain data monthly": one row per month, one column per calendar year
+//    (e.g. "2025") — the monthly totals used directly for the chart's
+//    per-year lines and the table (see buildCalendarYears() below).
+//  - "Daily rain data": a flat table, one row per calendar year+month
+//    (e.g. "2025"/"April"), with day-of-month columns (1-31) — only this
+//    tab has enough resolution to compare "this monsoon so far" against
+//    the *same* stretch last year (Apr 1 through today's date in both
+//    years), rather than comparing a partial year against another year's
+//    full total.
 import { getSheetValues } from '../../scripts/lib/google-drive.mjs';
 
 // Agricultural year runs April through March.
 const MONTHS_AGRI_ORDER = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+const CALENDAR_MONTH_ORDER = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 // The Sheet spells months inconsistently ("April" in one tab, "Jun" in
 // another, a trailing space on "May " in one row) — normalize everything
@@ -45,6 +47,14 @@ function normalizeMonth(raw: string): string | null {
   return MONTH_ALIASES[raw.trim().toLowerCase()] ?? null;
 }
 
+// Calendar month number for agriYearLabel() — the Sheet's "Daily rain data"
+// rows carry a plain calendar year (e.g. "2025"), not an agricultural-year
+// label, so a row's agricultural year has to be derived from year + month.
+const MONTH_CALENDAR_NUM: Record<string, number> = {
+  Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
+  Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12,
+};
+
 function agriYearLabel(calendarYear: number, calendarMonth1to12: number): string {
   const startYear = calendarMonth1to12 >= 4 ? calendarYear : calendarYear - 1;
   return `${startYear}-${String((startYear + 1) % 100).padStart(2, '0')}`;
@@ -55,19 +65,26 @@ function shiftAgriYearLabel(label: string, delta: number): string {
   return `${start}-${String((start + 1) % 100).padStart(2, '0')}`;
 }
 
-interface MonthlyEntry {
+interface CalendarMonthEntry {
   month: string;
-  mm: number;
+  mm: number | null;
 }
 
-// "Rain data monthly" tab: row 1 is a year header (first cell blank), each
-// following row is a month (until a trailing "Tot" row, which is skipped —
-// normalizeMonth() returns null for it, same as it does for blank rows).
+interface CalendarYearSeries {
+  year: number;
+  monthly: CalendarMonthEntry[];
+}
+
+// "Rain data monthly" tab: row 1 is a header of plain calendar years (e.g.
+// "2025"), each following row is a month (in whatever order the Sheet has
+// them) until a trailing "Total" row, which is skipped — normalizeMonth()
+// returns null for it, same as it does for blank rows.
 function parseMonthlyTab(rows: string[][]): Record<string, Record<string, number>> {
-  if (rows.length === 0) return {};
+  const byYear: Record<string, Record<string, number>> = {};
+  if (rows.length === 0) return byYear;
+
   const header = rows[0];
   const yearCols = header.slice(1).map((y) => String(y ?? '').trim()).filter(Boolean);
-  const byYear: Record<string, Record<string, number>> = {};
   for (const yearLabel of yearCols) byYear[yearLabel] = {};
 
   for (const row of rows.slice(1)) {
@@ -82,38 +99,66 @@ function parseMonthlyTab(rows: string[][]): Record<string, Record<string, number
   return byYear;
 }
 
+// Reshapes the monthly totals into one Jan-Dec series per calendar year, for
+// the chart's per-year lines. A month is `null` (rather than 0) once it's in
+// the future — the Sheet's own not-yet-reached cells (2027 onward, at the
+// time of writing) are pre-filled with a literal "0" rather than left
+// blank, so a real dry-season 0 and "hasn't happened yet" can only be told
+// apart by date, not by cell contents. A year that's entirely future (every
+// month null) is dropped rather than drawing an empty line.
+function buildCalendarYears(
+  monthlyByYear: Record<string, Record<string, number>>,
+  nowYear: number,
+  nowMonth: number
+): CalendarYearSeries[] {
+  const years = Object.keys(monthlyByYear)
+    .map(Number)
+    .filter(Number.isInteger)
+    .sort((a, b) => a - b);
+
+  const series: CalendarYearSeries[] = [];
+  for (const year of years) {
+    const yearLabel = String(year);
+    const monthly: CalendarMonthEntry[] = CALENDAR_MONTH_ORDER.map((month) => {
+      const calMonthNum = MONTH_CALENDAR_NUM[month];
+      const isFuture = year > nowYear || (year === nowYear && calMonthNum > nowMonth);
+      if (isFuture) return { month, mm: null };
+      return { month, mm: monthlyByYear[yearLabel]?.[month] ?? 0 };
+    });
+
+    if (monthly.some((m) => m.mm !== null)) series.push({ year, monthly });
+  }
+
+  return series;
+}
+
 interface DailyMonthBlock {
   month: string;
   days: number[]; // index 0 = day 1
   total: number;
 }
 
-// "Daily rain data" tab: a year label only appears in the top-left cell of
-// its merged header row (column A), so it's detected once per block — by
-// the header row's day-1 column reading "1" — rather than re-read from
-// every month row underneath it, which the Sheets API returns blank for.
+// "Daily rain data" tab: a flat table, header row ["Year", "Month", "1",
+// "2", ..., "31"], then one row per calendar year+month with day-of-month
+// values in columns C-AG. Rows for months not yet reached are present but
+// empty, not absent — normalizeMonth() returns null for the header row
+// (month "Month" isn't a valid alias) and any blank rows, so they're
+// skipped the same way.
 function parseDailyTab(rows: string[][]): Record<string, DailyMonthBlock[]> {
   const blocks: Record<string, DailyMonthBlock[]> = {};
-  let currentYear: string | null = null;
 
   for (const row of rows) {
-    const label = String(row[0] ?? '').trim();
-    const dayOneCell = String(row[2] ?? '').trim();
+    const yearRaw = String(row[0] ?? '').trim();
+    if (!/^\d{4}$/.test(yearRaw)) continue; // header row or blank row
 
-    if (/^\d{4}-\d{2}$/.test(label) && dayOneCell === '1') {
-      currentYear = label;
-      blocks[currentYear] = [];
-      continue;
-    }
-
-    if (!currentYear) continue;
     const monthAbbr = normalizeMonth(String(row[1] ?? ''));
-    if (!monthAbbr) continue; // the blank row separating year blocks
+    if (!monthAbbr) continue;
 
+    const agriYear = agriYearLabel(Number(yearRaw), MONTH_CALENDAR_NUM[monthAbbr]);
     const days = row.slice(2, 33).map((v) => (v === undefined || v === '' ? 0 : Number(v) || 0));
-    const totalRaw = row[33];
-    const total = totalRaw === undefined || totalRaw === '' ? days.reduce((a, b) => a + b, 0) : Number(totalRaw) || 0;
-    blocks[currentYear].push({ month: monthAbbr, days, total });
+    const total = days.reduce((a, b) => a + b, 0);
+
+    (blocks[agriYear] ??= []).push({ month: monthAbbr, days, total });
   }
 
   return blocks;
@@ -176,20 +221,8 @@ export default async (req: Request): Promise<Response> => {
     const currentYear = agriYearLabel(nowYear, nowMonth);
     const chartYear = shiftAgriYearLabel(currentYear, -1);
     const cutoffMonth = MONTHS_AGRI_ORDER[(nowMonth - 4 + 12) % 12];
-    const cutoffIdx = MONTHS_AGRI_ORDER.indexOf(cutoffMonth);
 
-    const chartMonthly: MonthlyEntry[] = MONTHS_AGRI_ORDER.map((month) => ({
-      month,
-      mm: monthlyByYear[chartYear]?.[month] ?? 0,
-    }));
-
-    // Only months reached so far this agricultural year — mirrors how the
-    // page used to stop its in-progress-year column at the current month
-    // rather than showing unreached months as zero.
-    const currentMonthly: MonthlyEntry[] = MONTHS_AGRI_ORDER.slice(0, cutoffIdx + 1).map((month) => ({
-      month,
-      mm: monthlyByYear[currentYear]?.[month] ?? 0,
-    }));
+    const calendarYears = buildCalendarYears(monthlyByYear, nowYear, nowMonth);
 
     const monsoonToDate = sumToDate(dailyByYear[currentYear], cutoffMonth, nowDay);
     const sameSpanLastYear = sumToDate(dailyByYear[chartYear], cutoffMonth, nowDay);
@@ -198,7 +231,7 @@ export default async (req: Request): Promise<Response> => {
       asOf: new Date().toISOString(),
       chartYear,
       currentYear,
-      monthly: { [chartYear]: chartMonthly, [currentYear]: currentMonthly },
+      calendarYears,
       monsoonToDate,
       sameSpanLastYear,
       cutoffMonth,

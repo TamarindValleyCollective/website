@@ -41,11 +41,14 @@ const content = {
     monsoonDeltaLess: 'less',
     monsoonDeltaMore: 'more',
     monsoonDeltaSuffix: 'than the same stretch last year ({mm}mm)',
-    chartHeading: 'Monthly rainfall, {year}',
-    chartAriaLabel: 'Monthly rainfall in millimetres for the {year} agricultural year, peaking at {peak}mm in {peakMonth}',
+    chartHeading: 'Monthly rainfall, {startYear}–{endYear}',
+    chartAriaLabel: 'Monthly rainfall in millimetres by calendar year, {startYear} to {endYear} — one line per year. Full figures in the table below.',
+    unit: 'mm',
     tableSummary: 'Full monthly figures',
     tableMonth: 'Month',
     toDate: '(to date)',
+    rainSummaryBehind: "This {year} monsoon is running {pct}% behind the same stretch last year ({mm}mm) — in line with the {enso} conditions forecasters have been tracking, which typically suppress India's southwest monsoon.",
+    rainSummarySource: 'Source: {source}',
     rainfallUnavailable: "Rainfall data isn't available right now — please check back soon.",
     nightSkyStatLabel: 'Artificial sky brightness',
     nightSkyStatSublabel: '(near-zero light pollution)',
@@ -64,11 +67,14 @@ const content = {
     monsoonDeltaLess: 'ಕಡಿಮೆ',
     monsoonDeltaMore: 'ಹೆಚ್ಚು',
     monsoonDeltaSuffix: 'ಕಳೆದ ವರ್ಷದ ಇದೇ ಅವಧಿಗಿಂತ ({mm}ಮಿಮೀ)',
-    chartHeading: 'ಮಾಸಿಕ ಮಳೆ, {year}',
-    chartAriaLabel: '{year} ಕೃಷಿ ವರ್ಷದ ಮಾಸಿಕ ಮಳೆ ಮಿಲಿಮೀಟರ್‌ಗಳಲ್ಲಿ, {peakMonth}ನಲ್ಲಿ {peak}ಮಿಮೀ ಗರಿಷ್ಠ ಮಟ್ಟ ತಲುಪಿತು',
+    chartHeading: 'ಮಾಸಿಕ ಮಳೆ, {startYear}–{endYear}',
+    chartAriaLabel: '{startYear} ಇಂದ {endYear} ವರೆಗಿನ ಪ್ರತಿ ಕ್ಯಾಲೆಂಡರ್ ವರ್ಷದ ಮಾಸಿಕ ಮಳೆ ಮಿಲಿಮೀಟರ್‌ಗಳಲ್ಲಿ — ಪ್ರತಿ ವರ್ಷಕ್ಕೂ ಒಂದು ರೇಖೆ. ಪೂರ್ಣ ಅಂಕಿಅಂಶಗಳು ಕೆಳಗಿನ ಕೋಷ್ಟಕದಲ್ಲಿವೆ.',
+    unit: 'ಮಿಮೀ',
     tableSummary: 'ಪೂರ್ಣ ಮಾಸಿಕ ಅಂಕಿಅಂಶಗಳು',
     tableMonth: 'ತಿಂಗಳು',
     toDate: '(ಇಲ್ಲಿಯವರೆಗೆ)',
+    rainSummaryBehind: 'ಈ {year} ಮಾನ್ಸೂನ್ ಕಳೆದ ವರ್ಷದ ಇದೇ ಅವಧಿಗಿಂತ {pct}% ಹಿಂದುಳಿದಿದೆ ({mm}ಮಿಮೀ) — ಇದು ಹವಾಮಾನ ತಜ್ಞರು ಗಮನಿಸುತ್ತಿರುವ {enso} ಪರಿಸ್ಥಿತಿಗಳಿಗೆ ಅನುಗುಣವಾಗಿದೆ, ಇದು ಸಾಮಾನ್ಯವಾಗಿ ಭಾರತದ ನೈऋತ್ಯ ಮಾನ್ಸೂನ್ ಅನ್ನು ಕುಂಠಿತಗೊಳಿಸುತ್ತದೆ.',
+    rainSummarySource: 'ಮೂಲ: {source}',
     rainfallUnavailable: 'ಮಳೆಯ ಮಾಹಿತಿ ಸದ್ಯಕ್ಕೆ ಲಭ್ಯವಿಲ್ಲ — ದಯವಿಟ್ಟು ಸ್ವಲ್ಪ ಸಮಯದ ನಂತರ ಪರಿಶೀಲಿಸಿ.',
     nightSkyStatLabel: 'ಕೃತಕ ಆಕಾಶ ಪ್ರಕಾಶಮಾನತೆ',
     nightSkyStatSublabel: '(ಬಹುತೇಕ ಶೂನ್ಯ ಬೆಳಕಿನ ಮಾಲಿನ್ಯ)',
@@ -87,11 +93,14 @@ const content = {
     monsoonDeltaLess: 'குறைவு',
     monsoonDeltaMore: 'அதிகம்',
     monsoonDeltaSuffix: 'கடந்த ஆண்டு இதே காலகட்டத்தை விட ({mm}மிமீ)',
-    chartHeading: 'மாதாந்திர மழைப்பொழிவு, {year}',
-    chartAriaLabel: '{year} விவசாய ஆண்டிற்கான மாதாந்திர மழைப்பொழிவு மில்லிமீட்டரில், {peakMonth}இல் {peak}மிமீ உச்சத்தை எட்டியது',
+    chartHeading: 'மாதாந்திர மழைப்பொழிவு, {startYear}–{endYear}',
+    chartAriaLabel: '{startYear} முதல் {endYear} வரையிலான ஒவ்வொரு நாட்காட்டி ஆண்டின் மாதாந்திர மழைப்பொழிவு மில்லிமீட்டரில் — ஒவ்வொரு ஆண்டிற்கும் ஒரு கோடு. முழு புள்ளிவிவரங்கள் கீழே உள்ள அட்டவணையில்.',
+    unit: 'மிமீ',
     tableSummary: 'முழு மாதாந்திர புள்ளிவிவரங்கள்',
     tableMonth: 'மாதம்',
     toDate: '(இதுவரை)',
+    rainSummaryBehind: 'இந்த {year} பருவமழை கடந்த ஆண்டு இதே காலகட்டத்தை விட {pct}% குறைவாக உள்ளது ({mm}மிமீ) — வானிலை நிபுணர்கள் கண்காணித்து வரும் {enso} நிலைமைகளுக்கு இணங்க, இது பொதுவாக இந்தியாவின் தென்மேற்கு பருவமழையை பலவீனப்படுத்துகிறது.',
+    rainSummarySource: 'ஆதாரம்: {source}',
     rainfallUnavailable: 'மழை தரவு இப்போது கிடைக்கவில்லை — சிறிது நேரம் கழித்து மீண்டும் பாருங்கள்.',
     nightSkyStatLabel: 'செயற்கை வான பிரகாசம்',
     nightSkyStatSublabel: '(கிட்டத்தட்ட பூஜ்ஜிய ஒளி மாசுபாடு)',
@@ -117,7 +126,10 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
     data-more={c.monsoonDeltaMore}
     data-fmt-chart-heading={c.chartHeading}
     data-fmt-aria-label={c.chartAriaLabel}
+    data-unit={c.unit}
     data-to-date={c.toDate}
+    data-fmt-rain-summary-behind={c.rainSummaryBehind}
+    data-fmt-rain-summary-source={c.rainSummarySource}
     data-unavailable={c.rainfallUnavailable}
   >
     <p>{c.introText}</p>
@@ -138,22 +150,31 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
       </div>
     </div>
 
-    <div id="rainfall-chart-section">
+    <p class="rainfall-summary" id="rainfall-summary" hidden>
+      <span id="rainfall-summary-text"></span>
+      <a id="rainfall-summary-source" href="#" target="_blank" rel="noopener noreferrer"></a>
+    </p>
+
+    <div id="rainfall-chart-section" class="rainfall-chart-wrap">
       <h2 id="rainfall-chart-heading">&nbsp;</h2>
-      <svg class="rainfall-chart" id="rainfall-chart-svg" viewBox="0 0 720 220" role="img"></svg>
+      <ul class="rainfall-legend" id="rainfall-legend"></ul>
+      <div class="rainfall-chart-frame">
+        <svg class="rainfall-chart" id="rainfall-chart-svg" viewBox="0 0 720 240" role="img"></svg>
+        <div class="rainfall-tooltip" id="rainfall-tooltip" role="status" aria-live="polite" hidden></div>
+      </div>
 
       <details class="rainfall-table-details">
         <summary>{c.tableSummary}</summary>
-        <table class="rainfall-table">
-          <thead>
-            <tr>
-              <th>{c.tableMonth}</th>
-              <th id="rainfall-table-head-chart"></th>
-              <th id="rainfall-table-head-current"></th>
-            </tr>
-          </thead>
-          <tbody id="rainfall-table-body"></tbody>
-        </table>
+        <div class="rainfall-table-scroll">
+          <table class="rainfall-table">
+            <thead>
+              <tr id="rainfall-table-head">
+                <th>{c.tableMonth}</th>
+              </tr>
+            </thead>
+            <tbody id="rainfall-table-body"></tbody>
+          </table>
+        </div>
       </details>
     </div>
 
@@ -220,15 +241,84 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
     margin: 0;
   }
 
+  /* Categorical line colors — dataviz skill's validated default palette,
+     first 5 slots, assigned by chronological order among the years shown
+     (never by value) so a year keeps its color as new years arrive. Only
+     line charts need adjacent-pair separation (not all-pairs, per the
+     skill), and this site has no dark mode, so light-mode hexes only. */
+  .rainfall-chart-wrap {
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --series-5: #e87ba4;
+    --series-6: #008300;
+    --series-7: #4a3aa7;
+    --series-8: #e34948;
+    --chart-surface: #faf7ee;
+  }
+
+  .rainfall-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    list-style: none;
+    margin: 10px 0 0;
+    padding: 0;
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .rainfall-legend :global(li) {
+    display: flex;
+    align-items: center;
+  }
+
+  .rainfall-legend :global(label) {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+
+  .rainfall-legend :global(input[type='checkbox']) {
+    margin: 0;
+    accent-color: var(--tvc-green);
+    cursor: pointer;
+  }
+
+  .rainfall-legend :global(.swatch) {
+    display: inline-block;
+    width: 16px;
+    height: 2px;
+    border-radius: 1px;
+  }
+
+  .rainfall-chart :global(.year-hidden),
+  .rainfall-table :global(.year-hidden) {
+    display: none;
+  }
+
+  .rainfall-summary {
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+    margin: 12px 0 0;
+  }
+
+  .rainfall-summary #rainfall-summary-source {
+    margin-left: 6px;
+    white-space: nowrap;
+  }
+
+  .rainfall-chart-frame {
+    position: relative;
+  }
+
   .rainfall-chart {
     width: 100%;
     max-width: 720px;
     height: auto;
     margin-top: 8px;
-  }
-
-  .rainfall-chart :global(.bar) {
-    fill: var(--tvc-green);
   }
 
   .rainfall-chart :global(.grid-line) {
@@ -241,10 +331,83 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
     fill: var(--tvc-ink-soft);
   }
 
-  .rainfall-chart :global(.bar-value) {
+  .rainfall-chart :global(.year-line) {
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .rainfall-chart :global(.end-dot) {
+    stroke: var(--chart-surface);
+    stroke-width: 2;
+  }
+
+  .rainfall-chart :global(.end-label) {
     font-size: 12px;
     font-weight: 700;
     fill: var(--tvc-ink);
+  }
+
+  .rainfall-chart :global(.crosshair) {
+    stroke: var(--tvc-line);
+    stroke-width: 1;
+  }
+
+  .rainfall-chart :global(.hit-col) {
+    fill: transparent;
+  }
+
+  .rainfall-chart :global(.hit-col:focus-visible) {
+    outline: 2px solid var(--tvc-green);
+    outline-offset: -2px;
+  }
+
+  .rainfall-tooltip {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    background: #fff;
+    border: 1px solid var(--tvc-line);
+    border-radius: 8px;
+    box-shadow: var(--shadow-soft);
+    padding: 8px 10px;
+    font-size: 0.8rem;
+    min-width: 110px;
+    transform: translate(-50%, -100%);
+    z-index: 2;
+  }
+
+  .rainfall-tooltip :global(.tooltip-month) {
+    font-weight: 600;
+    color: var(--tvc-ink);
+    margin: 0 0 4px;
+  }
+
+  .rainfall-tooltip :global(.tooltip-row) {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 2px 0;
+  }
+
+  .rainfall-tooltip :global(.tooltip-key) {
+    display: inline-block;
+    width: 10px;
+    height: 2px;
+    border-radius: 1px;
+    flex-shrink: 0;
+  }
+
+  .rainfall-tooltip :global(.tooltip-year) {
+    color: var(--tvc-ink-soft);
+  }
+
+  .rainfall-tooltip :global(.tooltip-value) {
+    font-weight: 700;
+    color: var(--tvc-ink);
+    margin-left: auto;
   }
 
   .rainfall-table-details {
@@ -257,9 +420,13 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
     color: var(--tvc-green-dark);
   }
 
+  .rainfall-table-scroll {
+    overflow-x: auto;
+  }
+
   .rainfall-table {
     width: 100%;
-    max-width: 480px;
+    max-width: 560px;
     border-collapse: collapse;
     margin-top: 12px;
     font-size: 0.9rem;
@@ -285,33 +452,49 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
 </style>
 
 <script>
-  import { fetchRainfall, buildChartGeometry, type MonthlyEntry } from '../../utils/rainfall';
+  import { fetchRainfall, buildLineChartGeometry, CALENDAR_MONTH_ORDER, type CalendarYearSeries, type CalendarMonthEntry } from '../../utils/rainfall';
 
-  const MONTHS_AGRI_ORDER = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
   const svgNS = 'http://www.w3.org/2000/svg';
+
+  interface DisplayYear {
+    year: number;
+    monthly: CalendarMonthEntry[];
+    colorVar: string;
+  }
+
+  // General, verified context for the "This monsoon so far" stat — not a
+  // claim about this one farm's rain gauge specifically, just the national
+  // ENSO backdrop for years where it's actually been reported. Years without
+  // a verified entry here simply don't get the extra sentence (see below) —
+  // no source, no claim, rather than guessing.
+  const ENSO_CONTEXT: Record<number, { phase: string; sourceLabel: string; sourceUrl: string }> = {
+    2023: {
+      phase: 'El Niño',
+      sourceLabel: 'Down To Earth, Jun 2026',
+      sourceUrl: 'https://www.downtoearth.org.in/climate-change/monsoon-2026-has-arrived-but-indias-rain-season-begins-under-el-ni%C3%B1o-shadow',
+    },
+    2026: {
+      phase: 'El Niño',
+      sourceLabel: 'Down To Earth, Jun 2026',
+      sourceUrl: 'https://www.downtoearth.org.in/climate-change/monsoon-2026-has-arrived-but-indias-rain-season-begins-under-el-ni%C3%B1o-shadow',
+    },
+  };
 
   function fmt(template: string, params: Record<string, string | number>): string {
     return Object.entries(params).reduce((s, [k, v]) => s.replaceAll(`{${k}}`, String(v)), template);
   }
 
-  // The Sheet's own year labels use a plain hyphen ("2025-26"); the page's
-  // existing copy/table used an en dash, so keep matching that for display.
-  function formatYearLabel(label: string): string {
-    return label.replace('-', '–');
-  }
-
-  function renderChart(svg: SVGSVGElement, monthly: MonthlyEntry[], monthAbbr: (m: string) => string) {
-    const geometry = buildChartGeometry(monthly);
+  function renderChart(svg: SVGSVGElement, calendarYears: CalendarYearSeries[], monthAbbr: (m: string) => string, unitLabel: string) {
+    const geometry = buildLineChartGeometry(calendarYears);
     svg.setAttribute('viewBox', `0 0 ${geometry.chartWidth} ${geometry.chartHeight}`);
-    svg.setAttribute('aria-hidden', 'false');
     svg.innerHTML = '';
 
     for (const tick of geometry.yTicks) {
-      const ty = 10 + (geometry.plotHeight - (tick / geometry.maxMm) * geometry.plotHeight);
+      const ty = geometry.chartPadTop + (geometry.plotHeight - (tick / geometry.maxMm) * geometry.plotHeight);
 
       const line = document.createElementNS(svgNS, 'line');
       line.setAttribute('x1', String(geometry.chartPadLeft));
-      line.setAttribute('x2', String(geometry.chartWidth - 12));
+      line.setAttribute('x2', String(geometry.chartWidth - 16));
       line.setAttribute('y1', String(ty));
       line.setAttribute('y2', String(ty));
       line.setAttribute('class', 'grid-line');
@@ -326,53 +509,261 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
       svg.appendChild(label);
     }
 
-    for (const bar of geometry.bars) {
-      const rect = document.createElementNS(svgNS, 'rect');
-      rect.setAttribute('x', String(bar.x));
-      rect.setAttribute('y', String(bar.y));
-      rect.setAttribute('width', String(bar.width));
-      rect.setAttribute('height', String(bar.height));
-      rect.setAttribute('rx', '4');
-      rect.setAttribute('class', 'bar');
-      svg.appendChild(rect);
+    CALENDAR_MONTH_ORDER.forEach((month, i) => {
+      const label = document.createElementNS(svgNS, 'text');
+      label.setAttribute('x', String(geometry.monthX[i]));
+      label.setAttribute('y', String(geometry.chartHeight - 6));
+      label.setAttribute('class', 'axis-label');
+      label.setAttribute('text-anchor', i === 0 ? 'start' : i === CALENDAR_MONTH_ORDER.length - 1 ? 'end' : 'middle');
+      label.textContent = monthAbbr(month);
+      svg.appendChild(label);
+    });
 
-      if (bar.month === geometry.peakMonth.month) {
-        const valueText = document.createElementNS(svgNS, 'text');
-        valueText.setAttribute('x', String(bar.x + bar.width / 2));
-        valueText.setAttribute('y', String(bar.y - 8));
-        valueText.setAttribute('class', 'bar-value');
-        valueText.setAttribute('text-anchor', 'middle');
-        valueText.textContent = `${bar.mm}mm`;
-        svg.appendChild(valueText);
-      }
+    for (const year of geometry.years) {
+      if (!year.pathD) continue;
+      const path = document.createElementNS(svgNS, 'path');
+      path.setAttribute('d', year.pathD);
+      path.setAttribute('class', 'year-line');
+      path.setAttribute('data-year', String(year.year));
+      path.setAttribute('style', `stroke: var(${year.colorVar})`);
+      svg.appendChild(path);
+    }
 
-      const monthLabel = document.createElementNS(svgNS, 'text');
-      monthLabel.setAttribute('x', String(bar.x + bar.width / 2));
-      monthLabel.setAttribute('y', String(geometry.chartHeight - 6));
-      monthLabel.setAttribute('class', 'axis-label');
-      monthLabel.setAttribute('text-anchor', 'middle');
-      monthLabel.textContent = monthAbbr(bar.month);
-      svg.appendChild(monthLabel);
+    // Direct end-label: only the most recent year, and only when it's still
+    // in progress (doesn't reach December) — the one line whose stopping
+    // point is itself the story. Complete years already read as "reaches
+    // the right edge" without needing a label.
+    const lastYear = geometry.years[geometry.years.length - 1];
+    if (lastYear?.endPoint && lastYear.endPoint.month !== 'Dec') {
+      const dot = document.createElementNS(svgNS, 'circle');
+      dot.setAttribute('cx', String(lastYear.endPoint.x));
+      dot.setAttribute('cy', String(lastYear.endPoint.y));
+      dot.setAttribute('r', '4');
+      dot.setAttribute('class', 'end-dot');
+      dot.setAttribute('data-year', String(lastYear.year));
+      dot.setAttribute('style', `fill: var(${lastYear.colorVar})`);
+      svg.appendChild(dot);
+
+      const label = document.createElementNS(svgNS, 'text');
+      label.setAttribute('x', String(lastYear.endPoint.x));
+      label.setAttribute('y', String(lastYear.endPoint.y - 10));
+      label.setAttribute('class', 'end-label');
+      label.setAttribute('data-year', String(lastYear.year));
+      label.setAttribute('text-anchor', lastYear.endPoint.month === 'Jan' ? 'start' : 'middle');
+      label.textContent = `${lastYear.endPoint.mm}${unitLabel}`;
+      svg.appendChild(label);
     }
 
     return geometry;
   }
 
+  // Legend doubles as the year filter — each row is a real checkbox (native
+  // keyboard/AT support for free), checked by default. onToggle re-applies
+  // visibility to the chart and table, which stay built once and just show
+  ///hide their per-year elements rather than re-rendering (see
+  // applyVisibility() below) — that's also what keeps a year's color fixed
+  // when other years are toggled off, instead of re-assigning slots by the
+  // now-smaller series count.
+  function renderLegend(container: HTMLElement, years: DisplayYear[], onToggle: (year: number, visible: boolean) => void) {
+    container.innerHTML = '';
+    for (const year of years) {
+      const li = document.createElement('li');
+      const label = document.createElement('label');
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = true;
+      checkbox.addEventListener('change', () => onToggle(year.year, checkbox.checked));
+      label.appendChild(checkbox);
+
+      const swatch = document.createElement('span');
+      swatch.className = 'swatch';
+      swatch.style.background = `var(${year.colorVar})`;
+      label.appendChild(swatch);
+
+      const text = document.createElement('span');
+      text.textContent = String(year.year);
+      label.appendChild(text);
+
+      li.appendChild(label);
+      container.appendChild(li);
+    }
+  }
+
+  function renderTable(
+    theadRow: HTMLTableRowElement,
+    tbody: HTMLElement,
+    years: DisplayYear[],
+    monthAbbr: (m: string) => string,
+    toDateLabel: string,
+    unitLabel: string
+  ) {
+    theadRow.querySelectorAll('th.year-col').forEach((el) => el.remove());
+    for (const y of years) {
+      const th = document.createElement('th');
+      th.className = 'year-col';
+      th.dataset.year = String(y.year);
+      th.textContent = `${y.year} (${unitLabel})`;
+      theadRow.appendChild(th);
+    }
+
+    const lastYear = years[years.length - 1];
+    const lastRealMonth = lastYear?.monthly.filter((m) => m.mm != null).at(-1)?.month;
+
+    tbody.innerHTML = '';
+    CALENDAR_MONTH_ORDER.forEach((month, i) => {
+      const tr = document.createElement('tr');
+      const tdMonth = document.createElement('td');
+      tdMonth.textContent = monthAbbr(month);
+      tr.appendChild(tdMonth);
+
+      for (const y of years) {
+        const entry = y.monthly[i];
+        const td = document.createElement('td');
+        td.dataset.year = String(y.year);
+        if (entry.mm == null) {
+          td.textContent = '—';
+        } else {
+          const suffix = y === lastYear && month === lastRealMonth ? ` ${toDateLabel}` : '';
+          td.textContent = `${entry.mm.toFixed(1)}${suffix}`;
+        }
+        tr.appendChild(td);
+      }
+
+      tbody.appendChild(tr);
+    });
+  }
+
+  // Hover/focus crosshair + tooltip, one hit target per calendar month,
+  // showing every year's value at that month — "one tooltip, every series"
+  // (see the dataviz skill's interaction guidance). Keyboard focus mirrors
+  // hover exactly, via the same show/hide pair.
+  function attachInteraction(
+    svg: SVGSVGElement,
+    frame: HTMLElement,
+    tooltip: HTMLElement,
+    geometry: ReturnType<typeof buildLineChartGeometry>,
+    years: DisplayYear[],
+    monthAbbr: (m: string) => string,
+    unitLabel: string,
+    isHidden: (year: number) => boolean
+  ) {
+    const crosshair = document.createElementNS(svgNS, 'line');
+    crosshair.setAttribute('class', 'crosshair');
+    crosshair.setAttribute('y1', String(geometry.chartPadTop));
+    crosshair.setAttribute('y2', String(geometry.chartPadTop + geometry.plotHeight));
+    crosshair.setAttribute('visibility', 'hidden');
+    svg.appendChild(crosshair);
+
+    const bounds = geometry.monthX.map((x, i) => {
+      const prev = geometry.monthX[i - 1];
+      const next = geometry.monthX[i + 1];
+      const left = prev !== undefined ? (prev + x) / 2 : geometry.chartPadLeft;
+      const right = next !== undefined ? (x + next) / 2 : geometry.chartWidth - 16;
+      return { left, right };
+    });
+
+    function showMonth(i: number) {
+      const month = CALENDAR_MONTH_ORDER[i];
+      const rows = years
+        .filter((y) => !isHidden(y.year))
+        .map((y) => ({ year: y.year, colorVar: y.colorVar, mm: y.monthly[i]?.mm ?? null }))
+        .filter((r) => r.mm != null);
+      if (rows.length === 0) return;
+
+      crosshair.setAttribute('x1', String(geometry.monthX[i]));
+      crosshair.setAttribute('x2', String(geometry.monthX[i]));
+      crosshair.setAttribute('visibility', 'visible');
+
+      tooltip.innerHTML = '';
+      const monthEl = document.createElement('p');
+      monthEl.className = 'tooltip-month';
+      monthEl.textContent = monthAbbr(month);
+      tooltip.appendChild(monthEl);
+
+      for (const row of rows) {
+        const rowEl = document.createElement('p');
+        rowEl.className = 'tooltip-row';
+        const key = document.createElement('span');
+        key.className = 'tooltip-key';
+        key.style.background = `var(${row.colorVar})`;
+        rowEl.appendChild(key);
+        const yearEl = document.createElement('span');
+        yearEl.className = 'tooltip-year';
+        yearEl.textContent = String(row.year);
+        rowEl.appendChild(yearEl);
+        const valueEl = document.createElement('span');
+        valueEl.className = 'tooltip-value';
+        valueEl.textContent = `${row.mm!.toFixed(1)}${unitLabel}`;
+        rowEl.appendChild(valueEl);
+        tooltip.appendChild(rowEl);
+      }
+
+      const svgRect = svg.getBoundingClientRect();
+      const frameRect = frame.getBoundingClientRect();
+      const scale = svgRect.width / geometry.chartWidth;
+      tooltip.style.left = `${svgRect.left - frameRect.left + geometry.monthX[i] * scale}px`;
+      tooltip.style.top = `${svgRect.top - frameRect.top + geometry.chartPadTop * scale}px`;
+      tooltip.hidden = false;
+    }
+
+    function hide() {
+      crosshair.setAttribute('visibility', 'hidden');
+      tooltip.hidden = true;
+    }
+
+    function ariaLabelFor(i: number): string {
+      const month = CALENDAR_MONTH_ORDER[i];
+      const summary = years
+        .filter((y) => !isHidden(y.year))
+        .map((y) => (y.monthly[i]?.mm != null ? `${y.year}: ${y.monthly[i].mm!.toFixed(1)}${unitLabel}` : null))
+        .filter(Boolean)
+        .join(', ');
+      return `${monthAbbr(month)}: ${summary || '—'}`;
+    }
+
+    const rects = bounds.map((b, i) => {
+      const rect = document.createElementNS(svgNS, 'rect');
+      rect.setAttribute('x', String(b.left));
+      rect.setAttribute('y', String(geometry.chartPadTop));
+      rect.setAttribute('width', String(Math.max(0, b.right - b.left)));
+      rect.setAttribute('height', String(geometry.plotHeight));
+      rect.setAttribute('class', 'hit-col');
+      rect.setAttribute('tabindex', '0');
+      rect.setAttribute('aria-label', ariaLabelFor(i));
+      rect.addEventListener('pointerenter', () => showMonth(i));
+      rect.addEventListener('pointermove', () => showMonth(i));
+      rect.addEventListener('pointerleave', hide);
+      rect.addEventListener('focus', () => showMonth(i));
+      rect.addEventListener('blur', hide);
+      svg.appendChild(rect);
+      return rect;
+    });
+
+    return {
+      refreshAria() {
+        rects.forEach((rect, i) => rect.setAttribute('aria-label', ariaLabelFor(i)));
+      },
+    };
+  }
+
   (async () => {
     const section = document.getElementById('rainfall-section');
     const svg = document.getElementById('rainfall-chart-svg') as SVGSVGElement | null;
+    const frame = document.querySelector('.rainfall-chart-frame') as HTMLElement | null;
+    const tooltip = document.getElementById('rainfall-tooltip');
+    const legend = document.getElementById('rainfall-legend');
+    const theadRow = document.getElementById('rainfall-table-head') as HTMLTableRowElement | null;
     const tableBody = document.getElementById('rainfall-table-body');
-    if (!section || !svg || !tableBody) return;
+    if (!section || !svg || !frame || !tooltip || !legend || !theadRow || !tableBody) return;
 
     const monthAbbrMap: Record<string, string> = JSON.parse(section.dataset.monthAbbr || '{}');
     const monthAbbr = (m: string) => monthAbbrMap[m] ?? m;
 
     try {
       const data = await fetchRainfall();
-      const chartMonthly = data.monthly[data.chartYear] ?? [];
-      const currentMonthly = data.monthly[data.currentYear] ?? [];
 
-      // Monsoon-to-date stat tile
+      // Monsoon-to-date stat tile — unchanged, still the agricultural-year framing
       document.getElementById('rainfall-monsoon-value')!.textContent =
         data.monsoonToDate != null ? data.monsoonToDate.toFixed(1) : '—';
       document.getElementById('rainfall-monsoon-sublabel')!.textContent = fmt(section.dataset.fmtMonsoonSublabel || '', {
@@ -386,48 +777,60 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
         const deltaWord = deltaPct < 0 ? section.dataset.less : section.dataset.more;
         const deltaSuffix = fmt(section.dataset.fmtDelta || '', { mm: data.sameSpanLastYear.toFixed(1) });
         document.getElementById('rainfall-monsoon-delta')!.textContent = `${Math.abs(deltaPct)}% ${deltaWord} ${deltaSuffix}`;
-      }
 
-      // Chart heading + bars (full prior agricultural year, always 12 months)
-      const geometry = renderChart(svg, chartMonthly, monthAbbr);
-      const chartYearLabel = formatYearLabel(data.chartYear);
-      document.getElementById('rainfall-chart-heading')!.textContent = fmt(section.dataset.fmtChartHeading || '', { year: chartYearLabel });
-      svg.setAttribute(
-        'aria-label',
-        fmt(section.dataset.fmtAriaLabel || '', { year: chartYearLabel, peak: geometry.peakMonth.mm, peakMonth: monthAbbr(geometry.peakMonth.month) })
-      );
-
-      // Full monthly table, both years side by side
-      document.getElementById('rainfall-table-head-chart')!.textContent = chartYearLabel;
-      document.getElementById('rainfall-table-head-current')!.textContent = formatYearLabel(data.currentYear);
-
-      const chartByMonth = new Map(chartMonthly.map((d) => [d.month, d.mm]));
-      const currentByMonth = new Map(currentMonthly.map((d) => [d.month, d.mm]));
-      const toDateLabel = section.dataset.toDate || '';
-
-      tableBody.innerHTML = '';
-      for (const month of MONTHS_AGRI_ORDER) {
-        const tr = document.createElement('tr');
-
-        const tdMonth = document.createElement('td');
-        tdMonth.textContent = monthAbbr(month);
-        tr.appendChild(tdMonth);
-
-        const tdChart = document.createElement('td');
-        tdChart.textContent = `${(chartByMonth.get(month) ?? 0).toFixed(1)}mm`;
-        tr.appendChild(tdChart);
-
-        const tdCurrent = document.createElement('td');
-        if (currentByMonth.has(month)) {
-          const suffix = month === data.cutoffMonth ? ` ${toDateLabel}` : '';
-          tdCurrent.textContent = `${currentByMonth.get(month)!.toFixed(1)}mm${suffix}`;
-        } else {
-          tdCurrent.textContent = '—';
+        // Short context sentence, live off the same numbers as the stat
+        // tile above — only shown for a year with a verified ENSO source
+        // (see ENSO_CONTEXT), so it goes quiet rather than guessing once
+        // that source falls out of date.
+        const enso = deltaPct < 0 ? ENSO_CONTEXT[data.cutoffCalendarYear] : undefined;
+        if (enso) {
+          const summaryEl = document.getElementById('rainfall-summary');
+          const textEl = document.getElementById('rainfall-summary-text');
+          const sourceEl = document.getElementById('rainfall-summary-source') as HTMLAnchorElement | null;
+          if (summaryEl && textEl && sourceEl) {
+            textEl.textContent = fmt(section.dataset.fmtRainSummaryBehind || '', {
+              year: data.cutoffCalendarYear,
+              pct: Math.abs(deltaPct),
+              mm: data.sameSpanLastYear.toFixed(1),
+              enso: enso.phase,
+            });
+            sourceEl.textContent = fmt(section.dataset.fmtRainSummarySource || '', { source: enso.sourceLabel });
+            sourceEl.href = enso.sourceUrl;
+            summaryEl.hidden = false;
+          }
         }
-        tr.appendChild(tdCurrent);
-
-        tableBody.appendChild(tr);
       }
+
+      if (data.calendarYears.length === 0) throw new Error('No calendar-year rainfall data');
+
+      const unitLabel = section.dataset.unit || 'mm';
+
+      // Chart: one smooth line per calendar year, Jan-Dec
+      const geometry = renderChart(svg, data.calendarYears, monthAbbr, unitLabel);
+      const years: DisplayYear[] = data.calendarYears.map((y, i) => ({ year: y.year, monthly: y.monthly, colorVar: geometry.years[i].colorVar }));
+
+      const startYear = years[0].year;
+      const endYear = years[years.length - 1].year;
+      document.getElementById('rainfall-chart-heading')!.textContent = fmt(section.dataset.fmtChartHeading || '', { startYear, endYear });
+      svg.setAttribute('aria-label', fmt(section.dataset.fmtAriaLabel || '', { startYear, endYear }));
+
+      // Year filter: the legend's checkboxes toggle a `year-hidden` class on
+      // that year's pre-built chart/table elements (matched via
+      // `data-year`) rather than re-rendering — keeps every year's color
+      // and the y-axis scale fixed regardless of what's shown or hidden.
+      const hiddenYears = new Set<number>();
+      function applyVisibility(year: number, visible: boolean) {
+        if (visible) hiddenYears.delete(year);
+        else hiddenYears.add(year);
+        svg!.querySelectorAll(`[data-year="${year}"]`).forEach((el) => el.classList.toggle('year-hidden', !visible));
+        theadRow!.querySelectorAll(`[data-year="${year}"]`).forEach((el) => el.classList.toggle('year-hidden', !visible));
+        tableBody!.querySelectorAll(`[data-year="${year}"]`).forEach((el) => el.classList.toggle('year-hidden', !visible));
+        interaction.refreshAria();
+      }
+
+      const interaction = attachInteraction(svg, frame, tooltip, geometry, years, monthAbbr, unitLabel, (year) => hiddenYears.has(year));
+      renderLegend(legend, years, applyVisibility);
+      renderTable(theadRow, tableBody, years, monthAbbr, section.dataset.toDate || '', unitLabel);
     } catch (err) {
       console.warn('Could not load live rainfall data', err);
       const chartSection = document.getElementById('rainfall-chart-section');

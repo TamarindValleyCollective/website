@@ -6,16 +6,23 @@
 const CACHE_KEY = 'tvc-rainfall-cache';
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
-export interface MonthlyEntry {
+export const CALENDAR_MONTH_ORDER = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+export interface CalendarMonthEntry {
   month: string;
-  mm: number;
+  mm: number | null;
+}
+
+export interface CalendarYearSeries {
+  year: number;
+  monthly: CalendarMonthEntry[];
 }
 
 export interface RainfallData {
   asOf: string;
   chartYear: string;
   currentYear: string;
-  monthly: Record<string, MonthlyEntry[]>;
+  calendarYears: CalendarYearSeries[];
   monsoonToDate: number | null;
   sameSpanLastYear: number | null;
   cutoffMonth: string;
@@ -47,27 +54,42 @@ export async function fetchRainfall(): Promise<RainfallData> {
   return data;
 }
 
-export interface ChartBar extends MonthlyEntry {
+export interface LinePoint {
   x: number;
   y: number;
-  width: number;
-  height: number;
+  month: string;
+  mm: number;
 }
 
-export interface ChartGeometry {
+export interface YearLine {
+  year: number;
+  // CSS custom property name (e.g. '--series-1') the chart's <style> block
+  // defines — see the dataviz skill's fixed categorical hue order. Assigned
+  // by chronological position among the years actually shown, never by
+  // value, so a series keeps its color as new years arrive.
+  colorVar: string;
+  points: LinePoint[]; // only real (non-null) months, in calendar order
+  pathD: string; // smoothed (Catmull-Rom) SVG path through `points`
+  endPoint: LinePoint | null; // last real point — where the line's drawing stops
+}
+
+export interface LineChartGeometry {
   chartWidth: number;
   chartHeight: number;
   chartPadLeft: number;
+  chartPadTop: number;
   plotWidth: number;
   plotHeight: number;
   maxMm: number;
   yTicks: number[];
-  peakMonth: MonthlyEntry;
-  bars: ChartBar[];
+  monthX: number[]; // x position per calendar-month index (0=Jan..11=Dec)
+  years: YearLine[];
 }
 
+const SERIES_COLOR_VARS = ['--series-1', '--series-2', '--series-3', '--series-4', '--series-5', '--series-6', '--series-7', '--series-8'];
+
 // Rounds the axis ceiling up to the next multiple of 50 above the peak
-// month (with 5% headroom so the tallest bar isn't flush with the top),
+// month (with 5% headroom so the tallest point isn't flush with the top),
 // rather than a value hardcoded for whichever year happened to be current
 // when this was written — a future year with a bigger monsoon (this Sheet
 // has single months over 250mm in its history) still renders correctly.
@@ -75,31 +97,64 @@ function niceMax(peak: number): number {
   return Math.max(50, Math.ceil((peak * 1.05) / 50) * 50);
 }
 
-export function buildChartGeometry(monthly: MonthlyEntry[]): ChartGeometry {
-  const chartWidth = 720;
-  const chartHeight = 220;
-  const chartPadLeft = 36;
-  const chartPadBottom = 26;
-  const plotWidth = chartWidth - chartPadLeft - 12;
-  const plotHeight = chartHeight - chartPadBottom - 10;
+// Uniform Catmull-Rom spline through `points`, converted to cubic Bezier
+// segments (tension 1/6) — a smooth curve that still passes through every
+// real data point, unlike a fitted approximation. Points with no data
+// (months not yet reached, or before the Sheet's history starts) are
+// already filtered out by the caller, so this only ever draws through
+// real values — never interpolates across a gap.
+function smoothPath(points: { x: number; y: number }[]): string {
+  if (points.length === 0) return '';
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
 
-  const peakMonth = monthly.reduce((a, b) => (b.mm > a.mm ? b : a), monthly[0]);
-  const maxMm = niceMax(peakMonth.mm);
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i - 1] ?? points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] ?? p2;
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)}, ${cp2x.toFixed(2)} ${cp2y.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+  }
+  return d;
+}
+
+export function buildLineChartGeometry(calendarYears: CalendarYearSeries[]): LineChartGeometry {
+  const chartWidth = 720;
+  const chartHeight = 240;
+  const chartPadLeft = 36;
+  const chartPadTop = 24;
+  const chartPadRight = 16;
+  const chartPadBottom = 26;
+  const plotWidth = chartWidth - chartPadLeft - chartPadRight;
+  const plotHeight = chartHeight - chartPadTop - chartPadBottom;
+
+  const monthX = CALENDAR_MONTH_ORDER.map((_, i) => chartPadLeft + (plotWidth * i) / (CALENDAR_MONTH_ORDER.length - 1));
+
+  let peak = 0;
+  for (const y of calendarYears) for (const m of y.monthly) if (m.mm != null) peak = Math.max(peak, m.mm);
+  const maxMm = niceMax(peak);
   const yTicks = [0, maxMm / 4, maxMm / 2, (maxMm * 3) / 4].map((n) => Math.round(n));
 
-  const bandWidth = plotWidth / monthly.length;
-  const barWidth = Math.min(24, bandWidth * 0.55);
+  const toY = (mm: number) => chartPadTop + (plotHeight - (mm / maxMm) * plotHeight);
 
-  const bars: ChartBar[] = monthly.map((d, i) => {
-    const barHeight = (d.mm / maxMm) * plotHeight;
+  const years: YearLine[] = calendarYears.map((y, idx) => {
+    const points: LinePoint[] = [];
+    y.monthly.forEach((m, i) => {
+      if (m.mm == null) return;
+      points.push({ x: monthX[i], y: toY(m.mm), month: m.month, mm: m.mm });
+    });
     return {
-      ...d,
-      x: chartPadLeft + i * bandWidth + (bandWidth - barWidth) / 2,
-      y: 10 + (plotHeight - barHeight),
-      width: barWidth,
-      height: Math.max(barHeight, d.mm > 0 ? 2 : 0),
+      year: y.year,
+      colorVar: SERIES_COLOR_VARS[idx % SERIES_COLOR_VARS.length],
+      points,
+      pathD: smoothPath(points.map((p) => ({ x: p.x, y: p.y }))),
+      endPoint: points.length ? points[points.length - 1] : null,
     };
   });
 
-  return { chartWidth, chartHeight, chartPadLeft, plotWidth, plotHeight, maxMm, yTicks, peakMonth, bars };
+  return { chartWidth, chartHeight, chartPadLeft, chartPadTop, plotWidth, plotHeight, maxMm, yTicks, monthX, years };
 }

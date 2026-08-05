@@ -223,22 +223,24 @@ Netlify build (the offline photo curation and captioning scripts).
   `scripts/lib/google-drive.mjs`'s `appendSheetRow()` (added alongside this Function; widened the
   file's Sheets scope from `spreadsheets.readonly` to full `spreadsheets` since this is the first
   write path — actual access is still gated per-spreadsheet by sharing, not by the scope alone).
-- **`netlify/functions/rainfall.mts`** — backs the rainfall chart, the two-year monthly table, and
-  the "this monsoon so far" stat on `/ecosystem/weather`. That data used to be a hand-copied
-  snapshot baked into `WeatherView.astro`'s frontmatter, updated by hand whenever someone
-  remembered to; this Function reads the community's shared "Tvc rain data" Google Sheet live on
-  every page view instead (`RAINFALL_SHEET_ID`, view-access only — this path never writes), so a
-  new row logged in the Sheet shows up on the site with no code change or rebuild. Reads two tabs:
-  "Rain data monthly" (one row per month, one column per agricultural year — the bar chart and
-  table) and "Daily rain data" (day-of-month columns per month, only kept for the current and
-  prior agricultural year) — the daily tab is what makes a fair "same stretch last year"
-  comparison possible, summing each year from April 1 through today's exact date rather than
-  comparing a partial year against another year's full total. Both years' merged header cells
-  (the year label only lives in Sheets' underlying data on the top-left cell of the merge) are
-  detected by scanning for the day-1 header row rather than assumed at fixed row numbers, so the
-  Sheet owner can keep prepending new agricultural-year blocks without breaking parsing. Reuses
-  `scripts/lib/google-drive.mjs`'s `getSheetValues()` (a small generalization of the existing
-  single-column `getAllowedEmails()` reader into a full-grid one, used by both now).
+- **`netlify/functions/rainfall.mts`** — backs the multi-year rainfall line chart, its monthly
+  table, and the "this monsoon so far" stat on `/ecosystem/weather`. That data used to be a
+  hand-copied snapshot baked into `WeatherView.astro`'s frontmatter, updated by hand whenever
+  someone remembered to; this Function reads the community's shared "Tvc rain data" Google Sheet
+  live on every page view instead (`RAINFALL_SHEET_ID`, view-access only — this path never
+  writes), so a new row logged in the Sheet shows up on the site with no code change or rebuild.
+  Reads two tabs, both calendar-year-native (not agricultural-year, as they were before an
+  August 2026 restructure of the Sheet — see `buildCalendarYears()`'s comments for the exact
+  shape): "Rain data monthly" (one row per month, one column per plain calendar year, e.g.
+  "2025") drives the chart's one-line-per-year view and its table, reshaped to null out months
+  that haven't happened yet rather than guessing from blank cells (the Sheet pre-fills future
+  cells with a literal "0" instead of leaving them blank, so blankness alone can't signal "not
+  logged yet"). "Daily rain data" (a flat table, one row per calendar year+month, day-of-month
+  columns) is what makes a fair "same stretch last year" comparison possible, summing each year
+  from April 1 through today's exact date rather than comparing a partial year against another
+  year's full total. Reuses `scripts/lib/google-drive.mjs`'s `getSheetValues()` (a small
+  generalization of the existing single-column `getAllowedEmails()` reader into a full-grid one,
+  used by both now).
 - **`scripts/lib/google-id-token.mjs`** — verifies a Google Identity Services ID token: fetches
   and caches Google's JWKS, hardcodes the expected `RS256` algorithm (defense against
   algorithm-confusion attacks), verifies the RSA signature via Node's built-in `crypto`, and
@@ -489,9 +491,17 @@ never touches Netlify either.
   `localStorage` for 15 minutes. Hides itself if the fetch fails rather than showing broken UI.
 - **Rainfall chart/table/monsoon stat** (`/ecosystem/weather`) — fetches `/api/rainfall`
   client-side on page load (`src/utils/rainfall.ts`, cached in `localStorage` for an hour, same
-  shape as `weather.ts`'s cache), then builds the SVG bar chart, the two-year monthly table, and
-  the "this monsoon so far" stat entirely in JS from the response. Falls back to a short
-  "data isn't available" message rather than a broken chart if the fetch fails.
+  shape as `weather.ts`'s cache), then builds a smooth multi-year SVG line chart (one line per
+  calendar year with real data, Jan-Dec x-axis, a validated colorblind-safe categorical palette
+  assigned by chronological order so a year keeps its color as new ones arrive), a legend that
+  doubles as a year filter (checkboxes toggle a `year-hidden` class on that year's pre-built
+  chart/table elements rather than re-rendering, so colors and the y-axis scale stay fixed), a
+  hover/keyboard-focus crosshair + tooltip, the full monthly table, and the "this monsoon so far"
+  stat — entirely in JS from the response. A short context sentence below the stat tiles (only
+  shown for years with a verified external source in a small hardcoded `ENSO_CONTEXT` map, e.g.
+  citing reporting on the 2026 El Niño monsoon outlook) recomputes from the same live numbers,
+  so it updates whenever new rows are logged in the Sheet. Falls back to a short "data isn't
+  available" message rather than a broken chart if the fetch fails.
 
 ### 5. Internal tools
 
@@ -548,7 +558,7 @@ never touches Netlify either.
 | Event interest widget + counter (Netlify Function, Blobs, Forms) | ✅ Live — "Want this to happen again?" on past event pages (`/events/<slug>`), public count via `/api/event-interest` + Netlify Blobs, optional-email entries via Netlify Forms; verified `/api/event-interest` responds live in production |
 | Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy` |
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
-| Live rainfall chart/table/monsoon stat (`/ecosystem/weather`, `/api/rainfall`) | 🟢 Deployed (pushed to `main`) — reads the community's rainfall-log Sheet live, `RAINFALL_SHEET_ID` set; not yet independently re-verified against the live production URL |
+| Live rainfall chart/table/monsoon stat (`/ecosystem/weather`, `/api/rainfall`) | 🟢 Deployed (pushed to `main`) — reads the community's rainfall-log Sheet live, `RAINFALL_SHEET_ID` set on Netlify (all deploy contexts) and confirmed returning real data via `netlify dev`; multi-year line chart with year-filter checkboxes; not yet independently re-verified against the live production URL |
 | Site search (nav icon / `/` key) | 🟢 Deployed (pushed to `main`), verified via `astro build` + `astro preview` locally (42 pages indexed, keyboard nav, navigation on Enter) — not yet independently re-verified against the live production URL |
 | Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | 🟢 Fully configured (Drive folders, service account, Google Sign-In OAuth client, curator allow-list Sheet, all Netlify env vars) and verified end-to-end via `netlify dev`, including real sign-in and the 403 not-authorized path — not yet pushed to `main` |
 
