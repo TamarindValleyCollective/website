@@ -151,6 +151,19 @@ export async function downloadFile(fileId) {
   return res;
 }
 
+// Generic Sheets read, returning the raw 2D array of cell values (rows of
+// columns) for a range — used directly by rainfall.mts (which needs the
+// full grid, not just a single column) and by getAllowedEmails() below.
+export async function getSheetValues(spreadsheetId, range) {
+  const token = await getAccessToken();
+  const res = await fetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(range)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Sheets values.get failed: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  return data.values ?? [];
+}
+
 // Curator allow-list for the photo-pool dashboard: a one-column Sheet
 // (email per row, row 1 a header) instead of a static env var, so adding a
 // curator is just adding a row — no redeploy. A real Google Group isn't an
@@ -159,13 +172,7 @@ export async function downloadFile(fileId) {
 // Workspace domain you administer. Share the Sheet with this same service
 // account (view access is enough) rather than creating a second one.
 export async function getAllowedEmails(spreadsheetId, range = 'Sheet1!A:A') {
-  const token = await getAccessToken();
-  const res = await fetch(`${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(range)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`Sheets values.get failed: ${res.status} ${await res.text()}`);
-  const data = await res.json();
-  const rows = (data.values ?? []).flat();
+  const rows = (await getSheetValues(spreadsheetId, range)).flat();
   return rows
     .slice(1) // header row
     .map((email) => String(email).trim().toLowerCase())

@@ -11,10 +11,12 @@
 under the Netlify account owned by `contact@tvc.farm` (ownership moved there from a personal
 account on 2026-07-18). The site is almost entirely static (prerendered HTML/CSS/JS, no server
 at request time), with a small set of deliberate exceptions that need a serverless backend:
-four Netlify Functions (the site-wide chat assistant, the event-interest counter backing past
+five Netlify Functions (the site-wide chat assistant, the event-interest counter backing past
 events' "Want this to happen again?" widget, `/api/photo-pool` backing the internal, unlinked
-photo review dashboard at `/internal/photo-pool`, and `/api/enquiry` logging the membership
-enquiry form (`/join`) and the general enquiry form (`/contact`) to Google Sheets), Netlify Blobs
+photo review dashboard at `/internal/photo-pool`, `/api/enquiry` logging the membership
+enquiry form (`/join`) and the general enquiry form (`/contact`) to Google Sheets, and
+`/api/rainfall` reading the community's rainfall-log Google Sheet live for the rainfall chart/
+table/monsoon stat on `/ecosystem/weather`), Netlify Blobs
 (public storage for the event-interest counter — the site's only *readable* server-side state
 that isn't gated behind a secret; everything else below is either write-only or, for photo-pool,
 gated), and Netlify Forms (the membership enquiry form on `/join`, the general enquiry form on
@@ -55,6 +57,7 @@ flowchart TD
         FUNC_SRC2["netlify/functions/event-interest.mts<br/>Serverless function, reads/writes Netlify Blobs"]
         FUNC_SRC3["netlify/functions/photo-pool.mts<br/>Serverless function, Google Sign-In gated —<br/>verifies ID token, checks a Sheet-backed<br/>allow-list, lists Inbox (+ uploader/EXIF/GPS/<br/>description), moves photos, saves descriptions"]
         FUNC_SRC4["netlify/functions/enquiry.mts<br/>Serverless function — appends a row to a<br/>Google Sheet per membership/general enquiry,<br/>fired via sendBeacon alongside each form's<br/>own native Netlify Forms submission"]
+        FUNC_SRC5["netlify/functions/rainfall.mts<br/>Serverless function — reads the community's<br/>rainfall-log Sheet (monthly + daily tabs) on<br/>every page view, computes the monsoon<br/>to-date stat, returns JSON"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
         SCRIPT_SRC2["scripts/build-search-index.mjs<br/>Reads every page's actual rendered<br/>title/description → dist/search-index.json<br/>for the client-side site search"]
     end
@@ -72,6 +75,7 @@ flowchart TD
         APIFN2["Netlify Function: /api/event-interest<br/>Deployed and live —<br/>reads/writes the per-event count below"]
         APIFN3["Netlify Function: /api/photo-pool<br/>(+/thumb, +/description)<br/>Configured — Drive service account + folder IDs<br/>set as Netlify env vars for all deploy contexts"]
         APIFN4["Netlify Function: /api/enquiry<br/>Live and verified — Sheet ids set,<br/>Sheets shared Editor-access with the<br/>service account, real appends confirmed"]
+        APIFN5["Netlify Function: /api/rainfall<br/>Reads the rainfall-log Sheet (view-access<br/>only, read-only path) — RAINFALL_SHEET_ID"]
         BLOBS["Netlify Blobs: 'event-interest' store<br/>One JSON record per past event id —<br/>{count, emails[]}. Reset via<br/>netlify blobs:delete event-interest &lt;id&gt;"]
         FORMS["Netlify Forms<br/>Captures /contact membership + general<br/>enquiries, /visit/host-an-event inquiries,<br/>/visit camping·day-visit·trekking inquiries,<br/>and event-interest submissions with an email"]
     end
@@ -92,6 +96,7 @@ flowchart TD
         TIMELINE["Our Journey / other pages<br/>Era-based year timeline, event listings —<br/>pure static, no calls out"]
         GA["Google Analytics (GA4)<br/>Loaded from BaseLayout, consent-gated by<br/>CookieConsent, skipped on localhost"]
         WEATHER["WeatherWidget (/ecosystem/geography)<br/>Fetches current conditions from<br/>Open-Meteo, no API key"]
+        RAINFALL["Rainfall chart/table/monsoon stat<br/>(/ecosystem/weather)<br/>Fetches /api/rainfall client-side,<br/>1hr-cached in localStorage"]
     end
 
     subgraph INTERNAL5["5 · Internal tool — staff-only, not part of the public site flow"]
@@ -107,7 +112,7 @@ flowchart TD
         GTAG["Google Analytics<br/>googletagmanager.com/gtag/js"]
         METEO["Open-Meteo API<br/>Free, no key required"]
         GDRIVE["Google Drive API<br/>Shared Inbox/Approved/Rejected/Published<br/>folders — service-account auth,<br/>called server-side only (Function + local script)"]
-        GSHEET["Google Sheets API<br/>Curator allow-list (read, photo-pool.mts) +<br/>membership/general enquiry logs (write,<br/>enquiry.mts) — same service account,<br/>called server-side only"]
+        GSHEET["Google Sheets API<br/>Curator allow-list (read, photo-pool.mts) +<br/>membership/general enquiry logs (write,<br/>enquiry.mts) + rainfall log (read,<br/>rainfall.mts) — same service account,<br/>called server-side only"]
         GIDTOKEN["Google Identity Services / OAuth<br/>Curator sign-in (browser) +<br/>ID token verification against<br/>Google's public JWKS (photo-pool.mts)"]
     end
 
@@ -120,6 +125,8 @@ flowchart TD
     PHOTOS -.-> R2
     GA -.-> GTAG
     WEATHER -.-> METEO
+    RAINFALL --> APIFN5
+    APIFN5 -.->|"read monthly + daily tabs"| GSHEET
     SCRIPT_CURATE -.->|"S3-compatible upload"| R2
     SCRIPT_CURATE -->|"writes"| CONTENT
     SCRIPT_CAPTION -.->|"vision request per photo"| ANTHROPIC
@@ -149,8 +156,8 @@ flowchart TD
     classDef cfStyle fill:#fef3e0,stroke:#e8891c,color:#7a4a00
     classDef localStyle fill:#eef0f5,stroke:#6b7280,color:#374151
 
-    class PAGES,INTERNALPAGE,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,CDN,POOLDASH staticStyle
-    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,BLOBS,FORMS,ANTHROPIC netlifyStyle
+    class PAGES,INTERNALPAGE,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH staticStyle
+    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,BLOBS,FORMS,ANTHROPIC netlifyStyle
     class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL localStyle
@@ -216,6 +223,22 @@ Netlify build (the offline photo curation and captioning scripts).
   `scripts/lib/google-drive.mjs`'s `appendSheetRow()` (added alongside this Function; widened the
   file's Sheets scope from `spreadsheets.readonly` to full `spreadsheets` since this is the first
   write path — actual access is still gated per-spreadsheet by sharing, not by the scope alone).
+- **`netlify/functions/rainfall.mts`** — backs the rainfall chart, the two-year monthly table, and
+  the "this monsoon so far" stat on `/ecosystem/weather`. That data used to be a hand-copied
+  snapshot baked into `WeatherView.astro`'s frontmatter, updated by hand whenever someone
+  remembered to; this Function reads the community's shared "Tvc rain data" Google Sheet live on
+  every page view instead (`RAINFALL_SHEET_ID`, view-access only — this path never writes), so a
+  new row logged in the Sheet shows up on the site with no code change or rebuild. Reads two tabs:
+  "Rain data monthly" (one row per month, one column per agricultural year — the bar chart and
+  table) and "Daily rain data" (day-of-month columns per month, only kept for the current and
+  prior agricultural year) — the daily tab is what makes a fair "same stretch last year"
+  comparison possible, summing each year from April 1 through today's exact date rather than
+  comparing a partial year against another year's full total. Both years' merged header cells
+  (the year label only lives in Sheets' underlying data on the top-left cell of the merge) are
+  detected by scanning for the day-1 header row rather than assumed at fixed row numbers, so the
+  Sheet owner can keep prepending new agricultural-year blocks without breaking parsing. Reuses
+  `scripts/lib/google-drive.mjs`'s `getSheetValues()` (a small generalization of the existing
+  single-column `getAllowedEmails()` reader into a full-grid one, used by both now).
 - **`scripts/lib/google-id-token.mjs`** — verifies a Google Identity Services ID token: fetches
   and caches Google's JWKS, hardcodes the expected `RS256` algorithm (defense against
   algorithm-confusion attacks), verifies the RSA signature via Node's built-in `crypto`, and
@@ -330,7 +353,7 @@ account on 2026-07-18).
   alias on this same Netlify project (2026-07-26) so its DNS zone (also managed on Netlify DNS)
   and SSL certificate resolve. `netlify.toml` force-redirects both hostnames to `tvc.farm` with
   a 301 rather than letting the alias silently mirror the site under a second hostname.
-- **Netlify Functions** — four. `chat.mts` is deployed and live at `/api/chat`; the
+- **Netlify Functions** — five. `chat.mts` is deployed and live at `/api/chat`; the
   `ANTHROPIC_API_KEY` environment variable was set in the Netlify dashboard on 2026-07-18,
   verified directly against production (`POST https://tvc.farm/api/chat`) returning real,
   grounded answers sourced from the site's own content. `event-interest.mts` is deployed and
@@ -357,6 +380,9 @@ account on 2026-07-18).
   each pointing at a Google Sheet shared Editor-access with the same `GDRIVE_SERVICE_ACCOUNT_EMAIL`
   service account photo-pool uses (view access isn't enough here, since this path writes) — a
   direct `POST` against the live production URL for each form type appended a real row.
+  `rainfall.mts` serves `/api/rainfall` — reads the community's rainfall-log Sheet
+  (`RAINFALL_SHEET_ID`, shared Viewer-access only, since this path never writes) live on every
+  page view for the `/ecosystem/weather` chart/table/monsoon stat.
 - **Netlify Blobs** — live. One store (`event-interest`), one JSON record
   per past event id (`{count, emails[]}`), written only by `event-interest.mts` — the site's
   only piece of server-side state that's publicly *readable*, unlike the write-only Forms
@@ -461,6 +487,11 @@ never touches Netlify either.
 - **WeatherWidget** (`/ecosystem/geography`) — fetches current temperature/humidity/conditions
   for the farm's coordinates from Open-Meteo (free, no API key) on page load, cached in
   `localStorage` for 15 minutes. Hides itself if the fetch fails rather than showing broken UI.
+- **Rainfall chart/table/monsoon stat** (`/ecosystem/weather`) — fetches `/api/rainfall`
+  client-side on page load (`src/utils/rainfall.ts`, cached in `localStorage` for an hour, same
+  shape as `weather.ts`'s cache), then builds the SVG bar chart, the two-year monthly table, and
+  the "this monsoon so far" stat entirely in JS from the response. Falls back to a short
+  "data isn't available" message rather than a broken chart if the fetch fails.
 
 ### 5. Internal tools
 
@@ -517,6 +548,7 @@ never touches Netlify either.
 | Event interest widget + counter (Netlify Function, Blobs, Forms) | ✅ Live — "Want this to happen again?" on past event pages (`/events/<slug>`), public count via `/api/event-interest` + Netlify Blobs, optional-email entries via Netlify Forms; verified `/api/event-interest` responds live in production |
 | Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy` |
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
+| Live rainfall chart/table/monsoon stat (`/ecosystem/weather`, `/api/rainfall`) | 🟢 Deployed (pushed to `main`) — reads the community's rainfall-log Sheet live, `RAINFALL_SHEET_ID` set; not yet independently re-verified against the live production URL |
 | Site search (nav icon / `/` key) | 🟢 Deployed (pushed to `main`), verified via `astro build` + `astro preview` locally (42 pages indexed, keyboard nav, navigation on Enter) — not yet independently re-verified against the live production URL |
 | Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | 🟢 Fully configured (Drive folders, service account, Google Sign-In OAuth client, curator allow-list Sheet, all Netlify env vars) and verified end-to-end via `netlify dev`, including real sign-in and the 403 not-authorized path — not yet pushed to `main` |
 
