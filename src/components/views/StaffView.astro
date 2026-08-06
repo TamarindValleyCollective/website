@@ -339,7 +339,7 @@ const staff = staffContent[lang];
           <div class="card-body">
             {group.people.map((p) => (
               <div class="person">
-                <h4>{p.name}</h4>
+                <h2>{p.name}</h2>
                 <p class="staff-role">{p.role}</p>
                 <p>{p.bio}</p>
               </div>
@@ -388,6 +388,10 @@ const staff = staffContent[lang];
   .person + .person {
     padding-top: 14px;
     border-top: 1px solid var(--tvc-line);
+  }
+
+  .person h2 {
+    font-size: 1rem;
   }
 
   .staff-role {

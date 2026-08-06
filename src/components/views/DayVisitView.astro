@@ -185,7 +185,7 @@ const packageOptions = c.itineraries.map((it) => it.name);
     <div class="itinerary-grid">
       {c.itineraries.map((it) => (
         <div class="card">
-          <h3>{it.name}</h3>
+          <h2>{it.name}</h2>
           <p class="desc">{it.desc}</p>
           <table>
             <tbody>
@@ -218,6 +218,10 @@ const packageOptions = c.itineraries.map((it) => it.name);
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 20px;
+  }
+
+  .itinerary-grid h2 {
+    font-size: clamp(1.3rem, 2.2vw, 1.6rem);
   }
 
   .desc {

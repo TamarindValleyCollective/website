@@ -139,7 +139,7 @@ const c = content[lang];
           data-msg-count-plural-template={c.msgCountPluralTemplate}
           data-msg-registered={c.msgRegistered}
         >
-          <h3>{c.wantAgainHeading}</h3>
+          <h2>{c.wantAgainHeading}</h2>
           <p>{c.wantAgainText}</p>
           <form class="interest-form">
             <input type="email" name="email" placeholder={c.emailPlaceholder} aria-label={c.emailAriaLabel} />
@@ -372,8 +372,9 @@ const c = content[lang];
     margin-top: 40px;
   }
 
-  .interest-widget h3 {
+  .interest-widget h2 {
     margin-top: 0;
+    font-size: clamp(1.3rem, 2.2vw, 1.6rem);
   }
 
   .interest-widget--closed p {

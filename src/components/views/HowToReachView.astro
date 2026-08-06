@@ -100,12 +100,12 @@ const c = content[lang];
     </ul>
     <p><strong>{c.tipLabel}</strong> {c.tipText}</p>
 
-    <h3>{c.directionsHeading}</h3>
+    <h2>{c.directionsHeading}</h2>
     <ol>
       {c.directions.map((step) => <li>{step}</li>)}
     </ol>
 
-    <h3>{c.locationHeading}</h3>
+    <h2>{c.locationHeading}</h2>
     <p>{c.locationText}</p>
     <p set:html={c.historyText} />
     <div class="map-embed">

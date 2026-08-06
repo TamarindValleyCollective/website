@@ -112,7 +112,7 @@ const c = content[lang];
         <div class="trail card">
           <img src={tr.image} alt={tr.name} loading="lazy" />
           <div>
-            <h3>{tr.name}</h3>
+            <h2>{tr.name}</h2>
             <p class="distance">{tr.distance}</p>
             <p>{tr.desc}</p>
           </div>
@@ -144,6 +144,10 @@ const c = content[lang];
     grid-template-columns: 220px 1fr;
     gap: 20px;
     align-items: start;
+  }
+
+  .trail h2 {
+    font-size: clamp(1.3rem, 2.2vw, 1.6rem);
   }
 
   .trail img {

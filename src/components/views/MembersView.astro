@@ -128,7 +128,7 @@ function initials(name: string) {
           ) : (
             <div class="member-photo member-photo--placeholder" aria-hidden="true">{initials(m.name)}</div>
           )}
-          <h4>{m.name}</h4>
+          <h2>{m.name}</h2>
           {m.bio && <p>{m.bio}</p>}
         </div>
       ))}
@@ -152,7 +152,7 @@ function initials(name: string) {
     text-align: center;
   }
 
-  .member-card h4 {
+  .member-card h2 {
     font-size: 0.88rem;
     margin: 0;
   }
