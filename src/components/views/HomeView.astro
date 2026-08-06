@@ -14,6 +14,21 @@ interface Props {
 const { lang } = Astro.props;
 const t = useTranslations(lang);
 
+// Simple hand-rolled line icons (no icon library dependency) - one per
+// PRINCIPLES entry, keyed the same way. Kept here rather than on the shared
+// Principle type since this condensed homepage card is the only place that
+// renders an icon at all (the fuller /about treatment is plain text).
+const PRINCIPLE_ICONS: Record<string, string> = {
+  environmentalHealth:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20c8 0 14-6 14-14 0-1 0-2-.2-3C10 4 4 10 4 18c0 .7.1 1.3.2 2z"/><path d="M6 18C10 12 14 8 17.5 4.5"/></svg>',
+  economicProfitability:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l5-5 4 4 7-8"/><path d="M15 8h5v5"/></svg>',
+  socialEquity:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3"/><circle cx="16.5" cy="10" r="2.5"/><path d="M4 19c0-3 2.5-5 5-5s5 2 5 5"/><path d="M14.5 14.5c2 .3 3.5 2 3.5 4.5"/></svg>',
+  resourceEfficiency:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4a8 8 0 0 1 7 4"/><path d="M20 4v4h-4"/><path d="M12 20a8 8 0 0 1-7-4"/><path d="M4 20v-4h4"/></svg>',
+};
+
 // Card/rung data is locale-agnostic (href, img, step, tone) - only the
 // prose per card/rung lives in the content object below, keyed by the same
 // index as its English counterpart.
@@ -65,7 +80,7 @@ const content = {
     heroEyebrow: 'Not just a farm — a regenerative ecosystem.',
     heroTitle: 'Regenerating a Corner of the Melagiris',
     heroIntro: 'Once stripped bare by exploitative farming, now a thriving food forest and wildlife habitat — permaculture and reforestation turned it around.',
-    forkEyebrow: 'How would you like to spend time here?',
+    forkEyebrow: 'Choose your path',
     forkTitle: 'Explore, or engage',
     forkIntro: 'Learn about the land and the people, or come experience it yourself — from a first visit to joining the collective.',
     doorExploreTag: 'Learn',
@@ -95,8 +110,8 @@ const content = {
     engageRungs: [
       { tag: 'Visit us — a day trip', title: 'Come for a day', desc: 'A farm tour, bird watching, star gazing, board games by the fire — a Picnic, a Hike, or a Do Nothing day, hour by hour.', cta: 'Plan a day visit →' },
       { tag: 'Stay with us — overnight', title: 'Spend the night', desc: 'A two-day stay under some of the darkest skies around — sunset hike, campfire, and a guided farm tour.', cta: 'Book an overnight stay →' },
-      { tag: 'Work with us — events & volunteering', title: 'Bring your team, or your hands', desc: 'Team outings for up to 20, workshops on permaculture and bamboo craft, or volunteer — chopping, planting, harvesting.', cta: 'See events & volunteering →' },
-      { tag: 'Bring your own — retreats & camps', title: 'Host your event here', desc: "Nature retreats, biodiversity walks, or a week-long deep-focus tech camp like The Lambda Retreat — bring your own event, camping included.", cta: 'See how to host an event →' },
+      { tag: 'Work with us — volunteering', title: 'Bring your team, or your hands', desc: 'Team outings for up to 20, workshops on permaculture and bamboo craft, or volunteer — chopping, planting, harvesting.', cta: 'See events & volunteering →' },
+      { tag: 'Bring your own — retreats', title: 'Host your event here', desc: "Nature retreats, biodiversity walks, or a week-long deep-focus tech camp like The Lambda Retreat — bring your own event, camping included.", cta: 'See how to host an event →' },
       { tag: 'Joining the collective', title: 'A note on membership', desc: "We're unlikely to expand — 53 families is likely as large as we'll get. Occasionally a member moves on, and their place passes privately to someone new. Here's how that actually works.", cta: 'Read how it works →' },
     ],
     quote1Text: '"Modern research divides nature into tiny pieces and conducts tests that conform neither with natural law nor with practical experience. The results are arranged for the convenience of research, not according to the needs of the farmer."',
@@ -255,7 +270,7 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
       <div class="principle-grid">
         {PRINCIPLES.map((p) => (
           <div class="principle-card">
-            <span class="principle-card__icon" aria-hidden="true"></span>
+            <span class="principle-card__icon" aria-hidden="true" set:html={PRINCIPLE_ICONS[p.key]} />
             <h4>{t(`principles.${p.key}.name`)}</h4>
             <p>{t(`principles.${p.key}.desc`)}</p>
           </div>
@@ -551,12 +566,19 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
   }
 
   .principle-card__icon {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 36px;
     height: 36px;
     border-radius: 50%;
     background: var(--tvc-orange);
     margin-bottom: 12px;
+  }
+
+  .principle-card__icon svg {
+    width: 18px;
+    height: 18px;
   }
 
   .principle-card h4 {
