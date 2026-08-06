@@ -12,6 +12,6 @@ An introduction for children to the abundance of nature — a night outdoors in 
 
 Pricing: INR 2,500 (adult), INR 1,500 (child).
 
-#### Facilitators
+## Facilitators
 
 The event was conducted by Ranjini ([@leftofwrite](https://www.instagram.com/leftofwrite/)) — an author, teacher, and food connoisseur — and Madhavan, our resident naturalist, who knows the trees, birds, butterflies, and reptiles at TVC like the back of his hand.

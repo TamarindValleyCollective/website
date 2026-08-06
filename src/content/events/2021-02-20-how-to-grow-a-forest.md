@@ -31,7 +31,7 @@ Having worked for wildlife conservation, he has walked pristine and virgin fores
 
 The cost is an all inclusive cost. Please carry your water bottle, a cap, sun-glasses and sun-screen. The hands-on session can be quite laborious and if you are not able to do it yourself, you can choose to watch and learn 🙂
 
-### What to expect?
+## What to expect?
 
 TVC is a 98-acre permaculture farm run by 53 families experimenting with a living style that reduces consumption and incorporates naturally supported cyclical systems.
 

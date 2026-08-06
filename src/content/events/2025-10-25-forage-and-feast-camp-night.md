@@ -11,7 +11,7 @@ tags: ["workshop", "food", "foraging"]
 
 Tamarind Valley Collective (TVC) is an experiment to see if we can live off the land — one of our ethos has been not to grow what you want to eat, but eat what grows naturally. Foraging is an integral part of that process. This camp night was organized to understand what the land has to offer.
 
-#### Schedule
+## Schedule
 
 | Time | Activity |
 |---|---|

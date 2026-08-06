@@ -39,7 +39,7 @@ Join **[@foragingtrailsandtales](https://www.instagram.com/foragingtrailsandtale
 
 <div class="cta card">
 
-### Register
+## Register
 
 **₹2,250 per person**
 
