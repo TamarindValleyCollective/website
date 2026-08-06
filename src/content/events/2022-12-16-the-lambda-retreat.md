@@ -62,7 +62,7 @@ Prior experience with any functional programming language is be useful to have, 
 
 ## Schedule
 
-#### Warm Up
+### Warm Up
 
 _Nov 28 - Dec 09, 2022_
 
