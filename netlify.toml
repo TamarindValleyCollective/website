@@ -146,6 +146,152 @@
   to = "/resource-centre"
   status = 301
 
+# More pre-Astro dead links, found via Search Console's Pages report
+# (Not found (404), 2026-08-03 export). /how-to-reach.html and the
+# 3Bs-and-1H .html URL above already redirect - Search Console just hadn't
+# recrawled them yet at export time.
+[[redirects]]
+  from = "/how-to-reach"
+  to = "/visit/how-to-reach"
+  status = 301
+
+[[redirects]]
+  from = "/past-events/"
+  to = "/events"
+  status = 301
+
+[[redirects]]
+  from = "/media/files/Lantana.pdf"
+  to = "/files/lantana-furniture-catalogue.pdf"
+  status = 301
+
+[[redirects]]
+  from = "/2021-sep-25-traditional-craft-of-making-bamboo-basket.html"
+  to = "/events/2021-09-25-bamboo-basket-making"
+  status = 301
+
+# ContactView.astro carries the location content (address + map) this old
+# page used to be - VisitView's Volunteering card also points at /contact.
+[[redirects]]
+  from = "/location.html"
+  to = "/contact"
+  status = 301
+
+[[redirects]]
+  from = "/voulnteer.html"
+  to = "/contact"
+  status = 301
+
+# The org's full name, used as the old site's homepage slug.
+[[redirects]]
+  from = "/tamarind-valley-collective-tvc.html"
+  to = "/"
+  status = 301
+
+[[redirects]]
+  from = "/tamarind-valley-collective-tvc"
+  to = "/"
+  status = 301
+
+[[redirects]]
+  from = "/ananas.html"
+  to = "/people/partners/ananas"
+  status = 301
+
+[[redirects]]
+  from = "/ananas"
+  to = "/people/partners/ananas"
+  status = 301
+
+[[redirects]]
+  from = "/want-to-join"
+  to = "/join"
+  status = 301
+
+# The recurring "3Bs and 1H" biodiversity walk series has run under several
+# dates (see /events/*-3bs-and-1h-biodiversity-walk) - no single instance is
+# the canonical target, so this points at the events listing instead.
+[[redirects]]
+  from = "/3bs-and-1h.html"
+  to = "/events"
+  status = 301
+
+[[redirects]]
+  from = "/birds-in-tvc.html"
+  to = "/ecosystem/biodiversity"
+  status = 301
+
+[[redirects]]
+  from = "/history-and-timeline.html"
+  to = "/our-journey"
+  status = 301
+
+# community-outreach/stem-experiential-learning-classes.md exists but is
+# still `draft: true` (no body copy migrated from the old site), so it has
+# no live page of its own yet - points at the outreach index instead.
+[[redirects]]
+  from = "/stem-experiential-learning-classes.html"
+  to = "/people/outreach"
+  status = 301
+
+# Linger was the old external booking partner, replaced by TVC's own
+# booking pages (see ARCHITECTURE.md).
+[[redirects]]
+  from = "/linger.html"
+  to = "/visit"
+  status = 301
+
+[[redirects]]
+  from = "/member-profiles.html"
+  to = "/people/members"
+  status = 301
+
+# Bare, extension-less siblings of the .html URLs above and two new ones -
+# found via Search Console's Pages report under Server error (5xx). This is
+# a fully static site (no SSR adapter, no middleware, no server-rendered
+# route), so nothing here could throw an application-level 500 for an
+# arbitrary path - most likely stale crawl records from a past outage
+# window, but real 301s fix it regardless of the original cause.
+[[redirects]]
+  from = "/day-visit.html"
+  to = "/visit/day-visit"
+  status = 301
+
+[[redirects]]
+  from = "/location"
+  to = "/contact"
+  status = 301
+
+[[redirects]]
+  from = "/resource-center"
+  to = "/resource-centre"
+  status = 301
+
+# Old site had one combined soil/climate page - now split into
+# /ecosystem/landscape (geography/terrain) and /ecosystem/weather; points
+# at the shared parent instead of picking one arbitrarily.
+[[redirects]]
+  from = "/soil-and-weather-conditions"
+  to = "/ecosystem"
+  status = 301
+
+[[redirects]]
+  from = "/member-profiles"
+  to = "/people/members"
+  status = 301
+
+[[redirects]]
+  from = "/birds-in-tvc"
+  to = "/ecosystem/biodiversity"
+  status = 301
+
+# Biome Solutions is a partner without its own page (the Ananas exception
+# noted above) - listed on the partners page instead.
+[[redirects]]
+  from = "/biome-solutions"
+  to = "/people/partners"
+  status = 301
+
 # syntropic.in (an old member-directory domain) is configured as a domain
 # alias on this same Netlify project so DNS/SSL resolve, but it should
 # redirect to tvc.farm rather than silently mirror the site under a second
