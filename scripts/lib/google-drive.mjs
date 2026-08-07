@@ -17,6 +17,7 @@ import { createSign } from 'node:crypto';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
+const SEARCH_CONSOLE_API = 'https://searchconsole.googleapis.com/v1';
 // Sheets access needs its own scope even for a spreadsheet this same service
 // account can already see via Drive — used by getAllowedEmails() and
 // appendSheetRow() below, which reuse this file's existing JWT-signing/
@@ -24,7 +25,12 @@ const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
 // .readonly) spreadsheets scope, since appendSheetRow() needs write access —
 // actual access is still gated per-spreadsheet by whichever Sheets this
 // service account has been explicitly shared on, not by the scope alone.
-const SCOPE = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets';
+// webmasters.readonly is for inspectUrl() below — this service account was
+// added as a Restricted user on the tvc.farm Search Console property
+// (2026-08-07) specifically so it could check indexing/crawl status without
+// a human re-checking the Search Console UI by hand.
+const SCOPE =
+  'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/webmasters.readonly';
 
 let cachedToken = null; // { accessToken, expiresAt }
 
@@ -196,5 +202,22 @@ export async function appendSheetRow(spreadsheetId, range, values) {
     }
   );
   if (!res.ok) throw new Error(`Sheets values.append failed: ${res.status} ${await res.text()}`);
+  return res.json();
+}
+
+// Search Console's urlInspection.index.inspect — reports the last time
+// Google crawled a URL and what it found (indexed / 404 / redirect / etc.),
+// straight from Google's own index rather than a live fetch of the URL.
+// siteUrl must match the Search Console property exactly, e.g.
+// "https://tvc.farm/" (with trailing slash, for a domain-verified property
+// pass "sc-domain:tvc.farm" instead).
+export async function inspectUrl(siteUrl, inspectionUrl) {
+  const token = await getAccessToken();
+  const res = await fetch(`${SEARCH_CONSOLE_API}/urlInspection/index:inspect`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ inspectionUrl, siteUrl }),
+  });
+  if (!res.ok) throw new Error(`Search Console urlInspection.index.inspect failed: ${res.status} ${await res.text()}`);
   return res.json();
 }

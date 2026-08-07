@@ -48,6 +48,10 @@ flowchart TD
         SCRIPT_CAPTION["scripts/caption-photos.mjs<br/>Sends each thumbnail to Claude,<br/>backfills draft captions into photos/*.md"]
     end
 
+    subgraph SEOTOOLS["0b · Local SEO maintenance — local machine, not part of the build"]
+        SCRIPT_GSC["scripts/check-search-console.mjs<br/>Looks up Google's own crawl/index status<br/>(coverageState, last crawl time) for one<br/>or more URLs — e.g. to confirm a<br/>netlify.toml redirect fix has been recrawled"]
+    end
+
     subgraph SRC["1 · Source — github.com/TamarindValleyCollective/website (main)"]
         PAGES["src/pages/*.astro<br/>File-based routes: Home, About, Visit,<br/>Events, Ecosystem, Our Journey, Contact, etc."]
         INTERNALPAGE["src/pages/internal/photo-pool.astro<br/>Unlinked, noindex — photo review dashboard shell"]
@@ -114,6 +118,7 @@ flowchart TD
         GDRIVE["Google Drive API<br/>Shared Inbox/Approved/Rejected/Published<br/>folders — service-account auth,<br/>called server-side only (Function + local script)"]
         GSHEET["Google Sheets API<br/>Curator allow-list (read, photo-pool.mts) +<br/>membership/general enquiry logs (write,<br/>enquiry.mts) + rainfall log (read,<br/>rainfall.mts) — same service account,<br/>called server-side only"]
         GIDTOKEN["Google Identity Services / OAuth<br/>Curator sign-in (browser) +<br/>ID token verification against<br/>Google's public JWKS (photo-pool.mts)"]
+        GSC["Google Search Console API<br/>urlInspection.index.inspect — read-only,<br/>same service account (added as a<br/>Restricted user on the property),<br/>called from a local script only"]
     end
 
     SRC --> BUILD
@@ -132,6 +137,7 @@ flowchart TD
     SCRIPT_CAPTION -.->|"vision request per photo"| ANTHROPIC
     SCRIPT_CAPTION -->|"backfills caption:"| CONTENT
     SCRIPT_PULL -.->|"download + move files"| GDRIVE
+    SCRIPT_GSC -.->|"inspect URL indexing/crawl status"| GSC
     CHATW --> APIFN
     HOSTFORM --> FORMS
     BOOKING --> FORMS
@@ -158,9 +164,9 @@ flowchart TD
 
     class PAGES,INTERNALPAGE,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH staticStyle
     class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,BLOBS,FORMS,ANTHROPIC netlifyStyle
-    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN externalStyle
+    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC externalStyle
     class CF cfStyle
-    class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL localStyle
+    class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL,SCRIPT_GSC localStyle
 ```
 
 **Legend:** 🟢 static / no server required · 🟠 depends on Netlify specifically (Functions or
@@ -280,7 +286,14 @@ Netlify build (the offline photo curation and captioning scripts).
 - **`scripts/lib/google-drive.mjs`** — shared Drive REST client (auth, list, get, move, download)
   plus Sheets read (`getAllowedEmails`) and write (`appendSheetRow`), used by `photo-pool.mts`,
   `pull-approved-photos.mjs`, and `enquiry.mts`. Plain ESM, not TypeScript, so both a bundled
-  Netlify Function and a plain `node`-run script can import it directly.
+  Netlify Function and a plain `node`-run script can import it directly. Also exports
+  `inspectUrl()` (Search Console's `urlInspection.index.inspect`, read-only scope), used only by
+  `check-search-console.mjs` below — same service account, no separate credentials.
+- **`scripts/check-search-console.mjs`** — run locally. Looks up Google's own crawl/index status
+  (`coverageState` — e.g. "Not found (404)", "Submitted and indexed" — and `lastCrawlTime`) for
+  one or more URLs, to confirm whether a `netlify.toml` redirect fix has actually been recrawled
+  yet rather than eyeballing the Search Console UI by hand. The service account was added as a
+  Restricted user on the `tvc.farm` Search Console property (2026-08-07) for this.
 
 ### 1a. Localization (Kannada / Tamil)
 
