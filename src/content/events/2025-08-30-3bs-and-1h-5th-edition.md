@@ -14,7 +14,7 @@ Experience Linger's hospitality, guided tours, and a hike to the top of the hill
 
 The event started Saturday afternoon around 3pm, with everyone camping at the farm overnight and heading back Sunday around noon.
 
-#### Pricing
+## Pricing
 
 Full event (1 night, 1 day): INR 3,200. Children below 10: free. Limited to 20 participants.
 

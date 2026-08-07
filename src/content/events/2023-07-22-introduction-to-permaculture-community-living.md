@@ -10,7 +10,7 @@ tags: ["permaculture", "workshop", "camping"]
 
 A 1 night/2 day event introducing the idea of Tamarind Valley Collective — why we chose permaculture as a design principle, what went into creating the design, the progress so far, and how well it's worked.
 
-#### Itinerary
+## Itinerary
 
 **Day 1**
 

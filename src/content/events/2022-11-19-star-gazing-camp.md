@@ -8,7 +8,7 @@ tags: ["camping", "stargazing"]
 
 A weekend of stargazing at the farm — astronomy basics, telescope observation, a guided farm walk, birdwatching, and a trek on the morning of day two.
 
-#### Stay options
+## Stay options
 
 1. Bamboo huts — adult / kids 10 yrs onwards: INR 4,000; kid (4–10 yrs): INR 2,000; kids below 4: free
 2. Canvas army tents — same pricing as bamboo huts

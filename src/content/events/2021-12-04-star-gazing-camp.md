@@ -12,7 +12,7 @@ Our world is not limited to what we see with naked eyes. As professor Brian Cox 
 
 Come over and discover the wonders of a night under a starlit sky unpolluted by city lights through a high-end astronomy telescope, guided by an astronomer, accompanied by astronomy stories around the campfire and great food.
 
-#### Duration
+## Duration
 
 2 days, 1 night.
 

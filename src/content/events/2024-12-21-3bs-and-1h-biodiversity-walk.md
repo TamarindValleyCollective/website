@@ -8,7 +8,7 @@ coverImageAlt: "Event poster for the 4th edition of 3Bs&1H Dusk to Dawn Biodiver
 tags: ["biodiversity", "walk"]
 ---
 
-#### **Event Summary**
+## **Event Summary**
 
 Spend Saturday evening and Sunday at [Tamarind Valley Collective](/visit/how-to-reach). Explore the vast property. Enjoy guided tours with our naturalists to watch and identify birds, butterflies, insects, and plants.
 
