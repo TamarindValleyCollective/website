@@ -213,6 +213,26 @@ export async function appendSheetRow(spreadsheetId, range, values) {
   return res.json();
 }
 
+// Writes values into an exact range (e.g. a single row's tracking columns),
+// unlike appendSheetRow() which always adds a new row at the end - used to
+// mark a "TVC Members: Your Story" response row as processed (Processed-at/
+// Notes columns) after its content lands in MembersView.astro, without
+// disturbing the Form-owned columns to its left. Same USER_ENTERED reasoning
+// as appendSheetRow().
+export async function updateSheetValues(spreadsheetId, range, values) {
+  const token = await getAccessToken();
+  const res = await fetch(
+    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+    {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ values: [values] }),
+    }
+  );
+  if (!res.ok) throw new Error(`Sheets values.update failed: ${res.status} ${await res.text()}`);
+  return res.json();
+}
+
 // Search Console's urlInspection.index.inspect — reports the last time
 // Google crawled a URL and what it found (indexed / 404 / redirect / etc.),
 // straight from Google's own index rather than a live fetch of the URL.

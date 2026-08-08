@@ -116,7 +116,7 @@ flowchart TD
         GTAG["Google Analytics<br/>googletagmanager.com/gtag/js"]
         METEO["Open-Meteo API<br/>Free, no key required"]
         GDRIVE["Google Drive API<br/>Shared Inbox/Approved/Rejected/Published<br/>folders — service-account auth,<br/>called server-side only (Function + local script)"]
-        GSHEET["Google Sheets API<br/>Curator allow-list (read, photo-pool.mts) +<br/>membership/general enquiry logs (write,<br/>enquiry.mts) + rainfall log (read,<br/>rainfall.mts) — same service account,<br/>called server-side only"]
+        GSHEET["Google Sheets API<br/>Curator allow-list (read, photo-pool.mts) +<br/>membership/general enquiry logs (write,<br/>enquiry.mts) + rainfall log (read,<br/>rainfall.mts) + Members story-form<br/>responses (read + write Processed-at/Notes,<br/>check-member-story-responses.mjs) —<br/>same service account, called server-side<br/>only (Functions) or from a local script"]
         GIDTOKEN["Google Identity Services / OAuth<br/>Curator sign-in (browser) +<br/>ID token verification against<br/>Google's public JWKS (photo-pool.mts)"]
         GSC["Google Search Console API<br/>urlInspection.index.inspect — read-only,<br/>same service account (Full user on the<br/>property as of 2026-08-08),<br/>called from a local script only"]
     end
