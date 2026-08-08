@@ -18,6 +18,10 @@ const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
 const SEARCH_CONSOLE_API = 'https://searchconsole.googleapis.com/v1';
+// sitemaps.list and searchAnalytics.query below live on Search Console's
+// older Webmasters API v3, not the v1 host above - Google never migrated
+// those two endpoints when it introduced urlInspection under v1.
+const WEBMASTERS_API = 'https://www.googleapis.com/webmasters/v3';
 // Sheets access needs its own scope even for a spreadsheet this same service
 // account can already see via Drive — used by getAllowedEmails() and
 // appendSheetRow() below, which reuse this file's existing JWT-signing/
@@ -224,4 +228,34 @@ export async function inspectUrl(siteUrl, inspectionUrl) {
   });
   if (!res.ok) throw new Error(`Search Console urlInspection.index.inspect failed: ${res.status} ${await res.text()}`);
   return res.json();
+}
+
+// Search Console's sitemaps.list — submission/crawl status per sitemap
+// (lastSubmitted/lastDownloaded, warnings, errors, submitted vs indexed
+// counts). Full user only; 403s for a Restricted account regardless of
+// scope (see the SCOPE comment above).
+export async function listSitemaps(siteUrl) {
+  const token = await getAccessToken();
+  const res = await fetch(`${WEBMASTERS_API}/sites/${encodeURIComponent(siteUrl)}/sitemaps`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Search Console sitemaps.list failed: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  return data.sitemap ?? [];
+}
+
+// Search Console's searchAnalytics.query — real clicks/impressions/CTR/
+// position, sliced by whichever dimensions are requested (e.g. ['page'] or
+// ['query']; [] returns one row of site-wide totals). Full user only, same
+// as listSitemaps above.
+export async function querySearchAnalytics(siteUrl, { startDate, endDate, dimensions = [], rowLimit = 25 }) {
+  const token = await getAccessToken();
+  const res = await fetch(`${WEBMASTERS_API}/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ startDate, endDate, dimensions, rowLimit }),
+  });
+  if (!res.ok) throw new Error(`Search Console searchAnalytics.query failed: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  return data.rows ?? [];
 }

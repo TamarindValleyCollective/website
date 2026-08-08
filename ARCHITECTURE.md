@@ -286,16 +286,25 @@ Netlify build (the offline photo curation and captioning scripts).
 - **`scripts/lib/google-drive.mjs`** — shared Drive REST client (auth, list, get, move, download)
   plus Sheets read (`getAllowedEmails`) and write (`appendSheetRow`), used by `photo-pool.mts`,
   `pull-approved-photos.mjs`, and `enquiry.mts`. Plain ESM, not TypeScript, so both a bundled
-  Netlify Function and a plain `node`-run script can import it directly. Also exports
-  `inspectUrl()` (Search Console's `urlInspection.index.inspect`, read-only scope), used only by
-  `check-search-console.mjs` below — same service account, no separate credentials.
+  Netlify Function and a plain `node`-run script can import it directly. Also exports three
+  Search Console functions, all read-only scope, used only by the two scripts below — same
+  service account, no separate credentials: `inspectUrl()` (`urlInspection.index.inspect`,
+  the v1 API host) and `listSitemaps()`/`querySearchAnalytics()` (`sitemaps.list`/
+  `searchAnalytics.query`, the older Webmasters v3 host — Google never migrated those two to v1).
 - **`scripts/check-search-console.mjs`** — run locally. Looks up Google's own crawl/index status
   (`coverageState` — e.g. "Not found (404)", "Submitted and indexed" — and `lastCrawlTime`) for
   one or more URLs, to confirm whether a `netlify.toml` redirect fix has actually been recrawled
-  yet rather than eyeballing the Search Console UI by hand. The service account was added as a
-  Restricted user on the `tvc.farm` Search Console property (2026-08-07), then upgraded to Full
-  user (2026-08-08) — Restricted users can only use URL Inspection via the API; Full also unlocks
-  `sitemaps.list` and `searchAnalytics.query`, not yet used by any committed script.
+  yet rather than eyeballing the Search Console UI by hand.
+- **`scripts/check-search-performance.mjs`** — run locally, `node scripts/check-search-performance.mjs
+  [days]` (default 28). Reports sitemap submission/crawl status (warnings, errors, submitted vs
+  indexed counts — the last of those is a known-unreliable field on the legacy endpoint, printed
+  with a caveat) plus real search performance: site-wide totals and top pages/queries by clicks.
+  Needs Full user, not just Restricted — see the service-account note below.
+
+The service account was added as a Restricted user on the `tvc.farm` Search Console property
+(2026-08-07), then upgraded to Full user (2026-08-08) — Restricted users can only use URL
+Inspection via the API; Full also unlocks `sitemaps.list` and `searchAnalytics.query`, which
+`check-search-performance.mjs` above uses.
 
 ### 1a. Localization (Kannada / Tamil)
 
