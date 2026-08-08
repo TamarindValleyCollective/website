@@ -1,0 +1,353 @@
+---
+// Unlinked guide for the "TVC Members: Your Story" Google Form - explains
+// what the form is for and exactly what happens to a response after
+// submitting (review, manual merge, no auto-publish). Deliberately not in
+// Nav, not in the sitemap (see astro.config.mjs's sitemap filter), and
+// noindex'd below - reachable only by whoever we send this direct link to,
+// same unlinked-page pattern as /internal/photo-pool.astro.
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+
+const FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScH8mWVrzD3wIG44QsMe1MrpLxaaieKRRRyck2XvCzOIlaf1g/viewform';
+---
+
+<BaseLayout
+  title="Sharing Your Story"
+  description={`A guide to the "TVC Members: Your Story" form - what it's for, and exactly what happens after you submit.`}
+  noindex
+  translated={false}
+>
+  <section class="section wrapper">
+    <div class="doc">
+      <header class="doc-header">
+        <span class="eyebrow">Tamarind Valley Collective</span>
+        <h1>Sharing your story with the collective</h1>
+        <p class="subhead">A short guide to the "TVC Members: Your Story" form — what it's for, and exactly what happens after you submit.</p>
+        <p class="intro">
+          People who find tvc.farm are often curious about the families behind it — what everyone does, why they joined, what keeps them here. Right now most member cards on the site are a one-line job title from 2017. We're asking each household to add a bit more: what you do today, your family if you'd like, one line on <strong>why TVC</strong>, and a photo or social link if you want one. <strong>Everything is optional except your name and the "why" line</strong> — fill in only what you're comfortable sharing.
+        </p>
+        <figure class="shot">
+          <img src="/images/pages/members-story-guide/form.jpg" alt='The top of the "TVC Members: Your Story" form, showing the header photo and intro text' width="760" height="392" loading="eager" />
+          <figcaption>The form itself — same photo, colors, and type as tvc.farm.</figcaption>
+        </figure>
+      </header>
+
+      <section class="doc-section">
+        <h2>What happens after you submit</h2>
+        <ol class="steps">
+          <li class="step">
+            <div class="step-num">1</div>
+            <h3>You submit</h3>
+            <p>Pick your card from the name list and answer what you're comfortable with. If your card lists two people, either of you can submit — or you can each answer separately and we'll combine both.</p>
+          </li>
+          <li class="step">
+            <div class="step-num">2</div>
+            <h3>We review it</h3>
+            <p>Every response gets read before it goes anywhere near the site — mainly a language and tone check. Nothing is published automatically, by anyone, ever.</p>
+          </li>
+          <li class="step">
+            <div class="step-num">3</div>
+            <h3>It gets added to your card</h3>
+            <p>Once reviewed, your answers are added to the Members page at tvc.farm — but only the parts you said yes to publishing. If two of you each submitted separately, both get folded into one card, photos included.</p>
+            <figure class="shot">
+              <img src="/images/pages/members-story-guide/card-example.jpg" alt="An example member card popup showing two photos, a bio, family line, a quote on why they're part of TVC, and LinkedIn/Instagram links" width="569" height="640" loading="lazy" />
+              <figcaption>What a filled-in card looks like once it's live.</figcaption>
+            </figure>
+          </li>
+          <li class="step">
+            <div class="step-num">4</div>
+            <h3>You can still change it</h3>
+            <p>Come back and edit your answers anytime using the link on the confirmation page. We'll pick up the change the next time we update the site.</p>
+          </li>
+        </ol>
+      </section>
+
+      <div class="note-card">
+        <h2>Before you fill it out</h2>
+        <ul>
+          <li><strong>Your email is never published</strong> — the form captures it automatically from your Google sign-in, just so we can follow up if something needs clarifying.</li>
+          <li><strong>Nothing goes live without your OK</strong> — the form ends with a yes/no question, and only "yes" responses get published.</li>
+          <li><strong>One photo, or several</strong> — if you and a partner each want to upload your own, that's fine; the card will show both.</li>
+          <li><strong>There's no fixed timeline</strong> — updates are batched by hand, not automated, so it may take a little while to appear.</li>
+        </ul>
+      </div>
+
+      <section class="doc-section">
+        <h2>Questions people have asked</h2>
+        <dl class="faq">
+          <div class="faq-item">
+            <dt>My partner and I want to answer separately — is that OK?</dt>
+            <dd>Yes. Pick the same card each time and submit your own response — we'll merge both into one card, including separate photos and social links if you each add one.</dd>
+          </div>
+          <div class="faq-item">
+            <dt>I already have a bio on the site — why fill this out again?</dt>
+            <dd>Most current bios are a single line from the old member directory, written around 2017. This is a chance to refresh what you do today and add the "why TVC" piece, which isn't on the site at all yet.</dd>
+          </div>
+          <div class="faq-item">
+            <dt>What if I'd rather skip the photo, family, or social link questions?</dt>
+            <dd>Skip them. Only your name and the one-line "why TVC" answer are required — everything else is there if you want it, not because it's expected.</dd>
+          </div>
+          <div class="faq-item">
+            <dt>Who do I ask if something's wrong or missing?</dt>
+            <dd>Email contact@tvc.farm — that's also where you can ask for something to be corrected or removed after it's published.</dd>
+          </div>
+        </dl>
+      </section>
+
+      <div class="cta-block">
+        <p class="lead">Ready to add your story?</p>
+        <a class="button" href={FORM_URL} target="_blank" rel="noopener noreferrer">Open the form</a>
+        <p class="link-status">Takes about 5 minutes. You'll need to sign in with Google to upload a photo.</p>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .doc {
+    max-width: 640px;
+    margin: 0 auto;
+  }
+
+  .eyebrow {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--tvc-green);
+    margin-bottom: 14px;
+  }
+
+  .doc-header h1 {
+    margin: 0 0 14px;
+    text-wrap: balance;
+  }
+
+  .subhead {
+    font-size: 1.08rem;
+    color: var(--tvc-ink-soft);
+    max-width: 46ch;
+    margin: 0;
+  }
+
+  .intro {
+    font-size: 1.05rem;
+    max-width: 62ch;
+    margin: 28px 0 0;
+  }
+
+  .intro strong {
+    color: var(--tvc-green-dark);
+    font-weight: 600;
+  }
+
+  .doc-section {
+    margin-top: 56px;
+  }
+
+  .doc h2 {
+    font-size: 1.4rem;
+    margin: 0 0 24px;
+    text-wrap: balance;
+  }
+
+  /* The steps below are a real, ordered sequence - submit, then review,
+     then merge, then (optionally) edit - so a numbered timeline encodes
+     something true, not just decoration. */
+  .steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    position: relative;
+  }
+
+  .steps::before {
+    content: "";
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    left: 15px;
+    width: 1px;
+    background: var(--tvc-line);
+  }
+
+  .step {
+    position: relative;
+    padding: 0 0 32px 48px;
+  }
+
+  .step:last-child {
+    padding-bottom: 0;
+  }
+
+  .step-num {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1px solid var(--tvc-line);
+    color: var(--tvc-green-dark);
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .step h3 {
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 1.02rem;
+    margin: 3px 0 6px;
+    color: var(--tvc-ink);
+  }
+
+  .step p {
+    margin: 0;
+    color: var(--tvc-ink-soft);
+    max-width: 56ch;
+  }
+
+  figure.shot {
+    margin: 24px 0 0;
+  }
+
+  .step figure.shot {
+    margin-top: 16px;
+  }
+
+  figure.shot img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+    border: 1px solid var(--tvc-line);
+  }
+
+  figure.shot figcaption {
+    margin-top: 10px;
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
+    text-align: center;
+  }
+
+  .note-card {
+    background: var(--tvc-green-tint);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    margin-top: 56px;
+  }
+
+  .note-card h2 {
+    font-size: 1.15rem;
+    margin-bottom: 12px;
+  }
+
+  .note-card ul {
+    margin: 0;
+    padding-left: 20px;
+  }
+
+  .note-card li {
+    margin-bottom: 8px;
+    color: var(--tvc-ink-soft);
+  }
+
+  .note-card li:last-child {
+    margin-bottom: 0;
+  }
+
+  .note-card li strong {
+    color: var(--tvc-ink);
+    font-weight: 600;
+  }
+
+  dl.faq {
+    margin: 0;
+  }
+
+  .faq-item {
+    padding: 20px 0;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .faq-item:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
+
+  dt {
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 6px;
+  }
+
+  dd {
+    margin: 0;
+    color: var(--tvc-ink-soft);
+    max-width: 58ch;
+  }
+
+  .cta-block {
+    margin-top: 56px;
+    padding-top: 40px;
+    border-top: 1px solid var(--tvc-line);
+    text-align: center;
+  }
+
+  .cta-block p.lead {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    margin: 0 0 20px;
+    color: var(--tvc-ink);
+  }
+
+  .button {
+    display: inline-block;
+    background: var(--tvc-orange-cta);
+    color: #fff;
+    font-weight: 700;
+    font-size: 1rem;
+    text-decoration: none;
+    padding: 13px 28px;
+    border-radius: 999px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(247, 133, 32, 0.35);
+  }
+
+  .button:focus-visible {
+    outline: 2px solid var(--tvc-green-dark);
+    outline-offset: 3px;
+  }
+
+  .link-status {
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
+    margin-top: 12px;
+  }
+
+  @media (max-width: 480px) {
+    .step {
+      padding-left: 42px;
+    }
+
+    .steps::before {
+      left: 13px;
+    }
+
+    .step-num {
+      width: 28px;
+      height: 28px;
+      font-size: 0.85rem;
+    }
+  }
+</style>

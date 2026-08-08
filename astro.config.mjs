@@ -17,8 +17,10 @@ export default defineConfig({
       // Excludes the noindex'd pages (see BaseLayout's `noindex` prop) -
       // listing a URL in the sitemap while also telling crawlers not to
       // index it is a mixed signal search engines don't need. /internal/ is
-      // the unlinked, secret-gated photo-pool review dashboard.
-      filter: (page) => !page.includes('/404') && !page.includes('/thanks') && !page.includes('/internal/'),
+      // the unlinked, secret-gated photo-pool review dashboard; story-guide
+      // is the unlinked member-form walkthrough, reachable only by direct
+      // link (see src/pages/people/members/story-guide.astro).
+      filter: (page) => !page.includes('/404') && !page.includes('/thanks') && !page.includes('/internal/') && !page.includes('/story-guide'),
       i18n: {
         defaultLocale: 'en',
         locales: { en: 'en-IN', kn: 'kn-IN', ta: 'ta-IN' },
