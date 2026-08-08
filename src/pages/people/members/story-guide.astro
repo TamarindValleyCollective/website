@@ -47,7 +47,7 @@ const FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScH8mWVrzD3wIG44QsMe1
           <li class="step">
             <div class="step-num">3</div>
             <h3>It gets added to your card</h3>
-            <p>Once reviewed, your answers are added to the Members page at tvc.farm — but only the parts you said yes to publishing. If two of you each submitted separately, both get folded into one card, photos included.</p>
+            <p>Once reviewed, your answers are added to the <a href="/people/members">Members page</a> at tvc.farm — but only the parts you said yes to publishing. If two of you each submitted separately, both get folded into one card, photos included.</p>
             <figure class="shot">
               <img src="/images/pages/members-story-guide/card-example.jpg" alt="An example member card popup showing two photos, a bio, family line, a quote on why they're part of TVC, and LinkedIn/Instagram links" width="569" height="640" loading="lazy" />
               <figcaption>What a filled-in card looks like once it's live.</figcaption>
@@ -64,6 +64,7 @@ const FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScH8mWVrzD3wIG44QsMe1
       <div class="note-card">
         <h2>Before you fill it out</h2>
         <ul>
+          <li><strong>You'll need to sign in with Google</strong> to submit the form.</li>
           <li><strong>Your email is never published</strong> — the form captures it automatically from your Google sign-in, just so we can follow up if something needs clarifying.</li>
           <li><strong>Nothing goes live without your OK</strong> — the form ends with a yes/no question, and only "yes" responses get published.</li>
           <li><strong>One photo, or several</strong> — if you and a partner each want to upload your own, that's fine; the card will show both.</li>
@@ -96,7 +97,7 @@ const FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScH8mWVrzD3wIG44QsMe1
       <div class="cta-block">
         <p class="lead">Ready to add your story?</p>
         <a class="button" href={FORM_URL} target="_blank" rel="noopener noreferrer">Open the form</a>
-        <p class="link-status">Takes about 5 minutes. You'll need to sign in with Google to upload a photo.</p>
+        <p class="link-status">Takes about 5 minutes. You'll need to sign in with Google to submit.</p>
       </div>
     </div>
   </section>
@@ -210,6 +211,11 @@ const FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScH8mWVrzD3wIG44QsMe1
     margin: 0;
     color: var(--tvc-ink-soft);
     max-width: 56ch;
+  }
+
+  .step p a {
+    color: var(--tvc-green-dark);
+    font-weight: 600;
   }
 
   figure.shot {
