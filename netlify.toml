@@ -31,12 +31,12 @@
 # directly and isn't swallowed by the second rule's wildcard.
 [[redirects]]
   from = "/ecosystem/partners/*"
-  to = "/people/partners"
+  to = "/people/partners/"
   status = 301
 
 [[redirects]]
   from = "/people/partners/*"
-  to = "/people/partners"
+  to = "/people/partners/"
   status = 301
 
 # These used to live in astro.config.mjs's `redirects` map, which - with no
@@ -53,19 +53,19 @@
 # explorer moved to /ecosystem/biodiversity - this is the pre-Astro URL.
 [[redirects]]
   from = "/biodiversity"
-  to = "/ecosystem/biodiversity"
+  to = "/ecosystem/biodiversity/"
   status = 301
 
 # Timeline was its own top-level page, then nested under Our Journey, then
 # folded directly into /our-journey itself.
 [[redirects]]
   from = "/timeline"
-  to = "/our-journey"
+  to = "/our-journey/"
   status = 301
 
 [[redirects]]
   from = "/our-journey/timeline"
-  to = "/our-journey"
+  to = "/our-journey/"
   status = 301
 
 # Community Outreach moved from top-level, to under Our Journey, to under
@@ -74,7 +74,7 @@
 # stops. Splat forms cover individual outreach post slugs.
 [[redirects]]
   from = "/community-outreach"
-  to = "/people/outreach"
+  to = "/people/outreach/"
   status = 301
 
 [[redirects]]
@@ -84,7 +84,7 @@
 
 [[redirects]]
   from = "/our-journey/community-outreach"
-  to = "/people/outreach"
+  to = "/people/outreach/"
   status = 301
 
 [[redirects]]
@@ -94,7 +94,7 @@
 
 [[redirects]]
   from = "/people/community-outreach"
-  to = "/people/outreach"
+  to = "/people/outreach/"
   status = 301
 
 [[redirects]]
@@ -105,45 +105,45 @@
 # The Design moved from Our Journey to About TVC.
 [[redirects]]
   from = "/our-journey/design"
-  to = "/about/design"
+  to = "/about/design/"
   status = 301
 
 # /ecosystem/partners itself (the wildcard form is above, alongside
 # /people/partners/*).
 [[redirects]]
   from = "/ecosystem/partners"
-  to = "/people/partners"
+  to = "/people/partners/"
   status = 301
 
 # Leftover URLs from the pre-Astro site, still indexed by Google.
 [[redirects]]
   from = "/how-to-reach.html"
-  to = "/visit/how-to-reach"
+  to = "/visit/how-to-reach/"
   status = 301
 
 [[redirects]]
   from = "/trekking-trails-of-tvc.html"
-  to = "/visit/trekking-trails"
+  to = "/visit/trekking-trails/"
   status = 301
 
 [[redirects]]
   from = "/tvc-3bs-and-1h-dusk-to-dawn-biodiversity-walks-tvc-birdsbutterfliesinsects.html"
-  to = "/events/2022-08-27-3bs-and-1h-biodiversity-walk"
+  to = "/events/2022-08-27-3bs-and-1h-biodiversity-walk/"
   status = 301
 
 [[redirects]]
   from = "/lantana-furniture.html"
-  to = "/resource-centre"
+  to = "/resource-centre/"
   status = 301
 
 [[redirects]]
   from = "/vision-and-objectives.html"
-  to = "/about"
+  to = "/about/"
   status = 301
 
 [[redirects]]
   from = "/resource-center.html"
-  to = "/resource-centre"
+  to = "/resource-centre/"
   status = 301
 
 # More pre-Astro dead links, found via Search Console's Pages report
@@ -152,12 +152,12 @@
 # recrawled them yet at export time.
 [[redirects]]
   from = "/how-to-reach"
-  to = "/visit/how-to-reach"
+  to = "/visit/how-to-reach/"
   status = 301
 
 [[redirects]]
   from = "/past-events/"
-  to = "/events"
+  to = "/events/"
   status = 301
 
 [[redirects]]
@@ -167,19 +167,19 @@
 
 [[redirects]]
   from = "/2021-sep-25-traditional-craft-of-making-bamboo-basket.html"
-  to = "/events/2021-09-25-bamboo-basket-making"
+  to = "/events/2021-09-25-bamboo-basket-making/"
   status = 301
 
 # ContactView.astro carries the location content (address + map) this old
 # page used to be - VisitView's Volunteering card also points at /contact.
 [[redirects]]
   from = "/location.html"
-  to = "/contact"
+  to = "/contact/"
   status = 301
 
 [[redirects]]
   from = "/voulnteer.html"
-  to = "/contact"
+  to = "/contact/"
   status = 301
 
 # The org's full name, used as the old site's homepage slug.
@@ -195,17 +195,17 @@
 
 [[redirects]]
   from = "/ananas.html"
-  to = "/people/partners/ananas"
+  to = "/people/partners/ananas/"
   status = 301
 
 [[redirects]]
   from = "/ananas"
-  to = "/people/partners/ananas"
+  to = "/people/partners/ananas/"
   status = 301
 
 [[redirects]]
   from = "/want-to-join"
-  to = "/join"
+  to = "/join/"
   status = 301
 
 # The recurring "3Bs and 1H" biodiversity walk series has run under several
@@ -213,17 +213,17 @@
 # the canonical target, so this points at the events listing instead.
 [[redirects]]
   from = "/3bs-and-1h.html"
-  to = "/events"
+  to = "/events/"
   status = 301
 
 [[redirects]]
   from = "/birds-in-tvc.html"
-  to = "/ecosystem/biodiversity"
+  to = "/ecosystem/biodiversity/"
   status = 301
 
 [[redirects]]
   from = "/history-and-timeline.html"
-  to = "/our-journey"
+  to = "/our-journey/"
   status = 301
 
 # community-outreach/stem-experiential-learning-classes.md exists but is
@@ -231,19 +231,19 @@
 # no live page of its own yet - points at the outreach index instead.
 [[redirects]]
   from = "/stem-experiential-learning-classes.html"
-  to = "/people/outreach"
+  to = "/people/outreach/"
   status = 301
 
 # Linger was the old external booking partner, replaced by TVC's own
 # booking pages (see ARCHITECTURE.md).
 [[redirects]]
   from = "/linger.html"
-  to = "/visit"
+  to = "/visit/"
   status = 301
 
 [[redirects]]
   from = "/member-profiles.html"
-  to = "/people/members"
+  to = "/people/members/"
   status = 301
 
 # Bare, extension-less siblings of the .html URLs above and two new ones -
@@ -254,17 +254,17 @@
 # window, but real 301s fix it regardless of the original cause.
 [[redirects]]
   from = "/day-visit.html"
-  to = "/visit/day-visit"
+  to = "/visit/day-visit/"
   status = 301
 
 [[redirects]]
   from = "/location"
-  to = "/contact"
+  to = "/contact/"
   status = 301
 
 [[redirects]]
   from = "/resource-center"
-  to = "/resource-centre"
+  to = "/resource-centre/"
   status = 301
 
 # Old site had one combined soil/climate page - now split into
@@ -272,24 +272,24 @@
 # at the shared parent instead of picking one arbitrarily.
 [[redirects]]
   from = "/soil-and-weather-conditions"
-  to = "/ecosystem"
+  to = "/ecosystem/"
   status = 301
 
 [[redirects]]
   from = "/member-profiles"
-  to = "/people/members"
+  to = "/people/members/"
   status = 301
 
 [[redirects]]
   from = "/birds-in-tvc"
-  to = "/ecosystem/biodiversity"
+  to = "/ecosystem/biodiversity/"
   status = 301
 
 # Biome Solutions is a partner without its own page (the Ananas exception
 # noted above) - listed on the partners page instead.
 [[redirects]]
   from = "/biome-solutions"
-  to = "/people/partners"
+  to = "/people/partners/"
   status = 301
 
 # syntropic.in (an old member-directory domain) is configured as a domain
