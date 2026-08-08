@@ -28,7 +28,11 @@ const SEARCH_CONSOLE_API = 'https://searchconsole.googleapis.com/v1';
 // webmasters.readonly is for inspectUrl() below — this service account was
 // added as a Restricted user on the tvc.farm Search Console property
 // (2026-08-07) specifically so it could check indexing/crawl status without
-// a human re-checking the Search Console UI by hand.
+// a human re-checking the Search Console UI by hand, then upgraded to Full
+// user (2026-08-08). The .readonly scope still blocks writes either way -
+// the property permission level instead gates *which* endpoints the API
+// exposes to a Restricted account: Restricted only gets urlInspection,
+// Full also unlocks sitemaps.list and searchAnalytics.query.
 const SCOPE =
   'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/webmasters.readonly';
 
