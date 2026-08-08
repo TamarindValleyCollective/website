@@ -62,6 +62,11 @@ interface Member {
   // blindly character-truncated mid-sentence. See summaryFor() below.
   summary?: string;
   family?: string;
+  // Children/pets named in `family` (e.g. ['Deesha', 'Aryaan', 'Thalia']) -
+  // highlighted inline like the card's own people, but never linked (no
+  // social profile is ever collected for them). Kept separate from the
+  // card's own name(s) since only those pair up with `social` by position.
+  familyNames?: string[];
   whyTVC?: string;
   // The form asks for "LinkedIn or another social profile", so this can be
   // any platform - rendered by detecting the host below, not assumed to be
@@ -108,7 +113,7 @@ const members: Member[] = [
   { name: 'Sanket & Surabhi', bio: 'Sanket works in software, and aspires to be a writer. Surabhi works for HP, also busy dealing with kids and pursuing her hobbies.', photo: '/images/members/sanket-and-surabhi.jpg' },
   { name: 'Shalini & Amit Jain', bio: 'Amit is a Program Manager at HPE. Shalini enjoys baking, gardening, and anything that challenges her creative mind.', photo: '/images/members/shalini-and-amit-jain.jpg' },
   { name: 'Shameek & Gitanjali', bio: 'Shameek and Gitanjali run the venture Farmizen. Gitanjali also runs an urban gardening business - GreenMyLife.', photo: '/images/members/shameek-and-gitanjali.jpg' },
-  { name: 'Sharath & Deepa', summary: 'Sharath is a Principal Software Engineer at Shell; Deepa heads the global help desk at Sobis.', bio: 'Sharath works for Shell as a Principal Software Engineer and is a firm believer in sustainable living; outside of work, he spends his time actively participating in the growth and development of the Tamarind Valley Collective. Deepa works for Sobis Software and heads their Global Helpdesk.', photo: '/images/members/sharath-and-deepa.jpg', family: 'Sharath and Deepa are parents to two children: Deesha, who is currently pursuing a Master’s in Ecology and Evolutionary Biology at the University of Helsinki, and Aryaan, who recently completed his undergraduate degree with a major in Mathematics. They also have a 10-year-old cat named Thalia.', whyTVC: 'We joined TVC because we wanted to create something of lasting value that money simply cannot buy, while fostering a deeper connection with the land and a like-minded community.', social: ['https://www.linkedin.com/in/sharathjeppu/'] },
+  { name: 'Sharath & Deepa', summary: 'Sharath is a Principal Software Engineer at Shell; Deepa heads the global help desk at Sobis.', bio: 'Sharath works for Shell as a Principal Software Engineer and is a firm believer in sustainable living; outside of work, he spends his time actively participating in the growth and development of the Tamarind Valley Collective. Deepa works for Sobis Software and heads their Global Helpdesk.', photo: '/images/members/sharath-and-deepa.jpg', family: 'Sharath and Deepa are parents to two children: Deesha, who is currently pursuing a Master’s in Ecology and Evolutionary Biology at the University of Helsinki, and Aryaan, who recently completed his undergraduate degree with a major in Mathematics. They also have a 10-year-old cat named Thalia.', familyNames: ['Deesha', 'Aryaan', 'Thalia'], whyTVC: 'We joined TVC because we wanted to create something of lasting value that money simply cannot buy, while fostering a deeper connection with the land and a like-minded community.', social: ['https://www.linkedin.com/in/sharathjeppu/'] },
   { name: 'Shashi & Shobha', bio: 'Sashi works as a Salesforce consultant for Digile. Shobha is a lawyer by education and an artist by choice.', photo: '/images/members/shashi-and-shobha.jpg' },
   { name: 'Shubh & Ranjini', bio: 'Shubh is a techie, works for RJT. Ranjini is a teacher at COMMITS (by day) and a writer (by night.)', photo: '/images/members/shubh-and-ranjini.jpg' },
   { name: 'Sree & Prameela', bio: '', photo: null },
@@ -148,41 +153,30 @@ function initials(name: string) {
 // The names the popup should highlight inline wherever they appear in the
 // bio/family prose (e.g. "Sharath" and "Deepa" from "Sharath & Deepa") -
 // same split used by socialLinks() below, kept separate since this applies
-// even to cards with no social links at all.
-function firstNamesOf(name: string): string[] {
-  return name.split('&').map((p) => p.trim().split(/\s+/)[0]).filter(Boolean);
+// even to cards with no social links at all. Combined with `familyNames`
+// (children/pets) below into one flat list sent to the client - only the
+// card's own name(s) are ever link-eligible (via socialLinks() pairing by
+// position), but highlightNames() itself doesn't need to know the
+// difference, it just bolds every name it's given and links the ones that
+// happen to match an entry in `links`.
+function highlightedNamesFor(m: Member): string[] {
+  const own = m.name.split('&').map((p) => p.trim().split(/\s+/)[0]).filter(Boolean);
+  return [...own, ...(m.familyNames ?? [])];
 }
 
-// Renders as the platform's icon rather than spelling out "LinkedIn" /
-// "Instagram", detected from the URL's host - the form field accepts any
-// social profile, not just LinkedIn, so this can't be hardcoded.
-function socialIcon(url: string): 'linkedin' | 'instagram' | 'twitter' | 'link' {
-  let host = '';
-  try {
-    host = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
-  } catch {
-    return 'link';
-  }
-  if (host.includes('linkedin.com')) return 'linkedin';
-  if (host.includes('instagram.com')) return 'instagram';
-  if (host.includes('twitter.com') || host === 'x.com') return 'twitter';
-  return 'link';
-}
-
-// Pairs each profile with the corresponding first name whenever the card
-// itself lists more than one person, so the icon alone doesn't leave it
-// ambiguous whose it is - including the common case of a couple's card
-// where only one of them submitted a link. A card for just one person
-// needs no name since there's no one else on it to confuse it with. Keyed
-// off the card's own name list, not the URL count - a single-URL couple's
-// card must still attribute that one link, which `urls.length > 1` used to
-// miss entirely.
+// Pairs each profile with the corresponding first name (by position) so
+// highlightNames() below can turn that name, wherever it's mentioned in the
+// bio/family text, into a link - the card's own inline name-linking is now
+// the only place these links surface (there used to also be a row of
+// platform icons at the bottom of the popup; removed as redundant once
+// names linked inline). Doesn't handle one person submitting more than one
+// profile - a second URL for the same name has nowhere else to go and is
+// simply not linked, but no current submission does this.
 function socialLinks(name: string, urls: string[]) {
   const firstNames = name.split('&').map((p) => p.trim().split(/\s+/)[0]);
   return urls.map((url, i) => ({
     url,
-    icon: socialIcon(url),
-    name: firstNames.length > 1 ? (firstNames[i] ?? '') : '',
+    name: firstNames[i] ?? '',
   }));
 }
 
@@ -223,7 +217,7 @@ const detailed = members
     name: m.name,
     photos: photosFor(m),
     initials: initials(m.name),
-    firstNames: firstNamesOf(m.name),
+    names: highlightedNamesFor(m),
     bio: m.bio,
     family: m.family ?? '',
     whyTVC: m.whyTVC ?? '',
@@ -307,7 +301,6 @@ const detailedById = new Set(detailed.map((d) => d.i));
           </svg>
           <p id="member-detail-quote-text"></p>
         </div>
-        <div id="member-detail-links" class="member-links"></div>
       </div>
     </div>
   </div>
@@ -320,11 +313,11 @@ const detailedById = new Set(detailed.map((d) => d.i));
       name: string;
       photos: string[];
       initials: string;
-      firstNames: string[];
+      names: string[];
       bio: string;
       family: string;
       whyTVC: string;
-      links: { url: string; icon: string; name: string }[];
+      links: { url: string; name: string }[];
     }
 
     function escapeHtml(text: string): string {
@@ -337,18 +330,20 @@ const detailedById = new Set(detailed.map((d) => d.i));
       return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
-    // Bolds each person's first name wherever it appears in the bio/family
-    // text, and turns it into a link straight to their own social profile
-    // when one exists - e.g. on a couple's card, "Sharath" links to his
-    // LinkedIn and "Deepa" just gets the bold treatment if she has none.
-    // Longest name first so "Deepa" doesn't accidentally match inside a
-    // longer name that happens to contain it.
-    function highlightNames(text: string, firstNames: string[], links: MemberDetail['links']): string {
+    // Bolds every given name (the card's own people, plus any children/pets
+    // named in `familyNames`) wherever it appears in the bio/family text,
+    // and turns it into a link straight to their own social profile when
+    // one exists - e.g. on a couple's card, "Sharath" links to his LinkedIn,
+    // "Deepa" gets just the bold treatment if she has none, and a child's
+    // or pet's name is always bold-only (no social profile is ever
+    // collected for them). Longest name first so "Deepa" doesn't
+    // accidentally match inside a longer name that happens to contain it.
+    function highlightNames(text: string, names: string[], links: MemberDetail['links']): string {
       const escaped = escapeHtml(text);
       const linkByName = new Map(links.filter((l) => l.name).map((l) => [l.name, l.url]));
-      const names = [...firstNames].sort((a, b) => b.length - a.length);
-      if (!names.length) return escaped;
-      const pattern = new RegExp(`\\b(${names.map(escapeRegExp).join('|')})\\b`, 'g');
+      const sorted = [...names].sort((a, b) => b.length - a.length);
+      if (!sorted.length) return escaped;
+      const pattern = new RegExp(`\\b(${sorted.map(escapeRegExp).join('|')})\\b`, 'g');
       return escaped.replace(pattern, (match) => {
         const url = linkByName.get(match);
         return url
@@ -356,22 +351,6 @@ const detailedById = new Set(detailed.map((d) => d.i));
           : `<span class="member-name">${match}</span>`;
       });
     }
-
-    // Same rounded-square icon language as Footer.astro's social links -
-    // reused rather than reinvented so the two spots agree visually.
-    const socialIcons: Record<string, string> = {
-      linkedin: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true"><rect x="2.5" y="2.5" width="19" height="19" rx="5" stroke="currentColor" stroke-width="1.6"/><path d="M7.2 10.2V17M7.2 7.4v.05M11 17v-4.3c0-1.5 1-2.4 2.3-2.4 1.3 0 2.1.9 2.1 2.4V17M11 10.2V17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-      instagram: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true"><rect x="2.5" y="2.5" width="19" height="19" rx="5" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="4.2" stroke="currentColor" stroke-width="1.6"/><circle cx="16.8" cy="7.2" r="1" fill="currentColor"/></svg>',
-      twitter: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true"><rect x="2.5" y="2.5" width="19" height="19" rx="5" stroke="currentColor" stroke-width="1.6"/><path d="M8 8l8 8M16 8l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
-      link: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true"><rect x="2.5" y="2.5" width="19" height="19" rx="5" stroke="currentColor" stroke-width="1.6"/><path d="M10 14.5l4-4M11 9.5l.5-.5a2.6 2.6 0 013.7 3.7l-.5.5M13 14.5l-.5.5a2.6 2.6 0 01-3.7-3.7l.5-.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    };
-
-    const iconAriaLabel: Record<string, string> = {
-      linkedin: 'LinkedIn',
-      instagram: 'Instagram',
-      twitter: 'Twitter',
-      link: 'Profile link',
-    };
 
     const dataEl = document.getElementById('member-detail-data');
     const details: MemberDetail[] = dataEl ? JSON.parse(dataEl.textContent ?? '[]') : [];
@@ -388,13 +367,12 @@ const detailedById = new Set(detailed.map((d) => d.i));
     const familyTextEl = document.getElementById('member-detail-family-text');
     const quoteEl = document.getElementById('member-detail-quote');
     const quoteTextEl = document.getElementById('member-detail-quote-text');
-    const linksEl = document.getElementById('member-detail-links');
 
     function open(detail: MemberDetail) {
       if (!overlay) return;
 
       if (nameEl) nameEl.textContent = detail.name;
-      if (bioEl) bioEl.innerHTML = highlightNames(detail.bio, detail.firstNames, detail.links);
+      if (bioEl) bioEl.innerHTML = highlightNames(detail.bio, detail.names, detail.links);
 
       if (photoEl && initialsEl && photosEl) {
         // Reset all three each time - only one of single photo / initials /
@@ -424,7 +402,7 @@ const detailedById = new Set(detailed.map((d) => d.i));
       }
 
       if (familyEl && familyTextEl) {
-        familyTextEl.innerHTML = highlightNames(detail.family, detail.firstNames, detail.links);
+        familyTextEl.innerHTML = highlightNames(detail.family, detail.names, detail.links);
         familyEl.hidden = !detail.family;
       }
       if (quoteEl && quoteTextEl) {
@@ -433,26 +411,6 @@ const detailedById = new Set(detailed.map((d) => d.i));
         // family narration which is normalized to third person.
         quoteTextEl.textContent = detail.whyTVC ? `“${detail.whyTVC}”` : '';
         quoteEl.hidden = !detail.whyTVC;
-      }
-      if (linksEl) {
-        linksEl.innerHTML = '';
-        detail.links.forEach((link) => {
-          const a = document.createElement('a');
-          a.href = link.url;
-          a.target = '_blank';
-          a.rel = 'noopener noreferrer';
-          a.className = 'member-social-link';
-          const platform = iconAriaLabel[link.icon] ?? iconAriaLabel.link;
-          a.setAttribute('aria-label', link.name ? `${link.name}'s ${platform}` : platform);
-          a.innerHTML = socialIcons[link.icon] ?? socialIcons.link;
-          if (link.name) {
-            const span = document.createElement('span');
-            span.className = 'member-social-name';
-            span.textContent = link.name;
-            a.appendChild(span);
-          }
-          linksEl.appendChild(a);
-        });
       }
 
       overlay.hidden = false;
@@ -764,42 +722,14 @@ const detailedById = new Set(detailed.map((d) => d.i));
     font-style: italic;
     color: var(--tvc-ink);
   }
-
-  .member-links {
-    display: flex;
-    flex-direction: row;
-    justify-content: center;
-    gap: 16px;
-    margin-top: 12px;
-  }
 </style>
 
 <style is:global>
-  /* Not scoped: .member-social-link/-name are assigned via className on
-     elements built with document.createElement (see the script above),
-     which never receive Astro's data-astro-cid attribute - a scoped rule
-     here would silently fail to match any of them, same issue documented
-     on SiteSearch.astro's overlay markup (also injected at runtime). */
-  .member-social-link {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    color: var(--tvc-ink-soft);
-    text-decoration: none;
-  }
-
-  .member-social-link:hover {
-    color: var(--tvc-green-dark);
-  }
-
-  .member-social-name {
-    font-size: 0.7rem;
-    font-weight: 600;
-  }
-
-  /* Also injected via innerHTML (see highlightNames() above), same reason
-     as .member-social-link. Bold ink for a name with no profile to link -
+  /* Not scoped: .member-name/-name--link are assigned via innerHTML (see
+     highlightNames() above), which never receives Astro's data-astro-cid
+     attribute - a scoped rule here would silently fail to match any of it,
+     same issue documented on SiteSearch.astro's overlay markup (also
+     injected at runtime). Bold ink for a name with no profile to link -
      the site's standard link green (global.css's plain `a`) plus
      underline-on-hover for one that is a link - so the color alone signals
      which names on the card are clickable, using the same green/orange
@@ -821,7 +751,7 @@ const detailedById = new Set(detailed.map((d) => d.i));
   }
 
   /* Also dynamically created (see #member-detail-photos in the script
-     above), same reason as .member-social-link. */
+     above), same not-scoped reason as .member-name above. */
   .member-photo-dynamic {
     width: 96px;
     height: 96px;
