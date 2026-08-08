@@ -48,6 +48,13 @@ interface Member {
   name: string;
   bio: string;
   photo: string | null;
+  // Separate family members can each submit their own photo for a shared
+  // card (e.g. Sharath and Deepa each uploading their own picture rather
+  // than one joint one) - when that happens this holds all of them and the
+  // card shows a stacked cluster instead of picking just one. Optional and
+  // additive so the ~53 existing single-photo entries above don't need to
+  // change; falls back to `photo` when absent.
+  photos?: string[];
   family?: string;
   whyTVC?: string;
   // The form asks for "LinkedIn or another social profile", so this can be
@@ -95,7 +102,7 @@ const members: Member[] = [
   { name: 'Sanket & Surabhi', bio: 'Sanket works in software, and aspires to be a writer. Surabhi works for HP, also busy dealing with kids and pursuing her hobbies.', photo: '/images/members/sanket-and-surabhi.jpg' },
   { name: 'Shalini & Amit Jain', bio: 'Amit is a Program Manager at HPE. Shalini enjoys baking, gardening, and anything that challenges her creative mind.', photo: '/images/members/shalini-and-amit-jain.jpg' },
   { name: 'Shameek & Gitanjali', bio: 'Shameek and Gitanjali run the venture Farmizen. Gitanjali also runs an urban gardening business - GreenMyLife.', photo: '/images/members/shameek-and-gitanjali.jpg' },
-  { name: 'Sharath & Deepa', bio: 'Sharath works for Shell, specializing in Infrastructure Security and Cloud. Deepa works for Sobis Software managing their global help desk.', photo: '/images/members/sharath-and-deepa.jpg', family: 'Two kids and a very opinionated cat.', whyTVC: 'We wanted our kids to grow up knowing where food comes from, not just where it’s bought — and honestly we underestimated how much that would end up changing us too, not just them, in ways we are still discovering years later.', social: ['https://linkedin.com/in/example-sharath', 'https://instagram.com/example-deepa'] },
+  { name: 'Sharath & Deepa', bio: 'Sharath works for Shell, specializing in Infrastructure Security and Cloud. Deepa works for Sobis Software managing their global help desk.', photo: '/images/members/sharath-and-deepa.jpg', photos: ['/images/members/sharath-and-deepa.jpg', '/images/members/sharath-and-deepa.jpg'], family: 'Two kids and a very opinionated cat.', whyTVC: 'We wanted our kids to grow up knowing where food comes from, not just where it’s bought — and honestly we underestimated how much that would end up changing us too, not just them, in ways we are still discovering years later.', social: ['https://linkedin.com/in/example-sharath', 'https://instagram.com/example-deepa'] },
   { name: 'Shashi & Shobha', bio: 'Sashi works as a Salesforce consultant for Digile. Shobha is a lawyer by education and an artist by choice.', photo: '/images/members/shashi-and-shobha.jpg' },
   { name: 'Shubh & Ranjini', bio: 'Shubh is a techie, works for RJT. Ranjini is a teacher at COMMITS (by day) and a writer (by night.)', photo: '/images/members/shubh-and-ranjini.jpg' },
   { name: 'Sree & Prameela', bio: '', photo: null },
@@ -112,6 +119,16 @@ const members: Member[] = [
   { name: 'Vishnu Kumar Agrawal', bio: '', photo: null },
   { name: 'Shilpa & Aditya', bio: "Shilpa is a development finance professional with nearly 20 years across institutions like the World Bank and the Reserve Bank Innovation Hub, and a published children's book author. Aditya has nearly 20 years in B2C e-commerce, across Myntra, Amazon, and Cleartrip.", photo: '/images/members/shilpa-and-aditya.jpg' },
 ];
+
+// A card normally has one photo, but when separate family members each
+// submit their own for the same shared card, `photos` holds all of them;
+// this is what every photo-rendering spot below actually reads from, with
+// the single legacy `photo` field as the fallback for the ~53 cards that
+// only ever had one.
+function photosFor(m: Member): string[] {
+  if (m.photos && m.photos.length) return m.photos;
+  return m.photo ? [m.photo] : [];
+}
 
 function initials(name: string) {
   const parts = name.split('&').map((p) => p.trim()).filter(Boolean);
@@ -174,7 +191,7 @@ const detailed = members
   .map(({ i, m }) => ({
     i,
     name: m.name,
-    photo: m.photo,
+    photos: photosFor(m),
     initials: initials(m.name),
     bio: m.bio,
     family: m.family ?? '',
@@ -195,30 +212,35 @@ const detailedById = new Set(detailed.map((d) => d.i));
 
   <section class="section wrapper">
     <div class="members-grid">
-      {members.map((m, i) => (
-        detailedById.has(i) ? (
+      {members.map((m, i) => {
+        const photos = photosFor(m);
+        const photoBlock = photos.length > 1 ? (
+          <div class="member-photo-stack">
+            {photos.slice(0, 3).map((src) => (
+              <img src={src} alt="" class="member-photo member-photo--stacked" loading="lazy" />
+            ))}
+          </div>
+        ) : photos.length === 1 ? (
+          <img src={photos[0]} alt={detailedById.has(i) ? '' : m.name} class="member-photo" loading="lazy" />
+        ) : (
+          <div class="member-photo member-photo--placeholder" aria-hidden="true">{initials(m.name)}</div>
+        );
+
+        return detailedById.has(i) ? (
           <button type="button" class="member-card member-card--has-details" data-member-id={i} aria-label={`More about ${m.name}`}>
-            {m.photo ? (
-              <img src={m.photo} alt="" class="member-photo" loading="lazy" />
-            ) : (
-              <div class="member-photo member-photo--placeholder" aria-hidden="true">{initials(m.name)}</div>
-            )}
+            {photoBlock}
             <h2>{m.name}</h2>
             {m.bio && <p>{summarize(m.bio)}</p>}
             <span class="member-more" aria-hidden="true">More →</span>
           </button>
         ) : (
           <div class="member-card">
-            {m.photo ? (
-              <img src={m.photo} alt={m.name} class="member-photo" loading="lazy" />
-            ) : (
-              <div class="member-photo member-photo--placeholder" aria-hidden="true">{initials(m.name)}</div>
-            )}
+            {photoBlock}
             <h2>{m.name}</h2>
             {m.bio && <p>{m.bio}</p>}
           </div>
-        )
-      ))}
+        );
+      })}
     </div>
   </section>
 
@@ -236,6 +258,7 @@ const detailedById = new Set(detailed.map((d) => d.i));
       <div class="member-panel-scroll">
         <img id="member-detail-photo" class="member-photo" alt="" hidden />
         <div id="member-detail-initials" class="member-photo member-photo--placeholder" aria-hidden="true" hidden></div>
+        <div id="member-detail-photos" class="member-detail-photos" hidden></div>
         <h2 id="member-detail-name"></h2>
         <p id="member-detail-bio"></p>
         <p id="member-detail-family" class="member-family" hidden></p>
@@ -251,7 +274,7 @@ const detailedById = new Set(detailed.map((d) => d.i));
     interface MemberDetail {
       i: number;
       name: string;
-      photo: string | null;
+      photos: string[];
       initials: string;
       bio: string;
       family: string;
@@ -283,6 +306,7 @@ const detailedById = new Set(detailed.map((d) => d.i));
     const closeBtn = document.getElementById('member-close');
     const photoEl = document.getElementById('member-detail-photo') as HTMLImageElement | null;
     const initialsEl = document.getElementById('member-detail-initials');
+    const photosEl = document.getElementById('member-detail-photos');
     const nameEl = document.getElementById('member-detail-name');
     const bioEl = document.getElementById('member-detail-bio');
     const familyEl = document.getElementById('member-detail-family');
@@ -295,15 +319,31 @@ const detailedById = new Set(detailed.map((d) => d.i));
       if (nameEl) nameEl.textContent = detail.name;
       if (bioEl) bioEl.textContent = detail.bio;
 
-      if (detail.photo && photoEl && initialsEl) {
-        photoEl.src = detail.photo;
-        photoEl.alt = detail.name;
-        photoEl.hidden = false;
-        initialsEl.hidden = true;
-      } else if (initialsEl && photoEl) {
-        initialsEl.textContent = detail.initials;
-        initialsEl.hidden = false;
+      if (photoEl && initialsEl && photosEl) {
+        // Reset all three each time - only one of single photo / initials /
+        // stacked photos should show, depending on how many this member has.
         photoEl.hidden = true;
+        initialsEl.hidden = true;
+        photosEl.hidden = true;
+        photosEl.innerHTML = '';
+
+        if (detail.photos.length > 1) {
+          photosEl.hidden = false;
+          detail.photos.forEach((src) => {
+            const img = document.createElement('img');
+            img.src = src;
+            img.alt = '';
+            img.className = 'member-photo-dynamic';
+            photosEl.appendChild(img);
+          });
+        } else if (detail.photos.length === 1) {
+          photoEl.src = detail.photos[0];
+          photoEl.alt = detail.name;
+          photoEl.hidden = false;
+        } else {
+          initialsEl.textContent = detail.initials;
+          initialsEl.hidden = false;
+        }
       }
 
       if (familyEl) {
@@ -446,6 +486,27 @@ const detailedById = new Set(detailed.map((d) => d.i));
     font-size: 1rem;
   }
 
+  /* When separate family members each submit their own photo for one
+     card, up to 3 render as a small overlapping cluster instead of
+     picking just one. */
+  .member-photo-stack {
+    display: flex;
+    justify-content: center;
+    margin: 0 auto 10px;
+  }
+
+  .member-photo--stacked {
+    width: 56px;
+    height: 56px;
+    margin: 0;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px var(--tvc-line);
+  }
+
+  .member-photo--stacked:not(:first-child) {
+    margin-left: -18px;
+  }
+
   .member-more {
     display: block;
     margin: 8px 0 0;
@@ -498,6 +559,19 @@ const detailedById = new Set(detailed.map((d) => d.i));
     width: 96px;
     height: 96px;
     font-size: 1.4rem;
+  }
+
+  .member-detail-photos {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 0 auto 10px;
+  }
+
+  /* Same [hidden]-vs-author-display-rule issue as .member-photo above. */
+  .member-detail-photos[hidden] {
+    display: none;
   }
 
   .member-panel h2 {
@@ -573,5 +647,14 @@ const detailedById = new Set(detailed.map((d) => d.i));
   .member-social-name {
     font-size: 0.7rem;
     font-weight: 600;
+  }
+
+  /* Also dynamically created (see #member-detail-photos in the script
+     above), same reason as .member-social-link. */
+  .member-photo-dynamic {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    object-fit: cover;
   }
 </style>
