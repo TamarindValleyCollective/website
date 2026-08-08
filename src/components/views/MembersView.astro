@@ -55,6 +55,12 @@ interface Member {
   // additive so the ~53 existing single-photo entries above don't need to
   // change; falls back to `photo` when absent.
   photos?: string[];
+  // A hand-written one-liner for the card front. The original 53 bios were
+  // already written to be card-length, so they need no summary of their
+  // own - this only exists for form-sourced bios, which are longer,
+  // first-person "what do you do today" answers that read poorly when
+  // blindly character-truncated mid-sentence. See summaryFor() below.
+  summary?: string;
   family?: string;
   whyTVC?: string;
   // The form asks for "LinkedIn or another social profile", so this can be
@@ -102,7 +108,7 @@ const members: Member[] = [
   { name: 'Sanket & Surabhi', bio: 'Sanket works in software, and aspires to be a writer. Surabhi works for HP, also busy dealing with kids and pursuing her hobbies.', photo: '/images/members/sanket-and-surabhi.jpg' },
   { name: 'Shalini & Amit Jain', bio: 'Amit is a Program Manager at HPE. Shalini enjoys baking, gardening, and anything that challenges her creative mind.', photo: '/images/members/shalini-and-amit-jain.jpg' },
   { name: 'Shameek & Gitanjali', bio: 'Shameek and Gitanjali run the venture Farmizen. Gitanjali also runs an urban gardening business - GreenMyLife.', photo: '/images/members/shameek-and-gitanjali.jpg' },
-  { name: 'Sharath & Deepa', bio: 'I work in technology and am a firm believer in sustainable living; outside of work, I spend my time actively participating in the growth and development of the Tamarind Valley Collective.', photo: '/images/members/sharath-and-deepa.jpg', family: 'Happily married to Deepa and parents to two children: Deesha, who is currently pursuing a Master’s in Ecology and Evolutionary Biology at the University of Helsinki, and Aryaan, who recently completed his undergraduate degree with a major in Mathematics.', whyTVC: 'We joined TVC because we wanted to create something of lasting value that money simply cannot buy, while fostering a deeper connection with the land and a like-minded community.', social: ['https://www.linkedin.com/in/sharathjeppu/'] },
+  { name: 'Sharath & Deepa', summary: 'Sharath is a Principal Software Engineer at Shell; Deepa heads the global help desk at Sobis.', bio: 'Sharath works for Shell as a Principal Software Engineer and is a firm believer in sustainable living; outside of work, he spends his time actively participating in the growth and development of the Tamarind Valley Collective. Deepa works for Sobis Software and heads their Global Helpdesk.', photo: '/images/members/sharath-and-deepa.jpg', family: 'Sharath and Deepa are parents to two children: Deesha, who is currently pursuing a Master’s in Ecology and Evolutionary Biology at the University of Helsinki, and Aryaan, who recently completed his undergraduate degree with a major in Mathematics. They also have a 10-year-old cat named Thalia.', whyTVC: 'We joined TVC because we wanted to create something of lasting value that money simply cannot buy, while fostering a deeper connection with the land and a like-minded community.', social: ['https://www.linkedin.com/in/sharathjeppu/'] },
   { name: 'Shashi & Shobha', bio: 'Sashi works as a Salesforce consultant for Digile. Shobha is a lawyer by education and an artist by choice.', photo: '/images/members/shashi-and-shobha.jpg' },
   { name: 'Shubh & Ranjini', bio: 'Shubh is a techie, works for RJT. Ranjini is a teacher at COMMITS (by day) and a writer (by night.)', photo: '/images/members/shubh-and-ranjini.jpg' },
   { name: 'Sree & Prameela', bio: '', photo: null },
@@ -139,6 +145,14 @@ function initials(name: string) {
   return (words[0][0] + (words[1]?.[0] ?? '')).toUpperCase();
 }
 
+// The names the popup should highlight inline wherever they appear in the
+// bio/family prose (e.g. "Sharath" and "Deepa" from "Sharath & Deepa") -
+// same split used by socialLinks() below, kept separate since this applies
+// even to cards with no social links at all.
+function firstNamesOf(name: string): string[] {
+  return name.split('&').map((p) => p.trim().split(/\s+/)[0]).filter(Boolean);
+}
+
 // Renders as the platform's icon rather than spelling out "LinkedIn" /
 // "Instagram", detected from the URL's host - the form field accepts any
 // social profile, not just LinkedIn, so this can't be hardcoded.
@@ -155,20 +169,29 @@ function socialIcon(url: string): 'linkedin' | 'instagram' | 'twitter' | 'link' 
   return 'link';
 }
 
-// Pairs each profile with the corresponding first name when a card lists
-// more than one (e.g. a couple's two separate profiles), so the icon alone
-// doesn't leave it ambiguous whose it is; a single profile needs no name
-// since there's no one else on the card to confuse it with.
+// Pairs each profile with the corresponding first name whenever the card
+// itself lists more than one person, so the icon alone doesn't leave it
+// ambiguous whose it is - including the common case of a couple's card
+// where only one of them submitted a link. A card for just one person
+// needs no name since there's no one else on it to confuse it with. Keyed
+// off the card's own name list, not the URL count - a single-URL couple's
+// card must still attribute that one link, which `urls.length > 1` used to
+// miss entirely.
 function socialLinks(name: string, urls: string[]) {
   const firstNames = name.split('&').map((p) => p.trim().split(/\s+/)[0]);
   return urls.map((url, i) => ({
     url,
     icon: socialIcon(url),
-    name: urls.length > 1 ? (firstNames[i] ?? '') : '',
+    name: firstNames.length > 1 ? (firstNames[i] ?? '') : '',
   }));
 }
 
-// The card shows only a summary - the popup is where the full bio lives.
+// Fallback only - blindly truncating at a character count reads badly for
+// the longer, first-person form-sourced bios (cuts mid-sentence), which is
+// why new entries should get a hand-written `summary` instead (see the
+// Member interface). Still used as a safety cap for the ~53 legacy bios,
+// which are already card-length and essentially never hit it, and as a cap
+// on `summary` itself in case one runs long.
 // Cuts at the last word boundary before maxLen rather than mid-word, unless
 // that would chop off more than half the target length (a bio with no
 // early spaces, e.g. one long clause).
@@ -179,20 +202,28 @@ function summarize(text: string, maxLen = 90) {
   return `${cut.slice(0, lastSpace > maxLen / 2 ? lastSpace : maxLen)}…`;
 }
 
+// What the card front actually shows: the curated summary if there is one,
+// otherwise the truncated bio.
+function cardText(m: Member): string {
+  return m.summary ? summarize(m.summary) : m.bio ? summarize(m.bio) : '';
+}
+
 // Cards only get a "More" trigger (and an entry in the detail-popup data
 // below) when there's actually more to show than what's already on the
-// card - either the bio itself got truncated, or there's a family/why-TVC/
-// social answer that doesn't fit on the card at all. The ~20 members with
-// no bio and no extra answers stay exactly as before, same height as every
-// other plain card, since a popup would have nothing new to show them.
+// card - either the card text is shorter than the full bio, or there's a
+// family/why-TVC/social answer that doesn't fit on the card at all. The
+// ~20 members with no bio and no extra answers stay exactly as before,
+// same height as every other plain card, since a popup would have nothing
+// new to show them.
 const detailed = members
-  .map((m, i) => ({ i, m, summary: m.bio ? summarize(m.bio) : '' }))
+  .map((m, i) => ({ i, m, summary: cardText(m) }))
   .filter(({ m, summary }) => summary !== m.bio || m.family || m.whyTVC || (m.social && m.social.length))
   .map(({ i, m }) => ({
     i,
     name: m.name,
     photos: photosFor(m),
     initials: initials(m.name),
+    firstNames: firstNamesOf(m.name),
     bio: m.bio,
     family: m.family ?? '',
     whyTVC: m.whyTVC ?? '',
@@ -230,7 +261,7 @@ const detailedById = new Set(detailed.map((d) => d.i));
           <button type="button" class="member-card member-card--has-details" data-member-id={i} aria-label={`More about ${m.name}`}>
             {photoBlock}
             <h2>{m.name}</h2>
-            {m.bio && <p>{summarize(m.bio)}</p>}
+            {m.bio && <p>{cardText(m)}</p>}
             <span class="member-more" aria-hidden="true">More →</span>
           </button>
         ) : (
@@ -260,9 +291,22 @@ const detailedById = new Set(detailed.map((d) => d.i));
         <div id="member-detail-initials" class="member-photo member-photo--placeholder" aria-hidden="true" hidden></div>
         <div id="member-detail-photos" class="member-detail-photos" hidden></div>
         <h2 id="member-detail-name"></h2>
-        <p id="member-detail-bio"></p>
-        <p id="member-detail-family" class="member-family" hidden></p>
-        <p id="member-detail-quote" class="member-quote" hidden></p>
+        <p id="member-detail-bio" class="member-bio"></p>
+        <p id="member-detail-family" class="member-family" hidden>
+          <svg class="member-family-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" aria-hidden="true">
+            <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.6" />
+            <circle cx="17" cy="9" r="2.4" stroke="currentColor" stroke-width="1.6" />
+            <path d="M3 19c0-3 2.2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            <path d="M14.5 19c0-2.2 1.6-4 4-4.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+          <span id="member-detail-family-text"></span>
+        </p>
+        <div id="member-detail-quote" class="member-quote" hidden>
+          <svg class="member-quote-mark" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path d="M7.5 6.5C4.9 8 3.5 10.3 3.5 13.1c0 2.6 1.8 4.4 4 4.4 1.9 0 3.3-1.4 3.3-3.2 0-1.7-1.2-3-2.9-3-.3 0-.6 0-.8.1.3-1.7 1.7-3.3 3.4-4.2L7.5 6.5Zm9 0c-2.6 1.5-4 3.8-4 6.6 0 2.6 1.8 4.4 4 4.4 1.9 0 3.3-1.4 3.3-3.2 0-1.7-1.2-3-2.9-3-.3 0-.6 0-.8.1.3-1.7 1.7-3.3 3.4-4.2L16.5 6.5Z" fill="currentColor" />
+          </svg>
+          <p id="member-detail-quote-text"></p>
+        </div>
         <div id="member-detail-links" class="member-links"></div>
       </div>
     </div>
@@ -276,10 +320,41 @@ const detailedById = new Set(detailed.map((d) => d.i));
       name: string;
       photos: string[];
       initials: string;
+      firstNames: string[];
       bio: string;
       family: string;
       whyTVC: string;
       links: { url: string; icon: string; name: string }[];
+    }
+
+    function escapeHtml(text: string): string {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function escapeRegExp(text: string): string {
+      return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    // Bolds each person's first name wherever it appears in the bio/family
+    // text, and turns it into a link straight to their own social profile
+    // when one exists - e.g. on a couple's card, "Sharath" links to his
+    // LinkedIn and "Deepa" just gets the bold treatment if she has none.
+    // Longest name first so "Deepa" doesn't accidentally match inside a
+    // longer name that happens to contain it.
+    function highlightNames(text: string, firstNames: string[], links: MemberDetail['links']): string {
+      const escaped = escapeHtml(text);
+      const linkByName = new Map(links.filter((l) => l.name).map((l) => [l.name, l.url]));
+      const names = [...firstNames].sort((a, b) => b.length - a.length);
+      if (!names.length) return escaped;
+      const pattern = new RegExp(`\\b(${names.map(escapeRegExp).join('|')})\\b`, 'g');
+      return escaped.replace(pattern, (match) => {
+        const url = linkByName.get(match);
+        return url
+          ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="member-name member-name--link">${match}</a>`
+          : `<span class="member-name">${match}</span>`;
+      });
     }
 
     // Same rounded-square icon language as Footer.astro's social links -
@@ -310,14 +385,16 @@ const detailedById = new Set(detailed.map((d) => d.i));
     const nameEl = document.getElementById('member-detail-name');
     const bioEl = document.getElementById('member-detail-bio');
     const familyEl = document.getElementById('member-detail-family');
+    const familyTextEl = document.getElementById('member-detail-family-text');
     const quoteEl = document.getElementById('member-detail-quote');
+    const quoteTextEl = document.getElementById('member-detail-quote-text');
     const linksEl = document.getElementById('member-detail-links');
 
     function open(detail: MemberDetail) {
       if (!overlay) return;
 
       if (nameEl) nameEl.textContent = detail.name;
-      if (bioEl) bioEl.textContent = detail.bio;
+      if (bioEl) bioEl.innerHTML = highlightNames(detail.bio, detail.firstNames, detail.links);
 
       if (photoEl && initialsEl && photosEl) {
         // Reset all three each time - only one of single photo / initials /
@@ -346,12 +423,15 @@ const detailedById = new Set(detailed.map((d) => d.i));
         }
       }
 
-      if (familyEl) {
-        familyEl.textContent = detail.family;
+      if (familyEl && familyTextEl) {
+        familyTextEl.innerHTML = highlightNames(detail.family, detail.firstNames, detail.links);
         familyEl.hidden = !detail.family;
       }
-      if (quoteEl) {
-        quoteEl.textContent = detail.whyTVC ? `“${detail.whyTVC}”` : '';
+      if (quoteEl && quoteTextEl) {
+        // Left first-person on purpose - this is the one place it's framed
+        // as a direct quote (speech-bubble styling below), unlike the bio/
+        // family narration which is normalized to third person.
+        quoteTextEl.textContent = detail.whyTVC ? `“${detail.whyTVC}”` : '';
         quoteEl.hidden = !detail.whyTVC;
       }
       if (linksEl) {
@@ -422,12 +502,22 @@ const detailedById = new Set(detailed.map((d) => d.i));
 
   /* Cards with a popup render as a <button> (see the aria-label on it) so
      the whole card is one click/tap target, not just the "More" text -
-     reset the default button chrome back to matching the plain div cards. */
+     reset the default button chrome back to matching the plain div cards.
+     Grid's default stretch already equalizes each button's outer height to
+     its row's tallest card, but a plain block-flow button leaves that extra
+     space dangling below "More →" instead of using it - flex column plus
+     .member-more's margin-top: auto below pins "More" to the bottom of
+     every card in a row, so a card with a short curated summary (e.g. a
+     couple's two-line "X does A; Y does B") doesn't strand its "More" link
+     far above its row's taller neighbors. */
   button.member-card {
     appearance: none;
     font: inherit;
     color: inherit;
     width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
   }
 
   .member-card--has-details {
@@ -509,7 +599,8 @@ const detailedById = new Set(detailed.map((d) => d.i));
 
   .member-more {
     display: block;
-    margin: 8px 0 0;
+    margin-top: auto;
+    padding-top: 8px;
     font-size: 0.78rem;
     font-weight: 600;
     color: var(--tvc-green-dark);
@@ -604,16 +695,74 @@ const detailedById = new Set(detailed.map((d) => d.i));
     background: var(--tvc-green-tint);
   }
 
-  .member-family {
-    color: var(--tvc-ink-soft);
+  /* Left-aligned and full-ink, unlike the secondary .member-family below -
+     this is the primary description, so it gets the stronger hierarchy.
+     Centered multi-line paragraphs are hard to scan; only the short,
+     single-line bits above (photo/name) stay centered.
+     Selector is `.member-panel .member-bio`, not just `.member-bio` - a
+     bare class selector loses to `.member-panel p` above on specificity
+     (class+type beats class alone) regardless of source order, which
+     silently kept bio stuck at the muted ink-soft color despite this rule. */
+  .member-panel .member-bio {
+    text-align: left;
+    color: var(--tvc-ink);
+    line-height: 1.55;
   }
 
+  /* Icon-prefixed rather than a text label ("Family:") - enough to read as
+     a distinct, secondary fact at a glance without adding more copy.
+     `.member-panel .member-family`, not a bare class, for the same
+     specificity reason as .member-bio above - otherwise `.member-panel p`
+     silently wins the font-size tug-of-war. */
+  .member-panel .member-family {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    text-align: left;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    margin-top: 18px !important;
+  }
+
+  .member-family[hidden] {
+    display: none;
+  }
+
+  .member-family-icon {
+    flex: none;
+    margin-top: 2px;
+    color: var(--tvc-green-dark);
+  }
+
+  /* Speech-bubble treatment for the one field that's an actual first-person
+     quote (everything else on the card is normalized to third person) - a
+     tinted callout with a quote mark reads as "someone's words" rather than
+     another paragraph of site copy. */
   .member-quote {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    text-align: left;
+    background: var(--tvc-green-tint);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin: 20px 0 0 !important;
+  }
+
+  .member-quote[hidden] {
+    display: none;
+  }
+
+  .member-quote-mark {
+    flex: none;
+    color: var(--tvc-green-dark);
+    opacity: 0.6;
+  }
+
+  .member-quote p {
+    margin: 0;
     font-style: italic;
     color: var(--tvc-ink);
-    border-top: 1px solid var(--tvc-line);
-    padding-top: 12px;
-    margin-top: 12px !important;
   }
 
   .member-links {
@@ -647,6 +796,28 @@ const detailedById = new Set(detailed.map((d) => d.i));
   .member-social-name {
     font-size: 0.7rem;
     font-weight: 600;
+  }
+
+  /* Also injected via innerHTML (see highlightNames() above), same reason
+     as .member-social-link. Bold ink for a name with no profile to link -
+     the site's standard link green (global.css's plain `a`) plus
+     underline-on-hover for one that is a link - so the color alone signals
+     which names on the card are clickable, using the same green/orange
+     link convention as every other in-content link on the site rather
+     than a one-off color just for this. */
+  .member-name {
+    font-weight: 700;
+    color: inherit;
+  }
+
+  a.member-name--link {
+    color: var(--tvc-green);
+    text-decoration: none;
+  }
+
+  a.member-name--link:hover {
+    color: var(--tvc-orange);
+    text-decoration: underline;
   }
 
   /* Also dynamically created (see #member-detail-photos in the script
