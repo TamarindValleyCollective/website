@@ -316,27 +316,27 @@
 # are its bare and tamarind-chutney siblings.
 [[redirects]]
   from = "/lantana-furniture"
-  to = "/resource-centre"
+  to = "/resource-centre/"
   status = 301
 
 [[redirects]]
   from = "/tamarind-chutney"
-  to = "/resource-centre"
+  to = "/resource-centre/"
   status = 301
 
 [[redirects]]
   from = "/tamarind-chutney.html"
-  to = "/resource-centre"
+  to = "/resource-centre/"
   status = 301
 
 [[redirects]]
   from = "/soil-and-weather-conditions.html"
-  to = "/ecosystem"
+  to = "/ecosystem/"
   status = 301
 
 [[redirects]]
   from = "/2022-dec-0304-3bs-and-1h-dusk-to-dawn-biodiversity-walkstvc-birdsbutterfliesbees.html"
-  to = "/events/2022-12-03-3bs-and-1h-biodiversity-walk"
+  to = "/events/2022-12-03-3bs-and-1h-biodiversity-walk/"
   status = 301
 
 # No content collection entry for a June 2023 instance of this recurring
@@ -344,45 +344,45 @@
 # /3bs-and-1h.html above, so it points at the events listing too.
 [[redirects]]
   from = "/2023-jun-34-3bs-and-1h-dusk-to-dawn-biodiversity-walkstvc-birdsbutterfliesbees"
-  to = "/events"
+  to = "/events/"
   status = 301
 
 [[redirects]]
   from = "/while-at-farm.html"
-  to = "/visit"
+  to = "/visit/"
   status = 301
 
 [[redirects]]
   from = "/20-feb-2021-how-to-grow-a-forest.html"
-  to = "/events/2021-02-20-how-to-grow-a-forest"
+  to = "/events/2021-02-20-how-to-grow-a-forest/"
   status = 301
 
 [[redirects]]
   from = "/upcoming-events-2.html"
-  to = "/events"
+  to = "/events/"
   status = 301
 
 [[redirects]]
   from = "/2023-jan-08-walk-pick-and-cook.html"
-  to = "/events/2023-01-08-walk-pick-and-cook"
+  to = "/events/2023-01-08-walk-pick-and-cook/"
   status = 301
 
 [[redirects]]
   from = "/permaculture-intro.html"
-  to = "/about"
+  to = "/about/"
   status = 301
 
 # WeCommunities is a partner without its own page (same pattern as
 # /biome-solutions above) - listed on the partners page instead.
 [[redirects]]
   from = "/we-communities.html"
-  to = "/people/partners"
+  to = "/people/partners/"
   status = 301
 
 # Tamil-locale sibling of the /people/community-outreach rules above.
 [[redirects]]
   from = "/ta/people/community-outreach"
-  to = "/ta/people/outreach"
+  to = "/ta/people/outreach/"
   status = 301
 
 [[redirects]]
@@ -394,5 +394,5 @@
 # pre-Astro URL for the same content.
 [[redirects]]
   from = "/ecosystem/geography"
-  to = "/ecosystem/landscape"
+  to = "/ecosystem/landscape/"
   status = 301
