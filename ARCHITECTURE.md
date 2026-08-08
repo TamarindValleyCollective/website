@@ -118,7 +118,7 @@ flowchart TD
         GDRIVE["Google Drive API<br/>Shared Inbox/Approved/Rejected/Published<br/>folders — service-account auth,<br/>called server-side only (Function + local script)"]
         GSHEET["Google Sheets API<br/>Curator allow-list (read, photo-pool.mts) +<br/>membership/general enquiry logs (write,<br/>enquiry.mts) + rainfall log (read,<br/>rainfall.mts) — same service account,<br/>called server-side only"]
         GIDTOKEN["Google Identity Services / OAuth<br/>Curator sign-in (browser) +<br/>ID token verification against<br/>Google's public JWKS (photo-pool.mts)"]
-        GSC["Google Search Console API<br/>urlInspection.index.inspect — read-only,<br/>same service account (added as a<br/>Restricted user on the property),<br/>called from a local script only"]
+        GSC["Google Search Console API<br/>urlInspection.index.inspect — read-only,<br/>same service account (Full user on the<br/>property as of 2026-08-08),<br/>called from a local script only"]
     end
 
     SRC --> BUILD
@@ -293,7 +293,9 @@ Netlify build (the offline photo curation and captioning scripts).
   (`coverageState` — e.g. "Not found (404)", "Submitted and indexed" — and `lastCrawlTime`) for
   one or more URLs, to confirm whether a `netlify.toml` redirect fix has actually been recrawled
   yet rather than eyeballing the Search Console UI by hand. The service account was added as a
-  Restricted user on the `tvc.farm` Search Console property (2026-08-07) for this.
+  Restricted user on the `tvc.farm` Search Console property (2026-08-07), then upgraded to Full
+  user (2026-08-08) — Restricted users can only use URL Inspection via the API; Full also unlocks
+  `sitemaps.list` and `searchAnalytics.query`, not yet used by any committed script.
 
 ### 1a. Localization (Kannada / Tamil)
 
