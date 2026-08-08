@@ -44,7 +44,16 @@ const c = content[lang];
 // brand names rather than conveying new meaning, for 53 short strings of
 // low individual value. Flagged as a candidate for follow-up if a native
 // reviewer wants them translated later.
-const members = [
+interface Member {
+  name: string;
+  bio: string;
+  photo: string | null;
+  family?: string;
+  whyTVC?: string;
+  linkedin?: string;
+}
+
+const members: Member[] = [
   { name: 'Abhinav & Divya', bio: 'Abhinav works for VMware. Divya is an engineer, now teaching baking as well as taking orders from home.', photo: '/images/members/abhinav-and-divya.jpg' },
   { name: 'Akash & Toshal', bio: 'Akash runs his startup Instamojo. Toshal is a software professional.', photo: '/images/members/akash-gehani.jpg' },
   { name: 'Amit Gupta', bio: '', photo: null },
@@ -82,7 +91,7 @@ const members = [
   { name: 'Sanket & Surabhi', bio: 'Sanket works in software, and aspires to be a writer. Surabhi works for HP, also busy dealing with kids and pursuing her hobbies.', photo: '/images/members/sanket-and-surabhi.jpg' },
   { name: 'Shalini & Amit Jain', bio: 'Amit is a Program Manager at HPE. Shalini enjoys baking, gardening, and anything that challenges her creative mind.', photo: '/images/members/shalini-and-amit-jain.jpg' },
   { name: 'Shameek & Gitanjali', bio: 'Shameek and Gitanjali run the venture Farmizen. Gitanjali also runs an urban gardening business - GreenMyLife.', photo: '/images/members/shameek-and-gitanjali.jpg' },
-  { name: 'Sharath & Deepa', bio: 'Sharath works for Shell, specializing in Infrastructure Security and Cloud. Deepa works for Sobis Software managing their global help desk.', photo: '/images/members/sharath-and-deepa.jpg' },
+  { name: 'Sharath & Deepa', bio: 'Sharath works for Shell, specializing in Infrastructure Security and Cloud. Deepa works for Sobis Software managing their global help desk.', photo: '/images/members/sharath-and-deepa.jpg', family: 'Two kids and a very opinionated cat.', whyTVC: 'We wanted our kids to grow up knowing where food comes from, not just where it’s bought.', linkedin: 'https://linkedin.com/in/example' },
   { name: 'Shashi & Shobha', bio: 'Sashi works as a Salesforce consultant for Digile. Shobha is a lawyer by education and an artist by choice.', photo: '/images/members/shashi-and-shobha.jpg' },
   { name: 'Shubh & Ranjini', bio: 'Shubh is a techie, works for RJT. Ranjini is a teacher at COMMITS (by day) and a writer (by night.)', photo: '/images/members/shubh-and-ranjini.jpg' },
   { name: 'Sree & Prameela', bio: '', photo: null },
@@ -130,6 +139,9 @@ function initials(name: string) {
           )}
           <h2>{m.name}</h2>
           {m.bio && <p>{m.bio}</p>}
+          {m.family && <p class="member-family">{m.family}</p>}
+          {m.whyTVC && <p class="member-quote">“{m.whyTVC}”</p>}
+          {m.linkedin && <a href={m.linkedin} class="member-linkedin" target="_blank" rel="noopener noreferrer">LinkedIn →</a>}
         </div>
       ))}
     </div>
@@ -180,5 +192,30 @@ function initials(name: string) {
     color: var(--tvc-green-dark);
     font-weight: 700;
     font-size: 1rem;
+  }
+
+  .member-family {
+    color: var(--tvc-ink-soft);
+  }
+
+  .member-quote {
+    font-style: italic;
+    color: var(--tvc-ink);
+    border-top: 1px solid var(--tvc-line);
+    padding-top: 8px;
+    margin-top: 8px !important;
+  }
+
+  .member-linkedin {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 0.75rem;
+    color: var(--tvc-green-dark);
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  .member-linkedin:hover {
+    text-decoration: underline;
   }
 </style>
