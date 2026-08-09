@@ -3,6 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import type { Locale } from '../../i18n/utils';
+import { organizationId } from '../../utils/schema';
 
 interface Props {
   lang: Locale;
@@ -67,9 +68,26 @@ const content = {
 } as const;
 
 const c = content[lang];
+
+// Same "hub linking its own leaves" pattern as EcosystemView's
+// CollectionPage - Members/Staff/Partners/Outreach are this page's whole
+// structure, listed via `hasPart` rather than restated here.
+const collectionSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: c.heroTitle,
+  description: c.metaDescription,
+  about: { '@id': organizationId(Astro.site) },
+  hasPart: c.cards.map((card) => ({
+    '@type': 'WebPage',
+    name: card.title,
+    description: card.desc,
+    url: new URL(getRelativeLocaleUrl(lang, card.href), Astro.site).toString(),
+  })),
+};
 ---
 
-<BaseLayout lang={lang} title={c.heroTitle} description={c.metaDescription} image="/images/members/reva-and-ranjan.jpg" imageWidth={768} imageHeight={576}>
+<BaseLayout lang={lang} title={c.heroTitle} description={c.metaDescription} schema={[collectionSchema]} image="/images/members/reva-and-ranjan.jpg" imageWidth={768} imageHeight={576}>
   <PageHero
     eyebrow={c.heroEyebrow}
     title={c.heroTitle}

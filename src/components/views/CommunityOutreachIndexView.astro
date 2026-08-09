@@ -4,6 +4,7 @@ import PageHero from '../PageHero.astro';
 import { getCollection, render } from 'astro:content';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import type { Locale } from '../../i18n/utils';
+import { organizationId } from '../../utils/schema';
 
 interface Props {
   lang: Locale;
@@ -62,9 +63,44 @@ const content = {
 } as const;
 
 const c = content[lang];
+
+// Mirrors CommunityOutreachDetailView's own Article schema when this page
+// is rendering a single post inline (see singlePost above), since that's
+// exactly what it is in that case; otherwise a CollectionPage listing every
+// post as `hasPart`, same "hub linking its own leaves" pattern as
+// EcosystemView/PeopleView.
+const outreachSchema =
+  singlePost
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'Article',
+        headline: singlePost.data.title,
+        datePublished: singlePost.data.date.toISOString().slice(0, 10),
+        description: singlePost.data.excerpt,
+        image: singlePost.data.coverImage ? new URL(singlePost.data.coverImage, Astro.site).toString() : undefined,
+        author: { '@type': 'Organization', name: 'Tamarind Valley Collective' },
+        publisher: {
+          '@type': 'Organization',
+          name: 'Tamarind Valley Collective',
+          logo: { '@type': 'ImageObject', url: new URL('/images/brand/tvc-logo-mark.png', Astro.site).toString() },
+        },
+      }
+    : {
+        '@context': 'https://schema.org',
+        '@type': 'CollectionPage',
+        name: c.heroTitle,
+        description: c.metaDescription,
+        about: { '@id': organizationId(Astro.site) },
+        hasPart: posts.map((p) => ({
+          '@type': 'WebPage',
+          name: p.data.title,
+          description: p.data.excerpt,
+          url: new URL(getRelativeLocaleUrl(lang, `/people/outreach/${bareSlug(p.id)}`), Astro.site).toString(),
+        })),
+      };
 ---
 
-<BaseLayout lang={lang} title={c.heroTitle} description={c.metaDescription} image="/images/community-outreach/stem-experiential-learning-classes.jpeg" imageWidth={1280} imageHeight={960}>
+<BaseLayout lang={lang} title={c.heroTitle} description={c.metaDescription} schema={[outreachSchema]} image="/images/community-outreach/stem-experiential-learning-classes.jpeg" imageWidth={1280} imageHeight={960}>
   <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} intro={c.heroIntro} image="/images/community-outreach/stem-experiential-learning-classes.jpeg" imageAlt="A STEM class in session at the local village school" />
   <section class="section wrapper">
     {singlePost && Content ? (

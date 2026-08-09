@@ -5,6 +5,7 @@ import PhotoGallery from '../photos/PhotoGallery.astro';
 import OnThisDay from '../photos/OnThisDay.astro';
 import { getCollection } from 'astro:content';
 import { useTranslations, type Locale } from '../../i18n/utils';
+import { organizationId } from '../../utils/schema';
 
 interface Props {
   lang: Locale;
@@ -40,9 +41,21 @@ const content = {
 } as const;
 
 const c = content[lang];
+
+// ImageGallery (a CollectionPage subtype) for the curated photo grid below -
+// numberOfItems is the real, current count of the `photos` collection this
+// page renders, not a hardcoded figure that'd drift as more get added.
+const gallerySchema = {
+  '@context': 'https://schema.org',
+  '@type': 'ImageGallery',
+  name: c.heroTitle,
+  description: c.metaDescription,
+  about: { '@id': organizationId(Astro.site) },
+  numberOfItems: photos.length,
+};
 ---
 
-<BaseLayout lang={lang} title={c.metaTitle} description={c.metaDescription} image="https://media.tvc.farm/photos/2024/2024-08-18-img-1880-display.jpg" imageWidth={4032} imageHeight={3024}>
+<BaseLayout lang={lang} title={c.metaTitle} description={c.metaDescription} schema={[gallerySchema]} image="https://media.tvc.farm/photos/2024/2024-08-18-img-1880-display.jpg" imageWidth={4032} imageHeight={3024}>
   <PageHero eyebrow={t('nav.explore')} title={c.heroTitle} intro={c.heroIntro} image="https://media.tvc.farm/photos/2024/2024-08-18-img-1880-display.jpg" imageAlt={c.heroImageAlt} />
 
   <section class="section wrapper">

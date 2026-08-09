@@ -3,6 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import { useTranslations, type Locale } from '../../i18n/utils';
 import { getRelativeLocaleUrl } from 'astro:i18n';
+import { LAT, LNG } from '../../utils/weather';
 
 interface Props {
   lang: Locale;
@@ -60,9 +61,25 @@ const content = {
 } as const;
 
 const c = content[lang];
+
+// Same coordinates BaseLayout's Organization entry and the weather widget
+// use (src/utils/weather.ts) - one source of truth for the farm's location,
+// here describing the Place this page is actually about.
+const placeSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  name: c.metaTitle,
+  description: c.metaDescription,
+  about: {
+    '@type': 'Place',
+    name: 'Tamarind Valley Collective',
+    geo: { '@type': 'GeoCoordinates', latitude: LAT, longitude: LNG },
+    containedInPlace: { '@type': 'Place', name: 'Melagiri Hills' },
+  },
+};
 ---
 
-<BaseLayout lang={lang} title={c.metaTitle} description={c.metaDescription} image="/images/pages/home/gallery-2.jpg" imageWidth={768} imageHeight={329}>
+<BaseLayout lang={lang} title={c.metaTitle} description={c.metaDescription} schema={[placeSchema]} image="/images/pages/home/gallery-2.jpg" imageWidth={768} imageHeight={329}>
   <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} intro={c.heroIntro} image="/images/pages/home/gallery-2.jpg" imageAlt={c.heroImageAlt} />
 
   <section class="section wrapper">

@@ -3,6 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import { type Locale } from '../../i18n/utils';
+import { organizationId } from '../../utils/schema';
 
 interface Props {
   lang: Locale;
@@ -62,9 +63,21 @@ const content = {
 } as const;
 
 const c = content[lang];
+
+// No price/Offer: the catalogue and email contact are the only real "how to
+// buy" facts we have - orders go through a direct email conversation with
+// Vivek, not a listed price, so an Offer here would be inventing one.
+const productSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Product',
+  name: c.lantanaHeading,
+  description: c.lantanaText,
+  brand: { '@id': organizationId(Astro.site) },
+  url: new URL('/files/lantana-furniture-catalogue.pdf', Astro.site).toString(),
+};
 ---
 
-<BaseLayout lang={lang} title={c.metaTitle} description={c.metaDescription} image="/images/products/tamarind-chutney.jpeg" imageWidth={1280} imageHeight={960}>
+<BaseLayout lang={lang} title={c.metaTitle} description={c.metaDescription} schema={[productSchema]} image="/images/products/tamarind-chutney.jpeg" imageWidth={1280} imageHeight={960}>
   <PageHero eyebrow={c.heroTitle} title={c.heroTitle} image="/images/products/tamarind-chutney.jpeg" imageAlt={c.heroImageAlt} />
 
   <section class="section wrapper">

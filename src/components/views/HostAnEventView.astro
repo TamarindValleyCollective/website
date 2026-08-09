@@ -6,6 +6,7 @@ import { formatDateRange } from '../../utils/events';
 import { FARM_AREA_ACRES, NIGHT_SKY_BRIGHTNESS_UCD_M2 } from '../../data/site-facts';
 import { useTranslations, type Locale } from '../../i18n/utils';
 import { getRelativeLocaleUrl } from 'astro:i18n';
+import { organizationId } from '../../utils/schema';
 
 interface Props {
   lang: Locale;
@@ -150,9 +151,22 @@ const content = {
 } as const;
 
 const c = content[lang];
+
+// A bookable venue-for-hire, not a fixed-price product like Camping/Day
+// Visit (pricing here is quote-based per event) - Service is the schema.org
+// type for that, with areaServed left off since this isn't a service you
+// travel to elsewhere, it's the venue itself.
+const serviceSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Service',
+  serviceType: 'Event venue rental',
+  name: c.pageTitle,
+  description: c.metaDescription,
+  provider: { '@id': organizationId(Astro.site) },
+};
 ---
 
-<BaseLayout lang={lang} title={c.pageTitle} description={c.metaDescription} image="/images/pages/home/gallery-4.jpg" imageWidth={1280} imageHeight={960}>
+<BaseLayout lang={lang} title={c.pageTitle} description={c.metaDescription} schema={[serviceSchema]} image="/images/pages/home/gallery-4.jpg" imageWidth={1280} imageHeight={960}>
   <PageHero
     eyebrow={t('nav.visitTvc')}
     title={c.pageTitle}

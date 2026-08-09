@@ -99,9 +99,30 @@ const content = {
 } as const;
 
 const c = content[lang];
+
+// The 3 named trails below, each a real, distinct thing visitors go do -
+// listed as an ItemList of TouristAttraction rather than restating them as
+// plain prose-only content. No isAccessibleForFree/price claim: the intro
+// above is explicit that treks are arranged with the local in-charge as
+// part of a paid visit, not walked independently.
+const trailsSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  name: c.heroTitle,
+  itemListElement: c.trails.map((tr, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    item: {
+      '@type': 'TouristAttraction',
+      name: tr.name,
+      description: tr.desc,
+      image: new URL(tr.image, Astro.site).toString(),
+    },
+  })),
+};
 ---
 
-<BaseLayout lang={lang} title={t('nav.trekkingTrails')} description={c.metaDescription} image="/images/pages/trekking/hilltop.jpg" imageWidth={1109} imageHeight={1478}>
+<BaseLayout lang={lang} title={t('nav.trekkingTrails')} description={c.metaDescription} schema={[trailsSchema]} image="/images/pages/trekking/hilltop.jpg" imageWidth={1109} imageHeight={1478}>
   <PageHero eyebrow={t('nav.visitTvc')} title={c.heroTitle} image="/images/pages/trekking/hilltop.jpg" imageAlt="View from the hilltop over the Melagiri Hills and forest below" />
 
   <section class="section wrapper">

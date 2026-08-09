@@ -3,6 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import { useTranslations, type Locale } from '../../i18n/utils';
 import { getRelativeLocaleUrl } from 'astro:i18n';
+import { organizationId } from '../../utils/schema';
 
 interface Props {
   lang: Locale;
@@ -83,9 +84,20 @@ const content = {
 
 const c = content[lang];
 const madhavanWhatsappHref = `https://wa.me/${MADHAVAN_WHATSAPP_NUMBER}?text=${encodeURIComponent(c.whatsappGreeting)}`;
+
+// The phone/address/geo facts a ContactPage's mainEntity should point to
+// already live on the sitewide Organization entry (BaseLayout's siteGraph) -
+// reference it by @id rather than repeating them here.
+const contactSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'ContactPage',
+  name: c.pageTitle,
+  description: c.metaDescription,
+  mainEntity: { '@id': organizationId(Astro.site) },
+};
 ---
 
-<BaseLayout lang={lang} title={c.pageTitle} description={c.metaDescription} image="/images/pages/location/hero.png" imageWidth={1177} imageHeight={673}>
+<BaseLayout lang={lang} title={c.pageTitle} description={c.metaDescription} schema={[contactSchema]} image="/images/pages/location/hero.png" imageWidth={1177} imageHeight={673}>
   <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} image="/images/pages/location/hero.png" imageAlt="Map showing TVC's location on the Tamil Nadu–Karnataka border" />
 
   <section class="section wrapper contact-options">

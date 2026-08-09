@@ -65,9 +65,24 @@ const content = {
 } as const;
 
 const c = content[lang];
+
+// One Organization per real partner, straight from the same collection
+// entries the cards below render (title/url/coverImage/excerpt) - no
+// per-partner "TVC connection" callout here, since that's a relationship
+// fact about TVC rather than a fact about the partner itself.
+const partnersSchema = {
+  '@context': 'https://schema.org',
+  '@graph': partnersWithContent.map(({ entry: p }) => ({
+    '@type': 'Organization',
+    name: partnerTitle(p),
+    description: p.data.excerpt,
+    url: p.data.url,
+    logo: p.data.coverImage ? new URL(p.data.coverImage, Astro.site).toString() : undefined,
+  })),
+};
 ---
 
-<BaseLayout lang={lang} title={c.heroTitle} description={c.metaDescription} image="/images/members/reva-and-ranjan.jpg" imageWidth={768} imageHeight={576}>
+<BaseLayout lang={lang} title={c.heroTitle} description={c.metaDescription} schema={[partnersSchema]} image="/images/members/reva-and-ranjan.jpg" imageWidth={768} imageHeight={576}>
   <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} intro={c.heroIntro} />
 
   <section class="section wrapper">
