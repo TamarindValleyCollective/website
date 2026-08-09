@@ -49,9 +49,23 @@ const content = {
 } as const;
 
 const c = content[lang];
+
+// The aerial flyover is a real, findable YouTube video (id ixHNXOiQ9vM,
+// embedded below) - VideoObject lets AI/video search surface it directly
+// rather than only as a generic page result. No uploadDate: we don't
+// actually know it, and Google's rich-result guidance for VideoObject is a
+// reason to add the field when it's known, not a reason to guess one.
+const videoSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'VideoObject',
+  name: c.videoTitle,
+  description: c.aerialText,
+  thumbnailUrl: [new URL('/images/pages/home/hero.jpg', Astro.site).toString()],
+  embedUrl: 'https://www.youtube.com/embed/ixHNXOiQ9vM',
+};
 ---
 
-<BaseLayout lang={lang} title={c.heroTitle} description={c.metaDescription} image="/images/pages/home/hero.jpg" imageWidth={4204} imageHeight={1330}>
+<BaseLayout lang={lang} title={c.heroTitle} description={c.metaDescription} schema={[videoSchema]} image="/images/pages/home/hero.jpg" imageWidth={4204} imageHeight={1330}>
   <PageHero
     eyebrow={t('nav.about')}
     title={c.heroTitle}

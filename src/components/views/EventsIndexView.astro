@@ -5,6 +5,7 @@ import { getCollection } from 'astro:content';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import type { Locale } from '../../i18n/utils';
 import { formatDateRange, durationTag, durationDays, daysUntil, countdownLabel } from '../../utils/events';
+import { organizationId } from '../../utils/schema';
 
 interface Props {
   lang: Locale;
@@ -114,12 +115,41 @@ const content = {
 } as const;
 
 const c = content[lang];
+
+// The full Event schema (location, organizer, ...) lives on each event's own
+// detail page (see EventDetailView) - this index just needs to point at the
+// upcoming ones, as a CollectionPage whose ItemList links out to them rather
+// than duplicating their facts. Past events are left out of the list (their
+// own pages still carry full Event schema) since this is a calendar of
+// what's coming up, not an archive listing.
+const eventsSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: c.heroTitle,
+  description: c.metaDescription,
+  about: { '@id': organizationId(Astro.site) },
+  mainEntity: {
+    '@type': 'ItemList',
+    itemListElement: upcoming.map((e, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      item: {
+        '@type': 'Event',
+        name: e.data.title,
+        startDate: e.data.date.toISOString().slice(0, 10),
+        endDate: e.data.endDate ? e.data.endDate.toISOString().slice(0, 10) : undefined,
+        url: new URL(eventHref(e.id), Astro.site).toString(),
+      },
+    })),
+  },
+};
 ---
 
 <BaseLayout
   lang={lang}
   title={c.heroTitle}
   description={c.metaDescription}
+  schema={[eventsSchema]}
   image="/images/events/2026-08-01-foraging-day/hero.jpeg"
   imageWidth={720}
   imageHeight={480}

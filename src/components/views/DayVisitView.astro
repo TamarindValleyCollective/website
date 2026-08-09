@@ -3,6 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import BookingInquiry from '../BookingInquiry.astro';
 import { useTranslations, type Locale } from '../../i18n/utils';
+import { organizationId } from '../../utils/schema';
 
 interface Props {
   lang: Locale;
@@ -176,9 +177,26 @@ const content = {
 
 const c = content[lang];
 const packageOptions = c.itineraries.map((it) => it.name);
+
+// pricingNote always reads "₹X per person, ₹Y per child under 10 — ..." in
+// every locale (see content.en/kn/ta above) - the two ₹ amounts, in that
+// order, are the adult and child rates.
+const [adultPrice, childPrice] = [...c.pricingNote.matchAll(/₹([\d,]+)/g)].map((m) => m[1].replace(/,/g, ''));
+const productSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Product',
+  name: c.heroTitle,
+  description: c.metaDescription,
+  image: new URL('/images/pages/home/gallery-2.jpg', Astro.site).toString(),
+  brand: { '@id': organizationId(Astro.site) },
+  offers: [
+    adultPrice && { '@type': 'Offer', name: 'Adult', price: adultPrice, priceCurrency: 'INR' },
+    childPrice && { '@type': 'Offer', name: 'Child under 10', price: childPrice, priceCurrency: 'INR' },
+  ].filter(Boolean),
+};
 ---
 
-<BaseLayout lang={lang} title={t('nav.dayVisit')} description={c.metaDescription} image="/images/pages/home/gallery-2.jpg" imageWidth={768} imageHeight={329}>
+<BaseLayout lang={lang} title={t('nav.dayVisit')} description={c.metaDescription} schema={[productSchema]} image="/images/pages/home/gallery-2.jpg" imageWidth={768} imageHeight={329}>
   <PageHero eyebrow={t('nav.visitTvc')} title={c.heroTitle} intro={c.heroIntro} image="/images/pages/home/gallery-2.jpg" imageAlt="Visitors taking in the valley view from a hilltop" />
 
   <section class="section wrapper">

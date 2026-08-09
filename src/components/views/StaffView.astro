@@ -2,6 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import type { Locale } from '../../i18n/utils';
+import { organizationId } from '../../utils/schema';
 
 interface Props {
   lang: Locale;
@@ -318,9 +319,31 @@ const staffContent = {
 } as const;
 
 const staff = staffContent[lang];
+
+// One Person per real, named team member (role + bio genuinely exist for
+// every one of them, unlike Members' mostly-empty bios - see MembersView's
+// deliberate choice not to do this) - each tied back to the Organization via
+// worksFor rather than restating the org's own facts.
+const orgId = organizationId(Astro.site);
+// One @context wrapping the whole list (via @graph), same pattern as
+// BaseLayout's own siteGraph - each Person is a JSON-LD script's sole
+// top-level entity otherwise, and would need to repeat @context on its own.
+const staffSchema = {
+  '@context': 'https://schema.org',
+  '@graph': staff.flatMap((group) =>
+    group.people.map((p) => ({
+      '@type': 'Person',
+      name: p.name,
+      jobTitle: p.role,
+      description: p.bio,
+      image: new URL(group.image, Astro.site).toString(),
+      worksFor: { '@id': orgId },
+    }))
+  ),
+};
 ---
 
-<BaseLayout lang={lang} title={c.heroTitle} description={c.metaDescription} image="/images/pages/staff/hero.jpg" imageWidth={1280} imageHeight={683}>
+<BaseLayout lang={lang} title={c.heroTitle} description={c.metaDescription} schema={[staffSchema]} image="/images/pages/staff/hero.jpg" imageWidth={1280} imageHeight={683}>
   <PageHero
     eyebrow={c.heroEyebrow}
     title={c.heroTitle}

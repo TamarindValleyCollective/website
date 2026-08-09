@@ -3,6 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import { useTranslations, type Locale } from '../../i18n/utils';
 import { getRelativeLocaleUrl } from 'astro:i18n';
+import { organizationId } from '../../utils/schema';
 
 interface Props {
   lang: Locale;
@@ -62,9 +63,27 @@ const content = {
 } as const;
 
 const c = content[lang];
+
+// This hub's 3 cards are its whole structure - a CollectionPage listing
+// them as `hasPart` mirrors that 1:1, same real hrefs the cards below link
+// to, rather than restating any of Biodiversity/Landscape/Weather's own
+// facts here.
+const collectionSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: c.heroTitle,
+  description: c.metaDescription,
+  about: { '@id': organizationId(Astro.site) },
+  hasPart: c.cards.map((card) => ({
+    '@type': 'WebPage',
+    name: card.title,
+    description: card.desc,
+    url: new URL(getRelativeLocaleUrl(lang, card.href), Astro.site).toString(),
+  })),
+};
 ---
 
-<BaseLayout lang={lang} title={t('nav.ecosystem')} description={c.metaDescription} image="/images/pages/while-at-farm/hero.jpg" imageWidth={1280} imageHeight={960}>
+<BaseLayout lang={lang} title={t('nav.ecosystem')} description={c.metaDescription} schema={[collectionSchema]} image="/images/pages/while-at-farm/hero.jpg" imageWidth={1280} imageHeight={960}>
   <PageHero eyebrow={t('nav.ecosystem')} title={c.heroTitle} intro={c.heroIntro} image="/images/pages/while-at-farm/hero.jpg" imageAlt={c.heroImageAlt} />
 
   <section class="section wrapper">

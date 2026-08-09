@@ -4,6 +4,7 @@ import PageHero from '../PageHero.astro';
 import JourneyTimeline from '../JourneyTimelineStandalone.astro';
 import { FARM_AREA_ACRES } from '../../data/site-facts';
 import type { Locale } from '../../i18n/utils';
+import { organizationId } from '../../utils/schema';
 
 interface Props {
   lang: Locale;
@@ -34,9 +35,22 @@ const content = {
 } as const;
 
 const c = content[lang];
+
+// 2017 is the founding year stated throughout the site (About, Ecosystem,
+// etc.) - temporalCoverage runs it through to the current year, since this
+// timeline is a living document that keeps adding new years, not a closed
+// date range.
+const journeySchema = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: c.heroTitle,
+  description: c.metaDescription,
+  about: { '@id': organizationId(Astro.site) },
+  temporalCoverage: `2017/${new Date().getFullYear()}`,
+};
 ---
 
-<BaseLayout lang={lang} title={c.heroTitle} description={c.metaDescription} image="/images/pages/journey/hero.jpg" imageWidth={1280} imageHeight={960}>
+<BaseLayout lang={lang} title={c.heroTitle} description={c.metaDescription} schema={[journeySchema]} image="/images/pages/journey/hero.jpg" imageWidth={1280} imageHeight={960}>
   <PageHero
     eyebrow={c.heroEyebrow}
     title={c.heroTitle}
