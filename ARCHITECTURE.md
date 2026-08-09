@@ -28,8 +28,9 @@ replaced by a direct invite link to that same group — no form, no manual step.
 `ANTHROPIC_API_KEY` was set on 2026-07-18, and it now answers with real, grounded responses,
 `/api/event-interest` responds live in production, and `/api/photo-pool`'s Google Cloud service
 account, Drive folder tree, and Netlify env vars (all deploy contexts, including production) are
-fully configured and verified end-to-end via local dev — not yet independently re-verified
-against the live production URL. `/api/enquiry` is **live and verified**: its two Google Sheets
+fully configured and **verified directly against production** (`/internal/photo-pool` returns
+200, `/api/photo-pool` returns 401 unauthenticated as expected for its Google Sign-In gate).
+`/api/enquiry` is **live and verified**: its two Google Sheets
 are created, shared Editor-access with the service account, and their ids set as
 `MEMBERSHIP_ENQUIRY_SHEET_ID`/`GENERAL_ENQUIRY_SHEET_ID` — a direct `POST` to
 `https://tvc.farm/api/enquiry` for each form type appended a real row successfully. No custom
@@ -577,20 +578,20 @@ never touches Netlify either.
 | Chat widget's actual AI responses | ✅ Live — `ANTHROPIC_API_KEY` set 2026-07-18; verified with real requests against `tvc.farm/api/chat` returning grounded answers |
 | Friends of TVC WhatsApp group (direct invite link) | ✅ Live — `/contact` links straight to the group, no form or manual step |
 | Membership + general enquiry forms (Netlify Forms + `/api/enquiry`) | ✅ Live — Sheet ids set and shared with the service account, verified with real `POST`s against production for both form types; email relies on Netlify's default owner notification (the account owner already is `contact@tvc.farm`), no custom notification rule needed |
-| Host an Event inquiry form (Netlify Forms) | 🟢 Deployed (pushed to `main`) — same Netlify Forms mechanism as the Visit inquiry form, at `/visit/host-an-event`; not independently re-verified against production |
-| Visit inquiry form + WhatsApp CTA (Netlify Forms) | 🟢 Deployed (pushed to `main`), both email notifications configured — replaces the "Book via Linger" redirect on `/visit/camping`, `/visit/day-visit`, `/visit/trekking-trails`; not independently re-verified against production |
+| Host an Event inquiry form (Netlify Forms) | 🟢 Deployed and registered — confirmed directly via Netlify's Forms API (`host-event-inquiry`, correct field schema: name/organization/email/phone/event-type/group-size/dates/message/honeypot); **0 submissions to date**, so the full round-trip hasn't actually been exercised yet |
+| Visit inquiry form + WhatsApp CTA (Netlify Forms) | ✅ Live and verified — confirmed via Netlify's Forms API (`visit-inquiry`), **1 real submission recorded** (2026-08-04); replaces the "Book via Linger" redirect on `/visit/camping`, `/visit/day-visit`, `/visit/trekking-trails` |
 | Event interest widget + counter (Netlify Function, Blobs, Forms) | ✅ Live — "Want this to happen again?" on past event pages (`/events/<slug>`), public count via `/api/event-interest` + Netlify Blobs, optional-email entries via Netlify Forms; verified `/api/event-interest` responds live in production |
 | Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy` |
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
 | Live rainfall chart/table/monsoon stat (`/ecosystem/weather`, `/api/rainfall`) | ✅ Live — reads the community's rainfall-log Sheet live, `RAINFALL_SHEET_ID` set on Netlify (all deploy contexts); multi-year line chart with year-filter checkboxes; verified against `tvc.farm/ecosystem/weather` and `tvc.farm/api/rainfall` directly |
-| Site search (nav icon / `/` key) | 🟢 Deployed (pushed to `main`), verified via `astro build` + `astro preview` locally (42 pages indexed, keyboard nav, navigation on Enter) — not yet independently re-verified against the live production URL |
-| Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | 🟢 Fully configured (Drive folders, service account, Google Sign-In OAuth client, curator allow-list Sheet, all Netlify env vars) and verified end-to-end via `netlify dev`, including real sign-in and the 403 not-authorized path — not yet pushed to `main` |
+| Site search (nav icon / `/` key) | ✅ Live — verified directly against production: `tvc.farm/search-index.json` serves 133 real entries, the search trigger and its fetch call are present in the live homepage HTML |
+| Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | ✅ Live — Drive folders, service account, Google Sign-In OAuth client, curator allow-list Sheet, all Netlify env vars configured; verified against production directly (`/internal/photo-pool` returns 200, `/api/photo-pool` returns 401 unauthenticated as expected for the Google Sign-In-gated function) |
 
-One known gap remains in what's deployed: the Photo Pool dashboard, fully built, configured, and
-verified locally, awaiting a push to actually deploy. The membership/general enquiry forms are
-fully live — Sheets logging verified with real production `POST`s, and email needs no separate
-setup since Netlify's default owner notification already reaches `contact@tvc.farm`.
-Every other *deployed* feature above is either confirmed live in production or (Host an Event,
-Visit inquiry) pushed to `main` without a separate direct-production check.
+The membership/general enquiry forms are fully live — Sheets logging verified with real
+production `POST`s, and email needs no separate setup since Netlify's default owner notification
+already reaches `contact@tvc.farm`. Every feature in the table above has now been checked
+directly against production (page/API responses, or Netlify's own Forms API). The one open item
+is the Host an Event form: it's registered correctly with Netlify, but has zero real submissions
+to date, so its full round-trip hasn't actually been exercised.
 The Netlify project itself is owned by the `contact@tvc.farm` account (moved there from a
 personal account on 2026-07-18).
