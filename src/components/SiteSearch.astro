@@ -10,7 +10,9 @@
 // naturally in the header bar's flex row; the overlay itself is
 // position:fixed, so its place in the DOM doesn't matter for where it
 // actually appears on screen.
+import { getRelativeLocaleUrl } from 'astro:i18n';
 import { useTranslations, DEFAULT_LOCALE, type Locale } from '../i18n/utils';
+import { members, memberSlug } from '../data/members';
 
 interface Props {
   lang?: Locale;
@@ -18,6 +20,22 @@ interface Props {
 
 const { lang = DEFAULT_LOCALE } = Astro.props;
 const t = useTranslations(lang);
+
+// A separate, always-correct lookup over the ~130 Members-page cards,
+// searched client-side alongside Pagefind. Pagefind's own chunking merges
+// many of these near-identical cards together on that one page, so a
+// full-text hit on e.g. "Prameela" can come back titled after a totally
+// different, later card in the same chunk with no in-page anchor at all -
+// fine for prose pages, not for a flat grid of ~130 short entries. This
+// index is tiny (name + url + blurb per member) and matches by substring
+// against the name only, so it's always attributed to the right person and
+// always deep-links to their actual card via memberSlug (see
+// MembersView.astro, which anchors each card with the same id).
+const memberIndex = members.map((m) => ({
+  name: m.name,
+  url: `${getRelativeLocaleUrl(lang, '/people/members')}#${memberSlug(m.name)}`,
+  blurb: m.summary ?? m.bio ?? '',
+}));
 ---
 
 <button type="button" id="site-search-trigger" class="search-trigger" aria-label={t('search.trigger')}>
@@ -52,6 +70,8 @@ const t = useTranslations(lang);
     ></p>
   </div>
 </div>
+
+<script type="application/json" id="site-search-members" set:html={JSON.stringify(memberIndex)} />
 
 <style is:global>
   /* Global rather than scoped: the results <li>/<a> markup is injected at
@@ -214,12 +234,20 @@ const t = useTranslations(lang);
     search: (query: string) => Promise<{ results: { data: () => Promise<PagefindResultData> }[] }>;
   }
 
+  interface MemberIndexEntry {
+    name: string;
+    url: string;
+    blurb: string;
+  }
+
   const trigger = document.getElementById('site-search-trigger');
   const overlay = document.getElementById('site-search-overlay');
   const input = document.getElementById('site-search-input') as HTMLInputElement | null;
   const closeBtn = document.getElementById('site-search-close');
   const resultsEl = document.getElementById('site-search-results');
   const statusEl = document.getElementById('site-search-status');
+  const membersDataEl = document.getElementById('site-search-members');
+  const memberIndex: MemberIndexEntry[] = membersDataEl ? JSON.parse(membersDataEl.textContent ?? '[]') : [];
 
   let pagefind: PagefindApi | null = null;
   let loadFailed = false;
@@ -249,13 +277,45 @@ const t = useTranslations(lang);
     return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
   }
 
+  // Wraps the first case-insensitive occurrence of `query` in <mark>,
+  // matching the styling of Pagefind's own excerpts (see the PagefindResultData
+  // comment above) even though this text never goes through Pagefind.
+  function highlightMatch(text: string, query: string): string {
+    const idx = text.toLowerCase().indexOf(query.toLowerCase());
+    if (idx === -1) return escapeHtml(text);
+    return (
+      escapeHtml(text.slice(0, idx)) +
+      '<mark>' + escapeHtml(text.slice(idx, idx + query.length)) + '</mark>' +
+      escapeHtml(text.slice(idx + query.length))
+    );
+  }
+
+  // Matches by substring against member names only (not the full bio) - see
+  // the memberIndex comment in the frontmatter above for why this exists
+  // separately from Pagefind. Capped at 3 so it can't crowd out every other
+  // page's results for a common name fragment.
+  function searchMembers(query: string): PagefindResultData[] {
+    const q = query.trim();
+    if (!q) return [];
+    return memberIndex
+      .filter((m) => m.name.toLowerCase().includes(q.toLowerCase()))
+      .slice(0, 3)
+      .map((m) => ({
+        url: m.url,
+        excerpt: highlightMatch(m.blurb || 'TVC member', q),
+        meta: { title: m.name },
+      }));
+  }
+
   async function search(query: string): Promise<PagefindResultData[]> {
     const q = query.trim();
     if (!q) return [];
+    const memberMatches = searchMembers(q);
     const api = await loadPagefind();
-    if (!api) return [];
+    if (!api) return memberMatches;
     const { results } = await api.search(q);
-    return Promise.all(results.slice(0, 8).map((r) => r.data()));
+    const pageMatches = await Promise.all(results.slice(0, 8 - memberMatches.length).map((r) => r.data()));
+    return [...memberMatches, ...pageMatches];
   }
 
   function render(query: string) {
@@ -263,18 +323,16 @@ const t = useTranslations(lang);
     resultsEl.innerHTML = '';
     activeIndex = -1;
 
-    if (loadFailed) {
-      statusEl.textContent = statusEl.dataset.msgUnavailable ?? '';
-      statusEl.hidden = false;
-      return;
-    }
     if (!query.trim()) {
       statusEl.hidden = true;
       currentResults = [];
       return;
     }
+    // Member-name matches don't depend on Pagefind, so they can still
+    // render even when it failed to load (loadFailed) - only fall back to
+    // the unavailable/no-results message once there's truly nothing to show.
     if (currentResults.length === 0) {
-      statusEl.textContent = statusEl.dataset.msgNoResults ?? '';
+      statusEl.textContent = loadFailed ? (statusEl.dataset.msgUnavailable ?? '') : (statusEl.dataset.msgNoResults ?? '');
       statusEl.hidden = false;
       return;
     }
