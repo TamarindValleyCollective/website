@@ -13,6 +13,9 @@ const FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScH8mWVrzD3wIG44QsMe1
 <BaseLayout
   title="Sharing Your Story"
   description={`A guide to the "TVC Members: Your Story" form - what it's for, and exactly what happens after you submit.`}
+  image="/images/journey/journey-43.jpg"
+  imageWidth={1400}
+  imageHeight={787}
   noindex
   translated={false}
 >
@@ -32,6 +35,34 @@ const FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScH8mWVrzD3wIG44QsMe1
       </header>
 
       <section class="doc-section">
+        <h2>What each answer becomes</h2>
+        <p class="section-intro">The form's own examples below are Sree &amp; Prameela's real, already-published answers — so you can see exactly where each one ends up on their actual card.</p>
+        <div class="field-map">
+          <div class="field-map-item">
+            <div class="field-map-q">
+              <span class="field-map-label">"What do you do today?"</span>
+              <p class="field-map-note">Becomes the main paragraph on your card.</p>
+            </div>
+            <img src="/images/pages/members-story-guide/field-bio.jpg" alt="Sree and Prameela's bio rendered on their card, with their names shown as green links" width="838" height="165" loading="lazy" class="field-map-img" />
+          </div>
+          <div class="field-map-item">
+            <div class="field-map-q">
+              <span class="field-map-label">"Family"</span>
+              <p class="field-map-note">Becomes its own line with a small icon. Add a LinkedIn link and your name turns green and clickable everywhere it's mentioned — here "Sree" and "Prameela" both link out, while "Sumant" (their son) is just bold, since no profile was given for him.</p>
+            </div>
+            <img src="/images/pages/members-story-guide/field-family.jpg" alt="Sree and Prameela's family line, with their own names linked and their son Sumant's name bolded but not linked" width="838" height="120" loading="lazy" class="field-map-img" />
+          </div>
+          <div class="field-map-item">
+            <div class="field-map-q">
+              <span class="field-map-label">"In one sentence, why are you part of TVC?"</span>
+              <p class="field-map-note">Becomes an italic quote bubble. If you and a partner each submit your own, you each get your own bubble, credited by name.</p>
+            </div>
+            <img src="/images/pages/members-story-guide/field-quote.jpg" alt="Sree's why-TVC answer rendered as an italic quote bubble, credited to him by name" width="838" height="250" loading="lazy" class="field-map-img" />
+          </div>
+        </div>
+      </section>
+
+      <section class="doc-section">
         <h2>What happens after you submit</h2>
         <ol class="steps">
           <li class="step">
@@ -49,8 +80,8 @@ const FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScH8mWVrzD3wIG44QsMe1
             <h3>It gets added to your card</h3>
             <p>Once reviewed, your answers are added to the <a href="/people/members">Members page</a> at tvc.farm — but only the parts you said yes to publishing. If two of you each submitted separately, both get folded into one card, photos included.</p>
             <figure class="shot">
-              <img src="/images/pages/members-story-guide/card-example.jpg" alt="An example member card popup showing a photo, bio, family line with names highlighted, and a quote on why they're part of TVC" width="700" height="1010" loading="lazy" />
-              <figcaption>What a filled-in card looks like once it's live.</figcaption>
+              <img src="/images/pages/members-story-guide/card-example.jpg" alt="Sree and Prameela's real member card popup, showing a photo, bio, family line with names highlighted, and two quotes on why they're part of TVC, one per person" width="838" height="1332" loading="lazy" />
+              <figcaption>Sree &amp; Prameela's card, live on the Members page today.</figcaption>
             </figure>
           </li>
           <li class="step">
@@ -150,6 +181,54 @@ const FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScH8mWVrzD3wIG44QsMe1
     font-size: 1.4rem;
     margin: 0 0 24px;
     text-wrap: balance;
+  }
+
+  .section-intro {
+    margin: -8px 0 28px;
+    color: var(--tvc-ink-soft);
+    max-width: 58ch;
+  }
+
+  .field-map {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  .field-map-item {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: center;
+  }
+
+  .field-map-label {
+    display: block;
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 0.92rem;
+    color: var(--tvc-ink);
+  }
+
+  .field-map-note {
+    margin: 6px 0 0;
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .field-map-img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+    border: 1px solid var(--tvc-line);
+  }
+
+  @media (max-width: 560px) {
+    .field-map-item {
+      grid-template-columns: 1fr;
+    }
   }
 
   /* The steps below are a real, ordered sequence - submit, then review,
