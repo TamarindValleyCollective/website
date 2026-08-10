@@ -238,6 +238,27 @@ export default async (req: Request): Promise<Response> => {
     if (!anthropicRes.ok) {
       const errText = await anthropicRes.text();
       console.error('[chat] Anthropic API error', anthropicRes.status, errText);
+
+      // A 403 billing_error (out of credits) is a distinct, known failure
+      // mode - worth a warmer message than the generic "having trouble"
+      // catch-all, since there's nothing transient about it that "try
+      // again shortly" would fix. Parsed defensively since a non-JSON
+      // error body (e.g. an upstream proxy error page) shouldn't crash
+      // the request - it just falls through to the generic message.
+      let errorType: string | undefined;
+      try {
+        errorType = JSON.parse(errText)?.error?.type;
+      } catch {
+        // not JSON - fall through to the generic message below
+      }
+
+      if (errorType === 'billing_error') {
+        return jsonResponse(
+          { error: "Looks like I've hit my limit for the moment — try again in a bit, or reach out via the Contact page!" },
+          502,
+        );
+      }
+
       return jsonResponse({ error: 'The assistant is having trouble right now. Please try again shortly.' }, 502);
     }
 
