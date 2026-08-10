@@ -67,7 +67,41 @@ const suggestionsJsonSafe = JSON.stringify(suggestions).replace(/<\/script/gi, '
     content: string;
   }
 
-  const history: ChatMessage[] = [];
+  // Persisted to sessionStorage (not localStorage) so a conversation
+  // survives page navigations within the same tab - this is a plain
+  // multi-page Astro site (full page loads, no client-side routing), so
+  // without this the widget's in-memory history reset to empty on every
+  // click to a new page, which undercuts the point of a conversational
+  // widget for a site where visitors often browse a couple of pages while
+  // asking follow-up questions. Clears naturally when the tab closes,
+  // matching the "session" framing already implied by `history`'s name.
+  const CHAT_HISTORY_KEY = 'tvc-chat-history';
+  // Mirrors MAX_HISTORY_MESSAGES in netlify/functions/chat.mts - no reason
+  // to keep/render more locally than what's actually ever sent to the
+  // model, and this keeps sessionStorage/the DOM bubble list from growing
+  // unboundedly over a very long-lived tab.
+  const MAX_STORED_MESSAGES = 12;
+
+  function loadHistory(): ChatMessage[] {
+    try {
+      const raw = sessionStorage.getItem(CHAT_HISTORY_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveHistory() {
+    try {
+      sessionStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(history));
+    } catch {
+      // Private browsing / storage disabled / quota exceeded - the chat
+      // still works, it just won't persist across navigations.
+    }
+  }
+
+  const history: ChatMessage[] = loadHistory();
   let open = false;
   let sending = false;
 
@@ -215,8 +249,16 @@ const suggestionsJsonSafe = JSON.stringify(suggestions).replace(/<\/script/gi, '
     panel.hidden = false;
     toggle.setAttribute('aria-expanded', 'true');
     if (!messagesEl.childElementCount) {
-      addBubble('assistant', messagesEl.dataset.welcome ?? '');
-      addSuggestedPrompts();
+      if (history.length) {
+        // Restored from a prior page on this tab (see loadHistory() above)
+        // - show the resumed conversation instead of the first-open welcome
+        // message and suggestion chips, which only make sense before
+        // there's any conversation yet.
+        history.forEach((m) => addBubble(m.role, m.content));
+      } else {
+        addBubble('assistant', messagesEl.dataset.welcome ?? '');
+        addSuggestedPrompts();
+      }
     }
     input.focus();
   }
@@ -259,6 +301,8 @@ const suggestionsJsonSafe = JSON.stringify(suggestions).replace(/<\/script/gi, '
         addBubble('assistant', data.reply);
         history.push({ role: 'user', content: message });
         history.push({ role: 'assistant', content: data.reply });
+        if (history.length > MAX_STORED_MESSAGES) history.splice(0, history.length - MAX_STORED_MESSAGES);
+        saveHistory();
       }
     } catch {
       typingBubble.remove();
