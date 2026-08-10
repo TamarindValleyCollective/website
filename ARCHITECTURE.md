@@ -196,7 +196,16 @@ Netlify build (the offline photo curation and captioning scripts).
 - **`src/content/`** — Markdown content collections that change over time without touching
   code: `events`, `partners`, `community-outreach`, `photos` (the last one populated by the
   offline curation script below, not authored by hand).
-- **`netlify/functions/chat.mts`** — powers the chat widget.
+- **`netlify/functions/chat.mts`** — powers the chat widget. Rather than stuffing the entire
+  `site-content.json` corpus into every request's system prompt (the original approach — risked
+  exceeding the function's ~10s Netlify execution timeout on a prompt-cache miss, since ~28.5k
+  corpus tokens plus Claude's own response time could exceed it), it runs a small keyword-overlap
+  retrieval step per request (`selectRelevantPages()`) to pick a handful of relevant pages plus a
+  fixed core set (home/about/visit/people), and separately matches the message against
+  `src/data/members.ts` directly to inject a matched member's full record (bio/family/why-TVC/
+  social) — the last three of those fields only ever render client-side from the Members page's
+  popup JSON, so they're invisible to `build-chat-context.mjs`'s static-HTML scrape no matter how
+  the page corpus itself is tuned.
 - **`netlify/functions/event-interest.mts`** — powers the "Want this to happen again?" widget
   (Netlify Blobs, see Hosting below).
 - **`netlify/functions/photo-pool.mts`** — backs `/internal/photo-pool`. Gated by real Google
@@ -355,7 +364,7 @@ just multiplies the number of prerendered pages.
   falling back to the English field when a translation isn't filled in yet.
 - **ChatWidget** — the widget sends the visitor's current `lang` alongside each message;
   `chat.mts`'s system prompt instructs Claude to reply in that language while still grounding
-  itself in the (English-only) site-content corpus — no need to translate the corpus itself.
+  itself in the (English-only) retrieved page content — no need to translate the corpus itself.
 
 ### 2. Build
 
