@@ -242,7 +242,16 @@ export default async (req: Request): Promise<Response> => {
     }
 
     const data = await anthropicRes.json();
-    const reply = data.content?.[0]?.type === 'text' ? data.content[0].text : '';
+    // Not always content[0] - Claude Sonnet 5 sometimes leads with a
+    // `thinking` block (even though this request never asks for extended
+    // thinking) before the actual `text` block, more often on follow-up
+    // (multi-turn) messages than the first one. Only checking index 0 here
+    // meant a real answer sitting at content[1] got silently discarded in
+    // favor of the generic "couldn't come up with an answer" fallback -
+    // confirmed via a raw API call reproducing exactly this shape on a
+    // follow-up question that had a perfectly good answer one slot over.
+    const textBlock = data.content?.find((block: { type: string }) => block.type === 'text');
+    const reply = textBlock?.text ?? '';
 
     return jsonResponse({ reply: reply || "Sorry, I couldn't come up with an answer to that." });
   } catch (err) {
