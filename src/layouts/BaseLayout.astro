@@ -205,7 +205,18 @@ const siteGraph = {
     <Nav lang={lang} translated={translated} />
     {showTranslationNotice && <TranslationNotice lang={lang} />}
     <Breadcrumbs pathname={Astro.url.pathname} pageTitle={title} lang={lang} />
-    <main>
+    <!-- data-pagefind-body scopes the post-build Pagefind index (see
+         SiteSearch.astro) to just this element - Nav/Footer/ChatWidget/
+         CookieConsent chrome is excluded automatically by not carrying the
+         attribute, and once it exists anywhere on the site, pages that
+         never render it (this one included when noindex) are skipped
+         entirely rather than indexed with a bare fallback. Pagefind checks
+         for the attribute's presence, not its value, and data-* attributes
+         aren't in Astro's known-boolean-attribute list - `false` would
+         still serialize as the literal string `data-pagefind-body="false"`
+         and get indexed anyway, so this must be `undefined`, not `false`,
+         on noindex pages. -->
+    <main data-pagefind-body={noindex ? undefined : true}>
       <slot />
     </main>
     <Footer lang={lang} />

@@ -1,11 +1,15 @@
 ---
-// Client-side site search — no backend. Fetches dist/search-index.json
-// (built post-`astro build` by scripts/build-search-index.mjs from every
-// page's actual rendered <title>/<meta description>) once, on first open,
-// and searches it entirely in the browser. Rendered from Nav.astro so the
-// trigger button sits naturally in the header bar's flex row; the overlay
-// itself is position:fixed, so its place in the DOM doesn't matter for
-// where it actually appears on screen.
+// Client-side site search — no backend. Backed by Pagefind
+// (https://pagefind.app), which indexes the full rendered content of every
+// non-noindex page (see BaseLayout's data-pagefind-body on <main>) as a
+// post-`astro build` step and writes a static, chunked index to
+// dist/pagefind/. This component dynamically imports dist/pagefind/pagefind.js
+// on first open and searches entirely in the browser/web worker — no
+// backend, no dist/search-index.json (the old title/description-only
+// index) anymore. Rendered from Nav.astro so the trigger button sits
+// naturally in the header bar's flex row; the overlay itself is
+// position:fixed, so its place in the DOM doesn't matter for where it
+// actually appears on screen.
 import { useTranslations, DEFAULT_LOCALE, type Locale } from '../i18n/utils';
 
 interface Props {
@@ -194,10 +198,20 @@ const t = useTranslations(lang);
 </style>
 
 <script>
-  interface SearchEntry {
-    title: string;
-    description: string;
+  // Shape of the object each Pagefind result's async .data() resolves to —
+  // see https://pagefind.app/docs/api/#the-search-fragment. `excerpt` is
+  // already-escaped HTML with <mark> around the matched terms; `meta.title`
+  // defaults to the page's first <h1>, so unlike the old title-tag based
+  // index this doesn't need to strip a " · Tamarind Valley Collective"
+  // suffix.
+  interface PagefindResultData {
     url: string;
+    excerpt: string;
+    meta: { title?: string };
+  }
+
+  interface PagefindApi {
+    search: (query: string) => Promise<{ results: { data: () => Promise<PagefindResultData> }[] }>;
   }
 
   const trigger = document.getElementById('site-search-trigger');
@@ -207,21 +221,27 @@ const t = useTranslations(lang);
   const resultsEl = document.getElementById('site-search-results');
   const statusEl = document.getElementById('site-search-status');
 
-  let index: SearchEntry[] | null = null;
+  let pagefind: PagefindApi | null = null;
   let loadFailed = false;
   let activeIndex = -1;
-  let currentResults: SearchEntry[] = [];
+  let currentResults: PagefindResultData[] = [];
+  // Guards against an older, slower keystroke's search resolving after a
+  // newer one and clobbering its results.
+  let searchToken = 0;
 
-  async function loadIndex(): Promise<SearchEntry[]> {
-    if (index) return index;
+  async function loadPagefind(): Promise<PagefindApi | null> {
+    if (pagefind) return pagefind;
+    if (loadFailed) return null;
     try {
-      const res = await fetch('/search-index.json');
-      if (!res.ok) throw new Error(String(res.status));
-      index = await res.json();
-      return index ?? [];
+      // Only exists at dist/pagefind/pagefind.js after `pagefind --site
+      // dist` runs post-build (see package.json) — not a source module, so
+      // neither Vite nor tsc can resolve it ahead of time.
+      // @ts-expect-error - runtime-only asset, no module for TS to resolve
+      pagefind = await import(/* @vite-ignore */ '/pagefind/pagefind.js');
+      return pagefind;
     } catch {
       loadFailed = true;
-      return [];
+      return null;
     }
   }
 
@@ -229,33 +249,13 @@ const t = useTranslations(lang);
     return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
   }
 
-  function highlight(text: string, query: string) {
-    const escaped = escapeHtml(text);
-    if (!query) return escaped;
-    const i = escaped.toLowerCase().indexOf(query.toLowerCase());
-    if (i === -1) return escaped;
-    return `${escaped.slice(0, i)}<mark>${escaped.slice(i, i + query.length)}</mark>${escaped.slice(i + query.length)}`;
-  }
-
-  function search(query: string, entries: SearchEntry[]): SearchEntry[] {
-    const q = query.trim().toLowerCase();
+  async function search(query: string): Promise<PagefindResultData[]> {
+    const q = query.trim();
     if (!q) return [];
-    const scored = entries
-      .map((e) => {
-        const title = e.title.toLowerCase();
-        const desc = e.description.toLowerCase();
-        let score = 0;
-        if (title === q) score = 100;
-        else if (title.startsWith(q)) score = 80;
-        else if (title.includes(q)) score = 60;
-        else if (desc.includes(q)) score = 20;
-        return { entry: e, score };
-      })
-      .filter((r) => r.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 8)
-      .map((r) => r.entry);
-    return scored;
+    const api = await loadPagefind();
+    if (!api) return [];
+    const { results } = await api.search(q);
+    return Promise.all(results.slice(0, 8).map((r) => r.data()));
   }
 
   function render(query: string) {
@@ -283,8 +283,8 @@ const t = useTranslations(lang);
     currentResults.forEach((entry, i) => {
       const li = document.createElement('li');
       li.innerHTML = `<a href="${entry.url}">
-        <div class="search-result__title">${highlight(entry.title, query)}</div>
-        ${entry.description ? `<div class="search-result__desc">${highlight(entry.description, query)}</div>` : ''}
+        <div class="search-result__title">${escapeHtml(entry.meta.title ?? '')}</div>
+        ${entry.excerpt ? `<div class="search-result__desc">${entry.excerpt}</div>` : ''}
       </a>`;
       li.dataset.index = String(i);
       resultsEl.appendChild(li);
@@ -306,12 +306,12 @@ const t = useTranslations(lang);
     overlay.hidden = false;
     input.value = '';
     input.focus();
-    if (!index && !loadFailed) {
+    if (!pagefind && !loadFailed) {
       if (statusEl) {
         statusEl.textContent = statusEl.dataset.msgLoading ?? '';
         statusEl.hidden = false;
       }
-      await loadIndex();
+      await loadPagefind();
       if (statusEl) statusEl.hidden = true;
     }
   }
@@ -330,9 +330,12 @@ const t = useTranslations(lang);
   });
 
   input?.addEventListener('input', async () => {
-    const entries = index ?? (await loadIndex());
-    currentResults = search(input.value, entries);
-    render(input.value);
+    const token = ++searchToken;
+    const query = input.value;
+    const results = await search(query);
+    if (token !== searchToken) return; // a newer keystroke already resolved
+    currentResults = results;
+    render(query);
   });
 
   document.addEventListener('keydown', (e) => {
