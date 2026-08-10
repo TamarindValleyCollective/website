@@ -238,11 +238,41 @@ export default async (req: Request): Promise<Response> => {
     if (!anthropicRes.ok) {
       const errText = await anthropicRes.text();
       console.error('[chat] Anthropic API error', anthropicRes.status, errText);
+
+      // A 403 billing_error (out of credits) is a distinct, known failure
+      // mode - worth a warmer message than the generic "having trouble"
+      // catch-all, since there's nothing transient about it that "try
+      // again shortly" would fix. Parsed defensively since a non-JSON
+      // error body (e.g. an upstream proxy error page) shouldn't crash
+      // the request - it just falls through to the generic message.
+      let errorType: string | undefined;
+      try {
+        errorType = JSON.parse(errText)?.error?.type;
+      } catch {
+        // not JSON - fall through to the generic message below
+      }
+
+      if (errorType === 'billing_error') {
+        return jsonResponse(
+          { error: "Looks like I've hit my limit for the moment — try again in a bit, or reach out via the Contact page!" },
+          502,
+        );
+      }
+
       return jsonResponse({ error: 'The assistant is having trouble right now. Please try again shortly.' }, 502);
     }
 
     const data = await anthropicRes.json();
-    const reply = data.content?.[0]?.type === 'text' ? data.content[0].text : '';
+    // Not always content[0] - Claude Sonnet 5 sometimes leads with a
+    // `thinking` block (even though this request never asks for extended
+    // thinking) before the actual `text` block, more often on follow-up
+    // (multi-turn) messages than the first one. Only checking index 0 here
+    // meant a real answer sitting at content[1] got silently discarded in
+    // favor of the generic "couldn't come up with an answer" fallback -
+    // confirmed via a raw API call reproducing exactly this shape on a
+    // follow-up question that had a perfectly good answer one slot over.
+    const textBlock = data.content?.find((block: { type: string }) => block.type === 'text');
+    const reply = textBlock?.text ?? '';
 
     return jsonResponse({ reply: reply || "Sorry, I couldn't come up with an answer to that." });
   } catch (err) {
