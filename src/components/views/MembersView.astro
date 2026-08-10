@@ -67,7 +67,14 @@ interface Member {
   // social profile is ever collected for them). Kept separate from the
   // card's own name(s) since only those pair up with `social` by position.
   familyNames?: string[];
-  whyTVC?: string;
+  // A single string renders as one unattributed quote (e.g. a couple's
+  // shared "we" sentiment, or just one person's answer). When both partners
+  // on a card submit their own separate why-TVC answer, use an array
+  // instead - one quote bubble per entry, each captioned with the matching
+  // name once there's more than one (paired by position with the card's own
+  // name split, same convention as `social` below) rather than silently
+  // merging two people's words into one paraphrased quote.
+  whyTVC?: string | string[];
   // The form asks for "LinkedIn or another social profile", so this can be
   // any platform - rendered by detecting the host below, not assumed to be
   // LinkedIn. A card can also carry more than one (e.g. a couple's card
@@ -116,7 +123,7 @@ const members: Member[] = [
   { name: 'Sharath & Deepa', summary: 'Sharath is a Principal Software Engineer at Shell; Deepa heads the global help desk at Sobis.', bio: 'Sharath works for Shell as a Principal Software Engineer and is a firm believer in sustainable living; outside of work, he spends his time actively participating in the growth and development of the Tamarind Valley Collective. Deepa works for Sobis Software and heads their Global Helpdesk.', photo: '/images/members/sharath-and-deepa.jpg', family: 'Sharath and Deepa are parents to two children: Deesha, who is currently pursuing a Master’s in Ecology and Evolutionary Biology at the University of Helsinki, and Aryaan, who recently completed his undergraduate degree with a major in Mathematics. They also have a 10-year-old cat named Thalia.', familyNames: ['Deesha', 'Aryaan', 'Thalia'], whyTVC: 'We joined TVC because we wanted to create something of lasting value that money simply cannot buy, while fostering a deeper connection with the land and a like-minded community.', social: ['https://www.linkedin.com/in/sharathjeppu/'] },
   { name: 'Shashi & Shobha', bio: 'Sashi works as a Salesforce consultant for Digile. Shobha is a lawyer by education and an artist by choice.', photo: '/images/members/shashi-and-shobha.jpg' },
   { name: 'Shubh & Ranjini', bio: 'Shubh is a techie, works for RJT. Ranjini is a teacher at COMMITS (by day) and a writer (by night.)', photo: '/images/members/shubh-and-ranjini.jpg' },
-  { name: 'Sree & Prameela', bio: '', photo: null },
+  { name: 'Sree & Prameela', summary: 'Sree is a Practice Director in SAP/cloud transformation; Prameela is a UX designer at TCS.', bio: 'Sree is a Practice Director, helping customers define their SAP and cloud transformation journey. Prameela is a UX designer at TCS in New Jersey, working to make digital products less confusing.', photo: null, family: 'Sree and Prameela are married with one son, Sumant (23). Sree is a movie buff; Prameela enjoys gardening and word/board games. Sumant practically lives online.', familyNames: ['Sumant'], whyTVC: ['Wanted to be away from the crowded city life and live close to the nature during retirement years.', 'I loved the idea of doing my part to give back to the earth, and being part of a community gives me the chance to do it alongside people who actually walk the talk.'], social: ['https://linkedin.com/in/pbsreedhar', 'https://linkedin.com/in/prameelajeppu'] },
   { name: 'Suneetha Krishnaveni', bio: 'Suneetha is making a living in Oslo, while dreaming of getting back to our roots. Iyappan and Krishnaveni are Suneetha’s parents.', photo: '/images/members/suneetha-krishnaveni.jpg' },
   { name: 'Swami & Vidhya', bio: 'Swami worked for Capgemini, Srividya quit her IT career and is currently a montessorian & special educator.', photo: '/images/members/swami-and-vidhya.jpg' },
   { name: 'Swayambhu & Mukthi', bio: 'Swayambhu is working with McAfee. Mukti teaches in an engineering college.', photo: '/images/members/swayambhu-and-mukthi.jpg' },
@@ -139,6 +146,14 @@ const members: Member[] = [
 function photosFor(m: Member): string[] {
   if (m.photos && m.photos.length) return m.photos;
   return m.photo ? [m.photo] : [];
+}
+
+// Normalizes `whyTVC` to a list so the rest of the code doesn't need to
+// special-case the single-quote-vs-per-person-array distinction described
+// on the Member interface above.
+function whyTVCList(m: Member): string[] {
+  if (!m.whyTVC) return [];
+  return Array.isArray(m.whyTVC) ? m.whyTVC : [m.whyTVC];
 }
 
 function initials(name: string) {
@@ -211,7 +226,7 @@ function cardText(m: Member): string {
 // new to show them.
 const detailed = members
   .map((m, i) => ({ i, m, summary: cardText(m) }))
-  .filter(({ m, summary }) => summary !== m.bio || m.family || m.whyTVC || (m.social && m.social.length))
+  .filter(({ m, summary }) => summary !== m.bio || m.family || whyTVCList(m).length || (m.social && m.social.length))
   .map(({ i, m }) => ({
     i,
     name: m.name,
@@ -220,7 +235,7 @@ const detailed = members
     names: highlightedNamesFor(m),
     bio: m.bio,
     family: m.family ?? '',
-    whyTVC: m.whyTVC ?? '',
+    whyTVC: whyTVCList(m),
     links: m.social ? socialLinks(m.name, m.social) : [],
   }));
 const detailedById = new Set(detailed.map((d) => d.i));
@@ -295,12 +310,7 @@ const detailedById = new Set(detailed.map((d) => d.i));
           </svg>
           <span id="member-detail-family-text"></span>
         </p>
-        <div id="member-detail-quote" class="member-quote" hidden>
-          <svg class="member-quote-mark" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-            <path d="M7.5 6.5C4.9 8 3.5 10.3 3.5 13.1c0 2.6 1.8 4.4 4 4.4 1.9 0 3.3-1.4 3.3-3.2 0-1.7-1.2-3-2.9-3-.3 0-.6 0-.8.1.3-1.7 1.7-3.3 3.4-4.2L7.5 6.5Zm9 0c-2.6 1.5-4 3.8-4 6.6 0 2.6 1.8 4.4 4 4.4 1.9 0 3.3-1.4 3.3-3.2 0-1.7-1.2-3-2.9-3-.3 0-.6 0-.8.1.3-1.7 1.7-3.3 3.4-4.2L16.5 6.5Z" fill="currentColor" />
-          </svg>
-          <p id="member-detail-quote-text"></p>
-        </div>
+        <div id="member-detail-quotes" class="member-quotes" hidden></div>
       </div>
     </div>
   </div>
@@ -316,7 +326,7 @@ const detailedById = new Set(detailed.map((d) => d.i));
       names: string[];
       bio: string;
       family: string;
-      whyTVC: string;
+      whyTVC: string[];
       links: { url: string; name: string }[];
     }
 
@@ -352,6 +362,30 @@ const detailedById = new Set(detailed.map((d) => d.i));
       });
     }
 
+    const QUOTE_MARK_SVG =
+      '<svg class="member-quote-mark" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M7.5 6.5C4.9 8 3.5 10.3 3.5 13.1c0 2.6 1.8 4.4 4 4.4 1.9 0 3.3-1.4 3.3-3.2 0-1.7-1.2-3-2.9-3-.3 0-.6 0-.8.1.3-1.7 1.7-3.3 3.4-4.2L7.5 6.5Zm9 0c-2.6 1.5-4 3.8-4 6.6 0 2.6 1.8 4.4 4 4.4 1.9 0 3.3-1.4 3.3-3.2 0-1.7-1.2-3-2.9-3-.3 0-.6 0-.8.1.3-1.7 1.7-3.3 3.4-4.2L16.5 6.5Z" fill="currentColor" /></svg>';
+
+    // One quote bubble per why-TVC answer. A single shared quote (the
+    // common case) renders unattributed, same as before - a name caption
+    // only appears once there's more than one quote, so a reader can tell
+    // whose words are whose, paired by position with the card's own name
+    // split (same convention socialLinks() uses server-side).
+    function renderQuotes(quotes: string[], name: string, links: MemberDetail['links']): string {
+      if (!quotes.length) return '';
+      const firstNames = name.split('&').map((p) => p.trim().split(/\s+/)[0]);
+      return quotes
+        .map((text, i) => {
+          const quoteName = quotes.length > 1 ? firstNames[i] ?? '' : '';
+          const link = links.find((l) => l.name === quoteName);
+          const nameHtml = link
+            ? `<a href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" class="member-name member-name--link">${escapeHtml(quoteName)}</a>`
+            : `<span class="member-name">${escapeHtml(quoteName)}</span>`;
+          const cite = quoteName ? `<span class="member-quote-name">— ${nameHtml}</span>` : '';
+          return `<div class="member-quote">${QUOTE_MARK_SVG}<div class="member-quote-body"><p>“${escapeHtml(text)}”</p>${cite}</div></div>`;
+        })
+        .join('');
+    }
+
     const dataEl = document.getElementById('member-detail-data');
     const details: MemberDetail[] = dataEl ? JSON.parse(dataEl.textContent ?? '[]') : [];
     const byId = new Map(details.map((d) => [d.i, d]));
@@ -365,8 +399,7 @@ const detailedById = new Set(detailed.map((d) => d.i));
     const bioEl = document.getElementById('member-detail-bio');
     const familyEl = document.getElementById('member-detail-family');
     const familyTextEl = document.getElementById('member-detail-family-text');
-    const quoteEl = document.getElementById('member-detail-quote');
-    const quoteTextEl = document.getElementById('member-detail-quote-text');
+    const quotesEl = document.getElementById('member-detail-quotes');
 
     function open(detail: MemberDetail) {
       if (!overlay) return;
@@ -405,12 +438,12 @@ const detailedById = new Set(detailed.map((d) => d.i));
         familyTextEl.innerHTML = highlightNames(detail.family, detail.names, detail.links);
         familyEl.hidden = !detail.family;
       }
-      if (quoteEl && quoteTextEl) {
+      if (quotesEl) {
         // Left first-person on purpose - this is the one place it's framed
         // as a direct quote (speech-bubble styling below), unlike the bio/
         // family narration which is normalized to third person.
-        quoteTextEl.textContent = detail.whyTVC ? `“${detail.whyTVC}”` : '';
-        quoteEl.hidden = !detail.whyTVC;
+        quotesEl.innerHTML = renderQuotes(detail.whyTVC, detail.name, detail.links);
+        quotesEl.hidden = detail.whyTVC.length === 0;
       }
 
       overlay.hidden = false;
@@ -692,35 +725,21 @@ const detailedById = new Set(detailed.map((d) => d.i));
     color: var(--tvc-green-dark);
   }
 
-  /* Speech-bubble treatment for the one field that's an actual first-person
-     quote (everything else on the card is normalized to third person) - a
-     tinted callout with a quote mark reads as "someone's words" rather than
-     another paragraph of site copy. */
-  .member-quote {
+  /* Speech-bubble treatment for the why-TVC field(s) - the one part of the
+     card that's an actual first-person quote (everything else is
+     normalized to third person). Wrapper for one or more `.member-quote`
+     bubbles (see renderQuotes() in the script below) - itself static
+     markup (see the Astro template above) so it can stay scoped, unlike
+     its dynamically-injected children below in the global block. */
+  .member-quotes {
     display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    text-align: left;
-    background: var(--tvc-green-tint);
-    border-radius: 14px;
-    padding: 14px 16px;
+    flex-direction: column;
+    gap: 12px;
     margin: 20px 0 0 !important;
   }
 
-  .member-quote[hidden] {
+  .member-quotes[hidden] {
     display: none;
-  }
-
-  .member-quote-mark {
-    flex: none;
-    color: var(--tvc-green-dark);
-    opacity: 0.6;
-  }
-
-  .member-quote p {
-    margin: 0;
-    font-style: italic;
-    color: var(--tvc-ink);
   }
 </style>
 
@@ -757,5 +776,44 @@ const detailedById = new Set(detailed.map((d) => d.i));
     height: 96px;
     border-radius: 50%;
     object-fit: cover;
+  }
+
+  /* Also dynamically created (see #member-detail-quotes and renderQuotes()
+     in the script above), same not-scoped reason as .member-name above -
+     the wrapping `.member-quotes` div stays in the scoped block since it's
+     static markup, but everything renderQuotes() injects inside it needs
+     to live here instead. */
+  .member-quote {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    text-align: left;
+    background: var(--tvc-green-tint);
+    border-radius: 14px;
+    padding: 14px 16px;
+  }
+
+  .member-quote-mark {
+    flex: none;
+    color: var(--tvc-green-dark);
+    opacity: 0.6;
+  }
+
+  .member-quote p {
+    margin: 0;
+    font-style: italic;
+    color: var(--tvc-ink);
+  }
+
+  /* Caption naming whose words these are - only rendered when a card has
+     more than one why-TVC quote (see renderQuotes()), so a single shared
+     quote still reads unattributed as before. */
+  .member-quote-name {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.72rem;
+    font-style: normal;
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
   }
 </style>
