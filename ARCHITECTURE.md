@@ -64,13 +64,12 @@ flowchart TD
         FUNC_SRC4["netlify/functions/enquiry.mts<br/>Serverless function — appends a row to a<br/>Google Sheet per membership/general enquiry,<br/>fired via sendBeacon alongside each form's<br/>own native Netlify Forms submission"]
         FUNC_SRC5["netlify/functions/rainfall.mts<br/>Serverless function — reads the community's<br/>rainfall-log Sheet (monthly + daily tabs) on<br/>every page view, computes the monsoon<br/>to-date stat, returns JSON"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
-        SCRIPT_SRC2["scripts/build-search-index.mjs<br/>Reads every page's actual rendered<br/>title/description → dist/search-index.json<br/>for the client-side site search"]
     end
 
     subgraph BUILD["2 · Build — on push to main"]
         B1["npm run build<br/>→ astro build (prerenders every page)"]
         B2["→ build-chat-context.mjs<br/>writes site-content.json (gitignored)"]
-        B2B["→ build-search-index.mjs<br/>writes dist/search-index.json"]
+        B2B["→ pagefind --site dist<br/>indexes data-pagefind-body content on every<br/>non-noindex page → dist/pagefind/"]
         B3["Output: dist/ (static site) + bundled function<br/>netlify.toml declares build cmd, publish dir, functions dir"]
     end
 
@@ -89,7 +88,7 @@ flowchart TD
 
     subgraph BROWSER["4 · Visitor's Browser"]
         CHATW["ChatWidget.astro<br/>Floating widget, site logo.<br/>Calls /api/chat"]
-        SEARCH["SiteSearch.astro (in Nav)<br/>Fetches /search-index.json once,<br/>searches entirely client-side —<br/>no backend, no Function"]
+        SEARCH["SiteSearch.astro (in Nav)<br/>Dynamically imports /pagefind/pagefind.js once,<br/>searches full page content entirely client-side —<br/>no backend, no Function"]
         FRIENDS["Friends of TVC —<br/>direct WhatsApp group invite link,<br/>no form involved"]
         MEMBERFORM["Membership enquiry form (/join)<br/>data-netlify=true + honeypot,<br/>also sendBeacons to /api/enquiry"]
         GENERALFORM["General enquiry form (/contact)<br/>data-netlify=true + honeypot,<br/>also sendBeacons to /api/enquiry;<br/>plus a WhatsApp link to Madhavan"]
@@ -255,12 +254,18 @@ Netlify build (the offline photo curation and captioning scripts).
   *signing* — same hand-rolled, dependency-free approach.
 - **`scripts/build-chat-context.mjs`** — post-build script that prepares the chat widget's
   knowledge base.
-- **`scripts/build-search-index.mjs`** — post-build script for the client-side site search
-  (`src/components/SiteSearch.astro`, rendered from `Nav.astro`). Walks `dist/` the same way
-  `build-chat-context.mjs` does, but keeps only each page's actual rendered `<title>`/`<meta
-  description>` (skipping anything marked `noindex`) rather than full page text, and writes the
-  result to `dist/search-index.json` — a plain static asset, not a Function, so the search box
-  fetches it once and matches/ranks entirely in the browser with no backend at all.
+- **Pagefind** (`pagefind --site dist`, run as the last step of `npm run build`) — indexes the
+  client-side site search (`src/components/SiteSearch.astro`, rendered from `Nav.astro`). Its CLI
+  crawls `dist/` after `astro build`, indexing only elements marked `data-pagefind-body` — just
+  `BaseLayout.astro`'s `<main>`, and only when the page isn't `noindex` (that prop maps to
+  `data-pagefind-body={noindex ? undefined : true}`; note it must be `undefined`, not `false` —
+  Pagefind checks the attribute's *presence*, and `data-*` isn't in Astro's known-boolean-attribute
+  list, so a literal `false` still serializes as `data-pagefind-body="false"` and gets indexed
+  anyway). Output is a static, chunked index at `dist/pagefind/` — not a Function — that
+  `SiteSearch.astro` dynamically imports (`/pagefind/pagefind.js`) once on first open and searches
+  entirely in the browser/a web worker, full page content included (not just title/description),
+  with no backend at all. Multilingual out of the box: it reads each page's `<html lang>` and
+  scopes results to the visitor's current locale automatically.
 - **`scripts/curate-photos.mjs`** — run locally, not part of the Netlify build. Reads a folder
   of already-selected photos, extracts EXIF/GPS, uploads a display and thumbnail size of each to
   Cloudflare R2, and writes one `src/content/photos/*.md` entry per photo — still just expects an
@@ -360,10 +365,9 @@ On every push to `main`, Netlify runs:
 2. `build-chat-context.mjs` — strips repeated Nav/Footer markup out of the built HTML and
    writes the remaining page text into a single JSON corpus (`site-content.json`, regenerated
    every build, gitignored).
-3. `build-search-index.mjs` — reads every page's `<title>`/`<meta description>` out of the same
-   built HTML and writes `dist/search-index.json`, the client-side site search's entire "index"
-   (not gitignored the way `site-content.json` is, since it needs to actually deploy as a static
-   asset rather than staying server-side-only).
+3. `pagefind --site dist` — the Pagefind CLI crawls the same built HTML and writes its own
+   chunked, static search index under `dist/pagefind/` (not gitignored the way `site-content.json`
+   is, since it needs to actually deploy as a static asset rather than staying server-side-only).
 
 `netlify.toml` declares the build command, publish directory (`dist`), and functions directory
 (`netlify/functions`).
@@ -467,9 +471,10 @@ never touches Netlify either.
 - **ChatWidget** — floating widget using the site logo; sends the visitor's question to
   `/api/chat` and gets back a real, grounded answer.
 - **SiteSearch** (magnifying-glass icon in the nav, opens on click or the `/` key) — client-side
-  search over every non-`noindex` page's title/description, fetched once from
-  `/search-index.json` and matched/ranked in the browser; no Function, no external service.
-  Keyboard-navigable (↑/↓/Enter), Escape or clicking outside the panel closes it.
+  search over every non-`noindex` page's full content, backed by Pagefind
+  (`/pagefind/pagefind.js`, dynamically imported once) and matched/ranked/excerpted in the
+  browser; no Function, no external service. Keyboard-navigable (↑/↓/Enter), Escape or clicking
+  outside the panel closes it.
 - **Friends of TVC** — live. A direct invite link to the WhatsApp group (no form, no manual
   step) — replaces the old name + phone signup that TVC had to action by hand.
 - **Membership enquiry form** (bottom of `/join`, below the existing "how membership works"
@@ -584,7 +589,7 @@ never touches Netlify either.
 | Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy` |
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
 | Live rainfall chart/table/monsoon stat (`/ecosystem/weather`, `/api/rainfall`) | ✅ Live — reads the community's rainfall-log Sheet live, `RAINFALL_SHEET_ID` set on Netlify (all deploy contexts); multi-year line chart with year-filter checkboxes; verified against `tvc.farm/ecosystem/weather` and `tvc.farm/api/rainfall` directly |
-| Site search (nav icon / `/` key) | ✅ Live — verified directly against production: `tvc.farm/search-index.json` serves 133 real entries, the search trigger and its fetch call are present in the live homepage HTML |
+| Site search (nav icon / `/` key) | 🟡 Built, verified locally (not yet deployed) — switched from a title/description-only index to Pagefind, which indexes each non-`noindex` page's full `<main>` content; confirmed via a local production build + `astro preview` that in-body content (e.g. member names on `/people/members/`) is now searchable and that `noindex` pages (404, thanks pages, `/internal/photo-pool`, `/people/members/story-guide`) are correctly excluded from the index |
 | Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | ✅ Live — Drive folders, service account, Google Sign-In OAuth client, curator allow-list Sheet, all Netlify env vars configured; verified against production directly (`/internal/photo-pool` returns 200, `/api/photo-pool` returns 401 unauthenticated as expected for the Google Sign-In-gated function) |
 
 The membership/general enquiry forms are fully live — Sheets logging verified with real
