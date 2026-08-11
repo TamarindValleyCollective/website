@@ -6,69 +6,72 @@
 // an actual page. Nothing here is linked from nav; noindex; not a
 // production feature — if a candidate is approved, its fetch logic should
 // move into the relevant page/widget and this file can be deleted.
+//
+// Second round, after the first six (Open-Meteo air quality, SoilGrids,
+// NASA POWER, GBIF, sunrisesunset.io, Wikipedia geosearch — see git history)
+// were rejected as either too trivial or not clearly dated/sourced enough to
+// trust. This round picks two candidates specifically for having a real,
+// checkable "as of" (a dated satellite mosaic; a named station with its own
+// last-updated timestamp) rather than a modeled estimate.
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { LAT, LNG } from '../../utils/weather';
+
+// Sentinel-2 cloudless (EOX IT Services, s2maps.eu) publishes a handful of
+// named yearly global mosaics, not a continuous archive — 2018 and 2020 are
+// the two most recent kept here since both are confirmed-published vintages;
+// double check https://s2maps.eu for whatever's newest before this goes live.
+const SAT_YEARS = ['2018', '2020'];
+const SAT_BUFFER_DEG = 0.01; // ~1.1km, framing the farm's own plots with some surrounding context
+const SAT_BBOX = `${LNG - SAT_BUFFER_DEG},${LAT - SAT_BUFFER_DEG},${LNG + SAT_BUFFER_DEG},${LAT + SAT_BUFFER_DEG}`;
+function satUrl(year: string) {
+  const params = new URLSearchParams({
+    service: 'WMS', version: '1.1.1', request: 'GetMap',
+    layers: `s2cloudless-${year}`, styles: '', format: 'image/jpeg',
+    srs: 'EPSG:4326', bbox: SAT_BBOX, width: '480', height: '480',
+  });
+  return `https://tiles.maps.eox.at/wms?${params.toString()}`;
+}
 ---
 
 <BaseLayout title="Integration Ideas — Evaluation" description="Sample page evaluating candidate third-party integrations for the site, with live data for the farm's own coordinates." noindex>
   <section class="section wrapper">
-    <h1>Integration ideas — live evaluation</h1>
+    <h1>Integration ideas — live evaluation, round 2</h1>
     <p class="hint">
-      Six candidate integrations, each fetching real live data for Tamarind Valley Collective's own
-      coordinates ({LAT.toFixed(4)}, {LNG.toFixed(4)}) — the same point already used by the weather
-      widget and biodiversity map. Everything below is free, requires no API key, and calls the
-      provider directly from the browser (no new backend). This page is for evaluation only:
-      unlinked from nav, <code>noindex</code>, not part of the public site. If a card below is worth
-      keeping, its fetch logic gets moved into the relevant real page and this file goes away.
+      Two candidates, picked this time specifically because the data carries its own real, checkable
+      "as of" — a dated satellite mosaic, a named monitoring station with its own last-updated
+      timestamp — rather than a modeled estimate. Same farm coordinates as before
+      ({LAT.toFixed(4)}, {LNG.toFixed(4)}). This page is for evaluation only: unlinked from nav,
+      <code>noindex</code>, not part of the public site.
     </p>
 
     <div class="grid">
-      <!-- 1. Air quality -->
-      <article class="card demo-card">
-        <h2>Air quality</h2>
-        <p class="why">Rural air quality for anyone planning a camping/trekking visit, or a stat for the Weather page alongside rainfall.</p>
-        <div id="card-air" class="body loading">Loading live conditions from Open-Meteo…</div>
-        <p class="source">Source: <a href="https://open-meteo.com/en/docs/air-quality-api" target="_blank" rel="noopener noreferrer">Open-Meteo Air Quality API</a> — no key required, same provider as the existing weather widget.</p>
+      <!-- 1. Satellite vegetation history -->
+      <article class="card demo-card demo-card--wide">
+        <h2>Satellite vegetation history</h2>
+        <p class="why">Real, dated satellite imagery of the farm's own plot across years — direct visual evidence of the regenerative-farming story, not a trivia stat. Could anchor an "our land over time" section.</p>
+        <div class="sat-row">
+          {SAT_YEARS.map((year) => (
+            <figure class="sat-figure">
+              <img
+                src={satUrl(year)}
+                alt={`Sentinel-2 cloudless satellite mosaic of the farm, ${year}`}
+                loading="lazy"
+                onerror="this.closest('.sat-figure').classList.add('sat-figure--error')"
+              />
+              <div class="sat-error-msg">Couldn't load the {year} mosaic — check the exact layer name at <a href="https://s2maps.eu" target="_blank" rel="noopener noreferrer">s2maps.eu</a>.</div>
+              <figcaption>{year} · Sentinel-2 cloudless mosaic (10m resolution)</figcaption>
+            </figure>
+          ))}
+        </div>
+        <p class="source">Source: <a href="https://s2maps.eu" target="_blank" rel="noopener noreferrer">EOX Sentinel-2 cloudless</a> — real dated global mosaics, no key required, image tiles so no CORS/fetch involved.</p>
       </article>
 
-      <!-- 2. Soil -->
+      <!-- 2. Real air-quality station -->
       <article class="card demo-card">
-        <h2>Soil composition</h2>
-        <p class="why">pH, organic carbon, and texture (clay/sand/silt) for the farm's exact plot — directly useful to the syntropic/permaculture planning the site already documents.</p>
-        <div id="card-soil" class="body loading">Loading soil properties from SoilGrids…</div>
-        <p class="source">Source: <a href="https://www.isric.org/explore/soilgrids/faq-soilgrids" target="_blank" rel="noopener noreferrer">ISRIC SoilGrids v2.0</a> — global 250m soil property maps, no key required.</p>
-      </article>
-
-      <!-- 3. Solar & climate -->
-      <article class="card demo-card">
-        <h2>Solar &amp; climate potential</h2>
-        <p class="why">Long-term average solar irradiance, temperature, and rainfall for this exact point — relevant to off-grid solar sizing and crop planning conversations.</p>
-        <div id="card-solar" class="body loading">Loading climatology from NASA POWER…</div>
-        <p class="source">Source: <a href="https://power.larc.nasa.gov/docs/services/api/" target="_blank" rel="noopener noreferrer">NASA POWER API</a> — 20+ year climatology, no key required.</p>
-      </article>
-
-      <!-- 4. Regional biodiversity -->
-      <article class="card demo-card">
-        <h2>Regional species records</h2>
-        <p class="why">iNaturalist already covers what's been logged on the property itself; GBIF aggregates museum/herbarium/other survey records for the wider region — a complementary "what else lives nearby" picture for the Ecosystem pages.</p>
-        <div id="card-gbif" class="body loading">Loading regional records from GBIF…</div>
-        <p class="source">Source: <a href="https://www.gbif.org/developer/occurrence" target="_blank" rel="noopener noreferrer">GBIF Occurrence API</a> — global biodiversity database, no key required.</p>
-      </article>
-
-      <!-- 5. Sun times -->
-      <article class="card demo-card">
-        <h2>Sun &amp; day length</h2>
-        <p class="why">Precise sunrise/sunset/golden-hour times for the farm — useful on the camping/trekking/day-visit pages for planning arrival, photography, and trail timing.</p>
-        <div id="card-sun" class="body loading">Loading today's sun times…</div>
-        <p class="source">Source: <a href="https://sunrisesunset.io/api/" target="_blank" rel="noopener noreferrer">sunrisesunset.io API</a> — no key required.</p>
-      </article>
-
-      <!-- 6. Nearby places -->
-      <article class="card demo-card">
-        <h2>Nearby places</h2>
-        <p class="why">Wikipedia-documented landmarks, villages, and hills within 10km — could enrich "How to Reach" or a "the wider area" section with real, sourced context.</p>
-        <div id="card-wiki" class="body loading">Loading nearby places from Wikipedia…</div>
-        <p class="source">Source: <a href="https://www.mediawiki.org/wiki/API:Geosearch" target="_blank" rel="noopener noreferrer">Wikipedia GeoSearch API</a> — no key required, CORS-enabled.</p>
+        <h2>Nearest real air-quality station</h2>
+        <p class="why">The nearest actual monitoring station rather than a modeled estimate — its distance and its own last-updated time are shown so accuracy is checkable, not assumed.</p>
+        <div id="card-waqi" class="body loading">Loading nearest station from WAQI…</div>
+        <p class="source">Source: <a href="https://aqicn.org/api/" target="_blank" rel="noopener noreferrer">World Air Quality Index (WAQI) API</a> — free token required (obtained, not committed to source — see below).</p>
       </article>
     </div>
   </section>
@@ -91,6 +94,10 @@ import { LAT, LNG } from '../../utils/weather';
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
     gap: 24px;
+  }
+
+  .demo-card--wide {
+    grid-column: 1 / -1;
   }
 
   .demo-card h2 {
@@ -158,42 +165,47 @@ import { LAT, LNG } from '../../utils/weather';
     color: var(--tvc-ink-soft);
   }
 
-  .demo-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
+  .sat-row {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 16px;
   }
 
-  .demo-list li {
-    border-top: 1px dashed var(--tvc-line);
-    padding-top: 8px;
+  .sat-figure {
+    margin: 0;
+    flex: 1 1 220px;
   }
 
-  .demo-list li:first-child {
-    border-top: none;
-    padding-top: 0;
-  }
-
-  .demo-list .name {
-    font-weight: 600;
-  }
-
-  .demo-list .meta {
+  .sat-figure img {
+    width: 100%;
+    height: auto;
     display: block;
+    border-radius: calc(var(--radius) - 6px);
+    background: var(--tvc-green-tint);
+  }
+
+  .sat-figure figcaption {
     font-size: 0.78rem;
     color: var(--tvc-ink-soft);
+    margin-top: 6px;
+    text-align: center;
   }
 
-  .demo-list a {
-    color: var(--tvc-green-dark);
-    text-decoration: none;
+  .sat-error-msg {
+    display: none;
+    font-size: 0.8rem;
+    color: #b3261e;
+    font-style: italic;
+    padding: 16px 0;
   }
 
-  .demo-list a:hover {
-    text-decoration: underline;
+  .sat-figure--error img {
+    display: none;
+  }
+
+  .sat-figure--error .sat-error-msg {
+    display: block;
   }
 </style>
 
@@ -213,139 +225,41 @@ import { LAT, LNG } from '../../utils/weather';
     el.textContent = message;
   }
 
-  // 1. Air quality — Open-Meteo
+  // Great-circle distance between the farm and the reporting station, so a
+  // reader can judge how locally representative the reading actually is.
+  function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  // Nearest real air-quality station — WAQI
   (async () => {
     try {
-      const res = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${LAT}&longitude=${LNG}&current=pm2_5,pm10,us_aqi,ozone,carbon_monoxide&timezone=Asia%2FKolkata`);
+      const token = import.meta.env.PUBLIC_WAQI_TOKEN;
+      if (!token) throw new Error('PUBLIC_WAQI_TOKEN is not set');
+      const res = await fetch(`https://api.waqi.info/feed/geo:${LAT};${LNG}/?token=${token}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
-      const c = json.current;
-      const aqi = Math.round(c.us_aqi);
+      if (json.status !== 'ok') throw new Error(json.data ?? 'WAQI returned an error');
+      const d = json.data;
+      const aqi = Math.round(d.aqi);
       const band = aqi <= 50 ? 'Good' : aqi <= 100 ? 'Moderate' : aqi <= 150 ? 'Unhealthy for sensitive groups' : aqi <= 200 ? 'Unhealthy' : aqi <= 300 ? 'Very unhealthy' : 'Hazardous';
-      setBody('card-air', `
+      const [stationLat, stationLng] = d.city.geo;
+      const km = distanceKm(LAT, LNG, stationLat, stationLng);
+      setBody('card-waqi', `
         <div class="stat-row">
-          <div class="stat"><span class="value">${aqi}</span><span class="label">US AQI · ${band}</span></div>
-          <div class="stat"><span class="value">${c.pm2_5?.toFixed(1) ?? '—'}</span><span class="label">PM2.5 µg/m³</span></div>
-          <div class="stat"><span class="value">${c.pm10?.toFixed(1) ?? '—'}</span><span class="label">PM10 µg/m³</span></div>
-          <div class="stat"><span class="value">${c.ozone?.toFixed(0) ?? '—'}</span><span class="label">Ozone µg/m³</span></div>
+          <div class="stat"><span class="value">${aqi}</span><span class="label">AQI · ${band}</span></div>
+          <div class="stat"><span class="value">${km.toFixed(1)} km</span><span class="label">From the farm</span></div>
         </div>
+        <p class="hint" style="margin:0 0 4px; font-size:0.82rem;"><strong>${d.city.name}</strong></p>
+        <p class="hint" style="margin:0; font-size:0.78rem;">Dominant pollutant: ${d.dominentpol ?? '—'} · Station last updated ${d.time?.s ?? '—'} (${d.time?.tz ?? ''})</p>
       `);
     } catch (err) {
-      console.warn('Air quality demo fetch failed', err);
-      setError('card-air', "Couldn't load live air quality right now.");
-    }
-  })();
-
-  // 2. Soil — SoilGrids (ISRIC)
-  (async () => {
-    try {
-      const url = `https://rest.isric.org/soilgrids/v2.0/properties/query?lon=${LNG}&lat=${LAT}&property=phh2o&property=soc&property=clay&property=sand&property=silt&depth=0-5cm&value=mean`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      const layers = json.properties?.layers ?? [];
-      const labels: Record<string, string> = { phh2o: 'pH (water)', soc: 'Organic carbon', clay: 'Clay', sand: 'Sand', silt: 'Silt' };
-      const units: Record<string, string> = { phh2o: '', soc: 'g/kg', clay: 'g/kg', sand: 'g/kg', silt: 'g/kg' };
-      const rows = layers.map((layer: any) => {
-        const mean = layer.depths?.[0]?.values?.mean;
-        const dFactor = layer.unit_measure?.d_factor ?? 1;
-        if (mean == null) return null;
-        const value = mean / dFactor;
-        return `<div class="stat"><span class="value">${value.toFixed(1)}</span><span class="label">${labels[layer.name] ?? layer.name} ${units[layer.name] ?? ''}</span></div>`;
-      }).filter(Boolean);
-      if (rows.length === 0) throw new Error('No layers returned');
-      setBody('card-soil', `<div class="stat-row">${rows.join('')}</div><p class="hint" style="margin:8px 0 0; font-size:0.78rem;">0–5cm depth, this exact point.</p>`);
-    } catch (err) {
-      console.warn('Soil demo fetch failed', err);
-      setError('card-soil', "Couldn't load live soil data right now.");
-    }
-  })();
-
-  // 3. Solar & climate — NASA POWER
-  (async () => {
-    try {
-      const url = `https://power.larc.nasa.gov/api/temporal/climatology/point?parameters=ALLSKY_SFC_SW_DWN,T2M,PRECTOTCORR&community=RE&longitude=${LNG}&latitude=${LAT}&format=JSON`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      const p = json.properties.parameter;
-      setBody('card-solar', `
-        <div class="stat-row">
-          <div class="stat"><span class="value">${p.ALLSKY_SFC_SW_DWN.ANN.toFixed(1)}</span><span class="label">kWh/m²/day solar (annual avg)</span></div>
-          <div class="stat"><span class="value">${p.T2M.ANN.toFixed(1)}°C</span><span class="label">Avg temperature</span></div>
-          <div class="stat"><span class="value">${p.PRECTOTCORR.ANN.toFixed(1)}</span><span class="label">mm/day rainfall (avg)</span></div>
-        </div>
-        <p class="hint" style="margin:8px 0 0; font-size:0.78rem;">20+ year NASA climatology for this point, not a forecast.</p>
-      `);
-    } catch (err) {
-      console.warn('Solar demo fetch failed', err);
-      setError('card-solar', "Couldn't load live climatology right now.");
-    }
-  })();
-
-  // 4. Regional biodiversity — GBIF
-  (async () => {
-    try {
-      const latBox = `${(LAT - 0.3).toFixed(2)},${(LAT + 0.3).toFixed(2)}`;
-      const lngBox = `${(LNG - 0.3).toFixed(2)},${(LNG + 0.3).toFixed(2)}`;
-      const url = `https://api.gbif.org/v1/occurrence/search?decimalLatitude=${latBox}&decimalLongitude=${lngBox}&hasCoordinate=true&limit=6`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      const items = (json.results ?? []).map((r: any) => `
-        <li>
-          <span class="name">${r.vernacularName ?? r.species ?? r.scientificName ?? 'Unidentified'}</span>
-          <span class="meta">${r.scientificName ?? ''}${r.eventDate ? ` · ${new Date(r.eventDate).toLocaleDateString()}` : ''}</span>
-        </li>
-      `).join('');
-      setBody('card-gbif', `
-        <p class="hint" style="margin:0 0 10px; font-size:0.78rem;"><strong>${json.count?.toLocaleString() ?? '—'}</strong> occurrence records within ~30km on GBIF.</p>
-        <ul class="demo-list">${items || '<li>No records found nearby.</li>'}</ul>
-      `);
-    } catch (err) {
-      console.warn('GBIF demo fetch failed', err);
-      setError('card-gbif', "Couldn't load live regional records right now.");
-    }
-  })();
-
-  // 5. Sun times
-  (async () => {
-    try {
-      const res = await fetch(`https://api.sunrisesunset.io/json?lat=${LAT}&lng=${LNG}&timezone=Asia/Kolkata`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      const r = json.results;
-      setBody('card-sun', `
-        <div class="stat-row">
-          <div class="stat"><span class="value">${r.sunrise}</span><span class="label">Sunrise</span></div>
-          <div class="stat"><span class="value">${r.sunset}</span><span class="label">Sunset</span></div>
-          <div class="stat"><span class="value">${r.day_length}</span><span class="label">Day length</span></div>
-        </div>
-        <p class="hint" style="margin:8px 0 0; font-size:0.78rem;">Golden hour: ${r.golden_hour} · ${r.date}</p>
-      `);
-    } catch (err) {
-      console.warn('Sun times demo fetch failed', err);
-      setError('card-sun', "Couldn't load live sun times right now.");
-    }
-  })();
-
-  // 6. Nearby places — Wikipedia GeoSearch
-  (async () => {
-    try {
-      const url = `https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${LAT}%7C${LNG}&gsradius=10000&gslimit=6&format=json&origin=*`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      const items = (json.query?.geosearch ?? []).map((p: any) => `
-        <li>
-          <a href="https://en.wikipedia.org/wiki/${encodeURIComponent(p.title)}" target="_blank" rel="noopener noreferrer">${p.title}</a>
-          <span class="meta">${(p.dist / 1000).toFixed(1)} km away</span>
-        </li>
-      `).join('');
-      setBody('card-wiki', `<ul class="demo-list">${items || '<li>No nearby Wikipedia-documented places found.</li>'}</ul>`);
-    } catch (err) {
-      console.warn('Wikipedia demo fetch failed', err);
-      setError('card-wiki', "Couldn't load nearby places right now.");
+      console.warn('WAQI demo fetch failed', err);
+      setError('card-waqi', "Couldn't load the nearest air-quality station right now.");
     }
   })();
 </script>
