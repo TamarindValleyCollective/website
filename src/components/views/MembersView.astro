@@ -2,13 +2,21 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import type { Locale } from '../../i18n/utils';
-import { members, memberSlug, type Member } from '../../data/members';
+import { members as membersData, memberSlug, type Member } from '../../data/members';
 
 interface Props {
   lang: Locale;
 }
 
 const { lang } = Astro.props;
+
+// Cards are sorted here (by first name) rather than in the data file so a
+// new entry appended to src/data/members.ts lands in the right spot on the
+// page without anyone having to hand-place it in the array.
+function firstName(name: string): string {
+  return name.split(/[\s&]+/)[0];
+}
+const members = [...membersData].sort((a, b) => firstName(a.name).localeCompare(firstName(b.name)));
 
 const content = {
   en: {
