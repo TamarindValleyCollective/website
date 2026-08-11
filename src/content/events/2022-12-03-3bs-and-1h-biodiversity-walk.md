@@ -12,29 +12,29 @@ tags: ["biodiversity", "walk"]
 
 Spend Saturday evening and Sunday at [Tamarind Valley Collective](/visit/how-to-reach). Explore the vast property. Enjoy guided tours with our naturalists to watch and identify birds, butterflies, insects, and plants.
 
-#### **Number of Attendees**
+### **Number of Attendees**
 
 Limited to 20 participants.
 
-#### **Naturalists who will be there**
+### **Naturalists who will be there**
 
 [Deepa Mohan](https://www.facebook.com/deemopahan) (Avid birder and nature lover. Well known among Bangalore birders)
 
 Madhav (Farm Manager at TVC. Our in house expert)
 
-#### **Participant Pricing**
+### **Participant Pricing**
 
 Full event (1 night, 1 day): [INR 3200/-](https://www.frchg.in/JVMp2mK)
 
 Children below 10: Free
 
-#### Any questions?
+### Any questions?
 
 For reservations & any clarifications
 
 **reach out to : stay@linger.in or +91-959-005-0001**
 
-#### **Itinerary**
+### **Itinerary**
 
 **Day 1**
 
@@ -59,7 +59,7 @@ _(End of event. Feel free to head back or hang out for some more time.)_
 
 If you decide to stay for some more time, please inform us we will arrange for tea/juice.
 
-#### **Food and Accommodation (Hospitality Partner: Linger)**
+### **Food and Accommodation (Hospitality Partner: Linger)**
 
 *   We will arrange accommodation (a combination of bamboo huts, Linger tents + private tents) for up to 20 people.
 *   Day 1: Coffee/tea/juice, evening snacks, dinner; Day 2: Coffee/tea/juice, breakfast, lunch.
@@ -75,7 +75,7 @@ Camping Deck – 3 tents (4 adults + 4 kids)
 
 Guest House (3 Adults)
 
-#### **Instructions to Participants**
+### **Instructions to Participants**
 
 *   Bring a pair of binoculars and cameras.
 *   Get a bird book if you have one.
@@ -85,7 +85,7 @@ Guest House (3 Adults)
 *   Carry your personal medicine(s) if any.
 *   Please share your observations on iNaturalist, eBird and relevant interest groups after the event.
 
-#### What to expect?
+### What to expect?
 
 TVC is a ~ 98-acre permaculture farm run by 53 families experimenting with a living style that reduces consumption and incorporates naturally supported cyclical systems.
 

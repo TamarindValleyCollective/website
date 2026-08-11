@@ -28,7 +28,7 @@ Tamarind Valley Collective (TVC) is an experiment to see if we can live off the 
 | 09:00 | Breakfast |
 | 10:00 | Wrap and leave |
 
-#### Pricing
+### Pricing
 
 Full event (1 night, 1 day): INR 3,200. Children below 10: free. Limited to 20 participants.
 

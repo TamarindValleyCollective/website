@@ -90,7 +90,7 @@ Discuss section 2.2 of SICP, covering hierarchical structures and sequence opera
 
   
 
-#### The Retreat
+### The Retreat
 
 _Dec 11 - Dec 16, 2022_
 

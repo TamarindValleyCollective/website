@@ -18,7 +18,7 @@ The event started Saturday afternoon around 3pm, with everyone camping at the fa
 
 Full event (1 night, 1 day): INR 3,200. Children below 10: free. Limited to 20 participants.
 
-#### Broad itinerary
+### Broad itinerary
 
 **Day 1**
 
