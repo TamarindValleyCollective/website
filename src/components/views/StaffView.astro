@@ -425,4 +425,13 @@ const staffSchema = {
     letter-spacing: 0.03em;
     margin-bottom: 10px;
   }
+
+  /* Kannada/Tamil have no letter case, so uppercase is a no-op on the
+     glyphs themselves - but letter-spacing still applies, adding unwanted
+     tracking to labels that are already longer than their English source. */
+  :global(html:lang(kn)) .staff-role,
+  :global(html:lang(ta)) .staff-role {
+    text-transform: none;
+    letter-spacing: normal;
+  }
 </style>
