@@ -21,16 +21,6 @@ import { LAT, LNG } from '../../utils/weather';
 // the two most recent kept here since both are confirmed-published vintages;
 // double check https://s2maps.eu for whatever's newest before this goes live.
 const SAT_YEARS = ['2018', '2020'];
-const SAT_BUFFER_DEG = 0.01; // ~1.1km, framing the farm's own plots with some surrounding context
-const SAT_BBOX = `${LNG - SAT_BUFFER_DEG},${LAT - SAT_BUFFER_DEG},${LNG + SAT_BUFFER_DEG},${LAT + SAT_BUFFER_DEG}`;
-function satUrl(year: string) {
-  const params = new URLSearchParams({
-    service: 'WMS', version: '1.1.1', request: 'GetMap',
-    layers: `s2cloudless-${year}`, styles: '', format: 'image/jpeg',
-    srs: 'EPSG:4326', bbox: SAT_BBOX, width: '480', height: '480',
-  });
-  return `https://tiles.maps.eox.at/wms?${params.toString()}`;
-}
 ---
 
 <BaseLayout title="Integration Ideas — Evaluation" description="Sample page evaluating candidate third-party integrations for the site, with live data for the farm's own coordinates." noindex>
@@ -48,22 +38,16 @@ function satUrl(year: string) {
       <!-- 1. Satellite vegetation history -->
       <article class="card demo-card demo-card--wide">
         <h2>Satellite vegetation history</h2>
-        <p class="why">Real, dated satellite imagery of the farm's own plot across years — direct visual evidence of the regenerative-farming story, not a trivia stat. Could anchor an "our land over time" section.</p>
+        <p class="why">Real, dated satellite imagery of the farm's own plot across years, with the actual property boundary overlaid — TVC is already mapped on OpenStreetMap (<a href="https://www.openstreetmap.org/way/1522934798" target="_blank" rel="noopener noreferrer">way/1522934798</a>, the same boundary the Design page's map already uses) — direct visual evidence of the regenerative-farming story, not a trivia stat. Could anchor an "our land over time" section.</p>
         <div class="sat-row">
           {SAT_YEARS.map((year) => (
-            <figure class="sat-figure">
-              <img
-                src={satUrl(year)}
-                alt={`Sentinel-2 cloudless satellite mosaic of the farm, ${year}`}
-                loading="lazy"
-                onerror="this.closest('.sat-figure').classList.add('sat-figure--error')"
-              />
-              <div class="sat-error-msg">Couldn't load the {year} mosaic — check the exact layer name at <a href="https://s2maps.eu" target="_blank" rel="noopener noreferrer">s2maps.eu</a>.</div>
-              <figcaption>{year} · Sentinel-2 cloudless mosaic (10m resolution)</figcaption>
-            </figure>
+            <div class="sat-figure">
+              <div id={`sat-map-${year}`} class="sat-map" data-year={year}></div>
+              <p class="sat-caption">{year} · Sentinel-2 cloudless mosaic (10m resolution) with the OSM-mapped property boundary</p>
+            </div>
           ))}
         </div>
-        <p class="source">Source: <a href="https://s2maps.eu" target="_blank" rel="noopener noreferrer">EOX Sentinel-2 cloudless</a> — real dated global mosaics, no key required, image tiles so no CORS/fetch involved.</p>
+        <p class="source">Source: <a href="https://s2maps.eu" target="_blank" rel="noopener noreferrer">EOX Sentinel-2 cloudless</a> (imagery, no key required) + <a href="https://www.openstreetmap.org/way/1522934798" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> (boundary, already in this repo as <code>TVC_BOUNDARY</code>).</p>
       </article>
 
       <!-- 2. Real air-quality station -->
@@ -189,27 +173,19 @@ function satUrl(year: string) {
     flex: 1 1 220px;
   }
 
-  .sat-figure img {
+  .sat-map {
+    height: 340px;
     width: 100%;
-    height: auto;
-    display: block;
     border-radius: calc(var(--radius) - 6px);
     background: var(--tvc-green-tint);
+    z-index: 0;
   }
 
-  .sat-figure figcaption {
+  .sat-caption {
     font-size: 0.78rem;
     color: var(--tvc-ink-soft);
-    margin-top: 6px;
+    margin: 6px 0 0;
     text-align: center;
-  }
-
-  .sat-error-msg {
-    display: none;
-    font-size: 0.8rem;
-    color: #b3261e;
-    font-style: italic;
-    padding: 16px 0;
   }
 
   .ig-embed {
@@ -221,18 +197,36 @@ function satUrl(year: string) {
   .ig-embed :global(iframe) {
     max-width: 100% !important;
   }
-
-  .sat-figure--error img {
-    display: none;
-  }
-
-  .sat-figure--error .sat-error-msg {
-    display: block;
-  }
 </style>
 
 <script>
+  import 'leaflet/dist/leaflet.css';
+  import L from 'leaflet';
   import { LAT, LNG } from '../../utils/weather';
+  import { TVC_BOUNDARY } from '../../components/biodiversity/tvc-boundary';
+
+  // Satellite vegetation history — EOX Sentinel-2 cloudless WMS base layer
+  // per year, with the farm's actual OSM-mapped boundary (same TVC_BOUNDARY
+  // the Design page's map already uses) drawn on top, same style.
+  for (const yearEl of document.querySelectorAll<HTMLElement>('.sat-map')) {
+    const year = yearEl.dataset.year!;
+    const map = L.map(yearEl, { scrollWheelZoom: false });
+
+    L.tileLayer.wms('https://tiles.maps.eox.at/wms', {
+      layers: `s2cloudless-${year}`,
+      format: 'image/jpeg',
+      version: '1.1.1',
+      attribution: 'Sentinel-2 cloudless &copy; EOX IT Services GmbH',
+    }).addTo(map);
+
+    const boundary = L.polygon(TVC_BOUNDARY, {
+      color: '#f78520',
+      weight: 2,
+      fill: false,
+    }).addTo(map);
+
+    map.fitBounds(boundary.getBounds().pad(0.15));
+  }
 
   function setBody(id: string, html: string) {
     const el = document.getElementById(id)!;
@@ -261,11 +255,11 @@ function satUrl(year: string) {
   (async () => {
     try {
       const token = import.meta.env.PUBLIC_WAQI_TOKEN;
-      if (!token) throw new Error('PUBLIC_WAQI_TOKEN is not set');
+      if (!token) throw new Error('PUBLIC_WAQI_TOKEN is not set at build time — check it\'s scoped to the Builds context on Netlify (same as PUBLIC_GOOGLE_CLIENT_ID) and that this page has been rebuilt since it was added.');
       const res = await fetch(`https://api.waqi.info/feed/geo:${LAT};${LNG}/?token=${token}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) throw new Error(`WAQI HTTP ${res.status}`);
       const json = await res.json();
-      if (json.status !== 'ok') throw new Error(json.data ?? 'WAQI returned an error');
+      if (json.status !== 'ok') throw new Error(`WAQI API error: ${json.data ?? 'unknown'}`);
       const d = json.data;
       const aqi = Math.round(d.aqi);
       const band = aqi <= 50 ? 'Good' : aqi <= 100 ? 'Moderate' : aqi <= 150 ? 'Unhealthy for sensitive groups' : aqi <= 200 ? 'Unhealthy' : aqi <= 300 ? 'Very unhealthy' : 'Hazardous';
@@ -281,7 +275,7 @@ function satUrl(year: string) {
       `);
     } catch (err) {
       console.warn('WAQI demo fetch failed', err);
-      setError('card-waqi', "Couldn't load the nearest air-quality station right now.");
+      setError('card-waqi', err instanceof Error ? err.message : "Couldn't load the nearest air-quality station right now.");
     }
   })();
 </script>
