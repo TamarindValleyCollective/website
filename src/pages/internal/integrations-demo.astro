@@ -261,11 +261,11 @@ function satUrl(year: string) {
   (async () => {
     try {
       const token = import.meta.env.PUBLIC_WAQI_TOKEN;
-      if (!token) throw new Error('PUBLIC_WAQI_TOKEN is not set');
+      if (!token) throw new Error('PUBLIC_WAQI_TOKEN is not set at build time — check it\'s scoped to the Builds context on Netlify (same as PUBLIC_GOOGLE_CLIENT_ID) and that this page has been rebuilt since it was added.');
       const res = await fetch(`https://api.waqi.info/feed/geo:${LAT};${LNG}/?token=${token}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) throw new Error(`WAQI HTTP ${res.status}`);
       const json = await res.json();
-      if (json.status !== 'ok') throw new Error(json.data ?? 'WAQI returned an error');
+      if (json.status !== 'ok') throw new Error(`WAQI API error: ${json.data ?? 'unknown'}`);
       const d = json.data;
       const aqi = Math.round(d.aqi);
       const band = aqi <= 50 ? 'Good' : aqi <= 100 ? 'Moderate' : aqi <= 150 ? 'Unhealthy for sensitive groups' : aqi <= 200 ? 'Unhealthy' : aqi <= 300 ? 'Very unhealthy' : 'Hazardous';
@@ -281,7 +281,7 @@ function satUrl(year: string) {
       `);
     } catch (err) {
       console.warn('WAQI demo fetch failed', err);
-      setError('card-waqi', "Couldn't load the nearest air-quality station right now.");
+      setError('card-waqi', err instanceof Error ? err.message : "Couldn't load the nearest air-quality station right now.");
     }
   })();
 </script>
