@@ -73,9 +73,21 @@ function satUrl(year: string) {
         <div id="card-waqi" class="body loading">Loading nearest station from WAQI…</div>
         <p class="source">Source: <a href="https://aqicn.org/api/" target="_blank" rel="noopener noreferrer">World Air Quality Index (WAQI) API</a> — free token required (obtained, not committed to source — see below).</p>
       </article>
+
+      <!-- 3. Instagram embed -->
+      <article class="card demo-card">
+        <h2>Instagram embed</h2>
+        <p class="why">The community's own real, current content — no accuracy question at all since it's TVC's actual post. Shown here is one specific reel; a real integration would need Buffer/Instagram API access to pick "latest" automatically rather than a hardcoded permalink.</p>
+        <div class="ig-embed">
+          <blockquote class="instagram-media" data-instgrm-permalink="https://www.instagram.com/reel/DbEArzVTK1Z/" data-instgrm-version="14"></blockquote>
+        </div>
+        <p class="source">Source: <a href="https://developers.facebook.com/docs/instagram-platform/oembed" target="_blank" rel="noopener noreferrer">Instagram's official embed widget</a> — no API key for a single fixed post; picking the account's latest post automatically needs the Instagram Graph API (app review) or reading it via the already-connected Buffer channel.</p>
+      </article>
     </div>
   </section>
 </BaseLayout>
+
+<script is:inline src="//www.instagram.com/embed.js"></script>
 
 <style>
   .hint {
@@ -198,6 +210,16 @@ function satUrl(year: string) {
     color: #b3261e;
     font-style: italic;
     padding: 16px 0;
+  }
+
+  .ig-embed {
+    display: flex;
+    justify-content: center;
+    min-height: 60px;
+  }
+
+  .ig-embed :global(iframe) {
+    max-width: 100% !important;
   }
 
   .sat-figure--error img {
