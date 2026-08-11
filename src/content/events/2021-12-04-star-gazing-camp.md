@@ -16,7 +16,7 @@ Come over and discover the wonders of a night under a starlit sky unpolluted by 
 
 2 days, 1 night.
 
-#### Participant Pricing
+### Participant Pricing
 
 Tariff: INR 7,850 / couple (all inclusive)
 
@@ -24,11 +24,11 @@ For kids below 10 yrs: INR 1,450 / kid (all inclusive)
 
 Group discounts available for groups of 5 or more.
 
-#### What's included
+### What's included
 
 Accommodation in tents, breakfast, lunch, dinner, campfire, farm walk, trekking, stories from the world of astronomy, and telescope observation of celestial objects like the moon, planets, constellations, galaxies, and stars.
 
-#### About the astronomer
+### About the astronomer
 
 Sathya Kumar Sharma has been an amateur astronomer for over 20 years and an astrophotographer for the past 15. An aerospace engineer by qualification, he gazes at the stars almost every clear night and his photos have been published internationally. His book, *Capturing the Cosmic Light: A Handbook of Astrophotography*, is available on Amazon. He also retails telescopes and offers 1-1 consulting for individuals and institutions looking to buy one.
 

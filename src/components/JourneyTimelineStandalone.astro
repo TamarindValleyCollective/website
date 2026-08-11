@@ -494,7 +494,7 @@ function tm(month: string): string {
     () => {
       const total = document.documentElement.scrollHeight - window.innerHeight;
       const pct = total > 0 ? Math.min(100, Math.max(0, (window.scrollY / total) * 100)) : 0;
-      if (railFill) railFill.style.height = `${pct}%`;
+      if (railFill) railFill.style.transform = `scaleY(${pct / 100})`;
     },
     { passive: true },
   );
@@ -803,9 +803,11 @@ function tm(month: string): string {
     top: 0;
     left: 0;
     width: 100%;
+    height: 100%;
     background: linear-gradient(to bottom, var(--jt-green), var(--jt-orange));
-    height: 0%;
-    transition: height 0.15s linear;
+    transform: scaleY(0);
+    transform-origin: top;
+    transition: transform 0.15s linear;
   }
 
   @media (max-width: 980px) {
