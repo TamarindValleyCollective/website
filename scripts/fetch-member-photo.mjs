@@ -4,6 +4,17 @@
 // note in ARCHITECTURE.md) and drops it into public/images/members/ ready
 // to reference from MembersView.astro.
 //
+// Writes two files: the existing 400x400 square crop (card thumbnail/popup
+// avatar) plus an uncropped `-full` version capped at 1600px on the long
+// edge, for the popup's click-to-enlarge lightbox - the square crop alone
+// isn't enough there since a group photo often loses people/context to the
+// crop (e.g. Om & Pavithra's card, caught 2026-08-12: the square-cropped
+// avatar was the only asset the lightbox could show, so "enlarge" just
+// blew up an already-cropped thumbnail instead of revealing the actual
+// photo). Member.photoFull/photosFull point at this second file; cards
+// with no full version (the ~53 legacy photos, or any processed before
+// this) just fall back to the square crop, same as today.
+//
 // Always call this rather than hand-rolling a one-off download+resize
 // script per batch - .rotate() (auto-orient from EXIF) below exists
 // specifically because an earlier ad-hoc version omitted it: sharp does
@@ -43,16 +54,27 @@ if (!fileId || !outName) {
 const res = await downloadFile(fileId);
 const buf = Buffer.from(await res.arrayBuffer());
 const outPath = path.join(root, 'public/images/members', outName);
+const fullOutPath = path.join(root, 'public/images/members', outName.replace(/\.jpg$/i, '-full.jpg'));
 
 // .rotate() with no args reads the EXIF orientation tag and bakes the
 // correct rotation into the pixels *before* resize/crop touches them, then
 // the encode step strips EXIF (default) so the output has no leftover
 // orientation tag for a browser to (dis)honor - matches every other photo
-// already in this folder, all plain unrotated 400x400 squares.
-await sharp(buf)
-  .rotate()
+// already in this folder, all plain unrotated 400x400 squares. .clone()
+// runs the square-crop and full-size pipelines off the same decoded/rotated
+// source rather than re-reading and re-rotating the buffer twice.
+const rotated = sharp(buf).rotate();
+
+await rotated
+  .clone()
   .resize(400, 400, { fit: 'cover' })
   .jpeg({ quality: 85, progressive: true })
   .toFile(outPath);
 
-console.log(`wrote ${path.relative(root, outPath)} (${buf.length} bytes source)`);
+await rotated
+  .clone()
+  .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
+  .jpeg({ quality: 88, progressive: true })
+  .toFile(fullOutPath);
+
+console.log(`wrote ${path.relative(root, outPath)} and ${path.relative(root, fullOutPath)} (${buf.length} bytes source)`);

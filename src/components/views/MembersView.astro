@@ -51,6 +51,18 @@ function photosFor(m: Member): string[] {
   return m.photo ? [m.photo] : [];
 }
 
+// Parallel to photosFor() above, one full-size URL per entry (by position)
+// for the popup's click-to-enlarge lightbox - falls back to the same
+// square-cropped URL wherever no full version exists, so callers can always
+// zip this 1:1 against photosFor()'s result without a length mismatch.
+function photosFullFor(m: Member): string[] {
+  const photos = photosFor(m);
+  if (m.photosFull && m.photosFull.length) {
+    return photos.map((p, i) => m.photosFull![i] ?? p);
+  }
+  return m.photoFull ? [m.photoFull, ...photos.slice(1)] : photos;
+}
+
 // Normalizes `whyTVC` to a list so the rest of the code doesn't need to
 // special-case the single-quote-vs-per-person-array distinction described
 // on the Member interface above.
@@ -134,6 +146,7 @@ const detailed = members
     i,
     name: m.name,
     photos: photosFor(m),
+    photosFull: photosFullFor(m),
     initials: initials(m.name),
     names: highlightedNamesFor(m),
     bio: m.bio,
@@ -218,6 +231,19 @@ const detailedById = new Set(detailed.map((d) => d.i));
     </div>
   </div>
 
+  {/* Separate top-level overlay (own stacking context, above .member-overlay)
+      rather than nesting inside .member-panel-scroll - a photo click should
+      layer a full-size view on top of the popup, not replace or scroll
+      alongside it. */}
+  <div id="member-photo-lightbox" class="member-photo-lightbox" hidden>
+    <button type="button" id="member-photo-lightbox-close" class="member-close member-photo-lightbox-close" aria-label="Close">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+        <path d="M1 1L13 13M13 1L1 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+      </svg>
+    </button>
+    <img id="member-photo-lightbox-img" alt="" />
+  </div>
+
   <script type="application/json" id="member-detail-data" set:html={JSON.stringify(detailed)} />
 
   <script>
@@ -225,6 +251,7 @@ const detailedById = new Set(detailed.map((d) => d.i));
       i: number;
       name: string;
       photos: string[];
+      photosFull: string[];
       initials: string;
       names: string[];
       bio: string;
@@ -304,6 +331,37 @@ const detailedById = new Set(detailed.map((d) => d.i));
     const familyTextEl = document.getElementById('member-detail-family-text');
     const quotesEl = document.getElementById('member-detail-quotes');
 
+    const photoLightbox = document.getElementById('member-photo-lightbox');
+    const photoLightboxImg = document.getElementById('member-photo-lightbox-img') as HTMLImageElement | null;
+    const photoLightboxClose = document.getElementById('member-photo-lightbox-close');
+
+    function openPhotoLightbox(src: string, alt: string) {
+      if (!photoLightbox || !photoLightboxImg) return;
+      photoLightboxImg.src = src;
+      photoLightboxImg.alt = alt;
+      photoLightbox.hidden = false;
+    }
+
+    function closePhotoLightbox() {
+      if (photoLightbox) photoLightbox.hidden = true;
+    }
+
+    // Delegated rather than bound per-<img> since the multi-photo case
+    // (.member-photo-dynamic) creates its <img>s fresh on every open() call
+    // below - a direct listener on those would need re-attaching each time,
+    // this way it's wired once and works for photos that don't exist yet.
+    document.querySelectorAll<HTMLElement>('.member-panel .member-photo, .member-detail-photos').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        if (target instanceof HTMLImageElement) openPhotoLightbox(target.dataset.full || target.src, target.alt);
+      });
+    });
+
+    photoLightboxClose?.addEventListener('click', closePhotoLightbox);
+    photoLightbox?.addEventListener('click', (e) => {
+      if (e.target === photoLightbox) closePhotoLightbox();
+    });
+
     function open(detail: MemberDetail) {
       if (!overlay) return;
 
@@ -320,15 +378,17 @@ const detailedById = new Set(detailed.map((d) => d.i));
 
         if (detail.photos.length > 1) {
           photosEl.hidden = false;
-          detail.photos.forEach((src) => {
+          detail.photos.forEach((src, idx) => {
             const img = document.createElement('img');
             img.src = src;
             img.alt = '';
             img.className = 'member-photo-dynamic';
+            img.dataset.full = detail.photosFull[idx] ?? src;
             photosEl.appendChild(img);
           });
         } else if (detail.photos.length === 1) {
           photoEl.src = detail.photos[0];
+          photoEl.dataset.full = detail.photosFull[0] ?? detail.photos[0];
           photoEl.alt = detail.name;
           photoEl.hidden = false;
         } else {
@@ -373,7 +433,11 @@ const detailedById = new Set(detailed.map((d) => d.i));
     });
 
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && overlay && !overlay.hidden) close();
+      if (e.key !== 'Escape') return;
+      // Lightbox sits on top when open - one Escape press should peel that
+      // back first, not jump straight past it to close the member popup too.
+      if (photoLightbox && !photoLightbox.hidden) closePhotoLightbox();
+      else if (overlay && !overlay.hidden) close();
     });
 
     // Lands on the member a search result (or any other #anchor link)
@@ -570,9 +634,18 @@ const detailedById = new Set(detailed.map((d) => d.i));
   }
 
   .member-panel .member-photo {
-    width: 96px;
-    height: 96px;
-    font-size: 1.4rem;
+    width: 176px;
+    height: 176px;
+    font-size: 2rem;
+  }
+
+  /* Photos in the popup are large enough to matter, so let a click open
+     them full-size (see #member-photo-lightbox) rather than leaving a
+     176px circle as the ceiling - initials placeholders aren't clickable,
+     there's no image behind them to enlarge. */
+  .member-panel .member-photo:not(.member-photo--placeholder),
+  .member-photo-dynamic {
+    cursor: zoom-in;
   }
 
   .member-detail-photos {
@@ -586,6 +659,43 @@ const detailedById = new Set(detailed.map((d) => d.i));
   /* Same [hidden]-vs-author-display-rule issue as .member-photo above. */
   .member-detail-photos[hidden] {
     display: none;
+  }
+
+  /* Full-size photo view, layered above .member-overlay (z-index 200) so it
+     opens on top of the popup rather than replacing it. */
+  .member-photo-lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 20, 10, 0.85);
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .member-photo-lightbox[hidden] {
+    display: none;
+  }
+
+  .member-photo-lightbox img {
+    max-width: min(90vw, 520px);
+    max-height: 85vh;
+    border-radius: 12px;
+    object-fit: contain;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  }
+
+  .member-photo-lightbox-close {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    color: #fff;
+  }
+
+  .member-photo-lightbox-close:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.18);
   }
 
   .member-panel h2 {
@@ -704,8 +814,8 @@ const detailedById = new Set(detailed.map((d) => d.i));
   /* Also dynamically created (see #member-detail-photos in the script
      above), same not-scoped reason as .member-name above. */
   .member-photo-dynamic {
-    width: 96px;
-    height: 96px;
+    width: 120px;
+    height: 120px;
     border-radius: 50%;
     object-fit: cover;
   }
