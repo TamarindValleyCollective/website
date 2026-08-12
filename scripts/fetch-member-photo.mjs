@@ -65,9 +65,15 @@ const fullOutPath = path.join(root, 'public/images/members', outName.replace(/\.
 // source rather than re-reading and re-rotating the buffer twice.
 const rotated = sharp(buf).rotate();
 
+// `position: attention` biases the square crop toward whichever edge
+// libvips' saliency detection favors, rather than always cutting evenly off
+// both sides - a plain center crop clips whoever's furthest from center in
+// a wide group photo (Divya & Sudhir's card, caught 2026-08-12: a 1599px-
+// wide photo center-cropped to 1200px square sliced into Sudhir's face on
+// the right edge even though there was room to shift the crop his way).
 await rotated
   .clone()
-  .resize(400, 400, { fit: 'cover' })
+  .resize(400, 400, { fit: 'cover', position: sharp.strategy.attention })
   .jpeg({ quality: 85, progressive: true })
   .toFile(outPath);
 
