@@ -51,8 +51,8 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
   <div class="wrapper nav__inner">
     <div class="nav__left">
       <a class="nav__brand" href={homeHref}>
-        <img src="/images/brand/tvc-logo-mark.png" alt="Tamarind Valley Collective" width="56" height="56" />
-        <span>Tamarind Valley Collective</span>
+        <img class="nav__brand-lockup" src="/images/brand/tvc-logo-horizontal.svg" alt="Tamarind Valley Collective" width="280" height="56" />
+        <img class="nav__brand-mark" src="/images/brand/tvc-logo-mark.svg" alt="Tamarind Valley Collective" width="44" height="44" />
       </a>
       <HeaderWeather lang={lang} />
     </div>
@@ -142,18 +142,14 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
   .nav__brand {
     display: flex;
     align-items: center;
-    gap: 12px;
     text-decoration: none;
-    color: var(--tvc-green-dark);
-    font-family: var(--font-wordmark);
-    font-weight: 700;
-    font-size: 1.1rem;
-    white-space: nowrap;
     flex-shrink: 0;
   }
 
-  .nav__brand img {
-    border-radius: 50%;
+  /* Mobile-only mark, swapped in for .nav__brand-lockup below 530px (see
+     that media query) - hidden by default. */
+  .nav__brand-mark {
+    display: none;
   }
 
   /* Groups the menu + search/hamburger controls as one flex item, same
@@ -417,21 +413,21 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
 
   /* Logo mark + "Tamarind Valley Collective" wordmark + the language
      switcher + search icon + hamburger don't all fit on one line below
-     ~530px — .nav__brand has flex-shrink:0 and white-space: nowrap, and
-     .nav__left has min-width:0, so instead of wrapping or clipping, the
-     wordmark overflows past .nav__left's shrunk box and visually overlaps
-     the language switcher. (This threshold used to be 420px, back when the
+     ~530px — .nav__brand has flex-shrink:0, and .nav__left has
+     min-width:0, so instead of wrapping or clipping, the lockup would
+     overflow past .nav__left's shrunk box and visually overlap the
+     language switcher. (This threshold used to be 420px, back when the
      row only had to fit the logo/wordmark/search/hamburger; the language
-     switcher's ~90px wasn't part of the budget yet.) Drop the wordmark
-     text at this width; the logo alone still links home. */
+     switcher's ~90px wasn't part of the budget yet.) Swap the full
+     mark+wordmark lockup for the mark-only image at this width; the logo
+     alone still links home. */
   @media (max-width: 530px) {
-    .nav__brand span {
+    .nav__brand-lockup {
       display: none;
     }
 
-    .nav__brand img {
-      width: 44px;
-      height: 44px;
+    .nav__brand-mark {
+      display: block;
     }
   }
 </style>
