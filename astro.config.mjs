@@ -5,6 +5,34 @@ import sitemap from '@astrojs/sitemap';
 // https://astro.build/config
 export default defineConfig({
   site: 'https://tvc.farm',
+  vite: {
+    plugins: [
+      // /pagefind/pagefind.js only exists after `pagefind --site dist` runs
+      // post-build (see package.json and SiteSearch.astro's loadPagefind) -
+      // in `astro dev` there's nothing at that URL, and Vite's dev-server-
+      // level error reporting for a failed dev request fires regardless of
+      // the app's own try/catch around the dynamic import, throwing a
+      // full-page HMR overlay on top of whatever page you're looking at
+      // (reported 2026-08-13: made the footer "invisible" mid-review,
+      // nothing to do with the footer itself). `apply: 'serve'` scopes this
+      // stub to `astro dev` only - `astro build` never sees this plugin, so
+      // the real generated pagefind.js is untouched in production.
+      {
+        name: 'stub-pagefind-in-dev',
+        apply: 'serve',
+        configureServer(server) {
+          server.middlewares.use((req, res, next) => {
+            if (req.url === '/pagefind/pagefind.js') {
+              res.setHeader('Content-Type', 'application/javascript');
+              res.end('export async function search(){return {results:[]};}\nexport async function options(){}\n');
+              return;
+            }
+            next();
+          });
+        },
+      },
+    ],
+  },
   i18n: {
     defaultLocale: 'en',
     locales: ['en', 'kn', 'ta'],
