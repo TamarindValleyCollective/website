@@ -81,6 +81,25 @@
 
   --space-section: 96px;
   --space-section-sm: 56px;
+
+  /* A 4px-based scale for future components to reach for instead of a new
+     hand-picked number each time. Not a retrofit of the ~40 hardcoded
+     gap/padding/margin values already in use elsewhere - those stay as-is. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 48px;
+
+  /* Sized from the two dominant clusters among the transitions already in
+     use sitewide. Slower, bespoke motion (chart draw-ins, decorative
+     loops) stays untokenized on purpose - those are one-off narrative
+     moments, not repeated UI feedback. */
+  --transition-fast: 150ms ease;
+  --transition-base: 300ms ease;
 }
 
 * {
