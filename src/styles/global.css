@@ -57,6 +57,15 @@
   --tvc-ink-soft: #57604f;
   --tvc-line: #e2ddc9;
 
+  /* Shared with docs.tvc.farm's design system (see the TVCDocs vault's
+     "Design system" note) - the true, saturated logo green, and the
+     brown/blue "nature" pair from TVC's "green trees, brown earth, blue
+     skies". Not used anywhere on this site yet, kept in sync as reserve
+     tokens for future callouts/diagrams shared across both surfaces. */
+  --tvc-green-vivid: #18723c;
+  --tvc-earth-brown: #6f4a2e;
+  --tvc-sky-blue: #4e8fb5;
+
   --font-wordmark: 'Quicksand', -apple-system, 'Segoe UI', sans-serif;
   --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
   --font-body: 'Inter', -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
