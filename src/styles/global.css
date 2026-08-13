@@ -50,6 +50,12 @@
   --tvc-green-dark: #294a36;
   --tvc-green-tint: #e8f2ea;
   --tvc-orange: #bd7248;
+  /* --tvc-orange itself is only 3.46:1 on --tvc-cream - fine for large
+     UI/decorative use (borders, backgrounds, icons) but fails WCAG AA
+     (4.5:1) as small text. This is the same hue/saturation darkened to
+     5.23:1, for anywhere orange is set as actual text at body/label sizes
+     (see .eyebrow below). */
+  --tvc-orange-text: #965836;
   --tvc-orange-cta: #f78520;
   --tvc-orange-tint: #fdead3;
   --tvc-cream: #faf7ee;
@@ -263,7 +269,9 @@ img {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-size: 0.78rem;
-  color: var(--tvc-orange);
+  /* --tvc-orange fails WCAG AA at this size (3.46:1, needs 4.5:1) - use
+     the darker text-safe variant instead. */
+  color: var(--tvc-orange-text);
 }
 
 @media (max-width: 640px) {
