@@ -66,11 +66,15 @@
   /* Shared with docs.tvc.farm's design system (see the TVCDocs vault's
      "Design system" note) - the true, saturated logo green, and the
      brown/blue "nature" pair from TVC's "green trees, brown earth, blue
-     skies". Not used anywhere on this site yet, kept in sync as reserve
-     tokens for future callouts/diagrams shared across both surfaces. */
+     skies". --tvc-green-vivid is still an unused reserve token; Earth
+     Brown/Sky Blue are used by .callout below. */
   --tvc-green-vivid: #18723c;
   --tvc-earth-brown: #6f4a2e;
   --tvc-sky-blue: #4e8fb5;
+  /* --tvc-sky-blue itself is only 3.31:1 on --tvc-cream - fine for the
+     callout's border/background wash but fails WCAG AA (4.5:1) as text.
+     Same hue/saturation darkened to 4.95:1, for .callout--sky's label. */
+  --tvc-sky-blue-text: #3c7190;
 
   --font-wordmark: 'Quicksand', -apple-system, 'Segoe UI', sans-serif;
   --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
@@ -291,6 +295,37 @@ img {
   /* --tvc-orange fails WCAG AA at this size (3.46:1, needs 4.5:1) - use
      the darker text-safe variant instead. */
   color: var(--tvc-orange-text);
+}
+
+/* Generalized from .rainfall-summary's existing bordered-card pattern
+   (WeatherView.astro) into a reusable component. Reserve only - no page
+   consumes .callout yet; .rainfall-summary itself was left as its own
+   one-off rather than retrofitted, same reasoning as the spacing scale. */
+.callout {
+  background: #fff;
+  border: 1px solid var(--tvc-line);
+  border-left: 4px solid var(--tvc-earth-brown);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  padding: var(--space-4) var(--space-6);
+  margin: var(--space-6) 0;
+}
+
+.callout p:last-child {
+  margin-bottom: 0;
+}
+
+.callout .eyebrow {
+  color: var(--tvc-earth-brown);
+}
+
+.callout--sky {
+  border-left-color: var(--tvc-sky-blue);
+}
+
+.callout--sky .eyebrow {
+  /* --tvc-sky-blue itself fails WCAG AA as text - use the text-safe variant. */
+  color: var(--tvc-sky-blue-text);
 }
 
 @media (max-width: 640px) {
