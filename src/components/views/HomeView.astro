@@ -33,23 +33,33 @@ const PRINCIPLE_ICONS: Record<string, string> = {
 // prose per card/rung lives in the content object below, keyed by the same
 // index as its English counterpart.
 // Explore-grid cards render at a fixed 140px-tall strip (see .explore-card
-// img below), so five of these deliberately point at dedicated small
+// img below), so six of these deliberately point at dedicated small
 // thumbnails instead of the same full-size hero/display photo other pages
 // use at their own real size — a PageSpeed pass (2026-08-04) found this
 // grid alone pulling in 1.6MB+ of oversized images on the homepage, the
 // worst single offender being the in-pictures thumb below (a 698KB "display"
 // R2 asset for a 362x140 card; the project's own curate-photos.mjs already
-// uploads a "-thumb" variant alongside every "-display" one).
+// uploads a "-thumb" variant alongside every "-display" one). The People
+// card points at a small crop of the staff group photo (hero-thumb.webp)
+// rather than a single member's 400x400 headshot — a square selfie-style
+// portrait center-crops badly into this wide a strip, cutting faces at the
+// hairline; a photo where everyone's already lined up at one head height
+// crops cleanly (see also the rung__media fix below for the same reason).
 const exploreLinks = [
   { href: '/about', img: '/images/pages/home/gallery-1-thumb.webp' },
-  { href: '/people', img: '/images/members/ananth-and-manasa.jpg' },
+  { href: '/people', img: '/images/pages/staff/hero-thumb.webp' },
   { href: '/our-journey', img: '/images/pages/journey/hero-thumb.webp' },
   { href: '/in-pictures', img: 'https://media.tvc.farm/photos/2024/2024-08-18-img-1880-thumb.jpg' },
   { href: '/ecosystem/biodiversity', img: '/images/pages/trekking/watering-hole-thumb.webp' },
   { href: '/ecosystem/landscape', img: '/images/pages/home/gallery-2.jpg' },
   { href: '/ecosystem/weather', img: '/images/pages/home/gallery-4.jpg' },
-  { href: '/resource-centre', img: '/images/products/tamarind-chutney.jpeg' },
-  { href: '/events', img: '/images/events/2026-08-01-foraging-day/hero.jpeg' },
+  // Both were pointing at the same full-size photo used elsewhere at its own
+  // real size - center-cropped into this grid's wide strip it cut the jar
+  // pyramid's cap and the foragers' heads. These -thumb variants are
+  // pre-cropped to the card's own aspect ratio instead of leaving it to a
+  // center crop.
+  { href: '/resource-centre', img: '/images/products/tamarind-chutney-thumb.webp' },
+  { href: '/events', img: '/images/events/2026-08-01-foraging-day/hero-thumb.webp' },
 ];
 
 // Deliberately 5 curated rungs, not a 1:1 mirror of every ENGAGE_LINKS page
@@ -63,8 +73,15 @@ const exploreLinks = [
 // prominence as the other paid stays.
 const engageLinks = [
   { step: '01', href: '/visit/day-visit', img: '/images/pages/home/gallery-2.jpg', tone: 'tone-1' },
-  { step: '02', href: '/visit/camping', img: '/images/pages/while-at-farm/hero.jpg', tone: 'tone-2' },
-  { step: '03', href: '/visit', img: '/images/pages/home/gallery-3.jpg', tone: 'tone-3' },
+  // objectPosition pulls the crop up toward the sunflower heads - this
+  // rung's aspect ratio is wide enough that a center crop lands on stems
+  // and leaves, well below where the actual flowers are.
+  { step: '02', href: '/visit/camping', img: '/images/pages/while-at-farm/hero-thumb.webp', objectPosition: '50% 23%', tone: 'tone-2' },
+  // Was gallery-3.jpg, a 4-panel photo collage - object-fit: cover center-crops
+  // a horizontal sliver straight through its internal dividers at this rung's
+  // aspect ratio, so no single panel reads. A single wide volunteer-day photo
+  // crops cleanly instead.
+  { step: '03', href: '/visit', img: '/images/events/2021-12-18-volunteer-day-chop-drop-area-survey/hero-thumb.webp', tone: 'tone-3' },
   { step: '04', href: '/visit/host-an-event', img: '/images/pages/trekking/hilltop.jpg', tone: 'tone-4' },
   { step: '05', href: '/join', img: '/images/members/reva-and-ranjan.jpg', tone: 'tone-5' },
 ];
@@ -304,7 +321,7 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
         {engageRungs.map((r) => (
           <a class:list={['rung', r.tone]} href={getRelativeLocaleUrl(lang, r.href)}>
             <div class="rung__step">{r.step}</div>
-            <div class="rung__media"><img src={r.img} alt="" loading="lazy" /></div>
+            <div class="rung__media"><img src={r.img} alt="" loading="lazy" style={r.objectPosition ? `object-position: ${r.objectPosition}` : undefined} /></div>
             <div class="rung__text">
               <span class="rung__tag">{r.tag}</span>
               <h3>{r.title}</h3>
@@ -660,7 +677,11 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
 
   .explore-card img {
     width: 100%;
-    height: 140px;
+    /* aspect-ratio, not a fixed px height - the grid goes 3 cols -> 2 -> 1
+       across breakpoints, so a fixed height let the effective crop swing
+       from ~2.75:1 on desktop to well over 4:1 on a wide single-column
+       phone. A ratio keeps the same crop everywhere the width changes. */
+    aspect-ratio: 2.75 / 1;
     object-fit: cover;
   }
 
@@ -714,7 +735,13 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
   .rung__media {
     border-radius: 12px;
     overflow: hidden;
-    height: 96px;
+    /* aspect-ratio, not a fixed px height - the ladder switches to a
+       'step media' / 'text text' layout at 860px (see the media query
+       below) where this column gets nearly the full card width, so a
+       fixed 96px height was stretching the crop past 6:1 at tablet
+       widths - much more aggressive than the ~4.6:1 it was tuned for on
+       desktop. A ratio keeps the crop consistent at every width. */
+    aspect-ratio: 3 / 1;
     position: relative;
   }
 
