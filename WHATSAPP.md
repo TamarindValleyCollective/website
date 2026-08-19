@@ -229,26 +229,44 @@ that Phase 3 step below is still open.
       call Resend, previously only reached from the member-update GitHub Action). No way to
       *reply* yet — that still needs a lightweight admin page hitting the Send Message API, left
       for later since replying isn't blocking anything else in this checklist.
-- [ ] **Not yet live** — three things still needed before real events reach the function:
-      1. Set `WHATSAPP_VERIFY_TOKEN` (an arbitrary string we choose, not Meta-issued — can be
-         generated and set directly), `WHATSAPP_APP_SECRET` (from the Meta App Dashboard's Basic
-         Settings — a real secret, needs Sharath to reveal/paste it, same handling as
-         `WHATSAPP_ACCESS_TOKEN`), and `RESEND_API_KEY` (exists only as a GitHub Actions secret
-         today — needs adding as a Netlify env var too, also needs Sharath to paste it) on
-         Netlify.
-      2. Configure the webhook URL (`https://tvc.farm/api/whatsapp-webhook`) + the same verify
-         token in the Meta App Dashboard (WhatsApp → Configuration → Configure Webhooks).
-         Subscribe only to `messages` and `message_template_status_update` — skip `calls`,
-         `flows`, `payment_configuration_update`.
-      3. Deploy to production (push to `main`) so the function is actually reachable at that URL.
+- [x] **Live in production — 2026-08-19.** All three prerequisites done:
+      1. `WHATSAPP_VERIFY_TOKEN` (generated ourselves, set directly), `WHATSAPP_APP_SECRET` (from
+         the Meta App Dashboard's Basic Settings, Sharath revealed/pasted it), and `RESEND_API_KEY`
+         (added as a Netlify env var alongside its existing GitHub Actions secret, Sharath pasted
+         it) are all set on Netlify — same handling as `WHATSAPP_ACCESS_TOKEN` throughout, Claude
+         never touched the raw values for the two real secrets.
+      2. Configured the webhook URL (`https://tvc.farm/api/whatsapp-webhook`) + verify token in
+         the Meta App Dashboard (WhatsApp → Configuration → Configure Webhooks). First "Verify and
+         save" attempt failed (500 "Server misconfigured") — the deployed function bundle predated
+         the three env vars above (Netlify Functions snapshot env vars at deploy time, not read
+         live); a manual redeploy (Deploys → Trigger deploy) picked them up and the second attempt
+         succeeded. Subscribed fields: confirmed `messages` and `message_template_status_update`
+         are on; the auto-subscribe also turned on `calls` (unsubscribed it, matching the original
+         plan) plus a few account/quality-update fields (left alone — harmless, the function
+         ignores any field it doesn't recognize). `payment_configuration_update`/`flows` were
+         never subscribed.
+      3. **Published the Meta app** (was blocking all production data — Meta only delivers test
+         webhooks to an unpublished app). Needed a Privacy Policy URL (`tvc.farm/privacy`, was
+         blank) and the "Connect with customers through WhatsApp" use case, both already
+         satisfied (`whatsapp_business_management`/`whatsapp_business_messaging` already showed
+         "Ready for testing," no App Review needed). Along the way also fixed the app's Contact
+         email (was Sharath's personal work address, now `contact@tvc.farm`) and set a proper App
+         icon (rendered from `public/images/brand/tvc-logo-mark.svg` at 1024×1024 via `sharp`,
+         Sharath uploaded it — Claude can't drive the native file-picker dialog). Terms of Service
+         URL auto-updated to `tvc.farm/terms` as a side effect.
+      **Not yet verified**: an actual real WhatsApp message sent to `+91 80 4110 9754` hasn't been
+      tried — that's the real end-to-end test, needs Sharath to send one and confirm the
+      `contact@tvc.farm` notification email arrives.
 - [ ] Submit real templates in the **UTILITY** category (transactional — confirmations,
       notifications), not MARKETING — cleaner approval, longer free-window eligibility. First
       trigger decided 2026-08-19: an internal staff alert on new Visit/general-enquiry form
       submissions (see resolved decision below) — template content itself still needs drafting.
 - [x] Update `ARCHITECTURE.md`'s function list and diagram once this function is live, per the
-      standing instruction in `CLAUDE.md`. Done 2026-08-19 alongside the function itself (diagram
-      node, external-service node for Meta's Cloud API, prose entry, status table row — marked
-      🟡 "Built, verified locally" until the three not-yet-live items above are done).
+      standing instruction in `CLAUDE.md`. Node/status table done 2026-08-19 alongside the
+      function itself; status row upgraded to 🟢 "Deployed and registered" now that the webhook is
+      verified and the app published — matching the Host an Event inquiry form's precedent for
+      "configured and reachable, but no real traffic exercised yet" (see the "Not yet verified"
+      note above).
 
 ## Open decisions (not yet made)
 

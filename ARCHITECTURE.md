@@ -86,7 +86,7 @@ flowchart TD
         APIFN3["Netlify Function: /api/photo-pool<br/>(+/thumb, +/description)<br/>Configured — Drive service account + folder IDs<br/>set as Netlify env vars for all deploy contexts"]
         APIFN4["Netlify Function: /api/enquiry<br/>Live and verified — Sheet ids set,<br/>Sheets shared Editor-access with the<br/>service account, real appends confirmed"]
         APIFN5["Netlify Function: /api/rainfall<br/>Reads the rainfall-log Sheet (view-access<br/>only, read-only path) — RAINFALL_SHEET_ID"]
-        APIFN6["Netlify Function: /api/whatsapp-webhook<br/>Code deployed, WHATSAPP_ACCESS_TOKEN set —<br/>WHATSAPP_VERIFY_TOKEN/APP_SECRET/RESEND_API_KEY<br/>not yet set, not yet registered as a webhook<br/>in the Meta App Dashboard, so not receiving<br/>real events yet"]
+        APIFN6["Netlify Function: /api/whatsapp-webhook<br/>Deployed, env vars set, webhook verified<br/>in the Meta App Dashboard, app published —<br/>no real inbound message exercised yet"]
         BLOBS["Netlify Blobs: 'event-interest' store<br/>One JSON record per past event id —<br/>{count, emails[]}. Reset via<br/>netlify blobs:delete event-interest &lt;id&gt;"]
         FORMS["Netlify Forms<br/>Captures /contact membership + general<br/>enquiries, /visit/host-an-event inquiries,<br/>/visit camping·day-visit·trekking inquiries,<br/>and event-interest submissions with an email"]
     end
@@ -647,7 +647,7 @@ never touches Netlify either.
 | Live rainfall chart/table/monsoon stat (`/ecosystem/weather`, `/api/rainfall`) | ✅ Live — reads the community's rainfall-log Sheet live, `RAINFALL_SHEET_ID` set on Netlify (all deploy contexts); multi-year line chart with year-filter checkboxes; verified against `tvc.farm/ecosystem/weather` and `tvc.farm/api/rainfall` directly |
 | Site search (nav icon / `/` key) | 🟡 Built, verified locally (not yet deployed) — switched from a title/description-only index to Pagefind, which indexes each non-`noindex` page's full `<main>` content; confirmed via a local production build + `astro preview` that in-body content (e.g. member names on `/people/members/`) is now searchable and that `noindex` pages (404, thanks pages, `/internal/photo-pool`, `/people/members/story-guide`) are correctly excluded from the index |
 | Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | ✅ Live — Drive folders, service account, Google Sign-In OAuth client, curator allow-list Sheet, all Netlify env vars configured; verified against production directly (`/internal/photo-pool` returns 200, `/api/photo-pool` returns 401 unauthenticated as expected for the Google Sign-In-gated function) |
-| WhatsApp webhook (`/api/whatsapp-webhook`) | 🟡 Built, verified locally (not yet live in production) — GET handshake and POST signature verification tested against `netlify dev`; `WHATSAPP_VERIFY_TOKEN`/`WHATSAPP_APP_SECRET`/`RESEND_API_KEY` not yet set on Netlify, URL not yet registered as a webhook in the Meta App Dashboard. See `WHATSAPP.md` |
+| WhatsApp webhook (`/api/whatsapp-webhook`) | 🟢 Deployed and registered — env vars set, webhook verified in the Meta App Dashboard (`messages`/`message_template_status_update` subscribed), Meta app published; **no real inbound message exercised yet**, so the end-to-end path (Meta → webhook → Resend notification email) isn't confirmed against live traffic. See `WHATSAPP.md` |
 
 The membership/general enquiry forms are fully live — Sheets logging verified with real
 production `POST`s, and email needs no separate setup since Netlify's default owner notification
