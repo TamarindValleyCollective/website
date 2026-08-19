@@ -212,32 +212,60 @@ that Phase 3 step below is still open.
 
 ### Phase 4 — Webhook + templates (Claude builds this once phase 1–3 credentials exist)
 
-- [ ] New Netlify function (alongside `chat.mts`, `enquiry.mts`, `rainfall.mts`) as the webhook
-      endpoint — handles Meta's GET verification handshake, then receives `messages` and
-      `message_template_status_update` events over HTTPS.
-- [ ] Configure the webhook URL + a verify token in the Meta App Dashboard (WhatsApp →
-      Configuration → Configure Webhooks). Subscribe only to needed fields (`messages`,
-      `message_template_status_update`; skip `calls`, `flows`, `payment_configuration_update`).
+- [x] **New Netlify function** `netlify/functions/whatsapp-webhook.mts` — done 2026-08-19.
+      Handles Meta's GET verification handshake (`hub.mode`/`hub.verify_token`/`hub.challenge`)
+      and POST requests carrying `messages`/`message_template_status_update` events, each
+      verified via its `X-Hub-Signature-256` HMAC signature (Node's built-in `crypto`, no new
+      dependency) before being trusted. Tested locally against `netlify dev` (port 8888, since
+      the plain `astro dev` server on 4321 doesn't serve Netlify Functions) — both handshake
+      outcomes (correct/wrong verify token) and both event types (a valid-signature message, a
+      template-status update) behave as expected; missing-signature and wrong-signature POSTs
+      correctly return 401. See `ARCHITECTURE.md`'s function-list entry for the full design
+      rationale.
+- [x] **Build a way to actually see incoming messages** — minimum viable version done 2026-08-19,
+      built directly into the webhook function above rather than as a separate piece: every
+      inbound message triggers a notification email to `contact@tvc.farm` via the Resend REST API
+      (`scripts/send-member-update-email.mjs`'s existing pattern — the first Netlify Function to
+      call Resend, previously only reached from the member-update GitHub Action). No way to
+      *reply* yet — that still needs a lightweight admin page hitting the Send Message API, left
+      for later since replying isn't blocking anything else in this checklist.
+- [ ] **Not yet live** — three things still needed before real events reach the function:
+      1. Set `WHATSAPP_VERIFY_TOKEN` (an arbitrary string we choose, not Meta-issued — can be
+         generated and set directly), `WHATSAPP_APP_SECRET` (from the Meta App Dashboard's Basic
+         Settings — a real secret, needs Sharath to reveal/paste it, same handling as
+         `WHATSAPP_ACCESS_TOKEN`), and `RESEND_API_KEY` (exists only as a GitHub Actions secret
+         today — needs adding as a Netlify env var too, also needs Sharath to paste it) on
+         Netlify.
+      2. Configure the webhook URL (`https://tvc.farm/api/whatsapp-webhook`) + the same verify
+         token in the Meta App Dashboard (WhatsApp → Configuration → Configure Webhooks).
+         Subscribe only to `messages` and `message_template_status_update` — skip `calls`,
+         `flows`, `payment_configuration_update`.
+      3. Deploy to production (push to `main`) so the function is actually reachable at that URL.
 - [ ] Submit real templates in the **UTILITY** category (transactional — confirmations,
       notifications), not MARKETING — cleaner approval, longer free-window eligibility. First
-      candidate: whatever trigger gets picked (see open decisions below).
-- [ ] **Build a way to actually see and reply to incoming messages.** Meta provides no inbox of
-      its own for Cloud API numbers — confirmed by checking every tab in WhatsApp Manager (no
-      Messages/Inbox anywhere) and Meta's own docs ("the contents of any message... is
-      communicated via webhook"). The webhook function above only receives messages; without
-      this, they'd arrive with nowhere to see or answer them. Minimum viable version: route
-      incoming messages to Slack/email and reply via a small script; a proper version would be a
-      lightweight admin page hitting the Send Message API.
-- [ ] Update `ARCHITECTURE.md`'s function list and diagram once this function is live, per the
-      standing instruction in `CLAUDE.md`.
+      trigger decided 2026-08-19: an internal staff alert on new Visit/general-enquiry form
+      submissions (see resolved decision below) — template content itself still needs drafting.
+- [x] Update `ARCHITECTURE.md`'s function list and diagram once this function is live, per the
+      standing instruction in `CLAUDE.md`. Done 2026-08-19 alongside the function itself (diagram
+      node, external-service node for Meta's Cloud API, prose entry, status table row — marked
+      🟡 "Built, verified locally" until the three not-yet-live items above are done).
 
 ## Open decisions (not yet made)
 
-- What the first real trigger is: an internal staff alert on new Visit/general-enquiry form
-  submissions, a customer-facing confirmation, or something else.
-- What content the first UTILITY template should have — a monthly-meeting-feedback-style
-  template with quick-reply buttons worked well as a concept previously; worth deciding whether
-  to reuse that idea or start fresh for whatever trigger gets picked.
+- What content the first UTILITY template should have (trigger is decided — see below) — a
+  monthly-meeting-feedback-style template with quick-reply buttons worked well as a concept
+  previously; worth deciding whether to reuse that idea or start fresh for an internal enquiry
+  alert instead (e.g. `New {{1}} enquiry from {{2}} — {{3}}`).
 - Whether/when to decommission the old AiSensy-provisioned WABA (`1546242986597983`) — blocked on
   confirming the phone number migration actually finished (see the 2026-08-19 decommissioning
   check above); recheck its Phone numbers tab for a "Transferred" status before doing anything.
+
+## Resolved decisions
+
+- **First outbound trigger (2026-08-19):** an internal staff alert on new Visit/general-enquiry
+  form submissions — lower risk than a customer-facing message, internal-only, easier template
+  approval. Not yet built — needs the UTILITY template above submitted and approved first, then
+  wiring a WhatsApp send call into `netlify/functions/enquiry.mts` (or a new function) alongside
+  its existing Sheet-append.
+- **Incoming-message notification channel (2026-08-19):** email via Resend, reusing the existing
+  setup rather than standing up Slack — see the webhook function above.
