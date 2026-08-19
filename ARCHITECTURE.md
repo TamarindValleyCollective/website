@@ -53,6 +53,10 @@ flowchart TD
         SCRIPT_GSC["scripts/check-search-console.mjs<br/>Looks up Google's own crawl/index status<br/>(coverageState, last crawl time) for one<br/>or more URLs — e.g. to confirm a<br/>netlify.toml redirect fix has been recrawled"]
     end
 
+    subgraph CIACTIONS["0c · GitHub Actions — CI, on push to main"]
+        GHA_MEMBER["member-update-email.yml<br/>+ send-member-update-email.mjs<br/>On push touching src/data/members.ts:<br/>diffs it, classifies changed cards<br/>new/updated, emails members@tvc.farm<br/>+ each changed member's own address"]
+    end
+
     subgraph SRC["1 · Source — github.com/TamarindValleyCollective/website (main)"]
         PAGES["src/pages/*.astro<br/>File-based routes: Home, About, Visit,<br/>Events, Ecosystem, Our Journey, Contact, etc."]
         INTERNALPAGE["src/pages/internal/photo-pool.astro<br/>Unlinked, noindex — photo review dashboard shell"]
@@ -119,6 +123,7 @@ flowchart TD
         GSHEET["Google Sheets API<br/>Curator allow-list (read, photo-pool.mts) +<br/>membership/general enquiry logs (write,<br/>enquiry.mts) + rainfall log (read,<br/>rainfall.mts) + Members story-form<br/>responses (read + write Processed-at/Notes,<br/>check-member-story-responses.mjs) —<br/>same service account, called server-side<br/>only (Functions) or from a local script"]
         GIDTOKEN["Google Identity Services / OAuth<br/>Curator sign-in (browser) +<br/>ID token verification against<br/>Google's public JWKS (photo-pool.mts)"]
         GSC["Google Search Console API<br/>urlInspection.index.inspect — read-only,<br/>same service account (Full user on the<br/>property as of 2026-08-08),<br/>called from a local script only"]
+        RESEND["Resend API<br/>Transactional email — noreply@tvc.farm,<br/>domain verified 2026-08-19,<br/>called only from the GitHub Action above"]
     end
 
     SRC --> BUILD
@@ -138,6 +143,8 @@ flowchart TD
     SCRIPT_CAPTION -->|"backfills caption:"| CONTENT
     SCRIPT_PULL -.->|"download + move files"| GDRIVE
     SCRIPT_GSC -.->|"inspect URL indexing/crawl status"| GSC
+    GHA_MEMBER -.->|"look up changed members' emails"| GSHEET
+    GHA_MEMBER -.->|"send update email"| RESEND
     CHATW --> APIFN
     HOSTFORM --> FORMS
     BOOKING --> FORMS
@@ -161,19 +168,22 @@ flowchart TD
     classDef externalStyle fill:#f6f1e7,stroke:#c9c2a8,color:#22291f
     classDef cfStyle fill:#fef3e0,stroke:#e8891c,color:#7a4a00
     classDef localStyle fill:#eef0f5,stroke:#6b7280,color:#374151
+    classDef ciStyle fill:#eef4fb,stroke:#3b6ea5,color:#1c3f5f
 
     class PAGES,INTERNALPAGE,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH staticStyle
     class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,BLOBS,FORMS,ANTHROPIC netlifyStyle
-    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC externalStyle
+    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL,SCRIPT_GSC localStyle
+    class GHA_MEMBER ciStyle
 ```
 
 **Legend:** 🟢 static / no server required · 🟠 depends on Netlify specifically (Functions or
 Forms) · ⬜ external third-party service (includes R2, which is a Cloudflare product but plays
 the role of an external media store here, not part of the Netlify hosting path) · 🟡 Cloudflare
 DNS/CDN layer in front of Netlify · ⚪ runs locally on a contributor's machine, outside the
-Netlify build (the offline photo curation and captioning scripts).
+Netlify build (the offline photo curation and captioning scripts) · 🔵 runs in GitHub Actions CI,
+outside both the local machine and Netlify (the member-update-email workflow).
 
 ## Layer-by-layer detail
 
@@ -306,6 +316,22 @@ Netlify build (the offline photo curation and captioning scripts).
   service account, no separate credentials: `inspectUrl()` (`urlInspection.index.inspect`,
   the v1 API host) and `listSitemaps()`/`querySearchAnalytics()` (`sitemaps.list`/
   `searchAnalytics.query`, the older Webmasters v3 host — Google never migrated those two to v1).
+- **`.github/workflows/member-update-email.yml`** + **`scripts/send-member-update-email.mjs`** —
+  the only GitHub Action in this repo that isn't purely local/report-only (contrast
+  `pagespeed.yml`). Runs on every push to `main` that touches `src/data/members.ts`, diffing that
+  file's previous committed version against the new one (one member per line in this file, so a
+  changed line is a changed member — no TS parsing needed) to find which member cards changed,
+  classifying each as "new" (its previous line had no `whyTVC` field — the one question unique to
+  the "TVC Members: Your Story" form) or "updated" (it already did; same heuristic drives a
+  site-wide "N of 53 members have shared their story" progress stat in the email body). Emails
+  `members@tvc.farm`, CC'ing each changed member's own address — looked up from the response
+  Sheet by name via `getSheetValues()`, reusing `google-drive.mjs` and its existing
+  `GDRIVE_SERVICE_ACCOUNT_EMAIL`/`_PRIVATE_KEY` (added as GitHub Actions secrets 2026-08-19,
+  alongside the local `.env`/Netlify env vars that already had them) — through the **Resend**
+  API (`RESEND_API_KEY` secret, `noreply@tvc.farm`, domain verified via DKIM/SPF/DMARC records
+  added to the `tvc.farm` Cloudflare zone the same day). Supports a manual `workflow_dispatch`
+  with `compare_ref`/`test_recipient` inputs so a real send can be tested against one inbox
+  (skips the member CCs) without emailing actual members.
 - **`scripts/check-search-console.mjs`** — run locally. Looks up Google's own crawl/index status
   (`coverageState` — e.g. "Not found (404)", "Submitted and indexed" — and `lastCrawlTime`) for
   one or more URLs, to confirm whether a `netlify.toml` redirect fix has actually been recrawled

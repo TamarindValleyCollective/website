@@ -1,0 +1,48 @@
+name: Member profile update email
+
+# Notifies members@tvc.farm (plus the individual member(s) whose card
+# changed, CC'd) whenever a push to main touches src/data/members.ts - the
+# automated half of the "process member profile updates" workflow; see
+# scripts/check-member-story-responses.mjs for the human-run half and
+# scripts/send-member-update-email.mjs for what this actually sends.
+#
+# Needs RESEND_API_KEY (resend.com dashboard) and the existing
+# GDRIVE_SERVICE_ACCOUNT_EMAIL/_PRIVATE_KEY (same tvc-photo-pool service
+# account used by the local scripts and Netlify functions, added as repo
+# secrets here 2026-08-19 so this workflow can look up each changed
+# member's own email from the response Sheet) as repo secrets.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/data/members.ts'
+  workflow_dispatch:
+    inputs:
+      compare_ref:
+        description: 'Git ref to diff members.ts against (defaults to the previous commit)'
+        required: false
+      test_recipient:
+        description: 'If set, sends the real email to just this address instead of members@tvc.farm + CCs (for testing)'
+        required: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 # need the pre-push commit too, to diff members.ts against it
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Send update email
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          GDRIVE_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_EMAIL }}
+          GDRIVE_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_PRIVATE_KEY }}
+          GITHUB_EVENT_BEFORE: ${{ github.event.inputs.compare_ref || github.event.before }}
+          TEST_SEND_TO: ${{ github.event.inputs.test_recipient }}
+        run: node scripts/send-member-update-email.mjs
