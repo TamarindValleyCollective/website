@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Notifies members@tvc.farm (plus each updated member's own email, CC'd)
-// whenever a push to main changes src/data/members.ts - see
+// Notifies members@tvc.farm (BCC'ing each updated member's own email - not
+// CC, so members can't see each other's addresses) whenever a push to main
+// changes src/data/members.ts - see
 // scripts/check-member-story-responses.mjs for the human-run half of this
 // process; this script is the automated half, wired into
 // .github/workflows/member-update-email.yml on every push to main that
@@ -22,7 +23,7 @@
 // GDRIVE_SERVICE_ACCOUNT_EMAIL/_PRIVATE_KEY (same tvc-photo-pool service
 // account used elsewhere, added as GitHub Actions secrets 2026-08-19 so
 // this script can look up each changed member's own email from the
-// response Sheet to CC them) as environment variables - see
+// response Sheet to BCC them) as environment variables - see
 // .github/workflows/member-update-email.yml.
 //
 // Usage: node scripts/send-member-update-email.mjs [--dry-run]
@@ -49,7 +50,7 @@ const SITE_URL = 'https://tvc.farm';
 const FROM = 'TVC Website <noreply@tvc.farm>';
 // TEST_SEND_TO (set via the workflow's manual "test_recipient" input, or
 // locally) reroutes a real send to one inbox instead of members@tvc.farm +
-// CCs - lets a real Resend send be verified end-to-end without emailing
+// BCCs - lets a real Resend send be verified end-to-end without emailing
 // actual members. Diffing/classification logic runs unchanged either way.
 const testRecipient = process.env.TEST_SEND_TO;
 const TO = testRecipient ? [testRecipient] : ['members@tvc.farm'];
@@ -140,7 +141,9 @@ async function lookupEmails(names) {
 }
 
 const emailsByName = await lookupEmails(changed.map((c) => c.name));
-const ccEmails = testRecipient ? [] : [...new Set(changed.flatMap((c) => [...(emailsByName.get(c.name) ?? [])]))];
+// BCC, not CC - each changed member's own address shouldn't be visible to
+// the rest of the members@tvc.farm list or to each other.
+const bccEmails = testRecipient ? [] : [...new Set(changed.flatMap((c) => [...(emailsByName.get(c.name) ?? [])]))];
 
 // --- 3. Build the email --------------------------------------------------
 
@@ -269,12 +272,12 @@ if (dryRun) {
     writeFileSync(process.env.DRY_RUN_HTML_OUT, html);
   }
   console.log('--dry-run: not sending. Subject:', subject);
-  console.log('To:', TO, 'Cc:', ccEmails);
+  console.log('To:', TO, 'Bcc:', bccEmails);
   process.exit(0);
 }
 
 const payload = { from: FROM, to: TO, subject, html };
-if (ccEmails.length > 0) payload.cc = ccEmails;
+if (bccEmails.length > 0) payload.bcc = bccEmails;
 
 const res = await fetch('https://api.resend.com/emails', {
   method: 'POST',
@@ -290,4 +293,4 @@ if (!res.ok) {
 }
 
 const result = await res.json();
-console.log('Sent:', result.id, '- to', TO, 'cc', ccEmails);
+console.log('Sent:', result.id, '- to', TO, 'bcc', bccEmails);

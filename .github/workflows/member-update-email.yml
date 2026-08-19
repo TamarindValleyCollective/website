@@ -1,7 +1,8 @@
 name: Member profile update email
 
-# Notifies members@tvc.farm (plus the individual member(s) whose card
-# changed, CC'd) whenever a push to main touches src/data/members.ts - the
+# Notifies members@tvc.farm (BCC'ing the individual member(s) whose card
+# changed, not CC - so they can't see each other's addresses) whenever a
+# push to main touches src/data/members.ts - the
 # automated half of the "process member profile updates" workflow; see
 # scripts/check-member-story-responses.mjs for the human-run half and
 # scripts/send-member-update-email.mjs for what this actually sends.
@@ -23,7 +24,7 @@ on:
         description: 'Git ref to diff members.ts against (defaults to the previous commit)'
         required: false
       test_recipient:
-        description: 'If set, sends the real email to just this address instead of members@tvc.farm + CCs (for testing)'
+        description: 'If set, sends the real email to just this address instead of members@tvc.farm + BCCs (for testing)'
         required: false
 
 jobs:
