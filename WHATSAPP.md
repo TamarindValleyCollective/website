@@ -109,6 +109,19 @@ is a good sign but not a guarantee it'll pass again on a fresh review.
 The old WABA (`1546242986597983`) is left as-is, not deleted — its approved display name and
 verified business status don't transfer, but there's no reason to touch it further.
 
+**2026-08-19 update (decommissioning check) — migration not confirmed complete yet, don't touch
+the old WABA.** Before considering the old WABA for cleanup, checked both WABAs' Phone numbers
+tabs: `+91 80 4110 9754` still appears in **both**, each showing status **Pending**. Per
+migration docs (360dialog's guide on WABA-to-WABA number migration — Meta doesn't publish its own
+detailed migration-status page), a completed migration marks the number **"Transferred"** in the
+*source* WABA, checked directly in WhatsApp Manager; ours still reads "Pending" there, not
+"Transferred," so the migration likely hasn't fully finished on Meta's backend yet, even though
+phone verification succeeded on the new WABA. **Decision: leave the old WABA (`1546242986597983`)
+completely alone for now** — no access changes, no removing AiSensy as a partner, no deletion.
+**Recheck its Phone numbers tab before any decommissioning work**: once that row flips to
+"Transferred," it's safe to clean up (revoke apiuser's assignment there, remove AiSensy's partner
+access, consider full decommissioning). Until then, touching it risks the phone number itself.
+
 **2026-08-19 update (later still) — new WABA phone verification complete.** Sharath answered
 the verification phone call and confirmed the code. Checked WhatsApp Manager → Phone numbers on
 the new WABA (asset ID `2166888700553540`, confirmed via Business Settings → WhatsApp accounts —
@@ -225,3 +238,6 @@ that Phase 3 step below is still open.
 - What content the first UTILITY template should have — a monthly-meeting-feedback-style
   template with quick-reply buttons worked well as a concept previously; worth deciding whether
   to reuse that idea or start fresh for whatever trigger gets picked.
+- Whether/when to decommission the old AiSensy-provisioned WABA (`1546242986597983`) — blocked on
+  confirming the phone number migration actually finished (see the 2026-08-19 decommissioning
+  check above); recheck its Phone numbers tab for a "Transferred" status before doing anything.
