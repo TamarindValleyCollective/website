@@ -26,6 +26,13 @@ decision to integrate directly against Meta's WhatsApp Cloud API instead, and th
 checklist/progress toward that. **Update it in the same change** whenever that changes — a setup
 step completed, a new webhook/template added, a new trigger wired into the site, etc.
 
+## UPI transaction sync documentation
+
+`UPI-SYNC.md` documents TVC's BHIM UPI transaction-tracking automation — a Google Apps Script
+project, unrelated to the website itself, kept here alongside `RAZORPAY.md`/`BUFFER.md` since
+that's where TVC's other operational tooling docs live. **Update it in the same change**
+whenever that changes — the sync script, sheet layout, trigger cadence, or Drive folder.
+
 ## Change log
 
 `CHANGELOG.md` is a short index; the actual entries live one file per month under
@@ -53,6 +60,20 @@ pushed (e.g. pure evaluation/advice, or work explicitly not committed).
 
 When a new month starts, create `CHANGELOG/YYYY-MM.md` (copy the previous month's header) and
 add it to the top of `CHANGELOG.md`'s list.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub Issues in TamarindValleyCollective/website (uses the `gh` CLI). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default label vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
 ## Development
 
