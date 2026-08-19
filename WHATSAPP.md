@@ -180,12 +180,14 @@ that Phase 3 step below is still open.
 - [ ] Hand the token to Claude (or set it directly) as a Netlify environment variable — never
       commit it to the repo. Same handling as `ANTHROPIC_API_KEY` / the Google service-account
       keys already used by other functions.
-- [ ] **Add a payment method to the new WABA.** Confirmed 2026-08-19: its Overview page shows a
-      "Missing valid payment method" alert — customer-initiated free-tier conversations won't work
-      until one's added. This is the direct payoff of the pivot (own billing, not AiSensy's shared
-      credit line) — needs Sharath to add a card/payment method in WhatsApp Manager → that WABA →
-      Payment configurations (Business Settings → the WABA → Preferences also has a "Payment
-      settings" link). Claude can't enter payment details itself (prohibited action).
+- [x] **Add a payment method to the new WABA.** Done 2026-08-19: Sharath added a Visa card
+      (···· 8866) via Business Settings → the new WABA → Preferences → Payment settings → Billing
+      & payments → Add payment method (note: WhatsApp Manager's own "Payment configurations" side
+      nav is a different feature — WhatsApp Pay for customer order payments, not this account
+      billing). Now shows as the account's default payment method, own billing entirely separate
+      from AiSensy's credit line (no credit line shows on this account at all) — the direct payoff
+      of the pivot. A ₹3.00 card-verification charge went through and is processing a refund, as
+      expected for this kind of card-add flow.
 
 ### Phase 4 — Webhook + templates (Claude builds this once phase 1–3 credentials exist)
 
