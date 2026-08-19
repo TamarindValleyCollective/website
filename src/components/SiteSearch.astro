@@ -263,9 +263,16 @@ const memberIndex = members.map((m) => ({
     try {
       // Only exists at dist/pagefind/pagefind.js after `pagefind --site
       // dist` runs post-build (see package.json) — not a source module, so
-      // neither Vite nor tsc can resolve it ahead of time.
+      // neither Vite nor tsc can resolve it ahead of time. The path is held
+      // in a variable rather than passed as a literal: Vite's import-
+      // analysis plugin statically pre-resolves literal `import('...')`
+      // specifiers regardless of a `/* @vite-ignore */` comment (a Vite 8
+      // regression from when that comment alone was enough), throwing a
+      // fatal dev-only HMR overlay when resolution fails — a non-literal
+      // specifier is never statically analyzed at all.
+      const pagefindUrl = '/pagefind/pagefind.js';
       // @ts-expect-error - runtime-only asset, no module for TS to resolve
-      pagefind = await import(/* @vite-ignore */ '/pagefind/pagefind.js');
+      pagefind = await import(/* @vite-ignore */ pagefindUrl);
       return pagefind;
     } catch {
       loadFailed = true;
