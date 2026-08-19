@@ -34,11 +34,11 @@ fully configured and **verified directly against production** (`/internal/photo-
 `/api/enquiry` is **live and verified**: its two Google Sheets
 are created, shared Editor-access with the service account, and their ids set as
 `MEMBERSHIP_ENQUIRY_SHEET_ID`/`GENERAL_ENQUIRY_SHEET_ID` — a direct `POST` to
-`https://tvc.farm/api/enquiry` for each form type appended a real row successfully. No custom
-Netlify notification rule was needed for the email side either: this site's Netlify account is
-itself owned by `contact@tvc.farm`, and Netlify emails the account owner on every form submission
-by default, with no per-form rule configured — the custom "Email notification" rule setting (which
-prompted a plan upgrade) is only for *additional* recipients beyond the owner, not required here.
+`https://tvc.farm/api/enquiry` for each form type appended a real row successfully. Email
+notification for this form and every other form without its own override runs through one
+site-wide "Email notification" rule (Site configuration → Forms → Form notifications, no
+per-form `form_name` set), pointed at `core-team@tvc.farm` (moved from `contact@tvc.farm` on
+2026-08-19 — see the Forms/WhatsApp section below).
 
 ## Diagram
 
@@ -68,7 +68,7 @@ flowchart TD
         FUNC_SRC3["netlify/functions/photo-pool.mts<br/>Serverless function, Google Sign-In gated —<br/>verifies ID token, checks a Sheet-backed<br/>allow-list, lists Inbox (+ uploader/EXIF/GPS/<br/>description), moves photos, saves descriptions"]
         FUNC_SRC4["netlify/functions/enquiry.mts<br/>Serverless function — appends a row to a<br/>Google Sheet per membership/general enquiry,<br/>fired via sendBeacon alongside each form's<br/>own native Netlify Forms submission"]
         FUNC_SRC5["netlify/functions/rainfall.mts<br/>Serverless function — reads the community's<br/>rainfall-log Sheet (monthly + daily tabs) on<br/>every page view, computes the monsoon<br/>to-date stat, returns JSON"]
-        FUNC_SRC6["netlify/functions/whatsapp-webhook.mts<br/>Serverless function — verifies Meta's GET<br/>handshake and each POST's HMAC signature,<br/>emails contact@tvc.farm via Resend per<br/>incoming WhatsApp message (no inbox exists<br/>for Cloud API numbers otherwise)"]
+        FUNC_SRC6["netlify/functions/whatsapp-webhook.mts<br/>Serverless function — verifies Meta's GET<br/>handshake and each POST's HMAC signature,<br/>emails core-team@tvc.farm via Resend per<br/>incoming WhatsApp message (no inbox exists<br/>for Cloud API numbers otherwise)"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
     end
 
@@ -243,9 +243,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   library, matching this repo's preference for small hand-rolled implementations for
   well-defined tasks (see `src/utils/calendar.ts`'s ICS generation).
 - **`netlify/functions/enquiry.mts`** — backs the membership enquiry form (bottom of `/join`)
-  and the general enquiry form (`/contact`). Each form submits natively via Netlify Forms (email —
-  no custom notification rule needed, since Netlify emails the account owner by default on every
-  submission, and that owner already is `contact@tvc.farm`); this Function exists purely
+  and the general enquiry form (`/contact`). Each form submits natively via Netlify Forms (email
+  handled by the site-wide "Email notification" rule in the Netlify dashboard, pointed at
+  `core-team@tvc.farm`); this Function exists purely
   for the one thing Netlify Forms can't do on its own — logging the same enquiry as a row in a
   Google Sheet, one sheet per form type. The page fires it via `navigator.sendBeacon` alongside
   the form's own native submission (rather than intercepting/replacing it), since `sendBeacon` is
@@ -280,7 +280,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   SHA256 over the *raw* request body using `WHATSAPP_APP_SECRET`, the Meta app's own secret) before
   the payload is trusted at all — computed with Node's built-in `crypto`, no dependency added.
   Cloud API numbers have no inbox of their own (confirmed by checking every tab in WhatsApp
-  Manager and Meta's own docs), so every inbound message also gets emailed to `contact@tvc.farm`
+  Manager and Meta's own docs), so every inbound message also gets emailed to `core-team@tvc.farm`
   via the same Resend REST API `scripts/send-member-update-email.mjs` already uses — the first
   Netlify Function to call Resend, previously only reached from the member-update GitHub Action.
   `message_template_status_update` events are logged only, not emailed, for now. Deployed but not
@@ -479,9 +479,9 @@ account on 2026-07-18).
   submissions with no custom backend code required. Five things use it: the membership enquiry
   form (name, email, phone, message) at the bottom of `/join` and the general enquiry form (same
   fields, plus a WhatsApp link) at `/contact`, both redirecting to `/contact/thanks` on success —
-  live, no custom notification rule needed (this site's Netlify account is itself owned by
-  `contact@tvc.farm`, and Netlify emails the account owner by default on every submission), and
-  each also fires `/api/enquiry` (see above) to log a Sheets row; the Host an Event inquiry
+  live, email notification handled by the site-wide "Email notification" rule (Site configuration
+  → Forms → Form notifications) pointed at `core-team@tvc.farm` (moved from `contact@tvc.farm` on
+  2026-08-19), and each also fires `/api/enquiry` (see above) to log a Sheets row; the Host an Event inquiry
   (name, org, contact details, event type, headcount, dates, message) at `/visit/host-an-event`,
   redirecting to `/visit/host-an-event/thanks` — pushed to `main` and deployed, but not
   independently re-verified against production; the Visit inquiry form
@@ -490,7 +490,8 @@ account on 2026-07-18).
   field noting which page it came from, redirecting to `/visit/thanks` — replaces the old
   external "Book via Linger" redirect, with pricing/inclusions now published on TVC's own
   pages and a WhatsApp link offered alongside the form; pushed to `main` and deployed, with
-  both email notifications (`stay@linger.in` and `contact@tvc.farm`) now set up in the
+  both email notifications (`stay@linger.in` and `core-team@tvc.farm`, the latter moved from
+  `contact@tvc.farm` on 2026-08-19) set up in the
   Netlify dashboard under Site configuration → Notifications; and the
   event-interest widget's optional-email path (an AJAX POST, not a page-navigating form
   submit, only fired when a visitor gives an email) — also deployed and live. The old Friends of
@@ -638,7 +639,7 @@ never touches Netlify either.
 | Chat widget UI | ✅ Live |
 | Chat widget's actual AI responses | ✅ Live — `ANTHROPIC_API_KEY` set 2026-07-18; verified with real requests against `tvc.farm/api/chat` returning grounded answers |
 | Friends of TVC WhatsApp group (direct invite link) | ✅ Live — `/contact` links straight to the group, no form or manual step |
-| Membership + general enquiry forms (Netlify Forms + `/api/enquiry`) | ✅ Live — Sheet ids set and shared with the service account, verified with real `POST`s against production for both form types; email relies on Netlify's default owner notification (the account owner already is `contact@tvc.farm`), no custom notification rule needed |
+| Membership + general enquiry forms (Netlify Forms + `/api/enquiry`) | ✅ Live — Sheet ids set and shared with the service account, verified with real `POST`s against production for both form types; email goes to `core-team@tvc.farm` via the site-wide Netlify Forms notification rule (moved from `contact@tvc.farm` on 2026-08-19) |
 | Host an Event inquiry form (Netlify Forms) | 🟢 Deployed and registered — confirmed directly via Netlify's Forms API (`host-event-inquiry`, correct field schema: name/organization/email/phone/event-type/group-size/dates/message/honeypot); **0 submissions to date**, so the full round-trip hasn't actually been exercised yet |
 | Visit inquiry form + WhatsApp CTA (Netlify Forms) | ✅ Live and verified — confirmed via Netlify's Forms API (`visit-inquiry`), **1 real submission recorded** (2026-08-04); replaces the "Book via Linger" redirect on `/visit/camping`, `/visit/day-visit`, `/visit/trekking-trails` |
 | Event interest widget + counter (Netlify Function, Blobs, Forms) | ✅ Live — "Want this to happen again?" on past event pages (`/events/<slug>`), public count via `/api/event-interest` + Netlify Blobs, optional-email entries via Netlify Forms; verified `/api/event-interest` responds live in production |
@@ -647,11 +648,11 @@ never touches Netlify either.
 | Live rainfall chart/table/monsoon stat (`/ecosystem/weather`, `/api/rainfall`) | ✅ Live — reads the community's rainfall-log Sheet live, `RAINFALL_SHEET_ID` set on Netlify (all deploy contexts); multi-year line chart with year-filter checkboxes; verified against `tvc.farm/ecosystem/weather` and `tvc.farm/api/rainfall` directly |
 | Site search (nav icon / `/` key) | 🟡 Built, verified locally (not yet deployed) — switched from a title/description-only index to Pagefind, which indexes each non-`noindex` page's full `<main>` content; confirmed via a local production build + `astro preview` that in-body content (e.g. member names on `/people/members/`) is now searchable and that `noindex` pages (404, thanks pages, `/internal/photo-pool`, `/people/members/story-guide`) are correctly excluded from the index |
 | Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | ✅ Live — Drive folders, service account, Google Sign-In OAuth client, curator allow-list Sheet, all Netlify env vars configured; verified against production directly (`/internal/photo-pool` returns 200, `/api/photo-pool` returns 401 unauthenticated as expected for the Google Sign-In-gated function) |
-| WhatsApp webhook (`/api/whatsapp-webhook`) | ✅ Live — verified end-to-end with a real WhatsApp message to `+91 80 4110 9754` on 2026-08-19, triggering a real `contact@tvc.farm` notification email. Two real bugs found and fixed along the way: the number wasn't actually registered for Cloud API messaging (blocked by a stuck migration from the old AiSensy WABA, which still held the number), and the WABA was never subscribed to the app's webhook (`POST /{waba-id}/subscribed_apps` — a separate step from the App Dashboard's webhook config). See `WHATSAPP.md` |
+| WhatsApp webhook (`/api/whatsapp-webhook`) | ✅ Live — verified end-to-end with a real WhatsApp message to `+91 80 4110 9754` on 2026-08-19, triggering a real notification email (then to `contact@tvc.farm`, since moved to `core-team@tvc.farm` the same day). Two real bugs found and fixed along the way: the number wasn't actually registered for Cloud API messaging (blocked by a stuck migration from the old AiSensy WABA, which still held the number), and the WABA was never subscribed to the app's webhook (`POST /{waba-id}/subscribed_apps` — a separate step from the App Dashboard's webhook config). See `WHATSAPP.md` |
 
 The membership/general enquiry forms are fully live — Sheets logging verified with real
-production `POST`s, and email needs no separate setup since Netlify's default owner notification
-already reaches `contact@tvc.farm`. Every feature in the table above has now been checked
+production `POST`s, and email routes to `core-team@tvc.farm` via the site-wide Netlify Forms
+notification rule. Every feature in the table above has now been checked
 directly against production (page/API responses, or Netlify's own Forms API). The one open item
 is the Host an Event form: it's registered correctly with Netlify, but has zero real submissions
 to date, so its full round-trip hasn't actually been exercised.

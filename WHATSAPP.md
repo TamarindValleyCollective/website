@@ -9,9 +9,11 @@
 Beyond the plain `wa.me` click-to-chat links (Friends of TVC group invite, `/contact` and
 booking-inquiry links — see `ARCHITECTURE.md`), the WhatsApp Cloud API integration is now **live**:
 `netlify/functions/whatsapp-webhook.mts` receives real inbound messages at `+91 80 4110 9754` and
-emails a notification to `contact@tvc.farm`, verified end-to-end with a real message on
-2026-08-19. Phases 1–4's webhook piece are done — see the checklist below; only message templates
-and a real reply UI remain.
+emails a notification to `core-team@tvc.farm` (moved from `contact@tvc.farm` on 2026-08-19, same
+change as the Netlify Forms notification recipients — see `ARCHITECTURE.md`), verified end-to-end
+with a real message on 2026-08-19 while it was still pointed at `contact@tvc.farm`. Phases 1–4's
+webhook piece are done — see the checklist below; only message templates and a real reply UI
+remain.
 
 ## Direct Meta Cloud API integration — setup checklist
 

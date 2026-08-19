@@ -19,14 +19,14 @@
 // confirmed by checking every tab in WhatsApp Manager and Meta's own docs,
 // see WHATSAPP.md's Phase 4 notes. Without something surfacing incoming
 // messages, they'd land here and go nowhere. Minimum viable version: email
-// contact@tvc.farm via Resend (the same REST API scripts/send-member-update-
+// core-team@tvc.farm via Resend (the same REST API scripts/send-member-update-
 // email.mjs already uses) for every inbound message. A proper reply UI is a
 // separate, later piece of work.
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const FROM = 'TVC Website <noreply@tvc.farm>';
-const NOTIFY_TO = ['contact@tvc.farm'];
+const NOTIFY_TO = ['core-team@tvc.farm'];
 
 function textResponse(body: string, status = 200): Response {
   return new Response(body, { status, headers: { 'content-type': 'text/plain' } });
