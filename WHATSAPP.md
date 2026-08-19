@@ -227,6 +227,11 @@ that Phase 3 step below is still open.
       call Resend, previously only reached from the member-update GitHub Action). No way to
       *reply* yet — that still needs a lightweight admin page hitting the Send Message API, left
       for later since replying isn't blocking anything else in this checklist.
+- [ ] **Build a reply admin page.** Decided 2026-08-19: a small page for staff to see incoming
+      messages and send replies via the Send Message API, gated behind the same Google Sign-In +
+      allow-list pattern already used for `/internal/photo-pool` (`photo-pool.mts`'s ID-token
+      verification + Sheet-backed allow-list), rather than a new auth mechanism. Not started —
+      explicitly deferred, no rush.
 - [x] **Live in production — 2026-08-19.** All three prerequisites done:
       1. `WHATSAPP_VERIFY_TOKEN` (generated ourselves, set directly), `WHATSAPP_APP_SECRET` (from
          the Meta App Dashboard's Basic Settings, Sharath revealed/pasted it), and `RESEND_API_KEY`
