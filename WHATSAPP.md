@@ -106,6 +106,28 @@ is a good sign but not a guarantee it'll pass again on a fresh review.
 The old WABA (`1546242986597983`) is left as-is, not deleted — its approved display name and
 verified business status don't transfer, but there's no reason to touch it further.
 
+**2026-08-19 update (later still) — new WABA phone verification complete.** Sharath answered
+the verification phone call and confirmed the code. Checked WhatsApp Manager → Phone numbers on
+the new WABA (asset ID `2166888700553540`, confirmed via Business Settings → WhatsApp accounts —
+the same ID as the `asset_id` in the WhatsApp Manager URL): the "Phone number verification
+required" banner is gone, and the number's status moved from **Unverified** to **Pending** — the
+same terminal state the old WABA's number reached (a quality-tier/messaging-limit state from zero
+send volume, not a registration blocker; see the 2026-08-19 update above). Display name
+**"Tamarind Valley Collective" is Approved** on the new WABA too (confirmed banner + Profile tab).
+Phone Number ID on the new WABA: **`1252670697930284`** (different from the old WABA's
+`1241370129064258` — expected, IDs don't carry over between WABAs). Business Settings →
+WhatsApp accounts confirms the new WABA: Account status **Approved**, Business verification
+**Verified**, owned by Syntropic Farm Management Private Limited.
+
+New gap found while there: the new WABA's Overview page shows a **"Missing valid payment
+method"** alert — "Free tier conversations can only be initiated by your customers. You won't be
+able to message customers until you've added a payment method." Expected, since ditching the
+AiSensy shared credit line was the whole point of the pivot — this WABA has no billing attached
+yet and needs its own payment method added before it can send customer-initiated messages. Also
+confirmed only **Sharath Jeppu** has full access to the new WABA so far (Business Settings →
+WhatsApp accounts → People tab) — the System User "apiuser" hasn't been assigned to it yet, so
+that Phase 3 step below is still open.
+
 ### Phase 1 — Meta app (minutes)
 
 - [x] Meta Business Manager exists for Syntropic Farm Management Private Limited — confirmed
@@ -117,10 +139,11 @@ verified business status don't transfer, but there's no reason to touch it furth
 - [x] WhatsApp product added as part of app creation.
 - [x] In API Setup ("Step 2. Production setup"), created a **new WABA** via the wizard's "Create
       a WhatsApp Business profile" step, rather than pointing at the old AiSensy-provisioned one
-      — see the 2026-08-19 pivot note above for why. New WABA's ID not yet known (confirmed once
-      phone verification completes).
-- [ ] Phone Number ID for `+91 80 4110 9754` on the **new** WABA — not yet known; the old ID
-      `1241370129064258` was on the abandoned WABA (`1546242986597983`) and doesn't carry over.
+      — see the 2026-08-19 pivot note above for why. New WABA ID confirmed 2026-08-19:
+      **`2166888700553540`**.
+- [x] Phone Number ID for `+91 80 4110 9754` on the **new** WABA confirmed 2026-08-19:
+      **`1252670697930284`** (the old ID `1241370129064258` was on the abandoned WABA
+      (`1546242986597983`) and didn't carry over, as expected).
 
 ### Phase 2 — Business verification
 
@@ -130,33 +153,39 @@ verified business status don't transfer, but there's no reason to touch it furth
 
 - [x] **Decide the real production phone number.** `+91 80 4110 9754`, being migrated from the
       old AiSensy-provisioned WABA to the new one (see 2026-08-19 pivot note above).
-- [ ] **OTP/migration in progress, blocked on rate limit — 2026-08-19.** Entered
-      `+91 80 4110 9754` into the new WABA's phone-number step; Meta accepted it as a migration
-      and sent an OTP. SMS failed (landline, can't receive SMS); an auto voice-call retry also
-      failed; further attempts are now rate-limited ("You have requested a verification code too
-      many times"). Phone call is selected as the method. **Next step**: once the limit clears,
-      click "Resend code" — Sharath must answer the call himself and read out the 6-digit code,
-      Claude can't receive audio.
-- [ ] **Display name approval** — unknown yet for the new WABA (review happens after phone
-      verification). It passed once already on the old WABA, which is a good sign but not a
-      guarantee.
+- [x] **OTP/migration complete — 2026-08-19.** After the ~1 hour rate-limit cooldown, Sharath
+      answered the verification phone call and read out the code. Confirmed in WhatsApp Manager:
+      the "Phone number verification required" banner is gone and the number's status moved from
+      Unverified to **Pending** (same terminal state the old WABA's number reached — a
+      quality-tier state, not a registration blocker).
+- [x] **Display name approval** — confirmed 2026-08-19: "Tamarind Valley Collective" is
+      **Approved** on the new WABA too.
 - [x] In Business Settings → **Users → System Users**, created a System User "apiuser" with the
       **Admin** role — 2026-08-19. Was blocked by a generic "invalid system user name" error
       until 2FA got enabled for the account admins (Security Centre → Two-factor authentication);
       once that was done, creation worked on the first retry with a plain name. System User ID:
       `61593713270653`.
 - [x] Assigned that System User to the app (`1272328798239463`, "TVC Site Messaging") and the
-      **old** WABA (`1546242986597983`, full access) — 2026-08-19. Needs re-assigning to the new
-      WABA once it exists (System Users are Business Manager-level, so this one is reusable).
+      **old** WABA (`1546242986597983`, full access) — 2026-08-19.
+- [ ] **Re-assign the System User to the new WABA** (`2166888700553540`) — confirmed 2026-08-19
+      it's not done yet: Business Settings → WhatsApp accounts → the new WABA's People tab shows
+      only Sharath Jeppu with full access, no System User. (System Users are Business
+      Manager-level, so the existing "apiuser" is reusable — no need to create a new one.)
 - [ ] Generate a **permanent access token** for the System User, scoped to just
       `whatsapp_business_messaging` and `whatsapp_business_management`. Started 2026-08-19 for
       the old WABA — needs a **peer approval** from another admin (Rajesh Kumar Thiagarajan)
-      before it's issued, since a System User can't approve its own token request. Request is
-      pending, expires in 7 days from 2026-08-19. Once the new WABA exists, redo this token
-      generation scoped to it instead.
+      before it's issued, since a System User can't approve its own token request. That request
+      is pending (expires in 7 days from 2026-08-19) but is now moot — redo it scoped to the
+      **new** WABA (`2166888700553540`) instead, after the System User is re-assigned above.
 - [ ] Hand the token to Claude (or set it directly) as a Netlify environment variable — never
       commit it to the repo. Same handling as `ANTHROPIC_API_KEY` / the Google service-account
       keys already used by other functions.
+- [ ] **Add a payment method to the new WABA.** Confirmed 2026-08-19: its Overview page shows a
+      "Missing valid payment method" alert — customer-initiated free-tier conversations won't work
+      until one's added. This is the direct payoff of the pivot (own billing, not AiSensy's shared
+      credit line) — needs Sharath to add a card/payment method in WhatsApp Manager → that WABA →
+      Payment configurations (Business Settings → the WABA → Preferences also has a "Payment
+      settings" link). Claude can't enter payment details itself (prohibited action).
 
 ### Phase 4 — Webhook + templates (Claude builds this once phase 1–3 credentials exist)
 
