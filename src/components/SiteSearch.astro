@@ -271,7 +271,6 @@ const memberIndex = members.map((m) => ({
       // fatal dev-only HMR overlay when resolution fails — a non-literal
       // specifier is never statically analyzed at all.
       const pagefindUrl = '/pagefind/pagefind.js';
-      // @ts-expect-error - runtime-only asset, no module for TS to resolve
       pagefind = await import(/* @vite-ignore */ pagefindUrl);
       return pagefind;
     } catch {
