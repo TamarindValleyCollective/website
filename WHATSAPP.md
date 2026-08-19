@@ -8,9 +8,12 @@
 
 The site's only live WhatsApp touchpoints are plain `wa.me` click-to-chat links — the Friends of
 TVC group invite, the `/contact` and booking-inquiry links (see `ARCHITECTURE.md`). There is no
-WhatsApp Business Platform integration in the codebase yet: no API keys, no webhooks, no
-server-side calls from `netlify/functions/`. The integration is being built directly against
-Meta's WhatsApp Cloud API (not through a third-party BSP) — see the checklist below.
+WhatsApp Business Platform integration in the codebase yet: no webhooks, no server-side calls
+from `netlify/functions/`. Phases 1–3 (Meta app, business verification, phone number + permanent
+access token) are done as of 2026-08-19 — a `WHATSAPP_ACCESS_TOKEN` now exists on Netlify, unused
+by any function yet. The integration is being built directly against Meta's WhatsApp Cloud API
+(not through a third-party BSP) — see the checklist below; only Phase 4 (webhook + templates)
+remains.
 
 ## Direct Meta Cloud API integration — setup checklist
 
@@ -167,19 +170,24 @@ that Phase 3 step below is still open.
       `61593713270653`.
 - [x] Assigned that System User to the app (`1272328798239463`, "TVC Site Messaging") and the
       **old** WABA (`1546242986597983`, full access) — 2026-08-19.
-- [ ] **Re-assign the System User to the new WABA** (`2166888700553540`) — confirmed 2026-08-19
-      it's not done yet: Business Settings → WhatsApp accounts → the new WABA's People tab shows
-      only Sharath Jeppu with full access, no System User. (System Users are Business
-      Manager-level, so the existing "apiuser" is reusable — no need to create a new one.)
-- [ ] Generate a **permanent access token** for the System User, scoped to just
-      `whatsapp_business_messaging` and `whatsapp_business_management`. Started 2026-08-19 for
-      the old WABA — needs a **peer approval** from another admin (Rajesh Kumar Thiagarajan)
-      before it's issued, since a System User can't approve its own token request. That request
-      is pending (expires in 7 days from 2026-08-19) but is now moot — redo it scoped to the
-      **new** WABA (`2166888700553540`) instead, after the System User is re-assigned above.
-- [ ] Hand the token to Claude (or set it directly) as a Netlify environment variable — never
-      commit it to the repo. Same handling as `ANTHROPIC_API_KEY` / the Google service-account
-      keys already used by other functions.
+- [x] **Re-assign the System User to the new WABA** (`2166888700553540`) — done 2026-08-19: via
+      Business Settings → WhatsApp accounts → the new WABA → Assign people → apiuser (System
+      user) → Full access ("Everything"). apiuser now shows 3 assigned business assets (the app
+      plus both WABAs, old and new).
+- [x] Generate a **permanent access token** for the System User. Done 2026-08-19: the request
+      from earlier the same day (started against the old WABA, pending peer approval) turned out
+      to already be approved by Rajesh Kumar Thiagarajan by the time we came back to it — System
+      Users page showed "Access token generation approved." Generated the token after
+      re-assigning apiuser to the new WABA above, so it now covers both WABAs' full access scope
+      (not narrowed to just `whatsapp_business_messaging`/`whatsapp_business_management` — Meta's
+      generation flow ties the token to the System User's current asset permissions, not a
+      per-generation scope picker).
+- [x] Hand the token to Claude (or set it directly) as a Netlify environment variable — never
+      commit it to the repo. Done 2026-08-19: set as `WHATSAPP_ACCESS_TOKEN` on the `tvc-farm`
+      Netlify site, scoped to Builds/Functions/Runtime with 5 deploy-context values, matching
+      `ANTHROPIC_API_KEY`'s existing pattern. Sharath pasted the value directly into Netlify's UI
+      himself — Claude navigated the browser and set up the field but never read or handled the
+      raw token value (blocked by design from entering credentials).
 - [x] **Add a payment method to the new WABA.** Done 2026-08-19: Sharath added a Visa card
       (···· 8866) via Business Settings → the new WABA → Preferences → Payment settings → Billing
       & payments → Add payment method (note: WhatsApp Manager's own "Payment configurations" side
