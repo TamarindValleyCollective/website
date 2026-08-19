@@ -19,6 +19,13 @@ published or queued, and what the connected Buffer MCP server can do on request.
 the same change** whenever that changes — a new connected channel, a new campaign posted, new
 API usage, etc.
 
+## WhatsApp documentation
+
+`WHATSAPP.md` documents what we actually do with WhatsApp — the AISensy account's status, the
+decision to integrate directly against Meta's WhatsApp Cloud API instead, and the setup
+checklist/progress toward that. **Update it in the same change** whenever that changes — a setup
+step completed, a new webhook/template added, a new trigger wired into the site, etc.
+
 ## Change log
 
 `CHANGELOG.md` is a short index; the actual entries live one file per month under
