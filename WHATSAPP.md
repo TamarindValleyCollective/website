@@ -99,28 +99,32 @@ done, but confirms nothing needs fixing there.
 
 ### Phase 3 — Phone number + permanent access token
 
-- [ ] **Decide the real production phone number.** `+91 80 6252 4957` (the number already
-      attached to the WABA) turned out to be unrecognized — Sharath doesn't know what it is,
-      likely a placeholder AiSensy auto-generated during onboarding (Bangalore STD code matching
-      the registered legal address, not TVC's actual location) rather than a number anyone at
-      TVC can answer. **Did not** trigger its OTP call. Open decision (2026-08-19): reuse the
-      number behind the site's existing `wa.me` contact links, get a new dedicated number, or
-      something else — see Open decisions below.
-- [ ] Once decided, verify that number via SMS/voice OTP in WhatsApp Manager (Phone numbers →
-      the number → Send verification code). Once registered for the API it can no longer run the
-      regular WhatsApp consumer/Business app.
-- [ ] Fix the **display name** — "Tamarind Valley Collective" was rejected for all three numbers
-      on the WABA (the two Meta test numbers and `+91 80 6252 4957`) for violating WhatsApp's
-      Display Name Guidelines. Needs a review of what name would pass (WhatsApp Manager →
-      View guidelines) before/alongside registering the real number.
+- [x] **Production phone number decided and verified**, 2026-08-19: **`+91 80 4110 9754`**
+      (landline, Bangalore) — Sharath's choice, added to the existing WABA
+      (`1546242986597983`) via WhatsApp Manager → Phone numbers → Add phone number. Phone
+      Number ID: `1241370129064258`. Verified via voice call (landline, so SMS wasn't an
+      option) — status moved from Unverified straight to **Pending** (verification done, now
+      awaiting final activation). `+91 80 6252 4957`, the old unrecognized placeholder number,
+      was left alone/untouched.
+- [x] Business profile set for the new number: display name "Tamarind Valley Collective"
+      (status **In review**), category "Other" (no farming/community category exists),
+      description "Tamarind Valley Collective is a farming collective at tvc.farm.", website
+      `https://www.tvc.farm/`. Per WhatsApp's display name guidelines, a name matching how the
+      business is actually branded on its website should qualify — added the website field
+      specifically to reinforce that link ahead of review, since the same name was rejected on
+      the other numbers. Outcome not yet known as of 2026-08-19.
+  - Note: the browser's `type` action twice silently dropped characters/spaces when writing the
+    description in one long burst (e.g. "collective" → "collectiv", missing spaces between
+    words) — worth typing in short chunks and zooming in to verify when editing text fields on
+    this Meta UI in future sessions, rather than trusting a single long `type` call.
 - [ ] In Business Settings → **Users → System Users**, create a System User with the **Admin**
       role. **Blocked as of 2026-08-19**: creating one fails with a generic "You chose an invalid
       system user name. Please choose another" error regardless of the name tried (tried three
       different names, including a plain generic one) — points away from the name itself and
       toward an account-level restriction. Security Centre shows **0 of 2 people have two-factor
       authentication enabled** on this business portfolio, which is a common reason Meta silently
-      blocks sensitive actions like this. Next step: enable 2FA for the account admin(s), then
-      retry system user creation.
+      blocks sensitive actions like this. Sharath is handling 2FA himself; retry system user
+      creation once that's done.
 - [ ] Assign that System User to both the app (`1272328798239463`, "TVC Site Messaging") and the
       existing WABA (`1546242986597983`).
 - [ ] Generate a **permanent access token** for the System User, scoped to just:
@@ -147,11 +151,29 @@ done, but confirms nothing needs fixing there.
 - [ ] Update `ARCHITECTURE.md`'s function list and diagram once this function is live, per the
       standing instruction in `CLAUDE.md`.
 
+## Business Manager account hardening (2026-08-19, alongside the checklist above)
+
+Sharath asked for help with the Security Centre's "Action needed" list on the Syntropic Farm
+Management Private Limited Business Manager, since the System User blocker pointed at 2FA
+coverage there. Findings and actions:
+
+- **Trusted domains**: `tvc.farm` and `syntropic.in` were already listed as approved domains —
+  nothing to add.
+- **Ad account peer approval**: not touched — requires knowing how TVC's ad account/ads are
+  actually managed, which wasn't established; not a blocker for the WhatsApp work either way.
+- **Users with a public email domain**: flagged `sharathjeppu@gmail.com` (Sharath's own login)
+  and `rajeshinf@yahoo.com` (Rajesh Kumar Thiagarajan). Did **not** remove either outright.
+  Instead, invited **`sharath@syntropic.in`** with Full access ("Everything") as a replacement
+  for the gmail account — currently **"Needs approval"** since Meta requires another full-access
+  admin to approve full-control invitations; Rajesh is the only other full-access user, so he's
+  the one who needs to approve it (and *not* be removed himself in the meantime, or nobody could
+  approve it). Sharath also separately invited `contact@tvc.farm`. `sharathjeppu@gmail.com`
+  stays in place until both new accounts are confirmed active — removing it first risks locking
+  Sharath out before the replacement works.
+- **2FA**: Sharath is enabling this himself; System User creation should be retried once done.
+
 ## Open decisions (not yet made)
 
-- **Which phone number to register for production** — the number already on the WABA is
-  unrecognized/likely a placeholder. Options raised 2026-08-19: reuse the number behind the
-  site's existing `wa.me` contact links, or get a new dedicated number. Blocks Phase 3.
 - What the first real trigger is: an internal staff alert on new Visit/general-enquiry form
   submissions, a customer-facing confirmation, or something else.
 - Whether to reuse the AISensy-approved `meeting_feedback_message` content/intent for a
