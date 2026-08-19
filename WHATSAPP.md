@@ -1,43 +1,16 @@
 # WhatsApp
 
 > **Keep this file up to date.** Whenever what we actually do with WhatsApp changes — the Cloud
-> API integration goes live, a new webhook/template is added, the AISensy account's status
-> changes, etc. — update this file in the same change. See the note in `AGENTS.md`.
+> API integration goes live, a new webhook/template is added, etc. — update this file in the
+> same change. See the note in `AGENTS.md`.
 
 ## What we actually do with WhatsApp today
 
 The site's only live WhatsApp touchpoints are plain `wa.me` click-to-chat links — the Friends of
 TVC group invite, the `/contact` and booking-inquiry links (see `ARCHITECTURE.md`). There is no
 WhatsApp Business Platform integration in the codebase yet: no API keys, no webhooks, no
-server-side calls from `netlify/functions/`.
-
-## AISensy account (existing, not the chosen integration path)
-
-TVC has an AISensy account (project "Syntropic Farm Management Private Limited", Free Forever
-plan) predating this effort. As of 2026-08-19:
-
-- **WhatsApp Business API status: PENDING** — the one remaining onboarding step is "Apply for
-  WhatsApp Business API" via a "Continue With Facebook" button (Meta OAuth linking), not yet
-  completed.
-- **Templates**: 6 total. One real, approved template — `meeting_feedback_message` (TVC Monthly
-  Meeting feedback, with Excellent/Satisfactory/Not satisfied quick-reply buttons, approved
-  2026-01-03). Five rejected generic e-commerce/onboarding-wizard templates from 2025-12-25
-  (`cart_drop_without_incentive`, `cart_drop_with_incentive_sku`, `cart_drop_with_incentive`,
-  `order_information`, `sample_template_message`) — not tailored to TVC, not usable.
-- **Contacts**: 9 contacts loaded (several tagged "Member"), but no messages ever sent/received
-  through the account — looks like an imported list, not conversation history.
-- **AI Agent** (Agent Studio): not configured.
-- **Free-plan API access**: only the basic API Campaign Key (template-triggered outbound send,
-  `POST backend.aisensy.com/campaign/t1/api/v2`) is available for free. **Project API Keys** and
-  **Project Webhooks** — the pieces needed for a real two-way, site-triggered integration — are
-  gated behind the PRO plan (₹3,040/month and up).
-
-**Decision**: go directly against Meta's WhatsApp Cloud API instead of paying for AISensy PRO.
-The Cloud API itself and its webhooks are free at the platform level (Meta only charges
-per-message once outside a free service/utility window); AISensy's PRO gate would just be paying
-for API access Meta gives away for free. The AISensy account is left as-is (not deleted, not
-progressed) — its one approved template and pending Meta application are not part of the chosen
-path.
+server-side calls from `netlify/functions/`. The integration is being built directly against
+Meta's WhatsApp Cloud API (not through a third-party BSP) — see the checklist below.
 
 ## Direct Meta Cloud API integration — setup checklist
 
@@ -57,9 +30,10 @@ the Meta Business Suite with Sharath (business.facebook.com) and found:
   upload, no waiting.
 - A **WhatsApp Business Account already exists** under it — "Tamarind Valley Collective"
   (WABA ID `1546242986597983`), **Account status: Approved**, **Business verification:
-  Verified**. It was provisioned via AiSensy as tech provider (payment method is currently an
-  AiSensy Communications Private Limited credit line) but it's owned by TVC's own business, not
-  AiSensy's — usable as the WABA for a direct integration.
+  Verified**. It was provisioned via AiSensy as tech provider, but it's owned by TVC's own
+  business, not AiSensy's. Its billing turned out to be locked to AiSensy's own credit line with
+  no self-service way to detach it — this WABA was later abandoned in favor of a fresh one; see
+  the 2026-08-19 pivot note below.
 - **Phone numbers already attached to this WABA**: two Meta-auto-provisioned `+1 555-xxx` test
   numbers (display name rejected, not usable for production), and **`+91 80 6252 4957`**
   (India, Bangalore), named "Tamarind Valley Collective," status **Unverified** — the real
@@ -95,6 +69,42 @@ One thing already checked off from the original assumption too: `LEGAL_ENTITY_NA
 common verification-rejection reason (name mismatch) — moot now since verification is already
 done, but confirms nothing needs fixing there.
 
+**2026-08-19 update (pivot) — abandoning the AiSensy-provisioned WABA, starting a fresh one.**
+The WABA above (`1546242986597983`) turned out to have a hard billing problem: its only payment
+method is a "credit line" allocated from AiSensy (Meta bills AiSensy's entity directly — both
+"Bill-to party" and "Sold-to party" are AiSensy Communications Private Limited — not TVC), and
+its available credit already shows "Low." Tried every self-service angle to detach it: became a
+finance editor, tried "Add payment method" (blocked — "You can't add a payment method because
+you're using a shared credit line"), checked the credit line's own "..." menu (only "Edit," which
+is just a PO-number field) and its details page (no disconnect control). There's no self-service
+way to move this WABA off AiSensy's credit line — only AiSensy (who allocated it) or Meta support
+could release it.
+
+Decision: abandon that WABA rather than depend on AiSensy's cooperation. Started creating a
+**brand-new WABA** via the same route previously avoided (Meta app → Connect on WhatsApp → Step 2
+→ "Register your WhatsApp phone number" → "Add phone number" → "Create a WhatsApp Business
+profile") — this time deliberately, since forking a new WABA is now the goal rather than a risk.
+Reused the same business profile info (display name "Tamarind Valley Collective," category
+Other, description "Tamarind Valley Collective is a farming collective at tvc.farm.") so it reads
+identically to customers.
+
+For the phone number, chose to **migrate** `+91 80 4110 9754` into the new WABA rather than get a
+different number — typed the existing number into the new WABA's "Add your WhatsApp phone
+number" step, and Meta accepted it and went straight to sending an OTP with no warning about it
+already existing elsewhere, confirming this is being treated as a migration rather than a
+conflict. Hit two problems getting the OTP itself: the number is a Bangalore landline (STD code
+080) that can't receive SMS, and after the SMS attempt + an auto voice-call retry, Meta rate-
+limited further code requests ("You have requested a verification code too many times"). Phone
+call is now correctly selected as the verification method. **Next step**: once the rate limit
+clears, click "Resend code" with phone call selected — Sharath needs to actually answer that
+call and read out the 6-digit code, Claude can't receive audio. The new WABA's ID isn't known yet
+(not confirmed until phone verification completes); display name approval status for the new
+WABA is also unknown yet — it passed once already on the old WABA (2026-08-19, see above), which
+is a good sign but not a guarantee it'll pass again on a fresh review.
+
+The old WABA (`1546242986597983`) is left as-is, not deleted — its approved display name and
+verified business status don't transfer, but there's no reason to touch it further.
+
 ### Phase 1 — Meta app (minutes)
 
 - [x] Meta Business Manager exists for Syntropic Farm Management Private Limited — confirmed
@@ -104,14 +114,12 @@ done, but confirms nothing needs fixing there.
       "WhatsApp" in app names), Business-type, "Connect with customers through WhatsApp" use
       case, linked to Syntropic Farm Management Private Limited.
 - [x] WhatsApp product added as part of app creation.
-- [ ] In API Setup ("Step 2. Production setup" under the "Connect on WhatsApp" use case), point
-      it at the **existing WABA** (`1546242986597983` — "Tamarind Valley Collective") — the
-      in-app "Add phone number" flow looked like it would spin up a new default WABA instead of
-      reusing the existing one, so this needs the WhatsApp Manager route (see Phase 3) rather
-      than the API Setup wizard directly.
-- [x] Phone Number ID recorded for the production number: `1241370129064258` (for
-      `+91 80 4110 9754`, superseding the earlier `+91 80 6252 4957` placeholder — see Phase 3
-      2026-08-19 update). WABA ID: `1546242986597983`.
+- [x] In API Setup ("Step 2. Production setup"), created a **new WABA** via the wizard's "Create
+      a WhatsApp Business profile" step, rather than pointing at the old AiSensy-provisioned one
+      — see the 2026-08-19 pivot note above for why. New WABA's ID not yet known (confirmed once
+      phone verification completes).
+- [ ] Phone Number ID for `+91 80 4110 9754` on the **new** WABA — not yet known; the old ID
+      `1241370129064258` was on the abandoned WABA (`1546242986597983`) and doesn't carry over.
 
 ### Phase 2 — Business verification
 
@@ -119,42 +127,35 @@ done, but confirms nothing needs fixing there.
 
 ### Phase 3 — Phone number + permanent access token
 
-- [x] **Decide the real production phone number.** Resolved 2026-08-19: **`+91 80 4110 9754`**
-      is now the number on the WABA, replacing the unrecognized `+91 80 6252 4957` placeholder.
-- [ ] **OTP/API registration not done yet — confirmed 2026-08-19.** Checked the definitive
-      source: the Meta app's own Production setup wizard (App ID `1272328798239463` →
-      Connect on WhatsApp → Step 2 → "Register your WhatsApp phone number"). That step shows
-      unchecked with only an "Add phone number" CTA — unlike "Add payment to send
-      business-initiated messages," which is checked. So `+91 80 4110 9754` exists on the WABA
-      with an approved display name, but isn't registered for API sending. (The WhatsApp
-      Manager-side signals — messaging insights present, Two-step verification tab implying
-      registration — turned out to be red herrings; this app-level wizard is authoritative.)
-      Next step: click "Add phone number" in that wizard (or WhatsApp Manager → Phone numbers →
-      the number → Send verification code) — this triggers an SMS/voice OTP to
-      `+91 80 4110 9754` that only Sharath can receive and enter, so Claude can't complete it
-      unattended.
-- [x] **Display name** — "Tamarind Valley Collective" is now **Approved** for `+91 80 4110 9754`
-      (confirmed 2026-08-19, WhatsApp Manager → Phone numbers → Profile tab). Still Rejected on
-      the two unused `+1 555-xxx` Meta test numbers, which don't matter for production.
-- [ ] In Business Settings → **Users → System Users**, create a System User with the **Admin**
-      role. **Blocked as of 2026-08-19**: creating one fails with a generic "You chose an invalid
-      system user name. Please choose another" error regardless of the name tried (tried three
-      different names, including a plain generic one) — points away from the name itself and
-      toward an account-level restriction. Security Centre shows **0 of 2 people have two-factor
-      authentication enabled** on this business portfolio, which is a common reason Meta silently
-      blocks sensitive actions like this. Next step: enable 2FA for the account admin(s), then
-      retry system user creation.
-- [ ] Assign that System User to both the app (`1272328798239463`, "TVC Site Messaging") and the
-      existing WABA (`1546242986597983`).
-- [ ] Generate a **permanent access token** for the System User, scoped to just:
-  - `whatsapp_business_messaging`
-  - `whatsapp_business_management`
+- [x] **Decide the real production phone number.** `+91 80 4110 9754`, being migrated from the
+      old AiSensy-provisioned WABA to the new one (see 2026-08-19 pivot note above).
+- [ ] **OTP/migration in progress, blocked on rate limit — 2026-08-19.** Entered
+      `+91 80 4110 9754` into the new WABA's phone-number step; Meta accepted it as a migration
+      and sent an OTP. SMS failed (landline, can't receive SMS); an auto voice-call retry also
+      failed; further attempts are now rate-limited ("You have requested a verification code too
+      many times"). Phone call is selected as the method. **Next step**: once the limit clears,
+      click "Resend code" — Sharath must answer the call himself and read out the 6-digit code,
+      Claude can't receive audio.
+- [ ] **Display name approval** — unknown yet for the new WABA (review happens after phone
+      verification). It passed once already on the old WABA, which is a good sign but not a
+      guarantee.
+- [x] In Business Settings → **Users → System Users**, created a System User "apiuser" with the
+      **Admin** role — 2026-08-19. Was blocked by a generic "invalid system user name" error
+      until 2FA got enabled for the account admins (Security Centre → Two-factor authentication);
+      once that was done, creation worked on the first retry with a plain name. System User ID:
+      `61593713270653`.
+- [x] Assigned that System User to the app (`1272328798239463`, "TVC Site Messaging") and the
+      **old** WABA (`1546242986597983`, full access) — 2026-08-19. Needs re-assigning to the new
+      WABA once it exists (System Users are Business Manager-level, so this one is reusable).
+- [ ] Generate a **permanent access token** for the System User, scoped to just
+      `whatsapp_business_messaging` and `whatsapp_business_management`. Started 2026-08-19 for
+      the old WABA — needs a **peer approval** from another admin (Rajesh Kumar Thiagarajan)
+      before it's issued, since a System User can't approve its own token request. Request is
+      pending, expires in 7 days from 2026-08-19. Once the new WABA exists, redo this token
+      generation scoped to it instead.
 - [ ] Hand the token to Claude (or set it directly) as a Netlify environment variable — never
       commit it to the repo. Same handling as `ANTHROPIC_API_KEY` / the Google service-account
       keys already used by other functions.
-- [ ] Check whether messages sent via the new app still bill against the existing AiSensy credit
-      line on the WABA, or whether a direct payment method needs adding in Payment settings —
-      unresolved as of 2026-08-19, worth confirming before real send volume.
 
 ### Phase 4 — Webhook + templates (Claude builds this once phase 1–3 credentials exist)
 
@@ -167,6 +168,13 @@ done, but confirms nothing needs fixing there.
 - [ ] Submit real templates in the **UTILITY** category (transactional — confirmations,
       notifications), not MARKETING — cleaner approval, longer free-window eligibility. First
       candidate: whatever trigger gets picked (see open decisions below).
+- [ ] **Build a way to actually see and reply to incoming messages.** Meta provides no inbox of
+      its own for Cloud API numbers — confirmed by checking every tab in WhatsApp Manager (no
+      Messages/Inbox anywhere) and Meta's own docs ("the contents of any message... is
+      communicated via webhook"). The webhook function above only receives messages; without
+      this, they'd arrive with nowhere to see or answer them. Minimum viable version: route
+      incoming messages to Slack/email and reply via a small script; a proper version would be a
+      lightweight admin page hitting the Send Message API.
 - [ ] Update `ARCHITECTURE.md`'s function list and diagram once this function is live, per the
       standing instruction in `CLAUDE.md`.
 
@@ -174,5 +182,6 @@ done, but confirms nothing needs fixing there.
 
 - What the first real trigger is: an internal staff alert on new Visit/general-enquiry form
   submissions, a customer-facing confirmation, or something else.
-- Whether to reuse the AISensy-approved `meeting_feedback_message` content/intent for a
-  Meta-native UTILITY template, or start fresh.
+- What content the first UTILITY template should have — a monthly-meeting-feedback-style
+  template with quick-reply buttons worked well as a concept previously; worth deciding whether
+  to reuse that idea or start fresh for whatever trigger gets picked.
