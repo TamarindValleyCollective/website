@@ -71,6 +71,25 @@ the Meta Business Suite with Sharath (business.facebook.com) and found:
 This significantly shortens phases 1–3: skip straight to app creation, phone number
 verification, and system-user token generation below.
 
+**2026-08-19 update (later same day) — production number decided and display name
+approved.** Checked WhatsApp Manager → Phone numbers directly:
+
+- The candidate number changed from `+91 80 6252 4957` (unrecognized placeholder, never
+  verified) to **`+91 80 4110 9754`** (India), now the only India number on the WABA — the old
+  placeholder number is no longer listed.
+- **Display name "Tamarind Valley Collective" is Approved** for this number (WhatsApp Manager →
+  Phone numbers → this number → Profile tab shows the green "Approved" tag next to the name).
+  Phone Number ID: `1241370129064258`.
+- The number already shows up under the WABA's "WhatsApp accounts" overview with working
+  message-delivery insights tracking (0 sent so far), and the Two-step verification tab's
+  copy ("when registering your phone number with WhatsApp again") implies it's already
+  registered — though the Phone numbers list still shows its row status as "Pending" (likely a
+  quality-rating/messaging-tier state given zero send volume yet, not a registration blocker).
+  Worth a quick re-check before Phase 4 go-live.
+- The top-of-page "Your display names were rejected" banner is stale/account-level — it still
+  refers to the two `+1 555-xxx` Meta test numbers, whose names remain **Rejected**; those
+  numbers aren't part of the production path.
+
 One thing already checked off from the original assumption too: `LEGAL_ENTITY_NAME` in
 `src/data/site-facts.ts` matches the Business Manager's legal name exactly, avoiding Meta's most
 common verification-rejection reason (name mismatch) — moot now since verification is already
@@ -90,8 +109,9 @@ done, but confirms nothing needs fixing there.
       in-app "Add phone number" flow looked like it would spin up a new default WABA instead of
       reusing the existing one, so this needs the WhatsApp Manager route (see Phase 3) rather
       than the API Setup wizard directly.
-- [x] Phone Number ID recorded for the existing candidate number: `929386003589539` (for
-      `+91 80 6252 4957`). WABA ID: `1546242986597983`.
+- [x] Phone Number ID recorded for the production number: `1241370129064258` (for
+      `+91 80 4110 9754`, superseding the earlier `+91 80 6252 4957` placeholder — see Phase 3
+      2026-08-19 update). WABA ID: `1546242986597983`.
 
 ### Phase 2 — Business verification
 
@@ -99,20 +119,16 @@ done, but confirms nothing needs fixing there.
 
 ### Phase 3 — Phone number + permanent access token
 
-- [ ] **Decide the real production phone number.** `+91 80 6252 4957` (the number already
-      attached to the WABA) turned out to be unrecognized — Sharath doesn't know what it is,
-      likely a placeholder AiSensy auto-generated during onboarding (Bangalore STD code matching
-      the registered legal address, not TVC's actual location) rather than a number anyone at
-      TVC can answer. **Did not** trigger its OTP call. Open decision (2026-08-19): reuse the
-      number behind the site's existing `wa.me` contact links, get a new dedicated number, or
-      something else — see Open decisions below.
-- [ ] Once decided, verify that number via SMS/voice OTP in WhatsApp Manager (Phone numbers →
-      the number → Send verification code). Once registered for the API it can no longer run the
-      regular WhatsApp consumer/Business app.
-- [ ] Fix the **display name** — "Tamarind Valley Collective" was rejected for all three numbers
-      on the WABA (the two Meta test numbers and `+91 80 6252 4957`) for violating WhatsApp's
-      Display Name Guidelines. Needs a review of what name would pass (WhatsApp Manager →
-      View guidelines) before/alongside registering the real number.
+- [x] **Decide the real production phone number.** Resolved 2026-08-19: **`+91 80 4110 9754`**
+      is now the number on the WABA, replacing the unrecognized `+91 80 6252 4957` placeholder.
+- [ ] Confirm OTP/SMS verification is actually complete for `+91 80 4110 9754` (WhatsApp Manager
+      → Phone numbers → the number → Send verification code, if not already done) — the number
+      already tracks messaging insights and its Two-step verification tab implies it's
+      registered, but its list-row status still reads "Pending" as of 2026-08-19; worth a final
+      check before Phase 4 go-live.
+- [x] **Display name** — "Tamarind Valley Collective" is now **Approved** for `+91 80 4110 9754`
+      (confirmed 2026-08-19, WhatsApp Manager → Phone numbers → Profile tab). Still Rejected on
+      the two unused `+1 555-xxx` Meta test numbers, which don't matter for production.
 - [ ] In Business Settings → **Users → System Users**, create a System User with the **Admin**
       role. **Blocked as of 2026-08-19**: creating one fails with a generic "You chose an invalid
       system user name. Please choose another" error regardless of the name tried (tried three
@@ -149,9 +165,6 @@ done, but confirms nothing needs fixing there.
 
 ## Open decisions (not yet made)
 
-- **Which phone number to register for production** — the number already on the WABA is
-  unrecognized/likely a placeholder. Options raised 2026-08-19: reuse the number behind the
-  site's existing `wa.me` contact links, or get a new dedicated number. Blocks Phase 3.
 - What the first real trigger is: an internal staff alert on new Visit/general-enquiry form
   submissions, a customer-facing confirmation, or something else.
 - Whether to reuse the AISensy-approved `meeting_feedback_message` content/intent for a
