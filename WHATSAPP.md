@@ -95,9 +95,10 @@ already existing elsewhere, confirming this is being treated as a migration rath
 conflict. Hit two problems getting the OTP itself: the number is a Bangalore landline (STD code
 080) that can't receive SMS, and after the SMS attempt + an auto voice-call retry, Meta rate-
 limited further code requests ("You have requested a verification code too many times"). Phone
-call is now correctly selected as the verification method. **Next step**: once the rate limit
-clears, click "Resend code" with phone call selected — Sharath needs to actually answer that
-call and read out the 6-digit code, Claude can't receive audio. The new WABA's ID isn't known yet
+call is now correctly selected as the verification method. Rate-limit cooldown is **~1 hour**
+per Sharath. **Next step**: once it clears, click "Resend code" with phone call selected —
+Sharath needs to actually answer that call and read out the 6-digit code, Claude can't receive
+audio. The new WABA's ID isn't known yet
 (not confirmed until phone verification completes); display name approval status for the new
 WABA is also unknown yet — it passed once already on the old WABA (2026-08-19, see above), which
 is a good sign but not a guarantee it'll pass again on a fresh review.
