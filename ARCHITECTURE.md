@@ -54,7 +54,7 @@ flowchart TD
     end
 
     subgraph CIACTIONS["0c · GitHub Actions — CI, on push to main"]
-        GHA_MEMBER["member-update-email.yml<br/>+ send-member-update-email.mjs<br/>On push touching src/data/members.ts:<br/>diffs it, classifies changed cards<br/>new/updated, emails members@tvc.farm<br/>+ each changed member's own address"]
+        GHA_MEMBER["member-update-email.yml<br/>+ send-member-update-email.mjs<br/>On push touching src/data/members.ts:<br/>diffs it, classifies changed cards<br/>new/updated, emails members@tvc.farm,<br/>BCCing each changed member's own address"]
     end
 
     subgraph SRC["1 · Source — github.com/TamarindValleyCollective/website (main)"]
@@ -324,14 +324,15 @@ outside both the local machine and Netlify (the member-update-email workflow).
   classifying each as "new" (its previous line had no `whyTVC` field — the one question unique to
   the "TVC Members: Your Story" form) or "updated" (it already did; same heuristic drives a
   site-wide "N of 53 members have shared their story" progress stat in the email body). Emails
-  `members@tvc.farm`, CC'ing each changed member's own address — looked up from the response
+  `members@tvc.farm`, BCC'ing each changed member's own address (not CC — so members can't see
+  each other's addresses) — looked up from the response
   Sheet by name via `getSheetValues()`, reusing `google-drive.mjs` and its existing
   `GDRIVE_SERVICE_ACCOUNT_EMAIL`/`_PRIVATE_KEY` (added as GitHub Actions secrets 2026-08-19,
   alongside the local `.env`/Netlify env vars that already had them) — through the **Resend**
   API (`RESEND_API_KEY` secret, `noreply@tvc.farm`, domain verified via DKIM/SPF/DMARC records
   added to the `tvc.farm` Cloudflare zone the same day). Supports a manual `workflow_dispatch`
   with `compare_ref`/`test_recipient` inputs so a real send can be tested against one inbox
-  (skips the member CCs) without emailing actual members.
+  (skips the member BCCs) without emailing actual members.
 - **`scripts/check-search-console.mjs`** — run locally. Looks up Google's own crawl/index status
   (`coverageState` — e.g. "Not found (404)", "Submitted and indexed" — and `lastCrawlTime`) for
   one or more URLs, to confirm whether a `netlify.toml` redirect fix has actually been recrawled
