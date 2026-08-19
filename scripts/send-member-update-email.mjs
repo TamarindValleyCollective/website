@@ -58,9 +58,23 @@ const TO = testRecipient ? [testRecipient] : ['members@tvc.farm'];
 
 function fileAtRef(ref) {
   try {
+    execSync(`git rev-parse --verify ${ref}^{commit}`, { cwd: root, stdio: 'ignore' });
+  } catch {
+    // Fails loudly rather than silently treating an unresolvable ref as "no
+    // file yet" (empty content) - that fallback used to also swallow a
+    // too-shallow checkout, which made every current member look "new"
+    // against a phantom empty history. Caught in the first live test run
+    // (2026-08-19): a manually-dispatched compare_ref outside the
+    // checkout's fetch-depth silently produced a 53-member "everything is
+    // new" email instead of erroring - harmless there since it only went to
+    // a --dry-run/test recipient, but would have gone to every real member
+    // otherwise.
+    throw new Error(`Ref '${ref}' not found in this checkout - fetch-depth too shallow? (git rev-parse failed)`);
+  }
+  try {
     return execSync(`git show ${ref}:${MEMBERS_FILE}`, { cwd: root, encoding: 'utf8' });
   } catch {
-    return ''; // ref doesn't have the file yet (e.g. very first commit) - treat as empty
+    return ''; // ref exists but predates this file (e.g. the very first commit) - legitimately empty
   }
 }
 

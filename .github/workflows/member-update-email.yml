@@ -32,7 +32,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2 # need the pre-push commit too, to diff members.ts against it
+          # Full history, not just the pushed commit's immediate parent: a
+          # manually-dispatched compare_ref can point arbitrarily far back,
+          # and a too-shallow checkout made send-member-update-email.mjs
+          # silently treat every current member as "new" instead of erroring
+          # (caught in the first live test run, 2026-08-19) - cheap for a
+          # repo this size, so just always fetch everything.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
