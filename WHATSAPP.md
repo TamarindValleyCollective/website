@@ -121,11 +121,18 @@ done, but confirms nothing needs fixing there.
 
 - [x] **Decide the real production phone number.** Resolved 2026-08-19: **`+91 80 4110 9754`**
       is now the number on the WABA, replacing the unrecognized `+91 80 6252 4957` placeholder.
-- [ ] Confirm OTP/SMS verification is actually complete for `+91 80 4110 9754` (WhatsApp Manager
-      → Phone numbers → the number → Send verification code, if not already done) — the number
-      already tracks messaging insights and its Two-step verification tab implies it's
-      registered, but its list-row status still reads "Pending" as of 2026-08-19; worth a final
-      check before Phase 4 go-live.
+- [ ] **OTP/API registration not done yet — confirmed 2026-08-19.** Checked the definitive
+      source: the Meta app's own Production setup wizard (App ID `1272328798239463` →
+      Connect on WhatsApp → Step 2 → "Register your WhatsApp phone number"). That step shows
+      unchecked with only an "Add phone number" CTA — unlike "Add payment to send
+      business-initiated messages," which is checked. So `+91 80 4110 9754` exists on the WABA
+      with an approved display name, but isn't registered for API sending. (The WhatsApp
+      Manager-side signals — messaging insights present, Two-step verification tab implying
+      registration — turned out to be red herrings; this app-level wizard is authoritative.)
+      Next step: click "Add phone number" in that wizard (or WhatsApp Manager → Phone numbers →
+      the number → Send verification code) — this triggers an SMS/voice OTP to
+      `+91 80 4110 9754` that only Sharath can receive and enter, so Claude can't complete it
+      unattended.
 - [x] **Display name** — "Tamarind Valley Collective" is now **Approved** for `+91 80 4110 9754`
       (confirmed 2026-08-19, WhatsApp Manager → Phone numbers → Profile tab). Still Rejected on
       the two unused `+1 555-xxx` Meta test numbers, which don't matter for production.
