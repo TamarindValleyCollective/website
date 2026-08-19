@@ -1,7 +1,7 @@
 // Netlify Function (v2 API) backing the two enquiry forms on /contact
 // (membership enquiry, general enquiry). Netlify Forms already handles the
 // actual email — both forms submit natively (data-netlify="true"), and
-// contact@tvc.farm is added as a notification recipient for each form in the
+// core-team@tvc.farm is added as a notification recipient for each form in the
 // Netlify dashboard, same as the existing Visit inquiry form. This Function
 // exists purely for the second requirement neither Netlify Forms nor any
 // other piece of this site already does: logging each enquiry as a row in a
