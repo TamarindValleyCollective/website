@@ -6,14 +6,12 @@
 
 ## What we actually do with WhatsApp today
 
-The site's only live WhatsApp touchpoints are plain `wa.me` click-to-chat links — the Friends of
-TVC group invite, the `/contact` and booking-inquiry links (see `ARCHITECTURE.md`). There is no
-WhatsApp Business Platform integration in the codebase yet: no webhooks, no server-side calls
-from `netlify/functions/`. Phases 1–3 (Meta app, business verification, phone number + permanent
-access token) are done as of 2026-08-19 — a `WHATSAPP_ACCESS_TOKEN` now exists on Netlify, unused
-by any function yet. The integration is being built directly against Meta's WhatsApp Cloud API
-(not through a third-party BSP) — see the checklist below; only Phase 4 (webhook + templates)
-remains.
+Beyond the plain `wa.me` click-to-chat links (Friends of TVC group invite, `/contact` and
+booking-inquiry links — see `ARCHITECTURE.md`), the WhatsApp Cloud API integration is now **live**:
+`netlify/functions/whatsapp-webhook.mts` receives real inbound messages at `+91 80 4110 9754` and
+emails a notification to `contact@tvc.farm`, verified end-to-end with a real message on
+2026-08-19. Phases 1–4's webhook piece are done — see the checklist below; only message templates
+and a real reply UI remain.
 
 ## Direct Meta Cloud API integration — setup checklist
 
@@ -254,9 +252,36 @@ that Phase 3 step below is still open.
          icon (rendered from `public/images/brand/tvc-logo-mark.svg` at 1024×1024 via `sharp`,
          Sharath uploaded it — Claude can't drive the native file-picker dialog). Terms of Service
          URL auto-updated to `tvc.farm/terms` as a side effect.
-      **Not yet verified**: an actual real WhatsApp message sent to `+91 80 4110 9754` hasn't been
-      tried — that's the real end-to-end test, needs Sharath to send one and confirm the
-      `contact@tvc.farm` notification email arrives.
+      **Verified end-to-end — 2026-08-19.** A real WhatsApp message sent to `+91 80 4110 9754`
+      reached the webhook and the `contact@tvc.farm` notification email arrived. Getting there
+      surfaced two real, separate bugs beyond the config above:
+      1. **The number wasn't actually registered for Cloud API messaging.** WhatsApp Manager's
+         wizard showed a "Register your WhatsApp phone number" step still incomplete (a PIN-based
+         API registration, distinct from the OTP ownership verification done earlier in Phase 3) —
+         `wa.me/918041109754` returned "The phone number isn't on WhatsApp." Sharath's first two
+         attempts to click "Register" and enter a PIN failed with a generic "Registration failed"
+         error. Root cause: the old AiSensy-provisioned WABA (`1546242986597983`) still listed this
+         number in its own phone list (Pending, never itself registered either — its Two-step
+         verification also showed "off") — the migration begun earlier the same day had never
+         actually completed. Deleting the number from the old WABA (Phone numbers → trash icon →
+         confirmed with Sharath's Meta account password) unblocked registration on the new WABA;
+         the retry succeeded and status moved to **Connected**.
+      2. **The WABA was never subscribed to the app's webhook.** Even after (1), no real message
+         reached the function and no email arrived. `GET /{waba-id}/subscribed_apps` (Graph API
+         Explorer, using a fresh user-generated token scoped to `whatsapp_business_management`/
+         `whatsapp_business_messaging` — not the stored `WHATSAPP_ACCESS_TOKEN`, which Netlify
+         permanently masks once marked secret, confirmed when Sharath couldn't reveal it) returned
+         `"data": []` — configuring the callback URL and field subscriptions in the App Dashboard
+         only registers the *app's* webhook; a WABA must separately be subscribed to receive
+         events, normally handled automatically by Embedded Signup but apparently skipped for a
+         manually-created WABA. Fixed with `POST /{waba-id}/subscribed_apps` (same Explorer token,
+         empty body) → `{"success": true}`; confirmed via a follow-up GET showing "TVC Site
+         Messaging" subscribed. A second real test message then triggered the webhook and the
+         notification email correctly.
+      3. Along the way, attempting to submit a real `/register` call directly via Graph API
+         Explorer (to get a detailed error instead of the UI's generic one) was blocked by Claude's
+         own safety classifier — registering a number with a throwaway PIN is the same class of
+         action as entering a password, so that diagnostic step was left to Sharath throughout.
 - [ ] Submit real templates in the **UTILITY** category (transactional — confirmations,
       notifications), not MARKETING — cleaner approval, longer free-window eligibility. First
       trigger decided 2026-08-19: an internal staff alert on new Visit/general-enquiry form
