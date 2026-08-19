@@ -80,14 +80,18 @@ done, but confirms nothing needs fixing there.
 
 - [x] Meta Business Manager exists for Syntropic Farm Management Private Limited — confirmed
       2026-08-19.
-- [ ] Go to [developers.facebook.com](https://developers.facebook.com), create a new
-      **Business**-type app.
-- [ ] Link the app to the "Syntropic Farm Management Private Limited" Business Manager.
-- [ ] Add the **WhatsApp** product to the app.
-- [ ] In API Setup, point it at the **existing WABA** (`1546242986597983` — "Tamarind Valley
-      Collective") rather than letting Meta auto-provision a new one.
-- [ ] Record the **Phone Number ID** and **WABA ID** shown in API Setup — needed for every future
-      API call.
+- [x] App created 2026-08-19: **"TVC Site Messaging"**, App ID `1272328798239463`
+      (app name "TVC WhatsApp Integration" was rejected — Meta blocks trademarked terms like
+      "WhatsApp" in app names), Business-type, "Connect with customers through WhatsApp" use
+      case, linked to Syntropic Farm Management Private Limited.
+- [x] WhatsApp product added as part of app creation.
+- [ ] In API Setup ("Step 2. Production setup" under the "Connect on WhatsApp" use case), point
+      it at the **existing WABA** (`1546242986597983` — "Tamarind Valley Collective") — the
+      in-app "Add phone number" flow looked like it would spin up a new default WABA instead of
+      reusing the existing one, so this needs the WhatsApp Manager route (see Phase 3) rather
+      than the API Setup wizard directly.
+- [x] Phone Number ID recorded for the existing candidate number: `929386003589539` (for
+      `+91 80 6252 4957`). WABA ID: `1546242986597983`.
 
 ### Phase 2 — Business verification
 
@@ -95,14 +99,30 @@ done, but confirms nothing needs fixing there.
 
 ### Phase 3 — Phone number + permanent access token
 
-- [ ] Verify **`+91 80 6252 4957`** (currently "Unverified" under the existing WABA) via its
-      SMS/voice OTP flow in WhatsApp Manager or API Setup — needs whoever can receive a call/SMS
-      at that number. Once registered for the API it can no longer run the regular WhatsApp
-      consumer/Business app.
+- [ ] **Decide the real production phone number.** `+91 80 6252 4957` (the number already
+      attached to the WABA) turned out to be unrecognized — Sharath doesn't know what it is,
+      likely a placeholder AiSensy auto-generated during onboarding (Bangalore STD code matching
+      the registered legal address, not TVC's actual location) rather than a number anyone at
+      TVC can answer. **Did not** trigger its OTP call. Open decision (2026-08-19): reuse the
+      number behind the site's existing `wa.me` contact links, get a new dedicated number, or
+      something else — see Open decisions below.
+- [ ] Once decided, verify that number via SMS/voice OTP in WhatsApp Manager (Phone numbers →
+      the number → Send verification code). Once registered for the API it can no longer run the
+      regular WhatsApp consumer/Business app.
+- [ ] Fix the **display name** — "Tamarind Valley Collective" was rejected for all three numbers
+      on the WABA (the two Meta test numbers and `+91 80 6252 4957`) for violating WhatsApp's
+      Display Name Guidelines. Needs a review of what name would pass (WhatsApp Manager →
+      View guidelines) before/alongside registering the real number.
 - [ ] In Business Settings → **Users → System Users**, create a System User with the **Admin**
-      role (none exist yet — confirmed 2026-08-19).
-- [ ] Assign that System User to both the new app (phase 1) and the existing WABA
-      (`1546242986597983`).
+      role. **Blocked as of 2026-08-19**: creating one fails with a generic "You chose an invalid
+      system user name. Please choose another" error regardless of the name tried (tried three
+      different names, including a plain generic one) — points away from the name itself and
+      toward an account-level restriction. Security Centre shows **0 of 2 people have two-factor
+      authentication enabled** on this business portfolio, which is a common reason Meta silently
+      blocks sensitive actions like this. Next step: enable 2FA for the account admin(s), then
+      retry system user creation.
+- [ ] Assign that System User to both the app (`1272328798239463`, "TVC Site Messaging") and the
+      existing WABA (`1546242986597983`).
 - [ ] Generate a **permanent access token** for the System User, scoped to just:
   - `whatsapp_business_messaging`
   - `whatsapp_business_management`
@@ -129,6 +149,9 @@ done, but confirms nothing needs fixing there.
 
 ## Open decisions (not yet made)
 
+- **Which phone number to register for production** — the number already on the WABA is
+  unrecognized/likely a placeholder. Options raised 2026-08-19: reuse the number behind the
+  site's existing `wa.me` contact links, or get a new dedicated number. Blocks Phase 3.
 - What the first real trigger is: an internal staff alert on new Visit/general-enquiry form
   submissions, a customer-facing confirmation, or something else.
 - Whether to reuse the AISensy-approved `meeting_feedback_message` content/intent for a
