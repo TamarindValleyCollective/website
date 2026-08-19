@@ -46,51 +46,72 @@ documents — Claude can't do these. Once the app exists and a test number/token
 the webhook Netlify function (phase 4) can be built and tested against them in parallel with
 business verification, which is the slow part.
 
-One thing already checked off: `LEGAL_ENTITY_NAME` in `src/data/site-facts.ts` is `Syntropic
-Farm Management Private Limited`, matching the AISensy project name — so the site footer/legal
-name should already agree with whatever goes into Meta Business Manager, avoiding Meta's most
-common verification-rejection reason (name mismatch).
+**2026-08-19 update — most of phases 1–2 were already done, unrelated to this effort.** Walked
+the Meta Business Suite with Sharath (business.facebook.com) and found:
 
-### Phase 1 — Meta app + WABA (minutes)
+- A Business Manager already exists — **"Syntropic Farm Management Private Limited"**
+  (portfolio ID `193847045525749`), with the correct legal name, address, Tax ID
+  (`U01120KA2022PTC161809`, matching `LEGAL_ENTITY_CIN`), and website (`tvc.farm`) already on
+  file. No duplicate needed.
+- **Business verification status: Verified** (12 Jul 2025). Phase 2 is done — no documents to
+  upload, no waiting.
+- A **WhatsApp Business Account already exists** under it — "Tamarind Valley Collective"
+  (WABA ID `1546242986597983`), **Account status: Approved**, **Business verification:
+  Verified**. It was provisioned via AiSensy as tech provider (payment method is currently an
+  AiSensy Communications Private Limited credit line) but it's owned by TVC's own business, not
+  AiSensy's — usable as the WABA for a direct integration.
+- **Phone numbers already attached to this WABA**: two Meta-auto-provisioned `+1 555-xxx` test
+  numbers (display name rejected, not usable for production), and **`+91 80 6252 4957`**
+  (India, Bangalore), named "Tamarind Valley Collective," status **Unverified** — the real
+  candidate production number, just needs the OTP verification step done.
+- **No Meta Developer app** and **no System User** exist yet in this Business Manager — these
+  are the actual remaining work, not the business/WABA/verification setup the original checklist
+  assumed would be needed from scratch.
 
-- [ ] Go to [business.facebook.com](https://business.facebook.com) and confirm/create the Meta
-      Business Manager for Syntropic Farm Management Private Limited (an existing one may already
-      exist from the AISensy onboarding — check before creating a duplicate).
+This significantly shortens phases 1–3: skip straight to app creation, phone number
+verification, and system-user token generation below.
+
+One thing already checked off from the original assumption too: `LEGAL_ENTITY_NAME` in
+`src/data/site-facts.ts` matches the Business Manager's legal name exactly, avoiding Meta's most
+common verification-rejection reason (name mismatch) — moot now since verification is already
+done, but confirms nothing needs fixing there.
+
+### Phase 1 — Meta app (minutes)
+
+- [x] Meta Business Manager exists for Syntropic Farm Management Private Limited — confirmed
+      2026-08-19.
 - [ ] Go to [developers.facebook.com](https://developers.facebook.com), create a new
       **Business**-type app.
-- [ ] Link the app to the Meta Business Manager from the step above.
+- [ ] Link the app to the "Syntropic Farm Management Private Limited" Business Manager.
 - [ ] Add the **WhatsApp** product to the app.
-- [ ] Meta auto-provisions a test WABA (WhatsApp Business Account), a test phone number, and
-      temporary credentials — enough to send test messages same-day.
+- [ ] In API Setup, point it at the **existing WABA** (`1546242986597983` — "Tamarind Valley
+      Collective") rather than letting Meta auto-provision a new one.
 - [ ] Record the **Phone Number ID** and **WABA ID** shown in API Setup — needed for every future
       API call.
 
-### Phase 2 — Business verification (days to weeks — start this immediately, it's the long pole)
+### Phase 2 — Business verification
 
-- [ ] In Business Manager: **Business Settings → Security Center → Start Business Verification**.
-- [ ] Upload documents matching the Business Manager profile exactly — Certificate of
-      Incorporation, a utility bill, or a bank statement. (CIN `U01120KA2022PTC161809`, PAN
-      `ABICS6243H` — see `src/data/site-facts.ts` — should back whatever's submitted.)
-- [ ] Double check every detail (legal name, address) matches `LEGAL_ENTITY_*` in
-      `src/data/site-facts.ts` and the live site footer character-for-character.
-- [ ] Wait for approval. This gates *production* sending to real numbers beyond a handful of test
-      recipients — nothing else in this checklist is blocked on it, so keep going.
+- [x] Already verified (12 Jul 2025) — confirmed 2026-08-19. Nothing to do here.
 
 ### Phase 3 — Phone number + permanent access token
 
-- [ ] Decide on a **dedicated production phone number** — once registered for the API it can no
-      longer be used in the regular WhatsApp/Business consumer app. Confirm this number isn't
-      currently active anywhere else before registering.
-- [ ] In API Setup, register that number (SMS or voice OTP verification).
+- [ ] Verify **`+91 80 6252 4957`** (currently "Unverified" under the existing WABA) via its
+      SMS/voice OTP flow in WhatsApp Manager or API Setup — needs whoever can receive a call/SMS
+      at that number. Once registered for the API it can no longer run the regular WhatsApp
+      consumer/Business app.
 - [ ] In Business Settings → **Users → System Users**, create a System User with the **Admin**
-      role.
-- [ ] Assign that System User to both the app and the WABA from phase 1.
+      role (none exist yet — confirmed 2026-08-19).
+- [ ] Assign that System User to both the new app (phase 1) and the existing WABA
+      (`1546242986597983`).
 - [ ] Generate a **permanent access token** for the System User, scoped to just:
   - `whatsapp_business_messaging`
   - `whatsapp_business_management`
 - [ ] Hand the token to Claude (or set it directly) as a Netlify environment variable — never
       commit it to the repo. Same handling as `ANTHROPIC_API_KEY` / the Google service-account
       keys already used by other functions.
+- [ ] Check whether messages sent via the new app still bill against the existing AiSensy credit
+      line on the WABA, or whether a direct payment method needs adding in Payment settings —
+      unresolved as of 2026-08-19, worth confirming before real send volume.
 
 ### Phase 4 — Webhook + templates (Claude builds this once phase 1–3 credentials exist)
 
