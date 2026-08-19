@@ -156,87 +156,107 @@ function memberSlug(name) {
     .replace(/^-+|-+$/g, '');
 }
 
+// Table-based layout with every style attribute inlined, deliberately not
+// the div+flexbox+<style>-block approach the browser-preview mockup used -
+// that rendered fine in a browser tab but broke in a real inbox (caught via
+// the first test send's raw .eml, 2026-08-19): Outlook's rendering engine
+// doesn't support flexbox or border-radius at all, and several clients
+// (Outlook, some Gmail surfaces) strip a <style> block in <head> entirely,
+// dropping every class-based rule with it. Tables + inline styles are the
+// only layout method that survives across all of them - see
+// https://www.caniemail.com if a future edit wants to reach for anything
+// fancier than what's used here.
+const FONT_BODY = "-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+const FONT_DISPLAY = "Georgia,'Times New Roman',serif";
+
 const cardsHtml = changed
   .map(({ name, photo, kind }) => {
     const safeName = escapeHtml(name);
-    const tagClass = kind === 'new' ? 'is-new' : 'is-updated';
+    const tagBg = kind === 'new' ? '#e8f2ea' : '#f78520';
+    const tagColor = kind === 'new' ? '#294a36' : '#ffffff';
     const tagLabel = kind === 'new' ? 'New profile' : 'Updated';
     const blurb = kind === 'new' ? 'Shared their story for the first time.' : 'Updated their story.';
     const photoUrl = photo ? `${SITE_URL}${photo}` : `${SITE_URL}/images/members/placeholder.jpg`;
     const link = `${SITE_URL}/people/members#${memberSlug(name)}`;
     return `
-      <div class="update-card">
-        <div class="update-row">
-          <div class="avatar"><img src="${photoUrl}" alt="${safeName}" /></div>
-          <div class="update-text">
-            <span class="eyebrow ${tagClass}">${tagLabel}</span>
-            <h2>${safeName}</h2>
-            <p class="desc">${blurb}</p>
-            <div class="cta-row"><a class="cta-link" href="${link}">View their card on tvc.farm &rarr;</a></div>
-          </div>
-        </div>
-      </div>`;
+        <tr>
+          <td style="padding:0 32px 30px 32px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td width="64" valign="top" style="width:64px; padding-right:18px;">
+                  <img src="${photoUrl}" width="64" height="64" alt="${safeName}" style="display:block; width:64px; height:64px; border-radius:50%; border:1px solid #e2ddc9; object-fit:cover;" />
+                </td>
+                <td valign="top">
+                  <span style="display:inline-block; font-family:${FONT_BODY}; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; padding:4px 10px; border-radius:100px; margin-bottom:10px; background:${tagBg}; color:${tagColor};">${tagLabel}</span>
+                  <h2 style="font-family:${FONT_DISPLAY}; font-weight:600; font-size:19px; margin:6px 0; color:#22291f;">${safeName}</h2>
+                  <p style="margin:0 0 12px 0; font-family:${FONT_BODY}; font-size:14px; line-height:1.5; color:#57604f;">${blurb}</p>
+                  <a href="${link}" style="font-family:${FONT_BODY}; font-size:14px; font-weight:700; color:#3d6e52; text-decoration:none; border-bottom:1px solid #3d6e52;">View their card on tvc.farm &rarr;</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>`;
   })
   .join('\n');
 
 const pct = Math.round((membersWithStory / totalMembers) * 100);
 
 const html = `<!doctype html>
-<html><head><meta charset="utf-8" /></head>
-<body style="margin:0; background:#eee9db; font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-<style>
-  .email-body { background:#faf7ee; }
-  .band { background:#294a36; padding:28px 32px 24px; }
-  .band .wordmark { font-family:Georgia,'Times New Roman',serif; font-weight:700; font-size:20px; color:#fff; }
-  .band .kicker { margin-top:6px; color:#bcd2c2; font-size:13px; }
-  .content { padding:32px 32px 8px; }
-  .content h1 { font-family:Georgia,'Times New Roman',serif; font-weight:600; font-size:25px; line-height:1.3; margin:0 0 14px; color:#294a36; }
-  .content p.lede { margin:0 0 6px; font-size:15px; line-height:1.6; color:#57604f; max-width:54ch; }
-  .stat-block { margin-top:22px; padding:16px 18px; background:#e8f2ea; border-radius:10px; max-width:54ch; }
-  .stat-row { display:flex; align-items:baseline; gap:7px; }
-  .stat-number { font-family:Georgia,'Times New Roman',serif; font-weight:700; font-size:26px; color:#294a36; }
-  .stat-of { font-size:13.5px; font-weight:600; color:#294a36; }
-  .stat-bar { margin-top:9px; height:6px; border-radius:100px; background:rgba(61,110,82,0.16); overflow:hidden; }
-  .stat-bar-fill { height:100%; border-radius:100px; background:#3d6e52; }
-  .stat-caption { margin:10px 0 0; font-size:13px; line-height:1.55; color:#57604f; }
-  .divider { height:1px; background:#e2ddc9; margin:26px 32px; }
-  .update-card { padding:0 32px 30px; }
-  .update-row { display:flex; gap:18px; align-items:flex-start; }
-  .avatar { flex:none; width:64px; height:64px; border-radius:50%; overflow:hidden; border:1px solid #e2ddc9; background:#fff; }
-  .avatar img { display:block; width:100%; height:100%; object-fit:cover; }
-  .update-text { flex:1; min-width:0; }
-  .eyebrow { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; padding:4px 10px; border-radius:100px; margin-bottom:10px; }
-  .eyebrow.is-new { background:#e8f2ea; color:#294a36; }
-  .eyebrow.is-updated { background:#f78520; color:#fff; }
-  .update-card h2 { font-family:Georgia,'Times New Roman',serif; font-weight:600; font-size:19px; margin:0 0 6px; color:#22291f; }
-  .update-card p.desc { margin:0 0 12px; font-size:14px; line-height:1.5; color:#57604f; }
-  .cta-link { font-size:14px; font-weight:700; color:#3d6e52; text-decoration:none; border-bottom:1px solid #3d6e52; padding-bottom:2px; }
-  .footer { padding:26px 32px 34px; border-top:1px solid #e2ddc9; font-size:12.5px; line-height:1.7; color:#57604f; }
-  .footer .sig { font-family:Georgia,'Times New Roman',serif; font-style:italic; color:#294a36; font-size:14px; margin-bottom:10px; }
-  .footer a { color:#57604f; }
-</style>
-<div class="email-body">
-  <div class="band">
-    <div class="wordmark">Tamarind Valley Collective</div>
-    <div class="kicker">Member directory update</div>
-  </div>
-  <div class="content">
-    <h1>${changed.length} member profile${changed.length === 1 ? '' : 's'} updated</h1>
-    <p class="lede">Here's what changed on the <a href="${SITE_URL}/people/members" style="color:#3d6e52; font-weight:600;">Members page</a>. Click through to see any card in full.</p>
-    <div class="stat-block">
-      <div class="stat-row"><span class="stat-number">${membersWithStory}</span><span class="stat-of">of ${totalMembers} members</span></div>
-      <div class="stat-bar"><div class="stat-bar-fill" style="width:${pct}%;"></div></div>
-      <p class="stat-caption">have updated their profile with the new "Your Story" form so far &mdash; the rest still show their original, shorter bio. Haven't told yours yet? <a href="${SITE_URL}/people/members/story-guide" style="color:#3d6e52; font-weight:600;">Fill out the form &rarr;</a></p>
-    </div>
-  </div>
-  <div class="divider"></div>
-  ${cardsHtml}
-  <div class="footer">
-    <div class="sig">&mdash; The TVC website</div>
-    Sent because you're a TVC member with a profile on tvc.farm. Spot something to fix in your own card? Reply to this email or resubmit the <a href="${SITE_URL}/people/members/story-guide">Members: Your Story</a> form.
-  </div>
-</div>
-</body></html>`;
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body style="margin:0; padding:0; background:#eee9db;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#eee9db;">
+    <tr>
+      <td align="center" style="padding:24px 12px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:100%; background:#faf7ee;">
+          <tr>
+            <td style="background:#294a36; padding:28px 32px 24px 32px;">
+              <div style="font-family:${FONT_DISPLAY}; font-weight:700; font-size:20px; color:#ffffff;">Tamarind Valley Collective</div>
+              <div style="font-family:${FONT_BODY}; margin-top:6px; color:#bcd2c2; font-size:13px;">Member directory update</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 32px 8px 32px;">
+              <h1 style="font-family:${FONT_DISPLAY}; font-weight:600; font-size:25px; line-height:1.3; margin:0 0 14px 0; color:#294a36;">${changed.length} member profile${changed.length === 1 ? '' : 's'} updated</h1>
+              <p style="margin:0 0 6px 0; font-family:${FONT_BODY}; font-size:15px; line-height:1.6; color:#57604f;">Here's what changed on the <a href="${SITE_URL}/people/members" style="color:#3d6e52; font-weight:600;">Members page</a>. Click through to see any card in full.</p>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:22px; background:#e8f2ea; border-radius:10px;">
+                <tr>
+                  <td style="padding:16px 18px 16px 18px;">
+                    <span style="font-family:${FONT_DISPLAY}; font-weight:700; font-size:26px; color:#294a36;">${membersWithStory}</span>
+                    <span style="font-family:${FONT_BODY}; font-size:13.5px; font-weight:600; color:#294a36;"> of ${totalMembers} members</span>
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:9px;">
+                      <tr>
+                        <td width="${pct}%" style="background:#3d6e52; height:6px; font-size:6px; line-height:6px;">&nbsp;</td>
+                        <td style="background:#cfe0d4; height:6px; font-size:6px; line-height:6px;">&nbsp;</td>
+                      </tr>
+                    </table>
+                    <p style="margin:10px 0 0 0; font-family:${FONT_BODY}; font-size:13px; line-height:1.55; color:#57604f;">have updated their profile with the new "Your Story" form so far &mdash; the rest still show their original, shorter bio. Haven't told yours yet? <a href="${SITE_URL}/people/members/story-guide" style="color:#3d6e52; font-weight:600;">Fill out the form &rarr;</a></p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:26px 32px;">
+              <div style="border-top:1px solid #e2ddc9; font-size:1px; line-height:1px;">&nbsp;</div>
+            </td>
+          </tr>
+${cardsHtml}
+          <tr>
+            <td style="padding:26px 32px 34px 32px; border-top:1px solid #e2ddc9; font-family:${FONT_BODY}; font-size:12.5px; line-height:1.7; color:#57604f;">
+              <div style="font-family:${FONT_DISPLAY}; font-style:italic; color:#294a36; font-size:14px; margin-bottom:10px;">&mdash; The TVC website</div>
+              Sent because you're a TVC member with a profile on tvc.farm. Spot something to fix in your own card? Reply to this email or resubmit the <a href="${SITE_URL}/people/members/story-guide" style="color:#57604f;">Members: Your Story</a> form.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 
 const subjectBase = `${changed.length} member profile${changed.length === 1 ? '' : 's'} updated on tvc.farm`;
 const subject = testRecipient ? `[TEST] ${subjectBase}` : subjectBase;
