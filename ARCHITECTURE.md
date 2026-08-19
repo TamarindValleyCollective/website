@@ -11,12 +11,13 @@
 under the Netlify account owned by `contact@tvc.farm` (ownership moved there from a personal
 account on 2026-07-18). The site is almost entirely static (prerendered HTML/CSS/JS, no server
 at request time), with a small set of deliberate exceptions that need a serverless backend:
-five Netlify Functions (the site-wide chat assistant, the event-interest counter backing past
+six Netlify Functions (the site-wide chat assistant, the event-interest counter backing past
 events' "Want this to happen again?" widget, `/api/photo-pool` backing the internal, unlinked
 photo review dashboard at `/internal/photo-pool`, `/api/enquiry` logging the membership
-enquiry form (`/join`) and the general enquiry form (`/contact`) to Google Sheets, and
+enquiry form (`/join`) and the general enquiry form (`/contact`) to Google Sheets,
 `/api/rainfall` reading the community's rainfall-log Google Sheet live for the rainfall chart/
-table/monsoon stat on `/ecosystem/weather`), Netlify Blobs
+table/monsoon stat on `/ecosystem/weather`, and `/api/whatsapp-webhook` receiving WhatsApp Cloud
+API events — see `WHATSAPP.md`), Netlify Blobs
 (public storage for the event-interest counter — the site's only *readable* server-side state
 that isn't gated behind a secret; everything else below is either write-only or, for photo-pool,
 gated), and Netlify Forms (the membership enquiry form on `/join`, the general enquiry form on
@@ -67,6 +68,7 @@ flowchart TD
         FUNC_SRC3["netlify/functions/photo-pool.mts<br/>Serverless function, Google Sign-In gated —<br/>verifies ID token, checks a Sheet-backed<br/>allow-list, lists Inbox (+ uploader/EXIF/GPS/<br/>description), moves photos, saves descriptions"]
         FUNC_SRC4["netlify/functions/enquiry.mts<br/>Serverless function — appends a row to a<br/>Google Sheet per membership/general enquiry,<br/>fired via sendBeacon alongside each form's<br/>own native Netlify Forms submission"]
         FUNC_SRC5["netlify/functions/rainfall.mts<br/>Serverless function — reads the community's<br/>rainfall-log Sheet (monthly + daily tabs) on<br/>every page view, computes the monsoon<br/>to-date stat, returns JSON"]
+        FUNC_SRC6["netlify/functions/whatsapp-webhook.mts<br/>Serverless function — verifies Meta's GET<br/>handshake and each POST's HMAC signature,<br/>emails contact@tvc.farm via Resend per<br/>incoming WhatsApp message (no inbox exists<br/>for Cloud API numbers otherwise)"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
     end
 
@@ -84,6 +86,7 @@ flowchart TD
         APIFN3["Netlify Function: /api/photo-pool<br/>(+/thumb, +/description)<br/>Configured — Drive service account + folder IDs<br/>set as Netlify env vars for all deploy contexts"]
         APIFN4["Netlify Function: /api/enquiry<br/>Live and verified — Sheet ids set,<br/>Sheets shared Editor-access with the<br/>service account, real appends confirmed"]
         APIFN5["Netlify Function: /api/rainfall<br/>Reads the rainfall-log Sheet (view-access<br/>only, read-only path) — RAINFALL_SHEET_ID"]
+        APIFN6["Netlify Function: /api/whatsapp-webhook<br/>Code deployed, WHATSAPP_ACCESS_TOKEN set —<br/>WHATSAPP_VERIFY_TOKEN/APP_SECRET/RESEND_API_KEY<br/>not yet set, not yet registered as a webhook<br/>in the Meta App Dashboard, so not receiving<br/>real events yet"]
         BLOBS["Netlify Blobs: 'event-interest' store<br/>One JSON record per past event id —<br/>{count, emails[]}. Reset via<br/>netlify blobs:delete event-interest &lt;id&gt;"]
         FORMS["Netlify Forms<br/>Captures /contact membership + general<br/>enquiries, /visit/host-an-event inquiries,<br/>/visit camping·day-visit·trekking inquiries,<br/>and event-interest submissions with an email"]
     end
@@ -123,7 +126,8 @@ flowchart TD
         GSHEET["Google Sheets API<br/>Curator allow-list (read, photo-pool.mts) +<br/>membership/general enquiry logs (write,<br/>enquiry.mts) + rainfall log (read,<br/>rainfall.mts) + Members story-form<br/>responses (read + write Processed-at/Notes,<br/>check-member-story-responses.mjs) —<br/>same service account, called server-side<br/>only (Functions) or from a local script"]
         GIDTOKEN["Google Identity Services / OAuth<br/>Curator sign-in (browser) +<br/>ID token verification against<br/>Google's public JWKS (photo-pool.mts)"]
         GSC["Google Search Console API<br/>urlInspection.index.inspect — read-only,<br/>same service account (Full user on the<br/>property as of 2026-08-08),<br/>called from a local script only"]
-        RESEND["Resend API<br/>Transactional email — noreply@tvc.farm,<br/>domain verified 2026-08-19,<br/>called only from the GitHub Action above"]
+        RESEND["Resend API<br/>Transactional email — noreply@tvc.farm,<br/>domain verified 2026-08-19,<br/>called from the GitHub Action above<br/>and whatsapp-webhook.mts"]
+        WAMETA["Meta WhatsApp Cloud API<br/>Sends inbound message + template-status<br/>events to /api/whatsapp-webhook;<br/>see WHATSAPP.md for setup status"]
     end
 
     SRC --> BUILD
@@ -137,6 +141,8 @@ flowchart TD
     WEATHER -.-> METEO
     RAINFALL --> APIFN5
     APIFN5 -.->|"read monthly + daily tabs"| GSHEET
+    WAMETA -.->|"POST webhook events"| APIFN6
+    APIFN6 -.->|"send notification email"| RESEND
     SCRIPT_CURATE -.->|"S3-compatible upload"| R2
     SCRIPT_CURATE -->|"writes"| CONTENT
     SCRIPT_CAPTION -.->|"vision request per photo"| ANTHROPIC
@@ -171,8 +177,8 @@ flowchart TD
     classDef ciStyle fill:#eef4fb,stroke:#3b6ea5,color:#1c3f5f
 
     class PAGES,INTERNALPAGE,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH staticStyle
-    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,BLOBS,FORMS,ANTHROPIC netlifyStyle
-    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND externalStyle
+    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,BLOBS,FORMS,ANTHROPIC netlifyStyle
+    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL,SCRIPT_GSC localStyle
     class GHA_MEMBER ciStyle
@@ -266,6 +272,20 @@ outside both the local machine and Netlify (the member-update-email workflow).
   year's full total. Reuses `scripts/lib/google-drive.mjs`'s `getSheetValues()` (a small
   generalization of the existing single-column `getAllowedEmails()` reader into a full-grid one,
   used by both now).
+- **`netlify/functions/whatsapp-webhook.mts`** — the WhatsApp Cloud API webhook endpoint (see
+  `WHATSAPP.md` for the full setup checklist). Handles Meta's one-time GET verification handshake
+  (`hub.mode`/`hub.verify_token`/`hub.challenge`, echoing the challenge back if the token matches
+  `WHATSAPP_VERIFY_TOKEN` — an arbitrary string chosen ourselves, not a Meta-issued secret) and
+  POST requests carrying real events, each verified via its `X-Hub-Signature-256` header (HMAC-
+  SHA256 over the *raw* request body using `WHATSAPP_APP_SECRET`, the Meta app's own secret) before
+  the payload is trusted at all — computed with Node's built-in `crypto`, no dependency added.
+  Cloud API numbers have no inbox of their own (confirmed by checking every tab in WhatsApp
+  Manager and Meta's own docs), so every inbound message also gets emailed to `contact@tvc.farm`
+  via the same Resend REST API `scripts/send-member-update-email.mjs` already uses — the first
+  Netlify Function to call Resend, previously only reached from the member-update GitHub Action.
+  `message_template_status_update` events are logged only, not emailed, for now. Deployed but not
+  yet live: `WHATSAPP_VERIFY_TOKEN`/`WHATSAPP_APP_SECRET`/`RESEND_API_KEY` aren't set on Netlify
+  yet, and the URL isn't registered as a webhook in the Meta App Dashboard yet.
 - **`scripts/lib/google-id-token.mjs`** — verifies a Google Identity Services ID token: fetches
   and caches Google's JWKS, hardcodes the expected `RS256` algorithm (defense against
   algorithm-confusion attacks), verifies the RSA signature via Node's built-in `crypto`, and
@@ -627,6 +647,7 @@ never touches Netlify either.
 | Live rainfall chart/table/monsoon stat (`/ecosystem/weather`, `/api/rainfall`) | ✅ Live — reads the community's rainfall-log Sheet live, `RAINFALL_SHEET_ID` set on Netlify (all deploy contexts); multi-year line chart with year-filter checkboxes; verified against `tvc.farm/ecosystem/weather` and `tvc.farm/api/rainfall` directly |
 | Site search (nav icon / `/` key) | 🟡 Built, verified locally (not yet deployed) — switched from a title/description-only index to Pagefind, which indexes each non-`noindex` page's full `<main>` content; confirmed via a local production build + `astro preview` that in-body content (e.g. member names on `/people/members/`) is now searchable and that `noindex` pages (404, thanks pages, `/internal/photo-pool`, `/people/members/story-guide`) are correctly excluded from the index |
 | Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | ✅ Live — Drive folders, service account, Google Sign-In OAuth client, curator allow-list Sheet, all Netlify env vars configured; verified against production directly (`/internal/photo-pool` returns 200, `/api/photo-pool` returns 401 unauthenticated as expected for the Google Sign-In-gated function) |
+| WhatsApp webhook (`/api/whatsapp-webhook`) | 🟡 Built, verified locally (not yet live in production) — GET handshake and POST signature verification tested against `netlify dev`; `WHATSAPP_VERIFY_TOKEN`/`WHATSAPP_APP_SECRET`/`RESEND_API_KEY` not yet set on Netlify, URL not yet registered as a webhook in the Meta App Dashboard. See `WHATSAPP.md` |
 
 The membership/general enquiry forms are fully live — Sheets logging verified with real
 production `POST`s, and email needs no separate setup since Netlify's default owner notification
