@@ -250,7 +250,38 @@ that Phase 3 step below is still open.
       (`WHATSAPP_ACCESS_TOKEN` + new `WHATSAPP_PHONE_NUMBER_ID` env var, `1252670697930284`); a
       failed send (most likely the 24-hour customer-service-window rejection, since no approved
       templates exist yet — see the open Phase 4 item below) is recorded as `status='failed'` with
-      Meta's own error text, shown inline in the thread rather than silently dropped.
+      Meta's own error text, shown inline in the thread rather than silently dropped. Since more
+      than one staff member replies from this one inbox, every outbound message is automatically
+      signed with the sender's name (pulled from their Google account) — `"{body}\n\n- {name}"` —
+      so the customer knows who they're talking to; this is part of the actual text sent to
+      WhatsApp, not just internal metadata.
+
+      **Bug found and fixed during first real end-to-end test (2026-08-20):** the conversation
+      row was created correctly but no message ever saved — `whatsapp_messages` inserts were
+      failing with Postgres error `42P10` ("there is no unique or exclusion constraint matching
+      the ON CONFLICT specification"), silently caught by `whatsapp-webhook.mts`'s try/catch. Root
+      cause: the original migration's unique index on `wa_message_id` was a *partial* index
+      (`where wa_message_id is not null`) — PostgREST's `on_conflict=wa_message_id` upsert needs
+      Postgres to infer a full, non-partial unique constraint from the column list, and can't do
+      that against a partial one. Fixed in
+      `supabase/migrations/0002_fix_wa_message_id_constraint.sql` by switching to a full unique
+      index — Postgres still treats every `NULL` as distinct for uniqueness, so this keeps the
+      same practical behavior (only non-null `wa_message_id`s are deduplicated). Verified via a
+      real WhatsApp message after the fix.
+
+      **Also found during the same test pass:** the conversation-list rows and message bubbles
+      rendered completely unstyled — a classic Astro scoped-CSS gotcha. Astro stamps a
+      `data-astro-cid-*` attribute onto every element present in a component's *template* at
+      build time and scopes that component's `<style>` rules to match only elements carrying it;
+      elements created client-side via `document.createElement` (the conversation buttons and
+      message bubbles, both built dynamically in the page's script) never get that attribute, so
+      the scoped rules silently never matched them. Fixed by wrapping those specific selectors in
+      `:global(...)`. While looking at the UI, also cleaned up the timestamp format (was a full
+      locale string like "8/20/2026, 8:32:38 PM" crammed into a bubble corner; now just the time
+      for today, a short date + time otherwise) and added a mobile breakpoint — below 720px the
+      two-pane layout collapses to one pane at a time (conversation list, then thread, with a
+      "‹ Back" button), since the fixed 280px sidebar plus a thread pane doesn't fit a phone
+      screen.
       New Netlify env vars: `SUPABASE_URL` and `WHATSAPP_PHONE_NUMBER_ID` (both non-secret, set
       directly) and `SUPABASE_SERVICE_ROLE_KEY` (secret — same handling as `WHATSAPP_ACCESS_TOKEN`:
       Sharath pastes it into Netlify's UI, Claude never reads/handles the raw value). None of the

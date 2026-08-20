@@ -32,6 +32,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       <div class="thread card">
         <p id="thread-empty" class="hint" style="margin: 16px;">Select a conversation.</p>
         <div id="thread-header" class="thread-header" hidden>
+          <button type="button" id="back-to-list" class="back-btn" aria-label="Back to conversations">‹ Back</button>
           <strong id="thread-name"></strong>
           <span id="thread-phone" class="hint"></span>
         </div>
@@ -40,6 +41,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           <textarea id="reply-input" placeholder="Type a reply…" required></textarea>
           <button type="submit" id="reply-send">Send</button>
         </form>
+        <p class="hint" style="margin: 4px 16px 8px;">Your name is added to the message automatically, since more than one person replies from this inbox.</p>
         <p id="reply-status" class="hint" style="margin: 4px 16px;" hidden></p>
       </div>
     </div>
@@ -107,7 +109,12 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     padding: 0;
   }
 
-  .conversation-item {
+  /* These rules target elements created client-side by document.createElement
+     (see the script below) rather than written in this file's template —
+     Astro only stamps its scoping data-attribute onto elements present in
+     the template at build time, so a bare (scoped) selector here would never
+     match them. :global() opts these specific selectors out of scoping. */
+  :global(.conversation-item) {
     display: block;
     width: 100%;
     text-align: left;
@@ -119,18 +126,18 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     font: inherit;
   }
 
-  .conversation-item:hover,
-  .conversation-item.active {
+  :global(.conversation-item:hover),
+  :global(.conversation-item.active) {
     background: var(--tvc-green-tint);
   }
 
-  .conversation-item .name {
+  :global(.conversation-item .name) {
     font-weight: 600;
     font-size: 0.9rem;
     display: block;
   }
 
-  .conversation-item .meta {
+  :global(.conversation-item .meta) {
     font-size: 0.76rem;
     color: var(--tvc-ink-soft);
     display: block;
@@ -151,6 +158,18 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     gap: 8px;
   }
 
+  .back-btn {
+    display: none;
+    appearance: none;
+    border: none;
+    background: none;
+    color: var(--tvc-green-dark);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 8px 4px 0;
+  }
+
   .messages {
     flex: 1;
     overflow-y: auto;
@@ -160,7 +179,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     gap: 10px;
   }
 
-  .bubble {
+  :global(.bubble) {
     max-width: 70%;
     padding: 8px 12px;
     border-radius: 12px;
@@ -169,29 +188,29 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     word-break: break-word;
   }
 
-  .bubble.inbound {
+  :global(.bubble.inbound) {
     align-self: flex-start;
     background: var(--tvc-cream);
   }
 
-  .bubble.outbound {
+  :global(.bubble.outbound) {
     align-self: flex-end;
     background: var(--tvc-green-tint);
   }
 
-  .bubble.failed {
+  :global(.bubble.failed) {
     background: #fbebe9;
     border: 1px solid #e8b4af;
   }
 
-  .bubble .bubble-error {
+  :global(.bubble .bubble-error) {
     display: block;
     margin-top: 4px;
     font-size: 0.76rem;
     color: #b3261e;
   }
 
-  .bubble .bubble-time {
+  :global(.bubble .bubble-time) {
     display: block;
     margin-top: 4px;
     font-size: 0.7rem;
@@ -233,6 +252,46 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     opacity: 0.5;
     cursor: default;
   }
+
+  /* Below a breakpoint, show one pane at a time (list, then thread) instead
+     of squeezing a 280px sidebar next to the thread — the two-column grid
+     doesn't leave enough room for either on a phone. #app.thread-open is
+     toggled by the script when a conversation is selected / the back button
+     is pressed; the class is harmless above the breakpoint since nothing
+     outside this query reads it. */
+  @media (max-width: 720px) {
+    .wrapper {
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+
+    .app {
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr;
+      height: calc(100vh - 220px);
+      min-height: 360px;
+    }
+
+    .thread {
+      display: none;
+    }
+
+    #app.thread-open .conversations {
+      display: none;
+    }
+
+    #app.thread-open .thread {
+      display: flex;
+    }
+
+    .back-btn {
+      display: inline-block;
+    }
+
+    :global(.bubble) {
+      max-width: 85%;
+    }
+  }
 </style>
 
 <script>
@@ -268,6 +327,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   const conversationsList = document.getElementById('conversations-list') as HTMLElement;
   const threadEmpty = document.getElementById('thread-empty') as HTMLElement;
   const threadHeader = document.getElementById('thread-header') as HTMLElement;
+  const backToListBtn = document.getElementById('back-to-list') as HTMLButtonElement;
   const threadName = document.getElementById('thread-name') as HTMLElement;
   const threadPhone = document.getElementById('thread-phone') as HTMLElement;
   const messagesEl = document.getElementById('messages') as HTMLElement;
@@ -335,8 +395,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     return res;
   }
 
-  function formatRelativeTime(iso: string): string {
-    return new Date(iso).toLocaleString();
+  // Full "8/20/2026, 8:32:38 PM" locale strings are too heavy to sit inside a
+  // chat bubble or a conversation-list row — just the time for anything sent
+  // today, otherwise a short date + time.
+  function formatTimestamp(iso: string): string {
+    const date = new Date(iso);
+    const time = date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    if (date.toDateString() === new Date().toDateString()) return time;
+    return `${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${time}`;
   }
 
   function renderConversations(conversations: Conversation[]) {
@@ -361,7 +427,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
       const meta = document.createElement('span');
       meta.className = 'meta';
-      meta.textContent = formatRelativeTime(conv.lastMessageAt);
+      meta.textContent = formatTimestamp(conv.lastMessageAt);
 
       btn.append(name, meta);
       btn.addEventListener('click', () => selectConversation(conv));
@@ -390,7 +456,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
       const time = document.createElement('span');
       time.className = 'bubble-time';
-      time.textContent = formatRelativeTime(m.createdAt);
+      time.textContent = formatTimestamp(m.createdAt);
       bubble.appendChild(time);
 
       messagesEl.appendChild(bubble);
@@ -434,6 +500,10 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     threadName.textContent = conv.displayName || `+${conv.waPhone}`;
     threadPhone.textContent = `+${conv.waPhone}`;
     document.querySelectorAll('.conversation-item').forEach((el) => el.classList.remove('active'));
+    // Below the mobile breakpoint this swaps the visible pane from the
+    // conversation list to the thread — see the .thread-open CSS rules.
+    // No-op above the breakpoint, since nothing there reads this class.
+    app.classList.add('thread-open');
     loadConversations();
     loadMessages();
   }
@@ -493,6 +563,10 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
     google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: 'outline', size: 'large' });
   }
+
+  backToListBtn.addEventListener('click', () => {
+    app.classList.remove('thread-open');
+  });
 
   useDifferentAccountBtn.addEventListener('click', () => {
     clearToken();

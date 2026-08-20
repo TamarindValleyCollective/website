@@ -24,7 +24,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-type AuthResult = { ok: true; email: string } | { ok: false; status: 401 | 403 | 500; error: string };
+type AuthResult = { ok: true; email: string; name?: string } | { ok: false; status: 401 | 403 | 500; error: string };
 
 // Same short cache rationale as photo-pool.mts: an admin adding a row to the
 // allow-list Sheet takes effect almost immediately, without hitting the
@@ -55,9 +55,11 @@ async function authenticate(req: Request): Promise<AuthResult> {
   }
 
   let email: string;
+  let name: string | undefined;
   try {
     const payload = await verifyGoogleIdToken(token, { audience: clientId });
     email = String(payload.email).toLowerCase();
+    name = typeof payload.name === 'string' ? payload.name : undefined;
   } catch (err) {
     console.error('ID token verification failed', err);
     return { ok: false, status: 401, error: 'Invalid or expired session' };
@@ -73,7 +75,7 @@ async function authenticate(req: Request): Promise<AuthResult> {
     return { ok: false, status: 500, error: 'Server misconfigured' };
   }
 
-  return { ok: true, email };
+  return { ok: true, email, name };
 }
 
 async function handleConversations(): Promise<Response> {
@@ -115,7 +117,7 @@ async function handleMessages(url: URL): Promise<Response> {
   }
 }
 
-async function handleReply(req: Request): Promise<Response> {
+async function handleReply(req: Request, responderLabel?: string): Promise<Response> {
   let payload: { conversationId?: string; body?: string };
   try {
     payload = await req.json();
@@ -127,6 +129,13 @@ async function handleReply(req: Request): Promise<Response> {
   if (!conversationId || !body?.trim()) {
     return jsonResponse({ error: 'conversationId and body are required' }, 400);
   }
+
+  // Multiple staff share one WhatsApp inbox, so sign every outbound message
+  // with whoever sent it — pulled from their Google account, no extra typing
+  // needed. The signature is part of the actual text sent to the customer
+  // (not just internal metadata), so it's included in what's stored too, to
+  // keep the thread showing exactly what was sent.
+  const signedBody = responderLabel ? `${body}\n\n- ${responderLabel}` : body;
 
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
@@ -154,7 +163,7 @@ async function handleReply(req: Request): Promise<Response> {
         messaging_product: 'whatsapp',
         to: conversation.wa_phone,
         type: 'text',
-        text: { body },
+        text: { body: signedBody },
       }),
     });
     metaData = await metaRes.json();
@@ -171,7 +180,7 @@ async function handleReply(req: Request): Promise<Response> {
     const errorMessage: string = metaData?.error?.message ?? 'WhatsApp API error';
     console.error('[whatsapp-admin] Send failed', metaRes.status, metaData);
     try {
-      await insertMessage({ conversationId, direction: 'outbound', body, status: 'failed', errorMessage });
+      await insertMessage({ conversationId, direction: 'outbound', body: signedBody, status: 'failed', errorMessage });
     } catch (err) {
       console.error('Failed to record failed send', err);
     }
@@ -180,7 +189,7 @@ async function handleReply(req: Request): Promise<Response> {
 
   const waMessageId = metaData?.messages?.[0]?.id;
   try {
-    const saved = await insertMessage({ conversationId, direction: 'outbound', body, waMessageId, status: 'sent' });
+    const saved = await insertMessage({ conversationId, direction: 'outbound', body: signedBody, waMessageId, status: 'sent' });
     return jsonResponse({ ok: true, message: saved });
   } catch (err) {
     // The WhatsApp send itself succeeded — Meta already delivered it — a
@@ -199,7 +208,7 @@ export default async (req: Request): Promise<Response> => {
 
   if (url.pathname === '/api/whatsapp-admin/conversations' && req.method === 'GET') return handleConversations();
   if (url.pathname === '/api/whatsapp-admin/messages' && req.method === 'GET') return handleMessages(url);
-  if (url.pathname === '/api/whatsapp-admin/reply' && req.method === 'POST') return handleReply(req);
+  if (url.pathname === '/api/whatsapp-admin/reply' && req.method === 'POST') return handleReply(req, auth.name ?? auth.email);
 
   return jsonResponse({ error: 'Not found' }, 404);
 };
