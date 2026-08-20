@@ -347,6 +347,18 @@ that Phase 3 step below is still open.
         possible yet, since messaging a staff member (rather than replying to a customer) hits the
         same 24-hour free-form-message window rule, and no message template is approved yet (see
         the open item below).
+      - **Conversation search** — a search box above the conversation list, matching contact
+        name, phone number, or message content. Two separate REST calls merged client-side rather
+        than one query (`scripts/lib/supabase.mjs`'s `searchConversations`): PostgREST has no
+        clean way to `OR` a top-level column condition (`display_name`/`wa_phone`) together with
+        a condition on an inner-joined embedded resource (`whatsapp_messages.body`) in a single
+        request. The message-content query uses `whatsapp_messages!inner(...)` with a filter on
+        the embedded resource — PostgREST's documented mechanism for restricting the *parent* rows
+        returned, not just what's shown in the embed — verified against the real API with the
+        public anon key before shipping (query syntax accepted, RLS correctly blocked the actual
+        data). When a conversation matches by message content, that matching message (not
+        necessarily the latest one) becomes its preview snippet in the list, same idea as a real
+        search UI highlighting the matched excerpt.
 - [x] **Live in production — 2026-08-19.** All three prerequisites done:
       1. `WHATSAPP_VERIFY_TOKEN` (generated ourselves, set directly), `WHATSAPP_APP_SECRET` (from
          the Meta App Dashboard's Basic Settings, Sharath revealed/pasted it), and `RESEND_API_KEY`

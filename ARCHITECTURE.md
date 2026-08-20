@@ -315,12 +315,14 @@ outside both the local machine and Netlify (the member-update-email workflow).
   dashboard (2026-08-20). Same Google Sign-In auth pattern as `photo-pool.mts` (verifies the ID
   token, checks it against `photo-pool.mts`'s own `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID` allow-list —
   reused rather than a second Sheet, since it's the same core-team staff). Three routes: list
-  conversations, list one conversation's messages (both reading from Supabase via
-  `scripts/lib/supabase.mjs`), and send a reply — which calls Meta's Send Message API directly
-  (`WHATSAPP_ACCESS_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID`) and records the outcome as a message row,
-  `status='failed'` with Meta's own error text when it's rejected (most likely WhatsApp's 24-hour
-  customer-service-window rule, since no approved message templates exist yet) rather than a
-  generic failure.
+  conversations (optionally filtered by a `search` query param — matches contact name, phone, or
+  message content via `scripts/lib/supabase.mjs`'s `searchConversations`, two REST calls merged
+  client-side since PostgREST can't `OR` a top-level column condition with an inner-embedded-
+  resource condition in one request), list one conversation's messages (both reading from
+  Supabase), and send a reply — which calls Meta's Send Message API directly (`WHATSAPP_ACCESS_
+  TOKEN` + `WHATSAPP_PHONE_NUMBER_ID`) and records the outcome as a message row, `status='failed'`
+  with Meta's own error text when it's rejected (most likely WhatsApp's 24-hour customer-service-
+  window rule, since no approved message templates exist yet) rather than a generic failure.
 - **`netlify/functions/whatsapp-stale-alert.mts`** — scheduled function (Netlify cron,
   `config.schedule = "*/15 * * * *"`, no HTTP path). The "make sure it actually gets answered"
   safety net: queries `scripts/lib/supabase.mjs`'s `listStaleUnreadConversations` for

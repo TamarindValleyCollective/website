@@ -13,6 +13,7 @@
 // if that ever needs to diverge.
 import {
   listConversations,
+  searchConversations,
   listMessages,
   getConversation,
   insertMessage,
@@ -87,9 +88,12 @@ async function authenticate(req: Request): Promise<AuthResult> {
 async function handleConversations(url: URL): Promise<Response> {
   const limitParam = Number(url.searchParams.get('limit'));
   const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : undefined;
+  const search = url.searchParams.get('search')?.trim();
 
   try {
-    const conversations = await listConversations(limit ? { limit } : {});
+    const conversations = search
+      ? await searchConversations(search, limit ? { limit } : {})
+      : await listConversations(limit ? { limit } : {});
     return jsonResponse({
       conversations: conversations.map((c: any) => {
         const lastMessage = c.whatsapp_messages?.[0];

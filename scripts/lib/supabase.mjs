@@ -105,6 +105,39 @@ export async function listConversations({ limit = 100 } = {}) {
   return res.json();
 }
 
+// Searches conversations by contact name/phone, or by message content —
+// two separate REST calls merged in JS rather than one query, since
+// PostgREST has no clean way to OR a top-level column condition together
+// with a condition on an inner-joined embedded resource in a single
+// request. When a conversation matches by message content, that matching
+// message (not necessarily the latest one) is what gets shown as the
+// preview — more useful for search than always showing the latest message,
+// same idea as how a real search UI highlights the matched snippet.
+export async function searchConversations(query, { limit = 50 } = {}) {
+  const pattern = encodeURIComponent(`*${query}*`);
+
+  const [byFieldRes, byMessageRes] = await Promise.all([
+    restFetch(
+      `/whatsapp_conversations?select=*,whatsapp_messages(body,direction,created_at)` +
+        `&whatsapp_messages.order=created_at.desc&whatsapp_messages.limit=1` +
+        `&or=(display_name.ilike.${pattern},wa_phone.ilike.${pattern})` +
+        `&order=last_message_at.desc&limit=${limit}`,
+    ),
+    restFetch(
+      `/whatsapp_conversations?select=*,whatsapp_messages!inner(body,direction,created_at)` +
+        `&whatsapp_messages.body=ilike.${pattern}` +
+        `&order=last_message_at.desc&limit=${limit}`,
+    ),
+  ]);
+
+  const [byField, byMessage] = await Promise.all([byFieldRes.json(), byMessageRes.json()]);
+
+  const merged = new Map();
+  for (const c of byField) merged.set(c.id, c);
+  for (const c of byMessage) merged.set(c.id, c); // wins on overlap — matched-message preview
+  return [...merged.values()].sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()).slice(0, limit);
+}
+
 // Marks a conversation read *for everyone* — this is one shared inbox, not
 // per-user state, so opening a thread clears its unread flag for all staff.
 export async function markConversationRead(conversationId) {

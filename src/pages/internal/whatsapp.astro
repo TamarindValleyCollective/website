@@ -36,6 +36,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
     <div id="app" class="app" hidden>
       <div class="conversations card">
+        <div class="search-row">
+          <input type="search" id="conversation-search" placeholder="Search name, phone, or message…" aria-label="Search conversations" />
+        </div>
         <ul id="conversations-list"></ul>
         <p id="conversations-status" class="pane-status" hidden></p>
         <div id="conversations-skeleton" class="skeleton-list" aria-hidden="true">
@@ -172,14 +175,38 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
 
   .conversations {
-    overflow-y: auto;
-    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .search-row {
+    flex: 0 0 auto;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .search-row input {
+    width: 100%;
+    padding: 7px 12px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 999px;
+    font: inherit;
+    font-size: 0.85rem;
+    background: var(--tvc-cream);
+  }
+
+  .search-row input:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 1px;
   }
 
   .conversations ul {
     list-style: none;
     margin: 0;
     padding: 0;
+    overflow-y: auto;
+    flex: 1;
   }
 
   .pane-status {
@@ -666,6 +693,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   const conversationsStatus = document.getElementById('conversations-status') as HTMLElement;
   const conversationsSkeleton = document.getElementById('conversations-skeleton') as HTMLElement;
   const conversationsList = document.getElementById('conversations-list') as HTMLElement;
+  const conversationSearchInput = document.getElementById('conversation-search') as HTMLInputElement;
   const loadMoreBtn = document.getElementById('load-more-conversations') as HTMLButtonElement;
   const threadEmpty = document.getElementById('thread-empty') as HTMLElement;
   const threadHeader = document.getElementById('thread-header') as HTMLElement;
@@ -687,6 +715,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   // Re-requested with a growing limit rather than an offset — see
   // listConversations' comment in scripts/lib/supabase.mjs for why.
   let conversationsLimit = 100;
+  let activeSearch = '';
+  let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   function getToken(): string | null {
     return sessionStorage.getItem(STORAGE_KEY);
@@ -815,7 +845,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     conversationsList.innerHTML = '';
     if (conversations.length === 0) {
       conversationsStatus.hidden = false;
-      conversationsStatus.textContent = 'No conversations yet.';
+      conversationsStatus.textContent = activeSearch ? `No matches for "${activeSearch}".` : 'No conversations yet.';
       return;
     }
     conversationsStatus.hidden = true;
@@ -918,7 +948,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
   async function loadConversations() {
     try {
-      const res = await authedFetch(`/api/whatsapp-admin/conversations?limit=${conversationsLimit}`);
+      const params = new URLSearchParams({ limit: String(conversationsLimit) });
+      if (activeSearch) params.set('search', activeSearch);
+      const res = await authedFetch(`/api/whatsapp-admin/conversations?${params}`);
       conversationsSkeleton.hidden = true;
       if (!res.ok) {
         conversationsStatus.hidden = false;
@@ -930,8 +962,10 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       // A full page back implies there may be more beyond it; a short page
       // means we've reached the end. Not exact (an exact-multiple total
       // shows one extra "Load more" click that returns nothing new), but
-      // avoids a separate count query for a small internal tool.
-      loadMoreBtn.hidden = data.conversations.length < conversationsLimit;
+      // avoids a separate count query for a small internal tool. Search
+      // results don't paginate at all — a query narrow enough to need
+      // "load more" is a query worth narrowing instead.
+      loadMoreBtn.hidden = !!activeSearch || data.conversations.length < conversationsLimit;
     } catch {
       // authedFetch already showed the gate/forbidden panel for 401/403.
       conversationsSkeleton.hidden = true;
@@ -981,6 +1015,17 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   loadMoreBtn.addEventListener('click', () => {
     conversationsLimit += 100;
     loadConversations();
+  });
+
+  // Debounced so every keystroke doesn't round-trip — 300ms feels
+  // instant to type against without firing a query per character.
+  conversationSearchInput.addEventListener('input', () => {
+    if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+      activeSearch = conversationSearchInput.value.trim();
+      conversationsLimit = 100;
+      loadConversations();
+    }, 300);
   });
 
   function pollIfVisible() {
