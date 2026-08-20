@@ -319,7 +319,15 @@ that Phase 3 step below is still open.
         pushing the workspace down for no reason), a loading skeleton instead of a bare "Loading…"
         line, refined hover/active states (previously identical, now genuinely distinguishable
         colors), themed focus rings matching the rest of the site, a sign-out button, and
-        Cmd/Ctrl+Enter to send.
+        Cmd/Ctrl+Enter to send. Fixed a follow-up bug the same pass introduced: `.avatar*` rules
+        weren't wrapped in `:global()` either, so every avatar except the one static header
+        instance silently got none of the rule's styling (no background, no white text, no
+        border-radius) — same root cause as the earlier conversation-item/bubble fix, just missed
+        the first time.
+      - A custom link-preview image (`public/images/pages/whatsapp-admin/og.png`, generated via
+        `sharp` from a hand-built SVG — a generic chat-bubble silhouette with the TVC logo mark
+        inside, not Meta's actual trademarked WhatsApp icon) — previously shared with the site-wide
+        4204×1330 home hero photo as the fallback, which read oddly for an internal tool link.
 - [x] **Live in production — 2026-08-19.** All three prerequisites done:
       1. `WHATSAPP_VERIFY_TOKEN` (generated ourselves, set directly), `WHATSAPP_APP_SECRET` (from
          the Meta App Dashboard's Basic Settings, Sharath revealed/pasted it), and `RESEND_API_KEY`
