@@ -9,11 +9,12 @@
 Beyond the plain `wa.me` click-to-chat links (Friends of TVC group invite, `/contact` and
 booking-inquiry links — see `ARCHITECTURE.md`), the WhatsApp Cloud API integration is now **live**:
 `netlify/functions/whatsapp-webhook.mts` receives real inbound messages at `+91 80 4110 9754` and
-emails a notification to `core-team@tvc.farm` (moved from `contact@tvc.farm` on 2026-08-19, same
-change as the Netlify Forms notification recipients — see `ARCHITECTURE.md`), verified end-to-end
-with a real message on 2026-08-19 while it was still pointed at `contact@tvc.farm`. Phases 1–4's
-webhook piece are done — see the checklist below; only message templates and a real reply UI
-remain.
+both emails a notification to `core-team@tvc.farm` (moved from `contact@tvc.farm` on 2026-08-19,
+same change as the Netlify Forms notification recipients — see `ARCHITECTURE.md`) and persists the
+message to Supabase, verified end-to-end with a real message on 2026-08-19 while it was still
+pointed at `contact@tvc.farm`. Staff can read and reply to conversations at `/internal/whatsapp`
+(2026-08-20, see Phase 4 below). Phases 1–4 are done — see the checklist below; only real message
+templates remain (needed for replies outside the 24-hour customer-service window).
 
 ## Direct Meta Cloud API integration — setup checklist
 
@@ -229,11 +230,32 @@ that Phase 3 step below is still open.
       call Resend, previously only reached from the member-update GitHub Action). No way to
       *reply* yet — that still needs a lightweight admin page hitting the Send Message API, left
       for later since replying isn't blocking anything else in this checklist.
-- [ ] **Build a reply admin page.** Decided 2026-08-19: a small page for staff to see incoming
-      messages and send replies via the Send Message API, gated behind the same Google Sign-In +
-      allow-list pattern already used for `/internal/photo-pool` (`photo-pool.mts`'s ID-token
-      verification + Sheet-backed allow-list), rather than a new auth mechanism. Not started —
-      explicitly deferred, no rush.
+- [x] **Build a reply admin page — done 2026-08-20.** `/internal/whatsapp` (a two-pane chat UI:
+      conversation list + selected thread, reply textarea, 15-second polling gated on tab
+      visibility), backed by `netlify/functions/whatsapp-admin.mts`. Gated behind the same Google
+      Sign-In + allow-list pattern as `/internal/photo-pool` — reuses `photo-pool.mts`'s
+      `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID` allow-list rather than standing up a second Sheet, since
+      it's the same core-team staff (a one-line env var change if that ever needs to diverge).
+      Message history is persisted in Postgres via the existing "TVC ERP" Supabase project
+      (`mljavkvkxdejvpzadnrp`) — two tables, `whatsapp_conversations` and `whatsapp_messages` (see
+      `supabase/migrations/0001_whatsapp_reply_admin.sql`), written through a small hand-rolled
+      PostgREST REST client (`scripts/lib/supabase.mjs`, no SDK dependency — matches this repo's
+      existing preference for small hand-rolled clients over heavy libraries, same as
+      `google-drive.mjs`/`google-id-token.mjs`). `whatsapp-webhook.mts` now persists every inbound
+      message (upsert conversation by phone, insert message row) alongside its existing email
+      notification — both happen independently, so a Supabase outage doesn't block the email or
+      vice versa. `wa_message_id` has a partial unique index and inserts use
+      `Prefer: resolution=ignore-duplicates`, making the webhook idempotent against Meta's
+      documented at-least-once delivery retries. Replying calls Meta's Send Message API directly
+      (`WHATSAPP_ACCESS_TOKEN` + new `WHATSAPP_PHONE_NUMBER_ID` env var, `1252670697930284`); a
+      failed send (most likely the 24-hour customer-service-window rejection, since no approved
+      templates exist yet — see the open Phase 4 item below) is recorded as `status='failed'` with
+      Meta's own error text, shown inline in the thread rather than silently dropped.
+      New Netlify env vars: `SUPABASE_URL` and `WHATSAPP_PHONE_NUMBER_ID` (both non-secret, set
+      directly) and `SUPABASE_SERVICE_ROLE_KEY` (secret — same handling as `WHATSAPP_ACCESS_TOKEN`:
+      Sharath pastes it into Netlify's UI, Claude never reads/handles the raw value). None of the
+      three are in `.env.example` — like the other `WHATSAPP_*` vars, they're pure Netlify-only,
+      never used by a local script.
 - [x] **Live in production — 2026-08-19.** All three prerequisites done:
       1. `WHATSAPP_VERIFY_TOKEN` (generated ourselves, set directly), `WHATSAPP_APP_SECRET` (from
          the Meta App Dashboard's Basic Settings, Sharath revealed/pasted it), and `RESEND_API_KEY`

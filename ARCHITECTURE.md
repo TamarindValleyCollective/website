@@ -11,13 +11,14 @@
 under the Netlify account owned by `contact@tvc.farm` (ownership moved there from a personal
 account on 2026-07-18). The site is almost entirely static (prerendered HTML/CSS/JS, no server
 at request time), with a small set of deliberate exceptions that need a serverless backend:
-six Netlify Functions (the site-wide chat assistant, the event-interest counter backing past
+seven Netlify Functions (the site-wide chat assistant, the event-interest counter backing past
 events' "Want this to happen again?" widget, `/api/photo-pool` backing the internal, unlinked
 photo review dashboard at `/internal/photo-pool`, `/api/enquiry` logging the membership
 enquiry form (`/join`) and the general enquiry form (`/contact`) to Google Sheets,
 `/api/rainfall` reading the community's rainfall-log Google Sheet live for the rainfall chart/
-table/monsoon stat on `/ecosystem/weather`, and `/api/whatsapp-webhook` receiving WhatsApp Cloud
-API events — see `WHATSAPP.md`), Netlify Blobs
+table/monsoon stat on `/ecosystem/weather`, `/api/whatsapp-webhook` receiving WhatsApp Cloud
+API events — see `WHATSAPP.md`, and `/api/whatsapp-admin` backing the internal, unlinked
+WhatsApp reply dashboard at `/internal/whatsapp`), Netlify Blobs
 (public storage for the event-interest counter — the site's only *readable* server-side state
 that isn't gated behind a secret; everything else below is either write-only or, for photo-pool,
 gated), and Netlify Forms (the membership enquiry form on `/join`, the general enquiry form on
@@ -61,6 +62,7 @@ flowchart TD
     subgraph SRC["1 · Source — github.com/TamarindValleyCollective/website (main)"]
         PAGES["src/pages/*.astro<br/>File-based routes: Home, About, Visit,<br/>Events, Ecosystem, Our Journey, Contact, etc."]
         INTERNALPAGE["src/pages/internal/photo-pool.astro<br/>Unlinked, noindex — photo review dashboard shell"]
+        INTERNALPAGE2["src/pages/internal/whatsapp.astro<br/>Unlinked, noindex — WhatsApp reply dashboard shell,<br/>two-pane chat UI, 15s visibility-gated polling"]
         COMPONENTS["src/components/<br/>Nav, Footer, PageHero, ChatWidget,<br/>CookieConsent, JourneyTimelineStandalone,<br/>BiodiversityExplorer, PhotoGallery"]
         CONTENT["src/content/*<br/>Markdown collections: events, partners,<br/>community-outreach, photos"]
         FUNC_SRC["netlify/functions/chat.mts<br/>Serverless function, calls Anthropic API server-side"]
@@ -68,7 +70,8 @@ flowchart TD
         FUNC_SRC3["netlify/functions/photo-pool.mts<br/>Serverless function, Google Sign-In gated —<br/>verifies ID token, checks a Sheet-backed<br/>allow-list, lists Inbox (+ uploader/EXIF/GPS/<br/>description), moves photos, saves descriptions"]
         FUNC_SRC4["netlify/functions/enquiry.mts<br/>Serverless function — appends a row to a<br/>Google Sheet per membership/general enquiry,<br/>fired via sendBeacon alongside each form's<br/>own native Netlify Forms submission"]
         FUNC_SRC5["netlify/functions/rainfall.mts<br/>Serverless function — reads the community's<br/>rainfall-log Sheet (monthly + daily tabs) on<br/>every page view, computes the monsoon<br/>to-date stat, returns JSON"]
-        FUNC_SRC6["netlify/functions/whatsapp-webhook.mts<br/>Serverless function — verifies Meta's GET<br/>handshake and each POST's HMAC signature,<br/>emails core-team@tvc.farm via Resend per<br/>incoming WhatsApp message (no inbox exists<br/>for Cloud API numbers otherwise)"]
+        FUNC_SRC6["netlify/functions/whatsapp-webhook.mts<br/>Serverless function — verifies Meta's GET<br/>handshake and each POST's HMAC signature,<br/>emails core-team@tvc.farm via Resend AND<br/>persists to Supabase per incoming WhatsApp<br/>message (no inbox exists for Cloud API<br/>numbers otherwise)"]
+        FUNC_SRC7["netlify/functions/whatsapp-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>lists conversations/messages from Supabase,<br/>sends replies via Meta's Send Message API"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
     end
 
@@ -87,6 +90,7 @@ flowchart TD
         APIFN4["Netlify Function: /api/enquiry<br/>Live and verified — Sheet ids set,<br/>Sheets shared Editor-access with the<br/>service account, real appends confirmed"]
         APIFN5["Netlify Function: /api/rainfall<br/>Reads the rainfall-log Sheet (view-access<br/>only, read-only path) — RAINFALL_SHEET_ID"]
         APIFN6["Netlify Function: /api/whatsapp-webhook<br/>Deployed and live — verified end-to-end<br/>with a real WhatsApp message on 2026-08-19"]
+        APIFN7["Netlify Function: /api/whatsapp-admin<br/>Awaiting SUPABASE_SERVICE_ROLE_KEY —<br/>SUPABASE_URL/WHATSAPP_PHONE_NUMBER_ID set"]
         BLOBS["Netlify Blobs: 'event-interest' store<br/>One JSON record per past event id —<br/>{count, emails[]}. Reset via<br/>netlify blobs:delete event-interest &lt;id&gt;"]
         FORMS["Netlify Forms<br/>Captures /contact membership + general<br/>enquiries, /visit/host-an-event inquiries,<br/>/visit camping·day-visit·trekking inquiries,<br/>and event-interest submissions with an email"]
     end
@@ -112,6 +116,7 @@ flowchart TD
 
     subgraph INTERNAL5["5 · Internal tool — staff-only, not part of the public site flow"]
         POOLDASH["Photo Pool dashboard (/internal/photo-pool)<br/>Google Sign-In gated client-side shell — shows uploader,<br/>EXIF/GPS, editable description; unlinked, noindex,<br/>sitemap-excluded"]
+        WHATSAPPDASH["WhatsApp dashboard (/internal/whatsapp)<br/>Google Sign-In gated two-pane chat UI — conversation<br/>list + thread + reply box; unlinked, noindex,<br/>sitemap-excluded"]
     end
 
     subgraph EXTERNAL["External services (called directly by the browser)"]
@@ -127,7 +132,8 @@ flowchart TD
         GIDTOKEN["Google Identity Services / OAuth<br/>Curator sign-in (browser) +<br/>ID token verification against<br/>Google's public JWKS (photo-pool.mts)"]
         GSC["Google Search Console API<br/>urlInspection.index.inspect — read-only,<br/>same service account (Full user on the<br/>property as of 2026-08-08),<br/>called from a local script only"]
         RESEND["Resend API<br/>Transactional email — noreply@tvc.farm,<br/>domain verified 2026-08-19,<br/>called from the GitHub Action above<br/>and whatsapp-webhook.mts"]
-        WAMETA["Meta WhatsApp Cloud API<br/>Sends inbound message + template-status<br/>events to /api/whatsapp-webhook;<br/>see WHATSAPP.md for setup status"]
+        WAMETA["Meta WhatsApp Cloud API<br/>Sends inbound message + template-status<br/>events to /api/whatsapp-webhook;<br/>receives replies from whatsapp-admin.mts;<br/>see WHATSAPP.md for setup status"]
+        SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages —<br/>service_role key, called server-side only<br/>(whatsapp-webhook.mts writes,<br/>whatsapp-admin.mts reads + writes)"]
     end
 
     SRC --> BUILD
@@ -143,6 +149,7 @@ flowchart TD
     APIFN5 -.->|"read monthly + daily tabs"| GSHEET
     WAMETA -.->|"POST webhook events"| APIFN6
     APIFN6 -.->|"send notification email"| RESEND
+    APIFN6 -.->|"upsert conversation,<br/>insert inbound message"| SUPABASE
     SCRIPT_CURATE -.->|"S3-compatible upload"| R2
     SCRIPT_CURATE -->|"writes"| CONTENT
     SCRIPT_CAPTION -.->|"vision request per photo"| ANTHROPIC
@@ -168,6 +175,12 @@ flowchart TD
     APIFN3 -.->|"read allow-list rows"| GSHEET
     APIFN3 -.->|"verify curator's ID token"| GIDTOKEN
     POOLDASH -.->|"Sign in with Google"| GIDTOKEN
+    WHATSAPPDASH --> APIFN7
+    APIFN7 -.->|"list/read conversations + messages"| SUPABASE
+    APIFN7 -.->|"send reply"| WAMETA
+    APIFN7 -.->|"read allow-list rows"| GSHEET
+    APIFN7 -.->|"verify staff ID token"| GIDTOKEN
+    WHATSAPPDASH -.->|"Sign in with Google"| GIDTOKEN
 
     classDef staticStyle fill:#e8f2ea,stroke:#17723b,color:#0f5029
     classDef netlifyStyle fill:#fdead3,stroke:#f78520,color:#9a5310
@@ -176,9 +189,9 @@ flowchart TD
     classDef localStyle fill:#eef0f5,stroke:#6b7280,color:#374151
     classDef ciStyle fill:#eef4fb,stroke:#3b6ea5,color:#1c3f5f
 
-    class PAGES,INTERNALPAGE,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH staticStyle
-    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,BLOBS,FORMS,ANTHROPIC netlifyStyle
-    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA externalStyle
+    class PAGES,INTERNALPAGE,INTERNALPAGE2,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH,WHATSAPPDASH staticStyle
+    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,FUNC_SRC7,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,APIFN7,BLOBS,FORMS,ANTHROPIC netlifyStyle
+    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,SUPABASE externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL,SCRIPT_GSC localStyle
     class GHA_MEMBER ciStyle
@@ -205,6 +218,12 @@ outside both the local machine and Netlify (the member-update-email workflow).
   shutter speed, ISO, focal length) and GPS (linked out to Google Maps) that Drive already
   extracts server-side on upload, and an editable description saved independently of the
   Approve/Reject decision via its own "Save" action.
+- **`src/pages/internal/whatsapp.astro`** — unlinked, `noindex`, sitemap-excluded. Same shell
+  pattern as `photo-pool.astro` (Google Sign-In gate, `sessionStorage`-held ID token, `authedFetch`
+  helper), backing a two-pane chat UI (see `netlify/functions/whatsapp-admin.mts` below): a
+  conversation list on the left, the selected thread on the right with a reply box. Polls every 15
+  seconds while the tab is visible (`document.visibilityState`) rather than real-time/WebSockets —
+  deliberately a small internal tool.
 - **`src/components/`** — shared UI: Nav, Footer, PageHero, the ChatWidget, the year-by-year
   `JourneyTimelineStandalone` component, the live `BiodiversityExplorer`, and `PhotoGallery`
   (In Pictures - filters, Grid/Map toggle, lightbox; its map, `photo-map.ts`, reuses the same
@@ -280,12 +299,31 @@ outside both the local machine and Netlify (the member-update-email workflow).
   SHA256 over the *raw* request body using `WHATSAPP_APP_SECRET`, the Meta app's own secret) before
   the payload is trusted at all — computed with Node's built-in `crypto`, no dependency added.
   Cloud API numbers have no inbox of their own (confirmed by checking every tab in WhatsApp
-  Manager and Meta's own docs), so every inbound message also gets emailed to `core-team@tvc.farm`
+  Manager and Meta's own docs), so every inbound message both gets emailed to `core-team@tvc.farm`
   via the same Resend REST API `scripts/send-member-update-email.mjs` already uses — the first
-  Netlify Function to call Resend, previously only reached from the member-update GitHub Action.
-  `message_template_status_update` events are logged only, not emailed, for now. Deployed but not
-  yet live: `WHATSAPP_VERIFY_TOKEN`/`WHATSAPP_APP_SECRET`/`RESEND_API_KEY` aren't set on Netlify
-  yet, and the URL isn't registered as a webhook in the Meta App Dashboard yet.
+  Netlify Function to call Resend, previously only reached from the member-update GitHub Action —
+  and is persisted to Supabase (`scripts/lib/supabase.mjs`, upserting a conversation by phone
+  number then inserting a message row), independently of the email send, so `/internal/whatsapp`
+  below can show and reply to it. `message_template_status_update` events are logged only, not
+  emailed, for now. **Live** — verified end-to-end with a real WhatsApp message on 2026-08-19.
+- **`netlify/functions/whatsapp-admin.mts`** — backs `/internal/whatsapp`, the WhatsApp reply
+  dashboard (2026-08-20). Same Google Sign-In auth pattern as `photo-pool.mts` (verifies the ID
+  token, checks it against `photo-pool.mts`'s own `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID` allow-list —
+  reused rather than a second Sheet, since it's the same core-team staff). Three routes: list
+  conversations, list one conversation's messages (both reading from Supabase via
+  `scripts/lib/supabase.mjs`), and send a reply — which calls Meta's Send Message API directly
+  (`WHATSAPP_ACCESS_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID`) and records the outcome as a message row,
+  `status='failed'` with Meta's own error text when it's rejected (most likely WhatsApp's 24-hour
+  customer-service-window rule, since no approved message templates exist yet) rather than a
+  generic failure.
+- **`scripts/lib/supabase.mjs`** — hand-rolled Supabase PostgREST REST client (`fetch` + the
+  `service_role` key, no `@supabase/supabase-js` dependency — matching this repo's preference for
+  small hand-rolled clients over heavy libraries) for the `whatsapp_conversations`/
+  `whatsapp_messages` tables in the "TVC ERP" Supabase project (see
+  `supabase/migrations/0001_whatsapp_reply_admin.sql`). Used by `whatsapp-webhook.mts` (write) and
+  `whatsapp-admin.mts` (read + write). `wa_message_id` has a partial unique index; inserts use
+  `Prefer: resolution=ignore-duplicates` so a re-delivered webhook (Meta documents at-least-once
+  delivery with retries) is a no-op rather than a duplicate row.
 - **`scripts/lib/google-id-token.mjs`** — verifies a Google Identity Services ID token: fetches
   and caches Google's JWKS, hardcodes the expected `RS256` algorithm (defense against
   algorithm-confusion attacks), verifies the RSA signature via Node's built-in `crypto`, and
@@ -625,6 +663,18 @@ never touches Netlify either.
   a real Google Sign-In with an allow-listed account (dashboard loads, list/thumbnail/approve/
   reject/description all functional) and the same account removed from the allow-list (clean 403
   with working recovery). Awaiting a push to `main` to actually go live.
+- **WhatsApp dashboard** (`/internal/whatsapp`, 2026-08-20) — staff-only, same shape as Photo Pool
+  above: unlinked, `noindex`, Google Sign-In gated, reusing the exact same curator allow-list
+  Sheet. Shows every conversation persisted by `whatsapp-webhook.mts` in the "TVC ERP" Supabase
+  project, oldest-inbound-message-first within a thread; sending a reply calls Meta's Send Message
+  API directly and shows the result inline — a failed send (most likely the 24-hour
+  customer-service-window rule, since no approved templates exist yet) is shown as a red bubble
+  with WhatsApp's own error text, not silently dropped. Polls every 15 seconds while the tab is
+  visible; no real-time/WebSockets, no read receipts, no message pagination beyond the newest
+  200 per thread / 50 conversations — deliberately a small internal tool, not a CRM. **Built,
+  awaiting `SUPABASE_SERVICE_ROLE_KEY`**: `SUPABASE_URL` and `WHATSAPP_PHONE_NUMBER_ID` are set on
+  Netlify (all deploy contexts); the Supabase service-role key still needs pasting into Netlify's
+  UI by hand (same secret-handling rule as `WHATSAPP_ACCESS_TOKEN`) before this can go live.
 
 ## Current Production Status
 
@@ -648,13 +698,15 @@ never touches Netlify either.
 | Live rainfall chart/table/monsoon stat (`/ecosystem/weather`, `/api/rainfall`) | ✅ Live — reads the community's rainfall-log Sheet live, `RAINFALL_SHEET_ID` set on Netlify (all deploy contexts); multi-year line chart with year-filter checkboxes; verified against `tvc.farm/ecosystem/weather` and `tvc.farm/api/rainfall` directly |
 | Site search (nav icon / `/` key) | 🟡 Built, verified locally (not yet deployed) — switched from a title/description-only index to Pagefind, which indexes each non-`noindex` page's full `<main>` content; confirmed via a local production build + `astro preview` that in-body content (e.g. member names on `/people/members/`) is now searchable and that `noindex` pages (404, thanks pages, `/internal/photo-pool`, `/people/members/story-guide`) are correctly excluded from the index |
 | Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | ✅ Live — Drive folders, service account, Google Sign-In OAuth client, curator allow-list Sheet, all Netlify env vars configured; verified against production directly (`/internal/photo-pool` returns 200, `/api/photo-pool` returns 401 unauthenticated as expected for the Google Sign-In-gated function) |
-| WhatsApp webhook (`/api/whatsapp-webhook`) | ✅ Live — verified end-to-end with a real WhatsApp message to `+91 80 4110 9754` on 2026-08-19, triggering a real notification email (then to `contact@tvc.farm`, since moved to `core-team@tvc.farm` the same day). Two real bugs found and fixed along the way: the number wasn't actually registered for Cloud API messaging (blocked by a stuck migration from the old AiSensy WABA, which still held the number), and the WABA was never subscribed to the app's webhook (`POST /{waba-id}/subscribed_apps` — a separate step from the App Dashboard's webhook config). See `WHATSAPP.md` |
+| WhatsApp webhook (`/api/whatsapp-webhook`) | ✅ Live — verified end-to-end with a real WhatsApp message to `+91 80 4110 9754` on 2026-08-19, triggering a real notification email (then to `contact@tvc.farm`, since moved to `core-team@tvc.farm` the same day). Two real bugs found and fixed along the way: the number wasn't actually registered for Cloud API messaging (blocked by a stuck migration from the old AiSensy WABA, which still held the number), and the WABA was never subscribed to the app's webhook (`POST /{waba-id}/subscribed_apps` — a separate step from the App Dashboard's webhook config). Now also persists every inbound message to Supabase (2026-08-20). See `WHATSAPP.md` |
+| WhatsApp reply dashboard (`/internal/whatsapp`, `/api/whatsapp-admin`) | 🟡 Built, not yet deployed — Supabase tables + migration applied, `SUPABASE_URL`/`WHATSAPP_PHONE_NUMBER_ID` set on Netlify; awaiting `SUPABASE_SERVICE_ROLE_KEY` (Sharath pastes it manually, same as `WHATSAPP_ACCESS_TOKEN`) and a push to `main` before it can be verified against production |
 
 The membership/general enquiry forms are fully live — Sheets logging verified with real
 production `POST`s, and email routes to `core-team@tvc.farm` via the site-wide Netlify Forms
-notification rule. Every feature in the table above has now been checked
-directly against production (page/API responses, or Netlify's own Forms API). The one open item
-is the Host an Event form: it's registered correctly with Netlify, but has zero real submissions
-to date, so its full round-trip hasn't actually been exercised.
+notification rule. Every feature in the table above except the two noted below has been checked
+directly against production (page/API responses, or Netlify's own Forms API). The Host an Event
+form is registered correctly with Netlify, but has zero real submissions to date, so its full
+round-trip hasn't actually been exercised. The WhatsApp reply dashboard is built but not yet
+deployed — see the table row above for what's left.
 The Netlify project itself is owned by the `contact@tvc.farm` account (moved there from a
 personal account on 2026-07-18).

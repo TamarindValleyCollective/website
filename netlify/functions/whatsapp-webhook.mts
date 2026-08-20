@@ -18,11 +18,13 @@
 // Meta's Cloud API gives WhatsApp Business numbers no inbox of their own —
 // confirmed by checking every tab in WhatsApp Manager and Meta's own docs,
 // see WHATSAPP.md's Phase 4 notes. Without something surfacing incoming
-// messages, they'd land here and go nowhere. Minimum viable version: email
-// core-team@tvc.farm via Resend (the same REST API scripts/send-member-update-
-// email.mjs already uses) for every inbound message. A proper reply UI is a
-// separate, later piece of work.
+// messages, they'd land here and go nowhere. Every inbound message both
+// emails core-team@tvc.farm via Resend (the same REST API scripts/send-
+// member-update-email.mjs already uses) and is persisted to Supabase (see
+// scripts/lib/supabase.mjs) so /internal/whatsapp (netlify/functions/
+// whatsapp-admin.mts) can show and reply to it.
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { upsertConversation, insertMessage } from '../../scripts/lib/supabase.mjs';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const FROM = 'TVC Website <noreply@tvc.farm>';
@@ -97,11 +99,34 @@ async function notifyIncomingMessage(message: WhatsAppMessage, contact: WhatsApp
 <body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f;">
   <p><strong>${escapeHtml(senderName)}</strong> (+${escapeHtml(senderNumber)}) sent a WhatsApp message at ${escapeHtml(receivedAt)}:</p>
   <blockquote style="margin:12px 0; padding:12px 16px; background:#f4f1e6; border-left:3px solid #294a36;">${escapeHtml(bodyText)}</blockquote>
-  <p style="font-size:13px; color:#57604f;">There's no inbox for this yet — replying requires the WhatsApp Business API directly. See WHATSAPP.md's Phase 4 notes for the planned reply UI.</p>
+  <p style="font-size:13px; color:#57604f;">Reply from <a href="https://tvc.farm/internal/whatsapp">tvc.farm/internal/whatsapp</a> — sign in with your Google account.</p>
 </body>
 </html>`;
 
   await sendNotificationEmail(subject, html);
+}
+
+// Kept in its own try/catch, independent of notifyIncomingMessage — a
+// Supabase outage shouldn't block the email notification (or vice versa),
+// and one message's persistence failure in a batch shouldn't block the
+// next message's.
+async function persistIncomingMessage(message: WhatsAppMessage, contact: WhatsAppContact | undefined): Promise<void> {
+  try {
+    const bodyText = message.type === 'text' ? (message.text?.body ?? '') : `[${message.type} message — not shown here]`;
+    const conversation = await upsertConversation({
+      waPhone: message.from,
+      displayName: contact?.profile?.name,
+      lastMessageAt: new Date(Number(message.timestamp) * 1000).toISOString(),
+    });
+    await insertMessage({
+      conversationId: conversation.id,
+      direction: 'inbound',
+      body: bodyText,
+      waMessageId: message.id,
+    });
+  } catch (err) {
+    console.error('[whatsapp-webhook] Failed to persist inbound message', err);
+  }
 }
 
 export default async (req: Request): Promise<Response> => {
@@ -155,7 +180,9 @@ export default async (req: Request): Promise<Response> => {
         if (change?.field === 'messages' && Array.isArray(value.messages)) {
           const contactsByWaId = new Map<string, WhatsAppContact>((value.contacts ?? []).map((c: WhatsAppContact) => [c.wa_id, c]));
           for (const message of value.messages as WhatsAppMessage[]) {
-            await notifyIncomingMessage(message, contactsByWaId.get(message.from));
+            const contact = contactsByWaId.get(message.from);
+            await notifyIncomingMessage(message, contact);
+            await persistIncomingMessage(message, contact);
           }
         } else if (change?.field === 'message_template_status_update') {
           // Low-volume, infrequent — logged only for now rather than also
