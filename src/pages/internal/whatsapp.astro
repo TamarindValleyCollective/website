@@ -257,8 +257,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   /* Initials-based, not a photo — Meta's Cloud API doesn't expose WhatsApp
      contact profile pictures (only name + phone come through the webhook),
      so this is the same fallback WhatsApp's own client shows for a contact
-     with no photo, not a lesser stand-in for one we could have used. */
-  .avatar {
+     with no photo, not a lesser stand-in for one we could have used.
+     :global() here for the same reason as .bubble/.conversation-item above:
+     the list and per-message avatars are document.createElement'd in the
+     script, so a scoped rule would only ever match the one static instance
+     (#thread-avatar in the header) and silently no-op on the rest — which
+     is exactly what happened here: no background, no white text, no
+     border-radius, just bare initials with none of this rule's styling. */
+  :global(.avatar) {
     flex: 0 0 auto;
     display: flex;
     align-items: center;
@@ -269,13 +275,13 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     letter-spacing: 0.02em;
   }
 
-  .avatar-sm {
+  :global(.avatar-sm) {
     width: 36px;
     height: 36px;
     font-size: 0.76rem;
   }
 
-  .avatar-lg {
+  :global(.avatar-lg) {
     width: 40px;
     height: 40px;
     font-size: 0.9rem;
@@ -441,7 +447,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     flex-direction: row-reverse;
   }
 
-  .avatar-xs {
+  :global(.avatar-xs) {
     width: 22px;
     height: 22px;
     font-size: 0.6rem;
