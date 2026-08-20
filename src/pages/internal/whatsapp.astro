@@ -9,8 +9,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
 <BaseLayout title="WhatsApp" description="Internal WhatsApp reply dashboard." noindex>
   <section class="section wrapper">
-    <h1>WhatsApp</h1>
-    <p class="hint">Reply to messages sent to +91 80 4110 9754. Free-form replies only work within 24 hours of the customer's last message — outside that window, WhatsApp will reject the send.</p>
+    <div class="page-head">
+      <h1>WhatsApp</h1>
+      <p class="page-head-sub">+91 80 4110 9754 · replies only send within 24h of the customer's last message</p>
+      <button type="button" id="logout-btn" class="logout-btn" hidden>Sign out</button>
+    </div>
 
     <div id="gate" class="gate card">
       <p class="gate-copy">Sign in with the Google account you use for internal tools.</p>
@@ -26,23 +29,39 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
     <div id="app" class="app" hidden>
       <div class="conversations card">
-        <p id="conversations-status" class="hint" style="margin: 12px 16px;">Loading…</p>
         <ul id="conversations-list"></ul>
+        <p id="conversations-status" class="pane-status" hidden></p>
+        <div id="conversations-skeleton" class="skeleton-list" aria-hidden="true">
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+        </div>
+        <button type="button" id="load-more-conversations" class="load-more-btn" hidden>Load more</button>
       </div>
       <div class="thread card">
-        <p id="thread-empty" class="hint" style="margin: 16px;">Select a conversation.</p>
+        <p id="thread-empty" class="pane-status">Select a conversation.</p>
         <div id="thread-header" class="thread-header" hidden>
-          <button type="button" id="back-to-list" class="back-btn" aria-label="Back to conversations">‹ Back</button>
-          <strong id="thread-name"></strong>
-          <span id="thread-phone" class="hint"></span>
+          <button type="button" id="back-to-list" class="back-btn" aria-label="Back to conversations">‹</button>
+          <span id="thread-avatar" class="avatar avatar-lg" aria-hidden="true"></span>
+          <div>
+            <strong id="thread-name"></strong>
+            <span id="thread-phone" class="thread-phone"></span>
+          </div>
         </div>
         <div id="messages" class="messages" hidden></div>
-        <form id="reply-form" class="reply-form" hidden>
-          <textarea id="reply-input" placeholder="Type a reply…" required></textarea>
-          <button type="submit" id="reply-send">Send</button>
-        </form>
-        <p class="hint" style="margin: 4px 16px 8px;">Your name is added to the message automatically, since more than one person replies from this inbox.</p>
-        <p id="reply-status" class="hint" style="margin: 4px 16px;" hidden></p>
+        <div id="composer" class="composer" hidden>
+          <div class="composer-signature">
+            <label for="responder-name">Signing as</label>
+            <input type="text" id="responder-name" placeholder="Your name" required />
+          </div>
+          <form id="reply-form" class="reply-form">
+            <textarea id="reply-input" placeholder="Type a reply…" title="⌘/Ctrl + Enter to send" required></textarea>
+            <button type="submit" id="reply-send">Send</button>
+          </form>
+          <p id="reply-status" class="reply-status" hidden></p>
+        </div>
       </div>
     </div>
   </section>
@@ -51,7 +70,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 <script is:inline src="https://accounts.google.com/gsi/client"></script>
 
 <style>
-  /* .app/.thread-header/.messages/.reply-form below all set `display` on a
+  /* .app/.thread-header/.messages/.composer below all set `display` on a
      hidden-toggled element — a bare class selector ties `[hidden]`'s UA
      `display: none` in specificity, and author styles win ties over UA
      styles, so without this the element would render regardless of the
@@ -61,9 +80,56 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     display: none !important;
   }
 
-  .hint {
+  /* This is a tool, not a landing page — the site's default 96px section
+     padding is calibrated for marketing pages and just pushes the actual
+     workspace down. Scoped to this page only (Astro scopes .section.wrapper
+     here to this file), doesn't touch the shared class elsewhere. */
+  .section.wrapper {
+    padding-top: 32px;
+    padding-bottom: 32px;
+  }
+
+  .page-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+
+  .page-head h1 {
+    margin: 0;
+    font-size: 1.6rem;
+  }
+
+  .page-head-sub {
+    margin: 0;
+    font-size: 0.85rem;
     color: var(--tvc-ink-soft);
-    margin: -8px 0 24px;
+  }
+
+  .logout-btn {
+    margin-left: auto;
+    appearance: none;
+    border: 1px solid var(--tvc-line);
+    background: #fff;
+    border-radius: 999px;
+    padding: 5px 14px;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+    cursor: pointer;
+    transition: background-color 150ms ease-out;
+  }
+
+  .logout-btn:hover {
+    background: var(--tvc-cream);
+  }
+
+  .logout-btn:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
   }
 
   .card {
@@ -76,7 +142,6 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   .gate {
     max-width: 400px;
     padding: 20px 24px;
-    margin-bottom: 24px;
   }
 
   .gate-copy {
@@ -93,14 +158,15 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
   .app {
     display: grid;
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: 300px 1fr;
     gap: 20px;
-    height: 70vh;
-    min-height: 480px;
+    height: 75vh;
+    min-height: 520px;
   }
 
   .conversations {
     overflow-y: auto;
+    position: relative;
   }
 
   .conversations ul {
@@ -109,39 +175,191 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     padding: 0;
   }
 
+  .pane-status {
+    margin: 0;
+    padding: 32px 16px;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  /* Loading skeleton, shown until the first conversations response lands —
+     see the script's toggling of #conversations-skeleton. Content-shaped
+     placeholders rather than a spinner, per this codebase's preference for
+     skeleton states over mid-content spinners on task-oriented surfaces. */
+  .skeleton-list {
+    padding: 8px 16px;
+  }
+
+  .skeleton-row {
+    height: 52px;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    background: linear-gradient(90deg, var(--tvc-line) 25%, var(--tvc-cream) 50%, var(--tvc-line) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-pulse 1.6s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton-row {
+      animation: none;
+      background: var(--tvc-line);
+    }
+  }
+
+  @keyframes skeleton-pulse {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+
   /* These rules target elements created client-side by document.createElement
      (see the script below) rather than written in this file's template —
      Astro only stamps its scoping data-attribute onto elements present in
      the template at build time, so a bare (scoped) selector here would never
      match them. :global() opts these specific selectors out of scoping. */
   :global(.conversation-item) {
-    display: block;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
     width: 100%;
     text-align: left;
-    padding: 12px 16px;
+    padding: 10px 16px;
     border: none;
     border-bottom: 1px solid var(--tvc-line);
     background: none;
     cursor: pointer;
     font: inherit;
+    transition: background-color 150ms ease-out;
   }
 
-  :global(.conversation-item:hover),
+  /* Hover and active read as genuinely different states, not the same tint
+     with a coincidental overlap — active (persistent, this thread is open)
+     is the more saturated green; hover (transient, just passing the mouse
+     over it) is the neutral cream already used for hover elsewhere on the
+     site. */
+  :global(.conversation-item:hover) {
+    background: var(--tvc-cream);
+  }
+
   :global(.conversation-item.active) {
     background: var(--tvc-green-tint);
   }
 
+  :global(.conversation-item:focus-visible) {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: -2px;
+  }
+
+  /* Initials-based, not a photo — Meta's Cloud API doesn't expose WhatsApp
+     contact profile pictures (only name + phone come through the webhook),
+     so this is the same fallback WhatsApp's own client shows for a contact
+     with no photo, not a lesser stand-in for one we could have used. */
+  .avatar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: #fff;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .avatar-sm {
+    width: 36px;
+    height: 36px;
+    font-size: 0.76rem;
+  }
+
+  .avatar-lg {
+    width: 40px;
+    height: 40px;
+    font-size: 0.9rem;
+  }
+
+  :global(.conversation-item .text) {
+    flex: 1;
+    min-width: 0;
+  }
+
+  :global(.conversation-item .name-row) {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
   :global(.conversation-item .name) {
     font-weight: 600;
-    font-size: 0.9rem;
-    display: block;
+    font-size: 0.88rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   :global(.conversation-item .meta) {
-    font-size: 0.76rem;
+    flex: 0 0 auto;
+    font-size: 0.72rem;
     color: var(--tvc-ink-soft);
+  }
+
+  :global(.conversation-item .preview) {
     display: block;
     margin-top: 2px;
+    font-size: 0.78rem;
+    color: var(--tvc-ink-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Unread is a shared, inbox-wide fact (see the migration comment on
+     last_read_at) — a dot + bold text, not a per-user marker. Placed at the
+     row's trailing edge, same corner WhatsApp's own client uses for its
+     unread badge, rather than on the avatar (which already carries enough
+     information as the contact's identity marker). */
+  :global(.conversation-item .unread-dot) {
+    flex: 0 0 auto;
+    align-self: center;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--tvc-orange-cta);
+  }
+
+  :global(.conversation-item.unread .preview) {
+    color: var(--tvc-ink);
+    font-weight: 500;
+  }
+
+  .load-more-btn {
+    display: block;
+    width: calc(100% - 32px);
+    margin: 12px 16px;
+    appearance: none;
+    border: 1px solid var(--tvc-line);
+    background: #fff;
+    border-radius: 999px;
+    padding: 8px 0;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+    cursor: pointer;
+    transition: background-color 150ms ease-out;
+  }
+
+  .load-more-btn:hover {
+    background: var(--tvc-cream);
+  }
+
+  .load-more-btn:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
   }
 
   .thread {
@@ -151,23 +369,46 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
 
   .thread-header {
-    padding: 12px 16px;
+    padding: 10px 16px;
     border-bottom: 1px solid var(--tvc-line);
     display: flex;
-    align-items: baseline;
-    gap: 8px;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .thread-header strong {
+    font-size: 0.95rem;
+  }
+
+  .thread-phone {
+    display: block;
+    font-size: 0.76rem;
+    color: var(--tvc-ink-soft);
   }
 
   .back-btn {
     display: none;
     appearance: none;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
     border: none;
+    border-radius: 50%;
     background: none;
     color: var(--tvc-green-dark);
-    font: inherit;
-    font-weight: 600;
+    font-size: 1.2rem;
+    line-height: 1;
     cursor: pointer;
-    padding: 4px 8px 4px 0;
+  }
+
+  .back-btn:hover {
+    background: var(--tvc-cream);
+  }
+
+  .back-btn:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
   }
 
   .messages {
@@ -177,25 +418,53 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     display: flex;
     flex-direction: column;
     gap: 10px;
-  }
-
-  :global(.bubble) {
-    max-width: 70%;
-    padding: 8px 12px;
-    border-radius: 12px;
-    font-size: 0.88rem;
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-
-  :global(.bubble.inbound) {
-    align-self: flex-start;
     background: var(--tvc-cream);
   }
 
-  :global(.bubble.outbound) {
+  /* One row per message: avatar + bubble, mirrored for outbound so the
+     avatar always sits on the "who sent this" side — the customer's on
+     inbound, whichever staff member replied on outbound (keyed by the name
+     they typed into "Signing as", same avatar system as the header/list). */
+  :global(.message-row) {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    max-width: 78%;
+  }
+
+  :global(.message-row.inbound) {
+    align-self: flex-start;
+  }
+
+  :global(.message-row.outbound) {
     align-self: flex-end;
+    flex-direction: row-reverse;
+  }
+
+  .avatar-xs {
+    width: 22px;
+    height: 22px;
+    font-size: 0.6rem;
+  }
+
+  :global(.bubble) {
+    padding: 8px 12px;
+    border-radius: 14px;
+    font-size: 0.88rem;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+    min-width: 0;
+  }
+
+  :global(.bubble.inbound) {
+    background: #fff;
+    border-bottom-left-radius: 4px;
+  }
+
+  :global(.bubble.outbound) {
     background: var(--tvc-green-tint);
+    border-bottom-right-radius: 4px;
   }
 
   :global(.bubble.failed) {
@@ -210,18 +479,45 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     color: #b3261e;
   }
 
-  :global(.bubble .bubble-time) {
+  :global(.bubble .bubble-meta) {
     display: block;
     margin-top: 4px;
     font-size: 0.7rem;
     color: var(--tvc-ink-soft);
   }
 
+  .composer {
+    border-top: 1px solid var(--tvc-line);
+    background: #fff;
+  }
+
+  .composer-signature {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px 0;
+    font-size: 0.76rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .composer-signature input {
+    flex: 0 1 180px;
+    padding: 3px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 999px;
+    font: inherit;
+    font-size: 0.78rem;
+  }
+
+  .composer-signature input:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 1px;
+  }
+
   .reply-form {
     display: flex;
     gap: 8px;
-    padding: 12px 16px;
-    border-top: 1px solid var(--tvc-line);
+    padding: 8px 16px 12px;
   }
 
   .reply-form textarea {
@@ -236,6 +532,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     resize: vertical;
   }
 
+  .reply-form textarea:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 1px;
+  }
+
   .reply-form button {
     appearance: none;
     border: 1px solid var(--tvc-green);
@@ -246,6 +547,16 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     font: inherit;
     font-weight: 600;
     cursor: pointer;
+    transition: background-color 150ms ease-out;
+  }
+
+  .reply-form button:hover:not(:disabled) {
+    background: var(--tvc-green-tint);
+  }
+
+  .reply-form button:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
   }
 
   .reply-form button:disabled {
@@ -253,8 +564,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     cursor: default;
   }
 
+  .reply-status {
+    margin: 0 16px 10px;
+    font-size: 0.8rem;
+    color: #b3261e;
+  }
+
   /* Below a breakpoint, show one pane at a time (list, then thread) instead
-     of squeezing a 280px sidebar next to the thread — the two-column grid
+     of squeezing a 300px sidebar next to the thread — the two-column grid
      doesn't leave enough room for either on a phone. #app.thread-open is
      toggled by the script when a conversation is selected / the back button
      is pressed; the class is harmless above the breakpoint since nothing
@@ -268,7 +585,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     .app {
       grid-template-columns: 1fr;
       grid-template-rows: 1fr;
-      height: calc(100vh - 220px);
+      height: calc(100vh - 160px);
       min-height: 360px;
     }
 
@@ -285,11 +602,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     }
 
     .back-btn {
-      display: inline-block;
+      display: inline-flex;
     }
 
-    :global(.bubble) {
-      max-width: 85%;
+    :global(.message-row) {
+      max-width: 88%;
     }
   }
 </style>
@@ -298,6 +615,12 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   declare const google: any;
 
   const STORAGE_KEY = 'tvc-whatsapp-idtoken';
+  // This inbox is signed into from one shared Google account used by several
+  // staff, so the ID token's own name claim can't tell them apart — each
+  // person types their own name once, remembered on that browser (localStorage,
+  // not sessionStorage, so it survives across tabs/sessions on the same
+  // device) rather than re-typed every reply.
+  const RESPONDER_NAME_KEY = 'tvc-whatsapp-responder-name';
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
   const POLL_INTERVAL_MS = 15000;
 
@@ -306,6 +629,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     waPhone: string;
     displayName: string | null;
     lastMessageAt: string;
+    unread: boolean;
+    lastMessagePreview: string | null;
+    lastMessageDirection: 'inbound' | 'outbound' | null;
   }
 
   interface Message {
@@ -322,22 +648,32 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   const forbidden = document.getElementById('forbidden') as HTMLElement;
   const forbiddenEmail = document.getElementById('forbidden-email') as HTMLElement;
   const useDifferentAccountBtn = document.getElementById('use-different-account') as HTMLButtonElement;
+  const logoutBtn = document.getElementById('logout-btn') as HTMLButtonElement;
   const app = document.getElementById('app') as HTMLElement;
   const conversationsStatus = document.getElementById('conversations-status') as HTMLElement;
+  const conversationsSkeleton = document.getElementById('conversations-skeleton') as HTMLElement;
   const conversationsList = document.getElementById('conversations-list') as HTMLElement;
+  const loadMoreBtn = document.getElementById('load-more-conversations') as HTMLButtonElement;
   const threadEmpty = document.getElementById('thread-empty') as HTMLElement;
   const threadHeader = document.getElementById('thread-header') as HTMLElement;
   const backToListBtn = document.getElementById('back-to-list') as HTMLButtonElement;
+  const threadAvatar = document.getElementById('thread-avatar') as HTMLElement;
   const threadName = document.getElementById('thread-name') as HTMLElement;
   const threadPhone = document.getElementById('thread-phone') as HTMLElement;
   const messagesEl = document.getElementById('messages') as HTMLElement;
+  const composer = document.getElementById('composer') as HTMLElement;
+  const responderNameInput = document.getElementById('responder-name') as HTMLInputElement;
   const replyForm = document.getElementById('reply-form') as HTMLFormElement;
   const replyInput = document.getElementById('reply-input') as HTMLTextAreaElement;
   const replySend = document.getElementById('reply-send') as HTMLButtonElement;
   const replyStatus = document.getElementById('reply-status') as HTMLElement;
 
   let selectedConversationId: string | null = null;
+  let selectedConversation: Conversation | null = null;
   let pollTimer: ReturnType<typeof setInterval> | null = null;
+  // Re-requested with a growing limit rather than an offset — see
+  // listConversations' comment in scripts/lib/supabase.mjs for why.
+  let conversationsLimit = 100;
 
   function getToken(): string | null {
     return sessionStorage.getItem(STORAGE_KEY);
@@ -363,6 +699,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     gate.hidden = false;
     forbidden.hidden = true;
     app.hidden = true;
+    logoutBtn.hidden = true;
     stopPolling();
     gateError.hidden = !message;
     if (message) gateError.textContent = message;
@@ -372,6 +709,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   function showForbidden(token: string) {
     gate.hidden = true;
     app.hidden = true;
+    logoutBtn.hidden = true;
     stopPolling();
     forbidden.hidden = false;
     forbiddenEmail.textContent = decodeTokenEmail(token);
@@ -405,6 +743,61 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     return `${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${time}`;
   }
 
+  // Outbound bodies are stored (and sent to the customer) as
+  // "{text}\n\n- {name}" — see whatsapp-admin.mts's handleReply. Stripping
+  // that back out here is purely cosmetic (both for the list preview and
+  // the message bubble below), so the admin view can show the signature
+  // separately/smaller; the actual WhatsApp message the customer received
+  // is untouched.
+  const SIGNATURE_PATTERN = /\n\n- (.+)$/;
+
+  function stripSignature(body: string): { text: string; signature: string | null } {
+    const match = body.match(SIGNATURE_PATTERN);
+    return match ? { text: body.slice(0, match.index), signature: match[1] } : { text: body, signature: null };
+  }
+
+  // No real photo to show — Meta's Cloud API never sends one (see the CSS
+  // comment on .avatar) — so this mirrors WhatsApp's own initials fallback:
+  // first letter of up to the first two words, a color picked deterministically
+  // from the phone number so the same contact always gets the same color.
+  // The raw --tvc-orange/--tvc-sky-blue tokens only hit 3.5-3.7:1 contrast
+  // against the white initials text (fails WCAG AA's 4.5:1 for text this
+  // small) — using this codebase's existing darker "-text" variants of the
+  // same two colors (already defined in global.css for the same contrast
+  // reason, just in a different context) instead, which clear 5.3:1+.
+  const AVATAR_COLORS = [
+    'var(--tvc-green)',
+    'var(--tvc-orange-text)',
+    'var(--tvc-earth-brown)',
+    'var(--tvc-sky-blue-text)',
+    'var(--tvc-green-dark)',
+  ];
+
+  function getInitials(displayName: string | null, waPhone: string): string {
+    const source = displayName?.trim();
+    if (!source) return waPhone.slice(-2);
+    const words = source.split(/\s+/).filter(Boolean);
+    return words.length > 1 ? `${words[0][0]}${words[1][0]}`.toUpperCase() : source.slice(0, 2).toUpperCase();
+  }
+
+  function getAvatarColor(waPhone: string): string {
+    let hash = 0;
+    for (let i = 0; i < waPhone.length; i++) hash = (hash * 31 + waPhone.charCodeAt(i)) >>> 0;
+    return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+  }
+
+  function buildAvatarEl(initials: string, colorKey: string, size: 'xs' | 'sm' | 'lg'): HTMLElement {
+    const avatar = document.createElement('span');
+    avatar.className = `avatar avatar-${size}`;
+    avatar.textContent = initials;
+    avatar.style.background = getAvatarColor(colorKey);
+    return avatar;
+  }
+
+  function buildAvatar(conv: Pick<Conversation, 'displayName' | 'waPhone'>, size: 'xs' | 'sm' | 'lg'): HTMLElement {
+    return buildAvatarEl(getInitials(conv.displayName, conv.waPhone), conv.waPhone, size);
+  }
+
   function renderConversations(conversations: Conversation[]) {
     conversationsList.innerHTML = '';
     if (conversations.length === 0) {
@@ -419,7 +812,17 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'conversation-item';
+      btn.dataset.conversationId = conv.id;
       if (conv.id === selectedConversationId) btn.classList.add('active');
+      if (conv.unread) btn.classList.add('unread');
+
+      const avatar = buildAvatar(conv, 'sm');
+
+      const text = document.createElement('span');
+      text.className = 'text';
+
+      const nameRow = document.createElement('span');
+      nameRow.className = 'name-row';
 
       const name = document.createElement('span');
       name.className = 'name';
@@ -429,7 +832,24 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       meta.className = 'meta';
       meta.textContent = formatTimestamp(conv.lastMessageAt);
 
-      btn.append(name, meta);
+      nameRow.append(name, meta);
+
+      const preview = document.createElement('span');
+      preview.className = 'preview';
+      if (conv.lastMessagePreview) {
+        const { text: previewText } = stripSignature(conv.lastMessagePreview);
+        preview.textContent = conv.lastMessageDirection === 'outbound' ? `You: ${previewText}` : previewText;
+      }
+
+      text.append(nameRow, preview);
+      btn.append(avatar, text);
+
+      if (conv.unread) {
+        const dot = document.createElement('span');
+        dot.className = 'unread-dot';
+        btn.appendChild(dot);
+      }
+
       btn.addEventListener('click', () => selectConversation(conv));
       li.appendChild(btn);
       conversationsList.appendChild(li);
@@ -439,12 +859,30 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   function renderMessages(messages: Message[]) {
     messagesEl.innerHTML = '';
     for (const m of messages) {
+      const { text: bodyText, signature } = m.direction === 'outbound' ? stripSignature(m.body) : { text: m.body, signature: null };
+
+      const row = document.createElement('div');
+      row.className = `message-row ${m.direction}`;
+
+      // Inbound avatars match the customer's avatar everywhere else (list,
+      // header) — keyed by their phone. Outbound avatars are keyed by
+      // whichever staff name is in the signature, so different repliers
+      // in the same thread get visibly different avatars, same as the
+      // customer would see distinct people in a group chat.
+      const avatar =
+        m.direction === 'inbound' && selectedConversation
+          ? buildAvatar(selectedConversation, 'xs')
+          : signature
+            ? buildAvatarEl(getInitials(signature, signature), signature, 'xs')
+            : null;
+      if (avatar) row.appendChild(avatar);
+
       const bubble = document.createElement('div');
       bubble.className = `bubble ${m.direction}`;
       if (m.status === 'failed') bubble.classList.add('failed');
 
       const body = document.createElement('span');
-      body.textContent = m.body;
+      body.textContent = bodyText;
       bubble.appendChild(body);
 
       if (m.status === 'failed' && m.errorMessage) {
@@ -454,19 +892,21 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         bubble.appendChild(err);
       }
 
-      const time = document.createElement('span');
-      time.className = 'bubble-time';
-      time.textContent = formatTimestamp(m.createdAt);
-      bubble.appendChild(time);
+      const meta = document.createElement('span');
+      meta.className = 'bubble-meta';
+      meta.textContent = signature ? `${formatTimestamp(m.createdAt)} · ${signature}` : formatTimestamp(m.createdAt);
+      bubble.appendChild(meta);
 
-      messagesEl.appendChild(bubble);
+      row.appendChild(bubble);
+      messagesEl.appendChild(row);
     }
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
   async function loadConversations() {
     try {
-      const res = await authedFetch('/api/whatsapp-admin/conversations');
+      const res = await authedFetch(`/api/whatsapp-admin/conversations?limit=${conversationsLimit}`);
+      conversationsSkeleton.hidden = true;
       if (!res.ok) {
         conversationsStatus.hidden = false;
         conversationsStatus.textContent = 'Failed to load conversations.';
@@ -474,8 +914,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       }
       const data = (await res.json()) as { conversations: Conversation[] };
       renderConversations(data.conversations);
+      // A full page back implies there may be more beyond it; a short page
+      // means we've reached the end. Not exact (an exact-multiple total
+      // shows one extra "Load more" click that returns nothing new), but
+      // avoids a separate count query for a small internal tool.
+      loadMoreBtn.hidden = data.conversations.length < conversationsLimit;
     } catch {
       // authedFetch already showed the gate/forbidden panel for 401/403.
+      conversationsSkeleton.hidden = true;
     }
   }
 
@@ -493,13 +939,24 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
   function selectConversation(conv: Conversation) {
     selectedConversationId = conv.id;
+    selectedConversation = conv;
     threadEmpty.hidden = true;
     threadHeader.hidden = false;
     messagesEl.hidden = false;
-    replyForm.hidden = false;
+    composer.hidden = false;
+    threadAvatar.textContent = getInitials(conv.displayName, conv.waPhone);
+    threadAvatar.style.background = getAvatarColor(conv.waPhone);
     threadName.textContent = conv.displayName || `+${conv.waPhone}`;
     threadPhone.textContent = `+${conv.waPhone}`;
     document.querySelectorAll('.conversation-item').forEach((el) => el.classList.remove('active'));
+    // Optimistic — the real read-state update happens server-side as a side
+    // effect of loadMessages() below (see handleMessages), which the next
+    // loadConversations() poll would eventually reflect anyway, but clearing
+    // it here immediately avoids a beat where a just-opened thread still
+    // shows as unread.
+    const listItem = conversationsList.querySelector<HTMLElement>(`[data-conversation-id="${conv.id}"]`);
+    listItem?.classList.remove('unread');
+    listItem?.querySelector('.unread-dot')?.remove();
     // Below the mobile breakpoint this swaps the visible pane from the
     // conversation list to the thread — see the .thread-open CSS rules.
     // No-op above the breakpoint, since nothing there reads this class.
@@ -507,6 +964,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     loadConversations();
     loadMessages();
   }
+
+  loadMoreBtn.addEventListener('click', () => {
+    conversationsLimit += 100;
+    loadConversations();
+  });
 
   function pollIfVisible() {
     if (document.visibilityState !== 'visible') return;
@@ -524,19 +986,39 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     pollTimer = null;
   }
 
+  responderNameInput.value = localStorage.getItem(RESPONDER_NAME_KEY) ?? '';
+  responderNameInput.addEventListener('input', () => {
+    localStorage.setItem(RESPONDER_NAME_KEY, responderNameInput.value.trim());
+  });
+
+  // Cmd/Ctrl+Enter submits — plain Enter stays a newline, since replies are
+  // often more than one line and shouldn't send on every line break.
+  replyInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      replyForm.requestSubmit();
+    }
+  });
+
   replyForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!selectedConversationId) return;
     const body = replyInput.value.trim();
+    const responderName = responderNameInput.value.trim();
     if (!body) return;
+    if (!responderName) {
+      responderNameInput.focus();
+      return;
+    }
 
     replySend.disabled = true;
+    replySend.textContent = 'Sending…';
     replyStatus.hidden = true;
     try {
       const res = await authedFetch('/api/whatsapp-admin/reply', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ conversationId: selectedConversationId, body }),
+        body: JSON.stringify({ conversationId: selectedConversationId, body, responderName }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -550,6 +1032,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       // handled by authedFetch
     } finally {
       replySend.disabled = false;
+      replySend.textContent = 'Send';
     }
   });
 
@@ -574,10 +1057,17 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     showGate();
   });
 
+  logoutBtn.addEventListener('click', () => {
+    clearToken();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
   async function startApp() {
     gate.hidden = true;
     forbidden.hidden = true;
     app.hidden = false;
+    logoutBtn.hidden = false;
     await loadConversations();
     startPolling();
   }

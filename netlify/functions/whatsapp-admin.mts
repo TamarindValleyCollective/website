@@ -11,7 +11,13 @@
 // EMAILS_SHEET_ID) — reused rather than standing up a second Sheet, since
 // it's the same "core team" staff; point this at a different Sheet ID later
 // if that ever needs to diverge.
-import { listConversations, listMessages, getConversation, insertMessage } from '../../scripts/lib/supabase.mjs';
+import {
+  listConversations,
+  listMessages,
+  getConversation,
+  insertMessage,
+  markConversationRead,
+} from '../../scripts/lib/supabase.mjs';
 import { getAllowedEmails } from '../../scripts/lib/google-drive.mjs';
 import { verifyGoogleIdToken } from '../../scripts/lib/google-id-token.mjs';
 
@@ -78,16 +84,27 @@ async function authenticate(req: Request): Promise<AuthResult> {
   return { ok: true, email, name };
 }
 
-async function handleConversations(): Promise<Response> {
+async function handleConversations(url: URL): Promise<Response> {
+  const limitParam = Number(url.searchParams.get('limit'));
+  const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : undefined;
+
   try {
-    const conversations = await listConversations();
+    const conversations = await listConversations(limit ? { limit } : {});
     return jsonResponse({
-      conversations: conversations.map((c: any) => ({
-        id: c.id,
-        waPhone: c.wa_phone,
-        displayName: c.display_name,
-        lastMessageAt: c.last_message_at,
-      })),
+      conversations: conversations.map((c: any) => {
+        const lastMessage = c.whatsapp_messages?.[0];
+        return {
+          id: c.id,
+          waPhone: c.wa_phone,
+          displayName: c.display_name,
+          lastMessageAt: c.last_message_at,
+          // Global, not per-user — see the migration comment for why. A
+          // conversation with no last_read_at has never been opened by anyone.
+          unread: !c.last_read_at || new Date(c.last_message_at) > new Date(c.last_read_at),
+          lastMessagePreview: lastMessage?.body ?? null,
+          lastMessageDirection: lastMessage?.direction ?? null,
+        };
+      }),
     });
   } catch (err) {
     console.error('Failed to list conversations', err);
@@ -101,6 +118,9 @@ async function handleMessages(url: URL): Promise<Response> {
 
   try {
     const messages = await listMessages(conversationId);
+    // Best-effort: opening a thread marks it read for every staff member,
+    // but a failure here shouldn't block the messages the caller asked for.
+    markConversationRead(conversationId).catch((err) => console.error('Failed to mark conversation read', err));
     return jsonResponse({
       messages: messages.map((m: any) => ({
         id: m.id,
@@ -117,25 +137,30 @@ async function handleMessages(url: URL): Promise<Response> {
   }
 }
 
-async function handleReply(req: Request, responderLabel?: string): Promise<Response> {
-  let payload: { conversationId?: string; body?: string };
+async function handleReply(req: Request, fallbackResponderLabel?: string): Promise<Response> {
+  let payload: { conversationId?: string; body?: string; responderName?: string };
   try {
     payload = await req.json();
   } catch {
     return jsonResponse({ error: 'Invalid request body' }, 400);
   }
 
-  const { conversationId, body } = payload;
+  const { conversationId, body, responderName } = payload;
   if (!conversationId || !body?.trim()) {
     return jsonResponse({ error: 'conversationId and body are required' }, 400);
   }
 
-  // Multiple staff share one WhatsApp inbox, so sign every outbound message
-  // with whoever sent it — pulled from their Google account, no extra typing
-  // needed. The signature is part of the actual text sent to the customer
-  // (not just internal metadata), so it's included in what's stored too, to
-  // keep the thread showing exactly what was sent.
-  const signedBody = responderLabel ? `${body}\n\n- ${responderLabel}` : body;
+  // Multiple staff share one WhatsApp inbox — often signed into a single
+  // shared Google account rather than each person's own, so the ID token's
+  // name claim can't tell them apart. The page asks each person to type
+  // their own name once (kept in localStorage), sent here as responderName;
+  // fall back to the Google account's own name/email only if that's somehow
+  // missing (an old cached page from before this existed, say). The
+  // signature is part of the actual text sent to the customer, not just
+  // internal metadata, so it's included in what's stored too, to keep the
+  // thread showing exactly what was sent.
+  const signerLabel = responderName?.trim() || fallbackResponderLabel;
+  const signedBody = signerLabel ? `${body}\n\n- ${signerLabel}` : body;
 
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
@@ -206,7 +231,7 @@ export default async (req: Request): Promise<Response> => {
 
   const url = new URL(req.url);
 
-  if (url.pathname === '/api/whatsapp-admin/conversations' && req.method === 'GET') return handleConversations();
+  if (url.pathname === '/api/whatsapp-admin/conversations' && req.method === 'GET') return handleConversations(url);
   if (url.pathname === '/api/whatsapp-admin/messages' && req.method === 'GET') return handleMessages(url);
   if (url.pathname === '/api/whatsapp-admin/reply' && req.method === 'POST') return handleReply(req, auth.name ?? auth.email);
 

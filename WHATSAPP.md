@@ -287,6 +287,39 @@ that Phase 3 step below is still open.
       Sharath pastes it into Netlify's UI, Claude never reads/handles the raw value). None of the
       three are in `.env.example` — like the other `WHATSAPP_*` vars, they're pure Netlify-only,
       never used by a local script.
+
+      **Follow-up UX pass (2026-08-20)**, once real usage surfaced concrete gaps:
+      - **Unread indicators**, shared inbox-wide rather than per-user — a new
+        `whatsapp_conversations.last_read_at` column (migration `0003`); a conversation is unread
+        when `last_message_at > last_read_at`. Opening a thread (`GET /messages`) marks it read for
+        *everyone*, matching how one shared login is actually used here. Shown as a dot at the row's
+        trailing edge.
+      - **Real pagination**, replacing a silent 50-conversation hard cap — `listConversations`
+        takes a `limit` that the page grows by 100 via a "Load more" button, rather than an
+        offset (a single bumped limit also naturally re-surfaces new conversations, no merge
+        logic needed).
+      - **Message preview snippets** in the conversation list (PostgREST resource embedding —
+        `whatsapp_conversations?select=*,whatsapp_messages(...)` with a per-relationship
+        `order`+`limit=1` — pulls each conversation's latest message in the same query).
+      - **Per-reply responder name**, since the inbox is signed into from one *shared* Google
+        account (not one login per staff member) — the ID token's own name claim can't
+        distinguish who's actually typing. Each person types their name once into a "Signing as"
+        field, kept in `localStorage` on that browser; sent as `responderName` and appended to
+        the outbound message text as `"{body}\n\n- {name}"` — part of what the customer actually
+        receives, not just internal metadata.
+      - **WhatsApp/iMessage-style initials avatars** — Meta's Cloud API never sends a real contact
+        photo, so this mirrors WhatsApp's own no-photo fallback: first-letters-of-name initials on
+        a color picked deterministically from phone number (customer) or the typed signature name
+        (staff, so different repliers in one thread read as different people). Two of the five
+        candidate palette colors (`--tvc-orange`, `--tvc-sky-blue`) only hit ~3.5:1 contrast for
+        white initials text, failing WCAG AA (4.5:1) — swapped for this codebase's existing
+        darker `-text` variants of the same two colors instead, which clear 5.3:1+.
+      - A full visual pass via the `impeccable` skill on top of these: tighter page-level spacing
+        (this is a tool, not a marketing page — the site's default 96px section padding was
+        pushing the workspace down for no reason), a loading skeleton instead of a bare "Loading…"
+        line, refined hover/active states (previously identical, now genuinely distinguishable
+        colors), themed focus rings matching the rest of the site, a sign-out button, and
+        Cmd/Ctrl+Enter to send.
 - [x] **Live in production — 2026-08-19.** All three prerequisites done:
       1. `WHATSAPP_VERIFY_TOKEN` (generated ourselves, set directly), `WHATSAPP_APP_SECRET` (from
          the Meta App Dashboard's Basic Settings, Sharath revealed/pasted it), and `RESEND_API_KEY`

@@ -1,0 +1,11 @@
+-- Unread indicators for /internal/whatsapp. Deliberately a single shared
+-- last_read_at per conversation, not per-user — this is one shared inbox
+-- multiple staff read from, so "read" is a global fact (whoever opens a
+-- thread marks it read for everyone), not a per-person flag.
+--
+-- A conversation is unread when last_message_at > last_read_at (or
+-- last_read_at is null, i.e. never opened). last_message_at is only ever
+-- bumped by inbound messages (see whatsapp-webhook.mts's upsertConversation
+-- call — outbound replies don't touch it), so a staff member replying never
+-- marks a conversation unread for others; only a new customer message does.
+alter table whatsapp_conversations add column last_read_at timestamptz;

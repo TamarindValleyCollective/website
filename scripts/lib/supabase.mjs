@@ -74,10 +74,33 @@ export async function insertMessage({ conversationId, direction, body, waMessage
   return rows[0] ?? null;
 }
 
-// Conversation list for the admin UI, most recently active first.
-export async function listConversations({ limit = 50 } = {}) {
-  const res = await restFetch(`/whatsapp_conversations?select=*&order=last_message_at.desc&limit=${limit}`);
+// Conversation list for the admin UI, most recently active first. The admin
+// page re-requests with a growing `limit` (rather than tracking an offset)
+// when the "Load more" button is used — see whatsapp.astro — so a single
+// bumped limit also naturally re-surfaces any new conversation that arrived
+// above previously-loaded ones, no separate merge logic needed.
+//
+// Embeds each conversation's single latest message (PostgREST resource
+// embedding with a per-relationship order+limit, via the whatsapp_messages
+// foreign key) so the list can show a preview snippet — standard for any
+// inbox UI, and cheaper than a second round-trip per row.
+export async function listConversations({ limit = 100 } = {}) {
+  const res = await restFetch(
+    `/whatsapp_conversations?select=*,whatsapp_messages(body,direction,created_at)` +
+      `&whatsapp_messages.order=created_at.desc&whatsapp_messages.limit=1` +
+      `&order=last_message_at.desc&limit=${limit}`,
+  );
   return res.json();
+}
+
+// Marks a conversation read *for everyone* — this is one shared inbox, not
+// per-user state, so opening a thread clears its unread flag for all staff.
+export async function markConversationRead(conversationId) {
+  await restFetch(`/whatsapp_conversations?id=eq.${conversationId}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ last_read_at: new Date().toISOString() }),
+  });
 }
 
 // One conversation's full message history, oldest first (chat reading order).
