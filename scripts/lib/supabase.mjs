@@ -37,11 +37,23 @@ async function restFetch(path, options = {}) {
 // does this atomically at the DB level — a separate select-then-insert/
 // update round-trip would race under concurrent webhook deliveries for the
 // same sender.
+//
+// last_stale_alert_at is reset to null on every call — each new inbound
+// message restarts the stale-alert countdown (see whatsapp-stale-alert.mts)
+// rather than inheriting a timestamp from a previous unread streak on this
+// same conversation.
 export async function upsertConversation({ waPhone, displayName, lastMessageAt }) {
   const res = await restFetch(`/whatsapp_conversations?on_conflict=wa_phone`, {
     method: 'POST',
     headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-    body: JSON.stringify([{ wa_phone: waPhone, display_name: displayName ?? null, last_message_at: lastMessageAt }]),
+    body: JSON.stringify([
+      {
+        wa_phone: waPhone,
+        display_name: displayName ?? null,
+        last_message_at: lastMessageAt,
+        last_stale_alert_at: null,
+      },
+    ]),
   });
   const rows = await res.json();
   return rows[0];
@@ -117,4 +129,34 @@ export async function getConversation(conversationId) {
   const res = await restFetch(`/whatsapp_conversations?id=eq.${conversationId}&select=*&limit=1`);
   const rows = await res.json();
   return rows[0] ?? null;
+}
+
+// Conversations unread for at least staleMinutes with no alert sent in that
+// same window — the source list for the digest email in
+// whatsapp-stale-alert.mts. "Unread" can't be expressed as a PostgREST
+// filter (its operators compare a column to a literal, not to another
+// column), so last_message_at/last_read_at is fetched and compared in JS,
+// same approach as handleConversations in whatsapp-admin.mts.
+export async function listStaleUnreadConversations({ staleMinutes = 60 } = {}) {
+  const cutoff = new Date(Date.now() - staleMinutes * 60 * 1000).toISOString();
+  const res = await restFetch(
+    `/whatsapp_conversations?select=*,whatsapp_messages(body,direction,created_at)` +
+      `&whatsapp_messages.order=created_at.desc&whatsapp_messages.limit=1` +
+      `&last_message_at=lt.${encodeURIComponent(cutoff)}` +
+      `&or=(last_stale_alert_at.is.null,last_stale_alert_at.lt.${encodeURIComponent(cutoff)})` +
+      `&order=last_message_at.asc`,
+  );
+  const rows = await res.json();
+  return rows.filter((c) => !c.last_read_at || new Date(c.last_message_at) > new Date(c.last_read_at));
+}
+
+// Records that a digest alert just covered these conversations, so the next
+// cron tick doesn't re-include them until another staleMinutes has passed.
+export async function markStaleAlertSent(conversationIds) {
+  if (conversationIds.length === 0) return;
+  await restFetch(`/whatsapp_conversations?id=in.(${conversationIds.join(',')})`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ last_stale_alert_at: new Date().toISOString() }),
+  });
 }

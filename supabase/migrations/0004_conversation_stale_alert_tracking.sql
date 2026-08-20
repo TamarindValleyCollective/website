@@ -1,0 +1,12 @@
+-- Backs the 60-minute unanswered-message digest email (see
+-- netlify/functions/whatsapp-stale-alert.mts). Tracks the last time this
+-- conversation was included in a stale-alert digest, so it can be
+-- re-included on an hourly cadence for as long as it stays unread (a
+-- recurring nag until someone actually answers, not a one-shot alert that
+-- can be silently missed) without re-alerting every 15-minute cron tick.
+--
+-- Reset to null on every new inbound message (see upsertConversation in
+-- scripts/lib/supabase.mjs) — each new message restarts its own 60-minute
+-- countdown rather than inheriting a stale timestamp from a previous
+-- unread streak on the same conversation.
+alter table whatsapp_conversations add column last_stale_alert_at timestamptz;

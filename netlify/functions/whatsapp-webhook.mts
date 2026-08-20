@@ -18,17 +18,16 @@
 // Meta's Cloud API gives WhatsApp Business numbers no inbox of their own —
 // confirmed by checking every tab in WhatsApp Manager and Meta's own docs,
 // see WHATSAPP.md's Phase 4 notes. Without something surfacing incoming
-// messages, they'd land here and go nowhere. Every inbound message both
-// emails core-team@tvc.farm via Resend (the same REST API scripts/send-
-// member-update-email.mjs already uses) and is persisted to Supabase (see
-// scripts/lib/supabase.mjs) so /internal/whatsapp (netlify/functions/
-// whatsapp-admin.mts) can show and reply to it.
+// messages, they'd land here and go nowhere. Every inbound message is
+// persisted to Supabase (see scripts/lib/supabase.mjs) so /internal/whatsapp
+// (netlify/functions/whatsapp-admin.mts) can show and reply to it.
+//
+// This used to also email core-team@tvc.farm on every single message —
+// removed 2026-08-20 in favor of whatsapp-stale-alert.mts's 60-minute
+// unanswered-message digest, once per-message emails turned out to be more
+// clutter than signal for a shared inbox multiple staff check.
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { upsertConversation, insertMessage } from '../../scripts/lib/supabase.mjs';
-
-const RESEND_API_URL = 'https://api.resend.com/emails';
-const FROM = 'TVC Website <noreply@tvc.farm>';
-const NOTIFY_TO = ['core-team@tvc.farm'];
 
 function textResponse(body: string, status = 200): Response {
   return new Response(body, { status, headers: { 'content-type': 'text/plain' } });
@@ -53,10 +52,6 @@ function verifySignature(rawBody: string, header: string | null, appSecret: stri
   return expectedBuf.length === providedBuf.length && timingSafeEqual(expectedBuf, providedBuf);
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
 interface WhatsAppMessage {
   from: string;
   id: string;
@@ -70,46 +65,6 @@ interface WhatsAppContact {
   wa_id: string;
 }
 
-async function sendNotificationEmail(subject: string, bodyHtml: string): Promise<void> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    console.error('[whatsapp-webhook] RESEND_API_KEY is not set — cannot notify of incoming message');
-    return;
-  }
-  const res = await fetch(RESEND_API_URL, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: FROM, to: NOTIFY_TO, subject, html: bodyHtml }),
-  });
-  if (!res.ok) {
-    console.error('[whatsapp-webhook] Resend send failed:', res.status, await res.text());
-  }
-}
-
-async function notifyIncomingMessage(message: WhatsAppMessage, contact: WhatsAppContact | undefined): Promise<void> {
-  const senderName = contact?.profile?.name ?? 'Unknown';
-  const senderNumber = message.from;
-  const receivedAt = new Date(Number(message.timestamp) * 1000).toISOString();
-  const bodyText = message.type === 'text' ? (message.text?.body ?? '') : `[${message.type} message — not shown here]`;
-
-  const subject = `New WhatsApp message from ${senderName} (+${senderNumber})`;
-  const html = `<!doctype html>
-<html>
-<head><meta charset="utf-8" /></head>
-<body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f;">
-  <p><strong>${escapeHtml(senderName)}</strong> (+${escapeHtml(senderNumber)}) sent a WhatsApp message at ${escapeHtml(receivedAt)}:</p>
-  <blockquote style="margin:12px 0; padding:12px 16px; background:#f4f1e6; border-left:3px solid #294a36;">${escapeHtml(bodyText)}</blockquote>
-  <p style="font-size:13px; color:#57604f;">Reply from <a href="https://tvc.farm/internal/whatsapp">tvc.farm/internal/whatsapp</a> — sign in with your Google account.</p>
-</body>
-</html>`;
-
-  await sendNotificationEmail(subject, html);
-}
-
-// Kept in its own try/catch, independent of notifyIncomingMessage — a
-// Supabase outage shouldn't block the email notification (or vice versa),
-// and one message's persistence failure in a batch shouldn't block the
-// next message's.
 async function persistIncomingMessage(message: WhatsAppMessage, contact: WhatsAppContact | undefined): Promise<void> {
   try {
     const bodyText = message.type === 'text' ? (message.text?.body ?? '') : `[${message.type} message — not shown here]`;
@@ -181,7 +136,6 @@ export default async (req: Request): Promise<Response> => {
           const contactsByWaId = new Map<string, WhatsAppContact>((value.contacts ?? []).map((c: WhatsAppContact) => [c.wa_id, c]));
           for (const message of value.messages as WhatsAppMessage[]) {
             const contact = contactsByWaId.get(message.from);
-            await notifyIncomingMessage(message, contact);
             await persistIncomingMessage(message, contact);
           }
         } else if (change?.field === 'message_template_status_update') {

@@ -9,12 +9,12 @@
 Beyond the plain `wa.me` click-to-chat links (Friends of TVC group invite, `/contact` and
 booking-inquiry links — see `ARCHITECTURE.md`), the WhatsApp Cloud API integration is now **live**:
 `netlify/functions/whatsapp-webhook.mts` receives real inbound messages at `+91 80 4110 9754` and
-both emails a notification to `core-team@tvc.farm` (moved from `contact@tvc.farm` on 2026-08-19,
-same change as the Netlify Forms notification recipients — see `ARCHITECTURE.md`) and persists the
-message to Supabase, verified end-to-end with a real message on 2026-08-19 while it was still
-pointed at `contact@tvc.farm`. Staff can read and reply to conversations at `/internal/whatsapp`
-(2026-08-20, see Phase 4 below). Phases 1–4 are done — see the checklist below; only real message
-templates remain (needed for replies outside the 24-hour customer-service window).
+persists each one to Supabase, verified end-to-end with a real message on 2026-08-19. Staff can
+read and reply to conversations at `/internal/whatsapp` (2026-08-20, see Phase 4 below); a separate
+scheduled function (`whatsapp-stale-alert.mts`) emails `core-team@tvc.farm` an hourly digest of
+anything unread for 60+ minutes, replacing an earlier design that emailed on every single message.
+Phases 1–4 are done — see the checklist below; only real message templates remain (needed for
+replies outside the 24-hour customer-service window).
 
 ## Direct Meta Cloud API integration — setup checklist
 
@@ -328,6 +328,25 @@ that Phase 3 step below is still open.
         `sharp` from a hand-built SVG — a generic chat-bubble silhouette with the TVC logo mark
         inside, not Meta's actual trademarked WhatsApp icon) — previously shared with the site-wide
         4204×1330 home hero photo as the fallback, which read oddly for an internal tool link.
+      - **Replaced the per-message email with an hourly unread digest**, once the original
+        instant-email-per-message design turned out to be more clutter than signal for a shared
+        inbox — the goal was never "notify fast," it was "make sure it actually gets answered."
+        `netlify/functions/whatsapp-webhook.mts` no longer emails at all; a new scheduled function,
+        `whatsapp-stale-alert.mts` (Netlify cron, every 15 minutes via `config.schedule`), queries
+        for conversations unread 60+ minutes (`scripts/lib/supabase.mjs`'s
+        `listStaleUnreadConversations` — "unread" can't be expressed as a PostgREST column-to-
+        column filter, so it's finished in JS, same pattern as `handleConversations`) and sends one
+        digest listing all of them to `core-team@tvc.farm`, not one email per conversation.
+        Deliberately a recurring hourly nag rather than a one-shot alert — a conversation is
+        re-included in the digest every hour for as long as it stays unread (tracked via a new
+        `whatsapp_conversations.last_stale_alert_at` column, migration `0004`), so a single missed
+        email can't let a message silently go unanswered. `last_stale_alert_at` resets to null on
+        every new inbound message (in `upsertConversation`), so each new message gets its own full
+        60-minute countdown rather than inheriting a stale timestamp from a previous unread streak
+        on the same conversation. Considered notifying via WhatsApp itself instead of email — not
+        possible yet, since messaging a staff member (rather than replying to a customer) hits the
+        same 24-hour free-form-message window rule, and no message template is approved yet (see
+        the open item below).
 - [x] **Live in production — 2026-08-19.** All three prerequisites done:
       1. `WHATSAPP_VERIFY_TOKEN` (generated ourselves, set directly), `WHATSAPP_APP_SECRET` (from
          the Meta App Dashboard's Basic Settings, Sharath revealed/pasted it), and `RESEND_API_KEY`
