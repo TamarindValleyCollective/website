@@ -8,10 +8,12 @@
 // This has to be regenerated on every build: add a page, tweak a script,
 // and the hashes change.
 //
-// Ships as Content-Security-Policy-Report-Only, not enforcing - see
-// CHANGELOG/2026-08.md and ARCHITECTURE.md for the plan to verify against
-// real traffic (Google Sign-In, Maps, YouTube embeds) before flipping it to
-// an enforcing Content-Security-Policy.
+// Shipped as Content-Security-Policy-Report-Only first (2026-08-21),
+// verified live with zero violations across every distinct page type -
+// home, Maps/forms (/contact), YouTube (/about/design), the event-page
+// interest widget, the biodiversity explorer's dynamically-rendered
+// inline-style grid, and both Google Sign-In dashboards (/internal/*).
+// Now enforcing. See CHANGELOG/2026-08.md.
 
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -69,7 +71,7 @@ const csp = [
 
 await writeFile(
   join(DIST, '_headers'),
-  `/*\n  Content-Security-Policy-Report-Only: ${csp}\n`,
+  `/*\n  Content-Security-Policy: ${csp}\n`,
   'utf8'
 );
 
