@@ -6,6 +6,19 @@
 [functions]
   node_bundler = "esbuild"
 
+# Baseline security headers. No Content-Security-Policy yet - the site embeds
+# accounts.google.com (Sign-In), www.google.com (Maps), and www.youtube.com,
+# and a CSP tight enough to matter needs to be worked out and verified live
+# against all three before shipping, not guessed here.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
+    Permissions-Policy = "camera=(), microphone=(), payment=(), usb=()"
+
 # This project's `astro dev` always daemonizes (see CLAUDE.md/AGENTS.md) —
 # it's meant to be started separately with `astro dev --background`. Telling
 # Netlify Dev not to spawn its own framework command and just proxy to the
