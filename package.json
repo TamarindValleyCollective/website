@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build && node scripts/build-chat-context.mjs && pagefind --site dist",
+    "build": "astro build && node scripts/build-chat-context.mjs && pagefind --site dist && node scripts/generate-csp.mjs",
     "preview": "astro preview",
     "astro": "astro",
     "check": "astro check"
