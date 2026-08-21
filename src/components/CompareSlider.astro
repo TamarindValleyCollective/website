@@ -1,0 +1,217 @@
+---
+import LocationInset from './LocationInset.astro';
+
+interface CameraLocation {
+  lat: number;
+  lng: number;
+  heading: number;
+  focalLength35mm?: number;
+  cropFactor?: number;
+}
+
+interface Props {
+  beforeSrc: string;
+  afterSrc: string;
+  beforeAlt: string;
+  afterAlt: string;
+  beforeLabel: string;
+  afterLabel: string;
+  beforeLocation?: CameraLocation;
+  afterLocation?: CameraLocation;
+}
+
+const { beforeSrc, afterSrc, beforeAlt, afterAlt, beforeLabel, afterLabel, beforeLocation, afterLocation } = Astro.props;
+---
+
+<div class="compare">
+  <div class="compare__frame">
+    <img class="compare__img" src={afterSrc} alt={afterAlt} loading="lazy" />
+    <div class="compare__before-wrap">
+      <img class="compare__img" src={beforeSrc} alt={beforeAlt} loading="lazy" />
+      {beforeLocation && (
+        <div class="compare__inset compare__inset--before">
+          <LocationInset
+            lat={beforeLocation.lat}
+            lng={beforeLocation.lng}
+            heading={beforeLocation.heading}
+            focalLength35mm={beforeLocation.focalLength35mm}
+            cropFactor={beforeLocation.cropFactor}
+          />
+        </div>
+      )}
+    </div>
+    {afterLocation && (
+      <div class="compare__inset compare__inset--after">
+        <LocationInset
+          lat={afterLocation.lat}
+          lng={afterLocation.lng}
+          heading={afterLocation.heading}
+          focalLength35mm={afterLocation.focalLength35mm}
+          cropFactor={afterLocation.cropFactor}
+        />
+      </div>
+    )}
+    <div class="compare__handle" aria-hidden="true">
+      <span class="compare__grip">↔</span>
+    </div>
+    <span class="compare__label compare__label--before">{beforeLabel}</span>
+    <span class="compare__label compare__label--after">{afterLabel}</span>
+    <input
+      class="compare__range"
+      type="range"
+      min="0"
+      max="100"
+      value="50"
+      aria-label={`Drag to compare ${beforeLabel} against ${afterLabel}`}
+    />
+  </div>
+</div>
+
+<style>
+  .compare {
+    margin: 20px 0;
+  }
+
+  .compare__frame {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    border-radius: var(--radius);
+    border: 1px solid var(--tvc-line);
+    /* Set once by the script on load/input; drives the clip-path and handle
+       position below. Kept as a CSS var (not inline width on the wrap) so
+       the before-image never resizes/squishes - only gets clipped. */
+    --pos: 50%;
+  }
+
+  .compare__img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  .compare__before-wrap {
+    position: absolute;
+    inset: 0;
+    clip-path: inset(0 calc(100% - var(--pos)) 0 0);
+  }
+
+  .compare__handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--pos);
+    width: 0;
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+
+  .compare__handle::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    left: -1px;
+    width: 2px;
+    background: #fff;
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+  }
+
+  .compare__inset {
+    position: absolute;
+    bottom: 12px;
+    pointer-events: none;
+  }
+
+  .compare__inset--before {
+    left: 12px;
+  }
+
+  .compare__inset--after {
+    right: 12px;
+  }
+
+  .compare__grip {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #fff;
+    color: var(--tvc-green-dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .compare__label {
+    position: absolute;
+    top: 12px;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #fff;
+    background: rgba(15, 26, 18, 0.55);
+    border-radius: 999px;
+    pointer-events: none;
+  }
+
+  .compare__label--before {
+    left: 12px;
+  }
+
+  .compare__label--after {
+    right: 12px;
+  }
+
+  .compare__range {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: ew-resize;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  /* A thumb sized to the full track breaks the browser's own value-from-
+     pointer-position formula (it divides by trackWidth - thumbWidth, which
+     hits zero at 100%) - keep it a normal small size. It's invisible either
+     way since the whole input has opacity: 0 above. */
+  .compare__range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 24px;
+    height: 24px;
+  }
+
+  .compare__range::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+    border: none;
+  }
+</style>
+
+<script>
+  // The range input is stretched invisibly over the whole frame (not just a
+  // thin bottom track) so dragging/clicking/tapping anywhere on the photo
+  // works, and arrow keys work for free once it's focused. Its value only
+  // drives a CSS custom property - the before-image itself is never resized,
+  // just clipped, so it can't distort while dragging.
+  document.querySelectorAll<HTMLElement>('.compare__frame').forEach((frame) => {
+    const range = frame.querySelector<HTMLInputElement>('.compare__range');
+    if (!range) return;
+    const update = () => frame.style.setProperty('--pos', `${range.value}%`);
+    range.addEventListener('input', update);
+    update();
+  });
+</script>

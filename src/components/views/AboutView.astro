@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
+import CompareSlider from '../CompareSlider.astro';
 import { PRINCIPLES } from '../../data/principles';
 import { FARM_AREA_ACRES } from '../../data/site-facts';
 import { organizationId } from '../../utils/schema';
@@ -169,10 +170,26 @@ const aboutSchema = {
     <h3>{c.landHeading}</h3>
     <p>{c.missionText3a}</p>
     <p>{c.missionText3b}</p>
+
+    <CompareSlider
+      beforeSrc="/images/pages/about/land-2018.jpg"
+      afterSrc="/images/pages/about/land-2022.jpg"
+      beforeAlt="The land in 2018, terraced but still sparse"
+      afterAlt="The same spot in 2022, regenerated and overgrown"
+      beforeLabel="2018"
+      afterLabel="2022"
+      beforeLocation={{ lat: 12.35238, lng: 77.644395, heading: 90.68, focalLength35mm: 28, cropFactor: 0.8 }}
+      afterLocation={{ lat: 12.352267, lng: 77.644233, heading: 124.54, focalLength35mm: 14, cropFactor: 0.8 }}
+    />
+
     <p class="fact-quote">{c.missionQuote}</p>
 
     <h3>{c.farmingHeading}</h3>
     <p>{c.farmingText}</p>
+
+    <div class="farming-photo">
+      <img src="/images/pages/home/gallery-3.jpg" alt="A harvest of okra, beans, greens, and vegetables from the farm" loading="lazy" />
+    </div>
 
     <div class="two-col">
       <div class="card">
@@ -196,23 +213,38 @@ const aboutSchema = {
 
   <section class="section section--tint">
     <div class="wrapper">
-      <h2>{c.designHeading}</h2>
-      <p>{c.designText}</p>
-      <a class="button button--outline" href={`/${lang === 'en' ? '' : lang + '/'}about/design`}>{c.designLink}</a>
+      <a class="teaser" href={`/${lang === 'en' ? '' : lang + '/'}about/design`}>
+        <img class="teaser__media" src="/images/pages/home/gallery-2.jpg" alt="" loading="lazy" />
+        <div class="teaser__body">
+          <h2>{c.designHeading}</h2>
+          <p>{c.designText}</p>
+          <span class="teaser__cta">{c.designLink}</span>
+        </div>
+      </a>
     </div>
   </section>
 
   <section class="section wrapper">
-    <h2>{c.peopleHeading}</h2>
-    <p>{c.peopleText}</p>
-    <a class="button button--outline" href={`/${lang === 'en' ? '' : lang + '/'}people`}>{c.peopleLink}</a>
+    <a class="teaser" href={`/${lang === 'en' ? '' : lang + '/'}people`}>
+      <img class="teaser__media" src="/images/pages/staff/hero-thumb.webp" alt="" loading="lazy" />
+      <div class="teaser__body">
+        <h2>{c.peopleHeading}</h2>
+        <p>{c.peopleText}</p>
+        <span class="teaser__cta">{c.peopleLink}</span>
+      </div>
+    </a>
   </section>
 
   <section class="section section--tint" id="join">
     <div class="wrapper join">
-      <h2>{c.joinHeading}</h2>
-      <p>{c.joinText}</p>
-      <a class="button" href={`/${lang === 'en' ? '' : lang + '/'}join`}>{c.joinLink}</a>
+      <a class="teaser teaser--centered" href={`/${lang === 'en' ? '' : lang + '/'}join`}>
+        <img class="teaser__media" src="/images/members/reva-and-ranjan.jpg" alt="" loading="lazy" />
+        <div class="teaser__body">
+          <h2>{c.joinHeading}</h2>
+          <p>{c.joinText}</p>
+          <span class="teaser__cta">{c.joinLink}</span>
+        </div>
+      </a>
     </div>
   </section>
 </BaseLayout>
@@ -226,8 +258,7 @@ const aboutSchema = {
   }
 
   .join {
-    text-align: center;
-    max-width: 60ch;
+    max-width: 640px;
     margin: 0 auto;
   }
 
@@ -238,5 +269,73 @@ const aboutSchema = {
     border-left: 4px solid var(--tvc-green-dark);
     border-radius: 0 var(--radius) var(--radius) 0;
     font-style: italic;
+  }
+
+  .farming-photo {
+    margin: 20px 0;
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--tvc-line);
+  }
+
+  .farming-photo img {
+    width: 100%;
+    max-height: 320px;
+    object-fit: cover;
+    display: block;
+  }
+
+  /* Teaser cards for the design/people/join sections - same "photo earns
+     its keep" convention as HomeView's explore-card/rung, so About stops
+     being the one page on the site that's pure text below its hero. */
+  .teaser {
+    display: grid;
+    grid-template-columns: minmax(160px, 280px) 1fr;
+    gap: 24px;
+    align-items: center;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .teaser__media {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: var(--radius);
+  }
+
+  .teaser__body h2 {
+    margin-bottom: 8px;
+  }
+
+  .teaser__body p {
+    margin-bottom: 10px;
+  }
+
+  .teaser__cta {
+    font-weight: 700;
+    color: var(--tvc-green-dark);
+  }
+
+  .teaser:hover .teaser__cta {
+    text-decoration: underline;
+  }
+
+  .teaser--centered {
+    grid-template-columns: 1fr;
+    max-width: 420px;
+    margin: 0 auto;
+    text-align: center;
+  }
+
+  .teaser--centered .teaser__media {
+    aspect-ratio: 16 / 9;
+  }
+
+  @media (max-width: 640px) {
+    .teaser {
+      grid-template-columns: 1fr;
+    }
   }
 </style>

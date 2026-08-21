@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "border-left: 4px solid var(--tvc-green-dark)",
+        "files": [
+          "src/components/views/AboutView.astro"
+        ],
+        "createdAt": "2026-08-21T12:03:02.018Z",
+        "reason": "pre-existing .fact-quote blockquote style, not a card accent; out of scope for this change"
+      }
+    ]
+  }
+}

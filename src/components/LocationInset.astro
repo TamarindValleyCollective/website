@@ -1,0 +1,121 @@
+---
+// Small "you are here, facing this way" map badge - same idea as Apple/
+// Google Maps' blue dot + field-of-view cone, drawn as static inline SVG
+// from the property's own traced boundary (tvc-boundary.ts) rather than an
+// embedded map tile, since this only needs to render once at build time.
+import { TVC_BOUNDARY } from './biodiversity/tvc-boundary';
+
+interface Props {
+  lat: number;
+  lng: number;
+  heading: number; // compass bearing, degrees clockwise from north
+  focalLength35mm?: number; // EXIF 35mm-equivalent focal length, if known
+  cropFactor?: number; // fraction of the original frame WIDTH still shown, if the source photo was cropped after the fact (default: uncropped)
+}
+
+const { lat, lng, heading, focalLength35mm, cropFactor = 1 } = Astro.props;
+
+// Horizontal field of view from the 35mm-equivalent focal length: standard
+// photographic formula against the 36mm-wide full-frame reference sensor
+// that "35mm-equivalent" is defined relative to. Falls back to a generic
+// phone-camera guess (~54°) when the caller doesn't have EXIF for it.
+// cropFactor narrows that further if the displayed image is a crop of the
+// original frame - a rectilinear approximation (tan scales with the
+// fraction of frame width kept), close enough at these small crop amounts
+// even though ultra-wide lenses aren't truly rectilinear.
+const baseHalfFovRad = focalLength35mm ? Math.atan(18 / focalLength35mm) : (54 / 2) * (Math.PI / 180);
+const halfFovRad = Math.atan(cropFactor * Math.tan(baseHalfFovRad));
+const fovDegrees = halfFovRad * 2 * (180 / Math.PI);
+
+const lats = TVC_BOUNDARY.map(([la]) => la);
+const lngs = TVC_BOUNDARY.map(([, lo]) => lo);
+const latMin = Math.min(...lats);
+const latMax = Math.max(...lats);
+const lngMin = Math.min(...lngs);
+const lngMax = Math.max(...lngs);
+const latMid = (latMin + latMax) / 2;
+// Longitude degrees are shorter than latitude degrees away from the equator
+// - scale by cos(latitude) so the traced boundary keeps its true proportions
+// instead of looking stretched east-west.
+const cosLat = Math.cos((latMid * Math.PI) / 180);
+
+const spanLat = latMax - latMin;
+const spanLng = (lngMax - lngMin) * cosLat;
+const spanDeg = Math.max(spanLat, spanLng);
+const padDeg = spanDeg * 0.15;
+const viewDeg = spanDeg + padDeg * 2;
+const offX = (viewDeg - spanLng) / 2;
+const offY = (viewDeg - spanLat) / 2;
+
+// Raw lat/lng spans are ~0.01-0.02 degrees wide - far too small a number
+// range for CSS stroke-width etc. to mean anything sensible against. Scale
+// everything into a fixed 0-100 viewBox so stroke widths, the dot radius,
+// and the cone length behave like ordinary SVG units.
+const view = 100;
+const scale = view / viewDeg;
+
+function project(la: number, lo: number): [number, number] {
+  const x = (offX + (lo - lngMin) * cosLat) * scale;
+  const yFromBottom = (offY + (la - latMin)) * scale;
+  return [x, view - yFromBottom];
+}
+
+const boundaryPoints = TVC_BOUNDARY.map(([la, lo]) => project(la, lo).join(',')).join(' ');
+const [px, py] = project(lat, lng);
+
+const coneLength = view * 0.4;
+const coneHalfAngle = fovDegrees / 2;
+function edgePoint(bearing: number): [number, number] {
+  const rad = (bearing * Math.PI) / 180;
+  return [px + coneLength * Math.sin(rad), py - coneLength * Math.cos(rad)];
+}
+const [lx, ly] = edgePoint(heading - coneHalfAngle);
+const [rx, ry] = edgePoint(heading + coneHalfAngle);
+---
+
+<div class="location-inset" title={`Camera position, facing ${Math.round(heading)}° on the property map`}>
+  <svg viewBox={`0 0 ${view} ${view}`} width="100%" height="100%" aria-hidden="true">
+    <polygon class="location-inset__boundary" points={boundaryPoints} />
+    <path class="location-inset__cone" d={`M ${px},${py} L ${lx},${ly} L ${rx},${ry} Z`} />
+    <circle class="location-inset__dot" cx={px} cy={py} r={view * 0.035} />
+  </svg>
+</div>
+
+<style>
+  .location-inset {
+    width: 148px;
+    height: 148px;
+  }
+
+  /* No backing card - this sits directly on the photo, which can be sky,
+     foliage, or soil behind it. A dark drop-shadow halo (rather than a
+     solid backdrop) keeps every line/shape legible against any of them,
+     the same trick as map-pin labels drawn straight onto imagery. Two
+     stacked shadows: a tight dark edge plus a softer wider glow. */
+  .location-inset svg {
+    filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.85)) drop-shadow(0 0 3px rgba(0, 0, 0, 0.55));
+  }
+
+  .location-inset__boundary {
+    fill: rgba(255, 255, 255, 0.14);
+    stroke: #fff;
+    stroke-width: 1.4;
+  }
+
+  .location-inset__cone {
+    fill: rgba(140, 200, 255, 0.8);
+  }
+
+  .location-inset__dot {
+    fill: #4da3ff;
+    stroke: #fff;
+    stroke-width: 2;
+  }
+
+  @media (max-width: 640px) {
+    .location-inset {
+      width: 108px;
+      height: 108px;
+    }
+  }
+</style>

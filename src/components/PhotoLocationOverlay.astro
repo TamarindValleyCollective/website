@@ -1,0 +1,78 @@
+---
+// Reusable "photo + where/which-way-it-was-taken" pattern - the same badge
+// CompareSlider.astro uses for its before/after land photos, packaged here
+// for the common case of a single (non-slider) photo elsewhere on the site.
+// Pull lat/lng/heading from the photo's own EXIF (macOS: `mdls -name
+// kMDItemLatitude -name kMDItemLongitude -name kMDItemImageDirection
+// <file>`) and focalLength35mm from `kMDItemFocalLength35mm` - don't guess
+// these. Only set cropFactor if the image file itself is a crop of the
+// original frame (width kept / original width); leave it unset otherwise.
+//
+// Usage:
+//   <PhotoLocationOverlay
+//     src="/images/pages/example/photo.jpg"
+//     alt="Description of the photo"
+//     lat={12.35238} lng={77.644395} heading={90.68}
+//     focalLength35mm={28}
+//   />
+import LocationInset from './LocationInset.astro';
+
+interface Props {
+  src: string;
+  alt: string;
+  lat: number;
+  lng: number;
+  heading: number;
+  focalLength35mm?: number;
+  cropFactor?: number;
+  corner?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+}
+
+const { src, alt, lat, lng, heading, focalLength35mm, cropFactor, corner = 'bottom-right' } = Astro.props;
+---
+
+<div class="photo-location">
+  <img class="photo-location__img" src={src} alt={alt} loading="lazy" />
+  <div class={`photo-location__inset photo-location__inset--${corner}`}>
+    <LocationInset lat={lat} lng={lng} heading={heading} focalLength35mm={focalLength35mm} cropFactor={cropFactor} />
+  </div>
+</div>
+
+<style>
+  .photo-location {
+    position: relative;
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--tvc-line);
+  }
+
+  .photo-location__img {
+    display: block;
+    width: 100%;
+  }
+
+  .photo-location__inset {
+    position: absolute;
+    pointer-events: none;
+  }
+
+  .photo-location__inset--top-left {
+    top: 12px;
+    left: 12px;
+  }
+
+  .photo-location__inset--top-right {
+    top: 12px;
+    right: 12px;
+  }
+
+  .photo-location__inset--bottom-left {
+    bottom: 12px;
+    left: 12px;
+  }
+
+  .photo-location__inset--bottom-right {
+    bottom: 12px;
+    right: 12px;
+  }
+</style>
