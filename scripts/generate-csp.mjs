@@ -8,12 +8,14 @@
 // This has to be regenerated on every build: add a page, tweak a script,
 // and the hashes change.
 //
-// Shipped as Content-Security-Policy-Report-Only first (2026-08-21),
-// verified live with zero violations across every distinct page type -
-// home, Maps/forms (/contact), YouTube (/about/design), the event-page
-// interest widget, the biodiversity explorer's dynamically-rendered
-// inline-style grid, and both Google Sign-In dashboards (/internal/*).
-// Now enforcing. See CHANGELOG/2026-08.md.
+// Shipped as Content-Security-Policy-Report-Only first (2026-08-21), then
+// flipped to enforcing the same day. That report-only pass missed two
+// client-side fetch() targets that don't show up just from clicking around:
+// the biodiversity explorer's live iNaturalist API calls/photos/OSM tiles,
+// and the header weather widget's Open-Meteo call (present on every page).
+// Both got silently blocked under enforcing (connect-src/img-src violations
+// don't throw JS errors you'd notice without checking the console or
+// network tab) until fixed here on 2026-08-21. See CHANGELOG/2026-08.md.
 
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -58,9 +60,9 @@ const csp = [
   "default-src 'self'",
   `script-src ${scriptSrc}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: https://media.tvc.farm",
+  "img-src 'self' data: https://media.tvc.farm https://*.inaturalist.org https://inaturalist-open-data.s3.amazonaws.com https://*.tile.openstreetmap.org",
   "font-src 'self'",
-  "connect-src 'self' https://www.google-analytics.com https://www.googletagmanager.com https://accounts.google.com",
+  "connect-src 'self' https://www.google-analytics.com https://www.googletagmanager.com https://accounts.google.com https://api.inaturalist.org https://api.open-meteo.com",
   'frame-src https://www.google.com https://www.youtube.com https://accounts.google.com',
   "object-src 'none'",
   "base-uri 'self'",
