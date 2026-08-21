@@ -134,9 +134,20 @@ function niceMax(peak: number): number {
 // (months not yet reached, or before the Sheet's history starts) are
 // already filtered out by the caller, so this only ever draws through
 // real values — never interpolates across a gap.
-function smoothPath(points: { x: number; y: number }[]): string {
+//
+// Catmull-Rom isn't monotonicity-preserving: swinging from a high peak
+// month down to a near-zero month can push a control point's y past the
+// real data point on either side, which for a peak-to-trough swing means
+// past the mm=0 baseline — the curve visibly dips into "negative rainfall"
+// between two valid, non-negative data points. Clamping each control point
+// to the plot's y-range keeps the curve passing exactly through every real
+// value while stopping it from overshooting past axes that bound all real
+// rainfall data (never negative, never above the chart's max).
+function smoothPath(points: { x: number; y: number }[], yMin: number, yMax: number): string {
   if (points.length === 0) return '';
   if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+
+  const clampY = (y: number) => Math.min(yMax, Math.max(yMin, y));
 
   let d = `M ${points[0].x} ${points[0].y}`;
   for (let i = 0; i < points.length - 1; i++) {
@@ -145,9 +156,9 @@ function smoothPath(points: { x: number; y: number }[]): string {
     const p2 = points[i + 1];
     const p3 = points[i + 2] ?? p2;
     const cp1x = p1.x + (p2.x - p0.x) / 6;
-    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp1y = clampY(p1.y + (p2.y - p0.y) / 6);
     const cp2x = p2.x - (p3.x - p1.x) / 6;
-    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    const cp2y = clampY(p2.y - (p3.y - p1.y) / 6);
     d += ` C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)}, ${cp2x.toFixed(2)} ${cp2y.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
   }
   return d;
@@ -189,7 +200,11 @@ export function buildLineChartGeometry(calendarYears: CalendarYearSeries[]): Lin
       year: y.year,
       colorVar: SERIES_COLOR_VARS[idx % SERIES_COLOR_VARS.length],
       points,
-      pathD: smoothPath(points.map((p) => ({ x: p.x, y: p.y }))),
+      pathD: smoothPath(
+        points.map((p) => ({ x: p.x, y: p.y })),
+        chartPadTop,
+        chartPadTop + plotHeight
+      ),
       endPoint: points.length ? points[points.length - 1] : null,
     };
   });
