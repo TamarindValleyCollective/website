@@ -11,6 +11,15 @@
         ],
         "createdAt": "2026-08-21T12:03:02.018Z",
         "reason": "pre-existing .fact-quote blockquote style, not a card accent; out of scope for this change"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/components/views/HomeView.astro"
+        ],
+        "createdAt": "2026-08-22T13:53:16.303Z",
+        "reason": "blockquote left-rule is a canonical typographic convention for pull-quotes/attribution, not a card-style side-tab accent; pre-existing code untouched by this session's edits"
       }
     ]
   }
