@@ -20,6 +20,11 @@ interface Props {
 
 const { lang = 'en' } = Astro.props;
 
+// statSpecies is deliberately "All species", not "Species" - this widget's
+// live count spans every iNaturalist taxon (birds, insects, plants, etc.),
+// not just birds, and sits right below this page's own "over 100 bird
+// species" hero copy. An unqualified "Species" reads as if it's answering
+// the same bird-count question, when it isn't.
 const content = {
   en: {
     loading: 'Loading live sightings from iNaturalist…',
@@ -37,7 +42,7 @@ const content = {
     tryAgain: 'Try again',
     closeAria: 'Close',
     statObservations: 'Observations',
-    statSpecies: 'Species',
+    statSpecies: 'All species',
     statContributors: 'Contributors',
     allChip: 'All',
     loadMore: 'Load more',
@@ -69,7 +74,7 @@ const content = {
     tryAgain: 'ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ',
     closeAria: 'ಮುಚ್ಚಿ',
     statObservations: 'ಪ್ರೇಕ್ಷಣೆಗಳು',
-    statSpecies: 'ಪ್ರಭೇದಗಳು',
+    statSpecies: 'ಎಲ್ಲಾ ಪ್ರಭೇದಗಳು',
     statContributors: 'ಕೊಡುಗೆದಾರರು',
     allChip: 'ಎಲ್ಲಾ',
     loadMore: 'ಇನ್ನಷ್ಟು ಲೋಡ್ ಮಾಡಿ',
@@ -101,7 +106,7 @@ const content = {
     tryAgain: 'மீண்டும் முயற்சிக்கவும்',
     closeAria: 'மூடு',
     statObservations: 'காட்சிகள்',
-    statSpecies: 'இனங்கள்',
+    statSpecies: 'அனைத்து இனங்களும்',
     statContributors: 'பங்களிப்பாளர்கள்',
     allChip: 'அனைத்தும்',
     loadMore: 'மேலும் ஏற்று',

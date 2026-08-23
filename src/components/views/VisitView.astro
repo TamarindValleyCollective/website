@@ -3,7 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import { useTranslations, type Locale } from '../../i18n/utils';
-import { NIGHT_SKY_BRIGHTNESS_UCD_M2 } from '../../data/site-facts';
+import { NIGHT_SKY_BRIGHTNESS_UCD_M2, ELEPHANT_CORRIDOR_CLAUSE } from '../../data/site-facts';
 
 interface Props {
   lang: Locale;
@@ -22,7 +22,7 @@ const content = {
     heroTitle: 'Come spend time in the hills',
     heroIntro: "We're on a hillslope facing west with stunning sunset views across the valley. Depending on the season, you'll see everything from deep green foliage to a golden brown hillside.",
     whatToExpectHeading: 'What to expect',
-    whatToExpectText: `The land is laid out in <a href="${getRelativeLocaleUrl(lang, '/about/design')}">three zones</a> — wildlife corridor, food forest, and cultivated land — regenerating naturally over the last several years. Hike up to the Chikkamma-Doddamma temple and you'll get a panoramic view of the whole valley. You'll be greeted with a cacophony of bird songs early in the morning and again in the evening — and if you're visiting after Dussehra, expect the morning dew to leave your trousers wet on early walks.`,
+    whatToExpectText: `The land is laid out in <a href="${getRelativeLocaleUrl(lang, '/about/design')}">three zones</a> — wildlife corridor, food forest, and cultivated land — regenerating naturally over the last several years. Hike up to the Chikkamma-Doddamma Temple and you'll get a panoramic view of the whole valley. You'll be greeted with a cacophony of bird songs early in the morning and again in the evening — and if you're visiting after Dussehra, expect the morning dew to leave your trousers wet on early walks.`,
     foodHeading: 'The food',
     foodText: 'We keep the food as local as possible, cooked using recipes from the local community that runs our kitchen — ragi mudde, tangy rasam and sambhar with farm-harvested tamarind, soppu from whatever greens are in season, and seasonal fruit depending on what the elephants and monkeys have left us.',
     facilitiesHeading: 'The facilities',
@@ -48,7 +48,7 @@ const content = {
       { title: 'How to Reach', desc: 'Directions from both the Tamil Nadu and Karnataka sides.', href: '/visit/how-to-reach' },
     ],
     nearbyHeading: 'Nearby attractions',
-    nearbyText: 'The Cauvery river is just over 10 km away. <strong>Hogenekal Falls</strong> is about 55 km / 1.5 hours, winding through Anchetty, Natrapalayam and Bingundala. <strong>Chunchi Falls / Mekedatu</strong> is about 53 km / 1.25 hours — a good detour via Kanakapura on the way to or from TVC.',
+    nearbyText: `The Cauvery river is just over 10 km away. <strong>Hogenekal Falls</strong> is about 55 km / 1.5 hours, winding through Anchetty, Natrapalayam and Bingundala. <strong>Chunchi Falls / Mekedatu</strong> is about 53 km / 1.25 hours — a good detour via Kanakapura on the way to or from TVC. See <a href="${getRelativeLocaleUrl(lang, '/visit/how-to-reach')}">How to Reach</a> for full driving directions to TVC itself.`,
     etiquetteHeading: 'Etiquette & precautions',
     etiquetteSubheading: 'Etiquette',
     etiquetteList: [
@@ -74,7 +74,7 @@ const content = {
       { q: 'Is the place senior friendly?', a: "There's a fair bit of walking — the camp site is a 5-7 minute walk from the parking lot. Fine for active seniors, but not the most accessible place." },
       { q: 'How about food?', a: 'Food is included in the charges. Meals are freshly prepared and mostly vegetarian; non-veg on request. What you get depends on seasonality and availability — no à la carte options.' },
       { q: 'What is the best time to visit?', a: "June to January is best. It's mostly pleasant during these months, though it can feel warm without a breeze." },
-      { q: 'What is the wildlife scene?', a: "There are no hard boundaries — rabbits and wild boar are common visitors. Elephants visit in the dry season, drawn by the tamarind and ragi; TVC sits inside the Melagiris' elephant corridor, part of the same connected landscape as the Cauvery North Wildlife Sanctuary, Bannerghatta, and the Nilgiri Biosphere Reserve." },
+      { q: 'What is the wildlife scene?', a: `There are no hard boundaries — rabbits and wild boar are common visitors. Elephants visit in the dry season, drawn by the tamarind and ragi; TVC sits inside ${ELEPHANT_CORRIDOR_CLAUSE}.` },
     ],
   },
   kn: {
@@ -108,7 +108,7 @@ const content = {
       { title: 'ತಲುಪುವುದು ಹೇಗೆ', desc: 'ತಮಿಳುನಾಡು ಮತ್ತು ಕರ್ನಾಟಕ ಎರಡೂ ಕಡೆಗಳಿಂದ ದಿಕ್ಕುಗಳು.', href: '/visit/how-to-reach' },
     ],
     nearbyHeading: 'ಹತ್ತಿರದ ಆಕರ್ಷಣೆಗಳು',
-    nearbyText: 'ಕಾವೇರಿ ನದಿ ಕೇವಲ 10 ಕಿ.ಮೀ ದೂರದಲ್ಲಿದೆ. <strong>ಹೊಗೆನಕಲ್ ಜಲಪಾತ</strong> ಸುಮಾರು 55 ಕಿ.ಮೀ / 1.5 ಗಂಟೆ, ಅಂಚೆಟ್ಟಿ, ನಟ್ರಪಾಳಯಂ ಮತ್ತು ಬಿಂಗುಂಡಲದ ಮೂಲಕ ಸಾಗುತ್ತದೆ. <strong>ಚುಂಚಿ ಜಲಪಾತ / ಮೇಕೆದಾಟು</strong> ಸುಮಾರು 53 ಕಿ.ಮೀ / 1.25 ಗಂಟೆ — TVC ಗೆ ಬರುವ ಅಥವಾ ಹೋಗುವ ದಾರಿಯಲ್ಲಿ ಕನಕಪುರ ಮೂಲಕ ಒಂದು ಒಳ್ಳೆಯ ತಿರುವು.',
+    nearbyText: `ಕಾವೇರಿ ನದಿ ಕೇವಲ 10 ಕಿ.ಮೀ ದೂರದಲ್ಲಿದೆ. <strong>ಹೊಗೆನಕಲ್ ಜಲಪಾತ</strong> ಸುಮಾರು 55 ಕಿ.ಮೀ / 1.5 ಗಂಟೆ, ಅಂಚೆಟ್ಟಿ, ನಟ್ರಪಾಳಯಂ ಮತ್ತು ಬಿಂಗುಂಡಲದ ಮೂಲಕ ಸಾಗುತ್ತದೆ. <strong>ಚುಂಚಿ ಜಲಪಾತ / ಮೇಕೆದಾಟು</strong> ಸುಮಾರು 53 ಕಿ.ಮೀ / 1.25 ಗಂಟೆ — TVC ಗೆ ಬರುವ ಅಥವಾ ಹೋಗುವ ದಾರಿಯಲ್ಲಿ ಕನಕಪುರ ಮೂಲಕ ಒಂದು ಒಳ್ಳೆಯ ತಿರುವು. TVC ಗೆ ಪೂರ್ಣ ಚಾಲನಾ ದಿಕ್ಕುಗಳಿಗಾಗಿ <a href="${getRelativeLocaleUrl(lang, '/visit/how-to-reach')}">ತಲುಪುವುದು ಹೇಗೆ</a> ನೋಡಿ.`,
     etiquetteHeading: 'ಶಿಷ್ಟಾಚಾರ ಮತ್ತು ಮುನ್ನೆಚ್ಚರಿಕೆಗಳು',
     etiquetteSubheading: 'ಶಿಷ್ಟಾಚಾರ',
     etiquetteList: [
@@ -134,7 +134,7 @@ const content = {
       { q: 'ಈ ಸ್ಥಳ ಹಿರಿಯರಿಗೆ ಸ್ನೇಹಪರವೇ?', a: 'ಸಾಕಷ್ಟು ನಡಿಗೆ ಇದೆ — ಕ್ಯಾಂಪ್ ಸೈಟ್ ಪಾರ್ಕಿಂಗ್ ಲಾಟ್‌ನಿಂದ 5-7 ನಿಮಿಷದ ನಡಿಗೆ. ಸಕ್ರಿಯ ಹಿರಿಯರಿಗೆ ಸೂಕ್ತ, ಆದರೆ ಅತ್ಯಂತ ಪ್ರವೇಶಿಸಬಹುದಾದ ಸ್ಥಳವಲ್ಲ.' },
       { q: 'ಆಹಾರದ ಬಗ್ಗೆ ಏನು?', a: 'ಆಹಾರ ಶುಲ್ಕದಲ್ಲಿ ಸೇರಿದೆ. ಊಟಗಳು ತಾಜಾವಾಗಿ ತಯಾರಿಸಲಾಗುತ್ತದೆ ಮತ್ತು ಹೆಚ್ಚಾಗಿ ಸಸ್ಯಾಹಾರಿ; ವಿನಂತಿಯ ಮೇರೆಗೆ ಮಾಂಸಾಹಾರಿ. ನೀವು ಪಡೆಯುವುದು ಋತುಮಾನ ಮತ್ತು ಲಭ್ಯತೆಯನ್ನು ಅವಲಂಬಿಸಿರುತ್ತದೆ — ಅ ಲಾ ಕಾರ್ಟೆ ಆಯ್ಕೆಗಳಿಲ್ಲ.' },
       { q: 'ಭೇಟಿ ನೀಡಲು ಉತ್ತಮ ಸಮಯ ಯಾವುದು?', a: 'ಜೂನ್‌ನಿಂದ ಜನವರಿ ಉತ್ತಮ. ಈ ತಿಂಗಳುಗಳಲ್ಲಿ ಇದು ಹೆಚ್ಚಾಗಿ ಆಹ್ಲಾದಕರವಾಗಿರುತ್ತದೆ, ಆದರೂ ಗಾಳಿ ಇಲ್ಲದೆ ಬೆಚ್ಚಗೆ ಅನಿಸಬಹುದು.' },
-      { q: 'ವನ್ಯಜೀವಿ ದೃಶ್ಯ ಹೇಗಿದೆ?', a: 'ಯಾವುದೇ ಕಠಿಣ ಗಡಿಗಳಿಲ್ಲ — ಮೊಲಗಳು ಮತ್ತು ಕಾಡುಹಂದಿಗಳು ಸಾಮಾನ್ಯ ಸಂದರ್ಶಕರು. ಬೇಸಿಗೆಯಲ್ಲಿ ಆನೆಗಳು ಭೇಟಿ ನೀಡುತ್ತವೆ, ಹುಣಸೆಹಣ್ಣು ಮತ್ತು ರಾಗಿಯಿಂದ ಆಕರ್ಷಿತವಾಗಿ; TVC ಮೇಲಗಿರಿಗಳ ಆನೆ ಕಾರಿಡಾರ್‌ನೊಳಗೆ ಇದೆ, ಕಾವೇರಿ ಉತ್ತರ ವನ್ಯಜೀವಿ ಅಭಯಾರಣ್ಯ, ಬನ್ನೇರುಘಟ್ಟ ಮತ್ತು ನೀಲಗಿರಿ ಜೀವಗೋಳ ಮೀಸಲು ಪ್ರದೇಶದಂತೆಯೇ ಸಂಪರ್ಕಿತ ಭೂಪ್ರದೇಶದ ಭಾಗ.' },
+      { q: 'ವನ್ಯಜೀವಿ ದೃಶ್ಯ ಹೇಗಿದೆ?', a: 'ಯಾವುದೇ ಕಠಿಣ ಗಡಿಗಳಿಲ್ಲ — ಮೊಲಗಳು ಮತ್ತು ಕಾಡುಹಂದಿಗಳು ಸಾಮಾನ್ಯ ಸಂದರ್ಶಕರು. ಬೇಸಿಗೆಯಲ್ಲಿ ಆನೆಗಳು ಭೇಟಿ ನೀಡುತ್ತವೆ, ಹುಣಸೆಹಣ್ಣು ಮತ್ತು ರಾಗಿಯಿಂದ ಆಕರ್ಷಿತವಾಗಿ; TVC ಬನ್ನೇರುಘಟ್ಟ ರಾಷ್ಟ್ರೀಯ ಉದ್ಯಾನವನ್ನು ಕಾವೇರಿಗೆ ಸಂಪರ್ಕಿಸುವ ಜೀವಂತ ಆನೆ ಕಾರಿಡಾರ್‌ನ ಒಳಗಿದೆ — MM ಬೆಟ್ಟಗಳು, BR ಬೆಟ್ಟಗಳು, ಸತ್ಯಮಂಗಲಂ ಮತ್ತು ನೀಲಗಿರಿ ಜೀವಗೋಳ ಮೀಸಲು ಪ್ರದೇಶವನ್ನೂ ಜೋಡಿಸುವ ವಿಶಾಲ ಸರಪಳಿಯ ಒಂದು ಕೊಂಡಿ.' },
     ],
   },
   ta: {
@@ -168,7 +168,7 @@ const content = {
       { title: 'வழி எப்படி', desc: 'தமிழ்நாடு மற்றும் கர்நாடகா இரு பக்கங்களிலிருந்தும் திசைகள்.', href: '/visit/how-to-reach' },
     ],
     nearbyHeading: 'அருகிலுள்ள ஈர்ப்பிடங்கள்',
-    nearbyText: 'காவேரி நதி வெறும் 10 கி.மீ தொலைவில் உள்ளது. <strong>ஓகேனக்கல் அருவி</strong> சுமார் 55 கி.மீ / 1.5 மணி நேரம், அஞ்செட்டி, நத்ரப்பாளையம் மற்றும் பிங்குண்டலா வழியாக செல்கிறது. <strong>சுஞ்சி அருவி / மேகேதாட்டு</strong> சுமார் 53 கி.மீ / 1.25 மணி நேரம் — TVC-க்கு வரும் அல்லது செல்லும் வழியில் கனகபுரா வழியாக ஒரு நல்ல திசைமாற்று.',
+    nearbyText: `காவேரி நதி வெறும் 10 கி.மீ தொலைவில் உள்ளது. <strong>ஓகேனக்கல் அருவி</strong> சுமார் 55 கி.மீ / 1.5 மணி நேரம், அஞ்செட்டி, நத்ரப்பாளையம் மற்றும் பிங்குண்டலா வழியாக செல்கிறது. <strong>சுஞ்சி அருவி / மேகேதாட்டு</strong> சுமார் 53 கி.மீ / 1.25 மணி நேரம் — TVC-க்கு வரும் அல்லது செல்லும் வழியில் கனகபுரா வழியாக ஒரு நல்ல திசைமாற்று. TVC-க்கான முழுமையான ஓட்டுநர் திசைகளுக்கு <a href="${getRelativeLocaleUrl(lang, '/visit/how-to-reach')}">வழி எப்படி</a> பார்க்கவும்.`,
     etiquetteHeading: 'நடத்தை விதிகள் & முன்னெச்சரிக்கைகள்',
     etiquetteSubheading: 'நடத்தை விதிகள்',
     etiquetteList: [
@@ -194,7 +194,7 @@ const content = {
       { q: 'இந்த இடம் மூத்தோர்களுக்கு ஏற்றதா?', a: 'நிறைய நடைபயிற்சி உள்ளது — முகாமிட இடம் வாகன நிறுத்துமிடத்திலிருந்து 5-7 நிமிட நடை தூரத்தில் உள்ளது. சுறுசுறுப்பான மூத்தோருக்கு நன்றாக இருக்கும், ஆனால் மிகவும் அணுகக்கூடிய இடம் அல்ல.' },
       { q: 'உணவைப் பற்றி என்ன?', a: 'உணவு கட்டணத்தில் சேர்க்கப்பட்டுள்ளது. உணவுகள் புதிதாக தயாரிக்கப்படுகின்றன, பெரும்பாலும் சைவம்; கேட்டால் அசைவம். நீங்கள் பெறுவது பருவம் மற்றும் கிடைக்கும் தன்மையைப் பொறுத்தது — தனிப்பட்ட உணவு தேர்வுகள் இல்லை.' },
       { q: 'வருகை தர சிறந்த நேரம் எது?', a: 'ஜூன் முதல் ஜனவரி வரை சிறந்தது. இந்த மாதங்களில் பெரும்பாலும் இதமாக இருக்கும், இருப்பினும் காற்று இல்லாமல் வெப்பமாக உணரலாம்.' },
-      { q: 'வனவிலங்கு காட்சி எப்படி இருக்கிறது?', a: 'கடுமையான எல்லைகள் எதுவும் இல்லை — முயல்கள் மற்றும் காட்டுப்பன்றிகள் பொதுவான வருகையாளர்கள். வறண்ட காலத்தில் யானைகள் வருகை தருகின்றன, புளி மற்றும் ராகியால் ஈர்க்கப்பட்டு; TVC மேலகிரி மலைகளின் யானை தாழ்வாரத்திற்குள் அமைந்துள்ளது, காவேரி வடக்கு வனவிலங்கு சரணாலயம், பன்னேர்காட்டா, மற்றும் நீலகிரி உயிர்க்கோள இருப்புடன் இணைந்த அதே நிலப்பரப்பின் ஒரு பகுதி.' },
+      { q: 'வனவிலங்கு காட்சி எப்படி இருக்கிறது?', a: 'கடுமையான எல்லைகள் எதுவும் இல்லை — முயல்கள் மற்றும் காட்டுப்பன்றிகள் பொதுவான வருகையாளர்கள். வறண்ட காலத்தில் யானைகள் வருகை தருகின்றன, புளி மற்றும் ராகியால் ஈர்க்கப்பட்டு; TVC பன்னேர்காட்டா தேசிய பூங்காவை காவேரியுடன் இணைக்கும் ஒரு வாழும் யானை தாழ்வாரத்திற்குள் அமைந்துள்ளது — MM மலைகள், BR மலைகள், சத்தியமங்கலம் மற்றும் நீலகிரி உயிர்க்கோள இருப்பையும் இணைக்கும் ஒரு பரந்த சங்கிலியின் ஒரு இணைப்பு.' },
     ],
   },
 } as const;
@@ -262,7 +262,7 @@ const trekLinkHtml = c.trekLinkText.replace('{href}', trekkingHref);
     </div>
   </section>
 
-  <section class="section wrapper">
+  <section class="section wrapper" id="nearby">
     <h2>{c.nearbyHeading}</h2>
     <p set:html={c.nearbyText} />
   </section>

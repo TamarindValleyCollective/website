@@ -2,14 +2,16 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import { getRelativeLocaleUrl } from 'astro:i18n';
-import type { Locale } from '../../i18n/utils';
+import { useTranslations, type Locale } from '../../i18n/utils';
 import { organizationId } from '../../utils/schema';
+import { MEMBER_FAMILY_COUNT } from '../../data/members';
 
 interface Props {
   lang: Locale;
 }
 
 const { lang } = Astro.props;
+const t = useTranslations(lang);
 
 // Prose content for this page only - shared chrome (nav labels etc.) comes
 // from src/i18n/*.ts via t() in the components this page uses. This page is
@@ -18,52 +20,43 @@ const { lang } = Astro.props;
 // "Explore the ecosystem" section fronting its own children.
 const content = {
   en: {
-    metaDescription: "The people of Tamarind Valley Collective — the 53 member families, the local staff who run things day to day, our partners, and our work with the neighboring community.",
+    metaDescription: `The people of Tamarind Valley Collective — the ${MEMBER_FAMILY_COUNT} member families, the local staff who run things day to day, our partners, and our work with the neighboring community.`,
     heroEyebrow: 'People',
     heroTitle: "Who's part of TVC",
     heroIntro: 'The member families who own the land collectively, the local staff who run it day to day, and the partners and neighboring community who make it all work.',
     cardsHeading: "Who's here",
     cards: [
-      { title: 'Members', desc: 'The 53 families who make up the collective — most joined between the founding in 2017 and today.', href: '/people/members' },
+      { title: 'Members', desc: `The ${MEMBER_FAMILY_COUNT} families who make up the collective — most joined between the founding in 2017 and today.`, href: '/people/members' },
       { title: 'Staff', desc: 'The day-to-day activities at TVC are managed by a small, dedicated team living on-site.', href: '/people/staff' },
       { title: 'Partners', desc: "Beyond TVC's own community, a handful of organizations have supported us along the way — from hospitality to permaculture design.", href: '/people/partners' },
       { title: 'Outreach', desc: 'Our ongoing work with the local community around TVC, in Odhipuram and Thaggatti village.', href: '/people/outreach' },
     ],
-    joinHeading: 'Interested in becoming a member?',
-    joinText: "Membership isn't really open — 53 families is close to as large as this community will get. When a spot does open, it passes privately between members rather than through any application process. Here's exactly how that works.",
-    joinLink: 'Read how it works →',
   },
   kn: {
-    metaDescription: 'ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ನ ಜನರು — 53 ಸದಸ್ಯ ಕುಟುಂಬಗಳು, ದಿನನಿತ್ಯದ ಕೆಲಸಗಳನ್ನು ನಡೆಸುವ ಸ್ಥಳೀಯ ಸಿಬ್ಬಂದಿ, ನಮ್ಮ ಪಾಲುದಾರರು, ಮತ್ತು ನೆರೆಯ ಸಮುದಾಯದೊಂದಿಗಿನ ನಮ್ಮ ಕೆಲಸ.',
+    metaDescription: `ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ನ ಜನರು — ${MEMBER_FAMILY_COUNT} ಸದಸ್ಯ ಕುಟುಂಬಗಳು, ದಿನನಿತ್ಯದ ಕೆಲಸಗಳನ್ನು ನಡೆಸುವ ಸ್ಥಳೀಯ ಸಿಬ್ಬಂದಿ, ನಮ್ಮ ಪಾಲುದಾರರು, ಮತ್ತು ನೆರೆಯ ಸಮುದಾಯದೊಂದಿಗಿನ ನಮ್ಮ ಕೆಲಸ.`,
     heroEyebrow: 'ಜನರು',
     heroTitle: 'TVC ಯ ಭಾಗವಾಗಿರುವವರು ಯಾರು',
     heroIntro: 'ಭೂಮಿಯನ್ನು ಸಾಮೂಹಿಕವಾಗಿ ಹೊಂದಿರುವ ಸದಸ್ಯ ಕುಟುಂಬಗಳು, ದಿನನಿತ್ಯ ಇದನ್ನು ನಡೆಸುವ ಸ್ಥಳೀಯ ಸಿಬ್ಬಂದಿ, ಮತ್ತು ಇದೆಲ್ಲವನ್ನೂ ಕಾರ್ಯಗತಗೊಳಿಸುವ ಪಾಲುದಾರರು ಮತ್ತು ನೆರೆಹೊರೆಯ ಸಮುದಾಯ.',
     cardsHeading: 'ಇಲ್ಲಿ ಯಾರಿದ್ದಾರೆ',
     cards: [
-      { title: 'ಸದಸ್ಯರು', desc: 'ಈ ಸಂಘಟನೆಯನ್ನು ರೂಪಿಸುವ 53 ಕುಟುಂಬಗಳು — ಹೆಚ್ಚಿನವರು 2017ರ ಸ್ಥಾಪನೆಯಿಂದ ಇಂದಿನವರೆಗೆ ಸೇರಿದವರು.', href: '/people/members' },
+      { title: 'ಸದಸ್ಯರು', desc: `ಈ ಸಂಘಟನೆಯನ್ನು ರೂಪಿಸುವ ${MEMBER_FAMILY_COUNT} ಕುಟುಂಬಗಳು — ಹೆಚ್ಚಿನವರು 2017ರ ಸ್ಥಾಪನೆಯಿಂದ ಇಂದಿನವರೆಗೆ ಸೇರಿದವರು.`, href: '/people/members' },
       { title: 'ಸಿಬ್ಬಂದಿ', desc: 'TVC ಯ ದಿನನಿತ್ಯದ ಚಟುವಟಿಕೆಗಳನ್ನು ಸ್ಥಳದಲ್ಲೇ ವಾಸಿಸುವ ಒಂದು ಚಿಕ್ಕ, ಸಮರ್ಪಿತ ತಂಡವು ನಿರ್ವಹಿಸುತ್ತದೆ.', href: '/people/staff' },
       { title: 'ಪಾಲುದಾರರು', desc: 'TVC ಯ ಸ್ವಂತ ಸಮುದಾಯದ ಆಚೆಗೂ, ಕೆಲವು ಸಂಸ್ಥೆಗಳು ಆತಿಥ್ಯದಿಂದ ಪರ್ಮಾಕಲ್ಚರ್ ವಿನ್ಯಾಸದವರೆಗೆ ನಮಗೆ ಬೆಂಬಲ ನೀಡಿವೆ.', href: '/people/partners' },
       { title: 'ಸಂಪರ್ಕ', desc: 'ಒಧಿಪುರಂ ಮತ್ತು ತಗ್ಗಟ್ಟಿ ಗ್ರಾಮಗಳಲ್ಲಿ, TVC ಸುತ್ತಮುತ್ತಲಿನ ಸ್ಥಳೀಯ ಸಮುದಾಯದೊಂದಿಗಿನ ನಮ್ಮ ನಿರಂತರ ಕೆಲಸ.', href: '/people/outreach' },
     ],
-    joinHeading: 'ಸದಸ್ಯರಾಗಲು ಆಸಕ್ತಿ ಇದೆಯೇ?',
-    joinText: 'ಸದಸ್ಯತ್ವ ನಿಜವಾಗಿಯೂ ಮುಕ್ತವಾಗಿಲ್ಲ — 53 ಕುಟುಂಬಗಳು ಈ ಸಮುದಾಯ ಬೆಳೆಯಬಹುದಾದ ಗರಿಷ್ಠ ಗಾತ್ರಕ್ಕೆ ಹತ್ತಿರವಾಗಿದೆ. ಒಂದು ಸ್ಥಾನ ತೆರೆದಾಗ, ಅದು ಯಾವುದೇ ಅರ್ಜಿ ಪ್ರಕ್ರಿಯೆಯ ಮೂಲಕ ಅಲ್ಲ, ಬದಲಾಗಿ ಸದಸ್ಯರ ನಡುವೆ ಖಾಸಗಿಯಾಗಿ ಹಸ್ತಾಂತರಗೊಳ್ಳುತ್ತದೆ. ಅದು ನಿಖರವಾಗಿ ಹೇಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ ಎಂಬುದು ಇಲ್ಲಿದೆ.',
-    joinLink: 'ಅದು ಹೇಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ ಎಂಬುದನ್ನು ಓದಿ →',
   },
   ta: {
-    metaDescription: 'டமரிண்ட் வேலி கலெக்டிவின் மக்கள் — 53 உறுப்பினர் குடும்பங்கள், அன்றாட நடவடிக்கைகளை நடத்தும் உள்ளூர் ஊழியர்கள், எங்கள் கூட்டாளர்கள், மற்றும் அண்டை சமூகத்துடனான எங்கள் பணி.',
+    metaDescription: `டமரிண்ட் வேலி கலெக்டிவின் மக்கள் — ${MEMBER_FAMILY_COUNT} உறுப்பினர் குடும்பங்கள், அன்றாட நடவடிக்கைகளை நடத்தும் உள்ளூர் ஊழியர்கள், எங்கள் கூட்டாளர்கள், மற்றும் அண்டை சமூகத்துடனான எங்கள் பணி.`,
     heroEyebrow: 'மக்கள்',
     heroTitle: 'TVC-யின் பகுதியாக இருப்பவர்கள் யார்',
     heroIntro: 'நிலத்தை கூட்டாக சொந்தமாக்கிக் கொண்டிருக்கும் உறுப்பினர் குடும்பங்கள், அதை தினசரி நடத்தும் உள்ளூர் ஊழியர்கள், மற்றும் இதையெல்லாம் சாத்தியமாக்கும் கூட்டாளர்கள் மற்றும் அண்டை சமூகம்.',
     cardsHeading: 'இங்கு யார் இருக்கிறார்கள்',
     cards: [
-      { title: 'உறுப்பினர்கள்', desc: 'இந்த கூட்டமைப்பை உருவாக்கும் 53 குடும்பங்கள் — பெரும்பாலோர் 2017 நிறுவனத்திலிருந்து இன்று வரை சேர்ந்தவர்கள்.', href: '/people/members' },
+      { title: 'உறுப்பினர்கள்', desc: `இந்த கூட்டமைப்பை உருவாக்கும் ${MEMBER_FAMILY_COUNT} குடும்பங்கள் — பெரும்பாலோர் 2017 நிறுவனத்திலிருந்து இன்று வரை சேர்ந்தவர்கள்.`, href: '/people/members' },
       { title: 'ஊழியர்கள்', desc: 'TVC-யின் அன்றாட நடவடிக்கைகளை பண்ணையிலேயே வசிக்கும் ஒரு சிறிய, அர்ப்பணிப்புள்ள குழு நிர்வகிக்கிறது.', href: '/people/staff' },
       { title: 'கூட்டாளர்கள்', desc: 'TVC-யின் சொந்த சமூகத்திற்கு அப்பால், சில அமைப்புகள் விருந்தோம்பலில் இருந்து இயற்கை வேளாண்மை வடிவமைப்பு வரை எங்களுக்கு ஆதரவளித்துள்ளன.', href: '/people/partners' },
       { title: 'தொடர்பு', desc: 'ஓதிபுரம் மற்றும் தக்கட்டி கிராமங்களில், TVC-க்கு அருகிலுள்ள உள்ளூர் சமூகத்துடனான எங்கள் தொடர்ச்சியான பணி.', href: '/people/outreach' },
     ],
-    joinHeading: 'உறுப்பினராக ஆர்வமா?',
-    joinText: 'உறுப்பினர் நிலை உண்மையில் திறந்திருக்கவில்லை — 53 குடும்பங்கள் இந்த சமூகம் வளரக்கூடிய அதிகபட்ச அளவிற்கு நெருக்கமாக உள்ளது. ஒரு இடம் திறக்கும்போது, அது எந்த விண்ணப்ப செயல்முறையையும் கடந்து அல்ல, மாறாக உறுப்பினர்களுக்கு இடையே தனிப்பட்ட முறையில் கடத்தப்படுகிறது. அது சரியாக எப்படி வேலை செய்கிறது என்பது இங்கே.',
-    joinLink: 'அது எப்படி வேலை செய்கிறது என்பதைப் படிக்கவும் →',
   },
 } as const;
 
@@ -111,9 +104,9 @@ const collectionSchema = {
   <section class="section section--tint">
     <div class="wrapper">
       <div class="join">
-        <h2>{c.joinHeading}</h2>
-        <p>{c.joinText}</p>
-        <a class="button" href={getRelativeLocaleUrl(lang, '/join')}>{c.joinLink}</a>
+        <h2>{t('joinTeaser.heading')}</h2>
+        <p>{t('joinTeaser.text', { families: MEMBER_FAMILY_COUNT })}</p>
+        <a class="button" href={getRelativeLocaleUrl(lang, '/join')}>{t('joinTeaser.cta')}</a>
       </div>
     </div>
   </section>

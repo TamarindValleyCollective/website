@@ -1,4 +1,5 @@
 ---
+import { getRelativeLocaleUrl } from 'astro:i18n';
 import { useTranslations, DEFAULT_LOCALE, type Locale } from '../i18n/utils';
 
 interface Props {
@@ -34,7 +35,7 @@ const f = fieldLabels[lang];
       class="inquiry-form card"
       name="visit-inquiry"
       method="POST"
-      action="/visit/thanks"
+      action={getRelativeLocaleUrl(lang, '/visit/thanks')}
       data-netlify="true"
       data-netlify-honeypot="bot-field"
     >

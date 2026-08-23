@@ -1,6 +1,7 @@
 ---
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import { FARM_AREA_ACRES } from '../data/site-facts';
+import { MEMBER_FAMILY_COUNT } from '../data/members';
 import { DEFAULT_LOCALE, type Locale } from '../i18n/utils';
 import { fetchSpeciesCountFresh } from './biodiversity/species-count';
 
@@ -33,9 +34,13 @@ try {
 // local dictionary rather than touching src/i18n/*.ts, per this pass's
 // constraints.
 const labels = {
-  en: { acres: 'Acres', years: 'Years', families: 'Families', species: 'Species' },
-  kn: { acres: 'ಎಕರೆಗಳು', years: 'ವರ್ಷಗಳು', families: 'ಕುಟುಂಬಗಳು', species: 'ಪ್ರಭೇದಗಳು' },
-  ta: { acres: 'ஏக்கர்கள்', years: 'ஆண்டுகள்', families: 'குடும்பங்கள்', species: 'இனங்கள்' },
+  // species is "All species" not "Species" - same reason as
+  // BiodiversityExplorer's statSpecies: this tile's live count spans every
+  // iNaturalist taxon, not just birds, and this tile links straight to the
+  // Biodiversity page whose hero leads with "over 100 bird species".
+  en: { acres: 'Acres', years: 'Years', families: 'Families', species: 'All species' },
+  kn: { acres: 'ಎಕರೆಗಳು', years: 'ವರ್ಷಗಳು', families: 'ಕುಟುಂಬಗಳು', species: 'ಎಲ್ಲಾ ಪ್ರಭೇದಗಳು' },
+  ta: { acres: 'ஏக்கர்கள்', years: 'ஆண்டுகள்', families: 'குடும்பங்கள்', species: 'அனைத்து இனங்களும்' },
 } as const;
 
 const l = labels[lang];
@@ -54,7 +59,7 @@ const peopleHref = getRelativeLocaleUrl(lang, '/people/members');
       <p class="home-stat__label">{l.years}</p>
     </a>
     <a class="home-stat" href={peopleHref}>
-      <p class="home-stat__value" data-count-to="53">0</p>
+      <p class="home-stat__value" data-count-to={MEMBER_FAMILY_COUNT}>0</p>
       <p class="home-stat__label">{l.families}</p>
     </a>
     <a class="home-stat" href={getRelativeLocaleUrl(lang, '/ecosystem/biodiversity')}>

@@ -8,6 +8,7 @@ import ScrollReveal from '../components/ScrollReveal.astro';
 import JsonLd from '../components/JsonLd.astro';
 import TranslationNotice from '../components/TranslationNotice.astro';
 import { FARM_AREA_ACRES } from '../data/site-facts';
+import { MEMBER_FAMILY_COUNT } from '../data/members';
 import { LAT, LNG } from '../utils/weather';
 import { useTranslations, stripLocalePrefix, SUPPORTED_LOCALES, DEFAULT_LOCALE, type Locale } from '../i18n/utils';
 import { TRANSLATION_REVIEWED } from '../i18n/reviewStatus';
@@ -54,7 +55,7 @@ const {
 } = Astro.props;
 
 const t = useTranslations(lang);
-const pageDescription = description ?? t('jsonLd.orgDescription', { acres: FARM_AREA_ACRES });
+const pageDescription = description ?? t('jsonLd.orgDescription', { acres: FARM_AREA_ACRES, families: MEMBER_FAMILY_COUNT });
 
 const pageTitle = `${title} · Tamarind Valley Collective`;
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
@@ -86,7 +87,7 @@ const siteGraph = {
       name: 'Tamarind Valley Collective',
       url: siteURL,
       logo: new URL('/images/brand/tvc-logo-mark.png', Astro.site).toString(),
-      description: t('jsonLd.orgDescription', { acres: FARM_AREA_ACRES }),
+      description: t('jsonLd.orgDescription', { acres: FARM_AREA_ACRES, families: MEMBER_FAMILY_COUNT }),
       telephone: '+91 74063 07309',
       address: {
         '@type': 'PostalAddress',

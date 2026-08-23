@@ -2,6 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import { useTranslations, type Locale } from '../../i18n/utils';
+import { getRelativeLocaleUrl } from 'astro:i18n';
 
 interface Props {
   lang: Locale;
@@ -35,6 +36,7 @@ const content = {
     ],
     locationHeading: 'Location',
     locationText: 'TVC is in the village of Thaggatti in Tamil Nadu, about 7 km from Hunsanahalli, the border town in Karnataka, and adjacent to the Thaggatti Reserve Forest — part of the Melagiri hills, where the Eastern and Western Ghats meet.',
+    nearbyLinkText: `Combining the trip with a visit to nearby waterfalls or the Cauvery? See <a href="${getRelativeLocaleUrl(lang, '/visit')}#nearby">nearby attractions</a> on the Visit page for distances and travel times.`,
     historyText: 'The area\'s history is documented by renowned hunter-turned-conservationist <a href="https://en.wikipedia.org/wiki/Kenneth_Anderson_(writer)#Jungle_folk" target="_blank" rel="noopener noreferrer">Kenneth Anderson</a>, in his story "Man-eater of Jowlagiri" — one of many tales set in these hills, whose legacy the Kenneth Anderson Nature Society carries on today. The places he mentions are well documented by fans of his writing, and he also references the village of Anchetty in another account, "Sher Khan and the Bettamugalam Man-eater."',
     mapCaption: 'TVC bordering the Thaggatti Reserve Forest',
     mapTitle: 'Map showing TVC bordering the Thaggatti Reserve Forest',
@@ -58,6 +60,7 @@ const content = {
     ],
     locationHeading: 'ಸ್ಥಳ',
     locationText: 'TVC ತಮಿಳುನಾಡಿನ ತಗ್ಗಟ್ಟಿ ಗ್ರಾಮದಲ್ಲಿದೆ, ಕರ್ನಾಟಕದ ಗಡಿ ಪಟ್ಟಣವಾದ ಹುಣಸನಹಳ್ಳಿಯಿಂದ ಸುಮಾರು 7 ಕಿ.ಮೀ ದೂರದಲ್ಲಿ, ಮತ್ತು ತಗ್ಗಟ್ಟಿ ಮೀಸಲು ಅರಣ್ಯದ ಪಕ್ಕದಲ್ಲಿದೆ — ಪೂರ್ವ ಮತ್ತು ಪಶ್ಚಿಮ ಘಟ್ಟಗಳು ಸಂಧಿಸುವ ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ ಭಾಗ.',
+    nearbyLinkText: `ಹತ್ತಿರದ ಜಲಪಾತಗಳು ಅಥವಾ ಕಾವೇರಿಗೆ ಭೇಟಿಯನ್ನು ಈ ಪ್ರಯಾಣದೊಂದಿಗೆ ಸೇರಿಸುತ್ತಿದ್ದೀರಾ? ದೂರ ಮತ್ತು ಪ್ರಯಾಣದ ಸಮಯಕ್ಕಾಗಿ ವಿಸಿಟ್ ಪುಟದಲ್ಲಿ <a href="${getRelativeLocaleUrl(lang, '/visit')}#nearby">ಹತ್ತಿರದ ಆಕರ್ಷಣೆಗಳು</a> ನೋಡಿ.`,
     historyText: 'ಈ ಪ್ರದೇಶದ ಇತಿಹಾಸವನ್ನು ಪ್ರಸಿದ್ಧ ಬೇಟೆಗಾರ-ಪರಿಸರ ಸಂರಕ್ಷಣಾಕಾರ <a href="https://en.wikipedia.org/wiki/Kenneth_Anderson_(writer)#Jungle_folk" target="_blank" rel="noopener noreferrer">Kenneth Anderson</a> ಅವರು ತಮ್ಮ "Man-eater of Jowlagiri" ಕಥೆಯಲ್ಲಿ ದಾಖಲಿಸಿದ್ದಾರೆ — ಈ ಬೆಟ್ಟಗಳಲ್ಲಿ ನಡೆಯುವ ಅನೇಕ ಕಥೆಗಳಲ್ಲಿ ಒಂದು, ಇದರ ಪರಂಪರೆಯನ್ನು Kenneth Anderson Nature Society ಇಂದಿಗೂ ಮುಂದುವರಿಸುತ್ತಿದೆ. ಅವರು ಉಲ್ಲೇಖಿಸಿದ ಸ್ಥಳಗಳನ್ನು ಅವರ ಬರವಣಿಗೆಯ ಅಭಿಮಾನಿಗಳು ಚೆನ್ನಾಗಿ ದಾಖಲಿಸಿದ್ದಾರೆ, ಮತ್ತು ಅವರು ಇನ್ನೊಂದು ಕಥೆಯಾದ "Sher Khan and the Bettamugalam Man-eater" ನಲ್ಲಿ ಅಂಚೆಟ್ಟಿ ಗ್ರಾಮವನ್ನೂ ಉಲ್ಲೇಖಿಸುತ್ತಾರೆ.',
     mapCaption: 'ತಗ್ಗಟ್ಟಿ ಮೀಸಲು ಅರಣ್ಯದ ಗಡಿಯಲ್ಲಿರುವ TVC',
     mapTitle: 'ತಗ್ಗಟ್ಟಿ ಮೀಸಲು ಅರಣ್ಯದ ಗಡಿಯಲ್ಲಿರುವ TVC ತೋರಿಸುವ ನಕ್ಷೆ',
@@ -81,6 +84,7 @@ const content = {
     ],
     locationHeading: 'இருப்பிடம்',
     locationText: 'TVC தமிழ்நாட்டின் தகட்டி கிராமத்தில் உள்ளது, கர்நாடகாவின் எல்லை நகரமான ஹுனசனஹள்ளியிலிருந்து சுமார் 7 கி.மீ தொலைவில், மேலும் தகட்டி ஒதுக்கு காட்டிற்கு அருகில் — கிழக்கு மற்றும் மேற்கு தொடர்ச்சி மலைகள் சந்திக்கும் மேலகிரி மலைகளின் ஒரு பகுதி.',
+    nearbyLinkText: `அருகிலுள்ள அருவிகள் அல்லது காவேரியை இந்தப் பயணத்துடன் இணைக்கிறீர்களா? தூரங்கள் மற்றும் பயண நேரங்களுக்கு விசிட் பக்கத்தில் <a href="${getRelativeLocaleUrl(lang, '/visit')}#nearby">அருகிலுள்ள ஈர்ப்பிடங்களைப்</a> பார்க்கவும்.`,
     historyText: 'இப்பகுதியின் வரலாறு புகழ்பெற்ற வேட்டையாடியிலிருந்து பாதுகாவலராக மாறிய <a href="https://en.wikipedia.org/wiki/Kenneth_Anderson_(writer)#Jungle_folk" target="_blank" rel="noopener noreferrer">Kenneth Anderson</a> அவர்களால் அவரது "Man-eater of Jowlagiri" கதையில் ஆவணப்படுத்தப்பட்டுள்ளது — இந்த மலைகளில் நடக்கும் பல கதைகளில் ஒன்று, இதன் பாரம்பரியத்தை Kenneth Anderson Nature Society இன்றும் தொடர்கிறது. அவர் குறிப்பிடும் இடங்கள் அவரது எழுத்தின் ரசிகர்களால் நன்கு ஆவணப்படுத்தப்பட்டுள்ளன, மேலும் அவர் மற்றொரு கதையான "Sher Khan and the Bettamugalam Man-eater" இல் அஞ்செட்டி கிராமத்தையும் குறிப்பிடுகிறார்.',
     mapCaption: 'தகட்டி ஒதுக்கு காட்டை ஒட்டியுள்ள TVC',
     mapTitle: 'தகட்டி ஒதுக்கு காட்டை ஒட்டியுள்ள TVC-ஐ காட்டும் வரைபடம்',
@@ -107,6 +111,7 @@ const c = content[lang];
 
     <h2>{c.locationHeading}</h2>
     <p>{c.locationText}</p>
+    <p set:html={c.nearbyLinkText} />
     <p set:html={c.historyText} />
     <div class="map-embed">
       <iframe

@@ -2,6 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import { FARM_AREA_ACRES } from '../../data/site-facts';
+import { MEMBER_FAMILY_COUNT } from '../../data/members';
 import { useTranslations, type Locale } from '../../i18n/utils';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 
@@ -24,9 +25,9 @@ const content = {
       'How membership at Tamarind Valley Collective actually works — community size, private transactions between members, and what matters to us in a new member.',
     heroEyebrow: 'Membership',
     heroTitle: 'Joining the Collective',
-    heroIntro: "TVC is unlikely to expand beyond its current 53 families — but a spot occasionally opens. Here's how that actually works, and what matters to us.",
+    heroIntro: `TVC is unlikely to expand beyond its current ${MEMBER_FAMILY_COUNT} families — but a spot occasionally opens. Here's how that actually works, and what matters to us.`,
     section1Heading: "We're unlikely to expand",
-    section1Text: `TVC is <a href="${peopleHref}">53 families</a> on ${FARM_AREA_ACRES} acres — that's likely close to as large as this community will ever get. We are unlikely to expand membership, and there's no waitlist or application process in the usual sense.`,
+    section1Text: `TVC is <a href="${peopleHref}">${MEMBER_FAMILY_COUNT} families</a> on ${FARM_AREA_ACRES} acres — that's likely close to as large as this community will ever get. We are unlikely to expand membership, and there's no waitlist or application process in the usual sense.`,
     section2Heading: 'How a spot occasionally opens',
     section2Text:
       "From time to time, for personal reasons, a member family decides to move on. When that happens, it isn't the collective selling a spot — it's a private transaction directly between that family and whoever takes their place. TVC isn't a party to the sale and doesn't broker it.",
@@ -39,7 +40,7 @@ const content = {
     section5Heading: 'How to start',
     section5Text:
       'The way in is conversation, not a form. Before any transaction is discussed, we ask anyone seriously interested to engage with at least 2 existing members to understand their respective reasons for being a part of the community — so you can relate to what draws people here, and what\'s actually expected of a member.',
-    memberPairNote: 'Two of the 53 member families you might end up talking to.',
+    memberPairNote: `Two of the ${MEMBER_FAMILY_COUNT} member families you might end up talking to.`,
     readyHeading: 'Ready to start the conversation?',
     readyHint: "If you'd like us to keep you in mind should a spot open, tell us a bit about yourself.",
     messageLabel: 'Tell us about yourself and why TVC interests you',
@@ -52,9 +53,9 @@ const content = {
       'ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ನಲ್ಲಿ ಸದಸ್ಯತ್ವ ನಿಜವಾಗಿ ಹೇಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ — ಸಮುದಾಯದ ಗಾತ್ರ, ಸದಸ್ಯರ ನಡುವಿನ ಖಾಸಗಿ ವಹಿವಾಟುಗಳು, ಮತ್ತು ಹೊಸ ಸದಸ್ಯರಲ್ಲಿ ನಮಗೆ ಮುಖ್ಯವಾದದ್ದು ಏನು.',
     heroEyebrow: 'ಸದಸ್ಯತ್ವ',
     heroTitle: 'ಕಲೆಕ್ಟಿವ್‌ಗೆ ಸೇರುವುದು',
-    heroIntro: 'TVC ತನ್ನ ಪ್ರಸ್ತುತ 53 ಕುಟುಂಬಗಳನ್ನು ಮೀರಿ ವಿಸ್ತರಿಸುವ ಸಾಧ್ಯತೆ ಕಡಿಮೆ — ಆದರೆ ಒಂದು ಸ್ಥಾನ ಸಾಂದರ್ಭಿಕವಾಗಿ ತೆರೆಯುತ್ತದೆ. ಅದು ನಿಜವಾಗಿ ಹೇಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ, ಮತ್ತು ನಮಗೆ ಏನು ಮುಖ್ಯ ಎಂಬುದು ಇಲ್ಲಿದೆ.',
+    heroIntro: `TVC ತನ್ನ ಪ್ರಸ್ತುತ ${MEMBER_FAMILY_COUNT} ಕುಟುಂಬಗಳನ್ನು ಮೀರಿ ವಿಸ್ತರಿಸುವ ಸಾಧ್ಯತೆ ಕಡಿಮೆ — ಆದರೆ ಒಂದು ಸ್ಥಾನ ಸಾಂದರ್ಭಿಕವಾಗಿ ತೆರೆಯುತ್ತದೆ. ಅದು ನಿಜವಾಗಿ ಹೇಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ, ಮತ್ತು ನಮಗೆ ಏನು ಮುಖ್ಯ ಎಂಬುದು ಇಲ್ಲಿದೆ.`,
     section1Heading: 'ನಾವು ವಿಸ್ತರಿಸುವ ಸಾಧ್ಯತೆ ಕಡಿಮೆ',
-    section1Text: `TVC ಎಂಬುದು ${FARM_AREA_ACRES} ಎಕರೆಗಳಲ್ಲಿ <a href="${peopleHref}">53 ಕುಟುಂಬಗಳು</a> — ಇದು ಈ ಸಮುದಾಯ ಎಂದಿಗೂ ತಲುಪಬಹುದಾದ ಗರಿಷ್ಠ ಗಾತ್ರಕ್ಕೆ ಹತ್ತಿರವಾಗಿರಬಹುದು. ನಾವು ಸದಸ್ಯತ್ವವನ್ನು ವಿಸ್ತರಿಸುವ ಸಾಧ್ಯತೆ ಕಡಿಮೆ, ಮತ್ತು ಸಾಮಾನ್ಯ ಅರ್ಥದಲ್ಲಿ ಯಾವುದೇ ಕಾಯುವ ಪಟ್ಟಿ ಅಥವಾ ಅರ್ಜಿ ಪ್ರಕ್ರಿಯೆ ಇಲ್ಲ.`,
+    section1Text: `TVC ಎಂಬುದು ${FARM_AREA_ACRES} ಎಕರೆಗಳಲ್ಲಿ <a href="${peopleHref}">${MEMBER_FAMILY_COUNT} ಕುಟುಂಬಗಳು</a> — ಇದು ಈ ಸಮುದಾಯ ಎಂದಿಗೂ ತಲುಪಬಹುದಾದ ಗರಿಷ್ಠ ಗಾತ್ರಕ್ಕೆ ಹತ್ತಿರವಾಗಿರಬಹುದು. ನಾವು ಸದಸ್ಯತ್ವವನ್ನು ವಿಸ್ತರಿಸುವ ಸಾಧ್ಯತೆ ಕಡಿಮೆ, ಮತ್ತು ಸಾಮಾನ್ಯ ಅರ್ಥದಲ್ಲಿ ಯಾವುದೇ ಕಾಯುವ ಪಟ್ಟಿ ಅಥವಾ ಅರ್ಜಿ ಪ್ರಕ್ರಿಯೆ ಇಲ್ಲ.`,
     section2Heading: 'ಒಂದು ಸ್ಥಾನ ಸಾಂದರ್ಭಿಕವಾಗಿ ಹೇಗೆ ತೆರೆಯುತ್ತದೆ',
     section2Text:
       'ಕಾಲಕಾಲಕ್ಕೆ, ವೈಯಕ್ತಿಕ ಕಾರಣಗಳಿಗಾಗಿ, ಒಂದು ಸದಸ್ಯ ಕುಟುಂಬ ಮುಂದೆ ಸಾಗಲು ನಿರ್ಧರಿಸುತ್ತದೆ. ಆಗ ಸಂಭವಿಸುವುದು ಕಲೆಕ್ಟಿವ್ ಒಂದು ಸ್ಥಾನವನ್ನು ಮಾರಾಟ ಮಾಡುವುದಲ್ಲ — ಅದು ಆ ಕುಟುಂಬ ಮತ್ತು ಅವರ ಸ್ಥಾನ ತೆಗೆದುಕೊಳ್ಳುವವರ ನಡುವಿನ ನೇರ ಖಾಸಗಿ ವಹಿವಾಟು. TVC ಈ ಮಾರಾಟದ ಪಕ್ಷಕಾರನಲ್ಲ ಮತ್ತು ಅದನ್ನು ಮಧ್ಯಸ್ಥಿಕೆ ಮಾಡುವುದಿಲ್ಲ.',
@@ -67,7 +68,7 @@ const content = {
     section5Heading: 'ಪ್ರಾರಂಭಿಸುವುದು ಹೇಗೆ',
     section5Text:
       'ಇಲ್ಲಿಗೆ ಬರುವ ದಾರಿ ಸಂಭಾಷಣೆ, ಒಂದು ಅರ್ಜಿ ಫಾರ್ಮ್ ಅಲ್ಲ. ಯಾವುದೇ ವಹಿವಾಟಿನ ಬಗ್ಗೆ ಚರ್ಚಿಸುವ ಮೊದಲು, ಗಂಭೀರವಾಗಿ ಆಸಕ್ತಿ ಹೊಂದಿರುವ ಯಾರಾದರೂ ಕನಿಷ್ಠ 2 ಈಗಿನ ಸದಸ್ಯರೊಂದಿಗೆ ಸಂವಹನ ನಡೆಸಿ, ಸಮುದಾಯದ ಭಾಗವಾಗಿರಲು ಅವರ ಆಯಾ ಕಾರಣಗಳನ್ನು ಅರ್ಥಮಾಡಿಕೊಳ್ಳಬೇಕೆಂದು ನಾವು ಕೇಳುತ್ತೇವೆ — ಇದರಿಂದ ಜನರನ್ನು ಇಲ್ಲಿಗೆ ಸೆಳೆಯುವುದೇನು ಮತ್ತು ಸದಸ್ಯರಿಂದ ನಿಜವಾಗಿ ಏನನ್ನು ನಿರೀಕ್ಷಿಸಲಾಗುತ್ತದೆ ಎಂಬುದನ್ನು ನೀವು ಸಂಬಂಧಿಸಿಕೊಳ್ಳಬಹುದು.',
-    memberPairNote: '53 ಸದಸ್ಯ ಕುಟುಂಬಗಳಲ್ಲಿ ನೀವು ಮಾತನಾಡಬಹುದಾದ ಇಬ್ಬರು.',
+    memberPairNote: `${MEMBER_FAMILY_COUNT} ಸದಸ್ಯ ಕುಟುಂಬಗಳಲ್ಲಿ ನೀವು ಮಾತನಾಡಬಹುದಾದ ಇಬ್ಬರು.`,
     readyHeading: 'ಸಂಭಾಷಣೆ ಪ್ರಾರಂಭಿಸಲು ಸಿದ್ಧರಿದ್ದೀರಾ?',
     readyHint: 'ಒಂದು ಸ್ಥಾನ ತೆರೆದಾಗ ನಮಗೆ ನಿಮ್ಮನ್ನು ನೆನಪಿನಲ್ಲಿಟ್ಟುಕೊಳ್ಳಬೇಕೆಂದು ಬಯಸಿದರೆ, ನಿಮ್ಮ ಬಗ್ಗೆ ಸ್ವಲ್ಪ ತಿಳಿಸಿ.',
     messageLabel: 'ನಿಮ್ಮ ಬಗ್ಗೆ ಮತ್ತು TVC ನಿಮಗೆ ಆಸಕ್ತಿ ಏಕೆ ಎಂಬುದನ್ನು ತಿಳಿಸಿ',
@@ -80,9 +81,9 @@ const content = {
       'டமரிண்ட் வேலி கலெக்டிவில் உறுப்பினர் நிலை உண்மையில் எப்படி வேலை செய்கிறது — சமூக அளவு, உறுப்பினர்களுக்கு இடையேயான தனிப்பட்ட பரிவர்த்தனைகள், மற்றும் புதிய உறுப்பினரிடம் நாங்கள் எதைக் கருதுகிறோம்.',
     heroEyebrow: 'உறுப்பினர் நிலை',
     heroTitle: 'கலெக்டிவில் இணைதல்',
-    heroIntro: 'TVC தற்போதைய 53 குடும்பங்களைத் தாண்டி விரிவடையும் வாய்ப்பு குறைவு — ஆனால் ஒரு இடம் அவ்வப்போது திறக்கும். அது உண்மையில் எப்படி வேலை செய்கிறது, மற்றும் எங்களுக்கு எது முக்கியம் என்பது இங்கே.',
+    heroIntro: `TVC தற்போதைய ${MEMBER_FAMILY_COUNT} குடும்பங்களைத் தாண்டி விரிவடையும் வாய்ப்பு குறைவு — ஆனால் ஒரு இடம் அவ்வப்போது திறக்கும். அது உண்மையில் எப்படி வேலை செய்கிறது, மற்றும் எங்களுக்கு எது முக்கியம் என்பது இங்கே.`,
     section1Heading: 'நாங்கள் விரிவடையும் வாய்ப்பு குறைவு',
-    section1Text: `TVC என்பது ${FARM_AREA_ACRES} ஏக்கரில் <a href="${peopleHref}">53 குடும்பங்கள்</a> — இது இந்த சமூகம் எப்போதும் அடையக்கூடிய அதிகபட்ச அளவிற்கு நெருக்கமாக இருக்கலாம். நாங்கள் உறுப்பினர் எண்ணிக்கையை விரிவுபடுத்தும் வாய்ப்பு குறைவு, மற்றும் வழக்கமான அர்த்தத்தில் காத்திருப்பு பட்டியல் அல்லது விண்ணப்ப செயல்முறை எதுவும் இல்லை.`,
+    section1Text: `TVC என்பது ${FARM_AREA_ACRES} ஏக்கரில் <a href="${peopleHref}">${MEMBER_FAMILY_COUNT} குடும்பங்கள்</a> — இது இந்த சமூகம் எப்போதும் அடையக்கூடிய அதிகபட்ச அளவிற்கு நெருக்கமாக இருக்கலாம். நாங்கள் உறுப்பினர் எண்ணிக்கையை விரிவுபடுத்தும் வாய்ப்பு குறைவு, மற்றும் வழக்கமான அர்த்தத்தில் காத்திருப்பு பட்டியல் அல்லது விண்ணப்ப செயல்முறை எதுவும் இல்லை.`,
     section2Heading: 'ஒரு இடம் அவ்வப்போது எப்படி திறக்கிறது',
     section2Text:
       'அவ்வப்போது, தனிப்பட்ட காரணங்களுக்காக, ஒரு உறுப்பினர் குடும்பம் முன்னேற முடிவு செய்கிறது. அப்போது நடப்பது கலெக்டிவ் ஒரு இடத்தை விற்பது அல்ல — அது அந்த குடும்பத்திற்கும் அவர்களின் இடத்தை எடுக்கும் நபருக்கும் இடையேயான நேரடி தனிப்பட்ட பரிவர்த்தனை. TVC இந்த விற்பனையில் ஒரு தரப்பினர் அல்ல, அதை நடத்தி வைக்கவும் இல்லை.',
@@ -95,7 +96,7 @@ const content = {
     section5Heading: 'எப்படி தொடங்குவது',
     section5Text:
       'இங்கு வரும் வழி உரையாடல், ஒரு படிவம் அல்ல. எந்த பரிவர்த்தனையும் விவாதிக்கப்படுவதற்கு முன், தீவிரமாக ஆர்வமுள்ள எவரும் குறைந்தது 2 தற்போதைய உறுப்பினர்களுடன் ஈடுபட்டு, சமூகத்தின் ஒரு பகுதியாக இருப்பதற்கான அவர்களின் அந்தந்த காரணங்களைப் புரிந்துகொள்ள வேண்டும் என்று நாங்கள் கேட்கிறோம் — இதனால் மக்களை இங்கு ஈர்ப்பது என்ன, ஒரு உறுப்பினரிடமிருந்து உண்மையில் என்ன எதிர்பார்க்கப்படுகிறது என்பதை நீங்கள் தொடர்பு படுத்திக் கொள்ளலாம்.',
-    memberPairNote: 'நீங்கள் பேசக்கூடிய 53 உறுப்பினர் குடும்பங்களில் இருவர்.',
+    memberPairNote: `நீங்கள் பேசக்கூடிய ${MEMBER_FAMILY_COUNT} உறுப்பினர் குடும்பங்களில் இருவர்.`,
     readyHeading: 'உரையாடலைத் தொடங்க தயாரா?',
     readyHint: 'ஒரு இடம் திறக்கும்போது உங்களை நினைவில் வைத்திருக்க வேண்டும் என விரும்பினால், உங்களைப் பற்றி எங்களிடம் சிறிது சொல்லுங்கள்.',
     messageLabel: 'உங்களைப் பற்றியும் TVC ஏன் உங்களுக்கு ஆர்வமூட்டுகிறது என்பதையும் சொல்லுங்கள்',

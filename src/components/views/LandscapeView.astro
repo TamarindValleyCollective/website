@@ -4,6 +4,7 @@ import PageHero from '../PageHero.astro';
 import { useTranslations, type Locale } from '../../i18n/utils';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import { LAT, LNG } from '../../utils/weather';
+import { ELEPHANT_CORRIDOR_CLAUSE } from '../../data/site-facts';
 
 interface Props {
   lang: Locale;
@@ -22,7 +23,7 @@ const content = {
     heroImageAlt: 'Looking out over the valley from the hills above TVC',
     introText: "TVC sits on a west-facing hillslope on the Tamil Nadu–Karnataka border, with sunset views across the valley. It's part of the Melagiri Hills, the range where the Eastern and Western Ghats meet — a geographic seam that makes the range biodiversity-rich and, for wildlife moving between habitats, a through-route rather than a dead end.",
     corridorHeading: 'Where this sits in the wider corridor',
-    corridorText: "The Melagiris alone cover roughly 1,295 km² of forest. TVC sits inside a live elephant corridor connecting Bannerghatta National Park to the Cauvery — one link in a wider chain also tying in MM Hills, BR Hills, Sathyamangalam, and the Nilgiri Biosphere Reserve, together one of South India's larger contiguous elephant landscapes. More on what that means for the land and its wildlife on",
+    corridorText: `The Melagiris alone cover roughly 1,295 km² of forest. TVC sits inside ${ELEPHANT_CORRIDOR_CLAUSE}, together one of South India's larger contiguous elephant landscapes. More on what that means for the land and its wildlife on`,
     corridorCaption: 'Marker positions are each protected area’s approximate reference point, shown here for scale and relative position — not a traced boundary.',
     rangeHeading: 'How far elephants range',
     rangeText1: 'Radio-telemetry studies elsewhere in this same corridor — collared female clans and bulls in the Nilgiri Biosphere Reserve — found average home ranges of around 677 km² for female clans (550–700 km²) and 293 km² for lone bulls (211–375 km²), shifting with rainfall and food availability. Dry-season ranges stay tight around perennial water; monsoon and post-monsoon ranges (roughly July–February) expand as temporary water opens up and crops ripen — the same window in which elephants are most likely to move through a corridor like this one toward farmland.',

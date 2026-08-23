@@ -127,6 +127,13 @@ export const members: Member[] = [
   { name: 'Shilpa & Aditya', bio: "Shilpa is a development finance professional with nearly 20 years across institutions like the World Bank and the Reserve Bank Innovation Hub, and a published children's book author. Aditya has nearly 20 years in B2C e-commerce, across Myntra, Amazon, and Cleartrip.", photo: '/images/members/shilpa-and-aditya.jpg' },
 ];
 
+// The "53 families" figure quoted in prose across Home/About/People/Members/
+// Join was previously hand-typed independently in ~8 places, with nothing
+// keeping them in sync with this array (the actual source of truth) if
+// membership ever changes. Derive it here instead so every consumer reads
+// the real count.
+export const MEMBER_FAMILY_COUNT = members.length;
+
 // A stable per-card anchor id (e.g. "sree-and-prameela") for the Members
 // page grid and this file's own SiteSearch consumer. Same "-and-"
 // convention as the existing photo filenames for readability. Names in

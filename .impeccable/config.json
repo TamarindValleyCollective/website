@@ -11,6 +11,63 @@
         ],
         "createdAt": "2026-08-21T12:03:02.018Z",
         "reason": "pre-existing .fact-quote blockquote style, not a card accent; out of scope for this change"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/components/views/AboutView.astro"
+        ],
+        "createdAt": "2026-08-23T02:25:09.038Z",
+        "reason": "pre-existing .fact-quote pull-quote blockquote for a single quoted fact, not a feature card; same false positive as before, re-flagged only because the git revert removed the earlier suppression"
+      },
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "src/components/JourneyTimelineStandalone.astro"
+        ],
+        "createdAt": "2026-08-23T02:47:50.859Z",
+        "reason": "pre-existing lightbox <img> template stub with empty src/alt, populated at runtime by client-side JS when a photo is opened — not a shipped broken image; unrelated to this edit, re-flagged only due to line-shift re-scan"
+      },
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "src/components/views/MembersView.astro"
+        ],
+        "createdAt": "2026-08-23T02:58:10.527Z",
+        "reason": "pre-existing JS-hydrated member-detail and photo-lightbox <img> template stubs with empty src/alt, populated at runtime by client script on card/photo click - not shipped broken images; unrelated to this edit (adding a MEMBER_FAMILY_COUNT import), re-flagged only due to line-shift re-scan"
+      },
+      {
+        "rule": "overused-font",
+        "value": "fraunces",
+        "createdAt": "2026-08-23T03:01:57.642Z",
+        "reason": "documented deliberate brand choice in global.css's own comment: warm serif display face chosen over a rounded sans to avoid flattening heading hierarchy site-wide; self-hosted variable font, not a default pick"
+      },
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-08-23T03:01:57.675Z",
+        "reason": "documented deliberate choice in global.css's own comment: consistent cross-platform body/UI face replacing the raw system-font stack, paired intentionally with the Fraunces display face"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/components/views/HomeView.astro"
+        ],
+        "createdAt": "2026-08-23T03:01:57.707Z",
+        "reason": "site-wide blockquote convention (border-left pull-quote style used for the quote-pair section), same pattern already confirmed legitimate elsewhere on About/Journey pages this session, not a feature-card tab"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/styles/global.css"
+        ],
+        "createdAt": "2026-08-23T03:01:57.741Z",
+        "reason": ".callout is a documented, deliberate reserve component (own code comment: generalized from the existing .rainfall-summary bordered-card pattern), not an accidental AI-card tell"
       }
     ]
   }

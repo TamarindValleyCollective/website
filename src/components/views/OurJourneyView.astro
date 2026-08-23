@@ -5,6 +5,7 @@ import JourneyTimeline from '../JourneyTimelineStandalone.astro';
 import { FARM_AREA_ACRES } from '../../data/site-facts';
 import type { Locale } from '../../i18n/utils';
 import { organizationId } from '../../utils/schema';
+import { getRelativeLocaleUrl } from 'astro:i18n';
 
 interface Props {
   lang: Locale;
@@ -21,16 +22,25 @@ const content = {
     metaDescription: `From ${FARM_AREA_ACRES} degraded acres to a regenerating ecosystem, walked year by year in photos.`,
     heroEyebrow: 'Our Journey',
     heroTitle: 'From degraded land to a regenerating ecosystem',
+    teaserHeading: 'In Pictures',
+    teaserText: 'The same regeneration story, in photos — camera and location details where we have them.',
+    teaserCta: 'See the gallery →',
   },
   kn: {
     metaDescription: `${FARM_AREA_ACRES} ಎಕರೆ ಅವನತಿ ಹೊಂದಿದ ಭೂಮಿಯಿಂದ ಪುನರುಜ್ಜೀವನಗೊಳ್ಳುತ್ತಿರುವ ಪರಿಸರ ವ್ಯವಸ್ಥೆಯವರೆಗೆ, ವರ್ಷದಿಂದ ವರ್ಷಕ್ಕೆ ಫೋಟೋಗಳಲ್ಲಿ ಸಾಗಿದ ಹಾದಿ.`,
     heroEyebrow: 'ನಮ್ಮ ಪಯಣ',
     heroTitle: 'ಅವನತಿ ಹೊಂದಿದ ಭೂಮಿಯಿಂದ ಪುನರುಜ್ಜೀವನಗೊಳ್ಳುತ್ತಿರುವ ಪರಿಸರ ವ್ಯವಸ್ಥೆಯವರೆಗೆ',
+    teaserHeading: 'ಚಿತ್ರಗಳಲ್ಲಿ',
+    teaserText: 'ಅದೇ ಪುನರುಜ್ಜೀವನದ ಕಥೆ, ಚಿತ್ರಗಳಲ್ಲಿ — ನಮ್ಮಲ್ಲಿರುವಲ್ಲಿ ಕ್ಯಾಮೆರಾ ಮತ್ತು ಸ್ಥಳದ ವಿವರಗಳೊಂದಿಗೆ.',
+    teaserCta: 'ಗ್ಯಾಲರಿ ನೋಡಿ →',
   },
   ta: {
     metaDescription: `${FARM_AREA_ACRES} ஏக்கர் சிதைந்த நிலத்திலிருந்து மீட்டெடுக்கப்படும் சுற்றுச்சூழல் அமைப்பு வரை, ஆண்டுக்கு ஆண்டு புகைப்படங்களில் நடந்த பயணம்.`,
     heroEyebrow: 'எங்கள் பயணம்',
     heroTitle: 'சிதைந்த நிலத்திலிருந்து மீட்டெடுக்கப்படும் சுற்றுச்சூழல் அமைப்பு வரை',
+    teaserHeading: 'படங்களில்',
+    teaserText: 'அதே மீட்டெடுப்புக் கதை, படங்களில் — எங்களிடம் இருக்கும் இடத்தில் கேமரா மற்றும் இருப்பிட விவரங்களுடன்.',
+    teaserCta: 'தொகுப்பைப் பார்க்கவும் →',
   },
 } as const;
 
@@ -59,4 +69,64 @@ const journeySchema = {
   />
 
   <JourneyTimeline lang={lang} />
+
+  {/* Every other page in the Explore/Engage nav routes on to something -
+      this was the one dead end. In Pictures is the natural next stop: the
+      same regeneration story this page just told in text, told again in
+      photos. Same `.teaser` card convention as AboutView's design/people/
+      join teasers (image earns its keep, not a bare text link). */}
+  <section class="section section--tint">
+    <div class="wrapper">
+      <a class="teaser" href={getRelativeLocaleUrl(lang, '/in-pictures')}>
+        <img class="teaser__media" src="https://media.tvc.farm/photos/2024/2024-08-18-img-1880-thumb.jpg" alt="" loading="lazy" />
+        <div class="teaser__body">
+          <h2>{c.teaserHeading}</h2>
+          <p>{c.teaserText}</p>
+          <span class="teaser__cta">{c.teaserCta}</span>
+        </div>
+      </a>
+    </div>
+  </section>
 </BaseLayout>
+
+<style>
+  .teaser {
+    display: grid;
+    grid-template-columns: minmax(160px, 280px) 1fr;
+    gap: 24px;
+    align-items: center;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .teaser__media {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: var(--radius);
+  }
+
+  .teaser__body h2 {
+    margin-bottom: 8px;
+  }
+
+  .teaser__body p {
+    margin-bottom: 10px;
+  }
+
+  .teaser__cta {
+    font-weight: 700;
+    color: var(--tvc-green-dark);
+  }
+
+  .teaser:hover .teaser__cta {
+    text-decoration: underline;
+  }
+
+  @media (max-width: 640px) {
+    .teaser {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

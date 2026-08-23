@@ -88,7 +88,7 @@ const ICONS: Record<number, string> = {
 const FOUNDING_YEARS: YearEntry[] = [
   {
     year: 2017, icon: '🌱', summary: 'Seed planted',
-    intro: "TVC began as a seed idea from a group who wanted to live sustainably as a community. WeCommunities came on as our real-estate development partner — TVC was their very first project. The group chose a site in Tamil Nadu near the village of Thakkatti, starting with 10 members. (Our 53rd and most recent member joined in 2024 — we're 53 strong today.)",
+    intro: "TVC began as a seed idea from a group who wanted to live sustainably as a community. WeCommunities came on as our real-estate development partner — TVC was their very first project. The group chose a site in Tamil Nadu near the village of Thaggatti, starting with 10 members. (Our 53rd and most recent member joined in 2024 — we're 53 strong today.)",
     months: [
       { m: 'March', t: 'First visit to the site. The land was barren, its topsoil stripped of organic matter.', imgs: ['/images/journey/journey-01.jpg'] },
       { m: 'June', t: 'The first earthwork was built to help store water on the land.', imgs: ['/images/journey/journey-45.jpg'] },
@@ -149,7 +149,7 @@ const FOUNDING_YEARS: YearEntry[] = [
     months: [
       { m: 'March', t: 'Ground was broken for home construction.', imgs: ['/images/journey/journey-25.jpg'] },
       { m: 'July', t: 'Power reached TVC with the installation of a 100kW transformer.', imgs: [] },
-      { m: 'September', t: 'Vijay and Sunita began engaging with the local school in Odipuram.', imgs: ['/images/journey/journey-26.jpg'] },
+      { m: 'September', t: 'Vijay and Sunita began engaging with the local school in Odhipuram.', imgs: ['/images/journey/journey-26.jpg'] },
     ],
   },
   {
@@ -190,7 +190,7 @@ const ERAS: Era[] = [
     name: 'Founding',
     range: '2017–2026',
     poem: [
-      'Nine years back, ten hands and a fence line\nheld a barren field near Thakkatti behind.\nEarthwork by earthwork, one workshop, one season —\nthe soil slowly remembered its reason.',
+      'Nine years back, ten hands and a fence line\nheld a barren field near Thaggatti behind.\nEarthwork by earthwork, one workshop, one season —\nthe soil slowly remembered its reason.',
       'A mud hut rose by hand. A wildfire came and went.\nElephants wandered through, uninvited, unbent.\nA transformer vanished one restless July night —\nstill, somehow, the years kept turning out right.',
       'Nine winters deep in, our first true home now stands.\nScroll below — and walk it through, hand in hand.',
     ],
@@ -759,15 +759,17 @@ function tm(month: string): string {
   .jt-index-item.active .jt-index-num { color: var(--jt-orange); }
 
   .jt-index-dash {
-    width: 14px;
+    width: 26px;
     height: 1px;
     background: var(--jt-line);
-    transition: width 0.35s ease, background 0.35s ease;
+    transform: scaleX(0.538);
+    transform-origin: left;
+    transition: transform 0.35s ease, background 0.35s ease;
     flex: 0 0 auto;
   }
 
   .jt-index-item.active .jt-index-dash {
-    width: 26px;
+    transform: scaleX(1);
     background: var(--jt-green);
   }
 

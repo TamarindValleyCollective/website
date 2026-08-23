@@ -3,7 +3,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import CompareSlider from '../CompareSlider.astro';
 import { PRINCIPLES } from '../../data/principles';
-import { FARM_AREA_ACRES } from '../../data/site-facts';
+import { FARM_AREA_ACRES, ELEPHANT_CORRIDOR_CLAUSE } from '../../data/site-facts';
+import { MEMBER_FAMILY_COUNT } from '../../data/members';
 import { organizationId } from '../../utils/schema';
 import { useTranslations, type Locale } from '../../i18n/utils';
 
@@ -23,15 +24,15 @@ const content = {
   en: {
     metaDescription: 'Why Tamarind Valley Collective exists, what we stand for, and how the land is laid out.',
     heroTitle: 'Why TVC?',
-    heroIntro: `A collective of 53 families regenerating ${FARM_AREA_ACRES} acres of the Melagiri Hills.`,
+    heroIntro: `A collective of ${MEMBER_FAMILY_COUNT} families regenerating ${FARM_AREA_ACRES} acres of the Melagiri Hills.`,
     standForHeading: 'What we stand for',
     visionHeading: 'Vision',
     visionText: 'To be a model for regenerating land as one ecosystem — sharing knowledge freely, and proving that a small, disciplined community can create outsized positive impact.',
     missionHeading: 'Mission',
     missionText1: 'We unite individuals committed to sustainable living to regenerate a low-energy landscape that connects rather than competes with nature, ensuring a fair share for birds and beasts alongside our own. Through shared labor, native seed banking, and disciplined land stewardship, we aim to demonstrate that regeneration can uplift both ecosystems and neighboring communities.',
-    missionText2: 'As the name indicates, TVC is a collective of like-minded people who have come together to evolve a sustainable living concept. We are currently <a href="/people/members">53 families</a> that care about the degradation of natural resources globally and would like to experiment with a living style that reduces consumption and incorporates naturally supported cyclical systems.',
+    missionText2: `As the name indicates, TVC is a collective of like-minded people who have come together to evolve a sustainable living concept. We are currently <a href="/people/members">${MEMBER_FAMILY_COUNT} families</a> that care about the degradation of natural resources globally and would like to experiment with a living style that reduces consumption and incorporates naturally supported cyclical systems.`,
     landHeading: 'The land',
-    missionText3a: `TVC is ${FARM_AREA_ACRES} acres of the Melagiri Hills, collectively owned by these families — a range straddling Tamil Nadu's Dharmapuri and Krishnagiri districts where the Eastern and Western Ghats meet, bordering Karnataka along the Cauvery. Part of the range was declared the Cauvery North Wildlife Sanctuary in 2014, and the whole landscape is a live elephant corridor connecting Bannerghatta National Park to the Cauvery — one link in a wider chain that also ties in MM Hills, BR Hills, Sathyamangalam, and the Nilgiri Biosphere Reserve.`,
+    missionText3a: `TVC is ${FARM_AREA_ACRES} acres of the Melagiri Hills, collectively owned by these families — a range straddling Tamil Nadu's Dharmapuri and Krishnagiri districts where the Eastern and Western Ghats meet, bordering Karnataka along the Cauvery. Part of the range was declared the Cauvery North Wildlife Sanctuary in 2014, and the whole landscape is ${ELEPHANT_CORRIDOR_CLAUSE}.`,
     missionText3b: `Wide-ranging animals, elephants especially, move through it freely, since they don't recognize human-drawn boundaries; farms, roads, and settlements that fragment the corridor choke off that movement and worsen human-elephant conflict. Due to exploitative farming practices, the land was degraded when we bought it — exactly the kind of fragmentation this corridor can't afford. Since 2017, the community has been using permaculture principles to regenerate its fertility naturally: one small, verifiable piece of restoring habitat quality inside one of India's most important wildlife corridors, not just claiming to.`,
     missionQuote: "Conservationists who've visited have remarked that there's now no visible difference between TVC's regenerated land and the adjoining forest.",
     farmingHeading: 'Farming, the TVC way',
@@ -51,22 +52,19 @@ const content = {
     designText: "The permaculture principles behind the land's layout — the wildlife corridor, food forests, cultivated zones, and water works — mapped out, plus a drone flyover.",
     designLink: 'See the design →',
     peopleHeading: "Who's part of TVC",
-    peopleText: 'The 53 member families who own the land collectively, the local staff who run it day to day, and the partners and neighboring community who make it all work.',
+    peopleText: `The ${MEMBER_FAMILY_COUNT} member families who own the land collectively, the local staff who run it day to day, and the partners and neighboring community who make it all work.`,
     peopleLink: 'Meet the people →',
-    joinHeading: 'Interested in becoming a member?',
-    joinText: "Membership isn't really open — 53 families is close to as large as this community will get. When a spot does open, it passes privately between members rather than through any application process. Here's exactly how that works.",
-    joinLink: 'Read how it works →',
   },
   kn: {
     metaDescription: 'ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್ ಏಕೆ ಅಸ್ತಿತ್ವದಲ್ಲಿದೆ, ನಾವು ಏನನ್ನು ಪ್ರತಿಪಾದಿಸುತ್ತೇವೆ, ಮತ್ತು ಭೂಮಿಯನ್ನು ಹೇಗೆ ವಿನ್ಯಾಸಗೊಳಿಸಲಾಗಿದೆ.',
     heroTitle: 'ಏಕೆ TVC?',
-    heroIntro: `ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ ${FARM_AREA_ACRES} ಎಕರೆಗಳನ್ನು ಪುನರುಜ್ಜೀವನಗೊಳಿಸುತ್ತಿರುವ 53 ಕುಟುಂಬಗಳ ಒಂದು ಸಂಘಟನೆ.`,
+    heroIntro: `ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ ${FARM_AREA_ACRES} ಎಕರೆಗಳನ್ನು ಪುನರುಜ್ಜೀವನಗೊಳಿಸುತ್ತಿರುವ ${MEMBER_FAMILY_COUNT} ಕುಟುಂಬಗಳ ಒಂದು ಸಂಘಟನೆ.`,
     standForHeading: 'ನಾವು ಏನನ್ನು ಪ್ರತಿಪಾದಿಸುತ್ತೇವೆ',
     visionHeading: 'ದೃಷ್ಟಿಕೋನ',
     visionText: 'ಭೂಮಿಯನ್ನು ಒಂದೇ ಪರಿಸರ ವ್ಯವಸ್ಥೆಯಾಗಿ ಪುನರುಜ್ಜೀವನಗೊಳಿಸುವ ಮಾದರಿಯಾಗುವುದು — ಜ್ಞಾನವನ್ನು ಮುಕ್ತವಾಗಿ ಹಂಚಿಕೊಳ್ಳುವುದು, ಮತ್ತು ಒಂದು ಚಿಕ್ಕ, ಶಿಸ್ತುಬದ್ಧ ಸಮುದಾಯವು ಅಸಾಧಾರಣ ಸಕಾರಾತ್ಮಕ ಪರಿಣಾಮವನ್ನು ಸೃಷ್ಟಿಸಬಲ್ಲದು ಎಂದು ಸಾಬೀತುಪಡಿಸುವುದು.',
     missionHeading: 'ಧ್ಯೇಯ',
     missionText1: 'ಸುಸ್ಥಿರ ಜೀವನಶೈಲಿಗೆ ಬದ್ಧರಾದ ವ್ಯಕ್ತಿಗಳನ್ನು ಒಗ್ಗೂಡಿಸಿ, ಪ್ರಕೃತಿಯೊಂದಿಗೆ ಸ್ಪರ್ಧಿಸುವ ಬದಲು ಅದರೊಂದಿಗೆ ಸಂಪರ್ಕ ಸಾಧಿಸುವ ಕಡಿಮೆ-ಶಕ್ತಿಯ ಭೂಪ್ರದೇಶವನ್ನು ಪುನರುಜ್ಜೀವನಗೊಳಿಸುವುದು, ನಮ್ಮ ಜೊತೆಗೆ ಪಕ್ಷಿಗಳಿಗೂ ಪ್ರಾಣಿಗಳಿಗೂ ನ್ಯಾಯಯುತ ಪಾಲನ್ನು ಖಚಿತಪಡಿಸುವುದು ನಮ್ಮ ಗುರಿ. ಹಂಚಿಕೆಯ ಶ್ರಮ, ಸ್ಥಳೀಯ ಬೀಜ ಸಂಗ್ರಹಣೆ ಮತ್ತು ಶಿಸ್ತುಬದ್ಧ ಭೂ ನಿರ್ವಹಣೆಯ ಮೂಲಕ, ಪುನರುಜ್ಜೀವನವು ಪರಿಸರ ವ್ಯವಸ್ಥೆಗಳನ್ನು ಮತ್ತು ನೆರೆಯ ಸಮುದಾಯಗಳನ್ನು ಎರಡನ್ನೂ ಮೇಲೆತ್ತಬಲ್ಲದು ಎಂದು ತೋರಿಸಲು ನಾವು ಬಯಸುತ್ತೇವೆ.',
-    missionText2: 'TVC ಎಂಬ ಹೆಸರೇ ಸೂಚಿಸುವಂತೆ, ಇದು ಸುಸ್ಥಿರ ಜೀವನ ಪರಿಕಲ್ಪನೆಯನ್ನು ರೂಪಿಸಲು ಒಗ್ಗೂಡಿದ ಸಮಾನ ಮನಸ್ಕ ಜನರ ಒಂದು ಸಂಘಟನೆ. ಪ್ರಸ್ತುತ ನಾವು <a href="/people/members">53 ಕುಟುಂಬಗಳು</a> — ಜಾಗತಿಕ ನೈಸರ್ಗಿಕ ಸಂಪನ್ಮೂಲಗಳ ಅವನತಿಯ ಬಗ್ಗೆ ಕಾಳಜಿ ವಹಿಸುವ ಮತ್ತು ಬಳಕೆಯನ್ನು ಕಡಿಮೆ ಮಾಡುವ, ನೈಸರ್ಗಿಕವಾಗಿ ಬೆಂಬಲಿತ ಆವರ್ತಕ ವ್ಯವಸ್ಥೆಗಳನ್ನು ಅಳವಡಿಸಿಕೊಳ್ಳುವ ಜೀವನಶೈಲಿಯನ್ನು ಪ್ರಯೋಗಿಸಲು ಬಯಸುತ್ತೇವೆ.',
+    missionText2: `TVC ಎಂಬ ಹೆಸರೇ ಸೂಚಿಸುವಂತೆ, ಇದು ಸುಸ್ಥಿರ ಜೀವನ ಪರಿಕಲ್ಪನೆಯನ್ನು ರೂಪಿಸಲು ಒಗ್ಗೂಡಿದ ಸಮಾನ ಮನಸ್ಕ ಜನರ ಒಂದು ಸಂಘಟನೆ. ಪ್ರಸ್ತುತ ನಾವು <a href="/people/members">${MEMBER_FAMILY_COUNT} ಕುಟುಂಬಗಳು</a> — ಜಾಗತಿಕ ನೈಸರ್ಗಿಕ ಸಂಪನ್ಮೂಲಗಳ ಅವನತಿಯ ಬಗ್ಗೆ ಕಾಳಜಿ ವಹಿಸುವ ಮತ್ತು ಬಳಕೆಯನ್ನು ಕಡಿಮೆ ಮಾಡುವ, ನೈಸರ್ಗಿಕವಾಗಿ ಬೆಂಬಲಿತ ಆವರ್ತಕ ವ್ಯವಸ್ಥೆಗಳನ್ನು ಅಳವಡಿಸಿಕೊಳ್ಳುವ ಜೀವನಶೈಲಿಯನ್ನು ಪ್ರಯೋಗಿಸಲು ಬಯಸುತ್ತೇವೆ.`,
     landHeading: 'ಭೂಮಿ',
     missionText3a: `TVC ಎಂಬುದು ಈ ಕುಟುಂಬಗಳ ಸಾಮೂಹಿಕ ಒಡೆತನದ ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ ${FARM_AREA_ACRES} ಎಕರೆ ಭೂಮಿ — ಪೂರ್ವ ಮತ್ತು ಪಶ್ಚಿಮ ಘಟ್ಟಗಳು ಸಂಧಿಸುವ, ತಮಿಳುನಾಡಿನ ಧರ್ಮಪುರಿ ಮತ್ತು ಕೃಷ್ಣಗಿರಿ ಜಿಲ್ಲೆಗಳಲ್ಲಿ ಹರಡಿರುವ, ಕಾವೇರಿಯ ಉದ್ದಕ್ಕೂ ಕರ್ನಾಟಕದ ಗಡಿಯನ್ನು ಹಂಚಿಕೊಳ್ಳುವ ಶ್ರೇಣಿ. ಈ ಶ್ರೇಣಿಯ ಒಂದು ಭಾಗವನ್ನು 2014ರಲ್ಲಿ ಕಾವೇರಿ ಉತ್ತರ ವನ್ಯಜೀವಿ ಅಭಯಾರಣ್ಯ ಎಂದು ಘೋಷಿಸಲಾಯಿತು, ಮತ್ತು ಇಡೀ ಭೂಪ್ರದೇಶವು ಬನ್ನೇರುಘಟ್ಟ ರಾಷ್ಟ್ರೀಯ ಉದ್ಯಾನವನ್ನು ಕಾವೇರಿಗೆ ಸಂಪರ್ಕಿಸುವ ಜೀವಂತ ಆನೆ ಕಾರಿಡಾರ್ ಆಗಿದೆ — ಇದು MM ಬೆಟ್ಟಗಳು, BR ಬೆಟ್ಟಗಳು, ಸತ್ಯಮಂಗಲಂ ಮತ್ತು ನೀಲಗಿರಿ ಜೀವಗೋಳ ಮೀಸಲು ಪ್ರದೇಶವನ್ನೂ ಜೋಡಿಸುವ ವಿಶಾಲ ಸರಪಳಿಯ ಒಂದು ಕೊಂಡಿ.`,
     missionText3b: `ವ್ಯಾಪಕವಾಗಿ ಸಂಚರಿಸುವ ಪ್ರಾಣಿಗಳು, ವಿಶೇಷವಾಗಿ ಆನೆಗಳು, ಮಾನವ ನಿರ್ಮಿತ ಗಡಿಗಳನ್ನು ಗುರುತಿಸದ ಕಾರಣ ಇಲ್ಲಿ ಮುಕ್ತವಾಗಿ ಸಂಚರಿಸುತ್ತವೆ; ಕಾರಿಡಾರ್ ಅನ್ನು ಛಿದ್ರಗೊಳಿಸುವ ಫಾರ್ಮ್‌ಗಳು, ರಸ್ತೆಗಳು ಮತ್ತು ವಸಾಹತುಗಳು ಆ ಸಂಚಾರವನ್ನು ಉಸಿರುಗಟ್ಟಿಸಿ ಮಾನವ-ಆನೆ ಸಂಘರ್ಷವನ್ನು ಹೆಚ್ಚಿಸುತ್ತವೆ. ಶೋಷಣಾತ್ಮಕ ಕೃಷಿ ಪದ್ಧತಿಗಳಿಂದಾಗಿ, ನಾವು ಇದನ್ನು ಖರೀದಿಸಿದಾಗ ಭೂಮಿ ಅವನತಿ ಹೊಂದಿತ್ತು — ಈ ಕಾರಿಡಾರ್‌ಗೆ ಸಹಿಸಲಾಗದ ರೀತಿಯ ಛಿದ್ರೀಕರಣ. 2017ರಿಂದ, ಸಮುದಾಯವು ಪರ್ಮಾಕಲ್ಚರ್ ತತ್ವಗಳನ್ನು ಬಳಸಿ ಅದರ ಫಲವತ್ತತೆಯನ್ನು ನೈಸರ್ಗಿಕವಾಗಿ ಪುನರುಜ್ಜೀವನಗೊಳಿಸುತ್ತಿದೆ: ಭಾರತದ ಪ್ರಮುಖ ವನ್ಯಜೀವಿ ಕಾರಿಡಾರ್‌ಗಳಲ್ಲಿ ಒಂದರ ಆವಾಸಸ್ಥಾನದ ಗುಣಮಟ್ಟವನ್ನು ಪುನಃಸ್ಥಾಪಿಸುವ ಒಂದು ಚಿಕ್ಕ, ಪರಿಶೀಲಿಸಬಹುದಾದ ಭಾಗ, ಕೇವಲ ಹೇಳಿಕೆಯಲ್ಲ.`,
@@ -88,22 +86,19 @@ const content = {
     designText: 'ಭೂಮಿಯ ವಿನ್ಯಾಸದ ಹಿಂದಿನ ಪರ್ಮಾಕಲ್ಚರ್ ತತ್ವಗಳು — ವನ್ಯಜೀವಿ ಕಾರಿಡಾರ್, ಆಹಾರ ಅರಣ್ಯಗಳು, ಕೃಷಿ ವಲಯಗಳು ಮತ್ತು ಜಲ ಕಾಮಗಾರಿಗಳು — ನಕ್ಷೆ ಮಾಡಲಾಗಿದೆ, ಜೊತೆಗೆ ಡ್ರೋನ್ ಹಾರಾಟ.',
     designLink: 'ವಿನ್ಯಾಸ ನೋಡಿ →',
     peopleHeading: 'TVC ಯ ಭಾಗವಾಗಿರುವವರು ಯಾರು',
-    peopleText: 'ಭೂಮಿಯನ್ನು ಸಾಮೂಹಿಕವಾಗಿ ಹೊಂದಿರುವ 53 ಸದಸ್ಯ ಕುಟುಂಬಗಳು, ದಿನನಿತ್ಯ ಇದನ್ನು ನಡೆಸುವ ಸ್ಥಳೀಯ ಸಿಬ್ಬಂದಿ, ಮತ್ತು ಇದೆಲ್ಲವನ್ನೂ ಕಾರ್ಯಗತಗೊಳಿಸುವ ಪಾಲುದಾರರು ಮತ್ತು ನೆರೆಹೊರೆಯ ಸಮುದಾಯ.',
+    peopleText: `ಭೂಮಿಯನ್ನು ಸಾಮೂಹಿಕವಾಗಿ ಹೊಂದಿರುವ ${MEMBER_FAMILY_COUNT} ಸದಸ್ಯ ಕುಟುಂಬಗಳು, ದಿನನಿತ್ಯ ಇದನ್ನು ನಡೆಸುವ ಸ್ಥಳೀಯ ಸಿಬ್ಬಂದಿ, ಮತ್ತು ಇದೆಲ್ಲವನ್ನೂ ಕಾರ್ಯಗತಗೊಳಿಸುವ ಪಾಲುದಾರರು ಮತ್ತು ನೆರೆಹೊರೆಯ ಸಮುದಾಯ.`,
     peopleLink: 'ಜನರನ್ನು ಭೇಟಿ ಮಾಡಿ →',
-    joinHeading: 'ಸದಸ್ಯರಾಗಲು ಆಸಕ್ತಿ ಇದೆಯೇ?',
-    joinText: 'ಸದಸ್ಯತ್ವ ನಿಜವಾಗಿಯೂ ಮುಕ್ತವಾಗಿಲ್ಲ — 53 ಕುಟುಂಬಗಳು ಈ ಸಮುದಾಯ ಬೆಳೆಯಬಹುದಾದ ಗರಿಷ್ಠ ಗಾತ್ರಕ್ಕೆ ಹತ್ತಿರವಾಗಿದೆ. ಒಂದು ಸ್ಥಾನ ತೆರೆದಾಗ, ಅದು ಯಾವುದೇ ಅರ್ಜಿ ಪ್ರಕ್ರಿಯೆಯ ಮೂಲಕ ಅಲ್ಲ, ಬದಲಾಗಿ ಸದಸ್ಯರ ನಡುವೆ ಖಾಸಗಿಯಾಗಿ ಹಸ್ತಾಂತರಗೊಳ್ಳುತ್ತದೆ. ಅದು ನಿಖರವಾಗಿ ಹೇಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ ಎಂಬುದು ಇಲ್ಲಿದೆ.',
-    joinLink: 'ಅದು ಹೇಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ ಎಂಬುದನ್ನು ಓದಿ →',
   },
   ta: {
     metaDescription: 'டமரிண்ட் வேலி கலெக்டிவ் ஏன் இருக்கிறது, நாங்கள் எதை பிரதிநிதித்துவப்படுத்துகிறோம், மற்றும் நிலம் எப்படி வடிவமைக்கப்பட்டுள்ளது.',
     heroTitle: 'ஏன் TVC?',
-    heroIntro: `மேலகிரி மலைகளின் ${FARM_AREA_ACRES} ஏக்கர்களை மீட்டெடுக்கும் 53 குடும்பங்களின் ஒரு கூட்டமைப்பு.`,
+    heroIntro: `மேலகிரி மலைகளின் ${FARM_AREA_ACRES} ஏக்கர்களை மீட்டெடுக்கும் ${MEMBER_FAMILY_COUNT} குடும்பங்களின் ஒரு கூட்டமைப்பு.`,
     standForHeading: 'நாங்கள் எதை பிரதிநிதித்துவப்படுத்துகிறோம்',
     visionHeading: 'நோக்கம்',
     visionText: 'நிலத்தை ஒற்றை சுற்றுச்சூழல் அமைப்பாக மீட்டெடுக்கும் ஒரு முன்மாதிரியாக இருப்பது — அறிவை சுதந்திரமாக பகிர்ந்துகொள்வது, மற்றும் ஒரு சிறிய, ஒழுங்குமிக்க சமூகம் மிகப்பெரிய நேர்மறையான தாக்கத்தை உருவாக்க முடியும் என்பதை நிரூபிப்பது.',
     missionHeading: 'பணி',
     missionText1: 'நிலைத்தன்மையான வாழ்க்கை முறைக்கு அர்ப்பணிப்புள்ள நபர்களை ஒன்றிணைத்து, இயற்கையுடன் போட்டியிடுவதற்குப் பதிலாக அதனுடன் இணைந்திருக்கும் குறைந்த-ஆற்றல் நிலப்பரப்பை மீட்டெடுப்பது, நமக்கு மட்டுமல்லாமல் பறவைகள் மற்றும் விலங்குகளுக்கும் நியாயமான பங்கை உறுதிசெய்வது எங்கள் நோக்கம். பகிரப்பட்ட உழைப்பு, உள்நாட்டு விதை சேமிப்பு, மற்றும் ஒழுங்குமிக்க நில மேலாண்மை மூலம், மீட்டெடுப்பு சுற்றுச்சூழல் அமைப்புகளையும் அண்டை சமூகங்களையும் மேம்படுத்த முடியும் என்பதை நிரூபிக்க விரும்புகிறோம்.',
-    missionText2: 'TVC என்ற பெயர் குறிப்பிடுவது போல, இது நிலைத்தன்மையான வாழ்க்கை கருத்தை உருவாக்க ஒன்றிணைந்த ஒரே எண்ணம் கொண்ட மக்களின் ஒரு கூட்டமைப்பு. தற்போது நாங்கள் <a href="/people/members">53 குடும்பங்கள்</a> — உலகளாவிய இயற்கை வளங்களின் சிதைவைப் பற்றி அக்கறை கொண்டு, நுகர்வைக் குறைத்து, இயற்கையாக ஆதரிக்கப்படும் சுழற்சி முறைகளை உள்ளடக்கிய ஒரு வாழ்க்கை முறையை பரிசோதிக்க விரும்புகிறோம்.',
+    missionText2: `TVC என்ற பெயர் குறிப்பிடுவது போல, இது நிலைத்தன்மையான வாழ்க்கை கருத்தை உருவாக்க ஒன்றிணைந்த ஒரே எண்ணம் கொண்ட மக்களின் ஒரு கூட்டமைப்பு. தற்போது நாங்கள் <a href="/people/members">${MEMBER_FAMILY_COUNT} குடும்பங்கள்</a> — உலகளாவிய இயற்கை வளங்களின் சிதைவைப் பற்றி அக்கறை கொண்டு, நுகர்வைக் குறைத்து, இயற்கையாக ஆதரிக்கப்படும் சுழற்சி முறைகளை உள்ளடக்கிய ஒரு வாழ்க்கை முறையை பரிசோதிக்க விரும்புகிறோம்.`,
     landHeading: 'நிலம்',
     missionText3a: `TVC என்பது இந்த குடும்பங்களின் கூட்டு உரிமையிலான மேலகிரி மலைகளின் ${FARM_AREA_ACRES} ஏக்கர் நிலம் — கிழக்கு மற்றும் மேற்கு தொடர்ச்சி மலைகள் சந்திக்கும், தமிழ்நாட்டின் தர்மபுரி மற்றும் கிருஷ்ணகிரி மாவட்டங்களில் பரவியிருக்கும், காவேரி நதியோரம் கர்நாடகாவுடன் எல்லையைப் பகிரும் மலைத்தொடர். இந்த தொடர்ச்சியின் ஒரு பகுதி 2014 இல் காவேரி வடக்கு வனவிலங்கு சரணாலயமாக அறிவிக்கப்பட்டது, மேலும் முழு நிலப்பரப்பும் பன்னேர்காட்டா தேசிய பூங்காவை காவேரியுடன் இணைக்கும் ஒரு வாழும் யானை தாழ்வாரமாகும் — MM மலைகள், BR மலைகள், சத்தியமங்கலம் மற்றும் நீலகிரி உயிர்க்கோள இருப்பு ஆகியவற்றையும் இணைக்கும் ஒரு பரந்த சங்கிலியின் ஒரு இணைப்பு.`,
     missionText3b: `நீண்ட தூரம் நகரும் விலங்குகள், குறிப்பாக யானைகள், மனிதன் வரையறுத்த எல்லைகளை அறியாதவை என்பதால் இங்கு சுதந்திரமாக நகர்கின்றன; தாழ்வாரத்தை துண்டாக்கும் பண்ணைகள், சாலைகள் மற்றும் குடியிருப்புகள் அந்த நகர்வை தடுத்து மனிதன்-யானை மோதலை மோசமாக்குகின்றன. சுரண்டல் விவசாய முறைகளால், நாங்கள் இதை வாங்கியபோது நிலம் சிதைந்திருந்தது — இந்த தாழ்வாரத்திற்கு தாங்க முடியாத வகையான துண்டாக்கம். 2017 முதல், சமூகம் இயற்கை வேளாண்மை கொள்கைகளைப் பயன்படுத்தி அதன் வளத்தன்மையை இயற்கையாக மீட்டெடுத்து வருகிறது: இந்தியாவின் மிக முக்கியமான வனவிலங்கு தாழ்வாரங்களில் ஒன்றின் வாழ்விட தரத்தை மீட்டெடுக்கும் ஒரு சிறிய, சரிபார்க்கக்கூடிய பங்கு, வெறும் கூற்று அல்ல.`,
@@ -125,11 +120,8 @@ const content = {
     designText: 'நிலத்தின் அமைப்பின் பின்னணியில் உள்ள இயற்கை வேளாண்மை கொள்கைகள் — வனவிலங்கு தாழ்வாரம், உணவு காடுகள், பயிரிடப்பட்ட மண்டலங்கள் மற்றும் நீர் பணிகள் — வரைபடமாக்கப்பட்டு, ஒரு ட்ரோன் பறப்புடன்.',
     designLink: 'வடிவமைப்பைப் பார்க்கவும் →',
     peopleHeading: 'TVC-யின் பகுதியாக இருப்பவர்கள் யார்',
-    peopleText: 'நிலத்தை கூட்டாக சொந்தமாக்கிக் கொண்டிருக்கும் 53 உறுப்பினர் குடும்பங்கள், அதை தினசரி நடத்தும் உள்ளூர் ஊழியர்கள், மற்றும் இதையெல்லாம் சாத்தியமாக்கும் கூட்டாளர்கள் மற்றும் அண்டை சமூகம்.',
+    peopleText: `நிலத்தை கூட்டாக சொந்தமாக்கிக் கொண்டிருக்கும் ${MEMBER_FAMILY_COUNT} உறுப்பினர் குடும்பங்கள், அதை தினசரி நடத்தும் உள்ளூர் ஊழியர்கள், மற்றும் இதையெல்லாம் சாத்தியமாக்கும் கூட்டாளர்கள் மற்றும் அண்டை சமூகம்.`,
     peopleLink: 'மக்களை சந்திக்கவும் →',
-    joinHeading: 'உறுப்பினராக ஆர்வமா?',
-    joinText: 'உறுப்பினர் நிலை உண்மையில் திறந்திருக்கவில்லை — 53 குடும்பங்கள் இந்த சமூகம் வளரக்கூடிய அதிகபட்ச அளவிற்கு நெருக்கமாக உள்ளது. ஒரு இடம் திறக்கும்போது, அது எந்த விண்ணப்ப செயல்முறையையும் கடந்து அல்ல, மாறாக உறுப்பினர்களுக்கு இடையே தனிப்பட்ட முறையில் கடத்தப்படுகிறது. அது சரியாக எப்படி வேலை செய்கிறது என்பது இங்கே.',
-    joinLink: 'அது எப்படி வேலை செய்கிறது என்பதைப் படிக்கவும் →',
   },
 } as const;
 
@@ -240,9 +232,9 @@ const aboutSchema = {
       <a class="teaser teaser--centered" href={`/${lang === 'en' ? '' : lang + '/'}join`}>
         <img class="teaser__media" src="/images/members/reva-and-ranjan.jpg" alt="" loading="lazy" />
         <div class="teaser__body">
-          <h2>{c.joinHeading}</h2>
-          <p>{c.joinText}</p>
-          <span class="teaser__cta">{c.joinLink}</span>
+          <h2>{t('joinTeaser.heading')}</h2>
+          <p>{t('joinTeaser.text', { families: MEMBER_FAMILY_COUNT })}</p>
+          <span class="teaser__cta">{t('joinTeaser.cta')}</span>
         </div>
       </a>
     </div>
