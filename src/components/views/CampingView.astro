@@ -94,18 +94,19 @@ const campingOffers = c.pricingRows.flatMap(([label, priceText]) => {
   if (!match) return [];
   return [{ '@type': 'Offer', name: label, price: match[1].replace(/,/g, ''), priceCurrency: 'INR' }];
 });
-const productSchema = {
+const serviceSchema = {
   '@context': 'https://schema.org',
-  '@type': 'Product',
+  '@type': 'Service',
+  serviceType: 'Overnight camping stay',
   name: c.heroTitle,
   description: c.metaDescription,
   image: new URL('/images/pages/home/gallery-1.jpg', Astro.site).toString(),
-  brand: { '@id': organizationId(Astro.site) },
+  provider: { '@id': organizationId(Astro.site) },
   offers: campingOffers,
 };
 ---
 
-<BaseLayout lang={lang} title={t('nav.camping')} description={c.metaDescription} schema={[productSchema]} image="/images/pages/home/gallery-1.jpg" imageWidth={768} imageHeight={576}>
+<BaseLayout lang={lang} title={t('nav.camping')} description={c.metaDescription} schema={[serviceSchema]} image="/images/pages/home/gallery-1.jpg" imageWidth={768} imageHeight={576}>
   <PageHero eyebrow={t('nav.visitTvc')} title={c.heroTitle} intro={c.heroIntro} image="/images/pages/home/gallery-1.jpg" imageAlt="Aerial view of TVC's camping huts and firepit clearing on the hillside" />
 
   <section class="section wrapper">
