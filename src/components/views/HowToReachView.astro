@@ -11,6 +11,24 @@ interface Props {
 const { lang } = Astro.props;
 const t = useTranslations(lang);
 
+// Shared between the intro text's "Tamarind Valley Collective" link and the
+// embedded map below, so the two can't point at different places - only the
+// embed needs `&output=embed`.
+const MAPS_QUERY_URL = 'https://www.google.com/maps?q=Tamarind+Valley+Collective,+Thaggatti&t=p&z=12';
+
+// Route-specific "open in Google Maps" links for each directions section
+// below (saddr/daddr) - Kanakapura and Hosur are the same starting towns
+// each section's own steps assume the driver has already reached. Linked
+// out rather than embedded: Google's unauthenticated embed endpoint only
+// reliably supports a single place pin (like MAPS_QUERY_URL above) - the
+// saddr/daddr directions form of the same endpoint doesn't render inside
+// its iframe without an API key, it breaks out and paints the full page
+// instead. The route pictures below the steps are static screenshots for
+// that reason, not live embeds.
+const TVC_COORDS = '12.3506875,77.6473125';
+const TN_ROUTE_MAP_URL = `https://www.google.com/maps?saddr=Hosur,+Tamil+Nadu&daddr=${TVC_COORDS}`;
+const KA_ROUTE_MAP_URL = `https://www.google.com/maps?saddr=Kanakapura,+Karnataka&daddr=${TVC_COORDS}`;
+
 // "Kenneth Anderson", the Kenneth Anderson Nature Society, and the story
 // titles ("Man-eater of Jowlagiri", "Sher Khan and the Bettamugalam
 // Man-eater") are kept untranslated as proper nouns/titles across all 3
@@ -20,20 +38,33 @@ const content = {
   en: {
     metaDescription: 'Directions to Tamarind Valley Collective from the Tamil Nadu and Karnataka sides, plus a bit of history about the surrounding forest.',
     heroTitle: 'How to Reach',
-    introText: 'Search for "Tamarind Valley Collective" on Google Maps to get directions. TVC can be reached from the Tamil Nadu side (via Tenkannikottai or Thally) or from the Karnataka side (via Hunasanahalli).',
+    introText: `Search for <a href="${MAPS_QUERY_URL}" target="_blank" rel="noopener noreferrer">Tamarind Valley Collective</a> on Google Maps to get directions. TVC can be reached from the Tamil Nadu side (via Denkanikottai or Thally) or from the Karnataka side (via Hunasanahalli).`,
     comingFrom: [
       'Coming from east of the Silk Board–Hosur highway (Whitefield, Outer Ring Road, HSR Layout, etc.) — use the Tamil Nadu side route.',
       'Coming from west of the Silk Board–Hosur highway (Jayanagar, JP Nagar, Bannerghatta Road) — use the Karnataka side route.',
     ],
+    viewRouteLink: 'View this route on Google Maps →',
     tipLabel: 'Tip:',
     tipText: 'load the driving directions while you have WiFi so the route buffers — cell reception near TVC is poor across all providers.',
-    directionsHeading: 'Karnataka side directions',
-    directions: [
+    tnDirectionsHeading: 'Tamil Nadu side directions (via Thally)',
+    tnDirections: [
+      'From Hosur, head out via Thendral Nagar Road, Commercial Street, and 100 Feet Road onto Hosur–Thally Road.',
+      'Follow Hosur–Thally Road for about 26 km, through a roundabout and the Anthevaadi checkpost, until you reach Thally.',
+      'At Thally, turn onto MDR703 (Jawalagiri Road) and continue for about 16 km to Kolagondanahalli.',
+      'Turn onto Kanakapura–Hunasanahalli Road, then left onto SH3 near Mandini — parts of this road are sometimes closed, so have the Karnataka-side route as a backup.',
+      "Follow SH3 for about 7.5 km, then take the final left turns into Thaggatti's housing cluster, ending with a right onto the last stretch (a restricted-access road) to TVC.",
+    ],
+    tnMapCaption: 'Driving route from Hosur to TVC via Thally',
+    tnMapTitle: 'Map of the driving route from Hosur to TVC via Thally',
+    kaDirectionsHeading: 'Karnataka side directions',
+    kaDirections: [
       'At Kanakapura, take a sharp left turn towards Kodihalli.',
       "After about 5–6 km, take another quick left (you'll cross the Arkavathi River).",
       'Take another left once you reach Kodihalli.',
       'Take a left again before reaching Thaggatti village — look for the BSNL phone tower; the turn is a narrow cement bund after the primary school, next to the hand pump.',
     ],
+    kaMapCaption: 'Driving route from Kanakapura to TVC',
+    kaMapTitle: 'Map of the driving route from Kanakapura to TVC',
     locationHeading: 'Location',
     locationText: 'TVC is in the village of Thaggatti in Tamil Nadu, about 7 km from Hunsanahalli, the border town in Karnataka, and adjacent to the Thaggatti Reserve Forest — part of the Melagiri hills, where the Eastern and Western Ghats meet.',
     nearbyLinkText: `Combining the trip with a visit to nearby waterfalls or the Cauvery? See <a href="${getRelativeLocaleUrl(lang, '/visit')}#nearby">nearby attractions</a> on the Visit page for distances and travel times.`,
@@ -44,20 +75,33 @@ const content = {
   kn: {
     metaDescription: 'ತಮಿಳುನಾಡು ಮತ್ತು ಕರ್ನಾಟಕ ಎರಡೂ ಕಡೆಗಳಿಂದ ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ಗೆ ದಿಕ್ಕುಗಳು, ಜೊತೆಗೆ ಸುತ್ತಮುತ್ತಲಿನ ಅರಣ್ಯದ ಬಗ್ಗೆ ಸ್ವಲ್ಪ ಇತಿಹಾಸ.',
     heroTitle: 'ತಲುಪುವುದು ಹೇಗೆ',
-    introText: 'ದಿಕ್ಕುಗಳನ್ನು ಪಡೆಯಲು Google Maps ನಲ್ಲಿ "Tamarind Valley Collective" ಅನ್ನು ಹುಡುಕಿ. TVC ಅನ್ನು ತಮಿಳುನಾಡು ಕಡೆಯಿಂದ (ತೆಂಕಣಿಕೊಟ್ಟೈ ಅಥವಾ ತಳ್ಳಿ ಮೂಲಕ) ಅಥವಾ ಕರ್ನಾಟಕ ಕಡೆಯಿಂದ (ಹುಣಸನಹಳ್ಳಿ ಮೂಲಕ) ತಲುಪಬಹುದು.',
+    introText: `ದಿಕ್ಕುಗಳನ್ನು ಪಡೆಯಲು Google Maps ನಲ್ಲಿ <a href="${MAPS_QUERY_URL}" target="_blank" rel="noopener noreferrer">Tamarind Valley Collective</a> ಅನ್ನು ಹುಡುಕಿ. TVC ಅನ್ನು ತಮಿಳುನಾಡು ಕಡೆಯಿಂದ (ತೆಂಕಣಿಕೊಟ್ಟೈ ಅಥವಾ ತಳ್ಳಿ ಮೂಲಕ) ಅಥವಾ ಕರ್ನಾಟಕ ಕಡೆಯಿಂದ (ಹುಣಸನಹಳ್ಳಿ ಮೂಲಕ) ತಲುಪಬಹುದು.`,
     comingFrom: [
       'ಸಿಲ್ಕ್ ಬೋರ್ಡ್-ಹೊಸೂರು ಹೆದ್ದಾರಿಯ ಪೂರ್ವದಿಂದ ಬರುತ್ತಿದ್ದರೆ (ವೈಟ್‌ಫೀಲ್ಡ್, ಔಟರ್ ರಿಂಗ್ ರೋಡ್, HSR ಲೇಔಟ್, ಇತ್ಯಾದಿ) — ತಮಿಳುನಾಡು ಕಡೆಯ ಮಾರ್ಗವನ್ನು ಬಳಸಿ.',
       'ಸಿಲ್ಕ್ ಬೋರ್ಡ್-ಹೊಸೂರು ಹೆದ್ದಾರಿಯ ಪಶ್ಚಿಮದಿಂದ ಬರುತ್ತಿದ್ದರೆ (ಜಯನಗರ, JP ನಗರ, ಬನ್ನೇರುಘಟ್ಟ ರಸ್ತೆ) — ಕರ್ನಾಟಕ ಕಡೆಯ ಮಾರ್ಗವನ್ನು ಬಳಸಿ.',
     ],
+    viewRouteLink: 'ಈ ಮಾರ್ಗವನ್ನು Google Maps ನಲ್ಲಿ ನೋಡಿ →',
     tipLabel: 'ಸಲಹೆ:',
     tipText: 'ವೈಫೈ ಇರುವಾಗ ಡ್ರೈವಿಂಗ್ ದಿಕ್ಕುಗಳನ್ನು ಲೋಡ್ ಮಾಡಿ ಇದರಿಂದ ಮಾರ್ಗವು ಬಫರ್ ಆಗುತ್ತದೆ — TVC ಬಳಿ ಸೆಲ್ ರಿಸೆಪ್ಶನ್ ಎಲ್ಲಾ ಸೇವಾ ಪೂರೈಕೆದಾರರಲ್ಲೂ ಕಳಪೆಯಾಗಿದೆ.',
-    directionsHeading: 'ಕರ್ನಾಟಕ ಕಡೆಯ ದಿಕ್ಕುಗಳು',
-    directions: [
+    tnDirectionsHeading: 'ತಮಿಳುನಾಡು ಕಡೆಯ ದಿಕ್ಕುಗಳು (ತಳ್ಳಿ ಮೂಲಕ)',
+    tnDirections: [
+      'ಹೊಸೂರಿನಿಂದ, ತೆಂದ್ರಲ್ ನಗರ ರಸ್ತೆ, ಕಾಮರ್ಷಿಯಲ್ ಸ್ಟ್ರೀಟ್ ಮತ್ತು 100 ಫೀಟ್ ರಸ್ತೆಯ ಮೂಲಕ ಹೊಸೂರು–ತಳ್ಳಿ ರಸ್ತೆಗೆ ಹೊರಡಿ.',
+      'ಹೊಸೂರು–ತಳ್ಳಿ ರಸ್ತೆಯಲ್ಲಿ ಸುಮಾರು 26 ಕಿ.ಮೀ ಸಾಗಿ, ಒಂದು ರೌಂಡ್‌ಎಬೌಟ್ ಮತ್ತು ಅಂತೇವಾಡಿ ಚೆಕ್‌ಪೋಸ್ಟ್ ಮೂಲಕ ಹಾದು, ತಳ್ಳಿ ತಲುಪುವವರೆಗೆ ಮುಂದುವರಿಸಿ.',
+      'ತಳ್ಳಿಯಲ್ಲಿ, MDR703 (ಜಾವಲಗಿರಿ ರಸ್ತೆ) ಗೆ ತಿರುಗಿ ಕೊಲಗೊಂಡನಹಳ್ಳಿಯವರೆಗೆ ಸುಮಾರು 16 ಕಿ.ಮೀ ಮುಂದುವರಿಸಿ.',
+      'ಕನಕಪುರ–ಹುಣಸನಹಳ್ಳಿ ರಸ್ತೆಗೆ ತಿರುಗಿ, ನಂತರ ಮಂಡಿನಿ ಬಳಿ SH3 ಗೆ ಎಡಕ್ಕೆ ತಿರುಗಿ — ಈ ರಸ್ತೆಯ ಕೆಲವು ಭಾಗಗಳು ಕೆಲವೊಮ್ಮೆ ಮುಚ್ಚಿರುತ್ತವೆ, ಆದ್ದರಿಂದ ಕರ್ನಾಟಕ ಕಡೆಯ ಮಾರ್ಗವನ್ನು ಬ್ಯಾಕಪ್ ಆಗಿ ಇರಿಸಿಕೊಳ್ಳಿ.',
+      'SH3 ನಲ್ಲಿ ಸುಮಾರು 7.5 ಕಿ.ಮೀ ಸಾಗಿ, ನಂತರ ತಗ್ಗಟ್ಟಿಯ ಹೌಸಿಂಗ್ ಕ್ಲಸ್ಟರ್‌ಗೆ ಕೊನೆಯ ಎಡ ತಿರುವುಗಳನ್ನು ತೆಗೆದುಕೊಳ್ಳಿ, TVC ಗೆ ಕೊನೆಯ ಹಂತದಲ್ಲಿ (ನಿರ್ಬಂಧಿತ-ಪ್ರವೇಶ ರಸ್ತೆ) ಬಲಕ್ಕೆ ತಿರುಗುವ ಮೂಲಕ ಮುಗಿಸಿ.',
+    ],
+    tnMapCaption: 'ತಳ್ಳಿ ಮೂಲಕ ಹೊಸೂರಿನಿಂದ TVC ಗೆ ಚಾಲನಾ ಮಾರ್ಗ',
+    tnMapTitle: 'ತಳ್ಳಿ ಮೂಲಕ ಹೊಸೂರಿನಿಂದ TVC ಗೆ ಚಾಲನಾ ಮಾರ್ಗದ ನಕ್ಷೆ',
+    kaDirectionsHeading: 'ಕರ್ನಾಟಕ ಕಡೆಯ ದಿಕ್ಕುಗಳು',
+    kaDirections: [
       'ಕನಕಪುರದಲ್ಲಿ, ಕೊಡಿಹಳ್ಳಿ ಕಡೆಗೆ ತೀಕ್ಷ್ಣವಾದ ಎಡ ತಿರುವು ತೆಗೆದುಕೊಳ್ಳಿ.',
       'ಸುಮಾರು 5–6 ಕಿ.ಮೀ ನಂತರ, ಇನ್ನೊಂದು ಶೀಘ್ರ ಎಡ ತಿರುವು ತೆಗೆದುಕೊಳ್ಳಿ (ನೀವು ಅರ್ಕಾವತಿ ನದಿಯನ್ನು ದಾಟುತ್ತೀರಿ).',
       'ಕೊಡಿಹಳ್ಳಿ ತಲುಪಿದ ನಂತರ ಇನ್ನೊಂದು ಎಡ ತಿರುವು ತೆಗೆದುಕೊಳ್ಳಿ.',
       'ತಗ್ಗಟ್ಟಿ ಗ್ರಾಮ ತಲುಪುವ ಮೊದಲು ಮತ್ತೆ ಎಡ ತಿರುವು ತೆಗೆದುಕೊಳ್ಳಿ — BSNL ಫೋನ್ ಟವರ್‌ಗಾಗಿ ಹುಡುಕಿ; ತಿರುವು ಪ್ರಾಥಮಿಕ ಶಾಲೆಯ ನಂತರ, ಕೈ ಪಂಪ್‌ನ ಪಕ್ಕದಲ್ಲಿ ಕಿರಿದಾದ ಸಿಮೆಂಟ್ ಬಂಡ್ ಆಗಿದೆ.',
     ],
+    kaMapCaption: 'ಕನಕಪುರದಿಂದ TVC ಗೆ ಚಾಲನಾ ಮಾರ್ಗ',
+    kaMapTitle: 'ಕನಕಪುರದಿಂದ TVC ಗೆ ಚಾಲನಾ ಮಾರ್ಗದ ನಕ್ಷೆ',
     locationHeading: 'ಸ್ಥಳ',
     locationText: 'TVC ತಮಿಳುನಾಡಿನ ತಗ್ಗಟ್ಟಿ ಗ್ರಾಮದಲ್ಲಿದೆ, ಕರ್ನಾಟಕದ ಗಡಿ ಪಟ್ಟಣವಾದ ಹುಣಸನಹಳ್ಳಿಯಿಂದ ಸುಮಾರು 7 ಕಿ.ಮೀ ದೂರದಲ್ಲಿ, ಮತ್ತು ತಗ್ಗಟ್ಟಿ ಮೀಸಲು ಅರಣ್ಯದ ಪಕ್ಕದಲ್ಲಿದೆ — ಪೂರ್ವ ಮತ್ತು ಪಶ್ಚಿಮ ಘಟ್ಟಗಳು ಸಂಧಿಸುವ ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ ಭಾಗ.',
     nearbyLinkText: `ಹತ್ತಿರದ ಜಲಪಾತಗಳು ಅಥವಾ ಕಾವೇರಿಗೆ ಭೇಟಿಯನ್ನು ಈ ಪ್ರಯಾಣದೊಂದಿಗೆ ಸೇರಿಸುತ್ತಿದ್ದೀರಾ? ದೂರ ಮತ್ತು ಪ್ರಯಾಣದ ಸಮಯಕ್ಕಾಗಿ ವಿಸಿಟ್ ಪುಟದಲ್ಲಿ <a href="${getRelativeLocaleUrl(lang, '/visit')}#nearby">ಹತ್ತಿರದ ಆಕರ್ಷಣೆಗಳು</a> ನೋಡಿ.`,
@@ -68,20 +112,33 @@ const content = {
   ta: {
     metaDescription: 'தமிழ்நாடு மற்றும் கர்நாடகா இரு பக்கங்களிலிருந்தும் டமரிண்ட் வேலி கலெக்டிவுக்கான திசைகள், மேலும் சுற்றியுள்ள காட்டைப் பற்றிய சிறிது வரலாறு.',
     heroTitle: 'வழி எப்படி',
-    introText: 'திசைகளைப் பெற Google Maps-இல் "Tamarind Valley Collective" எனத் தேடுங்கள். TVC-ஐ தமிழ்நாடு பக்கத்திலிருந்து (தென்கண்ணிகோட்டை அல்லது தள்ளி வழியாக) அல்லது கர்நாடகா பக்கத்திலிருந்து (ஹுனசனஹள்ளி வழியாக) அடையலாம்.',
+    introText: `திசைகளைப் பெற Google Maps-இல் <a href="${MAPS_QUERY_URL}" target="_blank" rel="noopener noreferrer">Tamarind Valley Collective</a> எனத் தேடுங்கள். TVC-ஐ தமிழ்நாடு பக்கத்திலிருந்து (தென்கண்ணிகோட்டை அல்லது தள்ளி வழியாக) அல்லது கர்நாடகா பக்கத்திலிருந்து (ஹுனசனஹள்ளி வழியாக) அடையலாம்.`,
     comingFrom: [
       'சில்க் போர்டு–ஹொசூர் நெடுஞ்சாலையின் கிழக்கிலிருந்து வருகிறீர்கள் என்றால் (வைட்ஃபீல்டு, அவுட்டர் ரிங் ரோடு, HSR லேஅவுட், போன்றவை) — தமிழ்நாடு பக்க வழியைப் பயன்படுத்தவும்.',
       'சில்க் போர்டு–ஹொசூர் நெடுஞ்சாலையின் மேற்கிலிருந்து வருகிறீர்கள் என்றால் (ஜெயநகர், JP நகர், பன்னேர்காட்டா சாலை) — கர்நாடகா பக்க வழியைப் பயன்படுத்தவும்.',
     ],
+    viewRouteLink: 'இந்த வழியை Google Maps-இல் காணவும் →',
     tipLabel: 'குறிப்பு:',
     tipText: 'வழி பஃபராகும்படி WiFi இருக்கும்போதே வாகன ஓட்டும் திசைகளை ஏற்றிக்கொள்ளுங்கள் — TVC அருகே அனைத்து சேவை வழங்குநர்களிடமும் செல்போன் சிக்னல் மோசமாக உள்ளது.',
-    directionsHeading: 'கர்நாடகா பக்க திசைகள்',
-    directions: [
+    tnDirectionsHeading: 'தமிழ்நாடு பக்க திசைகள் (தள்ளி வழியாக)',
+    tnDirections: [
+      'ஹொசூரிலிருந்து, தெண்ட்ரல் நகர் சாலை, காமர்ஷியல் தெரு மற்றும் 100 ஃபீட் சாலை வழியாக ஹொசூர்–தள்ளி சாலைக்குச் செல்லுங்கள்.',
+      'ஹொசூர்–தள்ளி சாலையில் சுமார் 26 கி.மீ சென்று, ஒரு ரவுண்ட்அபவுட் மற்றும் அந்தேவாடி செக்போஸ்ட் வழியாகச் சென்று, தள்ளியை அடையும் வரை தொடரவும்.',
+      'தள்ளியில், MDR703 (ஜவலகிரி சாலை) க்குத் திரும்பி கொலகொண்டநஹள்ளி வரை சுமார் 16 கி.மீ தொடரவும்.',
+      'கனகபுரா–ஹுனசனஹள்ளி சாலைக்குத் திரும்பி, பின்னர் மண்டினி அருகே SH3 க்கு இடதுபுறம் திரும்பவும் — இந்தச் சாலையின் சில பகுதிகள் சில நேரங்களில் மூடப்பட்டிருக்கும், எனவே கர்நாடகா பக்க வழியை காப்பாகக் கருதவும்.',
+      'SH3 இல் சுமார் 7.5 கி.மீ சென்று, பின்னர் தகட்டியின் வீட்டுத் தொகுப்புக்கு இறுதி இடது திருப்பங்களை எடுத்து, TVC-க்கான கடைசி பகுதியில் (கட்டுப்படுத்தப்பட்ட-அணுகல் சாலை) வலதுபுறம் திரும்புவதன் மூலம் முடிக்கவும்.',
+    ],
+    tnMapCaption: 'தள்ளி வழியாக ஹொசூரிலிருந்து TVC-க்கான வாகன ஓட்டும் பாதை',
+    tnMapTitle: 'தள்ளி வழியாக ஹொசூரிலிருந்து TVC-க்கான வாகன ஓட்டும் பாதையின் வரைபடம்',
+    kaDirectionsHeading: 'கர்நாடகா பக்க திசைகள்',
+    kaDirections: [
       'கனகபுராவில், கொடிஹள்ளி நோக்கி கூர்மையான இடது திருப்பம் எடுக்கவும்.',
       'சுமார் 5–6 கி.மீ க்குப் பிறகு, மற்றொரு விரைவான இடது திருப்பம் எடுக்கவும் (நீங்கள் அர்காவதி நதியைக் கடப்பீர்கள்).',
       'கொடிஹள்ளியை அடைந்தவுடன் மற்றொரு இடது திருப்பம் எடுக்கவும்.',
       'தகட்டி கிராமத்தை அடைவதற்கு முன் மீண்டும் இடது திருப்பம் எடுக்கவும் — BSNL தொலைபேசி கோபுரத்தைத் தேடுங்கள்; திருப்பம் தொடக்கப்பள்ளிக்குப் பிறகு, கை பம்புக்கு அடுத்ததாக ஒரு குறுகிய சிமெண்ட் வரப்பு ஆகும்.',
     ],
+    kaMapCaption: 'கனகபுராவிலிருந்து TVC-க்கான வாகன ஓட்டும் பாதை',
+    kaMapTitle: 'கனகபுராவிலிருந்து TVC-க்கான வாகன ஓட்டும் பாதையின் வரைபடம்',
     locationHeading: 'இருப்பிடம்',
     locationText: 'TVC தமிழ்நாட்டின் தகட்டி கிராமத்தில் உள்ளது, கர்நாடகாவின் எல்லை நகரமான ஹுனசனஹள்ளியிலிருந்து சுமார் 7 கி.மீ தொலைவில், மேலும் தகட்டி ஒதுக்கு காட்டிற்கு அருகில் — கிழக்கு மற்றும் மேற்கு தொடர்ச்சி மலைகள் சந்திக்கும் மேலகிரி மலைகளின் ஒரு பகுதி.',
     nearbyLinkText: `அருகிலுள்ள அருவிகள் அல்லது காவேரியை இந்தப் பயணத்துடன் இணைக்கிறீர்களா? தூரங்கள் மற்றும் பயண நேரங்களுக்கு விசிட் பக்கத்தில் <a href="${getRelativeLocaleUrl(lang, '/visit')}#nearby">அருகிலுள்ள ஈர்ப்பிடங்களைப்</a> பார்க்கவும்.`,
@@ -98,30 +155,32 @@ const c = content[lang];
   <PageHero eyebrow={t('nav.visitTvc')} title={c.heroTitle} image="/images/pages/how-to-reach/hero.png" imageAlt="Map directions to TVC" />
 
   <section class="section wrapper">
-    <p>{c.introText}</p>
+    <p set:html={c.introText} />
     <ul>
       {c.comingFrom.map((item) => <li>{item}</li>)}
     </ul>
     <p><strong>{c.tipLabel}</strong> {c.tipText}</p>
 
-    <h2>{c.directionsHeading}</h2>
+    <h2>{c.tnDirectionsHeading}</h2>
     <ol>
-      {c.directions.map((step) => <li>{step}</li>)}
+      {c.tnDirections.map((step) => <li>{step}</li>)}
     </ol>
+    <img class="route-map" src="/images/pages/how-to-reach/route-tn-hosur-thally.webp" alt={c.tnMapTitle} loading="lazy" width="653" height="587" />
+    <p class="caption">{c.tnMapCaption} — <a href={TN_ROUTE_MAP_URL} target="_blank" rel="noopener noreferrer">{c.viewRouteLink}</a></p>
+
+    <h2>{c.kaDirectionsHeading}</h2>
+    <ol>
+      {c.kaDirections.map((step) => <li>{step}</li>)}
+    </ol>
+    <img class="route-map" src="/images/pages/how-to-reach/route-ka-kanakapura.webp" alt={c.kaMapTitle} loading="lazy" width="653" height="587" />
+    <p class="caption">{c.kaMapCaption} — <a href={KA_ROUTE_MAP_URL} target="_blank" rel="noopener noreferrer">{c.viewRouteLink}</a></p>
 
     <h2>{c.locationHeading}</h2>
     <p>{c.locationText}</p>
     <p set:html={c.nearbyLinkText} />
     <p set:html={c.historyText} />
     <div class="map-embed">
-      <iframe
-        loading="lazy"
-        src="https://www.google.com/maps?q=Tamarind+Valley+Collective,+Thaggatti&t=p&z=12&output=embed"
-        width="100%"
-        height="420"
-        style="border:0"
-        title={c.mapTitle}
-      ></iframe>
+      <iframe loading="lazy" src={`${MAPS_QUERY_URL}&output=embed`} width="100%" height="420" style="border:0" title={c.mapTitle}></iframe>
     </div>
     <p class="caption">{c.mapCaption}</p>
   </section>
@@ -137,6 +196,16 @@ const c = content[lang];
 
   .map-embed iframe {
     display: block;
+  }
+
+  .route-map {
+    display: block;
+    margin-top: 20px;
+    width: 100%;
+    max-width: 500px;
+    height: auto;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
   }
 
   .caption {
