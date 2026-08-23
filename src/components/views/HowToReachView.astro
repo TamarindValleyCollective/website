@@ -161,19 +161,24 @@ const c = content[lang];
     </ul>
     <p><strong>{c.tipLabel}</strong> {c.tipText}</p>
 
-    <h2>{c.tnDirectionsHeading}</h2>
-    <ol>
-      {c.tnDirections.map((step) => <li>{step}</li>)}
-    </ol>
-    <img class="route-map" src="/images/pages/how-to-reach/route-tn-hosur-thally.webp" alt={c.tnMapTitle} loading="lazy" width="653" height="587" />
-    <p class="caption">{c.tnMapCaption} — <a href={TN_ROUTE_MAP_URL} target="_blank" rel="noopener noreferrer">{c.viewRouteLink}</a></p>
-
-    <h2>{c.kaDirectionsHeading}</h2>
-    <ol>
-      {c.kaDirections.map((step) => <li>{step}</li>)}
-    </ol>
-    <img class="route-map" src="/images/pages/how-to-reach/route-ka-kanakapura.webp" alt={c.kaMapTitle} loading="lazy" width="653" height="587" />
-    <p class="caption">{c.kaMapCaption} — <a href={KA_ROUTE_MAP_URL} target="_blank" rel="noopener noreferrer">{c.viewRouteLink}</a></p>
+    <div class="route-grid">
+      <div class="route-col">
+        <h2>{c.tnDirectionsHeading}</h2>
+        <ol>
+          {c.tnDirections.map((step) => <li>{step}</li>)}
+        </ol>
+        <img class="route-map" src="/images/pages/how-to-reach/route-tn-hosur-thally.webp" alt={c.tnMapTitle} loading="lazy" width="653" height="587" />
+        <p class="caption">{c.tnMapCaption} — <a href={TN_ROUTE_MAP_URL} target="_blank" rel="noopener noreferrer">{c.viewRouteLink}</a></p>
+      </div>
+      <div class="route-col">
+        <h2>{c.kaDirectionsHeading}</h2>
+        <ol>
+          {c.kaDirections.map((step) => <li>{step}</li>)}
+        </ol>
+        <img class="route-map" src="/images/pages/how-to-reach/route-ka-kanakapura.webp" alt={c.kaMapTitle} loading="lazy" width="653" height="587" />
+        <p class="caption">{c.kaMapCaption} — <a href={KA_ROUTE_MAP_URL} target="_blank" rel="noopener noreferrer">{c.viewRouteLink}</a></p>
+      </div>
+    </div>
 
     <h2>{c.locationHeading}</h2>
     <p>{c.locationText}</p>
@@ -198,11 +203,21 @@ const c = content[lang];
     display: block;
   }
 
+  .route-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 32px;
+    margin-top: 24px;
+  }
+
+  .route-col h2 {
+    margin-top: 0;
+  }
+
   .route-map {
     display: block;
     margin-top: 20px;
     width: 100%;
-    max-width: 500px;
     height: auto;
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
