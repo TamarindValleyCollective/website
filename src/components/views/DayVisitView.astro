@@ -182,13 +182,14 @@ const packageOptions = c.itineraries.map((it) => it.name);
 // every locale (see content.en/kn/ta above) - the two ₹ amounts, in that
 // order, are the adult and child rates.
 const [adultPrice, childPrice] = [...c.pricingNote.matchAll(/₹([\d,]+)/g)].map((m) => m[1].replace(/,/g, ''));
-const productSchema = {
+const serviceSchema = {
   '@context': 'https://schema.org',
-  '@type': 'Product',
+  '@type': 'Service',
+  serviceType: 'Day visit experience',
   name: c.heroTitle,
   description: c.metaDescription,
   image: new URL('/images/pages/home/gallery-2.jpg', Astro.site).toString(),
-  brand: { '@id': organizationId(Astro.site) },
+  provider: { '@id': organizationId(Astro.site) },
   offers: [
     adultPrice && { '@type': 'Offer', name: 'Adult', price: adultPrice, priceCurrency: 'INR' },
     childPrice && { '@type': 'Offer', name: 'Child under 10', price: childPrice, priceCurrency: 'INR' },
@@ -196,7 +197,7 @@ const productSchema = {
 };
 ---
 
-<BaseLayout lang={lang} title={t('nav.dayVisit')} description={c.metaDescription} schema={[productSchema]} image="/images/pages/home/gallery-2.jpg" imageWidth={768} imageHeight={329}>
+<BaseLayout lang={lang} title={t('nav.dayVisit')} description={c.metaDescription} schema={[serviceSchema]} image="/images/pages/home/gallery-2.jpg" imageWidth={768} imageHeight={329}>
   <PageHero eyebrow={t('nav.visitTvc')} title={c.heroTitle} intro={c.heroIntro} image="/images/pages/home/gallery-2.jpg" imageAlt="Visitors taking in the valley view from a hilltop" />
 
   <section class="section wrapper">
