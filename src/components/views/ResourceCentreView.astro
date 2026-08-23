@@ -64,20 +64,23 @@ const content = {
 
 const c = content[lang];
 
-// No price/Offer: the catalogue and email contact are the only real "how to
-// buy" facts we have - orders go through a direct email conversation with
-// Vivek, not a listed price, so an Offer here would be inventing one.
-const productSchema = {
+// Service, not Product: quote-based via a direct email conversation with
+// Vivek, not a listed price, so a Product's required Offer here would be
+// inventing one - same reasoning as HostAnEventView's serviceSchema.
+// Product without offers/review/aggregateRating is also flagged invalid by
+// Google Search Console's rich-results check, which is what prompted this.
+const serviceSchema = {
   '@context': 'https://schema.org',
-  '@type': 'Product',
+  '@type': 'Service',
+  serviceType: 'Lantana furniture, made to order',
   name: c.lantanaHeading,
   description: c.lantanaText,
-  brand: { '@id': organizationId(Astro.site) },
+  provider: { '@id': organizationId(Astro.site) },
   url: new URL('/files/lantana-furniture-catalogue.pdf', Astro.site).toString(),
 };
 ---
 
-<BaseLayout lang={lang} title={c.metaTitle} description={c.metaDescription} schema={[productSchema]} image="/images/products/tamarind-chutney.jpeg" imageWidth={1280} imageHeight={960}>
+<BaseLayout lang={lang} title={c.metaTitle} description={c.metaDescription} schema={[serviceSchema]} image="/images/products/tamarind-chutney.jpeg" imageWidth={1280} imageHeight={960}>
   <PageHero eyebrow={c.heroTitle} title={c.heroTitle} image="/images/products/tamarind-chutney.jpeg" imageAlt={c.heroImageAlt} />
 
   <section class="section wrapper">
