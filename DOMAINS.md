@@ -6,22 +6,25 @@
 
 ## The short version
 
-**Squarespace registers both domains. Neither one's DNS is actually hosted at Squarespace.**
-That's the one fact that makes the whole setup click:
+**`syntropic.in` is registered at Squarespace; `tvc.farm`'s registrar is being moved there
+from Squarespace to Cloudflare (transfer initiated 2026-08-27, DNS already at Cloudflare).**
+Neither domain's DNS is actually hosted at Squarespace. That's the fact that makes the rest of
+the setup click:
 
 | | `tvc.farm` | `syntropic.in` |
 |---|---|---|
 | **Role** | The live site | Old member-directory domain — redirects here now |
-| **Registrar** | **Squarespace Domains** (renews 2026-11-19, WHOIS privacy on) | **Squarespace Domains** (renews 2026-08-20, registrant: Sharath Jeppu) |
+| **Registrar** | **Transfer in progress: Squarespace Domains → Cloudflare Registrar** (initiated 2026-08-27). Squarespace pricing was $50/year; Cloudflare's is $30.20/year (at-cost, no markup). | **Squarespace Domains** (renews 2026-08-20, registrant: Sharath Jeppu) |
 | **DNS host** | **Cloudflare** (`adaline.ns.cloudflare.com`, `cartman.ns.cloudflare.com`) | **Netlify DNS** (`dns1-4.p05.nsone.net`) |
 | **Path to Netlify** | Cloudflare proxies (orange-cloud) straight to the Netlify site | A `NETLIFY`-type DNS record points at `tvc-farm.netlify.app`; no Cloudflare involved |
 | **What visitors see** | The actual site | A 301 redirect to `https://tvc.farm/:splat`, applied by a `netlify.toml` rule — not a DNS-level redirect |
 
-Both domains are registered through the same Squarespace account, but each was pointed at a
-*different* third-party DNS host at different times — `tvc.farm` at Cloudflare early on (see
-`ARCHITECTURE.md`'s "Cloudflare (in front of Netlify)" section), `syntropic.in` at Netlify DNS
-later, when it was added as a domain alias (2026-07-26). Squarespace's own DNS product isn't in
-the loop for either domain — it's registrar-only for both.
+`syntropic.in` is registered through Squarespace, at a *different* third-party DNS host —
+Netlify DNS, added 2026-07-26 as a domain alias — from `tvc.farm`, whose DNS has been at
+Cloudflare since early on (see `ARCHITECTURE.md`'s "Cloudflare (in front of Netlify)" section).
+`tvc.farm` used to be registered at Squarespace too, alongside `syntropic.in`, until the
+registrar transfer to Cloudflare above. Squarespace's own DNS product was never in the loop for
+either domain — it's (or, for `tvc.farm`, was) registrar-only.
 
 ## Why this matters in practice
 
@@ -42,16 +45,23 @@ the loop for either domain — it's registrar-only for both.
   go live immediately; propagation in practice has been near-instant.
 - **To change DNS for either domain, go to Netlify or Cloudflare — never Squarespace.**
   `tvc.farm` → Cloudflare dashboard. `syntropic.in` → Netlify (Team → DNS → `syntropic.in`).
-  Squarespace is purely where renewal/WHOIS-privacy/registrant details live for both.
+  Squarespace is purely where renewal/WHOIS-privacy/registrant details live for `syntropic.in`;
+  for `tvc.farm` that's moving to Cloudflare too, per the registrar transfer above.
 - **Cloudflare R2** (`media.tvc.farm`, the curated photo store) is a separate product under the
   same Cloudflare account used for `tvc.farm`'s DNS — see `ARCHITECTURE.md`'s "Cloudflare R2"
   section. It has nothing to do with `syntropic.in`.
 
 ## `tvc.farm`
 
-- **Registrar**: Squarespace Domains (`account.squarespace.com/domains/managed/tvc.farm`) —
-  renews 2026-11-19 for $50, WHOIS privacy on (so a plain `whois tvc.farm` lookup returns only
-  the `.farm` registry's own referral info, not registrant/registrar details).
+- **Registrar**: transferring from Squarespace Domains
+  (`account.squarespace.com/domains/managed/tvc.farm`, renewed 2026-11-19 for $50) to
+  **Cloudflare Registrar**, initiated 2026-08-27. Cloudflare charges at-cost with no markup —
+  $30.20/year for `.farm`, versus Squarespace's $50/year. DNS was already on Cloudflare before
+  this (see above); this transfer only moves where the domain is *registered*, not where its DNS
+  is hosted. WHOIS privacy was on at Squarespace (a plain `whois tvc.farm` lookup returned only
+  the `.farm` registry's own referral info, not registrant/registrar details) — Cloudflare
+  Registrar includes free WHOIS privacy too, so this should carry over once the transfer
+  completes.
 - **DNS**: Cloudflare, proxied (orange-cloud) — see `ARCHITECTURE.md` for the full hosting
   picture. Confirmed via `dig NS tvc.farm`:
   ```
