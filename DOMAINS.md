@@ -14,7 +14,7 @@ too (transfer initiated 2026-08-27, DNS already at Cloudflare beforehand):
 | | `tvc.farm` | `syntropic.in` |
 |---|---|---|
 | **Role** | The live site | Old member-directory domain — redirects here now |
-| **Registrar** | **Transfer in progress: Squarespace Domains → Cloudflare Registrar** (initiated 2026-08-27). Squarespace pricing was $50/year; Cloudflare's is $30.20/year (at-cost, no markup). | **Squarespace Domains** (renews annually, registrant: Sharath Jeppu) |
+| **Registrar** | **Transfer in progress: Squarespace Domains → Cloudflare Registrar** (initiated 2026-08-27). Squarespace pricing was $50/year; Cloudflare's is $30.20/year (at-cost, no markup). | **Squarespace Domains** (renews 2027-08-20 for $20, registrant: Sharath Jeppu) |
 | **DNS host** | **Cloudflare** (`adaline.ns.cloudflare.com`, `cartman.ns.cloudflare.com`) | **Cloudflare** — same two nameservers, same account. Was Netlify DNS as of 2026-07-29; migrated since |
 | **Path to Netlify** | Cloudflare proxies (orange-cloud) straight to the Netlify site, via a CNAME to `tvc.netlify.app` | Apex is an **A record → `75.2.60.5`** (Netlify's shared load-balancer IP), proxied; `www` is a CNAME to `tvc.netlify.app`, proxied — same pattern as `tvc.farm` |
 | **What visitors see** | The actual site | A 301 redirect to `https://tvc.farm/`, applied by a `netlify.toml` rule — not a DNS-level redirect |
@@ -107,9 +107,10 @@ either domain — it's (or, for `tvc.farm`, was) registrar-only.
 ## `syntropic.in`
 
 - **Registrar**: Squarespace Domains (`account.squarespace.com/domains/managed/syntropic.in`) —
-  registrant Sharath Jeppu. This is a holdover from Google Domains' migration to Squarespace; the
-  underlying registry backend (Key-Systems GmbH / RRPProxy) predates that move. (Not part of the
-  `tvc.farm` registrar transfer above — `syntropic.in` stays at Squarespace.)
+  registrant Sharath Jeppu, renewed 2026-08-27 through 2027-08-20 for $20. This is a holdover
+  from Google Domains' migration to Squarespace; the underlying registry backend (Key-Systems
+  GmbH / RRPProxy) predates that move. (Not part of the `tvc.farm` registrar transfer above —
+  `syntropic.in` stays at Squarespace.)
 - **DNS**: Cloudflare, same account as `tvc.farm` ("TVC"). Confirmed via `dig NS syntropic.in`:
   ```
   adaline.ns.cloudflare.com.
