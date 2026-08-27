@@ -6,22 +6,22 @@
 
 ## The short version
 
-**`syntropic.in` is registered at Squarespace; `tvc.farm`'s registrar is being moved there
-from Squarespace to Cloudflare (transfer initiated 2026-08-27, DNS already at Cloudflare).**
-Neither domain's DNS is actually hosted at Squarespace. That's the fact that makes the rest of
-the setup click:
+**Both domains' DNS is now on Cloudflare.** `syntropic.in` moved off Netlify DNS onto Cloudflare
+at some point after 2026-07-29 (exact date not captured — noticed 2026-08-27 while checking this
+doc for drift); `tvc.farm`'s registrar is separately being moved from Squarespace to Cloudflare
+too (transfer initiated 2026-08-27, DNS already at Cloudflare beforehand):
 
 | | `tvc.farm` | `syntropic.in` |
 |---|---|---|
 | **Role** | The live site | Old member-directory domain — redirects here now |
-| **Registrar** | **Transfer in progress: Squarespace Domains → Cloudflare Registrar** (initiated 2026-08-27). Squarespace pricing was $50/year; Cloudflare's is $30.20/year (at-cost, no markup). | **Squarespace Domains** (renews 2026-08-20, registrant: Sharath Jeppu) |
-| **DNS host** | **Cloudflare** (`adaline.ns.cloudflare.com`, `cartman.ns.cloudflare.com`) | **Netlify DNS** (`dns1-4.p05.nsone.net`) |
-| **Path to Netlify** | Cloudflare proxies (orange-cloud) straight to the Netlify site | A `NETLIFY`-type DNS record points at `tvc-farm.netlify.app`; no Cloudflare involved |
-| **What visitors see** | The actual site | A 301 redirect to `https://tvc.farm/:splat`, applied by a `netlify.toml` rule — not a DNS-level redirect |
+| **Registrar** | **Transfer in progress: Squarespace Domains → Cloudflare Registrar** (initiated 2026-08-27). Squarespace pricing was $50/year; Cloudflare's is $30.20/year (at-cost, no markup). | **Squarespace Domains** (renews annually, registrant: Sharath Jeppu) |
+| **DNS host** | **Cloudflare** (`adaline.ns.cloudflare.com`, `cartman.ns.cloudflare.com`) | **Cloudflare** — same two nameservers, same account. Was Netlify DNS as of 2026-07-29; migrated since |
+| **Path to Netlify** | Cloudflare proxies (orange-cloud) straight to the Netlify site, via a CNAME to `tvc.netlify.app` | Apex is an **A record → `75.2.60.5`** (Netlify's shared load-balancer IP), proxied; `www` is a CNAME to `tvc.netlify.app`, proxied — same pattern as `tvc.farm` |
+| **What visitors see** | The actual site | A 301 redirect to `https://tvc.farm/`, applied by a `netlify.toml` rule — not a DNS-level redirect |
 
-`syntropic.in` is registered through Squarespace, at a *different* third-party DNS host —
-Netlify DNS, added 2026-07-26 as a domain alias — from `tvc.farm`, whose DNS has been at
-Cloudflare since early on (see `ARCHITECTURE.md`'s "Cloudflare (in front of Netlify)" section).
+`syntropic.in` is still registered through Squarespace, but its DNS is no longer at Netlify —
+it's on Cloudflare now, in the same Cloudflare account as `tvc.farm` (see
+`ARCHITECTURE.md`'s "Cloudflare (in front of Netlify)" section for `tvc.farm`'s side of this).
 `tvc.farm` used to be registered at Squarespace too, alongside `syntropic.in`, until the
 registrar transfer to Cloudflare above. Squarespace's own DNS product was never in the loop for
 either domain — it's (or, for `tvc.farm`, was) registrar-only.
@@ -35,18 +35,25 @@ either domain — it's (or, for `tvc.farm`, was) registrar-only.
   Squarespace isn't the authoritative host for either domain's DNS. Confirmed: `tvc.farm`'s
   live mail actually flows through Google Workspace (`dig MX tvc.farm` → `aspmx.l.google.com`
   and friends) via Cloudflare's real DNS zone, not that dormant Mailgun preset.
-- **Netlify's dashboard lists a DNS zone for `tvc.farm` too** (Team → DNS shows both domains side
-  by side). That zone is **also not actually authoritative** — `tvc.farm`'s real nameservers are
-  Cloudflare's, confirmed via `dig NS tvc.farm`. Don't assume a record added to that Netlify zone
-  for `tvc.farm` will ever go live; it won't unless the domain's nameservers are switched to
-  Netlify's, which they aren't and aren't planned to be.
-- **`syntropic.in`'s Netlify DNS zone is the one that's actually live.** Records added there (an
-  apex + `www` `NETLIFY` record pointing at `tvc-farm.netlify.app`, plus a TXT record — see below)
-  go live immediately; propagation in practice has been near-instant.
-- **To change DNS for either domain, go to Netlify or Cloudflare — never Squarespace.**
-  `tvc.farm` → Cloudflare dashboard. `syntropic.in` → Netlify (Team → DNS → `syntropic.in`).
-  Squarespace is purely where renewal/WHOIS-privacy/registrant details live for `syntropic.in`;
-  for `tvc.farm` that's moving to Cloudflare too, per the registrar transfer above.
+- **Netlify's dashboard may still list a DNS zone for either domain** (Team → DNS). Neither is
+  authoritative — both domains' real nameservers are Cloudflare's, confirmed via `dig NS`. Don't
+  assume a record added in Netlify's DNS UI for either domain will ever go live; it won't unless
+  the domain's nameservers are switched to Netlify's, which they aren't and aren't planned to be.
+- **Both domains' DNS zones live in Cloudflare now** (same Cloudflare account, "TVC"). Records
+  added there go live immediately; propagation in practice has been near-instant.
+- **To change DNS for either domain, go to Cloudflare — never Netlify's DNS UI, never
+  Squarespace.** Squarespace is purely where renewal/WHOIS-privacy/registrant details live for
+  `syntropic.in`; for `tvc.farm` that's moving to Cloudflare too, per the registrar transfer
+  above.
+- **2026-08-27 incident**: `syntropic.in`'s DNS migration to Cloudflare left two things broken,
+  found while auditing this doc and fixed the same day: the `www.syntropic.in` CNAME record was
+  missing entirely (NXDOMAIN — Cloudflare's own dashboard flagged "Visitors cannot reach
+  www.syntropic.in"), and the Search Console domain-ownership verification TXT record was gone,
+  which had silently revoked `contact@tvc.farm`'s access to the `syntropic.in` property. Fixed by
+  adding a `www` CNAME → `tvc.netlify.app` (proxied, matching `tvc.farm`'s pattern) and
+  re-verifying Search Console ownership — which auto-verified via the "Domain name provider"
+  method (Google's direct integration with Cloudflare as DNS host) with no TXT record needed.
+  Neither fix touched the MX/DKIM/SPF/DMARC records (see mail setup below).
 - **Cloudflare R2** (`media.tvc.farm`, the curated photo store) is a separate product under the
   same Cloudflare account used for `tvc.farm`'s DNS — see `ARCHITECTURE.md`'s "Cloudflare R2"
   section. It has nothing to do with `syntropic.in`.
@@ -87,10 +94,12 @@ either domain — it's (or, for `tvc.farm`, was) registrar-only.
 - **Mail**: live MX records (`dig MX tvc.farm`) point to Google Workspace
   (`aspmx.l.google.com` and its alternates), set directly in Cloudflare's DNS zone — not the
   Mailgun-based "Email Forwarding" preset sitting inert in Squarespace's DNS panel (see above).
-  DKIM is configured (a `google._domainkey.tvc.farm` TXT record); Cloudflare's own DNS page
-  flags that **SPF and DMARC records are both missing** — worth adding, since DKIM alone doesn't
-  stop someone else from sending spoofed mail that claims to be from `@tvc.farm`. Other TXT
-  records on the apex handle Google/Bing/Apple domain-verification, unrelated to mail.
+  DKIM is configured (a `google._domainkey.tvc.farm` TXT record) and so is DMARC
+  (`_dmarc.tvc.farm` → `v=DMARC1; p=none;`, policy set to monitor-only rather than
+  reject/quarantine). **SPF is still missing** — worth adding, since DKIM+DMARC alone don't stop
+  someone else from sending spoofed mail that claims to be from `@tvc.farm` as effectively as SPF
+  would. Other TXT records on the apex handle Google/Bing/Apple domain-verification, unrelated to
+  mail.
 - A handful of other `tvc.farm` subdomains exist for internal tooling, routed through a
   Cloudflare Tunnel rather than exposed directly — intentionally not detailed here since this
   repo is public; see the separate (non-repo) internal-infrastructure note for those.
@@ -98,33 +107,46 @@ either domain — it's (or, for `tvc.farm`, was) registrar-only.
 ## `syntropic.in`
 
 - **Registrar**: Squarespace Domains (`account.squarespace.com/domains/managed/syntropic.in`) —
-  registrant Sharath Jeppu, renews 2026-08-20. This is a holdover from Google Domains' migration
-  to Squarespace; the underlying registry backend (Key-Systems GmbH / RRPProxy) predates that
-  move.
-- **DNS**: Netlify DNS, added 2026-07-26. Confirmed via `dig NS syntropic.in`:
+  registrant Sharath Jeppu. This is a holdover from Google Domains' migration to Squarespace; the
+  underlying registry backend (Key-Systems GmbH / RRPProxy) predates that move. (Not part of the
+  `tvc.farm` registrar transfer above — `syntropic.in` stays at Squarespace.)
+- **DNS**: Cloudflare, same account as `tvc.farm` ("TVC"). Confirmed via `dig NS syntropic.in`:
   ```
-  dns1.p05.nsone.net.
-  dns2.p05.nsone.net.
-  dns3.p05.nsone.net.
-  dns4.p05.nsone.net.
+  adaline.ns.cloudflare.com.
+  cartman.ns.cloudflare.com.
   ```
-  (Netlify's own managed-DNS product runs on NS1 infrastructure — this `dns#.pXX.nsone.net`
-  pattern is how any Netlify DNS zone's nameservers look, not something specific to this domain.)
-- **Records** (Team → DNS → `syntropic.in` in Netlify):
-  - `syntropic.in` — `NETLIFY` → `tvc-farm.netlify.app`
-  - `www.syntropic.in` — `NETLIFY` → `tvc-farm.netlify.app`
-  - `syntropic.in` — `TXT` → `google-site-verification=...` (added 2026-07-29, see below)
+  This used to be Netlify DNS (added 2026-07-26, on `dns#.p05.nsone.net`) as documented here as of
+  2026-07-29; it had moved to Cloudflare by the time this was rechecked on 2026-08-27. The exact
+  migration date wasn't captured.
+- **Records** (Cloudflare dashboard → `syntropic.in` → DNS → Records; 14 of 200 used):
+  - `syntropic.in` — `A` → `75.2.60.5` (Netlify's shared load-balancer IP), proxied
+  - `www.syntropic.in` — `CNAME` → `tvc.netlify.app`, proxied (added 2026-08-27 — see incident
+    note above; this record was missing and `www.syntropic.in` was NXDOMAIN until then)
+  - `_domainconnect.syntropic.in` — `CNAME` → `_domainconnect.domains.squarespace.com`, proxied
+    (a Squarespace Domain Connect artifact, harmless leftover from the registrar)
+  - Full Google Workspace mail setup — 5 `MX` records to `aspmx.l.google.com` and its alternates,
+    `google._domainkey.syntropic.in` DKIM TXT, `_dmarc.syntropic.in` → `v=DMARC1; p=none;
+    rua=mailto:contact@tvc.farm`, and an SPF TXT (`v=spf1 include:_spf.google.com ~all`) — none of
+    this was here as of 2026-07-29; whether `@syntropic.in` mail is actually in active use wasn't
+    checked, only that the records now mirror `tvc.farm`'s
+  - `_gh-tamarindvalleycollective-o.syntropic.in` — TXT, a GitHub organization domain-verification
+    token
+  - Two more TXT records: `facebook-domain-verification=...` and a bare UUID-format value
+    (`2db57230-dfc6-11f0-9c6d-4d862bebf89d`) whose origin/purpose wasn't identified
+  - The `google-site-verification=...` TXT record documented here as of 2026-07-29 is gone — see
+    the Search Console section below for what replaced it
 - **Redirect**: `netlify.toml` force-redirects both hostnames to `https://tvc.farm/:splat` with a
   301 — this is a Netlify-level redirect rule, not a DNS trick, so it only takes effect because
-  Netlify (not Cloudflare, not Squarespace) is the thing actually serving the request.
+  Netlify (not Cloudflare, not Squarespace) is the thing actually serving the request, once
+  Cloudflare has proxied it there.
 - **History**: used to run a separate, live Wix-hosted site (a member directory). That site is
   gone; the domain now exists purely to catch old links/bookmarks/search results and forward them
   to `tvc.farm`.
 
-## Google Search Console verification (2026-07-29)
+## Google Search Console verification
 
 `syntropic.in` still ranked in Google search with a stale snippet from its old Wix-hosted days,
-even though it now 301s to `tvc.farm`. Fixed by:
+even though it now 301s to `tvc.farm`. Originally fixed on 2026-07-29 by:
 
 1. Verifying `syntropic.in` as its own Search Console property via a DNS TXT record (added to
    Netlify DNS, per above — Squarespace's DNS panel couldn't be used since it isn't authoritative).
@@ -133,5 +155,11 @@ even though it now 301s to `tvc.farm`. Fixed by:
    from homepage, verification of both sites) passed. Status: confirmed moving, dated 2026-07-29.
 3. Requesting re-indexing on `https://syntropic.in/` directly via URL Inspection.
 
-Google's own consolidation of the two properties' index entries can take days to weeks after
-this; no further action is needed unless it stalls.
+**2026-08-27**: the DNS migration to Cloudflare (above) took the verification TXT record with it,
+which revoked `contact@tvc.farm`'s access to the property (Search Console showed "Oops, you don't
+have access to this property"). Re-verifying via Search Console's "Verify your ownership" flow
+**auto-verified through the "Domain name provider" method** — Google's direct integration with
+Cloudflare as the domain's DNS host — with no TXT record needed. Search Console's own guidance:
+removing the DNS record that granted a verification method can revoke it, so relying on a single
+method is fragile; **adding a second verification method (e.g. the HTML tag or Google Analytics
+method, via Settings → Ownership verification) would make this more durable** if it recurs.
