@@ -119,7 +119,7 @@ either domain — it's (or, for `tvc.farm`, was) registrar-only.
   This used to be Netlify DNS (added 2026-07-26, on `dns#.p05.nsone.net`) as documented here as of
   2026-07-29; it had moved to Cloudflare by the time this was rechecked on 2026-08-27. The exact
   migration date wasn't captured.
-- **Records** (Cloudflare dashboard → `syntropic.in` → DNS → Records; 14 of 200 used):
+- **Records** (Cloudflare dashboard → `syntropic.in` → DNS → Records; 15 of 200 used):
   - `syntropic.in` — `A` → `75.2.60.5` (Netlify's shared load-balancer IP), proxied
   - `www.syntropic.in` — `CNAME` → `tvc.netlify.app`, proxied (added 2026-08-27 — see incident
     note above; this record was missing and `www.syntropic.in` was NXDOMAIN until then)
@@ -134,8 +134,9 @@ either domain — it's (or, for `tvc.farm`, was) registrar-only.
     token
   - Two more TXT records: `facebook-domain-verification=...` and a bare UUID-format value
     (`2db57230-dfc6-11f0-9c6d-4d862bebf89d`) whose origin/purpose wasn't identified
-  - The `google-site-verification=...` TXT record documented here as of 2026-07-29 is gone — see
-    the Search Console section below for what replaced it
+  - `syntropic.in` — `TXT` → `google-site-verification=iIyHUHznY6GWBRjwxGXjhO_0w_JtepIH5mzV0Tvlp8I`
+    (added 2026-08-27, replacing the record documented here as of 2026-07-29 that had gone
+    missing — see the Search Console section below)
 - **Redirect**: `netlify.toml` force-redirects both hostnames to `https://tvc.farm/:splat` with a
   301 — this is a Netlify-level redirect rule, not a DNS trick, so it only takes effect because
   Netlify (not Cloudflare, not Squarespace) is the thing actually serving the request, once
@@ -159,8 +160,30 @@ even though it now 301s to `tvc.farm`. Originally fixed on 2026-07-29 by:
 **2026-08-27**: the DNS migration to Cloudflare (above) took the verification TXT record with it,
 which revoked `contact@tvc.farm`'s access to the property (Search Console showed "Oops, you don't
 have access to this property"). Re-verifying via Search Console's "Verify your ownership" flow
-**auto-verified through the "Domain name provider" method** — Google's direct integration with
-Cloudflare as the domain's DNS host — with no TXT record needed. Search Console's own guidance:
-removing the DNS record that granted a verification method can revoke it, so relying on a single
-method is fragile; **adding a second verification method (e.g. the HTML tag or Google Analytics
-method, via Settings → Ownership verification) would make this more durable** if it recurs.
+**auto-verified through the "Domain name provider" method** — Google's direct OAuth-based
+integration with Cloudflare.com as the domain's DNS host (the "Domain name provider" step lets
+you pick a specific provider, e.g. Cloudflare.com, or "Any DNS provider" for a plain DNS TXT
+record) — with no manual TXT record needed for `contact@tvc.farm`.
+
+**Domain properties only support DNS-based verification** (confirmed via Search Console's own
+"Add property" dialog: "Domain... Requires DNS verification" vs. "URL prefix... Allows multiple
+verification methods" like HTML tag/Analytics/Tag Manager — those aren't available for a
+domain-wide property like this one at all). Within that, `contact@tvc.farm`'s automatic
+Cloudflare-provider check pre-empts adding a second method for that same account — every attempt
+to re-verify just re-confirms the same automatic check rather than offering a fresh manual token.
+
+**Second verification method, added 2026-08-27**: `sharathjeppu@gmail.com` was already a
+delegated owner on this property (Settings → Users and permissions) but, being delegated rather
+than independently verified, would have lost access in the same incident. Switching to that
+account and choosing **"Any DNS provider"** (instead of "Cloudflare.com") in its own Ownership
+verification flow produced a genuine manual DNS TXT token, independent of the OAuth-based
+Cloudflare integration:
+`syntropic.in` — `TXT` → `google-site-verification=iIyHUHznY6GWBRjwxGXjhO_0w_JtepIH5mzV0Tvlp8I`
+(added to Cloudflare, see records above). `sharathjeppu@gmail.com` is now an independently
+verified owner via this token — a second, structurally different verification path from
+`contact@tvc.farm`'s automatic one, so losing one doesn't take down the other.
+
+(One gotcha hit while adding it: the token's characters are easy to transcribe wrong by eye —
+`iIy` is lowercase-i, uppercase-I, lowercase-y, easily misread as `ily` with a lowercase L. First
+attempt failed verification silently accepting a wrong character; fixed by reading the token's
+literal DOM text rather than eyeballing the rendered font.)
