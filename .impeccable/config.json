@@ -68,6 +68,15 @@
         ],
         "createdAt": "2026-08-23T03:01:57.741Z",
         "reason": ".callout is a documented, deliberate reserve component (own code comment: generalized from the existing .rainfall-summary bordered-card pattern), not an accidental AI-card tell"
+      },
+      {
+        "rule": "side-tab",
+        "value": "var(--tvc-orange)",
+        "files": [
+          "src/components/views/EventDetailView.astro"
+        ],
+        "createdAt": "2026-08-28T12:38:16.582Z",
+        "reason": "pre-existing blockquote quote-style border in markdown prose, not a UI card; file has zero diff from HEAD for this task"
       }
     ]
   }

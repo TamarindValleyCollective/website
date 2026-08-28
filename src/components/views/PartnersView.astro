@@ -88,7 +88,7 @@ const partnersSchema = {
   <section class="section wrapper">
     <div class="partners-list">
       {partnersWithContent.map(({ entry: p, Content }) => (
-        <article class="partner">
+        <article class="partner" id={p.id}>
           <div class="partner__head">
             {p.data.coverImage && <img src={p.data.coverImage} alt={partnerTitle(p)} class="partner__logo" loading="lazy" />}
             <div class="partner__heading">

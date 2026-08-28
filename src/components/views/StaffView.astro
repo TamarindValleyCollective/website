@@ -361,7 +361,7 @@ const staffSchema = {
           </div>
           <div class="card-body">
             {group.people.map((p) => (
-              <div class="person">
+              <div class="person" id={p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}>
                 <h2>{p.name}</h2>
                 <p class="staff-role">{p.role}</p>
                 <p>{p.bio}</p>
