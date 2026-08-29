@@ -12,11 +12,16 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import { getCollection } from 'astro:content';
 import { ACCOMMODATION_UNITS } from '../../../scripts/lib/accommodation.mjs';
 
-// English-only public events, for the "link to a public event" picker -
-// this is an internal tool, not a localized visitor-facing page, so the
-// kn/ta sibling entries (see EventsIndexView.astro's bareSlug convention)
-// aren't relevant here.
+// English-only, upcoming-only public events, for the "link to a public
+// event" picker - a past event has no future nights left to book
+// accommodation against, and this is an internal tool (not a localized
+// visitor-facing page), so the kn/ta sibling entries (see
+// EventsIndexView.astro's bareSlug convention) aren't relevant here either.
+// A multi-day event counts as upcoming until its last day (endDate), not
+// just its start.
+const today = new Date();
 const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.startsWith('kn/') && !e.id.startsWith('ta/')))
+  .filter((e) => (e.data.endDate ?? e.data.date) >= today)
   .sort((a, b) => a.data.date.valueOf() - b.data.date.valueOf())
   .map((e) => ({ slug: e.id, title: e.data.title, date: e.data.date.toISOString().slice(0, 10) }));
 ---
@@ -350,21 +355,19 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     gap: 6px;
   }
 
-  .guest-row input {
+  .guest-row input,
+  .guest-row select {
     padding: 4px 8px;
     font-size: 0.82rem;
+    font-family: inherit;
   }
 
   .guest-row input[data-field='name'] {
     flex: 2;
   }
 
-  .guest-row input[data-field='age'] {
-    flex: 1;
-    width: 60px;
-  }
-
-  .guest-row input[data-field='gender'] {
+  .guest-row select[data-field='ageGroup'],
+  .guest-row select[data-field='gender'] {
     flex: 1;
   }
 
@@ -372,6 +375,19 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     align-self: flex-start;
     font-size: 0.78rem;
     padding: 3px 10px;
+  }
+
+  .add-guest:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .tent-option--occupied {
+    opacity: 0.55;
+  }
+
+  .tent-option--occupied .tent-checkbox {
+    cursor: not-allowed;
   }
 
   [hidden] {
@@ -400,7 +416,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   interface Guest {
     name?: string;
-    age?: number;
+    ageGroup?: 'Adult' | 'Child';
     gender?: string;
   }
 
@@ -524,17 +540,47 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   // ---- Tent-assignment fieldset (checkbox per unit, expandable guest rows) ----
 
-  function addGuestRow(container: HTMLElement, guest: Guest = {}) {
+  const GENDER_OPTIONS = ['Male', 'Female', 'NA'];
+  const AGE_GROUP_OPTIONS = ['Adult', 'Child'];
+
+  function addGuestRow(container: HTMLElement, guest: Guest = {}, onRemove?: () => void) {
     const row = document.createElement('div');
     row.className = 'guest-row';
+    // No blank/placeholder option in either select, on purpose - "Adult/Child"
+    // and "Gender" as literal choices confused testing (see Sharath's
+    // feedback), and a real, always-present default (Adult / NA) is exactly
+    // what "these are mandatory to fill" means in practice: there's no empty
+    // state to accidentally submit, only a default a guest doesn't have to
+    // touch if it doesn't apply.
+    const ageGroup = guest.ageGroup ?? 'Adult';
+    const gender = guest.gender ?? 'NA';
     row.innerHTML = `
       <input type="text" data-field="name" placeholder="Name (or leave blank)" value="${guest.name ?? ''}" />
-      <input type="number" data-field="age" placeholder="Age" min="0" value="${guest.age ?? ''}" />
-      <input type="text" data-field="gender" placeholder="Gender" value="${guest.gender ?? ''}" />
+      <select data-field="ageGroup">
+        ${AGE_GROUP_OPTIONS.map((a) => `<option value="${a}" ${ageGroup === a ? 'selected' : ''}>${a}</option>`).join('')}
+      </select>
+      <select data-field="gender">
+        ${GENDER_OPTIONS.map((g) => `<option value="${g}" ${gender === g ? 'selected' : ''}>${g}</option>`).join('')}
+      </select>
       <button type="button" class="button remove-guest">✕</button>
     `;
-    row.querySelector('.remove-guest')!.addEventListener('click', () => row.remove());
+    row.querySelector('.remove-guest')!.addEventListener('click', () => {
+      row.remove();
+      onRemove?.();
+    });
     container.appendChild(row);
+  }
+
+  // A tent's capacity is a hard cap on guests, not just a display hint - the
+  // add-guest button disables itself at capacity, and removing a guest
+  // re-enables it, so Madhavan can't silently overbook a 3-person tent past
+  // 3 the way a plain "add another row" button would allow. The server
+  // (accommodation-admin.mts) enforces the same limit independently, since
+  // this client-side guard is just UX, not the source of truth.
+  function updateAddGuestButtonState(guestsEl: HTMLElement, addGuestBtn: HTMLButtonElement, capacity: number) {
+    const atCapacity = guestsEl.children.length >= capacity;
+    addGuestBtn.disabled = atCapacity;
+    addGuestBtn.textContent = atCapacity ? `Full (${capacity})` : '+ Guest';
   }
 
   function buildTentsFieldset() {
@@ -559,9 +605,16 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         const wantsGuests = wantsGuestFields();
         guestsEl.hidden = !checkbox.checked || !wantsGuests;
         addGuestBtn.hidden = !checkbox.checked || !wantsGuests;
-        if (checkbox.checked && wantsGuests && guestsEl.children.length === 0) addGuestRow(guestsEl);
+        if (checkbox.checked && wantsGuests && guestsEl.children.length === 0) {
+          addGuestRow(guestsEl, {}, () => updateAddGuestButtonState(guestsEl, addGuestBtn, unit.capacity));
+          updateAddGuestButtonState(guestsEl, addGuestBtn, unit.capacity);
+        }
       });
-      addGuestBtn.addEventListener('click', () => addGuestRow(guestsEl));
+      addGuestBtn.addEventListener('click', () => {
+        if (guestsEl.children.length >= unit.capacity) return;
+        addGuestRow(guestsEl, {}, () => updateAddGuestButtonState(guestsEl, addGuestBtn, unit.capacity));
+        updateAddGuestButtonState(guestsEl, addGuestBtn, unit.capacity);
+      });
 
       tentsContainer.appendChild(option);
     }
@@ -579,10 +632,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       const guests: Guest[] = [];
       for (const row of Array.from(option.querySelectorAll<HTMLElement>('.guest-row'))) {
         const name = (row.querySelector('[data-field="name"]') as HTMLInputElement).value.trim();
-        const ageRaw = (row.querySelector('[data-field="age"]') as HTMLInputElement).value.trim();
-        const gender = (row.querySelector('[data-field="gender"]') as HTMLInputElement).value.trim();
-        if (!name && !ageRaw && !gender) continue;
-        guests.push({ name: name || undefined, age: ageRaw ? Number(ageRaw) : undefined, gender: gender || undefined });
+        const ageGroup = (row.querySelector('[data-field="ageGroup"]') as HTMLSelectElement).value.trim() as Guest['ageGroup'] | '';
+        const gender = (row.querySelector('[data-field="gender"]') as HTMLSelectElement).value.trim();
+        if (!name && !ageGroup && !gender) continue;
+        guests.push({ name: name || undefined, ageGroup: ageGroup || undefined, gender: gender || undefined });
       }
       out.push({ tentId: option.dataset.tentId!, guests });
     }
@@ -592,6 +645,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   function setTents(tents: TentAssignment[]) {
     for (const option of Array.from(tentsContainer.querySelectorAll<HTMLElement>('.tent-option'))) {
       const tentId = option.dataset.tentId!;
+      const unit = UNITS.find((u) => u.id === tentId)!;
       const checkbox = option.querySelector('.tent-checkbox') as HTMLInputElement;
       const guestsEl = option.querySelector('.guests') as HTMLElement;
       const addGuestBtn = option.querySelector('.add-guest') as HTMLButtonElement;
@@ -601,12 +655,56 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       const showGuests = Boolean(assignment) && wantsGuestFields();
       guestsEl.hidden = !showGuests;
       addGuestBtn.hidden = !showGuests;
+      const onRemove = () => updateAddGuestButtonState(guestsEl, addGuestBtn, unit.capacity);
       if (assignment && wantsGuestFields()) {
-        if (assignment.guests.length === 0) addGuestRow(guestsEl);
-        else for (const g of assignment.guests) addGuestRow(guestsEl, g);
+        if (assignment.guests.length === 0) addGuestRow(guestsEl, {}, onRemove);
+        else for (const g of assignment.guests) addGuestRow(guestsEl, g, onRemove);
+        updateAddGuestButtonState(guestsEl, addGuestBtn, unit.capacity);
       }
     }
   }
+
+  // Reflects what's already booked for the form's currently-selected dates
+  // directly on the tent checkboxes - disables (and dims) any tent that's
+  // taken on any of the selected nights by a *different* booking, so
+  // Madhavan sees a conflict before submitting rather than only after the
+  // server rejects it (see accommodation-admin.mts's findConflict). Doesn't
+  // disable a tent this same booking (editingId) already occupies.
+  function markOccupiedTents() {
+    const start = startInput.value;
+    const nights = Number(nightsInput.value) || 1;
+    if (!start) return;
+    const selectedNights = new Set(nightsForBooking({ startDate: start, nights } as Booking));
+    for (const option of Array.from(tentsContainer.querySelectorAll<HTMLElement>('.tent-option'))) {
+      const tentId = option.dataset.tentId!;
+      const checkbox = option.querySelector('.tent-checkbox') as HTMLInputElement;
+      const conflict = currentBookings.find(
+        (b) => b.id !== editingId && b.type !== 'farm-closure' && b.tents.some((t) => t.tentId === tentId) && nightsForBooking(b).some((n) => selectedNights.has(n)),
+      );
+      const blocked = Boolean(conflict) && !checkbox.checked;
+      option.classList.toggle('tent-option--occupied', blocked);
+      checkbox.disabled = blocked;
+      checkbox.title = conflict ? `Already booked: ${conflict.label ?? conflict.eventTitle ?? conflict.type}` : '';
+    }
+  }
+
+  // Jumps the month view to match the form's selected start date so the
+  // grid/booking-list/occupied-tent markers reflect that date, instead of
+  // silently staying on whatever month was last navigated to (see point 4
+  // from Sharath's testing feedback).
+  async function handleDateOrNightsChange() {
+    if (!startInput.value) return;
+    const month = startInput.value.slice(0, 7);
+    if (month !== currentMonth) {
+      currentMonth = month;
+      await loadMonth();
+    } else {
+      markOccupiedTents();
+    }
+  }
+
+  startInput.addEventListener('change', handleDateOrNightsChange);
+  nightsInput.addEventListener('change', handleDateOrNightsChange);
 
   // ---- Type-conditional field visibility ----
 
@@ -728,6 +826,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     nightsInput.value = String(b.nights);
     noteInput.value = b.note ?? '';
     setTents(b.tents);
+    markOccupiedTents();
     form.scrollIntoView({ behavior: 'smooth' });
   }
 
@@ -739,6 +838,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     typeSelect.value = 'public-event';
     updateFieldVisibility();
     setTents([]);
+    markOccupiedTents();
     formError.hidden = true;
   }
 
@@ -821,6 +921,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       hideStatus();
       renderGrid();
       renderBookingList();
+      markOccupiedTents();
     } catch (err) {
       const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
       if (!handled) showStatus('Failed to load bookings — try refreshing.');

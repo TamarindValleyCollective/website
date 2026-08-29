@@ -25,7 +25,7 @@ type BookingType = 'public-event' | 'private-event' | 'casual-stay' | 'member-st
 
 interface Guest {
   name?: string;
-  age?: number;
+  ageGroup?: 'Adult' | 'Child';
   gender?: string;
 }
 
@@ -129,7 +129,9 @@ async function listAllBookings(): Promise<Booking[]> {
 }
 
 const VALID_TYPES: BookingType[] = ['public-event', 'private-event', 'casual-stay', 'member-stay', 'unit-closure', 'farm-closure'];
-const KNOWN_TENT_IDS = new Set(ACCOMMODATION_UNITS.map((u) => u.id));
+const UNITS_BY_ID = new Map(ACCOMMODATION_UNITS.map((u) => [u.id, u]));
+const VALID_AGE_GROUPS = ['Adult', 'Child'];
+const VALID_GENDERS = ['Male', 'Female', 'NA'];
 
 function validateBookingInput(input: Partial<Booking>): string | null {
   if (!input.type || !VALID_TYPES.includes(input.type)) return `type must be one of ${VALID_TYPES.join(', ')}`;
@@ -137,7 +139,23 @@ function validateBookingInput(input: Partial<Booking>): string | null {
   if (!Number.isInteger(input.nights) || (input.nights as number) < 1) return 'nights must be a positive integer';
   if (!Array.isArray(input.tents)) return 'tents must be an array (empty for a farm-wide closure)';
   for (const t of input.tents) {
-    if (!KNOWN_TENT_IDS.has(t.tentId)) return `Unknown tentId "${t.tentId}"`;
+    const unit = UNITS_BY_ID.get(t.tentId);
+    if (!unit) return `Unknown tentId "${t.tentId}"`;
+    // The hard cap this whole model rests on - "the same tent cannot be
+    // shared across 2 different events" only means something if a tent's
+    // own guest count can't exceed its own physical capacity either.
+    if (Array.isArray(t.guests) && t.guests.length > unit.capacity) {
+      return `${unit.label} holds at most ${unit.capacity}, but ${t.guests.length} guest(s) were assigned`;
+    }
+    // Name may be blank (the design's own allowance for when a guest's name
+    // isn't available), but age group and gender are mandatory per guest -
+    // the client never sends a blank value for either (both selects always
+    // default to a real option), so an absent/invalid value here means a
+    // request bypassing the client's own form, not a legitimate partial entry.
+    for (const g of t.guests ?? []) {
+      if (!g.ageGroup || !VALID_AGE_GROUPS.includes(g.ageGroup)) return `Each guest needs an age group (${VALID_AGE_GROUPS.join('/')})`;
+      if (!g.gender || !VALID_GENDERS.includes(g.gender)) return `Each guest needs a gender (${VALID_GENDERS.join('/')})`;
+    }
   }
   if (input.type === 'public-event' && !input.eventSlug) return 'eventSlug is required for type "public-event"';
   return null;
