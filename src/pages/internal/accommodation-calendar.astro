@@ -822,6 +822,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     if (b.eventSlug) eventSelect.value = b.eventSlug;
     labelInput.value = b.label ?? '';
     exclusiveInput.checked = Boolean(b.exclusive);
+    // No lower bound while editing - a booking that already starts in the
+    // past (e.g. correcting a historical entry) must stay editable without
+    // the browser's date-picker fighting the "no past dates" rule that only
+    // makes sense for *new* bookings (see resetForm below).
+    startInput.removeAttribute('min');
     startInput.value = b.startDate;
     nightsInput.value = String(b.nights);
     noteInput.value = b.note ?? '';
@@ -837,6 +842,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     form.reset();
     typeSelect.value = 'public-event';
     updateFieldVisibility();
+    // A new booking can't start in the past - today, in the visitor's own
+    // local timezone, computed fresh on every reset rather than baked in at
+    // build time (this page is statically prerendered).
+    startInput.min = new Date().toLocaleDateString('en-CA'); // en-CA formats as YYYY-MM-DD
     setTents([]);
     markOccupiedTents();
     formError.hidden = true;
