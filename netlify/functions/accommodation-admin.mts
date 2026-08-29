@@ -147,12 +147,15 @@ function validateBookingInput(input: Partial<Booking>): string | null {
     if (Array.isArray(t.guests) && t.guests.length > unit.capacity) {
       return `${unit.label} holds at most ${unit.capacity}, but ${t.guests.length} guest(s) were assigned`;
     }
-    // Name may be blank (the design's own allowance for when a guest's name
-    // isn't available), but age group and gender are mandatory per guest -
-    // the client never sends a blank value for either (both selects always
-    // default to a real option), so an absent/invalid value here means a
-    // request bypassing the client's own form, not a legitimate partial entry.
+    // Name, age group, and gender are all mandatory per guest now (name was
+    // originally allowed to be blank, but live testing found a booking could
+    // silently save with an unnamed guest, which isn't wanted after all) -
+    // the client's own form already enforces all three (required inputs,
+    // and both selects always default to a real option), so a violation
+    // here means a request bypassing the client's form, not a legitimate
+    // partial entry.
     for (const g of t.guests ?? []) {
+      if (!g.name || !g.name.trim()) return 'Each guest needs a name';
       if (!g.ageGroup || !VALID_AGE_GROUPS.includes(g.ageGroup)) return `Each guest needs an age group (${VALID_AGE_GROUPS.join('/')})`;
       if (!g.gender || !VALID_GENDERS.includes(g.gender)) return `Each guest needs a gender (${VALID_GENDERS.join('/')})`;
     }

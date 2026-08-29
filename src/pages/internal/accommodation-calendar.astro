@@ -555,7 +555,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     const ageGroup = guest.ageGroup ?? 'Adult';
     const gender = guest.gender ?? 'NA';
     row.innerHTML = `
-      <input type="text" data-field="name" placeholder="Name (or leave blank)" value="${guest.name ?? ''}" />
+      <input type="text" data-field="name" placeholder="Name" required value="${guest.name ?? ''}" />
       <select data-field="ageGroup">
         ${AGE_GROUP_OPTIONS.map((a) => `<option value="${a}" ${ageGroup === a ? 'selected' : ''}>${a}</option>`).join('')}
       </select>
