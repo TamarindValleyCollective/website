@@ -1,0 +1,865 @@
+---
+// Internal admin tool for the accommodation-calendar prototype: lets the
+// farm manager, Madhavan, record bookings against the fixed tent inventory
+// (scripts/lib/accommodation.mjs) - who's in which tent, for how long, and
+// why. See netlify/functions/accommodation-admin.mts for the API this talks
+// to, and src/components/views/AvailabilityView.astro for the public,
+// aggregate-only counterpart. Deliberately unlinked from nav; gated by
+// Google Sign-In plus a live allow-list, same shell pattern as
+// photo-pool.astro/whatsapp.astro (own Sheet/env var - see
+// accommodation-admin.mts's header comment for why it isn't shared).
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+import { ACCOMMODATION_UNITS } from '../../../scripts/lib/accommodation.mjs';
+
+// English-only public events, for the "link to a public event" picker -
+// this is an internal tool, not a localized visitor-facing page, so the
+// kn/ta sibling entries (see EventsIndexView.astro's bareSlug convention)
+// aren't relevant here.
+const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.startsWith('kn/') && !e.id.startsWith('ta/')))
+  .sort((a, b) => a.data.date.valueOf() - b.data.date.valueOf())
+  .map((e) => ({ slug: e.id, title: e.data.title, date: e.data.date.toISOString().slice(0, 10) }));
+---
+
+<BaseLayout title="Accommodation Calendar" description="Internal accommodation booking tool." noindex>
+  <section class="section wrapper">
+    <h1>Accommodation Calendar</h1>
+    <p class="hint">Record who's in which tent, for how long. The public site only ever shows aggregate availability derived from this.</p>
+
+    <div id="gate" class="gate card">
+      <p class="gate-copy">Sign in with the Google account you manage bookings with.</p>
+      <div id="g_id_signin"></div>
+      <p id="gate-error" class="error" hidden></p>
+    </div>
+
+    <div id="forbidden" class="gate card" hidden>
+      <p class="gate-copy">Signed in as <strong id="forbidden-email"></strong>, but this Google account isn't authorized to manage the accommodation calendar.</p>
+      <p class="hint" style="margin: 4px 0 12px;">Ask an admin to add it to the allow-list.</p>
+      <button type="button" id="use-different-account" class="button">Use a different account</button>
+    </div>
+
+    <div id="app" hidden>
+      <div class="month-nav">
+        <button type="button" id="prev-month" class="button">← Prev</button>
+        <h2 id="month-label"></h2>
+        <button type="button" id="next-month" class="button">Next →</button>
+      </div>
+
+      <p id="status" class="hint" hidden></p>
+
+      <div class="grid-scroll">
+        <table id="grid" class="grid-table"></table>
+      </div>
+
+      <h2>Bookings this month</h2>
+      <div id="booking-list" class="booking-list"></div>
+
+      <h2 id="form-heading">New booking</h2>
+      <form id="booking-form" class="card form">
+        <label>
+          Type
+          <select id="f-type" required>
+            <option value="public-event">Public event (linked)</option>
+            <option value="private-event">Private event / retreat</option>
+            <option value="casual-stay">Casual stay (via Linger)</option>
+            <option value="member-stay">Member stay (booked direct)</option>
+            <option value="unit-closure">Tent closure (repair, etc.)</option>
+            <option value="farm-closure">Farm-wide closure (leave, repairs)</option>
+          </select>
+        </label>
+
+        <label id="f-event-wrap">
+          Linked public event
+          <select id="f-event"></select>
+        </label>
+
+        <label id="f-label-wrap">
+          Label <span class="hint-inline">(shown to you only, e.g. who's coming)</span>
+          <input type="text" id="f-label" />
+        </label>
+
+        <label id="f-exclusive-wrap" class="checkbox-label">
+          <input type="checkbox" id="f-exclusive" />
+          Exclusive use — blocks the whole farm publicly, even if not every tent is assigned
+        </label>
+
+        <div class="dates-row">
+          <label>
+            Start date
+            <input type="date" id="f-start" required />
+          </label>
+          <label>
+            Nights
+            <input type="number" id="f-nights" min="1" value="1" required />
+          </label>
+        </div>
+
+        <fieldset id="f-tents-wrap">
+          <legend>Tents</legend>
+          <div id="f-tents"></div>
+        </fieldset>
+
+        <label>
+          Note <span class="hint-inline">(staff-only, never shown publicly)</span>
+          <textarea id="f-note" rows="2"></textarea>
+        </label>
+
+        <p id="form-error" class="error" hidden></p>
+
+        <div class="form-actions">
+          <button type="submit" id="f-submit" class="button button--primary">Save booking</button>
+          <button type="button" id="f-cancel-edit" class="button" hidden>Cancel edit</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</BaseLayout>
+
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<script type="application/json" id="events-data" set:html={JSON.stringify(allEvents)} />
+<script type="application/json" id="units-data" set:html={JSON.stringify(ACCOMMODATION_UNITS)} />
+
+<style>
+  .hint {
+    color: var(--tvc-ink-soft);
+    margin: -8px 0 24px;
+  }
+
+  .hint-inline {
+    font-weight: 400;
+    color: var(--tvc-ink-soft);
+    font-size: 0.82rem;
+  }
+
+  .card {
+    background: #fff;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .gate {
+    max-width: 420px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+  }
+
+  .gate-copy {
+    font-size: 0.9rem;
+    color: var(--tvc-ink-soft);
+    margin: 0 0 14px;
+  }
+
+  .error {
+    color: #b3261e;
+    font-size: 0.85rem;
+    margin: 10px 0 0;
+  }
+
+  .button {
+    appearance: none;
+    border: 1px solid var(--tvc-line);
+    background: #fff;
+    border-radius: 999px;
+    padding: 8px 18px;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.86rem;
+    cursor: pointer;
+  }
+
+  .button--primary {
+    background: var(--tvc-green);
+    border-color: var(--tvc-green);
+    color: #fff;
+  }
+
+  .month-nav {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .month-nav h2 {
+    margin: 0;
+    min-width: 180px;
+    text-align: center;
+  }
+
+  .grid-scroll {
+    overflow-x: auto;
+    margin-bottom: 32px;
+  }
+
+  .form {
+    max-width: 560px;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.86rem;
+    font-weight: 600;
+  }
+
+  .form input,
+  .form select,
+  .form textarea {
+    font: inherit;
+    padding: 6px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 8px;
+  }
+
+  .checkbox-label {
+    flex-direction: row !important;
+    align-items: center;
+    gap: 8px !important;
+  }
+
+  .dates-row {
+    display: flex;
+    gap: 14px;
+  }
+
+  .dates-row label {
+    flex: 1;
+  }
+
+  fieldset {
+    border: 1px solid var(--tvc-line);
+    border-radius: 8px;
+    padding: 10px 14px;
+  }
+
+  .form-actions {
+    display: flex;
+    gap: 10px;
+  }
+</style>
+
+<!--
+  Everything below styles content the client script builds at runtime
+  (renderGrid/renderBookingList/buildTentsFieldset use innerHTML/
+  createElement, not this component's own template) - Astro's scoped-style
+  attribute selector only lands on elements Astro itself renders, so a
+  normal scoped <style> block silently fails to match any of it (see
+  AvailabilityView.astro's identical note). [hidden] is included here too,
+  not just in the scoped block above, since guestsEl/addGuestBtn (dynamic)
+  rely on it being suppressed the same way #gate/#app (static) do. None of
+  these class names collide with anything in global.css (checked before
+  adding this).
+-->
+<style is:global>
+  .grid-table {
+    border-collapse: collapse;
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+
+  .grid-table th,
+  .grid-table td {
+    border: 1px solid var(--tvc-line);
+    padding: 4px 6px;
+    text-align: center;
+  }
+
+  .grid-table th.unit-col,
+  .grid-table td.unit-col {
+    text-align: left;
+    position: sticky;
+    left: 0;
+    background: #fff;
+    font-weight: 600;
+  }
+
+  .cell--free {
+    background: var(--tvc-green-tint);
+  }
+
+  .cell--occupied {
+    background: var(--tvc-orange-tint);
+  }
+
+  .cell--closed {
+    background: #e6e6e6;
+  }
+
+  .booking-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 32px;
+  }
+
+  .booking-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: #fff;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+  }
+
+  .booking-card .meta {
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .booking-card .actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .tent-option {
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--tvc-line);
+  }
+
+  .tent-option:last-child {
+    border-bottom: none;
+  }
+
+  .tent-option .tent-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 0.86rem;
+  }
+
+  .guests {
+    margin: 8px 0 0 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .guest-row {
+    display: flex;
+    gap: 6px;
+  }
+
+  .guest-row input {
+    padding: 4px 8px;
+    font-size: 0.82rem;
+  }
+
+  .guest-row input[data-field='name'] {
+    flex: 2;
+  }
+
+  .guest-row input[data-field='age'] {
+    flex: 1;
+    width: 60px;
+  }
+
+  .guest-row input[data-field='gender'] {
+    flex: 1;
+  }
+
+  .add-guest {
+    align-self: flex-start;
+    font-size: 0.78rem;
+    padding: 3px 10px;
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+</style>
+
+<script>
+  declare const google: any;
+
+  const STORAGE_KEY = 'tvc-accommodation-idtoken';
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+
+  interface EventOption {
+    slug: string;
+    title: string;
+    date: string;
+  }
+
+  interface Unit {
+    id: string;
+    label: string;
+    capacity: number;
+    kind: 'fixed' | 'removable';
+  }
+
+  interface Guest {
+    name?: string;
+    age?: number;
+    gender?: string;
+  }
+
+  interface TentAssignment {
+    tentId: string;
+    guests: Guest[];
+  }
+
+  type BookingType = 'public-event' | 'private-event' | 'casual-stay' | 'member-stay' | 'unit-closure' | 'farm-closure';
+
+  interface Booking {
+    id: string;
+    type: BookingType;
+    eventSlug?: string;
+    eventTitle?: string;
+    label?: string;
+    exclusive?: boolean;
+    startDate: string;
+    nights: number;
+    tents: TentAssignment[];
+    note?: string;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+  }
+
+  const EVENTS: EventOption[] = JSON.parse(document.getElementById('events-data')!.textContent!);
+  const UNITS: Unit[] = JSON.parse(document.getElementById('units-data')!.textContent!);
+
+  const gate = document.getElementById('gate') as HTMLElement;
+  const gateError = document.getElementById('gate-error') as HTMLElement;
+  const forbidden = document.getElementById('forbidden') as HTMLElement;
+  const forbiddenEmail = document.getElementById('forbidden-email') as HTMLElement;
+  const useDifferentAccountBtn = document.getElementById('use-different-account') as HTMLButtonElement;
+  const app = document.getElementById('app') as HTMLElement;
+  const statusEl = document.getElementById('status') as HTMLElement;
+  const monthLabel = document.getElementById('month-label') as HTMLElement;
+  const gridTable = document.getElementById('grid') as HTMLTableElement;
+  const bookingList = document.getElementById('booking-list') as HTMLElement;
+  const form = document.getElementById('booking-form') as HTMLFormElement;
+  const formHeading = document.getElementById('form-heading') as HTMLElement;
+  const formError = document.getElementById('form-error') as HTMLElement;
+  const typeSelect = document.getElementById('f-type') as HTMLSelectElement;
+  const eventWrap = document.getElementById('f-event-wrap') as HTMLElement;
+  const eventSelect = document.getElementById('f-event') as HTMLSelectElement;
+  const labelWrap = document.getElementById('f-label-wrap') as HTMLElement;
+  const labelInput = document.getElementById('f-label') as HTMLInputElement;
+  const exclusiveWrap = document.getElementById('f-exclusive-wrap') as HTMLElement;
+  const exclusiveInput = document.getElementById('f-exclusive') as HTMLInputElement;
+  const startInput = document.getElementById('f-start') as HTMLInputElement;
+  const nightsInput = document.getElementById('f-nights') as HTMLInputElement;
+  const tentsWrap = document.getElementById('f-tents-wrap') as HTMLElement;
+  const tentsContainer = document.getElementById('f-tents') as HTMLElement;
+  const noteInput = document.getElementById('f-note') as HTMLTextAreaElement;
+  const cancelEditBtn = document.getElementById('f-cancel-edit') as HTMLButtonElement;
+
+  let currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+  let currentBookings: Booking[] = [];
+  let editingId: string | null = null;
+
+  function getToken(): string | null {
+    return sessionStorage.getItem(STORAGE_KEY);
+  }
+
+  function clearToken() {
+    sessionStorage.removeItem(STORAGE_KEY);
+  }
+
+  function decodeTokenEmail(token: string): string {
+    const payloadB64 = token.split('.')[1] ?? '';
+    const base64 = payloadB64.replace(/-/g, '+').replace(/_/g, '/').padEnd(payloadB64.length + ((4 - (payloadB64.length % 4)) % 4), '=');
+    try {
+      return JSON.parse(atob(base64)).email ?? 'unknown';
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    app.hidden = true;
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+
+  function showForbidden(token: string) {
+    gate.hidden = true;
+    app.hidden = true;
+    forbidden.hidden = false;
+    forbiddenEmail.textContent = decodeTokenEmail(token);
+  }
+
+  function showStatus(message: string) {
+    statusEl.hidden = false;
+    statusEl.textContent = message;
+  }
+
+  function hideStatus() {
+    statusEl.hidden = true;
+  }
+
+  async function authedFetch(input: string, init: RequestInit = {}): Promise<Response> {
+    const token = getToken();
+    const res = await fetch(input, {
+      ...init,
+      headers: { ...init.headers, authorization: `Bearer ${token ?? ''}` },
+    });
+    if (res.status === 401) {
+      clearToken();
+      showGate('Your session expired — sign in again.');
+      throw new Error('Unauthorized');
+    }
+    if (res.status === 403) {
+      showForbidden(token!);
+      throw new Error('Forbidden');
+    }
+    return res;
+  }
+
+  // ---- Tent-assignment fieldset (checkbox per unit, expandable guest rows) ----
+
+  function addGuestRow(container: HTMLElement, guest: Guest = {}) {
+    const row = document.createElement('div');
+    row.className = 'guest-row';
+    row.innerHTML = `
+      <input type="text" data-field="name" placeholder="Name (or leave blank)" value="${guest.name ?? ''}" />
+      <input type="number" data-field="age" placeholder="Age" min="0" value="${guest.age ?? ''}" />
+      <input type="text" data-field="gender" placeholder="Gender" value="${guest.gender ?? ''}" />
+      <button type="button" class="button remove-guest">✕</button>
+    `;
+    row.querySelector('.remove-guest')!.addEventListener('click', () => row.remove());
+    container.appendChild(row);
+  }
+
+  function buildTentsFieldset() {
+    tentsContainer.innerHTML = '';
+    for (const unit of UNITS) {
+      const option = document.createElement('div');
+      option.className = 'tent-option';
+      option.dataset.tentId = unit.id;
+      option.innerHTML = `
+        <label class="tent-check">
+          <input type="checkbox" class="tent-checkbox" />
+          ${unit.label} (${unit.capacity})
+        </label>
+        <div class="guests" hidden></div>
+        <button type="button" class="button add-guest" hidden>+ Guest</button>
+      `;
+      const checkbox = option.querySelector('.tent-checkbox') as HTMLInputElement;
+      const guestsEl = option.querySelector('.guests') as HTMLElement;
+      const addGuestBtn = option.querySelector('.add-guest') as HTMLButtonElement;
+
+      checkbox.addEventListener('change', () => {
+        const wantsGuests = wantsGuestFields();
+        guestsEl.hidden = !checkbox.checked || !wantsGuests;
+        addGuestBtn.hidden = !checkbox.checked || !wantsGuests;
+        if (checkbox.checked && wantsGuests && guestsEl.children.length === 0) addGuestRow(guestsEl);
+      });
+      addGuestBtn.addEventListener('click', () => addGuestRow(guestsEl));
+
+      tentsContainer.appendChild(option);
+    }
+  }
+
+  function wantsGuestFields(): boolean {
+    return typeSelect.value !== 'unit-closure' && typeSelect.value !== 'farm-closure';
+  }
+
+  function collectTents(): TentAssignment[] {
+    const out: TentAssignment[] = [];
+    for (const option of Array.from(tentsContainer.querySelectorAll<HTMLElement>('.tent-option'))) {
+      const checkbox = option.querySelector('.tent-checkbox') as HTMLInputElement;
+      if (!checkbox.checked) continue;
+      const guests: Guest[] = [];
+      for (const row of Array.from(option.querySelectorAll<HTMLElement>('.guest-row'))) {
+        const name = (row.querySelector('[data-field="name"]') as HTMLInputElement).value.trim();
+        const ageRaw = (row.querySelector('[data-field="age"]') as HTMLInputElement).value.trim();
+        const gender = (row.querySelector('[data-field="gender"]') as HTMLInputElement).value.trim();
+        if (!name && !ageRaw && !gender) continue;
+        guests.push({ name: name || undefined, age: ageRaw ? Number(ageRaw) : undefined, gender: gender || undefined });
+      }
+      out.push({ tentId: option.dataset.tentId!, guests });
+    }
+    return out;
+  }
+
+  function setTents(tents: TentAssignment[]) {
+    for (const option of Array.from(tentsContainer.querySelectorAll<HTMLElement>('.tent-option'))) {
+      const tentId = option.dataset.tentId!;
+      const checkbox = option.querySelector('.tent-checkbox') as HTMLInputElement;
+      const guestsEl = option.querySelector('.guests') as HTMLElement;
+      const addGuestBtn = option.querySelector('.add-guest') as HTMLButtonElement;
+      const assignment = tents.find((t) => t.tentId === tentId);
+      checkbox.checked = Boolean(assignment);
+      guestsEl.innerHTML = '';
+      const showGuests = Boolean(assignment) && wantsGuestFields();
+      guestsEl.hidden = !showGuests;
+      addGuestBtn.hidden = !showGuests;
+      if (assignment && wantsGuestFields()) {
+        if (assignment.guests.length === 0) addGuestRow(guestsEl);
+        else for (const g of assignment.guests) addGuestRow(guestsEl, g);
+      }
+    }
+  }
+
+  // ---- Type-conditional field visibility ----
+
+  function populateEventSelect() {
+    eventSelect.innerHTML = EVENTS.map((e) => `<option value="${e.slug}">${e.date} — ${e.title}</option>`).join('');
+  }
+
+  function updateFieldVisibility() {
+    const type = typeSelect.value as BookingType;
+    eventWrap.hidden = type !== 'public-event';
+    labelWrap.hidden = type === 'public-event';
+    exclusiveWrap.hidden = type !== 'private-event';
+    tentsWrap.hidden = type === 'farm-closure';
+    // Re-apply guest-field visibility on every tent option for the new type.
+    for (const option of Array.from(tentsContainer.querySelectorAll<HTMLElement>('.tent-option'))) {
+      const checkbox = option.querySelector('.tent-checkbox') as HTMLInputElement;
+      const guestsEl = option.querySelector('.guests') as HTMLElement;
+      const addGuestBtn = option.querySelector('.add-guest') as HTMLButtonElement;
+      const show = checkbox.checked && wantsGuestFields();
+      guestsEl.hidden = !show;
+      addGuestBtn.hidden = !show;
+    }
+  }
+
+  typeSelect.addEventListener('change', updateFieldVisibility);
+
+  // ---- Month grid ----
+
+  function datesInMonth(monthStr: string): string[] {
+    const [y, m] = monthStr.split('-').map(Number);
+    const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    return Array.from({ length: daysInMonth }, (_, i) => `${monthStr}-${String(i + 1).padStart(2, '0')}`);
+  }
+
+  function nightsForBooking(b: Booking): string[] {
+    const [y, m, d] = b.startDate.split('-').map(Number);
+    const start = Date.UTC(y, m - 1, d);
+    return Array.from({ length: b.nights }, (_, i) => new Date(start + i * 86_400_000).toISOString().slice(0, 10));
+  }
+
+  function renderGrid() {
+    const dates = datesInMonth(currentMonth);
+    const nightsByBookingId = new Map(currentBookings.map((b) => [b.id, new Set(nightsForBooking(b))]));
+
+    let headHtml = '<tr><th class="unit-col">Tent</th>' + dates.map((d) => `<th>${d.slice(-2)}</th>`).join('') + '</tr>';
+    let bodyHtml = '';
+    for (const unit of UNITS) {
+      bodyHtml += `<tr><td class="unit-col">${unit.label}</td>`;
+      for (const date of dates) {
+        const farmClosed = currentBookings.some((b) => b.type === 'farm-closure' && nightsByBookingId.get(b.id)!.has(date));
+        const occupying = currentBookings.find((b) => b.type !== 'farm-closure' && b.tents.some((t) => t.tentId === unit.id) && nightsByBookingId.get(b.id)!.has(date));
+        if (farmClosed) {
+          bodyHtml += `<td class="cell--closed" title="Farm closed">·</td>`;
+        } else if (occupying) {
+          const label = occupying.label ?? occupying.eventTitle ?? occupying.type;
+          bodyHtml += `<td class="cell--occupied" title="${label.replace(/"/g, '&quot;')}">●</td>`;
+        } else {
+          bodyHtml += `<td class="cell--free">·</td>`;
+        }
+      }
+      bodyHtml += '</tr>';
+    }
+    gridTable.innerHTML = headHtml + bodyHtml;
+  }
+
+  function renderBookingList() {
+    bookingList.innerHTML = '';
+    if (currentBookings.length === 0) {
+      bookingList.innerHTML = '<p class="hint">No bookings this month.</p>';
+      return;
+    }
+    for (const b of [...currentBookings].sort((a, c) => a.startDate.localeCompare(c.startDate))) {
+      const card = document.createElement('div');
+      card.className = 'booking-card';
+      const title = b.eventTitle ?? b.label ?? b.type;
+      const tentNames = b.tents.map((t) => UNITS.find((u) => u.id === t.tentId)?.label ?? t.tentId).join(', ') || '(whole farm)';
+      card.innerHTML = `
+        <div>
+          <strong>${title}</strong>
+          <div class="meta">${b.startDate} · ${b.nights} night${b.nights > 1 ? 's' : ''} · ${tentNames}${b.exclusive ? ' · exclusive' : ''}</div>
+        </div>
+        <div class="actions">
+          <button type="button" class="button edit-booking">Edit</button>
+          <button type="button" class="button cancel-booking">Cancel</button>
+        </div>
+      `;
+      card.querySelector('.edit-booking')!.addEventListener('click', () => loadIntoForm(b));
+      card.querySelector('.cancel-booking')!.addEventListener('click', () => deleteBooking(b.id));
+      bookingList.appendChild(card);
+    }
+  }
+
+  async function deleteBooking(id: string) {
+    if (!confirm('Cancel this booking?')) return;
+    try {
+      const res = await authedFetch('/api/accommodation-admin/bookings/delete', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) throw new Error('Request failed');
+      await loadMonth();
+    } catch (err) {
+      const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
+      if (!handled) alert('Failed to cancel booking — try again.');
+    }
+  }
+
+  function loadIntoForm(b: Booking) {
+    editingId = b.id;
+    formHeading.textContent = 'Edit booking';
+    cancelEditBtn.hidden = false;
+    typeSelect.value = b.type;
+    updateFieldVisibility();
+    if (b.eventSlug) eventSelect.value = b.eventSlug;
+    labelInput.value = b.label ?? '';
+    exclusiveInput.checked = Boolean(b.exclusive);
+    startInput.value = b.startDate;
+    nightsInput.value = String(b.nights);
+    noteInput.value = b.note ?? '';
+    setTents(b.tents);
+    form.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function resetForm() {
+    editingId = null;
+    formHeading.textContent = 'New booking';
+    cancelEditBtn.hidden = true;
+    form.reset();
+    typeSelect.value = 'public-event';
+    updateFieldVisibility();
+    setTents([]);
+    formError.hidden = true;
+  }
+
+  cancelEditBtn.addEventListener('click', resetForm);
+
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    formError.hidden = true;
+
+    const type = typeSelect.value as BookingType;
+    const payload: Partial<Booking> & { id?: string } = {
+      id: editingId ?? undefined,
+      type,
+      startDate: startInput.value,
+      nights: Number(nightsInput.value),
+      tents: collectTents(),
+      note: noteInput.value.trim() || undefined,
+    };
+    if (type === 'public-event') {
+      const opt = EVENTS.find((e) => e.slug === eventSelect.value);
+      payload.eventSlug = opt?.slug;
+      payload.eventTitle = opt?.title;
+    } else {
+      payload.label = labelInput.value.trim() || undefined;
+    }
+    if (type === 'private-event') payload.exclusive = exclusiveInput.checked;
+
+    const url = editingId ? '/api/accommodation-admin/bookings/update' : '/api/accommodation-admin/bookings';
+    try {
+      const res = await authedFetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        formError.hidden = false;
+        formError.textContent = data.error ?? 'Failed to save — try again.';
+        return;
+      }
+      resetForm();
+      await loadMonth();
+    } catch (err) {
+      const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
+      if (!handled) {
+        formError.hidden = false;
+        formError.textContent = 'Failed to save — try again.';
+      }
+    }
+  });
+
+  // ---- Month loading/navigation ----
+
+  function monthDisplayLabel(monthStr: string): string {
+    const [y, m] = monthStr.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  }
+
+  function shiftMonth(monthStr: string, delta: number): string {
+    const [y, m] = monthStr.split('-').map(Number);
+    const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  }
+
+  async function loadMonth() {
+    gate.hidden = true;
+    forbidden.hidden = true;
+    app.hidden = false;
+    monthLabel.textContent = monthDisplayLabel(currentMonth);
+    showStatus('Loading…');
+
+    try {
+      const res = await authedFetch(`/api/accommodation-admin/bookings?month=${currentMonth}`);
+      if (!res.ok) {
+        showStatus('Failed to load bookings — try refreshing.');
+        return;
+      }
+      const data = (await res.json()) as { units: Unit[]; bookings: Booking[] };
+      currentBookings = data.bookings;
+      hideStatus();
+      renderGrid();
+      renderBookingList();
+    } catch (err) {
+      const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
+      if (!handled) showStatus('Failed to load bookings — try refreshing.');
+    }
+  }
+
+  document.getElementById('prev-month')!.addEventListener('click', () => {
+    currentMonth = shiftMonth(currentMonth, -1);
+    loadMonth();
+  });
+  document.getElementById('next-month')!.addEventListener('click', () => {
+    currentMonth = shiftMonth(currentMonth, 1);
+    loadMonth();
+  });
+
+  function handleCredentialResponse(response: { credential: string }) {
+    sessionStorage.setItem(STORAGE_KEY, response.credential);
+    loadMonth();
+  }
+
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: 'outline', size: 'large' });
+  }
+
+  useDifferentAccountBtn.addEventListener('click', () => {
+    clearToken();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
+  populateEventSelect();
+  buildTentsFieldset();
+  resetForm();
+
+  if (getToken()) {
+    loadMonth();
+  } else {
+    showGate();
+  }
+</script>
