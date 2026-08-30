@@ -196,7 +196,7 @@ flowchart TD
     WHATSAPPDASH -.->|"Sign in with Google"| GIDTOKEN
     ACCOMMODATIONDASH --> APIFN9
     APIFN9 -.->|"read/write bookings, guests,<br/>audit log"| SUPABASE
-    APIFN9 -.->|"read allow-list rows<br/>(reuses PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID)"| GSHEET
+    APIFN9 -.->|"read allow-list rows<br/>(own dedicated Sheet)"| GSHEET
     APIFN9 -.->|"verify staff ID token"| GIDTOKEN
     ACCOMMODATIONDASH -.->|"Sign in with Google"| GIDTOKEN
 
@@ -745,8 +745,12 @@ never touches Netlify either.
   UI by hand (same secret-handling rule as `WHATSAPP_ACCESS_TOKEN`) before this can go live.
 - **Accommodation Calendar** (`/internal/accommodation-calendar`) — staff-only (Madhavan, the
   farm manager), same shape as Photo Pool/WhatsApp above: unlinked, `noindex`, Google Sign-In
-  gated, reusing the same allow-list Sheet (`ACCOMMODATION_ALLOWED_EMAILS_SHEET_ID`, set to the
-  same Sheet id as `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID` rather than maintaining a second one).
+  gated. Briefly reused `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID`'s own Sheet at launch, then split
+  into its own dedicated `ACCOMMODATION_ALLOWED_EMAILS_SHEET_ID` Sheet the same day, once it was
+  clear the three internal tools' access needed to be managed independently, not as one combined
+  list. A unified admin console (shared users/roles/permissions across all internal tools,
+  instead of a separate Sheet per tool) is under consideration as the next step here — see the
+  project memory / conversation this decision came from for the current thinking.
   Records who's in which of the farm's 8 tents/huts, for how long, and why — a day/week/month
   calendar (tapping any cell opens a pre-filled booking dialog), a reusable guest directory with
   name/mobile-number typeahead and each guest's past-stay history, and a full audit trail of
