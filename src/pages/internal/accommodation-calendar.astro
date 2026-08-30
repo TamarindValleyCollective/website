@@ -11,19 +11,37 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { getCollection } from 'astro:content';
 import { ACCOMMODATION_UNITS } from '../../../scripts/lib/accommodation.mjs';
+import { durationDays } from '../../utils/events';
+import { members } from '../../data/members';
 
-// English-only, upcoming-only public events, for the "link to a public
-// event" picker - a past event has no future nights left to book
-// accommodation against, and this is an internal tool (not a localized
-// visitor-facing page), so the kn/ta sibling entries (see
-// EventsIndexView.astro's bareSlug convention) aren't relevant here either.
-// A multi-day event counts as upcoming until its last day (endDate), not
-// just its start.
+// Member names only, for the "member stay" label picker - `name` is already
+// the canonical display label used everywhere else members show up (see
+// MembersView.astro), so no separate slug/id is needed here.
+const memberNames = members.map((m) => m.name);
+
+// English-only, upcoming-only, *overnight* public events, for the "link to
+// a public event" picker - a day event has no accommodation to book
+// against (its own date/duration is fixed by the event, not chosen here),
+// so it's excluded rather than left for someone to pick and then have to
+// notice doesn't apply. durationDays() (src/utils/events.ts) is the same
+// day-vs-overnight test EventsIndexView.astro/EventDetailView.astro already
+// use, so this can't drift from what the public site itself calls
+// "overnight". A past event has no future nights left to book against, and
+// this is an internal tool (not a localized visitor-facing page), so the
+// kn/ta sibling entries (see EventsIndexView.astro's bareSlug convention)
+// aren't relevant here either. A multi-day event counts as upcoming until
+// its last day (endDate), not just its start.
 const today = new Date();
 const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.startsWith('kn/') && !e.id.startsWith('ta/')))
-  .filter((e) => (e.data.endDate ?? e.data.date) >= today)
+  .filter((e) => (e.data.endDate ?? e.data.date) >= today && durationDays(e.data.date, e.data.endDate) > 1)
   .sort((a, b) => a.data.date.valueOf() - b.data.date.valueOf())
-  .map((e) => ({ slug: e.id, title: e.data.title, date: e.data.date.toISOString().slice(0, 10) }));
+  .map((e) => ({
+    slug: e.id,
+    title: e.data.title,
+    date: e.data.date.toISOString().slice(0, 10),
+    // nights, not days: a 2-day event (date + 1 endDate) is a 1-night stay.
+    nights: durationDays(e.data.date, e.data.endDate) - 1,
+  }));
 ---
 
 <BaseLayout title="Accommodation Calendar" description="Internal accommodation booking tool." noindex>
@@ -48,6 +66,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         <button type="button" id="prev-month" class="button">← Prev</button>
         <h2 id="month-label"></h2>
         <button type="button" id="next-month" class="button">Next →</button>
+        <div class="view-toggle" role="group" aria-label="Calendar view">
+          <button type="button" class="button view-toggle-btn" data-view="day">Day</button>
+          <button type="button" class="button view-toggle-btn" data-view="week">Week</button>
+          <button type="button" class="button view-toggle-btn view-toggle-btn--active" data-view="month">Month</button>
+        </div>
       </div>
 
       <p id="status" class="hint" hidden></p>
@@ -56,7 +79,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         <table id="grid" class="grid-table"></table>
       </div>
 
-      <h2>Bookings this month</h2>
+      <h2 id="booking-list-heading">Bookings this month</h2>
       <div id="booking-list" class="booking-list"></div>
 
       <h2 id="form-heading">New booking</h2>
@@ -81,6 +104,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         <label id="f-label-wrap">
           Label <span class="hint-inline">(shown to you only, e.g. who's coming)</span>
           <input type="text" id="f-label" />
+        </label>
+
+        <label id="f-member-wrap" hidden>
+          Member
+          <select id="f-member"></select>
         </label>
 
         <label id="f-exclusive-wrap" class="checkbox-label">
@@ -129,6 +157,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
 <script type="application/json" id="events-data" set:html={JSON.stringify(allEvents)} />
 <script type="application/json" id="units-data" set:html={JSON.stringify(ACCOMMODATION_UNITS)} />
+<script type="application/json" id="members-data" set:html={JSON.stringify(memberNames)} />
 
 <style>
   .hint {
@@ -196,6 +225,23 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     margin: 0;
     min-width: 180px;
     text-align: center;
+  }
+
+  .view-toggle {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+  }
+
+  .view-toggle-btn {
+    padding: 6px 14px;
+    font-size: 0.8rem;
+  }
+
+  .view-toggle-btn--active {
+    background: var(--tvc-green);
+    border-color: var(--tvc-green);
+    color: #fff;
   }
 
   .grid-scroll {
@@ -300,6 +346,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   .cell--closed {
     background: #e6e6e6;
+  }
+
+  .cell--occupied,
+  .cell--closed {
+    cursor: pointer;
   }
 
   .booking-list {
@@ -502,6 +553,24 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     cursor: not-allowed;
   }
 
+  /* global.css's site-wide `.button:hover` (white text, meant for the
+     marketing CTA button) ties in specificity with this page's own
+     `.button` and can win the cascade here too, making these small outline
+     buttons' text invisible on hover/focus - hit on every button this page
+     builds dynamically (guest-row remove/add, booking-card edit/cancel,
+     reason-overlay actions), not just the ones Astro renders statically, so
+     this belongs in this is:global block rather than the scoped one above
+     (see this file's own note on why dynamic content needs is:global).
+     `.button.button` (repeating the class) bumps specificity past the tie
+     so this wins regardless of stylesheet load order, instead of depending
+     on this block happening to be declared later. :not(.button--primary)
+     excludes the one button here that's meant to look like the site's
+     green CTA and genuinely wants white text. */
+  .button.button:not(.button--primary):hover,
+  .button.button:not(.button--primary):focus-visible {
+    color: var(--tvc-ink);
+  }
+
   [hidden] {
     display: none !important;
   }
@@ -517,6 +586,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     slug: string;
     title: string;
     date: string;
+    nights: number;
   }
 
   interface Unit {
@@ -581,6 +651,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   const EVENTS: EventOption[] = JSON.parse(document.getElementById('events-data')!.textContent!);
   const UNITS: Unit[] = JSON.parse(document.getElementById('units-data')!.textContent!);
+  const MEMBERS: string[] = JSON.parse(document.getElementById('members-data')!.textContent!);
 
   const gate = document.getElementById('gate') as HTMLElement;
   const gateError = document.getElementById('gate-error') as HTMLElement;
@@ -590,7 +661,9 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   const app = document.getElementById('app') as HTMLElement;
   const statusEl = document.getElementById('status') as HTMLElement;
   const monthLabel = document.getElementById('month-label') as HTMLElement;
+  const viewToggleButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.view-toggle-btn'));
   const gridTable = document.getElementById('grid') as HTMLTableElement;
+  const bookingListHeading = document.getElementById('booking-list-heading') as HTMLElement;
   const bookingList = document.getElementById('booking-list') as HTMLElement;
   const form = document.getElementById('booking-form') as HTMLFormElement;
   const formHeading = document.getElementById('form-heading') as HTMLElement;
@@ -600,6 +673,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   const eventSelect = document.getElementById('f-event') as HTMLSelectElement;
   const labelWrap = document.getElementById('f-label-wrap') as HTMLElement;
   const labelInput = document.getElementById('f-label') as HTMLInputElement;
+  const memberWrap = document.getElementById('f-member-wrap') as HTMLElement;
+  const memberSelect = document.getElementById('f-member') as HTMLSelectElement;
   const exclusiveWrap = document.getElementById('f-exclusive-wrap') as HTMLElement;
   const exclusiveInput = document.getElementById('f-exclusive') as HTMLInputElement;
   const startInput = document.getElementById('f-start') as HTMLInputElement;
@@ -611,7 +686,9 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   const reasonInput = document.getElementById('f-reason') as HTMLTextAreaElement;
   const cancelEditBtn = document.getElementById('f-cancel-edit') as HTMLButtonElement;
 
-  let currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+  type ViewMode = 'day' | 'week' | 'month';
+  let viewMode: ViewMode = 'month';
+  let anchorDate = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD, local
   let currentBookings: Booking[] = [];
   let editingId: string | null = null;
 
@@ -955,16 +1032,22 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     }
   }
 
-  // Jumps the month view to match the form's selected start date so the
+  // Jumps the calendar view to match the form's selected start date (at
+  // whatever granularity - day/week/month - is currently active) so the
   // grid/booking-list/occupied-tent markers reflect that date, instead of
-  // silently staying on whatever month was last navigated to (see point 4
+  // silently staying on whatever range was last navigated to (see point 4
   // from Sharath's testing feedback).
   async function handleDateOrNightsChange() {
     if (!startInput.value) return;
-    const month = startInput.value.slice(0, 7);
-    if (month !== currentMonth) {
-      currentMonth = month;
-      await loadMonth();
+    // Not signed in yet - happens when the initial resetForm() call (before
+    // the gate/sign-in check at the bottom of this script) syncs the
+    // default event's dates. Nothing to refresh against the server yet, and
+    // calling loadView() this early would misfire as "session expired".
+    if (!getToken()) return;
+    const { start, end } = visibleRange();
+    if (startInput.value < start || startInput.value > end) {
+      anchorDate = startInput.value;
+      await loadView();
     } else {
       markOccupiedTents();
     }
@@ -979,12 +1062,41 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     eventSelect.innerHTML = EVENTS.map((e) => `<option value="${e.slug}">${e.date} — ${e.title}</option>`).join('');
   }
 
+  function populateMemberSelect() {
+    memberSelect.innerHTML = MEMBERS.map((name) => `<option value="${name}">${name}</option>`).join('');
+  }
+
+  // A linked public event already has its own dates and duration - EVENTS
+  // (built server-side from the events content collection, see this page's
+  // frontmatter) is filtered to overnight events only, so every option here
+  // has a real nights count to hand over. Called whenever the picked event
+  // changes, and once when switching a *new* booking's type to public-event
+  // (see typeSelect's listener below) - never during loadIntoForm, which
+  // sets startInput/nightsInput from the booking's own saved values instead
+  // and doesn't dispatch 'change', so an existing booking's dates are never
+  // silently overwritten by whatever the dropdown happens to show.
+  function syncDatesFromEvent() {
+    const opt = EVENTS.find((e) => e.slug === eventSelect.value);
+    if (!opt) return;
+    startInput.value = opt.date;
+    nightsInput.value = String(opt.nights);
+    handleDateOrNightsChange();
+  }
+
+  eventSelect.addEventListener('change', syncDatesFromEvent);
+
   function updateFieldVisibility() {
     const type = typeSelect.value as BookingType;
     eventWrap.hidden = type !== 'public-event';
-    labelWrap.hidden = type === 'public-event';
+    // member-stay picks from the member directory instead of free text -
+    // labelWrap and memberWrap are mutually exclusive, never both shown.
+    labelWrap.hidden = type === 'public-event' || type === 'member-stay';
+    memberWrap.hidden = type !== 'member-stay';
     exclusiveWrap.hidden = type !== 'private-event';
     tentsWrap.hidden = type === 'farm-closure';
+    // Fixed by the linked event, not chosen here - see syncDatesFromEvent.
+    startInput.disabled = type === 'public-event';
+    nightsInput.disabled = type === 'public-event';
     // Re-apply guest-field visibility on every tent option for the new type.
     for (const option of Array.from(tentsContainer.querySelectorAll<HTMLElement>('.tent-option'))) {
       const checkbox = option.querySelector('.tent-checkbox') as HTMLInputElement;
@@ -996,14 +1108,94 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     }
   }
 
-  typeSelect.addEventListener('change', updateFieldVisibility);
+  typeSelect.addEventListener('change', () => {
+    updateFieldVisibility();
+    // Only for a fresh pick on a *new* booking - loadIntoForm sets
+    // typeSelect.value programmatically (no 'change' event), so an edit in
+    // progress never hits this branch.
+    if (typeSelect.value === 'public-event' && editingId === null) syncDatesFromEvent();
+  });
 
-  // ---- Month grid ----
+  // ---- Calendar grid (day/week/month) ----
 
   function datesInMonth(monthStr: string): string[] {
     const [y, m] = monthStr.split('-').map(Number);
     const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
     return Array.from({ length: daysInMonth }, (_, i) => `${monthStr}-${String(i + 1).padStart(2, '0')}`);
+  }
+
+  function addDaysToDateStr(dateStr: string, days: number): string {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+  }
+
+  function addMonthsToDateStr(dateStr: string, months: number): string {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const target = new Date(Date.UTC(y, m - 1 + months, 1));
+    const daysInTargetMonth = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+    target.setUTCDate(Math.min(d, daysInTargetMonth));
+    return target.toISOString().slice(0, 10);
+  }
+
+  // Monday-start week, so "this week" always reads as a normal work-week
+  // block rather than splitting a weekend across two rows.
+  function startOfWeek(dateStr: string): string {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0=Sun..6=Sat
+    return addDaysToDateStr(dateStr, -((dow + 6) % 7));
+  }
+
+  function monthKey(dateStr: string): string {
+    return dateStr.slice(0, 7);
+  }
+
+  // The [start, end] (inclusive) date range the current viewMode+anchorDate
+  // covers - the single source of truth every render/fetch/nav function
+  // below derives from, so day/week/month can't drift from each other.
+  function visibleRange(): { start: string; end: string } {
+    if (viewMode === 'day') return { start: anchorDate, end: anchorDate };
+    if (viewMode === 'week') {
+      const start = startOfWeek(anchorDate);
+      return { start, end: addDaysToDateStr(start, 6) };
+    }
+    const dates = datesInMonth(monthKey(anchorDate));
+    return { start: dates[0], end: dates[dates.length - 1] };
+  }
+
+  function visibleDates(): string[] {
+    const { start, end } = visibleRange();
+    const out: string[] = [];
+    for (let cur = start; cur <= end; cur = addDaysToDateStr(cur, 1)) out.push(cur);
+    return out;
+  }
+
+  // A week can straddle two calendar months (e.g. 28 Aug - 3 Sep); day/month
+  // views never touch more than one. The admin API only serves "give me
+  // this month's bookings", so this is however many separate calls a given
+  // view needs to cover its own date range.
+  function monthsTouchingRange(start: string, end: string): string[] {
+    return [...new Set([monthKey(start), monthKey(end)])];
+  }
+
+  function formatDateLabel(dateStr: string, opts: Intl.DateTimeFormatOptions): string {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-IN', { ...opts, timeZone: 'UTC' });
+  }
+
+  function viewRangeLabel(start: string, end: string): string {
+    if (viewMode === 'month') return monthDisplayLabel(monthKey(start));
+    if (viewMode === 'day') return formatDateLabel(start, { day: 'numeric', month: 'long', year: 'numeric' });
+    if (monthKey(start) === monthKey(end)) {
+      const monthName = formatDateLabel(start, { month: 'long' });
+      return `${Number(start.slice(-2))}–${Number(end.slice(-2))} ${monthName} ${start.slice(0, 4)}`;
+    }
+    return `${formatDateLabel(start, { day: 'numeric', month: 'short' })} – ${formatDateLabel(end, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  }
+
+  function bookingListHeadingLabel(): string {
+    if (viewMode === 'day') return 'Bookings today';
+    if (viewMode === 'week') return 'Bookings this week';
+    return 'Bookings this month';
   }
 
   function nightsForBooking(b: Booking): string[] {
@@ -1012,22 +1204,38 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     return Array.from({ length: b.nights }, (_, i) => new Date(start + i * 86_400_000).toISOString().slice(0, 10));
   }
 
-  function renderGrid() {
-    const dates = datesInMonth(currentMonth);
-    const nightsByBookingId = new Map(currentBookings.map((b) => [b.id, new Set(nightsForBooking(b))]));
+  function escapeAttr(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  }
 
-    let headHtml = '<tr><th class="unit-col">Tent</th>' + dates.map((d) => `<th>${d.slice(-2)}</th>`).join('') + '</tr>';
+  function cellTooltip(b: Booking, tentId: string): string {
+    const title = b.type === 'farm-closure' ? 'Farm closed' : (b.label ?? b.eventTitle ?? b.type);
+    const dates = `${b.startDate} · ${b.nights} night${b.nights > 1 ? 's' : ''}`;
+    if (b.type === 'farm-closure') return [title, dates, b.note].filter(Boolean).join('\n');
+    const guestNames = b.tents
+      .find((t) => t.tentId === tentId)
+      ?.guests.map((g) => g.name)
+      .filter(Boolean)
+      .join(', ');
+    return [title, dates, guestNames || 'No guests listed'].join('\n');
+  }
+
+  function renderGrid() {
+    const dates = visibleDates();
+    const nightsByBookingId = new Map(currentBookings.map((b) => [b.id, new Set(nightsForBooking(b))]));
+    const headerLabel = (d: string) => (viewMode === 'month' ? d.slice(-2) : formatDateLabel(d, { day: 'numeric', month: 'short' }));
+
+    let headHtml = '<tr><th class="unit-col">Tent</th>' + dates.map((d) => `<th>${headerLabel(d)}</th>`).join('') + '</tr>';
     let bodyHtml = '';
     for (const unit of UNITS) {
       bodyHtml += `<tr><td class="unit-col">${unit.label}</td>`;
       for (const date of dates) {
-        const farmClosed = currentBookings.some((b) => b.type === 'farm-closure' && nightsByBookingId.get(b.id)!.has(date));
+        const farmClosure = currentBookings.find((b) => b.type === 'farm-closure' && nightsByBookingId.get(b.id)!.has(date));
         const occupying = currentBookings.find((b) => b.type !== 'farm-closure' && b.tents.some((t) => t.tentId === unit.id) && nightsByBookingId.get(b.id)!.has(date));
-        if (farmClosed) {
-          bodyHtml += `<td class="cell--closed" title="Farm closed">·</td>`;
+        if (farmClosure) {
+          bodyHtml += `<td class="cell--closed" data-booking-id="${farmClosure.id}" title="${escapeAttr(cellTooltip(farmClosure, unit.id))}">·</td>`;
         } else if (occupying) {
-          const label = occupying.label ?? occupying.eventTitle ?? occupying.type;
-          bodyHtml += `<td class="cell--occupied" title="${label.replace(/"/g, '&quot;')}">●</td>`;
+          bodyHtml += `<td class="cell--occupied" data-booking-id="${occupying.id}" title="${escapeAttr(cellTooltip(occupying, unit.id))}">●</td>`;
         } else {
           bodyHtml += `<td class="cell--free">·</td>`;
         }
@@ -1037,13 +1245,27 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     gridTable.innerHTML = headHtml + bodyHtml;
   }
 
+  // Delegated once on the table itself (which persists across renderGrid's
+  // innerHTML replacements) rather than per-cell, since cells are rebuilt
+  // from scratch on every render.
+  gridTable.addEventListener('click', (ev) => {
+    const cell = (ev.target as HTMLElement).closest('td[data-booking-id]') as HTMLElement | null;
+    if (!cell) return;
+    const booking = currentBookings.find((b) => b.id === cell.dataset.bookingId);
+    if (booking) loadIntoForm(booking);
+  });
+
   function renderBookingList() {
+    bookingListHeading.textContent = bookingListHeadingLabel();
+    const dates = new Set(visibleDates());
+    const relevant = currentBookings.filter((b) => nightsForBooking(b).some((n) => dates.has(n)));
+
     bookingList.innerHTML = '';
-    if (currentBookings.length === 0) {
-      bookingList.innerHTML = '<p class="hint">No bookings this month.</p>';
+    if (relevant.length === 0) {
+      bookingList.innerHTML = '<p class="hint">No bookings in this view.</p>';
       return;
     }
-    for (const b of [...currentBookings].sort((a, c) => a.startDate.localeCompare(c.startDate))) {
+    for (const b of [...relevant].sort((a, c) => a.startDate.localeCompare(c.startDate))) {
       const card = document.createElement('div');
       card.className = 'booking-card';
       const title = b.eventTitle ?? b.label ?? b.type;
@@ -1109,7 +1331,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         body: JSON.stringify({ id: b.id, reason }),
       });
       if (!res.ok) throw new Error('Request failed');
-      await loadMonth();
+      await loadView();
     } catch (err) {
       const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
       if (!handled) alert('Failed to cancel booking — try again.');
@@ -1126,6 +1348,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     updateFieldVisibility();
     if (b.eventSlug) eventSelect.value = b.eventSlug;
     labelInput.value = b.label ?? '';
+    if (b.type === 'member-stay' && b.label) memberSelect.value = b.label;
     exclusiveInput.checked = Boolean(b.exclusive);
     // No lower bound while editing - a booking that already starts in the
     // past (e.g. correcting a historical entry) must stay editable without
@@ -1153,6 +1376,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     // local timezone, computed fresh on every reset rather than baked in at
     // build time (this page is statically prerendered).
     startInput.min = new Date().toLocaleDateString('en-CA'); // en-CA formats as YYYY-MM-DD
+    // Default type is public-event, so the freshly-reset form should show
+    // that event's own dates right away, not the leftover values form.reset()
+    // just cleared them to.
+    syncDatesFromEvent();
     setTents([]);
     markOccupiedTents();
     formError.hidden = true;
@@ -1184,6 +1411,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       const opt = EVENTS.find((e) => e.slug === eventSelect.value);
       payload.eventSlug = opt?.slug;
       payload.eventTitle = opt?.title;
+    } else if (type === 'member-stay') {
+      payload.label = memberSelect.value || undefined;
     } else {
       payload.label = labelInput.value.trim() || undefined;
     }
@@ -1203,7 +1432,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         return;
       }
       resetForm();
-      await loadMonth();
+      await loadView();
     } catch (err) {
       const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
       if (!handled) {
@@ -1213,34 +1442,41 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     }
   });
 
-  // ---- Month loading/navigation ----
+  // ---- View loading/navigation ----
 
   function monthDisplayLabel(monthStr: string): string {
     const [y, m] = monthStr.split('-').map(Number);
     return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
   }
 
-  function shiftMonth(monthStr: string, delta: number): string {
-    const [y, m] = monthStr.split('-').map(Number);
-    const d = new Date(Date.UTC(y, m - 1 + delta, 1));
-    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  function shiftView(direction: 1 | -1) {
+    if (viewMode === 'day') anchorDate = addDaysToDateStr(anchorDate, direction);
+    else if (viewMode === 'week') anchorDate = addDaysToDateStr(anchorDate, direction * 7);
+    else anchorDate = addMonthsToDateStr(anchorDate, direction);
+    loadView();
   }
 
-  async function loadMonth() {
+  async function loadView() {
     gate.hidden = true;
     forbidden.hidden = true;
     app.hidden = false;
-    monthLabel.textContent = monthDisplayLabel(currentMonth);
+    const { start, end } = visibleRange();
+    monthLabel.textContent = viewRangeLabel(start, end);
     showStatus('Loading…');
 
     try {
-      const res = await authedFetch(`/api/accommodation-admin/bookings?month=${currentMonth}`);
-      if (!res.ok) {
+      const months = monthsTouchingRange(start, end);
+      const responses = await Promise.all(months.map((m) => authedFetch(`/api/accommodation-admin/bookings?month=${m}`)));
+      if (responses.some((res) => !res.ok)) {
         showStatus('Failed to load bookings — try refreshing.');
         return;
       }
-      const data = (await res.json()) as { units: Unit[]; bookings: Booking[] };
-      currentBookings = data.bookings;
+      const bodies = (await Promise.all(responses.map((res) => res.json()))) as { units: Unit[]; bookings: Booking[] }[];
+      // Dedupe by id - a week straddling two months fetches both, and a
+      // booking touching both (e.g. a stay spanning the boundary) would
+      // otherwise appear in each month's response.
+      const byId = new Map(bodies.flatMap((body) => body.bookings).map((b) => [b.id, b]));
+      currentBookings = [...byId.values()];
       hideStatus();
       renderGrid();
       renderBookingList();
@@ -1251,18 +1487,22 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     }
   }
 
-  document.getElementById('prev-month')!.addEventListener('click', () => {
-    currentMonth = shiftMonth(currentMonth, -1);
-    loadMonth();
-  });
-  document.getElementById('next-month')!.addEventListener('click', () => {
-    currentMonth = shiftMonth(currentMonth, 1);
-    loadMonth();
-  });
+  document.getElementById('prev-month')!.addEventListener('click', () => shiftView(-1));
+  document.getElementById('next-month')!.addEventListener('click', () => shiftView(1));
+
+  for (const btn of viewToggleButtons) {
+    btn.addEventListener('click', () => {
+      const mode = btn.dataset.view as ViewMode;
+      if (mode === viewMode) return;
+      viewMode = mode;
+      for (const b of viewToggleButtons) b.classList.toggle('view-toggle-btn--active', b === btn);
+      loadView();
+    });
+  }
 
   function handleCredentialResponse(response: { credential: string }) {
     sessionStorage.setItem(STORAGE_KEY, response.credential);
-    loadMonth();
+    loadView();
   }
 
   function renderSignInButton() {
@@ -1278,11 +1518,12 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   });
 
   populateEventSelect();
+  populateMemberSelect();
   buildTentsFieldset();
   resetForm();
 
   if (getToken()) {
-    loadMonth();
+    loadView();
   } else {
     showGate();
   }
