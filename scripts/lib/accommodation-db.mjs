@@ -4,10 +4,12 @@
 // 0008_accommodation_audit_and_justification.sql) in the "TVC ERP" Supabase
 // project. Mirrors supabase.mjs's hand-rolled PostgREST style (no
 // @supabase/supabase-js) and reuses its restHeaders for the same
-// service_role auth. Used by netlify/functions/accommodation-admin.mts
-// (full read/write, guest data included) and
-// accommodation-availability.mts (read-only, guest-free — see
-// listBookingsForAvailability's select list).
+// service_role auth. Used exclusively by
+// netlify/functions/accommodation-admin.mts (full read/write, guest data
+// included) — the public, guest-free availability view this once also
+// backed was dropped rather than shipped to production alongside the admin
+// tool (2026-08-30); a future public view is a separate, not-yet-designed
+// piece of work.
 //
 // Conflict-checking (no shared tent on a shared night) is enforced in
 // Postgres itself, not here: accommodation_create_booking/
@@ -97,41 +99,30 @@ const ADMIN_SELECT =
   'select=id,type,event_slug,event_title,label,exclusive,start_date,nights,note,created_by,created_at,updated_by,updated_at,' +
   'accommodation_tent_assignments(tent_id,accommodation_guests(seq,age_group,person_id,accommodation_people(name,mobile_number,gender,preferences)))';
 
-// Never embeds accommodation_guests/accommodation_people - this is the only
-// place that distinction is enforced, so a routing mistake elsewhere can't
-// leak guest PII to a public, unauthenticated caller (see
-// accommodation-availability.mts's header comment, which relies on this).
-const AVAILABILITY_SELECT = 'select=id,type,event_title,label,exclusive,start_date,nights,accommodation_tent_assignments(tent_id)';
-
 // Turns a PostgREST row (snake_case, SQL null for absent optional fields)
 // back into the exact JSON shape the client already gets today (camelCase,
-// absent key rather than null). `includeGuests` mirrors which select list
-// produced the row: false for availability's tent-only embed, so `guests`
-// is omitted from each tent entirely rather than emitted as `[]`.
-function rowToBooking(row, { includeGuests }) {
+// absent key rather than null).
+function rowToBooking(row) {
   const booking = {
     id: row.id,
     type: row.type,
     startDate: row.start_date,
     nights: row.nights,
     isPast: isPastBooking(row.start_date, row.nights),
-    tents: (row.accommodation_tent_assignments ?? []).map((ta) => {
-      const tent = { tentId: ta.tent_id };
-      if (includeGuests) {
-        tent.guests = (ta.accommodation_guests ?? [])
-          .slice()
-          .sort((a, b) => a.seq - b.seq)
-          .map((g) => ({
-            personId: g.person_id,
-            name: g.accommodation_people.name,
-            mobileNumber: g.accommodation_people.mobile_number ?? undefined,
-            gender: g.accommodation_people.gender ?? undefined,
-            preferences: g.accommodation_people.preferences ?? undefined,
-            ageGroup: g.age_group,
-          }));
-      }
-      return tent;
-    }),
+    tents: (row.accommodation_tent_assignments ?? []).map((ta) => ({
+      tentId: ta.tent_id,
+      guests: (ta.accommodation_guests ?? [])
+        .slice()
+        .sort((a, b) => a.seq - b.seq)
+        .map((g) => ({
+          personId: g.person_id,
+          name: g.accommodation_people.name,
+          mobileNumber: g.accommodation_people.mobile_number ?? undefined,
+          gender: g.accommodation_people.gender ?? undefined,
+          preferences: g.accommodation_people.preferences ?? undefined,
+          ageGroup: g.age_group,
+        })),
+    })),
   };
   if (row.event_slug != null) booking.eventSlug = row.event_slug;
   if (row.event_title != null) booking.eventTitle = row.event_title;
@@ -147,18 +138,13 @@ function rowToBooking(row, { includeGuests }) {
 
 export async function listBookingsForAdmin({ month }) {
   const res = await restFetch(`/accommodation_bookings?stay_range=${stayRangeOverlapFilter(month)}&${ADMIN_SELECT}`);
-  return (await res.json()).map((row) => rowToBooking(row, { includeGuests: true }));
-}
-
-export async function listBookingsForAvailability({ month }) {
-  const res = await restFetch(`/accommodation_bookings?stay_range=${stayRangeOverlapFilter(month)}&${AVAILABILITY_SELECT}`);
-  return (await res.json()).map((row) => rowToBooking(row, { includeGuests: false }));
+  return (await res.json()).map(rowToBooking);
 }
 
 async function getBookingById(id) {
   const res = await restFetch(`/accommodation_bookings?id=eq.${id}&${ADMIN_SELECT}`);
   const rows = await res.json();
-  return rows[0] ? rowToBooking(rows[0], { includeGuests: true }) : null;
+  return rows[0] ? rowToBooking(rows[0]) : null;
 }
 
 export async function createBooking({ type, eventSlug, eventTitle, label, exclusive, startDate, nights, tents, note, createdBy }) {
