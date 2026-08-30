@@ -109,6 +109,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
           <textarea id="f-note" rows="2"></textarea>
         </label>
 
+        <label id="f-reason-wrap" hidden>
+          Reason for this change <span class="hint-inline">(required — this stay has already happened)</span>
+          <textarea id="f-reason" rows="2"></textarea>
+        </label>
+
         <p id="form-error" class="error" hidden></p>
 
         <div class="form-actions">
@@ -352,7 +357,14 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   .guest-row {
     display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .guest-row-main {
+    display: flex;
     gap: 6px;
+    position: relative;
   }
 
   .guest-row input,
@@ -366,9 +378,109 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     flex: 2;
   }
 
+  .guest-row input[data-field='phone'] {
+    flex: 1;
+  }
+
   .guest-row select[data-field='ageGroup'],
   .guest-row select[data-field='gender'] {
     flex: 1;
+  }
+
+  .guest-row input[data-field='preferences'] {
+    flex: 1 1 100%;
+  }
+
+  .guest-typeahead {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 5;
+    background: #fff;
+    border: 1px solid var(--tvc-line);
+    border-radius: 6px;
+    box-shadow: var(--shadow-soft);
+    min-width: 220px;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+
+  .guest-typeahead button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    border: none;
+    background: none;
+    cursor: pointer;
+  }
+
+  .guest-typeahead button:hover {
+    background: var(--tvc-green-tint);
+  }
+
+  .guest-history-toggle {
+    align-self: flex-start;
+    font-size: 0.76rem;
+    padding: 2px 8px;
+    background: none;
+    border: none;
+    text-decoration: underline;
+    color: var(--tvc-ink-soft);
+    cursor: pointer;
+  }
+
+  .guest-history-panel {
+    margin: 2px 0 4px;
+    padding: 6px 10px;
+    background: var(--tvc-green-tint);
+    border-radius: 6px;
+    font-size: 0.78rem;
+  }
+
+  .guest-history-panel ul {
+    margin: 4px 0 0;
+    padding-left: 18px;
+  }
+
+  .reason-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+
+  .reason-overlay-card {
+    background: #fff;
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    max-width: 420px;
+    width: 90%;
+  }
+
+  .reason-overlay-card p {
+    margin: 0 0 10px;
+    font-size: 0.88rem;
+  }
+
+  .reason-overlay-card textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+    padding: 6px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 8px;
+  }
+
+  .reason-overlay-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 12px;
   }
 
   .add-guest {
@@ -415,9 +527,31 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   interface Guest {
+    personId?: string;
     name?: string;
+    phone?: string;
     ageGroup?: 'Adult' | 'Child';
     gender?: string;
+    preferences?: string;
+  }
+
+  interface GuestMatch {
+    id: string;
+    name: string;
+    phone?: string;
+    gender?: string;
+    preferences?: string;
+  }
+
+  interface PastStay {
+    bookingId: string;
+    startDate: string;
+    nights: number;
+    tentId: string;
+    type: string;
+    label?: string;
+    eventTitle?: string;
+    ageGroupAtStay: string;
   }
 
   interface TentAssignment {
@@ -438,8 +572,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     nights: number;
     tents: TentAssignment[];
     note?: string;
+    isPast: boolean;
     createdBy: string;
     createdAt: string;
+    updatedBy?: string;
     updatedAt: string;
   }
 
@@ -471,6 +607,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   const tentsWrap = document.getElementById('f-tents-wrap') as HTMLElement;
   const tentsContainer = document.getElementById('f-tents') as HTMLElement;
   const noteInput = document.getElementById('f-note') as HTMLTextAreaElement;
+  const reasonWrap = document.getElementById('f-reason-wrap') as HTMLElement;
+  const reasonInput = document.getElementById('f-reason') as HTMLTextAreaElement;
   const cancelEditBtn = document.getElementById('f-cancel-edit') as HTMLButtonElement;
 
   let currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
@@ -543,6 +681,38 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   const GENDER_OPTIONS = ['Male', 'Female', 'NA'];
   const AGE_GROUP_OPTIONS = ['Adult', 'Child'];
 
+  // Debounced so the typeahead doesn't fire a request on every keystroke -
+  // 250ms is short enough to feel live, long enough to skip the request
+  // entirely for someone typing at a normal pace.
+  function debounce<T extends (...args: never[]) => void>(fn: T, ms: number): T {
+    let timer: ReturnType<typeof setTimeout>;
+    return ((...args: never[]) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn(...args), ms);
+    }) as T;
+  }
+
+  async function searchGuestsByName(query: string): Promise<GuestMatch[]> {
+    if (query.trim().length < 2) return [];
+    try {
+      const res = await authedFetch(`/api/accommodation-admin/guests/search?q=${encodeURIComponent(query.trim())}`);
+      if (!res.ok) return [];
+      return ((await res.json()) as { matches: GuestMatch[] }).matches;
+    } catch {
+      return [];
+    }
+  }
+
+  async function fetchGuestStays(personId: string): Promise<{ person: GuestMatch; stays: PastStay[] } | null> {
+    try {
+      const res = await authedFetch(`/api/accommodation-admin/guests/${personId}/stays`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
   function addGuestRow(container: HTMLElement, guest: Guest = {}, onRemove?: () => void) {
     const row = document.createElement('div');
     row.className = 'guest-row';
@@ -554,20 +724,108 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     // touch if it doesn't apply.
     const ageGroup = guest.ageGroup ?? 'Adult';
     const gender = guest.gender ?? 'NA';
+    row.dataset.personId = guest.personId ?? '';
     row.innerHTML = `
-      <input type="text" data-field="name" placeholder="Name" required value="${guest.name ?? ''}" />
-      <select data-field="ageGroup">
-        ${AGE_GROUP_OPTIONS.map((a) => `<option value="${a}" ${ageGroup === a ? 'selected' : ''}>${a}</option>`).join('')}
-      </select>
-      <select data-field="gender">
-        ${GENDER_OPTIONS.map((g) => `<option value="${g}" ${gender === g ? 'selected' : ''}>${g}</option>`).join('')}
-      </select>
-      <button type="button" class="button remove-guest">✕</button>
+      <div class="guest-row-main">
+        <input type="text" data-field="name" placeholder="Name" required autocomplete="off" value="${guest.name ?? ''}" />
+        <select data-field="ageGroup">
+          ${AGE_GROUP_OPTIONS.map((a) => `<option value="${a}" ${ageGroup === a ? 'selected' : ''}>${a}</option>`).join('')}
+        </select>
+        <select data-field="gender">
+          ${GENDER_OPTIONS.map((g) => `<option value="${g}" ${gender === g ? 'selected' : ''}>${g}</option>`).join('')}
+        </select>
+        <input type="tel" data-field="phone" placeholder="Phone (optional)" value="${guest.phone ?? ''}" />
+        <button type="button" class="button remove-guest">✕</button>
+      </div>
+      <input type="text" data-field="preferences" placeholder="Preferences / allergies (optional)" value="${guest.preferences ?? ''}" />
+      <button type="button" class="guest-history-toggle" ${guest.personId ? '' : 'hidden'}>Past stays</button>
     `;
     row.querySelector('.remove-guest')!.addEventListener('click', () => {
       row.remove();
       onRemove?.();
     });
+
+    // ---- Typeahead: search by name, pick a match to reuse that guest's
+    // record (fills phone/gender/preferences, links personId) instead of
+    // creating a fresh one. Typing without picking a suggestion just means
+    // "new person" - still resolved server-side by phone if one's entered.
+    const nameInput = row.querySelector('[data-field="name"]') as HTMLInputElement;
+    const phoneInput = row.querySelector('[data-field="phone"]') as HTMLInputElement;
+    const genderSelect = row.querySelector('[data-field="gender"]') as HTMLSelectElement;
+    const preferencesInput = row.querySelector('[data-field="preferences"]') as HTMLInputElement;
+    const historyToggle = row.querySelector('.guest-history-toggle') as HTMLButtonElement;
+    const guestMain = row.querySelector('.guest-row-main') as HTMLElement;
+    let dropdown: HTMLElement | null = null;
+
+    function closeDropdown() {
+      dropdown?.remove();
+      dropdown = null;
+    }
+
+    function selectMatch(match: GuestMatch) {
+      row.dataset.personId = match.id;
+      nameInput.value = match.name;
+      phoneInput.value = match.phone ?? '';
+      genderSelect.value = match.gender ?? 'NA';
+      preferencesInput.value = match.preferences ?? '';
+      historyToggle.hidden = false;
+      closeDropdown();
+    }
+
+    nameInput.addEventListener('input', () => {
+      row.dataset.personId = ''; // typing again after a pick means "not necessarily that person anymore"
+      historyToggle.hidden = true;
+      closeDropdown();
+      debouncedSearch(nameInput.value);
+    });
+
+    const debouncedSearch = debounce(async (query: string) => {
+      const matches = await searchGuestsByName(query);
+      closeDropdown();
+      if (matches.length === 0) return;
+      dropdown = document.createElement('div');
+      dropdown.className = 'guest-typeahead';
+      for (const m of matches) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = m.phone ? `${m.name} — ${m.phone}` : m.name;
+        btn.addEventListener('click', () => selectMatch(m));
+        dropdown.appendChild(btn);
+      }
+      guestMain.appendChild(dropdown);
+    }, 250);
+
+    nameInput.addEventListener('blur', () => {
+      // Let a click on a dropdown button register before it disappears.
+      setTimeout(closeDropdown, 150);
+    });
+
+    historyToggle.addEventListener('click', async () => {
+      const existingPanel = row.querySelector('.guest-history-panel');
+      if (existingPanel) {
+        existingPanel.remove();
+        return;
+      }
+      const personId = row.dataset.personId;
+      if (!personId) return;
+      const result = await fetchGuestStays(personId);
+      const panel = document.createElement('div');
+      panel.className = 'guest-history-panel';
+      if (!result || result.stays.length === 0) {
+        panel.textContent = 'No past stays on record.';
+      } else {
+        const items = result.stays
+          .map((s) => {
+            const tentLabel = UNITS.find((u) => u.id === s.tentId)?.label ?? s.tentId;
+            const what = s.eventTitle ?? s.label ?? s.type;
+            return `<li>${s.startDate} · ${tentLabel} · ${what}</li>`;
+          })
+          .join('');
+        panel.innerHTML = `Past stays:<ul>${items}</ul>`;
+      }
+      row.appendChild(panel);
+    });
+
     container.appendChild(row);
   }
 
@@ -634,8 +892,17 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         const name = (row.querySelector('[data-field="name"]') as HTMLInputElement).value.trim();
         const ageGroup = (row.querySelector('[data-field="ageGroup"]') as HTMLSelectElement).value.trim() as Guest['ageGroup'] | '';
         const gender = (row.querySelector('[data-field="gender"]') as HTMLSelectElement).value.trim();
+        const phone = (row.querySelector('[data-field="phone"]') as HTMLInputElement).value.trim();
+        const preferences = (row.querySelector('[data-field="preferences"]') as HTMLInputElement).value.trim();
         if (!name && !ageGroup && !gender) continue;
-        guests.push({ name: name || undefined, ageGroup: ageGroup || undefined, gender: gender || undefined });
+        guests.push({
+          personId: row.dataset.personId || undefined,
+          name: name || undefined,
+          ageGroup: ageGroup || undefined,
+          gender: gender || undefined,
+          phone: phone || undefined,
+          preferences: preferences || undefined,
+        });
       }
       out.push({ tentId: option.dataset.tentId!, guests });
     }
@@ -792,18 +1059,54 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         </div>
       `;
       card.querySelector('.edit-booking')!.addEventListener('click', () => loadIntoForm(b));
-      card.querySelector('.cancel-booking')!.addEventListener('click', () => deleteBooking(b.id));
+      card.querySelector('.cancel-booking')!.addEventListener('click', () => cancelBooking(b));
       bookingList.appendChild(card);
     }
   }
 
-  async function deleteBooking(id: string) {
-    if (!confirm('Cancel this booking?')) return;
+  // Custom overlay instead of a native prompt() - a past booking's cancel
+  // reason needs a real multi-line field, which prompt() can't give, and a
+  // native dialog blocks all further page script until dismissed.
+  function showReasonPrompt(message: string): Promise<string | null> {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'reason-overlay';
+      overlay.innerHTML = `
+        <div class="reason-overlay-card">
+          <p>${message}</p>
+          <textarea rows="3" autofocus></textarea>
+          <div class="reason-overlay-actions">
+            <button type="button" class="button" data-action="cancel">Never mind</button>
+            <button type="button" class="button button--primary" data-action="confirm">Confirm</button>
+          </div>
+        </div>
+      `;
+      const textarea = overlay.querySelector('textarea') as HTMLTextAreaElement;
+      const close = (value: string | null) => {
+        overlay.remove();
+        resolve(value);
+      };
+      overlay.querySelector('[data-action="cancel"]')!.addEventListener('click', () => close(null));
+      overlay.querySelector('[data-action="confirm"]')!.addEventListener('click', () => close(textarea.value.trim() || null));
+      document.body.appendChild(overlay);
+      textarea.focus();
+    });
+  }
+
+  async function cancelBooking(b: Booking) {
+    let reason: string | undefined;
+    if (b.isPast) {
+      const entered = await showReasonPrompt('This stay has already happened. Why is it being cancelled?');
+      if (!entered) return; // either "Never mind" or an empty reason - both abort
+      reason = entered;
+    } else if (!confirm('Cancel this booking?')) {
+      return;
+    }
     try {
       const res = await authedFetch('/api/accommodation-admin/bookings/delete', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ id: b.id, reason }),
       });
       if (!res.ok) throw new Error('Request failed');
       await loadMonth();
@@ -817,6 +1120,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     editingId = b.id;
     formHeading.textContent = 'Edit booking';
     cancelEditBtn.hidden = false;
+    reasonWrap.hidden = !b.isPast;
+    reasonInput.value = '';
     typeSelect.value = b.type;
     updateFieldVisibility();
     if (b.eventSlug) eventSelect.value = b.eventSlug;
@@ -839,6 +1144,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     editingId = null;
     formHeading.textContent = 'New booking';
     cancelEditBtn.hidden = true;
+    reasonWrap.hidden = true;
+    reasonInput.value = '';
     form.reset();
     typeSelect.value = 'public-event';
     updateFieldVisibility();
@@ -857,14 +1164,21 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     ev.preventDefault();
     formError.hidden = true;
 
+    if (!reasonWrap.hidden && !reasonInput.value.trim()) {
+      formError.hidden = false;
+      formError.textContent = 'A reason is required to edit a past booking.';
+      return;
+    }
+
     const type = typeSelect.value as BookingType;
-    const payload: Partial<Booking> & { id?: string } = {
+    const payload: Partial<Booking> & { id?: string; reason?: string } = {
       id: editingId ?? undefined,
       type,
       startDate: startInput.value,
       nights: Number(nightsInput.value),
       tents: collectTents(),
       note: noteInput.value.trim() || undefined,
+      reason: reasonWrap.hidden ? undefined : reasonInput.value.trim(),
     };
     if (type === 'public-event') {
       const opt = EVENTS.find((e) => e.slug === eventSelect.value);
