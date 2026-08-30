@@ -819,7 +819,27 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     cancelEditBtn.hidden = false;
     typeSelect.value = b.type;
     updateFieldVisibility();
-    if (b.eventSlug) eventSelect.value = b.eventSlug;
+    // #f-event only lists upcoming events (see the EVENTS prop's own
+    // comment) - editing a booking whose linked event has since happened
+    // (e.g. correcting a booking after the fact) would otherwise set
+    // eventSelect.value to a slug with no matching <option>, which a native
+    // <select> silently ignores rather than erroring. The select would then
+    // just keep showing whatever option it already had selected, and saving
+    // would silently reassign the booking to that wrong event. Rebuild from
+    // the upcoming-only list first (clears any previously-injected option
+    // from an earlier edit), then inject this booking's own event if it
+    // isn't already there, so eventSelect.value always lands on the right
+    // one.
+    populateEventSelect();
+    if (b.eventSlug) {
+      if (!Array.from(eventSelect.options).some((o) => o.value === b.eventSlug)) {
+        const opt = document.createElement('option');
+        opt.value = b.eventSlug;
+        opt.textContent = b.eventTitle ?? b.eventSlug;
+        eventSelect.insertBefore(opt, eventSelect.firstChild);
+      }
+      eventSelect.value = b.eventSlug;
+    }
     labelInput.value = b.label ?? '';
     exclusiveInput.checked = Boolean(b.exclusive);
     // No lower bound while editing - a booking that already starts in the
@@ -840,6 +860,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     formHeading.textContent = 'New booking';
     cancelEditBtn.hidden = true;
     form.reset();
+    populateEventSelect(); // drops any event injected by loadIntoForm for a past-event edit
     typeSelect.value = 'public-event';
     updateFieldVisibility();
     // A new booking can't start in the past - today, in the visitor's own
@@ -867,9 +888,17 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       note: noteInput.value.trim() || undefined,
     };
     if (type === 'public-event') {
-      const opt = EVENTS.find((e) => e.slug === eventSelect.value);
-      payload.eventSlug = opt?.slug;
-      payload.eventTitle = opt?.title;
+      // Read the slug straight from the select rather than only trusting a
+      // lookup in the upcoming-only EVENTS list - loadIntoForm injects a
+      // synthetic option (with its own label) for a booking whose linked
+      // event has since happened, and that option's slug has no entry in
+      // EVENTS. Falling back to the selected option's own text keeps
+      // eventTitle correct for that case too, instead of silently dropping
+      // both fields.
+      const slug = eventSelect.value || undefined;
+      const opt = EVENTS.find((e) => e.slug === slug);
+      payload.eventSlug = slug;
+      payload.eventTitle = opt?.title ?? eventSelect.options[eventSelect.selectedIndex]?.textContent ?? undefined;
     } else {
       payload.label = labelInput.value.trim() || undefined;
     }
