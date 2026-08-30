@@ -93,63 +93,72 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
             <button type="button" id="booking-modal-close" class="button" aria-label="Close">✕</button>
           </div>
           <form id="booking-form" class="form">
-            <label>
-              Type
-              <select id="f-type" required>
-                <option value="casual-stay">Casual stay (via Linger)</option>
-                <option value="public-event">Public event (linked)</option>
-                <option value="private-event">Private event (retreat)</option>
-                <option value="member-stay">Member stay (booked direct)</option>
-                <option value="unit-closure">Tent closure (repair, etc.)</option>
-                <option value="farm-closure">Farm-wide closure (leave, repairs)</option>
-              </select>
-            </label>
-
-            <label id="f-event-wrap">
-              Linked public event
-              <select id="f-event"></select>
-            </label>
-
-            <label id="f-label-wrap">
-              Label <span id="f-label-hint" class="hint-inline">(shown to you only, e.g. who's coming)</span>
-              <input type="text" id="f-label" />
-            </label>
-
-            <label id="f-member-wrap" hidden>
-              Member
-              <select id="f-member"></select>
-            </label>
-
-            <label id="f-exclusive-wrap" class="checkbox-label">
-              <input type="checkbox" id="f-exclusive" />
-              Exclusive use — blocks the whole farm publicly, even if not every tent is assigned
-            </label>
-
-            <div class="dates-row">
+            <fieldset class="form-group">
+              <legend>What</legend>
               <label>
-                Start date
-                <input type="date" id="f-start" required />
+                Type
+                <select id="f-type" required>
+                  <option value="casual-stay">Linger booking</option>
+                  <option value="public-event" id="f-type-public-event">Public event (linked)</option>
+                  <option value="private-event">Private event (retreat)</option>
+                  <option value="member-stay">Member stay (booked direct)</option>
+                  <option value="unit-closure">Tent closure (repair, etc.)</option>
+                  <option value="farm-closure">Farm on Vacation (no bookings taken)</option>
+                </select>
               </label>
-              <label>
-                Nights
-                <input type="number" id="f-nights" min="1" value="1" required />
-              </label>
-            </div>
 
-            <fieldset id="f-tents-wrap">
+              <label id="f-event-wrap">
+                Linked public event
+                <select id="f-event"></select>
+              </label>
+
+              <label id="f-label-wrap">
+                Label <span id="f-label-hint" class="hint-inline">(shown to you only, e.g. who's coming)</span>
+                <input type="text" id="f-label" />
+              </label>
+
+              <label id="f-member-wrap" hidden>
+                Member
+                <select id="f-member"></select>
+              </label>
+
+              <label id="f-exclusive-wrap" class="checkbox-label">
+                <input type="checkbox" id="f-exclusive" />
+                Exclusive use — blocks the whole farm publicly, even if not every tent is assigned
+              </label>
+            </fieldset>
+
+            <fieldset class="form-group">
+              <legend>When</legend>
+              <div class="dates-row">
+                <label>
+                  Start date
+                  <input type="date" id="f-start" required />
+                </label>
+                <label>
+                  Nights
+                  <input type="number" id="f-nights" min="1" value="1" required />
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset id="f-tents-wrap" class="form-group">
               <legend>Tents</legend>
               <div id="f-tents"></div>
             </fieldset>
 
-            <label>
-              Note <span class="hint-inline">(staff-only, never shown publicly)</span>
-              <textarea id="f-note" rows="2"></textarea>
-            </label>
+            <fieldset class="form-group">
+              <legend>Internal notes</legend>
+              <label>
+                Note <span class="hint-inline">(staff-only, never shown publicly)</span>
+                <textarea id="f-note" rows="2"></textarea>
+              </label>
 
-            <label id="f-reason-wrap" hidden>
-              Reason for this change <span class="hint-inline">(required — this stay has already happened)</span>
-              <textarea id="f-reason" rows="2"></textarea>
-            </label>
+              <label id="f-reason-wrap" hidden>
+                Reason for this change <span class="hint-inline">(required — this stay has already happened)</span>
+                <textarea id="f-reason" rows="2"></textarea>
+              </label>
+            </fieldset>
 
             <p id="form-error" class="error" hidden></p>
 
@@ -388,10 +397,41 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     flex: 1;
   }
 
+  /* An empty date input renders its dd/mm/yyyy pattern in full black by
+     default, reading as if it were already a real value rather than a
+     format hint. :placeholder-shown doesn't actually match a date input in
+     Chrome (confirmed live - it never matches here despite matching a text
+     input's real placeholder), so this is driven by a plain JS-toggled
+     class (see syncStartDateEmptyState) instead of relying on that
+     pseudo-class. */
+  #f-start.is-empty {
+    color: var(--tvc-ink-soft);
+  }
+
   fieldset {
     border: 1px solid var(--tvc-line);
     border-radius: 8px;
     padding: 10px 14px;
+  }
+
+  /* Groups the form into what/when/tents/internal-notes clusters instead of
+     one flat 10+ field scroll with no landmarks - on a phone this used to
+     be a long undifferentiated thumb-scroll (see this page's design
+     critique, 2026-08). Reuses the plain fieldset look already established
+     by the Tents box rather than inventing a second visual language. */
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .form-group legend {
+    font-weight: 700;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tvc-ink-soft);
+    padding: 0 4px;
   }
 
   .form-actions {
@@ -426,13 +466,30 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     text-align: center;
   }
 
-  /* Neutral (not the green/orange already meaning free/occupied in the
-     body cells) - a weekend column only needs to read as structurally
-     different, not carry another status color. Header-only: tinting the
-     body cells too would double up with their existing free/occupied/
-     closed background and muddy that meaning. */
   .grid-table th.col--weekend {
     background: var(--tvc-line);
+  }
+
+  /* Body cells get the weekend cue too (Sharath: it shouldn't be
+     header-only), but as a translucent overlay rather than a flat
+     background - a flat color would replace, not sit alongside, the
+     free/occupied/closed status color that same cell already carries,
+     muddying the one thing that background is actually for. Layering a
+     dark wash on top (background-image, painted over background-color)
+     darkens whichever status color is underneath by the same amount
+     instead of replacing it. */
+  .grid-table td.col--weekend {
+    background-image: linear-gradient(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.08));
+  }
+
+  /* A past date's header gets a visibly darker/greyer tint than a weekend
+     one (this rule follows col--weekend in source, so a date that's both
+     wins this treatment) - a quick "this column is history" cue across the
+     whole calendar, not just on the free cells below (see .cell--free's own
+     past-dimming, which only covers the one status that otherwise looked
+     identical whether it was bookable or not). */
+  .grid-table th.col--past {
+    background: #d8d8d8;
   }
 
   .day-letter {
@@ -458,6 +515,14 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     background: var(--tvc-green-tint);
   }
 
+  /* Past free cells (no data-tent-id - see renderGrid) can't be booked, so
+     the green "bookable" tint above would be actively misleading here -
+     matches the header's own col--past shading rather than inventing a
+     second grey. */
+  .cell--free:not([data-tent-id]) {
+    background: #d8d8d8;
+  }
+
   .cell--occupied {
     background: var(--tvc-orange-tint);
   }
@@ -468,15 +533,18 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   .cell--occupied,
   .cell--closed,
-  .cell--free {
+  .cell--free[data-tent-id] {
     cursor: pointer;
   }
 
-  /* A free cell now opens a pre-filled new-booking dialog (see
-     startNewBookingAt) - this outline is the only hint that tapping it does
-     something, so it needs to read as clickable the same way the occupied/
-     closed cells already do via their tint. */
-  .cell--free:hover {
+  /* A free cell for today or later opens a pre-filled new-booking dialog
+     (see startNewBookingAt) - this outline is the only hint that tapping it
+     does something, so it needs to read as clickable the same way the
+     occupied/closed cells already do via their tint. A free cell in the
+     past has no data-tent-id (renderGrid) and gets neither the pointer
+     cursor above nor this hover outline, since a new booking can never
+     start in the past - it must read as inert, not clickable. */
+  .cell--free[data-tent-id]:hover {
     outline: 2px solid var(--tvc-green);
     outline-offset: -2px;
   }
@@ -544,29 +612,52 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
+    align-items: flex-end;
     position: relative;
   }
 
-  .guest-row input,
-  .guest-row select {
+  /* Each guest field is a label wrapping its input/select, with a small
+     persistent caption above it - a plain placeholder used to be the only
+     hint at what a field was, which disappears the moment it's filled in
+     (see this page's design critique, 2026-08: a farm manager filling
+     these in has no way to re-confirm which column is which once there's
+     real data in them). */
+  .guest-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .guest-field-label {
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--tvc-ink-soft);
+  }
+
+  .guest-field input,
+  .guest-field select {
+    width: 100%;
     padding: 4px 8px;
     font-size: 0.82rem;
     font-family: inherit;
     /* Flex items default to min-width:auto, which floors their shrink at
-       their content/intrinsic width - with 5 items now on this row (name,
-       age, gender, mobile number, remove), that floor added up to wider than the
-       .form card itself, pushing the row out past the card's border
+       their content/intrinsic width - with 5 fields now on this row (name,
+       age, gender, mobile number, remove), that floor added up to wider than
+       the .form card itself, pushing the row out past the card's border
        instead of wrapping or shrinking. min-width:0 lets them actually
        shrink; flex-wrap on the row (above) is the fallback once they've
        shrunk as far as still-usable and there's still no room. */
     min-width: 0;
   }
 
-  .guest-row input[data-field='name'] {
+  .guest-field--name {
     flex: 2 1 110px;
   }
 
-  .guest-row input[data-field='mobileNumber'] {
+  .guest-field--mobile {
     flex: 1 1 90px;
   }
 
@@ -599,20 +690,16 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     padding: 4px 10px;
   }
 
-  .guest-row select[data-field='ageGroup'] {
+  .guest-field--age {
     flex: 1 1 80px;
   }
 
-  /* Wider than ageGroup - "Prefer not to say" (the readable label for the
-     stored value "NA", see GENDER_DISPLAY_LABELS) doesn't fit the narrower
-     basis without clipping, which is exactly the truncated-text bug the
+  /* Wider than age - "Unspecified" (the readable label for the stored
+     value "NA", see GENDER_DISPLAY_LABELS) doesn't fit the narrower basis
+     without clipping, which is exactly the truncated-text bug the
      min-width:0 shrink rule above already risks for a long enough label. */
-  .guest-row select[data-field='gender'] {
+  .guest-field--gender {
     flex: 2 1 130px;
-  }
-
-  .guest-row input[data-field='preferences'] {
-    flex: 1 1 100%;
   }
 
   .guest-typeahead {
@@ -862,10 +949,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   const TYPE_DISPLAY_LABELS: Record<BookingType, string> = {
     'public-event': 'Public event',
     'private-event': 'Private event / retreat',
-    'casual-stay': 'Casual stay',
+    'casual-stay': 'Linger booking',
     'member-stay': 'Member stay',
     'unit-closure': 'Tent closure',
-    'farm-closure': 'Farm closure',
+    'farm-closure': 'Farm on Vacation',
   };
 
   function typeDisplayLabel(type: string): string {
@@ -914,6 +1001,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   const formHeading = document.getElementById('form-heading') as HTMLElement;
   const formError = document.getElementById('form-error') as HTMLElement;
   const typeSelect = document.getElementById('f-type') as HTMLSelectElement;
+  const publicEventTypeOption = document.getElementById('f-type-public-event') as HTMLOptionElement;
   const eventWrap = document.getElementById('f-event-wrap') as HTMLElement;
   const eventSelect = document.getElementById('f-event') as HTMLSelectElement;
   const labelWrap = document.getElementById('f-label-wrap') as HTMLElement;
@@ -1022,7 +1110,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   // the server's VALID_GENDERS checks against (accommodation-admin.mts);
   // "NA" read as developer shorthand in a guest register, not a real choice
   // a guest would recognize themselves in.
-  const GENDER_DISPLAY_LABELS: Record<string, string> = { Male: 'Male', Female: 'Female', NA: 'Prefer not to say' };
+  const GENDER_DISPLAY_LABELS: Record<string, string> = { Male: 'Male', Female: 'Female', NA: 'Unspecified' };
   const AGE_GROUP_OPTIONS = ['Adult', 'Child'];
 
   // Debounced so the typeahead doesn't fire a request on every keystroke -
@@ -1085,19 +1173,34 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     row.dataset.personId = guest.personId ?? '';
     row.innerHTML = `
       <div class="guest-row-main">
-        <input type="text" data-field="name" placeholder="Name" required autocomplete="off" value="${guest.name ?? ''}" />
-        <select data-field="ageGroup">
-          ${AGE_GROUP_OPTIONS.map((a) => `<option value="${a}" ${ageGroup === a ? 'selected' : ''}>${a}</option>`).join('')}
-        </select>
-        <select data-field="gender">
-          ${GENDER_OPTIONS.map((g) => `<option value="${g}" ${gender === g ? 'selected' : ''}>${GENDER_DISPLAY_LABELS[g]}</option>`).join('')}
-        </select>
-        <input type="tel" data-field="mobileNumber" placeholder="Mobile (optional)" value="${guest.mobileNumber ?? ''}" />
-        <button type="button" class="button button--danger remove-guest">✕</button>
+        <label class="guest-field guest-field--name">
+          <span class="guest-field-label">Name</span>
+          <input type="text" data-field="name" placeholder="Name" required autocomplete="off" value="${guest.name ?? ''}" />
+        </label>
+        <label class="guest-field guest-field--age">
+          <span class="guest-field-label">Age</span>
+          <select data-field="ageGroup">
+            ${AGE_GROUP_OPTIONS.map((a) => `<option value="${a}" ${ageGroup === a ? 'selected' : ''}>${a}</option>`).join('')}
+          </select>
+        </label>
+        <label class="guest-field guest-field--gender">
+          <span class="guest-field-label">Gender</span>
+          <select data-field="gender">
+            ${GENDER_OPTIONS.map((g) => `<option value="${g}" ${gender === g ? 'selected' : ''}>${GENDER_DISPLAY_LABELS[g]}</option>`).join('')}
+          </select>
+        </label>
+        <label class="guest-field guest-field--mobile">
+          <span class="guest-field-label">Mobile</span>
+          <input type="tel" data-field="mobileNumber" placeholder="Optional" value="${guest.mobileNumber ?? ''}" />
+        </label>
+        <button type="button" class="button button--danger remove-guest" aria-label="Remove guest">✕</button>
       </div>
       <p class="mobile-number-warning" hidden></p>
       <div class="mobile-number-conflict" hidden></div>
-      <input type="text" data-field="preferences" placeholder="Preferences / allergies (optional)" value="${guest.preferences ?? ''}" />
+      <label class="guest-field">
+        <span class="guest-field-label">Preferences / allergies</span>
+        <input type="text" data-field="preferences" placeholder="Optional" value="${guest.preferences ?? ''}" />
+      </label>
       <button type="button" class="guest-history-toggle" ${guest.personId ? '' : 'hidden'}>Past stays</button>
     `;
     row.querySelector('.remove-guest')!.addEventListener('click', () => {
@@ -1409,6 +1512,17 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   startInput.addEventListener('change', handleDateOrNightsChange);
   nightsInput.addEventListener('change', handleDateOrNightsChange);
 
+  // Drives #f-start.is-empty (see that rule's own comment for why this
+  // isn't CSS-only) - 'input' fires on every keystroke/picker interaction,
+  // covering manual entry; call sites that set .value programmatically
+  // (resetForm, loadIntoForm, startNewBookingAt, syncDatesFromEvent) call
+  // this directly too, since a script-assigned value doesn't fire 'input'.
+  function syncStartDateEmptyState() {
+    startInput.classList.toggle('is-empty', !startInput.value);
+  }
+
+  startInput.addEventListener('input', syncStartDateEmptyState);
+
   // ---- Type-conditional field visibility ----
 
   function populateEventSelect() {
@@ -1432,6 +1546,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     const opt = EVENTS.find((e) => e.slug === eventSelect.value);
     if (!opt) return;
     startInput.value = opt.date;
+    syncStartDateEmptyState();
     nightsInput.value = String(opt.nights);
     handleDateOrNightsChange();
   }
@@ -1565,7 +1680,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   function cellTooltip(b: Booking, tentId: string): string {
-    const title = b.type === 'farm-closure' ? 'Farm closed' : (b.label ?? b.eventTitle ?? typeDisplayLabel(b.type));
+    const title = b.type === 'farm-closure' ? typeDisplayLabel(b.type) : (b.label ?? b.eventTitle ?? typeDisplayLabel(b.type));
     const dates = `${b.startDate} · ${b.nights} night${b.nights > 1 ? 's' : ''}`;
     if (b.type === 'farm-closure') return [title, dates, b.note].filter(Boolean).join('\n');
     const guestNames = b.tents
@@ -1596,26 +1711,38 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   function renderGrid() {
     const dates = visibleDates();
+    // A new booking can never start in the past (see resetForm) - a free
+    // cell for a bygone date must not look or act clickable, or tapping it
+    // would silently contradict that rule via startNewBookingAt instead of
+    // being visibly inert.
+    const today = new Date().toLocaleDateString('en-CA');
     const nightsByBookingId = new Map(currentBookings.map((b) => [b.id, new Set(nightsForBooking(b))]));
     // Month's 31 narrow columns only have room for the day-of-month number;
     // day/week have space to also spell out which weekday each column is.
     const headerLabel = (d: string) =>
       viewMode === 'month' ? d.slice(-2) : `<div class="day-letter">${weekdayLetter(d)}</div><div class="day-date">${formatDateLabel(d, { day: 'numeric', month: 'short' })}</div>`;
 
+    const headerColClass = (d: string) => [d < today ? 'col--past' : '', isWeekend(d) ? 'col--weekend' : ''].filter(Boolean).join(' ');
     let headHtml =
-      '<tr><th class="unit-col">Tent</th>' + dates.map((d) => `<th class="${isWeekend(d) ? 'col--weekend' : ''}">${headerLabel(d)}</th>`).join('') + '</tr>';
+      '<tr><th class="unit-col">Tent</th>' + dates.map((d) => `<th class="${headerColClass(d)}">${headerLabel(d)}</th>`).join('') + '</tr>';
     let bodyHtml = '';
     for (const unit of UNITS) {
       bodyHtml += `<tr><td class="unit-col">${unit.label}</td>`;
       for (const date of dates) {
+        const weekendClass = isWeekend(date) ? ' col--weekend' : '';
         const farmClosure = currentBookings.find((b) => b.type === 'farm-closure' && nightsByBookingId.get(b.id)!.has(date));
         const occupying = currentBookings.find((b) => b.type !== 'farm-closure' && b.tents.some((t) => t.tentId === unit.id) && nightsByBookingId.get(b.id)!.has(date));
         if (farmClosure) {
-          bodyHtml += `<td class="cell--closed" data-booking-id="${farmClosure.id}" title="${escapeAttr(cellTooltip(farmClosure, unit.id))}">✕</td>`;
+          const label = cellTooltip(farmClosure, unit.id).replace(/\n/g, ' — ');
+          bodyHtml += `<td class="cell--closed${weekendClass}" data-booking-id="${farmClosure.id}" title="${escapeAttr(cellTooltip(farmClosure, unit.id))}" tabindex="0" role="button" aria-label="${escapeAttr(label)}">✕</td>`;
         } else if (occupying) {
-          bodyHtml += `<td class="cell--occupied" data-booking-id="${occupying.id}" title="${escapeAttr(cellTooltip(occupying, unit.id))}">●</td>`;
+          const label = cellTooltip(occupying, unit.id).replace(/\n/g, ' — ');
+          bodyHtml += `<td class="cell--occupied${weekendClass}" data-booking-id="${occupying.id}" title="${escapeAttr(cellTooltip(occupying, unit.id))}" tabindex="0" role="button" aria-label="${escapeAttr(label)}">●</td>`;
+        } else if (date < today) {
+          bodyHtml += `<td class="cell--free${weekendClass}">·</td>`;
         } else {
-          bodyHtml += `<td class="cell--free" data-tent-id="${unit.id}" data-date="${date}">·</td>`;
+          const label = `${unit.label}, ${formatDateLabel(date, { day: 'numeric', month: 'long' })} — free, tap to book`;
+          bodyHtml += `<td class="cell--free${weekendClass}" data-tent-id="${unit.id}" data-date="${date}" tabindex="0" role="button" aria-label="${escapeAttr(label)}">·</td>`;
         }
       }
       bodyHtml += '</tr>';
@@ -1623,32 +1750,47 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     gridTable.innerHTML = headHtml + bodyHtml;
   }
 
-  // Delegated once on the table itself (which persists across renderGrid's
-  // innerHTML replacements) rather than per-cell, since cells are rebuilt
-  // from scratch on every render.
-  gridTable.addEventListener('click', (ev) => {
-    const cell = (ev.target as HTMLElement).closest('td[data-booking-id], td.cell--free') as HTMLElement | null;
-    if (!cell) return;
+  function activateCell(cell: HTMLElement) {
     if (cell.dataset.bookingId) {
       const booking = currentBookings.find((b) => b.id === cell.dataset.bookingId);
       if (booking) loadIntoForm(booking);
       return;
     }
     startNewBookingAt(cell.dataset.tentId!, cell.dataset.date!);
+  }
+
+  // Delegated once on the table itself (which persists across renderGrid's
+  // innerHTML replacements) rather than per-cell, since cells are rebuilt
+  // from scratch on every render. Cells are plain <td>s (not real buttons),
+  // so click alone left keyboard/screen-reader users with no way to act on
+  // one despite the tabindex/role="button"/aria-label added in renderGrid -
+  // the keydown listener below is what actually makes that markup mean
+  // something rather than just describing intent.
+  gridTable.addEventListener('click', (ev) => {
+    const cell = (ev.target as HTMLElement).closest('td[data-booking-id], td.cell--free[data-tent-id]') as HTMLElement | null;
+    if (cell) activateCell(cell);
+  });
+
+  gridTable.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    const cell = (ev.target as HTMLElement).closest('td[data-booking-id], td.cell--free[data-tent-id]') as HTMLElement | null;
+    if (!cell) return;
+    ev.preventDefault(); // stop Space from scrolling the page
+    activateCell(cell);
   });
 
   // Tapping a free grid cell starts a new booking pre-filled with that tent
   // and date, instead of requiring a scroll to a separate form section and
   // re-entering both from memory - the "grid and form are disconnected"
-  // fix from this page's design critique (2026-08).
+  // fix from this page's design critique (2026-08). Only free cells for
+  // today or later ever reach here (see renderGrid) - a new booking must
+  // never start in the past (the same rule resetForm's own `min` already
+  // enforces for manual date entry); backfilling a historical booking is
+  // only ever done by editing an existing one, never by creating a new one.
   function startNewBookingAt(tentId: string, date: string) {
     resetForm();
-    // resetForm() floors new bookings at today so the date picker can't be
-    // dragged into the past by hand - but a free cell in the past (e.g.
-    // backfilling a historical entry) is a deliberate, valid target here,
-    // so that floor is lifted rather than silently clamping the date.
-    if (date < new Date().toLocaleDateString('en-CA')) startInput.removeAttribute('min');
     startInput.value = date;
+    syncStartDateEmptyState();
     handleDateOrNightsChange();
     const option = tentsContainer.querySelector<HTMLElement>(`.tent-option[data-tent-id="${tentId}"]`);
     const checkbox = option?.querySelector<HTMLInputElement>('.tent-checkbox');
@@ -1742,12 +1884,33 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     }
   }
 
+  // Hides "Public event" from the Type dropdown entirely when there's
+  // nothing upcoming to link it to, rather than leaving a picker that opens
+  // onto an empty select - the option itself has no value once EVENTS is
+  // empty. Editing an *existing* public-event booking still needs the
+  // option available regardless (see loadIntoForm), so this only ever runs
+  // for the new-booking state (resetForm) and once at load.
+  function updatePublicEventOptionVisibility() {
+    const hasUpcomingEvents = EVENTS.length > 0;
+    publicEventTypeOption.hidden = !hasUpcomingEvents;
+    publicEventTypeOption.disabled = !hasUpcomingEvents;
+  }
+
   function loadIntoForm(b: Booking) {
     editingId = b.id;
     formHeading.textContent = 'Edit booking';
     cancelEditBtn.hidden = false;
     reasonWrap.hidden = !b.isPast;
     reasonInput.value = '';
+    // An existing public-event booking must stay viewable/editable even if
+    // its event no longer has any upcoming overnight dates to offer a *new*
+    // booking (see updatePublicEventOptionVisibility) - re-enabling here is
+    // scoped to this one edit; resetForm re-applies the hide-if-empty rule
+    // the moment this edit ends.
+    if (b.type === 'public-event') {
+      publicEventTypeOption.hidden = false;
+      publicEventTypeOption.disabled = false;
+    }
     typeSelect.value = b.type;
     updateFieldVisibility();
     if (b.eventSlug) eventSelect.value = b.eventSlug;
@@ -1760,6 +1923,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     // makes sense for *new* bookings (see resetForm below).
     startInput.removeAttribute('min');
     startInput.value = b.startDate;
+    syncStartDateEmptyState();
     nightsInput.value = String(b.nights);
     noteInput.value = b.note ?? '';
     setTents(b.tents);
@@ -1774,7 +1938,9 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     reasonWrap.hidden = true;
     reasonInput.value = '';
     form.reset();
+    syncStartDateEmptyState();
     typeSelect.value = 'casual-stay';
+    updatePublicEventOptionVisibility();
     updateFieldVisibility();
     // A new booking can't start in the past - today, in the visitor's own
     // local timezone, computed fresh on every reset rather than baked in at
@@ -1950,6 +2116,17 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   populateMemberSelect();
   buildTentsFieldset();
   resetForm();
+
+  // Month view's 31 narrow columns are unusable on a phone - default to
+  // week view there instead (same breakpoint as the booking dialog's own
+  // sheet-vs-centered switch, for one consistent "phone" cutoff across the
+  // page). Checked once at load, not on resize/rotate, since the view
+  // changing itself under someone mid-session would feel like a bug, not a
+  // convenience - Day/Week/Month stays a manual, sticky choice from here.
+  if (window.matchMedia('(max-width: 640px)').matches) {
+    viewMode = 'week';
+    for (const b of viewToggleButtons) b.classList.toggle('view-toggle-btn--active', b.dataset.view === 'week');
+  }
 
   if (getToken()) {
     loadView();
