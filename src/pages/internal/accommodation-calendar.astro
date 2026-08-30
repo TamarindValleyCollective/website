@@ -1,0 +1,2296 @@
+---
+// Internal admin tool for the accommodation-calendar prototype: lets the
+// farm manager, Madhavan, record bookings against the fixed tent inventory
+// (scripts/lib/accommodation.mjs) - who's in which tent, for how long, and
+// why. See netlify/functions/accommodation-admin.mts for the API this talks
+// to, and src/components/views/AvailabilityView.astro for the public,
+// aggregate-only counterpart. Deliberately unlinked from nav; gated by
+// Google Sign-In plus a live allow-list, same shell pattern as
+// photo-pool.astro/whatsapp.astro (own Sheet/env var - see
+// accommodation-admin.mts's header comment for why it isn't shared).
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+import { ACCOMMODATION_UNITS } from '../../../scripts/lib/accommodation.mjs';
+import { durationDays } from '../../utils/events';
+import { members } from '../../data/members';
+
+// Member names only, for the "member stay" label picker - `name` is already
+// the canonical display label used everywhere else members show up (see
+// MembersView.astro), so no separate slug/id is needed here.
+const memberNames = members.map((m) => m.name);
+
+// English-only, upcoming-only, *overnight* public events, for the "link to
+// a public event" picker - a day event has no accommodation to book
+// against (its own date/duration is fixed by the event, not chosen here),
+// so it's excluded rather than left for someone to pick and then have to
+// notice doesn't apply. durationDays() (src/utils/events.ts) is the same
+// day-vs-overnight test EventsIndexView.astro/EventDetailView.astro already
+// use, so this can't drift from what the public site itself calls
+// "overnight". A past event has no future nights left to book against, and
+// this is an internal tool (not a localized visitor-facing page), so the
+// kn/ta sibling entries (see EventsIndexView.astro's bareSlug convention)
+// aren't relevant here either. A multi-day event counts as upcoming until
+// its last day (endDate), not just its start.
+const today = new Date();
+const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.startsWith('kn/') && !e.id.startsWith('ta/')))
+  .filter((e) => (e.data.endDate ?? e.data.date) >= today && durationDays(e.data.date, e.data.endDate) > 1)
+  .sort((a, b) => a.data.date.valueOf() - b.data.date.valueOf())
+  .map((e) => ({
+    slug: e.id,
+    title: e.data.title,
+    date: e.data.date.toISOString().slice(0, 10),
+    // nights, not days: a 2-day event (date + 1 endDate) is a 1-night stay.
+    nights: durationDays(e.data.date, e.data.endDate) - 1,
+  }));
+---
+
+<BaseLayout title="Accommodation Calendar" description="Internal accommodation booking tool." noindex>
+  <section class="section wrapper">
+    <h1>Accommodation Calendar</h1>
+    <p class="hint">Record who's in which tent, for how long. The public site only ever shows aggregate availability derived from this.</p>
+
+    <div id="gate" class="gate card">
+      <p class="gate-copy">Sign in with the Google account you manage bookings with.</p>
+      <div id="g_id_signin"></div>
+      <p id="gate-error" class="error" hidden></p>
+    </div>
+
+    <div id="forbidden" class="gate card" hidden>
+      <p class="gate-copy">Signed in as <strong id="forbidden-email"></strong>, but this Google account isn't authorized to manage the accommodation calendar.</p>
+      <p class="hint" style="margin: 4px 0 12px;">Ask an admin to add it to the allow-list.</p>
+      <button type="button" id="use-different-account" class="button">Use a different account</button>
+    </div>
+
+    <div id="app" hidden>
+      <div class="month-nav">
+        <button type="button" id="prev-month" class="button">← Prev</button>
+        <h2 id="month-label"></h2>
+        <button type="button" id="next-month" class="button">Next →</button>
+        <div class="view-toggle" role="group" aria-label="Calendar view">
+          <button type="button" class="button view-toggle-btn" data-view="day">Day</button>
+          <button type="button" class="button view-toggle-btn" data-view="week">Week</button>
+          <button type="button" class="button view-toggle-btn view-toggle-btn--active" data-view="month">Month</button>
+        </div>
+      </div>
+
+      <p id="status" class="hint" hidden></p>
+
+      <div class="grid-scroll">
+        <table id="grid" class="grid-table"></table>
+      </div>
+
+      <div id="day-view" class="day-view" hidden></div>
+
+      <div class="booking-list-header">
+        <h2 id="booking-list-heading">Bookings this month</h2>
+        <button type="button" id="new-booking-btn" class="button button--primary">+ New booking</button>
+      </div>
+      <div id="booking-list" class="booking-list"></div>
+
+      <div id="booking-modal" class="booking-modal" hidden>
+        <div id="booking-modal-backdrop" class="booking-modal-backdrop"></div>
+        <div class="card booking-modal-panel" role="dialog" aria-modal="true" aria-labelledby="form-heading">
+          <div class="booking-modal-panel-head">
+            <h2 id="form-heading">New booking</h2>
+            <button type="button" id="booking-modal-close" class="button" aria-label="Close">✕</button>
+          </div>
+          <form id="booking-form" class="form">
+            <fieldset class="form-group">
+              <legend>What</legend>
+              <label>
+                Type
+                <select id="f-type" required>
+                  <option value="casual-stay">Linger booking</option>
+                  <option value="public-event" id="f-type-public-event">Public event (linked)</option>
+                  <option value="private-event">Private event (retreat)</option>
+                  <option value="member-stay">Member stay (booked direct)</option>
+                  <option value="unit-closure">Tent closure (repair, etc.)</option>
+                  <option value="farm-closure">Farm on Vacation (no bookings taken)</option>
+                </select>
+              </label>
+
+              <label id="f-event-wrap">
+                Linked public event
+                <select id="f-event"></select>
+              </label>
+
+              <label id="f-label-wrap">
+                Label <span id="f-label-hint" class="hint-inline">(shown to you only, e.g. who's coming)</span>
+                <input type="text" id="f-label" />
+              </label>
+
+              <label id="f-member-wrap" hidden>
+                Member
+                <select id="f-member"></select>
+              </label>
+
+              <label id="f-exclusive-wrap" class="checkbox-label">
+                <input type="checkbox" id="f-exclusive" />
+                Exclusive use — blocks the whole farm publicly, even if not every tent is assigned
+              </label>
+            </fieldset>
+
+            <fieldset class="form-group">
+              <legend>When</legend>
+              <div class="dates-row">
+                <label>
+                  Start date
+                  <input type="date" id="f-start" required />
+                </label>
+                <label>
+                  Nights
+                  <input type="number" id="f-nights" min="1" value="1" required />
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset id="f-tents-wrap" class="form-group">
+              <legend>Tents</legend>
+              <div id="f-tents"></div>
+            </fieldset>
+
+            <fieldset class="form-group">
+              <legend>Internal notes</legend>
+              <label>
+                Note <span class="hint-inline">(staff-only, never shown publicly)</span>
+                <textarea id="f-note" rows="2"></textarea>
+              </label>
+
+              <label id="f-reason-wrap" hidden>
+                Reason for this change <span class="hint-inline">(required — this stay has already happened)</span>
+                <textarea id="f-reason" rows="2"></textarea>
+              </label>
+            </fieldset>
+
+            <p id="form-error" class="error" hidden></p>
+
+            <div class="form-actions">
+              <button type="submit" id="f-submit" class="button button--primary">Save booking</button>
+              <button type="button" id="f-cancel-edit" class="button" hidden>Cancel edit</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<script type="application/json" id="events-data" set:html={JSON.stringify(allEvents)} />
+<script type="application/json" id="units-data" set:html={JSON.stringify(ACCOMMODATION_UNITS)} />
+<script type="application/json" id="members-data" set:html={JSON.stringify(memberNames)} />
+
+<style>
+  .hint {
+    color: var(--tvc-ink-soft);
+    margin: -8px 0 24px;
+  }
+
+  .hint-inline {
+    font-weight: 400;
+    color: var(--tvc-ink-soft);
+    font-size: 0.82rem;
+  }
+
+  .card {
+    background: #fff;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .gate {
+    max-width: 420px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+  }
+
+  .gate-copy {
+    font-size: 0.9rem;
+    color: var(--tvc-ink-soft);
+    margin: 0 0 14px;
+  }
+
+  .error {
+    color: #b3261e;
+    font-size: 0.85rem;
+    margin: 10px 0 0;
+  }
+
+  .button {
+    appearance: none;
+    border: 1px solid var(--tvc-line);
+    background: #fff;
+    border-radius: 999px;
+    padding: 8px 18px;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.86rem;
+    cursor: pointer;
+  }
+
+  .button--primary {
+    background: var(--tvc-green);
+    border-color: var(--tvc-green);
+    color: #fff;
+  }
+
+  .month-nav {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+    /* Without this, the toggle group (pushed right by margin-left:auto)
+       simply ran off the edge of a phone-width viewport instead of
+       dropping to its own line - confirmed via a real 390px-wide check
+       during this page's design critique (2026-08): the row's own content
+       (588px) exceeded the viewport (485px) and the Day/Week/Month buttons
+       were hidden off-screen with no way to reach them. */
+    flex-wrap: wrap;
+  }
+
+  .month-nav h2 {
+    margin: 0;
+    min-width: 180px;
+    text-align: center;
+  }
+
+  .view-toggle {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+  }
+
+  .view-toggle-btn {
+    padding: 6px 14px;
+    font-size: 0.8rem;
+  }
+
+  .view-toggle-btn--active {
+    background: var(--tvc-green);
+    border-color: var(--tvc-green);
+    color: #fff;
+  }
+
+  /* Below this width, Prev/label/Next alone are already tight - let the
+     label shrink instead of holding a fixed 180px, and force the view
+     toggle onto its own centered row rather than letting the wrap point
+     land wherever it happens to (which read as broken, not tidy). */
+  @media (max-width: 480px) {
+    .month-nav h2 {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
+    .view-toggle {
+      flex-basis: 100%;
+      justify-content: center;
+      margin-left: 0;
+    }
+  }
+
+  .grid-scroll {
+    overflow-x: auto;
+    margin-bottom: 32px;
+  }
+
+  .booking-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .booking-list-header h2 {
+    margin: 0;
+  }
+
+  /* A dialog the grid opens directly, instead of a form living in its own
+     scrolled-past section below the booking list - closes the "grid and
+     form are disconnected" gap found in this page's design critique
+     (2026-08). Bottom-sheet on narrow screens (align-items: flex-end) since
+     that's the native mobile pattern for "an action anchored to what you
+     just tapped"; a centered dialog once there's room for one (see the
+     min-width media query below). */
+  .booking-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  .booking-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  .booking-modal-panel {
+    position: relative;
+    width: 100%;
+    max-width: 560px;
+    max-height: 92vh;
+    overflow-y: auto;
+    padding: 20px 24px;
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  .booking-modal-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .booking-modal-panel-head h2 {
+    margin: 0;
+  }
+
+  @media (min-width: 640px) {
+    .booking-modal {
+      align-items: center;
+    }
+
+    .booking-modal-panel {
+      border-radius: var(--radius);
+    }
+  }
+
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.86rem;
+    font-weight: 600;
+  }
+
+  .form input,
+  .form select,
+  .form textarea {
+    font: inherit;
+    padding: 6px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 8px;
+  }
+
+  .checkbox-label {
+    flex-direction: row !important;
+    align-items: center;
+    gap: 8px !important;
+  }
+
+  .dates-row {
+    display: flex;
+    gap: 14px;
+  }
+
+  .dates-row label {
+    flex: 1;
+  }
+
+  /* An empty date input renders its dd/mm/yyyy pattern in full black by
+     default, reading as if it were already a real value rather than a
+     format hint. :placeholder-shown doesn't actually match a date input in
+     Chrome (confirmed live - it never matches here despite matching a text
+     input's real placeholder), so this is driven by a plain JS-toggled
+     class (see syncStartDateEmptyState) instead of relying on that
+     pseudo-class. */
+  #f-start.is-empty {
+    color: var(--tvc-ink-soft);
+  }
+
+  fieldset {
+    border: 1px solid var(--tvc-line);
+    border-radius: 8px;
+    padding: 10px 14px;
+  }
+
+  /* Groups the form into what/when/tents/internal-notes clusters instead of
+     one flat 10+ field scroll with no landmarks - on a phone this used to
+     be a long undifferentiated thumb-scroll (see this page's design
+     critique, 2026-08). Reuses the plain fieldset look already established
+     by the Tents box rather than inventing a second visual language. */
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .form-group legend {
+    font-weight: 700;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tvc-ink-soft);
+    padding: 0 4px;
+  }
+
+  .form-actions {
+    display: flex;
+    gap: 10px;
+  }
+</style>
+
+<!--
+  Everything below styles content the client script builds at runtime
+  (renderGrid/renderBookingList/buildTentsFieldset use innerHTML/
+  createElement, not this component's own template) - Astro's scoped-style
+  attribute selector only lands on elements Astro itself renders, so a
+  normal scoped <style> block silently fails to match any of it (see
+  AvailabilityView.astro's identical note). [hidden] is included here too,
+  not just in the scoped block above, since guestsEl/addGuestBtn (dynamic)
+  rely on it being suppressed the same way #gate/#app (static) do. None of
+  these class names collide with anything in global.css (checked before
+  adding this).
+-->
+<style is:global>
+  .grid-table {
+    border-collapse: collapse;
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+
+  .grid-table th,
+  .grid-table td {
+    border: 1px solid var(--tvc-line);
+    padding: 4px 6px;
+    text-align: center;
+  }
+
+  .grid-table th.col--weekend {
+    background: var(--tvc-line);
+  }
+
+  /* Body cells get the weekend cue too (Sharath: it shouldn't be
+     header-only), but as a translucent overlay rather than a flat
+     background - a flat color would replace, not sit alongside, the
+     free/occupied/closed status color that same cell already carries,
+     muddying the one thing that background is actually for. Layering a
+     dark wash on top (background-image, painted over background-color)
+     darkens whichever status color is underneath by the same amount
+     instead of replacing it. */
+  .grid-table td.col--weekend {
+    background-image: linear-gradient(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.08));
+  }
+
+  /* A past date's header gets a visibly darker/greyer tint than a weekend
+     one (this rule follows col--weekend in source, so a date that's both
+     wins this treatment) - a quick "this column is history" cue across the
+     whole calendar, not just on the free cells below (see .cell--free's own
+     past-dimming, which only covers the one status that otherwise looked
+     identical whether it was bookable or not). */
+  .grid-table th.col--past {
+    background: #d8d8d8;
+  }
+
+  .day-letter {
+    font-weight: 700;
+  }
+
+  .day-date {
+    font-weight: 400;
+    color: var(--tvc-ink-soft);
+    font-size: 0.72rem;
+  }
+
+  .grid-table th.unit-col,
+  .grid-table td.unit-col {
+    text-align: left;
+    position: sticky;
+    left: 0;
+    background: #fff;
+    font-weight: 600;
+  }
+
+  .cell--free {
+    background: var(--tvc-green-tint);
+  }
+
+  /* Past free cells (no data-tent-id - see renderGrid) can't be booked, so
+     the green "bookable" tint above would be actively misleading here -
+     matches the header's own col--past shading rather than inventing a
+     second grey. */
+  .cell--free:not([data-tent-id]) {
+    background: #d8d8d8;
+  }
+
+  .cell--occupied {
+    background: var(--tvc-orange-tint);
+  }
+
+  .cell--closed {
+    background: #e6e6e6;
+  }
+
+  .cell--occupied,
+  .cell--closed,
+  .cell--free[data-tent-id] {
+    cursor: pointer;
+  }
+
+  /* A free cell for today or later opens a pre-filled new-booking dialog
+     (see startNewBookingAt) - this outline is the only hint that tapping it
+     does something, so it needs to read as clickable the same way the
+     occupied/closed cells already do via their tint. A free cell in the
+     past has no data-tent-id (renderGrid) and gets neither the pointer
+     cursor above nor this hover outline, since a new booking can never
+     start in the past - it must read as inert, not clickable. */
+  .cell--free[data-tent-id]:hover {
+    outline: 2px solid var(--tvc-green);
+    outline-offset: -2px;
+  }
+
+  /* Day view: one wide row per tent instead of the table's one-column
+     squeeze (see renderDayView). Same status colors as the grid cells
+     (free/occupied/closed/past) for a consistent vocabulary, but with room
+     to actually show the booking's title and guest names instead of a
+     glyph behind a hover-only tooltip. */
+  .day-view {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 32px;
+  }
+
+  .day-row {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    background: var(--tvc-green-tint);
+  }
+
+  .day-row-tent {
+    flex: 0 0 140px;
+    font-weight: 700;
+    font-size: 0.9rem;
+  }
+
+  .day-row-main {
+    flex: 1 1 220px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+  }
+
+  .day-row-title {
+    font-weight: 600;
+  }
+
+  .day-row-guests {
+    color: var(--tvc-ink-soft);
+    font-size: 0.88rem;
+  }
+
+  .day-row--occupied {
+    background: var(--tvc-orange-tint);
+  }
+
+  .day-row--closed {
+    background: #e6e6e6;
+  }
+
+  .day-row--free-past {
+    background: #d8d8d8;
+    color: var(--tvc-ink-soft);
+  }
+
+  .day-row--occupied,
+  .day-row--closed,
+  .day-row--free {
+    cursor: pointer;
+  }
+
+  .day-row--occupied:hover,
+  .day-row--closed:hover,
+  .day-row--free:hover {
+    outline: 2px solid var(--tvc-green);
+    outline-offset: -2px;
+  }
+
+  .booking-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 32px;
+  }
+
+  .booking-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: #fff;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+  }
+
+  .booking-card .meta {
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .booking-card .actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .tent-option {
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--tvc-line);
+  }
+
+  .tent-option:last-child {
+    border-bottom: none;
+  }
+
+  .tent-option .tent-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 0.86rem;
+  }
+
+  .guests {
+    margin: 8px 0 0 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .guest-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .guest-row-main {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: flex-end;
+    position: relative;
+  }
+
+  /* Each guest field is a label wrapping its input/select, with a small
+     persistent caption above it - a plain placeholder used to be the only
+     hint at what a field was, which disappears the moment it's filled in
+     (see this page's design critique, 2026-08: a farm manager filling
+     these in has no way to re-confirm which column is which once there's
+     real data in them). */
+  .guest-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .guest-field-label {
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--tvc-ink-soft);
+  }
+
+  .guest-field input,
+  .guest-field select {
+    width: 100%;
+    padding: 4px 8px;
+    font-size: 0.82rem;
+    font-family: inherit;
+    /* Flex items default to min-width:auto, which floors their shrink at
+       their content/intrinsic width - with 5 fields now on this row (name,
+       age, gender, mobile number, remove), that floor added up to wider than
+       the .form card itself, pushing the row out past the card's border
+       instead of wrapping or shrinking. min-width:0 lets them actually
+       shrink; flex-wrap on the row (above) is the fallback once they've
+       shrunk as far as still-usable and there's still no room. */
+    min-width: 0;
+  }
+
+  .guest-field--name {
+    flex: 2 1 110px;
+  }
+
+  .guest-field--mobile {
+    flex: 1 1 90px;
+  }
+
+  .mobile-number-warning {
+    margin: 0;
+    font-size: 0.76rem;
+    color: var(--tvc-orange-text);
+    font-weight: 600;
+  }
+
+  .mobile-number-conflict {
+    padding: 8px 10px;
+    background: var(--tvc-orange-tint);
+    border-radius: 6px;
+    font-size: 0.8rem;
+  }
+
+  .mobile-number-conflict p {
+    margin: 0 0 6px;
+  }
+
+  .mobile-number-conflict-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .mobile-number-conflict-actions .button {
+    font-size: 0.76rem;
+    padding: 4px 10px;
+  }
+
+  .guest-field--age {
+    flex: 1 1 80px;
+  }
+
+  /* Wider than age - "Unspecified" (the readable label for the stored
+     value "NA", see GENDER_DISPLAY_LABELS) doesn't fit the narrower basis
+     without clipping, which is exactly the truncated-text bug the
+     min-width:0 shrink rule above already risks for a long enough label. */
+  .guest-field--gender {
+    flex: 2 1 130px;
+  }
+
+  .guest-typeahead {
+    position: absolute;
+    /* A few px of gap (instead of sitting flush at 100%) plus an opaque
+       background is what stops this from reading as merged into the
+       Preferences field directly beneath it, which sits at that same
+       vertical position in normal flow. */
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 5;
+    background: #fff;
+    border: 1px solid var(--tvc-line);
+    border-radius: 6px;
+    box-shadow: var(--shadow-soft);
+    min-width: 220px;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+
+  .guest-typeahead button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    border: none;
+    background: none;
+    cursor: pointer;
+  }
+
+  .guest-typeahead button:hover {
+    background: var(--tvc-green-tint);
+  }
+
+  .guest-history-toggle {
+    align-self: flex-start;
+    font-size: 0.76rem;
+    padding: 2px 8px;
+    background: none;
+    border: none;
+    text-decoration: underline;
+    color: var(--tvc-ink-soft);
+    cursor: pointer;
+  }
+
+  .guest-history-panel {
+    margin: 2px 0 4px;
+    padding: 6px 10px;
+    background: var(--tvc-green-tint);
+    border-radius: 6px;
+    font-size: 0.78rem;
+  }
+
+  .guest-history-panel ul {
+    margin: 4px 0 0;
+    padding-left: 18px;
+  }
+
+  .reason-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+
+  .reason-overlay-card {
+    background: #fff;
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    max-width: 420px;
+    width: 90%;
+  }
+
+  .reason-overlay-card p {
+    margin: 0 0 10px;
+    font-size: 0.88rem;
+  }
+
+  .reason-overlay-card textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+    padding: 6px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 8px;
+  }
+
+  .reason-overlay-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .add-guest {
+    align-self: flex-start;
+    font-size: 0.78rem;
+    padding: 3px 10px;
+  }
+
+  .add-guest:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .tent-option--occupied {
+    opacity: 0.55;
+  }
+
+  .tent-option--occupied .tent-checkbox {
+    cursor: not-allowed;
+  }
+
+  /* A tent that's checked but has become conflicting since (dates changed
+     underneath it) - distinct from --occupied (unchecked + taken), since
+     this one stays enabled so the admin can uncheck it themselves. */
+  .tent-option--conflict {
+    background: var(--tvc-orange-tint);
+    border-radius: 6px;
+    padding: 4px 6px;
+    margin: 0 -6px;
+  }
+
+  .tent-conflict-warning {
+    margin: 2px 0 0;
+    font-size: 0.78rem;
+    color: var(--tvc-orange-text);
+    font-weight: 600;
+  }
+
+  /* Buttons this page builds at runtime (guest-row remove/add, booking-card
+     edit/cancel, reason-overlay actions, mobile-conflict actions) never get
+     Astro's scoped-style attribute, so without an is:global override they
+     fell through to global.css's site-wide `.button` at every state - a
+     solid orange marketing-CTA background, meant for the site's hero CTA,
+     not a small admin-tool action pill. Confirmed live during this page's
+     design critique (2026-08): Edit/Cancel computed to
+     `background: rgb(247, 133, 32)` with no astro-cid attribute, versus the
+     one statically-rendered button (Prev), which correctly got this page's
+     own white background. `.button.button` (repeating the class) bumps
+     specificity past global.css's plain `.button`/`.button:hover`
+     regardless of stylesheet load order, giving every non-primary,
+     non-danger button here this page's own neutral pill look end to end -
+     base, hover, and focus, not just the text color. :not(.button--primary)
+     excludes the one button that's meant to look like the site's green CTA;
+     :not(.button--danger) excludes destructive actions below, which get
+     their own look so a destructive action never renders identically to a
+     safe one (Edit vs Cancel were indistinguishable before this). */
+  .button.button:not(.button--primary):not(.button--danger) {
+    background: #fff;
+    color: var(--tvc-ink);
+  }
+
+  .button.button:not(.button--primary):not(.button--danger):hover,
+  .button.button:not(.button--primary):not(.button--danger):focus-visible {
+    background: var(--tvc-line);
+    color: var(--tvc-ink);
+  }
+
+  /* Destructive actions (cancelling a booking, removing a guest row) get a
+     visibly different treatment from neutral ones (Edit, +Guest) so the two
+     are never one indistinguishable pill color. */
+  .button.button--danger {
+    background: #fff;
+    border-color: #b3261e;
+    color: #b3261e;
+  }
+
+  .button.button--danger:hover,
+  .button.button--danger:focus-visible {
+    background: #b3261e;
+    border-color: #b3261e;
+    color: #fff;
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+</style>
+
+<script>
+  import { normalizeMobileNumber } from '../../../scripts/lib/accommodation.mjs';
+
+  declare const google: any;
+
+  const STORAGE_KEY = 'tvc-accommodation-idtoken';
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+
+  interface EventOption {
+    slug: string;
+    title: string;
+    date: string;
+    nights: number;
+  }
+
+  interface Unit {
+    id: string;
+    label: string;
+    capacity: number;
+    kind: 'fixed' | 'removable';
+  }
+
+  interface Guest {
+    personId?: string;
+    name?: string;
+    mobileNumber?: string;
+    ageGroup?: 'Adult' | 'Child';
+    gender?: string;
+    preferences?: string;
+  }
+
+  interface GuestMatch {
+    id: string;
+    name: string;
+    mobileNumber?: string;
+    gender?: string;
+    preferences?: string;
+  }
+
+  interface PastStay {
+    bookingId: string;
+    startDate: string;
+    nights: number;
+    tentId: string;
+    type: string;
+    label?: string;
+    eventTitle?: string;
+    ageGroupAtStay: string;
+  }
+
+  interface TentAssignment {
+    tentId: string;
+    guests: Guest[];
+  }
+
+  type BookingType = 'public-event' | 'private-event' | 'casual-stay' | 'member-stay' | 'unit-closure' | 'farm-closure';
+
+  // A booking with no Label/eventTitle used to fall back to its raw type
+  // slug ("casual-stay") as its human-facing title, everywhere that title
+  // shows up (booking card, grid tooltip, a guest's past-stays list) - a
+  // real bug found in this page's design critique (2026-08): the slug is
+  // internal shorthand, never meant to be read by anyone.
+  const TYPE_DISPLAY_LABELS: Record<BookingType, string> = {
+    'public-event': 'Public event',
+    'private-event': 'Private event / retreat',
+    'casual-stay': 'Linger booking',
+    'member-stay': 'Member stay',
+    'unit-closure': 'Tent closure',
+    'farm-closure': 'Farm on Vacation',
+  };
+
+  function typeDisplayLabel(type: string): string {
+    return TYPE_DISPLAY_LABELS[type as BookingType] ?? type;
+  }
+
+  interface Booking {
+    id: string;
+    type: BookingType;
+    eventSlug?: string;
+    eventTitle?: string;
+    label?: string;
+    exclusive?: boolean;
+    startDate: string;
+    nights: number;
+    tents: TentAssignment[];
+    note?: string;
+    isPast: boolean;
+    createdBy: string;
+    createdAt: string;
+    updatedBy?: string;
+    updatedAt: string;
+  }
+
+  const EVENTS: EventOption[] = JSON.parse(document.getElementById('events-data')!.textContent!);
+  const UNITS: Unit[] = JSON.parse(document.getElementById('units-data')!.textContent!);
+  const MEMBERS: string[] = JSON.parse(document.getElementById('members-data')!.textContent!);
+
+  const gate = document.getElementById('gate') as HTMLElement;
+  const gateError = document.getElementById('gate-error') as HTMLElement;
+  const forbidden = document.getElementById('forbidden') as HTMLElement;
+  const forbiddenEmail = document.getElementById('forbidden-email') as HTMLElement;
+  const useDifferentAccountBtn = document.getElementById('use-different-account') as HTMLButtonElement;
+  const app = document.getElementById('app') as HTMLElement;
+  const statusEl = document.getElementById('status') as HTMLElement;
+  const monthLabel = document.getElementById('month-label') as HTMLElement;
+  const viewToggleButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.view-toggle-btn'));
+  const gridTable = document.getElementById('grid') as HTMLTableElement;
+  const gridScroll = document.querySelector('.grid-scroll') as HTMLElement;
+  const dayView = document.getElementById('day-view') as HTMLElement;
+  const bookingListHeading = document.getElementById('booking-list-heading') as HTMLElement;
+  const bookingList = document.getElementById('booking-list') as HTMLElement;
+  const newBookingBtn = document.getElementById('new-booking-btn') as HTMLButtonElement;
+  const bookingModal = document.getElementById('booking-modal') as HTMLElement;
+  const bookingModalBackdrop = document.getElementById('booking-modal-backdrop') as HTMLElement;
+  const bookingModalClose = document.getElementById('booking-modal-close') as HTMLButtonElement;
+  const form = document.getElementById('booking-form') as HTMLFormElement;
+  const formHeading = document.getElementById('form-heading') as HTMLElement;
+  const formError = document.getElementById('form-error') as HTMLElement;
+  const typeSelect = document.getElementById('f-type') as HTMLSelectElement;
+  const publicEventTypeOption = document.getElementById('f-type-public-event') as HTMLOptionElement;
+  const eventWrap = document.getElementById('f-event-wrap') as HTMLElement;
+  const eventSelect = document.getElementById('f-event') as HTMLSelectElement;
+  const labelWrap = document.getElementById('f-label-wrap') as HTMLElement;
+  const labelHint = document.getElementById('f-label-hint') as HTMLElement;
+  const labelInput = document.getElementById('f-label') as HTMLInputElement;
+  const memberWrap = document.getElementById('f-member-wrap') as HTMLElement;
+  const memberSelect = document.getElementById('f-member') as HTMLSelectElement;
+  const exclusiveWrap = document.getElementById('f-exclusive-wrap') as HTMLElement;
+  const exclusiveInput = document.getElementById('f-exclusive') as HTMLInputElement;
+  const startInput = document.getElementById('f-start') as HTMLInputElement;
+  const nightsInput = document.getElementById('f-nights') as HTMLInputElement;
+  const tentsWrap = document.getElementById('f-tents-wrap') as HTMLElement;
+  const tentsContainer = document.getElementById('f-tents') as HTMLElement;
+  const noteInput = document.getElementById('f-note') as HTMLTextAreaElement;
+  const reasonWrap = document.getElementById('f-reason-wrap') as HTMLElement;
+  const reasonInput = document.getElementById('f-reason') as HTMLTextAreaElement;
+  const cancelEditBtn = document.getElementById('f-cancel-edit') as HTMLButtonElement;
+
+  type ViewMode = 'day' | 'week' | 'month';
+  let viewMode: ViewMode = 'month';
+  let anchorDate = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD, local
+  let currentBookings: Booking[] = [];
+  let editingId: string | null = null;
+
+  function getToken(): string | null {
+    return sessionStorage.getItem(STORAGE_KEY);
+  }
+
+  function clearToken() {
+    sessionStorage.removeItem(STORAGE_KEY);
+  }
+
+  function decodeTokenEmail(token: string): string {
+    const payloadB64 = token.split('.')[1] ?? '';
+    const base64 = payloadB64.replace(/-/g, '+').replace(/_/g, '/').padEnd(payloadB64.length + ((4 - (payloadB64.length % 4)) % 4), '=');
+    try {
+      return JSON.parse(atob(base64)).email ?? 'unknown';
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    app.hidden = true;
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+
+  function showForbidden(token: string) {
+    gate.hidden = true;
+    app.hidden = true;
+    forbidden.hidden = false;
+    forbiddenEmail.textContent = decodeTokenEmail(token);
+  }
+
+  function showStatus(message: string) {
+    statusEl.hidden = false;
+    statusEl.textContent = message;
+  }
+
+  function hideStatus() {
+    statusEl.hidden = true;
+  }
+
+  // The booking form lives in a dialog the grid opens directly (tap a free
+  // cell to book, tap an occupied one to edit) instead of a separate
+  // section scrolled past below the list - see this page's design critique
+  // (2026-08) for why. Locking body scroll matters most on a phone, where
+  // the sheet covers most of the viewport and a background scroll under it
+  // reads as broken.
+  function openBookingModal() {
+    bookingModal.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeBookingModal() {
+    bookingModal.hidden = true;
+    document.body.style.overflow = '';
+  }
+
+  async function authedFetch(input: string, init: RequestInit = {}): Promise<Response> {
+    const token = getToken();
+    const res = await fetch(input, {
+      ...init,
+      headers: { ...init.headers, authorization: `Bearer ${token ?? ''}` },
+    });
+    if (res.status === 401) {
+      clearToken();
+      showGate('Your session expired — sign in again.');
+      throw new Error('Unauthorized');
+    }
+    if (res.status === 403) {
+      showForbidden(token!);
+      throw new Error('Forbidden');
+    }
+    return res;
+  }
+
+  // ---- Tent-assignment fieldset (checkbox per unit, expandable guest rows) ----
+
+  const GENDER_OPTIONS = ['Male', 'Female', 'NA'];
+  // Display text only - the stored/validated value stays the literal 'NA'
+  // the server's VALID_GENDERS checks against (accommodation-admin.mts);
+  // "NA" read as developer shorthand in a guest register, not a real choice
+  // a guest would recognize themselves in.
+  const GENDER_DISPLAY_LABELS: Record<string, string> = { Male: 'Male', Female: 'Female', NA: 'Unspecified' };
+  const AGE_GROUP_OPTIONS = ['Adult', 'Child'];
+
+  // Debounced so the typeahead doesn't fire a request on every keystroke -
+  // 250ms is short enough to feel live, long enough to skip the request
+  // entirely for someone typing at a normal pace.
+  function debounce<T extends (...args: never[]) => void>(fn: T, ms: number): T {
+    let timer: ReturnType<typeof setTimeout>;
+    return ((...args: never[]) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn(...args), ms);
+    }) as T;
+  }
+
+  async function searchGuestsByName(query: string): Promise<GuestMatch[]> {
+    if (query.trim().length < 2) return [];
+    try {
+      const res = await authedFetch(`/api/accommodation-admin/guests/search?q=${encodeURIComponent(query.trim())}`);
+      if (!res.ok) return [];
+      return ((await res.json()) as { matches: GuestMatch[] }).matches;
+    } catch {
+      return [];
+    }
+  }
+
+  // Exact match, so this can return more than one row now that mobile
+  // number alone isn't unique (see 0011's migration comment) - two
+  // different people sharing a number is exactly the case this powers the
+  // "same person, fix the spelling? or a different guest?" prompt for.
+  async function searchGuestsByMobile(mobileNumber: string): Promise<GuestMatch[]> {
+    try {
+      const res = await authedFetch(`/api/accommodation-admin/guests/search?mobile=${encodeURIComponent(mobileNumber)}`);
+      if (!res.ok) return [];
+      return ((await res.json()) as { matches: GuestMatch[] }).matches;
+    } catch {
+      return [];
+    }
+  }
+
+  async function fetchGuestStays(personId: string): Promise<{ person: GuestMatch; stays: PastStay[] } | null> {
+    try {
+      const res = await authedFetch(`/api/accommodation-admin/guests/${personId}/stays`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  function addGuestRow(container: HTMLElement, guest: Guest = {}, onRemove?: () => void) {
+    const row = document.createElement('div');
+    row.className = 'guest-row';
+    // No blank/placeholder option in either select, on purpose - "Adult/Child"
+    // and "Gender" as literal choices confused testing (see Sharath's
+    // feedback), and a real, always-present default (Adult / NA) is exactly
+    // what "these are mandatory to fill" means in practice: there's no empty
+    // state to accidentally submit, only a default a guest doesn't have to
+    // touch if it doesn't apply.
+    const ageGroup = guest.ageGroup ?? 'Adult';
+    const gender = guest.gender ?? 'NA';
+    row.dataset.personId = guest.personId ?? '';
+    row.innerHTML = `
+      <div class="guest-row-main">
+        <label class="guest-field guest-field--name">
+          <span class="guest-field-label">Name</span>
+          <input type="text" data-field="name" placeholder="Name" required autocomplete="off" value="${guest.name ?? ''}" />
+        </label>
+        <label class="guest-field guest-field--age">
+          <span class="guest-field-label">Age</span>
+          <select data-field="ageGroup">
+            ${AGE_GROUP_OPTIONS.map((a) => `<option value="${a}" ${ageGroup === a ? 'selected' : ''}>${a}</option>`).join('')}
+          </select>
+        </label>
+        <label class="guest-field guest-field--gender">
+          <span class="guest-field-label">Gender</span>
+          <select data-field="gender">
+            ${GENDER_OPTIONS.map((g) => `<option value="${g}" ${gender === g ? 'selected' : ''}>${GENDER_DISPLAY_LABELS[g]}</option>`).join('')}
+          </select>
+        </label>
+        <label class="guest-field guest-field--mobile">
+          <span class="guest-field-label">Mobile</span>
+          <input type="tel" data-field="mobileNumber" placeholder="Optional" value="${guest.mobileNumber ?? ''}" />
+        </label>
+        <button type="button" class="button button--danger remove-guest" aria-label="Remove guest">✕</button>
+      </div>
+      <p class="mobile-number-warning" hidden></p>
+      <div class="mobile-number-conflict" hidden></div>
+      <label class="guest-field">
+        <span class="guest-field-label">Preferences / allergies</span>
+        <input type="text" data-field="preferences" placeholder="Optional" value="${guest.preferences ?? ''}" />
+      </label>
+      <button type="button" class="guest-history-toggle" ${guest.personId ? '' : 'hidden'}>Past stays</button>
+    `;
+    row.querySelector('.remove-guest')!.addEventListener('click', () => {
+      row.remove();
+      onRemove?.();
+    });
+
+    // ---- Typeahead: search by name, pick a match to reuse that guest's
+    // record (fills mobile number/gender/preferences, links personId)
+    // instead of creating a fresh one. Typing without picking a suggestion
+    // just means "new person" - still resolved server-side by mobile
+    // number + name together if a number's entered (see 0011's migration
+    // comment on why mobile number alone isn't a safe auto-match key).
+    const nameInput = row.querySelector('[data-field="name"]') as HTMLInputElement;
+    const mobileInput = row.querySelector('[data-field="mobileNumber"]') as HTMLInputElement;
+    const mobileWarning = row.querySelector('.mobile-number-warning') as HTMLElement;
+    const mobileConflict = row.querySelector('.mobile-number-conflict') as HTMLElement;
+    const genderSelect = row.querySelector('[data-field="gender"]') as HTMLSelectElement;
+    const preferencesInput = row.querySelector('[data-field="preferences"]') as HTMLInputElement;
+    const historyToggle = row.querySelector('.guest-history-toggle') as HTMLButtonElement;
+    const guestMain = row.querySelector('.guest-row-main') as HTMLElement;
+    let dropdown: HTMLElement | null = null;
+
+    function closeDropdown() {
+      dropdown?.remove();
+      dropdown = null;
+    }
+
+    function selectMatch(match: GuestMatch) {
+      row.dataset.personId = match.id;
+      nameInput.value = match.name;
+      mobileInput.value = match.mobileNumber ?? '';
+      genderSelect.value = match.gender ?? 'NA';
+      preferencesInput.value = match.preferences ?? '';
+      historyToggle.hidden = false;
+      closeDropdown();
+    }
+
+    // If this number already belongs to a different-named person, ask
+    // rather than silently either merging or duplicating: "same person,
+    // fix the spelling?" links this row to that existing record (so saving
+    // corrects its name); "different guest" leaves this as a new,
+    // independent person who happens to share the number - Sharath's
+    // explicit call, since auto-picking either behavior silently is wrong
+    // often enough to need a human in the loop (see 0011's migration
+    // comment for the "two people, one shared phone" bug this replaces).
+    async function checkMobileConflict() {
+      mobileConflict.hidden = true;
+      mobileConflict.innerHTML = '';
+      const normalized = normalizeMobileNumber(mobileInput.value);
+      const typedName = nameInput.value.trim();
+      if (!normalized || !typedName) return;
+
+      const matches = await searchGuestsByMobile(normalized);
+      const different = matches.find((m) => m.id !== row.dataset.personId && m.name.trim().toLowerCase() !== typedName.toLowerCase());
+      if (!different) return;
+
+      mobileConflict.hidden = false;
+      mobileConflict.innerHTML = `
+        <p>This number is already saved for <strong>${different.name}</strong>.</p>
+        <div class="mobile-number-conflict-actions">
+          <button type="button" class="button" data-action="same">Same person — fix name to "${typedName}"</button>
+          <button type="button" class="button" data-action="different">Different guest, same number</button>
+        </div>
+      `;
+      mobileConflict.querySelector('[data-action="same"]')!.addEventListener('click', () => {
+        row.dataset.personId = different.id;
+        genderSelect.value = different.gender ?? genderSelect.value;
+        if (!preferencesInput.value.trim()) preferencesInput.value = different.preferences ?? '';
+        historyToggle.hidden = false;
+        mobileConflict.hidden = true;
+      });
+      mobileConflict.querySelector('[data-action="different"]')!.addEventListener('click', () => {
+        if (row.dataset.personId === different.id) row.dataset.personId = '';
+        mobileConflict.hidden = true;
+      });
+    }
+
+    // Same validation the server enforces (normalizeMobileNumber, imported
+    // from the one shared implementation) - this is UX-only, an instant
+    // heads-up before the round-trip to the server that will reject it for
+    // real regardless.
+    mobileInput.addEventListener('blur', () => {
+      const raw = mobileInput.value.trim();
+      const invalid = raw !== '' && !normalizeMobileNumber(raw);
+      mobileWarning.hidden = !invalid;
+      mobileWarning.textContent = invalid ? '⚠ Doesn’t look like a valid mobile number (10 digits for India, or include a country code).' : '';
+      if (!invalid) checkMobileConflict();
+    });
+
+    nameInput.addEventListener('input', () => {
+      row.dataset.personId = ''; // typing again after a pick means "not necessarily that person anymore"
+      historyToggle.hidden = true;
+      closeDropdown();
+      debouncedSearch(nameInput.value);
+    });
+
+    const debouncedSearch = debounce(async (query: string) => {
+      const matches = await searchGuestsByName(query);
+      closeDropdown();
+      if (matches.length === 0) return;
+      dropdown = document.createElement('div');
+      dropdown.className = 'guest-typeahead';
+      for (const m of matches) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = m.mobileNumber ? `${m.name} — ${m.mobileNumber}` : m.name;
+        btn.addEventListener('click', () => selectMatch(m));
+        dropdown.appendChild(btn);
+      }
+      guestMain.appendChild(dropdown);
+    }, 250);
+
+    nameInput.addEventListener('blur', () => {
+      // Let a click on a dropdown button register before it disappears.
+      setTimeout(closeDropdown, 150);
+    });
+
+    historyToggle.addEventListener('click', async () => {
+      const existingPanel = row.querySelector('.guest-history-panel');
+      if (existingPanel) {
+        existingPanel.remove();
+        return;
+      }
+      const personId = row.dataset.personId;
+      if (!personId) return;
+      const result = await fetchGuestStays(personId);
+      const panel = document.createElement('div');
+      panel.className = 'guest-history-panel';
+      if (!result || result.stays.length === 0) {
+        panel.textContent = 'No past stays on record.';
+      } else {
+        const items = result.stays
+          .map((s) => {
+            const tentLabel = UNITS.find((u) => u.id === s.tentId)?.label ?? s.tentId;
+            const what = s.eventTitle ?? s.label ?? typeDisplayLabel(s.type);
+            return `<li>${s.startDate} · ${tentLabel} · ${what}</li>`;
+          })
+          .join('');
+        panel.innerHTML = `Past stays:<ul>${items}</ul>`;
+      }
+      row.appendChild(panel);
+    });
+
+    container.appendChild(row);
+  }
+
+  // A tent's capacity is a hard cap on guests, not just a display hint - the
+  // add-guest button disables itself at capacity, and removing a guest
+  // re-enables it, so Madhavan can't silently overbook a 3-person tent past
+  // 3 the way a plain "add another row" button would allow. The server
+  // (accommodation-admin.mts) enforces the same limit independently, since
+  // this client-side guard is just UX, not the source of truth.
+  function updateAddGuestButtonState(guestsEl: HTMLElement, addGuestBtn: HTMLButtonElement, capacity: number) {
+    const atCapacity = guestsEl.children.length >= capacity;
+    addGuestBtn.disabled = atCapacity;
+    addGuestBtn.textContent = atCapacity ? `Full (${capacity})` : '+ Guest';
+  }
+
+  function buildTentsFieldset() {
+    tentsContainer.innerHTML = '';
+    for (const unit of UNITS) {
+      const option = document.createElement('div');
+      option.className = 'tent-option';
+      option.dataset.tentId = unit.id;
+      option.innerHTML = `
+        <label class="tent-check">
+          <input type="checkbox" class="tent-checkbox" />
+          ${unit.label} (${unit.capacity})
+        </label>
+        <p class="tent-conflict-warning" hidden></p>
+        <div class="guests" hidden></div>
+        <button type="button" class="button add-guest" hidden>+ Guest</button>
+      `;
+      const checkbox = option.querySelector('.tent-checkbox') as HTMLInputElement;
+      const guestsEl = option.querySelector('.guests') as HTMLElement;
+      const addGuestBtn = option.querySelector('.add-guest') as HTMLButtonElement;
+
+      checkbox.addEventListener('change', () => {
+        const wantsGuests = wantsGuestFields();
+        guestsEl.hidden = !checkbox.checked || !wantsGuests;
+        addGuestBtn.hidden = !checkbox.checked || !wantsGuests;
+        if (checkbox.checked && wantsGuests && guestsEl.children.length === 0) {
+          addGuestRow(guestsEl, {}, () => updateAddGuestButtonState(guestsEl, addGuestBtn, unit.capacity));
+          updateAddGuestButtonState(guestsEl, addGuestBtn, unit.capacity);
+        }
+      });
+      addGuestBtn.addEventListener('click', () => {
+        if (guestsEl.children.length >= unit.capacity) return;
+        addGuestRow(guestsEl, {}, () => updateAddGuestButtonState(guestsEl, addGuestBtn, unit.capacity));
+        updateAddGuestButtonState(guestsEl, addGuestBtn, unit.capacity);
+      });
+
+      tentsContainer.appendChild(option);
+    }
+  }
+
+  function wantsGuestFields(): boolean {
+    return typeSelect.value !== 'unit-closure' && typeSelect.value !== 'farm-closure';
+  }
+
+  function collectTents(): TentAssignment[] {
+    const out: TentAssignment[] = [];
+    for (const option of Array.from(tentsContainer.querySelectorAll<HTMLElement>('.tent-option'))) {
+      const checkbox = option.querySelector('.tent-checkbox') as HTMLInputElement;
+      if (!checkbox.checked) continue;
+      const guests: Guest[] = [];
+      for (const row of Array.from(option.querySelectorAll<HTMLElement>('.guest-row'))) {
+        const name = (row.querySelector('[data-field="name"]') as HTMLInputElement).value.trim();
+        const ageGroup = (row.querySelector('[data-field="ageGroup"]') as HTMLSelectElement).value.trim() as Guest['ageGroup'] | '';
+        const gender = (row.querySelector('[data-field="gender"]') as HTMLSelectElement).value.trim();
+        const mobileNumber = (row.querySelector('[data-field="mobileNumber"]') as HTMLInputElement).value.trim();
+        const preferences = (row.querySelector('[data-field="preferences"]') as HTMLInputElement).value.trim();
+        if (!name && !ageGroup && !gender) continue;
+        guests.push({
+          personId: row.dataset.personId || undefined,
+          name: name || undefined,
+          ageGroup: ageGroup || undefined,
+          gender: gender || undefined,
+          mobileNumber: mobileNumber || undefined,
+          preferences: preferences || undefined,
+        });
+      }
+      out.push({ tentId: option.dataset.tentId!, guests });
+    }
+    return out;
+  }
+
+  function setTents(tents: TentAssignment[]) {
+    for (const option of Array.from(tentsContainer.querySelectorAll<HTMLElement>('.tent-option'))) {
+      const tentId = option.dataset.tentId!;
+      const unit = UNITS.find((u) => u.id === tentId)!;
+      const checkbox = option.querySelector('.tent-checkbox') as HTMLInputElement;
+      const guestsEl = option.querySelector('.guests') as HTMLElement;
+      const addGuestBtn = option.querySelector('.add-guest') as HTMLButtonElement;
+      const assignment = tents.find((t) => t.tentId === tentId);
+      checkbox.checked = Boolean(assignment);
+      guestsEl.innerHTML = '';
+      const showGuests = Boolean(assignment) && wantsGuestFields();
+      guestsEl.hidden = !showGuests;
+      addGuestBtn.hidden = !showGuests;
+      const onRemove = () => updateAddGuestButtonState(guestsEl, addGuestBtn, unit.capacity);
+      if (assignment && wantsGuestFields()) {
+        if (assignment.guests.length === 0) addGuestRow(guestsEl, {}, onRemove);
+        else for (const g of assignment.guests) addGuestRow(guestsEl, g, onRemove);
+        updateAddGuestButtonState(guestsEl, addGuestBtn, unit.capacity);
+      }
+    }
+  }
+
+  // Reflects what's already booked for the form's currently-selected dates
+  // directly on the tent checkboxes - disables (and dims) any tent that's
+  // taken on any of the selected nights by a *different* booking, so
+  // Madhavan sees a conflict before submitting rather than only after the
+  // server rejects it (see accommodation-admin.mts's findConflict). Doesn't
+  // disable a tent this same booking (editingId) already occupies.
+  function markOccupiedTents() {
+    const start = startInput.value;
+    const nights = Number(nightsInput.value) || 1;
+    if (!start) return;
+    const selectedNights = new Set(nightsForBooking({ startDate: start, nights } as Booking));
+    for (const option of Array.from(tentsContainer.querySelectorAll<HTMLElement>('.tent-option'))) {
+      const tentId = option.dataset.tentId!;
+      const checkbox = option.querySelector('.tent-checkbox') as HTMLInputElement;
+      const warning = option.querySelector('.tent-conflict-warning') as HTMLElement;
+      const conflict = currentBookings.find(
+        (b) => b.id !== editingId && b.type !== 'farm-closure' && b.tents.some((t) => t.tentId === tentId) && nightsForBooking(b).some((n) => selectedNights.has(n)),
+      );
+      const conflictName = conflict ? (conflict.label ?? conflict.eventTitle ?? conflict.type) : '';
+      const blocked = Boolean(conflict) && !checkbox.checked;
+      option.classList.toggle('tent-option--occupied', blocked);
+      checkbox.disabled = blocked;
+      checkbox.title = conflict ? `Already booked: ${conflictName}` : '';
+      // A tent already checked before the dates changed underneath it isn't
+      // auto-unchecked (that could feel like the form silently discarding a
+      // choice) or disabled (blocking a checked box would trap the admin
+      // into being unable to uncheck it) - but leaving it checked with only
+      // an invisible title attribute as the sole warning meant the tent
+      // list looked exactly the same before and after the dates changed,
+      // which read as "the view isn't refreshing" even though it was.
+      const conflictWhileChecked = Boolean(conflict) && checkbox.checked;
+      option.classList.toggle('tent-option--conflict', conflictWhileChecked);
+      warning.hidden = !conflictWhileChecked;
+      if (conflictWhileChecked) warning.textContent = `⚠ Already booked by ${conflictName} on these dates - uncheck or pick different dates.`;
+    }
+  }
+
+  // Jumps the calendar view to match the form's selected start date (at
+  // whatever granularity - day/week/month - is currently active) so the
+  // grid/booking-list/occupied-tent markers reflect that date, instead of
+  // silently staying on whatever range was last navigated to (see point 4
+  // from Sharath's testing feedback).
+  async function handleDateOrNightsChange() {
+    if (!startInput.value) return;
+    // Not signed in yet - happens when the initial resetForm() call (before
+    // the gate/sign-in check at the bottom of this script) syncs the
+    // default event's dates. Nothing to refresh against the server yet, and
+    // calling loadView() this early would misfire as "session expired".
+    if (!getToken()) return;
+    const { start, end } = visibleRange();
+    if (startInput.value < start || startInput.value > end) {
+      anchorDate = startInput.value;
+      await loadView();
+    } else {
+      markOccupiedTents();
+    }
+  }
+
+  startInput.addEventListener('change', handleDateOrNightsChange);
+  nightsInput.addEventListener('change', handleDateOrNightsChange);
+
+  // Drives #f-start.is-empty (see that rule's own comment for why this
+  // isn't CSS-only) - 'input' fires on every keystroke/picker interaction,
+  // covering manual entry; call sites that set .value programmatically
+  // (resetForm, loadIntoForm, startNewBookingAt, syncDatesFromEvent) call
+  // this directly too, since a script-assigned value doesn't fire 'input'.
+  function syncStartDateEmptyState() {
+    startInput.classList.toggle('is-empty', !startInput.value);
+  }
+
+  startInput.addEventListener('input', syncStartDateEmptyState);
+
+  // ---- Type-conditional field visibility ----
+
+  function populateEventSelect() {
+    eventSelect.innerHTML = EVENTS.map((e) => `<option value="${e.slug}">${e.date} — ${e.title}</option>`).join('');
+  }
+
+  function populateMemberSelect() {
+    memberSelect.innerHTML = MEMBERS.map((name) => `<option value="${name}">${name}</option>`).join('');
+  }
+
+  // A linked public event already has its own dates and duration - EVENTS
+  // (built server-side from the events content collection, see this page's
+  // frontmatter) is filtered to overnight events only, so every option here
+  // has a real nights count to hand over. Called whenever the picked event
+  // changes, and once when switching a *new* booking's type to public-event
+  // (see typeSelect's listener below) - never during loadIntoForm, which
+  // sets startInput/nightsInput from the booking's own saved values instead
+  // and doesn't dispatch 'change', so an existing booking's dates are never
+  // silently overwritten by whatever the dropdown happens to show.
+  function syncDatesFromEvent() {
+    const opt = EVENTS.find((e) => e.slug === eventSelect.value);
+    if (!opt) return;
+    startInput.value = opt.date;
+    syncStartDateEmptyState();
+    nightsInput.value = String(opt.nights);
+    handleDateOrNightsChange();
+  }
+
+  eventSelect.addEventListener('change', syncDatesFromEvent);
+
+  function updateFieldVisibility() {
+    const type = typeSelect.value as BookingType;
+    eventWrap.hidden = type !== 'public-event';
+    // member-stay picks from the member directory instead of free text -
+    // labelWrap and memberWrap are mutually exclusive, never both shown.
+    labelWrap.hidden = type === 'public-event' || type === 'member-stay';
+    // "who's coming" reads as a non-sequitur on a closure, which has no
+    // guests - a closure's label is a reason, not a guest list.
+    labelHint.textContent = type === 'unit-closure' || type === 'farm-closure' ? '(shown to you only, e.g. the reason)' : "(shown to you only, e.g. who's coming)";
+    memberWrap.hidden = type !== 'member-stay';
+    exclusiveWrap.hidden = type !== 'private-event';
+    tentsWrap.hidden = type === 'farm-closure';
+    // Fixed by the linked event, not chosen here - see syncDatesFromEvent.
+    startInput.disabled = type === 'public-event';
+    nightsInput.disabled = type === 'public-event';
+    // Re-apply guest-field visibility on every tent option for the new type.
+    for (const option of Array.from(tentsContainer.querySelectorAll<HTMLElement>('.tent-option'))) {
+      const checkbox = option.querySelector('.tent-checkbox') as HTMLInputElement;
+      const guestsEl = option.querySelector('.guests') as HTMLElement;
+      const addGuestBtn = option.querySelector('.add-guest') as HTMLButtonElement;
+      const show = checkbox.checked && wantsGuestFields();
+      guestsEl.hidden = !show;
+      addGuestBtn.hidden = !show;
+    }
+  }
+
+  typeSelect.addEventListener('change', () => {
+    updateFieldVisibility();
+    // Only for a fresh pick on a *new* booking - loadIntoForm sets
+    // typeSelect.value programmatically (no 'change' event), so an edit in
+    // progress never hits this branch.
+    if (typeSelect.value === 'public-event' && editingId === null) syncDatesFromEvent();
+  });
+
+  // ---- Calendar grid (day/week/month) ----
+
+  function datesInMonth(monthStr: string): string[] {
+    const [y, m] = monthStr.split('-').map(Number);
+    const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    return Array.from({ length: daysInMonth }, (_, i) => `${monthStr}-${String(i + 1).padStart(2, '0')}`);
+  }
+
+  function addDaysToDateStr(dateStr: string, days: number): string {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+  }
+
+  function addMonthsToDateStr(dateStr: string, months: number): string {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const target = new Date(Date.UTC(y, m - 1 + months, 1));
+    const daysInTargetMonth = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+    target.setUTCDate(Math.min(d, daysInTargetMonth));
+    return target.toISOString().slice(0, 10);
+  }
+
+  // Monday-start week, so "this week" always reads as a normal work-week
+  // block rather than splitting a weekend across two rows.
+  function startOfWeek(dateStr: string): string {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0=Sun..6=Sat
+    return addDaysToDateStr(dateStr, -((dow + 6) % 7));
+  }
+
+  function monthKey(dateStr: string): string {
+    return dateStr.slice(0, 7);
+  }
+
+  // The [start, end] (inclusive) date range the current viewMode+anchorDate
+  // covers - the single source of truth every render/fetch/nav function
+  // below derives from, so day/week/month can't drift from each other.
+  function visibleRange(): { start: string; end: string } {
+    if (viewMode === 'day') return { start: anchorDate, end: anchorDate };
+    if (viewMode === 'week') {
+      const start = startOfWeek(anchorDate);
+      return { start, end: addDaysToDateStr(start, 6) };
+    }
+    const dates = datesInMonth(monthKey(anchorDate));
+    return { start: dates[0], end: dates[dates.length - 1] };
+  }
+
+  function visibleDates(): string[] {
+    const { start, end } = visibleRange();
+    const out: string[] = [];
+    for (let cur = start; cur <= end; cur = addDaysToDateStr(cur, 1)) out.push(cur);
+    return out;
+  }
+
+  // A week can straddle two calendar months (e.g. 28 Aug - 3 Sep); day/month
+  // views never touch more than one. The admin API only serves "give me
+  // this month's bookings", so this is however many separate calls a given
+  // view needs to cover its own date range.
+  function monthsTouchingRange(start: string, end: string): string[] {
+    return [...new Set([monthKey(start), monthKey(end)])];
+  }
+
+  function formatDateLabel(dateStr: string, opts: Intl.DateTimeFormatOptions): string {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-IN', { ...opts, timeZone: 'UTC' });
+  }
+
+  function viewRangeLabel(start: string, end: string): string {
+    if (viewMode === 'month') return monthDisplayLabel(monthKey(start));
+    if (viewMode === 'day') return formatDateLabel(start, { day: 'numeric', month: 'long', year: 'numeric' });
+    if (monthKey(start) === monthKey(end)) {
+      const monthName = formatDateLabel(start, { month: 'long' });
+      return `${Number(start.slice(-2))}–${Number(end.slice(-2))} ${monthName} ${start.slice(0, 4)}`;
+    }
+    return `${formatDateLabel(start, { day: 'numeric', month: 'short' })} – ${formatDateLabel(end, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  }
+
+  function bookingListHeadingLabel(): string {
+    if (viewMode === 'day') return 'Bookings today';
+    if (viewMode === 'week') return 'Bookings this week';
+    return 'Bookings this month';
+  }
+
+  function nightsForBooking(b: Booking): string[] {
+    const [y, m, d] = b.startDate.split('-').map(Number);
+    const start = Date.UTC(y, m - 1, d);
+    return Array.from({ length: b.nights }, (_, i) => new Date(start + i * 86_400_000).toISOString().slice(0, 10));
+  }
+
+  function escapeAttr(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  }
+
+  function cellTooltip(b: Booking, tentId: string): string {
+    const title = b.type === 'farm-closure' ? typeDisplayLabel(b.type) : (b.label ?? b.eventTitle ?? typeDisplayLabel(b.type));
+    const dates = `${b.startDate} · ${b.nights} night${b.nights > 1 ? 's' : ''}`;
+    if (b.type === 'farm-closure') return [title, dates, b.note].filter(Boolean).join('\n');
+    const guestNames = b.tents
+      .find((t) => t.tentId === tentId)
+      ?.guests.map((g) => g.name)
+      .filter(Boolean)
+      .join(', ');
+    return [title, dates, guestNames || 'No guests listed'].join('\n');
+  }
+
+  // Mon-first single-letter row (M T W T F S S) - the standard compact
+  // calendar-header convention; Tue/Thu and Sat/Sun sharing a letter is
+  // expected in this style, since column position (not the letter alone)
+  // disambiguates.
+  const WEEKDAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+  function isWeekend(dateStr: string): boolean {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0=Sun..6=Sat
+    return dow === 0 || dow === 6;
+  }
+
+  function weekdayLetter(dateStr: string): string {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+    return WEEKDAY_LETTERS[(dow + 6) % 7]; // re-index so Monday is 0
+  }
+
+  // Day view gets its own wide, full-name-visible list instead of the
+  // table: with only one date column, the table's narrow, nowrap cells
+  // (built for 7-31 columns at once) had room for nothing but a single
+  // status glyph behind a hover-only tooltip - useless on a phone, where
+  // hover doesn't even exist. One flex row per tent, each free to wrap
+  // text and use the full page width, works the same way on a phone as on
+  // a desktop (see Sharath's own ask: "wide... keep mobile in mind").
+  function renderDayView() {
+    const [date] = visibleDates();
+    const today = new Date().toLocaleDateString('en-CA');
+    const nightsByBookingId = new Map(currentBookings.map((b) => [b.id, new Set(nightsForBooking(b))]));
+    const farmClosure = currentBookings.find((b) => b.type === 'farm-closure' && nightsByBookingId.get(b.id)!.has(date));
+
+    if (farmClosure) {
+      // Blocks the whole farm - one row, not one per tent (unlike the
+      // table, which is stuck repeating it down every row since that's
+      // just how a table works).
+      const ariaLabel = cellTooltip(farmClosure, '').replace(/\n/g, ' — ');
+      dayView.innerHTML = `
+        <div class="day-row day-row--closed" data-booking-id="${farmClosure.id}" tabindex="0" role="button" aria-label="${escapeAttr(ariaLabel)}">
+          <div class="day-row-title">${escapeAttr(typeDisplayLabel(farmClosure.type))}</div>
+          ${farmClosure.note ? `<div class="day-row-guests">${escapeAttr(farmClosure.note)}</div>` : ''}
+        </div>`;
+      return;
+    }
+
+    let html = '';
+    for (const unit of UNITS) {
+      const occupying = currentBookings.find((b) => b.type !== 'farm-closure' && b.tents.some((t) => t.tentId === unit.id) && nightsByBookingId.get(b.id)!.has(date));
+      if (occupying) {
+        const title = occupying.label ?? occupying.eventTitle ?? typeDisplayLabel(occupying.type);
+        const guestNames =
+          occupying.tents
+            .find((t) => t.tentId === unit.id)
+            ?.guests.map((g) => g.name)
+            .filter(Boolean)
+            .join(', ') || 'No guests listed';
+        const ariaLabel = cellTooltip(occupying, unit.id).replace(/\n/g, ' — ');
+        html += `
+          <div class="day-row day-row--occupied" data-booking-id="${occupying.id}" tabindex="0" role="button" aria-label="${escapeAttr(ariaLabel)}">
+            <div class="day-row-tent">${unit.label}</div>
+            <div class="day-row-main">
+              <span class="day-row-title">${escapeAttr(title)}</span>
+              <span class="day-row-guests">${escapeAttr(guestNames)}</span>
+            </div>
+          </div>`;
+      } else if (date < today) {
+        html += `
+          <div class="day-row day-row--free-past">
+            <div class="day-row-tent">${unit.label}</div>
+            <div class="day-row-main"><span class="day-row-title">—</span></div>
+          </div>`;
+      } else {
+        const ariaLabel = `${unit.label}, ${formatDateLabel(date, { day: 'numeric', month: 'long' })} — free, tap to book`;
+        html += `
+          <div class="day-row day-row--free" data-tent-id="${unit.id}" data-date="${date}" tabindex="0" role="button" aria-label="${escapeAttr(ariaLabel)}">
+            <div class="day-row-tent">${unit.label}</div>
+            <div class="day-row-main"><span class="day-row-title">Free — tap to book</span></div>
+          </div>`;
+      }
+    }
+    dayView.innerHTML = html;
+  }
+
+  function renderGrid() {
+    gridScroll.hidden = viewMode === 'day';
+    dayView.hidden = viewMode !== 'day';
+    if (viewMode === 'day') {
+      renderDayView();
+      return;
+    }
+    const dates = visibleDates();
+    // A new booking can never start in the past (see resetForm) - a free
+    // cell for a bygone date must not look or act clickable, or tapping it
+    // would silently contradict that rule via startNewBookingAt instead of
+    // being visibly inert.
+    const today = new Date().toLocaleDateString('en-CA');
+    const nightsByBookingId = new Map(currentBookings.map((b) => [b.id, new Set(nightsForBooking(b))]));
+    // Month's 31 narrow columns only have room for the day-of-month number;
+    // day/week have space to also spell out which weekday each column is.
+    const headerLabel = (d: string) =>
+      viewMode === 'month' ? d.slice(-2) : `<div class="day-letter">${weekdayLetter(d)}</div><div class="day-date">${formatDateLabel(d, { day: 'numeric', month: 'short' })}</div>`;
+
+    const headerColClass = (d: string) => [d < today ? 'col--past' : '', isWeekend(d) ? 'col--weekend' : ''].filter(Boolean).join(' ');
+    let headHtml =
+      '<tr><th class="unit-col">Tent</th>' + dates.map((d) => `<th class="${headerColClass(d)}">${headerLabel(d)}</th>`).join('') + '</tr>';
+    let bodyHtml = '';
+    for (const unit of UNITS) {
+      bodyHtml += `<tr><td class="unit-col">${unit.label}</td>`;
+      for (const date of dates) {
+        const weekendClass = isWeekend(date) ? ' col--weekend' : '';
+        const farmClosure = currentBookings.find((b) => b.type === 'farm-closure' && nightsByBookingId.get(b.id)!.has(date));
+        const occupying = currentBookings.find((b) => b.type !== 'farm-closure' && b.tents.some((t) => t.tentId === unit.id) && nightsByBookingId.get(b.id)!.has(date));
+        if (farmClosure) {
+          const label = cellTooltip(farmClosure, unit.id).replace(/\n/g, ' — ');
+          bodyHtml += `<td class="cell--closed${weekendClass}" data-booking-id="${farmClosure.id}" title="${escapeAttr(cellTooltip(farmClosure, unit.id))}" tabindex="0" role="button" aria-label="${escapeAttr(label)}">✕</td>`;
+        } else if (occupying) {
+          const label = cellTooltip(occupying, unit.id).replace(/\n/g, ' — ');
+          bodyHtml += `<td class="cell--occupied${weekendClass}" data-booking-id="${occupying.id}" title="${escapeAttr(cellTooltip(occupying, unit.id))}" tabindex="0" role="button" aria-label="${escapeAttr(label)}">●</td>`;
+        } else if (date < today) {
+          bodyHtml += `<td class="cell--free${weekendClass}">·</td>`;
+        } else {
+          const label = `${unit.label}, ${formatDateLabel(date, { day: 'numeric', month: 'long' })} — free, tap to book`;
+          bodyHtml += `<td class="cell--free${weekendClass}" data-tent-id="${unit.id}" data-date="${date}" tabindex="0" role="button" aria-label="${escapeAttr(label)}">·</td>`;
+        }
+      }
+      bodyHtml += '</tr>';
+    }
+    gridTable.innerHTML = headHtml + bodyHtml;
+  }
+
+  function activateCell(cell: HTMLElement) {
+    if (cell.dataset.bookingId) {
+      const booking = currentBookings.find((b) => b.id === cell.dataset.bookingId);
+      if (booking) loadIntoForm(booking);
+      return;
+    }
+    startNewBookingAt(cell.dataset.tentId!, cell.dataset.date!);
+  }
+
+  // Delegated once on the table itself (which persists across renderGrid's
+  // innerHTML replacements) rather than per-cell, since cells are rebuilt
+  // from scratch on every render. Cells are plain <td>s (not real buttons),
+  // so click alone left keyboard/screen-reader users with no way to act on
+  // one despite the tabindex/role="button"/aria-label added in renderGrid -
+  // the keydown listener below is what actually makes that markup mean
+  // something rather than just describing intent.
+  gridTable.addEventListener('click', (ev) => {
+    const cell = (ev.target as HTMLElement).closest('td[data-booking-id], td.cell--free[data-tent-id]') as HTMLElement | null;
+    if (cell) activateCell(cell);
+  });
+
+  gridTable.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    const cell = (ev.target as HTMLElement).closest('td[data-booking-id], td.cell--free[data-tent-id]') as HTMLElement | null;
+    if (!cell) return;
+    ev.preventDefault(); // stop Space from scrolling the page
+    activateCell(cell);
+  });
+
+  // Same activateCell, same delegation reasoning, just against day view's
+  // own row markup (a div, not a td) instead of the table's cells.
+  dayView.addEventListener('click', (ev) => {
+    const row = (ev.target as HTMLElement).closest('.day-row[data-booking-id], .day-row--free[data-tent-id]') as HTMLElement | null;
+    if (row) activateCell(row);
+  });
+
+  dayView.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    const row = (ev.target as HTMLElement).closest('.day-row[data-booking-id], .day-row--free[data-tent-id]') as HTMLElement | null;
+    if (!row) return;
+    ev.preventDefault();
+    activateCell(row);
+  });
+
+  // Tapping a free grid cell starts a new booking pre-filled with that tent
+  // and date, instead of requiring a scroll to a separate form section and
+  // re-entering both from memory - the "grid and form are disconnected"
+  // fix from this page's design critique (2026-08). Only free cells for
+  // today or later ever reach here (see renderGrid) - a new booking must
+  // never start in the past (the same rule resetForm's own `min` already
+  // enforces for manual date entry); backfilling a historical booking is
+  // only ever done by editing an existing one, never by creating a new one.
+  function startNewBookingAt(tentId: string, date: string) {
+    resetForm();
+    startInput.value = date;
+    syncStartDateEmptyState();
+    handleDateOrNightsChange();
+    const option = tentsContainer.querySelector<HTMLElement>(`.tent-option[data-tent-id="${tentId}"]`);
+    const checkbox = option?.querySelector<HTMLInputElement>('.tent-checkbox');
+    if (checkbox && !checkbox.disabled) {
+      checkbox.checked = true;
+      checkbox.dispatchEvent(new Event('change'));
+    }
+    openBookingModal();
+  }
+
+  function renderBookingList() {
+    bookingListHeading.textContent = bookingListHeadingLabel();
+    const dates = new Set(visibleDates());
+    const relevant = currentBookings.filter((b) => nightsForBooking(b).some((n) => dates.has(n)));
+
+    bookingList.innerHTML = '';
+    if (relevant.length === 0) {
+      bookingList.innerHTML = '<p class="hint">No bookings in this view.</p>';
+      return;
+    }
+    for (const b of [...relevant].sort((a, c) => a.startDate.localeCompare(c.startDate))) {
+      const card = document.createElement('div');
+      card.className = 'booking-card';
+      const title = b.eventTitle ?? b.label ?? typeDisplayLabel(b.type);
+      const tentNames = b.tents.map((t) => UNITS.find((u) => u.id === t.tentId)?.label ?? t.tentId).join(', ') || '(whole farm)';
+      card.innerHTML = `
+        <div>
+          <strong>${title}</strong>
+          <div class="meta">${b.startDate} · ${b.nights} night${b.nights > 1 ? 's' : ''} · ${tentNames}${b.exclusive ? ' · exclusive' : ''}</div>
+        </div>
+        <div class="actions">
+          <button type="button" class="button edit-booking">Edit</button>
+          <button type="button" class="button button--danger cancel-booking">Cancel</button>
+        </div>
+      `;
+      card.querySelector('.edit-booking')!.addEventListener('click', () => loadIntoForm(b));
+      card.querySelector('.cancel-booking')!.addEventListener('click', () => cancelBooking(b));
+      bookingList.appendChild(card);
+    }
+  }
+
+  // Custom overlay instead of a native prompt() - a past booking's cancel
+  // reason needs a real multi-line field, which prompt() can't give, and a
+  // native dialog blocks all further page script until dismissed.
+  function showReasonPrompt(message: string): Promise<string | null> {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'reason-overlay';
+      overlay.innerHTML = `
+        <div class="reason-overlay-card">
+          <p>${message}</p>
+          <textarea rows="3" autofocus></textarea>
+          <div class="reason-overlay-actions">
+            <button type="button" class="button" data-action="cancel">Never mind</button>
+            <button type="button" class="button button--primary" data-action="confirm">Confirm</button>
+          </div>
+        </div>
+      `;
+      const textarea = overlay.querySelector('textarea') as HTMLTextAreaElement;
+      const close = (value: string | null) => {
+        overlay.remove();
+        resolve(value);
+      };
+      overlay.querySelector('[data-action="cancel"]')!.addEventListener('click', () => close(null));
+      overlay.querySelector('[data-action="confirm"]')!.addEventListener('click', () => close(textarea.value.trim() || null));
+      document.body.appendChild(overlay);
+      textarea.focus();
+    });
+  }
+
+  async function cancelBooking(b: Booking) {
+    let reason: string | undefined;
+    if (b.isPast) {
+      const entered = await showReasonPrompt('This stay has already happened. Why is it being cancelled?');
+      if (!entered) return; // either "Never mind" or an empty reason - both abort
+      reason = entered;
+    } else if (!confirm('Cancel this booking?')) {
+      return;
+    }
+    try {
+      const res = await authedFetch('/api/accommodation-admin/bookings/delete', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: b.id, reason }),
+      });
+      if (!res.ok) throw new Error('Request failed');
+      await loadView();
+    } catch (err) {
+      const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
+      if (!handled) alert('Failed to cancel booking — try again.');
+    }
+  }
+
+  // Hides "Public event" from the Type dropdown entirely when there's
+  // nothing upcoming to link it to, rather than leaving a picker that opens
+  // onto an empty select - the option itself has no value once EVENTS is
+  // empty. Editing an *existing* public-event booking still needs the
+  // option available regardless (see loadIntoForm), so this only ever runs
+  // for the new-booking state (resetForm) and once at load.
+  function updatePublicEventOptionVisibility() {
+    const hasUpcomingEvents = EVENTS.length > 0;
+    publicEventTypeOption.hidden = !hasUpcomingEvents;
+    publicEventTypeOption.disabled = !hasUpcomingEvents;
+  }
+
+  function loadIntoForm(b: Booking) {
+    editingId = b.id;
+    formHeading.textContent = 'Edit booking';
+    cancelEditBtn.hidden = false;
+    reasonWrap.hidden = !b.isPast;
+    reasonInput.value = '';
+    // An existing public-event booking must stay viewable/editable even if
+    // its event no longer has any upcoming overnight dates to offer a *new*
+    // booking (see updatePublicEventOptionVisibility) - re-enabling here is
+    // scoped to this one edit; resetForm re-applies the hide-if-empty rule
+    // the moment this edit ends.
+    if (b.type === 'public-event') {
+      publicEventTypeOption.hidden = false;
+      publicEventTypeOption.disabled = false;
+    }
+    typeSelect.value = b.type;
+    updateFieldVisibility();
+    if (b.eventSlug) eventSelect.value = b.eventSlug;
+    labelInput.value = b.label ?? '';
+    if (b.type === 'member-stay' && b.label) memberSelect.value = b.label;
+    exclusiveInput.checked = Boolean(b.exclusive);
+    // No lower bound while editing - a booking that already starts in the
+    // past (e.g. correcting a historical entry) must stay editable without
+    // the browser's date-picker fighting the "no past dates" rule that only
+    // makes sense for *new* bookings (see resetForm below).
+    startInput.removeAttribute('min');
+    startInput.value = b.startDate;
+    syncStartDateEmptyState();
+    nightsInput.value = String(b.nights);
+    noteInput.value = b.note ?? '';
+    setTents(b.tents);
+    markOccupiedTents();
+    openBookingModal();
+  }
+
+  function resetForm() {
+    editingId = null;
+    formHeading.textContent = 'New booking';
+    cancelEditBtn.hidden = true;
+    reasonWrap.hidden = true;
+    reasonInput.value = '';
+    form.reset();
+    syncStartDateEmptyState();
+    typeSelect.value = 'casual-stay';
+    updatePublicEventOptionVisibility();
+    updateFieldVisibility();
+    // A new booking can't start in the past - today, in the visitor's own
+    // local timezone, computed fresh on every reset rather than baked in at
+    // build time (this page is statically prerendered).
+    startInput.min = new Date().toLocaleDateString('en-CA'); // en-CA formats as YYYY-MM-DD
+    // Only public-event's dates come from the linked event - casual-stay
+    // (the default type) leaves Start date/Nights blank for the admin to
+    // fill in themselves, same as every other non-public-event type.
+    setTents([]);
+    markOccupiedTents();
+    formError.hidden = true;
+  }
+
+  cancelEditBtn.addEventListener('click', () => {
+    resetForm();
+    closeBookingModal();
+  });
+
+  newBookingBtn.addEventListener('click', () => {
+    resetForm();
+    openBookingModal();
+  });
+
+  bookingModalBackdrop.addEventListener('click', () => {
+    resetForm();
+    closeBookingModal();
+  });
+
+  bookingModalClose.addEventListener('click', () => {
+    resetForm();
+    closeBookingModal();
+  });
+
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && !bookingModal.hidden) {
+      resetForm();
+      closeBookingModal();
+    }
+  });
+
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    formError.hidden = true;
+
+    if (!reasonWrap.hidden && !reasonInput.value.trim()) {
+      formError.hidden = false;
+      formError.textContent = 'A reason is required to edit a past booking.';
+      return;
+    }
+
+    const type = typeSelect.value as BookingType;
+    const payload: Partial<Booking> & { id?: string; reason?: string } = {
+      id: editingId ?? undefined,
+      type,
+      startDate: startInput.value,
+      nights: Number(nightsInput.value),
+      tents: collectTents(),
+      note: noteInput.value.trim() || undefined,
+      reason: reasonWrap.hidden ? undefined : reasonInput.value.trim(),
+    };
+    if (type === 'public-event') {
+      const opt = EVENTS.find((e) => e.slug === eventSelect.value);
+      payload.eventSlug = opt?.slug;
+      payload.eventTitle = opt?.title;
+    } else if (type === 'member-stay') {
+      payload.label = memberSelect.value || undefined;
+    } else {
+      payload.label = labelInput.value.trim() || undefined;
+    }
+    if (type === 'private-event') payload.exclusive = exclusiveInput.checked;
+
+    const url = editingId ? '/api/accommodation-admin/bookings/update' : '/api/accommodation-admin/bookings';
+    try {
+      const res = await authedFetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        formError.hidden = false;
+        formError.textContent = data.error ?? 'Failed to save — try again.';
+        return;
+      }
+      resetForm();
+      closeBookingModal();
+      await loadView();
+    } catch (err) {
+      const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
+      if (!handled) {
+        formError.hidden = false;
+        formError.textContent = 'Failed to save — try again.';
+      }
+    }
+  });
+
+  // ---- View loading/navigation ----
+
+  function monthDisplayLabel(monthStr: string): string {
+    const [y, m] = monthStr.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  }
+
+  function shiftView(direction: 1 | -1) {
+    if (viewMode === 'day') anchorDate = addDaysToDateStr(anchorDate, direction);
+    else if (viewMode === 'week') anchorDate = addDaysToDateStr(anchorDate, direction * 7);
+    else anchorDate = addMonthsToDateStr(anchorDate, direction);
+    loadView();
+  }
+
+  async function loadView() {
+    gate.hidden = true;
+    forbidden.hidden = true;
+    app.hidden = false;
+    const { start, end } = visibleRange();
+    monthLabel.textContent = viewRangeLabel(start, end);
+    showStatus('Loading…');
+
+    try {
+      const months = monthsTouchingRange(start, end);
+      const responses = await Promise.all(months.map((m) => authedFetch(`/api/accommodation-admin/bookings?month=${m}`)));
+      if (responses.some((res) => !res.ok)) {
+        showStatus('Failed to load bookings — try refreshing.');
+        return;
+      }
+      const bodies = (await Promise.all(responses.map((res) => res.json()))) as { units: Unit[]; bookings: Booking[] }[];
+      // Dedupe by id - a week straddling two months fetches both, and a
+      // booking touching both (e.g. a stay spanning the boundary) would
+      // otherwise appear in each month's response.
+      const byId = new Map(bodies.flatMap((body) => body.bookings).map((b) => [b.id, b]));
+      currentBookings = [...byId.values()];
+      hideStatus();
+      renderGrid();
+      renderBookingList();
+      markOccupiedTents();
+    } catch (err) {
+      const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
+      if (!handled) showStatus('Failed to load bookings — try refreshing.');
+    }
+  }
+
+  document.getElementById('prev-month')!.addEventListener('click', () => shiftView(-1));
+  document.getElementById('next-month')!.addEventListener('click', () => shiftView(1));
+
+  for (const btn of viewToggleButtons) {
+    btn.addEventListener('click', () => {
+      const mode = btn.dataset.view as ViewMode;
+      if (mode === viewMode) return;
+      viewMode = mode;
+      for (const b of viewToggleButtons) b.classList.toggle('view-toggle-btn--active', b === btn);
+      loadView();
+    });
+  }
+
+  function handleCredentialResponse(response: { credential: string }) {
+    sessionStorage.setItem(STORAGE_KEY, response.credential);
+    loadView();
+  }
+
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: 'outline', size: 'large' });
+  }
+
+  useDifferentAccountBtn.addEventListener('click', () => {
+    clearToken();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
+  populateEventSelect();
+  populateMemberSelect();
+  buildTentsFieldset();
+  resetForm();
+
+  // Month view's 31 narrow columns are unusable on a phone - default to
+  // week view there instead (same breakpoint as the booking dialog's own
+  // sheet-vs-centered switch, for one consistent "phone" cutoff across the
+  // page). Checked once at load, not on resize/rotate, since the view
+  // changing itself under someone mid-session would feel like a bug, not a
+  // convenience - Day/Week/Month stays a manual, sticky choice from here.
+  if (window.matchMedia('(max-width: 640px)').matches) {
+    viewMode = 'week';
+    for (const b of viewToggleButtons) b.classList.toggle('view-toggle-btn--active', b.dataset.view === 'week');
+  }
+
+  if (getToken()) {
+    loadView();
+  } else {
+    showGate();
+  }
+</script>
