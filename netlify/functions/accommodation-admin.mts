@@ -16,10 +16,10 @@
 // rather than reusing PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID - Madhavan isn't
 // "core team" in the sense that list means, and shouldn't gain photo/WhatsApp
 // access as a side effect of getting calendar access (or vice versa).
-import { getStore } from '@netlify/blobs';
 import { getAllowedEmails } from '../../scripts/lib/google-drive.mjs';
 import { verifyGoogleIdToken } from '../../scripts/lib/google-id-token.mjs';
-import { ACCOMMODATION_UNITS, nightsForBooking, bookingTouchesMonth } from '../../scripts/lib/accommodation.mjs';
+import { ACCOMMODATION_UNITS } from '../../scripts/lib/accommodation.mjs';
+import { listBookingsForAdmin, createBooking, updateBooking, deleteBooking } from '../../scripts/lib/accommodation-db.mjs';
 
 type BookingType = 'public-event' | 'private-event' | 'casual-stay' | 'member-stay' | 'unit-closure' | 'farm-closure';
 
@@ -111,23 +111,6 @@ async function authenticate(req: Request): Promise<AuthResult> {
   return { ok: true, email };
 }
 
-function store() {
-  return getStore('accommodation-bookings');
-}
-
-// Plain full-scan-then-filter, no secondary date index - list() with no
-// `paginate: true` already returns every blob in one Promise<ListResult>
-// (@netlify/blobs handles pagination internally), so this is a single round
-// trip plus one get() per booking. Same "fine at this scale, revisit if it
-// grows" reasoning event-interest.mts already applies to its own read
-// pattern - this farm will have, at most, low hundreds of bookings a year.
-async function listAllBookings(): Promise<Booking[]> {
-  const s = store();
-  const { blobs } = await s.list();
-  const bookings = await Promise.all(blobs.map(({ key }) => s.get(key, { type: 'json' }) as Promise<Booking | null>));
-  return bookings.filter((b): b is Booking => b !== null);
-}
-
 const VALID_TYPES: BookingType[] = ['public-event', 'private-event', 'casual-stay', 'member-stay', 'unit-closure', 'farm-closure'];
 const UNITS_BY_ID = new Map(ACCOMMODATION_UNITS.map((u) => [u.id, u]));
 const VALID_AGE_GROUPS = ['Adult', 'Child'];
@@ -164,31 +147,11 @@ function validateBookingInput(input: Partial<Booking>): string | null {
   return null;
 }
 
-// "A tent isn't shared across two different parties" (see the design
-// conversation) - reject a create/update whose tent(s) overlap, on any
-// shared night, with another booking's tent(s). farm-closure bookings have
-// no tents, so they never trip this - farm-wide closures are enforced
-// separately by the public availability calculation, not by this guard.
-function findConflict(candidate: Booking, existing: Booking[]): Booking | null {
-  if (candidate.tents.length === 0) return null;
-  const candidateNights = new Set(nightsForBooking(candidate));
-  const candidateTentIds = new Set(candidate.tents.map((t) => t.tentId));
-  for (const other of existing) {
-    if (other.id === candidate.id || other.tents.length === 0) continue;
-    const sharesTent = other.tents.some((t) => candidateTentIds.has(t.tentId));
-    if (!sharesTent) continue;
-    const sharesNight = nightsForBooking(other).some((n) => candidateNights.has(n));
-    if (sharesNight) return other;
-  }
-  return null;
-}
-
 async function handleList(url: URL): Promise<Response> {
   const month = url.searchParams.get('month');
   if (!month || !/^\d{4}-\d{2}$/.test(month)) return jsonResponse({ error: 'month is required, as YYYY-MM' }, 400);
 
-  const all = await listAllBookings();
-  const bookings = all.filter((b) => bookingTouchesMonth(b, month));
+  const bookings = await listBookingsForAdmin({ month });
   return jsonResponse({ units: ACCOMMODATION_UNITS, bookings });
 }
 
@@ -203,32 +166,27 @@ async function handleCreate(req: Request, email: string): Promise<Response> {
   const validationError = validateBookingInput(payload);
   if (validationError) return jsonResponse({ error: validationError }, 400);
 
-  const now = new Date().toISOString();
-  const booking: Booking = {
-    id: crypto.randomUUID(),
-    type: payload.type!,
-    eventSlug: payload.eventSlug,
-    eventTitle: payload.eventTitle,
-    label: payload.label,
-    exclusive: payload.type === 'private-event' ? Boolean(payload.exclusive) : undefined,
-    startDate: payload.startDate!,
-    nights: payload.nights!,
-    tents: payload.tents ?? [],
-    note: payload.note,
-    createdBy: email,
-    createdAt: now,
-    updatedAt: now,
-  };
-
   try {
-    const existing = await listAllBookings();
-    const conflict = findConflict(booking, existing);
-    if (conflict) {
-      return jsonResponse({ error: `Conflicts with an existing booking (${conflict.label ?? conflict.eventTitle ?? conflict.type}) on a shared tent/night` }, 409);
-    }
-    await store().setJSON(booking.id, booking);
+    const booking = await createBooking({
+      type: payload.type!,
+      eventSlug: payload.eventSlug,
+      eventTitle: payload.eventTitle,
+      label: payload.label,
+      exclusive: payload.type === 'private-event' ? Boolean(payload.exclusive) : undefined,
+      startDate: payload.startDate!,
+      nights: payload.nights!,
+      tents: payload.tents ?? [],
+      note: payload.note,
+      createdBy: email,
+    });
     return jsonResponse({ booking });
   } catch (err) {
+    // 409 here means accommodation_create_booking's EXCLUDE-constraint-backed
+    // conflict check rejected an overlapping tent/night - the error message
+    // already names the conflicting booking (see the migration's rpc
+    // functions), so it's passed straight through.
+    const status = (err as { status?: number }).status;
+    if (status === 409) return jsonResponse({ error: (err as Error).message }, 409);
     console.error('Failed to create booking', err);
     return jsonResponse({ error: 'Failed to save the booking' }, 500);
   }
@@ -247,12 +205,8 @@ async function handleUpdate(req: Request): Promise<Response> {
   if (validationError) return jsonResponse({ error: validationError }, 400);
 
   try {
-    const s = store();
-    const existingBooking = (await s.get(payload.id, { type: 'json' })) as Booking | null;
-    if (!existingBooking) return jsonResponse({ error: 'Booking not found' }, 404);
-
-    const updated: Booking = {
-      ...existingBooking,
+    const booking = await updateBooking({
+      id: payload.id,
       type: payload.type!,
       eventSlug: payload.eventSlug,
       eventTitle: payload.eventTitle,
@@ -262,18 +216,15 @@ async function handleUpdate(req: Request): Promise<Response> {
       nights: payload.nights!,
       tents: payload.tents ?? [],
       note: payload.note,
-      updatedAt: new Date().toISOString(),
-    };
-
-    const all = await listAllBookings();
-    const conflict = findConflict(updated, all);
-    if (conflict) {
-      return jsonResponse({ error: `Conflicts with an existing booking (${conflict.label ?? conflict.eventTitle ?? conflict.type}) on a shared tent/night` }, 409);
-    }
-
-    await s.setJSON(updated.id, updated);
-    return jsonResponse({ booking: updated });
+    });
+    return jsonResponse({ booking });
   } catch (err) {
+    // 404: accommodation_update_booking found no row for this id. 409: its
+    // conflict check rejected an overlapping tent/night (message already
+    // names the conflicting booking - see the migration's rpc functions).
+    const status = (err as { status?: number }).status;
+    if (status === 404) return jsonResponse({ error: 'Booking not found' }, 404);
+    if (status === 409) return jsonResponse({ error: (err as Error).message }, 409);
     console.error('Failed to update booking', err);
     return jsonResponse({ error: 'Failed to save the booking' }, 500);
   }
@@ -290,7 +241,7 @@ async function handleDelete(req: Request): Promise<Response> {
   if (!payload.id) return jsonResponse({ error: 'id is required' }, 400);
 
   try {
-    await store().delete(payload.id);
+    await deleteBooking(payload.id);
     return jsonResponse({ ok: true });
   } catch (err) {
     console.error('Failed to delete booking', err);

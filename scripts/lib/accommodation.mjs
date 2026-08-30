@@ -64,12 +64,3 @@ export function datesInMonth(monthStr) {
   }
   return out;
 }
-
-// Whether any night of `booking` falls within `monthStr` ("YYYY-MM") - used
-// to decide which stored bookings are relevant to a given month view without
-// needing a secondary date index (see accommodation-admin.mts/
-// accommodation-availability.mts's own comments on why a plain store.list()
-// scan is fine at this farm's scale).
-export function bookingTouchesMonth(booking, monthStr) {
-  return nightsForBooking(booking).some((d) => d.startsWith(monthStr));
-}

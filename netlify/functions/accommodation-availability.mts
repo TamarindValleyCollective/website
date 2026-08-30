@@ -3,10 +3,12 @@
 // (src/components/views/AvailabilityView.astro) with hotel-booking-site-style
 // aggregate availability: rooms/person-capacity free per day, never
 // per-tent detail or guest data (see accommodation-admin.mts, which is the
-// only place that data is readable). Reads the same
-// `accommodation-bookings` Blobs store the admin Function writes to.
-import { getStore } from '@netlify/blobs';
-import { ACCOMMODATION_UNITS, TOTAL_ROOMS, TOTAL_CAPACITY, nightsForBooking, datesInMonth, bookingTouchesMonth } from '../../scripts/lib/accommodation.mjs';
+// only place that data is readable). Reads the same accommodation_* Supabase
+// tables the admin Function writes to, via accommodation-db.mjs's
+// listBookingsForAvailability - which never even embeds the guests table,
+// so a routing mistake here can't leak guest PII to a visitor.
+import { ACCOMMODATION_UNITS, TOTAL_ROOMS, TOTAL_CAPACITY, nightsForBooking, datesInMonth } from '../../scripts/lib/accommodation.mjs';
+import { listBookingsForAvailability } from '../../scripts/lib/accommodation-db.mjs';
 
 type BookingType = 'public-event' | 'private-event' | 'casual-stay' | 'member-stay' | 'unit-closure' | 'farm-closure';
 
@@ -60,15 +62,6 @@ function labelFor(b: Booking): string | null {
   }
 }
 
-// See accommodation-admin.mts's identical helper for why a single
-// non-paginated list() call is sufficient at this farm's scale.
-async function listAllBookings(): Promise<Booking[]> {
-  const s = getStore('accommodation-bookings');
-  const { blobs } = await s.list();
-  const bookings = await Promise.all(blobs.map(({ key }) => s.get(key, { type: 'json' }) as Promise<Booking | null>));
-  return bookings.filter((b): b is Booking => b !== null);
-}
-
 function computeDay(date: string, bookingsTouchingMonth: Booking[]): DayAvailability {
   const todaysBookings = bookingsTouchingMonth.filter((b) => nightsForBooking(b).includes(date));
 
@@ -95,8 +88,7 @@ async function handleAvailability(url: URL): Promise<Response> {
   if (!month || !/^\d{4}-\d{2}$/.test(month)) return jsonResponse({ error: 'month is required, as YYYY-MM' }, 400);
 
   try {
-    const all = await listAllBookings();
-    const relevant = all.filter((b) => bookingTouchesMonth(b, month));
+    const relevant = await listBookingsForAvailability({ month });
     const days = datesInMonth(month).map((date) => computeDay(date, relevant));
     return jsonResponse({ month, totalRooms: TOTAL_ROOMS, totalCapacity: TOTAL_CAPACITY, days });
   } catch (err) {
