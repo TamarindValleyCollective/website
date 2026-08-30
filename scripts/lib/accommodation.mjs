@@ -17,8 +17,8 @@
 // adds/removes a tent - a deploy-worthy change, same as everything else that
 // lives in git on this site.
 export const ACCOMMODATION_UNITS = [
-  { id: 'malabar-1', label: 'Malabar Tent 1', capacity: 3, kind: 'fixed' },
-  { id: 'malabar-2', label: 'Malabar Tent 2', capacity: 3, kind: 'fixed' },
+  { id: 'malabar-1', label: 'Malabar Hut 1', capacity: 3, kind: 'fixed' },
+  { id: 'malabar-2', label: 'Malabar Hut 2', capacity: 3, kind: 'fixed' },
   { id: 'banyan', label: 'Banyan Hut', capacity: 3, kind: 'fixed' },
   { id: 'portable-1', label: 'Portable Tent 1', capacity: 3, kind: 'removable' },
   { id: 'portable-2', label: 'Portable Tent 2', capacity: 2, kind: 'removable' },
@@ -63,4 +63,45 @@ export function datesInMonth(monthStr) {
     out.push(`${monthStr}-${String(d).padStart(2, '0')}`);
   }
   return out;
+}
+
+// Normalizes a guest's mobile number to E.164 (+<country code><digits>),
+// defaulting to +91 (India) when no country code is given - this farm's
+// guests are overwhelmingly Indian, and a bare 10-digit number typed into
+// this field is always meant as a local Indian mobile number, not a
+// landline (the whole point of collecting it is reaching a guest on
+// WhatsApp/SMS). Returns null for empty input (field is optional) or for
+// anything that doesn't parse as a plausible mobile number, so callers can
+// tell "not provided" apart from "provided but invalid" and reject the
+// latter rather than silently dropping it.
+//
+// Imported by both the client script (accommodation-calendar.astro, for
+// instant feedback) and the server (accommodation-admin.mts, the actual
+// gate) - one implementation, so "what counts as a valid mobile number"
+// can't drift between the two.
+export function normalizeMobileNumber(raw) {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const hasCountryCode = trimmed.startsWith('+');
+  const digits = trimmed.replace(/\D/g, '');
+  if (!digits) return null;
+
+  if (hasCountryCode) {
+    // Generic E.164 plausibility check (8-15 digits total after the '+').
+    // Real per-country mobile-vs-landline validation needs a library like
+    // libphonenumber - disproportionate here given this farm's guest mix,
+    // so a country code other than +91 just gets this looser check rather
+    // than a false sense of per-country strictness.
+    if (digits.length < 8 || digits.length > 15) return null;
+    return `+${digits}`;
+  }
+
+  // No country code given - assume India. Indian mobile numbers are
+  // exactly 10 digits and start with 6-9 under TRAI's numbering plan;
+  // landline numbers and any other length are rejected outright rather
+  // than accepted as if they were a mobile number.
+  if (!/^[6-9]\d{9}$/.test(digits)) return null;
+  return `+91${digits}`;
 }

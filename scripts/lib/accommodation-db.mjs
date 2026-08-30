@@ -25,10 +25,11 @@
 // Guest identity (accommodation_people) and the full create/update/delete
 // audit trail (accommodation_booking_audit_log) are both enforced inside
 // the same rpc/ functions - accommodation_replace_tents resolves each guest
-// to a person row (by explicit personId, else by phone, else a new person),
-// and a set of table triggers on accommodation_bookings write the audit row
-// no matter which of these functions the write came through. Nothing here
-// needs to know about either mechanism directly.
+// to a person row (by explicit personId, else by mobile number + name
+// together, else a new person), and a set of table triggers on
+// accommodation_bookings write the audit row no matter which of these
+// functions the write came through. Nothing here needs to know about
+// either mechanism directly.
 import { restHeaders } from './supabase.mjs';
 
 function supabaseUrl() {
@@ -94,7 +95,7 @@ function isPastBooking(startDate, nights) {
 
 const ADMIN_SELECT =
   'select=id,type,event_slug,event_title,label,exclusive,start_date,nights,note,created_by,created_at,updated_by,updated_at,' +
-  'accommodation_tent_assignments(tent_id,accommodation_guests(seq,age_group,person_id,accommodation_people(name,phone,gender,preferences)))';
+  'accommodation_tent_assignments(tent_id,accommodation_guests(seq,age_group,person_id,accommodation_people(name,mobile_number,gender,preferences)))';
 
 // Never embeds accommodation_guests/accommodation_people - this is the only
 // place that distinction is enforced, so a routing mistake elsewhere can't
@@ -123,7 +124,7 @@ function rowToBooking(row, { includeGuests }) {
           .map((g) => ({
             personId: g.person_id,
             name: g.accommodation_people.name,
-            phone: g.accommodation_people.phone ?? undefined,
+            mobileNumber: g.accommodation_people.mobile_number ?? undefined,
             gender: g.accommodation_people.gender ?? undefined,
             preferences: g.accommodation_people.preferences ?? undefined,
             ageGroup: g.age_group,
@@ -198,20 +199,23 @@ export async function deleteBooking(id, { deletedBy, reason }) {
   await callRpc('accommodation_delete_booking', { p_id: id, p_deleted_by: deletedBy, p_reason: reason || null });
 }
 
-const PERSON_FIELDS = 'id,name,phone,gender,preferences';
+const PERSON_FIELDS = 'id,name,mobile_number,gender,preferences';
 
-// Phone takes priority when both are given - it's the reliable identity
-// signal (see accommodation_resolve_person's own matching order). Name
-// search deliberately returns candidates for a human to pick from rather
-// than resolving to one - see this file's header comment and the "never
-// silently merge on name" decision behind accommodation_resolve_person.
-export async function searchGuests({ query, phone }) {
-  const path = phone
-    ? `/accommodation_people?phone=eq.${encodeURIComponent(phone)}&select=${PERSON_FIELDS}`
+// Mobile number takes priority when both are given - it's the reliable
+// identity signal (see accommodation_resolve_person's own matching order,
+// which additionally requires name to agree too - see 0011's migration
+// comment on why mobile_number alone isn't a safe auto-match key, e.g. a
+// couple sharing one number). Name search deliberately returns candidates
+// for a human to pick from rather than resolving to one - see this file's
+// header comment and the "never silently merge on name" decision behind
+// accommodation_resolve_person.
+export async function searchGuests({ query, mobileNumber }) {
+  const path = mobileNumber
+    ? `/accommodation_people?mobile_number=eq.${encodeURIComponent(mobileNumber)}&select=${PERSON_FIELDS}`
     : `/accommodation_people?name=ilike.*${encodeURIComponent(query ?? '')}*&select=${PERSON_FIELDS}&order=name.asc&limit=10`;
   const res = await restFetch(path);
   const rows = await res.json();
-  return rows.map((p) => ({ id: p.id, name: p.name, phone: p.phone ?? undefined, gender: p.gender ?? undefined, preferences: p.preferences ?? undefined }));
+  return rows.map((p) => ({ id: p.id, name: p.name, mobileNumber: p.mobile_number ?? undefined, gender: p.gender ?? undefined, preferences: p.preferences ?? undefined }));
 }
 
 export async function listStaysForPerson(personId) {
@@ -242,7 +246,7 @@ export async function listStaysForPerson(personId) {
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
 
   return {
-    person: { id: person.id, name: person.name, phone: person.phone ?? undefined, gender: person.gender ?? undefined, preferences: person.preferences ?? undefined },
+    person: { id: person.id, name: person.name, mobileNumber: person.mobile_number ?? undefined, gender: person.gender ?? undefined, preferences: person.preferences ?? undefined },
     stays,
   };
 }

@@ -18,7 +18,7 @@
 // access as a side effect of getting calendar access (or vice versa).
 import { getAllowedEmails } from '../../scripts/lib/google-drive.mjs';
 import { verifyGoogleIdToken } from '../../scripts/lib/google-id-token.mjs';
-import { ACCOMMODATION_UNITS } from '../../scripts/lib/accommodation.mjs';
+import { ACCOMMODATION_UNITS, normalizeMobileNumber } from '../../scripts/lib/accommodation.mjs';
 import { listBookingsForAdmin, createBooking, updateBooking, deleteBooking, searchGuests, listStaysForPerson } from '../../scripts/lib/accommodation-db.mjs';
 
 type BookingType = 'public-event' | 'private-event' | 'casual-stay' | 'member-stay' | 'unit-closure' | 'farm-closure';
@@ -26,7 +26,7 @@ type BookingType = 'public-event' | 'private-event' | 'casual-stay' | 'member-st
 interface Guest {
   personId?: string;
   name?: string;
-  phone?: string;
+  mobileNumber?: string;
   ageGroup?: 'Adult' | 'Child';
   gender?: string;
   preferences?: string;
@@ -150,6 +150,18 @@ function validateBookingInput(input: Partial<Booking>): string | null {
       if (g.personId != null && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(g.personId)) {
         return 'personId must be a UUID';
       }
+      // Mobile number is optional, but if one was typed it has to actually
+      // look like one - normalizes in place (bare 10-digit numbers become
+      // +91-prefixed) so accommodation-db.mjs/the RPC layer only ever see
+      // an already-normalized value, never raw client input. See
+      // normalizeMobileNumber's own comment for the validation rules.
+      if (g.mobileNumber != null && g.mobileNumber.trim() !== '') {
+        const normalized = normalizeMobileNumber(g.mobileNumber);
+        if (!normalized) return `"${g.mobileNumber}" doesn't look like a valid mobile number - use a 10-digit Indian number or include a country code (e.g. +1...)`;
+        g.mobileNumber = normalized;
+      } else {
+        g.mobileNumber = undefined;
+      }
     }
   }
   if (input.type === 'public-event' && !input.eventSlug) return 'eventSlug is required for type "public-event"';
@@ -266,11 +278,11 @@ async function handleDelete(req: Request, email: string): Promise<Response> {
 }
 
 async function handleGuestSearch(url: URL): Promise<Response> {
-  const phone = url.searchParams.get('phone');
+  const mobile = url.searchParams.get('mobile');
   const query = url.searchParams.get('q');
-  if (!phone && !query?.trim()) return jsonResponse({ error: 'q or phone is required' }, 400);
+  if (!mobile && !query?.trim()) return jsonResponse({ error: 'q or mobile is required' }, 400);
 
-  const matches = await searchGuests({ query: query?.trim(), phone: phone ?? undefined });
+  const matches = await searchGuests({ query: query?.trim(), mobileNumber: mobile ?? undefined });
   return jsonResponse({ matches });
 }
 

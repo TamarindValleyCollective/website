@@ -79,76 +79,87 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         <table id="grid" class="grid-table"></table>
       </div>
 
-      <h2 id="booking-list-heading">Bookings this month</h2>
+      <div class="booking-list-header">
+        <h2 id="booking-list-heading">Bookings this month</h2>
+        <button type="button" id="new-booking-btn" class="button button--primary">+ New booking</button>
+      </div>
       <div id="booking-list" class="booking-list"></div>
 
-      <h2 id="form-heading">New booking</h2>
-      <form id="booking-form" class="card form">
-        <label>
-          Type
-          <select id="f-type" required>
-            <option value="public-event">Public event (linked)</option>
-            <option value="private-event">Private event / retreat</option>
-            <option value="casual-stay">Casual stay (via Linger)</option>
-            <option value="member-stay">Member stay (booked direct)</option>
-            <option value="unit-closure">Tent closure (repair, etc.)</option>
-            <option value="farm-closure">Farm-wide closure (leave, repairs)</option>
-          </select>
-        </label>
+      <div id="booking-modal" class="booking-modal" hidden>
+        <div id="booking-modal-backdrop" class="booking-modal-backdrop"></div>
+        <div class="card booking-modal-panel" role="dialog" aria-modal="true" aria-labelledby="form-heading">
+          <div class="booking-modal-panel-head">
+            <h2 id="form-heading">New booking</h2>
+            <button type="button" id="booking-modal-close" class="button" aria-label="Close">✕</button>
+          </div>
+          <form id="booking-form" class="form">
+            <label>
+              Type
+              <select id="f-type" required>
+                <option value="casual-stay">Casual stay (via Linger)</option>
+                <option value="public-event">Public event (linked)</option>
+                <option value="private-event">Private event (retreat)</option>
+                <option value="member-stay">Member stay (booked direct)</option>
+                <option value="unit-closure">Tent closure (repair, etc.)</option>
+                <option value="farm-closure">Farm-wide closure (leave, repairs)</option>
+              </select>
+            </label>
 
-        <label id="f-event-wrap">
-          Linked public event
-          <select id="f-event"></select>
-        </label>
+            <label id="f-event-wrap">
+              Linked public event
+              <select id="f-event"></select>
+            </label>
 
-        <label id="f-label-wrap">
-          Label <span class="hint-inline">(shown to you only, e.g. who's coming)</span>
-          <input type="text" id="f-label" />
-        </label>
+            <label id="f-label-wrap">
+              Label <span id="f-label-hint" class="hint-inline">(shown to you only, e.g. who's coming)</span>
+              <input type="text" id="f-label" />
+            </label>
 
-        <label id="f-member-wrap" hidden>
-          Member
-          <select id="f-member"></select>
-        </label>
+            <label id="f-member-wrap" hidden>
+              Member
+              <select id="f-member"></select>
+            </label>
 
-        <label id="f-exclusive-wrap" class="checkbox-label">
-          <input type="checkbox" id="f-exclusive" />
-          Exclusive use — blocks the whole farm publicly, even if not every tent is assigned
-        </label>
+            <label id="f-exclusive-wrap" class="checkbox-label">
+              <input type="checkbox" id="f-exclusive" />
+              Exclusive use — blocks the whole farm publicly, even if not every tent is assigned
+            </label>
 
-        <div class="dates-row">
-          <label>
-            Start date
-            <input type="date" id="f-start" required />
-          </label>
-          <label>
-            Nights
-            <input type="number" id="f-nights" min="1" value="1" required />
-          </label>
+            <div class="dates-row">
+              <label>
+                Start date
+                <input type="date" id="f-start" required />
+              </label>
+              <label>
+                Nights
+                <input type="number" id="f-nights" min="1" value="1" required />
+              </label>
+            </div>
+
+            <fieldset id="f-tents-wrap">
+              <legend>Tents</legend>
+              <div id="f-tents"></div>
+            </fieldset>
+
+            <label>
+              Note <span class="hint-inline">(staff-only, never shown publicly)</span>
+              <textarea id="f-note" rows="2"></textarea>
+            </label>
+
+            <label id="f-reason-wrap" hidden>
+              Reason for this change <span class="hint-inline">(required — this stay has already happened)</span>
+              <textarea id="f-reason" rows="2"></textarea>
+            </label>
+
+            <p id="form-error" class="error" hidden></p>
+
+            <div class="form-actions">
+              <button type="submit" id="f-submit" class="button button--primary">Save booking</button>
+              <button type="button" id="f-cancel-edit" class="button" hidden>Cancel edit</button>
+            </div>
+          </form>
         </div>
-
-        <fieldset id="f-tents-wrap">
-          <legend>Tents</legend>
-          <div id="f-tents"></div>
-        </fieldset>
-
-        <label>
-          Note <span class="hint-inline">(staff-only, never shown publicly)</span>
-          <textarea id="f-note" rows="2"></textarea>
-        </label>
-
-        <label id="f-reason-wrap" hidden>
-          Reason for this change <span class="hint-inline">(required — this stay has already happened)</span>
-          <textarea id="f-reason" rows="2"></textarea>
-        </label>
-
-        <p id="form-error" class="error" hidden></p>
-
-        <div class="form-actions">
-          <button type="submit" id="f-submit" class="button button--primary">Save booking</button>
-          <button type="button" id="f-cancel-edit" class="button" hidden>Cancel edit</button>
-        </div>
-      </form>
+      </div>
     </div>
   </section>
 </BaseLayout>
@@ -219,6 +230,13 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     align-items: center;
     gap: 16px;
     margin-bottom: 16px;
+    /* Without this, the toggle group (pushed right by margin-left:auto)
+       simply ran off the edge of a phone-width viewport instead of
+       dropping to its own line - confirmed via a real 390px-wide check
+       during this page's design critique (2026-08): the row's own content
+       (588px) exceeded the viewport (485px) and the Day/Week/Month buttons
+       were hidden off-screen with no way to reach them. */
+    flex-wrap: wrap;
   }
 
   .month-nav h2 {
@@ -244,14 +262,95 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     color: #fff;
   }
 
+  /* Below this width, Prev/label/Next alone are already tight - let the
+     label shrink instead of holding a fixed 180px, and force the view
+     toggle onto its own centered row rather than letting the wrap point
+     land wherever it happens to (which read as broken, not tidy). */
+  @media (max-width: 480px) {
+    .month-nav h2 {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
+    .view-toggle {
+      flex-basis: 100%;
+      justify-content: center;
+      margin-left: 0;
+    }
+  }
+
   .grid-scroll {
     overflow-x: auto;
     margin-bottom: 32px;
   }
 
-  .form {
+  .booking-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .booking-list-header h2 {
+    margin: 0;
+  }
+
+  /* A dialog the grid opens directly, instead of a form living in its own
+     scrolled-past section below the booking list - closes the "grid and
+     form are disconnected" gap found in this page's design critique
+     (2026-08). Bottom-sheet on narrow screens (align-items: flex-end) since
+     that's the native mobile pattern for "an action anchored to what you
+     just tapped"; a centered dialog once there's room for one (see the
+     min-width media query below). */
+  .booking-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  .booking-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  .booking-modal-panel {
+    position: relative;
+    width: 100%;
     max-width: 560px;
+    max-height: 92vh;
+    overflow-y: auto;
     padding: 20px 24px;
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  .booking-modal-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .booking-modal-panel-head h2 {
+    margin: 0;
+  }
+
+  @media (min-width: 640px) {
+    .booking-modal {
+      align-items: center;
+    }
+
+    .booking-modal-panel {
+      border-radius: var(--radius);
+    }
+  }
+
+  .form {
     display: flex;
     flex-direction: column;
     gap: 14px;
@@ -368,8 +467,18 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   .cell--occupied,
-  .cell--closed {
+  .cell--closed,
+  .cell--free {
     cursor: pointer;
+  }
+
+  /* A free cell now opens a pre-filled new-booking dialog (see
+     startNewBookingAt) - this outline is the only hint that tapping it does
+     something, so it needs to read as clickable the same way the occupied/
+     closed cells already do via their tint. */
+  .cell--free:hover {
+    outline: 2px solid var(--tvc-green);
+    outline-offset: -2px;
   }
 
   .booking-list {
@@ -445,7 +554,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     font-family: inherit;
     /* Flex items default to min-width:auto, which floors their shrink at
        their content/intrinsic width - with 5 items now on this row (name,
-       age, gender, phone, remove), that floor added up to wider than the
+       age, gender, mobile number, remove), that floor added up to wider than the
        .form card itself, pushing the row out past the card's border
        instead of wrapping or shrinking. min-width:0 lets them actually
        shrink; flex-wrap on the row (above) is the fallback once they've
@@ -457,13 +566,49 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     flex: 2 1 110px;
   }
 
-  .guest-row input[data-field='phone'] {
+  .guest-row input[data-field='mobileNumber'] {
     flex: 1 1 90px;
   }
 
-  .guest-row select[data-field='ageGroup'],
+  .mobile-number-warning {
+    margin: 0;
+    font-size: 0.76rem;
+    color: var(--tvc-orange-text);
+    font-weight: 600;
+  }
+
+  .mobile-number-conflict {
+    padding: 8px 10px;
+    background: var(--tvc-orange-tint);
+    border-radius: 6px;
+    font-size: 0.8rem;
+  }
+
+  .mobile-number-conflict p {
+    margin: 0 0 6px;
+  }
+
+  .mobile-number-conflict-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .mobile-number-conflict-actions .button {
+    font-size: 0.76rem;
+    padding: 4px 10px;
+  }
+
+  .guest-row select[data-field='ageGroup'] {
+    flex: 1 1 80px;
+  }
+
+  /* Wider than ageGroup - "Prefer not to say" (the readable label for the
+     stored value "NA", see GENDER_DISPLAY_LABELS) doesn't fit the narrower
+     basis without clipping, which is exactly the truncated-text bug the
+     min-width:0 shrink rule above already risks for a long enough label. */
   .guest-row select[data-field='gender'] {
-    flex: 1 1 64px;
+    flex: 2 1 130px;
   }
 
   .guest-row input[data-field='preferences'] {
@@ -472,7 +617,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   .guest-typeahead {
     position: absolute;
-    top: 100%;
+    /* A few px of gap (instead of sitting flush at 100%) plus an opaque
+       background is what stops this from reading as merged into the
+       Preferences field directly beneath it, which sits at that same
+       vertical position in normal flow. */
+    top: calc(100% + 4px);
     left: 0;
     z-index: 5;
     background: #fff;
@@ -598,22 +747,49 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     font-weight: 600;
   }
 
-  /* global.css's site-wide `.button:hover` (white text, meant for the
-     marketing CTA button) ties in specificity with this page's own
-     `.button` and can win the cascade here too, making these small outline
-     buttons' text invisible on hover/focus - hit on every button this page
-     builds dynamically (guest-row remove/add, booking-card edit/cancel,
-     reason-overlay actions), not just the ones Astro renders statically, so
-     this belongs in this is:global block rather than the scoped one above
-     (see this file's own note on why dynamic content needs is:global).
-     `.button.button` (repeating the class) bumps specificity past the tie
-     so this wins regardless of stylesheet load order, instead of depending
-     on this block happening to be declared later. :not(.button--primary)
-     excludes the one button here that's meant to look like the site's
-     green CTA and genuinely wants white text. */
-  .button.button:not(.button--primary):hover,
-  .button.button:not(.button--primary):focus-visible {
+  /* Buttons this page builds at runtime (guest-row remove/add, booking-card
+     edit/cancel, reason-overlay actions, mobile-conflict actions) never get
+     Astro's scoped-style attribute, so without an is:global override they
+     fell through to global.css's site-wide `.button` at every state - a
+     solid orange marketing-CTA background, meant for the site's hero CTA,
+     not a small admin-tool action pill. Confirmed live during this page's
+     design critique (2026-08): Edit/Cancel computed to
+     `background: rgb(247, 133, 32)` with no astro-cid attribute, versus the
+     one statically-rendered button (Prev), which correctly got this page's
+     own white background. `.button.button` (repeating the class) bumps
+     specificity past global.css's plain `.button`/`.button:hover`
+     regardless of stylesheet load order, giving every non-primary,
+     non-danger button here this page's own neutral pill look end to end -
+     base, hover, and focus, not just the text color. :not(.button--primary)
+     excludes the one button that's meant to look like the site's green CTA;
+     :not(.button--danger) excludes destructive actions below, which get
+     their own look so a destructive action never renders identically to a
+     safe one (Edit vs Cancel were indistinguishable before this). */
+  .button.button:not(.button--primary):not(.button--danger) {
+    background: #fff;
     color: var(--tvc-ink);
+  }
+
+  .button.button:not(.button--primary):not(.button--danger):hover,
+  .button.button:not(.button--primary):not(.button--danger):focus-visible {
+    background: var(--tvc-line);
+    color: var(--tvc-ink);
+  }
+
+  /* Destructive actions (cancelling a booking, removing a guest row) get a
+     visibly different treatment from neutral ones (Edit, +Guest) so the two
+     are never one indistinguishable pill color. */
+  .button.button--danger {
+    background: #fff;
+    border-color: #b3261e;
+    color: #b3261e;
+  }
+
+  .button.button--danger:hover,
+  .button.button--danger:focus-visible {
+    background: #b3261e;
+    border-color: #b3261e;
+    color: #fff;
   }
 
   [hidden] {
@@ -622,6 +798,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 </style>
 
 <script>
+  import { normalizeMobileNumber } from '../../../scripts/lib/accommodation.mjs';
+
   declare const google: any;
 
   const STORAGE_KEY = 'tvc-accommodation-idtoken';
@@ -644,7 +822,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   interface Guest {
     personId?: string;
     name?: string;
-    phone?: string;
+    mobileNumber?: string;
     ageGroup?: 'Adult' | 'Child';
     gender?: string;
     preferences?: string;
@@ -653,7 +831,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   interface GuestMatch {
     id: string;
     name: string;
-    phone?: string;
+    mobileNumber?: string;
     gender?: string;
     preferences?: string;
   }
@@ -675,6 +853,24 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   type BookingType = 'public-event' | 'private-event' | 'casual-stay' | 'member-stay' | 'unit-closure' | 'farm-closure';
+
+  // A booking with no Label/eventTitle used to fall back to its raw type
+  // slug ("casual-stay") as its human-facing title, everywhere that title
+  // shows up (booking card, grid tooltip, a guest's past-stays list) - a
+  // real bug found in this page's design critique (2026-08): the slug is
+  // internal shorthand, never meant to be read by anyone.
+  const TYPE_DISPLAY_LABELS: Record<BookingType, string> = {
+    'public-event': 'Public event',
+    'private-event': 'Private event / retreat',
+    'casual-stay': 'Casual stay',
+    'member-stay': 'Member stay',
+    'unit-closure': 'Tent closure',
+    'farm-closure': 'Farm closure',
+  };
+
+  function typeDisplayLabel(type: string): string {
+    return TYPE_DISPLAY_LABELS[type as BookingType] ?? type;
+  }
 
   interface Booking {
     id: string;
@@ -710,6 +906,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   const gridTable = document.getElementById('grid') as HTMLTableElement;
   const bookingListHeading = document.getElementById('booking-list-heading') as HTMLElement;
   const bookingList = document.getElementById('booking-list') as HTMLElement;
+  const newBookingBtn = document.getElementById('new-booking-btn') as HTMLButtonElement;
+  const bookingModal = document.getElementById('booking-modal') as HTMLElement;
+  const bookingModalBackdrop = document.getElementById('booking-modal-backdrop') as HTMLElement;
+  const bookingModalClose = document.getElementById('booking-modal-close') as HTMLButtonElement;
   const form = document.getElementById('booking-form') as HTMLFormElement;
   const formHeading = document.getElementById('form-heading') as HTMLElement;
   const formError = document.getElementById('form-error') as HTMLElement;
@@ -717,6 +917,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   const eventWrap = document.getElementById('f-event-wrap') as HTMLElement;
   const eventSelect = document.getElementById('f-event') as HTMLSelectElement;
   const labelWrap = document.getElementById('f-label-wrap') as HTMLElement;
+  const labelHint = document.getElementById('f-label-hint') as HTMLElement;
   const labelInput = document.getElementById('f-label') as HTMLInputElement;
   const memberWrap = document.getElementById('f-member-wrap') as HTMLElement;
   const memberSelect = document.getElementById('f-member') as HTMLSelectElement;
@@ -780,6 +981,22 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     statusEl.hidden = true;
   }
 
+  // The booking form lives in a dialog the grid opens directly (tap a free
+  // cell to book, tap an occupied one to edit) instead of a separate
+  // section scrolled past below the list - see this page's design critique
+  // (2026-08) for why. Locking body scroll matters most on a phone, where
+  // the sheet covers most of the viewport and a background scroll under it
+  // reads as broken.
+  function openBookingModal() {
+    bookingModal.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeBookingModal() {
+    bookingModal.hidden = true;
+    document.body.style.overflow = '';
+  }
+
   async function authedFetch(input: string, init: RequestInit = {}): Promise<Response> {
     const token = getToken();
     const res = await fetch(input, {
@@ -801,6 +1018,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   // ---- Tent-assignment fieldset (checkbox per unit, expandable guest rows) ----
 
   const GENDER_OPTIONS = ['Male', 'Female', 'NA'];
+  // Display text only - the stored/validated value stays the literal 'NA'
+  // the server's VALID_GENDERS checks against (accommodation-admin.mts);
+  // "NA" read as developer shorthand in a guest register, not a real choice
+  // a guest would recognize themselves in.
+  const GENDER_DISPLAY_LABELS: Record<string, string> = { Male: 'Male', Female: 'Female', NA: 'Prefer not to say' };
   const AGE_GROUP_OPTIONS = ['Adult', 'Child'];
 
   // Debounced so the typeahead doesn't fire a request on every keystroke -
@@ -818,6 +1040,20 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     if (query.trim().length < 2) return [];
     try {
       const res = await authedFetch(`/api/accommodation-admin/guests/search?q=${encodeURIComponent(query.trim())}`);
+      if (!res.ok) return [];
+      return ((await res.json()) as { matches: GuestMatch[] }).matches;
+    } catch {
+      return [];
+    }
+  }
+
+  // Exact match, so this can return more than one row now that mobile
+  // number alone isn't unique (see 0011's migration comment) - two
+  // different people sharing a number is exactly the case this powers the
+  // "same person, fix the spelling? or a different guest?" prompt for.
+  async function searchGuestsByMobile(mobileNumber: string): Promise<GuestMatch[]> {
+    try {
+      const res = await authedFetch(`/api/accommodation-admin/guests/search?mobile=${encodeURIComponent(mobileNumber)}`);
       if (!res.ok) return [];
       return ((await res.json()) as { matches: GuestMatch[] }).matches;
     } catch {
@@ -854,11 +1090,13 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
           ${AGE_GROUP_OPTIONS.map((a) => `<option value="${a}" ${ageGroup === a ? 'selected' : ''}>${a}</option>`).join('')}
         </select>
         <select data-field="gender">
-          ${GENDER_OPTIONS.map((g) => `<option value="${g}" ${gender === g ? 'selected' : ''}>${g}</option>`).join('')}
+          ${GENDER_OPTIONS.map((g) => `<option value="${g}" ${gender === g ? 'selected' : ''}>${GENDER_DISPLAY_LABELS[g]}</option>`).join('')}
         </select>
-        <input type="tel" data-field="phone" placeholder="Phone (optional)" value="${guest.phone ?? ''}" />
-        <button type="button" class="button remove-guest">✕</button>
+        <input type="tel" data-field="mobileNumber" placeholder="Mobile (optional)" value="${guest.mobileNumber ?? ''}" />
+        <button type="button" class="button button--danger remove-guest">✕</button>
       </div>
+      <p class="mobile-number-warning" hidden></p>
+      <div class="mobile-number-conflict" hidden></div>
       <input type="text" data-field="preferences" placeholder="Preferences / allergies (optional)" value="${guest.preferences ?? ''}" />
       <button type="button" class="guest-history-toggle" ${guest.personId ? '' : 'hidden'}>Past stays</button>
     `;
@@ -868,11 +1106,15 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     });
 
     // ---- Typeahead: search by name, pick a match to reuse that guest's
-    // record (fills phone/gender/preferences, links personId) instead of
-    // creating a fresh one. Typing without picking a suggestion just means
-    // "new person" - still resolved server-side by phone if one's entered.
+    // record (fills mobile number/gender/preferences, links personId)
+    // instead of creating a fresh one. Typing without picking a suggestion
+    // just means "new person" - still resolved server-side by mobile
+    // number + name together if a number's entered (see 0011's migration
+    // comment on why mobile number alone isn't a safe auto-match key).
     const nameInput = row.querySelector('[data-field="name"]') as HTMLInputElement;
-    const phoneInput = row.querySelector('[data-field="phone"]') as HTMLInputElement;
+    const mobileInput = row.querySelector('[data-field="mobileNumber"]') as HTMLInputElement;
+    const mobileWarning = row.querySelector('.mobile-number-warning') as HTMLElement;
+    const mobileConflict = row.querySelector('.mobile-number-conflict') as HTMLElement;
     const genderSelect = row.querySelector('[data-field="gender"]') as HTMLSelectElement;
     const preferencesInput = row.querySelector('[data-field="preferences"]') as HTMLInputElement;
     const historyToggle = row.querySelector('.guest-history-toggle') as HTMLButtonElement;
@@ -887,12 +1129,64 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     function selectMatch(match: GuestMatch) {
       row.dataset.personId = match.id;
       nameInput.value = match.name;
-      phoneInput.value = match.phone ?? '';
+      mobileInput.value = match.mobileNumber ?? '';
       genderSelect.value = match.gender ?? 'NA';
       preferencesInput.value = match.preferences ?? '';
       historyToggle.hidden = false;
       closeDropdown();
     }
+
+    // If this number already belongs to a different-named person, ask
+    // rather than silently either merging or duplicating: "same person,
+    // fix the spelling?" links this row to that existing record (so saving
+    // corrects its name); "different guest" leaves this as a new,
+    // independent person who happens to share the number - Sharath's
+    // explicit call, since auto-picking either behavior silently is wrong
+    // often enough to need a human in the loop (see 0011's migration
+    // comment for the "two people, one shared phone" bug this replaces).
+    async function checkMobileConflict() {
+      mobileConflict.hidden = true;
+      mobileConflict.innerHTML = '';
+      const normalized = normalizeMobileNumber(mobileInput.value);
+      const typedName = nameInput.value.trim();
+      if (!normalized || !typedName) return;
+
+      const matches = await searchGuestsByMobile(normalized);
+      const different = matches.find((m) => m.id !== row.dataset.personId && m.name.trim().toLowerCase() !== typedName.toLowerCase());
+      if (!different) return;
+
+      mobileConflict.hidden = false;
+      mobileConflict.innerHTML = `
+        <p>This number is already saved for <strong>${different.name}</strong>.</p>
+        <div class="mobile-number-conflict-actions">
+          <button type="button" class="button" data-action="same">Same person — fix name to "${typedName}"</button>
+          <button type="button" class="button" data-action="different">Different guest, same number</button>
+        </div>
+      `;
+      mobileConflict.querySelector('[data-action="same"]')!.addEventListener('click', () => {
+        row.dataset.personId = different.id;
+        genderSelect.value = different.gender ?? genderSelect.value;
+        if (!preferencesInput.value.trim()) preferencesInput.value = different.preferences ?? '';
+        historyToggle.hidden = false;
+        mobileConflict.hidden = true;
+      });
+      mobileConflict.querySelector('[data-action="different"]')!.addEventListener('click', () => {
+        if (row.dataset.personId === different.id) row.dataset.personId = '';
+        mobileConflict.hidden = true;
+      });
+    }
+
+    // Same validation the server enforces (normalizeMobileNumber, imported
+    // from the one shared implementation) - this is UX-only, an instant
+    // heads-up before the round-trip to the server that will reject it for
+    // real regardless.
+    mobileInput.addEventListener('blur', () => {
+      const raw = mobileInput.value.trim();
+      const invalid = raw !== '' && !normalizeMobileNumber(raw);
+      mobileWarning.hidden = !invalid;
+      mobileWarning.textContent = invalid ? '⚠ Doesn’t look like a valid mobile number (10 digits for India, or include a country code).' : '';
+      if (!invalid) checkMobileConflict();
+    });
 
     nameInput.addEventListener('input', () => {
       row.dataset.personId = ''; // typing again after a pick means "not necessarily that person anymore"
@@ -910,7 +1204,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       for (const m of matches) {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.textContent = m.phone ? `${m.name} — ${m.phone}` : m.name;
+        btn.textContent = m.mobileNumber ? `${m.name} — ${m.mobileNumber}` : m.name;
         btn.addEventListener('click', () => selectMatch(m));
         dropdown.appendChild(btn);
       }
@@ -939,7 +1233,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         const items = result.stays
           .map((s) => {
             const tentLabel = UNITS.find((u) => u.id === s.tentId)?.label ?? s.tentId;
-            const what = s.eventTitle ?? s.label ?? s.type;
+            const what = s.eventTitle ?? s.label ?? typeDisplayLabel(s.type);
             return `<li>${s.startDate} · ${tentLabel} · ${what}</li>`;
           })
           .join('');
@@ -1015,7 +1309,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         const name = (row.querySelector('[data-field="name"]') as HTMLInputElement).value.trim();
         const ageGroup = (row.querySelector('[data-field="ageGroup"]') as HTMLSelectElement).value.trim() as Guest['ageGroup'] | '';
         const gender = (row.querySelector('[data-field="gender"]') as HTMLSelectElement).value.trim();
-        const phone = (row.querySelector('[data-field="phone"]') as HTMLInputElement).value.trim();
+        const mobileNumber = (row.querySelector('[data-field="mobileNumber"]') as HTMLInputElement).value.trim();
         const preferences = (row.querySelector('[data-field="preferences"]') as HTMLInputElement).value.trim();
         if (!name && !ageGroup && !gender) continue;
         guests.push({
@@ -1023,7 +1317,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
           name: name || undefined,
           ageGroup: ageGroup || undefined,
           gender: gender || undefined,
-          phone: phone || undefined,
+          mobileNumber: mobileNumber || undefined,
           preferences: preferences || undefined,
         });
       }
@@ -1150,6 +1444,9 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     // member-stay picks from the member directory instead of free text -
     // labelWrap and memberWrap are mutually exclusive, never both shown.
     labelWrap.hidden = type === 'public-event' || type === 'member-stay';
+    // "who's coming" reads as a non-sequitur on a closure, which has no
+    // guests - a closure's label is a reason, not a guest list.
+    labelHint.textContent = type === 'unit-closure' || type === 'farm-closure' ? '(shown to you only, e.g. the reason)' : "(shown to you only, e.g. who's coming)";
     memberWrap.hidden = type !== 'member-stay';
     exclusiveWrap.hidden = type !== 'private-event';
     tentsWrap.hidden = type === 'farm-closure';
@@ -1268,7 +1565,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   function cellTooltip(b: Booking, tentId: string): string {
-    const title = b.type === 'farm-closure' ? 'Farm closed' : (b.label ?? b.eventTitle ?? b.type);
+    const title = b.type === 'farm-closure' ? 'Farm closed' : (b.label ?? b.eventTitle ?? typeDisplayLabel(b.type));
     const dates = `${b.startDate} · ${b.nights} night${b.nights > 1 ? 's' : ''}`;
     if (b.type === 'farm-closure') return [title, dates, b.note].filter(Boolean).join('\n');
     const guestNames = b.tents
@@ -1314,11 +1611,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         const farmClosure = currentBookings.find((b) => b.type === 'farm-closure' && nightsByBookingId.get(b.id)!.has(date));
         const occupying = currentBookings.find((b) => b.type !== 'farm-closure' && b.tents.some((t) => t.tentId === unit.id) && nightsByBookingId.get(b.id)!.has(date));
         if (farmClosure) {
-          bodyHtml += `<td class="cell--closed" data-booking-id="${farmClosure.id}" title="${escapeAttr(cellTooltip(farmClosure, unit.id))}">·</td>`;
+          bodyHtml += `<td class="cell--closed" data-booking-id="${farmClosure.id}" title="${escapeAttr(cellTooltip(farmClosure, unit.id))}">✕</td>`;
         } else if (occupying) {
           bodyHtml += `<td class="cell--occupied" data-booking-id="${occupying.id}" title="${escapeAttr(cellTooltip(occupying, unit.id))}">●</td>`;
         } else {
-          bodyHtml += `<td class="cell--free">·</td>`;
+          bodyHtml += `<td class="cell--free" data-tent-id="${unit.id}" data-date="${date}">·</td>`;
         }
       }
       bodyHtml += '</tr>';
@@ -1330,11 +1627,37 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   // innerHTML replacements) rather than per-cell, since cells are rebuilt
   // from scratch on every render.
   gridTable.addEventListener('click', (ev) => {
-    const cell = (ev.target as HTMLElement).closest('td[data-booking-id]') as HTMLElement | null;
+    const cell = (ev.target as HTMLElement).closest('td[data-booking-id], td.cell--free') as HTMLElement | null;
     if (!cell) return;
-    const booking = currentBookings.find((b) => b.id === cell.dataset.bookingId);
-    if (booking) loadIntoForm(booking);
+    if (cell.dataset.bookingId) {
+      const booking = currentBookings.find((b) => b.id === cell.dataset.bookingId);
+      if (booking) loadIntoForm(booking);
+      return;
+    }
+    startNewBookingAt(cell.dataset.tentId!, cell.dataset.date!);
   });
+
+  // Tapping a free grid cell starts a new booking pre-filled with that tent
+  // and date, instead of requiring a scroll to a separate form section and
+  // re-entering both from memory - the "grid and form are disconnected"
+  // fix from this page's design critique (2026-08).
+  function startNewBookingAt(tentId: string, date: string) {
+    resetForm();
+    // resetForm() floors new bookings at today so the date picker can't be
+    // dragged into the past by hand - but a free cell in the past (e.g.
+    // backfilling a historical entry) is a deliberate, valid target here,
+    // so that floor is lifted rather than silently clamping the date.
+    if (date < new Date().toLocaleDateString('en-CA')) startInput.removeAttribute('min');
+    startInput.value = date;
+    handleDateOrNightsChange();
+    const option = tentsContainer.querySelector<HTMLElement>(`.tent-option[data-tent-id="${tentId}"]`);
+    const checkbox = option?.querySelector<HTMLInputElement>('.tent-checkbox');
+    if (checkbox && !checkbox.disabled) {
+      checkbox.checked = true;
+      checkbox.dispatchEvent(new Event('change'));
+    }
+    openBookingModal();
+  }
 
   function renderBookingList() {
     bookingListHeading.textContent = bookingListHeadingLabel();
@@ -1349,7 +1672,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     for (const b of [...relevant].sort((a, c) => a.startDate.localeCompare(c.startDate))) {
       const card = document.createElement('div');
       card.className = 'booking-card';
-      const title = b.eventTitle ?? b.label ?? b.type;
+      const title = b.eventTitle ?? b.label ?? typeDisplayLabel(b.type);
       const tentNames = b.tents.map((t) => UNITS.find((u) => u.id === t.tentId)?.label ?? t.tentId).join(', ') || '(whole farm)';
       card.innerHTML = `
         <div>
@@ -1358,7 +1681,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         </div>
         <div class="actions">
           <button type="button" class="button edit-booking">Edit</button>
-          <button type="button" class="button cancel-booking">Cancel</button>
+          <button type="button" class="button button--danger cancel-booking">Cancel</button>
         </div>
       `;
       card.querySelector('.edit-booking')!.addEventListener('click', () => loadIntoForm(b));
@@ -1441,7 +1764,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     noteInput.value = b.note ?? '';
     setTents(b.tents);
     markOccupiedTents();
-    form.scrollIntoView({ behavior: 'smooth' });
+    openBookingModal();
   }
 
   function resetForm() {
@@ -1451,22 +1774,46 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     reasonWrap.hidden = true;
     reasonInput.value = '';
     form.reset();
-    typeSelect.value = 'public-event';
+    typeSelect.value = 'casual-stay';
     updateFieldVisibility();
     // A new booking can't start in the past - today, in the visitor's own
     // local timezone, computed fresh on every reset rather than baked in at
     // build time (this page is statically prerendered).
     startInput.min = new Date().toLocaleDateString('en-CA'); // en-CA formats as YYYY-MM-DD
-    // Default type is public-event, so the freshly-reset form should show
-    // that event's own dates right away, not the leftover values form.reset()
-    // just cleared them to.
-    syncDatesFromEvent();
+    // Only public-event's dates come from the linked event - casual-stay
+    // (the default type) leaves Start date/Nights blank for the admin to
+    // fill in themselves, same as every other non-public-event type.
     setTents([]);
     markOccupiedTents();
     formError.hidden = true;
   }
 
-  cancelEditBtn.addEventListener('click', resetForm);
+  cancelEditBtn.addEventListener('click', () => {
+    resetForm();
+    closeBookingModal();
+  });
+
+  newBookingBtn.addEventListener('click', () => {
+    resetForm();
+    openBookingModal();
+  });
+
+  bookingModalBackdrop.addEventListener('click', () => {
+    resetForm();
+    closeBookingModal();
+  });
+
+  bookingModalClose.addEventListener('click', () => {
+    resetForm();
+    closeBookingModal();
+  });
+
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && !bookingModal.hidden) {
+      resetForm();
+      closeBookingModal();
+    }
+  });
 
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -1513,6 +1860,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         return;
       }
       resetForm();
+      closeBookingModal();
       await loadView();
     } catch (err) {
       const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
