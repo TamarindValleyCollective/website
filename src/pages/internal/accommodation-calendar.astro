@@ -327,6 +327,25 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     text-align: center;
   }
 
+  /* Neutral (not the green/orange already meaning free/occupied in the
+     body cells) - a weekend column only needs to read as structurally
+     different, not carry another status color. Header-only: tinting the
+     body cells too would double up with their existing free/occupied/
+     closed background and muddy that meaning. */
+  .grid-table th.col--weekend {
+    background: var(--tvc-line);
+  }
+
+  .day-letter {
+    font-weight: 700;
+  }
+
+  .day-date {
+    font-weight: 400;
+    color: var(--tvc-ink-soft);
+    font-size: 0.72rem;
+  }
+
   .grid-table th.unit-col,
   .grid-table td.unit-col {
     text-align: left;
@@ -414,6 +433,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   .guest-row-main {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
     position: relative;
   }
@@ -423,19 +443,27 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     padding: 4px 8px;
     font-size: 0.82rem;
     font-family: inherit;
+    /* Flex items default to min-width:auto, which floors their shrink at
+       their content/intrinsic width - with 5 items now on this row (name,
+       age, gender, phone, remove), that floor added up to wider than the
+       .form card itself, pushing the row out past the card's border
+       instead of wrapping or shrinking. min-width:0 lets them actually
+       shrink; flex-wrap on the row (above) is the fallback once they've
+       shrunk as far as still-usable and there's still no room. */
+    min-width: 0;
   }
 
   .guest-row input[data-field='name'] {
-    flex: 2;
+    flex: 2 1 110px;
   }
 
   .guest-row input[data-field='phone'] {
-    flex: 1;
+    flex: 1 1 90px;
   }
 
   .guest-row select[data-field='ageGroup'],
   .guest-row select[data-field='gender'] {
-    flex: 1;
+    flex: 1 1 64px;
   }
 
   .guest-row input[data-field='preferences'] {
@@ -551,6 +579,23 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   .tent-option--occupied .tent-checkbox {
     cursor: not-allowed;
+  }
+
+  /* A tent that's checked but has become conflicting since (dates changed
+     underneath it) - distinct from --occupied (unchecked + taken), since
+     this one stays enabled so the admin can uncheck it themselves. */
+  .tent-option--conflict {
+    background: var(--tvc-orange-tint);
+    border-radius: 6px;
+    padding: 4px 6px;
+    margin: 0 -6px;
+  }
+
+  .tent-conflict-warning {
+    margin: 2px 0 0;
+    font-size: 0.78rem;
+    color: var(--tvc-orange-text);
+    font-weight: 600;
   }
 
   /* global.css's site-wide `.button:hover` (white text, meant for the
@@ -929,6 +974,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
           <input type="checkbox" class="tent-checkbox" />
           ${unit.label} (${unit.capacity})
         </label>
+        <p class="tent-conflict-warning" hidden></p>
         <div class="guests" hidden></div>
         <button type="button" class="button add-guest" hidden>+ Guest</button>
       `;
@@ -1022,13 +1068,26 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     for (const option of Array.from(tentsContainer.querySelectorAll<HTMLElement>('.tent-option'))) {
       const tentId = option.dataset.tentId!;
       const checkbox = option.querySelector('.tent-checkbox') as HTMLInputElement;
+      const warning = option.querySelector('.tent-conflict-warning') as HTMLElement;
       const conflict = currentBookings.find(
         (b) => b.id !== editingId && b.type !== 'farm-closure' && b.tents.some((t) => t.tentId === tentId) && nightsForBooking(b).some((n) => selectedNights.has(n)),
       );
+      const conflictName = conflict ? (conflict.label ?? conflict.eventTitle ?? conflict.type) : '';
       const blocked = Boolean(conflict) && !checkbox.checked;
       option.classList.toggle('tent-option--occupied', blocked);
       checkbox.disabled = blocked;
-      checkbox.title = conflict ? `Already booked: ${conflict.label ?? conflict.eventTitle ?? conflict.type}` : '';
+      checkbox.title = conflict ? `Already booked: ${conflictName}` : '';
+      // A tent already checked before the dates changed underneath it isn't
+      // auto-unchecked (that could feel like the form silently discarding a
+      // choice) or disabled (blocking a checked box would trap the admin
+      // into being unable to uncheck it) - but leaving it checked with only
+      // an invisible title attribute as the sole warning meant the tent
+      // list looked exactly the same before and after the dates changed,
+      // which read as "the view isn't refreshing" even though it was.
+      const conflictWhileChecked = Boolean(conflict) && checkbox.checked;
+      option.classList.toggle('tent-option--conflict', conflictWhileChecked);
+      warning.hidden = !conflictWhileChecked;
+      if (conflictWhileChecked) warning.textContent = `⚠ Already booked by ${conflictName} on these dates - uncheck or pick different dates.`;
     }
   }
 
@@ -1220,12 +1279,34 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     return [title, dates, guestNames || 'No guests listed'].join('\n');
   }
 
+  // Mon-first single-letter row (M T W T F S S) - the standard compact
+  // calendar-header convention; Tue/Thu and Sat/Sun sharing a letter is
+  // expected in this style, since column position (not the letter alone)
+  // disambiguates.
+  const WEEKDAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+  function isWeekend(dateStr: string): boolean {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0=Sun..6=Sat
+    return dow === 0 || dow === 6;
+  }
+
+  function weekdayLetter(dateStr: string): string {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+    return WEEKDAY_LETTERS[(dow + 6) % 7]; // re-index so Monday is 0
+  }
+
   function renderGrid() {
     const dates = visibleDates();
     const nightsByBookingId = new Map(currentBookings.map((b) => [b.id, new Set(nightsForBooking(b))]));
-    const headerLabel = (d: string) => (viewMode === 'month' ? d.slice(-2) : formatDateLabel(d, { day: 'numeric', month: 'short' }));
+    // Month's 31 narrow columns only have room for the day-of-month number;
+    // day/week have space to also spell out which weekday each column is.
+    const headerLabel = (d: string) =>
+      viewMode === 'month' ? d.slice(-2) : `<div class="day-letter">${weekdayLetter(d)}</div><div class="day-date">${formatDateLabel(d, { day: 'numeric', month: 'short' })}</div>`;
 
-    let headHtml = '<tr><th class="unit-col">Tent</th>' + dates.map((d) => `<th>${headerLabel(d)}</th>`).join('') + '</tr>';
+    let headHtml =
+      '<tr><th class="unit-col">Tent</th>' + dates.map((d) => `<th class="${isWeekend(d) ? 'col--weekend' : ''}">${headerLabel(d)}</th>`).join('') + '</tr>';
     let bodyHtml = '';
     for (const unit of UNITS) {
       bodyHtml += `<tr><td class="unit-col">${unit.label}</td>`;
