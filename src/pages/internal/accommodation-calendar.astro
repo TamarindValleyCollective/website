@@ -79,6 +79,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         <table id="grid" class="grid-table"></table>
       </div>
 
+      <div id="day-view" class="day-view" hidden></div>
+
       <div class="booking-list-header">
         <h2 id="booking-list-heading">Bookings this month</h2>
         <button type="button" id="new-booking-btn" class="button button--primary">+ New booking</button>
@@ -549,6 +551,77 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     outline-offset: -2px;
   }
 
+  /* Day view: one wide row per tent instead of the table's one-column
+     squeeze (see renderDayView). Same status colors as the grid cells
+     (free/occupied/closed/past) for a consistent vocabulary, but with room
+     to actually show the booking's title and guest names instead of a
+     glyph behind a hover-only tooltip. */
+  .day-view {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 32px;
+  }
+
+  .day-row {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    background: var(--tvc-green-tint);
+  }
+
+  .day-row-tent {
+    flex: 0 0 140px;
+    font-weight: 700;
+    font-size: 0.9rem;
+  }
+
+  .day-row-main {
+    flex: 1 1 220px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+  }
+
+  .day-row-title {
+    font-weight: 600;
+  }
+
+  .day-row-guests {
+    color: var(--tvc-ink-soft);
+    font-size: 0.88rem;
+  }
+
+  .day-row--occupied {
+    background: var(--tvc-orange-tint);
+  }
+
+  .day-row--closed {
+    background: #e6e6e6;
+  }
+
+  .day-row--free-past {
+    background: #d8d8d8;
+    color: var(--tvc-ink-soft);
+  }
+
+  .day-row--occupied,
+  .day-row--closed,
+  .day-row--free {
+    cursor: pointer;
+  }
+
+  .day-row--occupied:hover,
+  .day-row--closed:hover,
+  .day-row--free:hover {
+    outline: 2px solid var(--tvc-green);
+    outline-offset: -2px;
+  }
+
   .booking-list {
     display: flex;
     flex-direction: column;
@@ -991,6 +1064,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   const monthLabel = document.getElementById('month-label') as HTMLElement;
   const viewToggleButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.view-toggle-btn'));
   const gridTable = document.getElementById('grid') as HTMLTableElement;
+  const gridScroll = document.querySelector('.grid-scroll') as HTMLElement;
+  const dayView = document.getElementById('day-view') as HTMLElement;
   const bookingListHeading = document.getElementById('booking-list-heading') as HTMLElement;
   const bookingList = document.getElementById('booking-list') as HTMLElement;
   const newBookingBtn = document.getElementById('new-booking-btn') as HTMLButtonElement;
@@ -1709,7 +1784,77 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     return WEEKDAY_LETTERS[(dow + 6) % 7]; // re-index so Monday is 0
   }
 
+  // Day view gets its own wide, full-name-visible list instead of the
+  // table: with only one date column, the table's narrow, nowrap cells
+  // (built for 7-31 columns at once) had room for nothing but a single
+  // status glyph behind a hover-only tooltip - useless on a phone, where
+  // hover doesn't even exist. One flex row per tent, each free to wrap
+  // text and use the full page width, works the same way on a phone as on
+  // a desktop (see Sharath's own ask: "wide... keep mobile in mind").
+  function renderDayView() {
+    const [date] = visibleDates();
+    const today = new Date().toLocaleDateString('en-CA');
+    const nightsByBookingId = new Map(currentBookings.map((b) => [b.id, new Set(nightsForBooking(b))]));
+    const farmClosure = currentBookings.find((b) => b.type === 'farm-closure' && nightsByBookingId.get(b.id)!.has(date));
+
+    if (farmClosure) {
+      // Blocks the whole farm - one row, not one per tent (unlike the
+      // table, which is stuck repeating it down every row since that's
+      // just how a table works).
+      const ariaLabel = cellTooltip(farmClosure, '').replace(/\n/g, ' — ');
+      dayView.innerHTML = `
+        <div class="day-row day-row--closed" data-booking-id="${farmClosure.id}" tabindex="0" role="button" aria-label="${escapeAttr(ariaLabel)}">
+          <div class="day-row-title">${escapeAttr(typeDisplayLabel(farmClosure.type))}</div>
+          ${farmClosure.note ? `<div class="day-row-guests">${escapeAttr(farmClosure.note)}</div>` : ''}
+        </div>`;
+      return;
+    }
+
+    let html = '';
+    for (const unit of UNITS) {
+      const occupying = currentBookings.find((b) => b.type !== 'farm-closure' && b.tents.some((t) => t.tentId === unit.id) && nightsByBookingId.get(b.id)!.has(date));
+      if (occupying) {
+        const title = occupying.label ?? occupying.eventTitle ?? typeDisplayLabel(occupying.type);
+        const guestNames =
+          occupying.tents
+            .find((t) => t.tentId === unit.id)
+            ?.guests.map((g) => g.name)
+            .filter(Boolean)
+            .join(', ') || 'No guests listed';
+        const ariaLabel = cellTooltip(occupying, unit.id).replace(/\n/g, ' — ');
+        html += `
+          <div class="day-row day-row--occupied" data-booking-id="${occupying.id}" tabindex="0" role="button" aria-label="${escapeAttr(ariaLabel)}">
+            <div class="day-row-tent">${unit.label}</div>
+            <div class="day-row-main">
+              <span class="day-row-title">${escapeAttr(title)}</span>
+              <span class="day-row-guests">${escapeAttr(guestNames)}</span>
+            </div>
+          </div>`;
+      } else if (date < today) {
+        html += `
+          <div class="day-row day-row--free-past">
+            <div class="day-row-tent">${unit.label}</div>
+            <div class="day-row-main"><span class="day-row-title">—</span></div>
+          </div>`;
+      } else {
+        const ariaLabel = `${unit.label}, ${formatDateLabel(date, { day: 'numeric', month: 'long' })} — free, tap to book`;
+        html += `
+          <div class="day-row day-row--free" data-tent-id="${unit.id}" data-date="${date}" tabindex="0" role="button" aria-label="${escapeAttr(ariaLabel)}">
+            <div class="day-row-tent">${unit.label}</div>
+            <div class="day-row-main"><span class="day-row-title">Free — tap to book</span></div>
+          </div>`;
+      }
+    }
+    dayView.innerHTML = html;
+  }
+
   function renderGrid() {
+    gridScroll.hidden = viewMode === 'day';
+    dayView.hidden = viewMode !== 'day';
+    if (viewMode === 'day') {
+      renderDayView();
+      return;
+    }
     const dates = visibleDates();
     // A new booking can never start in the past (see resetForm) - a free
     // cell for a bygone date must not look or act clickable, or tapping it
@@ -1777,6 +1922,21 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     if (!cell) return;
     ev.preventDefault(); // stop Space from scrolling the page
     activateCell(cell);
+  });
+
+  // Same activateCell, same delegation reasoning, just against day view's
+  // own row markup (a div, not a td) instead of the table's cells.
+  dayView.addEventListener('click', (ev) => {
+    const row = (ev.target as HTMLElement).closest('.day-row[data-booking-id], .day-row--free[data-tent-id]') as HTMLElement | null;
+    if (row) activateCell(row);
+  });
+
+  dayView.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    const row = (ev.target as HTMLElement).closest('.day-row[data-booking-id], .day-row--free[data-tent-id]') as HTMLElement | null;
+    if (!row) return;
+    ev.preventDefault();
+    activateCell(row);
   });
 
   // Tapping a free grid cell starts a new booking pre-filled with that tent
