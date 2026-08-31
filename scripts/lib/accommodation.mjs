@@ -9,22 +9,29 @@
 // import this directly, with no risk of a TS-file cross-boundary import
 // failing to resolve in either bundler.
 
-// The farm's fixed tent/hut inventory. Confirmed with Sharath (2026-08-29):
-// 3 fixed tents (Malabar x2, Banyan x1, 3 people each) plus 5 portable tents
-// (1 three-person, 4 two-person) - sums to exactly the ~20-person cap already
-// quoted on /visit/camping. Lives here as static data rather than a content
-// collection or Blobs record since it only changes when the farm physically
-// adds/removes a tent - a deploy-worthy change, same as everything else that
-// lives in git on this site.
+// The farm's fixed tent/hut inventory. Updated with Sharath (2026-08-31):
+// renamed every unit, switched to generic `TentNN` ids (the old
+// location-named ids like `malabar-1`/`portable-3` were judged not generic
+// enough now that every unit is, physically, a tent), reclassified the old
+// "Portable Tent 4/5" as the named fixed Upper/Lower Bamboo Hut, and added
+// one new 2-person Campground Portable - 9 units, 22-person total capacity
+// (was 8 units / 20 people). Renaming the ids is a real migration, not just
+// a relabel: existing bookings' `tent_id` in `accommodation_tent_assignments`
+// had to be rewritten from the old ids to the new ones (see
+// supabase/migrations/0012_accommodation_unit_inventory_update.sql) - the
+// `TentNN` order below matches the order that migration's UPDATE mapping
+// uses, confirmed against Sharath's original numbered list so no booking's
+// tent gets silently reassigned to the wrong physical unit.
 export const ACCOMMODATION_UNITS = [
-  { id: 'malabar-1', label: 'Malabar Hut 1', capacity: 3, kind: 'fixed' },
-  { id: 'malabar-2', label: 'Malabar Hut 2', capacity: 3, kind: 'fixed' },
-  { id: 'banyan', label: 'Banyan Hut', capacity: 3, kind: 'fixed' },
-  { id: 'portable-1', label: 'Portable Tent 1', capacity: 3, kind: 'removable' },
-  { id: 'portable-2', label: 'Portable Tent 2', capacity: 2, kind: 'removable' },
-  { id: 'portable-3', label: 'Portable Tent 3', capacity: 2, kind: 'removable' },
-  { id: 'portable-4', label: 'Portable Tent 4', capacity: 2, kind: 'removable' },
-  { id: 'portable-5', label: 'Portable Tent 5', capacity: 2, kind: 'removable' },
+  { id: 'Tent01', label: 'Malabar Hut Fixed (N)', capacity: 3, kind: 'fixed' },
+  { id: 'Tent02', label: 'Malabar Hut Fixed (S)', capacity: 3, kind: 'fixed' },
+  { id: 'Tent03', label: 'Malabar Hut Portable', capacity: 2, kind: 'removable' },
+  { id: 'Tent04', label: 'Banyan Hut Fixed', capacity: 3, kind: 'fixed' },
+  { id: 'Tent05', label: 'Banyan Hut Portable', capacity: 2, kind: 'removable' },
+  { id: 'Tent06', label: 'Upper Bamboo Hut', capacity: 2, kind: 'fixed' },
+  { id: 'Tent07', label: 'Lower Bamboo Hut', capacity: 2, kind: 'fixed' },
+  { id: 'Tent08', label: 'Campground Portable', capacity: 3, kind: 'removable' },
+  { id: 'Tent09', label: 'Campground Portable', capacity: 2, kind: 'removable' },
 ];
 
 export const TOTAL_ROOMS = ACCOMMODATION_UNITS.length;
