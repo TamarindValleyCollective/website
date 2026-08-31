@@ -68,8 +68,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         <button type="button" id="next-month" class="button">Next →</button>
         <div class="view-toggle" role="group" aria-label="Calendar view">
           <button type="button" class="button view-toggle-btn" data-view="day">Day</button>
-          <button type="button" class="button view-toggle-btn" data-view="week">Week</button>
-          <button type="button" class="button view-toggle-btn view-toggle-btn--active" data-view="month">Month</button>
+          <button type="button" class="button view-toggle-btn view-toggle-btn--active" data-view="week">Week</button>
+          <button type="button" class="button view-toggle-btn" data-view="month">Month</button>
         </div>
       </div>
 
@@ -105,7 +105,6 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
                   <option value="private-event">Private event (retreat)</option>
                   <option value="member-stay">Member stay (booked direct)</option>
                   <option value="unit-closure">Tent closure (repair, etc.)</option>
-                  <option value="farm-closure">Farm on Vacation (no bookings taken)</option>
                 </select>
               </label>
 
@@ -127,6 +126,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
               <label id="f-exclusive-wrap" class="checkbox-label">
                 <input type="checkbox" id="f-exclusive" />
                 Exclusive use — blocks the whole farm publicly, even if not every tent is assigned
+              </label>
+
+              <label id="f-farm-closure-wrap" class="checkbox-label" hidden>
+                <input type="checkbox" id="f-farm-closure" />
+                Farm on Vacation — closes the whole farm, not just one tent (no tent selection needed)
               </label>
             </fieldset>
 
@@ -456,6 +460,14 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 -->
 <style is:global>
   .grid-table {
+    /* Table width is otherwise intrinsic to its content - month view's ~30
+       date columns naturally exceed the container (hence .grid-scroll's
+       horizontal scroll), but week view's 7 columns fall well short of it,
+       leaving the table looking stranded in the left part of the page
+       instead of using the same width day/month do. width: 100% stretches
+       it to fill the container whenever content is narrower; it has no
+       effect once content (month view) already exceeds that width. */
+    width: 100%;
     border-collapse: collapse;
     font-size: 0.78rem;
     white-space: nowrap;
@@ -1086,6 +1098,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   const memberSelect = document.getElementById('f-member') as HTMLSelectElement;
   const exclusiveWrap = document.getElementById('f-exclusive-wrap') as HTMLElement;
   const exclusiveInput = document.getElementById('f-exclusive') as HTMLInputElement;
+  const farmClosureWrap = document.getElementById('f-farm-closure-wrap') as HTMLElement;
+  const farmClosureInput = document.getElementById('f-farm-closure') as HTMLInputElement;
   const startInput = document.getElementById('f-start') as HTMLInputElement;
   const nightsInput = document.getElementById('f-nights') as HTMLInputElement;
   const tentsWrap = document.getElementById('f-tents-wrap') as HTMLElement;
@@ -1096,7 +1110,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   const cancelEditBtn = document.getElementById('f-cancel-edit') as HTMLButtonElement;
 
   type ViewMode = 'day' | 'week' | 'month';
-  let viewMode: ViewMode = 'month';
+  let viewMode: ViewMode = 'week';
   let anchorDate = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD, local
   let currentBookings: Booking[] = [];
   let editingId: string | null = null;
@@ -1474,7 +1488,17 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   function wantsGuestFields(): boolean {
-    return typeSelect.value !== 'unit-closure' && typeSelect.value !== 'farm-closure';
+    return typeSelect.value !== 'unit-closure';
+  }
+
+  // "Farm on Vacation" isn't its own dropdown entry - it's a checkbox that
+  // only appears once "Tent closure" is picked, refining a closure from
+  // "this one tent" to "the whole farm" (see f-farm-closure-wrap). The
+  // underlying data model is unchanged: this still submits as booking type
+  // 'farm-closure' (see the submit handler and loadIntoForm below), zero
+  // tents assigned, same as before the UI moved it off the dropdown.
+  function isFarmClosure(): boolean {
+    return typeSelect.value === 'unit-closure' && farmClosureInput.checked;
   }
 
   function collectTents(): TentAssignment[] {
@@ -1636,10 +1660,16 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     labelWrap.hidden = type === 'public-event' || type === 'member-stay';
     // "who's coming" reads as a non-sequitur on a closure, which has no
     // guests - a closure's label is a reason, not a guest list.
-    labelHint.textContent = type === 'unit-closure' || type === 'farm-closure' ? '(shown to you only, e.g. the reason)' : "(shown to you only, e.g. who's coming)";
+    labelHint.textContent = type === 'unit-closure' ? '(shown to you only, e.g. the reason)' : "(shown to you only, e.g. who's coming)";
     memberWrap.hidden = type !== 'member-stay';
     exclusiveWrap.hidden = type !== 'private-event';
-    tentsWrap.hidden = type === 'farm-closure';
+    farmClosureWrap.hidden = type !== 'unit-closure';
+    // Leaving the checkbox checked after switching away from "Tent closure"
+    // would silently resurrect it (still checked, just hidden) if the admin
+    // switches back to unit-closure later without noticing - uncheck it the
+    // moment it's no longer reachable.
+    if (type !== 'unit-closure') farmClosureInput.checked = false;
+    tentsWrap.hidden = isFarmClosure();
     // Fixed by the linked event, not chosen here - see syncDatesFromEvent.
     startInput.disabled = type === 'public-event';
     nightsInput.disabled = type === 'public-event';
@@ -1660,6 +1690,24 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     // typeSelect.value programmatically (no 'change' event), so an edit in
     // progress never hits this branch.
     if (typeSelect.value === 'public-event' && editingId === null) syncDatesFromEvent();
+  });
+
+  farmClosureInput.addEventListener('change', () => {
+    // A farm-wide closure has no specific tents - clear any already-checked
+    // ones so they don't ride along in the submitted payload despite the
+    // now-hidden fieldset (collectTents() reads .checked regardless of
+    // visibility, so a stale check here would silently attach a tent to a
+    // booking that's supposed to have none).
+    if (farmClosureInput.checked) {
+      for (const option of Array.from(tentsContainer.querySelectorAll<HTMLElement>('.tent-option'))) {
+        const checkbox = option.querySelector('.tent-checkbox') as HTMLInputElement;
+        if (checkbox.checked) {
+          checkbox.checked = false;
+          checkbox.dispatchEvent(new Event('change'));
+        }
+      }
+    }
+    updateFieldVisibility();
   });
 
   // ---- Calendar grid (day/week/month) ----
@@ -2071,7 +2119,12 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       publicEventTypeOption.hidden = false;
       publicEventTypeOption.disabled = false;
     }
-    typeSelect.value = b.type;
+    // "Farm on Vacation" has no dropdown entry of its own (see
+    // isFarmClosure) - a saved farm-closure booking loads back as
+    // "Tent closure" with the checkbox ticked, since that's the only UI
+    // path that produces it.
+    typeSelect.value = b.type === 'farm-closure' ? 'unit-closure' : b.type;
+    farmClosureInput.checked = b.type === 'farm-closure';
     updateFieldVisibility();
     if (b.eventSlug) eventSelect.value = b.eventSlug;
     labelInput.value = b.label ?? '';
@@ -2151,7 +2204,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       return;
     }
 
-    const type = typeSelect.value as BookingType;
+    const type = (isFarmClosure() ? 'farm-closure' : typeSelect.value) as BookingType;
     const payload: Partial<Booking> & { id?: string; reason?: string } = {
       id: editingId ?? undefined,
       type,
@@ -2276,17 +2329,6 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   populateMemberSelect();
   buildTentsFieldset();
   resetForm();
-
-  // Month view's 31 narrow columns are unusable on a phone - default to
-  // week view there instead (same breakpoint as the booking dialog's own
-  // sheet-vs-centered switch, for one consistent "phone" cutoff across the
-  // page). Checked once at load, not on resize/rotate, since the view
-  // changing itself under someone mid-session would feel like a bug, not a
-  // convenience - Day/Week/Month stays a manual, sticky choice from here.
-  if (window.matchMedia('(max-width: 640px)').matches) {
-    viewMode = 'week';
-    for (const b of viewToggleButtons) b.classList.toggle('view-toggle-btn--active', b.dataset.view === 'week');
-  }
 
   if (getToken()) {
     loadView();
