@@ -27,11 +27,36 @@ const allEventsForLang =
   lang === 'en' ? allEventsRaw.filter((e) => !e.id.startsWith('kn/') && !e.id.startsWith('ta/')) : allEventsRaw.filter((e) => e.id.startsWith(`${lang}/`));
 const allEvents = allEventsForLang.sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
 const today = new Date();
-const upcoming = allEvents.filter((e) => e.data.date >= today);
-const past = allEvents.filter((e) => e.data.date < today);
 
-function eventHref(id: string) {
-  return getRelativeLocaleUrl(lang, `/events/${bareSlug(id)}`);
+// Completed 3Bs&1H editions collapse into one "stack" card linking to the
+// series hub (/events/3bs1h, English only for now - see Bs1hSeriesView.astro)
+// instead of appearing as several anonymous, near-duplicate past cards. An
+// UPCOMING 3bs1h edition is deliberately left alone in `upcoming` below and
+// renders as a normal card like any other event - only completed editions
+// get folded away, positioned by the most recently completed one's date.
+const bs1hPast = lang === 'en' ? allEvents.filter((e) => e.data.series === '3bs1h' && e.data.date < today) : [];
+const bs1hLatestPast = bs1hPast.length > 0 ? bs1hPast.reduce((a, b) => (a.data.date > b.data.date ? a : b)) : null;
+
+const upcoming = allEvents.filter((e) => e.data.date >= today);
+const past = allEvents.filter((e) => e.data.date < today && !bs1hPast.includes(e));
+
+type PastCard =
+  | { kind: 'event'; event: (typeof past)[number]; date: Date }
+  | { kind: 'bs1hStack'; latest: NonNullable<typeof bs1hLatestPast>; count: number; date: Date };
+
+const pastCards: PastCard[] = [
+  ...past.map((event) => ({ kind: 'event' as const, event, date: event.data.date })),
+  ...(bs1hLatestPast ? [{ kind: 'bs1hStack' as const, latest: bs1hLatestPast, count: bs1hPast.length, date: bs1hLatestPast.data.date }] : []),
+].sort((a, b) => b.date.valueOf() - a.date.valueOf());
+
+// 3bs1h editions live at the versioned /events/3bs1h/<edition> route instead
+// of the flat /events/<slug> route (see src/pages/events/3bs1h/[edition].astro
+// and src/pages/events/[slug].astro's exclusion of series==='3bs1h') - only
+// relevant for English, since that versioned route is English-only for now
+// and kn/ta 3bs1h editions still live at their original flat URLs.
+function eventHref(e: (typeof allEvents)[number]) {
+  if (lang === 'en' && e.data.series === '3bs1h') return `/events/3bs1h/${e.data.edition}`;
+  return getRelativeLocaleUrl(lang, `/events/${bareSlug(e.id)}`);
 }
 
 // Every filterable tag, derived from real content rather than hardcoded -
@@ -138,7 +163,7 @@ const eventsSchema = {
         name: e.data.title,
         startDate: e.data.date.toISOString().slice(0, 10),
         endDate: e.data.endDate ? e.data.endDate.toISOString().slice(0, 10) : undefined,
-        url: new URL(eventHref(e.id), Astro.site).toString(),
+        url: new URL(eventHref(e), Astro.site).toString(),
       },
     })),
   },
@@ -164,7 +189,7 @@ const eventsSchema = {
         upcoming.map((e) => {
           const daysAway = daysUntil(e.data.date, today);
           return (
-            <a class="upcoming-card" href={eventHref(e.id)} data-tags={tagsAttr(e)}>
+            <a class="upcoming-card" href={eventHref(e)} data-tags={tagsAttr(e)}>
               <div class="countdown">
                 <span class="countdown__num">{countdownLabel(daysAway, lang)}</span>
               </div>
@@ -218,32 +243,86 @@ const eventsSchema = {
       <p class="section-hint">{c.pastHint}</p>
 
       <div class="grid" id="grid-past">
-        {past.map((e) => (
-          <a class="card" href={eventHref(e.id)} data-tags={tagsAttr(e)}>
-            {e.data.coverImage && <img src={e.data.coverImage} alt={e.data.coverImageAlt ?? e.data.title} loading="lazy" />}
-            <p class="date">{formatDateRange(e.data.date, e.data.endDate, lang)}</p>
-            <h3>{e.data.title}</h3>
-            <p class="excerpt">{e.data.excerpt}</p>
-            <ul class="tags">
-              {e.data.tags.map((t) => <li class="tag">{t}</li>)}
-              <li class="tag tag--duration">{durationTag(e.data.date, e.data.endDate, lang)}</li>
-            </ul>
-          </a>
-        ))}
+        {pastCards.map((item) =>
+          item.kind === 'event' ? (
+            <a class="card" href={eventHref(item.event)} data-tags={tagsAttr(item.event)}>
+              {item.event.data.coverImage && (
+                <img src={item.event.data.coverImage} alt={item.event.data.coverImageAlt ?? item.event.data.title} loading="lazy" />
+              )}
+              <p class="date">{formatDateRange(item.event.data.date, item.event.data.endDate, lang)}</p>
+              <h3>{item.event.data.title}</h3>
+              <p class="excerpt">{item.event.data.excerpt}</p>
+              <ul class="tags">
+                {item.event.data.tags.map((t) => <li class="tag">{t}</li>)}
+                <li class="tag tag--duration">{durationTag(item.event.data.date, item.event.data.endDate, lang)}</li>
+              </ul>
+            </a>
+          ) : (
+            <a class="card card--stack" href="/events/3bs1h" data-tags={tagsAttr(item.latest)}>
+              <div class="card-stack__media">
+                {/* A dedicated clean photo, not item.latest.data.coverImage -
+                    that's the 5th edition's own cover, one of the old mockup
+                    graphics with baked-in text (see Bs1hSeriesView.astro's
+                    hero for the same issue already fixed there). This card
+                    represents the whole series, not one edition, so it gets
+                    the same photo used on the hub's hero. */}
+                <img class="card-stack__cover" src="/images/events/3bs1h/card.jpg" alt="An Indian Silverbill at TVC" loading="lazy" />
+                {/* Overlaid on the photo itself, not sitting in flow below it
+                    - the cream (reversed) mark, not the green one used
+                    elsewhere, since it needs to read against a photo, not a
+                    light background (see public/images/brand/3bs1h/README.md
+                    on the two ink variants). */}
+                <img src="/images/brand/3bs1h/3bs1h-quad-cream.svg" alt="" class="card-stack__icon" />
+              </div>
+              <p class="date">{formatDateRange(item.latest.data.date, item.latest.data.endDate, lang)}</p>
+              {/* Title + "N editions" on one row, right-aligned - reads more
+                  naturally as one fact about the series than crowding the
+                  icon row above or getting lost among the topical tags
+                  below. */}
+              <div class="card-stack__title-row">
+                <h3>3Bs&amp;1H</h3>
+                <span class="tag card-stack__badge">{item.count} editions</span>
+              </div>
+              <p class="excerpt">TVC's recurring biodiversity walk — see every edition on its own page →</p>
+              <ul class="tags">
+                {item.latest.data.tags.map((t) => <li class="tag">{t}</li>)}
+                <li class="tag tag--duration">{durationTag(item.latest.data.date, item.latest.data.endDate, lang)}</li>
+              </ul>
+            </a>
+          ),
+        )}
       </div>
 
       <div class="timeline" id="timeline-past" hidden>
-        {past.map((e) => (
-          <div class="tl-item" data-tags={tagsAttr(e)}>
-            <p class="date">{formatDateRange(e.data.date, e.data.endDate, lang)}</p>
-            <h3><a href={eventHref(e.id)}>{e.data.title}</a></h3>
-            <p class="excerpt">{e.data.excerpt}</p>
-            <ul class="tags">
-              {e.data.tags.map((t) => <li class="tag">{t}</li>)}
-              <li class="tag tag--duration">{durationTag(e.data.date, e.data.endDate, lang)}</li>
-            </ul>
-          </div>
-        ))}
+        {pastCards.map((item) =>
+          item.kind === 'event' ? (
+            <div class="tl-item" data-tags={tagsAttr(item.event)}>
+              <p class="date">{formatDateRange(item.event.data.date, item.event.data.endDate, lang)}</p>
+              <h3><a href={eventHref(item.event)}>{item.event.data.title}</a></h3>
+              <p class="excerpt">{item.event.data.excerpt}</p>
+              <ul class="tags">
+                {item.event.data.tags.map((t) => <li class="tag">{t}</li>)}
+                <li class="tag tag--duration">{durationTag(item.event.data.date, item.event.data.endDate, lang)}</li>
+              </ul>
+            </div>
+          ) : (
+            <div class="tl-item tl-item--stack" data-tags={tagsAttr(item.latest)}>
+              <span class="card-stack__num">
+                <img src="/images/brand/3bs1h/3bs1h-quad-green.svg" alt="" class="card-stack__icon" />
+              </span>
+              <p class="date">{formatDateRange(item.latest.data.date, item.latest.data.endDate, lang)}</p>
+              <div class="card-stack__title-row">
+                <h3><a href="/events/3bs1h">3Bs&amp;1H</a></h3>
+                <span class="tag card-stack__badge">{item.count} editions</span>
+              </div>
+              <p class="excerpt">TVC's recurring biodiversity walk — see every edition on its own page →</p>
+              <ul class="tags">
+                {item.latest.data.tags.map((t) => <li class="tag">{t}</li>)}
+                <li class="tag tag--duration">{durationTag(item.latest.data.date, item.latest.data.endDate, lang)}</li>
+              </ul>
+            </div>
+          ),
+        )}
       </div>
 
       <p class="empty-state" id="past-empty" hidden>{c.emptyPast}</p>
@@ -256,6 +335,105 @@ const eventsSchema = {
     color: var(--tvc-ink-soft);
     font-size: 0.92rem;
     margin: -8px 0 20px;
+  }
+
+  /* Renders as a plain single card now - an earlier layered "stack" effect
+     (two offset cream rectangles behind the card) was dropped: it added a
+     stacking context + negative-margin interactions that were the root of
+     several rendering bugs here, for a decorative cue that wasn't earning
+     its complexity. */
+  .card-stack__title-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .card-stack__title-row h3 {
+    margin: 0;
+  }
+
+  /* Timeline-only now (no photo there to overlay on to - see
+     .card-stack__media below for the grid card's version). Just an inline
+     icon wrapper. */
+  .card-stack__num {
+    margin-bottom: 10px;
+  }
+
+  /* Layered on top of the plain .tag styling (background/padding/font-size/
+     border-radius already come from there) - just recolors it to stand out
+     as the one brand-specific fact among the topical tags. */
+  .card-stack__badge {
+    font-family: var(--font-3bs1h-label);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--tvc-green-vivid);
+    background: var(--tvc-3bs1h-cream);
+  }
+
+  .card--stack h3 {
+    font-family: var(--font-3bs1h-display);
+  }
+
+  /* The grid card's photo + overlaid mark. .grid img (above) would otherwise
+     also match both images here as plain descendants of .grid and force its
+     own bleed/160px-cover sizing onto them - tag+class selectors below tie
+     it on specificity and win on source order (defined later in this file),
+     confirmed against the actual compiled output, not assumed. */
+  .card-stack__media {
+    position: relative;
+    margin: -28px -28px 16px;
+    border-radius: var(--radius) var(--radius) 0 0;
+    overflow: hidden;
+    height: 160px;
+  }
+
+  /* Scoped under .card-stack__media (not just img.card-stack__cover alone)
+     for the same reason as the icon below - a tie with .grid img was won by
+     .grid img regardless of source order, confirmed against the compiled
+     output. Without this, .grid img's own -28px/-28px/16px margin would
+     apply on top of the margin already carried by the .card-stack__media
+     wrapper itself, pushing the photo taller than every sibling card's. */
+  .card-stack__media img.card-stack__cover {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    margin: 0;
+  }
+
+  /* Base size shared with the timeline's inline usage above - the
+     four-creature mark reads as a scribble under ~120px wide (see public/
+     images/brand/3bs1h/README.md), so 30px height is the smallest legible
+     size, same as the hub's own edition cards (Bs1hSeriesView.astro). */
+  img.card-stack__icon {
+    height: 30px;
+    width: auto;
+  }
+
+  /* Overlay positioning only applies inside the grid card's photo, not the
+     timeline's plain inline usage above. Also repeats height/width at this
+     higher specificity (two classes + element, beats .grid img outright
+     instead of tying with it) - a tie with .grid img was won by .grid img
+     regardless of source order, confirmed against the compiled output, so
+     this can't rely on the plain img.card-stack__icon rule above alone. */
+  .card-stack__media img.card-stack__icon {
+    position: absolute;
+    /* Not 12px/12px - .card-stack__media's own -28px top/right margin (used
+       to bleed the photo to the card's edge) shifts the effective containing-
+       block origin for absolutely-positioned children by that same -28px on
+       BOTH axes, confirmed empirically in a live page (getBoundingClientRect
+       showed the icon 28px higher than intended, and its right edge 28px
+       further right than intended - clipped on both sides by
+       .card-stack__media's overflow:hidden before this fix). 12+28=40 lands
+       it at the intended 12px from the *visible* photo edges. */
+    top: 40px;
+    right: 40px;
+    height: 30px;
+    width: auto;
+  }
+
+  .tl-item--stack::before {
+    border-color: var(--tvc-green-vivid);
   }
 
   /* ---- upcoming highlight ---- */

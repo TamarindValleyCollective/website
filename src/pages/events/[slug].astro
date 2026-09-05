@@ -3,7 +3,15 @@ import EventDetailView from '../../components/views/EventDetailView.astro';
 import { getCollection } from 'astro:content';
 
 export async function getStaticPaths() {
-  const events = await getCollection('events', (e) => !e.data.draft && !e.id.startsWith('kn/') && !e.id.startsWith('ta/'));
+  // 3bs1h editions live at the versioned /events/3bs1h/<n> route instead
+  // (see src/pages/events/3bs1h/[edition].astro) - excluded here so this
+  // route doesn't also emit a live page at their old URL, which would
+  // silently win over the 301 redirects in netlify.toml (those are
+  // unforced, so they only apply when no real file exists at that path).
+  const events = await getCollection(
+    'events',
+    (e) => !e.data.draft && !e.id.startsWith('kn/') && !e.id.startsWith('ta/') && e.data.series !== '3bs1h',
+  );
   return events.map((event) => ({ params: { slug: event.id }, props: { event } }));
 }
 

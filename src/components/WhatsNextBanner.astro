@@ -53,7 +53,16 @@ function countdownText(daysAway: number): string {
         <span class="whats-next__date">{formatDateRange(nextEvent.data.date, nextEvent.data.endDate)}</span>
       </div>
       <span class="whats-next__countdown">{countdownText(daysUntil(nextEvent.data.date, today))}</span>
-      <a class="button whats-next__cta" href={getRelativeLocaleUrl(lang, `/events/${nextEvent.id}`)}>{l.cta}</a>
+      <a
+        class="button whats-next__cta"
+        href={
+          nextEvent.data.series === '3bs1h'
+            ? `/events/3bs1h/${nextEvent.data.edition}`
+            : getRelativeLocaleUrl(lang, `/events/${nextEvent.id}`)
+        }
+      >
+        {l.cta}
+      </a>
     </div>
   </section>
 )}

@@ -17,6 +17,17 @@ const events = defineCollection({
     coverImageAlt: z.string().optional(),
     organizer: z.string().optional(),
     tags: z.array(z.string()).default([]),
+    // Groups editions of the same recurring event under one visual identity
+    // (see EventDetailView / EventsIndexView / PageHero) - a slug like
+    // "3bs1h", not a display name. Omit for one-off events; unrelated to
+    // `tags`, which is for topical filtering, not series grouping.
+    series: z.string().optional(),
+    // The authoritative edition number for a `series` entry - not inferred
+    // from title text, which drifts (existing 3bs1h files disagree on
+    // whether/how they state their own edition number). Also used to build
+    // that series' versioned URL, e.g. /events/3bs1h/5 (see
+    // src/pages/events/3bs1h/[edition].astro). Omit for one-off events.
+    edition: z.number().int().positive().optional(),
     // Lets a placeholder/template event file sit in this folder without
     // showing up on the site - flip to false (or delete the line) once the
     // real details are filled in. See _template.md in this collection.

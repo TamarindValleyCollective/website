@@ -100,11 +100,25 @@ const content = {
 } as const;
 
 const c = content[lang];
+
+// Opt-in sub-brand treatment (see `series` on the events schema) - currently
+// only 3bs1h has a kit; any future recurring series would add its own case
+// here rather than each getting bespoke wiring through PageHero/BaseLayout.
+const brand =
+  event.data.series === '3bs1h'
+    ? // Cream (reversed) mark, not the green ink variant - the hero sits on a
+      // dark photo scrim (see PageHero's .hero-bg__scrim), where the kit's own
+      // green ink has too little contrast to read as a bird rather than a blob.
+      { brandClass: 'hero--3bs1h', logo: '/images/brand/3bs1h/3bs1h-quad-cream.svg', logoAlt: '3Bs&1H — Birds, Butterflies, Bees & Herps' }
+    : {};
 ---
 
 <BaseLayout lang={lang} title={event.data.title} description={event.data.excerpt} image={event.data.coverImage} schema={[eventSchema]}>
-  <PageHero eyebrow={formatDateRange(event.data.date, event.data.endDate, lang)} title={event.data.title} image={event.data.coverImage} imageAlt={event.data.coverImageAlt ?? event.data.title} />
-  <article class="section wrapper prose">
+  <PageHero eyebrow={formatDateRange(event.data.date, event.data.endDate, lang)} title={event.data.title} image={event.data.coverImage} imageAlt={event.data.coverImageAlt ?? event.data.title} {...brand} />
+  <article class={`section wrapper prose ${event.data.series === '3bs1h' ? 'event--3bs1h' : ''}`.trim()}>
+    {event.data.series === '3bs1h' && (
+      <a class="series-link" href="/events/3bs1h">Part of 3Bs&amp;1H →</a>
+    )}
     <div class="meta">
       {event.data.organizer && <p class="organizer">{c.organizedBy(event.data.organizer)}</p>}
       <ul class="tags">
@@ -252,6 +266,16 @@ const c = content[lang];
 </BaseLayout>
 
 <style>
+  .series-link {
+    display: inline-block;
+    font-family: var(--font-3bs1h-label);
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tvc-green-vivid);
+    margin-bottom: 16px;
+  }
+
   .meta {
     display: flex;
     flex-wrap: wrap;
@@ -287,6 +311,19 @@ const c = content[lang];
   .tag--duration {
     background: var(--tvc-orange-tint);
     color: #a85712;
+  }
+
+  /* 3Bs&1H sub-brand body — opt-in via the `event--3bs1h` class, only ever
+     applied when event.data.series === '3bs1h' (see the brand const above).
+     Restyles headings/tags within .prose rather than forking a new template. */
+  .event--3bs1h.prose :global(h2) {
+    font-family: var(--font-3bs1h-display);
+    font-weight: 500;
+  }
+
+  .event--3bs1h .tag {
+    background: var(--tvc-3bs1h-cream);
+    color: var(--tvc-green-vivid);
   }
 
   .prose :global(h2) {

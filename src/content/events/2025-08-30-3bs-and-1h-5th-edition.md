@@ -1,11 +1,13 @@
 ---
-title: "3Bs&1H@TVC - 5th Edition"
+title: "3Bs&1H — Edition 5"
 date: 2025-08-30
 endDate: 2025-08-31
 excerpt: "The 5th edition of TVC's biodiversity walks — birds, butterflies, bees, and a moth screen, with naturalist Deepa Mohan."
 coverImage: "/images/events/2025-08-30-3bs-and-1h-5th-edition/hero.jpg"
 coverImageAlt: "Event poster for the 5th edition of 3Bs&1H Camping & Biodiversity Walk with Deepa Mohan, featuring a coppersmith barbet on a berry branch."
 tags: ["biodiversity", "walk"]
+series: "3bs1h"
+edition: 5
 ---
 
 TVC is a labour of love. With more than 80 species of birds and a wide variety of butterflies, insects, and plants, TVC is a biodiversity hotspot. The 5th edition of 3Bs&1H@TVC — explore the richness and abundance of life around you with the keen eyes of Deepa Mohan, avid birder, traveller, naturalist, and visual storyteller.
