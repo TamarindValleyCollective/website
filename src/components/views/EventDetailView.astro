@@ -388,15 +388,15 @@ const brand =
 
   /* 3Bs&1H sub-brand body — opt-in via the `event--3bs1h` class, only ever
      applied when event.data.series === '3bs1h' (see the brand const above).
-     Restyles headings/tags within .prose rather than forking a new template. */
+     Restyles headings within .prose rather than forking a new template.
+     Tag pills deliberately stay the same green/orange scheme every other
+     event uses (see .tag/.tag--duration above) - a past attempt to give
+     3bs1h its own cream/green tag colors also had a specificity bug that
+     silently swallowed the orange duration pill into the same cream look,
+     which is what actually got flagged as inconsistent. */
   .event--3bs1h.prose :global(h2) {
     font-family: var(--font-3bs1h-display);
     font-weight: 500;
-  }
-
-  .event--3bs1h .tag {
-    background: var(--tvc-3bs1h-cream);
-    color: var(--tvc-green-vivid);
   }
 
   .prose :global(h2) {
