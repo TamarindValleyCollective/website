@@ -611,23 +611,43 @@ const brand =
     margin: 16px 0 32px;
   }
 
-  @media (max-width: 640px) {
-    .prose :global(.poster-cluster) {
-      grid-template-columns: 1fr;
-    }
-  }
-
   .prose :global(.poster-cluster .poster) {
     width: 100%;
     max-width: none;
     margin: 0;
   }
 
+  /* Content order from the markdown is butterfly, hilltop, nature-journal.
+     The hilltop shot is portrait -- give it its own column spanning both
+     rows, with the two landscape shots stacked beside it. */
+  .prose :global(.poster-cluster .poster:nth-child(2)) {
+    grid-row: span 2;
+  }
+
   .prose :global(.poster-cluster .poster img) {
-    aspect-ratio: 4 / 3;
     width: 100%;
-    height: auto;
+    height: 100%;
     object-fit: cover;
+  }
+
+  .prose :global(.poster-cluster .poster:nth-child(1) img),
+  .prose :global(.poster-cluster .poster:nth-child(3) img) {
+    aspect-ratio: 4 / 3;
+  }
+
+  @media (max-width: 640px) {
+    .prose :global(.poster-cluster) {
+      grid-template-columns: 1fr;
+    }
+
+    .prose :global(.poster-cluster .poster:nth-child(2)) {
+      grid-row: auto;
+    }
+
+    .prose :global(.poster-cluster .poster:nth-child(2) img) {
+      aspect-ratio: 4 / 3;
+      height: auto;
+    }
   }
 
   .prose :global(.poster) {
