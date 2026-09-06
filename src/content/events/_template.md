@@ -57,4 +57,7 @@ call-to-action last, at the very bottom.
 
 If you set `price` above, that call-to-action must be wrapped with
 `id="cta"` (e.g. `<div class="cta card" id="cta">`), so the sidebar's
-"Book now" button has something to jump to.
+"Request to book" button has something to jump to. Don't call it a "Book
+now" button or heading in the body either - the flow behind it is an
+offline request TVC follows up on by hand, not a real-time checkout, and
+"now" reads as a promise this site doesn't keep.

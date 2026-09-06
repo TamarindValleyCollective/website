@@ -148,13 +148,42 @@ const brand =
         and three image treatments) before landing here: it directly answers
         "the price is a repeat"/"almost hidden" by being the ONE place price
         is stated, using data already on the page rather than a new image
-        that would need sourcing per event. The sidebar's "Book now" link
-        always points at #cta - pair `price` with a call-to-action element
-        carrying that id somewhere in the event (this component renders one
-        itself for 3bs1h; other events put it on their own body's
-        Register/booking block, see _template.md). */}
+        that would need sourcing per event. The sidebar's "Request to book"
+        link always points at #cta - pair `price` with a call-to-action
+        element carrying that id somewhere in the event (this component
+        renders one itself for 3bs1h; other events put it on their own
+        body's Register/booking block, see _template.md).
+
+        Markup order below is aside-then-main, not main-then-aside, even
+        though the aside renders as the right-hand column on desktop (see
+        .layout-grid using grid-template-areas to place it there regardless
+        of source order): on the single-column mobile layout, `<Content />`
+        always ends with its own booking CTA at #cta (see _template.md), so
+        a literal main-then-aside markup order stacked the price/"book"
+        summary card AFTER that CTA - a visitor had to scroll past the
+        booking form to reach the card that was supposed to summarize it,
+        and the card's own "book" link then jumped backward, up the page,
+        to a form already behind them. Aside-first markup makes the summary
+        the first thing after the tags on mobile (matching its "at a
+        glance" purpose) and makes its "book" link jump forward, down the
+        page, to the CTA - the direction a scroll link should point. */}
     {showSidebar ? (
       <div class="layout-grid">
+        <aside class="layout-grid__aside">
+          <div class="info-card">
+            <p class="info-card__label">At a glance</p>
+            <p class="info-card__date">{formatDateRange(event.data.date, event.data.endDate, lang)}</p>
+            <ul class="info-card__prices">
+              {event.data.price!.map((p) => <li><strong>{p.amount}</strong> {p.label}</li>)}
+            </ul>
+            {/* Not "Book now" - that read as an instant online checkout to
+                at least one visitor, when this is actually an offline
+                request TVC (or, for 3bs1h, Linger) follows up on by hand;
+                see BookingInquiry's own submit button, which says "Send
+                booking request" for the same reason. */}
+            <a class="button info-card__cta" href="#cta">Request to book ↓</a>
+          </div>
+        </aside>
         <div class="layout-grid__main">
           <div class="meta">
             {event.data.organizer && <p class="organizer">{c.organizedBy(event.data.organizer)}</p>}
@@ -175,7 +204,7 @@ const brand =
               <BookingInquiry
                 lang={lang}
                 type={event.data.title}
-                heading="Book your spot"
+                heading="Request to book"
                 packageOptions={['Deck-based tent / bamboo hut — ₹3,500 per person', 'Campground tent / DIY camping — ₹3,200 per person']}
                 note="Choose your accommodation tier, then send your details to Linger by form or WhatsApp."
                 whatsappMessage={`Hi! I'd like to book a spot for ${event.data.title} (${formatDateRange(event.data.date, event.data.endDate, lang)}).`}
@@ -184,16 +213,6 @@ const brand =
             </div>
           )}
         </div>
-        <aside class="layout-grid__aside">
-          <div class="info-card">
-            <p class="info-card__label">At a glance</p>
-            <p class="info-card__date">{formatDateRange(event.data.date, event.data.endDate, lang)}</p>
-            <ul class="info-card__prices">
-              {event.data.price!.map((p) => <li><strong>{p.amount}</strong> {p.label}</li>)}
-            </ul>
-            <a class="button info-card__cta" href="#cta">Book now ↓</a>
-          </div>
-        </aside>
       </div>
     ) : (
       <>
@@ -489,11 +508,22 @@ const brand =
   .layout-grid {
     display: grid;
     grid-template-columns: 1fr 300px;
+    /* Named areas, not source order, decide visual placement - the markup
+       puts <aside> before .layout-grid__main (see the comment above that
+       markup) so it appears first when this collapses to one column on
+       mobile, but on this two-column desktop layout it still needs to sit
+       on the right, beside the reading column, as before. */
+    grid-template-areas: 'main aside';
     gap: 48px;
     align-items: start;
   }
 
+  .layout-grid__main {
+    grid-area: main;
+  }
+
   .layout-grid__aside {
+    grid-area: aside;
     position: sticky;
     top: 100px;
   }
@@ -550,6 +580,10 @@ const brand =
   @media (max-width: 800px) {
     .layout-grid {
       grid-template-columns: 1fr;
+      /* Single column now, so fall back to source order: aside (the "at a
+         glance" price/booking-request summary) first, then main - see the
+         markup comment above for why that order matters here. */
+      grid-template-areas: 'aside' 'main';
     }
 
     .layout-grid__aside {

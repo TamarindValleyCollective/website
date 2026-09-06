@@ -63,7 +63,7 @@ const events = defineCollection({
     // turns the sidebar on - pair it with a call-to-action element somewhere
     // in the event (the body's own "Register"/booking block, or one
     // EventDetailView renders itself) carrying `id="cta"`, so the sidebar's
-    // "Book now" link has something to jump to.
+    // "Request to book" link has something to jump to.
     price: z.array(z.object({ amount: z.string(), label: z.string() })).optional(),
   }),
 });

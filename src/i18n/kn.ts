@@ -51,6 +51,7 @@ export default {
     message: 'ಸಂದೇಶ',
     sendInquiry: 'ವಿಚಾರಣೆ ಕಳುಹಿಸಿ',
     sendEnquiry: 'ವಿಚಾರಣೆ ಕಳುಹಿಸಿ',
+    sendBookingRequest: 'ಬುಕಿಂಗ್ ವಿನಂತಿ ಕಳುಹಿಸಿ',
     chooseOne: 'ಒಂದನ್ನು ಆಯ್ಕೆಮಾಡಿ',
     honeypotLabel: 'ಇದನ್ನು ಭರ್ತಿ ಮಾಡಬೇಡಿ:',
     preferChat: 'ಚಾಟ್ ಮಾಡಲು ಬಯಸುವಿರಾ? ನಮ್ಮ ಭೇಟಿ-ಬುಕಿಂಗ್ ಲೈನ್‌ಗೆ ನೇರವಾಗಿ ಸಂದೇಶ ಕಳುಹಿಸಿ:',
