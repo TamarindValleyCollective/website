@@ -2,7 +2,6 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import BookingInquiry from '../BookingInquiry.astro';
-import { getRelativeLocaleUrl } from 'astro:i18n';
 import { useTranslations, type Locale } from '../../i18n/utils';
 import { organizationId } from '../../utils/schema';
 
@@ -34,9 +33,9 @@ const content = {
       ['Bring your own tent, per person/weekend', '₹2,450'],
     ],
     pricingNote: 'Rates include meals, the sunset hike, and the guided farm tour. Confirm current pricing and availability when you send your inquiry below.',
+    bookingHeading: 'Book your stay',
     bookingWhatsapp: "Hi! I'd like to know more about overnight camping at TVC.",
     bookingNote: "Camping stays are coordinated with our hospitality partner, Linger — send an inquiry or message us and we'll take it from there.",
-    checkAvailability: 'Check rough availability by month',
   },
   kn: {
     metaDescription: 'ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ನಲ್ಲಿ ಎರಡು ದಿನಗಳ ರಾತ್ರಿ ವಾಸ್ತವ್ಯ ಶಿಬಿರ — ಆಗಮನ, ಸೂರ್ಯಾಸ್ತದ ವೀಕ್ಷಣಾ ಸ್ಥಳಕ್ಕೆ ಚಾರಣ, ಕ್ಯಾಂಪ್‌ಫೈರ್, ಮತ್ತು ಮಾರನೆಯ ಬೆಳಿಗ್ಗೆ ಮಾರ್ಗದರ್ಶಿತ ಫಾರ್ಮ್ ಪ್ರವಾಸ.',
@@ -58,9 +57,9 @@ const content = {
       ['ನಿಮ್ಮದೇ ಟೆಂಟ್ ತನ್ನಿ, ಪ್ರತಿ ವ್ಯಕ್ತಿಗೆ/ವಾರಾಂತ್ಯಕ್ಕೆ', '₹2,450'],
     ],
     pricingNote: 'ದರಗಳಲ್ಲಿ ಊಟ, ಸೂರ್ಯಾಸ್ತದ ಚಾರಣ ಮತ್ತು ಮಾರ್ಗದರ್ಶಿತ ಫಾರ್ಮ್ ಪ್ರವಾಸ ಸೇರಿದೆ. ಕೆಳಗೆ ನಿಮ್ಮ ವಿಚಾರಣೆಯನ್ನು ಕಳುಹಿಸುವಾಗ ಪ್ರಸ್ತುತ ಬೆಲೆ ಮತ್ತು ಲಭ್ಯತೆಯನ್ನು ಖಚಿತಪಡಿಸಿಕೊಳ್ಳಿ.',
+    bookingHeading: 'ನಿಮ್ಮ ವಾಸ್ತವ್ಯವನ್ನು ಬುಕ್ ಮಾಡಿ',
     bookingWhatsapp: 'ಹಾಯ್! TVC ಯಲ್ಲಿ ರಾತ್ರಿ ವಾಸ್ತವ್ಯ ಶಿಬಿರದ ಬಗ್ಗೆ ಇನ್ನಷ್ಟು ತಿಳಿಯಲು ಬಯಸುತ್ತೇನೆ.',
     bookingNote: 'ಶಿಬಿರ ವಾಸ್ತವ್ಯಗಳನ್ನು ನಮ್ಮ ಆತಿಥ್ಯ ಪಾಲುದಾರ Linger ಜೊತೆ ಸಂಯೋಜಿಸಲಾಗುತ್ತದೆ — ವಿಚಾರಣೆ ಕಳುಹಿಸಿ ಅಥವಾ ನಮಗೆ ಸಂದೇಶ ಕಳುಹಿಸಿ, ನಾವು ಅಲ್ಲಿಂದ ನಿರ್ವಹಿಸುತ್ತೇವೆ.',
-    checkAvailability: 'ತಿಂಗಳವಾರು ಅಂದಾಜು ಲಭ್ಯತೆಯನ್ನು ಪರಿಶೀಲಿಸಿ',
   },
   ta: {
     metaDescription: 'டமரிண்ட் வேலி கலெக்டிவில் இரண்டு நாள் இரவு தங்கும் முகாம் — வருகை, சூரிய அஸ்தமன பார்வையிடத்திற்கு மலையேற்றம், கேம்ப்ஃபயர், மற்றும் மறுநாள் காலை வழிகாட்டப்பட்ட பண்ணை சுற்றுலா.',
@@ -82,14 +81,13 @@ const content = {
       ['உங்கள் சொந்த கூடாரத்தைக் கொண்டு வாருங்கள், ஒரு நபருக்கு/வார இறுதிக்கு', '₹2,450'],
     ],
     pricingNote: 'விலைகளில் உணவு, சூரிய அஸ்தமன மலையேற்றம், மற்றும் வழிகாட்டப்பட்ட பண்ணை சுற்றுலா அடங்கும். கீழே உங்கள் விசாரணையை அனுப்பும்போது தற்போதைய விலை மற்றும் கிடைக்கும் தன்மையை உறுதிப்படுத்தவும்.',
+    bookingHeading: 'உங்கள் தங்குமிடத்தை முன்பதிவு செய்யுங்கள்',
     bookingWhatsapp: 'வணக்கம்! TVC-யில் இரவு தங்கும் முகாம் பற்றி மேலும் அறிய விரும்புகிறேன்.',
     bookingNote: 'முகாம் தங்குமிடங்கள் எங்கள் விருந்தோம்பல் கூட்டாளர் Linger உடன் ஒருங்கிணைக்கப்படுகின்றன — விசாரணையை அனுப்பவும் அல்லது எங்களுக்கு செய்தி அனுப்பவும், நாங்கள் அங்கிருந்து கவனித்துக்கொள்வோம்.',
-    checkAvailability: 'மாத வாரியான தோராயமான கிடைக்கும் தன்மையைச் சரிபார்க்கவும்',
   },
 } as const;
 
 const c = content[lang];
-const availabilityHref = getRelativeLocaleUrl(lang, '/visit/availability');
 
 // Real, fixed-price rows only (e.g. skips "50% of the adult rate", which
 // isn't itself a price) - straight off the same pricingRows the table below
@@ -132,11 +130,11 @@ const serviceSchema = {
       </tbody>
     </table>
     <p class="pricing-note">{c.pricingNote}</p>
-    <p class="pricing-note"><a href={availabilityHref}>{c.checkAvailability}</a></p>
 
     <BookingInquiry
       lang={lang}
       type="Overnight Stay"
+      heading={c.bookingHeading}
       whatsappMessage={c.bookingWhatsapp}
       note={c.bookingNote}
     />

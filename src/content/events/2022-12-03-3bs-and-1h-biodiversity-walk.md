@@ -1,11 +1,15 @@
 ---
-title: "3Bs and 1H - Dusk to Dawn: Biodiversity Walks@TVC (Birds/Butterflies/Bees)"
+title: "3Bs&1H — Edition 3"
 date: 2022-12-03
 endDate: 2022-12-04
 excerpt: "Spend Saturday evening and Sunday exploring the property, with guided naturalist tours to watch and identify birds, butterflies, insects, and plants. Limited to 20 participants."
 coverImage: "/images/events/2022-12-03-3bs-and-1h-biodiversity-walk/hero.jpg"
 coverImageAlt: "Event poster for the 3Bs&1H Dusk to Dawn Biodiversity Walk, with a close-up photo of two mating grass blue butterflies."
+coverImageWidth: 1080
+coverImageHeight: 1467
 tags: ["biodiversity", "walk"]
+series: "3bs1h"
+edition: 3
 ---
 
 ## **Event Summary**

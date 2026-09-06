@@ -1,5 +1,5 @@
 ---
-import { sectionFor } from '../data/site-map';
+import { sectionFor, EXPLORE_LINKS } from '../data/site-map';
 import { useTranslations, stripLocalePrefix, type Locale } from '../i18n/utils';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import JsonLd from './JsonLd.astro';
@@ -21,6 +21,17 @@ const barePathname = stripLocalePrefix(pathname);
 const section = barePathname === '/' ? null : sectionFor(barePathname);
 const sectionLabelKey = section?.label === 'Explore' ? 'nav.explore' : 'nav.engage';
 
+// Events is the one Explore section deep enough (listing, individual events,
+// and now the 3bs1h hub + its own versioned editions) that landing straight
+// on a leaf page with no "Events" stop in between left no easy way back to
+// the listing - reusing site-map.ts's own entry rather than duplicating its
+// label/href. Not generalized to every other section (People, Ecosystem,
+// ...) - none of those are nested deep enough yet to need it, and adding it
+// everywhere would be a much bigger sitewide trail change than asked for.
+const eventsLink = EXPLORE_LINKS.find((l) => l.key === 'events')!;
+const showEventsCrumb = barePathname === eventsLink.href || barePathname.startsWith(eventsLink.href + '/');
+const eventsHref = showEventsCrumb ? getRelativeLocaleUrl(lang, eventsLink.href) : '';
+
 // getRelativeLocaleUrl unconditionally appends a trailing slash, which
 // would land after the hash (`/kn/#explore/`) and break the anchor if
 // passed the raw `/#explore` — split the hash off first and reattach it to
@@ -32,7 +43,7 @@ const sectionHref = section ? (() => {
 })() : '';
 
 // Mirrors the visual trail above 1:1 so the two never drift apart - same
-// three stops (Home / section / current page), just as schema.org
+// stops (Home / section / [Events] / current page), just as schema.org
 // BreadcrumbList instead of markup. Last item's `item` URL is included too;
 // Google's guidance treats omitting it on the current page as optional, not
 // required.
@@ -42,7 +53,10 @@ const breadcrumbSchema = section ? {
   itemListElement: [
     { '@type': 'ListItem', position: 1, name: t('common.home'), item: new URL(getRelativeLocaleUrl(lang, '/'), Astro.site).toString() },
     { '@type': 'ListItem', position: 2, name: t(sectionLabelKey), item: new URL(sectionHref, Astro.site).toString() },
-    { '@type': 'ListItem', position: 3, name: pageTitle, item: new URL(pathname, Astro.site).toString() },
+    ...(showEventsCrumb
+      ? [{ '@type': 'ListItem', position: 3, name: t(`nav.${eventsLink.key}`), item: new URL(eventsHref, Astro.site).toString() }]
+      : []),
+    { '@type': 'ListItem', position: showEventsCrumb ? 4 : 3, name: pageTitle, item: new URL(pathname, Astro.site).toString() },
   ],
 } : null;
 ---
@@ -54,6 +68,12 @@ const breadcrumbSchema = section ? {
       <span class="breadcrumbs__sep" aria-hidden="true">/</span>
       <a href={sectionHref}>{t(sectionLabelKey)}</a>
       <span class="breadcrumbs__sep" aria-hidden="true">/</span>
+      {showEventsCrumb && (
+        <>
+          <a href={eventsHref}>{t(`nav.${eventsLink.key}`)}</a>
+          <span class="breadcrumbs__sep" aria-hidden="true">/</span>
+        </>
+      )}
       <span class="breadcrumbs__current" aria-current="page">{pageTitle}</span>
     </div>
   </nav>

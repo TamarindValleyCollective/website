@@ -6,7 +6,9 @@
 // PostgREST's REST surface for these few operations (list/upsert/insert) is
 // simple enough not to justify the @supabase/supabase-js dependency.
 
-function restHeaders(extra = {}) {
+// Exported for reuse by accommodation-db.mjs, which talks to the same
+// project's rpc/ endpoints with the same service_role auth.
+export function restHeaders(extra = {}) {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceRoleKey) {

@@ -1,0 +1,238 @@
+---
+// English-only for now, and deliberately not part of the `events` collection
+// itself (it's a hub *about* the collection's series entries, not one) - see
+// AnanasProjectView.astro for the site's one other precedent of a bespoke,
+// hand-authored page living alongside a generic collection template.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHero from '../PageHero.astro';
+import { getCollection } from 'astro:content';
+import { formatDateRange } from '../../utils/events';
+
+// Latest edition first - this is a "what's happened in this series" page,
+// not an archive read front-to-back, so the most recent/upcoming edition
+// should be the first thing a visitor sees.
+const editions = (
+  await getCollection('events', (e) => e.data.series === '3bs1h' && !e.data.draft && !e.id.includes('/'))
+).sort((a, b) => (b.data.edition ?? 0) - (a.data.edition ?? 0));
+
+const today = new Date();
+
+const articleSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  headline: '3Bs&1H',
+  description:
+    "3Bs&1H is TVC's recurring dusk-to-dawn biodiversity walk - Birds, Butterflies, Bees & Herps - now in its sixth edition.",
+  image: new URL('/images/events/3bs1h/hero.jpg', Astro.site).toString(),
+  publisher: {
+    '@type': 'Organization',
+    name: 'Tamarind Valley Collective',
+    logo: { '@type': 'ImageObject', url: new URL('/images/brand/tvc-logo-mark.png', Astro.site).toString() },
+  },
+};
+---
+
+<BaseLayout
+  lang="en"
+  title="3Bs&1H"
+  description="3Bs&1H is TVC's recurring dusk-to-dawn biodiversity walk - Birds, Butterflies, Bees & Herps - now in its sixth edition. Naturalist-led, overnight, limited to 20 participants."
+  image="/images/events/3bs1h/hero.jpg"
+  imageWidth={2048}
+  imageHeight={600}
+  schema={[articleSchema]}
+  translated={false}
+>
+  <div class="bs1h-hero-wrap">
+    <PageHero
+      brandClass="hero--3bs1h"
+      eyebrow="TVC's recurring biodiversity walk"
+      title="3Bs&1H"
+      intro="Birds, Butterflies, Bees & Herps - a dusk-to-dawn walk with TVC's naturalists, now in its sixth edition."
+      image="/images/events/3bs1h/hero.jpg"
+      imageAlt="A small flock of Indian Silverbills perched on a wire at TVC"
+      imagePosition="70% 20%"
+      logo="/images/brand/3bs1h/3bs1h-quad-cream.svg"
+      logoAlt="3Bs&1H — Birds, Butterflies, Bees & Herps"
+    />
+    {/* Photo has no open license on iNaturalist (all rights reserved) -
+        Sharath is confirming reuse permission directly with the photographer.
+        Don't republish/share this image elsewhere until that's confirmed. */}
+    <p class="bs1h-hero-credit">
+      Indian Silverbills at TVC, photographed by{' '}
+      <a href="https://www.inaturalist.org/observations/384968169" target="_blank" rel="noopener noreferrer">Omshivaprakash H L</a>{' '}
+      · used with permission, iNaturalist
+    </p>
+  </div>
+
+  <article class="section wrapper prose event--3bs1h">
+    <h2>What is 3Bs&1H?</h2>
+    <p>
+      Six editions in, 3Bs&1H has become TVC's signature overnight program - a guided walk
+      through the property's birds, butterflies, bees, and herps (reptiles and amphibians),
+      run dusk to dawn with naturalists who know this valley by ear as much as by eye.
+      Participants arrive in the afternoon, walk the property's high-activity spots into the
+      evening, gather around a campfire for a moth screen after dinner, then rise before
+      sunrise for a second round of birding and a hike to the top of the hill.
+    </p>
+    <p>
+      Each edition is hosted with TVC's hospitality partner, Linger, and limited to around
+      20 participants so every naturalist walk stays small enough to actually watch and
+      identify what's around you, not just pass through it.
+    </p>
+
+    <h2>Editions</h2>
+    <div class="bs1h-editions-grid">
+      {editions.map((event) => {
+        const isUpcoming = event.data.date >= today;
+        return (
+          <a class="bs1h-edition-card" href={`/events/3bs1h/${event.data.edition}`}>
+            {event.data.coverImage && (
+              <img class="bs1h-edition-card__cover" src={event.data.coverImage} alt={event.data.coverImageAlt ?? event.data.title} loading="lazy" />
+            )}
+            <div class="bs1h-edition-card__body">
+              <span class="bs1h-edition-card__num">
+                <img src="/images/brand/3bs1h/3bs1h-quad-green.svg" alt="" class="bs1h-edition-card__icon" />
+                {isUpcoming && <span class="bs1h-edition-card__badge">Upcoming</span>}
+              </span>
+              <p class="bs1h-edition-card__date">{formatDateRange(event.data.date, event.data.endDate, 'en')}</p>
+              {/* Edition number, not "3Bs&1H" - the icon row + page context
+                  already establish the series, so the number is what actually
+                  distinguishes one card from another. event.data.title itself
+                  stays "3Bs&1H — Edition N" for the browser tab/breadcrumb. */}
+              <h3>Edition {event.data.edition}</h3>
+              <p class="bs1h-edition-card__excerpt">{event.data.excerpt}</p>
+            </div>
+          </a>
+        );
+      })}
+    </div>
+    <p class="bs1h-editions__note">
+      3Bs&1H began before this archive did, so edition numbering here starts from the first
+      one we have a written record of.
+    </p>
+  </article>
+</BaseLayout>
+
+<style>
+  /* Wraps PageHero so this credit chip can anchor to the hero box itself
+     (.hero--image is already position:relative) rather than sitting in normal
+     flow after it, where it would land on the hero's own fixed-position
+     background photo - illegible regardless of text color, since that photo
+     stays visible until the user scrolls (see PageHero's fade script). */
+  .bs1h-hero-wrap {
+    position: relative;
+  }
+
+  .bs1h-hero-credit {
+    position: absolute;
+    right: 20px;
+    bottom: 14px;
+    z-index: 1;
+    margin: 0;
+    font-size: 0.72rem;
+    color: #fff;
+    background: rgba(18, 39, 26, 0.55);
+    backdrop-filter: blur(2px);
+    padding: 4px 10px;
+    border-radius: 999px;
+  }
+
+  .bs1h-hero-credit a {
+    color: #fff;
+    text-decoration: underline;
+  }
+
+  /* The four-creature mark reads as a scribble under ~120px wide (see
+     public/images/brand/3bs1h/README.md's own rule) - sized to clear that
+     floor rather than the single-bird mark's compact 14px used elsewhere. */
+  .bs1h-edition-card__icon {
+    height: 30px;
+    width: auto;
+  }
+
+  /* Astro scopes <style> per component, so EventDetailView.astro's own
+     .event--3bs1h h2 rule doesn't reach this file's h2 elements even though
+     they share the class - each component needs its own copy. */
+  .event--3bs1h h2 {
+    font-family: var(--font-3bs1h-display);
+    font-weight: 500;
+  }
+
+  .bs1h-editions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 22px;
+    margin: 0 0 20px;
+  }
+
+  .bs1h-edition-card {
+    display: flex;
+    flex-direction: column;
+    background: var(--tvc-3bs1h-cream);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow-soft);
+    color: var(--tvc-ink);
+    text-decoration: none;
+    transition: transform 0.15s ease;
+  }
+
+  .bs1h-edition-card:hover {
+    color: var(--tvc-ink);
+    transform: translateY(-2px);
+  }
+
+  .bs1h-edition-card__cover {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+  }
+
+  .bs1h-edition-card__body {
+    padding: 18px 20px 22px;
+  }
+
+  .bs1h-edition-card__num {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-3bs1h-label);
+    font-size: 0.74rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--tvc-green-vivid);
+  }
+
+  .bs1h-edition-card__badge {
+    background: var(--tvc-orange-cta);
+    color: #fff;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    border-radius: 999px;
+    padding: 2px 9px;
+  }
+
+  .bs1h-edition-card__date {
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
+    margin: 6px 0 4px;
+  }
+
+  .bs1h-edition-card h3 {
+    font-family: var(--font-3bs1h-display);
+    font-weight: 500;
+    font-size: 1.08rem;
+    margin: 0 0 6px;
+  }
+
+  .bs1h-edition-card__excerpt {
+    font-size: 0.88rem;
+    color: var(--tvc-ink-soft);
+    margin: 0;
+  }
+
+  .bs1h-editions__note {
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+  }
+</style>

@@ -15,8 +15,30 @@ const events = defineCollection({
     // attribute - falls back to the event title (see EventsIndexView /
     // EventDetailView) when not set, same as before this field existed.
     coverImageAlt: z.string().optional(),
+    // The actual pixel dimensions of coverImage. BaseLayout's og:image:width
+    // /height must match the real file or WhatsApp's link-preview crawler
+    // silently discards the image and falls back to the site's
+    // apple-touch-icon (see BaseLayout.astro's own comment on this) - every
+    // event page was hitting exactly that bug by passing a custom coverImage
+    // without matching dimensions, so BaseLayout's 4204x1330 default never
+    // matched. Get the real numbers with `sips -g pixelWidth -g pixelHeight
+    // <file>`. Omit only alongside coverImage itself (no custom image, no
+    // custom dimensions needed).
+    coverImageWidth: z.number().int().positive().optional(),
+    coverImageHeight: z.number().int().positive().optional(),
     organizer: z.string().optional(),
     tags: z.array(z.string()).default([]),
+    // Groups editions of the same recurring event under one visual identity
+    // (see EventDetailView / EventsIndexView / PageHero) - a slug like
+    // "3bs1h", not a display name. Omit for one-off events; unrelated to
+    // `tags`, which is for topical filtering, not series grouping.
+    series: z.string().optional(),
+    // The authoritative edition number for a `series` entry - not inferred
+    // from title text, which drifts (existing 3bs1h files disagree on
+    // whether/how they state their own edition number). Also used to build
+    // that series' versioned URL, e.g. /events/3bs1h/5 (see
+    // src/pages/events/3bs1h/[edition].astro). Omit for one-off events.
+    edition: z.number().int().positive().optional(),
     // Lets a placeholder/template event file sit in this folder without
     // showing up on the site - flip to false (or delete the line) once the
     // real details are filled in. See _template.md in this collection.
@@ -31,6 +53,18 @@ const events = defineCollection({
     // (see netlify/functions/event-interest.mts).
     interestNote: z.string().optional(),
     interestNoteHref: z.string().optional(),
+    // One row per price line in the "at a glance" sidebar on an upcoming
+    // event's detail page (see EventDetailView.astro) - `amount` renders
+    // bold, `label` plain, e.g. { amount: "INR 3,500", label: "deck/hut" }
+    // or { amount: "Free", label: "children under 10" }. Not reconstructed
+    // from the body's own Pricing/What's-included section - this is the one
+    // place the price actually lives; the body shouldn't restate it. Omit
+    // for free events or ones with no fixed price yet. Setting this is what
+    // turns the sidebar on - pair it with a call-to-action element somewhere
+    // in the event (the body's own "Register"/booking block, or one
+    // EventDetailView renders itself) carrying `id="cta"`, so the sidebar's
+    // "Request to book" link has something to jump to.
+    price: z.array(z.object({ amount: z.string(), label: z.string() })).optional(),
   }),
 });
 

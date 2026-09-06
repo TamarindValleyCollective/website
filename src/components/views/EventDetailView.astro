@@ -2,6 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import AddToCalendar from '../AddToCalendar.astro';
+import BookingInquiry from '../BookingInquiry.astro';
 import { render, type CollectionEntry } from 'astro:content';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import { formatDateRange, durationTag } from '../../utils/events';
@@ -26,6 +27,17 @@ const canonicalId = event.id.replace(/^(kn|ta)\//, '');
 // Only worth offering on events that haven't happened yet -- adding a past
 // event to your calendar is a dead end, not a conversion.
 const isUpcoming = event.data.date >= new Date();
+// The "at a glance" sidebar only earns its place once there's a real price
+// to show and something still bookable -- a past event's price is no longer
+// actionable, and an event with no `price` set has nothing to summarize.
+const showSidebar = isUpcoming && Boolean(event.data.price?.length);
+// Only pass a custom social-preview image when its real dimensions are also
+// known - BaseLayout's og:image:width/height must match the actual file or
+// WhatsApp's crawler silently discards the image and falls back to the
+// site's apple-touch-icon (the bug this guards against). An event missing
+// coverImageWidth/Height degrades to BaseLayout's own sitewide default
+// image+dimensions instead of repeating that failure.
+const hasSizedCoverImage = Boolean(event.data.coverImage && event.data.coverImageWidth && event.data.coverImageHeight);
 const calendarEvent = {
   uid: canonicalId,
   title: event.data.title,
@@ -100,27 +112,136 @@ const content = {
 } as const;
 
 const c = content[lang];
+
+// Opt-in sub-brand treatment (see `series` on the events schema) - currently
+// only 3bs1h has a kit; any future recurring series would add its own case
+// here rather than each getting bespoke wiring through PageHero/BaseLayout.
+const brand =
+  event.data.series === '3bs1h'
+    ? // Cream (reversed) mark, not the green ink variant - the hero sits on a
+      // dark photo scrim (see PageHero's .hero-bg__scrim), where the kit's own
+      // green ink has too little contrast to read as a bird rather than a blob.
+      { brandClass: 'hero--3bs1h', logo: '/images/brand/3bs1h/3bs1h-quad-cream.svg', logoAlt: '3Bs&1H — Birds, Butterflies, Bees & Herps' }
+    : {};
 ---
 
-<BaseLayout lang={lang} title={event.data.title} description={event.data.excerpt} image={event.data.coverImage} schema={[eventSchema]}>
-  <PageHero eyebrow={formatDateRange(event.data.date, event.data.endDate, lang)} title={event.data.title} image={event.data.coverImage} imageAlt={event.data.coverImageAlt ?? event.data.title} />
-  <article class="section wrapper prose">
-    <div class="meta">
-      {event.data.organizer && <p class="organizer">{c.organizedBy(event.data.organizer)}</p>}
-      <ul class="tags">
-        {event.data.tags.map((t) => <li class="tag">{t}</li>)}
-        <li class="tag tag--duration">{durationTag(event.data.date, event.data.endDate, lang)}</li>
-      </ul>
-    </div>
-    {isUpcoming && (
-      <AddToCalendar
-        lang={lang}
-        googleUrl={googleCalendarUrl(calendarEvent)}
-        icsHref={icsDataUri(calendarEvent)}
-        icsFilename={`${canonicalId}.ics`}
-      />
+<BaseLayout
+  lang={lang}
+  title={event.data.title}
+  description={event.data.excerpt}
+  image={hasSizedCoverImage ? event.data.coverImage : undefined}
+  imageWidth={hasSizedCoverImage ? event.data.coverImageWidth : undefined}
+  imageHeight={hasSizedCoverImage ? event.data.coverImageHeight : undefined}
+  schema={[eventSchema]}
+>
+  <PageHero eyebrow={formatDateRange(event.data.date, event.data.endDate, lang)} title={event.data.title} image={event.data.coverImage} imageAlt={event.data.coverImageAlt ?? event.data.title} {...brand} />
+  <article class={`section wrapper prose ${event.data.series === '3bs1h' ? 'event--3bs1h' : ''}`.trim()}>
+    {event.data.series === '3bs1h' && (
+      <a class="series-link" href="/events/3bs1h">Part of 3Bs&amp;1H →</a>
     )}
-    <Content />
+
+    {/* Any upcoming event with a `price` set (see content.config.ts) gets a
+        sticky "at a glance" sidebar alongside the main column, instead of
+        the plain single-column layout below - the standard template for
+        every event going forward, not a 3bs1h-only treatment. Explored as
+        five options in a throwaway prototype (widen the text, this sidebar,
+        and three image treatments) before landing here: it directly answers
+        "the price is a repeat"/"almost hidden" by being the ONE place price
+        is stated, using data already on the page rather than a new image
+        that would need sourcing per event. The sidebar's "Request to book"
+        link always points at #cta - pair `price` with a call-to-action
+        element carrying that id somewhere in the event (this component
+        renders one itself for 3bs1h; other events put it on their own
+        body's Register/booking block, see _template.md).
+
+        Markup order below is aside-then-main, not main-then-aside, even
+        though the aside renders as the right-hand column on desktop (see
+        .layout-grid using grid-template-areas to place it there regardless
+        of source order): on the single-column mobile layout, `<Content />`
+        always ends with its own booking CTA at #cta (see _template.md), so
+        a literal main-then-aside markup order stacked the price/"book"
+        summary card AFTER that CTA - a visitor had to scroll past the
+        booking form to reach the card that was supposed to summarize it,
+        and the card's own "book" link then jumped backward, up the page,
+        to a form already behind them. Aside-first markup makes the summary
+        the first thing after the tags on mobile (matching its "at a
+        glance" purpose) and makes its "book" link jump forward, down the
+        page, to the CTA - the direction a scroll link should point. */}
+    {showSidebar ? (
+      <div class="layout-grid">
+        <aside class="layout-grid__aside">
+          <div class="info-card">
+            <p class="info-card__label">At a glance</p>
+            <p class="info-card__date">{formatDateRange(event.data.date, event.data.endDate, lang)}</p>
+            <ul class="info-card__prices">
+              {event.data.price!.map((p) => <li><strong>{p.amount}</strong> {p.label}</li>)}
+            </ul>
+            {/* Not "Book now" - that read as an instant online checkout to
+                at least one visitor, when this is actually an offline
+                request TVC (or, for 3bs1h, Linger) follows up on by hand;
+                see BookingInquiry's own submit button, which says "Send
+                booking request" for the same reason. */}
+            <a class="button info-card__cta" href="#cta">Request to book ↓</a>
+          </div>
+        </aside>
+        <div class="layout-grid__main">
+          <div class="meta">
+            {event.data.organizer && <p class="organizer">{c.organizedBy(event.data.organizer)}</p>}
+            <ul class="tags">
+              {event.data.tags.map((t) => <li class="tag">{t}</li>)}
+              <li class="tag tag--duration">{durationTag(event.data.date, event.data.endDate, lang)}</li>
+            </ul>
+          </div>
+          <Content />
+          {/* 3Bs&1H editions book through TVC's hospitality partner Linger,
+              not through TVC directly - reuses the same visit-inquiry
+              Netlify form as /visit/camping etc. (already wired to notify
+              stay@linger.in) rather than a bespoke booking flow. Other
+              events carry their own CTA inside `<Content />` itself (see
+              #cta above), so nothing extra renders here for them. */}
+          {event.data.series === '3bs1h' && (
+            <div id="cta">
+              <BookingInquiry
+                lang={lang}
+                type={event.data.title}
+                heading="Request to book"
+                packageOptions={['Deck-based tent / bamboo hut — ₹3,500 per person', 'Campground tent / DIY camping — ₹3,200 per person']}
+                note="Choose your accommodation tier, then send your details to Linger by form or WhatsApp."
+                whatsappMessage={`Hi! I'd like to book a spot for ${event.data.title} (${formatDateRange(event.data.date, event.data.endDate, lang)}).`}
+                fixedDates={formatDateRange(event.data.date, event.data.endDate, lang)}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    ) : (
+      <>
+        <div class="meta">
+          {event.data.organizer && <p class="organizer">{c.organizedBy(event.data.organizer)}</p>}
+          <ul class="tags">
+            {event.data.tags.map((t) => <li class="tag">{t}</li>)}
+            <li class="tag tag--duration">{durationTag(event.data.date, event.data.endDate, lang)}</li>
+          </ul>
+        </div>
+        <Content />
+      </>
+    )}
+
+    {/* Calendaring only makes sense once you're actually going - kept below
+        the booking CTA (or below the content, for events with no CTA of
+        their own) rather than at the top, where it used to sit as if it were
+        the page's primary action before there was anything to commit to. */}
+    {isUpcoming && (
+      <div class="add-to-cal-section">
+        <span class="add-to-cal-label">{event.data.series === '3bs1h' ? 'Already booked? Add it to your calendar:' : 'Add this to your calendar:'}</span>
+        <AddToCalendar
+          lang={lang}
+          googleUrl={googleCalendarUrl(calendarEvent)}
+          icsHref={icsDataUri(calendarEvent)}
+          icsFilename={`${canonicalId}.ics`}
+        />
+      </div>
+    )}
 
     {!isUpcoming && (
       event.data.interestNote ? (
@@ -252,6 +373,16 @@ const c = content[lang];
 </BaseLayout>
 
 <style>
+  .series-link {
+    display: inline-block;
+    font-family: var(--font-3bs1h-label);
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tvc-green-vivid);
+    margin-bottom: 16px;
+  }
+
   .meta {
     display: flex;
     flex-wrap: wrap;
@@ -287,6 +418,19 @@ const c = content[lang];
   .tag--duration {
     background: var(--tvc-orange-tint);
     color: #a85712;
+  }
+
+  /* 3Bs&1H sub-brand body — opt-in via the `event--3bs1h` class, only ever
+     applied when event.data.series === '3bs1h' (see the brand const above).
+     Restyles headings within .prose rather than forking a new template.
+     Tag pills deliberately stay the same green/orange scheme every other
+     event uses (see .tag/.tag--duration above) - a past attempt to give
+     3bs1h its own cream/green tag colors also had a specificity bug that
+     silently swallowed the orange duration pill into the same cream look,
+     which is what actually got flagged as inconsistent. */
+  .event--3bs1h.prose :global(h2) {
+    font-family: var(--font-3bs1h-display);
+    font-weight: 500;
   }
 
   .prose :global(h2) {
@@ -345,6 +489,119 @@ const c = content[lang];
 
   .prose :global(.cta .button) {
     margin: 12px 0;
+  }
+
+  /* Keeps the booking CTA aligned with this article's own reading column -
+     BookingInquiry.astro has no opinion on width (its other callers sit in
+     plain, non-.prose sections that stretch full-width), so without this it
+     would stretch past where every paragraph and table above it stops,
+     reading as a mismatched, wider "box" rather than the column's own close. */
+  .prose :global(.booking-inquiry) {
+    max-width: 72ch;
+  }
+
+  /* Fills the space next to the reading column with a live summary instead
+     of leaving it as bare page background - the sticky positioning keeps
+     dates/prices/the booking link in view for the whole read, which is the
+     actual point (not just decoration): see the "price is almost hidden"
+     fix this was built to answer. */
+  .layout-grid {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    /* Named areas, not source order, decide visual placement - the markup
+       puts <aside> before .layout-grid__main (see the comment above that
+       markup) so it appears first when this collapses to one column on
+       mobile, but on this two-column desktop layout it still needs to sit
+       on the right, beside the reading column, as before. */
+    grid-template-areas: 'main aside';
+    gap: 48px;
+    align-items: start;
+  }
+
+  .layout-grid__main {
+    grid-area: main;
+  }
+
+  .layout-grid__aside {
+    grid-area: aside;
+    position: sticky;
+    top: 100px;
+  }
+
+  .info-card {
+    background: var(--tvc-3bs1h-cream);
+    border-radius: var(--radius);
+    padding: 22px;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .info-card__label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--tvc-green-vivid);
+    font-weight: 700;
+    margin: 0 0 8px;
+  }
+
+  .info-card__date {
+    font-weight: 700;
+    margin: 0 0 14px;
+  }
+
+  .info-card__prices {
+    list-style: none;
+    margin: 0 0 18px;
+    padding: 0;
+  }
+
+  .info-card__prices li {
+    font-size: 0.92rem;
+    margin-bottom: 6px;
+  }
+
+  .info-card__prices li:last-child {
+    margin-bottom: 0;
+  }
+
+  .info-card__cta {
+    width: 100%;
+    text-align: center;
+  }
+
+  /* Offsets the jump-link landing spot below the site's sticky header, same
+     reason any anchor target on this site needs it. Targets both the
+     BookingInquiry wrapper this component renders for 3bs1h and any other
+     event's own #cta element inside <Content /> (see _template.md). */
+  :global(#cta) {
+    scroll-margin-top: 90px;
+  }
+
+  @media (max-width: 800px) {
+    .layout-grid {
+      grid-template-columns: 1fr;
+      /* Single column now, so fall back to source order: aside (the "at a
+         glance" price/booking-request summary) first, then main - see the
+         markup comment above for why that order matters here. */
+      grid-template-areas: 'aside' 'main';
+    }
+
+    .layout-grid__aside {
+      position: static;
+    }
+  }
+
+  .add-to-cal-section {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 28px;
+  }
+
+  .add-to-cal-label {
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
   }
 
   .prose :global(.poster) {

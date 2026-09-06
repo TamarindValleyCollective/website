@@ -11,15 +11,19 @@
 under the Netlify account owned by `contact@tvc.farm` (ownership moved there from a personal
 account on 2026-07-18). The site is almost entirely static (prerendered HTML/CSS/JS, no server
 at request time), with a small set of deliberate exceptions that need a serverless backend:
-eight Netlify Functions (the site-wide chat assistant, the event-interest counter backing past
+ten Netlify Functions (the site-wide chat assistant, the event-interest counter backing past
 events' "Want this to happen again?" widget, `/api/photo-pool` backing the internal, unlinked
 photo review dashboard at `/internal/photo-pool`, `/api/enquiry` logging the membership
 enquiry form (`/join`) and the general enquiry form (`/contact`) to Google Sheets,
 `/api/rainfall` reading the community's rainfall-log Google Sheet live for the rainfall chart/
 table/monsoon stat on `/ecosystem/weather`, `/api/whatsapp-webhook` receiving WhatsApp Cloud
 API events — see `WHATSAPP.md`, `/api/whatsapp-admin` backing the internal, unlinked
-WhatsApp reply dashboard at `/internal/whatsapp`, and a scheduled (cron, no HTTP path)
-`whatsapp-stale-alert.mts` emailing an hourly digest of unread WhatsApp messages), Netlify Blobs
+WhatsApp reply dashboard at `/internal/whatsapp`, a scheduled (cron, no HTTP path)
+`whatsapp-stale-alert.mts` emailing an hourly digest of unread WhatsApp messages, and
+`/api/accommodation-admin` backing the internal, unlinked tent-booking dashboard at
+`/internal/accommodation-calendar` — the public, aggregate-only availability view this admin
+tool was originally built alongside was deliberately **not** shipped to production with it
+(dropped 2026-08-30, approach TBD)), Netlify Blobs
 (public storage for the event-interest counter — the site's only *readable* server-side state
 that isn't gated behind a secret; everything else below is either write-only or, for photo-pool,
 gated), and Netlify Forms (the membership enquiry form on `/join`, the general enquiry form on
@@ -64,6 +68,7 @@ flowchart TD
         PAGES["src/pages/*.astro<br/>File-based routes: Home, About, Visit,<br/>Events, Ecosystem, Our Journey, Contact, etc."]
         INTERNALPAGE["src/pages/internal/photo-pool.astro<br/>Unlinked, noindex — photo review dashboard shell"]
         INTERNALPAGE2["src/pages/internal/whatsapp.astro<br/>Unlinked, noindex — WhatsApp reply dashboard shell,<br/>two-pane chat UI, 15s visibility-gated polling"]
+        INTERNALPAGE3["src/pages/internal/accommodation-calendar.astro<br/>Unlinked, noindex — tent-booking dashboard shell,<br/>day/week/month calendar, guest directory, audit log"]
         COMPONENTS["src/components/<br/>Nav, Footer, PageHero, ChatWidget,<br/>CookieConsent, JourneyTimelineStandalone,<br/>BiodiversityExplorer, PhotoGallery"]
         CONTENT["src/content/*<br/>Markdown collections: events, partners,<br/>community-outreach, photos"]
         FUNC_SRC["netlify/functions/chat.mts<br/>Serverless function, calls Anthropic API server-side"]
@@ -74,6 +79,7 @@ flowchart TD
         FUNC_SRC6["netlify/functions/whatsapp-webhook.mts<br/>Serverless function — verifies Meta's GET<br/>handshake and each POST's HMAC signature,<br/>persists to Supabase per incoming WhatsApp<br/>message (no inbox exists for Cloud API<br/>numbers otherwise)"]
         FUNC_SRC7["netlify/functions/whatsapp-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>lists conversations/messages from Supabase,<br/>sends replies via Meta's Send Message API"]
         FUNC_SRC8["netlify/functions/whatsapp-stale-alert.mts<br/>Scheduled function (cron, every 15 min) —<br/>emails core-team@tvc.farm one digest of<br/>WhatsApp conversations unread 60+ min,<br/>re-sent hourly per conversation until read"]
+        FUNC_SRC9["netlify/functions/accommodation-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>full tent-booking CRUD backed by Postgres<br/>(EXCLUDE constraints make double-booking<br/>physically impossible), guest directory,<br/>full audit log, past-booking justification"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
     end
 
@@ -94,6 +100,7 @@ flowchart TD
         APIFN6["Netlify Function: /api/whatsapp-webhook<br/>Deployed and live — verified end-to-end<br/>with a real WhatsApp message on 2026-08-19"]
         APIFN7["Netlify Function: /api/whatsapp-admin<br/>Deployed and live — real conversations<br/>read/replied to via /internal/whatsapp"]
         APIFN8["Netlify Function: whatsapp-stale-alert<br/>Scheduled (cron), no HTTP path —<br/>deployed and live"]
+        APIFN9["Netlify Function: /api/accommodation-admin<br/>Deployed and live — merged 2026-08-30,<br/>verified against production"]
         BLOBS["Netlify Blobs: 'event-interest' store<br/>One JSON record per past event id —<br/>{count, emails[]}. Reset via<br/>netlify blobs:delete event-interest &lt;id&gt;"]
         FORMS["Netlify Forms<br/>Captures /contact membership + general<br/>enquiries, /visit/host-an-event inquiries,<br/>/visit camping·day-visit·trekking inquiries,<br/>and event-interest submissions with an email"]
     end
@@ -120,6 +127,7 @@ flowchart TD
     subgraph INTERNAL5["5 · Internal tool — staff-only, not part of the public site flow"]
         POOLDASH["Photo Pool dashboard (/internal/photo-pool)<br/>Google Sign-In gated client-side shell — shows uploader,<br/>EXIF/GPS, editable description; unlinked, noindex,<br/>sitemap-excluded"]
         WHATSAPPDASH["WhatsApp dashboard (/internal/whatsapp)<br/>Google Sign-In gated two-pane chat UI — conversation<br/>list + thread + reply box; unlinked, noindex,<br/>sitemap-excluded"]
+        ACCOMMODATIONDASH["Accommodation Calendar (/internal/accommodation-calendar)<br/>Google Sign-In gated tent-booking dashboard —<br/>day/week/month views, guest directory + typeahead,<br/>audit log; unlinked, noindex, sitemap-excluded"]
     end
 
     subgraph EXTERNAL["External services (called directly by the browser)"]
@@ -186,6 +194,11 @@ flowchart TD
     APIFN7 -.->|"read allow-list rows"| GSHEET
     APIFN7 -.->|"verify staff ID token"| GIDTOKEN
     WHATSAPPDASH -.->|"Sign in with Google"| GIDTOKEN
+    ACCOMMODATIONDASH --> APIFN9
+    APIFN9 -.->|"read/write bookings, guests,<br/>audit log"| SUPABASE
+    APIFN9 -.->|"read allow-list rows<br/>(own dedicated Sheet)"| GSHEET
+    APIFN9 -.->|"verify staff ID token"| GIDTOKEN
+    ACCOMMODATIONDASH -.->|"Sign in with Google"| GIDTOKEN
 
     classDef staticStyle fill:#e8f2ea,stroke:#17723b,color:#0f5029
     classDef netlifyStyle fill:#fdead3,stroke:#f78520,color:#9a5310
@@ -194,8 +207,8 @@ flowchart TD
     classDef localStyle fill:#eef0f5,stroke:#6b7280,color:#374151
     classDef ciStyle fill:#eef4fb,stroke:#3b6ea5,color:#1c3f5f
 
-    class PAGES,INTERNALPAGE,INTERNALPAGE2,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH,WHATSAPPDASH staticStyle
-    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,APIFN7,APIFN8,BLOBS,FORMS,ANTHROPIC netlifyStyle
+    class PAGES,INTERNALPAGE,INTERNALPAGE2,INTERNALPAGE3,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH,WHATSAPPDASH,ACCOMMODATIONDASH staticStyle
+    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,APIFN7,APIFN8,APIFN9,BLOBS,FORMS,ANTHROPIC netlifyStyle
     class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,SUPABASE externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL,SCRIPT_GSC localStyle
@@ -229,6 +242,16 @@ outside both the local machine and Netlify (the member-update-email workflow).
   conversation list on the left, the selected thread on the right with a reply box. Polls every 15
   seconds while the tab is visible (`document.visibilityState`) rather than real-time/WebSockets —
   deliberately a small internal tool.
+- **`src/pages/internal/accommodation-calendar.astro`** — unlinked, `noindex`, sitemap-excluded.
+  Same Google Sign-In shell pattern as `photo-pool.astro`/`whatsapp.astro`, backing the farm
+  manager's tent-booking dashboard (see `netlify/functions/accommodation-admin.mts` below): a
+  day/week/month calendar (day view redesigned 2026-08-30 into a wide, name-visible list per
+  tent rather than a cramped single-column table), tapping a grid cell opens a booking dialog
+  pre-filled with that tent/date, a guest directory with name/mobile-number typeahead, and a
+  full create/update/delete audit log. Built alongside a public, aggregate-only availability
+  view (`AvailabilityView.astro` + `/visit/availability`) that was **deliberately not shipped**
+  with this initial production launch — dropped rather than deferred, pending a rethink of that
+  approach.
 - **`src/components/`** — shared UI: Nav, Footer, PageHero, the ChatWidget, the year-by-year
   `JourneyTimelineStandalone` component, the live `BiodiversityExplorer`, and `PhotoGallery`
   (In Pictures - filters, Grid/Map toggle, lightbox; its map, `photo-map.ts`, reuses the same
@@ -333,6 +356,32 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `whatsapp_conversations.last_stale_alert_at`, reset to null on every new inbound message so
   each message gets its own full 60-minute countdown), so a single missed email can't let a
   message silently go unanswered.
+- **`netlify/functions/accommodation-admin.mts`** — backs `/internal/accommodation-calendar`.
+  Same Google Sign-In auth pattern as `photo-pool.mts`/`whatsapp-admin.mts` (verifies the ID
+  token, checks it against `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID`'s allow-list — reused rather than
+  a separate Sheet). Full booking CRUD plus guest search/history, all against the
+  `accommodation_*` tables in the "TVC ERP" Supabase project via
+  `scripts/lib/accommodation-db.mjs`. The core guarantee this whole feature was built around:
+  double-booking a tent is *physically impossible*, not just checked for in application code — an
+  `EXCLUDE USING gist` constraint on `accommodation_tent_assignments` makes an overlapping insert
+  fail at the database level even under concurrent requests (replacing an earlier Netlify Blobs
+  design that let two identical bookings land 38 seconds apart under Blobs' eventual consistency).
+  A second `EXCLUDE` constraint does the same for a single guest being double-booked into two
+  different tents on an overlapping night. Guest identity (`accommodation_people`) resolves by
+  mobile number + name together, not by number alone, so two people sharing a phone number (a
+  couple, for instance) don't silently overwrite each other; a full audit log
+  (`accommodation_booking_audit_log`, populated by table triggers, not application code, so no
+  write path can bypass it) records every create/update/delete, and editing or deleting a booking
+  whose stay has already happened requires and records a reason.
+- **`scripts/lib/accommodation-db.mjs`** — hand-rolled Supabase PostgREST REST client (same style
+  as `supabase.mjs` below, no `@supabase/supabase-js`), the sole data-access layer for
+  `accommodation-admin.mts`. Conflict-checking lives entirely in Postgres (see above) — this file
+  just calls the `accommodation_create_booking`/`_update_booking`/`_delete_booking` RPCs and reads
+  back the result, mapping a thrown RPC error's HTTP status (`404`/`409`/`422`, via
+  `RAISE EXCEPTION ... USING ERRCODE = 'PTnnn'`) straight through. The public, guest-free
+  availability view this once also backed (`listBookingsForAvailability`) was removed when that
+  view was dropped from this launch (2026-08-30) — a future public view is separate, undesigned
+  work.
 - **`scripts/lib/supabase.mjs`** — hand-rolled Supabase PostgREST REST client (`fetch` + the
   `service_role` key, no `@supabase/supabase-js` dependency — matching this repo's preference for
   small hand-rolled clients over heavy libraries) for the `whatsapp_conversations`/
@@ -340,7 +389,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `supabase/migrations/0001_whatsapp_reply_admin.sql`). Used by `whatsapp-webhook.mts` (write) and
   `whatsapp-admin.mts` (read + write). `wa_message_id` has a partial unique index; inserts use
   `Prefer: resolution=ignore-duplicates` so a re-delivered webhook (Meta documents at-least-once
-  delivery with retries) is a no-op rather than a duplicate row.
+  delivery with retries) is a no-op rather than a duplicate row. Its `restHeaders()` helper (the
+  `service_role` auth header builder) is also exported and reused directly by
+  `accommodation-db.mjs` above — same project, same auth, no reason for a second copy.
 - **`scripts/lib/google-id-token.mjs`** — verifies a Google Identity Services ID token: fetches
   and caches Google's JWKS, hardcodes the expected `RS256` algorithm (defense against
   algorithm-confusion attacks), verifies the RSA signature via Node's built-in `crypto`, and
@@ -692,6 +743,25 @@ never touches Netlify either.
   awaiting `SUPABASE_SERVICE_ROLE_KEY`**: `SUPABASE_URL` and `WHATSAPP_PHONE_NUMBER_ID` are set on
   Netlify (all deploy contexts); the Supabase service-role key still needs pasting into Netlify's
   UI by hand (same secret-handling rule as `WHATSAPP_ACCESS_TOKEN`) before this can go live.
+- **Accommodation Calendar** (`/internal/accommodation-calendar`) — staff-only (Madhavan, the
+  farm manager), same shape as Photo Pool/WhatsApp above: unlinked, `noindex`, Google Sign-In
+  gated. Briefly reused `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID`'s own Sheet at launch, then split
+  into its own dedicated `ACCOMMODATION_ALLOWED_EMAILS_SHEET_ID` Sheet the same day, once it was
+  clear the three internal tools' access needed to be managed independently, not as one combined
+  list. A unified admin console (shared users/roles/permissions across all internal tools,
+  instead of a separate Sheet per tool) is under consideration as the next step here — see the
+  project memory / conversation this decision came from for the current thinking.
+  Records who's in which of the farm's 8 tents/huts, for how long, and why — a day/week/month
+  calendar (tapping any cell opens a pre-filled booking dialog), a reusable guest directory with
+  name/mobile-number typeahead and each guest's past-stay history, and a full audit trail of
+  every change. The double-booking guarantee is enforced by Postgres itself (`EXCLUDE` gist
+  constraints — see `accommodation-admin.mts` above), not application code, so it holds even
+  under concurrent requests. Built alongside a public, aggregate-only availability page
+  (`/visit/availability`) that let Linger (TVC's hospitality partner) self-serve rough
+  availability instead of calling Madhavan directly — that public half was **deliberately
+  dropped, not deferred**, before this launch (2026-08-30): the admin tool graduated to
+  production on its own, and the public-facing approach is being rethought from scratch rather
+  than shipped as originally designed.
 
 ## Current Production Status
 
@@ -718,6 +788,7 @@ never touches Netlify either.
 | WhatsApp webhook (`/api/whatsapp-webhook`) | ✅ Live — verified end-to-end with a real WhatsApp message to `+91 80 4110 9754` on 2026-08-19. Two real bugs found and fixed along the way: the number wasn't actually registered for Cloud API messaging (blocked by a stuck migration from the old AiSensy WABA, which still held the number), and the WABA was never subscribed to the app's webhook (`POST /{waba-id}/subscribed_apps` — a separate step from the App Dashboard's webhook config). Persists every inbound message to Supabase (2026-08-20); no longer emails per-message (see the stale-alert row below). See `WHATSAPP.md` |
 | WhatsApp reply dashboard (`/internal/whatsapp`, `/api/whatsapp-admin`) | ✅ Live — verified end-to-end with real WhatsApp messages and real replies sent from production. Unread indicators, real pagination, message previews, per-reply responder names, WhatsApp/iMessage-style avatars, and a full visual pass added 2026-08-20 after real usage surfaced gaps |
 | WhatsApp unread digest (`whatsapp-stale-alert.mts`, scheduled) | ✅ Live — cron every 15 minutes, emails `core-team@tvc.farm` one digest of conversations unread 60+ minutes, re-sent hourly per conversation until read. Replaces the old per-message email (2026-08-20) |
+| Accommodation Calendar dashboard (`/internal/accommodation-calendar`, `/api/accommodation-admin`) | ✅ Live — merged to `main` and deployed 2026-08-30 (PR #116); verified directly against production (`/internal/accommodation-calendar` returns 200, `/api/accommodation-admin/bookings` returns 401 unauthenticated as expected for the Google Sign-In gate, `accommodation-admin` listed among the deploy's live functions). The public availability view (`/visit/availability`) built alongside it was **not** included in this launch — dropped 2026-08-30, pending a rethink; confirmed 404 on production |
 
 The membership/general enquiry forms are fully live — Sheets logging verified with real
 production `POST`s, and email routes to `core-team@tvc.farm` via the site-wide Netlify Forms

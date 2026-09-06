@@ -52,6 +52,31 @@
   to = "/people/partners/"
   status = 301
 
+# 3Bs&1H editions moved from flat, date-prefixed URLs to a versioned series
+# URL (/events/3bs1h/<edition number>) once the series got its own hub page
+# and brand identity (see src/pages/events/3bs1h/ and content.config.ts's
+# `series`/`edition` fields). Individual rules, not a splat, since each old
+# slug maps to a specific edition number rather than a single destination.
+[[redirects]]
+  from = "/events/2022-08-27-3bs-and-1h-biodiversity-walk"
+  to = "/events/3bs1h/2"
+  status = 301
+
+[[redirects]]
+  from = "/events/2022-12-03-3bs-and-1h-biodiversity-walk"
+  to = "/events/3bs1h/3"
+  status = 301
+
+[[redirects]]
+  from = "/events/2024-12-21-3bs-and-1h-biodiversity-walk"
+  to = "/events/3bs1h/4"
+  status = 301
+
+[[redirects]]
+  from = "/events/2025-08-30-3bs-and-1h-5th-edition"
+  to = "/events/3bs1h/5"
+  status = 301
+
 # These used to live in astro.config.mjs's `redirects` map, which - with no
 # SSR adapter on this static-output project - doesn't produce a real HTTP
 # redirect. It emits a static page with a client-side meta-refresh, a

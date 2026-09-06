@@ -4,7 +4,16 @@ import sitemap from '@astrojs/sitemap';
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://tvc.farm',
+  // DEPLOY_PRIME_URL is set by Netlify at build time - the production
+  // domain on a production build, but the deploy-preview/branch-deploy
+  // subdomain on those builds. Without this, canonical URLs and og:image
+  // always pointed at production even on a preview deploy, so a freshly
+  // added image (not live on production yet) 404'd when WhatsApp's crawler
+  // tried to fetch it there - iMessage's link-preview generator tolerates
+  // that failure by falling back to scraping the actual page, but WhatsApp
+  // just gives up and shows the site's apple-touch-icon instead. Falls back
+  // to the real domain for local dev, where this env var doesn't exist.
+  site: process.env.DEPLOY_PRIME_URL || 'https://tvc.farm',
   vite: {
     plugins: [
       // /pagefind/pagefind.js only exists after `pagefind --site dist` runs

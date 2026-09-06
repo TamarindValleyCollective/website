@@ -9,22 +9,29 @@
 // import this directly, with no risk of a TS-file cross-boundary import
 // failing to resolve in either bundler.
 
-// The farm's fixed tent/hut inventory. Confirmed with Sharath (2026-08-29):
-// 3 fixed tents (Malabar x2, Banyan x1, 3 people each) plus 5 portable tents
-// (1 three-person, 4 two-person) - sums to exactly the ~20-person cap already
-// quoted on /visit/camping. Lives here as static data rather than a content
-// collection or Blobs record since it only changes when the farm physically
-// adds/removes a tent - a deploy-worthy change, same as everything else that
-// lives in git on this site.
+// The farm's fixed tent/hut inventory. Updated with Sharath (2026-08-31):
+// renamed every unit, switched to generic `TentNN` ids (the old
+// location-named ids like `malabar-1`/`portable-3` were judged not generic
+// enough now that every unit is, physically, a tent), reclassified the old
+// "Portable Tent 4/5" as the named fixed Upper/Lower Bamboo Hut, and added
+// one new 2-person Campground Portable - 9 units, 22-person total capacity
+// (was 8 units / 20 people). Renaming the ids is a real migration, not just
+// a relabel: existing bookings' `tent_id` in `accommodation_tent_assignments`
+// had to be rewritten from the old ids to the new ones (see
+// supabase/migrations/0012_accommodation_unit_inventory_update.sql) - the
+// `TentNN` order below matches the order that migration's UPDATE mapping
+// uses, confirmed against Sharath's original numbered list so no booking's
+// tent gets silently reassigned to the wrong physical unit.
 export const ACCOMMODATION_UNITS = [
-  { id: 'malabar-1', label: 'Malabar Tent 1', capacity: 3, kind: 'fixed' },
-  { id: 'malabar-2', label: 'Malabar Tent 2', capacity: 3, kind: 'fixed' },
-  { id: 'banyan', label: 'Banyan Hut', capacity: 3, kind: 'fixed' },
-  { id: 'portable-1', label: 'Portable Tent 1', capacity: 3, kind: 'removable' },
-  { id: 'portable-2', label: 'Portable Tent 2', capacity: 2, kind: 'removable' },
-  { id: 'portable-3', label: 'Portable Tent 3', capacity: 2, kind: 'removable' },
-  { id: 'portable-4', label: 'Portable Tent 4', capacity: 2, kind: 'removable' },
-  { id: 'portable-5', label: 'Portable Tent 5', capacity: 2, kind: 'removable' },
+  { id: 'Tent01', label: 'Malabar Hut Fixed (N)', capacity: 3, kind: 'fixed' },
+  { id: 'Tent02', label: 'Malabar Hut Fixed (S)', capacity: 3, kind: 'fixed' },
+  { id: 'Tent03', label: 'Malabar Hut Portable', capacity: 2, kind: 'removable' },
+  { id: 'Tent04', label: 'Banyan Hut Fixed', capacity: 3, kind: 'fixed' },
+  { id: 'Tent05', label: 'Banyan Hut Portable', capacity: 2, kind: 'removable' },
+  { id: 'Tent06', label: 'Upper Bamboo Hut', capacity: 2, kind: 'fixed' },
+  { id: 'Tent07', label: 'Lower Bamboo Hut', capacity: 2, kind: 'fixed' },
+  { id: 'Tent08', label: 'Campground Portable', capacity: 3, kind: 'removable' },
+  { id: 'Tent09', label: 'Campground Portable', capacity: 2, kind: 'removable' },
 ];
 
 export const TOTAL_ROOMS = ACCOMMODATION_UNITS.length;
@@ -65,11 +72,43 @@ export function datesInMonth(monthStr) {
   return out;
 }
 
-// Whether any night of `booking` falls within `monthStr` ("YYYY-MM") - used
-// to decide which stored bookings are relevant to a given month view without
-// needing a secondary date index (see accommodation-admin.mts/
-// accommodation-availability.mts's own comments on why a plain store.list()
-// scan is fine at this farm's scale).
-export function bookingTouchesMonth(booking, monthStr) {
-  return nightsForBooking(booking).some((d) => d.startsWith(monthStr));
+// Normalizes a guest's mobile number to E.164 (+<country code><digits>),
+// defaulting to +91 (India) when no country code is given - this farm's
+// guests are overwhelmingly Indian, and a bare 10-digit number typed into
+// this field is always meant as a local Indian mobile number, not a
+// landline (the whole point of collecting it is reaching a guest on
+// WhatsApp/SMS). Returns null for empty input (field is optional) or for
+// anything that doesn't parse as a plausible mobile number, so callers can
+// tell "not provided" apart from "provided but invalid" and reject the
+// latter rather than silently dropping it.
+//
+// Imported by both the client script (accommodation-calendar.astro, for
+// instant feedback) and the server (accommodation-admin.mts, the actual
+// gate) - one implementation, so "what counts as a valid mobile number"
+// can't drift between the two.
+export function normalizeMobileNumber(raw) {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const hasCountryCode = trimmed.startsWith('+');
+  const digits = trimmed.replace(/\D/g, '');
+  if (!digits) return null;
+
+  if (hasCountryCode) {
+    // Generic E.164 plausibility check (8-15 digits total after the '+').
+    // Real per-country mobile-vs-landline validation needs a library like
+    // libphonenumber - disproportionate here given this farm's guest mix,
+    // so a country code other than +91 just gets this looser check rather
+    // than a false sense of per-country strictness.
+    if (digits.length < 8 || digits.length > 15) return null;
+    return `+${digits}`;
+  }
+
+  // No country code given - assume India. Indian mobile numbers are
+  // exactly 10 digits and start with 6-9 under TRAI's numbering plan;
+  // landline numbers and any other length are rejected outright rather
+  // than accepted as if they were a mobile number.
+  if (!/^[6-9]\d{9}$/.test(digits)) return null;
+  return `+91${digits}`;
 }

@@ -5,19 +5,30 @@ interface Props {
   intro?: string;
   image?: string;
   imageAlt?: string;
+  // CSS object-position for the background photo - lets a caller whose
+  // subject isn't centered (e.g. a flock off to one side) keep it in frame
+  // under object-fit:cover instead of a default center crop pushing it out.
+  imagePosition?: string;
+  // Opt-in sub-brand treatment (see `series` on the events collection) - a
+  // CSS modifier class plus an optional mark rendered above the eyebrow.
+  // Empty by default, so every non-branded page renders exactly as before.
+  brandClass?: string;
+  logo?: string;
+  logoAlt?: string;
 }
 
-const { eyebrow, title, intro, image, imageAlt = '' } = Astro.props;
+const { eyebrow, title, intro, image, imageAlt = '', imagePosition, brandClass = '', logo, logoAlt = '' } = Astro.props;
 ---
 
 {image ? (
   <>
     <div class="hero-bg">
-      <img class="hero-bg__image" src={image} alt={imageAlt} />
+      <img class="hero-bg__image" src={image} alt={imageAlt} style={imagePosition ? `object-position: ${imagePosition}` : undefined} />
       <div class="hero-bg__scrim"></div>
     </div>
-    <section class="hero hero--image">
+    <section class={`hero hero--image ${brandClass}`.trim()}>
       <div class="wrapper hero__content">
+        {logo && <img class="hero__logo" src={logo} alt={logoAlt} />}
         {eyebrow && <p class="eyebrow eyebrow--light">{eyebrow}</p>}
         <h1>{title}</h1>
         {intro && <p class="hero__intro">{intro}</p>}
@@ -25,8 +36,9 @@ const { eyebrow, title, intro, image, imageAlt = '' } = Astro.props;
     </section>
   </>
 ) : (
-  <section class="hero hero--plain">
+  <section class={`hero hero--plain ${brandClass}`.trim()}>
     <div class="wrapper hero__content">
+      {logo && <img class="hero__logo" src={logo} alt={logoAlt} />}
       {eyebrow && (
         <p class="eyebrow">
           {eyebrow}
@@ -162,6 +174,30 @@ const { eyebrow, title, intro, image, imageAlt = '' } = Astro.props;
       padding-top: 56px;
       padding-bottom: 40px;
     }
+  }
+
+  /* 3Bs&1H sub-brand hero — opt-in via PageHero's `brandClass` prop, only ever
+     passed by EventDetailView when event.data.series === '3bs1h'. Reuses the
+     existing hero--image/hero--plain layout, only restyling type + accent color
+     within it, so this stays a modifier on the shared hero rather than a fork. */
+  .hero__logo {
+    height: 40px;
+    width: auto;
+    margin-bottom: 14px;
+  }
+
+  .hero--3bs1h .eyebrow {
+    font-family: var(--font-3bs1h-label);
+    letter-spacing: 0.14em;
+  }
+
+  .hero--3bs1h h1 {
+    font-family: var(--font-3bs1h-display);
+    font-weight: 500;
+  }
+
+  .hero--3bs1h.hero--plain {
+    background: var(--tvc-3bs1h-cream);
   }
 </style>
 

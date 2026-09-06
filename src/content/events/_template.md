@@ -17,11 +17,47 @@
 title: "YYYY: Mon DD - Event Name"
 date: 2026-01-01
 excerpt: "A one-to-two sentence summary shown on the event card and in link previews. Keep it under ~250 characters."
+# coverImage: "/images/events/YYYY-MM-DD-your-event-name/hero.jpg"
+# coverImageAlt: "What's actually in the photo."
+# If you set coverImage, you MUST also set its real pixel dimensions here -
+# run `sips -g pixelWidth -g pixelHeight <the file>` and copy the numbers.
+# Skipping this is exactly the bug that made every event page's WhatsApp
+# link preview show the site's logo instead of the event photo: og:image
+# dimensions that don't match the real file get silently discarded by
+# WhatsApp's crawler, which falls back to the apple-touch-icon.
+# coverImageWidth: 0
+# coverImageHeight: 0
 organizer: ""
 tags: []
 draft: true
+# If this event has a fixed price, list every tier here - one row per
+# price line in the "at a glance" sidebar, `amount` shown bold and `label`
+# plain. Include a free-for-some-age-group row if that applies (see the
+# second example row below). Leave the whole field out for a fully free
+# event. Don't also restate any of this in a heading below (e.g.
+# "## What's included — INR 1,900") - the sidebar is the one place price
+# lives now, so the body only needs "## What's included" plus a bullet list.
+# price:
+#   - amount: "INR 1,900"
+#     label: "per person"
+#   - amount: "Free"
+#     label: "children under 10"
 ---
 
-Full event description goes here. Use the excerpt above for the short
-summary, and write as much detail as you like in this section - what to
-bring, how to register, timings, and so on.
+Full event description goes here - what the event actually is, in a
+paragraph or two.
+
+Standard section order for the rest of the body (keep every event reading
+the same way, not each one improvised): the write-up above, then
+**## Schedule** (a Time/Activity table - see any 3Bs&1H edition for the
+two-day format, or the Melagiri event for single-day), then
+**## What's included** (a bullet list), then any event-specific extras
+(what to carry, logistics, etc.), then the registration/booking
+call-to-action last, at the very bottom.
+
+If you set `price` above, that call-to-action must be wrapped with
+`id="cta"` (e.g. `<div class="cta card" id="cta">`), so the sidebar's
+"Request to book" button has something to jump to. Don't call it a "Book
+now" button or heading in the body either - the flow behind it is an
+offline request TVC follows up on by hand, not a real-time checkout, and
+"now" reads as a promise this site doesn't keep.

@@ -52,6 +52,13 @@ export default {
     message: 'Message',
     sendInquiry: 'Send inquiry',
     sendEnquiry: 'Send enquiry',
+    // Used only by BookingInquiry.astro (camping/day-visit/trekking/event
+    // booking forms) - unlike the general-purpose sendInquiry/sendEnquiry
+    // above, these forms are always a request to book a specific paid
+    // slot, not an open-ended question, so the button should say so rather
+    // than reading as a generic "enquiry" a visitor could mistake for
+    // non-committal.
+    sendBookingRequest: 'Send booking request',
     chooseOne: 'Choose one',
     honeypotLabel: "Don't fill this out:",
     preferChat: 'Prefer to chat? Message our visit-bookings line directly:',
