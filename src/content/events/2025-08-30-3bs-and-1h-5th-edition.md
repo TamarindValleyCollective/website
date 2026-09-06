@@ -4,9 +4,9 @@ date: 2025-08-30
 endDate: 2025-08-31
 excerpt: "The 5th edition of TVC's biodiversity walks — birds, butterflies, bees, and a moth screen, with naturalist Deepa Mohan."
 coverImage: "/images/events/2025-08-30-3bs-and-1h-5th-edition/hero.jpg"
-coverImageAlt: "A Short-toed Snake Eagle soaring overhead, spotted during the 5th edition's dusk nature walk."
-coverImageWidth: 1005
-coverImageHeight: 675
+coverImageAlt: "A juvenile White-browed Wagtail perched on an overhead wire, calling — spotted during the 5th edition."
+coverImageWidth: 1064
+coverImageHeight: 716
 tags: ["biodiversity", "walk"]
 series: "3bs1h"
 edition: 5
@@ -64,6 +64,10 @@ Hosted with our hospitality partner Linger.
 
 **Day 2:** The morning began with an early nature walk at a leisurely pace, with plenty of stops to identify plants and insects along the way. After breakfast, several people headed up the hill for a hike — and even afterward, no one seemed in a rush to leave. The conversations continued well into the afternoon, always a good sign that everyone had gelled well.
 
+One of the younger participants spent the weekend observing, sketching, and asking questions in a nature journal — a naturalist in the making.
+
+<div class="poster-cluster">
+
 <figure class="poster">
 
 ![A Common Jezebel butterfly resting on a leaf](/images/events/2025-08-30-3bs-and-1h-5th-edition/recap-butterfly.jpg)
@@ -80,8 +84,6 @@ Hosted with our hospitality partner Linger.
 
 </figure>
 
-One of the younger participants spent the weekend observing, sketching, and asking questions in a nature journal — a naturalist in the making.
-
 <figure class="poster">
 
 ![A page from a participant's nature journal, with a pressed leaf and a colored-pencil sketch of it](/images/events/2025-08-30-3bs-and-1h-5th-edition/recap-nature-journal.jpg)
@@ -89,5 +91,7 @@ One of the younger participants spent the weekend observing, sketching, and aski
 <figcaption>A page from one participant's nature journal</figcaption>
 
 </figure>
+
+</div>
 
 Naturalist Deepa Mohan's full [eBird trip report](https://ebird.org/tripreport/407272) recorded 75 species over the weekend. Browse the [full photo album](https://photos.google.com/share/AF1QipOTbxALCYzkCQ_oO24uvPr4t2f7jTxr_NiU_IjUkGXHdjCP-edKsfx-mtD7-o606g?key=RFBpMVhLNmRHeWFmYWxrSkhXTGVLd0p4UGxBN0lB) for more from the weekend, and feel free to add your own.
