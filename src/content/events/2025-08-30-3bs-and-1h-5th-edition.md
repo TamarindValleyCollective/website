@@ -19,6 +19,11 @@ highlights:
   - "75 species recorded (eBird)"
   - "Highlight: a Short-toed Snake Eagle overhead"
   - "Firefly-lit night walk for herps"
+links:
+  - label: "eBird trip report"
+    url: "https://ebird.org/tripreport/407272"
+  - label: "Full photo album"
+    url: "https://photos.google.com/share/AF1QipOTbxALCYzkCQ_oO24uvPr4t2f7jTxr_NiU_IjUkGXHdjCP-edKsfx-mtD7-o606g?key=RFBpMVhLNmRHeWFmYWxrSkhXTGVLd0p4UGxBN0lB"
 ---
 
 We had a smaller group for the 5th edition, likely due to the Ganesha festival falling the same weekend — but the enthusiasm was top-notch, and the vibe felt more like a family gathering than an event full of strangers.
@@ -98,4 +103,4 @@ One of the younger participants spent the weekend observing, sketching, and aski
 
 </div>
 
-Naturalist Deepa Mohan's full [eBird trip report](https://ebird.org/tripreport/407272) recorded 75 species over the weekend. Browse the [full photo album](https://photos.google.com/share/AF1QipOTbxALCYzkCQ_oO24uvPr4t2f7jTxr_NiU_IjUkGXHdjCP-edKsfx-mtD7-o606g?key=RFBpMVhLNmRHeWFmYWxrSkhXTGVLd0p4UGxBN0lB) for more from the weekend, and feel free to add your own.
+Naturalist Deepa Mohan's full eBird trip report recorded 75 species over the weekend. Browse the full photo album for more from the weekend (both linked in the sidebar), and feel free to add your own.

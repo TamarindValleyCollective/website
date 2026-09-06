@@ -188,9 +188,18 @@ const brand =
                 <a class="button info-card__cta" href="#cta">Request to book ↓</a>
               </>
             ) : (
-              <ul class="info-card__highlights">
-                {event.data.highlights!.map((h) => <li>{h}</li>)}
-              </ul>
+              <>
+                <ul class="info-card__highlights">
+                  {event.data.highlights!.map((h) => <li>{h}</li>)}
+                </ul>
+                {event.data.links && event.data.links.length > 0 && (
+                  <ul class="info-card__links">
+                    {event.data.links.map((l) => (
+                      <li><a href={l.url} target="_blank" rel="noopener noreferrer">{l.label} ↗</a></li>
+                    ))}
+                  </ul>
+                )}
+              </>
             )}
           </div>
         </aside>
@@ -621,6 +630,36 @@ const brand =
     position: absolute;
     left: 4px;
     color: var(--tvc-orange);
+  }
+
+  /* Reference links (eBird report, photo album) below the highlights -
+     styled like .partner__sitelink elsewhere on the site: small, bold,
+     no underline until hover, since these are secondary to the highlights
+     themselves rather than the sidebar's main content. */
+  .info-card__links {
+    list-style: none;
+    margin: 14px 0 0;
+    padding: 14px 0 0;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .info-card__links li {
+    margin-bottom: 6px;
+  }
+
+  .info-card__links li:last-child {
+    margin-bottom: 0;
+  }
+
+  .info-card__links a {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--tvc-green-dark);
+    text-decoration: none;
+  }
+
+  .info-card__links a:hover {
+    text-decoration: underline;
   }
 
   /* Offsets the jump-link landing spot below the site's sticky header, same
