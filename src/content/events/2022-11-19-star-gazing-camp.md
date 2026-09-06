@@ -25,4 +25,4 @@ Pre-booking with full payment was mandatory for this event.
 
 Astronomy session by Vijay Kapoor, founder of the Bangalore Astronomy Club and the Delhi Astronomy Club, and owner of some of the most advanced personal telescopes in India. He has conducted astronomy workshops at prestigious institutions across the country and run stargazing events for families and kids nationwide.
 
-Bookings and hospitality for this event were handled by our partner Linger.
+Bookings and hospitality for this event were handled by our partner [Linger](/people/partners#linger).

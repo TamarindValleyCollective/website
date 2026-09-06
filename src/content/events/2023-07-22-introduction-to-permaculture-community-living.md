@@ -41,4 +41,4 @@ A 1 night/2 day event introducing the idea of Tamarind Valley Collective — why
 
 INR 3,600 per participant, including food and tented accommodation for the night — twin sharing in a mix of 2 bamboo huts, 3 army tents, and Coleman dome tents.
 
-Hosted with our hospitality partner Linger.
+Hosted with our hospitality partner [Linger](/people/partners#linger).

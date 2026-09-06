@@ -27,10 +27,12 @@ const canonicalId = event.id.replace(/^(kn|ta)\//, '');
 // Only worth offering on events that haven't happened yet -- adding a past
 // event to your calendar is a dead end, not a conversion.
 const isUpcoming = event.data.date >= new Date();
-// The "at a glance" sidebar only earns its place once there's a real price
-// to show and something still bookable -- a past event's price is no longer
-// actionable, and an event with no `price` set has nothing to summarize.
-const showSidebar = isUpcoming && Boolean(event.data.price?.length);
+// The "at a glance" sidebar only earns its place once there's real content
+// for it: on an upcoming event, a price to show and something still
+// bookable; on a past one, a `highlights` summary pulled from the recap
+// (see content.config.ts) - a past event's price is no longer actionable,
+// so it falls back to highlights instead of repeating price/booking.
+const showSidebar = (isUpcoming && Boolean(event.data.price?.length)) || (!isUpcoming && Boolean(event.data.highlights?.length));
 // Only pass a custom social-preview image when its real dimensions are also
 // known - BaseLayout's og:image:width/height must match the actual file or
 // WhatsApp's crawler silently discards the image and falls back to the
@@ -135,7 +137,7 @@ const brand =
   schema={[eventSchema]}
 >
   <PageHero eyebrow={formatDateRange(event.data.date, event.data.endDate, lang)} title={event.data.title} image={event.data.coverImage} imageAlt={event.data.coverImageAlt ?? event.data.title} {...brand} />
-  <article class={`section wrapper prose ${event.data.series === '3bs1h' ? 'event--3bs1h' : ''}`.trim()}>
+  <article class={`section wrapper prose ${event.data.series === '3bs1h' ? 'event--3bs1h' : ''} ${!showSidebar ? 'prose--wide' : ''}`.trim()}>
     {event.data.series === '3bs1h' && (
       <a class="series-link" href="/events/3bs1h">Part of 3Bs&amp;1H →</a>
     )}
@@ -173,15 +175,32 @@ const brand =
           <div class="info-card">
             <p class="info-card__label">At a glance</p>
             <p class="info-card__date">{formatDateRange(event.data.date, event.data.endDate, lang)}</p>
-            <ul class="info-card__prices">
-              {event.data.price!.map((p) => <li><strong>{p.amount}</strong> {p.label}</li>)}
-            </ul>
-            {/* Not "Book now" - that read as an instant online checkout to
-                at least one visitor, when this is actually an offline
-                request TVC (or, for 3bs1h, Linger) follows up on by hand;
-                see BookingInquiry's own submit button, which says "Send
-                booking request" for the same reason. */}
-            <a class="button info-card__cta" href="#cta">Request to book ↓</a>
+            {isUpcoming ? (
+              <>
+                <ul class="info-card__prices">
+                  {event.data.price!.map((p) => <li><strong>{p.amount}</strong> {p.label}</li>)}
+                </ul>
+                {/* Not "Book now" - that read as an instant online checkout to
+                    at least one visitor, when this is actually an offline
+                    request TVC (or, for 3bs1h, Linger) follows up on by hand;
+                    see BookingInquiry's own submit button, which says "Send
+                    booking request" for the same reason. */}
+                <a class="button info-card__cta" href="#cta">Request to book ↓</a>
+              </>
+            ) : (
+              <>
+                <ul class="info-card__highlights">
+                  {event.data.highlights!.map((h) => <li>{h}</li>)}
+                </ul>
+                {event.data.links && event.data.links.length > 0 && (
+                  <ul class="info-card__links">
+                    {event.data.links.map((l) => (
+                      <li><a href={l.url} target="_blank" rel="noopener noreferrer">{l.label} ↗</a></li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
           </div>
         </aside>
         <div class="layout-grid__main">
@@ -198,8 +217,12 @@ const brand =
               Netlify form as /visit/camping etc. (already wired to notify
               stay@linger.in) rather than a bespoke booking flow. Other
               events carry their own CTA inside `<Content />` itself (see
-              #cta above), so nothing extra renders here for them. */}
-          {event.data.series === '3bs1h' && (
+              #cta above), so nothing extra renders here for them. Gated on
+              isUpcoming too, not just showSidebar - showSidebar alone is no
+              longer proof of "upcoming" now that a past event with
+              `highlights` also takes this branch (see showSidebar above),
+              and a past event has nothing left to book. */}
+          {isUpcoming && event.data.series === '3bs1h' && (
             <div id="cta">
               <BookingInquiry
                 lang={lang}
@@ -500,6 +523,19 @@ const brand =
     max-width: 72ch;
   }
 
+  /* The 72ch reading-column cap above exists to leave room for the "at a
+     glance" sidebar beside it - on a past event there's no sidebar (see
+     showSidebar), so the cap alone just leaves an unbalanced gap on wide
+     screens instead. prose--wide (applied only when the sidebar is absent)
+     lets the column fill the wrapper instead, same as content outside
+     .prose already does by default. */
+  .prose--wide :global(p),
+  .prose--wide :global(table),
+  .prose--wide :global(.cta),
+  .prose--wide :global(.booking-inquiry) {
+    max-width: none;
+  }
+
   /* Fills the space next to the reading column with a live summary instead
      of leaving it as bare page background - the sticky positioning keeps
      dates/prices/the booking link in view for the whole read, which is the
@@ -569,6 +605,63 @@ const brand =
     text-align: center;
   }
 
+  /* Past-event counterpart to .info-card__prices - plain lines instead of
+     amount/label pairs (a highlight has no second part to bold), and no
+     trailing CTA below it since there's nothing left to book. */
+  .info-card__highlights {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .info-card__highlights li {
+    font-size: 0.92rem;
+    padding-left: 18px;
+    position: relative;
+    margin-bottom: 8px;
+  }
+
+  .info-card__highlights li:last-child {
+    margin-bottom: 0;
+  }
+
+  .info-card__highlights li::before {
+    content: '•';
+    position: absolute;
+    left: 4px;
+    color: var(--tvc-orange);
+  }
+
+  /* Reference links (eBird report, photo album) below the highlights -
+     styled like .partner__sitelink elsewhere on the site: small, bold,
+     no underline until hover, since these are secondary to the highlights
+     themselves rather than the sidebar's main content. */
+  .info-card__links {
+    list-style: none;
+    margin: 14px 0 0;
+    padding: 14px 0 0;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .info-card__links li {
+    margin-bottom: 6px;
+  }
+
+  .info-card__links li:last-child {
+    margin-bottom: 0;
+  }
+
+  .info-card__links a {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--tvc-green-dark);
+    text-decoration: none;
+  }
+
+  .info-card__links a:hover {
+    text-decoration: underline;
+  }
+
   /* Offsets the jump-link landing spot below the site's sticky header, same
      reason any anchor target on this site needs it. Targets both the
      BookingInquiry wrapper this component renders for 3bs1h and any other
@@ -602,6 +695,52 @@ const brand =
   .add-to-cal-label {
     font-size: 0.85rem;
     color: var(--tvc-ink-soft);
+  }
+
+  .prose :global(.poster-cluster) {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin: 16px 0 32px;
+  }
+
+  .prose :global(.poster-cluster .poster) {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+
+  /* Content order from the markdown is butterfly, hilltop, nature-journal.
+     The hilltop shot is portrait -- give it its own column spanning both
+     rows, with the two landscape shots stacked beside it. */
+  .prose :global(.poster-cluster .poster:nth-child(2)) {
+    grid-row: span 2;
+  }
+
+  .prose :global(.poster-cluster .poster img) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .prose :global(.poster-cluster .poster:nth-child(1) img),
+  .prose :global(.poster-cluster .poster:nth-child(3) img) {
+    aspect-ratio: 4 / 3;
+  }
+
+  @media (max-width: 640px) {
+    .prose :global(.poster-cluster) {
+      grid-template-columns: 1fr;
+    }
+
+    .prose :global(.poster-cluster .poster:nth-child(2)) {
+      grid-row: auto;
+    }
+
+    .prose :global(.poster-cluster .poster:nth-child(2) img) {
+      aspect-ratio: 4 / 3;
+      height: auto;
+    }
   }
 
   .prose :global(.poster) {
