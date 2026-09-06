@@ -208,8 +208,12 @@ const brand =
               Netlify form as /visit/camping etc. (already wired to notify
               stay@linger.in) rather than a bespoke booking flow. Other
               events carry their own CTA inside `<Content />` itself (see
-              #cta above), so nothing extra renders here for them. */}
-          {event.data.series === '3bs1h' && (
+              #cta above), so nothing extra renders here for them. Gated on
+              isUpcoming too, not just showSidebar - showSidebar alone is no
+              longer proof of "upcoming" now that a past event with
+              `highlights` also takes this branch (see showSidebar above),
+              and a past event has nothing left to book. */}
+          {isUpcoming && event.data.series === '3bs1h' && (
             <div id="cta">
               <BookingInquiry
                 lang={lang}
