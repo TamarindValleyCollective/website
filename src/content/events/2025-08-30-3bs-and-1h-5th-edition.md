@@ -4,9 +4,9 @@ date: 2025-08-30
 endDate: 2025-08-31
 excerpt: "The 5th edition of TVC's biodiversity walks — birds, butterflies, bees, and a moth screen, with naturalist Deepa Mohan."
 coverImage: "/images/events/2025-08-30-3bs-and-1h-5th-edition/hero.jpg"
-coverImageAlt: "Event poster for the 5th edition of 3Bs&1H Camping & Biodiversity Walk with Deepa Mohan, featuring a coppersmith barbet on a berry branch."
-coverImageWidth: 1571
-coverImageHeight: 2000
+coverImageAlt: "A Short-toed Snake Eagle soaring overhead, spotted during the 5th edition's dusk nature walk."
+coverImageWidth: 1005
+coverImageHeight: 675
 tags: ["biodiversity", "walk"]
 series: "3bs1h"
 edition: 5
@@ -17,9 +17,9 @@ price:
     label: "children under 10"
 ---
 
-TVC is a labour of love. With more than 80 species of birds and a wide variety of butterflies, insects, and plants, TVC is a biodiversity hotspot. The 5th edition of 3Bs&1H@TVC — explore the richness and abundance of life around you with the keen eyes of Deepa Mohan, avid birder, traveller, naturalist, and visual storyteller.
+We had a smaller group for the 5th edition, likely due to the Ganesha festival falling the same weekend — but the enthusiasm was top-notch, and the vibe felt more like a family gathering than an event full of strangers.
 
-Experience Linger's hospitality, guided tours, and a hike to the top of the hill in the morning. Watch and identify birds, butterflies, insects, herps (if you're lucky), and plants. Stay at the farm overnight and share stories around a campfire.
+Naturalist Deepa Mohan led guided walks to watch and identify birds, butterflies, insects, and herps around the property, alongside Linger's hospitality, an overnight stay at the farm, and a hike to the top of the hill on Day 2.
 
 The event started Saturday afternoon around 3pm, with everyone camping at the farm overnight and heading back Sunday around noon.
 
@@ -57,3 +57,37 @@ The event started Saturday afternoon around 3pm, with everyone camping at the fa
 Children below 10: free. Limited to 20 participants.
 
 Hosted with our hospitality partner Linger.
+
+## How it went
+
+**Day 1:** After everyone made it to the farm, we kicked off with a dusk nature walk — moderate activity, with a **Short-toed Snake Eagle** soaring overhead the highlight (pictured above). Back from the walk, the bajjis were polished off in record time. Post-dinner, the moth screen drew a modest crowd, but the night walk for herps was more eventful thanks to the fireflies — the kids had a fantastic time chasing them.
+
+**Day 2:** The morning began with an early nature walk at a leisurely pace, with plenty of stops to identify plants and insects along the way. After breakfast, several people headed up the hill for a hike — and even afterward, no one seemed in a rush to leave. The conversations continued well into the afternoon, always a good sign that everyone had gelled well.
+
+<figure class="poster">
+
+![A Common Jezebel butterfly resting on a leaf](/images/events/2025-08-30-3bs-and-1h-5th-edition/recap-butterfly.jpg)
+
+<figcaption>A Common Jezebel, spotted along the trail</figcaption>
+
+</figure>
+
+<figure class="poster">
+
+![Two participants taking a break on the rocks partway up the hill](/images/events/2025-08-30-3bs-and-1h-5th-edition/recap-hilltop.jpg)
+
+<figcaption>Taking a breather partway up the Day 2 hike</figcaption>
+
+</figure>
+
+One of the younger participants spent the weekend observing, sketching, and asking questions in a nature journal — a naturalist in the making.
+
+<figure class="poster">
+
+![A page from a participant's nature journal, with a pressed leaf and a colored-pencil sketch of it](/images/events/2025-08-30-3bs-and-1h-5th-edition/recap-nature-journal.jpg)
+
+<figcaption>A page from one participant's nature journal</figcaption>
+
+</figure>
+
+Naturalist Deepa Mohan's full [eBird trip report](https://ebird.org/tripreport/407272) recorded 75 species over the weekend. Browse the [full photo album](https://photos.google.com/share/AF1QipOTbxALCYzkCQ_oO24uvPr4t2f7jTxr_NiU_IjUkGXHdjCP-edKsfx-mtD7-o606g?key=RFBpMVhLNmRHeWFmYWxrSkhXTGVLd0p4UGxBN0lB) for more from the weekend, and feel free to add your own.
