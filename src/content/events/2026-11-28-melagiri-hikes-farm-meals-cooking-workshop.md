@@ -4,6 +4,8 @@ date: 2026-11-28
 excerpt: "A day of hikes, farm meals, and a raw cooking workshop at Tamarind Valley Collective with Local Narratives — a guided forest hike, a cooking workshop with village women, and farm-to-table meals."
 coverImage: "/images/events/2026-11-28-melagiri-hikes-farm-meals-cooking-workshop/hero.png"
 coverImageAlt: "Local Narratives logo — placeholder until a real event photo is available."
+coverImageWidth: 656
+coverImageHeight: 450
 organizer: "Local Narratives"
 tags: ["hike", "farm-experience", "cooking", "workshop"]
 draft: false

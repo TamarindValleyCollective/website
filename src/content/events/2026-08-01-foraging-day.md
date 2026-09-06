@@ -4,6 +4,8 @@ date: 2026-08-01
 excerpt: "A full day of foraging, cooking, and eating together at Tamarind Valley Collective with Foraging Trails & Tales — a guided foraging walk, a hands-on cooking workshop, and a farm-to-table lunch."
 coverImage: "/images/events/2026-08-01-foraging-day/hero.jpeg"
 coverImageAlt: "Participants foraging for wild greens in a grassy meadow during Foraging Day."
+coverImageWidth: 720
+coverImageHeight: 480
 organizer: "Foraging Trails & Tales"
 tags: ["workshop", "food", "foraging"]
 draft: true

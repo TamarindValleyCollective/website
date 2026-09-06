@@ -31,6 +31,13 @@ const isUpcoming = event.data.date >= new Date();
 // to show and something still bookable -- a past event's price is no longer
 // actionable, and an event with no `price` set has nothing to summarize.
 const showSidebar = isUpcoming && Boolean(event.data.price?.length);
+// Only pass a custom social-preview image when its real dimensions are also
+// known - BaseLayout's og:image:width/height must match the actual file or
+// WhatsApp's crawler silently discards the image and falls back to the
+// site's apple-touch-icon (the bug this guards against). An event missing
+// coverImageWidth/Height degrades to BaseLayout's own sitewide default
+// image+dimensions instead of repeating that failure.
+const hasSizedCoverImage = Boolean(event.data.coverImage && event.data.coverImageWidth && event.data.coverImageHeight);
 const calendarEvent = {
   uid: canonicalId,
   title: event.data.title,
@@ -118,7 +125,15 @@ const brand =
     : {};
 ---
 
-<BaseLayout lang={lang} title={event.data.title} description={event.data.excerpt} image={event.data.coverImage} schema={[eventSchema]}>
+<BaseLayout
+  lang={lang}
+  title={event.data.title}
+  description={event.data.excerpt}
+  image={hasSizedCoverImage ? event.data.coverImage : undefined}
+  imageWidth={hasSizedCoverImage ? event.data.coverImageWidth : undefined}
+  imageHeight={hasSizedCoverImage ? event.data.coverImageHeight : undefined}
+  schema={[eventSchema]}
+>
   <PageHero eyebrow={formatDateRange(event.data.date, event.data.endDate, lang)} title={event.data.title} image={event.data.coverImage} imageAlt={event.data.coverImageAlt ?? event.data.title} {...brand} />
   <article class={`section wrapper prose ${event.data.series === '3bs1h' ? 'event--3bs1h' : ''}`.trim()}>
     {event.data.series === '3bs1h' && (

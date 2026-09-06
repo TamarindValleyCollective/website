@@ -17,6 +17,16 @@
 title: "YYYY: Mon DD - Event Name"
 date: 2026-01-01
 excerpt: "A one-to-two sentence summary shown on the event card and in link previews. Keep it under ~250 characters."
+# coverImage: "/images/events/YYYY-MM-DD-your-event-name/hero.jpg"
+# coverImageAlt: "What's actually in the photo."
+# If you set coverImage, you MUST also set its real pixel dimensions here -
+# run `sips -g pixelWidth -g pixelHeight <the file>` and copy the numbers.
+# Skipping this is exactly the bug that made every event page's WhatsApp
+# link preview show the site's logo instead of the event photo: og:image
+# dimensions that don't match the real file get silently discarded by
+# WhatsApp's crawler, which falls back to the apple-touch-icon.
+# coverImageWidth: 0
+# coverImageHeight: 0
 organizer: ""
 tags: []
 draft: true

@@ -4,6 +4,8 @@ date: 2021-08-21
 excerpt: "One of the primary dreams for any new farm owner is to plant and grow trees. We envision having a large canopy of trees providing not just visual appeal but also produce clean air to breath. If you are new to setting up a farm then you will have lots of questions. What t"
 coverImage: "/images/events/2021-08-21-seeds-saplings-growing-trees/hero.jpeg"
 coverImageAlt: "Rows of young tree saplings in nursery bags at TVC."
+coverImageWidth: 960
+coverImageHeight: 1280
 tags: ["workshop"]
 ---
 

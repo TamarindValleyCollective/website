@@ -5,6 +5,8 @@ endDate: 2024-12-22
 excerpt: "Spend Saturday evening and Sunday exploring the property, with guided naturalist tours to watch and identify birds, butterflies, insects, and plants. Limited to 20 participants."
 coverImage: "/images/events/2024-12-21-3bs-and-1h-biodiversity-walk/hero.jpg"
 coverImageAlt: "Event poster for the 4th edition of 3Bs&1H Dusk to Dawn Biodiversity Walk with Deepa Mohan, showing a birder photographing an oriental white-eye."
+coverImageWidth: 1080
+coverImageHeight: 1375
 tags: ["biodiversity", "walk"]
 series: "3bs1h"
 edition: 4

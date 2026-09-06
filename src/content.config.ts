@@ -15,6 +15,17 @@ const events = defineCollection({
     // attribute - falls back to the event title (see EventsIndexView /
     // EventDetailView) when not set, same as before this field existed.
     coverImageAlt: z.string().optional(),
+    // The actual pixel dimensions of coverImage. BaseLayout's og:image:width
+    // /height must match the real file or WhatsApp's link-preview crawler
+    // silently discards the image and falls back to the site's
+    // apple-touch-icon (see BaseLayout.astro's own comment on this) - every
+    // event page was hitting exactly that bug by passing a custom coverImage
+    // without matching dimensions, so BaseLayout's 4204x1330 default never
+    // matched. Get the real numbers with `sips -g pixelWidth -g pixelHeight
+    // <file>`. Omit only alongside coverImage itself (no custom image, no
+    // custom dimensions needed).
+    coverImageWidth: z.number().int().positive().optional(),
+    coverImageHeight: z.number().int().positive().optional(),
     organizer: z.string().optional(),
     tags: z.array(z.string()).default([]),
     // Groups editions of the same recurring event under one visual identity

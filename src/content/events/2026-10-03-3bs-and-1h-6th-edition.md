@@ -5,6 +5,8 @@ endDate: 2026-10-04
 excerpt: "The 6th edition of TVC's dusk-to-dawn biodiversity walks — birds, butterflies, bees, and herps, with a moth screen and night walk."
 coverImage: "/images/events/2026-10-03-3bs-and-1h-6th-edition/hero.jpg"
 coverImageAlt: "A weaver ant colony tending their nest through a torn leaf window, backlit bright green."
+coverImageWidth: 1350
+coverImageHeight: 1365
 tags: ["biodiversity", "walk"]
 series: "3bs1h"
 edition: 6
