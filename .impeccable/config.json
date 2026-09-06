@@ -77,6 +77,15 @@
         ],
         "createdAt": "2026-08-28T12:38:16.582Z",
         "reason": "pre-existing blockquote quote-style border in markdown prose, not a UI card; file has zero diff from HEAD for this task"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/components/views/EventDetailView.astro"
+        ],
+        "createdAt": "2026-09-06T03:55:41.367Z",
+        "reason": "blockquote left-border accent is a standard typographic convention, not a card side-tab; pre-existing rule, not part of this session's changes"
       }
     ]
   }
