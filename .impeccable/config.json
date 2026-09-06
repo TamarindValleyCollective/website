@@ -84,8 +84,8 @@
         "files": [
           "src/components/views/EventDetailView.astro"
         ],
-        "createdAt": "2026-09-06T03:55:41.367Z",
-        "reason": "blockquote left-border accent is a standard typographic convention, not a card side-tab; pre-existing rule, not part of this session's changes"
+        "createdAt": "2026-09-05T11:11:31.465Z",
+        "reason": "pre-existing .prose blockquote left-border rule, predates this session's 3bs1h changes; a blockquote rule not a card, and an established site-wide editorial convention"
       }
     ]
   }

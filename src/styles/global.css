@@ -38,6 +38,39 @@
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
+/* 3Bs&1H sub-brand faces — scoped to .event--3bs1h / .hero--3bs1h only (see the
+   `series` field on the events collection), never used as a global token. Self-hosted
+   the same way as the three faces above, same latin-only unicode-range. Italic is a
+   separate face (not synthesized) because the brand kit's own rule reserves italic for
+   one specific small use (a "Certificate of Participation"-style line), not general
+   emphasis. */
+@font-face {
+  font-family: 'EB Garamond';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('/fonts/eb-garamond-variable.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'EB Garamond';
+  font-style: italic;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('/fonts/eb-garamond-italic-variable.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/archivo-variable.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 /* Design tokens sampled directly from TVC-Logo-2.png / FULL-Logo-Master-PNG.png.
    --tvc-green/--tvc-orange are deliberately muted (desaturated from the raw
    logo swatches) so the everyday accent pairing - links, eyebrows, hover
@@ -76,9 +109,21 @@
      Same hue/saturation darkened to 4.95:1, for .callout--sky's label. */
   --tvc-sky-blue-text: #3c7190;
 
+  /* 3Bs&1H sub-brand tokens, scoped to .event--3bs1h / .hero--3bs1h only (see
+     `series` on the events collection and public/images/brand/3bs1h/README.md).
+     The kit's own green (#17743C) and CTA orange (#F88722) are near-identical to
+     --tvc-green-vivid / --tvc-orange-cta above, so those are reused rather than
+     duplicated - only the kit's warmer cream and dark ground have no existing
+     token, since --tvc-cream itself is a different, cooler shade. */
+  --tvc-3bs1h-cream: #f2ecdb;
+  --tvc-3bs1h-paper: #fbf8f1;
+  --tvc-3bs1h-dark: #12271a;
+
   --font-wordmark: 'Quicksand', -apple-system, 'Segoe UI', sans-serif;
   --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
   --font-body: 'Inter', -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-3bs1h-display: 'EB Garamond', Georgia, 'Times New Roman', serif;
+  --font-3bs1h-label: 'Archivo', -apple-system, 'Segoe UI', sans-serif;
 
   --radius: 14px;
   --shadow-soft: 0 4px 18px rgba(34, 41, 31, 0.1);

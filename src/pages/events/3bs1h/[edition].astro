@@ -1,0 +1,16 @@
+---
+import EventDetailView from '../../../components/views/EventDetailView.astro';
+import { getCollection } from 'astro:content';
+
+export async function getStaticPaths() {
+  const editions = await getCollection(
+    'events',
+    (e) => e.data.series === '3bs1h' && !e.data.draft && !e.id.includes('/'),
+  );
+  return editions.map((event) => ({ params: { edition: String(event.data.edition) }, props: { event } }));
+}
+
+const { event } = Astro.props;
+---
+
+<EventDetailView lang="en" event={event} />
