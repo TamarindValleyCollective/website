@@ -135,7 +135,7 @@ const brand =
   schema={[eventSchema]}
 >
   <PageHero eyebrow={formatDateRange(event.data.date, event.data.endDate, lang)} title={event.data.title} image={event.data.coverImage} imageAlt={event.data.coverImageAlt ?? event.data.title} {...brand} />
-  <article class={`section wrapper prose ${event.data.series === '3bs1h' ? 'event--3bs1h' : ''}`.trim()}>
+  <article class={`section wrapper prose ${event.data.series === '3bs1h' ? 'event--3bs1h' : ''} ${!showSidebar ? 'prose--wide' : ''}`.trim()}>
     {event.data.series === '3bs1h' && (
       <a class="series-link" href="/events/3bs1h">Part of 3Bs&amp;1H →</a>
     )}
@@ -498,6 +498,19 @@ const brand =
      reading as a mismatched, wider "box" rather than the column's own close. */
   .prose :global(.booking-inquiry) {
     max-width: 72ch;
+  }
+
+  /* The 72ch reading-column cap above exists to leave room for the "at a
+     glance" sidebar beside it - on a past event there's no sidebar (see
+     showSidebar), so the cap alone just leaves an unbalanced gap on wide
+     screens instead. prose--wide (applied only when the sidebar is absent)
+     lets the column fill the wrapper instead, same as content outside
+     .prose already does by default. */
+  .prose--wide :global(p),
+  .prose--wide :global(table),
+  .prose--wide :global(.cta),
+  .prose--wide :global(.booking-inquiry) {
+    max-width: none;
   }
 
   /* Fills the space next to the reading column with a live summary instead

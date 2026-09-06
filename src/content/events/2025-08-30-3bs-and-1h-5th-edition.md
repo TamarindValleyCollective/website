@@ -60,7 +60,7 @@ Hosted with our hospitality partner Linger.
 
 ## How it went
 
-**Day 1:** After everyone made it to the farm, we kicked off with a dusk nature walk — moderate activity, with a **Short-toed Snake Eagle** soaring overhead the highlight (pictured above). Back from the walk, the bajjis were polished off in record time. Post-dinner, the moth screen drew a modest crowd, but the night walk for herps was more eventful thanks to the fireflies — the kids had a fantastic time chasing them.
+**Day 1:** After everyone made it to the farm, we kicked off with a dusk nature walk — moderate activity, with a **Short-toed Snake Eagle** soaring overhead the highlight. Back from the walk, the bajjis were polished off in record time. Post-dinner, the moth screen drew a modest crowd, but the night walk for herps was more eventful thanks to the fireflies — the kids had a fantastic time chasing them.
 
 **Day 2:** The morning began with an early nature walk at a leisurely pace, with plenty of stops to identify plants and insects along the way. After breakfast, several people headed up the hill for a hike — and even afterward, no one seemed in a rush to leave. The conversations continued well into the afternoon, always a good sign that everyone had gelled well.
 

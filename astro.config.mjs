@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
+import rehypeExternalLinks from 'rehype-external-links';
 
 // https://astro.build/config
 export default defineConfig({
@@ -14,6 +15,14 @@ export default defineConfig({
   // just gives up and shows the site's apple-touch-icon instead. Falls back
   // to the real domain for local dev, where this env var doesn't exist.
   site: process.env.DEPLOY_PRIME_URL || 'https://tvc.farm',
+  // Every external link across the site's markdown content (event recaps,
+  // outreach pages, etc.) should open in a new tab rather than navigating
+  // away from tvc.farm - applied here once at the markdown-rendering level
+  // instead of per-link, since dozens of existing pages already have plain
+  // `[text](url)` links with no way to set target/rel individually.
+  markdown: {
+    rehypePlugins: [[rehypeExternalLinks, { target: '_blank', rel: ['noopener', 'noreferrer'] }]],
+  },
   vite: {
     plugins: [
       // /pagefind/pagefind.js only exists after `pagefind --site dist` runs
