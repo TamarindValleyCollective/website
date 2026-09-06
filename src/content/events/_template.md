@@ -20,8 +20,31 @@ excerpt: "A one-to-two sentence summary shown on the event card and in link prev
 organizer: ""
 tags: []
 draft: true
+# If this event has a fixed price, list every tier here - one row per
+# price line in the "at a glance" sidebar, `amount` shown bold and `label`
+# plain. Include a free-for-some-age-group row if that applies (see the
+# second example row below). Leave the whole field out for a fully free
+# event. Don't also restate any of this in a heading below (e.g.
+# "## What's included — INR 1,900") - the sidebar is the one place price
+# lives now, so the body only needs "## What's included" plus a bullet list.
+# price:
+#   - amount: "INR 1,900"
+#     label: "per person"
+#   - amount: "Free"
+#     label: "children under 10"
 ---
 
-Full event description goes here. Use the excerpt above for the short
-summary, and write as much detail as you like in this section - what to
-bring, how to register, timings, and so on.
+Full event description goes here - what the event actually is, in a
+paragraph or two.
+
+Standard section order for the rest of the body (keep every event reading
+the same way, not each one improvised): the write-up above, then
+**## Schedule** (a Time/Activity table - see any 3Bs&1H edition for the
+two-day format, or the Melagiri event for single-day), then
+**## What's included** (a bullet list), then any event-specific extras
+(what to carry, logistics, etc.), then the registration/booking
+call-to-action last, at the very bottom.
+
+If you set `price` above, that call-to-action must be wrapped with
+`id="cta"` (e.g. `<div class="cta card" id="cta">`), so the sidebar's
+"Book now" button has something to jump to.

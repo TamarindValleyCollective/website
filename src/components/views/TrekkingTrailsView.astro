@@ -37,6 +37,7 @@ const content = {
       },
     ],
     closingText: 'You can also do shorter walks in the upper wildlife corridor, along the periphery of the large canopy food forest, or through the Kavery 2 area to learn about native and planted species helping rejuvenate the land.',
+    bookingHeading: 'Book your trek',
     bookingWhatsapp: "Hi! I'd like to plan a guided trek at TVC.",
     bookingNote: 'Treks are arranged as part of a day visit or overnight stay with our local in-charge — send an inquiry or message us to plan yours.',
   },
@@ -65,6 +66,7 @@ const content = {
       },
     ],
     closingText: 'ಭೂಮಿಯನ್ನು ಪುನಶ್ಚೇತನಗೊಳಿಸಲು ಸಹಾಯ ಮಾಡುವ ಸ್ಥಳೀಯ ಮತ್ತು ನೆಟ್ಟ ಪ್ರಭೇದಗಳ ಬಗ್ಗೆ ತಿಳಿಯಲು ನೀವು ಮೇಲಿನ ವನ್ಯಜೀವಿ ಕಾರಿಡಾರ್‌ನಲ್ಲಿ, ದೊಡ್ಡ ಮೇಲಾವರಣ ಆಹಾರ ಅರಣ್ಯದ ಪರಿಧಿಯ ಉದ್ದಕ್ಕೂ, ಅಥವಾ ಕಾವೇರಿ 2 ಪ್ರದೇಶದ ಮೂಲಕ ಕಡಿಮೆ ನಡಿಗೆಗಳನ್ನೂ ಮಾಡಬಹುದು.',
+    bookingHeading: 'ನಿಮ್ಮ ಚಾರಣವನ್ನು ಬುಕ್ ಮಾಡಿ',
     bookingWhatsapp: 'ಹಾಯ್! TVC ಯಲ್ಲಿ ಮಾರ್ಗದರ್ಶಿತ ಚಾರಣವನ್ನು ಯೋಜಿಸಲು ಬಯಸುತ್ತೇನೆ.',
     bookingNote: 'ಚಾರಣಗಳನ್ನು ನಮ್ಮ ಸ್ಥಳೀಯ ಉಸ್ತುವಾರಿಯೊಂದಿಗೆ ಒಂದು ದಿನದ ಭೇಟಿ ಅಥವಾ ರಾತ್ರಿ ವಾಸ್ತವ್ಯದ ಭಾಗವಾಗಿ ಆಯೋಜಿಸಲಾಗುತ್ತದೆ — ನಿಮ್ಮದನ್ನು ಯೋಜಿಸಲು ವಿಚಾರಣೆ ಕಳುಹಿಸಿ ಅಥವಾ ನಮಗೆ ಸಂದೇಶ ಕಳುಹಿಸಿ.',
   },
@@ -93,6 +95,7 @@ const content = {
       },
     ],
     closingText: 'நிலத்தை புத்துயிர் பெறச் செய்ய உதவும் உள்நாட்டு மற்றும் நடப்பட்ட இனங்களைப் பற்றி அறிய, மேல் வனவிலங்கு தாழ்வாரத்திலும், பெரிய விதானமுள்ள உணவு காட்டின் புற எல்லையிலும், அல்லது காவேரி 2 பகுதி வழியாகவும் குறுகிய நடைப்பயணங்களையும் நீங்கள் செய்யலாம்.',
+    bookingHeading: 'உங்கள் மலையேற்றத்தை முன்பதிவு செய்யுங்கள்',
     bookingWhatsapp: 'வணக்கம்! TVC-யில் வழிகாட்டப்பட்ட மலையேற்றத்தை திட்டமிட விரும்புகிறேன்.',
     bookingNote: 'மலையேற்றங்கள் எங்கள் உள்ளூர் பொறுப்பாளருடன் ஒரு நாள் பயணம் அல்லது இரவு தங்குமிடத்தின் ஒரு பகுதியாக ஏற்பாடு செய்யப்படுகின்றன — உங்களுடையதைத் திட்டமிட விசாரணையை அனுப்பவும் அல்லது எங்களுக்கு செய்தி அனுப்பவும்.',
   },
@@ -146,6 +149,7 @@ const trailsSchema = {
     <BookingInquiry
       lang={lang}
       type="Trekking"
+      heading={c.bookingHeading}
       whatsappMessage={c.bookingWhatsapp}
       note={c.bookingNote}
     />

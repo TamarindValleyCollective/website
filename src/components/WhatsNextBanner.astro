@@ -21,9 +21,14 @@ const { lang = DEFAULT_LOCALE } = Astro.props;
 // locale-prefixed id would double up.
 const allEvents = await getCollection('events', (e) => !e.data.draft && !e.id.includes('/'));
 const today = new Date();
-const nextEvent = allEvents
+// Soonest first, capped at 3 - the strip cycles through these one at a time
+// (see the script below) rather than growing into a card row, so it stays
+// the same glanceable size regardless of how many events are upcoming.
+const MAX_EVENTS = 3;
+const upcomingEvents = allEvents
   .filter((e) => e.data.date >= today)
-  .sort((a, b) => a.data.date.valueOf() - b.data.date.valueOf())[0];
+  .sort((a, b) => a.data.date.valueOf() - b.data.date.valueOf())
+  .slice(0, MAX_EVENTS);
 
 // Countdown text is reproduced locally (rather than importing
 // countdownLabel from ../utils/events, which is shared with the
@@ -44,25 +49,38 @@ function countdownText(daysAway: number): string {
 }
 ---
 
-{nextEvent && (
-  <section class="whats-next">
+{upcomingEvents.length > 0 && (
+  <section class="whats-next" id="whats-next">
     <div class="wrapper whats-next__inner">
-      <div class="whats-next__text">
-        <span class="whats-next__eyebrow">{l.eyebrow}</span>
-        <h3 class="whats-next__title">{nextEvent.data.title}</h3>
-        <span class="whats-next__date">{formatDateRange(nextEvent.data.date, nextEvent.data.endDate)}</span>
+      <div class="whats-next__slides">
+        {upcomingEvents.map((event, i) => (
+          <div class="whats-next__slide" data-slide hidden={i !== 0}>
+            <div class="whats-next__text">
+              <span class="whats-next__eyebrow">{l.eyebrow}</span>
+              <h3 class="whats-next__title">{event.data.title}</h3>
+              <span class="whats-next__date">{formatDateRange(event.data.date, event.data.endDate)}</span>
+            </div>
+            <span class="whats-next__countdown">{countdownText(daysUntil(event.data.date, today))}</span>
+            <a
+              class="button whats-next__cta"
+              href={
+                event.data.series === '3bs1h'
+                  ? `/events/3bs1h/${event.data.edition}`
+                  : getRelativeLocaleUrl(lang, `/events/${event.id}`)
+              }
+            >
+              {l.cta}
+            </a>
+          </div>
+        ))}
       </div>
-      <span class="whats-next__countdown">{countdownText(daysUntil(nextEvent.data.date, today))}</span>
-      <a
-        class="button whats-next__cta"
-        href={
-          nextEvent.data.series === '3bs1h'
-            ? `/events/3bs1h/${nextEvent.data.edition}`
-            : getRelativeLocaleUrl(lang, `/events/${nextEvent.id}`)
-        }
-      >
-        {l.cta}
-      </a>
+      {upcomingEvents.length > 1 && (
+        <div class="whats-next__dots" role="tablist" aria-label={l.eyebrow}>
+          {upcomingEvents.map((_, i) => (
+            <button type="button" class="whats-next__dot" class:list={{ 'is-active': i === 0 }} data-dot={i} role="tab" aria-selected={i === 0} aria-label={`${i + 1}`}></button>
+          ))}
+        </div>
+      )}
     </div>
   </section>
 )}
@@ -79,6 +97,43 @@ function countdownText(daysAway: number): string {
     display: flex;
     align-items: center;
     gap: 20px;
+  }
+
+  .whats-next__slides {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .whats-next__slide {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .whats-next__slide[hidden] {
+    display: none;
+  }
+
+  .whats-next__dots {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .whats-next__dot {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 8px;
+    height: 8px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(168, 87, 18, 0.3);
+    cursor: pointer;
+  }
+
+  .whats-next__dot.is-active {
+    background: var(--tvc-orange-strong, #a85712);
   }
 
   .whats-next__text {
@@ -129,6 +184,11 @@ function countdownText(daysAway: number): string {
       flex-wrap: wrap;
     }
 
+    .whats-next__slide {
+      flex-wrap: wrap;
+      width: 100%;
+    }
+
     .whats-next__countdown {
       order: 3;
     }
@@ -140,3 +200,43 @@ function countdownText(daysAway: number): string {
     }
   }
 </style>
+
+<script>
+  const ADVANCE_MS = 6000;
+
+  document.querySelectorAll<HTMLElement>('#whats-next').forEach((banner) => {
+    const slides = Array.from(banner.querySelectorAll<HTMLElement>('[data-slide]'));
+    const dots = Array.from(banner.querySelectorAll<HTMLButtonElement>('[data-dot]'));
+    if (slides.length <= 1) return;
+
+    let active = 0;
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    function show(index: number) {
+      active = index;
+      slides.forEach((s, i) => (s.hidden = i !== index));
+      dots.forEach((d, i) => {
+        d.classList.toggle('is-active', i === index);
+        d.setAttribute('aria-selected', String(i === index));
+      });
+    }
+
+    function next() {
+      show((active + 1) % slides.length);
+    }
+
+    // No auto-advance for reduced-motion users - same convention as
+    // PageHero's own scroll-fade script - but the dots stay fully clickable,
+    // so cycling is still possible, just not automatic.
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!reduceMotion) {
+      timer = setInterval(next, ADVANCE_MS);
+      banner.addEventListener('mouseenter', () => timer && clearInterval(timer));
+      banner.addEventListener('mouseleave', () => (timer = setInterval(next, ADVANCE_MS)));
+      banner.addEventListener('focusin', () => timer && clearInterval(timer));
+      banner.addEventListener('focusout', () => (timer = setInterval(next, ADVANCE_MS)));
+    }
+
+    dots.forEach((dot, i) => dot.addEventListener('click', () => show(i)));
+  });
+</script>

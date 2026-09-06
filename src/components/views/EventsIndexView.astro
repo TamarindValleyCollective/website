@@ -37,7 +37,10 @@ const today = new Date();
 const bs1hPast = lang === 'en' ? allEvents.filter((e) => e.data.series === '3bs1h' && e.data.date < today) : [];
 const bs1hLatestPast = bs1hPast.length > 0 ? bs1hPast.reduce((a, b) => (a.data.date > b.data.date ? a : b)) : null;
 
-const upcoming = allEvents.filter((e) => e.data.date >= today);
+// Soonest-first, the opposite of allEvents' newest-first order above - an
+// upcoming list exists to answer "what's happening next", so the nearest
+// date belongs at the top, not the furthest-out one.
+const upcoming = allEvents.filter((e) => e.data.date >= today).sort((a, b) => a.data.date.valueOf() - b.data.date.valueOf());
 const past = allEvents.filter((e) => e.data.date < today && !bs1hPast.includes(e));
 
 type PastCard =
@@ -60,11 +63,16 @@ function eventHref(e: (typeof allEvents)[number]) {
 }
 
 // Every filterable tag, derived from real content rather than hardcoded -
-// content tags (workshop, biodiversity, ...) alphabetically, duration tags
-// (Day event, Overnight event (N days)) sorted shortest-first. Content tags
-// come out already translated since they're read straight off this locale's
-// content collection entries.
-const contentTags = [...new Set(allEvents.flatMap((e) => e.data.tags))].sort();
+// content tags (workshop, biodiversity, ...) most-used first (ties broken
+// alphabetically), duration tags (Day event, Overnight event (N days))
+// sorted shortest-first. Most-used-first, rather than plain alphabetical,
+// keeps the handful of tags an actual visitor is likely to want up front
+// instead of every tag competing for equal attention regardless of how rare
+// it is. Content tags come out already translated since they're read
+// straight off this locale's content collection entries.
+const tagCounts = new Map<string, number>();
+allEvents.forEach((e) => e.data.tags.forEach((t) => tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1)));
+const contentTags = [...tagCounts.keys()].sort((a, b) => tagCounts.get(b)! - tagCounts.get(a)! || a.localeCompare(b));
 const durationTagDays = new Map<string, number>();
 allEvents.forEach((e) => {
   const tag = durationTag(e.data.date, e.data.endDate, lang);

@@ -42,6 +42,18 @@ const events = defineCollection({
     // (see netlify/functions/event-interest.mts).
     interestNote: z.string().optional(),
     interestNoteHref: z.string().optional(),
+    // One row per price line in the "at a glance" sidebar on an upcoming
+    // event's detail page (see EventDetailView.astro) - `amount` renders
+    // bold, `label` plain, e.g. { amount: "INR 3,500", label: "deck/hut" }
+    // or { amount: "Free", label: "children under 10" }. Not reconstructed
+    // from the body's own Pricing/What's-included section - this is the one
+    // place the price actually lives; the body shouldn't restate it. Omit
+    // for free events or ones with no fixed price yet. Setting this is what
+    // turns the sidebar on - pair it with a call-to-action element somewhere
+    // in the event (the body's own "Register"/booking block, or one
+    // EventDetailView renders itself) carrying `id="cta"`, so the sidebar's
+    // "Book now" link has something to jump to.
+    price: z.array(z.object({ amount: z.string(), label: z.string() })).optional(),
   }),
 });
 
