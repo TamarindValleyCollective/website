@@ -63,7 +63,7 @@ _(End of event. Feel free to head back or hang out for some more time.)_
 
 If you decide to stay for some more time, please inform us we will arrange for tea/juice.
 
-### **Food and Accommodation (Hospitality Partner: Linger)**
+### **Food and Accommodation (Hospitality Partner: [Linger](/people/partners#linger))**
 
 *   We will arrange accommodation (a combination of bamboo huts, Linger tents + private tents) for up to 20 people.
 *   Day 1: Coffee/tea/juice, evening snacks, dinner; Day 2: Coffee/tea/juice, breakfast, lunch.

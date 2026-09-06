@@ -65,6 +65,13 @@ const events = defineCollection({
     // EventDetailView renders itself) carrying `id="cta"`, so the sidebar's
     // "Request to book" link has something to jump to.
     price: z.array(z.object({ amount: z.string(), label: z.string() })).optional(),
+    // Mirrors `price` above but for a past event's "at a glance" sidebar
+    // (see EventDetailView.astro) - short standalone lines like "75 species
+    // recorded" or "20 participants", pulled from the recap rather than
+    // restating it. Omit for a past event with no sidebar-worthy highlight
+    // yet; setting this is what turns the sidebar on for a completed event,
+    // same as `price` does for an upcoming one.
+    highlights: z.array(z.string()).optional(),
   }),
 });
 

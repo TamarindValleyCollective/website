@@ -27,10 +27,12 @@ const canonicalId = event.id.replace(/^(kn|ta)\//, '');
 // Only worth offering on events that haven't happened yet -- adding a past
 // event to your calendar is a dead end, not a conversion.
 const isUpcoming = event.data.date >= new Date();
-// The "at a glance" sidebar only earns its place once there's a real price
-// to show and something still bookable -- a past event's price is no longer
-// actionable, and an event with no `price` set has nothing to summarize.
-const showSidebar = isUpcoming && Boolean(event.data.price?.length);
+// The "at a glance" sidebar only earns its place once there's real content
+// for it: on an upcoming event, a price to show and something still
+// bookable; on a past one, a `highlights` summary pulled from the recap
+// (see content.config.ts) - a past event's price is no longer actionable,
+// so it falls back to highlights instead of repeating price/booking.
+const showSidebar = (isUpcoming && Boolean(event.data.price?.length)) || (!isUpcoming && Boolean(event.data.highlights?.length));
 // Only pass a custom social-preview image when its real dimensions are also
 // known - BaseLayout's og:image:width/height must match the actual file or
 // WhatsApp's crawler silently discards the image and falls back to the
@@ -173,15 +175,23 @@ const brand =
           <div class="info-card">
             <p class="info-card__label">At a glance</p>
             <p class="info-card__date">{formatDateRange(event.data.date, event.data.endDate, lang)}</p>
-            <ul class="info-card__prices">
-              {event.data.price!.map((p) => <li><strong>{p.amount}</strong> {p.label}</li>)}
-            </ul>
-            {/* Not "Book now" - that read as an instant online checkout to
-                at least one visitor, when this is actually an offline
-                request TVC (or, for 3bs1h, Linger) follows up on by hand;
-                see BookingInquiry's own submit button, which says "Send
-                booking request" for the same reason. */}
-            <a class="button info-card__cta" href="#cta">Request to book ↓</a>
+            {isUpcoming ? (
+              <>
+                <ul class="info-card__prices">
+                  {event.data.price!.map((p) => <li><strong>{p.amount}</strong> {p.label}</li>)}
+                </ul>
+                {/* Not "Book now" - that read as an instant online checkout to
+                    at least one visitor, when this is actually an offline
+                    request TVC (or, for 3bs1h, Linger) follows up on by hand;
+                    see BookingInquiry's own submit button, which says "Send
+                    booking request" for the same reason. */}
+                <a class="button info-card__cta" href="#cta">Request to book ↓</a>
+              </>
+            ) : (
+              <ul class="info-card__highlights">
+                {event.data.highlights!.map((h) => <li>{h}</li>)}
+              </ul>
+            )}
           </div>
         </aside>
         <div class="layout-grid__main">
@@ -580,6 +590,33 @@ const brand =
   .info-card__cta {
     width: 100%;
     text-align: center;
+  }
+
+  /* Past-event counterpart to .info-card__prices - plain lines instead of
+     amount/label pairs (a highlight has no second part to bold), and no
+     trailing CTA below it since there's nothing left to book. */
+  .info-card__highlights {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .info-card__highlights li {
+    font-size: 0.92rem;
+    padding-left: 18px;
+    position: relative;
+    margin-bottom: 8px;
+  }
+
+  .info-card__highlights li:last-child {
+    margin-bottom: 0;
+  }
+
+  .info-card__highlights li::before {
+    content: '•';
+    position: absolute;
+    left: 4px;
+    color: var(--tvc-orange);
   }
 
   /* Offsets the jump-link landing spot below the site's sticky header, same

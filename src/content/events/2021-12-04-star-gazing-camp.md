@@ -34,4 +34,4 @@ Accommodation in tents, breakfast, lunch, dinner, campfire, farm walk, trekking,
 
 Sathya Kumar Sharma has been an amateur astronomer for over 20 years and an astrophotographer for the past 15. An aerospace engineer by qualification, he gazes at the stars almost every clear night and his photos have been published internationally. His book, *Capturing the Cosmic Light: A Handbook of Astrophotography*, is available on Amazon. He also retails telescopes and offers 1-1 consulting for individuals and institutions looking to buy one.
 
-Bookings and hospitality for this event were handled by our partner Linger.
+Bookings and hospitality for this event were handled by our partner [Linger](/people/partners#linger).

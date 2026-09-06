@@ -69,4 +69,4 @@ Photograph and document what you see, and upload observations to iNaturalist —
 
 Binoculars and a camera if you have them, a bird book or field guide, clothes that blend with the surroundings, closed shoes and socks for uneven terrain, sun protection, a reusable water bottle, personal medicines, and a torch/headlamp for the night walk.
 
-Hosted with our hospitality partner Linger.
+Hosted with our hospitality partner [Linger](/people/partners#linger).

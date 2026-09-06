@@ -15,11 +15,15 @@ price:
     label: "per person"
   - amount: "Free"
     label: "children under 10"
+highlights:
+  - "75 species recorded (eBird)"
+  - "Highlight: a Short-toed Snake Eagle overhead"
+  - "Firefly-lit night walk for herps"
 ---
 
 We had a smaller group for the 5th edition, likely due to the Ganesha festival falling the same weekend — but the enthusiasm was top-notch, and the vibe felt more like a family gathering than an event full of strangers.
 
-Naturalist Deepa Mohan led guided walks to watch and identify birds, butterflies, insects, and herps around the property, alongside Linger's hospitality, an overnight stay at the farm, and a hike to the top of the hill on Day 2.
+Naturalist [Deepa Mohan](https://birdcount.in/birder-profile-deepa-mohan/) led guided walks to watch and identify birds, butterflies, insects, and herps around the property, alongside [Linger](/people/partners#linger)'s hospitality, an overnight stay at the farm, and a hike to the top of the hill on Day 2.
 
 The event started Saturday afternoon around 3pm, with everyone camping at the farm overnight and heading back Sunday around noon.
 

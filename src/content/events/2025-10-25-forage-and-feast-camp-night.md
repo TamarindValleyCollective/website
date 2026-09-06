@@ -20,7 +20,7 @@ Tamarind Valley Collective (TVC) is an experiment to see if we can live off the 
 | 10:00 | Arrive at the farm, juice/buttermilk served |
 | 11:00 | Introduction to the farm and self-exploration — Madhav |
 | 13:00 | Lunch |
-| 14:00 | Forest ecosystem and foraging food — Shubhasini & Archana, Foraging Trails and Tales |
+| 14:00 | Forest ecosystem and foraging food — Shubhasini & Archana, [Foraging Trails and Tales](/people/partners#foraging-trails-and-tales) |
 | 15:30 | Tea/coffee |
 | 16:00 | Foraging walk |
 | 17:30 | Cutting, cleaning & cooking |
@@ -36,4 +36,4 @@ Full event (1 night, 1 day): INR 3,200. Children below 10: free. Limited to 20 p
 
 This is the first run of the foraging day format with [Foraging Trails and Tales](https://www.instagram.com/foragingtrailsandtales/).
 
-Hosted with our hospitality partner Linger.
+Hosted with our hospitality partner [Linger](/people/partners#linger).
