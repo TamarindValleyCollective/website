@@ -51,6 +51,8 @@ A WhatsApp group is created 1–2 days before the event with final details and i
 
 ## Register
 
+₹1,900 per person, ₹1,200 for children under 10. You'll register directly with Local Narratives on their form — they'll confirm your spot and share pickup details before the day.
+
 <a class="button" href="https://docs.google.com/forms/d/e/1FAIpQLSfD0usuNhVHWFsGL2_4Ojyg7awjfwmUod2Bgt_66bXuy_bb_g/viewform">Register on the form →</a>
 
 </div>
