@@ -1,0 +1,5 @@
+{
+  "env": {
+    "GATEGUARD_EXEMPT_GLOBS": "src/content/**"
+  }
+}
