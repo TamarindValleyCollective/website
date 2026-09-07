@@ -357,15 +357,21 @@ outside both the local machine and Netlify (the member-update-email workflow).
 - **`netlify/functions/whatsapp-admin.mts`** — backs `/internal/whatsapp`, the WhatsApp reply
   dashboard (2026-08-20). Same Google Sign-In auth pattern as `photo-pool.mts` (verifies the ID
   token, checks it against `photo-pool.mts`'s own `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID` allow-list —
-  reused rather than a second Sheet, since it's the same core-team staff). Three routes: list
+  reused rather than a second Sheet, since it's the same core-team staff). Four routes: list
   conversations (optionally filtered by a `search` query param — matches contact name, phone, or
   message content via `scripts/lib/supabase.mjs`'s `searchConversations`, two REST calls merged
   client-side since PostgREST can't `OR` a top-level column condition with an inner-embedded-
   resource condition in one request), list one conversation's messages (both reading from
-  Supabase), and send a reply — which calls Meta's Send Message API directly (`WHATSAPP_ACCESS_
+  Supabase), send a reply — which calls Meta's Send Message API directly (`WHATSAPP_ACCESS_
   TOKEN` + `WHATSAPP_PHONE_NUMBER_ID`) and records the outcome as a message row, `status='failed'`
   with Meta's own error text when it's rejected (most likely WhatsApp's 24-hour customer-service-
-  window rule, since no approved message templates exist yet) rather than a generic failure.
+  window rule, since no approved message templates exist yet) rather than a generic failure — and
+  block/unblock a number (added 2026-09-07), which calls Meta's native Cloud API `block_users`
+  endpoint (`POST`/`DELETE .../{phone-number-id}/block_users`) directly, then mirrors the outcome
+  into `whatsapp_conversations.is_blocked`/`blocked_at` purely so the admin UI can show a "Blocked"
+  badge without a live Graph API round-trip on every poll — Meta's own block state is the source
+  of truth, not this column. Once blocked, Meta silently drops future inbound messages from that
+  number before they ever reach `whatsapp-webhook.mts`; no notification to the sender either way.
 - **`netlify/functions/whatsapp-stale-alert.mts`** — scheduled function (Netlify cron,
   `config.schedule = "*/15 * * * *"`, no HTTP path). The "make sure it actually gets answered"
   safety net: queries `scripts/lib/supabase.mjs`'s `listStaleUnreadConversations` for

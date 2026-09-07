@@ -140,6 +140,19 @@ export async function searchConversations(query, { limit = 50 } = {}) {
   return [...merged.values()].sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()).slice(0, limit);
 }
 
+// Mirrors a block/unblock decision made against Meta's Cloud API (see
+// handleBlock in whatsapp-admin.mts) into is_blocked/blocked_at, so the
+// admin UI can show a "Blocked" badge without a live Graph API round-trip
+// on every conversation-list poll. The real enforcement lives with Meta —
+// this column is a local reflection of that state, not the source of truth.
+export async function setConversationBlocked(conversationId, blocked) {
+  await restFetch(`/whatsapp_conversations?id=eq.${conversationId}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ is_blocked: blocked, blocked_at: blocked ? new Date().toISOString() : null }),
+  });
+}
+
 // Marks a conversation read *for everyone* — this is one shared inbox, not
 // per-user state, so opening a thread clears its unread flag for all staff.
 export async function markConversationRead(conversationId) {
