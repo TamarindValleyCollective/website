@@ -676,11 +676,16 @@ const eventsSchema = {
 
   .tag--duration {
     background: var(--tvc-orange-tint);
-    color: #a85712;
+    /* #a85712 measured 4.4:1 here, just under WCAG AA's 4.5:1 - the site's
+       existing text-safe orange token clears it at 4.78:1 instead (see
+       --tvc-orange-text in global.css). */
+    color: var(--tvc-orange-text);
   }
 
   .date {
-    color: var(--tvc-orange);
+    /* --tvc-orange itself is 3.7:1 on this card's white background, below
+       WCAG AA - same failure as .eyebrow in global.css, same fix. */
+    color: var(--tvc-orange-text);
     font-weight: 600;
     font-size: 0.82rem;
     text-transform: uppercase;

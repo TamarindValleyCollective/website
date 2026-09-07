@@ -211,7 +211,10 @@ const articleSchema = {
 
   .bs1h-edition-card__badge {
     background: var(--tvc-orange-cta);
-    color: #fff;
+    /* White text on --tvc-orange-cta is only 2.5:1, same failure documented
+       on .button in global.css - dark ink clears it at 5.93:1 there, same
+       fix here. */
+    color: var(--tvc-ink);
     font-weight: 700;
     letter-spacing: 0.04em;
     border-radius: 999px;
