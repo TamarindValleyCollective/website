@@ -18,6 +18,7 @@ import {
   getConversation,
   insertMessage,
   markConversationRead,
+  setConversationBlocked,
 } from '../../scripts/lib/supabase.mjs';
 import { getAllowedEmails } from '../../scripts/lib/google-drive.mjs';
 import { verifyGoogleIdToken } from '../../scripts/lib/google-id-token.mjs';
@@ -107,6 +108,7 @@ async function handleConversations(url: URL): Promise<Response> {
           unread: !c.last_read_at || new Date(c.last_message_at) > new Date(c.last_read_at),
           lastMessagePreview: lastMessage?.body ?? null,
           lastMessageDirection: lastMessage?.direction ?? null,
+          isBlocked: c.is_blocked ?? false,
         };
       }),
     });
@@ -229,6 +231,79 @@ async function handleReply(req: Request, fallbackResponderLabel?: string): Promi
   }
 }
 
+// Blocks or unblocks a conversation's number with Meta directly (Cloud
+// API's block_users endpoint — POST to block, DELETE to unblock — scoped to
+// our phone number ID, same auth as handleReply). Once blocked, Meta drops
+// future inbound messages from that number before they ever reach
+// whatsapp-webhook.mts; no notification to the sender either way. The local
+// is_blocked flag is just a mirror of this for the UI — Meta's own state is
+// the source of truth, so a failed Supabase write after a successful Meta
+// call still leaves the block in effect, just unreflected in the badge
+// until the next successful toggle.
+async function handleBlock(req: Request): Promise<Response> {
+  let payload: { conversationId?: string; blocked?: boolean };
+  try {
+    payload = await req.json();
+  } catch {
+    return jsonResponse({ error: 'Invalid request body' }, 400);
+  }
+
+  const { conversationId, blocked } = payload;
+  if (!conversationId || typeof blocked !== 'boolean') {
+    return jsonResponse({ error: 'conversationId and blocked are required' }, 400);
+  }
+
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+  if (!phoneNumberId || !accessToken) {
+    console.error('Missing WHATSAPP_PHONE_NUMBER_ID or WHATSAPP_ACCESS_TOKEN');
+    return jsonResponse({ error: 'Server misconfigured' }, 500);
+  }
+
+  let conversation: { id: string; wa_phone: string } | null;
+  try {
+    conversation = await getConversation(conversationId);
+  } catch (err) {
+    console.error('Failed to look up conversation', err);
+    return jsonResponse({ error: 'Failed to reach the message store' }, 502);
+  }
+  if (!conversation) return jsonResponse({ error: 'Conversation not found' }, 404);
+
+  let metaRes: Response;
+  let metaData: any;
+  try {
+    metaRes = await fetch(`https://graph.facebook.com/${WHATSAPP_GRAPH_API_VERSION}/${phoneNumberId}/block_users`, {
+      method: blocked ? 'POST' : 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        block_users: [{ user: conversation.wa_phone }],
+      }),
+    });
+    metaData = await metaRes.json();
+  } catch (err) {
+    console.error('Failed to reach the WhatsApp Block Users API', err);
+    return jsonResponse({ error: 'Failed to reach WhatsApp' }, 502);
+  }
+
+  if (!metaRes.ok) {
+    const errorMessage: string = metaData?.error?.message ?? 'WhatsApp API error';
+    console.error('[whatsapp-admin] Block/unblock failed', metaRes.status, metaData);
+    return jsonResponse({ error: errorMessage, metaCode: metaData?.error?.code }, 502);
+  }
+
+  try {
+    await setConversationBlocked(conversationId, blocked);
+  } catch (err) {
+    // Meta's block already took effect — a failure here only means the local
+    // badge won't reflect it yet, so still report success (see comment above
+    // the function for why this asymmetry is intentional).
+    console.error('Block/unblock succeeded on Meta but failed to record locally', err);
+  }
+
+  return jsonResponse({ ok: true, isBlocked: blocked });
+}
+
 export default async (req: Request): Promise<Response> => {
   const auth = await authenticate(req);
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
@@ -238,10 +313,16 @@ export default async (req: Request): Promise<Response> => {
   if (url.pathname === '/api/whatsapp-admin/conversations' && req.method === 'GET') return handleConversations(url);
   if (url.pathname === '/api/whatsapp-admin/messages' && req.method === 'GET') return handleMessages(url);
   if (url.pathname === '/api/whatsapp-admin/reply' && req.method === 'POST') return handleReply(req, auth.name ?? auth.email);
+  if (url.pathname === '/api/whatsapp-admin/block' && req.method === 'POST') return handleBlock(req);
 
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
 export const config = {
-  path: ['/api/whatsapp-admin/conversations', '/api/whatsapp-admin/messages', '/api/whatsapp-admin/reply'],
+  path: [
+    '/api/whatsapp-admin/conversations',
+    '/api/whatsapp-admin/messages',
+    '/api/whatsapp-admin/reply',
+    '/api/whatsapp-admin/block',
+  ],
 };

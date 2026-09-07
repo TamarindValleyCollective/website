@@ -10,7 +10,10 @@ Beyond the plain `wa.me` click-to-chat links (Friends of TVC group invite, `/con
 booking-inquiry links — see `ARCHITECTURE.md`), the WhatsApp Cloud API integration is now **live**:
 `netlify/functions/whatsapp-webhook.mts` receives real inbound messages at `+91 80 4110 9754` and
 persists each one to Supabase, verified end-to-end with a real message on 2026-08-19. Staff can
-read and reply to conversations at `/internal/whatsapp` (2026-08-20, see Phase 4 below); a separate
+read and reply to conversations at `/internal/whatsapp` (2026-08-20, see Phase 4 below), and block
+or unblock a number directly from that dashboard (2026-09-07 — calls Meta Cloud API's native
+`block_users` endpoint, which makes Meta silently drop future inbound messages from that number
+before they reach the webhook); a separate
 scheduled function (`whatsapp-stale-alert.mts`) emails `core-team@tvc.farm` an hourly digest of
 anything unread for 60+ minutes, replacing an earlier design that emailed on every single message.
 Phases 1–4 are done — see the checklist below; only real message templates remain (needed for
@@ -359,6 +362,20 @@ that Phase 3 step below is still open.
         data). When a conversation matches by message content, that matching message (not
         necessarily the latest one) becomes its preview snippet in the list, same idea as a real
         search UI highlighting the matched excerpt.
+      - **Block/unblock a number (2026-09-07)** — a "Block"/"Unblock" button in the thread header,
+        backed by a new `/api/whatsapp-admin/block` route. Uses Meta Cloud API's native block/unblock
+        endpoint (`POST`/`DELETE https://graph.facebook.com/v21.0/{phone-number-id}/block_users`,
+        scoped to our own phone number ID) rather than anything homegrown — once blocked, Meta
+        itself silently drops any future inbound message from that number before it ever reaches
+        `whatsapp-webhook.mts`; there's no notification to the sender either way, and no separate
+        list of blocked numbers to keep in sync elsewhere. A new
+        `whatsapp_conversations.is_blocked`/`blocked_at` pair (migration
+        `0014_conversation_blocking.sql`) mirrors that decision locally purely so the conversation
+        list can show a "Blocked" badge without a live Graph API call on every poll — Meta's own
+        block state is the actual source of truth; a failed local write after a successful Meta call
+        still leaves the block in effect, just unreflected in the badge until the next toggle.
+        Blocking prompts a confirm (irreversible-feeling from the customer's side — no way for them
+        to reach this number again short of a new one), unblocking doesn't.
 - [x] **Live in production — 2026-08-19.** All three prerequisites done:
       1. `WHATSAPP_VERIFY_TOKEN` (generated ourselves, set directly), `WHATSAPP_APP_SECRET` (from
          the Meta App Dashboard's Basic Settings, Sharath revealed/pasted it), and `RESEND_API_KEY`
