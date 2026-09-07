@@ -1,0 +1,262 @@
+---
+// Renders the `accommodationTypes` collection as a grid of cards (name,
+// description, thumbnail strip) with a click-to-enlarge lightbox - built so
+// any page can drop in real photos of TVC's tents/huts without re-describing
+// them from scratch (see content.config.ts's accommodationTypes comment).
+// Caller fetches+sorts the collection itself (same convention as
+// PhotoGallery.astro taking `photos` as a prop) rather than this component
+// self-querying, so a page can filter/reorder before rendering.
+import type { CollectionEntry } from 'astro:content';
+import { type Locale } from '../i18n/utils';
+
+interface Props {
+  types: CollectionEntry<'accommodationTypes'>[];
+  lang?: Locale;
+}
+
+const { types, lang = 'en' } = Astro.props;
+
+const content = {
+  en: { tapToEnlarge: 'Tap a photo to enlarge', close: 'Close', previousPhoto: 'Previous photo', nextPhoto: 'Next photo' },
+  kn: { tapToEnlarge: 'ದೊಡ್ಡದಾಗಿ ನೋಡಲು ಫೋಟೋ ಟ್ಯಾಪ್ ಮಾಡಿ', close: 'ಮುಚ್ಚಿ', previousPhoto: 'ಹಿಂದಿನ ಫೋಟೋ', nextPhoto: 'ಮುಂದಿನ ಫೋಟೋ' },
+  ta: { tapToEnlarge: 'பெரிதாக்க புகைப்படத்தைத் தட்டவும்', close: 'மூடு', previousPhoto: 'முந்தைய படம்', nextPhoto: 'அடுத்த படம்' },
+} as const;
+const t = content[lang];
+
+// One flat photo list for the lightbox (each entry knows its own type index
+// range) - keeps the client script's prev/next math to simple array
+// arithmetic instead of juggling nested per-type arrays.
+const allPhotos = types.flatMap((type) =>
+  type.data.images.map((img) => ({ src: img.src, alt: img.alt, typeName: type.data.name }))
+);
+let offset = 0;
+const typeRanges = types.map((type) => {
+  const start = offset;
+  offset += type.data.images.length;
+  return { start, count: type.data.images.length };
+});
+
+const photosJson = JSON.stringify(allPhotos).replace(/<\/script/gi, '<\\/script');
+---
+
+<div class="accommodation-gallery" data-photos={photosJson}>
+  <p class="tap-hint">{t.tapToEnlarge}</p>
+  <div class="type-grid">
+    {types.map((type, i) => (
+      <div class="type-card card">
+        <h3>{type.data.name}</h3>
+        {type.data.capacity && <p class="capacity">{type.data.capacity}</p>}
+        <p class="description">{type.data.description}</p>
+        <div class="thumb-row">
+          {type.data.images.map((img, j) => (
+            <button type="button" class="thumb-btn" data-photo-index={typeRanges[i].start + j} aria-label={img.alt}>
+              <img src={img.src} alt={img.alt} loading="lazy" />
+            </button>
+          ))}
+        </div>
+      </div>
+    ))}
+  </div>
+
+  <div class="lightbox" id="accommodation-lightbox" hidden>
+    <button type="button" class="lightbox-close" id="accommodation-lightbox-close" aria-label={t.close}>&times;</button>
+    <button type="button" class="lightbox-nav lightbox-prev" id="accommodation-lightbox-prev" aria-label={t.previousPhoto}>&#8249;</button>
+    <img class="lightbox-img" id="accommodation-lightbox-img" src="" alt="" />
+    <button type="button" class="lightbox-nav lightbox-next" id="accommodation-lightbox-next" aria-label={t.nextPhoto}>&#8250;</button>
+    <p class="lightbox-caption" id="accommodation-lightbox-caption"></p>
+  </div>
+</div>
+
+<style>
+  .accommodation-gallery {
+    margin: 16px 0 24px;
+  }
+
+  .tap-hint {
+    color: var(--tvc-ink-soft);
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+  }
+
+  .type-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+  }
+
+  .type-card {
+    padding: 16px;
+  }
+
+  .type-card h3 {
+    margin: 0 0 2px;
+  }
+
+  .capacity {
+    color: var(--tvc-green);
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin: 0 0 8px;
+  }
+
+  .description {
+    margin: 0 0 12px;
+    font-size: 0.92rem;
+  }
+
+  .thumb-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+    gap: 6px;
+  }
+
+  .thumb-btn {
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    aspect-ratio: 1;
+    background: var(--tvc-line);
+  }
+
+  .thumb-btn img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.15s ease;
+  }
+
+  .thumb-btn:hover img,
+  .thumb-btn:focus-visible img {
+    transform: scale(1.06);
+  }
+
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .lightbox-img {
+    max-width: min(90vw, 1100px);
+    max-height: 78vh;
+    object-fit: contain;
+    border-radius: 4px;
+  }
+
+  .lightbox-caption {
+    color: #fff;
+    margin-top: 12px;
+    font-size: 0.9rem;
+    text-align: center;
+  }
+
+  .lightbox-close,
+  .lightbox-nav {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+
+  .lightbox-close {
+    top: 16px;
+    right: 16px;
+    width: 40px;
+    height: 40px;
+    font-size: 1.6rem;
+  }
+
+  .lightbox-nav {
+    top: 50%;
+    transform: translateY(-50%);
+    width: 48px;
+    height: 48px;
+    font-size: 2rem;
+  }
+
+  .lightbox-prev {
+    left: 16px;
+  }
+
+  .lightbox-next {
+    right: 16px;
+  }
+
+  @media (max-width: 600px) {
+    .lightbox-nav {
+      width: 40px;
+      height: 40px;
+      font-size: 1.6rem;
+    }
+  }
+</style>
+
+<script>
+  interface AccommodationPhoto {
+    src: string;
+    alt: string;
+    typeName: string;
+  }
+
+  const root = document.querySelector<HTMLElement>('.accommodation-gallery');
+  if (root) {
+    const photos: AccommodationPhoto[] = JSON.parse(root.dataset.photos ?? '[]');
+    const lightbox = document.getElementById('accommodation-lightbox') as HTMLDivElement;
+    const lightboxImg = document.getElementById('accommodation-lightbox-img') as HTMLImageElement;
+    const lightboxCaption = document.getElementById('accommodation-lightbox-caption') as HTMLParagraphElement;
+    let currentIndex = 0;
+
+    const show = (index: number) => {
+      currentIndex = (index + photos.length) % photos.length;
+      const photo = photos[currentIndex];
+      lightboxImg.src = photo.src;
+      lightboxImg.alt = photo.alt;
+      lightboxCaption.textContent = `${photo.typeName} — ${photo.alt}`;
+    };
+
+    const open = (index: number) => {
+      show(index);
+      lightbox.hidden = false;
+      document.body.style.overflow = 'hidden';
+    };
+
+    const close = () => {
+      lightbox.hidden = true;
+      document.body.style.overflow = '';
+    };
+
+    root.querySelectorAll<HTMLButtonElement>('.thumb-btn').forEach((btn) => {
+      btn.addEventListener('click', () => open(Number(btn.dataset.photoIndex)));
+    });
+
+    document.getElementById('accommodation-lightbox-close')?.addEventListener('click', close);
+    document.getElementById('accommodation-lightbox-prev')?.addEventListener('click', () => show(currentIndex - 1));
+    document.getElementById('accommodation-lightbox-next')?.addEventListener('click', () => show(currentIndex + 1));
+
+    lightbox.addEventListener('click', (e) => {
+      if (e.target === lightbox) close();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (lightbox.hidden) return;
+      if (e.key === 'Escape') close();
+      if (e.key === 'ArrowLeft') show(currentIndex - 1);
+      if (e.key === 'ArrowRight') show(currentIndex + 1);
+    });
+  }
+</script>
