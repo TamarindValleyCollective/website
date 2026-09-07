@@ -135,9 +135,12 @@ const articleSchema = {
     bottom: 14px;
     z-index: 1;
     margin: 0;
-    font-size: 0.72rem;
+    font-size: 0.8rem;
     color: #fff;
-    background: rgba(18, 39, 26, 0.55);
+    /* Raised from 0.55 opacity - against a bright patch of photo behind it,
+       the old value measured 3.8:1, below WCAG AA. More opaque keeps white
+       text legible regardless of what's in that corner of the photo. */
+    background: rgba(18, 39, 26, 0.8);
     backdrop-filter: blur(2px);
     padding: 4px 10px;
     border-radius: 999px;
@@ -146,6 +149,32 @@ const articleSchema = {
   .bs1h-hero-credit a {
     color: #fff;
     text-decoration: underline;
+  }
+
+  /* At narrow widths this chip's ~90-character credit line wraps to two
+     lines, roughly doubling its height - since it's anchored to the hero
+     box's bottom-right corner (see .bs1h-hero-credit above) while
+     PageHero's own intro paragraph also ends near that same corner, the
+     taller wrapped chip crowds directly against it. Dropping the absolute
+     positioning here returns it to normal flow inside .bs1h-hero-wrap
+     (which has no fixed height), so it simply renders as a caption below
+     the hero instead of overlapping anything - no photo behind it at that
+     point, so the dark pill/white-text treatment is dropped too. */
+  @media (max-width: 640px) {
+    .bs1h-hero-credit {
+      position: static;
+      display: block;
+      color: var(--tvc-ink-soft);
+      background: none;
+      backdrop-filter: none;
+      padding: 10px 24px 0;
+      text-align: right;
+      border-radius: 0;
+    }
+
+    .bs1h-hero-credit a {
+      color: var(--tvc-ink-soft);
+    }
   }
 
   /* The four-creature mark reads as a scribble under ~120px wide (see
