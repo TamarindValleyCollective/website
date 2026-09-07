@@ -18,4 +18,6 @@ images:
     alt: "Sitout deck with chairs looking out over the forested valley"
   - src: "/images/accommodation/swiss-tents/4.jpg"
     alt: "Three chairs on the deck's sitout, overlooking the hills and valley"
+  - src: "/images/accommodation/swiss-tents/8.jpg"
+    alt: "The Banyan Hut seen from the approach path through tall grass and shrubs"
 ---
