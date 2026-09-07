@@ -86,6 +86,15 @@
         ],
         "createdAt": "2026-09-05T11:11:31.465Z",
         "reason": "pre-existing .prose blockquote left-border rule, predates this session's 3bs1h changes; a blockquote rule not a card, and an established site-wide editorial convention"
+      },
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "src/components/AccommodationGallery.astro"
+        ],
+        "createdAt": "2026-09-07T06:56:27.564Z",
+        "reason": "intentional empty-src lightbox placeholder, populated by client JS on open - same pattern as PhotoGallery.astro's lb-img"
       }
     ]
   }

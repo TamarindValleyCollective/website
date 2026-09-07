@@ -1,0 +1,25 @@
+---
+name: "Malabar Hut"
+description: "The larger of TVC's two bamboo decks, with two fixed Swiss tents built in - the same tent style used on the Banyan deck - plus room for an additional portable tent."
+capacity: "2 fixed 3-person tents + room for 1 portable 2-person tent"
+order: 1
+images:
+  - src: "/images/accommodation/malabar-hut/9.jpg"
+    alt: "The 'Malabar Hut' signboard hanging from the thatched roof above the tent entrance"
+  - src: "/images/accommodation/malabar-hut/2.jpg"
+    alt: "Malabar Hut's deck and tent seen through the surrounding trees"
+  - src: "/images/accommodation/malabar-hut/1.jpg"
+    alt: "The deck's sitout with four chairs around a table, overlooking the forest"
+  - src: "/images/accommodation/malabar-hut/3.jpg"
+    alt: "The walkway along Malabar Hut's deck, with a console table and chairs, tents on either side"
+  - src: "/images/accommodation/malabar-hut/6.jpg"
+    alt: "The deck's walkway with a woven bench and basket, tents visible on both sides"
+  - src: "/images/accommodation/malabar-hut/4.jpg"
+    alt: "Interior of one of Malabar Hut's fixed tents, with two beds side by side and a garment rack"
+  - src: "/images/accommodation/malabar-hut/5.jpg"
+    alt: "Made-up three-person bed inside one of Malabar Hut's fixed tents"
+  - src: "/images/accommodation/malabar-hut/7.jpg"
+    alt: "Made-up three-person bed inside a fixed tent, seen through the open flap"
+  - src: "/images/accommodation/malabar-hut/8.jpg"
+    alt: "Close view of the three-person bed with folded throws and towels"
+---

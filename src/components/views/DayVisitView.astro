@@ -179,12 +179,21 @@ const content = {
 } as const;
 
 const c = content[lang];
-const packageOptions = c.itineraries.map((it) => it.name);
 
 // pricingNote always reads "₹X per person, ₹Y per child under 10 — ..." in
 // every locale (see content.en/kn/ta above) - the two ₹ amounts, in that
 // order, are the adult and child rates.
 const [adultPrice, childPrice] = [...c.pricingNote.matchAll(/₹([\d,]+)/g)].map((m) => m[1].replace(/,/g, ''));
+
+// Same flat per-person rate applies no matter which itinerary a visitor
+// picks (see pricingNote above) - priced options (rather than plain name
+// strings) is what turns on BookingInquiry's live "estimated total", same
+// as EventDetailView's 3bs1h packageOptions.
+const packageOptions = c.itineraries.map((it) => ({
+  label: it.name,
+  adultRate: Number(adultPrice),
+  childRate: Number(childPrice),
+}));
 const serviceSchema = {
   '@context': 'https://schema.org',
   '@type': 'Service',

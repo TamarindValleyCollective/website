@@ -3,7 +3,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import AddToCalendar from '../AddToCalendar.astro';
 import BookingInquiry from '../BookingInquiry.astro';
-import { render, type CollectionEntry } from 'astro:content';
+import AccommodationGallery from '../AccommodationGallery.astro';
+import { render, getCollection, type CollectionEntry } from 'astro:content';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import { formatDateRange, durationTag } from '../../utils/events';
 import { icsDataUri, googleCalendarUrl } from '../../utils/calendar';
@@ -23,6 +24,15 @@ const { Content } = await render(event);
 // any language page counts toward the same real-world event rather than
 // fragmenting the tally per locale.
 const canonicalId = event.id.replace(/^(kn|ta)\//, '');
+
+// Only 3bs1h editions render this (see the isUpcoming && series === '3bs1h'
+// gate below) - fetched unconditionally anyway since it's a cheap read and
+// keeps this block next to the other data prep above rather than deep in
+// the template.
+const accommodationTypes = (await getCollection('accommodationTypes')).sort(
+  (a, b) => (a.data.order ?? 0) - (b.data.order ?? 0)
+);
+const facilities = (await getCollection('facilities')).sort((a, b) => (a.data.order ?? 0) - (b.data.order ?? 0));
 
 // Only worth offering on events that haven't happened yet -- adding a past
 // event to your calendar is a dead end, not a conversion.
@@ -86,6 +96,10 @@ const content = {
     msgCountSingular: '1 person wants this again.',
     msgCountPluralTemplate: '{n} people want this again.',
     msgRegistered: "You're in — we'll factor this into what we plan next.",
+    accommodationHeading: 'Where you’ll stay',
+    accommodationHint: 'A look at each type of tent and hut on offer, so you know what to expect.',
+    facilitiesHeading: 'Facilities',
+    facilitiesHint: 'Shared facilities used by everyone staying on site.',
   },
   kn: {
     organizedBy: (organizer: string) => `ಆಯೋಜಕರು: ${organizer}`,
@@ -98,6 +112,10 @@ const content = {
     msgCountSingular: '1 ವ್ಯಕ್ತಿ ಇದು ಮತ್ತೆ ಆಗಬೇಕೆಂದು ಬಯಸುತ್ತಾರೆ.',
     msgCountPluralTemplate: '{n} ಜನರು ಇದು ಮತ್ತೆ ಆಗಬೇಕೆಂದು ಬಯಸುತ್ತಾರೆ.',
     msgRegistered: 'ನೀವು ಸೇರಿದ್ದೀರಿ — ಮುಂದಿನ ಯೋಜನೆಯಲ್ಲಿ ನಾವು ಇದನ್ನು ಪರಿಗಣಿಸುತ್ತೇವೆ.',
+    accommodationHeading: 'ನೀವು ಎಲ್ಲಿ ಉಳಿಯುವಿರಿ',
+    accommodationHint: 'ಯಾವ ರೀತಿಯ ಟೆಂಟ್ ಮತ್ತು ಹಟ್ ಲಭ್ಯವಿದೆ ಎಂಬುದನ್ನು ನೋಡಿ, ಏನನ್ನು ನಿರೀಕ್ಷಿಸಬಹುದು ಎಂದು ತಿಳಿಯಿರಿ.',
+    facilitiesHeading: 'ಸೌಲಭ್ಯಗಳು',
+    facilitiesHint: 'ಸ್ಥಳದಲ್ಲಿ ಉಳಿಯುವ ಎಲ್ಲರೂ ಬಳಸುವ ಹಂಚಿಕೆಯ ಸೌಲಭ್ಯಗಳು.',
   },
   ta: {
     organizedBy: (organizer: string) => `ஏற்பாட்டாளர்: ${organizer}`,
@@ -110,6 +128,10 @@ const content = {
     msgCountSingular: '1 நபர் இது மீண்டும் நடக்க வேண்டும் என விரும்புகிறார்.',
     msgCountPluralTemplate: '{n} பேர் இது மீண்டும் நடக்க வேண்டும் என விரும்புகிறார்கள்.',
     msgRegistered: 'நீங்கள் இணைந்துவிட்டீர்கள் — அடுத்த திட்டமிடலில் இதைக் கருத்தில் கொள்வோம்.',
+    accommodationHeading: 'நீங்கள் எங்கு தங்குவீர்கள்',
+    accommodationHint: 'என்ன எதிர்பார்க்கலாம் என்பதை அறிய, கிடைக்கும் ஒவ்வொரு வகை கூடாரம் மற்றும் குடிசையையும் பாருங்கள்.',
+    facilitiesHeading: 'வசதிகள்',
+    facilitiesHint: 'தளத்தில் தங்கும் அனைவரும் பயன்படுத்தும் பகிரப்பட்ட வசதிகள்.',
   },
 } as const;
 
@@ -232,6 +254,14 @@ const brand =
               and a past event has nothing left to book. */}
           {isUpcoming && event.data.series === '3bs1h' && (
             <div id="cta">
+              <h2>{c.accommodationHeading}</h2>
+              <p>{c.accommodationHint}</p>
+              <AccommodationGallery items={accommodationTypes.map((accType) => accType.data)} lang={lang} />
+
+              <h2>{c.facilitiesHeading}</h2>
+              <p>{c.facilitiesHint}</p>
+              <AccommodationGallery items={facilities.map((facility) => facility.data)} lang={lang} />
+
               <BookingInquiry
                 lang={lang}
                 type={event.data.title}
