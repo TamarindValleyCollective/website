@@ -11,7 +11,9 @@
 under the Netlify account owned by `contact@tvc.farm` (ownership moved there from a personal
 account on 2026-07-18). The site is almost entirely static (prerendered HTML/CSS/JS, no server
 at request time), with a small set of deliberate exceptions that need a serverless backend:
-ten Netlify Functions (the site-wide chat assistant, the event-interest counter backing past
+eleven Netlify Functions (the site-wide chat assistant, `/api/search-ai` backing the site
+search's "Ask AI" answer (Gemini API free tier first, falling back to the same Anthropic API
+the chat assistant uses), the event-interest counter backing past
 events' "Want this to happen again?" widget, `/api/photo-pool` backing the internal, unlinked
 photo review dashboard at `/internal/photo-pool`, `/api/enquiry` logging the membership
 enquiry form (`/join`) and the general enquiry form (`/contact`) to Google Sheets,
@@ -72,6 +74,7 @@ flowchart TD
         COMPONENTS["src/components/<br/>Nav, Footer, PageHero, ChatWidget,<br/>CookieConsent, JourneyTimelineStandalone,<br/>BiodiversityExplorer, PhotoGallery"]
         CONTENT["src/content/*<br/>Markdown collections: events, partners,<br/>community-outreach, photos"]
         FUNC_SRC["netlify/functions/chat.mts<br/>Serverless function, calls Anthropic API server-side"]
+        FUNC_SRC10["netlify/functions/search-ai.mts<br/>Serverless function — site search's 'Ask AI' answer.<br/>Gemini API free tier first, falls back to Anthropic.<br/>Shares retrieval logic with chat.mts via<br/>netlify/functions/lib/site-retrieval.ts"]
         FUNC_SRC2["netlify/functions/event-interest.mts<br/>Serverless function, reads/writes Netlify Blobs"]
         FUNC_SRC3["netlify/functions/photo-pool.mts<br/>Serverless function, Google Sign-In gated —<br/>verifies ID token, checks a Sheet-backed<br/>allow-list, lists Inbox (+ uploader/EXIF/GPS/<br/>description), moves photos, saves descriptions"]
         FUNC_SRC4["netlify/functions/enquiry.mts<br/>Serverless function — appends a row to a<br/>Google Sheet per membership/general enquiry,<br/>fired via sendBeacon alongside each form's<br/>own native Netlify Forms submission"]
@@ -93,6 +96,7 @@ flowchart TD
     subgraph HOST["3 · Hosting: Netlify — LIVE"]
         CDN["Static CDN<br/>Serves dist/ — everything except<br/>the exceptions to the right"]
         APIFN["Netlify Function: /api/chat<br/>Deployed and live —<br/>ANTHROPIC_API_KEY set, calls the<br/>Anthropic API for grounded answers"]
+        APIFN10["Netlify Function: /api/search-ai<br/>Gemini free tier first, falls back<br/>to Anthropic if unset/erroring —<br/>GEMINI_API_KEY not yet set in production"]
         APIFN2["Netlify Function: /api/event-interest<br/>Deployed and live —<br/>reads/writes the per-event count below"]
         APIFN3["Netlify Function: /api/photo-pool<br/>(+/thumb, +/description)<br/>Configured — Drive service account + folder IDs<br/>set as Netlify env vars for all deploy contexts"]
         APIFN4["Netlify Function: /api/enquiry<br/>Live and verified — Sheet ids set,<br/>Sheets shared Editor-access with the<br/>service account, real appends confirmed"]
@@ -109,7 +113,7 @@ flowchart TD
 
     subgraph BROWSER["4 · Visitor's Browser"]
         CHATW["ChatWidget.astro<br/>Floating widget, site logo.<br/>Calls /api/chat"]
-        SEARCH["SiteSearch.astro (in Nav)<br/>Dynamically imports /pagefind/pagefind.js once,<br/>searches full page content entirely client-side —<br/>no backend, no Function"]
+        SEARCH["SiteSearch.astro (in Nav)<br/>Dynamically imports /pagefind/pagefind.js once,<br/>searches full page content entirely client-side.<br/>'Ask AI' button additionally calls /api/search-ai"]
         FRIENDS["Friends of TVC —<br/>direct WhatsApp group invite link,<br/>no form involved"]
         MEMBERFORM["Membership enquiry form (/join)<br/>data-netlify=true + honeypot,<br/>also sendBeacons to /api/enquiry"]
         GENERALFORM["General enquiry form (/contact)<br/>data-netlify=true + honeypot,<br/>also sendBeacons to /api/enquiry;<br/>plus a WhatsApp link to Madhavan"]
@@ -134,7 +138,8 @@ flowchart TD
         INAT["iNaturalist API"]
         GMAPS["Google Maps (iframe, directions only)"]
         YT["YouTube (iframe)"]
-        ANTHROPIC["Anthropic Claude API<br/>(chat.mts server-side,<br/>and caption-photos.mjs locally)"]
+        ANTHROPIC["Anthropic Claude API<br/>(chat.mts server-side,<br/>search-ai.mts's fallback,<br/>and caption-photos.mjs locally)"]
+        GEMINI["Google Gemini API (free tier)<br/>search-ai.mts server-side —<br/>site search's 'Ask AI' answer, tried first"]
         R2["Cloudflare R2<br/>media.tvc.farm — curated photo storage,<br/>served directly to the browser"]
         GTAG["Google Analytics<br/>googletagmanager.com/gtag/js"]
         METEO["Open-Meteo API<br/>Free, no key required"]
@@ -153,6 +158,9 @@ flowchart TD
     CF --> BROWSER
     BIODIV -.-> INAT
     APIFN -.-> ANTHROPIC
+    SEARCH -.->|"Ask AI"| APIFN10
+    APIFN10 -.->|"tried first"| GEMINI
+    APIFN10 -.->|"fallback"| ANTHROPIC
     PHOTOS -.-> R2
     GA -.-> GTAG
     WEATHER -.-> METEO
@@ -208,8 +216,8 @@ flowchart TD
     classDef ciStyle fill:#eef4fb,stroke:#3b6ea5,color:#1c3f5f
 
     class PAGES,INTERNALPAGE,INTERNALPAGE2,INTERNALPAGE3,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH,WHATSAPPDASH,ACCOMMODATIONDASH staticStyle
-    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,APIFN7,APIFN8,APIFN9,BLOBS,FORMS,ANTHROPIC netlifyStyle
-    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,SUPABASE externalStyle
+    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,BLOBS,FORMS,ANTHROPIC netlifyStyle
+    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,SUPABASE,GEMINI externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL,SCRIPT_GSC localStyle
     class GHA_MEMBER ciStyle
@@ -269,6 +277,18 @@ outside both the local machine and Netlify (the member-update-email workflow).
   social) — the last three of those fields only ever render client-side from the Members page's
   popup JSON, so they're invisible to `build-chat-context.mjs`'s static-HTML scrape no matter how
   the page corpus itself is tuned.
+- **`netlify/functions/lib/site-retrieval.ts`** — shared retrieval + Anthropic-call plumbing
+  factored out of `chat.mts` so it and `search-ai.mts` below can't drift apart:
+  `selectRelevantPages()`, `matchMembers()`, `formatPages()`/`formatMembers()`, the
+  language-instruction builder, and `callAnthropic()` (the Anthropic request/response shape,
+  including the "not always `content[0]`" parsing quirk noted above).
+- **`netlify/functions/search-ai.mts`** — powers the site search's "Ask AI" answer (see
+  `SiteSearch.astro` below): same grounded retrieval as `chat.mts` via the shared lib above, but
+  single-shot (no conversation history) and answers from the Gemini API's free tier first, falling
+  back to the same Anthropic API `chat.mts` uses only if `GEMINI_API_KEY` is unset, rate-limited,
+  or erroring — so a free-tier hiccup degrades to a paid-but-working answer rather than an outright
+  failure. `GEMINI_API_KEY` is not yet set in production, so this currently always falls through
+  to Anthropic (already live there) until that key is added.
 - **`netlify/functions/event-interest.mts`** — powers the "Want this to happen again?" widget
   (Netlify Blobs, see Hosting below).
 - **`netlify/functions/photo-pool.mts`** — backs `/internal/photo-pool`. Gated by real Google
@@ -409,8 +429,10 @@ outside both the local machine and Netlify (the member-update-email workflow).
   anyway). Output is a static, chunked index at `dist/pagefind/` — not a Function — that
   `SiteSearch.astro` dynamically imports (`/pagefind/pagefind.js`) once on first open and searches
   entirely in the browser/a web worker, full page content included (not just title/description),
-  with no backend at all. Multilingual out of the box: it reads each page's `<html lang>` and
-  scopes results to the visitor's current locale automatically.
+  with no backend involved for keyword matches. Multilingual out of the box: it reads each page's
+  `<html lang>` and scopes results to the visitor's current locale automatically. `SiteSearch.astro`
+  also offers an "Ask AI" button alongside these keyword results, which does call a backend —
+  see `netlify/functions/search-ai.mts` above.
 - **`scripts/curate-photos.mjs`** — run locally, not part of the Netlify build. Reads a folder
   of already-selected photos, extracts EXIF/GPS, uploads a display and thumbnail size of each to
   Cloudflare R2, and writes one `src/content/photos/*.md` entry per photo — still just expects an
@@ -575,7 +597,10 @@ account on 2026-07-18).
   direct `POST` against the live production URL for each form type appended a real row.
   `rainfall.mts` serves `/api/rainfall` — reads the community's rainfall-log Sheet
   (`RAINFALL_SHEET_ID`, shared Viewer-access only, since this path never writes) live on every
-  page view for the `/ecosystem/weather` chart/table/monsoon stat.
+  page view for the `/ecosystem/weather` chart/table/monsoon stat. `search-ai.mts` serves
+  `/api/search-ai`, backing the site search's "Ask AI" answer — `GEMINI_API_KEY` is not yet set
+  in production, so it currently always falls through to the already-live `ANTHROPIC_API_KEY`
+  fallback; once a free-tier Gemini key is added it'll be tried first.
 - **Netlify Blobs** — live. One store (`event-interest`), one JSON record
   per past event id (`{count, emails[]}`), written only by `event-interest.mts` — the site's
   only piece of server-side state that's publicly *readable*, unlike the write-only Forms
@@ -636,8 +661,10 @@ never touches Netlify either.
 - **SiteSearch** (magnifying-glass icon in the nav, opens on click or the `/` key) — client-side
   search over every non-`noindex` page's full content, backed by Pagefind
   (`/pagefind/pagefind.js`, dynamically imported once) and matched/ranked/excerpted in the
-  browser; no Function, no external service. Keyboard-navigable (↑/↓/Enter), Escape or clicking
-  outside the panel closes it.
+  browser; no Function, no external service for keyword results. Keyboard-navigable
+  (↑/↓/Enter), Escape or clicking outside the panel closes it. An "Ask AI" button (shown once
+  there's a query) calls `/api/search-ai` for a synthesized, grounded answer plus source-page
+  links instead of a keyword list — see `search-ai.mts` above.
 - **Friends of TVC** — live. A direct invite link to the WhatsApp group (no form, no manual
   step) — replaces the old name + phone signup that TVC had to action by hand.
 - **Membership enquiry form** (bottom of `/join`, below the existing "how membership works"
@@ -783,7 +810,8 @@ never touches Netlify either.
 | Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy` |
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
 | Live rainfall chart/table/monsoon stat (`/ecosystem/weather`, `/api/rainfall`) | ✅ Live — reads the community's rainfall-log Sheet live, `RAINFALL_SHEET_ID` set on Netlify (all deploy contexts); multi-year line chart with year-filter checkboxes; verified against `tvc.farm/ecosystem/weather` and `tvc.farm/api/rainfall` directly |
-| Site search (nav icon / `/` key) | 🟡 Built, verified locally (not yet deployed) — switched from a title/description-only index to Pagefind, which indexes each non-`noindex` page's full `<main>` content; confirmed via a local production build + `astro preview` that in-body content (e.g. member names on `/people/members/`) is now searchable and that `noindex` pages (404, thanks pages, `/internal/photo-pool`, `/people/members/story-guide`) are correctly excluded from the index |
+| Site search (nav icon / `/` key) | ✅ Live — Pagefind indexes each non-`noindex` page's full `<main>` content; verified directly against `tvc.farm` (previously broken there — the 2026-08-21 CSP rollout omitted `'wasm-unsafe-eval'` from `script-src`, silently blocking Pagefind's WASM search engine from compiling in every visitor's browser; fixed 2026-09-07) |
+| Site search "Ask AI" answer (`/api/search-ai`) | 🟡 Built, verified locally via `netlify dev` (fallback path only — no valid API keys in the local `.env`, but confirmed the Gemini call is attempted first, falls through correctly on a real API error, and the Anthropic fallback is attempted next). `ANTHROPIC_API_KEY` is already live in production (same key `/api/chat` uses), so this works immediately on deploy; `GEMINI_API_KEY` is not yet set, so it won't get the free-tier path until that key is added |
 | Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | ✅ Live — Drive folders, service account, Google Sign-In OAuth client, curator allow-list Sheet, all Netlify env vars configured; verified against production directly (`/internal/photo-pool` returns 200, `/api/photo-pool` returns 401 unauthenticated as expected for the Google Sign-In-gated function) |
 | WhatsApp webhook (`/api/whatsapp-webhook`) | ✅ Live — verified end-to-end with a real WhatsApp message to `+91 80 4110 9754` on 2026-08-19. Two real bugs found and fixed along the way: the number wasn't actually registered for Cloud API messaging (blocked by a stuck migration from the old AiSensy WABA, which still held the number), and the WABA was never subscribed to the app's webhook (`POST /{waba-id}/subscribed_apps` — a separate step from the App Dashboard's webhook config). Persists every inbound message to Supabase (2026-08-20); no longer emails per-message (see the stale-alert row below). See `WHATSAPP.md` |
 | WhatsApp reply dashboard (`/internal/whatsapp`, `/api/whatsapp-admin`) | ✅ Live — verified end-to-end with real WhatsApp messages and real replies sent from production. Unread indicators, real pagination, message previews, per-reply responder names, WhatsApp/iMessage-style avatars, and a full visual pass added 2026-08-20 after real usage surfaced gaps |

@@ -90,6 +90,10 @@ export default {
     unavailable: "Search isn't available right now.",
     noResults: 'No results.',
     loading: 'Loading…',
+    askAi: '✨ Ask AI',
+    aiThinking: 'Thinking…',
+    aiError: "Couldn't get an AI answer right now. Please try again shortly.",
+    aiDisclaimer: 'AI-generated — verify with the linked pages.',
   },
   chat: {
     openAria: 'Open chat',

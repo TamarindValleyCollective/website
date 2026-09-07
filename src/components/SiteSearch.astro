@@ -45,7 +45,7 @@ const memberIndex = members.map((m) => ({
   </svg>
 </button>
 
-<div id="site-search-overlay" class="search-overlay" hidden>
+<div id="site-search-overlay" class="search-overlay" hidden data-lang={lang}>
   <div class="search-panel" role="dialog" aria-modal="true" aria-label="Search tvc.farm">
     <div class="search-input-row">
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
@@ -59,6 +59,17 @@ const memberIndex = members.map((m) => ({
         </svg>
       </button>
     </div>
+    <div class="search-ai-row" id="site-search-ai-row" hidden>
+      <button type="button" id="site-search-ai-trigger" class="search-ai-trigger">{t('search.askAi')}</button>
+    </div>
+    <div
+      id="site-search-ai-answer"
+      class="search-ai-answer"
+      hidden
+      data-msg-thinking={t('search.aiThinking')}
+      data-msg-error={t('search.aiError')}
+      data-msg-disclaimer={t('search.aiDisclaimer')}
+    ></div>
     <ul id="site-search-results" class="search-results"></ul>
     <p
       id="site-search-status"
@@ -210,6 +221,82 @@ const memberIndex = members.map((m) => ({
     margin: 0;
   }
 
+  .search-ai-row {
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .search-ai-trigger {
+    appearance: none;
+    border: 1px solid var(--tvc-line);
+    background: #fff;
+    color: var(--tvc-green-dark);
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 7px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .search-ai-trigger:hover {
+    background: var(--tvc-green-tint);
+    border-color: var(--tvc-green);
+  }
+
+  .search-ai-answer {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--tvc-line);
+    background: var(--tvc-cream);
+  }
+
+  .search-ai-answer[hidden] {
+    display: none;
+  }
+
+  .search-ai-status {
+    margin: 0;
+    color: var(--tvc-ink-soft);
+    font-size: 0.9rem;
+  }
+
+  .search-ai-status--error {
+    color: var(--tvc-orange);
+  }
+
+  .search-ai-reply {
+    margin: 0;
+    color: var(--tvc-ink);
+    font-size: 0.92rem;
+    line-height: 1.5;
+  }
+
+  .search-ai-sources {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+  }
+
+  .search-ai-sources a {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--tvc-green-dark);
+    text-decoration: none;
+  }
+
+  .search-ai-sources a:hover {
+    text-decoration: underline;
+  }
+
+  .search-ai-disclaimer {
+    margin: 10px 0 0;
+    color: var(--tvc-ink-faint, var(--tvc-ink-soft));
+    font-size: 0.75rem;
+  }
+
   mark {
     background: var(--tvc-orange-tint);
     color: inherit;
@@ -248,6 +335,10 @@ const memberIndex = members.map((m) => ({
   const statusEl = document.getElementById('site-search-status');
   const membersDataEl = document.getElementById('site-search-members');
   const memberIndex: MemberIndexEntry[] = membersDataEl ? JSON.parse(membersDataEl.textContent ?? '[]') : [];
+  const aiRow = document.getElementById('site-search-ai-row');
+  const aiTrigger = document.getElementById('site-search-ai-trigger');
+  const aiAnswerEl = document.getElementById('site-search-ai-answer');
+  const searchLang = overlay?.dataset.lang ?? 'en';
 
   let pagefind: PagefindApi | null = null;
   let loadFailed = false;
@@ -281,6 +372,73 @@ const memberIndex = members.map((m) => ({
 
   function escapeHtml(s: string) {
     return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  }
+
+  interface AiSearchSource {
+    title: string;
+    url: string;
+  }
+
+  interface AiSearchResponse {
+    reply?: string;
+    sources?: AiSearchSource[];
+    error?: string;
+  }
+
+  // Guards against a stale "Ask AI" click resolving after the query changed
+  // (or the panel closed) and overwriting a newer answer - same pattern as
+  // searchToken below, just for the AI call instead of the Pagefind one.
+  let aiRequestToken = 0;
+
+  function resetAiAnswer() {
+    aiRequestToken++;
+    if (aiAnswerEl) {
+      aiAnswerEl.hidden = true;
+      aiAnswerEl.innerHTML = '';
+    }
+  }
+
+  function renderAiThinking() {
+    if (!aiAnswerEl) return;
+    aiAnswerEl.hidden = false;
+    aiAnswerEl.innerHTML = `<p class="search-ai-status">${escapeHtml(aiAnswerEl.dataset.msgThinking ?? '')}</p>`;
+  }
+
+  function renderAiError() {
+    if (!aiAnswerEl) return;
+    aiAnswerEl.hidden = false;
+    aiAnswerEl.innerHTML = `<p class="search-ai-status search-ai-status--error">${escapeHtml(aiAnswerEl.dataset.msgError ?? '')}</p>`;
+  }
+
+  function renderAiReply(reply: string, sources: AiSearchSource[]) {
+    if (!aiAnswerEl) return;
+    aiAnswerEl.hidden = false;
+    const sourcesHtml = sources.length
+      ? `<ul class="search-ai-sources">${sources.map((s) => `<li><a href="${s.url}">${escapeHtml(s.title)}</a></li>`).join('')}</ul>`
+      : '';
+    aiAnswerEl.innerHTML = `<p class="search-ai-reply">${escapeHtml(reply)}</p>${sourcesHtml}<p class="search-ai-disclaimer">${escapeHtml(aiAnswerEl.dataset.msgDisclaimer ?? '')}</p>`;
+  }
+
+  async function askAi(query: string) {
+    const token = ++aiRequestToken;
+    renderAiThinking();
+    try {
+      const res = await fetch('/api/search-ai', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ query, lang: searchLang }),
+      });
+      const data: AiSearchResponse = await res.json();
+      if (token !== aiRequestToken) return; // panel closed or query changed since
+      if (!res.ok || !data.reply) {
+        renderAiError();
+        return;
+      }
+      renderAiReply(data.reply, Array.isArray(data.sources) ? data.sources : []);
+    } catch {
+      if (token !== aiRequestToken) return;
+      renderAiError();
+    }
   }
 
   // Wraps the first case-insensitive occurrence of `query` in <mark>,
@@ -369,6 +527,8 @@ const memberIndex = members.map((m) => ({
     if (!overlay || !input) return;
     overlay.hidden = false;
     input.value = '';
+    if (aiRow) aiRow.hidden = true;
+    resetAiAnswer();
     input.focus();
     if (!pagefind && !loadFailed) {
       if (statusEl) {
@@ -384,6 +544,7 @@ const memberIndex = members.map((m) => ({
     if (!overlay) return;
     overlay.hidden = true;
     trigger?.focus();
+    resetAiAnswer();
   }
 
   trigger?.addEventListener('click', open);
@@ -396,10 +557,17 @@ const memberIndex = members.map((m) => ({
   input?.addEventListener('input', async () => {
     const token = ++searchToken;
     const query = input.value;
+    if (aiRow) aiRow.hidden = !query.trim();
+    resetAiAnswer();
     const results = await search(query);
     if (token !== searchToken) return; // a newer keystroke already resolved
     currentResults = results;
     render(query);
+  });
+
+  aiTrigger?.addEventListener('click', () => {
+    const query = input?.value.trim();
+    if (query) askAi(query);
   });
 
   document.addEventListener('keydown', (e) => {
