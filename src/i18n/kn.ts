@@ -54,8 +54,8 @@ export default {
     sendBookingRequest: 'ಬುಕಿಂಗ್ ವಿನಂತಿ ಕಳುಹಿಸಿ',
     chooseOne: 'ಒಂದನ್ನು ಆಯ್ಕೆಮಾಡಿ',
     honeypotLabel: 'ಇದನ್ನು ಭರ್ತಿ ಮಾಡಬೇಡಿ:',
-    preferChat: 'ಚಾಟ್ ಮಾಡಲು ಬಯಸುವಿರಾ? ನಮ್ಮ ಭೇಟಿ-ಬುಕಿಂಗ್ ಲೈನ್‌ಗೆ ನೇರವಾಗಿ ಸಂದೇಶ ಕಳುಹಿಸಿ:',
-    messageOnWhatsapp: 'WhatsApp ನಲ್ಲಿ ನಮಗೆ ಸಂದೇಶ ಕಳುಹಿಸಿ',
+    preferChat: 'ಮೊದಲು ಮಾತನಾಡಲು ಬಯಸುವಿರಾ?',
+    messageOnWhatsapp: 'ನಮಗೆ ಸಂದೇಶ ಕಳುಹಿಸಿ',
   },
   translationNotice: {
     text: 'ಈ ಪುಟವು ಕರಡು AI ಅನುವಾದವಾಗಿದ್ದು, ಸ್ಥಳೀಯ ಭಾಷಿಕರ ಪರಿಶೀಲನೆಗೆ ಬಾಕಿ ಇದೆ. ಕೆಲವು ಪದಪ್ರಯೋಗಗಳು ಅಪೂರ್ಣವಾಗಿರಬಹುದು.',

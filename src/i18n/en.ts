@@ -61,8 +61,8 @@ export default {
     sendBookingRequest: 'Send booking request',
     chooseOne: 'Choose one',
     honeypotLabel: "Don't fill this out:",
-    preferChat: 'Prefer to chat? Message our visit-bookings line directly:',
-    messageOnWhatsapp: 'Message us on WhatsApp',
+    preferChat: 'Prefer to talk first?',
+    messageOnWhatsapp: 'Message us',
   },
   translationNotice: {
     text: 'This page is a draft AI translation pending review by a native speaker. Some phrasing may be imperfect.',
