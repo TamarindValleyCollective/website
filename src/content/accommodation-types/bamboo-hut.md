@@ -1,8 +1,8 @@
 ---
 name: "Bamboo Hut"
-description: "A raised bamboo cabin with a thatched roof, tucked into the bamboo grove."
-capacity: "Fits 2 adults"
-order: 1
+description: "A raised bamboo cabin with a thatched roof and a fixed tent inside - there are two on site, an upper and a lower hut."
+capacity: "Fixed 2-person tent"
+order: 3
 images:
   - src: "/images/accommodation/bamboo-huts/5.jpg"
     alt: "Bamboo hut exterior on stilts with a thatched roof and porch chair, hills in the background"

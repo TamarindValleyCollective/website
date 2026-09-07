@@ -1,20 +1,31 @@
 ---
-// Renders the `accommodationTypes` collection as a grid of cards (name,
-// description, thumbnail strip) with a click-to-enlarge lightbox - built so
-// any page can drop in real photos of TVC's tents/huts without re-describing
-// them from scratch (see content.config.ts's accommodationTypes comment).
-// Caller fetches+sorts the collection itself (same convention as
-// PhotoGallery.astro taking `photos` as a prop) rather than this component
-// self-querying, so a page can filter/reorder before rendering.
-import type { CollectionEntry } from 'astro:content';
+// Renders a list of {name, description, capacity?, images} items as a grid
+// of cards with a click-to-enlarge lightbox - built for the
+// `accommodationTypes` collection (see content.config.ts) but generic over
+// any gallery-shaped item, so `facilities` (toilets, etc.) reuses the same
+// component instead of a near-duplicate. Caller fetches+sorts+maps its
+// collection to plain data itself (same convention as PhotoGallery.astro
+// taking `photos` as a prop) rather than this component self-querying, so a
+// page can filter/reorder before rendering.
+//
+// A page may render more than one instance (e.g. CampingView shows both
+// accommodation types and facilities) - every DOM lookup below is scoped to
+// its own root element (no id="..." anywhere) so instances don't collide.
 import { type Locale } from '../i18n/utils';
 
+interface GalleryItem {
+  name: string;
+  description: string;
+  capacity?: string;
+  images: { src: string; alt: string }[];
+}
+
 interface Props {
-  types: CollectionEntry<'accommodationTypes'>[];
+  items: GalleryItem[];
   lang?: Locale;
 }
 
-const { types, lang = 'en' } = Astro.props;
+const { items, lang = 'en' } = Astro.props;
 
 const content = {
   en: { tapToEnlarge: 'Tap a photo to enlarge', close: 'Close', previousPhoto: 'Previous photo', nextPhoto: 'Next photo' },
@@ -23,33 +34,33 @@ const content = {
 } as const;
 const t = content[lang];
 
-// One flat photo list for the lightbox (each entry knows its own type index
+// One flat photo list for the lightbox (each entry knows its own item index
 // range) - keeps the client script's prev/next math to simple array
-// arithmetic instead of juggling nested per-type arrays.
-const allPhotos = types.flatMap((type) =>
-  type.data.images.map((img) => ({ src: img.src, alt: img.alt, typeName: type.data.name }))
+// arithmetic instead of juggling nested per-item arrays.
+const allPhotos = items.flatMap((item) =>
+  item.images.map((img) => ({ src: img.src, alt: img.alt, itemName: item.name }))
 );
 let offset = 0;
-const typeRanges = types.map((type) => {
+const itemRanges = items.map((item) => {
   const start = offset;
-  offset += type.data.images.length;
-  return { start, count: type.data.images.length };
+  offset += item.images.length;
+  return { start, count: item.images.length };
 });
 
 const photosJson = JSON.stringify(allPhotos).replace(/<\/script/gi, '<\\/script');
 ---
 
-<div class="accommodation-gallery" data-photos={photosJson}>
+<div class="gallery" data-photos={photosJson}>
   <p class="tap-hint">{t.tapToEnlarge}</p>
-  <div class="type-grid">
-    {types.map((type, i) => (
-      <div class="type-card card">
-        <h3>{type.data.name}</h3>
-        {type.data.capacity && <p class="capacity">{type.data.capacity}</p>}
-        <p class="description">{type.data.description}</p>
+  <div class="item-grid">
+    {items.map((item, i) => (
+      <div class="item-card card">
+        <h3>{item.name}</h3>
+        {item.capacity && <p class="capacity">{item.capacity}</p>}
+        <p class="description">{item.description}</p>
         <div class="thumb-row">
-          {type.data.images.map((img, j) => (
-            <button type="button" class="thumb-btn" data-photo-index={typeRanges[i].start + j} aria-label={img.alt}>
+          {item.images.map((img, j) => (
+            <button type="button" class="thumb-btn" data-photo-index={itemRanges[i].start + j} aria-label={img.alt}>
               <img src={img.src} alt={img.alt} loading="lazy" />
             </button>
           ))}
@@ -58,17 +69,17 @@ const photosJson = JSON.stringify(allPhotos).replace(/<\/script/gi, '<\\/script'
     ))}
   </div>
 
-  <div class="lightbox" id="accommodation-lightbox" hidden>
-    <button type="button" class="lightbox-close" id="accommodation-lightbox-close" aria-label={t.close}>&times;</button>
-    <button type="button" class="lightbox-nav lightbox-prev" id="accommodation-lightbox-prev" aria-label={t.previousPhoto}>&#8249;</button>
-    <img class="lightbox-img" id="accommodation-lightbox-img" src="" alt="" />
-    <button type="button" class="lightbox-nav lightbox-next" id="accommodation-lightbox-next" aria-label={t.nextPhoto}>&#8250;</button>
-    <p class="lightbox-caption" id="accommodation-lightbox-caption"></p>
+  <div class="lightbox" hidden>
+    <button type="button" class="lightbox-close" aria-label={t.close}>&times;</button>
+    <button type="button" class="lightbox-nav lightbox-prev" aria-label={t.previousPhoto}>&#8249;</button>
+    <img class="lightbox-img" src="" alt="" />
+    <button type="button" class="lightbox-nav lightbox-next" aria-label={t.nextPhoto}>&#8250;</button>
+    <p class="lightbox-caption"></p>
   </div>
 </div>
 
 <style>
-  .accommodation-gallery {
+  .gallery {
     margin: 16px 0 24px;
   }
 
@@ -78,17 +89,17 @@ const photosJson = JSON.stringify(allPhotos).replace(/<\/script/gi, '<\\/script'
     margin-bottom: 12px;
   }
 
-  .type-grid {
+  .item-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 16px;
   }
 
-  .type-card {
+  .item-card {
     padding: 16px;
   }
 
-  .type-card h3 {
+  .item-card h3 {
     margin: 0 0 2px;
   }
 
@@ -217,18 +228,23 @@ const photosJson = JSON.stringify(allPhotos).replace(/<\/script/gi, '<\\/script'
 </style>
 
 <script>
-  interface AccommodationPhoto {
+  interface GalleryPhoto {
     src: string;
     alt: string;
-    typeName: string;
+    itemName: string;
   }
 
-  const root = document.querySelector<HTMLElement>('.accommodation-gallery');
-  if (root) {
-    const photos: AccommodationPhoto[] = JSON.parse(root.dataset.photos ?? '[]');
-    const lightbox = document.getElementById('accommodation-lightbox') as HTMLDivElement;
-    const lightboxImg = document.getElementById('accommodation-lightbox-img') as HTMLImageElement;
-    const lightboxCaption = document.getElementById('accommodation-lightbox-caption') as HTMLParagraphElement;
+  // Scoped per root (via closest-descendant queries, no ids) rather than a
+  // single document-wide lookup, since a page can render more than one
+  // <AccommodationGallery> (e.g. accommodation types + facilities) - a
+  // fixed-id version of this would have the second instance's lightbox
+  // silently do nothing (or worse, hijack the first instance's DOM).
+  document.querySelectorAll<HTMLElement>('.gallery').forEach((root) => {
+    const photos: GalleryPhoto[] = JSON.parse(root.dataset.photos ?? '[]');
+    const lightbox = root.querySelector<HTMLDivElement>('.lightbox');
+    const lightboxImg = root.querySelector<HTMLImageElement>('.lightbox-img');
+    const lightboxCaption = root.querySelector<HTMLParagraphElement>('.lightbox-caption');
+    if (!lightbox || !lightboxImg || !lightboxCaption) return;
     let currentIndex = 0;
 
     const show = (index: number) => {
@@ -236,7 +252,7 @@ const photosJson = JSON.stringify(allPhotos).replace(/<\/script/gi, '<\\/script'
       const photo = photos[currentIndex];
       lightboxImg.src = photo.src;
       lightboxImg.alt = photo.alt;
-      lightboxCaption.textContent = `${photo.typeName} — ${photo.alt}`;
+      lightboxCaption.textContent = `${photo.itemName} — ${photo.alt}`;
     };
 
     const open = (index: number) => {
@@ -254,9 +270,9 @@ const photosJson = JSON.stringify(allPhotos).replace(/<\/script/gi, '<\\/script'
       btn.addEventListener('click', () => open(Number(btn.dataset.photoIndex)));
     });
 
-    document.getElementById('accommodation-lightbox-close')?.addEventListener('click', close);
-    document.getElementById('accommodation-lightbox-prev')?.addEventListener('click', () => show(currentIndex - 1));
-    document.getElementById('accommodation-lightbox-next')?.addEventListener('click', () => show(currentIndex + 1));
+    root.querySelector('.lightbox-close')?.addEventListener('click', close);
+    root.querySelector('.lightbox-prev')?.addEventListener('click', () => show(currentIndex - 1));
+    root.querySelector('.lightbox-next')?.addEventListener('click', () => show(currentIndex + 1));
 
     lightbox.addEventListener('click', (e) => {
       if (e.target === lightbox) close();
@@ -268,5 +284,5 @@ const photosJson = JSON.stringify(allPhotos).replace(/<\/script/gi, '<\\/script'
       if (e.key === 'ArrowLeft') show(currentIndex - 1);
       if (e.key === 'ArrowRight') show(currentIndex + 1);
     });
-  }
+  });
 </script>

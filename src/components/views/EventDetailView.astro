@@ -32,6 +32,7 @@ const canonicalId = event.id.replace(/^(kn|ta)\//, '');
 const accommodationTypes = (await getCollection('accommodationTypes')).sort(
   (a, b) => (a.data.order ?? 0) - (b.data.order ?? 0)
 );
+const facilities = (await getCollection('facilities')).sort((a, b) => (a.data.order ?? 0) - (b.data.order ?? 0));
 
 // Only worth offering on events that haven't happened yet -- adding a past
 // event to your calendar is a dead end, not a conversion.
@@ -97,6 +98,8 @@ const content = {
     msgRegistered: "You're in — we'll factor this into what we plan next.",
     accommodationHeading: 'Where you’ll stay',
     accommodationHint: 'A look at each type of tent and hut on offer, so you know what to expect.',
+    facilitiesHeading: 'Facilities',
+    facilitiesHint: 'Shared facilities used by everyone staying on site.',
   },
   kn: {
     organizedBy: (organizer: string) => `ಆಯೋಜಕರು: ${organizer}`,
@@ -111,6 +114,8 @@ const content = {
     msgRegistered: 'ನೀವು ಸೇರಿದ್ದೀರಿ — ಮುಂದಿನ ಯೋಜನೆಯಲ್ಲಿ ನಾವು ಇದನ್ನು ಪರಿಗಣಿಸುತ್ತೇವೆ.',
     accommodationHeading: 'ನೀವು ಎಲ್ಲಿ ಉಳಿಯುವಿರಿ',
     accommodationHint: 'ಯಾವ ರೀತಿಯ ಟೆಂಟ್ ಮತ್ತು ಹಟ್ ಲಭ್ಯವಿದೆ ಎಂಬುದನ್ನು ನೋಡಿ, ಏನನ್ನು ನಿರೀಕ್ಷಿಸಬಹುದು ಎಂದು ತಿಳಿಯಿರಿ.',
+    facilitiesHeading: 'ಸೌಲಭ್ಯಗಳು',
+    facilitiesHint: 'ಸ್ಥಳದಲ್ಲಿ ಉಳಿಯುವ ಎಲ್ಲರೂ ಬಳಸುವ ಹಂಚಿಕೆಯ ಸೌಲಭ್ಯಗಳು.',
   },
   ta: {
     organizedBy: (organizer: string) => `ஏற்பாட்டாளர்: ${organizer}`,
@@ -125,6 +130,8 @@ const content = {
     msgRegistered: 'நீங்கள் இணைந்துவிட்டீர்கள் — அடுத்த திட்டமிடலில் இதைக் கருத்தில் கொள்வோம்.',
     accommodationHeading: 'நீங்கள் எங்கு தங்குவீர்கள்',
     accommodationHint: 'என்ன எதிர்பார்க்கலாம் என்பதை அறிய, கிடைக்கும் ஒவ்வொரு வகை கூடாரம் மற்றும் குடிசையையும் பாருங்கள்.',
+    facilitiesHeading: 'வசதிகள்',
+    facilitiesHint: 'தளத்தில் தங்கும் அனைவரும் பயன்படுத்தும் பகிரப்பட்ட வசதிகள்.',
   },
 } as const;
 
@@ -249,7 +256,11 @@ const brand =
             <div id="cta">
               <h2>{c.accommodationHeading}</h2>
               <p>{c.accommodationHint}</p>
-              <AccommodationGallery types={accommodationTypes} lang={lang} />
+              <AccommodationGallery items={accommodationTypes.map((accType) => accType.data)} lang={lang} />
+
+              <h2>{c.facilitiesHeading}</h2>
+              <p>{c.facilitiesHint}</p>
+              <AccommodationGallery items={facilities.map((facility) => facility.data)} lang={lang} />
 
               <BookingInquiry
                 lang={lang}
