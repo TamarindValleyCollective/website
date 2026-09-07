@@ -296,6 +296,14 @@ const brand =
                 fixedDates={formatDateRange(event.data.date, event.data.endDate, lang)}
                 showWhatsapp={!event.data.whatsapp}
               />
+              {/* 3bs1h has no edition-specific cancellation terms (unlike
+                  Melagiri, which states its own inline) - the sitewide
+                  policy applies by default in that case, so this points
+                  there rather than leaving the question unanswered right
+                  where money changes hands. */}
+              <p class="cancellation-note">
+                Need to cancel or reschedule? TVC's standard <a href="/refund-policy">cancellation &amp; refund policy</a> applies.
+              </p>
             </div>
           )}
         </div>
@@ -488,6 +496,12 @@ const brand =
     margin: 0;
     color: var(--tvc-ink-soft);
     font-size: 0.9rem;
+  }
+
+  .cancellation-note {
+    margin-top: 16px;
+    color: var(--tvc-ink-soft);
+    font-size: 0.85rem;
   }
 
   .tags {
