@@ -57,7 +57,12 @@ function countdownText(daysAway: number): string {
           <div class="whats-next__slide" data-slide hidden={i !== 0}>
             <div class="whats-next__text">
               <span class="whats-next__eyebrow">{l.eyebrow}</span>
-              <h3 class="whats-next__title">{event.data.title}</h3>
+              {/* h2, not h3 - HomeView.astro's h1 (hero title) is the only
+                  heading before this banner, so h3 skipped a level. Visually
+                  identical either way since .whats-next__title sets its own
+                  font-size and h1-h4 already share family/weight/color in
+                  global.css. */}
+              <h2 class="whats-next__title">{event.data.title}</h2>
               <span class="whats-next__date">{formatDateRange(event.data.date, event.data.endDate)}</span>
             </div>
             <span class="whats-next__countdown">{countdownText(daysUntil(event.data.date, today))}</span>
