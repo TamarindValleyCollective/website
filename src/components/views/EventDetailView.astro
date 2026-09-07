@@ -100,6 +100,7 @@ const content = {
     msgCountSingular: '1 person wants this again.',
     msgCountPluralTemplate: '{n} people want this again.',
     msgRegistered: "You're in — we'll factor this into what we plan next.",
+    msgError: "That didn't go through — check your connection and try again.",
     accommodationHeading: 'Where you’ll stay',
     accommodationHint: 'A look at each type of tent and hut on offer, so you know what to expect.',
     facilitiesHeading: 'Facilities',
@@ -118,6 +119,7 @@ const content = {
     msgCountSingular: '1 ವ್ಯಕ್ತಿ ಇದು ಮತ್ತೆ ಆಗಬೇಕೆಂದು ಬಯಸುತ್ತಾರೆ.',
     msgCountPluralTemplate: '{n} ಜನರು ಇದು ಮತ್ತೆ ಆಗಬೇಕೆಂದು ಬಯಸುತ್ತಾರೆ.',
     msgRegistered: 'ನೀವು ಸೇರಿದ್ದೀರಿ — ಮುಂದಿನ ಯೋಜನೆಯಲ್ಲಿ ನಾವು ಇದನ್ನು ಪರಿಗಣಿಸುತ್ತೇವೆ.',
+    msgError: 'ಅದು ಕಳುಹಿಸಲಾಗಲಿಲ್ಲ — ನಿಮ್ಮ ಸಂಪರ್ಕವನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
     accommodationHeading: 'ನೀವು ಎಲ್ಲಿ ಉಳಿಯುವಿರಿ',
     accommodationHint: 'ಯಾವ ರೀತಿಯ ಟೆಂಟ್ ಮತ್ತು ಹಟ್ ಲಭ್ಯವಿದೆ ಎಂಬುದನ್ನು ನೋಡಿ, ಏನನ್ನು ನಿರೀಕ್ಷಿಸಬಹುದು ಎಂದು ತಿಳಿಯಿರಿ.',
     facilitiesHeading: 'ಸೌಲಭ್ಯಗಳು',
@@ -136,6 +138,7 @@ const content = {
     msgCountSingular: '1 நபர் இது மீண்டும் நடக்க வேண்டும் என விரும்புகிறார்.',
     msgCountPluralTemplate: '{n} பேர் இது மீண்டும் நடக்க வேண்டும் என விரும்புகிறார்கள்.',
     msgRegistered: 'நீங்கள் இணைந்துவிட்டீர்கள் — அடுத்த திட்டமிடலில் இதைக் கருத்தில் கொள்வோம்.',
+    msgError: 'அது அனுப்பப்படவில்லை — உங்கள் இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
     accommodationHeading: 'நீங்கள் எங்கு தங்குவீர்கள்',
     accommodationHint: 'என்ன எதிர்பார்க்கலாம் என்பதை அறிய, கிடைக்கும் ஒவ்வொரு வகை கூடாரம் மற்றும் குடிசையையும் பாருங்கள்.',
     facilitiesHeading: 'வசதிகள்',
@@ -345,6 +348,7 @@ const brand =
           data-msg-count-singular={c.msgCountSingular}
           data-msg-count-plural-template={c.msgCountPluralTemplate}
           data-msg-registered={c.msgRegistered}
+          data-msg-error={c.msgError}
         >
           <h2>{c.wantAgainHeading}</h2>
           <p>{c.wantAgainText}</p>
@@ -353,6 +357,7 @@ const brand =
             <button type="submit" class="button">{c.interestButton}</button>
           </form>
           <p class="interest-count" hidden></p>
+          <p class="interest-error" role="alert" hidden></p>
         </div>
       )
     )}
@@ -384,6 +389,7 @@ const brand =
       const emailInput = widget.querySelector<HTMLInputElement>('input[name="email"]');
       const submitBtn = widget.querySelector<HTMLButtonElement>('button[type="submit"]');
       const countEl = widget.querySelector<HTMLElement>('.interest-count');
+      const errorEl = widget.querySelector<HTMLElement>('.interest-error');
       const storageKey = `tvc-event-interest-${eventId}`;
 
       function showCount(count: number) {
@@ -392,6 +398,16 @@ const brand =
         const pluralTemplate = widget!.dataset.msgCountPluralTemplate ?? '';
         countEl.textContent = count === 1 ? singular : pluralTemplate.replace('{n}', String(count));
         countEl.hidden = false;
+      }
+
+      function showError() {
+        if (!errorEl) return;
+        errorEl.textContent = widget!.dataset.msgError ?? '';
+        errorEl.hidden = false;
+      }
+
+      function hideError() {
+        if (errorEl) errorEl.hidden = true;
       }
 
       function markRegistered() {
@@ -416,6 +432,7 @@ const brand =
       form?.addEventListener('submit', async (e) => {
         e.preventDefault();
         if (submitBtn) submitBtn.disabled = true;
+        hideError();
         const email = emailInput?.value.trim() ?? '';
 
         try {
@@ -446,9 +463,13 @@ const brand =
                 }).toString(),
               }).catch(() => {});
             }
+          } else {
+            // Leave the form enabled so they can retry.
+            showError();
           }
         } catch {
           // Leave the form enabled so they can retry.
+          showError();
         } finally {
           if (submitBtn) submitBtn.disabled = false;
         }
@@ -898,5 +919,16 @@ const brand =
     margin: 12px 0 0;
     font-weight: 600;
     color: var(--tvc-green-dark);
+  }
+
+  .interest-error {
+    margin: 12px 0 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    /* No red exists anywhere else in this site's deliberately muted
+       palette (see global.css's :root comment) - this is the one place
+       that needs an unambiguous "something went wrong" signal, so it's a
+       one-off rather than a new token. 6.5:1 on the card's white background. */
+    color: #b3261e;
   }
 </style>
