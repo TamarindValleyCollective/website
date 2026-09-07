@@ -54,7 +54,14 @@ for (const file of htmlFiles) {
   }
 }
 
-const scriptSrc = ["'self'", 'https://accounts.google.com', 'https://www.googletagmanager.com', ...hashes].join(' ');
+// 'wasm-unsafe-eval' (distinct from 'unsafe-eval', which this CSP
+// deliberately omits) is what Chrome/Firefox require in script-src to allow
+// WebAssembly.instantiate() at all - without it, Pagefind's search worker
+// (see SiteSearch.astro) fails to compile its .wasm module and every search
+// silently returns nothing. Missed in the 2026-08-21 CSP rollout because
+// report-only mode logs the violation without throwing, so it never showed
+// up as a visible error while clicking around.
+const scriptSrc = ["'self'", "'wasm-unsafe-eval'", 'https://accounts.google.com', 'https://www.googletagmanager.com', ...hashes].join(' ');
 
 const csp = [
   "default-src 'self'",
