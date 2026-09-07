@@ -3,6 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import AddToCalendar from '../AddToCalendar.astro';
 import BookingInquiry from '../BookingInquiry.astro';
+import WhatsAppButton from '../WhatsAppButton.astro';
 import AccommodationGallery from '../AccommodationGallery.astro';
 import { render, getCollection, type CollectionEntry } from 'astro:content';
 import { getRelativeLocaleUrl } from 'astro:i18n';
@@ -43,6 +44,9 @@ const isUpcoming = event.data.date >= new Date();
 // (see content.config.ts) - a past event's price is no longer actionable,
 // so it falls back to highlights instead of repeating price/booking.
 const showSidebar = (isUpcoming && Boolean(event.data.price?.length)) || (!isUpcoming && Boolean(event.data.highlights?.length));
+// Shared by the sidebar's WhatsApp button and (for 3bs1h) BookingInquiry's
+// own wa.me link - one message per event regardless of which CTA sent it.
+const whatsappMessage = `Hi! I'd like to book a spot for ${event.data.title} (${formatDateRange(event.data.date, event.data.endDate, lang)}).`;
 // Only pass a custom social-preview image when its real dimensions are also
 // known - BaseLayout's og:image:width/height must match the actual file or
 // WhatsApp's crawler silently discards the image and falls back to the
@@ -100,6 +104,8 @@ const content = {
     accommodationHint: 'A look at each type of tent and hut on offer, so you know what to expect.',
     facilitiesHeading: 'Facilities',
     facilitiesHint: 'Shared facilities used by everyone staying on site.',
+    preferChatFirst: 'Prefer to chat first?',
+    messageContact: (contactName: string) => `Message ${contactName}`,
   },
   kn: {
     organizedBy: (organizer: string) => `ಆಯೋಜಕರು: ${organizer}`,
@@ -116,6 +122,8 @@ const content = {
     accommodationHint: 'ಯಾವ ರೀತಿಯ ಟೆಂಟ್ ಮತ್ತು ಹಟ್ ಲಭ್ಯವಿದೆ ಎಂಬುದನ್ನು ನೋಡಿ, ಏನನ್ನು ನಿರೀಕ್ಷಿಸಬಹುದು ಎಂದು ತಿಳಿಯಿರಿ.',
     facilitiesHeading: 'ಸೌಲಭ್ಯಗಳು',
     facilitiesHint: 'ಸ್ಥಳದಲ್ಲಿ ಉಳಿಯುವ ಎಲ್ಲರೂ ಬಳಸುವ ಹಂಚಿಕೆಯ ಸೌಲಭ್ಯಗಳು.',
+    preferChatFirst: 'ಮೊದಲು ಚಾಟ್ ಮಾಡಲು ಬಯಸುವಿರಾ?',
+    messageContact: (contactName: string) => `${contactName} ಅವರಿಗೆ ಸಂದೇಶ ಕಳುಹಿಸಿ`,
   },
   ta: {
     organizedBy: (organizer: string) => `ஏற்பாட்டாளர்: ${organizer}`,
@@ -132,6 +140,8 @@ const content = {
     accommodationHint: 'என்ன எதிர்பார்க்கலாம் என்பதை அறிய, கிடைக்கும் ஒவ்வொரு வகை கூடாரம் மற்றும் குடிசையையும் பாருங்கள்.',
     facilitiesHeading: 'வசதிகள்',
     facilitiesHint: 'தளத்தில் தங்கும் அனைவரும் பயன்படுத்தும் பகிரப்பட்ட வசதிகள்.',
+    preferChatFirst: 'முதலில் அரட்டையடிக்க விரும்புகிறீர்களா?',
+    messageContact: (contactName: string) => `${contactName} க்கு செய்தி அனுப்பவும்`,
   },
 } as const;
 
@@ -216,6 +226,17 @@ const brand =
                     see BookingInquiry's own submit button, which says "Send
                     booking request" for the same reason. */}
                 <a class="button info-card__cta" href="#cta">Request to book ↓</a>
+                {event.data.whatsapp && (
+                  <div class="info-card__whatsapp-block">
+                    <p class="info-card__whatsapp-label">{c.preferChatFirst}</p>
+                    <WhatsAppButton
+                      href={`https://wa.me/${event.data.whatsapp.number}?text=${encodeURIComponent(whatsappMessage)}`}
+                      class="info-card__whatsapp"
+                    >
+                      {c.messageContact(event.data.whatsapp.contactName)}
+                    </WhatsAppButton>
+                  </div>
+                )}
               </>
             ) : (
               <>
@@ -271,8 +292,9 @@ const brand =
                   { label: 'Campground tent / DIY camping — ₹3,200 per person', adultRate: 3200, childRate: 0 },
                 ]}
                 note="Choose your accommodation tier, then send your details to Linger by form or WhatsApp."
-                whatsappMessage={`Hi! I'd like to book a spot for ${event.data.title} (${formatDateRange(event.data.date, event.data.endDate, lang)}).`}
+                whatsappMessage={whatsappMessage}
                 fixedDates={formatDateRange(event.data.date, event.data.endDate, lang)}
+                showWhatsapp={!event.data.whatsapp}
               />
             </div>
           )}
@@ -651,6 +673,23 @@ const brand =
   .info-card__cta {
     width: 100%;
     text-align: center;
+  }
+
+  .info-card__whatsapp-block {
+    margin-top: 12px;
+    text-align: center;
+  }
+
+  .info-card__whatsapp-label {
+    margin-bottom: 8px;
+  }
+
+  /* :global - this modifier class is passed as a prop into WhatsAppButton.astro
+     and applied to the <a> that component renders, which doesn't carry this
+     file's scoped-style attribute. */
+  :global(.info-card__whatsapp) {
+    width: 100%;
+    justify-content: center;
   }
 
   /* Past-event counterpart to .info-card__prices - plain lines instead of

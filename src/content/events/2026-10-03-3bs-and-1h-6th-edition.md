@@ -17,6 +17,9 @@ price:
     label: "campground tent / DIY camping, per person"
   - amount: "Free"
     label: "children under 10"
+whatsapp:
+  number: "918548065772"
+  contactName: "Linger"
 ---
 
 Spend Saturday evening and Sunday at Tamarind Valley Collective (TVC), exploring its diverse landscapes through guided walks and observation sessions. Join our naturalists and fellow nature enthusiasts to discover and identify birds, butterflies, bees, insects, herps, and plants across the farm — from an evening of bird and butterfly watching to a night walk and moth screening, followed by an early-morning trail.

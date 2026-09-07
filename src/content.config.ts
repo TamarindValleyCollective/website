@@ -78,6 +78,15 @@ const events = defineCollection({
     // links in the body's closing paragraph. Rendered with target="_blank"
     // (see EventDetailView), so these should always be external URLs.
     links: z.array(z.object({ label: z.string(), url: z.string() })).optional(),
+    // Drives an optional "Prefer to chat first? Message {contactName}" button
+    // in the "at a glance" sidebar (see EventDetailView.astro), next to
+    // "Request to book" - only appears alongside `price` (an upcoming event).
+    // `contactName` identifies who's actually on the other end (e.g. "Linger"
+    // for 3bs1h, or a partner org's own contact) since the number alone tells
+    // a visitor nothing about who they're about to message. Omit for events
+    // without a direct WhatsApp line of their own; they keep whatever contact
+    // method they put in their own body content instead.
+    whatsapp: z.object({ number: z.string(), contactName: z.string() }).optional(),
   }),
 });
 
