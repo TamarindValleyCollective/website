@@ -145,6 +145,16 @@ const photosJson = JSON.stringify(allPhotos).replace(/<\/script/gi, '<\\/script'
     padding: 24px;
   }
 
+  /* Without this, the class's own `display: flex` (author, normal
+     importance) beats the UA stylesheet's `[hidden] { display: none }` -
+     same origin-precedence footgun already worked around in
+     PhotoGallery.astro's .lightbox[hidden] rule - so the lightbox stayed
+     visible (and unclosable, since close() only ever toggled the `hidden`
+     attribute) from first page load, not just after a thumbnail click. */
+  .lightbox[hidden] {
+    display: none;
+  }
+
   .lightbox-img {
     max-width: min(90vw, 1100px);
     max-height: 78vh;
