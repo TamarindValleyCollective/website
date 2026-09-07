@@ -54,5 +54,3 @@ A WhatsApp group is created 1–2 days before the event with final details and i
 <a class="button" href="https://docs.google.com/forms/d/e/1FAIpQLSfD0usuNhVHWFsGL2_4Ojyg7awjfwmUod2Bgt_66bXuy_bb_g/viewform">Register on the form →</a>
 
 </div>
-
-`#Melagiri` `#Permaculture` `#FarmToTable` `#LocalNarratives`
