@@ -228,7 +228,7 @@ const eventsSchema = {
         <p class="filter-group__label">{c.filterByType}</p>
         <div class="chips" id="tag-chips">
           <button type="button" class="chip is-active" data-tag="all">{c.allChip}</button>
-          {contentTags.map((t) => <button type="button" class="chip" data-tag={t}>{t}</button>)}
+          {contentTags.map((t) => <button type="button" class="chip" data-tag={t}>{t} <span class="chip__count">{tagCounts.get(t)}</span></button>)}
         </div>
       </div>
       <div>
@@ -545,7 +545,7 @@ const eventsSchema = {
   }
 
   .filter-group__label {
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.07em;
@@ -583,6 +583,19 @@ const eventsSchema = {
     background: var(--tvc-green);
     border-color: var(--tvc-green);
     color: #fff;
+  }
+
+  /* Content tags are already sorted most-used-first (see tagCounts above),
+     but that ordering alone is invisible to a visitor scanning 14 equally-
+     styled chips - printing the count turns "these happen to be in some
+     order" into a visible reason to look at the first few before the rest. */
+  .chip__count {
+    opacity: 0.6;
+    font-weight: 500;
+  }
+
+  .chip.is-active .chip__count {
+    opacity: 0.85;
   }
 
   .chip--duration.is-active {
