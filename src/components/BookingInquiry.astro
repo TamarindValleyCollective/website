@@ -2,10 +2,22 @@
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import { useTranslations, DEFAULT_LOCALE, type Locale } from '../i18n/utils';
 
+interface PricedPackageOption {
+  label: string;
+  // Per-adult rate for this package. Presence of at least one priced option
+  // is what turns on the live "estimated total" - a plain string list (see
+  // DayVisitView's itinerary names) has no rate to compute from, so no
+  // total is shown for those forms.
+  adultRate: number;
+  // Per-child rate; omitted (or 0) matches the "children under 10 free"
+  // pricing used across events (see `price` in content.config.ts).
+  childRate?: number;
+}
+
 interface Props {
   type: string;
   whatsappMessage: string;
-  packageOptions?: string[];
+  packageOptions?: string[] | PricedPackageOption[];
   note?: string;
   lang?: Locale;
   // Rendered as an <h2> above the note/form, with a border-top separating it
@@ -33,11 +45,30 @@ const fieldId = type.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 // (packageOptions) are supplied pre-translated by the caller, but their
 // slugified form is only used as a stable HTML id, never shown.
 const fieldLabels = {
-  en: { itinerary: 'Which itinerary?', people: 'Number of people', peoplePlaceholder: 'e.g. 2 adults, 1 child', dates: 'Preferred dates', datesPlaceholder: 'e.g. a weekend in December, or flexible', anythingElse: 'Anything else? (optional)', anythingElsePlaceholder: 'Any questions or extra details' },
-  kn: { itinerary: 'ಯಾವ ಪ್ರಯಾಣ ಯೋಜನೆ?', people: 'ಜನರ ಸಂಖ್ಯೆ', peoplePlaceholder: 'ಉದಾ. 2 ವಯಸ್ಕರು, 1 ಮಗು', dates: 'ಆದ್ಯತೆಯ ದಿನಾಂಕಗಳು', datesPlaceholder: 'ಉದಾ. ಡಿಸೆಂಬರ್‌ನಲ್ಲಿ ಒಂದು ವಾರಾಂತ್ಯ, ಅಥವಾ ಹೊಂದಿಕೊಳ್ಳುವ', anythingElse: 'ಬೇರೆ ಏನಾದರೂ? (ಐಚ್ಛಿಕ)', anythingElsePlaceholder: 'ಯಾವುದೇ ಪ್ರಶ್ನೆಗಳು ಅಥವಾ ಹೆಚ್ಚಿನ ವಿವರಗಳು' },
-  ta: { itinerary: 'எந்த பயணத் திட்டம்?', people: 'நபர்களின் எண்ணிக்கை', peoplePlaceholder: 'எ.கா. 2 பெரியவர்கள், 1 குழந்தை', dates: 'விருப்பமான தேதிகள்', datesPlaceholder: 'எ.கா. டிசம்பரில் ஒரு வார இறுதி, அல்லது நெகிழ்வானது', anythingElse: 'வேறு ஏதேனும்? (விருப்பம்)', anythingElsePlaceholder: 'ஏதேனும் கேள்விகள் அல்லது கூடுதல் விவரங்கள்' },
+  en: { itinerary: 'Which itinerary?', adults: 'Number of adults', children: 'Number of children', dates: 'Preferred dates', datesPlaceholder: 'e.g. a weekend in December, or flexible', anythingElse: 'Anything else? (optional)', anythingElsePlaceholder: 'Any questions or extra details', total: 'Estimated total' },
+  kn: { itinerary: 'ಯಾವ ಪ್ರಯಾಣ ಯೋಜನೆ?', adults: 'ವಯಸ್ಕರ ಸಂಖ್ಯೆ', children: 'ಮಕ್ಕಳ ಸಂಖ್ಯೆ', dates: 'ಆದ್ಯತೆಯ ದಿನಾಂಕಗಳು', datesPlaceholder: 'ಉದಾ. ಡಿಸೆಂಬರ್‌ನಲ್ಲಿ ಒಂದು ವಾರಾಂತ್ಯ, ಅಥವಾ ಹೊಂದಿಕೊಳ್ಳುವ', anythingElse: 'ಬೇರೆ ಏನಾದರೂ? (ಐಚ್ಛಿಕ)', anythingElsePlaceholder: 'ಯಾವುದೇ ಪ್ರಶ್ನೆಗಳು ಅಥವಾ ಹೆಚ್ಚಿನ ವಿವರಗಳು', total: 'ಅಂದಾಜು ಒಟ್ಟು ಮೊತ್ತ' },
+  ta: { itinerary: 'எந்த பயணத் திட்டம்?', adults: 'பெரியவர்களின் எண்ணிக்கை', children: 'குழந்தைகளின் எண்ணிக்கை', dates: 'விருப்பமான தேதிகள்', datesPlaceholder: 'எ.கா. டிசம்பரில் ஒரு வார இறுதி, அல்லது நெகிழ்வானது', anythingElse: 'வேறு ஏதேனும்? (விருப்பம்)', anythingElsePlaceholder: 'ஏதேனும் கேள்விகள் அல்லது கூடுதல் விவரங்கள்', total: 'மதிப்பிடப்பட்ட மொத்தம்' },
 } as const;
 const f = fieldLabels[lang];
+
+// Capped at 10 (plus a "10+" option) - a party larger than that should
+// just say so in the "anything else" field rather than the dropdown
+// growing indefinitely, and the live total (below) intentionally doesn't
+// try to compute a number for "10+".
+const MAX_COUNT = 10;
+const adultCounts = [...Array.from({ length: MAX_COUNT }, (_, i) => String(i + 1)), '10+'];
+const childCounts = ['0', ...adultCounts];
+
+interface DisplayPackageOption {
+  label: string;
+  adultRate?: number;
+  childRate?: number;
+}
+
+const normalizedPackages: DisplayPackageOption[] | undefined = packageOptions?.map((opt) =>
+  typeof opt === 'string' ? { label: opt } : opt,
+);
+const hasPricing = normalizedPackages?.some((opt) => typeof opt.adultRate === 'number') ?? false;
 ---
 
 <div class="booking-inquiry">
@@ -56,12 +87,16 @@ const f = fieldLabels[lang];
       <input type="hidden" name="type" value={type} />
       <p class="inquiry-hp"><label>{t('forms.honeypotLabel')} <input name="bot-field" /></label></p>
 
-      {packageOptions && (
+      {normalizedPackages && (
         <div class="field-package">
           <label for={`${fieldId}-package`}>{f.itinerary}</label>
           <select id={`${fieldId}-package`} name="package" required>
             <option value="">{t('forms.chooseOne')}</option>
-            {packageOptions.map((opt) => <option value={opt}>{opt}</option>)}
+            {normalizedPackages.map((opt) => (
+              <option value={opt.label} data-adult-rate={opt.adultRate ?? ''} data-child-rate={opt.childRate ?? 0}>
+                {opt.label}
+              </option>
+            ))}
           </select>
         </div>
       )}
@@ -80,8 +115,17 @@ const f = fieldLabels[lang];
           <input id={`${fieldId}-phone`} type="tel" name="phone" placeholder="+91 98765 43210" autocomplete="tel" />
         </div>
         <div>
-          <label for={`${fieldId}-people`}>{f.people}</label>
-          <input id={`${fieldId}-people`} type="text" name="people" placeholder={f.peoplePlaceholder} />
+          <label for={`${fieldId}-adults`}>{f.adults}</label>
+          <select id={`${fieldId}-adults`} name="adults" required>
+            <option value="">{t('forms.chooseOne')}</option>
+            {adultCounts.map((n) => <option value={n}>{n}</option>)}
+          </select>
+        </div>
+        <div>
+          <label for={`${fieldId}-children`}>{f.children}</label>
+          <select id={`${fieldId}-children`} name="children">
+            {childCounts.map((n) => <option value={n} selected={n === '0'}>{n}</option>)}
+          </select>
         </div>
       </div>
 
@@ -97,8 +141,57 @@ const f = fieldLabels[lang];
       <label for={`${fieldId}-message`}>{f.anythingElse}</label>
       <textarea id={`${fieldId}-message`} name="message" rows="3" placeholder={f.anythingElsePlaceholder}></textarea>
 
+      {hasPricing && (
+        <div class="field-total" id={`${fieldId}-total-wrap`} hidden>
+          <span class="field-total__label">{f.total}</span>
+          <span class="field-total__amount" id={`${fieldId}-total-amount`}>₹0</span>
+        </div>
+      )}
+
       <button class="button" type="submit">{t('forms.sendBookingRequest')}</button>
     </form>
+
+    {hasPricing && (
+      // Recomputes on every package/adults/children change. Deliberately
+      // stays hidden (rather than showing ₹0 or an error) whenever the
+      // package or adult count isn't a concrete number yet - notably for
+      // the "10+" option, where a per-person rate times "10+" isn't a real
+      // total, so the visitor is left to confirm that via WhatsApp instead.
+      <script define:vars={{ fieldId }}>
+        const packageSelect = document.getElementById(`${fieldId}-package`);
+        const adultsSelect = document.getElementById(`${fieldId}-adults`);
+        const childrenSelect = document.getElementById(`${fieldId}-children`);
+        const totalWrap = document.getElementById(`${fieldId}-total-wrap`);
+        const totalAmount = document.getElementById(`${fieldId}-total-amount`);
+
+        function formatInr(amount) {
+          return `₹${amount.toLocaleString('en-IN')}`;
+        }
+
+        function updateTotal() {
+          if (!packageSelect || !adultsSelect || !totalWrap || !totalAmount) return;
+
+          const selected = packageSelect.selectedOptions[0];
+          const adultRate = selected ? Number(selected.dataset.adultRate) : NaN;
+          const childRate = selected ? Number(selected.dataset.childRate || '0') : 0;
+          const adults = Number(adultsSelect.value);
+          const children = childrenSelect ? Number(childrenSelect.value) : 0;
+
+          if (!selected?.value || Number.isNaN(adultRate) || !adultsSelect.value || Number.isNaN(adults)) {
+            totalWrap.hidden = true;
+            return;
+          }
+
+          const total = adultRate * adults + (Number.isNaN(childRate) ? 0 : childRate) * (Number.isNaN(children) ? 0 : children);
+          totalAmount.textContent = formatInr(total);
+          totalWrap.hidden = false;
+        }
+
+        packageSelect?.addEventListener('change', updateTotal);
+        adultsSelect?.addEventListener('change', updateTotal);
+        childrenSelect?.addEventListener('change', updateTotal);
+      </script>
+    )}
 
     <div class="whatsapp-cta">
       <p>{t('forms.preferChat')}</p>
@@ -164,6 +257,33 @@ const f = fieldLabels[lang];
 
   .inquiry-form button {
     align-self: flex-start;
+  }
+
+  .field-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: var(--tvc-green-tint);
+  }
+
+  /* The [hidden] attribute is how the script (below) toggles this element,
+     but its UA-stylesheet `display: none` loses to the `display: flex`
+     above under the cascade's origin ordering - restate it explicitly so
+     hiding actually works. */
+  .field-total[hidden] {
+    display: none;
+  }
+
+  .field-total__label {
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+
+  .field-total__amount {
+    font-weight: 700;
+    font-size: 1.15rem;
   }
 
   .whatsapp-cta {

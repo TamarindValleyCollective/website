@@ -139,7 +139,15 @@ const brand =
   <PageHero eyebrow={formatDateRange(event.data.date, event.data.endDate, lang)} title={event.data.title} image={event.data.coverImage} imageAlt={event.data.coverImageAlt ?? event.data.title} {...brand} />
   <article class={`section wrapper prose ${event.data.series === '3bs1h' ? 'event--3bs1h' : ''} ${!showSidebar ? 'prose--wide' : ''}`.trim()}>
     {event.data.series === '3bs1h' && (
-      <a class="series-link" href="/events/3bs1h">Part of 3Bs&amp;1H →</a>
+      <>
+        <a class="series-link" href="/events/3bs1h">Part of 3Bs&amp;1H →</a>
+        {/* Short version of the naming origin told in full on the series
+            hub (Bs1hSeriesView.astro's "What is 3Bs&1H?" section) - repeated
+            here as a one-line hook rather than linked-to-only, since a
+            visitor landing straight on one edition's page (from search, a
+            share, WhatsApp) may never click through to the hub. */}
+        <p class="series-hook">Birds, Butterflies, Bees &amp; Herps — a half-joking name from a nature-walk brainstorm that stuck.</p>
+      </>
     )}
 
     {/* Any upcoming event with a `price` set (see content.config.ts) gets a
@@ -228,7 +236,10 @@ const brand =
                 lang={lang}
                 type={event.data.title}
                 heading="Request to book"
-                packageOptions={['Deck-based tent / bamboo hut — ₹3,500 per person', 'Campground tent / DIY camping — ₹3,200 per person']}
+                packageOptions={[
+                  { label: 'Deck-based tent / bamboo hut — ₹3,500 per person', adultRate: 3500, childRate: 0 },
+                  { label: 'Campground tent / DIY camping — ₹3,200 per person', adultRate: 3200, childRate: 0 },
+                ]}
                 note="Choose your accommodation tier, then send your details to Linger by form or WhatsApp."
                 whatsappMessage={`Hi! I'd like to book a spot for ${event.data.title} (${formatDateRange(event.data.date, event.data.endDate, lang)}).`}
                 fixedDates={formatDateRange(event.data.date, event.data.endDate, lang)}
@@ -404,6 +415,13 @@ const brand =
     text-transform: uppercase;
     color: var(--tvc-green-vivid);
     margin-bottom: 16px;
+  }
+
+  .series-hook {
+    font-style: italic;
+    color: var(--tvc-ink-soft);
+    margin-top: -8px;
+    margin-bottom: 20px;
   }
 
   .meta {
