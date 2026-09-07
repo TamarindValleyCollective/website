@@ -190,7 +190,7 @@ const eventsSchema = {
   <PageHero eyebrow={c.heroEyebrow} title={c.heroTitle} intro={c.heroIntro} image="/images/events/2026-08-01-foraging-day/hero.jpeg" imageAlt={c.heroImageAlt} />
 
   <section class="section wrapper">
-    <h2>{c.upcomingHeading}</h2>
+    <h2 id="upcoming-heading">{c.upcomingHeading}</h2>
     <p class="section-hint">{c.upcomingHint}</p>
     <div class="upcoming-list" id="upcoming-list">
       {upcoming.length > 0 ? (
@@ -544,6 +544,14 @@ const eventsSchema = {
     gap: 18px;
   }
 
+  /* Filtering can change the Upcoming list, which sits above this panel -
+     scroll-margin-top clears the sticky nav (Nav.astro) so the smooth-
+     scroll triggered on chip click (see the script below) lands with the
+     heading fully visible instead of tucked under it. */
+  #upcoming-heading {
+    scroll-margin-top: 90px;
+  }
+
   .filter-group__label {
     font-size: 0.75rem;
     font-weight: 700;
@@ -819,6 +827,8 @@ const eventsSchema = {
     }
   }
 
+  const upcomingHeading = document.getElementById('upcoming-heading');
+
   chips.forEach((chip) => {
     chip.addEventListener('click', () => {
       const tag = chip.dataset.tag ?? 'all';
@@ -828,6 +838,17 @@ const eventsSchema = {
         c.classList.toggle('is-active', t === activeTag || (activeTag === 'all' && t === 'all'));
       });
       render();
+
+      // The filter panel sits below Upcoming, so a change there can update
+      // Upcoming's contents entirely off-screen, above the user's current
+      // scroll position - the only prior feedback was small "Filtered to
+      // 'X'" text easy to miss. Only scroll when Upcoming has actually
+      // scrolled out of view (rect.top < 0), not on every click, so this
+      // doesn't yank the view around on tall viewports where both sections
+      // are already visible together.
+      if (upcomingHeading && upcomingHeading.getBoundingClientRect().top < 0) {
+        upcomingHeading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     });
   });
 
