@@ -18,7 +18,7 @@ import {
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 // Overridable via env var so a future model rename/deprecation doesn't need
 // a code change - just a new value in Netlify's env var settings.
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
 const ANTHROPIC_FALLBACK_MODEL = 'claude-sonnet-5';
 
 // A search answer is meant to be a quick, skimmable summary, not a
