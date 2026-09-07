@@ -55,10 +55,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         <div id="thread-header" class="thread-header" hidden>
           <button type="button" id="back-to-list" class="back-btn" aria-label="Back to conversations">‹</button>
           <span id="thread-avatar" class="avatar avatar-lg" aria-hidden="true"></span>
-          <div>
+          <div class="thread-header-text">
             <strong id="thread-name"></strong>
             <span id="thread-phone" class="thread-phone"></span>
           </div>
+          <button type="button" id="block-btn" class="block-btn">Block</button>
         </div>
         <div id="messages" class="messages" hidden></div>
         <div id="composer" class="composer" hidden>
@@ -333,12 +334,20 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     gap: 8px;
   }
 
+  :global(.conversation-item .name-group) {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+  }
+
   :global(.conversation-item .name) {
     font-weight: 600;
     font-size: 0.88rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
   }
 
   :global(.conversation-item .meta) {
@@ -424,6 +433,63 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     display: block;
     font-size: 0.76rem;
     color: var(--tvc-ink-soft);
+  }
+
+  .thread-header-text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .block-btn {
+    flex: 0 0 auto;
+    appearance: none;
+    border: 1px solid var(--tvc-line);
+    background: #fff;
+    color: var(--tvc-ink-soft);
+    border-radius: 999px;
+    padding: 5px 14px;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 150ms ease-out;
+  }
+
+  .block-btn:hover {
+    background: var(--tvc-cream);
+  }
+
+  .block-btn:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .block-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  /* Unblocking a currently-blocked number is the reversible, low-risk action
+     (default button styling); blocking is the one worth a visual warning
+     before it's clicked, same red used for failed-send bubbles elsewhere on
+     this page. */
+  .block-btn.is-blocked {
+    border-color: #e8b4af;
+    background: #fbebe9;
+    color: #b3261e;
+  }
+
+  /* Shown in the conversation list next to a blocked contact's name — same
+     idea as the unread dot, a small persistent marker rather than repeating
+     the full "Blocked" word in every row. */
+  :global(.conversation-item .blocked-tag) {
+    flex: 0 0 auto;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #b3261e;
+    background: #fbebe9;
+    border-radius: 999px;
+    padding: 1px 7px;
   }
 
   .back-btn {
@@ -672,6 +738,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     unread: boolean;
     lastMessagePreview: string | null;
     lastMessageDirection: 'inbound' | 'outbound' | null;
+    isBlocked: boolean;
   }
 
   interface Message {
@@ -701,6 +768,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   const threadAvatar = document.getElementById('thread-avatar') as HTMLElement;
   const threadName = document.getElementById('thread-name') as HTMLElement;
   const threadPhone = document.getElementById('thread-phone') as HTMLElement;
+  const blockBtn = document.getElementById('block-btn') as HTMLButtonElement;
   const messagesEl = document.getElementById('messages') as HTMLElement;
   const composer = document.getElementById('composer') as HTMLElement;
   const responderNameInput = document.getElementById('responder-name') as HTMLInputElement;
@@ -867,15 +935,30 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       const nameRow = document.createElement('span');
       nameRow.className = 'name-row';
 
+      // Grouped with the name (rather than appended straight to nameRow) so
+      // nameRow's existing space-between still resolves against exactly two
+      // items — name-group, timestamp — regardless of whether the blocked
+      // tag is present.
+      const nameGroup = document.createElement('span');
+      nameGroup.className = 'name-group';
+
       const name = document.createElement('span');
       name.className = 'name';
       name.textContent = conv.displayName || `+${conv.waPhone}`;
+      nameGroup.append(name);
+
+      if (conv.isBlocked) {
+        const blockedTag = document.createElement('span');
+        blockedTag.className = 'blocked-tag';
+        blockedTag.textContent = 'Blocked';
+        nameGroup.append(blockedTag);
+      }
 
       const meta = document.createElement('span');
       meta.className = 'meta';
       meta.textContent = formatTimestamp(conv.lastMessageAt);
 
-      nameRow.append(name, meta);
+      nameRow.append(nameGroup, meta);
 
       const preview = document.createElement('span');
       preview.className = 'preview';
@@ -995,6 +1078,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     threadAvatar.style.background = getAvatarColor(conv.waPhone);
     threadName.textContent = conv.displayName || `+${conv.waPhone}`;
     threadPhone.textContent = `+${conv.waPhone}`;
+    updateBlockBtn(conv.isBlocked);
     document.querySelectorAll('.conversation-item').forEach((el) => el.classList.remove('active'));
     // Optimistic — the real read-state update happens server-side as a side
     // effect of loadMessages() below (see handleMessages), which the next
@@ -1011,6 +1095,42 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     loadConversations();
     loadMessages();
   }
+
+  function updateBlockBtn(isBlocked: boolean) {
+    blockBtn.textContent = isBlocked ? 'Unblock' : 'Block';
+    blockBtn.classList.toggle('is-blocked', isBlocked);
+  }
+
+  blockBtn.addEventListener('click', async () => {
+    if (!selectedConversationId || !selectedConversation) return;
+    const nextBlocked = !selectedConversation.isBlocked;
+    // Blocking silences a real customer with no way to reach us short of a
+    // new number — worth a confirm; unblocking is reversible, so it isn't.
+    if (nextBlocked && !confirm(`Block ${selectedConversation.displayName || `+${selectedConversation.waPhone}`}? They won't be able to message this number until unblocked.`)) {
+      return;
+    }
+
+    blockBtn.disabled = true;
+    try {
+      const res = await authedFetch('/api/whatsapp-admin/block', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ conversationId: selectedConversationId, blocked: nextBlocked }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || 'Failed to update block status — try again.');
+        return;
+      }
+      selectedConversation.isBlocked = nextBlocked;
+      updateBlockBtn(nextBlocked);
+      loadConversations();
+    } catch {
+      // handled by authedFetch
+    } finally {
+      blockBtn.disabled = false;
+    }
+  });
 
   loadMoreBtn.addEventListener('click', () => {
     conversationsLimit += 100;
