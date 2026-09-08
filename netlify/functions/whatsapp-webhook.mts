@@ -65,23 +65,24 @@ interface WhatsAppContact {
   wa_id: string;
 }
 
+// Deliberately does not catch its own errors — a persistence failure here
+// must propagate so the handler below can return a non-2xx status and let
+// Meta retry the delivery. insertMessage() dedupes on wa_message_id (see
+// scripts/lib/supabase.mjs), so re-processing an already-persisted message
+// on retry is a safe no-op rather than a duplicate.
 async function persistIncomingMessage(message: WhatsAppMessage, contact: WhatsAppContact | undefined): Promise<void> {
-  try {
-    const bodyText = message.type === 'text' ? (message.text?.body ?? '') : `[${message.type} message — not shown here]`;
-    const conversation = await upsertConversation({
-      waPhone: message.from,
-      displayName: contact?.profile?.name,
-      lastMessageAt: new Date(Number(message.timestamp) * 1000).toISOString(),
-    });
-    await insertMessage({
-      conversationId: conversation.id,
-      direction: 'inbound',
-      body: bodyText,
-      waMessageId: message.id,
-    });
-  } catch (err) {
-    console.error('[whatsapp-webhook] Failed to persist inbound message', err);
-  }
+  const bodyText = message.type === 'text' ? (message.text?.body ?? '') : `[${message.type} message — not shown here]`;
+  const conversation = await upsertConversation({
+    waPhone: message.from,
+    displayName: contact?.profile?.name,
+    lastMessageAt: new Date(Number(message.timestamp) * 1000).toISOString(),
+  });
+  await insertMessage({
+    conversationId: conversation.id,
+    direction: 'inbound',
+    body: bodyText,
+    waMessageId: message.id,
+  });
 }
 
 export default async (req: Request): Promise<Response> => {
@@ -146,12 +147,14 @@ export default async (req: Request): Promise<Response> => {
       }
     }
   } catch (err) {
-    // Meta retries on non-2xx, which would resend every message in this
-    // batch again — but our own bug in notification-sending shouldn't
-    // repeatedly re-deliver the same underlying WhatsApp message from
-    // Meta's side. Log and still return 200; this is a visibility gap to
-    // watch for in function logs, not a reason to trigger retries.
+    // A failure anywhere in this loop — today, that's exclusively a
+    // persistence failure in persistIncomingMessage() — must not be
+    // acknowledged as delivered: return non-2xx so Meta retries. Safe to
+    // retry the whole batch since insertMessage() ignores duplicates by
+    // wa_message_id, so messages that already persisted successfully in
+    // this batch won't be double-written.
     console.error('[whatsapp-webhook] Error processing webhook payload', err);
+    return jsonResponse({ error: 'Failed to process webhook payload' }, 500);
   }
 
   return jsonResponse({ ok: true });
