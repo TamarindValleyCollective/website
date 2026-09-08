@@ -54,28 +54,38 @@ export default async (req: Request): Promise<Response> => {
 
     const email = (payload.email ?? '').trim().toLowerCase();
 
-    const record = ((await store.get(event, { type: 'json' })) as InterestRecord | null) ?? {
-      count: 0,
-      emails: [],
-    };
+    // Read-modify-write via Blobs' own optimistic concurrency (ETag +
+    // onlyIfMatch/onlyIfNew) rather than a plain unconditional write --
+    // two concurrent submissions could otherwise both read the same count
+    // and each overwrite the other's increment. Bounded retries rather than
+    // a different storage model, since this site's actual traffic makes
+    // more than a couple of retries vanishingly unlikely.
+    const MAX_ATTEMPTS = 5;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      const existing = (await store.getWithMetadata(event, { type: 'json' })) as { data: InterestRecord; etag: string } | null;
+      const record: InterestRecord = existing?.data ?? { count: 0, emails: [] };
 
-    if (email && record.emails.includes(email)) {
-      // Same person, already counted (e.g. a different browser/device) --
-      // idempotent no-op rather than an error, so the client doesn't need
-      // special-case handling; it just doesn't also re-notify the farm team.
-      return jsonResponse({ count: record.count, deduped: true });
+      if (email && record.emails.includes(email)) {
+        // Same person, already counted (e.g. a different browser/device) --
+        // idempotent no-op rather than an error, so the client doesn't need
+        // special-case handling; it just doesn't also re-notify the farm team.
+        return jsonResponse({ count: record.count, deduped: true });
+      }
+
+      const updated: InterestRecord = {
+        count: record.count + 1,
+        emails: email ? [...record.emails, email] : record.emails,
+      };
+
+      const result = await store.setJSON(event, updated, existing ? { onlyIfMatch: existing.etag } : { onlyIfNew: true });
+      if (result.modified) {
+        return jsonResponse({ count: updated.count, deduped: false });
+      }
+      // Someone else wrote in between our read and write -- retry with a
+      // fresh read rather than clobbering their update.
     }
 
-    record.count += 1;
-    if (email) record.emails.push(email);
-
-    // Plain read-modify-write, no optimistic-concurrency retry on conflict --
-    // accepted simplification given this site's traffic (a small farm site,
-    // not a high-concurrency ticketing system), same reasoning chat.mts's
-    // own comment gives for its simpler-but-good-enough approach.
-    await store.setJSON(event, record);
-
-    return jsonResponse({ count: record.count, deduped: false });
+    return jsonResponse({ error: 'Too many concurrent submissions, please try again.' }, 503);
   }
 
   return jsonResponse({ error: 'Method not allowed' }, 405);
