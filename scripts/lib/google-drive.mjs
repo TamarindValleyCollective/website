@@ -194,15 +194,19 @@ export async function getAllowedEmails(spreadsheetId, range = 'Sheet1!A:A') {
 }
 
 // Appends one row to the end of a sheet/range — used by netlify/functions/
-// enquiry.mts to log membership/general enquiries. valueInputOption=USER_ENTERED
-// (rather than RAW) so a plain ISO timestamp string still renders as
-// Sheets' native date/time type instead of literal text, same as pasting it
-// in by hand would. Share the target spreadsheet with this same service
-// account (Editor access, not just view) before pointing an env var at it.
+// enquiry.mts to log membership/general enquiries, whose fields (name,
+// email, phone, message) are anonymous, unauthenticated user input.
+// valueInputOption=RAW so a value like "=IMPORTXML(...)" or "+1+1" lands as
+// literal text instead of being evaluated as a formula by Sheets — the
+// ISO timestamp this also writes renders as plain text rather than a native
+// date/time cell under RAW, which is an acceptable tradeoff for not
+// evaluating untrusted input as a formula. Share the target spreadsheet
+// with this same service account (Editor access, not just view) before
+// pointing an env var at it.
 export async function appendSheetRow(spreadsheetId, range, values) {
   const token = await getAccessToken();
   const res = await fetch(
-    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`,
+    `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=RAW`,
     {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
