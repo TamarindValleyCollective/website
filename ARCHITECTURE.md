@@ -74,7 +74,7 @@ flowchart TD
         COMPONENTS["src/components/<br/>Nav, Footer, PageHero, ChatWidget,<br/>CookieConsent, JourneyTimelineStandalone,<br/>BiodiversityExplorer, PhotoGallery"]
         CONTENT["src/content/*<br/>Markdown collections: events, partners,<br/>community-outreach, photos"]
         FUNC_SRC["netlify/functions/chat.mts<br/>Serverless function, calls Anthropic API server-side"]
-        FUNC_SRC10["netlify/functions/search-ai.mts<br/>Serverless function — site search's 'Ask AI' answer.<br/>Gemini API free tier first, falls back to Anthropic.<br/>Shares retrieval logic with chat.mts via<br/>netlify/functions/lib/site-retrieval.ts"]
+        FUNC_SRC10["netlify/functions/search-ai.mts<br/>Serverless function — site search's 'Ask AI' answer.<br/>Gemini API free tier first, falls back to Anthropic.<br/>Shares retrieval logic with chat.mts via<br/>netlify/functions/lib/site-retrieval.ts. Self-rate-limits<br/>per-IP + a daily Anthropic-fallback budget via Blobs"]
         FUNC_SRC2["netlify/functions/event-interest.mts<br/>Serverless function, reads/writes Netlify Blobs"]
         FUNC_SRC3["netlify/functions/photo-pool.mts<br/>Serverless function, Google Sign-In gated —<br/>verifies ID token, checks a Sheet-backed<br/>allow-list, lists Inbox (+ uploader/EXIF/GPS/<br/>description), moves photos, saves descriptions"]
         FUNC_SRC4["netlify/functions/enquiry.mts<br/>Serverless function — appends a row to a<br/>Google Sheet per membership/general enquiry,<br/>fired via sendBeacon alongside each form's<br/>own native Netlify Forms submission"]
@@ -105,7 +105,7 @@ flowchart TD
         APIFN7["Netlify Function: /api/whatsapp-admin<br/>Deployed and live — real conversations<br/>read/replied to via /internal/whatsapp"]
         APIFN8["Netlify Function: whatsapp-stale-alert<br/>Scheduled (cron), no HTTP path —<br/>deployed and live"]
         APIFN9["Netlify Function: /api/accommodation-admin<br/>Deployed and live — merged 2026-08-30,<br/>verified against production"]
-        BLOBS["Netlify Blobs: 'event-interest' store<br/>One JSON record per past event id —<br/>{count, emails[]}. Reset via<br/>netlify blobs:delete event-interest &lt;id&gt;"]
+        BLOBS["Netlify Blobs<br/>'event-interest' store — one JSON record per<br/>past event id, {count, emails[]}, optimistic-<br/>concurrency writes. Reset via netlify blobs:delete<br/>event-interest &lt;id&gt;.<br/>'search-ai-rate-limit' store — per-IP window +<br/>daily Anthropic-fallback budget records"]
         FORMS["Netlify Forms<br/>Captures /contact membership + general<br/>enquiries, /visit/host-an-event inquiries,<br/>/visit camping·day-visit·trekking inquiries,<br/>and event-interest submissions with an email"]
     end
 
@@ -189,6 +189,7 @@ flowchart TD
     APIFN4 -.->|"append enquiry row"| GSHEET
     INTEREST --> APIFN2
     APIFN2 --> BLOBS
+    APIFN10 -.->|"rate-limit checks"| BLOBS
     INTEREST -.->|"only when an email is given"| FORMS
     CF --> INTERNAL5
     POOLDASH --> APIFN3
@@ -288,7 +289,11 @@ outside both the local machine and Netlify (the member-update-email workflow).
   back to the same Anthropic API `chat.mts` uses only if `GEMINI_API_KEY` is unset, rate-limited,
   or erroring — so a free-tier hiccup degrades to a paid-but-working answer rather than an outright
   failure. `GEMINI_API_KEY` is not yet set in production, so this currently always falls through
-  to Anthropic (already live there) until that key is added.
+  to Anthropic (already live there) until that key is added. Being public and unauthenticated, this
+  endpoint also rate-limits itself: a per-IP fixed window before any provider call, plus a separate
+  global daily cap on Anthropic-fallback invocations specifically, both backed by a Netlify Blobs
+  store (`search-ai-rate-limit`, see Hosting below) — guards against cost exhaustion on the paid
+  fallback from either a single abusive client or many distinct ones.
 - **`netlify/functions/event-interest.mts`** — powers the "Want this to happen again?" widget
   (Netlify Blobs, see Hosting below).
 - **`netlify/functions/photo-pool.mts`** — backs `/internal/photo-pool`. Gated by real Google
@@ -607,11 +612,15 @@ account on 2026-07-18).
   `/api/search-ai`, backing the site search's "Ask AI" answer — `GEMINI_API_KEY` is not yet set
   in production, so it currently always falls through to the already-live `ANTHROPIC_API_KEY`
   fallback; once a free-tier Gemini key is added it'll be tried first.
-- **Netlify Blobs** — live. One store (`event-interest`), one JSON record
-  per past event id (`{count, emails[]}`), written only by `event-interest.mts` — the site's
-  only piece of server-side state that's publicly *readable*, unlike the write-only Forms
-  below. Auto-provisioned per-site, no setup or environment variable needed. Reset a specific
-  event's record with `netlify blobs:delete event-interest <event-id>` (see README.md).
+- **Netlify Blobs** — live. Two stores. `event-interest` holds one JSON record per past event id
+  (`{count, emails[]}`), written only by `event-interest.mts` (optimistic-concurrency writes via
+  ETag `onlyIfMatch`/`onlyIfNew`, with a bounded retry loop, so two concurrent submissions can't
+  overwrite each other's increment) — the site's only piece of server-side state that's publicly
+  *readable*, unlike the write-only Forms below. `search-ai-rate-limit` backs `search-ai.mts`'s
+  self-rate-limiting (see above): one record per client IP for the per-IP window, plus one
+  date-scoped record for the global Anthropic-fallback daily cap. Both auto-provisioned per-site,
+  no setup or environment variable needed. Reset a specific event's record with
+  `netlify blobs:delete event-interest <event-id>` (see README.md).
 - **Netlify Forms** — live. Detects each `data-netlify="true"` form at build time and captures
   submissions with no custom backend code required. Five things use it: the membership enquiry
   form (name, email, phone, message) at the bottom of `/join` and the general enquiry form (same
