@@ -5,6 +5,7 @@
 // chat.mts uses only if Gemini is unset, rate-limited, or erroring - so a
 // free-tier hiccup degrades to a paid-but-working answer instead of an
 // outright failure.
+import { getStore } from '@netlify/blobs';
 import {
   selectRelevantPages,
   formatPages,
@@ -35,6 +36,52 @@ const MAX_QUERY_LENGTH = 300;
 // budget left after it - abandon the Gemini attempt well before that
 // budget runs out instead of risking both calls timing out.
 const GEMINI_TIMEOUT_MS = 6_000;
+
+// This endpoint is public and unauthenticated, and every valid request
+// costs an LLM call (free-tier Gemini, or paid Anthropic on fallback) — a
+// per-IP fixed window keeps a single abusive client from cheaply driving up
+// request volume and forcing repeated fallback attempts. State lives in
+// Netlify Blobs (same pattern as event-interest.mts's public counter), with
+// no retry-on-conflict: an occasional lost increment under this endpoint's
+// actual traffic just means the limit is marginally looser, never stricter.
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const RATE_LIMIT_MAX_REQUESTS = 10;
+
+// Separate from the per-IP limit above: this caps how many times *any*
+// caller can fall through to the paid Anthropic call in a day, so many
+// distinct IPs each individually under the per-IP limit can't collectively
+// exhaust the paid-provider budget. Resets naturally since the key is
+// date-scoped, so there's nothing to prune.
+const ANTHROPIC_FALLBACK_DAILY_CAP = 200;
+
+interface RateLimitRecord {
+  count: number;
+  windowStart: number;
+}
+
+async function checkIpRateLimit(ip: string): Promise<boolean> {
+  const store = getStore('search-ai-rate-limit');
+  const now = Date.now();
+  const record = (await store.get(`ip:${ip}`, { type: 'json' })) as RateLimitRecord | null;
+
+  if (record && now - record.windowStart < RATE_LIMIT_WINDOW_MS) {
+    if (record.count >= RATE_LIMIT_MAX_REQUESTS) return false;
+    await store.setJSON(`ip:${ip}`, { count: record.count + 1, windowStart: record.windowStart });
+    return true;
+  }
+
+  await store.setJSON(`ip:${ip}`, { count: 1, windowStart: now });
+  return true;
+}
+
+async function checkAnthropicFallbackBudget(): Promise<boolean> {
+  const store = getStore('search-ai-rate-limit');
+  const key = `anthropic-fallback:${new Date().toISOString().slice(0, 10)}`;
+  const count = ((await store.get(key, { type: 'json' })) as number | null) ?? 0;
+  if (count >= ANTHROPIC_FALLBACK_DAILY_CAP) return false;
+  await store.setJSON(key, count + 1);
+  return true;
+}
 
 const SEARCH_INSTRUCTIONS = `You are answering a single search query typed into the site search box on the Tamarind Valley Collective (TVC) website (tvc.farm), a 100-acre permaculture farm community near Kanakapura, India.
 
@@ -120,6 +167,12 @@ export default async (req: Request): Promise<Response> => {
     return jsonResponse({ error: 'Query is too long.' }, 400);
   }
 
+  const clientIp =
+    req.headers.get('x-nf-client-connection-ip') ?? req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  if (!(await checkIpRateLimit(clientIp))) {
+    return jsonResponse({ error: 'Too many requests. Please try again in a few minutes.' }, 429);
+  }
+
   const geminiKey = process.env.GEMINI_API_KEY;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   if (!geminiKey && !anthropicKey) {
@@ -148,6 +201,11 @@ export default async (req: Request): Promise<Response> => {
 
   if (!anthropicKey) {
     // Gemini was the only option and it just failed.
+    return jsonResponse({ error: 'AI search is having trouble right now. Please try again shortly.' }, 502);
+  }
+
+  if (!(await checkAnthropicFallbackBudget())) {
+    console.warn('[search-ai] Anthropic fallback daily budget exhausted');
     return jsonResponse({ error: 'AI search is having trouble right now. Please try again shortly.' }, 502);
   }
 
