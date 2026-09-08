@@ -84,6 +84,18 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+// A signed-in curator is otherwise trusted to supply any Drive file id they
+// want for the thumb/description/decision operations below — without this
+// check, that id could point anywhere the service account can read, not
+// just an inbox photo. Every operation on a client-supplied id must confirm
+// the file is actually a child of the inbox folder first.
+function requireInboxMembership(file: { parents?: string[] }, inboxId: string): Response | null {
+  if (!file.parents?.includes(inboxId)) {
+    return jsonResponse({ error: 'File is not in the review inbox' }, 403);
+  }
+  return null;
+}
+
 type AuthResult = { ok: true; email: string } | { ok: false; status: 401 | 403 | 500; error: string };
 
 // Short cache so an admin adding a row to the allow-list Sheet takes effect
@@ -169,8 +181,16 @@ async function handleThumb(url: URL): Promise<Response> {
   const id = url.searchParams.get('id');
   if (!id) return jsonResponse({ error: 'id is required' }, 400);
 
+  const inboxId = process.env.GDRIVE_INBOX_FOLDER_ID;
+  if (!inboxId) {
+    console.error('Missing GDRIVE_INBOX_FOLDER_ID');
+    return jsonResponse({ error: 'Server misconfigured' }, 500);
+  }
+
   try {
-    const file = (await getFile(id, 'thumbnailLink')) as DriveFile;
+    const file = (await getFile(id, 'thumbnailLink,parents')) as DriveFile & { parents?: string[] };
+    const authError = requireInboxMembership(file, inboxId);
+    if (authError) return authError;
     if (!file.thumbnailLink) return jsonResponse({ error: 'No thumbnail available yet' }, 404);
 
     const thumbRes = await fetchThumbnail(file.thumbnailLink);
@@ -208,6 +228,10 @@ async function handleDecision(req: Request): Promise<Response> {
   const targetId = decision === 'approve' ? approvedId : rejectedId;
 
   try {
+    const file = (await getFile(id, 'parents')) as { parents?: string[] };
+    const authError = requireInboxMembership(file, inboxId);
+    if (authError) return authError;
+
     await moveFile(id, inboxId, targetId);
     return jsonResponse({ ok: true });
   } catch (err) {
@@ -229,7 +253,17 @@ async function handleDescription(req: Request): Promise<Response> {
     return jsonResponse({ error: 'id and description (string) are required' }, 400);
   }
 
+  const inboxId = process.env.GDRIVE_INBOX_FOLDER_ID;
+  if (!inboxId) {
+    console.error('Missing GDRIVE_INBOX_FOLDER_ID');
+    return jsonResponse({ error: 'Server misconfigured' }, 500);
+  }
+
   try {
+    const file = (await getFile(id, 'parents')) as { parents?: string[] };
+    const authError = requireInboxMembership(file, inboxId);
+    if (authError) return authError;
+
     await updateDescription(id, description);
     return jsonResponse({ ok: true });
   } catch (err) {
