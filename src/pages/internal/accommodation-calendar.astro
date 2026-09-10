@@ -689,6 +689,19 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     flex-shrink: 0;
   }
 
+  .tent-group-heading {
+    margin: 12px 0 2px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tvc-ink-soft);
+  }
+
+  .tent-group-heading:first-child {
+    margin-top: 0;
+  }
+
   .tent-option {
     padding: 6px 0;
     border-bottom: 1px dashed var(--tvc-line);
@@ -1015,6 +1028,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     label: string;
     capacity: number;
     kind: 'fixed' | 'removable';
+    group: string;
   }
 
   interface Guest {
@@ -1533,7 +1547,19 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   function buildTentsFieldset() {
     tentsContainer.innerHTML = '';
+    let lastGroup: string | null = null;
     for (const unit of UNITS) {
+      // Purely a visual cluster (Malabar Hut/Banyan Hut/Bamboo Huts/Portable
+      // Tents) - UNITS is already in a fixed, group-contiguous order (see
+      // accommodation.mjs), so a heading only needs inserting when the
+      // group actually changes, not a full group-by pass.
+      if (unit.group !== lastGroup) {
+        const heading = document.createElement('p');
+        heading.className = 'tent-group-heading';
+        heading.textContent = unit.group;
+        tentsContainer.appendChild(heading);
+        lastGroup = unit.group;
+      }
       const option = document.createElement('div');
       option.className = 'tent-option';
       option.dataset.tentId = unit.id;

@@ -22,16 +22,22 @@
 // `TentNN` order below matches the order that migration's UPDATE mapping
 // uses, confirmed against Sharath's original numbered list so no booking's
 // tent gets silently reassigned to the wrong physical unit.
+// `group` is a display-only clustering (Sharath, 2026-09-10) for the admin
+// tool's Tents picker - Malabar/Banyan/Bamboo/Portable, matching how the
+// site's own marketing copy already talks about accommodation types (see
+// the accommodationTypes content collection). Purely presentational: not
+// read by any booking/conflict/capacity logic, which still operates per
+// physical unit id exactly as before.
 export const ACCOMMODATION_UNITS = [
-  { id: 'Tent01', label: 'Malabar Hut Fixed (N)', capacity: 3, kind: 'fixed' },
-  { id: 'Tent02', label: 'Malabar Hut Fixed (S)', capacity: 3, kind: 'fixed' },
-  { id: 'Tent03', label: 'Malabar Hut Portable', capacity: 2, kind: 'removable' },
-  { id: 'Tent04', label: 'Banyan Hut Fixed', capacity: 3, kind: 'fixed' },
-  { id: 'Tent05', label: 'Banyan Hut Portable', capacity: 2, kind: 'removable' },
-  { id: 'Tent06', label: 'Upper Bamboo Hut', capacity: 2, kind: 'fixed' },
-  { id: 'Tent07', label: 'Lower Bamboo Hut', capacity: 2, kind: 'fixed' },
-  { id: 'Tent08', label: 'Campground Portable', capacity: 3, kind: 'removable' },
-  { id: 'Tent09', label: 'Campground Portable', capacity: 2, kind: 'removable' },
+  { id: 'Tent01', label: 'Malabar Hut Fixed (N)', capacity: 3, kind: 'fixed', group: 'Malabar Hut' },
+  { id: 'Tent02', label: 'Malabar Hut Fixed (S)', capacity: 3, kind: 'fixed', group: 'Malabar Hut' },
+  { id: 'Tent03', label: 'Malabar Hut Portable', capacity: 2, kind: 'removable', group: 'Malabar Hut' },
+  { id: 'Tent04', label: 'Banyan Hut Fixed', capacity: 3, kind: 'fixed', group: 'Banyan Hut' },
+  { id: 'Tent05', label: 'Banyan Hut Portable', capacity: 2, kind: 'removable', group: 'Banyan Hut' },
+  { id: 'Tent06', label: 'Upper Bamboo Hut', capacity: 2, kind: 'fixed', group: 'Bamboo Huts' },
+  { id: 'Tent07', label: 'Lower Bamboo Hut', capacity: 2, kind: 'fixed', group: 'Bamboo Huts' },
+  { id: 'Tent08', label: 'Campground Portable', capacity: 3, kind: 'removable', group: 'Portable Tents' },
+  { id: 'Tent09', label: 'Campground Portable', capacity: 2, kind: 'removable', group: 'Portable Tents' },
 ];
 
 export const TOTAL_ROOMS = ACCOMMODATION_UNITS.length;
