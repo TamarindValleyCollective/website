@@ -389,9 +389,21 @@ outside both the local machine and Netlify (the member-update-email workflow).
   message silently go unanswered.
 - **`netlify/functions/accommodation-admin.mts`** — backs `/internal/accommodation-calendar`.
   Same Google Sign-In auth pattern as `photo-pool.mts`/`whatsapp-admin.mts` (verifies the ID
-  token, checks it against `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID`'s allow-list — reused rather than
-  a separate Sheet). Full booking CRUD plus guest search/history, all against the
-  `accommodation_*` tables in the "TVC ERP" Supabase project via
+  token, checks it against an allow-list), but its own dedicated
+  `ACCOMMODATION_ALLOWED_EMAILS_SHEET_ID` Sheet rather than reusing
+  `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID` — split out 2026-08-30 so calendar access isn't a side
+  effect of photo/WhatsApp access or vice versa. Beyond the allow-list gate, each row carries a
+  role (`scripts/lib/accommodation-access.mjs`): `admin` (read/write every booking type — today's
+  default), `restricted` (read everything, write only a listed subset of booking types, e.g. a
+  Linger contact scoped to `casual-stay`/`public-event`), or `viewer` (read-only). Every role sees
+  the full grid; only writes are type-scoped, and `canWriteType()` enforces that server-side in
+  `accommodation-admin.mts` against both a booking's existing type and its new type on
+  update/delete — never left to the client form to hide options for. Designed to migrate cleanly
+  to the shared `admin_access(email, tool, role, allowed_types)` Supabase table parked from the
+  2026-08-31 admin-console session: `getAccessRecord()`'s return shape already matches that
+  table's row shape, so adopting it later is a rewrite of `accommodation-access.mjs`'s internals
+  only, not of `accommodation-admin.mts` or the UI. Full booking CRUD plus guest search/history,
+  all against the `accommodation_*` tables in the "TVC ERP" Supabase project via
   `scripts/lib/accommodation-db.mjs`. The core guarantee this whole feature was built around:
   double-booking a tent is *physically impossible*, not just checked for in application code — an
   `EXCLUDE USING gist` constraint on `accommodation_tent_assignments` makes an overlapping insert
@@ -786,13 +798,17 @@ never touches Netlify either.
   Netlify (all deploy contexts); the Supabase service-role key still needs pasting into Netlify's
   UI by hand (same secret-handling rule as `WHATSAPP_ACCESS_TOKEN`) before this can go live.
 - **Accommodation Calendar** (`/internal/accommodation-calendar`) — staff-only (Madhavan, the
-  farm manager), same shape as Photo Pool/WhatsApp above: unlinked, `noindex`, Google Sign-In
-  gated. Briefly reused `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID`'s own Sheet at launch, then split
-  into its own dedicated `ACCOMMODATION_ALLOWED_EMAILS_SHEET_ID` Sheet the same day, once it was
-  clear the three internal tools' access needed to be managed independently, not as one combined
-  list. A unified admin console (shared users/roles/permissions across all internal tools,
-  instead of a separate Sheet per tool) is under consideration as the next step here — see the
-  project memory / conversation this decision came from for the current thinking.
+  farm manager, plus role-scoped external contacts like Linger), same shape as Photo Pool/WhatsApp
+  above: unlinked, `noindex`, Google Sign-In gated. Briefly reused
+  `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID`'s own Sheet at launch, then split into its own dedicated
+  `ACCOMMODATION_ALLOWED_EMAILS_SHEET_ID` Sheet the same day, once it was clear the three internal
+  tools' access needed to be managed independently, not as one combined list. That Sheet now
+  carries a role per email (`admin`/`restricted`/`viewer`, `restricted` further scoped to a
+  booking-type allow-list) rather than being a flat in-or-out list — see
+  `accommodation-admin.mts` above. A unified admin console (shared users/roles/permissions across
+  all internal tools, instead of a separate Sheet per tool) is under consideration as the next
+  step here — see the project memory / conversation this decision came from for the current
+  thinking.
   Records who's in which of the farm's 8 tents/huts, for how long, and why — a day/week/month
   calendar (tapping any cell opens a pre-filled booking dialog), a reusable guest directory with
   name/mobile-number typeahead and each guest's past-stay history, and a full audit trail of

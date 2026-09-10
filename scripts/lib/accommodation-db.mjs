@@ -141,7 +141,7 @@ export async function listBookingsForAdmin({ month }) {
   return (await res.json()).map(rowToBooking);
 }
 
-async function getBookingById(id) {
+export async function getBookingById(id) {
   const res = await restFetch(`/accommodation_bookings?id=eq.${id}&${ADMIN_SELECT}`);
   const rows = await res.json();
   return rows[0] ? rowToBooking(rows[0]) : null;

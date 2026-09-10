@@ -388,6 +388,32 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     border-radius: 8px;
   }
 
+  /* Applied by setFormEditable() when a role can view but not write a
+     booking (viewer, or restricted looking at a type outside its
+     allowedTypes) - the browser's own default :disabled look is too subtle
+     on this page's custom-bordered inputs/checkboxes to read as "locked"
+     rather than just "a form that happens to ignore clicks" (Sharath's
+     testing feedback, 2026-09-10). `disabled` is still the real mechanism
+     (this is presentation only); button:disabled is excluded since
+     #f-cancel-edit is the one button a read-only form keeps active. */
+  .form--readonly input:disabled,
+  .form--readonly select:disabled,
+  .form--readonly textarea:disabled {
+    background: var(--tvc-line);
+    color: var(--tvc-ink-soft);
+    cursor: not-allowed;
+    opacity: 0.75;
+  }
+
+  .form--readonly button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .form--readonly .tent-option {
+    cursor: not-allowed;
+  }
+
   .checkbox-label {
     flex-direction: row !important;
     align-items: center;
@@ -1108,12 +1134,30 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   const reasonWrap = document.getElementById('f-reason-wrap') as HTMLElement;
   const reasonInput = document.getElementById('f-reason') as HTMLTextAreaElement;
   const cancelEditBtn = document.getElementById('f-cancel-edit') as HTMLButtonElement;
+  const submitBtn = document.getElementById('f-submit') as HTMLButtonElement;
 
   type ViewMode = 'day' | 'week' | 'month';
   let viewMode: ViewMode = 'week';
   let anchorDate = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD, local
   let currentBookings: Booking[] = [];
   let editingId: string | null = null;
+
+  // Role/allowedTypes come back on every /bookings response (see
+  // accommodation-admin.mts's handleList) rather than a separate "whoami"
+  // call - defaults to unrestricted until the first successful load, same
+  // as the brief pre-load flicker every other role-gated control already has.
+  type Role = 'admin' | 'restricted' | 'viewer';
+  let myRole: Role = 'admin';
+  let myAllowedTypes: string[] | null = null;
+
+  // Server-side canWriteType (accommodation-admin.mts) is the real gate -
+  // this mirrors it only to grey out/hide controls the request would be
+  // rejected for anyway, never as the actual authorization boundary.
+  function canWriteType(type: string): boolean {
+    if (myRole === 'admin') return true;
+    if (myRole === 'restricted') return myAllowedTypes?.includes(type) ?? false;
+    return false; // viewer
+  }
 
   function getToken(): string | null {
     return sessionStorage.getItem(STORAGE_KEY);
@@ -1172,6 +1216,44 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   function closeBookingModal() {
     bookingModal.hidden = true;
     document.body.style.overflow = '';
+  }
+
+  // Layers role-based type restrictions on top of whatever
+  // updatePublicEventOptionVisibility()/loadIntoForm already decided about
+  // f-type's options - only ever adds a disabled/hidden state, never removes
+  // one, so call order relative to those doesn't matter. Hidden, not just
+  // disabled, for a restricted role: a partner like Linger shouldn't see
+  // that internal categories (member-stay, private-event, tent closure)
+  // exist at all in the picker, not just be blocked from picking them
+  // (Sharath's feedback, 2026-09-10). A hidden option that's already the
+  // *current* selection (editing an existing out-of-scope booking) still
+  // shows as the select's closed-state text - restricted/viewer roles see
+  // full booking details regardless of type, per the read-access design
+  // decision; this only hides options from the open picker list.
+  function refreshTypeOptions() {
+    for (const opt of Array.from(typeSelect.options)) {
+      if (myRole === 'restricted' && !canWriteType(opt.value)) {
+        opt.disabled = true;
+        opt.hidden = true;
+      }
+    }
+  }
+
+  // Disables every field/button in the booking form except the dismiss
+  // control (#f-cancel-edit), and applies .form--readonly so the disabled
+  // state actually reads as locked rather than just an inert copy of the
+  // normal form (see that class's own CSS comment) - used when the
+  // signed-in role can view a booking (every role can) but not write to it:
+  // a viewer, or a restricted role looking at a booking outside its
+  // allowedTypes. The server-side canWriteType check in
+  // accommodation-admin.mts is the actual boundary; this only keeps the UI
+  // from offering a save/delete that would 403.
+  function setFormEditable(editable: boolean) {
+    form.classList.toggle('form--readonly', !editable);
+    for (const el of Array.from(form.querySelectorAll('input, select, textarea, button:not(#f-cancel-edit)'))) {
+      (el as HTMLInputElement | HTMLButtonElement).disabled = !editable;
+    }
+    submitBtn.hidden = !editable;
   }
 
   async function authedFetch(input: string, init: RequestInit = {}): Promise<Response> {
@@ -1943,10 +2025,22 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     gridTable.innerHTML = headHtml + bodyHtml;
   }
 
+  let viewOnlyHintTimer: ReturnType<typeof setTimeout> | undefined;
+
   function activateCell(cell: HTMLElement) {
     if (cell.dataset.bookingId) {
       const booking = currentBookings.find((b) => b.id === cell.dataset.bookingId);
       if (booking) loadIntoForm(booking);
+      return;
+    }
+    if (myRole === 'viewer') {
+      // A free cell for a viewer has nothing to open (no booking to view, no
+      // permission to create one) - silently doing nothing here reads as a
+      // dead/broken click rather than "correctly no permission" (Sharath's
+      // testing feedback, 2026-09-10: "nothing pops up"), so say so instead.
+      showStatus('View-only access — you can’t create new bookings.');
+      clearTimeout(viewOnlyHintTimer);
+      viewOnlyHintTimer = setTimeout(hideStatus, 3000);
       return;
     }
     startNewBookingAt(cell.dataset.tentId!, cell.dataset.date!);
@@ -2024,18 +2118,19 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       card.className = 'booking-card';
       const title = b.eventTitle ?? b.label ?? typeDisplayLabel(b.type);
       const tentNames = b.tents.map((t) => UNITS.find((u) => u.id === t.tentId)?.label ?? t.tentId).join(', ') || '(whole farm)';
+      const canWrite = canWriteType(b.type);
       card.innerHTML = `
         <div>
           <strong>${title}</strong>
           <div class="meta">${b.startDate} · ${b.nights} night${b.nights > 1 ? 's' : ''} · ${tentNames}${b.exclusive ? ' · exclusive' : ''}</div>
         </div>
         <div class="actions">
-          <button type="button" class="button edit-booking">Edit</button>
-          <button type="button" class="button button--danger cancel-booking">Cancel</button>
+          <button type="button" class="button edit-booking">${canWrite ? 'Edit' : 'View'}</button>
+          ${canWrite ? '<button type="button" class="button button--danger cancel-booking">Cancel</button>' : ''}
         </div>
       `;
       card.querySelector('.edit-booking')!.addEventListener('click', () => loadIntoForm(b));
-      card.querySelector('.cancel-booking')!.addEventListener('click', () => cancelBooking(b));
+      card.querySelector('.cancel-booking')?.addEventListener('click', () => cancelBooking(b));
       bookingList.appendChild(card);
     }
   }
@@ -2106,8 +2201,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   function loadIntoForm(b: Booking) {
     editingId = b.id;
-    formHeading.textContent = 'Edit booking';
+    const canEdit = canWriteType(b.type);
+    formHeading.textContent = canEdit ? 'Edit booking' : 'View booking';
     cancelEditBtn.hidden = false;
+    cancelEditBtn.textContent = canEdit ? 'Cancel edit' : 'Close';
     reasonWrap.hidden = !b.isPast;
     reasonInput.value = '';
     // An existing public-event booking must stay viewable/editable even if
@@ -2161,6 +2258,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     noteInput.value = b.note ?? '';
     setTents(b.tents);
     markOccupiedTents();
+    refreshTypeOptions();
+    setFormEditable(canEdit); // must run last - overrides markOccupiedTents' own enable/disable calls
     openBookingModal();
   }
 
@@ -2168,13 +2267,25 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     editingId = null;
     formHeading.textContent = 'New booking';
     cancelEditBtn.hidden = true;
+    cancelEditBtn.textContent = 'Cancel edit';
     reasonWrap.hidden = true;
     reasonInput.value = '';
     form.reset();
+    setFormEditable(true); // form.reset() clears values, not a prior view-only edit's disabled state
     populateEventSelect(); // drops any event injected by loadIntoForm for a past-event edit
     syncStartDateEmptyState();
     typeSelect.value = 'casual-stay';
     updatePublicEventOptionVisibility();
+    refreshTypeOptions();
+    // Linger booking (casual-stay) is the default type, but a restricted
+    // role without casual-stay in its allowedTypes can't land there - fall
+    // through to the first type it's actually allowed to create instead of
+    // opening a new-booking form defaulted to a type its first save would
+    // 403 on.
+    if (typeSelect.selectedOptions[0]?.disabled) {
+      const firstAllowed = Array.from(typeSelect.options).find((o) => !o.disabled);
+      if (firstAllowed) typeSelect.value = firstAllowed.value;
+    }
     updateFieldVisibility();
     // A new booking can't start in the past - today, in the visitor's own
     // local timezone, computed fresh on every reset rather than baked in at
@@ -2308,12 +2419,23 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         showStatus('Failed to load bookings — try refreshing.');
         return;
       }
-      const bodies = (await Promise.all(responses.map((res) => res.json()))) as { units: Unit[]; bookings: Booking[] }[];
+      const bodies = (await Promise.all(responses.map((res) => res.json()))) as {
+        units: Unit[];
+        bookings: Booking[];
+        access: { role: Role; allowedTypes: string[] | null };
+      }[];
       // Dedupe by id - a week straddling two months fetches both, and a
       // booking touching both (e.g. a stay spanning the boundary) would
       // otherwise appear in each month's response.
       const byId = new Map(bodies.flatMap((body) => body.bookings).map((b) => [b.id, b]));
       currentBookings = [...byId.values()];
+      // Every month's response carries the same access record for this
+      // signed-in caller - any one of them is fine to read it from.
+      if (bodies[0]?.access) {
+        myRole = bodies[0].access.role;
+        myAllowedTypes = bodies[0].access.allowedTypes;
+      }
+      newBookingBtn.hidden = myRole === 'viewer';
       hideStatus();
       renderGrid();
       renderBookingList();

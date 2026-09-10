@@ -16,12 +16,21 @@
 // rather than reusing PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID - Madhavan isn't
 // "core team" in the sense that list means, and shouldn't gain photo/WhatsApp
 // access as a side effect of getting calendar access (or vice versa).
-import { getAllowedEmails } from '../../scripts/lib/google-drive.mjs';
+//
+// Beyond the allow-list gate, each email carries a role (see
+// accommodation-access.mjs for the Sheet schema/full contract): 'admin' can
+// read/write every booking type; 'restricted' can read everything but write
+// only its own allowedTypes; 'viewer' can only read. Type-scoped writes are
+// enforced here, not just hidden in the UI - the type is attacker-controlled
+// in the request body, so canWriteType() gates handleCreate/handleUpdate/
+// handleDelete directly rather than trusting the client form to hide options.
+import { getAccessRecord } from '../../scripts/lib/accommodation-access.mjs';
 import { verifyGoogleIdToken } from '../../scripts/lib/google-id-token.mjs';
 import { ACCOMMODATION_UNITS, normalizeMobileNumber } from '../../scripts/lib/accommodation.mjs';
-import { listBookingsForAdmin, createBooking, updateBooking, deleteBooking, searchGuests, listStaysForPerson } from '../../scripts/lib/accommodation-db.mjs';
+import { listBookingsForAdmin, createBooking, updateBooking, deleteBooking, searchGuests, listStaysForPerson, getBookingById } from '../../scripts/lib/accommodation-db.mjs';
 
 type BookingType = 'public-event' | 'private-event' | 'casual-stay' | 'member-stay' | 'unit-closure' | 'farm-closure';
+type Role = 'admin' | 'restricted' | 'viewer';
 
 interface Guest {
   personId?: string;
@@ -65,20 +74,18 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-type AuthResult = { ok: true; email: string } | { ok: false; status: 401 | 403 | 500; error: string };
+type AuthResult =
+  | { ok: true; email: string; role: Role; allowedTypes: BookingType[] | null }
+  | { ok: false; status: 401 | 403 | 500; error: string };
 
-const ALLOWED_EMAILS_TTL_MS = 2 * 60 * 1000;
-let cachedAllowedEmails: { emails: string[]; expiresAt: number } | null = null;
-
-async function getCachedAllowedEmails(): Promise<string[]> {
-  if (cachedAllowedEmails && cachedAllowedEmails.expiresAt > Date.now()) {
-    return cachedAllowedEmails.emails;
-  }
-  const sheetId = process.env.ACCOMMODATION_ALLOWED_EMAILS_SHEET_ID;
-  if (!sheetId) throw new Error('Missing ACCOMMODATION_ALLOWED_EMAILS_SHEET_ID');
-  const emails = await getAllowedEmails(sheetId);
-  cachedAllowedEmails = { emails, expiresAt: Date.now() + ALLOWED_EMAILS_TTL_MS };
-  return emails;
+// Whether an authenticated caller may create/edit/delete a booking of the
+// given type - never how much they can *read*, which stays the same
+// (everything) across all three roles per Sharath's call to keep the grid
+// fully visible to everyone allow-listed, restriction only on writes.
+function canWriteType(auth: Extract<AuthResult, { ok: true }>, type: BookingType): boolean {
+  if (auth.role === 'admin') return true;
+  if (auth.role === 'restricted') return auth.allowedTypes?.includes(type) ?? false;
+  return false; // viewer
 }
 
 async function authenticate(req: Request): Promise<AuthResult> {
@@ -102,16 +109,15 @@ async function authenticate(req: Request): Promise<AuthResult> {
   }
 
   try {
-    const allowed = await getCachedAllowedEmails();
-    if (!allowed.includes(email)) {
+    const access = await getAccessRecord(email);
+    if (!access) {
       return { ok: false, status: 403, error: 'This Google account is not authorized to manage the accommodation calendar' };
     }
+    return { ok: true, email, role: access.role as Role, allowedTypes: access.allowedTypes as BookingType[] | null };
   } catch (err) {
     console.error('Failed to check the accommodation-calendar allow-list', err);
     return { ok: false, status: 500, error: 'Server misconfigured' };
   }
-
-  return { ok: true, email };
 }
 
 const VALID_TYPES: BookingType[] = ['public-event', 'private-event', 'casual-stay', 'member-stay', 'unit-closure', 'farm-closure'];
@@ -168,15 +174,15 @@ function validateBookingInput(input: Partial<Booking>): string | null {
   return null;
 }
 
-async function handleList(url: URL): Promise<Response> {
+async function handleList(url: URL, auth: Extract<AuthResult, { ok: true }>): Promise<Response> {
   const month = url.searchParams.get('month');
   if (!month || !/^\d{4}-\d{2}$/.test(month)) return jsonResponse({ error: 'month is required, as YYYY-MM' }, 400);
 
   const bookings = await listBookingsForAdmin({ month });
-  return jsonResponse({ units: ACCOMMODATION_UNITS, bookings });
+  return jsonResponse({ units: ACCOMMODATION_UNITS, bookings, access: { role: auth.role, allowedTypes: auth.allowedTypes } });
 }
 
-async function handleCreate(req: Request, email: string): Promise<Response> {
+async function handleCreate(req: Request, auth: Extract<AuthResult, { ok: true }>): Promise<Response> {
   let payload: Partial<Booking>;
   try {
     payload = await req.json();
@@ -186,6 +192,9 @@ async function handleCreate(req: Request, email: string): Promise<Response> {
 
   const validationError = validateBookingInput(payload);
   if (validationError) return jsonResponse({ error: validationError }, 400);
+  if (!canWriteType(auth, payload.type!)) {
+    return jsonResponse({ error: `You are not authorized to create a "${payload.type}" booking` }, 403);
+  }
 
   try {
     const booking = await createBooking({
@@ -198,7 +207,7 @@ async function handleCreate(req: Request, email: string): Promise<Response> {
       nights: payload.nights!,
       tents: payload.tents ?? [],
       note: payload.note,
-      createdBy: email,
+      createdBy: auth.email,
     });
     return jsonResponse({ booking });
   } catch (err) {
@@ -213,7 +222,7 @@ async function handleCreate(req: Request, email: string): Promise<Response> {
   }
 }
 
-async function handleUpdate(req: Request, email: string): Promise<Response> {
+async function handleUpdate(req: Request, auth: Extract<AuthResult, { ok: true }>): Promise<Response> {
   let payload: Partial<Booking> & { id?: string; reason?: string };
   try {
     payload = await req.json();
@@ -224,6 +233,17 @@ async function handleUpdate(req: Request, email: string): Promise<Response> {
   if (!payload.id) return jsonResponse({ error: 'id is required' }, 400);
   const validationError = validateBookingInput(payload);
   if (validationError) return jsonResponse({ error: validationError }, 400);
+
+  // A restricted/viewer caller must be authorized for BOTH the booking's
+  // current type and the type it's being changed to - otherwise a
+  // Linger-scoped user could retype a member-stay into casual-stay to gain
+  // write access to it, or vice versa launder a change out of their own
+  // scope into a type nobody's watching.
+  const existing = await getBookingById(payload.id);
+  if (!existing) return jsonResponse({ error: 'Booking not found' }, 404);
+  if (!canWriteType(auth, existing.type) || !canWriteType(auth, payload.type!)) {
+    return jsonResponse({ error: 'You are not authorized to edit this booking' }, 403);
+  }
 
   try {
     const booking = await updateBooking({
@@ -237,7 +257,7 @@ async function handleUpdate(req: Request, email: string): Promise<Response> {
       nights: payload.nights!,
       tents: payload.tents ?? [],
       note: payload.note,
-      updatedBy: email,
+      updatedBy: auth.email,
       reason: payload.reason,
     });
     return jsonResponse({ booking });
@@ -255,7 +275,7 @@ async function handleUpdate(req: Request, email: string): Promise<Response> {
   }
 }
 
-async function handleDelete(req: Request, email: string): Promise<Response> {
+async function handleDelete(req: Request, auth: Extract<AuthResult, { ok: true }>): Promise<Response> {
   let payload: { id?: string; reason?: string };
   try {
     payload = await req.json();
@@ -265,8 +285,14 @@ async function handleDelete(req: Request, email: string): Promise<Response> {
 
   if (!payload.id) return jsonResponse({ error: 'id is required' }, 400);
 
+  const existing = await getBookingById(payload.id);
+  if (!existing) return jsonResponse({ error: 'Booking not found' }, 404);
+  if (!canWriteType(auth, existing.type)) {
+    return jsonResponse({ error: 'You are not authorized to cancel this booking' }, 403);
+  }
+
   try {
-    await deleteBooking(payload.id, { deletedBy: email, reason: payload.reason });
+    await deleteBooking(payload.id, { deletedBy: auth.email, reason: payload.reason });
     return jsonResponse({ ok: true });
   } catch (err) {
     const status = (err as { status?: number }).status;
@@ -299,10 +325,10 @@ export default async (req: Request): Promise<Response> => {
   const url = new URL(req.url);
   const staysMatch = url.pathname.match(/^\/api\/accommodation-admin\/guests\/([^/]+)\/stays$/);
 
-  if (url.pathname === '/api/accommodation-admin/bookings' && req.method === 'GET') return handleList(url);
-  if (url.pathname === '/api/accommodation-admin/bookings' && req.method === 'POST') return handleCreate(req, auth.email);
-  if (url.pathname === '/api/accommodation-admin/bookings/update' && req.method === 'POST') return handleUpdate(req, auth.email);
-  if (url.pathname === '/api/accommodation-admin/bookings/delete' && req.method === 'POST') return handleDelete(req, auth.email);
+  if (url.pathname === '/api/accommodation-admin/bookings' && req.method === 'GET') return handleList(url, auth);
+  if (url.pathname === '/api/accommodation-admin/bookings' && req.method === 'POST') return handleCreate(req, auth);
+  if (url.pathname === '/api/accommodation-admin/bookings/update' && req.method === 'POST') return handleUpdate(req, auth);
+  if (url.pathname === '/api/accommodation-admin/bookings/delete' && req.method === 'POST') return handleDelete(req, auth);
   if (url.pathname === '/api/accommodation-admin/guests/search' && req.method === 'GET') return handleGuestSearch(url);
   if (staysMatch && req.method === 'GET') return handleGuestStays(staysMatch[1]);
 
