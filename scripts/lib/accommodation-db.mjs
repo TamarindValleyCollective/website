@@ -97,7 +97,7 @@ function isPastBooking(startDate, nights) {
 
 const ADMIN_SELECT =
   'select=id,type,event_slug,event_title,label,exclusive,start_date,nights,note,created_by,created_at,updated_by,updated_at,' +
-  'accommodation_tent_assignments(tent_id,accommodation_guests(seq,age_group,person_id,accommodation_people(name,mobile_number,gender,preferences)))';
+  'accommodation_tent_assignments(tent_id,accommodation_guests(seq,age_group,person_id,accommodation_people(name,mobile_number,gender,preferences,email)))';
 
 // Turns a PostgREST row (snake_case, SQL null for absent optional fields)
 // back into the exact JSON shape the client already gets today (camelCase,
@@ -120,6 +120,7 @@ function rowToBooking(row) {
           mobileNumber: g.accommodation_people.mobile_number ?? undefined,
           gender: g.accommodation_people.gender ?? undefined,
           preferences: g.accommodation_people.preferences ?? undefined,
+          email: g.accommodation_people.email ?? undefined,
           ageGroup: g.age_group,
         })),
     })),
@@ -185,7 +186,7 @@ export async function deleteBooking(id, { deletedBy, reason }) {
   await callRpc('accommodation_delete_booking', { p_id: id, p_deleted_by: deletedBy, p_reason: reason || null });
 }
 
-const PERSON_FIELDS = 'id,name,mobile_number,gender,preferences';
+const PERSON_FIELDS = 'id,name,mobile_number,gender,preferences,email';
 
 // Mobile number takes priority when both are given - it's the reliable
 // identity signal (see accommodation_resolve_person's own matching order,
@@ -201,7 +202,7 @@ export async function searchGuests({ query, mobileNumber }) {
     : `/accommodation_people?name=ilike.*${encodeURIComponent(query ?? '')}*&select=${PERSON_FIELDS}&order=name.asc&limit=10`;
   const res = await restFetch(path);
   const rows = await res.json();
-  return rows.map((p) => ({ id: p.id, name: p.name, mobileNumber: p.mobile_number ?? undefined, gender: p.gender ?? undefined, preferences: p.preferences ?? undefined }));
+  return rows.map((p) => ({ id: p.id, name: p.name, mobileNumber: p.mobile_number ?? undefined, gender: p.gender ?? undefined, preferences: p.preferences ?? undefined, email: p.email ?? undefined }));
 }
 
 export async function listStaysForPerson(personId) {
@@ -232,7 +233,7 @@ export async function listStaysForPerson(personId) {
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
 
   return {
-    person: { id: person.id, name: person.name, mobileNumber: person.mobile_number ?? undefined, gender: person.gender ?? undefined, preferences: person.preferences ?? undefined },
+    person: { id: person.id, name: person.name, mobileNumber: person.mobile_number ?? undefined, gender: person.gender ?? undefined, preferences: person.preferences ?? undefined, email: person.email ?? undefined },
     stays,
   };
 }

@@ -26,7 +26,7 @@
 // handleDelete directly rather than trusting the client form to hide options.
 import { getAccessRecord } from '../../scripts/lib/accommodation-access.mjs';
 import { verifyGoogleIdToken } from '../../scripts/lib/google-id-token.mjs';
-import { ACCOMMODATION_UNITS, normalizeMobileNumber } from '../../scripts/lib/accommodation.mjs';
+import { ACCOMMODATION_UNITS, normalizeMobileNumber, isValidEmail } from '../../scripts/lib/accommodation.mjs';
 import { listBookingsForAdmin, createBooking, updateBooking, deleteBooking, searchGuests, listStaysForPerson, getBookingById } from '../../scripts/lib/accommodation-db.mjs';
 
 type BookingType = 'public-event' | 'private-event' | 'casual-stay' | 'member-stay' | 'unit-closure' | 'farm-closure';
@@ -36,6 +36,7 @@ interface Guest {
   personId?: string;
   name?: string;
   mobileNumber?: string;
+  email?: string;
   ageGroup?: 'Adult' | 'Child';
   gender?: string;
   preferences?: string;
@@ -167,6 +168,15 @@ function validateBookingInput(input: Partial<Booking>): string | null {
         g.mobileNumber = normalized;
       } else {
         g.mobileNumber = undefined;
+      }
+      // Optional, captured for a possible future confirmation-email feature
+      // (see migration 0015) - same shape check the DB's own CHECK
+      // constraint enforces as a backstop, via the one shared implementation.
+      if (g.email != null && g.email.trim() !== '') {
+        if (!isValidEmail(g.email)) return `"${g.email}" doesn't look like a valid email address`;
+        g.email = g.email.trim();
+      } else {
+        g.email = undefined;
       }
     }
   }

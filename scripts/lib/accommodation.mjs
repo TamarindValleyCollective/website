@@ -28,20 +28,65 @@
 // the accommodationTypes content collection). Purely presentational: not
 // read by any booking/conflict/capacity logic, which still operates per
 // physical unit id exactly as before.
+// `shortLabel` (same day) is the checkbox text used ONLY inside that same
+// grouped picker, where the group heading directly above already says
+// "Malabar Hut"/etc - repeating it on every checkbox read as redundant.
+// `label` (the full, standalone name) is still used everywhere else that has
+// no group heading for context: grid/day-view tooltips, a guest's past-stays
+// list, booking cards. Nothing about a booking ever stores either string -
+// both are always looked up fresh from this file by tentId at display time
+// (see rowToBooking/UNITS.find() call sites), so renaming either one here
+// immediately updates every place it's shown, confirmation emails included
+// once that feature exists.
+//
+// Wording (2026-09-10, Sharath): every unit says "Tent" except Bamboo Huts,
+// which says "Hut" instead (matches its own group name) - and Tent08/09
+// (Portable Tents, previously just "Campground Portable" x2 with nothing to
+// tell them apart but capacity) got real names, "Large"/"Medium". `label`
+// keeps the group name as a prefix (it has no heading nearby to supply that
+// context); `shortLabel` drops it (the picker's own group heading already
+// supplies it) - same wording otherwise, so the two names for one unit never
+// read as contradicting each other across different parts of the page.
+// BYOT01-05 (2026-09-10, Sharath): five slots for guests camping in their
+// own tent rather than one of the farm's own 9 physical units above - "the
+// capacity of the tents is not material here" (there's no real structure
+// with a fixed bed count to enforce), but guest details still need
+// recording the same as any other tent, so each slot gets a working cap of
+// 3 for that purpose specifically (Sharath's follow-up). `kind: 'byot'`
+// exists only to exclude these from TOTAL_ROOMS/TOTAL_CAPACITY below (the
+// farm's own physical-room figures) - everything else (capacity, the dots
+// meter, Family Booking, conflict-checking so the same slot can't be
+// double-booked) reuses the exact same code path as a real unit, since a
+// slot behaves identically to one for every purpose except "is this a room
+// the farm itself owns." Its own group ("Bring Your Own Tent") means the
+// existing group-rendering (booking form's Tents picker, and the calendar's
+// day/week/month views once that grouping was extended there) picks these
+// up automatically - no new UI code needed for this, just data.
 export const ACCOMMODATION_UNITS = [
-  { id: 'Tent01', label: 'Malabar Hut Fixed (N)', capacity: 3, kind: 'fixed', group: 'Malabar Hut' },
-  { id: 'Tent02', label: 'Malabar Hut Fixed (S)', capacity: 3, kind: 'fixed', group: 'Malabar Hut' },
-  { id: 'Tent03', label: 'Malabar Hut Portable', capacity: 2, kind: 'removable', group: 'Malabar Hut' },
-  { id: 'Tent04', label: 'Banyan Hut Fixed', capacity: 3, kind: 'fixed', group: 'Banyan Hut' },
-  { id: 'Tent05', label: 'Banyan Hut Portable', capacity: 2, kind: 'removable', group: 'Banyan Hut' },
-  { id: 'Tent06', label: 'Upper Bamboo Hut', capacity: 2, kind: 'fixed', group: 'Bamboo Huts' },
-  { id: 'Tent07', label: 'Lower Bamboo Hut', capacity: 2, kind: 'fixed', group: 'Bamboo Huts' },
-  { id: 'Tent08', label: 'Campground Portable', capacity: 3, kind: 'removable', group: 'Portable Tents' },
-  { id: 'Tent09', label: 'Campground Portable', capacity: 2, kind: 'removable', group: 'Portable Tents' },
+  { id: 'Tent01', label: 'Malabar Hut Fixed Tent (N)', shortLabel: 'Fixed Tent (N)', capacity: 3, kind: 'fixed', group: 'Malabar Hut' },
+  { id: 'Tent02', label: 'Malabar Hut Fixed Tent (S)', shortLabel: 'Fixed Tent (S)', capacity: 3, kind: 'fixed', group: 'Malabar Hut' },
+  { id: 'Tent03', label: 'Malabar Hut Portable Tent', shortLabel: 'Portable Tent', capacity: 2, kind: 'removable', group: 'Malabar Hut' },
+  { id: 'Tent04', label: 'Banyan Hut Fixed Tent', shortLabel: 'Fixed Tent', capacity: 3, kind: 'fixed', group: 'Banyan Hut' },
+  { id: 'Tent05', label: 'Banyan Hut Portable Tent', shortLabel: 'Portable Tent', capacity: 2, kind: 'removable', group: 'Banyan Hut' },
+  { id: 'Tent06', label: 'Upper Bamboo Hut', shortLabel: 'Upper Hut', capacity: 2, kind: 'fixed', group: 'Bamboo Huts' },
+  { id: 'Tent07', label: 'Lower Bamboo Hut', shortLabel: 'Lower Hut', capacity: 2, kind: 'fixed', group: 'Bamboo Huts' },
+  { id: 'Tent08', label: 'Large Portable Tent', shortLabel: 'Large Tent', capacity: 3, kind: 'removable', group: 'Portable Tents' },
+  { id: 'Tent09', label: 'Medium Portable Tent', shortLabel: 'Medium Tent', capacity: 2, kind: 'removable', group: 'Portable Tents' },
+  { id: 'BYOT01', label: 'Bring Your Own Tent 1', shortLabel: 'Tent 1', capacity: 3, kind: 'byot', group: 'Bring Your Own Tent' },
+  { id: 'BYOT02', label: 'Bring Your Own Tent 2', shortLabel: 'Tent 2', capacity: 3, kind: 'byot', group: 'Bring Your Own Tent' },
+  { id: 'BYOT03', label: 'Bring Your Own Tent 3', shortLabel: 'Tent 3', capacity: 3, kind: 'byot', group: 'Bring Your Own Tent' },
+  { id: 'BYOT04', label: 'Bring Your Own Tent 4', shortLabel: 'Tent 4', capacity: 3, kind: 'byot', group: 'Bring Your Own Tent' },
+  { id: 'BYOT05', label: 'Bring Your Own Tent 5', shortLabel: 'Tent 5', capacity: 3, kind: 'byot', group: 'Bring Your Own Tent' },
 ];
 
-export const TOTAL_ROOMS = ACCOMMODATION_UNITS.length;
-export const TOTAL_CAPACITY = ACCOMMODATION_UNITS.reduce((sum, u) => sum + u.capacity, 0);
+// The farm's own physical rooms only - BYOT slots aren't a structure the
+// farm owns, so they don't belong in a "how many rooms/people can the farm
+// itself house" figure (not currently read anywhere outside this file, but
+// kept correct in case that changes - see the file's own header comment on
+// the now-dropped public availability view this was originally built for).
+const PHYSICAL_UNITS = ACCOMMODATION_UNITS.filter((u) => u.kind !== 'byot');
+export const TOTAL_ROOMS = PHYSICAL_UNITS.length;
+export const TOTAL_CAPACITY = PHYSICAL_UNITS.reduce((sum, u) => sum + u.capacity, 0);
 
 const DAY_MS = 86_400_000;
 
@@ -117,4 +162,17 @@ export function normalizeMobileNumber(raw) {
   // than accepted as if they were a mobile number.
   if (!/^[6-9]\d{9}$/.test(digits)) return null;
   return `+91${digits}`;
+}
+
+// A generic "does this look like an email" shape check, not a real
+// RFC 5322 validator - matches the same permissive local@domain.tld pattern
+// as the accommodation_people_email_format CHECK constraint added in
+// migration 0015, so the client's instant feedback and the DB's actual
+// backstop can never disagree about what counts as valid. Guest email is
+// captured for a possible future confirmation-email feature (no sender
+// exists yet) - like mobile number, optional and untrimmed here; the caller
+// decides what "not provided" vs "provided but invalid" means.
+export function isValidEmail(raw) {
+  if (!raw) return false;
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw.trim());
 }

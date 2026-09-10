@@ -89,9 +89,9 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
       <div id="booking-modal" class="booking-modal" hidden>
         <div id="booking-modal-backdrop" class="booking-modal-backdrop"></div>
-        <div class="card booking-modal-panel" role="dialog" aria-modal="true" aria-labelledby="form-heading">
+        <div id="booking-modal-panel" class="card booking-modal-panel" role="dialog" aria-modal="true" aria-labelledby="form-heading">
           <div class="booking-modal-panel-head">
-            <h2 id="form-heading">New booking</h2>
+            <h2 id="form-heading" tabindex="-1">New booking</h2>
             <button type="button" id="booking-modal-close" class="button" aria-label="Close">✕</button>
           </div>
           <form id="booking-form" class="form">
@@ -365,6 +365,39 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     }
   }
 
+  /* Below the same 640px threshold the modal itself treats as "mobile"
+     (see the min-width query above) - Start date/Nights sat side by side
+     and didn't fit (design critique, 2026-09-10): the row overflowed the
+     panel by 18px, scrollable via a scrollbar touch browsers hide by
+     default, so Nights was reachable but easy to miss and leave at its
+     default. The matching touch-target fix for the Tents picker's controls
+     lives in the second, is:global stylesheet below (see that block's own
+     comment) - those are elements the client script builds at runtime, so
+     a rule here (Astro's scoped-style attribute never lands on them) would
+     silently do nothing. */
+  @media (max-width: 639px) {
+    .dates-row {
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    #booking-modal-close {
+      min-width: 44px;
+      min-height: 44px;
+    }
+  }
+
+  /* The site-wide chat bubble (ChatWidget.astro, rendered by BaseLayout on
+     every page including this internal one) sits at z-index 100, above the
+     booking modal's own z-index 90 - on mobile it physically overlapped the
+     second tent row's "+ Guest" button by ~15px (design critique,
+     2026-09-10), so a tap aimed at +Guest could silently open marketing
+     chat instead. :global() since #cw-root belongs to a different
+     component's template, outside this page's own scoped-style subtree. */
+  :global(body:has(#booking-modal:not([hidden])) #cw-root) {
+    display: none;
+  }
+
   .form {
     display: flex;
     flex-direction: column;
@@ -551,6 +584,25 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     font-weight: 600;
   }
 
+  /* Same grouping the booking form's Tents picker uses, extended to the
+     week/month grid (Sharath's feedback, 2026-09-10) - a solid-green band
+     reads clearly against every row state's own background (free/occupied/
+     closed all use tints, not solid color, of their own - see .day-row's
+     own comment on that same clash). */
+  .group-row td.group-row-label {
+    background: var(--tvc-green);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .group-row td.group-row-fill {
+    background: var(--tvc-green);
+    border-color: var(--tvc-green);
+  }
+
   .cell--free {
     background: var(--tvc-green-tint);
   }
@@ -599,6 +651,28 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     flex-direction: column;
     gap: 8px;
     margin-bottom: 32px;
+  }
+
+  /* Same grouping the booking form's Tents picker uses, extended to day
+     view (Sharath's feedback, 2026-09-10). A solid pill, not a tint, since
+     every .day-row state (free/occupied/closed/past) already claims a tint
+     of its own for status - a tinted heading would read as just another row
+     state instead of a heading sitting above them. */
+  .day-group-heading {
+    align-self: flex-start;
+    margin-top: 12px;
+    padding: 3px 10px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #fff;
+    background: var(--tvc-green);
+    border-radius: 999px;
+  }
+
+  .day-group-heading:first-child {
+    margin-top: 0;
   }
 
   .day-row {
@@ -689,26 +763,146 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     flex-shrink: 0;
   }
 
-  .tent-group-heading {
-    margin: 12px 0 2px;
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--tvc-ink-soft);
+  /* A plain uppercase heading sitting flush with its own units read as the
+     same visual level as them, not a parent (Sharath's feedback,
+     2026-09-10: "Fixed (S) is part of Malabar Hut, but they look like the
+     same level"). A real bordered <fieldset>/<legend> per group - the exact
+     pattern this form's own top-level sections (What/When/Tents/Internal
+     notes) already use one level up - makes the containment unambiguous
+     without inventing a new visual language. Bare `fieldset` below already
+     supplies the border/radius/padding every fieldset on this page gets;
+     this only adds the legend treatment and tightens spacing for a smaller,
+     denser nested group. */
+  .tent-group-fieldset {
+    padding: 6px 12px 2px;
+    margin-bottom: 10px;
   }
 
-  .tent-group-heading:first-child {
-    margin-top: 0;
+  .tent-group-fieldset:last-child {
+    margin-bottom: 0;
+  }
+
+  /* A muted-grey uppercase legend on a white fieldset read as barely there
+     ("Malabar Hut itself is lost in the text," Sharath's feedback,
+     2026-09-10) - a solid brand-green pill with white text gives it real
+     contrast and weight instead. It doubles as the collapse/expand toggle
+     (same date, once 5 groups made the list long) - a plain <legend> isn't
+     natively interactive, so this gets its own hover/focus treatment rather
+     than relying on a browser default a legend doesn't have. */
+  .tent-group-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #fff;
+    background: var(--tvc-green);
+    padding: 3px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .tent-group-legend:hover,
+  .tent-group-legend:focus-visible {
+    background: var(--tvc-green-dark);
+    outline: 2px solid var(--tvc-green);
+    outline-offset: 2px;
+  }
+
+  /* Rotates to point down once expanded - plain text, not an icon font, to
+     match this page's existing no-icon-library convention (see .tent-summary's
+     own chevron, the first place this page did the same thing). */
+  .tent-group-chevron {
+    display: inline-block;
+    transition: transform 200ms ease;
+  }
+
+  .tent-group-fieldset--expanded .tent-group-chevron {
+    transform: rotate(90deg);
+  }
+
+  /* The CSS-grid 0fr/1fr trick: a track that animates between "collapsed to
+     nothing" and "exactly its content's natural height" without either
+     JS-measured heights or an overestimated max-height guess (which would
+     leave a lingering gap once actually collapsed, or clip real content
+     once a guest card pushes the group taller than a fixed guess). Needs
+     exactly one child (.tent-group-body) to measure against; that child's
+     own overflow:hidden is what actually clips it mid-transition, since the
+     grid track alone can report a fractional height partway through. */
+  .tent-group-body-wrap {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 220ms ease;
+  }
+
+  .tent-group-fieldset--expanded .tent-group-body-wrap {
+    grid-template-rows: 1fr;
+  }
+
+  .tent-group-body {
+    overflow: hidden;
+    min-height: 0;
   }
 
   .tent-option {
-    padding: 6px 0;
+    padding: 10px 0;
     border-bottom: 1px dashed var(--tvc-line);
   }
 
   .tent-option:last-child {
     border-bottom: none;
+  }
+
+  /* Checkbox+name and the +Guest button share one row - +Guest used to sit
+     on its own line below the (hidden-until-checked) guest rows, reading as
+     detached from the tent it belonged to once more than one tent was
+     checked (Sharath's feedback, 2026-09-10). */
+  /* Grid, not flex+space-between, so the occupancy count genuinely centers
+     between the name and +Guest regardless of how wide either is (Sharath's
+     feedback, 2026-09-10) - flex+space-between only pushes the two end
+     items apart, it can't center a third item independent of their widths. */
+  .tent-check-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .tent-check-row .tent-check {
+    justify-self: start;
+  }
+
+  .tent-check-row .add-guest {
+    justify-self: end;
+  }
+
+  .tent-occupancy {
+    justify-self: center;
+    font-weight: 600;
+    font-size: 0.86rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  /* Guest mode's dot meter only - closure mode's plain "(3)" capacity
+     figure keeps the base muted/tight styling above. */
+  .tent-occupancy--dots {
+    font-size: 0.95rem;
+    letter-spacing: 2px;
+    color: var(--tvc-green);
+  }
+
+  .tent-solo-check {
+    margin-top: 6px;
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: var(--tvc-ink-soft);
+  }
+
+  .tent-solo-check:has(.tent-solo-checkbox:disabled) {
+    opacity: 0.6;
   }
 
   .tent-option .tent-check {
@@ -719,25 +913,102 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     font-size: 0.86rem;
   }
 
+  /* Collapsed state for a guest-mode tent that has guests but isn't the
+     active one (see activeTentId/renderTentState) - a full-width row rather
+     than a small link, since it's replacing the entire guest-card block and
+     should read as "there's real content folded up here," not a stray
+     button. The chevron is plain text, not an icon font, to match this
+     page's existing no-icon-library convention. */
+  .tent-summary {
+    display: block;
+    width: 100%;
+    margin-top: 6px;
+    padding: 8px 10px;
+    border: 1px dashed var(--tvc-line);
+    border-radius: 8px;
+    background: none;
+    font: inherit;
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .tent-summary::after {
+    content: ' ›';
+  }
+
+  .tent-summary:hover,
+  .tent-summary:focus-visible {
+    border-color: var(--tvc-green);
+    color: var(--tvc-ink);
+  }
+
   .guests {
-    margin: 8px 0 0 24px;
+    margin: 10px 0 2px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    /* Numbers each .guest-row below via .guest-row::before - browser-native,
+       stays correct as rows are added/removed with no JS bookkeeping. */
+    counter-reset: guest;
+  }
+
+  /* Each guest used to be a bare, unbordered stack of label rows with only a
+     6px gap from the next guest's identical-looking stack - within one tent,
+     "guest 1 ends" and "guest 2 begins" had no visual signal at all (Sharath's
+     feedback, 2026-09-10: "two user details... too close... without any
+     visual separation"). A bordered, tinted card per guest plus a numbered
+     label makes each one read as one self-contained unit - the deliberate
+     contrast this needs is tight spacing *within* a guest's own fields
+     (unchanged below) against generous spacing *between* guests (the .guests
+     gap above), not one uniform value for both relationships. */
+  .guest-row {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 6px;
+    /* Extra right padding reserves the top-right corner for .remove-guest
+       (below) so no field ever renders underneath it. */
+    padding: 10px 40px 10px 12px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 8px;
+    background: var(--tvc-cream);
   }
 
-  .guest-row {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+  .guest-row::before {
+    counter-increment: guest;
+    content: 'Guest ' counter(guest);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--tvc-ink-soft);
   }
 
   .guest-row-main {
     display: flex;
+    position: relative; /* anchors .guest-typeahead's dropdown below */
+  }
+
+  .guest-fields {
+    display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    align-items: flex-end;
-    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* Top-right corner of the guest card, matching the common "dismiss this
+     card" convention - used to sit inline next to Mobile, but now that each
+     guest is its own bordered card (see .guest-row above), the corner reads
+     as more intuitive (Sharath's feedback, 2026-09-10). .guest-row's extra
+     right padding reserves this space so it never overlaps a field. */
+  .remove-guest {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 4px 10px;
   }
 
   /* Each guest field is a label wrapping its input/select, with a small
@@ -785,7 +1056,12 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     flex: 1 1 90px;
   }
 
-  .mobile-number-warning {
+  .guest-field--email {
+    flex: 2 1 140px;
+  }
+
+  .mobile-number-warning,
+  .email-warning {
     margin: 0;
     font-size: 0.76rem;
     color: var(--tvc-orange-text);
@@ -870,6 +1146,49 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     cursor: pointer;
   }
 
+  /* Preferences/allergies is empty for most guests - an always-visible
+     input for it read as clutter (Sharath's feedback, 2026-09-10). Idle
+     state is a plain link-like button; a filled-in value becomes read-only
+     text with a small Edit affordance instead of a permanently open input. */
+  .preferences-add-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.78rem;
+    text-decoration: underline;
+    color: var(--tvc-ink-soft);
+    cursor: pointer;
+  }
+
+  .preferences-display {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 0.82rem;
+  }
+
+  .preferences-display .preferences-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    word-break: break-word;
+  }
+
+  .preferences-edit-btn {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.76rem;
+    text-decoration: underline;
+    color: var(--tvc-ink-soft);
+    cursor: pointer;
+  }
+
+  .preferences-input {
+    width: 100%;
+  }
+
   .guest-history-panel {
     margin: 2px 0 4px;
     padding: 6px 10px;
@@ -923,7 +1242,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   .add-guest {
-    align-self: flex-start;
+    align-self: center;
+    flex-shrink: 0;
     font-size: 0.78rem;
     padding: 3px 10px;
   }
@@ -1006,10 +1326,55 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   [hidden] {
     display: none !important;
   }
+
+  /* Touch targets for the Tents picker's runtime-built controls (design
+     critique, 2026-09-10, measured live at 390px): group-legend pills
+     (~24px tall), +Guest (67x21px), remove-guest (33x27px), the tent and
+     Family Booking checkboxes' label rows (as little as 116x16px) all
+     measured well under the ~44x44px minimum. Widens the actual hit area
+     via padding/min-height only below the same 640px threshold the modal
+     itself already treats as "mobile" - the deliberately compact desktop
+     sizing these were tuned to (see this file's earlier design-critique
+     fixes) is untouched above that width. Placed last in this stylesheet,
+     and matches the base rules' own specificity exactly (single class
+     selectors) - equal-specificity CSS resolves by source order, so this
+     has to come after every rule it's meant to override, not just be
+     wrapped in the right media query. */
+  @media (max-width: 639px) {
+    .tent-group-legend {
+      padding: 10px 14px;
+      min-height: 44px;
+    }
+
+    .add-guest {
+      padding: 10px 14px;
+      min-height: 44px;
+    }
+
+    .remove-guest {
+      min-width: 44px;
+      min-height: 44px;
+    }
+
+    .tent-check {
+      min-height: 44px;
+    }
+
+    /* Unlike .tent-check (already display:flex from its own base rule),
+       .tent-solo-check has no explicit display - a runtime-built <label>
+       defaults to inline, which min-height has no effect on at all (it
+       just happened to look fine side-by-side because inline boxes flow
+       horizontally too, hiding that the property was silently a no-op). */
+    .tent-solo-check {
+      display: flex;
+      align-items: center;
+      min-height: 44px;
+    }
+  }
 </style>
 
 <script>
-  import { normalizeMobileNumber } from '../../../scripts/lib/accommodation.mjs';
+  import { normalizeMobileNumber, isValidEmail } from '../../../scripts/lib/accommodation.mjs';
 
   declare const google: any;
 
@@ -1026,8 +1391,9 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   interface Unit {
     id: string;
     label: string;
+    shortLabel: string;
     capacity: number;
-    kind: 'fixed' | 'removable';
+    kind: 'fixed' | 'removable' | 'byot';
     group: string;
   }
 
@@ -1035,6 +1401,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     personId?: string;
     name?: string;
     mobileNumber?: string;
+    email?: string;
     ageGroup?: 'Adult' | 'Child';
     gender?: string;
     preferences?: string;
@@ -1044,6 +1411,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     id: string;
     name: string;
     mobileNumber?: string;
+    email?: string;
     gender?: string;
     preferences?: string;
   }
@@ -1122,6 +1490,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   const bookingList = document.getElementById('booking-list') as HTMLElement;
   const newBookingBtn = document.getElementById('new-booking-btn') as HTMLButtonElement;
   const bookingModal = document.getElementById('booking-modal') as HTMLElement;
+  const bookingModalPanel = document.getElementById('booking-modal-panel') as HTMLElement;
   const bookingModalBackdrop = document.getElementById('booking-modal-backdrop') as HTMLElement;
   const bookingModalClose = document.getElementById('booking-modal-close') as HTMLButtonElement;
   const form = document.getElementById('booking-form') as HTMLFormElement;
@@ -1216,6 +1585,43 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     statusEl.hidden = true;
   }
 
+  // The dialog asserted role="dialog" aria-modal="true" but didn't back
+  // that up with real focus handling (Sharath's feedback, 2026-09-10, filed
+  // as issue #154): focus stayed on <body> after opening, and Tab could
+  // still reach the page header's nav behind a modal claiming to be, well,
+  // modal. modalTriggerEl remembers whatever had focus before the modal
+  // opened (the grid cell, "+ New booking", etc.) so it can be restored on
+  // close - the standard "return focus to where you were" dialog contract.
+  let modalTriggerEl: HTMLElement | null = null;
+
+  // Elements a real user could tab to - deliberately narrow (no [tabindex]
+  // catch-all) since every focusable control in this form is one of these
+  // native element types; broadening it would risk snagging something like
+  // a decorative element that happens to carry a stray tabindex.
+  function getFocusableElements(container: HTMLElement): HTMLElement[] {
+    return Array.from(
+      container.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])'),
+    ).filter((el) => el.getClientRects().length > 0); // excludes anything hidden/display:none
+  }
+
+  // Keeps Tab/Shift+Tab cycling within the panel instead of escaping to
+  // background page content - wrap-around only at the two ends, everything
+  // in between is untouched native tab order.
+  function trapModalFocus(ev: KeyboardEvent) {
+    if (ev.key !== 'Tab' || bookingModal.hidden) return;
+    const focusable = getFocusableElements(bookingModalPanel);
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (ev.shiftKey && document.activeElement === first) {
+      ev.preventDefault();
+      last.focus();
+    } else if (!ev.shiftKey && document.activeElement === last) {
+      ev.preventDefault();
+      first.focus();
+    }
+  }
+
   // The booking form lives in a dialog the grid opens directly (tap a free
   // cell to book, tap an occupied one to edit) instead of a separate
   // section scrolled past below the list - see this page's design critique
@@ -1223,13 +1629,21 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   // the sheet covers most of the viewport and a background scroll under it
   // reads as broken.
   function openBookingModal() {
+    modalTriggerEl = document.activeElement as HTMLElement | null;
     bookingModal.hidden = false;
     document.body.style.overflow = 'hidden';
+    // The heading, not the first field - works identically whether the
+    // form is editable or a fully-disabled view-only booking (see
+    // setFormEditable), and announces "New/Edit/View booking" before a
+    // screen-reader user lands on any field.
+    formHeading.focus();
   }
 
   function closeBookingModal() {
     bookingModal.hidden = true;
     document.body.style.overflow = '';
+    modalTriggerEl?.focus();
+    modalTriggerEl = null;
   }
 
   // Layers role-based type restrictions on top of whatever
@@ -1344,6 +1758,23 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     }
   }
 
+  // "Guest 1"/"Guest 2" is otherwise CSS counter-content only (.guest-row
+  // ::before), invisible to a screen reader, and every "Remove guest"
+  // button was identically labeled regardless of which guest it belonged
+  // to (Sharath's feedback, 2026-09-10, filed as issue #156) - a screen
+  // reader user tabbing through 2-3 identical announcements had no way to
+  // tell which guest they were about to delete. Recomputed from current DOM
+  // order (not stored once at creation) so removing a guest correctly
+  // renumbers everyone after it, the same way the CSS counter already does
+  // visually - called after every add and every remove.
+  function renumberGuestAriaLabels(container: HTMLElement) {
+    Array.from(container.querySelectorAll<HTMLElement>('.guest-row')).forEach((row, i) => {
+      const n = i + 1;
+      row.setAttribute('aria-label', `Guest ${n}`);
+      row.querySelector('.remove-guest')?.setAttribute('aria-label', `Remove Guest ${n}`);
+    });
+  }
+
   function addGuestRow(container: HTMLElement, guest: Guest = {}, onRemove?: () => void) {
     const row = document.createElement('div');
     row.className = 'guest-row';
@@ -1358,40 +1789,94 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     row.dataset.personId = guest.personId ?? '';
     row.innerHTML = `
       <div class="guest-row-main">
-        <label class="guest-field guest-field--name">
-          <span class="guest-field-label">Name</span>
-          <input type="text" data-field="name" placeholder="Name" required autocomplete="off" value="${guest.name ?? ''}" />
-        </label>
-        <label class="guest-field guest-field--age">
-          <span class="guest-field-label">Age</span>
-          <select data-field="ageGroup">
-            ${AGE_GROUP_OPTIONS.map((a) => `<option value="${a}" ${ageGroup === a ? 'selected' : ''}>${a}</option>`).join('')}
-          </select>
-        </label>
-        <label class="guest-field guest-field--gender">
-          <span class="guest-field-label">Gender</span>
-          <select data-field="gender">
-            ${GENDER_OPTIONS.map((g) => `<option value="${g}" ${gender === g ? 'selected' : ''}>${GENDER_DISPLAY_LABELS[g]}</option>`).join('')}
-          </select>
-        </label>
-        <label class="guest-field guest-field--mobile">
-          <span class="guest-field-label">Mobile</span>
-          <input type="tel" data-field="mobileNumber" placeholder="Optional" value="${guest.mobileNumber ?? ''}" />
-        </label>
-        <button type="button" class="button button--danger remove-guest" aria-label="Remove guest">✕</button>
+        <div class="guest-fields">
+          <label class="guest-field guest-field--name">
+            <span class="guest-field-label">Name</span>
+            <input type="text" data-field="name" placeholder="Name" required autocomplete="off" value="${guest.name ?? ''}" />
+          </label>
+          <label class="guest-field guest-field--age">
+            <span class="guest-field-label">Age</span>
+            <select data-field="ageGroup">
+              ${AGE_GROUP_OPTIONS.map((a) => `<option value="${a}" ${ageGroup === a ? 'selected' : ''}>${a}</option>`).join('')}
+            </select>
+          </label>
+          <label class="guest-field guest-field--gender">
+            <span class="guest-field-label">Gender</span>
+            <select data-field="gender">
+              ${GENDER_OPTIONS.map((g) => `<option value="${g}" ${gender === g ? 'selected' : ''}>${GENDER_DISPLAY_LABELS[g]}</option>`).join('')}
+            </select>
+          </label>
+          <label class="guest-field guest-field--mobile">
+            <span class="guest-field-label">Mobile</span>
+            <input type="tel" data-field="mobileNumber" placeholder="Optional" value="${guest.mobileNumber ?? ''}" />
+          </label>
+          <label class="guest-field guest-field--email">
+            <span class="guest-field-label">Email</span>
+            <input type="email" data-field="email" placeholder="Optional" value="${guest.email ?? ''}" />
+          </label>
+        </div>
       </div>
       <p class="mobile-number-warning" hidden></p>
       <div class="mobile-number-conflict" hidden></div>
-      <label class="guest-field">
-        <span class="guest-field-label">Preferences / allergies</span>
-        <input type="text" data-field="preferences" placeholder="Optional" value="${guest.preferences ?? ''}" />
-      </label>
+      <p class="email-warning" hidden></p>
+      <div class="preferences-field">
+        <input type="text" data-field="preferences" class="preferences-input" placeholder="Preferences / allergies" value="${guest.preferences ?? ''}" hidden />
+        <button type="button" class="preferences-add-btn" hidden>+ Preferences / allergies</button>
+        <div class="preferences-display" hidden>
+          <span class="guest-field-label">Preferences / allergies</span>
+          <span class="preferences-text"></span>
+          <button type="button" class="preferences-edit-btn">Edit</button>
+        </div>
+      </div>
       <button type="button" class="guest-history-toggle" ${guest.personId ? '' : 'hidden'}>Past stays</button>
+      <button type="button" class="button button--danger remove-guest" aria-label="Remove guest">✕</button>
     `;
     row.querySelector('.remove-guest')!.addEventListener('click', () => {
       row.remove();
+      renumberGuestAriaLabels(container);
       onRemove?.();
     });
+
+    // ---- Preferences/allergies: hidden entirely when empty (idle "+ Add"
+    // link) instead of an always-visible input, and a plain-text + Edit
+    // affordance once a value exists, instead of a permanently-open input -
+    // both read as clutter for a field that's empty for most guests
+    // (Sharath's feedback, 2026-09-10). The underlying <input> stays in the
+    // DOM at all times either way, so collectTents()'s existing
+    // `[data-field="preferences"]` read is completely unaffected by which
+    // of the three states is currently showing.
+    const preferencesInput = row.querySelector('.preferences-input') as HTMLInputElement;
+    const preferencesAddBtn = row.querySelector('.preferences-add-btn') as HTMLButtonElement;
+    const preferencesDisplay = row.querySelector('.preferences-display') as HTMLElement;
+    const preferencesText = row.querySelector('.preferences-text') as HTMLElement;
+    const preferencesEditBtn = row.querySelector('.preferences-edit-btn') as HTMLButtonElement;
+
+    function renderPreferencesState() {
+      const value = preferencesInput.value.trim();
+      preferencesInput.hidden = true;
+      preferencesAddBtn.hidden = Boolean(value);
+      preferencesDisplay.hidden = !value;
+      if (value) preferencesText.textContent = value;
+    }
+
+    preferencesAddBtn.addEventListener('click', () => {
+      preferencesAddBtn.hidden = true;
+      preferencesInput.hidden = false;
+      preferencesInput.focus();
+    });
+    preferencesEditBtn.addEventListener('click', () => {
+      preferencesDisplay.hidden = true;
+      preferencesInput.hidden = false;
+      preferencesInput.focus();
+    });
+    preferencesInput.addEventListener('blur', renderPreferencesState);
+    preferencesInput.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        preferencesInput.blur();
+      }
+    });
+    renderPreferencesState();
 
     // ---- Typeahead: search by name, pick a match to reuse that guest's
     // record (fills mobile number/gender/preferences, links personId)
@@ -1401,10 +1886,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     // comment on why mobile number alone isn't a safe auto-match key).
     const nameInput = row.querySelector('[data-field="name"]') as HTMLInputElement;
     const mobileInput = row.querySelector('[data-field="mobileNumber"]') as HTMLInputElement;
+    const emailInput = row.querySelector('[data-field="email"]') as HTMLInputElement;
     const mobileWarning = row.querySelector('.mobile-number-warning') as HTMLElement;
     const mobileConflict = row.querySelector('.mobile-number-conflict') as HTMLElement;
+    const emailWarning = row.querySelector('.email-warning') as HTMLElement;
     const genderSelect = row.querySelector('[data-field="gender"]') as HTMLSelectElement;
-    const preferencesInput = row.querySelector('[data-field="preferences"]') as HTMLInputElement;
     const historyToggle = row.querySelector('.guest-history-toggle') as HTMLButtonElement;
     const guestMain = row.querySelector('.guest-row-main') as HTMLElement;
     let dropdown: HTMLElement | null = null;
@@ -1418,8 +1904,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       row.dataset.personId = match.id;
       nameInput.value = match.name;
       mobileInput.value = match.mobileNumber ?? '';
+      emailInput.value = match.email ?? '';
       genderSelect.value = match.gender ?? 'NA';
       preferencesInput.value = match.preferences ?? '';
+      renderPreferencesState();
       historyToggle.hidden = false;
       closeDropdown();
     }
@@ -1454,7 +1942,9 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       mobileConflict.querySelector('[data-action="same"]')!.addEventListener('click', () => {
         row.dataset.personId = different.id;
         genderSelect.value = different.gender ?? genderSelect.value;
+        if (!emailInput.value.trim()) emailInput.value = different.email ?? '';
         if (!preferencesInput.value.trim()) preferencesInput.value = different.preferences ?? '';
+        renderPreferencesState();
         historyToggle.hidden = false;
         mobileConflict.hidden = true;
       });
@@ -1474,6 +1964,16 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       mobileWarning.hidden = !invalid;
       mobileWarning.textContent = invalid ? '⚠ Doesn’t look like a valid mobile number (10 digits for India, or include a country code).' : '';
       if (!invalid) checkMobileConflict();
+    });
+
+    // Same shape check the server enforces (isValidEmail, the one shared
+    // implementation) - instant feedback only, the server/DB CHECK
+    // constraint (migration 0015) is the actual gate.
+    emailInput.addEventListener('blur', () => {
+      const raw = emailInput.value.trim();
+      const invalid = raw !== '' && !isValidEmail(raw);
+      emailWarning.hidden = !invalid;
+      emailWarning.textContent = invalid ? '⚠ Doesn’t look like a valid email address.' : '';
     });
 
     nameInput.addEventListener('input', () => {
@@ -1531,68 +2031,305 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     });
 
     container.appendChild(row);
+    renumberGuestAriaLabels(container);
   }
 
-  // A tent's capacity is a hard cap on guests, not just a display hint - the
-  // add-guest button disables itself at capacity, and removing a guest
-  // re-enables it, so Madhavan can't silently overbook a 3-person tent past
-  // 3 the way a plain "add another row" button would allow. The server
-  // (accommodation-admin.mts) enforces the same limit independently, since
-  // this client-side guard is just UX, not the source of truth.
-  function updateAddGuestButtonState(guestsEl: HTMLElement, addGuestBtn: HTMLButtonElement, capacity: number) {
-    const atCapacity = guestsEl.children.length >= capacity;
-    addGuestBtn.disabled = atCapacity;
-    addGuestBtn.textContent = atCapacity ? `Full (${capacity})` : '+ Guest';
+  // Which tent (if any) currently shows its full guest cards - every other
+  // guest-mode tent that has guests collapses to a one-line summary instead
+  // (Sharath's feedback, 2026-09-10: filling one tent while several others
+  // sit fully expanded was the core of "too cluttered"). Closure-mode tents
+  // (wantsGuestFields() false) ignore this entirely - they're a plain
+  // checkbox list, nothing to expand.
+  let activeTentId: string | null = null;
+
+  // Explicit user toggles of a group's collapse state, keyed by group name -
+  // absent means "use the default" (see isGroupExpanded). Cleared per fresh
+  // form session (resetForm/loadIntoForm), not persisted beyond that.
+  const groupOverride = new Map<string, boolean>();
+
+  function countGuests(option: HTMLElement): number {
+    return option.querySelectorAll('.guest-row').length;
+  }
+
+  // "Amit, Guest 2" - falls back to "Guest N" for a still-blank name so the
+  // collapsed summary is never just an empty string.
+  function guestSummaryText(option: HTMLElement): string {
+    return Array.from(option.querySelectorAll<HTMLElement>('.guest-row'))
+      .map((row, i) => (row.querySelector('[data-field="name"]') as HTMLInputElement).value.trim() || `Guest ${i + 1}`)
+      .join(', ');
+  }
+
+  // Renders one tent-option's presentation for the current type + guest
+  // count + activeTentId. The checkbox itself stays the one source of truth
+  // collectTents()/markOccupiedTents() read (unchanged) - this only decides
+  // what's visible: the real checkbox in closure mode, or a hidden checkbox
+  // driven by "+Guest"/guest-count in guest mode (see activateGuestTent/
+  // onGuestRemoved below, the only two places that ever check/uncheck it in
+  // guest mode).
+  // The "Family Booking" checkbox (Sharath, 2026-09-10) caps a
+  // tent at 1 guest instead of its real physical capacity - purely a form
+  // convenience for the common solo-occupancy case, nothing persisted (a
+  // booking that ends up with exactly 1 guest already fully captures the
+  // outcome on its own). Only selectable while the tent has 0 or 1 guests
+  // already (see renderTentState's soloCheckbox.disabled) - a 2nd guest
+  // already means "not one person," so the box can't be turned on to
+  // contradict data that's already there.
+  function effectiveCapacity(option: HTMLElement, unit: Unit): number {
+    const solo = option.querySelector('.tent-solo-checkbox') as HTMLInputElement | null;
+    return solo?.checked ? 1 : unit.capacity;
+  }
+
+  // "●●○" reads as a filled-vs-empty meter at a glance without an icon
+  // library (Sharath's feedback, 2026-09-10: "can capacity be a visual
+  // indicator," then "remove the numbers next to it" once dots alone were
+  // shown) - every unit here tops out at 3, well within the ~4 items a
+  // glance can subitize without counting, so the dots alone stay exactly as
+  // precise as the digits they replaced, not a fuzzy approximation of them.
+  // aria-label on the element using this (see renderTentState) carries the
+  // literal count for anyone not reading the glyphs visually.
+  function capacityDots(count: number, cap: number): string {
+    return '●'.repeat(Math.min(count, cap)) + '○'.repeat(Math.max(cap - count, 0));
+  }
+
+  function renderTentState(option: HTMLElement, unit: Unit) {
+    const checkbox = option.querySelector('.tent-checkbox') as HTMLInputElement;
+    const nameText = option.querySelector('.tent-name-text') as HTMLElement;
+    const occupancyText = option.querySelector('.tent-occupancy') as HTMLElement;
+    const addGuestBtn = option.querySelector('.add-guest') as HTMLButtonElement;
+    const soloWrap = option.querySelector('.tent-solo-check') as HTMLElement;
+    const soloCheckbox = option.querySelector('.tent-solo-checkbox') as HTMLInputElement;
+    const summaryBtn = option.querySelector('.tent-summary') as HTMLButtonElement;
+    const guestsEl = option.querySelector('.guests') as HTMLElement;
+
+    nameText.textContent = unit.shortLabel;
+
+    if (!wantsGuestFields()) {
+      checkbox.hidden = false;
+      occupancyText.textContent = `(${unit.capacity})`;
+      occupancyText.classList.remove('tent-occupancy--dots');
+      occupancyText.removeAttribute('aria-label');
+      addGuestBtn.hidden = true;
+      soloWrap.hidden = true;
+      summaryBtn.hidden = true;
+      guestsEl.hidden = true;
+      return;
+    }
+
+    const guestCount = countGuests(option);
+    const cap = effectiveCapacity(option, unit);
+    checkbox.hidden = true;
+    occupancyText.textContent = capacityDots(guestCount, cap);
+    occupancyText.classList.add('tent-occupancy--dots');
+    occupancyText.setAttribute('aria-label', `${guestCount} of ${cap} occupied`);
+    addGuestBtn.hidden = false;
+    const atCapacity = guestCount >= cap;
+    addGuestBtn.disabled = checkbox.disabled || atCapacity;
+    addGuestBtn.textContent = atCapacity ? `Full (${cap})` : '+ Guest';
+
+    // Doesn't apply to a BYOT slot (Sharath, 2026-09-10) - "whole tent for
+    // one person/family" is a distinction about one of the farm's own
+    // rooms; a guest's own tent has no such ambiguity to resolve.
+    soloWrap.hidden = unit.kind === 'byot';
+    soloCheckbox.disabled = guestCount >= 2;
+
+    if (guestCount === 0) {
+      summaryBtn.hidden = true;
+      guestsEl.hidden = true;
+    } else if (activeTentId === unit.id) {
+      summaryBtn.hidden = true;
+      guestsEl.hidden = false;
+    } else {
+      summaryBtn.hidden = false;
+      summaryBtn.textContent = `${guestSummaryText(option)} — tap to edit`;
+      guestsEl.hidden = true;
+    }
+  }
+
+  function renderAllTentStates() {
+    for (const option of Array.from(tentsContainer.querySelectorAll<HTMLElement>('.tent-option'))) {
+      const unit = UNITS.find((u) => u.id === option.dataset.tentId)!;
+      renderTentState(option, unit);
+    }
+    renderGroupStates();
+  }
+
+  // True the moment any unit in this group is part of the booking -
+  // checkbox.checked is the one flag that already means that uniformly in
+  // both guest mode (set via activateGuestTent) and closure mode (the real,
+  // user-clicked checkbox), so no mode-specific branching is needed here.
+  function groupHasSelection(groupName: string): boolean {
+    return Array.from(tentsContainer.querySelectorAll<HTMLElement>('.tent-option')).some((option) => {
+      const unit = UNITS.find((u) => u.id === option.dataset.tentId)!;
+      if (unit.group !== groupName) return false;
+      return (option.querySelector('.tent-checkbox') as HTMLInputElement).checked;
+    });
+  }
+
+  // A manual toggle wins; absent one, a group defaults open only while it
+  // actually has something in it - collapsing every empty group is the
+  // point (Sharath's feedback, 2026-09-10: 5 groups' worth of tent rows
+  // made the list long), while a group mid-booking never silently hides
+  // what's already been entered into it.
+  function isGroupExpanded(groupName: string): boolean {
+    return groupOverride.has(groupName) ? groupOverride.get(groupName)! : groupHasSelection(groupName);
+  }
+
+  function toggleGroup(groupName: string) {
+    groupOverride.set(groupName, !isGroupExpanded(groupName));
+    renderGroupStates();
+  }
+
+  function renderGroupStates() {
+    for (const fieldset of Array.from(tentsContainer.querySelectorAll<HTMLElement>('.tent-group-fieldset'))) {
+      const groupName = fieldset.dataset.group!;
+      const expanded = isGroupExpanded(groupName);
+      fieldset.classList.toggle('tent-group-fieldset--expanded', expanded);
+      fieldset.querySelector('.tent-group-legend')!.setAttribute('aria-expanded', String(expanded));
+    }
+  }
+
+  function setActiveTent(tentId: string | null) {
+    activeTentId = tentId;
+    renderAllTentStates();
+  }
+
+  // The sole "+Guest" entry point for a guest-mode tent (button click or a
+  // free-cell grid tap via startNewBookingAt) - checks the underlying
+  // checkbox, seeds the first guest row if needed, and makes this the one
+  // expanded tent.
+  function activateGuestTent(option: HTMLElement, unit: Unit) {
+    const checkbox = option.querySelector('.tent-checkbox') as HTMLInputElement;
+    const guestsEl = option.querySelector('.guests') as HTMLElement;
+    if (countGuests(option) >= effectiveCapacity(option, unit)) {
+      setActiveTent(unit.id);
+      return;
+    }
+    checkbox.checked = true;
+    addGuestRow(guestsEl, {}, () => onGuestRemoved(option, unit));
+    setActiveTent(unit.id);
+  }
+
+  // A tent with zero guests left isn't part of the booking anymore - uncheck
+  // it (collectTents() excludes it) and fall back out of "active" so it
+  // reads as idle again instead of an expanded-but-empty card.
+  function onGuestRemoved(option: HTMLElement, unit: Unit) {
+    const checkbox = option.querySelector('.tent-checkbox') as HTMLInputElement;
+    if (countGuests(option) === 0) {
+      checkbox.checked = false;
+      if (activeTentId === unit.id) activeTentId = null;
+    }
+    renderAllTentStates();
   }
 
   function buildTentsFieldset() {
     tentsContainer.innerHTML = '';
     let lastGroup: string | null = null;
+    let currentGroupBody: HTMLElement | null = null;
     for (const unit of UNITS) {
-      // Purely a visual cluster (Malabar Hut/Banyan Hut/Bamboo Huts/Portable
-      // Tents) - UNITS is already in a fixed, group-contiguous order (see
-      // accommodation.mjs), so a heading only needs inserting when the
-      // group actually changes, not a full group-by pass.
+      // Each group is its own real <fieldset>/<legend> - UNITS is already
+      // in a fixed, group-contiguous order (see accommodation.mjs), so a
+      // new fieldset only needs starting when the group actually changes,
+      // not a full group-by pass. The legend doubles as a collapse/expand
+      // toggle (Sharath's feedback, 2026-09-10: the list got long once
+      // there were 5 groups) - a plain <legend> isn't natively interactive,
+      // so it gets the same tabindex/role="button"/keydown pattern the
+      // grid's own non-button cells already use elsewhere on this page.
       if (unit.group !== lastGroup) {
-        const heading = document.createElement('p');
-        heading.className = 'tent-group-heading';
-        heading.textContent = unit.group;
-        tentsContainer.appendChild(heading);
+        const fieldset = document.createElement('fieldset');
+        fieldset.className = 'tent-group-fieldset';
+        fieldset.dataset.group = unit.group;
+        const legend = document.createElement('legend');
+        legend.className = 'tent-group-legend';
+        legend.tabIndex = 0;
+        legend.setAttribute('role', 'button');
+        const name = document.createElement('span');
+        name.className = 'tent-group-name';
+        name.textContent = unit.group;
+        const chevron = document.createElement('span');
+        chevron.className = 'tent-group-chevron';
+        chevron.setAttribute('aria-hidden', 'true');
+        chevron.textContent = '›';
+        legend.append(name, chevron);
+        legend.addEventListener('click', () => toggleGroup(unit.group));
+        legend.addEventListener('keydown', (ev) => {
+          if (ev.key !== 'Enter' && ev.key !== ' ') return;
+          ev.preventDefault();
+          toggleGroup(unit.group);
+        });
+        fieldset.appendChild(legend);
+        // The animated element: CSS grid-template-rows 0fr<->1fr (see this
+        // class's own CSS comment) needs exactly one child to measure
+        // against, so the actual tent-options live one level deeper still
+        // (.tent-group-body, with overflow:hidden to clip mid-transition).
+        const bodyWrap = document.createElement('div');
+        bodyWrap.className = 'tent-group-body-wrap';
+        const body = document.createElement('div');
+        body.className = 'tent-group-body';
+        bodyWrap.appendChild(body);
+        fieldset.appendChild(bodyWrap);
+        tentsContainer.appendChild(fieldset);
+        currentGroupBody = body;
         lastGroup = unit.group;
       }
       const option = document.createElement('div');
       option.className = 'tent-option';
       option.dataset.tentId = unit.id;
       option.innerHTML = `
-        <label class="tent-check">
-          <input type="checkbox" class="tent-checkbox" />
-          ${unit.label} (${unit.capacity})
+        <div class="tent-check-row">
+          <label class="tent-check">
+            <input type="checkbox" class="tent-checkbox" />
+            <span class="tent-name-text"></span>
+          </label>
+          <span class="tent-occupancy"></span>
+          <button type="button" class="button add-guest" hidden>+ Guest</button>
+        </div>
+        <label class="tent-solo-check checkbox-label" hidden>
+          <input type="checkbox" class="tent-solo-checkbox" />
+          Family Booking — treats this tent as one booking, not per-person
         </label>
+        <button type="button" class="tent-summary" hidden></button>
         <p class="tent-conflict-warning" hidden></p>
         <div class="guests" hidden></div>
-        <button type="button" class="button add-guest" hidden>+ Guest</button>
       `;
       const checkbox = option.querySelector('.tent-checkbox') as HTMLInputElement;
-      const guestsEl = option.querySelector('.guests') as HTMLElement;
+      const checkLabel = option.querySelector('.tent-check') as HTMLLabelElement;
       const addGuestBtn = option.querySelector('.add-guest') as HTMLButtonElement;
+      const soloWrap = option.querySelector('.tent-solo-check') as HTMLElement;
+      const soloCheckbox = option.querySelector('.tent-solo-checkbox') as HTMLInputElement;
+      const summaryBtn = option.querySelector('.tent-summary') as HTMLButtonElement;
+      const guestsEl = option.querySelector('.guests') as HTMLElement;
 
+      // The checkbox is only visually hidden in guest mode, not removed -
+      // a <label> still forwards a click anywhere on its text to the
+      // control it wraps by default, which would silently flip the hidden
+      // checkbox to checked with zero guests attached (a phantom "included"
+      // tent collectTents() would submit) without ever going through
+      // activateGuestTent. Block only that default in guest mode; closure
+      // mode leaves it alone since toggling the checkbox by clicking its
+      // label text is exactly the real, visible control there.
+      checkLabel.addEventListener('click', (ev) => {
+        if (wantsGuestFields()) ev.preventDefault();
+      });
+
+      // Only ever fires for closure mode (real, user-clicked checkbox) or a
+      // programmatic uncheck in guest mode (farmClosureInput's "clear every
+      // checked tent" cleanup below) - guest mode's own check-on path goes
+      // through activateGuestTent, never through this listener.
       checkbox.addEventListener('change', () => {
-        const wantsGuests = wantsGuestFields();
-        guestsEl.hidden = !checkbox.checked || !wantsGuests;
-        addGuestBtn.hidden = !checkbox.checked || !wantsGuests;
-        if (checkbox.checked && wantsGuests && guestsEl.children.length === 0) {
-          addGuestRow(guestsEl, {}, () => updateAddGuestButtonState(guestsEl, addGuestBtn, unit.capacity));
-          updateAddGuestButtonState(guestsEl, addGuestBtn, unit.capacity);
+        if (!checkbox.checked) {
+          guestsEl.innerHTML = '';
+          if (activeTentId === unit.id) activeTentId = null;
         }
+        renderTentState(option, unit);
       });
-      addGuestBtn.addEventListener('click', () => {
-        if (guestsEl.children.length >= unit.capacity) return;
-        addGuestRow(guestsEl, {}, () => updateAddGuestButtonState(guestsEl, addGuestBtn, unit.capacity));
-        updateAddGuestButtonState(guestsEl, addGuestBtn, unit.capacity);
-      });
+      addGuestBtn.addEventListener('click', () => activateGuestTent(option, unit));
+      soloCheckbox.addEventListener('change', () => renderTentState(option, unit));
+      summaryBtn.addEventListener('click', () => setActiveTent(unit.id));
 
-      tentsContainer.appendChild(option);
+      currentGroupBody!.appendChild(option);
+      renderTentState(option, unit);
     }
+    renderGroupStates();
   }
 
   function wantsGuestFields(): boolean {
@@ -1621,6 +2358,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         const gender = (row.querySelector('[data-field="gender"]') as HTMLSelectElement).value.trim();
         const mobileNumber = (row.querySelector('[data-field="mobileNumber"]') as HTMLInputElement).value.trim();
         const preferences = (row.querySelector('[data-field="preferences"]') as HTMLInputElement).value.trim();
+        const email = (row.querySelector('[data-field="email"]') as HTMLInputElement).value.trim();
         if (!name && !ageGroup && !gender) continue;
         guests.push({
           personId: row.dataset.personId || undefined,
@@ -1629,6 +2367,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
           gender: gender || undefined,
           mobileNumber: mobileNumber || undefined,
           preferences: preferences || undefined,
+          email: email || undefined,
         });
       }
       out.push({ tentId: option.dataset.tentId!, guests });
@@ -1642,20 +2381,26 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       const unit = UNITS.find((u) => u.id === tentId)!;
       const checkbox = option.querySelector('.tent-checkbox') as HTMLInputElement;
       const guestsEl = option.querySelector('.guests') as HTMLElement;
-      const addGuestBtn = option.querySelector('.add-guest') as HTMLButtonElement;
+      const soloCheckbox = option.querySelector('.tent-solo-checkbox') as HTMLInputElement;
       const assignment = tents.find((t) => t.tentId === tentId);
       checkbox.checked = Boolean(assignment);
       guestsEl.innerHTML = '';
-      const showGuests = Boolean(assignment) && wantsGuestFields();
-      guestsEl.hidden = !showGuests;
-      addGuestBtn.hidden = !showGuests;
-      const onRemove = () => updateAddGuestButtonState(guestsEl, addGuestBtn, unit.capacity);
+      // Never persisted (see effectiveCapacity's own comment) - always
+      // starts unchecked, whether this is a fresh reset or loading an
+      // existing booking, rather than guessing intent from guest count.
+      soloCheckbox.checked = false;
       if (assignment && wantsGuestFields()) {
+        const onRemove = () => onGuestRemoved(option, unit);
         if (assignment.guests.length === 0) addGuestRow(guestsEl, {}, onRemove);
         else for (const g of assignment.guests) addGuestRow(guestsEl, g, onRemove);
-        updateAddGuestButtonState(guestsEl, addGuestBtn, unit.capacity);
       }
     }
+    // Expand the first assigned tent, collapse the rest - editing a
+    // multi-tent booking used to dump every tent's full guest cards open at
+    // once; this is the same "one tent open at a time" default a fresh
+    // booking gets via activateGuestTent.
+    activeTentId = tents[0]?.tentId ?? null;
+    renderAllTentStates();
   }
 
   // Reflects what's already booked for the form's currently-selected dates
@@ -1693,6 +2438,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       warning.hidden = !conflictWhileChecked;
       if (conflictWhileChecked) warning.textContent = `⚠ Already booked by ${conflictName} on these dates - uncheck or pick different dates.`;
     }
+    // Picks up checkbox.disabled just set above into addGuestBtn.disabled
+    // (guest mode's own visible control) - closure mode's real checkbox
+    // already reflects it directly, this only matters for guest mode.
+    renderAllTentStates();
   }
 
   // Jumps the calendar view to match the form's selected start date (at
@@ -1781,15 +2530,30 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     // Fixed by the linked event, not chosen here - see syncDatesFromEvent.
     startInput.disabled = type === 'public-event';
     nightsInput.disabled = type === 'public-event';
-    // Re-apply guest-field visibility on every tent option for the new type.
+    // A tent's checked state can carry real meaning across a type switch
+    // (e.g. "close this tent" stays checked if you switch to a guest type,
+    // or vice versa), but leftover *content* from the other mode doesn't:
+    // guest rows attached to a tent now being closed would otherwise
+    // silently ride along into a closure booking with no guest concept at
+    // all, and a checked-but-empty tent coming out of closure mode isn't
+    // meaningfully "included" in a guest booking (collectTents() reads
+    // checkbox.checked regardless of visibility, so either case would
+    // otherwise submit a phantom tent assignment).
     for (const option of Array.from(tentsContainer.querySelectorAll<HTMLElement>('.tent-option'))) {
       const checkbox = option.querySelector('.tent-checkbox') as HTMLInputElement;
       const guestsEl = option.querySelector('.guests') as HTMLElement;
-      const addGuestBtn = option.querySelector('.add-guest') as HTMLButtonElement;
-      const show = checkbox.checked && wantsGuestFields();
-      guestsEl.hidden = !show;
-      addGuestBtn.hidden = !show;
+      const soloCheckbox = option.querySelector('.tent-solo-checkbox') as HTMLInputElement;
+      if (!wantsGuestFields()) {
+        guestsEl.innerHTML = '';
+        soloCheckbox.checked = false;
+      } else if (checkbox.checked && countGuests(option) === 0) {
+        checkbox.checked = false;
+      }
     }
+    // Re-render every tent option for the new type - switches each between
+    // closure mode (real checkbox) and guest mode (+Guest/occupancy/
+    // accordion), see renderTentState.
+    renderAllTentStates();
   }
 
   typeSelect.addEventListener('change', () => {
@@ -1967,7 +2731,23 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     }
 
     let html = '';
+    let lastGroup: string | null = null;
     for (const unit of UNITS) {
+      // Same grouping as the booking form's Tents picker (Malabar Hut/Banyan
+      // Hut/Bamboo Huts/Portable Tents), extended to the calendar's own
+      // views (Sharath's feedback, 2026-09-10) - UNITS is already in a
+      // fixed, group-contiguous order (see accommodation.mjs), so a heading
+      // only needs inserting when the group actually changes. The per-row
+      // name switches to shortLabel for the same reason the picker's did:
+      // the heading directly above already says "Malabar Hut," repeating it
+      // on every row underneath it would just reproduce the redundancy that
+      // change fixed there. aria-label keeps the full standalone `label`
+      // (below) since a screen reader announcing one row in isolation has
+      // no visual heading to inherit context from.
+      if (unit.group !== lastGroup) {
+        html += `<div class="day-group-heading">${escapeAttr(unit.group)}</div>`;
+        lastGroup = unit.group;
+      }
       const occupying = currentBookings.find((b) => b.type !== 'farm-closure' && b.tents.some((t) => t.tentId === unit.id) && nightsByBookingId.get(b.id)!.has(date));
       if (occupying) {
         const title = occupying.label ?? occupying.eventTitle ?? typeDisplayLabel(occupying.type);
@@ -1980,7 +2760,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         const ariaLabel = cellTooltip(occupying, unit.id).replace(/\n/g, ' — ');
         html += `
           <div class="day-row day-row--occupied" data-booking-id="${occupying.id}" tabindex="0" role="button" aria-label="${escapeAttr(ariaLabel)}">
-            <div class="day-row-tent">${unit.label}</div>
+            <div class="day-row-tent">${unit.shortLabel}</div>
             <div class="day-row-main">
               <span class="day-row-title">${escapeAttr(title)}</span>
               <span class="day-row-guests">${escapeAttr(guestNames)}</span>
@@ -1989,14 +2769,14 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       } else if (date < today) {
         html += `
           <div class="day-row day-row--free-past">
-            <div class="day-row-tent">${unit.label}</div>
+            <div class="day-row-tent">${unit.shortLabel}</div>
             <div class="day-row-main"><span class="day-row-title">—</span></div>
           </div>`;
       } else {
         const ariaLabel = `${unit.label}, ${formatDateLabel(date, { day: 'numeric', month: 'long' })} — free, tap to book`;
         html += `
           <div class="day-row day-row--free" data-tent-id="${unit.id}" data-date="${date}" tabindex="0" role="button" aria-label="${escapeAttr(ariaLabel)}">
-            <div class="day-row-tent">${unit.label}</div>
+            <div class="day-row-tent">${unit.shortLabel}</div>
             <div class="day-row-main"><span class="day-row-title">Free — tap to book</span></div>
           </div>`;
       }
@@ -2027,8 +2807,20 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     let headHtml =
       '<tr><th class="unit-col">Tent</th>' + dates.map((d) => `<th class="${headerColClass(d)}">${headerLabel(d)}</th>`).join('') + '</tr>';
     let bodyHtml = '';
+    let lastGroup: string | null = null;
     for (const unit of UNITS) {
-      bodyHtml += `<tr><td class="unit-col">${unit.label}</td>`;
+      // Same grouping/shortLabel reasoning as renderDayView() above - a
+      // full-width row (the table equivalent of a heading, since a table
+      // row can't sit "above" a set of other rows any other way) spanning
+      // every date column. The label cell reuses .unit-col so it stays
+      // pinned (position: sticky) during month view's horizontal scroll,
+      // same as the real unit-name column below it - a single colspan cell
+      // would scroll the label itself out of view along with the dates.
+      if (unit.group !== lastGroup) {
+        bodyHtml += `<tr class="group-row"><td class="unit-col group-row-label">${escapeAttr(unit.group)}</td>${'<td class="group-row-fill"></td>'.repeat(dates.length)}</tr>`;
+        lastGroup = unit.group;
+      }
+      bodyHtml += `<tr><td class="unit-col">${unit.shortLabel}</td>`;
       for (const date of dates) {
         const weekendClass = isWeekend(date) ? ' col--weekend' : '';
         const farmClosure = currentBookings.find((b) => b.type === 'farm-closure' && nightsByBookingId.get(b.id)!.has(date));
@@ -2121,10 +2913,14 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     syncStartDateEmptyState();
     handleDateOrNightsChange();
     const option = tentsContainer.querySelector<HTMLElement>(`.tent-option[data-tent-id="${tentId}"]`);
+    const unit = UNITS.find((u) => u.id === tentId);
     const checkbox = option?.querySelector<HTMLInputElement>('.tent-checkbox');
-    if (checkbox && !checkbox.disabled) {
-      checkbox.checked = true;
-      checkbox.dispatchEvent(new Event('change'));
+    if (option && unit && checkbox && !checkbox.disabled) {
+      if (wantsGuestFields()) activateGuestTent(option, unit);
+      else {
+        checkbox.checked = true;
+        checkbox.dispatchEvent(new Event('change'));
+      }
     }
     openBookingModal();
   }
@@ -2225,8 +3021,53 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     publicEventTypeOption.disabled = !hasUpcomingEvents;
   }
 
+  // A cheap dirty-check for the discard-confirmation guard below: every
+  // field that matters, serialized to one string, compared against a
+  // baseline snapshot taken right after the form was last put into a known
+  // state (end of resetForm for a new booking, end of loadIntoForm for an
+  // edit - see both). Reuses collectTents() rather than re-deriving guest
+  // data separately, so this can never disagree with what Save would
+  // actually submit.
+  let formBaseline = '';
+
+  function formSnapshot(): string {
+    return JSON.stringify({
+      type: typeSelect.value,
+      label: labelInput.value,
+      member: memberSelect.value,
+      exclusive: exclusiveInput.checked,
+      farmClosure: farmClosureInput.checked,
+      eventSlug: eventSelect.value,
+      start: startInput.value,
+      nights: nightsInput.value,
+      note: noteInput.value,
+      reason: reasonInput.value,
+      tents: collectTents(),
+    });
+  }
+
+  function isFormDirty(): boolean {
+    return formSnapshot() !== formBaseline;
+  }
+
+  // Backdrop click, the X button, and Escape all used to discard a
+  // partially-filled booking with zero warning (Sharath's feedback,
+  // 2026-09-10, filed as issue #152) - a native confirm() matches this
+  // page's own existing precedent for a plain yes/no gate (see
+  // cancelBooking's non-past-booking path), rather than introducing a new
+  // custom-overlay component for a case that doesn't need a text input the
+  // way the reason-for-a-past-edit prompt does. Only asks when there's
+  // actually something to lose - an untouched or already-viewed-unchanged
+  // form closes immediately, same as before this fix.
+  function attemptCloseModal() {
+    if (isFormDirty() && !confirm('Discard changes to this booking?')) return;
+    resetForm();
+    closeBookingModal();
+  }
+
   function loadIntoForm(b: Booking) {
     editingId = b.id;
+    groupOverride.clear(); // fresh session - groups default open/closed by selection, not a stale manual toggle
     const canEdit = canWriteType(b.type);
     formHeading.textContent = canEdit ? 'Edit booking' : 'View booking';
     cancelEditBtn.hidden = false;
@@ -2286,11 +3127,13 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     markOccupiedTents();
     refreshTypeOptions();
     setFormEditable(canEdit); // must run last - overrides markOccupiedTents' own enable/disable calls
+    formBaseline = formSnapshot(); // after every field above is populated - "dirty" means changed since this load, not "non-empty"
     openBookingModal();
   }
 
   function resetForm() {
     editingId = null;
+    groupOverride.clear(); // fresh session - see loadIntoForm's same reset
     formHeading.textContent = 'New booking';
     cancelEditBtn.hidden = true;
     cancelEditBtn.textContent = 'Cancel edit';
@@ -2323,6 +3166,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     setTents([]);
     markOccupiedTents();
     formError.hidden = true;
+    formBaseline = formSnapshot(); // after every field above is reset - see loadIntoForm's matching line
   }
 
   cancelEditBtn.addEventListener('click', () => {
@@ -2335,21 +3179,16 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     openBookingModal();
   });
 
-  bookingModalBackdrop.addEventListener('click', () => {
-    resetForm();
-    closeBookingModal();
-  });
+  bookingModalBackdrop.addEventListener('click', attemptCloseModal);
 
-  bookingModalClose.addEventListener('click', () => {
-    resetForm();
-    closeBookingModal();
-  });
+  bookingModalClose.addEventListener('click', attemptCloseModal);
 
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape' && !bookingModal.hidden) {
-      resetForm();
-      closeBookingModal();
+      attemptCloseModal();
+      return;
     }
+    trapModalFocus(ev);
   });
 
   form.addEventListener('submit', async (ev) => {
