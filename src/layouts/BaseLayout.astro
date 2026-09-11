@@ -89,13 +89,28 @@ const siteGraph = {
       logo: new URL('/images/brand/tvc-logo-mark.png', Astro.site).toString(),
       description: t('jsonLd.orgDescription', { acres: FARM_AREA_ACRES, families: MEMBER_FAMILY_COUNT }),
       telephone: '+91 74063 07309',
-      address: {
-        '@type': 'PostalAddress',
-        streetAddress: 'Thaggatti village',
-        addressLocality: 'Kanakapura',
-        addressRegion: 'Karnataka/Tamil Nadu border',
-        addressCountry: 'IN',
-      },
+      // Two addresses: the farm itself (where visitors go) and the
+      // registered legal entity's office (quoted verbatim from
+      // LEGAL_ENTITY_ADDRESS) - kept distinct so crawlers checking a
+      // business listing against either one can find a match.
+      address: [
+        {
+          '@type': 'PostalAddress',
+          streetAddress: 'Thaggatti village',
+          addressLocality: 'Kanakapura',
+          addressRegion: 'Karnataka/Tamil Nadu border',
+          addressCountry: 'IN',
+        },
+        {
+          '@type': 'PostalAddress',
+          name: 'Registered office',
+          streetAddress: 'Plot No. 227-228, AMR Brick Field Shelters, Bendiganahalli, Mayasandra',
+          addressLocality: 'Bangalore',
+          addressRegion: 'Karnataka',
+          postalCode: '562107',
+          addressCountry: 'IN',
+        },
+      ],
       // Same coordinates the weather widget uses (src/utils/weather.ts,
       // matching the farm's Google Business Profile pin exactly) - one
       // source of truth for the farm's location.
