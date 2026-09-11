@@ -4,6 +4,7 @@ import PageHero from '../PageHero.astro';
 import { useTranslations, type Locale } from '../../i18n/utils';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import { organizationId } from '../../utils/schema';
+import { LEGAL_ENTITY_NAME, LEGAL_ENTITY_ADDRESS } from '../../data/site-facts';
 
 interface Props {
   lang: Locale;
@@ -33,7 +34,9 @@ const content = {
     phoneHeading: 'Phone',
     phoneGeneral: 'Madhavan — general enquiries:',
     phoneVisit: 'Visit bookings:',
+    phoneOther: 'Other:',
     addressHeading: 'Address',
+    addressRegisteredHeading: 'Registered office',
     socialHeading: 'Social',
     locationHeading: 'Location',
     mapCaption: `Pulled directly from our <a href="${GOOGLE_MAPS_CID}" target="_blank" rel="noopener noreferrer">Google Business Profile</a> — see reviews and get directions there too.`,
@@ -54,7 +57,9 @@ const content = {
     phoneHeading: 'ಫೋನ್',
     phoneGeneral: 'Madhavan — ಸಾಮಾನ್ಯ ವಿಚಾರಣೆಗಳು:',
     phoneVisit: 'ಭೇಟಿ ಬುಕಿಂಗ್‌ಗಳು:',
+    phoneOther: 'ಇತರೆ:',
     addressHeading: 'ವಿಳಾಸ',
+    addressRegisteredHeading: 'ನೋಂದಾಯಿತ ಕಚೇರಿ',
     socialHeading: 'ಸಾಮಾಜಿಕ ಮಾಧ್ಯಮ',
     locationHeading: 'ಸ್ಥಳ',
     mapCaption: `ನಮ್ಮ <a href="${GOOGLE_MAPS_CID}" target="_blank" rel="noopener noreferrer">Google Business Profile</a>‌ನಿಂದ ನೇರವಾಗಿ ಪಡೆಯಲಾಗಿದೆ — ವಿಮರ್ಶೆಗಳನ್ನು ನೋಡಿ ಮತ್ತು ಅಲ್ಲಿಂದಲೂ ದಿಕ್ಕುಗಳನ್ನು ಪಡೆಯಿರಿ.`,
@@ -75,7 +80,9 @@ const content = {
     phoneHeading: 'தொலைபேசி',
     phoneGeneral: 'Madhavan — பொது விசாரணைகள்:',
     phoneVisit: 'வருகை முன்பதிவுகள்:',
+    phoneOther: 'மற்றவை:',
     addressHeading: 'முகவரி',
+    addressRegisteredHeading: 'பதிவுசெய்யப்பட்ட அலுவலகம்',
     socialHeading: 'சமூக ஊடகம்',
     locationHeading: 'இடம்',
     mapCaption: `எங்கள் <a href="${GOOGLE_MAPS_CID}" target="_blank" rel="noopener noreferrer">Google Business Profile</a>-இலிருந்து நேரடியாகப் பெறப்பட்டது — மதிப்புரைகளைப் பார்க்கவும், அங்கிருந்தும் திசைகளைப் பெறவும்.`,
@@ -153,9 +160,11 @@ const contactSchema = {
       <h3>{c.phoneHeading}</h3>
       <p>{c.phoneGeneral} <a href="tel:+917406307309">+91 74063 07309</a></p>
       <p>{c.phoneVisit} <a href="tel:+918548065772">+91 85480 65772</a></p>
+      <p>{c.phoneOther} <a href="tel:+917338212670">+91 73382 12670</a></p>
 
       <h3>{c.addressHeading}</h3>
       <p>Tamarind Valley Collective<br />Thaggatti village, near Kanakapura<br />Karnataka/Tamil Nadu border, India</p>
+      <p><strong>{c.addressRegisteredHeading}:</strong><br />{LEGAL_ENTITY_NAME}<br />{LEGAL_ENTITY_ADDRESS}</p>
 
       <h3>{c.socialHeading}</h3>
       <p>
