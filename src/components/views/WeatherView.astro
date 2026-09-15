@@ -483,6 +483,15 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
     stroke-width: 1;
   }
 
+  /* Always-on marker at "today" in cumulative mode, dashed to read as a
+     reference line rather than a gridline — see attachTodayMarker. */
+  .rainfall-chart :global(.today-guide) {
+    stroke: var(--tvc-ink-soft);
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+    opacity: 0.5;
+  }
+
   .rainfall-chart :global(.hit-col) {
     fill: transparent;
   }
@@ -692,7 +701,8 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
     geometry: ReturnType<typeof buildLineChartGeometry>,
     monthAbbr: (m: string) => string,
     unitLabel: string,
-    monsoonBandLabels: [string, string]
+    monsoonBandLabels: [string, string],
+    showTodayGuide: boolean
   ) {
     svg.setAttribute('viewBox', `0 0 ${geometry.chartWidth} ${geometry.chartHeight}`);
     svg.innerHTML = '';
@@ -749,6 +759,22 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
     // the right edge" without needing a label.
     const lastYear = geometry.years[geometry.years.length - 1];
     if (lastYear?.endPoint && lastYear.endPoint.month !== 'Dec') {
+      // Subtle always-on guide at "today"'s real x position — cumulative
+      // mode only (see showTodayGuide), since that's the one case where
+      // this differs from the month's own tick. It's what attachTodayMarker
+      // below attaches its hover/focus target to, so every visible year's
+      // value can be read at the exact same point in the season, not just
+      // at month boundaries.
+      if (showTodayGuide) {
+        const guide = document.createElementNS(svgNS, 'line');
+        guide.setAttribute('x1', String(lastYear.endPoint.x));
+        guide.setAttribute('x2', String(lastYear.endPoint.x));
+        guide.setAttribute('y1', String(geometry.chartPadTop));
+        guide.setAttribute('y2', String(geometry.chartPadTop + geometry.plotHeight));
+        guide.setAttribute('class', 'today-guide');
+        svg.appendChild(guide);
+      }
+
       const dot = document.createElementNS(svgNS, 'circle');
       dot.setAttribute('cx', String(lastYear.endPoint.x));
       dot.setAttribute('cy', String(lastYear.endPoint.y));
@@ -1012,6 +1038,128 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
     };
   }
 
+  // Extra hover/focus target at "today"'s exact x (see the today-guide line
+  // in renderChart) — attachInteraction above only ever samples at month
+  // boundaries, which in cumulative mode is no longer where the current
+  // year's line actually ends. This reads every visible year's value at
+  // that same x by interpolating along its real drawn points (exact
+  // wherever day-level data exists — adjacent points are ~1 day apart —
+  // a reasonable straight-line estimate where a year only has monthly
+  // points to interpolate between).
+  function attachTodayMarker(
+    svg: SVGSVGElement,
+    frame: HTMLElement,
+    tooltip: HTMLElement,
+    geometry: ReturnType<typeof buildLineChartGeometry>,
+    unitLabel: string,
+    todayLabel: string,
+    isHidden: (year: number) => boolean
+  ) {
+    const lastYear = geometry.years[geometry.years.length - 1];
+    if (!lastYear?.endPoint) return;
+    const todayX = lastYear.endPoint.x;
+
+    function mmAt(points: { x: number; mm: number }[]): number | null {
+      if (points.length === 0) return null;
+      const firstPt = points[0];
+      const lastPt = points[points.length - 1];
+      if (todayX <= firstPt.x) return firstPt.mm;
+      if (todayX >= lastPt.x) return lastPt.mm;
+      for (let i = 0; i < points.length - 1; i++) {
+        const a = points[i];
+        const b = points[i + 1];
+        if (todayX >= a.x && todayX <= b.x) {
+          const t = b.x === a.x ? 0 : (todayX - a.x) / (b.x - a.x);
+          return a.mm + (b.mm - a.mm) * t;
+        }
+      }
+      return lastPt.mm;
+    }
+
+    const dots = new Map<number, SVGCircleElement>();
+    for (const y of geometry.years) {
+      const dot = document.createElementNS(svgNS, 'circle');
+      dot.setAttribute('class', 'hover-dot');
+      dot.setAttribute('data-year', String(y.year));
+      dot.setAttribute('style', `fill: var(${y.colorVar})`);
+      svg.appendChild(dot);
+      dots.set(y.year, dot);
+    }
+
+    function show() {
+      const rows = geometry.years
+        .filter((y) => !isHidden(y.year))
+        .map((y) => ({ year: y.year, colorVar: y.colorVar, mm: mmAt(y.points) }))
+        .filter((r) => r.mm != null);
+      if (rows.length === 0) return;
+
+      for (const row of rows) {
+        const dot = dots.get(row.year);
+        if (!dot) continue;
+        const y = geometry.chartPadTop + (geometry.plotHeight - (row.mm! / geometry.maxMm) * geometry.plotHeight);
+        dot.setAttribute('cx', String(todayX));
+        dot.setAttribute('cy', String(y));
+        dot.classList.add('active');
+      }
+      const shownYears = new Set(rows.map((r) => r.year));
+      dots.forEach((dot, year) => {
+        if (!shownYears.has(year)) dot.classList.remove('active');
+      });
+
+      tooltip.innerHTML = '';
+      const heading = document.createElement('p');
+      heading.className = 'tooltip-month';
+      heading.textContent = todayLabel;
+      tooltip.appendChild(heading);
+
+      for (const row of rows) {
+        const rowEl = document.createElement('p');
+        rowEl.className = 'tooltip-row';
+        const key = document.createElement('span');
+        key.className = 'tooltip-key';
+        key.style.background = `var(${row.colorVar})`;
+        rowEl.appendChild(key);
+        const yearEl = document.createElement('span');
+        yearEl.className = 'tooltip-year';
+        yearEl.textContent = String(row.year);
+        rowEl.appendChild(yearEl);
+        const valueEl = document.createElement('span');
+        valueEl.className = 'tooltip-value';
+        valueEl.textContent = `${row.mm!.toFixed(1)}${unitLabel}`;
+        rowEl.appendChild(valueEl);
+        tooltip.appendChild(rowEl);
+      }
+
+      const svgRect = svg.getBoundingClientRect();
+      const frameRect = frame.getBoundingClientRect();
+      const scale = svgRect.width / geometry.chartWidth;
+      tooltip.style.left = `${svgRect.left - frameRect.left + todayX * scale}px`;
+      tooltip.style.top = `${svgRect.top - frameRect.top + geometry.chartPadTop * scale}px`;
+      tooltip.hidden = false;
+    }
+
+    function hide() {
+      dots.forEach((dot) => dot.classList.remove('active'));
+      tooltip.hidden = true;
+    }
+
+    const hitWidth = 14;
+    const hit = document.createElementNS(svgNS, 'rect');
+    hit.setAttribute('x', String(todayX - hitWidth / 2));
+    hit.setAttribute('y', String(geometry.chartPadTop));
+    hit.setAttribute('width', String(hitWidth));
+    hit.setAttribute('height', String(geometry.plotHeight));
+    hit.setAttribute('class', 'hit-col today-hit');
+    hit.setAttribute('tabindex', '0');
+    hit.setAttribute('aria-label', todayLabel);
+    hit.addEventListener('pointerenter', show);
+    hit.addEventListener('pointermove', show);
+    hit.addEventListener('pointerleave', hide);
+    hit.addEventListener('focus', show);
+    hit.addEventListener('blur', hide);
+    svg.appendChild(hit);
+  }
+
   // Draws each year's line in from left to right via the classic SVG
   // stroke-dashoffset technique, staggered slightly per line. Skips
   // entirely under prefers-reduced-motion — the lines are already fully
@@ -1150,7 +1298,7 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
           mode === 'cumulative'
             ? buildCumulativeLineChartGeometry(data.calendarYears, data.dailyByCalendarYear ?? [])
             : buildLineChartGeometry(data.calendarYears);
-        renderChart(svg!, geometry, monthAbbr, unitLabel, monsoonBandLabels);
+        renderChart(svg!, geometry, monthAbbr, unitLabel, monsoonBandLabels, mode === 'cumulative');
         const displayYears: DisplayYear[] = sourceData.map((y, i) => ({
           year: y.year,
           monthly: y.monthly,
@@ -1159,6 +1307,16 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
         }));
 
         interaction = attachInteraction(svg!, frame!, tooltip!, geometry, displayYears, monthAbbr, unitLabel, (year) => hiddenYears.has(year));
+        // Cumulative mode's own "today" hover target — see attachTodayMarker
+        // — only when the most recent year's line actually stops mid-month
+        // (same condition as the today-guide line/end-dot in renderChart).
+        if (mode === 'cumulative') {
+          const lastGeomYear = geometry.years[geometry.years.length - 1];
+          if (lastGeomYear?.endPoint && lastGeomYear.endPoint.month !== 'Dec') {
+            const todayLabel = `${data.cutoffDay} ${monthAbbr(data.cutoffMonth)}`;
+            attachTodayMarker(svg!, frame!, tooltip!, geometry, unitLabel, todayLabel, (year) => hiddenYears.has(year));
+          }
+        }
         renderTable(theadRow!, tableBody!, displayYears, monthAbbr, section!.dataset.toDate || '', unitLabel);
         for (const year of hiddenYears) {
           svg!.querySelectorAll(`[data-year="${year}"]`).forEach((el) => el.classList.add('year-hidden'));
