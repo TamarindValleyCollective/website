@@ -44,6 +44,12 @@ interface Guest {
 
 interface TentAssignment {
   tentId: string;
+  // "Family Booking" checkbox (see accommodation-calendar.astro's
+  // effectiveCapacity) - caps this tent at 1 guest instead of its real
+  // physical capacity, for the common solo/one-family-occupancy case.
+  // Persisted (migration 0017) so reopening a saved booking doesn't silently
+  // reopen the tent back up to full capacity.
+  solo?: boolean;
   guests: Guest[];
 }
 
@@ -139,6 +145,16 @@ function validateBookingInput(input: Partial<Booking>): string | null {
     // own guest count can't exceed its own physical capacity either.
     if (Array.isArray(t.guests) && t.guests.length > unit.capacity) {
       return `${unit.label} holds at most ${unit.capacity}, but ${t.guests.length} guest(s) were assigned`;
+    }
+    // Mirrors the client's own soloCheckbox.disabled rule (guestCount >= 2
+    // can't turn it on) and its "doesn't apply to BYOT" rule - both are only
+    // enforced client-side otherwise, and this endpoint is the actual
+    // trust boundary for everything else in this loop.
+    if (t.solo && Array.isArray(t.guests) && t.guests.length > 1) {
+      return `${unit.label} is marked as a solo/family booking but has ${t.guests.length} guests`;
+    }
+    if (t.solo && unit.kind === 'byot') {
+      return `${unit.label} is a Bring Your Own Tent slot - the solo/family booking option doesn't apply to it`;
     }
     // Name, age group, and gender are all mandatory per guest now (name was
     // originally allowed to be blank, but live testing found a booking could

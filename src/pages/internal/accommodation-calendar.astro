@@ -44,9 +44,9 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }));
 ---
 
-<BaseLayout title="Accommodation Calendar" description="Internal accommodation booking tool." noindex>
+<BaseLayout title="Accommodation Allocation" description="Internal accommodation booking tool." noindex>
   <section class="section wrapper">
-    <h1>Accommodation Calendar</h1>
+    <h1>Accommodation Allocation</h1>
     <p class="hint">Record who's in which tent, for how long. The public site only ever shows aggregate availability derived from this.</p>
 
     <div id="gate" class="gate card">
@@ -92,7 +92,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         <div id="booking-modal-panel" class="card booking-modal-panel" role="dialog" aria-modal="true" aria-labelledby="form-heading">
           <div class="booking-modal-panel-head">
             <h2 id="form-heading" tabindex="-1">New booking</h2>
-            <button type="button" id="booking-modal-close" class="button" aria-label="Close">✕</button>
+            <button type="button" id="booking-modal-close" class="button button--icon" aria-label="Close">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true" focusable="false">
+                <path d="M6 6L18 18M18 6L6 18" />
+              </svg>
+            </button>
           </div>
           <form id="booking-form" class="form">
             <fieldset class="form-group">
@@ -379,11 +383,6 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     .dates-row {
       flex-direction: column;
       gap: 10px;
-    }
-
-    #booking-modal-close {
-      min-width: 44px;
-      min-height: 44px;
     }
   }
 
@@ -1003,12 +1002,14 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
      card" convention - used to sit inline next to Mobile, but now that each
      guest is its own bordered card (see .guest-row above), the corner reads
      as more intuitive (Sharath's feedback, 2026-09-10). .guest-row's extra
-     right padding reserves this space so it never overlaps a field. */
+     right padding reserves this space so it never overlaps a field. Sizing
+     itself comes from .button--icon (shared with #booking-modal-close,
+     Sharath's feedback 2026-09-15 that this one looked inconsistent next to
+     the modal's own close X) - only positioning lives here. */
   .remove-guest {
     position: absolute;
     top: 8px;
     right: 8px;
-    padding: 4px 10px;
   }
 
   /* Each guest field is a label wrapping its input/select, with a small
@@ -1323,23 +1324,63 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     color: #fff;
   }
 
+  /* An icon-only dismiss button reads as a lopsided, over-wide oval when it
+     inherits .button's text-label padding (16px 30px from global.css, or
+     8px 18px from this page's own scoped .button) - this fixes it to a
+     small circle instead, equally sized in both dimensions, wherever it's
+     used: the modal's header close (#booking-modal-close, a real templated
+     element) and .remove-guest's per-guest dismiss (runtime-built) alike.
+     The icon itself is an inline SVG (two crossing <path> lines, stroke:
+     currentColor), not the "✕" text glyph this used to be (Sharath's
+     feedback, 2026-09-15: the glyph never sat visually centered in the
+     circle - font glyphs carry their own uneven ink/bounding-box metrics
+     that vary by platform, which flexbox centering can't correct for since
+     it centers the character's box, not its ink). currentColor means the
+     SVG still inherits whatever .button/.button--danger sets, so the
+     neutral-vs-destructive color distinction those two are deliberately
+     keeping still works with zero extra markup per state. Lives in this
+     is:global block, not the scoped stylesheet above, for the same reason
+     every other runtime-button override here does (see this block's own
+     opening comment) - .remove-guest never gets Astro's scoping attribute,
+     and `.button.button--icon`'s doubled class matches `.button.button`'s
+     own specificity trick to beat global.css's padding regardless of load
+     order. */
+  .button.button--icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    line-height: 1;
+  }
+
+  @media (max-width: 639px) {
+    .button.button--icon {
+      width: 44px;
+      height: 44px;
+    }
+  }
+
   [hidden] {
     display: none !important;
   }
 
   /* Touch targets for the Tents picker's runtime-built controls (design
      critique, 2026-09-10, measured live at 390px): group-legend pills
-     (~24px tall), +Guest (67x21px), remove-guest (33x27px), the tent and
-     Family Booking checkboxes' label rows (as little as 116x16px) all
-     measured well under the ~44x44px minimum. Widens the actual hit area
-     via padding/min-height only below the same 640px threshold the modal
-     itself already treats as "mobile" - the deliberately compact desktop
-     sizing these were tuned to (see this file's earlier design-critique
-     fixes) is untouched above that width. Placed last in this stylesheet,
-     and matches the base rules' own specificity exactly (single class
-     selectors) - equal-specificity CSS resolves by source order, so this
-     has to come after every rule it's meant to override, not just be
-     wrapped in the right media query. */
+     (~24px tall), +Guest (67x21px), the tent and Family Booking checkboxes'
+     label rows (as little as 116x16px) all measured well under the
+     ~44x44px minimum (remove-guest was too, but that's now handled by
+     .button.button--icon's own mobile rule above instead, since its fix is
+     a fixed width/height rather than a min- one). Widens the actual hit
+     area via padding/min-height only below the same 640px threshold the
+     modal itself already treats as "mobile" - the deliberately compact
+     desktop sizing these were tuned to (see this file's earlier
+     design-critique fixes) is untouched above that width. Placed last in
+     this stylesheet, and matches the base rules' own specificity exactly
+     (single class selectors) - equal-specificity CSS resolves by source
+     order, so this has to come after every rule it's meant to override,
+     not just be wrapped in the right media query. */
   @media (max-width: 639px) {
     .tent-group-legend {
       padding: 10px 14px;
@@ -1348,11 +1389,6 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
     .add-guest {
       padding: 10px 14px;
-      min-height: 44px;
-    }
-
-    .remove-guest {
-      min-width: 44px;
       min-height: 44px;
     }
 
@@ -1429,6 +1465,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   interface TentAssignment {
     tentId: string;
+    solo?: boolean;
     guests: Guest[];
   }
 
@@ -1829,7 +1866,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         </div>
       </div>
       <button type="button" class="guest-history-toggle" ${guest.personId ? '' : 'hidden'}>Past stays</button>
-      <button type="button" class="button button--danger remove-guest" aria-label="Remove guest">✕</button>
+      <button type="button" class="button button--danger button--icon remove-guest" aria-label="Remove guest">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true" focusable="false">
+          <path d="M6 6L18 18M18 6L6 18" />
+        </svg>
+      </button>
     `;
     row.querySelector('.remove-guest')!.addEventListener('click', () => {
       row.remove();
@@ -2067,10 +2108,13 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   // onGuestRemoved below, the only two places that ever check/uncheck it in
   // guest mode).
   // The "Family Booking" checkbox (Sharath, 2026-09-10) caps a
-  // tent at 1 guest instead of its real physical capacity - purely a form
-  // convenience for the common solo-occupancy case, nothing persisted (a
-  // booking that ends up with exactly 1 guest already fully captures the
-  // outcome on its own). Only selectable while the tent has 0 or 1 guests
+  // tent at 1 guest instead of its real physical capacity - a form
+  // convenience for the common solo-occupancy case. Persisted per tent
+  // (migration 0017, Sharath 2026-09-15) - an earlier version left this
+  // unsaved on the theory that a 1-guest outcome already captured the
+  // intent, but that meant reopening a saved solo/family booking silently
+  // reopened the tent back up to full capacity, which read as the checkbox
+  // itself failing to save. Only selectable while the tent has 0 or 1 guests
   // already (see renderTentState's soloCheckbox.disabled) - a 2nd guest
   // already means "not one person," so the box can't be turned on to
   // contradict data that's already there.
@@ -2370,7 +2414,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
           email: email || undefined,
         });
       }
-      out.push({ tentId: option.dataset.tentId!, guests });
+      const soloCheckbox = option.querySelector('.tent-solo-checkbox') as HTMLInputElement | null;
+      out.push({ tentId: option.dataset.tentId!, solo: soloCheckbox?.checked ?? false, guests });
     }
     return out;
   }
@@ -2385,10 +2430,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       const assignment = tents.find((t) => t.tentId === tentId);
       checkbox.checked = Boolean(assignment);
       guestsEl.innerHTML = '';
-      // Never persisted (see effectiveCapacity's own comment) - always
-      // starts unchecked, whether this is a fresh reset or loading an
-      // existing booking, rather than guessing intent from guest count.
-      soloCheckbox.checked = false;
+      // Persisted (migration 0017) - restores whatever was actually saved,
+      // rather than resetting to unchecked and silently reopening a saved
+      // solo/family tent back up to its full physical capacity.
+      soloCheckbox.checked = assignment?.solo ?? false;
       if (assignment && wantsGuestFields()) {
         const onRemove = () => onGuestRemoved(option, unit);
         if (assignment.guests.length === 0) addGuestRow(guestsEl, {}, onRemove);
