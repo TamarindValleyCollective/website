@@ -2010,19 +2010,29 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     // (row.dataset.personId set) shows masked, read-only text instead of
     // the real value, since this tool isn't Madhavan-only - Linger's team
     // has access too. Plain text only while genuinely new data is being
-    // typed (no personId yet) or right after "Edit" is clicked;
-    // *Revealed is that override, cleared again on blur so an intentional
-    // peek doesn't stick open for the rest of the session. Re-run after
-    // every place personId or the value itself changes (selectMatch, the
-    // conflict-resolution buttons below, blur) so it stays correct in
-    // both directions - masking newly-saved data and unmasking data that
-    // turned out not to be a saved match after all.
+    // typed (no personId yet).
+    //
+    // "Edit" does NOT reveal the real stored value on screen (Sharath,
+    // 2026-09-15: an earlier version showed the full number once Edit was
+    // clicked, defeating the point) - it stashes the real value in
+    // *EditOriginal and clears the input to an empty, focused field whose
+    // placeholder is the *masked* value, so typing replaces the number
+    // without the real one ever having been rendered. Blurring with
+    // nothing typed restores the stashed original (still masked, nothing
+    // was actually changed); blurring with something typed treats it as a
+    // genuine replacement and runs the normal validation/mask path on the
+    // new value. Re-run after every place personId or the value itself
+    // changes (selectMatch, the conflict-resolution buttons below, blur)
+    // so it stays correct in both directions - masking newly-saved data
+    // and unmasking data that turned out not to be a saved match after all.
     const mobileMaskWrap = row.querySelector('.guest-field--mobile .masked-field-display') as HTMLElement;
     const mobileMaskText = mobileMaskWrap.querySelector('.masked-field-text') as HTMLElement;
     const emailMaskWrap = row.querySelector('.guest-field--email .masked-field-display') as HTMLElement;
     const emailMaskText = emailMaskWrap.querySelector('.masked-field-text') as HTMLElement;
     let mobileRevealed = false;
     let emailRevealed = false;
+    let mobileEditOriginal: string | null = null;
+    let emailEditOriginal: string | null = null;
 
     function renderMobileMask() {
       const shouldMask = !mobileRevealed && Boolean(row.dataset.personId) && mobileInput.value.trim() !== '' && mobileWarning.hidden;
@@ -2038,11 +2048,17 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     }
     mobileMaskWrap.querySelector('.masked-field-edit-btn')!.addEventListener('click', () => {
       mobileRevealed = true;
+      mobileEditOriginal = mobileInput.value;
+      mobileInput.value = '';
+      mobileInput.placeholder = maskMobileNumber(mobileEditOriginal) || 'Mobile';
       renderMobileMask();
       mobileInput.focus();
     });
     emailMaskWrap.querySelector('.masked-field-edit-btn')!.addEventListener('click', () => {
       emailRevealed = true;
+      emailEditOriginal = emailInput.value;
+      emailInput.value = '';
+      emailInput.placeholder = maskEmail(emailEditOriginal) || 'Optional';
       renderEmailMask();
       emailInput.focus();
     });
@@ -2063,6 +2079,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       emailWarning.hidden = true;
       mobileRevealed = false;
       emailRevealed = false;
+      mobileEditOriginal = null;
+      emailEditOriginal = null;
       renderMobileMask();
       renderEmailMask();
     }
@@ -2105,6 +2123,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         emailWarning.hidden = true;
         mobileRevealed = false;
         emailRevealed = false;
+        mobileEditOriginal = null;
+        emailEditOriginal = null;
         renderMobileMask();
         renderEmailMask();
       });
@@ -2121,6 +2141,20 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     // heads-up before the round-trip to the server that will reject it for
     // real regardless.
     mobileInput.addEventListener('blur', () => {
+      mobileInput.placeholder = 'Mobile';
+      // Edit was opened (see the edit-btn handler above) but nothing new
+      // was typed - restore the real, never-displayed value rather than
+      // leaving the field blank (which would fail the required check and,
+      // if saved, silently erase a real guest's number).
+      if (mobileEditOriginal !== null && mobileInput.value.trim() === '') {
+        mobileInput.value = mobileEditOriginal;
+        mobileEditOriginal = null;
+        mobileWarning.hidden = true;
+        mobileRevealed = false;
+        renderMobileMask();
+        return;
+      }
+      mobileEditOriginal = null;
       const raw = mobileInput.value.trim();
       const invalid = raw !== '' && !normalizeMobileNumber(raw);
       mobileWarning.hidden = !invalid;
@@ -2134,6 +2168,17 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     // implementation) - instant feedback only, the server/DB CHECK
     // constraint (migration 0015) is the actual gate.
     emailInput.addEventListener('blur', () => {
+      emailInput.placeholder = 'Optional';
+      // Same "opened Edit, typed nothing" restore as mobile above.
+      if (emailEditOriginal !== null && emailInput.value.trim() === '') {
+        emailInput.value = emailEditOriginal;
+        emailEditOriginal = null;
+        emailWarning.hidden = true;
+        emailRevealed = false;
+        renderEmailMask();
+        return;
+      }
+      emailEditOriginal = null;
       const raw = emailInput.value.trim();
       const invalid = raw !== '' && !isValidEmail(raw);
       emailWarning.hidden = !invalid;
