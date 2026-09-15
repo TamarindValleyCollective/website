@@ -97,7 +97,7 @@ function isPastBooking(startDate, nights) {
 
 const ADMIN_SELECT =
   'select=id,type,event_slug,event_title,label,exclusive,start_date,nights,note,created_by,created_at,updated_by,updated_at,' +
-  'accommodation_tent_assignments(tent_id,accommodation_guests(seq,age_group,person_id,accommodation_people(name,mobile_number,gender,preferences,email)))';
+  'accommodation_tent_assignments(tent_id,solo,accommodation_guests(seq,age_group,person_id,accommodation_people(name,mobile_number,gender,preferences,email)))';
 
 // Turns a PostgREST row (snake_case, SQL null for absent optional fields)
 // back into the exact JSON shape the client already gets today (camelCase,
@@ -111,6 +111,7 @@ function rowToBooking(row) {
     isPast: isPastBooking(row.start_date, row.nights),
     tents: (row.accommodation_tent_assignments ?? []).map((ta) => ({
       tentId: ta.tent_id,
+      solo: Boolean(ta.solo),
       guests: (ta.accommodation_guests ?? [])
         .slice()
         .sort((a, b) => a.seq - b.seq)
