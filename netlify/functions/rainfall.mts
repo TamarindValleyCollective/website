@@ -15,14 +15,18 @@
 //    per-year lines and the table (see buildCalendarYears() below).
 //  - "Daily rain data": a flat table, one row per calendar year+month
 //    (e.g. "2025"/"April"), with day-of-month columns (1-31) — only this
-//    tab has enough resolution to compare "this monsoon so far" against
-//    the *same* stretch last year (Apr 1 through today's date in both
-//    years), rather than comparing a partial year against another year's
-//    full total.
+//    tab has enough resolution to compare "this year so far" against the
+//    *same* stretch last year (Jan 1 through today's date in both years),
+//    rather than comparing a partial year against another year's full
+//    total.
+//
+// Both "this year so far" and the chart's cumulative line are calendar-year
+// (1 Jan) based, on purpose — an earlier agricultural-year (1 Apr) framing
+// for the stat and a calendar-year framing for the chart produced two
+// different "same stretch last year" numbers on the same page, which read
+// as a bug rather than two deliberately different metrics.
 import { getSheetValues } from '../../scripts/lib/google-drive.mjs';
 
-// Agricultural year runs April through March.
-const MONTHS_AGRI_ORDER = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
 const CALENDAR_MONTH_ORDER = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 // The Sheet spells months inconsistently ("April" in one tab, "Jun" in
@@ -47,23 +51,10 @@ function normalizeMonth(raw: string): string | null {
   return MONTH_ALIASES[raw.trim().toLowerCase()] ?? null;
 }
 
-// Calendar month number for agriYearLabel() — the Sheet's "Daily rain data"
-// rows carry a plain calendar year (e.g. "2025"), not an agricultural-year
-// label, so a row's agricultural year has to be derived from year + month.
 const MONTH_CALENDAR_NUM: Record<string, number> = {
   Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
   Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12,
 };
-
-function agriYearLabel(calendarYear: number, calendarMonth1to12: number): string {
-  const startYear = calendarMonth1to12 >= 4 ? calendarYear : calendarYear - 1;
-  return `${startYear}-${String((startYear + 1) % 100).padStart(2, '0')}`;
-}
-
-function shiftAgriYearLabel(label: string, delta: number): string {
-  const start = Number(label.split('-')[0]) + delta;
-  return `${start}-${String((start + 1) % 100).padStart(2, '0')}`;
-}
 
 interface CalendarMonthEntry {
   month: string;
@@ -132,27 +123,20 @@ function buildCalendarYears(
   return series;
 }
 
-interface DailyMonthBlock {
-  month: string;
-  days: number[]; // index 0 = day 1
-  total: number;
-}
-
 interface CalendarDailyMonthEntry {
   month: string;
   days: number[]; // index 0 = day 1
 }
 
-// Same raw daily rows as parseDailyTab() below, but keyed by plain calendar
-// year (not agricultural year) and without collapsing to a single running
-// total — feeds the chart's cumulative line so it can trace an actual
-// day-by-day trajectory (matching what sumToDate() already does for the
-// monsoon stat) instead of jumping straight from one month-end total to the
-// next, which is what made a past year's chart position at "today's date"
-// read as that month's full total rather than a same-day cutoff. A month
-// not yet fully reached in the current year is truncated to only the days
-// already elapsed, so the line doesn't imply data for days that haven't
-// happened yet; a month that hasn't started at all is dropped.
+// Raw daily rows, keyed by plain calendar year — feeds both the chart's
+// cumulative line (so it can trace an actual day-by-day trajectory instead
+// of jumping straight from one month-end total to the next) and
+// sumCalendarYearToDate() below (so "this year so far" and "same stretch
+// last year" are day-matched, not a partial year against another year's
+// full total). A month not yet fully reached in the current year is
+// truncated to only the days already elapsed, so nothing implies data for
+// days that haven't happened yet; a month that hasn't started at all is
+// dropped.
 function parseDailyTabByCalendarYear(
   rows: string[][],
   nowYear: number,
@@ -181,45 +165,33 @@ function parseDailyTabByCalendarYear(
   return byYear;
 }
 
-// "Daily rain data" tab: a flat table, header row ["Year", "Month", "1",
-// "2", ..., "31"], then one row per calendar year+month with day-of-month
-// values in columns C-AG. Rows for months not yet reached are present but
-// empty, not absent — normalizeMonth() returns null for the header row
-// (month "Month" isn't a valid alias) and any blank rows, so they're
-// skipped the same way.
-function parseDailyTab(rows: string[][]): Record<string, DailyMonthBlock[]> {
-  const blocks: Record<string, DailyMonthBlock[]> = {};
+// Sum of rainfall from Jan 1 of `year` through a cutoff day within
+// cutoffMonth — day-level figures from dailyByCalendarYear wherever a month
+// has them, that month's own already-known total from monthlyByYear
+// otherwise (matches buildDailyCumulativePoints() in src/utils/rainfall.ts,
+// so this server-side total and the chart's client-side line agree
+// exactly). The cutoff month itself must have real day-level data, or there
+// is no honest way to say how much of it counts — no source, no claim,
+// rather than guessing from that month's eventual full total.
+function sumCalendarYearToDate(
+  year: number,
+  monthlyByYear: Record<string, Record<string, number>>,
+  dailyByCalendarYear: Record<number, CalendarDailyMonthEntry[]>,
+  cutoffMonth: string,
+  cutoffDay: number
+): number | null {
+  const monthlyForYear = monthlyByYear[String(year)];
+  const dailyForYear = new Map((dailyByCalendarYear[year] ?? []).map((m) => [m.month, m.days]));
+  const cutoffDays = dailyForYear.get(cutoffMonth);
+  if (!cutoffDays || cutoffDays.length === 0) return null;
 
-  for (const row of rows) {
-    const yearRaw = String(row[0] ?? '').trim();
-    if (!/^\d{4}$/.test(yearRaw)) continue; // header row or blank row
-
-    const monthAbbr = normalizeMonth(String(row[1] ?? ''));
-    if (!monthAbbr) continue;
-
-    const agriYear = agriYearLabel(Number(yearRaw), MONTH_CALENDAR_NUM[monthAbbr]);
-    const days = row.slice(2, 33).map((v) => (v === undefined || v === '' ? 0 : Number(v) || 0));
-    const total = days.reduce((a, b) => a + b, 0);
-
-    (blocks[agriYear] ??= []).push({ month: monthAbbr, days, total });
-  }
-
-  return blocks;
-}
-
-// Sum of rainfall from the start of the agricultural year (April 1) through
-// a given cutoff day within cutoffMonth, using each month's own logged
-// total for months already fully in the past and day-level data only for
-// the cutoff month itself.
-function sumToDate(block: DailyMonthBlock[] | undefined, cutoffMonth: string, cutoffDay: number): number | null {
-  if (!block || block.length === 0) return null;
-  const cutoffIdx = MONTHS_AGRI_ORDER.indexOf(cutoffMonth);
-  let sum = 0;
-  for (const entry of block) {
-    const idx = MONTHS_AGRI_ORDER.indexOf(entry.month);
-    if (idx < 0) continue;
-    if (idx < cutoffIdx) sum += entry.total;
-    else if (idx === cutoffIdx) sum += entry.days.slice(0, cutoffDay).reduce((a, b) => a + b, 0);
+  let sum = cutoffDays.slice(0, cutoffDay).reduce((a, b) => a + b, 0);
+  const cutoffIdx = CALENDAR_MONTH_ORDER.indexOf(cutoffMonth);
+  for (let i = 0; i < cutoffIdx; i++) {
+    const month = CALENDAR_MONTH_ORDER[i];
+    const days = dailyForYear.get(month);
+    if (days && days.length > 0) sum += days.reduce((a, b) => a + b, 0);
+    else if (monthlyForYear) sum += monthlyForYear[month] ?? 0;
   }
   return sum;
 }
@@ -247,7 +219,6 @@ export default async (req: Request): Promise<Response> => {
     ]);
 
     const monthlyByYear = parseMonthlyTab(monthlyRows);
-    const dailyByYear = parseDailyTab(dailyRows);
 
     // The farm is IST — compute "today" in that zone rather than the
     // Function's own (UTC) clock, same reasoning as formatFarmTime() in
@@ -260,23 +231,17 @@ export default async (req: Request): Promise<Response> => {
     const nowYear = Number(parts.year);
     const nowMonth = Number(parts.month);
     const nowDay = Number(parts.day);
-
-    const currentYear = agriYearLabel(nowYear, nowMonth);
-    const chartYear = shiftAgriYearLabel(currentYear, -1);
-    const cutoffMonth = MONTHS_AGRI_ORDER[(nowMonth - 4 + 12) % 12];
+    const cutoffMonth = CALENDAR_MONTH_ORDER[nowMonth - 1];
 
     const calendarYears = buildCalendarYears(monthlyByYear, nowYear, nowMonth);
-
-    const monsoonToDate = sumToDate(dailyByYear[currentYear], cutoffMonth, nowDay);
-    const sameSpanLastYear = sumToDate(dailyByYear[chartYear], cutoffMonth, nowDay);
-
     const dailyByCalendarYear = parseDailyTabByCalendarYear(dailyRows, nowYear, nowMonth, nowDay);
+
+    const monsoonToDate = sumCalendarYearToDate(nowYear, monthlyByYear, dailyByCalendarYear, cutoffMonth, nowDay);
+    const sameSpanLastYear = sumCalendarYearToDate(nowYear - 1, monthlyByYear, dailyByCalendarYear, cutoffMonth, nowDay);
 
     return jsonResponse({
       asOf: new Date().toISOString(),
       dailyByCalendarYear: Object.entries(dailyByCalendarYear).map(([year, months]) => ({ year: Number(year), months })),
-      chartYear,
-      currentYear,
       calendarYears,
       monsoonToDate,
       sameSpanLastYear,

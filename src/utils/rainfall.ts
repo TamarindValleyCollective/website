@@ -50,8 +50,6 @@ export interface DailyCalendarYear {
 
 export interface RainfallData {
   asOf: string;
-  chartYear: string;
-  currentYear: string;
   calendarYears: CalendarYearSeries[];
   dailyByCalendarYear: DailyCalendarYear[];
   monsoonToDate: number | null;
