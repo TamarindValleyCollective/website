@@ -2232,8 +2232,22 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     for (const g of new Set(UNITS.map((u) => u.group))) groupOverride.set(g, g === groupName);
   }
 
+  // A group's legend is both "make this the one open group" and "collapse
+  // it" depending on what's already on screen - collapsing outright only
+  // when it's already the sole expanded group (nothing else to focus away
+  // from), otherwise focusing it. Editing a fresh booking never hits the
+  // first branch on a first click (everything starts collapsed, so the very
+  // first click on any legend is already "not expanded" -> focusGroup), but
+  // editing an existing multi-group booking does - several groups start
+  // expanded by default (isGroupExpanded's own fallback), and the old
+  // "expanded -> just collapse this one" logic left every other one sitting
+  // open instead of narrowing down to the one just clicked (Sharath's
+  // feedback, 2026-09-15: this worked for a new entry but not an existing
+  // one - that's exactly the difference between those two starting states).
   function toggleGroup(groupName: string) {
-    if (isGroupExpanded(groupName)) {
+    const allGroups = new Set(UNITS.map((u) => u.group));
+    const onlyThisOneOpen = isGroupExpanded(groupName) && [...allGroups].every((g) => g === groupName || !isGroupExpanded(g));
+    if (onlyThisOneOpen) {
       groupOverride.set(groupName, false);
     } else {
       focusGroup(groupName);
