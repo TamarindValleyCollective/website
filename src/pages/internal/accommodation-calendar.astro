@@ -1061,6 +1061,40 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     flex: 2 1 140px;
   }
 
+  /* Mobile/email default to masked, read-only text once a guest is linked
+     to an already-saved directory record (Sharath, 2026-09-15: this tool
+     isn't Madhavan-only, Linger's team also has access, so a saved guest's
+     contact details shouldn't sit in plain text for whoever else opens
+     that booking) - the real <input> stays in the DOM either way
+     (collectTents() reads it unchanged), just hidden until "Edit" is
+     clicked. Same display+edit-affordance shape as .preferences-display
+     below, reused for a different reason (privacy, not decluttering). */
+  .masked-field-display {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 0.82rem;
+    padding: 4px 0;
+  }
+
+  .masked-field-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    letter-spacing: 0.02em;
+    word-break: break-all;
+  }
+
+  .masked-field-edit-btn {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.76rem;
+    text-decoration: underline;
+    color: var(--tvc-ink-soft);
+    cursor: pointer;
+  }
+
   .mobile-number-warning,
   .email-warning {
     margin: 0;
@@ -1411,6 +1445,28 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
 <script>
   import { normalizeMobileNumber, isValidEmail } from '../../../scripts/lib/accommodation.mjs';
+
+  // Masks an already-saved guest's contact details for display (Sharath,
+  // 2026-09-15 - this tool isn't Madhavan-only, Linger's team has access
+  // too, so a saved guest's real number/email shouldn't sit in plain text
+  // for whoever else opens that booking). Display-only: the real value
+  // never leaves the underlying <input>/dataset, only what's rendered in
+  // the masked-field-text span differs. Keeps a few characters on each end
+  // so the right guest is still recognisable at a glance without exposing
+  // the whole number/address.
+  function maskMobileNumber(value: string): string {
+    if (!value) return '';
+    if (value.length <= 4) return '•'.repeat(value.length);
+    return value.slice(0, 3) + '•'.repeat(Math.max(value.length - 5, 3)) + value.slice(-2);
+  }
+
+  function maskEmail(value: string): string {
+    if (!value) return '';
+    const at = value.indexOf('@');
+    if (at <= 0) return '•'.repeat(value.length);
+    const local = value.slice(0, at);
+    return `${local.slice(0, 1)}${'•'.repeat(Math.max(local.length - 1, 3))}${value.slice(at)}`;
+  }
 
   declare const google: any;
 
@@ -1843,14 +1899,22 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
               ${GENDER_OPTIONS.map((g) => `<option value="${g}" ${gender === g ? 'selected' : ''}>${GENDER_DISPLAY_LABELS[g]}</option>`).join('')}
             </select>
           </label>
-          <label class="guest-field guest-field--mobile">
+          <div class="guest-field guest-field--mobile">
             <span class="guest-field-label">Mobile</span>
-            <input type="tel" data-field="mobileNumber" placeholder="Optional" value="${guest.mobileNumber ?? ''}" />
-          </label>
-          <label class="guest-field guest-field--email">
+            <input type="tel" data-field="mobileNumber" placeholder="Mobile" required value="${guest.mobileNumber ?? ''}" />
+            <span class="masked-field-display" hidden>
+              <span class="masked-field-text"></span>
+              <button type="button" class="masked-field-edit-btn">Edit</button>
+            </span>
+          </div>
+          <div class="guest-field guest-field--email">
             <span class="guest-field-label">Email</span>
             <input type="email" data-field="email" placeholder="Optional" value="${guest.email ?? ''}" />
-          </label>
+            <span class="masked-field-display" hidden>
+              <span class="masked-field-text"></span>
+              <button type="button" class="masked-field-edit-btn">Edit</button>
+            </span>
+          </div>
         </div>
       </div>
       <p class="mobile-number-warning" hidden></p>
@@ -1941,6 +2005,50 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       dropdown = null;
     }
 
+    // ---- Contact-detail masking (maskMobileNumber/maskEmail, defined
+    // above) - a guest linked to an already-saved directory record
+    // (row.dataset.personId set) shows masked, read-only text instead of
+    // the real value, since this tool isn't Madhavan-only - Linger's team
+    // has access too. Plain text only while genuinely new data is being
+    // typed (no personId yet) or right after "Edit" is clicked;
+    // *Revealed is that override, cleared again on blur so an intentional
+    // peek doesn't stick open for the rest of the session. Re-run after
+    // every place personId or the value itself changes (selectMatch, the
+    // conflict-resolution buttons below, blur) so it stays correct in
+    // both directions - masking newly-saved data and unmasking data that
+    // turned out not to be a saved match after all.
+    const mobileMaskWrap = row.querySelector('.guest-field--mobile .masked-field-display') as HTMLElement;
+    const mobileMaskText = mobileMaskWrap.querySelector('.masked-field-text') as HTMLElement;
+    const emailMaskWrap = row.querySelector('.guest-field--email .masked-field-display') as HTMLElement;
+    const emailMaskText = emailMaskWrap.querySelector('.masked-field-text') as HTMLElement;
+    let mobileRevealed = false;
+    let emailRevealed = false;
+
+    function renderMobileMask() {
+      const shouldMask = !mobileRevealed && Boolean(row.dataset.personId) && mobileInput.value.trim() !== '' && mobileWarning.hidden;
+      mobileInput.hidden = shouldMask;
+      mobileMaskWrap.hidden = !shouldMask;
+      if (shouldMask) mobileMaskText.textContent = maskMobileNumber(mobileInput.value.trim());
+    }
+    function renderEmailMask() {
+      const shouldMask = !emailRevealed && Boolean(row.dataset.personId) && emailInput.value.trim() !== '' && emailWarning.hidden;
+      emailInput.hidden = shouldMask;
+      emailMaskWrap.hidden = !shouldMask;
+      if (shouldMask) emailMaskText.textContent = maskEmail(emailInput.value.trim());
+    }
+    mobileMaskWrap.querySelector('.masked-field-edit-btn')!.addEventListener('click', () => {
+      mobileRevealed = true;
+      renderMobileMask();
+      mobileInput.focus();
+    });
+    emailMaskWrap.querySelector('.masked-field-edit-btn')!.addEventListener('click', () => {
+      emailRevealed = true;
+      renderEmailMask();
+      emailInput.focus();
+    });
+    renderMobileMask();
+    renderEmailMask();
+
     function selectMatch(match: GuestMatch) {
       row.dataset.personId = match.id;
       nameInput.value = match.name;
@@ -1951,6 +2059,12 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       renderPreferencesState();
       historyToggle.hidden = false;
       closeDropdown();
+      mobileWarning.hidden = true;
+      emailWarning.hidden = true;
+      mobileRevealed = false;
+      emailRevealed = false;
+      renderMobileMask();
+      renderEmailMask();
     }
 
     // If this number already belongs to a different-named person, ask
@@ -1988,10 +2102,17 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         renderPreferencesState();
         historyToggle.hidden = false;
         mobileConflict.hidden = true;
+        emailWarning.hidden = true;
+        mobileRevealed = false;
+        emailRevealed = false;
+        renderMobileMask();
+        renderEmailMask();
       });
       mobileConflict.querySelector('[data-action="different"]')!.addEventListener('click', () => {
         if (row.dataset.personId === different.id) row.dataset.personId = '';
         mobileConflict.hidden = true;
+        renderMobileMask();
+        renderEmailMask();
       });
     }
 
@@ -2005,6 +2126,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       mobileWarning.hidden = !invalid;
       mobileWarning.textContent = invalid ? '⚠ Doesn’t look like a valid mobile number (10 digits for India, or include a country code).' : '';
       if (!invalid) checkMobileConflict();
+      mobileRevealed = false;
+      renderMobileMask();
     });
 
     // Same shape check the server enforces (isValidEmail, the one shared
@@ -2015,6 +2138,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       const invalid = raw !== '' && !isValidEmail(raw);
       emailWarning.hidden = !invalid;
       emailWarning.textContent = invalid ? '⚠ Doesn’t look like a valid email address.' : '';
+      emailRevealed = false;
+      renderEmailMask();
     });
 
     nameInput.addEventListener('input', () => {
@@ -2022,6 +2147,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       historyToggle.hidden = true;
       closeDropdown();
       debouncedSearch(nameInput.value);
+      renderMobileMask();
+      renderEmailMask();
     });
 
     const debouncedSearch = debounce(async (query: string) => {
@@ -2033,7 +2160,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       for (const m of matches) {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.textContent = m.mobileNumber ? `${m.name} — ${m.mobileNumber}` : m.name;
+        btn.textContent = m.mobileNumber ? `${m.name} — ${maskMobileNumber(m.mobileNumber)}` : m.name;
         btn.addEventListener('click', () => selectMatch(m));
         dropdown.appendChild(btn);
       }

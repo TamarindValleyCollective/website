@@ -173,18 +173,15 @@ function validateBookingInput(input: Partial<Booking>): string | null {
       if (g.personId != null && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(g.personId)) {
         return 'personId must be a UUID';
       }
-      // Mobile number is optional, but if one was typed it has to actually
-      // look like one - normalizes in place (bare 10-digit numbers become
-      // +91-prefixed) so accommodation-db.mjs/the RPC layer only ever see
-      // an already-normalized value, never raw client input. See
+      // Mobile number is now mandatory per guest (Sharath, 2026-09-15) -
+      // normalizes in place (bare 10-digit numbers become +91-prefixed) so
+      // accommodation-db.mjs/the RPC layer only ever see an
+      // already-normalized value, never raw client input. See
       // normalizeMobileNumber's own comment for the validation rules.
-      if (g.mobileNumber != null && g.mobileNumber.trim() !== '') {
-        const normalized = normalizeMobileNumber(g.mobileNumber);
-        if (!normalized) return `"${g.mobileNumber}" doesn't look like a valid mobile number - use a 10-digit Indian number or include a country code (e.g. +1...)`;
-        g.mobileNumber = normalized;
-      } else {
-        g.mobileNumber = undefined;
-      }
+      if (!g.mobileNumber || g.mobileNumber.trim() === '') return 'Each guest needs a mobile number';
+      const normalized = normalizeMobileNumber(g.mobileNumber);
+      if (!normalized) return `"${g.mobileNumber}" doesn't look like a valid mobile number - use a 10-digit Indian number or include a country code (e.g. +1...)`;
+      g.mobileNumber = normalized;
       // Optional, captured for a possible future confirmation-email feature
       // (see migration 0015) - same shape check the DB's own CHECK
       // constraint enforces as a backstop, via the one shared implementation.
