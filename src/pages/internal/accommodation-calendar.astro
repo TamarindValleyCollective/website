@@ -2170,22 +2170,28 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     addGuestBtn.disabled = checkbox.disabled || atCapacity;
     addGuestBtn.textContent = atCapacity ? `Full (${cap})` : '+ Guest';
 
-    // Doesn't apply to a BYOT slot (Sharath, 2026-09-10) - "whole tent for
-    // one person/family" is a distinction about one of the farm's own
-    // rooms; a guest's own tent has no such ambiguity to resolve.
-    soloWrap.hidden = unit.kind === 'byot';
     soloCheckbox.disabled = guestCount >= 2;
 
     if (guestCount === 0) {
       summaryBtn.hidden = true;
       guestsEl.hidden = true;
+      soloWrap.hidden = true; // nothing booked into this tent yet - nothing to mark "solo"
     } else if (activeTentId === unit.id) {
       summaryBtn.hidden = true;
       guestsEl.hidden = false;
+      // Doesn't apply to a BYOT slot (Sharath, 2026-09-10) - "whole tent for
+      // one person/family" is a distinction about one of the farm's own
+      // rooms; a guest's own tent has no such ambiguity to resolve. Only
+      // shown for the one tent actually expanded for editing (Sharath,
+      // 2026-09-15: a collapsed tent card showed it too, alongside every
+      // other tent's own copy, well before there was any guest data to
+      // apply it to).
+      soloWrap.hidden = unit.kind === 'byot';
     } else {
       summaryBtn.hidden = false;
       summaryBtn.textContent = `${guestSummaryText(option)} — tap to edit`;
       guestsEl.hidden = true;
+      soloWrap.hidden = true; // collapsed summary view - not editing this tent right now
     }
   }
 
