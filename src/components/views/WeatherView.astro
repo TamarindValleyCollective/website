@@ -54,6 +54,7 @@ const content = {
     tableSummary: 'Full monthly figures',
     tableMonth: 'Month',
     toDate: '(to date)',
+    sinceJan1: 'since 1 Jan',
     rainSummaryEyebrow: 'Monsoon watch',
     rainSummaryBehind: "This {year} monsoon is running {pct}% behind the same stretch last year ({mm}mm) — in line with the {enso} conditions forecasters have been tracking, which typically suppress India's southwest monsoon.",
     rainSummarySource: 'Source: {source}',
@@ -88,6 +89,7 @@ const content = {
     tableSummary: 'ಪೂರ್ಣ ಮಾಸಿಕ ಅಂಕಿಅಂಶಗಳು',
     tableMonth: 'ತಿಂಗಳು',
     toDate: '(ಇಲ್ಲಿಯವರೆಗೆ)',
+    sinceJan1: '1 ಜನವರಿಯಿಂದ',
     rainSummaryEyebrow: 'ಮಾನ್ಸೂನ್ ವೀಕ್ಷಣೆ',
     rainSummaryBehind: 'ಈ {year} ಮಾನ್ಸೂನ್ ಕಳೆದ ವರ್ಷದ ಇದೇ ಅವಧಿಗಿಂತ {pct}% ಹಿಂದುಳಿದಿದೆ ({mm}ಮಿಮೀ) — ಇದು ಹವಾಮಾನ ತಜ್ಞರು ಗಮನಿಸುತ್ತಿರುವ {enso} ಪರಿಸ್ಥಿತಿಗಳಿಗೆ ಅನುಗುಣವಾಗಿದೆ, ಇದು ಸಾಮಾನ್ಯವಾಗಿ ಭಾರತದ ನೈऋತ್ಯ ಮಾನ್ಸೂನ್ ಅನ್ನು ಕುಂಠಿತಗೊಳಿಸುತ್ತದೆ.',
     rainSummarySource: 'ಮೂಲ: {source}',
@@ -122,6 +124,7 @@ const content = {
     tableSummary: 'முழு மாதாந்திர புள்ளிவிவரங்கள்',
     tableMonth: 'மாதம்',
     toDate: '(இதுவரை)',
+    sinceJan1: 'ஜனவரி 1 முதல்',
     rainSummaryEyebrow: 'பருவமழை கண்காணிப்பு',
     rainSummaryBehind: 'இந்த {year} பருவமழை கடந்த ஆண்டு இதே காலகட்டத்தை விட {pct}% குறைவாக உள்ளது ({mm}மிமீ) — வானிலை நிபுணர்கள் கண்காணித்து வரும் {enso} நிலைமைகளுக்கு இணங்க, இது பொதுவாக இந்தியாவின் தென்மேற்கு பருவமழையை பலவீனப்படுத்துகிறது.',
     rainSummarySource: 'ஆதாரம்: {source}',
@@ -156,6 +159,7 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
     data-monsoon-band2-label={c.monsoonBand2Label}
     data-unit={c.unit}
     data-to-date={c.toDate}
+    data-since-jan1={c.sinceJan1}
     data-fmt-rain-summary-behind={c.rainSummaryBehind}
     data-fmt-rain-summary-source={c.rainSummarySource}
     data-unavailable={c.rainfallUnavailable}
@@ -1313,7 +1317,12 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
         if (mode === 'cumulative') {
           const lastGeomYear = geometry.years[geometry.years.length - 1];
           if (lastGeomYear?.endPoint && lastGeomYear.endPoint.month !== 'Dec') {
-            const todayLabel = `${data.cutoffDay} ${monthAbbr(data.cutoffMonth)}`;
+            // "(since 1 Jan)" makes explicit that this reads the chart's
+            // own Jan-1 cumulative basis, not the "This monsoon so far"
+            // stat's 1 Apr basis above — those two numbers legitimately
+            // differ by whatever fell in Jan-Mar, and are deliberately
+            // labeled as different figures rather than reconciled.
+            const todayLabel = `${data.cutoffDay} ${monthAbbr(data.cutoffMonth)} (${section!.dataset.sinceJan1 || ''})`;
             attachTodayMarker(svg!, frame!, tooltip!, geometry, unitLabel, todayLabel, (year) => hiddenYears.has(year));
           }
         }
