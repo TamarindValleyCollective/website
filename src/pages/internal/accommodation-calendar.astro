@@ -2213,13 +2213,31 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   // actually has something in it - collapsing every empty group is the
   // point (Sharath's feedback, 2026-09-10: 5 groups' worth of tent rows
   // made the list long), while a group mid-booking never silently hides
-  // what's already been entered into it.
+  // what's already been entered into it. That's the *initial* state only
+  // (set once per loadIntoForm/resetForm, before any override exists) - the
+  // moment the admin actually clicks into a group or a tent, focusGroup
+  // below narrows it down to one group at a time.
   function isGroupExpanded(groupName: string): boolean {
     return groupOverride.has(groupName) ? groupOverride.get(groupName)! : groupHasSelection(groupName);
   }
 
+  // Expands exactly one group and collapses every other one - clicking into
+  // a specific tent/group shouldn't leave every other group a multi-tent
+  // booking touches (e.g. a public event spanning all 5 groups) sitting
+  // open too (Sharath's feedback, 2026-09-15: "click on a specific item...
+  // should collapse the other entries"). Guest data already entered into a
+  // now-collapsed group isn't lost - it's still in the DOM/collectTents(),
+  // just not visible until that group's own legend is clicked again.
+  function focusGroup(groupName: string) {
+    for (const g of new Set(UNITS.map((u) => u.group))) groupOverride.set(g, g === groupName);
+  }
+
   function toggleGroup(groupName: string) {
-    groupOverride.set(groupName, !isGroupExpanded(groupName));
+    if (isGroupExpanded(groupName)) {
+      groupOverride.set(groupName, false);
+    } else {
+      focusGroup(groupName);
+    }
     renderGroupStates();
   }
 
@@ -2232,8 +2250,15 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     }
   }
 
+  // Also narrows the group list down to just the activated tent's own group
+  // (see focusGroup above) - activating a tent is as much "click on a
+  // specific item" as clicking a group legend directly is, so it gets the
+  // same collapse-the-rest treatment. Only on activation, not on
+  // deactivation (tentId === null): clearing the active tent (e.g. its last
+  // guest was removed) shouldn't also snap every other group shut.
   function setActiveTent(tentId: string | null) {
     activeTentId = tentId;
+    if (tentId) focusGroup(UNITS.find((u) => u.id === tentId)!.group);
     renderAllTentStates();
   }
 
