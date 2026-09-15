@@ -2829,7 +2829,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
             .join(', ') || 'No guests listed';
         const ariaLabel = cellTooltip(occupying, unit.id).replace(/\n/g, ' — ');
         html += `
-          <div class="day-row day-row--occupied" data-booking-id="${occupying.id}" tabindex="0" role="button" aria-label="${escapeAttr(ariaLabel)}">
+          <div class="day-row day-row--occupied" data-booking-id="${occupying.id}" data-tent-id="${unit.id}" tabindex="0" role="button" aria-label="${escapeAttr(ariaLabel)}">
             <div class="day-row-tent">${unit.shortLabel}</div>
             <div class="day-row-main">
               <span class="day-row-title">${escapeAttr(title)}</span>
@@ -2897,10 +2897,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         const occupying = currentBookings.find((b) => b.type !== 'farm-closure' && b.tents.some((t) => t.tentId === unit.id) && nightsByBookingId.get(b.id)!.has(date));
         if (farmClosure) {
           const label = cellTooltip(farmClosure, unit.id).replace(/\n/g, ' — ');
-          bodyHtml += `<td class="cell--closed${weekendClass}" data-booking-id="${farmClosure.id}" title="${escapeAttr(cellTooltip(farmClosure, unit.id))}" tabindex="0" role="button" aria-label="${escapeAttr(label)}">✕</td>`;
+          bodyHtml += `<td class="cell--closed${weekendClass}" data-booking-id="${farmClosure.id}" data-tent-id="${unit.id}" title="${escapeAttr(cellTooltip(farmClosure, unit.id))}" tabindex="0" role="button" aria-label="${escapeAttr(label)}">✕</td>`;
         } else if (occupying) {
           const label = cellTooltip(occupying, unit.id).replace(/\n/g, ' — ');
-          bodyHtml += `<td class="cell--occupied${weekendClass}" data-booking-id="${occupying.id}" title="${escapeAttr(cellTooltip(occupying, unit.id))}" tabindex="0" role="button" aria-label="${escapeAttr(label)}">●</td>`;
+          bodyHtml += `<td class="cell--occupied${weekendClass}" data-booking-id="${occupying.id}" data-tent-id="${unit.id}" title="${escapeAttr(cellTooltip(occupying, unit.id))}" tabindex="0" role="button" aria-label="${escapeAttr(label)}">●</td>`;
         } else if (date < today) {
           bodyHtml += `<td class="cell--free${weekendClass}">·</td>`;
         } else {
@@ -2918,7 +2918,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   function activateCell(cell: HTMLElement) {
     if (cell.dataset.bookingId) {
       const booking = currentBookings.find((b) => b.id === cell.dataset.bookingId);
-      if (booking) loadIntoForm(booking);
+      if (booking) loadIntoForm(booking, cell.dataset.tentId);
       return;
     }
     if (myRole === 'viewer') {
@@ -3135,7 +3135,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     closeBookingModal();
   }
 
-  function loadIntoForm(b: Booking) {
+  function loadIntoForm(b: Booking, focusTentId?: string) {
     editingId = b.id;
     groupOverride.clear(); // fresh session - groups default open/closed by selection, not a stale manual toggle
     const canEdit = canWriteType(b.type);
@@ -3194,6 +3194,14 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     nightsInput.value = String(b.nights);
     noteInput.value = b.note ?? '';
     setTents(b.tents);
+    // The grid/day-view cell actually clicked may name a specific tent
+    // within this booking (see activateCell) - setTents above always
+    // defaults to the booking's first tent, which silently ignored which
+    // cell was tapped (Sharath: "clicking on BYOT Tent 1 keeps all the
+    // accordions open"). Only honoured if that tent is really part of this
+    // booking - the generic .edit-booking card button passes no
+    // focusTentId at all and keeps the old default.
+    if (focusTentId && b.tents.some((t) => t.tentId === focusTentId)) setActiveTent(focusTentId);
     markOccupiedTents();
     refreshTypeOptions();
     setFormEditable(canEdit); // must run last - overrides markOccupiedTents' own enable/disable calls
