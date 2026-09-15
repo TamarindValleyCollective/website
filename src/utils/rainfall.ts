@@ -38,11 +38,22 @@ export function toCumulative(calendarYears: CalendarYearSeries[]): CalendarYearS
   });
 }
 
+export interface DailyMonthEntry {
+  month: string;
+  days: number[]; // index 0 = day 1
+}
+
+export interface DailyCalendarYear {
+  year: number;
+  months: DailyMonthEntry[];
+}
+
 export interface RainfallData {
   asOf: string;
   chartYear: string;
   currentYear: string;
   calendarYears: CalendarYearSeries[];
+  dailyByCalendarYear: DailyCalendarYear[];
   monsoonToDate: number | null;
   sameSpanLastYear: number | null;
   cutoffMonth: string;
@@ -164,7 +175,11 @@ function smoothPath(points: { x: number; y: number }[], yMin: number, yMax: numb
   return d;
 }
 
-export function buildLineChartGeometry(calendarYears: CalendarYearSeries[]): LineChartGeometry {
+// Pure chart-frame math (dimensions, month tick positions, month bands) —
+// identical for the plain monthly geometry and the day-granular cumulative
+// geometry below, since both always draw the same 12 month ticks on the
+// x-axis regardless of how many real data points make up each year's line.
+function computeChartFrame() {
   const chartWidth = 720;
   const chartHeight = 240;
   const chartPadLeft = 36;
@@ -183,6 +198,12 @@ export function buildLineChartGeometry(calendarYears: CalendarYearSeries[]): Lin
     return { left, right };
   });
 
+  return { chartWidth, chartHeight, chartPadLeft, chartPadTop, chartPadRight, plotWidth, plotHeight, monthX, monthBounds };
+}
+
+export function buildLineChartGeometry(calendarYears: CalendarYearSeries[]): LineChartGeometry {
+  const { chartWidth, chartHeight, chartPadLeft, chartPadTop, plotWidth, plotHeight, monthX, monthBounds } = computeChartFrame();
+
   let peak = 0;
   for (const y of calendarYears) for (const m of y.monthly) if (m.mm != null) peak = Math.max(peak, m.mm);
   const maxMm = niceMax(peak);
@@ -196,6 +217,102 @@ export function buildLineChartGeometry(calendarYears: CalendarYearSeries[]): Lin
       if (m.mm == null) return;
       points.push({ x: monthX[i], y: toY(m.mm), month: m.month, mm: m.mm });
     });
+    return {
+      year: y.year,
+      colorVar: SERIES_COLOR_VARS[idx % SERIES_COLOR_VARS.length],
+      points,
+      pathD: smoothPath(
+        points.map((p) => ({ x: p.x, y: p.y })),
+        chartPadTop,
+        chartPadTop + plotHeight
+      ),
+      endPoint: points.length ? points[points.length - 1] : null,
+    };
+  });
+
+  return { chartWidth, chartHeight, chartPadLeft, chartPadTop, plotWidth, plotHeight, maxMm, yTicks, monthX, monthBounds, years };
+}
+
+function daysInMonth(year: number, monthIndex0: number): number {
+  return new Date(year, monthIndex0 + 1, 0).getDate();
+}
+
+// One point per logged day for months the "Daily rain data" sheet actually
+// covers, so the line's height at any x position is a real day-accurate
+// running total (matching sumToDate() on the server) instead of only being
+// trustworthy at month boundaries — a past year's position at "today's
+// date" then reads as a same-day cutoff, not that month's full total.
+// Months without day-level data still contribute a single end-of-month
+// jump using that month's already-known total, same as before this
+// existed, so coverage can be partial (e.g. only the last year or two)
+// without breaking older years' lines. `monthPos` follows the same convention
+// as buildLineChartGeometry's monthX indices — monthPos i means "cumulative
+// through end of calendar month i" — so day d of D in month i lands at
+// i - 1 + d/D, reaching exactly i on the month's last day.
+export function buildDailyCumulativePoints(
+  year: number,
+  monthly: CalendarMonthEntry[],
+  dailyMonths: DailyMonthEntry[] | undefined
+): { monthPos: number; mm: number }[] {
+  const dailyByMonth = new Map((dailyMonths ?? []).map((m) => [m.month, m.days]));
+  const points: { monthPos: number; mm: number }[] = [];
+  let running = 0;
+
+  for (let i = 0; i < CALENDAR_MONTH_ORDER.length; i++) {
+    const entry = monthly[i];
+    if (entry.mm == null) break; // future / no data — stop, same rule as toCumulative()
+
+    const days = dailyByMonth.get(CALENDAR_MONTH_ORDER[i]);
+    if (days && days.length > 0) {
+      const totalDays = daysInMonth(year, i);
+      for (let d = 0; d < days.length; d++) {
+        running += days[d];
+        points.push({ monthPos: i - 1 + (d + 1) / totalDays, mm: running });
+      }
+    } else {
+      running += entry.mm;
+      points.push({ monthPos: i, mm: running });
+    }
+  }
+
+  return points;
+}
+
+// Cumulative-mode counterpart to buildLineChartGeometry(): same chart frame
+// and output shape, but each year's line is built from real day-by-day
+// data where available (see buildDailyCumulativePoints) rather than one
+// point per month — falls back to the plain monthly jump wherever a year
+// has no daily coverage, so it's safe to call even if the Sheet's "Daily
+// rain data" tab has no history at all.
+export function buildCumulativeLineChartGeometry(
+  calendarYears: CalendarYearSeries[],
+  dailyByCalendarYear: DailyCalendarYear[]
+): LineChartGeometry {
+  const { chartWidth, chartHeight, chartPadLeft, chartPadTop, chartPadRight, plotWidth, plotHeight, monthX, monthBounds } = computeChartFrame();
+  const dailyByYear = new Map(dailyByCalendarYear.map((y) => [y.year, y.months]));
+
+  const perYearPoints = calendarYears.map((y) => buildDailyCumulativePoints(y.year, y.monthly, dailyByYear.get(y.year)));
+
+  let peak = 0;
+  for (const points of perYearPoints) for (const p of points) peak = Math.max(peak, p.mm);
+  const maxMm = niceMax(peak);
+  const yTicks = [0, maxMm / 4, maxMm / 2, (maxMm * 3) / 4].map((n) => Math.round(n));
+
+  // Daily points can land fractionally outside [0, 11] at the very edges
+  // (e.g. day 1 of a month with day-level data sits just shy of the
+  // previous month's tick) — clamped to the plot's actual x-range so a
+  // point never renders outside the chart.
+  const toX = (monthPos: number) =>
+    Math.min(chartWidth - chartPadRight, Math.max(chartPadLeft, chartPadLeft + (plotWidth * monthPos) / (CALENDAR_MONTH_ORDER.length - 1)));
+  const toY = (mm: number) => chartPadTop + (plotHeight - (mm / maxMm) * plotHeight);
+
+  const years: YearLine[] = calendarYears.map((y, idx) => {
+    const points: LinePoint[] = perYearPoints[idx].map((p) => ({
+      x: toX(p.monthPos),
+      y: toY(p.mm),
+      month: CALENDAR_MONTH_ORDER[Math.min(11, Math.max(0, Math.ceil(p.monthPos - 1e-9)))],
+      mm: p.mm,
+    }));
     return {
       year: y.year,
       colorVar: SERIES_COLOR_VARS[idx % SERIES_COLOR_VARS.length],

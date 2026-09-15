@@ -603,6 +603,7 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
   import {
     fetchRainfall,
     buildLineChartGeometry,
+    buildCumulativeLineChartGeometry,
     toCumulative,
     CALENDAR_MONTH_ORDER,
     type CalendarYearSeries,
@@ -615,6 +616,12 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
     year: number;
     monthly: CalendarMonthEntry[];
     colorVar: string;
+    // Real x-position of this year's last data point (from the geometry
+    // that built the currently-rendered line) — only diverges from that
+    // month's tick position for a year still mid-month, so the hover dot
+    // below can be clamped to it instead of floating past where the line
+    // actually ends.
+    endX?: number;
   }
 
   // General, verified context for the "This monsoon so far" stat — not a
@@ -682,12 +689,11 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
 
   function renderChart(
     svg: SVGSVGElement,
-    calendarYears: CalendarYearSeries[],
+    geometry: ReturnType<typeof buildLineChartGeometry>,
     monthAbbr: (m: string) => string,
     unitLabel: string,
     monsoonBandLabels: [string, string]
   ) {
-    const geometry = buildLineChartGeometry(calendarYears);
     svg.setAttribute('viewBox', `0 0 ${geometry.chartWidth} ${geometry.chartHeight}`);
     svg.innerHTML = '';
 
@@ -908,7 +914,7 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
       const month = CALENDAR_MONTH_ORDER[i];
       const rows = years
         .filter((y) => !isHidden(y.year))
-        .map((y) => ({ year: y.year, colorVar: y.colorVar, mm: y.monthly[i]?.mm ?? null }))
+        .map((y) => ({ year: y.year, colorVar: y.colorVar, mm: y.monthly[i]?.mm ?? null, endX: y.endX }))
         .filter((r) => r.mm != null);
       if (rows.length === 0) return;
 
@@ -920,7 +926,11 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
         const dot = hoverDots.get(row.year);
         if (!dot) continue;
         const y = geometry.chartPadTop + (geometry.plotHeight - (row.mm! / geometry.maxMm) * geometry.plotHeight);
-        dot.setAttribute('cx', String(geometry.monthX[i]));
+        // Clamp to this year's real last-point x (only differs from the
+        // month tick for a year still mid-month) so the dot never floats
+        // past where its line actually ends.
+        const dotX = Math.min(geometry.monthX[i], row.endX ?? geometry.monthX[i]);
+        dot.setAttribute('cx', String(dotX));
         dot.setAttribute('cy', String(y));
         dot.classList.add('active');
       }
@@ -1132,8 +1142,21 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
 
       function render(animate: boolean): DisplayYear[] {
         const sourceData = mode === 'cumulative' ? toCumulative(data.calendarYears) : data.calendarYears;
-        const geometry = renderChart(svg!, sourceData, monthAbbr, unitLabel, monsoonBandLabels);
-        const displayYears: DisplayYear[] = sourceData.map((y, i) => ({ year: y.year, monthly: y.monthly, colorVar: geometry.years[i].colorVar }));
+        // Cumulative mode draws from real day-by-day figures where the
+        // Sheet has them, so a year's line reflects "same day, last year"
+        // rather than jumping to that month's full total — see
+        // buildCumulativeLineChartGeometry(). Monthly mode is unaffected.
+        const geometry =
+          mode === 'cumulative'
+            ? buildCumulativeLineChartGeometry(data.calendarYears, data.dailyByCalendarYear ?? [])
+            : buildLineChartGeometry(data.calendarYears);
+        renderChart(svg!, geometry, monthAbbr, unitLabel, monsoonBandLabels);
+        const displayYears: DisplayYear[] = sourceData.map((y, i) => ({
+          year: y.year,
+          monthly: y.monthly,
+          colorVar: geometry.years[i].colorVar,
+          endX: geometry.years[i].endPoint?.x,
+        }));
 
         interaction = attachInteraction(svg!, frame!, tooltip!, geometry, displayYears, monthAbbr, unitLabel, (year) => hiddenYears.has(year));
         renderTable(theadRow!, tableBody!, displayYears, monthAbbr, section!.dataset.toDate || '', unitLabel);

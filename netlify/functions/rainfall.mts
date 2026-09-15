@@ -138,6 +138,49 @@ interface DailyMonthBlock {
   total: number;
 }
 
+interface CalendarDailyMonthEntry {
+  month: string;
+  days: number[]; // index 0 = day 1
+}
+
+// Same raw daily rows as parseDailyTab() below, but keyed by plain calendar
+// year (not agricultural year) and without collapsing to a single running
+// total — feeds the chart's cumulative line so it can trace an actual
+// day-by-day trajectory (matching what sumToDate() already does for the
+// monsoon stat) instead of jumping straight from one month-end total to the
+// next, which is what made a past year's chart position at "today's date"
+// read as that month's full total rather than a same-day cutoff. A month
+// not yet fully reached in the current year is truncated to only the days
+// already elapsed, so the line doesn't imply data for days that haven't
+// happened yet; a month that hasn't started at all is dropped.
+function parseDailyTabByCalendarYear(
+  rows: string[][],
+  nowYear: number,
+  nowMonth: number,
+  nowDay: number
+): Record<number, CalendarDailyMonthEntry[]> {
+  const byYear: Record<number, CalendarDailyMonthEntry[]> = {};
+
+  for (const row of rows) {
+    const yearRaw = String(row[0] ?? '').trim();
+    if (!/^\d{4}$/.test(yearRaw)) continue; // header row or blank row
+    const year = Number(yearRaw);
+
+    const monthAbbr = normalizeMonth(String(row[1] ?? ''));
+    if (!monthAbbr) continue;
+    const calMonthNum = MONTH_CALENDAR_NUM[monthAbbr];
+
+    if (year > nowYear || (year === nowYear && calMonthNum > nowMonth)) continue; // hasn't started
+
+    let days = row.slice(2, 33).map((v) => (v === undefined || v === '' ? 0 : Number(v) || 0));
+    if (year === nowYear && calMonthNum === nowMonth) days = days.slice(0, nowDay);
+
+    (byYear[year] ??= []).push({ month: monthAbbr, days });
+  }
+
+  return byYear;
+}
+
 // "Daily rain data" tab: a flat table, header row ["Year", "Month", "1",
 // "2", ..., "31"], then one row per calendar year+month with day-of-month
 // values in columns C-AG. Rows for months not yet reached are present but
@@ -227,8 +270,11 @@ export default async (req: Request): Promise<Response> => {
     const monsoonToDate = sumToDate(dailyByYear[currentYear], cutoffMonth, nowDay);
     const sameSpanLastYear = sumToDate(dailyByYear[chartYear], cutoffMonth, nowDay);
 
+    const dailyByCalendarYear = parseDailyTabByCalendarYear(dailyRows, nowYear, nowMonth, nowDay);
+
     return jsonResponse({
       asOf: new Date().toISOString(),
+      dailyByCalendarYear: Object.entries(dailyByCalendarYear).map(([year, months]) => ({ year: Number(year), months })),
       chartYear,
       currentYear,
       calendarYears,
