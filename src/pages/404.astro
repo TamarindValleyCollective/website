@@ -78,9 +78,21 @@ import { FARM_AREA_ACRES } from '../data/site-facts';
       <a class="button button--outline" href="/visit/trekking-trails">Explore the Trails</a>
     </div>
 
-    <p class="lost__aside">Typed the address? Double-check it — our hens spell better than autocorrect.</p>
+    <p class="lost__aside">
+      Typed the address? Double-check it — our hens spell better than autocorrect. Or <button type="button" id="lost-search-trigger" class="lost__search-link">search the site</button> instead.
+    </p>
   </section>
 </BaseLayout>
+
+<script>
+  // Reuses the same overlay Nav.astro's SiteSearch renders site-wide
+  // (including here) rather than a second, duplicate search UI - a lost
+  // visitor is more likely to notice this prompt in the 404's own copy
+  // than the header's search icon, so it's worth surfacing here too.
+  document.getElementById('lost-search-trigger')?.addEventListener('click', () => {
+    document.getElementById('site-search-trigger')?.click();
+  });
+</script>
 
 <style>
   .lost {
@@ -147,6 +159,23 @@ import { FARM_AREA_ACRES } from '../data/site-facts';
     font-size: 0.88rem;
     font-style: italic;
     color: var(--tvc-ink-soft);
+  }
+
+  .lost__search-link {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    font-style: italic;
+    color: var(--tvc-green);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .lost__search-link:hover,
+  .lost__search-link:focus-visible {
+    color: var(--tvc-orange);
   }
 
   @media (max-width: 640px) {

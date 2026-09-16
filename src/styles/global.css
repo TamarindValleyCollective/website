@@ -105,6 +105,12 @@
   --tvc-error-border: #e8b4af;
   --tvc-error-bg: #fbebe9;
 
+  /* Homepage engagement-ladder "stone" tone (rung 5, deliberately the
+     quiet one - see HomeView.astro) - a genuinely distinct shade, not a
+     near-match to --tvc-cream/--tvc-line, so it gets its own token rather
+     than reusing either. */
+  --tvc-stone: #efece2;
+
   /* Shared with docs.tvc.farm's design system (see the TVCDocs vault's
      "Design system" note) - the true, saturated logo green, and the
      brown/blue "nature" pair from TVC's "green trees, brown earth, blue

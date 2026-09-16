@@ -8,6 +8,16 @@ import L from 'leaflet';
 import { TVC_BOUNDARY } from './biodiversity/tvc-boundary';
 import { TVC_LAYOUT, type LayoutCategory, type LayoutFeature } from '../data/tvc-layout';
 
+// Plain hex, not var(--tvc-*) - these feed Leaflet's SVG polygon/marker
+// styling (design-map.ts:65) as well as a plain inline-style legend
+// swatch, and CSS custom-property resolution inside SVG presentation
+// attributes set via Leaflet's own internals isn't reliable enough across
+// browsers to risk it for a property-plan legend. `structures` is an
+// intentional exact match for --tvc-orange (same brand color, reused
+// here rather than duplicated-with-drift); `foodForest` is close to but
+// independent of --tvc-green-vivid - both are worth checking by hand if
+// the brand palette in global.css ever changes. The other four have no
+// existing token equivalent; they're this legend's own categorical set.
 const CATEGORY_COLORS: Record<LayoutCategory, string> = {
   structures: '#bd7248',
   farmPlots: '#5b8c3e',

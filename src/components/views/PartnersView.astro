@@ -110,11 +110,11 @@ const partnersSchema = {
   .partners-list {
     display: flex;
     flex-direction: column;
-    gap: 32px;
+    gap: var(--space-7);
   }
 
   .partner {
-    padding-bottom: 32px;
+    padding-bottom: var(--space-7);
     border-bottom: 1px solid var(--tvc-line);
   }
 
@@ -145,7 +145,7 @@ const partnersSchema = {
     display: flex;
     align-items: baseline;
     flex-wrap: wrap;
-    gap: 4px 12px;
+    gap: var(--space-1) var(--space-3);
   }
 
   .partner__heading h2 {
@@ -187,7 +187,7 @@ const partnersSchema = {
     text-transform: uppercase;
     font-size: 0.75rem;
     letter-spacing: 0.03em;
-    margin-right: 4px;
+    margin-right: var(--space-1);
   }
 
   .partner__tvc :global(a) {

@@ -839,8 +839,15 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
     background: var(--tvc-orange-tint);
     border: 1px solid rgba(247, 133, 32, 0.3);
   }
-  .tone-3 .rung__step { color: #b85e10; }
-  .tone-3 .rung__cta { color: #b85e10; }
+  /* Was a hardcoded #b85e10 - fine (3.85:1) for .rung__step's large 2.2rem
+     bold numeral (WCAG AA only needs 3:1 there), but .rung__cta's 0.78rem
+     bold text needs the full 4.5:1 and was failing it (3.85-3.94:1 on
+     these tints). --tvc-orange-text is the same darkened-for-small-text
+     variant already used everywhere else on the site for this exact
+     problem (4.77:1+ on both tints here) - also more consistent with the
+     site's deliberately muted palette than the more vivid #b85e10 was. */
+  .tone-3 .rung__step { color: var(--tvc-orange-text); }
+  .tone-3 .rung__cta { color: var(--tvc-orange-text); }
 
   /* Host an Event gets a green-to-orange gradient instead of a flat tint —
      the two colors standing for the two audiences the pitch names (nature
@@ -850,13 +857,13 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
     border: 1px solid var(--tvc-line);
   }
   .tone-4 .rung__step { color: var(--tvc-green-dark); }
-  .tone-4 .rung__cta { color: #b85e10; }
+  .tone-4 .rung__cta { color: var(--tvc-orange-text); }
 
   /* Rung 5 is deliberately the quiet one — a muted stone tone instead of
      continuing the green-to-orange escalation, so it reads as "read this
      carefully" rather than "click here to apply" (TVC is unlikely to expand). */
   .tone-5 {
-    background: #efece2;
+    background: var(--tvc-stone);
     border: 1px solid var(--tvc-line);
   }
   .tone-5 .rung__step { color: var(--tvc-ink-soft); }
