@@ -63,6 +63,11 @@ export default {
     honeypotLabel: "Don't fill this out:",
     preferChat: 'Prefer to talk first?',
     messageOnWhatsapp: 'Message us',
+    // Every enquiry form marks the one or two optional fields ("Phone
+    // (optional)", etc.) rather than every required one - this single line
+    // states that convention up front instead of leaving a visitor to
+    // discover which fields are mandatory only after a failed submit.
+    requiredNote: 'All fields are required unless marked (optional).',
   },
   translationNotice: {
     text: 'This page is a draft AI translation pending review by a native speaker. Some phrasing may be imperfect.',

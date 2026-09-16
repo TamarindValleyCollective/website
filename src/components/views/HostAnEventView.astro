@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
+import WhatsAppButton from '../WhatsAppButton.astro';
 import { getCollection } from 'astro:content';
 import { formatDateRange } from '../../utils/events';
 import { FARM_AREA_ACRES, NIGHT_SKY_BRIGHTNESS_UCD_M2 } from '../../data/site-facts';
@@ -14,6 +15,14 @@ interface Props {
 
 const { lang } = Astro.props;
 const t = useTranslations(lang);
+
+// Same visit-bookings line BookingInquiry.astro's camping/day-visit/
+// trekking forms already message (this page also lives under /visit/) -
+// this was the one booking form on the site with no WhatsApp fallback at
+// all, unlike every sibling form.
+const WHATSAPP_NUMBER = '918548065772';
+const whatsappGreeting = "Hi, I'd like to talk about hosting an event at TVC.";
+const whatsappHref = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappGreeting)}`;
 
 // Two concrete proof points, one per audience track below - not a general
 // events query, since the whole point is naming things that actually
@@ -232,6 +241,7 @@ const serviceSchema = {
       >
         <input type="hidden" name="form-name" value="host-event-inquiry" />
         <p class="inquiry-hp"><label>{t('forms.honeypotLabel')} <input name="bot-field" /></label></p>
+        <p class="form-required-note">{t('forms.requiredNote')}</p>
 
         <div class="inquiry-grid">
           <div>
@@ -271,6 +281,11 @@ const serviceSchema = {
 
         <button class="button" type="submit">{t('forms.sendInquiry')}</button>
       </form>
+
+      <div class="whatsapp-cta">
+        <p class="whatsapp-cta__label">{t('forms.preferChat')}</p>
+        <WhatsAppButton href={whatsappHref}>{t('forms.messageOnWhatsapp')}</WhatsAppButton>
+      </div>
     </div>
   </section>
 </BaseLayout>
@@ -324,6 +339,15 @@ const serviceSchema = {
 
   .inquiry-form button {
     align-self: flex-start;
+  }
+
+  .whatsapp-cta {
+    max-width: 640px;
+    margin-top: 16px;
+  }
+
+  .whatsapp-cta__label {
+    margin-bottom: 8px;
   }
 
   /* Netlify Forms spam honeypot - off-screen, not display:none (some bots

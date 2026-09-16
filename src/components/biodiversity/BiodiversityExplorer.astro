@@ -931,13 +931,22 @@ const stringsJsonSafe = JSON.stringify(strings).replace(/<\/script/gi, '<\\/scri
     });
 
     overlayEl.hidden = false;
+    // Matches MembersView's popup pattern: no full focus trap, but landing
+    // focus on the close button means Tab/Shift+Tab starts from a sane
+    // point and Escape always has a clear target to close.
+    detailCloseEl.focus();
   }
 
-  detailCloseEl.addEventListener('click', () => {
+  function closeDetail() {
     overlayEl.hidden = true;
-  });
+  }
+
+  detailCloseEl.addEventListener('click', closeDetail);
   overlayEl.addEventListener('click', (e) => {
-    if (e.target === overlayEl) overlayEl.hidden = true;
+    if (e.target === overlayEl) closeDetail();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !overlayEl.hidden) closeDetail();
   });
 
   loadMoreBtn.addEventListener('click', () => {

@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
+import WhatsAppButton from '../WhatsAppButton.astro';
 import { FARM_AREA_ACRES } from '../../data/site-facts';
 import { MEMBER_FAMILY_COUNT } from '../../data/members';
 import { useTranslations, type Locale } from '../../i18n/utils';
@@ -12,6 +13,14 @@ interface Props {
 
 const { lang } = Astro.props;
 const t = useTranslations(lang);
+
+// Same general-enquiries line ContactView routes to Madhavan - this page's
+// own copy already says "the way in is conversation, not a form," so the
+// form-only booking flow it had (no WhatsApp fallback, unlike every other
+// enquiry form on the site) was actually working against its own framing.
+const MADHAVAN_WHATSAPP_NUMBER = '917406307309';
+const whatsappGreeting = "Hi, I'd like to know more about joining TVC as a member.";
+const whatsappHref = `https://wa.me/${MADHAVAN_WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappGreeting)}`;
 
 // Inline links inside prose (set:html) are built up front so each locale's
 // text only needs to interpolate a ready-made, locale-aware href.
@@ -160,6 +169,7 @@ const c = content[lang];
       >
         <input type="hidden" name="form-name" value="membership-enquiry" />
         <p class="enquiry-hp"><label>{t('forms.honeypotLabel')} <input name="bot-field" /></label></p>
+        <p class="form-required-note">{t('forms.requiredNote')}</p>
         <div class="enquiry-grid">
           <div>
             <label for="membership-name">{t('forms.name')}</label>
@@ -178,6 +188,12 @@ const c = content[lang];
         <textarea id="membership-message" name="message" rows="4" required></textarea>
         <button class="button" type="submit">{t('forms.sendEnquiry')}</button>
       </form>
+
+      <div class="whatsapp-cta">
+        <p class="whatsapp-cta__label">{t('forms.preferChat')}</p>
+        <WhatsAppButton href={whatsappHref}>{t('forms.messageOnWhatsapp')}</WhatsAppButton>
+      </div>
+
       <p class="join-other-reason">{c.otherReasonText} <a href={contactHref}>{c.otherReasonLink}</a></p>
     </div>
   </section>
@@ -223,6 +239,14 @@ const c = content[lang];
 
   .enquiry-form button {
     align-self: flex-start;
+  }
+
+  .whatsapp-cta {
+    margin-top: 20px;
+  }
+
+  .whatsapp-cta__label {
+    margin-bottom: 8px;
   }
 
   /* Netlify Forms spam honeypot — off-screen, not display:none (some bots

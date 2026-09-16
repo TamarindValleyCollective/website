@@ -43,6 +43,7 @@ const content = {
     heroIntro: 'Work with the local community around us, in Odhipuram and Thaggatti village.',
     ctaPre: "Want to work with the community on an initiative aligned with TVC's ethos?",
     ctaLinkText: 'Reach out',
+    emptyState: "We're preparing our first outreach story — check back soon, or reach out below in the meantime.",
   },
   kn: {
     metaDescription: 'ಒಧಿಪುರಂ ಮತ್ತು ತಗ್ಗಟ್ಟಿ ಗ್ರಾಮಗಳಲ್ಲಿ, TVC ಸುತ್ತಮುತ್ತಲಿನ ಸ್ಥಳೀಯ ಸಮುದಾಯದೊಂದಿಗೆ ಮಾಡಿದ ಕೆಲಸ.',
@@ -51,6 +52,7 @@ const content = {
     heroIntro: 'ಒಧಿಪುರಂ ಮತ್ತು ತಗ್ಗಟ್ಟಿ ಗ್ರಾಮಗಳಲ್ಲಿ, ನಮ್ಮ ಸುತ್ತಮುತ್ತಲಿನ ಸ್ಥಳೀಯ ಸಮುದಾಯದೊಂದಿಗಿನ ಕೆಲಸ.',
     ctaPre: 'TVC ಯ ಆಶಯಗಳಿಗೆ ಅನುಗುಣವಾದ ಒಂದು ಉಪಕ್ರಮದಲ್ಲಿ ಸಮುದಾಯದೊಂದಿಗೆ ಕೆಲಸ ಮಾಡಲು ಬಯಸುವಿರಾ?',
     ctaLinkText: 'ಸಂಪರ್ಕಿಸಿ',
+    emptyState: 'ನಾವು ನಮ್ಮ ಮೊದಲ ಔಟ್‌ರೀಚ್ ಕಥೆಯನ್ನು ಸಿದ್ಧಪಡಿಸುತ್ತಿದ್ದೇವೆ — ಶೀಘ್ರದಲ್ಲೇ ಮತ್ತೆ ಪರಿಶೀಲಿಸಿ, ಅಥವಾ ಈ ಮಧ್ಯೆ ಕೆಳಗೆ ಸಂಪರ್ಕಿಸಿ.',
   },
   ta: {
     metaDescription: 'ஓதிபுரம் மற்றும் தக்கட்டி கிராமங்களில், TVC-க்கு அருகிலுள்ள உள்ளூர் சமூகத்துடன் செய்த பணி.',
@@ -59,6 +61,7 @@ const content = {
     heroIntro: 'ஓதிபுரம் மற்றும் தக்கட்டி கிராமங்களில், எங்களைச் சுற்றியுள்ள உள்ளூர் சமூகத்துடனான பணி.',
     ctaPre: 'TVC-யின் நோக்கத்திற்கு ஏற்ற ஒரு முயற்சியில் சமூகத்துடன் இணைந்து பணியாற்ற விரும்புகிறீர்களா?',
     ctaLinkText: 'தொடர்பு கொள்ளுங்கள்',
+    emptyState: 'நாங்கள் எங்கள் முதல் தொடர்பு கதையைத் தயாரித்து வருகிறோம் — விரைவில் மீண்டும் பார்க்கவும், அல்லது இதற்கிடையில் கீழே தொடர்பு கொள்ளுங்கள்.',
   },
 } as const;
 
@@ -108,7 +111,7 @@ const outreachSchema =
         <h2>{singlePost.data.title}</h2>
         <Content />
       </article>
-    ) : (
+    ) : posts.length > 0 ? (
       <div class="grid">
         {posts.map((p) => (
           <a class="card" href={getRelativeLocaleUrl(lang, `/people/outreach/${bareSlug(p.id)}`)}>
@@ -118,6 +121,11 @@ const outreachSchema =
           </a>
         ))}
       </div>
+    ) : (
+      // All current entries (en/kn/ta) are draft:true pending real content -
+      // without this, the hero's "ongoing work" copy was followed by a
+      // visibly empty section instead of an honest placeholder.
+      <p class="empty-state">{c.emptyState}</p>
     )}
     <p class="cta-line">{c.ctaPre} <a href={getRelativeLocaleUrl(lang, '/contact')}>{c.ctaLinkText}</a></p>
   </section>
@@ -155,5 +163,9 @@ const outreachSchema =
 
   .cta-line {
     margin-top: 20px;
+  }
+
+  .empty-state {
+    color: var(--tvc-ink-soft);
   }
 </style>

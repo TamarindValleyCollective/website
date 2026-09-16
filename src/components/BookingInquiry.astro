@@ -90,6 +90,7 @@ const hasPricing = normalizedPackages?.some((opt) => typeof opt.adultRate === 'n
     <input type="hidden" name="form-name" value="visit-inquiry" />
     <input type="hidden" name="type" value={type} />
     <p class="inquiry-hp"><label>{t('forms.honeypotLabel')} <input name="bot-field" /></label></p>
+    <p class="form-required-note">{t('forms.requiredNote')}</p>
 
     {normalizedPackages && (
       <div class="field-package">

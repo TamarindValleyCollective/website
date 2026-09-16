@@ -390,6 +390,17 @@ img {
   color: #9c4438;
 }
 
+/* One shared note ("All fields are required unless marked optional") at
+   the top of every enquiry/booking form, instead of marking each required
+   field individually - matches the forms' existing convention of marking
+   only the optional exception, and keeps the wording/placement identical
+   across ContactView, BookingInquiry, HostAnEventView, and JoinView. */
+.form-required-note {
+  font-size: 0.85rem;
+  color: var(--tvc-ink-soft);
+  margin: 0 0 var(--space-2);
+}
+
 @media (max-width: 640px) {
   .section {
     padding-top: var(--space-section-sm);
