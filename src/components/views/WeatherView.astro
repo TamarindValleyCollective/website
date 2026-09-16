@@ -381,9 +381,8 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
   }
 
   .rainfall-summary {
-    background: #fff;
+    background: #f9e2df;
     border: 1px solid var(--tvc-line);
-    border-left: 4px solid var(--tvc-orange);
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
     padding: 14px 20px;
@@ -392,6 +391,9 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
 
   .rainfall-summary .eyebrow {
     margin: 0 0 6px;
+    /* #f9e2df fails WCAG AA against --tvc-orange-text (3.9:1) - darkened
+       red-brown for the same reason --tvc-orange-text exists. */
+    color: #9c4438;
   }
 
   .rainfall-summary-body {
@@ -790,7 +792,7 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
       label.setAttribute('class', 'end-label');
       label.setAttribute('data-year', String(lastYear.year));
       label.setAttribute('text-anchor', lastYear.endPoint.month === 'Jan' ? 'start' : 'middle');
-      label.textContent = `${lastYear.endPoint.mm}${unitLabel}`;
+      label.textContent = `${lastYear.endPoint.mm.toFixed(1)}${unitLabel}`;
       svg.appendChild(label);
     }
 

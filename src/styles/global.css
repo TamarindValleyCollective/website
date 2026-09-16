@@ -345,11 +345,13 @@ img {
 /* Generalized from .rainfall-summary's existing bordered-card pattern
    (WeatherView.astro) into a reusable component. Reserve only - no page
    consumes .callout yet; .rainfall-summary itself was left as its own
-   one-off rather than retrofitted, same reasoning as the spacing scale. */
+   one-off rather than retrofitted, same reasoning as the spacing scale.
+   Originally used a 4px border-left accent; moved to a tinted background
+   per variant instead after that read as a clashing "side-tab" against
+   the card's own border-radius (see .rainfall-summary's history). */
 .callout {
   background: #fff;
   border: 1px solid var(--tvc-line);
-  border-left: 4px solid var(--tvc-earth-brown);
   border-radius: var(--radius);
   box-shadow: var(--shadow-soft);
   padding: var(--space-4) var(--space-6);
@@ -365,12 +367,27 @@ img {
 }
 
 .callout--sky {
-  border-left-color: var(--tvc-sky-blue);
+  background: #eef4f6;
 }
 
 .callout--sky .eyebrow {
-  /* --tvc-sky-blue itself fails WCAG AA as text - use the text-safe variant. */
+  /* --tvc-sky-blue itself fails WCAG AA as text - use the text-safe variant.
+     4.78:1 at this background, comfortably past the 4.5:1 AA floor. */
   color: var(--tvc-sky-blue-text);
+}
+
+.callout--red {
+  /* Pale, muted red - kept dusty rather than a saturated alarm-red to
+     match the site's earth-tone palette. No named --tvc-* token for red
+     yet since this is the only consumer; promote to one if a second
+     .callout--red use turns up. */
+  background: #f9e2df;
+}
+
+.callout--red .eyebrow {
+  /* #f9e2df fails WCAG AA against --tvc-orange-text (3.9:1) - a darker
+     red-brown gets back to 5.15:1, same reasoning as --tvc-orange-text. */
+  color: #9c4438;
 }
 
 @media (max-width: 640px) {
