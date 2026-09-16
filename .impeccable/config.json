@@ -95,6 +95,15 @@
         ],
         "createdAt": "2026-09-07T06:56:27.564Z",
         "reason": "intentional empty-src lightbox placeholder, populated by client JS on open - same pattern as PhotoGallery.astro's lb-img"
+      },
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "src/components/photos/PhotoGallery.astro"
+        ],
+        "createdAt": "2026-09-16T13:55:54.020Z",
+        "reason": "lb-img is the lightbox's template element, src set by JS on open (not shipped empty); the L10 match is the literal string <img> inside a // comment describing this pattern, not markup"
       }
     ]
   }

@@ -219,10 +219,11 @@ const serviceSchema = {
           <h2>{it.name}</h2>
           <p class="desc">{it.desc}</p>
           <table>
+            <caption class="sr-only">{it.name}</caption>
             <tbody>
               {it.schedule.map(([time, activity]) => (
                 <tr>
-                  <td class="time">{time}</td>
+                  <th scope="row" class="time">{time}</th>
                   <td>{activity}</td>
                 </tr>
               ))}
@@ -267,16 +268,20 @@ const serviceSchema = {
     font-size: 0.92rem;
   }
 
-  td {
+  td,
+  th {
     padding: 6px 0;
     border-top: 1px dashed var(--tvc-line);
+    font-weight: inherit;
   }
 
-  td.time {
+  td.time,
+  th.time {
     font-variant-numeric: tabular-nums;
     color: var(--tvc-green);
     font-weight: 600;
     width: 70px;
+    text-align: left;
   }
 
   .pricing-note {

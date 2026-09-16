@@ -232,7 +232,7 @@ const serviceSchema = {
       <h2>{c.getInTouchHeading}</h2>
       <p class="section-hint">{c.getInTouchHint}</p>
       <form
-        class="inquiry-form card"
+        class="inquiry-form card site-form"
         name="host-event-inquiry"
         method="POST"
         action={getRelativeLocaleUrl(lang, '/visit/host-an-event/thanks')}
@@ -240,10 +240,10 @@ const serviceSchema = {
         data-netlify-honeypot="bot-field"
       >
         <input type="hidden" name="form-name" value="host-event-inquiry" />
-        <p class="inquiry-hp"><label>{t('forms.honeypotLabel')} <input name="bot-field" /></label></p>
+        <p class="form-honeypot" aria-hidden="true"><label>{t('forms.honeypotLabel')} <input name="bot-field" tabindex="-1" autocomplete="off" /></label></p>
         <p class="form-required-note">{t('forms.requiredNote')}</p>
 
-        <div class="inquiry-grid">
+        <div class="inquiry-grid site-form-grid">
           <div>
             <label for="name">{t('forms.name')}</label>
             <input id="name" type="text" name="name" placeholder={t('forms.namePlaceholder')} autocomplete="name" required />
@@ -282,8 +282,8 @@ const serviceSchema = {
         <button class="button" type="submit">{t('forms.sendInquiry')}</button>
       </form>
 
-      <div class="whatsapp-cta">
-        <p class="whatsapp-cta__label">{t('forms.preferChat')}</p>
+      <div class="form-whatsapp-cta form-whatsapp-cta--host">
+        <p class="form-whatsapp-cta__label">{t('forms.preferChat')}</p>
         <WhatsAppButton href={whatsappHref}>{t('forms.messageOnWhatsapp')}</WhatsAppButton>
       </div>
     </div>
@@ -308,52 +308,17 @@ const serviceSchema = {
   .inquiry-form {
     max-width: 640px;
     margin-top: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-
-  .inquiry-form label {
-    display: block;
-    font-weight: 600;
-    font-size: 0.85rem;
-    margin-bottom: 4px;
-  }
-
-  .inquiry-form input,
-  .inquiry-form select,
-  .inquiry-form textarea {
-    width: 100%;
-    padding: 10px 14px;
-    border: 1px solid var(--tvc-line);
-    border-radius: 10px;
-    font: inherit;
-    background: #fff;
   }
 
   .inquiry-grid {
-    display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 14px;
   }
 
-  .inquiry-form button {
-    align-self: flex-start;
-  }
-
-  .whatsapp-cta {
+  .form-whatsapp-cta--host {
     max-width: 640px;
-    margin-top: 16px;
   }
 
-  .whatsapp-cta__label {
+  .form-whatsapp-cta__label {
     margin-bottom: 8px;
-  }
-
-  /* Netlify Forms spam honeypot - off-screen, not display:none (some bots
-     skip hidden fields, but few check for visibility via position). */
-  .inquiry-hp {
-    position: absolute;
-    left: -9999px;
   }
 </style>

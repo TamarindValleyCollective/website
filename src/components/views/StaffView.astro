@@ -355,11 +355,11 @@ const staffSchema = {
   <section class="section wrapper">
     <div class="staff-grid">
       {staff.map((group) => (
-        <div class="card">
-          <div class="card-photo">
+        <div class="staff-card">
+          <div class="staff-card__photo">
             <img src={group.image} alt={group.imageAlt} loading="lazy" />
           </div>
-          <div class="card-body">
+          <div class="staff-card__body">
             {group.people.map((p) => (
               <div class="person" id={p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}>
                 <h2>{p.name}</h2>
@@ -381,27 +381,33 @@ const staffSchema = {
     gap: 24px;
   }
 
-  .card {
+  /* Deliberately its own namespace, not the shared global .card (that's a
+     bordered/shadowed/padded box - see global.css - which doesn't fit a
+     photo-forward bio group). Was previously named plain .card, which
+     silently shadowed the global class by name (Astro's scoping makes a
+     component-local rule win regardless) - a real footgun for anyone who
+     went looking for "the" .card rule and found this one instead. */
+  .staff-card {
     display: flex;
     flex-direction: column;
     overflow: hidden;
   }
 
-  .card-photo {
+  .staff-card__photo {
     aspect-ratio: 1 / 1;
     overflow: hidden;
     border-radius: 8px;
     background: var(--tvc-green-tint);
   }
 
-  .card-photo img {
+  .staff-card__photo img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     object-position: center;
   }
 
-  .card-body {
+  .staff-card__body {
     padding-top: 14px;
     display: flex;
     flex-direction: column;

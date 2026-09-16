@@ -119,7 +119,7 @@ const contactSchema = {
       <p>{c.generalText}</p>
       <div class="general-enquiry-layout">
         <form
-          class="enquiry-form"
+          class="enquiry-form site-form"
           name="general-enquiry"
           method="POST"
           action={getRelativeLocaleUrl(lang, '/contact/thanks')}
@@ -127,9 +127,9 @@ const contactSchema = {
           data-netlify-honeypot="bot-field"
         >
           <input type="hidden" name="form-name" value="general-enquiry" />
-          <p class="enquiry-hp"><label>{t('forms.honeypotLabel')} <input name="bot-field" /></label></p>
+          <p class="form-honeypot" aria-hidden="true"><label>{t('forms.honeypotLabel')} <input name="bot-field" tabindex="-1" autocomplete="off" /></label></p>
           <p class="form-required-note">{t('forms.requiredNote')}</p>
-          <div class="enquiry-grid">
+          <div class="site-form-grid">
             <div>
               <label for="general-name">{t('forms.name')}</label>
               <input id="general-name" type="text" name="name" placeholder={t('forms.namePlaceholder')} autocomplete="name" required />
@@ -211,39 +211,6 @@ const contactSchema = {
     margin-top: 16px;
   }
 
-  .enquiry-form {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-
-  .enquiry-form label {
-    display: block;
-    font-weight: 600;
-    font-size: 0.85rem;
-    margin-bottom: 4px;
-  }
-
-  .enquiry-form input,
-  .enquiry-form textarea {
-    width: 100%;
-    padding: 10px 14px;
-    border: 1px solid var(--tvc-line);
-    border-radius: 10px;
-    font: inherit;
-    background: #fff;
-  }
-
-  .enquiry-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 14px;
-  }
-
-  .enquiry-form button {
-    align-self: flex-start;
-  }
-
   .whatsapp-cta {
     padding: 20px;
     border: 1px dashed var(--tvc-line);
@@ -254,13 +221,6 @@ const contactSchema = {
 
   .whatsapp-cta p {
     margin-bottom: 12px;
-  }
-
-  /* Netlify Forms spam honeypot — off-screen, not display:none (some bots
-     skip hidden fields, but few check for visibility via position). */
-  .enquiry-hp {
-    position: absolute;
-    left: -9999px;
   }
 
   .contact-grid {

@@ -160,7 +160,7 @@ const c = content[lang];
       <h2>{c.readyHeading}</h2>
       <p>{c.readyHint}</p>
       <form
-        class="enquiry-form card"
+        class="enquiry-form card site-form"
         name="membership-enquiry"
         method="POST"
         action={getRelativeLocaleUrl(lang, '/contact/thanks')}
@@ -168,9 +168,9 @@ const c = content[lang];
         data-netlify-honeypot="bot-field"
       >
         <input type="hidden" name="form-name" value="membership-enquiry" />
-        <p class="enquiry-hp"><label>{t('forms.honeypotLabel')} <input name="bot-field" /></label></p>
+        <p class="form-honeypot" aria-hidden="true"><label>{t('forms.honeypotLabel')} <input name="bot-field" tabindex="-1" autocomplete="off" /></label></p>
         <p class="form-required-note">{t('forms.requiredNote')}</p>
-        <div class="enquiry-grid">
+        <div class="enquiry-grid site-form-grid">
           <div>
             <label for="membership-name">{t('forms.name')}</label>
             <input id="membership-name" type="text" name="name" placeholder={t('forms.namePlaceholder')} autocomplete="name" required />
@@ -189,8 +189,8 @@ const c = content[lang];
         <button class="button" type="submit">{t('forms.sendEnquiry')}</button>
       </form>
 
-      <div class="whatsapp-cta">
-        <p class="whatsapp-cta__label">{t('forms.preferChat')}</p>
+      <div class="form-whatsapp-cta form-whatsapp-cta--join">
+        <p class="form-whatsapp-cta__label">{t('forms.preferChat')}</p>
         <WhatsAppButton href={whatsappHref}>{t('forms.messageOnWhatsapp')}</WhatsAppButton>
       </div>
 
@@ -209,51 +209,14 @@ const c = content[lang];
   .enquiry-form {
     text-align: left;
     margin-top: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-
-  .enquiry-form label {
-    display: block;
-    font-weight: 600;
-    font-size: 0.85rem;
-    margin-bottom: 4px;
-  }
-
-  .enquiry-form input,
-  .enquiry-form textarea {
-    width: 100%;
-    padding: 10px 14px;
-    border: 1px solid var(--tvc-line);
-    border-radius: 10px;
-    font: inherit;
-    background: #fff;
   }
 
   .enquiry-grid {
-    display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 14px;
   }
 
-  .enquiry-form button {
-    align-self: flex-start;
-  }
-
-  .whatsapp-cta {
+  .form-whatsapp-cta--join {
     margin-top: 20px;
-  }
-
-  .whatsapp-cta__label {
-    margin-bottom: 8px;
-  }
-
-  /* Netlify Forms spam honeypot — off-screen, not display:none (some bots
-     skip hidden fields, but few check for visibility via position). */
-  .enquiry-hp {
-    position: absolute;
-    left: -9999px;
   }
 
   .join-other-reason {

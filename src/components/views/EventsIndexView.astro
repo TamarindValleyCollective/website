@@ -227,14 +227,14 @@ const eventsSchema = {
       <div>
         <p class="filter-group__label">{c.filterByType}</p>
         <div class="chips" id="tag-chips">
-          <button type="button" class="chip is-active" data-tag="all">{c.allChip}</button>
-          {contentTags.map((t) => <button type="button" class="chip" data-tag={t}>{t} <span class="chip__count">{tagCounts.get(t)}</span></button>)}
+          <button type="button" class="chip tap-target is-active" data-tag="all">{c.allChip}</button>
+          {contentTags.map((t) => <button type="button" class="chip tap-target" data-tag={t}>{t} <span class="chip__count">{tagCounts.get(t)}</span></button>)}
         </div>
       </div>
       <div>
         <p class="filter-group__label">{c.lengthLabel}</p>
         <div class="chips" id="duration-chips">
-          {durationTags.map((t) => <button type="button" class="chip chip--duration" data-tag={t}>{t}</button>)}
+          {durationTags.map((t) => <button type="button" class="chip chip--duration tap-target" data-tag={t}>{t}</button>)}
         </div>
       </div>
     </div>
@@ -254,8 +254,15 @@ const eventsSchema = {
         {pastCards.map((item) =>
           item.kind === 'event' ? (
             <a class="card" href={eventHref(item.event)} data-tags={tagsAttr(item.event)}>
-              {item.event.data.coverImage && (
+              {item.event.data.coverImage ? (
                 <img src={item.event.data.coverImage} alt={item.event.data.coverImageAlt ?? item.event.data.title} loading="lazy" />
+              ) : (
+                // Same gradient fallback as .upcoming-card__media--empty above,
+                // instead of leaving a bare text card - a past event with no
+                // photo used to have no visual treatment at all, an outlier
+                // next to every other card in this grid (real photos or, on
+                // the 3Bs&1H stack card, a dedicated cover).
+                <div class="grid-media-empty" aria-hidden="true" />
               )}
               <p class="date">{formatDateRange(item.event.data.date, item.event.data.endDate, lang)}</p>
               <h3>{item.event.data.title}</h3>
@@ -670,6 +677,13 @@ const eventsSchema = {
     width: calc(100% + 56px);
     height: 160px;
     object-fit: cover;
+  }
+
+  .grid-media-empty {
+    border-radius: var(--radius) var(--radius) 0 0;
+    margin: -28px -28px 16px;
+    height: 160px;
+    background: linear-gradient(135deg, var(--tvc-green-tint), var(--tvc-orange-tint));
   }
 
   .card .excerpt {

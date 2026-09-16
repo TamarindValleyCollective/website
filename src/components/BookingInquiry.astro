@@ -80,7 +80,7 @@ const hasPricing = normalizedPackages?.some((opt) => typeof opt.adultRate === 'n
   {heading && <h2 class="booking-inquiry__heading">{heading}</h2>}
   {note && <p class="note">{note}</p>}
   <form
-    class="inquiry-form card"
+    class="inquiry-form card site-form"
     name="visit-inquiry"
     method="POST"
     action={getRelativeLocaleUrl(lang, '/visit/thanks')}
@@ -89,7 +89,7 @@ const hasPricing = normalizedPackages?.some((opt) => typeof opt.adultRate === 'n
   >
     <input type="hidden" name="form-name" value="visit-inquiry" />
     <input type="hidden" name="type" value={type} />
-    <p class="inquiry-hp"><label>{t('forms.honeypotLabel')} <input name="bot-field" /></label></p>
+    <p class="form-honeypot" aria-hidden="true"><label>{t('forms.honeypotLabel')} <input name="bot-field" tabindex="-1" autocomplete="off" /></label></p>
     <p class="form-required-note">{t('forms.requiredNote')}</p>
 
     {normalizedPackages && (
@@ -106,7 +106,7 @@ const hasPricing = normalizedPackages?.some((opt) => typeof opt.adultRate === 'n
       </div>
     )}
 
-    <div class="inquiry-grid">
+    <div class="inquiry-grid site-form-grid">
       <div>
         <label for={`${fieldId}-name`}>{t('forms.name')}</label>
         <input id={`${fieldId}-name`} type="text" name="name" placeholder={t('forms.namePlaceholder')} autocomplete="name" required />
@@ -199,8 +199,8 @@ const hasPricing = normalizedPackages?.some((opt) => typeof opt.adultRate === 'n
   )}
 
   {showWhatsapp && (
-    <div class="whatsapp-cta">
-      <p class="whatsapp-cta__label">{t('forms.preferChat')}</p>
+    <div class="form-whatsapp-cta">
+      <p class="form-whatsapp-cta__label">{t('forms.preferChat')}</p>
       <WhatsAppButton href={whatsappHref}>{t('forms.messageOnWhatsapp')}</WhatsAppButton>
     </div>
   )}
@@ -219,40 +219,6 @@ const hasPricing = normalizedPackages?.some((opt) => typeof opt.adultRate === 'n
 
   .note {
     margin-bottom: 16px;
-  }
-
-  .inquiry-form {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-
-  .inquiry-form label {
-    display: block;
-    font-weight: 600;
-    font-size: 0.85rem;
-    margin-bottom: 4px;
-  }
-
-  .inquiry-form input,
-  .inquiry-form select,
-  .inquiry-form textarea {
-    width: 100%;
-    padding: 10px 14px;
-    border: 1px solid var(--tvc-line);
-    border-radius: 10px;
-    font: inherit;
-    background: #fff;
-  }
-
-  .inquiry-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 14px;
-  }
-
-  .inquiry-form button {
-    align-self: flex-start;
   }
 
   .field-total {
@@ -282,18 +248,4 @@ const hasPricing = normalizedPackages?.some((opt) => typeof opt.adultRate === 'n
     font-size: 1.15rem;
   }
 
-  .whatsapp-cta {
-    margin-top: 16px;
-  }
-
-  .whatsapp-cta__label {
-    margin-bottom: 8px;
-  }
-
-  /* Netlify Forms spam honeypot - off-screen, not display:none (some bots
-     skip hidden fields, but few check for visibility via position). */
-  .inquiry-hp {
-    position: absolute;
-    left: -9999px;
-  }
 </style>

@@ -939,10 +939,11 @@ const brand =
     margin: 12px 0 0;
     font-size: 0.85rem;
     font-weight: 600;
-    /* No red exists anywhere else in this site's deliberately muted
-       palette (see global.css's :root comment) - this is the one place
-       that needs an unambiguous "something went wrong" signal, so it's a
-       one-off rather than a new token. 6.5:1 on the card's white background. */
-    color: #b3261e;
+    /* Same --tvc-error-text used by every form-validation and /internal
+       error state (see global.css) - this was written as an intentional
+       one-off hex before those other uses turned up and got promoted to a
+       shared token; this is that same value. 6.5:1 on the card's white
+       background. */
+    color: var(--tvc-error-text);
   }
 </style>

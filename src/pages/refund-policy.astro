@@ -14,10 +14,11 @@ import { LEGAL_ENTITY_NAME } from '../data/site-facts';
 
     <h2>Cancelling a confirmed booking</h2>
     <table class="refund-table">
+      <caption class="sr-only">Refund by cancellation timing</caption>
       <tbody>
-        <tr><td>7 or more days before your check-in date</td><td>75% refund</td></tr>
-        <tr><td>48 hours to 7 days before your check-in date</td><td>50% refund</td></tr>
-        <tr><td>Less than 48 hours before your check-in date</td><td>No refund</td></tr>
+        <tr><th scope="row">7 or more days before your check-in date</th><td>75% refund</td></tr>
+        <tr><th scope="row">48 hours to 7 days before your check-in date</th><td>50% refund</td></tr>
+        <tr><th scope="row">Less than 48 hours before your check-in date</th><td>No refund</td></tr>
       </tbody>
     </table>
     <p>To cancel, contact us at <a href="mailto:contact@tvc.farm">contact@tvc.farm</a> or <a href="tel:+917406307309">+91 74063 07309</a> as early as possible — the refund tier is based on when we receive your cancellation, not when you first booked.</p>
@@ -47,9 +48,12 @@ import { LEGAL_ENTITY_NAME } from '../data/site-facts';
     margin: 16px 0;
   }
 
-  .refund-table td {
+  .refund-table td,
+  .refund-table th {
     padding: 10px 0;
     border-top: 1px dashed var(--tvc-line);
+    font-weight: inherit;
+    text-align: left;
   }
 
   .refund-table td:last-child {

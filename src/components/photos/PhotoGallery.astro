@@ -394,7 +394,15 @@ const uiStringsJsonSafe = JSON.stringify(c).replace(/<\/script/gi, '<\\/script')
     height: 190px;
     object-fit: cover;
     display: block;
-    transition: transform 0.3s ease;
+    opacity: 1;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+  }
+
+  /* Only images the script (below) marks as still-loading start hidden -
+     opacity defaults to 1 above, so a no-JS visitor sees every photo
+     immediately with no fade, just without the enhancement. */
+  .photo-tile img.is-loading {
+    opacity: 0;
   }
 
   .photo-tile:hover img {
@@ -764,6 +772,24 @@ const uiStringsJsonSafe = JSON.stringify(c).replace(/<\/script/gi, '<\\/script')
   let mapInitialized = false;
 
   const tiles = Array.from(document.querySelectorAll<HTMLElement>('.photo-tile'));
+
+  // Remote R2-hosted photos can take a moment on a slow connection - fade
+  // each tile's image in once it actually loads instead of popping in
+  // abruptly, so a still-loading tile reads as "loading" (visible tan
+  // .photo-tile background) rather than "broken." Opacity defaults to 1 in
+  // CSS; only images this script marks .is-loading start hidden, so a
+  // no-JS visitor still sees every photo immediately, just without the
+  // fade. Both load and error remove the class, so a failed image falls
+  // back to the tan background + browser's broken-image icon instead of
+  // staying invisible forever.
+  tiles.forEach((tile) => {
+    const img = tile.querySelector('img');
+    if (!img || img.complete) return;
+    img.classList.add('is-loading');
+    const reveal = () => img.classList.remove('is-loading');
+    img.addEventListener('load', reveal, { once: true });
+    img.addEventListener('error', reveal, { once: true });
+  });
 
   function matches(el: HTMLElement) {
     const yearOk = activeYear === 'all' || el.dataset.year === activeYear;

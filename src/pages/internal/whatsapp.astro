@@ -162,7 +162,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
 
   .error {
-    color: #b3261e;
+    color: var(--tvc-error-text);
     font-size: 0.85rem;
     margin: 10px 0 0;
   }
@@ -474,9 +474,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
      before it's clicked, same red used for failed-send bubbles elsewhere on
      this page. */
   .block-btn.is-blocked {
-    border-color: #e8b4af;
-    background: #fbebe9;
-    color: #b3261e;
+    border-color: var(--tvc-error-border);
+    background: var(--tvc-error-bg);
+    color: var(--tvc-error-text);
   }
 
   /* Shown in the conversation list next to a blocked contact's name — same
@@ -486,8 +486,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     flex: 0 0 auto;
     font-size: 0.68rem;
     font-weight: 600;
-    color: #b3261e;
-    background: #fbebe9;
+    color: var(--tvc-error-text);
+    background: var(--tvc-error-bg);
     border-radius: 999px;
     padding: 1px 7px;
   }
@@ -574,15 +574,15 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
 
   :global(.bubble.failed) {
-    background: #fbebe9;
-    border: 1px solid #e8b4af;
+    background: var(--tvc-error-bg);
+    border: 1px solid var(--tvc-error-border);
   }
 
   :global(.bubble .bubble-error) {
     display: block;
     margin-top: 4px;
     font-size: 0.76rem;
-    color: #b3261e;
+    color: var(--tvc-error-text);
   }
 
   :global(.bubble .bubble-meta) {
@@ -673,7 +673,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   .reply-status {
     margin: 0 16px 10px;
     font-size: 0.8rem;
-    color: #b3261e;
+    color: var(--tvc-error-text);
   }
 
   /* Below a breakpoint, show one pane at a time (list, then thread) instead

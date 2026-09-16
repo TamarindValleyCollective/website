@@ -190,6 +190,17 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 <script type="application/json" id="members-data" set:html={JSON.stringify(memberNames)} />
 
 <style>
+  /* This is a tool, not a landing page — same override as the other two
+     /internal pages (photo-pool.astro, whatsapp.astro): the site's
+     default 96px section padding is calibrated for marketing pages and
+     just pushes the actual calendar workspace down. Scoped to this page
+     only (Astro scopes .section.wrapper here to this file), doesn't
+     touch the shared class elsewhere. */
+  .section.wrapper {
+    padding-top: 32px;
+    padding-bottom: 32px;
+  }
+
   .hint {
     color: var(--tvc-ink-soft);
     margin: -8px 0 24px;
@@ -221,7 +232,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   .error {
-    color: #b3261e;
+    color: var(--tvc-error-text);
     font-size: 0.85rem;
     margin: 10px 0 0;
   }
@@ -1347,14 +1358,14 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
      are never one indistinguishable pill color. */
   .button.button--danger {
     background: #fff;
-    border-color: #b3261e;
-    color: #b3261e;
+    border-color: var(--tvc-error-text);
+    color: var(--tvc-error-text);
   }
 
   .button.button--danger:hover,
   .button.button--danger:focus-visible {
-    background: #b3261e;
-    border-color: #b3261e;
+    background: var(--tvc-error-text);
+    border-color: var(--tvc-error-text);
     color: #fff;
   }
 

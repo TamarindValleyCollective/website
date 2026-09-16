@@ -142,9 +142,10 @@ const serviceSchema = {
 
     <h2>{c.pricingHeading}</h2>
     <table class="pricing-table">
+      <caption class="sr-only">{c.pricingHeading}</caption>
       <tbody>
         {c.pricingRows.map(([label, price]) => (
-          <tr><td>{label}</td><td>{price}</td></tr>
+          <tr><th scope="row">{label}</th><td>{price}</td></tr>
         ))}
       </tbody>
     </table>
@@ -177,9 +178,18 @@ const serviceSchema = {
     margin: 16px 0;
   }
 
-  .pricing-table td {
+  .pricing-table td,
+  .pricing-table th {
     padding: 8px 0;
     border-top: 1px dashed var(--tvc-line);
+  }
+
+  /* Row label is a <th scope="row"> for screen readers - undo the UA
+     stylesheet's bold/center so it still reads like the plain label it
+     visually was. */
+  .pricing-table th {
+    font-weight: inherit;
+    text-align: left;
   }
 
   .pricing-table td:last-child {

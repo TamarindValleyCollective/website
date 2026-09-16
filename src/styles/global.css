@@ -96,6 +96,15 @@
   --tvc-ink-soft: #57604f;
   --tvc-line: #e2ddc9;
 
+  /* Form/validation error state - distinct from .callout--red's softer,
+     earth-tone red (used for editorial content) since this trio was
+     already in use, verbatim, across every form-validation and
+     internal-tool error state (EventDetailView, and the three /internal
+     admin pages) before being promoted here. Same values, just named. */
+  --tvc-error-text: #b3261e;
+  --tvc-error-border: #e8b4af;
+  --tvc-error-bg: #fbebe9;
+
   /* Shared with docs.tvc.farm's design system (see the TVCDocs vault's
      "Design system" note) - the true, saturated logo green, and the
      brown/blue "nature" pair from TVC's "green trees, brown earth, blue
@@ -249,7 +258,10 @@ a:hover {
 }
 
 a:focus-visible,
-button:focus-visible {
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
   outline: 2px solid var(--tvc-orange);
   outline-offset: 2px;
 }
@@ -395,10 +407,124 @@ img {
    field individually - matches the forms' existing convention of marking
    only the optional exception, and keeps the wording/placement identical
    across ContactView, BookingInquiry, HostAnEventView, and JoinView. */
+/* Visually hidden but still announced by screen readers - for table
+   captions and other context that sighted users get from surrounding
+   layout (a heading, a card) but a screen reader navigating table-by-table
+   or field-by-field does not. */
+/* Expands a small control's actual hit area toward a more comfortable
+   touch target without inflating its visible size or the layout around
+   it - needed by dense rows of filter chips/legend checkboxes (Events,
+   Biodiversity, Weather) where visually growing every control to a full
+   44px would blow out the layout and increase scroll length. The 4px
+   inset (adding up to 8px per axis) is deliberately conservative: most of
+   these controls sit in rows with only 6-8px of gap between siblings, so
+   a larger expansion would make adjacent hit areas overlap and produce
+   ambiguous taps - a worse regression than the small target it fixes.
+   position: relative is bundled here rather than left to each caller,
+   since none of the buttons/labels it's applied to needed a different
+   position value. */
+.tap-target {
+  position: relative;
+}
+
+.tap-target::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+/* Every Leaflet map on the site (Landscape's corridor map, Biodiversity's
+   observation map, the photo gallery's map view) ships Leaflet's own
+   unthemed zoom control. Leaflet already auto-detects touch and bumps
+   .leaflet-bar a from 26px to 30px via its own .leaflet-touch variant -
+   this only pushes that touch case further, toward a full 44px, since
+   that's specifically where small targets are a real finger-precision
+   problem. Desktop's mouse-driven 26px is left alone; a mouse pointer
+   doesn't need a 44px target the way a fingertip does. Selector matches
+   .leaflet-container to outrank leaflet.css's own same-specificity rule
+   regardless of stylesheet load order. */
+.leaflet-container.leaflet-touch .leaflet-bar a {
+  width: 44px;
+  height: 44px;
+  line-height: 44px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .form-required-note {
   font-size: 0.85rem;
   color: var(--tvc-ink-soft);
   margin: 0 0 var(--space-2);
+}
+
+/* Shared base for every enquiry/booking form site-wide (Contact,
+   BookingInquiry's camping/day-visit/trekking/event forms, Host-an-Event,
+   Join) - this was identical, hand-copied CSS in four separate files
+   before being promoted here. Each form keeps its own class
+   (.enquiry-form / .inquiry-form) for page-specific bits (max-width,
+   margin-top, text-align) layered on top via a second class. */
+.site-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.site-form label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+}
+
+.site-form input,
+.site-form select,
+.site-form textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--tvc-line);
+  border-radius: 10px;
+  font: inherit;
+  background: #fff;
+}
+
+.site-form > button {
+  align-self: flex-start;
+}
+
+/* Default 2-up/3-up responsive field grid; a form needing a different
+   column minimum overrides grid-template-columns on its own local class
+   alongside this one, rather than redefining the whole rule. */
+.site-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+/* Netlify Forms spam honeypot - off-screen via position (not
+   display:none, since some bots skip hidden fields but few check for
+   visibility this way), aria-hidden and tabindex="-1" on the markup keep
+   it out of a real visitor's tab order and screen-reader flow. */
+.form-honeypot {
+  position: absolute;
+  left: -9999px;
+}
+
+.form-whatsapp-cta {
+  margin-top: 16px;
+}
+
+.form-whatsapp-cta__label {
+  margin-bottom: 8px;
 }
 
 @media (max-width: 640px) {

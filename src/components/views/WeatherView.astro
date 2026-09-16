@@ -816,6 +816,7 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
     for (const year of years) {
       const li = document.createElement('li');
       const label = document.createElement('label');
+      label.className = 'tap-target';
 
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';

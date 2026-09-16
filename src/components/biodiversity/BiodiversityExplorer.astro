@@ -157,7 +157,7 @@ const stringsJsonSafe = JSON.stringify(strings).replace(/<\/script/gi, '<\\/scri
 
     <div class="leaderboard-row">
       <div class="leaderboard" id="leaderboard" role="group" aria-label={c.topContributorsAria}></div>
-      <label class="quality-toggle" title={c.researchGradeTitle}>
+      <label class="quality-toggle tap-target" title={c.researchGradeTitle}>
         <input type="checkbox" id="research-grade-toggle" />
         {c.researchGradeLabel}
       </label>
@@ -786,7 +786,7 @@ const stringsJsonSafe = JSON.stringify(strings).replace(/<\/script/gi, '<\\/scri
     top.forEach(([login, { name, count }], i) => {
       const item = document.createElement('button');
       item.type = 'button';
-      item.className = `leaderboard__item${login === activeContributor ? ' is-active' : ''}`;
+      item.className = `leaderboard__item tap-target${login === activeContributor ? ' is-active' : ''}`;
       item.innerHTML = `<span class="leaderboard__rank">${RANK_MEDALS[i] ?? i + 1}</span> ${name} <span class="leaderboard__count">· ${count}</span>`;
       item.addEventListener('click', () => setContributorFilter(login, name));
       leaderboardEl.appendChild(item);
@@ -796,7 +796,7 @@ const stringsJsonSafe = JSON.stringify(strings).replace(/<\/script/gi, '<\\/scri
   function renderChips(groups: Map<string, Observation[]>) {
     chipsEl.innerHTML = '';
     const allChip = document.createElement('button');
-    allChip.className = 'chip is-active';
+    allChip.className = 'chip tap-target is-active';
     allChip.type = 'button';
     allChip.dataset.taxon = '';
     allChip.textContent = `${STR.allChip} · ${allObservations.length}`;
@@ -806,7 +806,7 @@ const stringsJsonSafe = JSON.stringify(strings).replace(/<\/script/gi, '<\\/scri
     const sortedGroups = [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
     for (const [iconicTaxon, obs] of sortedGroups) {
       const chip = document.createElement('button');
-      chip.className = 'chip';
+      chip.className = 'chip tap-target';
       chip.type = 'button';
       chip.dataset.taxon = iconicTaxon;
       chip.textContent = `${labelForIconicTaxon(iconicTaxon, LANG)} · ${obs.length}`;

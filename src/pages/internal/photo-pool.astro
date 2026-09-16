@@ -35,6 +35,17 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 <script is:inline src="https://accounts.google.com/gsi/client"></script>
 
 <style>
+  /* This is a tool, not a landing page — same override as the other two
+     /internal pages (whatsapp.astro, accommodation-calendar.astro): the
+     site's default 96px section padding is calibrated for marketing
+     pages and just pushes the sign-in gate down a full screen for no
+     reason. Scoped to this page only (Astro scopes .section.wrapper here
+     to this file), doesn't touch the shared class elsewhere. */
+  .section.wrapper {
+    padding-top: 32px;
+    padding-bottom: 32px;
+  }
+
   .hint {
     color: var(--tvc-ink-soft);
     margin: -8px 0 24px;
@@ -60,7 +71,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
 
   .error {
-    color: #b3261e;
+    color: var(--tvc-error-text);
     font-size: 0.85rem;
     margin: 10px 0 0;
   }
@@ -229,12 +240,12 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
 
   .photo-card .reject {
-    color: #b3261e;
-    border-color: #e8b4af;
+    color: var(--tvc-error-text);
+    border-color: var(--tvc-error-border);
   }
 
   .photo-card .reject:hover {
-    background: #fbebe9;
+    background: var(--tvc-error-bg);
   }
 
   .photo-card button:disabled {
