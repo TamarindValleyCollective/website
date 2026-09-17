@@ -125,6 +125,7 @@ flowchart TD
         PHOTOS["PhotoGallery (/in-pictures)<br/>Filters, Grid/Map toggle, lightbox —<br/>images served directly from R2"]
         TIMELINE["Our Journey / other pages<br/>Era-based year timeline, event listings —<br/>pure static, no calls out"]
         GA["Google Analytics (GA4)<br/>Loaded from BaseLayout, consent-gated by<br/>CookieConsent, skipped on localhost"]
+        CLARITY["Microsoft Clarity<br/>Loaded from BaseLayout, same consent gate<br/>as GA, skipped on localhost"]
         WEATHER["WeatherWidget (/ecosystem/geography)<br/>Fetches current conditions from<br/>Open-Meteo, no API key"]
         RAINFALL["Rainfall chart/table/monsoon stat<br/>(/ecosystem/weather)<br/>Fetches /api/rainfall client-side,<br/>1hr-cached in localStorage"]
     end
@@ -143,6 +144,7 @@ flowchart TD
         GEMINI["Google Gemini API (free tier)<br/>search-ai.mts server-side —<br/>site search's 'Ask AI' answer, tried first"]
         R2["Cloudflare R2<br/>media.tvc.farm — curated photo storage,<br/>served directly to the browser"]
         GTAG["Google Analytics<br/>googletagmanager.com/gtag/js"]
+        CLARITYEXT["Microsoft Clarity<br/>www.clarity.ms tag → scripts.clarity.ms<br/>bundle → *.clarity.ms/collect (subdomain<br/>varies, load-balanced)"]
         METEO["Open-Meteo API<br/>Free, no key required"]
         GDRIVE["Google Drive API<br/>Shared Inbox/Approved/Rejected/Published<br/>folders — service-account auth,<br/>called server-side only (Function + local script)"]
         GSHEET["Google Sheets API<br/>Curator allow-list (read, photo-pool.mts) +<br/>membership/general enquiry logs (write,<br/>enquiry.mts) + rainfall log (read,<br/>rainfall.mts) + Members story-form<br/>responses (read + write Processed-at/Notes,<br/>check-member-story-responses.mjs) —<br/>same service account, called server-side<br/>only (Functions) or from a local script"]
@@ -748,6 +750,21 @@ never touches Netlify either.
   link, calls `.revoke()`, which sets gtag's own `ga-disable-<id>` flag — the standard kill
   switch, needed because a script already injected earlier in the session can't be
   un-injected. `/privacy` documents what's collected and links back to this same control.
+- **Microsoft Clarity** — loaded from the same `BaseLayout.astro` script block as GA, behind the
+  same `window.tvcAnalytics.load()`/`.revoke()` interface and the same consent banner/localStorage
+  gate. Project id `xttq21yf39` — the project Bing Webmaster Tools' own "Microsoft Clarity"
+  integration tab had already auto-provisioned for this verified property, reused rather than
+  creating a second, unlinked one. `.load()` injects Clarity's tag script and calls its
+  `clarity('consent')` client API (Clarity's documented mechanism for going from not-tracking to
+  tracking - there's no GA-style disable flag, so `.revoke()` can only prevent a *future* load,
+  not stop an already-running session within the same page view). The tag script itself fans out
+  to more `clarity.ms` subdomains at runtime - `scripts.clarity.ms` for the real bundle, plus a
+  data-collection endpoint that isn't fixed (observed as `o.`, `l.`, and `a.clarity.ms` across
+  three separate loads of the same code, evidently load-balanced) - which is why
+  `scripts/generate-csp.mjs` wildcards `*.clarity.ms` in `script-src`/`connect-src` rather than
+  enumerating subdomains one at a time. `/privacy` and the cookie banner (all 3 locales) name it
+  alongside GA, since it collects materially different data (session recordings/heatmaps, not
+  aggregate pageviews).
 - **WeatherWidget** (`/ecosystem/geography`) — fetches current temperature/humidity/conditions
   for the farm's coordinates from Open-Meteo (free, no API key) on page load, cached in
   `localStorage` for 15 minutes. Hides itself if the fetch fails rather than showing broken UI.
@@ -854,6 +871,7 @@ never touches Netlify either.
 | Visit inquiry form + WhatsApp CTA (Netlify Forms) | ✅ Live and verified — confirmed via Netlify's Forms API (`visit-inquiry`), **1 real submission recorded** (2026-08-04); replaces the "Book via Linger" redirect on `/visit/camping`, `/visit/day-visit`, `/visit/trekking-trails` |
 | Event interest widget + counter (Netlify Function, Blobs, Forms) | ✅ Live — "Want this to happen again?" on past event pages (`/events/<slug>`), public count via `/api/event-interest` + Netlify Blobs, optional-email entries via Netlify Forms; verified `/api/event-interest` responds live in production |
 | Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy` |
+| Microsoft Clarity | 🟢 Built and verified against a real CSP-enforcing response via `netlify dev` (script tag, bundle, and collect beacon all confirmed unblocked under the `*.clarity.ms` wildcard) — same consent gate as GA. Project id `xttq21yf39`, reusing the one Bing Webmaster Tools had already auto-provisioned. Not yet confirmed against production traffic (no real visitor session recorded in the Clarity dashboard yet, since this hasn't deployed) |
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
 | Live rainfall chart/table/monsoon stat (`/ecosystem/weather`, `/api/rainfall`) | ✅ Live — reads the community's rainfall-log Sheet live, `RAINFALL_SHEET_ID` set on Netlify (all deploy contexts); multi-year line chart with year-filter checkboxes; verified against `tvc.farm/ecosystem/weather` and `tvc.farm/api/rainfall` directly |
 | Site search (nav icon / `/` key) | ✅ Live — Pagefind indexes each non-`noindex` page's full `<main>` content; verified directly against `tvc.farm` (previously broken there — the 2026-08-21 CSP rollout omitted `'wasm-unsafe-eval'` from `script-src`, silently blocking Pagefind's WASM search engine from compiling in every visitor's browser; fixed 2026-09-07) |
