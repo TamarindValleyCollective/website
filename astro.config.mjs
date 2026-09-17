@@ -5,16 +5,21 @@ import rehypeExternalLinks from 'rehype-external-links';
 
 // https://astro.build/config
 export default defineConfig({
-  // DEPLOY_PRIME_URL is set by Netlify at build time - the production
-  // domain on a production build, but the deploy-preview/branch-deploy
-  // subdomain on those builds. Without this, canonical URLs and og:image
-  // always pointed at production even on a preview deploy, so a freshly
-  // added image (not live on production yet) 404'd when WhatsApp's crawler
-  // tried to fetch it there - iMessage's link-preview generator tolerates
+  // DEPLOY_PRIME_URL is meant to carry the deploy-preview/branch-deploy
+  // subdomain on those builds, so a freshly added image (not live on
+  // production yet) doesn't 404 when WhatsApp's crawler tries to fetch it
+  // at the production domain - iMessage's link-preview generator tolerates
   // that failure by falling back to scraping the actual page, but WhatsApp
-  // just gives up and shows the site's apple-touch-icon instead. Falls back
-  // to the real domain for local dev, where this env var doesn't exist.
-  site: process.env.DEPLOY_PRIME_URL || 'https://tvc.farm',
+  // just gives up and shows the site's apple-touch-icon instead. But on
+  // *this* project it also comes back as the `main--tvc-farm.netlify.app`
+  // branch alias on production builds themselves (confirmed 2026-09-17:
+  // every canonical/og:url tag on the live site pointed there, tanking
+  // Search Console indexing site-wide - Google saw the "real" page as
+  // living on a domain it can't/shouldn't index). Gate on Netlify's
+  // `CONTEXT` build var instead, which is unambiguous: only fall back to
+  // DEPLOY_PRIME_URL outside the actual production context. Falls back to
+  // the real domain for local dev, where neither env var exists.
+  site: process.env.CONTEXT === 'production' ? 'https://tvc.farm' : (process.env.DEPLOY_PRIME_URL || 'https://tvc.farm'),
   // Every external link across the site's markdown content (event recaps,
   // outreach pages, etc.) should open in a new tab rather than navigating
   // away from tvc.farm - applied here once at the markdown-rendering level
