@@ -750,6 +750,16 @@ never touches Netlify either.
   link, calls `.revoke()`, which sets gtag's own `ga-disable-<id>` flag — the standard kill
   switch, needed because a script already injected earlier in the session can't be
   un-injected. `/privacy` documents what's collected and links back to this same control.
+  **CSP note (fixed 2026-09-17):** `scripts/generate-csp.mjs`'s `connect-src` had allowlisted
+  `www.google-analytics.com` since the CSP was first enforced (2026-08-21) - a Universal
+  Analytics-era domain gtag.js's GA4 client doesn't actually send hits to. The real runtime
+  collect endpoint is `analytics.google.com`, with a fallback to `stats.g.doubleclick.net` -
+  neither was allowlisted, so every real visitor's hit was silently CSP-blocked for close to a
+  month (script loaded, `gtag('config', ...)` fired, dataLayer looked correct - nothing ever
+  actually reached Google, confirmed via GA4's Realtime report showing 0 users even from a real
+  visit during the same debugging session). Now wildcarded as `*.google-analytics.com`,
+  `*.analytics.google.com`, `*.g.doubleclick.net` rather than pinned to the one endpoint this
+  investigation happened to observe.
 - **Microsoft Clarity** — loaded from the same `BaseLayout.astro` script block as GA, behind the
   same `window.tvcAnalytics.load()`/`.revoke()` interface and the same consent banner/localStorage
   gate. Project id `xttq21yf39` — the project Bing Webmaster Tools' own "Microsoft Clarity"
@@ -870,7 +880,7 @@ never touches Netlify either.
 | Host an Event inquiry form (Netlify Forms) | 🟢 Deployed and registered — confirmed directly via Netlify's Forms API (`host-event-inquiry`, correct field schema: name/organization/email/phone/event-type/group-size/dates/message/honeypot); **0 submissions to date**, so the full round-trip hasn't actually been exercised yet |
 | Visit inquiry form + WhatsApp CTA (Netlify Forms) | ✅ Live and verified — confirmed via Netlify's Forms API (`visit-inquiry`), **1 real submission recorded** (2026-08-04); replaces the "Book via Linger" redirect on `/visit/camping`, `/visit/day-visit`, `/visit/trekking-trails` |
 | Event interest widget + counter (Netlify Function, Blobs, Forms) | ✅ Live — "Want this to happen again?" on past event pages (`/events/<slug>`), public count via `/api/event-interest` + Netlify Blobs, optional-email entries via Netlify Forms; verified `/api/event-interest` responds live in production |
-| Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy` |
+| Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy`. Was silently broken 2026-08-21 to 2026-09-17: CSP allowlisted the wrong collect domain, so no real visitor hit ever reached Google in that window - fixed and verified (a real hit lands under the corrected `connect-src`) |
 | Microsoft Clarity | 🟢 Built and verified against a real CSP-enforcing response via `netlify dev` (script tag, bundle, and collect beacon all confirmed unblocked under the `*.clarity.ms` wildcard) — same consent gate as GA. Project id `xttq21yf39`, reusing the one Bing Webmaster Tools had already auto-provisioned. Not yet confirmed against production traffic (no real visitor session recorded in the Clarity dashboard yet, since this hasn't deployed) |
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
 | Live rainfall chart/table/monsoon stat (`/ecosystem/weather`, `/api/rainfall`) | ✅ Live — reads the community's rainfall-log Sheet live, `RAINFALL_SHEET_ID` set on Netlify (all deploy contexts); multi-year line chart with year-filter checkboxes; verified against `tvc.farm/ecosystem/weather` and `tvc.farm/api/rainfall` directly |
