@@ -85,7 +85,16 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https://media.tvc.farm https://*.inaturalist.org https://inaturalist-open-data.s3.amazonaws.com https://*.tile.openstreetmap.org",
   "font-src 'self'",
-  "connect-src 'self' https://www.google-analytics.com https://www.googletagmanager.com https://accounts.google.com https://api.inaturalist.org https://api.open-meteo.com https://*.clarity.ms",
+  // GA4's actual runtime hit lands on analytics.google.com (a fallback to
+  // stats.g.doubleclick.net too) - not www.google-analytics.com, that's a
+  // Universal Analytics-era domain gtag.js doesn't send hits to anymore.
+  // Confirmed empirically 2026-09-17: this CSP had allowlisted the wrong
+  // domain since it was first enforced (2026-08-21), silently dropping
+  // every real visitor's GA hit for almost a month - the site *looked*
+  // instrumented (script loads, config fires) but nothing ever reached
+  // Google. Wildcarding both, plus keeping the legacy domain, rather than
+  // risk narrowing to exactly what one test run happened to hit.
+  "connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://*.g.doubleclick.net https://www.googletagmanager.com https://accounts.google.com https://api.inaturalist.org https://api.open-meteo.com https://*.clarity.ms",
   'frame-src https://www.google.com https://www.youtube.com https://accounts.google.com',
   "object-src 'none'",
   "base-uri 'self'",
