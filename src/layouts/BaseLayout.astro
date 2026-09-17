@@ -196,19 +196,34 @@ const siteGraph = {
          browser fetch it before it discovers the font-face rule in the
          parsed CSS, instead of waiting on that discovery. -->
     <link rel="preload" href="/fonts/fraunces-variable.woff2" as="font" type="font/woff2" crossorigin />
-    <!-- Google Analytics (GA4) — consent-gated. Doesn't load until the visitor
-         accepts the cookie banner (see CookieConsent.astro), skipped
-         entirely on localhost so local/dev browsing never pollutes
-         production traffic data. window.tvcAnalytics is the interface the
-         banner calls into: .load() on Accept (or on return visits that
-         already granted consent), .revoke() on Reject/withdrawal, using
-         gtag's own documented `ga-disable-<id>` kill switch since a script
-         already injected earlier in the session can't be un-injected. -->
+    <!-- Google Analytics (GA4) + Microsoft Clarity — both consent-gated.
+         Neither loads until the visitor accepts the cookie banner (see
+         CookieConsent.astro), skipped entirely on localhost so local/dev
+         browsing never pollutes production traffic data. window.tvcAnalytics
+         is the interface the banner calls into: .load() on Accept (or on
+         return visits that already granted consent), .revoke() on
+         Reject/withdrawal.
+
+         GA uses gtag's own documented `ga-disable-<id>` kill switch since a
+         script already injected earlier in the session can't be
+         un-injected. Clarity has no equivalent - its client API only
+         documents a `clarity('consent')` call for going *from* not-tracking
+         *to* tracking (see Consent Mode docs), so revoke() here can only
+         stop a *future* load; it can't retroactively stop an
+         already-running session if Accept and Reject both happen within the
+         same page view. Clarity's tag script itself fans out to more
+         subdomains at runtime (scripts.clarity.ms for the real bundle, plus
+         a data-collection endpoint that isn't even fixed - observed as both
+         o.clarity.ms and l.clarity.ms from the same code) - see
+         scripts/generate-csp.mjs's *.clarity.ms wildcard in script-src/
+         connect-src, needed even though only www.clarity.ms appears here. -->
     <script is:inline>
       (function () {
         var GA_ID = 'G-795FTPB47P';
+        var CLARITY_ID = 'xttq21yf39';
         if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return;
         window['ga-disable-' + GA_ID] = true;
+        var clarityLoaded = false;
 
         function loadGA() {
           window['ga-disable-' + GA_ID] = false;
@@ -228,7 +243,22 @@ const siteGraph = {
           window['ga-disable-' + GA_ID] = true;
         }
 
-        window.tvcAnalytics = { load: loadGA, revoke: revokeGA };
+        function loadClarity() {
+          if (!clarityLoaded) {
+            clarityLoaded = true;
+            (function (c, l, a, r, i, t, y) {
+              c[a] = c[a] || function () { (c[a].q = c[a].q || []).push(arguments); };
+              t = l.createElement(r); t.async = 1; t.src = 'https://www.clarity.ms/tag/' + i;
+              y = l.getElementsByTagName(r)[0]; y.parentNode.insertBefore(t, y);
+            })(window, document, 'clarity', 'script', CLARITY_ID);
+          }
+          window.clarity('consent');
+        }
+
+        window.tvcAnalytics = {
+          load: function () { loadGA(); loadClarity(); },
+          revoke: function () { revokeGA(); },
+        };
       })();
     </script>
     <meta name="description" content={pageDescription} />

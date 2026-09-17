@@ -61,7 +61,23 @@ for (const file of htmlFiles) {
 // silently returns nothing. Missed in the 2026-08-21 CSP rollout because
 // report-only mode logs the violation without throwing, so it never showed
 // up as a visible error while clicking around.
-const scriptSrc = ["'self'", "'wasm-unsafe-eval'", 'https://accounts.google.com', 'https://www.googletagmanager.com', ...hashes].join(' ');
+// Microsoft Clarity fans its own load across several subdomains (confirmed
+// empirically 2026-09-17, loading the real tag on a page with no CSP and
+// watching what it actually requested - the docs don't spell this out):
+// www.clarity.ms serves the initial tag script, which loads the real
+// bundle from scripts.clarity.ms, which POSTs session data to a collection
+// endpoint that isn't even fixed - observed as o.clarity.ms once and
+// l.clarity.ms another time from the same code, seemingly load-balanced.
+// Wildcarding *.clarity.ms instead of enumerating subdomains one at a time
+// as they surface.
+const scriptSrc = [
+  "'self'",
+  "'wasm-unsafe-eval'",
+  'https://accounts.google.com',
+  'https://www.googletagmanager.com',
+  'https://*.clarity.ms',
+  ...hashes,
+].join(' ');
 
 const csp = [
   "default-src 'self'",
@@ -69,7 +85,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https://media.tvc.farm https://*.inaturalist.org https://inaturalist-open-data.s3.amazonaws.com https://*.tile.openstreetmap.org",
   "font-src 'self'",
-  "connect-src 'self' https://www.google-analytics.com https://www.googletagmanager.com https://accounts.google.com https://api.inaturalist.org https://api.open-meteo.com",
+  "connect-src 'self' https://www.google-analytics.com https://www.googletagmanager.com https://accounts.google.com https://api.inaturalist.org https://api.open-meteo.com https://*.clarity.ms",
   'frame-src https://www.google.com https://www.youtube.com https://accounts.google.com',
   "object-src 'none'",
   "base-uri 'self'",
