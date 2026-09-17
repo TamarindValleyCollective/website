@@ -90,6 +90,7 @@ flowchart TD
         B1["npm run build<br/>→ astro build (prerenders every page)"]
         B2["→ build-chat-context.mjs<br/>writes site-content.json (gitignored)"]
         B2B["→ pagefind --site dist<br/>indexes data-pagefind-body content on every<br/>non-noindex page → dist/pagefind/"]
+        B2C["→ submit-indexnow.mjs (production builds only)<br/>pushes the sitemap URL list to api.indexnow.org,<br/>fanned out to Bing/Yandex/Seznam/Naver"]
         B3["Output: dist/ (static site) + bundled function<br/>netlify.toml declares build cmd, publish dir, functions dir"]
     end
 
@@ -456,6 +457,20 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `<html lang>` and scopes results to the visitor's current locale automatically. `SiteSearch.astro`
   also offers an "Ask AI" button alongside these keyword results, which does call a backend —
   see `netlify/functions/search-ai.mts` above.
+- **`scripts/submit-indexnow.mjs`** (last step of `npm run build`, added 2026-09-17) — pushes the
+  full sitemap URL list to `api.indexnow.org`, which fans the submission out to every
+  participating search engine (Bing, Yandex, Seznam, Naver, ...) instead of waiting for each to
+  crawl on its own schedule. Only runs when `CONTEXT=production` (Netlify's build var) - a local
+  build or a deploy-preview/branch-deploy has no live URL worth notifying anyone about. Reads
+  `dist/sitemap-index.xml` then each sub-sitemap it points to, rather than hardcoding a filename,
+  so it keeps working if `@astrojs/sitemap` ever splits output across more than the one
+  `sitemap-0.xml` file it currently produces. Ownership proof is the flat key file at
+  `public/051fae095f051244a7cf06c7e1271dbf.txt` (IndexNow's protocol: the key must be servable at
+  `https://<host>/<key>.txt` before a submission signed with it is accepted) - not a secret, just
+  a public capability token; regenerating it (a new random hex string, a new key file, delete the
+  old one) invalidates anyone else's ability to submit URLs under this key, if that's ever needed.
+  A failed or non-200 submission logs a warning but never fails the build - IndexNow is a
+  nice-to-have nudge, not something a deploy should block on.
 - **`scripts/curate-photos.mjs`** — run locally, not part of the Netlify build. Reads a folder
   of already-selected photos, extracts EXIF/GPS, uploads a display and thumbnail size of each to
   Cloudflare R2, and writes one `src/content/photos/*.md` entry per photo — still just expects an
