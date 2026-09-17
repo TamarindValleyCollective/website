@@ -13,6 +13,7 @@ import { LAT, LNG } from '../utils/weather';
 import { useTranslations, stripLocalePrefix, SUPPORTED_LOCALES, DEFAULT_LOCALE, type Locale } from '../i18n/utils';
 import { TRANSLATION_REVIEWED } from '../i18n/reviewStatus';
 import { getRelativeLocaleUrl } from 'astro:i18n';
+import { getCollection } from 'astro:content';
 import '../styles/global.css';
 
 interface Props {
@@ -78,6 +79,21 @@ const showTranslationNotice = lang !== DEFAULT_LOCALE && !TRANSLATION_REVIEWED[l
 // panel) instead of re-describing it inconsistently per page.
 const siteURL = new URL('/', Astro.site).toString();
 const organizationId = `${siteURL}#organization`;
+
+// Real, bookable accommodation structures (see content.config.ts's
+// accommodationTypes collection) surfaced as LodgingBusiness.containsPlace
+// entries below - not fabricated, just the same huts/tents CampingView
+// already lists, one level removed so Google can see them without crawling
+// that specific page.
+const accommodationTypes = await getCollection('accommodationTypes');
+const lodgingContainsPlace = accommodationTypes
+  .sort((a, b) => (a.data.order ?? 0) - (b.data.order ?? 0))
+  .map((entry) => ({
+    '@type': 'Accommodation',
+    name: entry.data.name,
+    description: entry.data.capacity ? `${entry.data.description} ${entry.data.capacity}.` : entry.data.description,
+  }));
+
 const siteGraph = {
   '@context': 'https://schema.org',
   '@graph': [
@@ -126,6 +142,36 @@ const siteGraph = {
         'https://www.instagram.com/tamarindvalleycollective/',
         'https://www.google.com/maps?cid=12716822598495943685',
       ],
+    },
+    {
+      // A separate node from the Organization above, not a second `@type`
+      // on the same one - LodgingBusiness rich results expect a single,
+      // unambiguous property address, and the Organization node's `address`
+      // is an array that also carries the registered-office address for
+      // legal/payment-gateway purposes (irrelevant to "where do I stay").
+      // `brand` links back to the Organization by @id instead of repeating
+      // name/logo/sameAs here.
+      '@type': 'LodgingBusiness',
+      '@id': `${siteURL}#lodging`,
+      name: 'Tamarind Valley Collective',
+      url: siteURL,
+      image: new URL('/images/pages/home/hero.jpg', Astro.site).toString(),
+      brand: { '@id': organizationId },
+      telephone: '+91 74063 07309',
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: 'Thaggatti village',
+        addressLocality: 'Kanakapura',
+        addressRegion: 'Karnataka/Tamil Nadu border',
+        addressCountry: 'IN',
+      },
+      geo: {
+        '@type': 'GeoCoordinates',
+        latitude: LAT,
+        longitude: LNG,
+      },
+      priceRange: '₹1,200–₹5,950',
+      containsPlace: lodgingContainsPlace,
     },
     {
       '@type': 'WebSite',
