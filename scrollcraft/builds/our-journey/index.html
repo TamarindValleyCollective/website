@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Our Journey · Tamarind Valley Collective (scroll-craft prototype)</title>
+<meta name="description" content="Nine years, three setbacks and one finished home: Tamarind Valley Collective's founding story, scrolled as chapters instead of a flat timeline.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%233d6e52'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="scrollcraft.css">
+<style>
+  /* TVC's real brand tokens (src/styles/global.css), reused deliberately: this
+     is the brand's actual identity, not the generic cream-and-brass default
+     taste.md warns against. See BRIEF.md §5. */
+  :root {
+    --sc-canvas:     #faf7ee;
+    --sc-surface:    #f2e9d6;
+    --sc-ink:        #22291f;
+    --sc-ink-soft:   #57604f;
+    /* #f78520 (the real site's vivid CTA orange) is only 2.35:1 on this
+       cream canvas, which fails even the engine's own focus-ring outline
+       (scrollcraft.css uses --sc-accent there, needs >=3:1). #bd7248 is the
+       real site's already-verified 3.46:1-on-cream shade; used here for the
+       same reason it's used on the live site. */
+    --sc-accent:     #bd7248;
+    --sc-accent-ink: #22291f;
+    --sc-font-display: "Fraunces", Georgia, "Times New Roman", serif;
+    --sc-font-text:    "Inter", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+    /* Orange at full saturation is only ~3.5:1 on cream: fine for large type
+       and icons, not for body-sized text. The real site solves this with a
+       darker text-safe shade; reused here for the same reason. */
+    --tvc-accent-text: #965836;
+    --tvc-struck-ground: #eee2ce;
+  }
+
+  /* ---- structure: chaptered editorial has no fixed bar, no drift ground,
+     hard cuts between chapters instead ---- */
+  .tvc-chapter { background: var(--sc-canvas); position: relative; }
+  .tvc-chapter--muted { background: var(--sc-surface); }
+  .tvc-chapter--struck { background: var(--tvc-struck-ground); }
+  .tvc-chapter--peak { background: var(--sc-canvas); }
+
+  .tvc-kicker {
+    font: 600 0.8rem/1 var(--sc-font-text);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tvc-accent-text);
+    margin: 0 0 var(--sc-5);
+  }
+
+  .tvc-folio-inline {
+    font: 600 0.78rem/1 var(--sc-font-text);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--sc-ink-soft);
+    margin: 0;
+  }
+
+  /* ---- title page: type on paper, no media above the fold ---- */
+  .tvc-title {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    background: var(--sc-canvas);
+  }
+  .tvc-title .sc-wrap { max-width: 54rem; }
+  .tvc-title h1 { margin: 0 0 var(--sc-6); }
+  .tvc-poem {
+    font: 400 1.05rem/1.6 var(--sc-font-display);
+    font-style: italic;
+    color: var(--sc-ink-soft);
+    white-space: pre-line;
+    max-width: 34rem;
+    margin: 0;
+  }
+
+  /* ---- two-up chapter layout ---- */
+  .tvc-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(2rem, 5vw, 5rem);
+    align-items: center;
+    padding-block: clamp(4rem, 10vh, 7rem);
+  }
+  .tvc-split--reverse .tvc-split-media { order: -1; }
+  .tvc-split figure { margin: 0; }
+  .tvc-split img {
+    width: 100%; height: auto;
+    border-radius: 2px;
+    display: block;
+  }
+  @media (max-width: 760px) {
+    .tvc-split { grid-template-columns: 1fr; }
+    .tvc-split--reverse .tvc-split-media { order: 0; }
+  }
+
+  .tvc-parallax-frame { overflow: hidden; border-radius: 2px; }
+  .tvc-parallax-frame img { max-width: none; width: 112%; margin-left: -6%; }
+
+  /* ---- struck again: dark ground, hard-cut kinetic punches ----
+     The verification pass measured actual composited pixels and found the
+     first cut of this (a gradient baked straight into background-image)
+     dropped as low as 1.09:1 wherever the wildfire photo's bright smoke/sky
+     sat behind a line of type. Text here spans nearly the whole frame by
+     design (four stacked headings), so rather than a flat full-frame
+     overlay (banned, taste.md), the photo itself is darkened/desaturated on
+     its own layer via `filter`, independent of local pixel brightness, with
+     the gradient as a second, thinner pass on top. */
+  .tvc-struck {
+    position: relative;
+    padding-block: clamp(5rem, 14vh, 9rem);
+    color: #f5efdf;
+    overflow: hidden;
+  }
+  .tvc-struck::before {
+    content: "";
+    position: absolute; inset: -4% -4%;
+    background: url('assets/journey-34.jpg') center/cover no-repeat;
+    filter: saturate(0.5) brightness(0.28);
+    z-index: 0;
+  }
+  .tvc-struck::after {
+    content: "";
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(12,10,8,0.55), rgba(12,10,8,0.72));
+    z-index: 0;
+  }
+  .tvc-struck > .sc-wrap { position: relative; z-index: 1; }
+  .tvc-struck .sc-body { color: #cfc6b2; }
+  .tvc-struck .tvc-folio-inline { color: #cfc6b2; }
+  .tvc-struck .tvc-epigraph {
+    font: 400 1rem/1.6 var(--sc-font-display);
+    font-style: italic;
+    color: #b9ae95;
+    white-space: pre-line;
+    border-left: 1px solid rgba(245,239,223,0.25);
+    padding-left: var(--sc-5);
+    margin: var(--sc-7) 0 0;
+    max-width: 30rem;
+  }
+  .tvc-struck .sc-display { color: #f5efdf; margin: var(--sc-4) 0 0; }
+  .tvc-struck .sc-display:first-of-type { margin-top: 0; }
+
+  /* ---- pan rail: taking root ---- */
+  .rail { gap: clamp(1.25rem, 3vw, 2rem); padding-inline: var(--sc-gutter); align-items: stretch; }
+  .rail__lead { flex: 0 0 clamp(14rem, 22vw, 18rem); display: flex; flex-direction: column; justify-content: center; }
+  .rail .item {
+    flex: 0 0 clamp(16rem, 26vw, 20rem);
+    display: flex; flex-direction: column; gap: var(--sc-3);
+  }
+  .rail .item img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 2px; }
+  .rail .item h3 { font: 500 1.15rem/1.2 var(--sc-font-display); margin: 0; }
+  .rail .item p { font: 400 0.95rem/1.45 var(--sc-font-text); color: var(--sc-ink-soft); margin: 0; }
+  .rail .item .tvc-folio-inline { margin-bottom: 2px; }
+
+  /* ---- what held: flow + count ---- */
+  .tvc-held { padding-block: clamp(4rem, 10vh, 7rem); }
+  .tvc-held .sc-wrap { max-width: 40rem; }
+  .tvc-held img { width: 100%; height: auto; border-radius: 2px; margin: var(--sc-6) 0; }
+  .tvc-count-line { font: 500 1.4rem/1.2 var(--sc-font-display); margin: var(--sc-5) 0 0; }
+  .tvc-count-line .sc-nums { color: var(--sc-accent); font-family: var(--sc-font-display); font-variant-numeric: tabular-nums; }
+
+  /* ---- peak: first home ---- */
+  .tvc-peak-wrap { padding-block: clamp(5rem, 14vh, 10rem); }
+  .tvc-peak-copy { max-width: 42rem; margin: 0 auto var(--sc-8); text-align: center; }
+  .tvc-peak-copy h2 { margin: 0 0 var(--sc-5); }
+  .tvc-peak-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    grid-template-rows: auto auto;
+    gap: clamp(0.75rem, 2vw, 1.25rem);
+    max-width: 64rem; margin-inline: auto;
+  }
+  .tvc-peak-grid figure { margin: 0; overflow: hidden; border-radius: 2px; }
+  .tvc-peak-grid img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .tvc-peak-grid .g1 { grid-row: 1 / 3; }
+  .tvc-peak-grid .g1 img { aspect-ratio: 3/4; }
+  .tvc-peak-grid .g2 img, .tvc-peak-grid .g3 img { aspect-ratio: 16/10; }
+  @media (max-width: 760px) {
+    .tvc-peak-grid { grid-template-columns: 1fr; grid-template-rows: none; }
+    .tvc-peak-grid .g1 { grid-row: auto; }
+  }
+
+  /* ---- colophon / close ---- */
+  .tvc-colophon {
+    padding-block: clamp(4rem, 12vh, 8rem);
+    border-top: 1px solid rgba(34,41,31,0.14);
+  }
+  .tvc-colophon .sc-wrap { max-width: 34rem; }
+  .tvc-colophon .tvc-poem { margin-bottom: var(--sc-6); }
+  .tvc-cta-line { font: 500 1.15rem/1.5 var(--sc-font-display); margin: 0 0 var(--sc-7); }
+  .tvc-cta-line a { color: var(--tvc-accent-text); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+  .tvc-cta-line a:hover { color: var(--sc-ink); }
+  .tvc-cta-line a:focus-visible { outline: 2px solid var(--sc-accent); outline-offset: 3px; border-radius: 2px; }
+  .tvc-colophon__small { font: 400 0.82rem/1.6 var(--sc-font-text); color: var(--sc-ink-soft); margin: 0; }
+
+  /* =====================================================================
+     Signature move: "the skyline mends itself".
+     A fixed margin folio: a vertical line built from TVC's own real
+     per-year monoline icons (reused from JourneyTimelineStandalone.astro),
+     with two setback nodes that render cracked, then mend solid + a stitch
+     mark the instant the following chapter is reached. Doubles as the
+     grammar's required "chapter number/title, updating as chapters pass."
+     Bespoke, coded here; the engine (scrollcraft.js/.css) is untouched.
+     ===================================================================== */
+  .tvc-folio {
+    position: fixed;
+    left: clamp(1rem, 3vw, 2.25rem);
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sc-4);
+    padding: var(--sc-4) var(--sc-3);
+    pointer-events: none;
+    /* The folio is fixed, so it floats over every chapter ground as the
+       reader scrolls, including "Struck again"'s dark ground. ink-soft
+       text/icon strokes are only ~2.3:1 there. A permanent frosted chip
+       keeps the folio on one known-safe ground at every scroll position,
+       instead of relying on colours tuned for the cream ground only. */
+    background: rgba(250,247,238,0.86);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border-radius: 999px;
+    box-shadow: 0 1px 3px rgba(34,41,31,0.1);
+  }
+  .tvc-folio__label {
+    font: 600 0.72rem/1.3 var(--sc-font-text);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--sc-ink-soft);
+    text-align: center;
+    max-width: 8rem;
+    transition: color 400ms var(--sc-ease-out, ease);
+  }
+  .tvc-folio__line { width: 22px; height: min(58vh, 420px); overflow: visible; }
+  .tvc-folio__track {
+    stroke: var(--sc-ink-soft);
+    stroke-opacity: 0.28;
+    stroke-width: 1.5;
+    transition: stroke 900ms var(--sc-ease-out, ease);
+  }
+  .tvc-folio.is-resolved .tvc-folio__track { stroke: var(--sc-accent); stroke-opacity: 0.65; }
+
+  .tvc-node { opacity: 0.32; transition: opacity 500ms var(--sc-ease-out, ease); }
+  .tvc-node path, .tvc-node circle, .tvc-node line { stroke: var(--sc-ink-soft); stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .tvc-node.is-active { opacity: 1; }
+  .tvc-node.is-active path, .tvc-node.is-active circle, .tvc-node.is-active line { stroke: var(--sc-ink); }
+
+  .tvc-node--crack .tvc-crack { stroke-dasharray: 2 2.4; stroke: var(--tvc-accent-text); }
+  .tvc-node--crack .tvc-stitch { opacity: 0; stroke: var(--sc-accent); stroke-width: 2; transition: opacity 300ms ease; }
+  .tvc-node--crack.is-mended { opacity: 1; }
+  .tvc-node--crack.is-mended .tvc-crack { stroke-dasharray: none; stroke: var(--sc-accent); stroke-width: 2; }
+  .tvc-node--crack.is-mended .tvc-stitch { opacity: 1; }
+
+  @media (max-width: 900px) {
+    .tvc-folio {
+      left: 0; right: 0; top: 0; bottom: auto;
+      transform: none;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--sc-3);
+      padding: 10px var(--sc-gutter);
+      background: rgba(250,247,238,0.92);
+      backdrop-filter: blur(6px);
+      border-bottom: 1px solid rgba(34,41,31,0.12);
+    }
+    .tvc-folio__label { max-width: none; text-align: left; }
+    .tvc-folio__line { width: min(50vw, 260px); height: 14px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tvc-node, .tvc-folio__track, .tvc-node--crack .tvc-stitch { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<span data-sc-progress></span>
+<div class="sc-grain" aria-hidden="true"></div>
+
+<!-- Signature move + folio nav: see BRIEF.md "Signature move" -->
+<aside class="tvc-folio" data-tvc-folio aria-hidden="true">
+  <p class="tvc-folio__label" data-tvc-folio-label>2017 · Arrival</p>
+  <svg class="tvc-folio__line" viewBox="0 0 24 420" preserveAspectRatio="none">
+    <line class="tvc-folio__track" x1="12" y1="6" x2="12" y2="414"/>
+
+    <!-- Arrival, 2017: TVC's own "seed" icon -->
+    <g class="tvc-node" data-tvc-node="arrival" transform="translate(0,0) scale(0.72)">
+      <g transform="translate(1,1)">
+        <path d="M12 21V10"/>
+        <path d="M12 10c0-4.2-3.1-6.4-7.2-6.4 0 4.2 3.1 7.4 7.2 6.4z"/>
+        <path d="M12 10c0-4.2 3.1-6.4 7.2-6.4 0 4.2-3.1 7.4-7.2 6.4z"/>
+      </g>
+    </g>
+
+    <!-- Land pushes back, Oct 2017: cracked, mends when "Taking root" arrives -->
+    <g class="tvc-node tvc-node--crack" data-tvc-node="pushback" data-tvc-mend-on="root" transform="translate(0,72) scale(0.72)">
+      <path class="tvc-crack" d="M12 2 L8 10 L13 11 L9 20"/>
+      <path class="tvc-stitch" d="M8.5 8 L10.7 6 M9.6 15 L11.8 13"/>
+    </g>
+
+    <!-- Taking root, 2018-2021: TVC's own "solar" icon (2020) -->
+    <g class="tvc-node" data-tvc-node="root" transform="translate(0,144) scale(0.72)">
+      <g transform="translate(1,1)">
+        <circle cx="11" cy="11" r="4"/>
+        <path d="M11 1.3v3M11 17.7v3M3.3 3.3l2.1 2.1M16.6 16.6l2.1 2.1M1.3 11h3M17.7 11h3M3.3 18.7l2.1-2.1M16.6 5.4l2.1-2.1"/>
+      </g>
+    </g>
+
+    <!-- Struck again, 2024-25: cracked, mends when "What held" arrives -->
+    <g class="tvc-node tvc-node--crack" data-tvc-node="struck" data-tvc-mend-on="held" transform="translate(0,216) scale(0.72)">
+      <path class="tvc-crack" d="M12 2 L8 10 L13 11 L9 20"/>
+      <path class="tvc-stitch" d="M8.5 8 L10.7 6 M9.6 15 L11.8 13"/>
+    </g>
+
+    <!-- What held, 2025: TVC's own icon (phoenix/flame motif, year 2025) -->
+    <g class="tvc-node" data-tvc-node="held" transform="translate(0,288) scale(0.72)">
+      <g transform="translate(1,1)">
+        <path d="M11 1.2c1.1 3.8-2.6 5-2.6 8.6a2.6 2.6 0 005.2 0c0-1.3-.9-1.8-.9-3.1 1.8 1 2.7 3.2 2.7 5a4.4 4.4 0 01-8.8 0c0-4.6 3.5-5.6 4.4-10.5z"/>
+      </g>
+    </g>
+
+    <!-- First home, 2026: TVC's own "house" icon -->
+    <g class="tvc-node" data-tvc-node="home" transform="translate(0,354) scale(0.72)">
+      <g transform="translate(1,1)">
+        <path d="M3 10 11 3l8 7"/>
+        <path d="M5 9.2v10.3h5v-6h2v6h5V9.2"/>
+      </g>
+    </g>
+  </svg>
+</aside>
+
+<main id="top">
+
+  <!-- TITLE: type on paper, no media. The grammar's own hero convention. -->
+  <section class="tvc-title" data-sc-act="flow">
+    <div class="sc-wrap">
+      <p class="tvc-kicker">Founding, 2017&ndash;2026</p>
+      <h1 class="sc-display sc-display--lg" data-sc-cue="0 1 0 0">Nine years back, ten hands and a fence line held a barren field near Thaggatti behind.</h1>
+      <p class="tvc-poem">Earthwork by earthwork, one workshop, one season: the soil slowly remembered its reason.</p>
+    </div>
+  </section>
+
+  <!-- CH 1 · ARRIVAL: reveal -->
+  <section class="tvc-chapter" data-sc-act="flow" data-tvc-chapter="arrival" data-tvc-year="2017" data-tvc-title="Arrival">
+    <div class="sc-wrap tvc-split">
+      <div class="sc-stack" data-sc-in data-sc-stagger="70">
+        <p class="tvc-folio-inline">01 &middot; 2017</p>
+        <h2 class="sc-display sc-display--lg">The land was quiet before any of this.</h2>
+        <p class="sc-body">TVC began as a seed idea from a group who wanted to live sustainably as a community. WeCommunities came on as the real-estate development partner, its very first project. The group chose a site in Tamil Nadu near the village of Thaggatti, starting with ten members.</p>
+        <p class="sc-body">March 2017: first visit to the site. The land was barren, its topsoil stripped of organic matter. By July, planting had begun in a small plot set aside for trees, with Biome Environmental Solutions and Ananas on board as design and permaculture consultants.</p>
+      </div>
+      <figure class="tvc-split-media" data-sc-reveal="up" data-sc-reveal-at="0.15 0.6">
+        <img src="assets/journey-01.jpg" width="1400" height="1049" alt="The barren, degraded land at Tamarind Valley Collective's first site visit in March 2017.">
+      </figure>
+    </div>
+  </section>
+
+  <!-- CH 2 · THE LAND PUSHES BACK: parallax -->
+  <section class="tvc-chapter tvc-chapter--muted" data-sc-act="flow" data-tvc-chapter="pushback" data-tvc-year="2017" data-tvc-title="The land pushes back">
+    <div class="sc-wrap tvc-split tvc-split--reverse">
+      <figure class="tvc-split-media tvc-parallax-frame">
+        <img data-sc-parallax="0.5" src="assets/journey-48.jpg" width="1400" height="1400" alt="The site after an unusually heavy October 2017 monsoon washed out the season's earthwork.">
+      </figure>
+      <div class="sc-stack" data-sc-in data-sc-stagger="70">
+        <p class="tvc-folio-inline">02 &middot; October 2017</p>
+        <h2 class="sc-display sc-display--lg">Then the rain took it back.</h2>
+        <p class="sc-body">An unusually heavy north-east monsoon washed away June's earthwork and much of what had just been planted. Nearby stations logged 20 to 40mm of rain within single 24-hour periods. It would not be the last time the land pushed back.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CH 3 · TAKING ROOT: pan rail, 2018-2021 -->
+  <section data-sc-act="pan" data-sc-span="5.4" data-tvc-chapter="root" data-tvc-year="2018–2021" data-tvc-title="Taking root">
+    <div data-sc-stage>
+      <div class="rail" data-sc-pan="0.1">
+        <div class="rail__lead sc-stack">
+          <p class="tvc-folio-inline">03 &middot; 2018&ndash;2021</p>
+          <h2 class="sc-display sc-display--md">Four years, one steady climb.</h2>
+          <p class="sc-body">A structure, an identity, power, and the first animal on the land.</p>
+        </div>
+        <article class="item">
+          <img src="assets/journey-04.jpg" width="1400" height="1049" alt="TVC's first structure, a mud hut built entirely by hand, in January 2018.">
+          <p class="tvc-folio-inline">2018</p>
+          <h3>First structure</h3>
+          <p>A mud hut, built entirely by hand, went up. The community held its first camp-site stay.</p>
+        </article>
+        <article class="item">
+          <img src="assets/journey-06.jpg" width="1400" height="553" alt="Construction beginning on the first farmer's quarters, July 2018.">
+          <p class="tvc-folio-inline">2018</p>
+          <h3>Farmer's quarters</h3>
+          <p>Construction began on the first farmer's quarters.</p>
+        </article>
+        <article class="item">
+          <img src="assets/journey-08.jpg" width="1400" height="787" alt="TVC's first GAIA Map delivered by Ananas, May 2019.">
+          <p class="tvc-folio-inline">2019</p>
+          <h3>A first map</h3>
+          <p>Ananas delivered TVC's first GAIA Map. Madhavan joined that July as Farm Manager.</p>
+        </article>
+        <article class="item">
+          <img src="assets/journey-49.jpg" width="1400" height="1398" alt="TVC's logo, finalized in December 2019." style="object-fit: contain; background: var(--sc-surface);">
+          <p class="tvc-folio-inline">2019</p>
+          <h3>An identity</h3>
+          <p>After member Sunita's first renders in November, TVC's current logo was finalized in December.</p>
+        </article>
+        <article class="item">
+          <img src="assets/journey-12.jpg" width="1400" height="1050" alt="The solar shed set up at TVC in March 2020." style="object-fit: cover;">
+          <p class="tvc-folio-inline">2020&ndash;2021</p>
+          <h3>Power, then a cow</h3>
+          <p>The solar shed went up in March 2020. TVC's first cow arrived the following January, and water lines followed that August.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- CH 4 · STRUCK AGAIN: kinetic, hard cuts, 2024-2025 -->
+  <section class="tvc-struck" data-sc-act="flow" data-tvc-chapter="struck" data-tvc-year="2024–2025" data-tvc-title="Struck again">
+    <div class="sc-wrap">
+      <p class="tvc-folio-inline">04 &middot; 2024&ndash;2025</p>
+      <h2 class="sc-display sc-display--lg" data-sc-cue="0 0.3 0" data-sc-kinetic="lines">Then the land pushed back three more times.</h2>
+      <h2 class="sc-display sc-display--md" data-sc-cue="0.15 0.42" data-sc-kinetic="lines">An elephant came through, uninvited, and damaged structures near the mud hut.</h2>
+      <h2 class="sc-display sc-display--md" data-sc-cue="0.36 0.63" data-sc-kinetic="lines">A wildfire breached the fire lines and burned through a lot of vegetation.</h2>
+      <h2 class="sc-display sc-display--md" data-sc-cue="0.57 0.9 0.2" data-sc-kinetic="lines">Then, one July night, the transformer was stolen.</h2>
+      <p class="tvc-epigraph">A mud hut rose by hand. A wildfire came and went.
+Elephants wandered through, uninvited, unbent.
+A transformer vanished one restless July night:
+still, somehow, the years kept turning out right.</p>
+    </div>
+  </section>
+
+  <!-- CH 5 · WHAT HELD: flow + count, 2025 continued -->
+  <section class="tvc-chapter tvc-held" data-sc-act="flow" data-tvc-chapter="held" data-tvc-year="2025" data-tvc-title="What held">
+    <div class="sc-wrap sc-stack" data-sc-in data-sc-stagger="70">
+      <p class="tvc-folio-inline">05 &middot; 2025</p>
+      <h2 class="sc-display sc-display--lg">The year kept moving anyway.</h2>
+      <p class="sc-body">May's meet-up, delayed to August, finally took place. The fifth edition of 3Bs&amp;1H ran on schedule. Home construction kept climbing through it all.</p>
+      <img src="assets/journey-41.jpg" width="1400" height="813" alt="Home construction making steady progress at TVC in August 2025.">
+      <p class="tvc-count-line"><span class="sc-nums" data-sc-count="0 53">0</span> members, and counting.</p>
+    </div>
+  </section>
+
+  <!-- CH 6 · FIRST HOME (PEAK): reveal, largest span, most room -->
+  <section class="tvc-chapter tvc-chapter--peak" data-sc-act="flow" data-tvc-chapter="home" data-tvc-year="2026" data-tvc-title="First home">
+    <div class="sc-wrap tvc-peak-wrap">
+      <div class="tvc-peak-copy sc-stack" data-sc-in data-sc-stagger="80">
+        <p class="tvc-folio-inline">06 &middot; March 15, 2026</p>
+        <h2 class="sc-display sc-display--xl" data-sc-cue="0 0.4 0" data-sc-kinetic="lines">Nine winters deep in, our first true home now stands.</h2>
+        <p class="sc-body" style="margin-inline:auto;">Housewarming for Ram and Krishna's home. The same month, the pottery wheel was inaugurated with a first workshop led by Ravi Varma.</p>
+      </div>
+      <div class="tvc-peak-grid">
+        <figure class="g1" data-sc-reveal="up" data-sc-reveal-at="0.15 0.62">
+          <img src="assets/journey-46.jpg" width="1050" height="1400" alt="Housewarming for Ram and Krishna's home at TVC, March 15, 2026.">
+        </figure>
+        <figure class="g2" data-sc-reveal="left" data-sc-reveal-at="0.25 0.72">
+          <img src="assets/journey-47.jpg" width="1050" height="1400" alt="Members gathered for the housewarming celebration.">
+        </figure>
+        <figure class="g3" data-sc-reveal="right" data-sc-reveal-at="0.35 0.82">
+          <img src="assets/journey-51.jpg" width="1400" height="788" alt="The pottery wheel workshop led by Ravi Varma, March 2026.">
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- CLOSE: colophon. Small type, CTA as a line of running text. -->
+  <section class="tvc-colophon" data-sc-act="flow" data-tvc-chapter="close">
+    <div class="sc-wrap sc-stack" data-sc-in data-sc-stagger="60">
+      <p class="tvc-poem">Nine winters deep in, our first true home now stands.
+Better than scrolling: walk it through yourself, hand in hand.</p>
+      <p class="tvc-cta-line">Come see it in person. <a href="https://tvc.farm/visit">Plan a visit to Tamarind Valley Collective &rarr;</a></p>
+      <p class="tvc-colophon__small">Tamarind Valley Collective, founded 2017, near Thaggatti, Tamil Nadu. This page is a scroll-craft prototype of the real "Our Journey" story on tvc.farm, built to test the style before deciding whether to carry it into the live ten-year page. Not yet live.</p>
+    </div>
+  </section>
+
+</main>
+
+<script src="scrollcraft.js"></script>
+<script>ScrollCraft.mount(document.body);</script>
+<script>
+(function () {
+  "use strict";
+  // Signature move: "the skyline mends itself". See BRIEF.md. Bespoke to this
+  // page; does not touch scrollcraft.js/.css.
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var folio = document.querySelector('[data-tvc-folio]');
+  var label = document.querySelector('[data-tvc-folio-label]');
+  var chapters = Array.prototype.slice.call(document.querySelectorAll('[data-tvc-chapter]'));
+  var nodes = {};
+  Array.prototype.forEach.call(document.querySelectorAll('[data-tvc-node]'), function (n) {
+    nodes[n.getAttribute('data-tvc-node')] = n;
+  });
+
+  function activateChapter(ch) {
+    var key = ch.getAttribute('data-tvc-chapter');
+    var year = ch.getAttribute('data-tvc-year');
+    var title = ch.getAttribute('data-tvc-title');
+    if (label && title) label.textContent = year + ' · ' + title;
+
+    var node = nodes[key];
+    if (node) node.classList.add('is-active');
+
+    // Mend: the moment THIS chapter is reached, mark the setback node it heals.
+    Array.prototype.forEach.call(document.querySelectorAll('[data-tvc-mend-on="' + key + '"]'), function (crack) {
+      crack.classList.add('is-mended');
+    });
+
+    // Resolve the whole line once the peak (first home) is reached.
+    if (key === 'home' && folio) folio.classList.add('is-resolved');
+  }
+
+  if ('IntersectionObserver' in window && chapters.length) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) activateChapter(entry.target);
+      });
+    }, { threshold: 0, rootMargin: '-40% 0px -40% 0px' });
+    chapters.forEach(function (ch) { io.observe(ch); });
+  } else {
+    // No IntersectionObserver: show the resolved end-state rather than nothing.
+    Object.keys(nodes).forEach(function (k) { nodes[k].classList.add('is-active'); });
+    document.querySelectorAll('[data-tvc-mend-on]').forEach(function (c) { c.classList.add('is-mended'); });
+    if (folio) folio.classList.add('is-resolved');
+    if (label) label.textContent = '2026 · First home';
+  }
+})();
+</script>
+</body>
+</html>

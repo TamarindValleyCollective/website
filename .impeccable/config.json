@@ -113,6 +113,15 @@
         ],
         "createdAt": "2026-09-16T14:09:28.004Z",
         "reason": "detector matches the literal substring 'width' inside stroke-width (an SVG paint attribute animated on .year-line, line 449) - not the CSS box-model width property; no layout thrash, confirmed no other transition:width in this file"
+      },
+      {
+        "rule": "low-contrast",
+        "value": "*",
+        "files": [
+          "scrollcraft/builds/our-journey/index.html"
+        ],
+        "createdAt": "2026-09-17T16:06:27.871Z",
+        "reason": "Claude verified via real Chrome render (getComputedStyle) that the flagged pairs (#9a9ba1 on #e7e4dc, #965836 on #08090b) never actually occur on the page - those are the unmodified scroll-craft engine defaults, while the page's real computed tokens are --sc-canvas:#faf7ee, --sc-ink-soft:#57604f, --tvc-accent-text:#965836, all confirmed >=4.5:1 by direct calculation. Static analysis appears to resolve the two stylesheets' :root blocks independently instead of following the real cascade. Scoped to this one prototype file only."
       }
     ]
   }
