@@ -207,3 +207,36 @@ working as designed: the rail becomes a fully-visible static stack (confirmed
 visually — all four cards shown at once, nothing hidden), so continued
 vertical scroll is naturally static because there is nothing left to reveal.
 The harness's generic dead-scroll heuristic does not special-case this.
+
+## Second verification pass (project design hook)
+
+The project's own `impeccable` design hook flagged 11 issues on its deeper
+Stop-hook pass. Triaged each against a real Chrome render rather than trusting
+or dismissing the tool:
+
+- **4 confirmed false positives**, same root cause as the contrast issue
+  above (the detector reads an element's own declared CSS / the untouched
+  engine's default tokens, not the resolved cascade or a nested wrapper's
+  padding): `cramped-padding` on `.tvc-chapter`/`.tvc-colophon` (real measured
+  inset: 118-630px, not 0 — their padding lives on a nested wrapper div) and
+  `overused-font` for "geist"/"instrument sans" (never rendered anywhere;
+  `getComputedStyle` confirms Fraunces/Inter throughout — those names only
+  exist as the untouched engine's own unused default fallbacks). Suppressed
+  narrowly, scoped to this one file, with the measurements recorded in each
+  ignore reason.
+- **2 real findings, fixed:**
+  1. `numbered-section-labels` (6 instances): every chapter's `01 ·`, `02 ·`
+     ... prefix was arbitrary decoration — the real date next to it already
+     carries the actual chronological information, more honestly than a
+     counter would. Dropped the prefixes; labels now just read "2017",
+     "October 2017", "2018–2021", etc.
+  2. `flat-type-hierarchy`: 9 distinct small text sizes bunched between
+     11.5px and 22.4px with no clear steps. Consolidated the bespoke label/
+     caption sizes (kicker, folio labels, colophon small print) to one shared
+     0.8rem, folded two near-body sizes (poem, rail card copy) into 1rem, and
+     gave the rail card heading and CTA line a real 1.25rem step instead of
+     an arbitrary 1.15rem.
+
+Re-ran all three verification passes after both fixes; still clean (no dead
+scroll beyond the documented `pan` fallback, contrast clear everywhere).
+Sheets in `lab/` reflect this final version.

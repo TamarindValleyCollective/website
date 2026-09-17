@@ -122,6 +122,33 @@
         ],
         "createdAt": "2026-09-17T16:06:27.871Z",
         "reason": "Claude verified via real Chrome render (getComputedStyle) that the flagged pairs (#9a9ba1 on #e7e4dc, #965836 on #08090b) never actually occur on the page - those are the unmodified scroll-craft engine defaults, while the page's real computed tokens are --sc-canvas:#faf7ee, --sc-ink-soft:#57604f, --tvc-accent-text:#965836, all confirmed >=4.5:1 by direct calculation. Static analysis appears to resolve the two stylesheets' :root blocks independently instead of following the real cascade. Scoped to this one prototype file only."
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "scrollcraft/builds/our-journey/index.html"
+        ],
+        "createdAt": "2026-09-17T16:10:47.402Z",
+        "reason": "Verified via Chrome getComputedStyle/getBoundingClientRect: flagged elements (.tvc-chapter, .tvc-colophon) declare their padding on a nested wrapper div (.tvc-split/.tvc-held/.tvc-peak-wrap), not on the flagged element itself. Real measured inset from section edge to first text: 118px top / 136px left / 630px bottom for .tvc-chapter, 137px for .tvc-colophon below its border-top. Detector checks the outer element's own box only."
+      },
+      {
+        "rule": "overused-font",
+        "value": "geist",
+        "files": [
+          "scrollcraft/builds/our-journey/index.html"
+        ],
+        "createdAt": "2026-09-17T16:11:04.199Z",
+        "reason": "Verified via Chrome getComputedStyle: no rendered element resolves to Geist. It only appears as the untouched scroll-craft engine's own default --sc-font-text fallback in scrollcraft.css (never edited, per the skill's hard rule); this page's actual font-text token is Inter."
+      },
+      {
+        "rule": "overused-font",
+        "value": "instrument sans",
+        "files": [
+          "scrollcraft/builds/our-journey/index.html"
+        ],
+        "createdAt": "2026-09-17T16:11:11.248Z",
+        "reason": "Verified via Chrome getComputedStyle: no rendered element resolves to Instrument Sans. It only appears as the untouched scroll-craft engine's own default --sc-font-display fallback in scrollcraft.css (never edited, per the skill's hard rule); this page's actual font-display token is Fraunces."
       }
     ]
   }
