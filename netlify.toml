@@ -434,3 +434,19 @@
   from = "/ecosystem/geography"
   to = "/ecosystem/landscape/"
   status = 301
+
+# More 404s found via Search Console's Pages report (2026-09-17 export).
+
+# Old site's date-worded slug for the same event now filed under its
+# content-collection id (see src/content/events/2024-11-24-volunteer-day.md).
+[[redirects]]
+  from = "/2024-nov-24-volunteer-day"
+  to = "/events/2024-11-24-volunteer-day/"
+  status = 301
+
+# Publii author-archive URL from the old site - no per-author page exists
+# on this one, so this points at the people listing instead.
+[[redirects]]
+  from = "/authors/rajesh/"
+  to = "/people/"
+  status = 301
