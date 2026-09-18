@@ -780,6 +780,21 @@ never touches Netlify either.
   enumerating subdomains one at a time. `/privacy` and the cookie banner (all 3 locales) name it
   alongside GA, since it collects materially different data (session recordings/heatmaps, not
   aggregate pageviews).
+  - **Known issue (2026-09-19): dashboard sign-in broken for `contact@tvc.farm`.** The tag
+    fires fine (data collection is unaffected), but the project id `xttq21yf39`'s dashboard at
+    `clarity.microsoft.com` can't be reached with this account. Reproduced with browser
+    automation: both "Sign in to Google" (silent `prompt=none` approval, valid code, `hd=tvc.farm`
+    confirmed - Google's side works) and "Sign in to Microsoft" (a real password reset completed
+    successfully) land back on Clarity's own "Welcome back" sign-in wall instead of the dashboard,
+    with no console error either time. Clearing `clarity.microsoft.com`'s localStorage/
+    sessionStorage (which held a stale token from an earlier failed attempt) didn't change the
+    behavior, ruling out stale client-side state. Suspected cause: the project was
+    auto-provisioned by Bing Webmaster Tools rather than created directly through Clarity's own
+    sign-up flow (see above), which may have left the account in a state normal OAuth sign-in
+    can't reach - this looks like a Microsoft Clarity platform bug, not fixable from this repo.
+    Untried: clearing `clarity.microsoft.com` cookies via Chrome's own settings UI (unreachable
+    from browser automation), an Incognito window, a different browser. Escalated to Microsoft
+    support - ticket `UCM000007493055`, filed 2026-09-19.
 - **WeatherWidget** (`/ecosystem/geography`) — fetches current temperature/humidity/conditions
   for the farm's coordinates from Open-Meteo (free, no API key) on page load, cached in
   `localStorage` for 15 minutes. Hides itself if the fetch fails rather than showing broken UI.
