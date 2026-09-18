@@ -94,7 +94,17 @@ const csp = [
   // instrumented (script loads, config fires) but nothing ever reached
   // Google. Wildcarding both, plus keeping the legacy domain, rather than
   // risk narrowing to exactly what one test run happened to hit.
-  "connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://*.g.doubleclick.net https://www.googletagmanager.com https://accounts.google.com https://api.inaturalist.org https://api.open-meteo.com https://*.clarity.ms",
+  //
+  // That first fix (2026-09-17) still didn't work: `*.analytics.google.com`
+  // is a CSP wildcard, and CSP wildcards only match subdomains - never the
+  // bare apex domain. The real hit lands on the bare `analytics.google.com`
+  // itself, so it kept getting silently dropped even after the "fix".
+  // Confirmed 2026-09-19 by triggering a real `securitypolicyviolation`
+  // event against it in production. Listing the bare domain explicitly
+  // alongside the wildcard, same lesson applied to the google-analytics.com
+  // and g.doubleclick.net entries in case a future hit lands on their apex
+  // too.
+  "connect-src 'self' https://google-analytics.com https://*.google-analytics.com https://analytics.google.com https://*.analytics.google.com https://g.doubleclick.net https://*.g.doubleclick.net https://www.googletagmanager.com https://accounts.google.com https://api.inaturalist.org https://api.open-meteo.com https://*.clarity.ms",
   'frame-src https://www.google.com https://www.youtube.com https://accounts.google.com',
   "object-src 'none'",
   "base-uri 'self'",
