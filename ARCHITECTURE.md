@@ -793,8 +793,8 @@ never touches Netlify either.
     sign-up flow (see above), which may have left the account in a state normal OAuth sign-in
     can't reach - this looks like a Microsoft Clarity platform bug, not fixable from this repo.
     Untried: clearing `clarity.microsoft.com` cookies via Chrome's own settings UI (unreachable
-    from browser automation), an Incognito window, a different browser, or filing a ticket with
-    Clarity support via its Help icon.
+    from browser automation), an Incognito window, a different browser. Escalated to Microsoft
+    support - ticket `UCM000007493055`, filed 2026-09-19.
 - **WeatherWidget** (`/ecosystem/geography`) — fetches current temperature/humidity/conditions
   for the farm's coordinates from Open-Meteo (free, no API key) on page load, cached in
   `localStorage` for 15 minutes. Hides itself if the fetch fails rather than showing broken UI.
