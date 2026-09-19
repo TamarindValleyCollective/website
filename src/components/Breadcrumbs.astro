@@ -21,15 +21,19 @@ const barePathname = stripLocalePrefix(pathname);
 const section = barePathname === '/' ? null : sectionFor(barePathname);
 const sectionLabelKey = section?.label === 'Explore' ? 'nav.explore' : 'nav.engage';
 
-// Events is the one Explore section deep enough (listing, individual events,
-// and now the 3bs1h hub + its own versioned editions) that landing straight
-// on a leaf page with no "Events" stop in between left no easy way back to
-// the listing - reusing site-map.ts's own entry rather than duplicating its
-// label/href. Not generalized to every other section (People, Ecosystem,
-// ...) - none of those are nested deep enough yet to need it, and adding it
-// everywhere would be a much bigger sitewide trail change than asked for.
+// Events is the one Explore section deep enough (individual events, and now
+// the 3bs1h hub + its own versioned editions) that landing straight on a leaf
+// page with no "Events" stop in between left no easy way back to the listing
+// - reusing site-map.ts's own entry rather than duplicating its label/href.
+// Excludes the listing page itself (barePathname === eventsLink.href) -
+// otherwise the trail on /events would repeat the same URL twice ("Events"
+// pointing at /events, then the current-page crumb also at /events), the way
+// no other section's index page repeats its own top-level crumb. Not
+// generalized to every other section (People, Ecosystem, ...) - none of
+// those are nested deep enough yet to need it, and adding it everywhere
+// would be a much bigger sitewide trail change than asked for.
 const eventsLink = EXPLORE_LINKS.find((l) => l.key === 'events')!;
-const showEventsCrumb = barePathname === eventsLink.href || barePathname.startsWith(eventsLink.href + '/');
+const showEventsCrumb = barePathname.startsWith(eventsLink.href + '/');
 const eventsHref = showEventsCrumb ? getRelativeLocaleUrl(lang, eventsLink.href) : '';
 
 // getRelativeLocaleUrl unconditionally appends a trailing slash, which
