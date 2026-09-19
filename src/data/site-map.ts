@@ -89,3 +89,23 @@ export function sectionFor(pathname: string): { label: 'Explore' | 'Engage'; hre
   if (ENGAGE_PREFIXES.some(matches)) return { label: 'Engage', href: '/#engage' };
   return null;
 }
+
+const ALL_LINKS: SiteLink[] = [...EXPLORE_LINKS, ...ENGAGE_LINKS].flatMap((link) => [
+  link,
+  ...(link.children ?? []),
+]);
+
+// Breadcrumbs' final "current page" crumb needs a label for the page - and
+// several pages have drifted into using a bespoke marketing title there
+// ("Who's part of TVC", "From degraded land to a regenerating ecosystem")
+// instead of the short nav-dropdown label ("People", "Our Journey"), which
+// reads as the breadcrumb being out of sync with the URL/nav structure. For
+// any page whose URL exactly matches a nav entry here, look up that entry's
+// `key` so Breadcrumbs can render the translated nav label instead of
+// trusting each page to have kept its own title in sync by hand - same
+// single-source-of-truth reasoning as `sectionFor` above. Pages with no
+// matching entry (dynamic sub-pages like individual events, member stories,
+// outreach posts) fall back to their own title, since they're not nav items.
+export function navKeyFor(pathname: string): string | null {
+  return ALL_LINKS.find((link) => link.href === pathname)?.key ?? null;
+}
