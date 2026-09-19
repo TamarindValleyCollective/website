@@ -58,7 +58,13 @@ const {
 const t = useTranslations(lang);
 const pageDescription = description ?? t('jsonLd.orgDescription', { acres: FARM_AREA_ACRES, families: MEMBER_FAMILY_COUNT });
 
-const pageTitle = `${title} · Tamarind Valley Collective`;
+// Search engines flag/truncate <title> past ~70 characters. Most page
+// titles comfortably fit the brand suffix within that budget, but a
+// handful of naturally long ones (event names especially) don't - rather
+// than editing those titles down to fit an arbitrary suffix, drop the
+// suffix itself when it would push the total over the limit.
+const SITE_NAME = 'Tamarind Valley Collective';
+const pageTitle = `${title} · ${SITE_NAME}`.length > 70 ? title : `${title} · ${SITE_NAME}`;
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 const socialImageURL = new URL(image, Astro.site);
 
