@@ -1,5 +1,5 @@
 ---
-import { sectionFor, EXPLORE_LINKS } from '../data/site-map';
+import { sectionFor, EXPLORE_LINKS, navKeyFor } from '../data/site-map';
 import { useTranslations, stripLocalePrefix, type Locale } from '../i18n/utils';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import JsonLd from './JsonLd.astro';
@@ -36,6 +36,19 @@ const eventsLink = EXPLORE_LINKS.find((l) => l.key === 'events')!;
 const showEventsCrumb = barePathname.startsWith(eventsLink.href + '/');
 const eventsHref = showEventsCrumb ? getRelativeLocaleUrl(lang, eventsLink.href) : '';
 
+// A page's own <title> is written for the browser tab/SEO and often reads
+// as marketing copy ("Who's part of TVC", "From degraded land to a
+// regenerating ecosystem") rather than the short nav-dropdown label the URL
+// actually maps to ("People", "Our Journey") - that mismatch is what reads
+// as the breadcrumb being out of sync with the URL. Whenever the current
+// page's URL exactly matches a site-map entry, use that entry's translated
+// nav label for the "current page" crumb instead of trusting `pageTitle` to
+// have been kept in sync by hand; pages with no matching entry (individual
+// events, member stories, outreach posts, ...) keep their own title since
+// they're not nav items to begin with.
+const navKey = navKeyFor(barePathname);
+const currentLabel = navKey ? t(`nav.${navKey}`) : pageTitle;
+
 // getRelativeLocaleUrl unconditionally appends a trailing slash, which
 // would land after the hash (`/kn/#explore/`) and break the anchor if
 // passed the raw `/#explore` — split the hash off first and reattach it to
@@ -60,7 +73,7 @@ const breadcrumbSchema = section ? {
     ...(showEventsCrumb
       ? [{ '@type': 'ListItem', position: 3, name: t(`nav.${eventsLink.key}`), item: new URL(eventsHref, Astro.site).toString() }]
       : []),
-    { '@type': 'ListItem', position: showEventsCrumb ? 4 : 3, name: pageTitle, item: new URL(pathname, Astro.site).toString() },
+    { '@type': 'ListItem', position: showEventsCrumb ? 4 : 3, name: currentLabel, item: new URL(pathname, Astro.site).toString() },
   ],
 } : null;
 ---
@@ -78,7 +91,7 @@ const breadcrumbSchema = section ? {
           <span class="breadcrumbs__sep" aria-hidden="true">/</span>
         </>
       )}
-      <span class="breadcrumbs__current" aria-current="page">{pageTitle}</span>
+      <span class="breadcrumbs__current" aria-current="page">{currentLabel}</span>
     </div>
   </nav>
 )}
