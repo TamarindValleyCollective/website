@@ -17,7 +17,17 @@ const t = useTranslations(lang);
 // there's no useful trail to show — skip rendering rather than show a
 // half-empty breadcrumb. sectionFor() only knows about bare (locale-less)
 // paths, so strip the /kn or /ta prefix before matching.
-const barePathname = stripLocalePrefix(pathname);
+//
+// Astro's static output always gives Astro.url.pathname a trailing slash
+// (e.g. `/people/`), but every href in site-map.ts is written without one.
+// sectionFor()'s prefix checks (`startsWith(prefix + '/')`) happen to
+// tolerate that mismatch, which is why the section-level crumb has always
+// looked right - but the exact-match checks below (showEventsCrumb,
+// navKeyFor) silently never matched, permanently defeating both this fix
+// and the earlier events self-reference fix. Strip the trailing slash once
+// here so every comparison downstream is consistent.
+const rawBarePathname = stripLocalePrefix(pathname);
+const barePathname = rawBarePathname.length > 1 ? rawBarePathname.replace(/\/$/, '') : rawBarePathname;
 const section = barePathname === '/' ? null : sectionFor(barePathname);
 const sectionLabelKey = section?.label === 'Explore' ? 'nav.explore' : 'nav.engage';
 
