@@ -8,7 +8,7 @@ coverImageWidth: 656
 coverImageHeight: 450
 organizer: "Local Narratives"
 tags: ["hike", "farm-experience", "cooking", "workshop"]
-draft: false
+draft: true
 price:
   - amount: "₹1,900"
     label: "per person"

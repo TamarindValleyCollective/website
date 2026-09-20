@@ -5,6 +5,7 @@ excerpt: "Local Narratives உடன் Tamarind Valley Collective-இல் ந
 coverImage: "/images/events/2026-11-28-melagiri-hikes-farm-meals-cooking-workshop/hero.png"
 organizer: "Local Narratives"
 tags: ["நடைபயணம்", "பண்ணை அனுபவம்", "சமையல்", "பட்டறை"]
+draft: true
 ---
 
 **[Local Narratives](/ta/people/partners#local-narratives)** உடன் Tamarind Valley Collective-இல் ஒரு நாளுக்காக இணையுங்கள் — நடைபயணங்கள், பண்ணை உணவுகள், மற்றும் ஒரு பச்சை சமையல் பட்டறை, TVC-யின் சொந்த [மாதவன்](/ta/people/staff#madhavan) அவர்களின் விருந்தோம்பலில்.
