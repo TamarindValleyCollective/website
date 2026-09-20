@@ -28,6 +28,14 @@ navigation structure, using the homepage hero image
 queue (`addToQueue`), not published immediately — check Buffer for actual send times. LinkedIn
 wasn't included in that round.
 
+On 2026-09-20, a LinkedIn cross-post of the "website launch" Instagram reel
+(`instagram.com/reel/DdggwMFh1bZ/`) was drafted for the `tvcfarm` page channel (post ID
+`6aafd87813d908add21a8377`, status `draft`). The MCP `create_post` tool has no media-upload
+mutation — every video/image asset needs a direct, publicly-fetchable URL Buffer's servers pull
+from, so a locally-held video file can't be attached from here. The draft was created text-only
+(`saveToDraft: true`); the video gets attached by hand in Buffer's own composer (which supports
+direct file upload) before publishing.
+
 ## What the Buffer MCP server can do
 
 The assistant has a Buffer MCP server connected (workspace-level access, separate from the
