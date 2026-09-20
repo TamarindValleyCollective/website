@@ -5,6 +5,7 @@ excerpt: "ಲೋಕಲ್ ನ್ಯಾರೇಟಿವ್ಸ್ ಜೊತೆ ತ�
 coverImage: "/images/events/2026-11-28-melagiri-hikes-farm-meals-cooking-workshop/hero.png"
 organizer: "Local Narratives"
 tags: ["ನಡಿಗೆ", "ಫಾರ್ಮ್ ಅನುಭವ", "ಅಡುಗೆ", "ಕಾರ್ಯಾಗಾರ"]
+draft: true
 ---
 
 **[ಲೋಕಲ್ ನ್ಯಾರೇಟಿವ್ಸ್](/kn/people/partners#local-narratives)** ಜೊತೆ ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ನಲ್ಲಿ ಒಂದು ದಿನಕ್ಕೆ ಸೇರಿ — ನಡಿಗೆ, ಫಾರ್ಮ್ ಊಟಗಳು, ಮತ್ತು ಕಚ್ಚಾ ಅಡುಗೆ ಕಾರ್ಯಾಗಾರ, TVC ಯ ಸ್ವಂತ [ಮಾಧವನ್](/kn/people/staff#madhavan) ಅವರ ಆತಿಥ್ಯದಲ್ಲಿ.
