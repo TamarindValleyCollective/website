@@ -550,6 +550,25 @@ const uiStringsJsonSafe = JSON.stringify(c).replace(/<\/script/gi, '<\\/script')
     right: 12px;
   }
 
+  /* Touchscreens can't hover to "find" a small arrow the way a mouse can,
+     so give coarse-pointer devices (phones/tablets) a much bigger hit area
+     instead of relying on precise taps against the 40px desktop button -
+     swipe (in the script below) is the primary way to navigate here, this
+     is just the fallback tap target. */
+  @media (pointer: coarse) {
+    .lightbox-nav {
+      width: 56px;
+      height: 56px;
+      font-size: 26px;
+    }
+    .lightbox-prev {
+      left: 6px;
+    }
+    .lightbox-next {
+      right: 6px;
+    }
+  }
+
   .lightbox-detail {
     padding: 22px;
     overflow-y: auto;
@@ -998,6 +1017,34 @@ const uiStringsJsonSafe = JSON.stringify(c).replace(/<\/script/gi, '<\\/script')
   document.getElementById('lightbox')?.addEventListener('click', (e) => {
     if ((e.target as HTMLElement).id === 'lightbox') closeLightbox();
   });
+
+  // Swipe left/right to navigate on touch devices - the prev/next arrows
+  // stay as a fallback (enlarged for coarse pointers in CSS above), but a
+  // swipe on the image itself is the natural touch gesture and doesn't
+  // depend on hitting a small button.
+  const lightboxImage = document.querySelector<HTMLElement>('.lightbox-image');
+  let touchStartX = 0;
+  let touchStartY = 0;
+  lightboxImage?.addEventListener(
+    'touchstart',
+    (e) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    },
+    { passive: true }
+  );
+  lightboxImage?.addEventListener(
+    'touchend',
+    (e) => {
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      // Require a deliberate, mostly-horizontal swipe so a vertical drag
+      // (e.g. a stray scroll attempt) doesn't accidentally change photos.
+      if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      document.getElementById(dx < 0 ? 'lb-next' : 'lb-prev')?.click();
+    },
+    { passive: true }
+  );
   document.addEventListener('keydown', (e) => {
     const lb = document.getElementById('lightbox');
     if (!lb || lb.hidden) return;
