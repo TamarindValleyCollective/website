@@ -1,5 +1,5 @@
 ---
-import { sectionFor, EXPLORE_LINKS, navKeyFor } from '../data/site-map';
+import { sectionFor, navKeyFor, parentLinkFor } from '../data/site-map';
 import { useTranslations, stripLocalePrefix, type Locale } from '../i18n/utils';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import JsonLd from './JsonLd.astro';
@@ -31,20 +31,17 @@ const barePathname = rawBarePathname.length > 1 ? rawBarePathname.replace(/\/$/,
 const section = barePathname === '/' ? null : sectionFor(barePathname);
 const sectionLabelKey = section?.label === 'Explore' ? 'nav.explore' : 'nav.engage';
 
-// Events is the one Explore section deep enough (individual events, and now
-// the 3bs1h hub + its own versioned editions) that landing straight on a leaf
-// page with no "Events" stop in between left no easy way back to the listing
-// - reusing site-map.ts's own entry rather than duplicating its label/href.
-// Excludes the listing page itself (barePathname === eventsLink.href) -
-// otherwise the trail on /events would repeat the same URL twice ("Events"
-// pointing at /events, then the current-page crumb also at /events), the way
-// no other section's index page repeats its own top-level crumb. Not
-// generalized to every other section (People, Ecosystem, ...) - none of
-// those are nested deep enough yet to need it, and adding it everywhere
-// would be a much bigger sitewide trail change than asked for.
-const eventsLink = EXPLORE_LINKS.find((l) => l.key === 'events')!;
-const showEventsCrumb = barePathname.startsWith(eventsLink.href + '/');
-const eventsHref = showEventsCrumb ? getRelativeLocaleUrl(lang, eventsLink.href) : '';
+// Any page nested under a top-level nav item's own URL (About/design,
+// People/outreach/some-post, Events/some-event, ...) gets that item as an
+// intermediate crumb, so the trail reads "About Us / The Design" instead of
+// dropping straight from the section to the leaf page with no way back to
+// the parent. Excludes each item's own listing page (parentLinkFor only
+// matches genuine sub-pages, not the item's own href) - otherwise /events
+// would repeat itself ("Events" pointing at /events, then the current-page
+// crumb also at /events), the way no section's index page repeats its own
+// top-level crumb.
+const parentLink = parentLinkFor(barePathname);
+const parentHref = parentLink ? getRelativeLocaleUrl(lang, parentLink.href) : '';
 
 // A page's own <title> is written for the browser tab/SEO and often reads
 // as marketing copy ("Who's part of TVC", "From degraded land to a
@@ -70,7 +67,7 @@ const sectionHref = section ? (() => {
 })() : '';
 
 // Mirrors the visual trail above 1:1 so the two never drift apart - same
-// stops (Home / section / [Events] / current page), just as schema.org
+// stops (Home / section / [parent] / current page), just as schema.org
 // BreadcrumbList instead of markup. Last item's `item` URL is included too;
 // Google's guidance treats omitting it on the current page as optional, not
 // required.
@@ -80,10 +77,10 @@ const breadcrumbSchema = section ? {
   itemListElement: [
     { '@type': 'ListItem', position: 1, name: t('common.home'), item: new URL(getRelativeLocaleUrl(lang, '/'), Astro.site).toString() },
     { '@type': 'ListItem', position: 2, name: t(sectionLabelKey), item: new URL(sectionHref, Astro.site).toString() },
-    ...(showEventsCrumb
-      ? [{ '@type': 'ListItem', position: 3, name: t(`nav.${eventsLink.key}`), item: new URL(eventsHref, Astro.site).toString() }]
+    ...(parentLink
+      ? [{ '@type': 'ListItem', position: 3, name: t(`nav.${parentLink.key}`), item: new URL(parentHref, Astro.site).toString() }]
       : []),
-    { '@type': 'ListItem', position: showEventsCrumb ? 4 : 3, name: currentLabel, item: new URL(pathname, Astro.site).toString() },
+    { '@type': 'ListItem', position: parentLink ? 4 : 3, name: currentLabel, item: new URL(pathname, Astro.site).toString() },
   ],
 } : null;
 ---
@@ -95,9 +92,9 @@ const breadcrumbSchema = section ? {
       <span class="breadcrumbs__sep" aria-hidden="true">/</span>
       <a href={sectionHref}>{t(sectionLabelKey)}</a>
       <span class="breadcrumbs__sep" aria-hidden="true">/</span>
-      {showEventsCrumb && (
+      {parentLink && (
         <>
-          <a href={eventsHref}>{t(`nav.${eventsLink.key}`)}</a>
+          <a href={parentHref}>{t(`nav.${parentLink.key}`)}</a>
           <span class="breadcrumbs__sep" aria-hidden="true">/</span>
         </>
       )}

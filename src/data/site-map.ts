@@ -109,3 +109,22 @@ const ALL_LINKS: SiteLink[] = [...EXPLORE_LINKS, ...ENGAGE_LINKS].flatMap((link)
 export function navKeyFor(pathname: string): string | null {
   return ALL_LINKS.find((link) => link.href === pathname)?.key ?? null;
 }
+
+const TOP_LEVEL_LINKS: SiteLink[] = [...EXPLORE_LINKS, ...ENGAGE_LINKS];
+
+// Any page one or more levels under a top-level nav item's own URL (e.g.
+// /about/design, /people/outreach/some-post, /events/some-event) reads as a
+// child of that item, and the breadcrumb should say so with an intermediate
+// crumb - "About Us / The Design", not just "The Design" floating under the
+// bare section name. This used to be hand-rolled once, just for Events
+// (individual events and the 3bs1h hub landing straight on a leaf page with
+// no way back to the listing); generalizing it here gives every section's
+// sub-pages the same "how do I get back to the parent" affordance, declared
+// or not - it doesn't require the sub-page to be one of `children` above,
+// only that its URL nests under the top-level item's own href, so dynamic
+// routes (event slugs, outreach posts, the partners/ananas write-up) get it
+// for free too. Only one intermediate level is shown even for URLs nested
+// two deep (e.g. /events/3bs1h/6) - same depth Events already used.
+export function parentLinkFor(pathname: string): SiteLink | null {
+  return TOP_LEVEL_LINKS.find((link) => pathname.startsWith(link.href + '/')) ?? null;
+}
