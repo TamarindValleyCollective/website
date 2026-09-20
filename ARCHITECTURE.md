@@ -599,7 +599,9 @@ On every push to `main`, Netlify runs:
 ### 3. Hosting — Netlify (live)
 
 The Netlify project is owned by the `contact@tvc.farm` account (moved there from a personal
-account on 2026-07-18).
+account on 2026-07-18). **Deploys are manual, not auto-triggered from GitHub pushes** — merging
+to `main` alone does not ship anything; production is updated by running `npm run build` then
+`netlify deploy --prod` (needs the linked `.netlify/state.json` or an explicit `--site` id).
 
 - **Static CDN** — serves every prerendered page directly; the large majority of the site
   needs nothing more than this. Confirmed live via response headers
