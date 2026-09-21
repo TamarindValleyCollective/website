@@ -1,5 +1,5 @@
-// Post-build step (see package.json's "build" script, runs after Pagefind
-// indexing). Astro inlines each page's non-`is:inline` <script type="module">
+// Post-build step (see package.json's "build" script). Astro inlines each
+// page's non-`is:inline` <script type="module">
 // directly into that page's HTML rather than extracting to an external file
 // (small per-page bundles aren't worth a separate chunk) - a strict CSP
 // script-src can't use 'unsafe-inline' for these without giving up the whole
@@ -54,13 +54,6 @@ for (const file of htmlFiles) {
   }
 }
 
-// 'wasm-unsafe-eval' (distinct from 'unsafe-eval', which this CSP
-// deliberately omits) is what Chrome/Firefox require in script-src to allow
-// WebAssembly.instantiate() at all - without it, Pagefind's search worker
-// (see SiteSearch.astro) fails to compile its .wasm module and every search
-// silently returns nothing. Missed in the 2026-08-21 CSP rollout because
-// report-only mode logs the violation without throwing, so it never showed
-// up as a visible error while clicking around.
 // Microsoft Clarity fans its own load across several subdomains (confirmed
 // empirically 2026-09-17, loading the real tag on a page with no CSP and
 // watching what it actually requested - the docs don't spell this out):
@@ -72,7 +65,6 @@ for (const file of htmlFiles) {
 // as they surface.
 const scriptSrc = [
   "'self'",
-  "'wasm-unsafe-eval'",
   'https://accounts.google.com',
   'https://www.googletagmanager.com',
   'https://*.clarity.ms',

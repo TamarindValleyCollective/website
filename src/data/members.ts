@@ -1,13 +1,9 @@
 // The Tamarind Valley Collective member directory shown on
 // src/components/views/MembersView.astro. Lives in its own module (rather
-// than inline in that .astro file's frontmatter) so SiteSearch.astro can
-// also import it at build time for its member-name lookup (see
-// searchMembers() there) - Pagefind's own full-text index doesn't reliably
-// deep-link to one specific card out of ~130 near-identical ones on a
-// single page (its chunking merges many cards together, so a search hit's
-// title/anchor can land on the wrong member entirely - see the
-// member-name-lookup changelog entry), so member-name matches need this
-// separate, always-correct path instead.
+// than inline in that .astro file's frontmatter) so it can also be imported
+// by other pages/components (HomeView, AboutView, PeopleView, JoinView,
+// HomeStats, the accommodation calendar, and search-ai.mts's grounding
+// retrieval) without pulling in MembersView's own markup.
 //
 // Sourced from the community's earlier syntropic.in/member directory; Madhav & Krithika
 // omitted here since they're already listed under Staff.
