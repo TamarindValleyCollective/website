@@ -1,5 +1,8 @@
 {
   "env": {
     "GATEGUARD_EXEMPT_GLOBS": "src/content/**"
+  },
+  "enabledPlugins": {
+    "codex@openai-codex": true
   }
 }
