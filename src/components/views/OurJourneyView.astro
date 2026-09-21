@@ -79,7 +79,9 @@ const journeySchema = {
   <section class="section section--tint">
     <div class="wrapper">
       <a class="teaser" href={getRelativeLocaleUrl(lang, '/in-pictures')}>
-        <Picture class="teaser__media" src="https://media.tvc.farm/photos/2024/2024-08-18-img-1880-thumb.jpg" alt="" loading="lazy" />
+        <Picture src="https://media.tvc.farm/photos/2024/2024-08-18-img-1880-thumb.jpg">
+          <img class="teaser__media" src="https://media.tvc.farm/photos/2024/2024-08-18-img-1880-thumb.jpg" alt="" loading="lazy" />
+        </Picture>
         <div class="teaser__body">
           <h2>{c.teaserHeading}</h2>
           <p>{c.teaserText}</p>

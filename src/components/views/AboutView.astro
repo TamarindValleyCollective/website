@@ -182,7 +182,9 @@ const aboutSchema = {
     <p>{c.farmingText}</p>
 
     <div class="farming-photo">
-      <Picture src="/images/pages/home/gallery-3.jpg" alt="A harvest of okra, beans, greens, and vegetables from the farm" loading="lazy" />
+      <Picture src="/images/pages/home/gallery-3.jpg">
+        <img src="/images/pages/home/gallery-3.jpg" alt="A harvest of okra, beans, greens, and vegetables from the farm" loading="lazy" />
+      </Picture>
     </div>
 
     <div class="two-col">
@@ -208,7 +210,9 @@ const aboutSchema = {
   <section class="section section--tint">
     <div class="wrapper">
       <a class="teaser" href={`/${lang === 'en' ? '' : lang + '/'}about/design/`}>
-        <Picture class="teaser__media" src="/images/pages/home/gallery-2.jpg" alt="" loading="lazy" />
+        <Picture src="/images/pages/home/gallery-2.jpg">
+          <img class="teaser__media" src="/images/pages/home/gallery-2.jpg" alt="" loading="lazy" />
+        </Picture>
         <div class="teaser__body">
           <h2>{c.designHeading}</h2>
           <p>{c.designText}</p>
@@ -220,7 +224,9 @@ const aboutSchema = {
 
   <section class="section wrapper">
     <a class="teaser" href={`/${lang === 'en' ? '' : lang + '/'}people/`}>
-      <Picture class="teaser__media" src="/images/pages/staff/hero-thumb.webp" alt="" loading="lazy" />
+      <Picture src="/images/pages/staff/hero-thumb.webp">
+        <img class="teaser__media" src="/images/pages/staff/hero-thumb.webp" alt="" loading="lazy" />
+      </Picture>
       <div class="teaser__body">
         <h2>{c.peopleHeading}</h2>
         <p>{c.peopleText}</p>
@@ -232,7 +238,9 @@ const aboutSchema = {
   <section class="section section--tint" id="join">
     <div class="wrapper join">
       <a class="teaser teaser--centered" href={`/${lang === 'en' ? '' : lang + '/'}join/`}>
-        <Picture class="teaser__media" src="/images/members/reva-and-ranjan.jpg" alt="" loading="lazy" />
+        <Picture src="/images/members/reva-and-ranjan.jpg">
+          <img class="teaser__media" src="/images/members/reva-and-ranjan.jpg" alt="" loading="lazy" />
+        </Picture>
         <div class="teaser__body">
           <h2>{t('joinTeaser.heading')}</h2>
           <p>{t('joinTeaser.text', { families: MEMBER_FAMILY_COUNT })}</p>

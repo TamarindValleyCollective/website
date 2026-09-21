@@ -99,7 +99,9 @@ const articleSchema = {
         return (
           <a class="bs1h-edition-card" href={`/events/3bs1h/${event.data.edition}/`}>
             {event.data.coverImage && (
-              <Picture class="bs1h-edition-card__cover" src={event.data.coverImage} alt={event.data.coverImageAlt ?? event.data.title} loading="lazy" />
+              <Picture src={event.data.coverImage}>
+                <img class="bs1h-edition-card__cover" src={event.data.coverImage} alt={event.data.coverImageAlt ?? event.data.title} loading="lazy" />
+              </Picture>
             )}
             <div class="bs1h-edition-card__body">
               <span class="bs1h-edition-card__num">
