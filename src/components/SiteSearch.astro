@@ -1,18 +1,17 @@
 ---
-// Client-side site search — no backend. Backed by Pagefind
-// (https://pagefind.app), which indexes the full rendered content of every
-// non-noindex page (see BaseLayout's data-pagefind-body on <main>) as a
-// post-`astro build` step and writes a static, chunked index to
-// dist/pagefind/. This component dynamically imports dist/pagefind/pagefind.js
-// on first open and searches entirely in the browser/web worker — no
-// backend, no dist/search-index.json (the old title/description-only
-// index) anymore. Rendered from Nav.astro so the trigger button sits
-// naturally in the header bar's flex row; the overlay itself is
-// position:fixed, so its place in the DOM doesn't matter for where it
-// actually appears on screen.
-import { getRelativeLocaleUrl } from 'astro:i18n';
+// Client-side trigger + overlay for site search. All actual searching
+// happens server-side in netlify/functions/search-ai.mts: submitting the
+// search form (Enter, a mobile keyboard's "Go"/"Search" action, or tapping
+// the magnifying-glass icon) calls /api/search-ai, which grounds an LLM
+// answer in the site's content (see lib/site-retrieval.ts) and returns a
+// short reply plus source-page links. There is no client-side keyword index
+// (Pagefind was removed along with this component's old keyword-results
+// list - see CHANGELOG for the "AI search by default" change) - the AI
+// answer is the only result type now. Deliberately submit-triggered rather
+// than firing as the visitor types: this endpoint is rate-limited and every
+// request costs a real LLM call, so auto-firing on every half-typed query
+// would burn through that budget for no benefit.
 import { useTranslations, DEFAULT_LOCALE, type Locale } from '../i18n/utils';
-import { members, memberSlug } from '../data/members';
 
 interface Props {
   lang?: Locale;
@@ -20,22 +19,6 @@ interface Props {
 
 const { lang = DEFAULT_LOCALE } = Astro.props;
 const t = useTranslations(lang);
-
-// A separate, always-correct lookup over the ~130 Members-page cards,
-// searched client-side alongside Pagefind. Pagefind's own chunking merges
-// many of these near-identical cards together on that one page, so a
-// full-text hit on e.g. "Prameela" can come back titled after a totally
-// different, later card in the same chunk with no in-page anchor at all -
-// fine for prose pages, not for a flat grid of ~130 short entries. This
-// index is tiny (name + url + blurb per member) and matches by substring
-// against the name only, so it's always attributed to the right person and
-// always deep-links to their actual card via memberSlug (see
-// MembersView.astro, which anchors each card with the same id).
-const memberIndex = members.map((m) => ({
-  name: m.name,
-  url: `${getRelativeLocaleUrl(lang, '/people/members')}#${memberSlug(m.name)}`,
-  blurb: m.summary ?? m.bio ?? '',
-}));
 ---
 
 <button type="button" id="site-search-trigger" class="search-trigger" aria-label={t('search.trigger')}>
@@ -47,21 +30,27 @@ const memberIndex = members.map((m) => ({
 
 <div id="site-search-overlay" class="search-overlay" hidden data-lang={lang}>
   <div class="search-panel" role="dialog" aria-modal="true" aria-label="Search tvc.farm">
-    <div class="search-input-row">
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-        <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.6" />
-        <path d="M16 16L12.5 12.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-      </svg>
-      <input id="site-search-input" type="text" placeholder={t('search.placeholder')} autocomplete="off" spellcheck="false" />
-      <button type="button" id="site-search-close" aria-label={t('search.close')}>
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+    <form id="site-search-form" class="search-pill">
+      <input
+        id="site-search-input"
+        type="text"
+        enterkeyhint="search"
+        placeholder={t('search.placeholder')}
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button type="button" id="site-search-close" class="search-pill__close" aria-label={t('search.close')}>
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
           <path d="M1 1L13 13M13 1L1 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
         </svg>
       </button>
-    </div>
-    <div class="search-ai-row" id="site-search-ai-row" hidden>
-      <button type="button" id="site-search-ai-trigger" class="search-ai-trigger">{t('search.askAi')}</button>
-    </div>
+      <button type="submit" id="site-search-submit" aria-label={t('search.trigger')}>
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+          <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.8" />
+          <path d="M16 16L12.5 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+        </svg>
+      </button>
+    </form>
     <div
       id="site-search-ai-answer"
       class="search-ai-answer"
@@ -70,24 +59,13 @@ const memberIndex = members.map((m) => ({
       data-msg-error={t('search.aiError')}
       data-msg-disclaimer={t('search.aiDisclaimer')}
     ></div>
-    <ul id="site-search-results" class="search-results"></ul>
-    <p
-      id="site-search-status"
-      class="search-status"
-      hidden
-      data-msg-unavailable={t('search.unavailable')}
-      data-msg-no-results={t('search.noResults')}
-      data-msg-loading={t('search.loading')}
-    ></p>
   </div>
 </div>
 
-<script type="application/json" id="site-search-members" set:html={JSON.stringify(memberIndex)} />
-
 <style is:global>
-  /* Global rather than scoped: the results <li>/<a> markup is injected at
-     runtime via innerHTML (see the script below), so it never carries the
-     data-astro-cid attribute Astro's scoping relies on — a scoped style
+  /* Global rather than scoped: the AI-answer markup is injected at runtime
+     via innerHTML (see the script below), so it never carries the
+     data-astro-cid attribute Astro's scoping relies on - a scoped style
      here would silently fail to match any of it. Class names below
      (search-*) are specific enough to this feature that de-scoping the
      whole block is safe. */
@@ -130,124 +108,106 @@ const memberIndex = members.map((m) => ({
     display: none;
   }
 
+  /* Unlike the old design (a single bordered white box holding both the
+     input row and the results below it), the panel itself carries no
+     chrome - the pill and the answer card below it are each their own
+     floating surface, stacked with a gap, closer to how a search-engine
+     results page separates the search box from its answer. */
   .search-panel {
     width: 100%;
-    max-width: 560px;
-    background: #fff;
-    border-radius: var(--radius);
-    box-shadow: 0 12px 40px rgba(15, 20, 10, 0.3);
-    overflow: hidden;
+    max-width: 600px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
   }
 
-  .search-input-row {
+  .search-pill {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 14px 18px;
-    border-bottom: 1px solid var(--tvc-line);
-    color: var(--tvc-ink-soft);
+    gap: 4px;
+    background: #fff;
+    border: 1.5px solid var(--tvc-line);
+    border-radius: 999px;
+    padding: 6px 6px 6px 24px;
+    box-shadow: 0 10px 30px rgba(15, 20, 10, 0.16);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
 
-  .search-input-row input {
+  .search-pill:focus-within {
+    border-color: var(--tvc-green);
+    box-shadow: 0 12px 34px rgba(61, 110, 82, 0.28);
+  }
+
+  /* The site-wide focus-visible ring (see global.css) draws a hard-edged
+     rectangle straight through this rounded pill, since it targets the bare
+     input rather than the pill shape around it - the pill's own
+     border-color/shadow change above is this input's focus indicator
+     instead. */
+  #site-search-input:focus-visible {
+    outline: none;
+  }
+
+  .search-pill input {
     flex: 1;
+    min-width: 0;
     border: none;
     outline: none;
     font: inherit;
-    font-size: 1rem;
+    font-size: 1.05rem;
     color: var(--tvc-ink);
     background: none;
+    padding: 12px 0;
   }
 
-  #site-search-close {
+  .search-pill__close {
     appearance: none;
+    flex-shrink: 0;
     background: none;
     border: none;
+    border-radius: 50%;
     color: var(--tvc-ink-faint, var(--tvc-ink-soft));
     cursor: pointer;
-    padding: 4px;
+    width: 32px;
+    height: 32px;
     display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  #site-search-close:hover {
+  .search-pill__close:hover {
     color: var(--tvc-ink);
+    background: var(--tvc-cream);
   }
 
-  .search-results {
-    list-style: none;
-    margin: 0;
-    padding: 8px;
-    max-height: 55vh;
-    overflow-y: auto;
-  }
-
-  .search-results li {
-    border-radius: 10px;
-  }
-
-  .search-results a {
-    display: block;
-    padding: 10px 12px;
-    text-decoration: none;
-    color: inherit;
-    border-radius: 10px;
-  }
-
-  .search-results li.is-active a,
-  .search-results a:hover {
-    background: var(--tvc-green-tint);
-  }
-
-  .search-result__title {
-    font-weight: 600;
-    color: var(--tvc-ink);
-    font-size: 0.95rem;
-  }
-
-  .search-result__desc {
-    color: var(--tvc-ink-soft);
-    font-size: 0.85rem;
-    margin-top: 2px;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .search-status {
-    padding: 18px;
-    text-align: center;
-    color: var(--tvc-ink-soft);
-    font-size: 0.9rem;
-    margin: 0;
-  }
-
-  .search-ai-row {
-    padding: 10px 18px;
-    border-bottom: 1px solid var(--tvc-line);
-  }
-
-  .search-ai-trigger {
+  #site-search-submit {
     appearance: none;
-    border: 1px solid var(--tvc-line);
-    background: #fff;
-    color: var(--tvc-green-dark);
-    font: inherit;
-    font-size: 0.85rem;
-    font-weight: 600;
-    padding: 7px 14px;
-    border-radius: 999px;
+    flex-shrink: 0;
+    background: var(--tvc-green);
+    border: none;
+    border-radius: 50%;
+    color: #fff;
     cursor: pointer;
+    width: 42px;
+    height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, transform 0.1s ease;
   }
 
-  .search-ai-trigger:hover {
-    background: var(--tvc-green-tint);
-    border-color: var(--tvc-green);
+  #site-search-submit:hover {
+    background: var(--tvc-green-dark);
+  }
+
+  #site-search-submit:active {
+    transform: scale(0.94);
   }
 
   .search-ai-answer {
-    padding: 14px 18px;
-    border-bottom: 1px solid var(--tvc-line);
     background: var(--tvc-cream);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    box-shadow: 0 10px 30px rgba(15, 20, 10, 0.14);
   }
 
   .search-ai-answer[hidden] {
@@ -260,120 +220,81 @@ const memberIndex = members.map((m) => ({
     font-size: 0.9rem;
   }
 
+  .search-ai-status--loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .search-ai-status--loading::before {
+    content: '';
+    flex-shrink: 0;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    border: 2px solid var(--tvc-line);
+    border-top-color: var(--tvc-green);
+    animation: search-ai-spin 0.7s linear infinite;
+  }
+
+  @keyframes search-ai-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
   .search-ai-status--error {
-    color: var(--tvc-orange);
+    color: var(--tvc-orange-text);
   }
 
   .search-ai-reply {
     margin: 0;
     color: var(--tvc-ink);
-    font-size: 0.92rem;
-    line-height: 1.5;
+    font-size: 0.98rem;
+    line-height: 1.55;
   }
 
   .search-ai-sources {
     list-style: none;
-    margin: 8px 0 0;
+    margin: 14px 0 0;
     padding: 0;
     display: flex;
     flex-wrap: wrap;
-    gap: 6px 12px;
+    gap: 8px;
   }
 
   .search-ai-sources a {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: var(--tvc-green-tint);
     font-size: 0.82rem;
     font-weight: 600;
     color: var(--tvc-green-dark);
     text-decoration: none;
+    transition: background 0.15s ease, color 0.15s ease;
   }
 
   .search-ai-sources a:hover {
-    text-decoration: underline;
+    background: var(--tvc-green);
+    color: #fff;
   }
 
   .search-ai-disclaimer {
-    margin: 10px 0 0;
+    margin: 14px 0 0;
     color: var(--tvc-ink-faint, var(--tvc-ink-soft));
     font-size: 0.75rem;
   }
 
-  mark {
-    background: var(--tvc-orange-tint);
-    color: inherit;
-    border-radius: 3px;
+  @media (max-width: 480px) {
+    .search-pill input {
+      font-size: 1rem;
+    }
   }
 </style>
 
 <script>
-  // Shape of the object each Pagefind result's async .data() resolves to —
-  // see https://pagefind.app/docs/api/#the-search-fragment. `excerpt` is
-  // already-escaped HTML with <mark> around the matched terms; `meta.title`
-  // defaults to the page's first <h1>, so unlike the old title-tag based
-  // index this doesn't need to strip a " · Tamarind Valley Collective"
-  // suffix.
-  interface PagefindResultData {
-    url: string;
-    excerpt: string;
-    meta: { title?: string };
-  }
-
-  interface PagefindApi {
-    search: (query: string) => Promise<{ results: { data: () => Promise<PagefindResultData> }[] }>;
-  }
-
-  interface MemberIndexEntry {
-    name: string;
-    url: string;
-    blurb: string;
-  }
-
-  const trigger = document.getElementById('site-search-trigger');
-  const overlay = document.getElementById('site-search-overlay');
-  const input = document.getElementById('site-search-input') as HTMLInputElement | null;
-  const closeBtn = document.getElementById('site-search-close');
-  const resultsEl = document.getElementById('site-search-results');
-  const statusEl = document.getElementById('site-search-status');
-  const membersDataEl = document.getElementById('site-search-members');
-  const memberIndex: MemberIndexEntry[] = membersDataEl ? JSON.parse(membersDataEl.textContent ?? '[]') : [];
-  const aiRow = document.getElementById('site-search-ai-row');
-  const aiTrigger = document.getElementById('site-search-ai-trigger');
-  const aiAnswerEl = document.getElementById('site-search-ai-answer');
-  const searchLang = overlay?.dataset.lang ?? 'en';
-
-  let pagefind: PagefindApi | null = null;
-  let loadFailed = false;
-  let activeIndex = -1;
-  let currentResults: PagefindResultData[] = [];
-  // Guards against an older, slower keystroke's search resolving after a
-  // newer one and clobbering its results.
-  let searchToken = 0;
-
-  async function loadPagefind(): Promise<PagefindApi | null> {
-    if (pagefind) return pagefind;
-    if (loadFailed) return null;
-    try {
-      // Only exists at dist/pagefind/pagefind.js after `pagefind --site
-      // dist` runs post-build (see package.json) — not a source module, so
-      // neither Vite nor tsc can resolve it ahead of time. The path is held
-      // in a variable rather than passed as a literal: Vite's import-
-      // analysis plugin statically pre-resolves literal `import('...')`
-      // specifiers regardless of a `/* @vite-ignore */` comment (a Vite 8
-      // regression from when that comment alone was enough), throwing a
-      // fatal dev-only HMR overlay when resolution fails — a non-literal
-      // specifier is never statically analyzed at all.
-      const pagefindUrl = '/pagefind/pagefind.js';
-      pagefind = await import(/* @vite-ignore */ pagefindUrl);
-      return pagefind;
-    } catch {
-      loadFailed = true;
-      return null;
-    }
-  }
-
-  function escapeHtml(s: string) {
-    return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
-  }
-
   interface AiSearchSource {
     title: string;
     url: string;
@@ -385,32 +306,43 @@ const memberIndex = members.map((m) => ({
     error?: string;
   }
 
-  // Guards against a stale "Ask AI" click resolving after the query changed
-  // (or the panel closed) and overwriting a newer answer - same pattern as
-  // searchToken below, just for the AI call instead of the Pagefind one.
-  let aiRequestToken = 0;
+  const trigger = document.getElementById('site-search-trigger');
+  const overlay = document.getElementById('site-search-overlay');
+  const form = document.getElementById('site-search-form') as HTMLFormElement | null;
+  const input = document.getElementById('site-search-input') as HTMLInputElement | null;
+  const closeBtn = document.getElementById('site-search-close');
+  const aiAnswerEl = document.getElementById('site-search-ai-answer');
+  const searchLang = overlay?.dataset.lang ?? 'en';
 
-  function resetAiAnswer() {
-    aiRequestToken++;
+  // Guards against a stale request resolving after a newer one was
+  // submitted (or the panel closed) and overwriting a newer answer.
+  let requestToken = 0;
+
+  function escapeHtml(s: string) {
+    return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  }
+
+  function resetAnswer() {
+    requestToken++;
     if (aiAnswerEl) {
       aiAnswerEl.hidden = true;
       aiAnswerEl.innerHTML = '';
     }
   }
 
-  function renderAiThinking() {
+  function renderThinking() {
     if (!aiAnswerEl) return;
     aiAnswerEl.hidden = false;
-    aiAnswerEl.innerHTML = `<p class="search-ai-status">${escapeHtml(aiAnswerEl.dataset.msgThinking ?? '')}</p>`;
+    aiAnswerEl.innerHTML = `<p class="search-ai-status search-ai-status--loading">${escapeHtml(aiAnswerEl.dataset.msgThinking ?? '')}</p>`;
   }
 
-  function renderAiError() {
+  function renderError(message?: string) {
     if (!aiAnswerEl) return;
     aiAnswerEl.hidden = false;
-    aiAnswerEl.innerHTML = `<p class="search-ai-status search-ai-status--error">${escapeHtml(aiAnswerEl.dataset.msgError ?? '')}</p>`;
+    aiAnswerEl.innerHTML = `<p class="search-ai-status search-ai-status--error">${escapeHtml(message || aiAnswerEl.dataset.msgError || '')}</p>`;
   }
 
-  function renderAiReply(reply: string, sources: AiSearchSource[]) {
+  function renderReply(reply: string, sources: AiSearchSource[]) {
     if (!aiAnswerEl) return;
     aiAnswerEl.hidden = false;
     const sourcesHtml = sources.length
@@ -420,8 +352,8 @@ const memberIndex = members.map((m) => ({
   }
 
   async function askAi(query: string) {
-    const token = ++aiRequestToken;
-    renderAiThinking();
+    const token = ++requestToken;
+    renderThinking();
     try {
       const res = await fetch('/api/search-ai', {
         method: 'POST',
@@ -429,122 +361,31 @@ const memberIndex = members.map((m) => ({
         body: JSON.stringify({ query, lang: searchLang }),
       });
       const data: AiSearchResponse = await res.json();
-      if (token !== aiRequestToken) return; // panel closed or query changed since
+      if (token !== requestToken) return; // panel closed or query changed since
       if (!res.ok || !data.reply) {
-        renderAiError();
+        renderError(data.error);
         return;
       }
-      renderAiReply(data.reply, Array.isArray(data.sources) ? data.sources : []);
+      renderReply(data.reply, Array.isArray(data.sources) ? data.sources : []);
     } catch {
-      if (token !== aiRequestToken) return;
-      renderAiError();
+      if (token !== requestToken) return;
+      renderError();
     }
   }
 
-  // Wraps the first case-insensitive occurrence of `query` in <mark>,
-  // matching the styling of Pagefind's own excerpts (see the PagefindResultData
-  // comment above) even though this text never goes through Pagefind.
-  function highlightMatch(text: string, query: string): string {
-    const idx = text.toLowerCase().indexOf(query.toLowerCase());
-    if (idx === -1) return escapeHtml(text);
-    return (
-      escapeHtml(text.slice(0, idx)) +
-      '<mark>' + escapeHtml(text.slice(idx, idx + query.length)) + '</mark>' +
-      escapeHtml(text.slice(idx + query.length))
-    );
-  }
-
-  // Matches by substring against member names only (not the full bio) - see
-  // the memberIndex comment in the frontmatter above for why this exists
-  // separately from Pagefind. Capped at 3 so it can't crowd out every other
-  // page's results for a common name fragment.
-  function searchMembers(query: string): PagefindResultData[] {
-    const q = query.trim();
-    if (!q) return [];
-    return memberIndex
-      .filter((m) => m.name.toLowerCase().includes(q.toLowerCase()))
-      .slice(0, 3)
-      .map((m) => ({
-        url: m.url,
-        excerpt: highlightMatch(m.blurb || 'TVC member', q),
-        meta: { title: m.name },
-      }));
-  }
-
-  async function search(query: string): Promise<PagefindResultData[]> {
-    const q = query.trim();
-    if (!q) return [];
-    const memberMatches = searchMembers(q);
-    const api = await loadPagefind();
-    if (!api) return memberMatches;
-    const { results } = await api.search(q);
-    const pageMatches = await Promise.all(results.slice(0, 8 - memberMatches.length).map((r) => r.data()));
-    return [...memberMatches, ...pageMatches];
-  }
-
-  function render(query: string) {
-    if (!resultsEl || !statusEl) return;
-    resultsEl.innerHTML = '';
-    activeIndex = -1;
-
-    if (!query.trim()) {
-      statusEl.hidden = true;
-      currentResults = [];
-      return;
-    }
-    // Member-name matches don't depend on Pagefind, so they can still
-    // render even when it failed to load (loadFailed) - only fall back to
-    // the unavailable/no-results message once there's truly nothing to show.
-    if (currentResults.length === 0) {
-      statusEl.textContent = loadFailed ? (statusEl.dataset.msgUnavailable ?? '') : (statusEl.dataset.msgNoResults ?? '');
-      statusEl.hidden = false;
-      return;
-    }
-
-    statusEl.hidden = true;
-    currentResults.forEach((entry, i) => {
-      const li = document.createElement('li');
-      li.innerHTML = `<a href="${entry.url}">
-        <div class="search-result__title">${escapeHtml(entry.meta.title ?? '')}</div>
-        ${entry.excerpt ? `<div class="search-result__desc">${entry.excerpt}</div>` : ''}
-      </a>`;
-      li.dataset.index = String(i);
-      resultsEl.appendChild(li);
-    });
-  }
-
-  function setActive(i: number) {
-    const items = resultsEl?.querySelectorAll('li') ?? [];
-    items.forEach((el) => el.classList.remove('is-active'));
-    if (i >= 0 && i < items.length) {
-      items[i].classList.add('is-active');
-      items[i].scrollIntoView({ block: 'nearest' });
-    }
-    activeIndex = i;
-  }
-
-  async function open() {
+  function open() {
     if (!overlay || !input) return;
     overlay.hidden = false;
     input.value = '';
-    if (aiRow) aiRow.hidden = true;
-    resetAiAnswer();
+    resetAnswer();
     input.focus();
-    if (!pagefind && !loadFailed) {
-      if (statusEl) {
-        statusEl.textContent = statusEl.dataset.msgLoading ?? '';
-        statusEl.hidden = false;
-      }
-      await loadPagefind();
-      if (statusEl) statusEl.hidden = true;
-    }
   }
 
   function close() {
     if (!overlay) return;
     overlay.hidden = true;
     trigger?.focus();
-    resetAiAnswer();
+    resetAnswer();
   }
 
   trigger?.addEventListener('click', open);
@@ -554,18 +395,13 @@ const memberIndex = members.map((m) => ({
     if (e.target === overlay) close();
   });
 
-  input?.addEventListener('input', async () => {
-    const token = ++searchToken;
-    const query = input.value;
-    if (aiRow) aiRow.hidden = !query.trim();
-    resetAiAnswer();
-    const results = await search(query);
-    if (token !== searchToken) return; // a newer keystroke already resolved
-    currentResults = results;
-    render(query);
-  });
-
-  aiTrigger?.addEventListener('click', () => {
+  // Covers Enter in the input, and a mobile keyboard's "Go"/"Search" action
+  // button - some mobile keyboards don't reliably fire a real Enter keydown,
+  // but always trigger the enclosing form's submit. The magnifying-glass
+  // icon is also a type="submit" button, giving touch users an explicit tap
+  // target that doesn't depend on the keyboard at all.
+  form?.addEventListener('submit', (e) => {
+    e.preventDefault();
     const query = input?.value.trim();
     if (query) askAi(query);
   });
@@ -583,17 +419,6 @@ const memberIndex = members.map((m) => ({
       return;
     }
 
-    if (e.key === 'Escape') {
-      close();
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setActive(Math.min(activeIndex + 1, currentResults.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setActive(Math.max(activeIndex - 1, 0));
-    } else if (e.key === 'Enter') {
-      const target = activeIndex >= 0 ? currentResults[activeIndex] : currentResults[0];
-      if (target) window.location.href = target.url;
-    }
+    if (e.key === 'Escape') close();
   });
 </script>
