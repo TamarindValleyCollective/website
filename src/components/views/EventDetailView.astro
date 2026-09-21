@@ -83,9 +83,16 @@ const eventSchema = {
       addressCountry: 'IN',
     },
   },
-  organizer: event.data.organizer
-    ? { '@type': 'Organization', name: event.data.organizer }
-    : { '@type': 'Organization', name: 'Tamarind Valley Collective', url: new URL(getRelativeLocaleUrl(lang, '/'), Astro.site).toString() },
+  // A custom `organizer` (e.g. "Linger" for 3bs1h) has no URL of its own
+  // tracked in the events collection - Google's structured-data validator
+  // flags Organization.url as missing either way, so this falls back to
+  // TVC's own homepage even then, since TVC is still genuinely the hosting
+  // entity regardless of which partner runs day-to-day logistics.
+  organizer: {
+    '@type': 'Organization',
+    name: event.data.organizer ?? 'Tamarind Valley Collective',
+    url: new URL(getRelativeLocaleUrl(lang, '/'), Astro.site).toString(),
+  },
 };
 
 const content = {
