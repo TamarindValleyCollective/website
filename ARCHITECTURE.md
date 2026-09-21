@@ -96,7 +96,7 @@ flowchart TD
     subgraph HOST["3 · Hosting: Netlify — LIVE"]
         CDN["Static CDN<br/>Serves dist/ — everything except<br/>the exceptions to the right"]
         APIFN["Netlify Function: /api/chat<br/>Deployed and live —<br/>ANTHROPIC_API_KEY set, calls the<br/>Anthropic API for grounded answers"]
-        APIFN10["Netlify Function: /api/search-ai<br/>The site search's only result type.<br/>Gemini free tier first, falls back<br/>to Anthropic if unset/erroring —<br/>GEMINI_API_KEY not yet set in production"]
+        APIFN10["Netlify Function: /api/search-ai<br/>The site search's only result type.<br/>Deployed and live — verified against production<br/>2026-09-21, answering from the Gemini free tier"]
         APIFN2["Netlify Function: /api/event-interest<br/>Deployed and live —<br/>reads/writes the per-event count below"]
         APIFN3["Netlify Function: /api/photo-pool<br/>(+/thumb, +/description)<br/>Configured — Drive service account + folder IDs<br/>set as Netlify env vars for all deploy contexts"]
         APIFN4["Netlify Function: /api/enquiry<br/>Live and verified — Sheet ids set,<br/>Sheets shared Editor-access with the<br/>service account, real appends confirmed"]
@@ -290,8 +290,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   single-shot (no conversation history) and answers from the Gemini API's free tier first, falling
   back to the same Anthropic API `chat.mts` uses only if `GEMINI_API_KEY` is unset, rate-limited,
   or erroring — so a free-tier hiccup degrades to a paid-but-working answer rather than an outright
-  failure. `GEMINI_API_KEY` is not yet set in production, so this currently always falls through
-  to Anthropic (already live there) until that key is added. Being public and unauthenticated, this
+  failure. Both `GEMINI_API_KEY` and `ANTHROPIC_API_KEY` are live in production — verified
+  directly against `tvc.farm/api/search-ai` on 2026-09-21, answering from the Gemini free tier as
+  expected. Being public and unauthenticated, this
   endpoint also rate-limits itself: a per-IP fixed window before any provider call, plus a separate
   global daily cap on Anthropic-fallback invocations specifically, both backed by a Netlify Blobs
   store (`search-ai-rate-limit`, see Hosting below) — guards against cost exhaustion on the paid
@@ -629,9 +630,8 @@ to `main` alone does not ship anything; production is updated by running `npm ru
   `rainfall.mts` serves `/api/rainfall` — reads the community's rainfall-log Sheet
   (`RAINFALL_SHEET_ID`, shared Viewer-access only, since this path never writes) live on every
   page view for the `/ecosystem/weather` chart/table/monsoon stat. `search-ai.mts` serves
-  `/api/search-ai`, backing the site search's AI answer — `GEMINI_API_KEY` is not yet set
-  in production, so it currently always falls through to the already-live `ANTHROPIC_API_KEY`
-  fallback; once a free-tier Gemini key is added it'll be tried first.
+  `/api/search-ai`, backing the site search's AI answer — deployed and live, verified directly
+  against production 2026-09-21, answering from the Gemini free tier.
 - **Netlify Blobs** — live. Two stores. `event-interest` holds one JSON record per past event id
   (`{count, emails[]}`), written only by `event-interest.mts` (optimistic-concurrency writes via
   ETag `onlyIfMatch`/`onlyIfNew`, with a bounded retry loop, so two concurrent submissions can't
@@ -895,7 +895,7 @@ never touches Netlify either.
 | Microsoft Clarity | 🟢 Built and verified against a real CSP-enforcing response via `netlify dev` (script tag, bundle, and collect beacon all confirmed unblocked under the `*.clarity.ms` wildcard) — same consent gate as GA. Project id `xttq21yf39`, reusing the one Bing Webmaster Tools had already auto-provisioned. Not yet confirmed against production traffic (no real visitor session recorded in the Clarity dashboard yet, since this hasn't deployed) |
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
 | Live rainfall chart/table/monsoon stat (`/ecosystem/weather`, `/api/rainfall`) | ✅ Live — reads the community's rainfall-log Sheet live, `RAINFALL_SHEET_ID` set on Netlify (all deploy contexts); multi-year line chart with year-filter checkboxes; verified against `tvc.farm/ecosystem/weather` and `tvc.farm/api/rainfall` directly |
-| Site search (nav icon / `/` key), AI-only via `/api/search-ai` | 🟡 Built, verified locally via `netlify dev` (fallback path only — no valid API keys in the local `.env`, but confirmed the Gemini call is attempted first, falls through correctly on a real API error, and the Anthropic fallback is attempted next; submit-triggered UI behavior — Enter, mobile keyboard action, tap — confirmed in a real browser). Not yet deployed (deploys are manual, see Hosting above). `ANTHROPIC_API_KEY` is already live in production (same key `/api/chat` uses), so this will work immediately on deploy; `GEMINI_API_KEY` is not yet set, so it won't get the free-tier path until that key is added. Pagefind (the prior client-side keyword index) was removed 2026-09-21 in favor of this AI-only search |
+| Site search (nav icon / `/` key), AI-only via `/api/search-ai` | ✅ Live — deployed 2026-09-21, verified directly against `tvc.farm/api/search-ai` returning a real, grounded answer with source links from the Gemini free tier. Submit-triggered UI behavior (Enter, mobile keyboard action, tap) confirmed in a real browser pre-deploy. Pagefind (the prior client-side keyword index) was removed the same day in favor of this AI-only search |
 | Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | ✅ Live — Drive folders, service account, Google Sign-In OAuth client, curator allow-list Sheet, all Netlify env vars configured; verified against production directly (`/internal/photo-pool` returns 200, `/api/photo-pool` returns 401 unauthenticated as expected for the Google Sign-In-gated function) |
 | WhatsApp webhook (`/api/whatsapp-webhook`) | ✅ Live — verified end-to-end with a real WhatsApp message to `+91 80 4110 9754` on 2026-08-19. Two real bugs found and fixed along the way: the number wasn't actually registered for Cloud API messaging (blocked by a stuck migration from the old AiSensy WABA, which still held the number), and the WABA was never subscribed to the app's webhook (`POST /{waba-id}/subscribed_apps` — a separate step from the App Dashboard's webhook config). Persists every inbound message to Supabase (2026-08-20); no longer emails per-message (see the stale-alert row below). See `WHATSAPP.md` |
 | WhatsApp reply dashboard (`/internal/whatsapp`, `/api/whatsapp-admin`) | ✅ Live — verified end-to-end with real WhatsApp messages and real replies sent from production. Unread indicators, real pagination, message previews, per-reply responder names, WhatsApp/iMessage-style avatars, and a full visual pass added 2026-08-20 after real usage surfaced gaps |
