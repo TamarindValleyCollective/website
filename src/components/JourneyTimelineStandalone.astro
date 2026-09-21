@@ -563,6 +563,41 @@ function tm(month: string): string {
     if (e.key === 'ArrowLeft') lbPrev.click();
   });
 
+  // Touch swipe through the lightbox's photos — the arrow buttons and
+  // keyboard arrows work, but a touchscreen has neither, so swiping the
+  // stage left/right is the only way to move through photos there.
+  // Threshold-based (not a scroll track like the year carousels) since
+  // the lightbox shows one photo at a time with no horizontal scroll.
+  const lbStage = lightbox.querySelector('.jt-lb-stage') as HTMLElement;
+  let lbTouchStartX = 0;
+  let lbTouchStartY = 0;
+  const LB_SWIPE_THRESHOLD = 40;
+
+  lbStage.addEventListener(
+    'touchstart',
+    (e) => {
+      const t = e.changedTouches[0];
+      lbTouchStartX = t.clientX;
+      lbTouchStartY = t.clientY;
+    },
+    { passive: true },
+  );
+
+  lbStage.addEventListener(
+    'touchend',
+    (e) => {
+      const t = e.changedTouches[0];
+      const dx = t.clientX - lbTouchStartX;
+      const dy = t.clientY - lbTouchStartY;
+      // Ignore mostly-vertical gestures so a scroll/drag attempt doesn't
+      // accidentally flip photos.
+      if (Math.abs(dx) < LB_SWIPE_THRESHOLD || Math.abs(dx) < Math.abs(dy)) return;
+      if (dx < 0) lbNext.click();
+      else lbPrev.click();
+    },
+    { passive: true },
+  );
+
   yearSectionEls.forEach((section, yi) => {
     const carEl = section.querySelector(`[data-carousel="${yi}"]`) as HTMLElement;
     const dotsEl = section.querySelector(`[data-dots="${yi}"]`) as HTMLElement;
