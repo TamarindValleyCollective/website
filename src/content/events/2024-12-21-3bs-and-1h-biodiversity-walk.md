@@ -14,7 +14,7 @@ edition: 4
 
 ## **Event Summary**
 
-Spend Saturday evening and Sunday at [Tamarind Valley Collective](/visit/how-to-reach). Explore the vast property. Enjoy guided tours with our naturalists to watch and identify birds, butterflies, insects, and plants.
+Spend Saturday evening and Sunday at [Tamarind Valley Collective](/visit/how-to-reach/). Explore the vast property. Enjoy guided tours with our naturalists to watch and identify birds, butterflies, insects, and plants.
 
 ### **Number of Attendees**
 
@@ -93,7 +93,7 @@ Guest House (3 Adults)
 
 TVC is a ~ 98-acre permaculture farm run by 53 families experimenting with a living style that reduces consumption and incorporates naturally supported cyclical systems.
 
-Details about how to reach are here. Basic etiquettes while you are at the farm are listed [here](/visit/how-to-reach).
+Details about how to reach are here. Basic etiquettes while you are at the farm are listed [here](/visit/how-to-reach/).
 
 The farm is still in the regeneration phase. The weather is pleasant during Aug - Feb.
 

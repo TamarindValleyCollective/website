@@ -70,7 +70,7 @@ function countdownText(daysAway: number): string {
               class="button whats-next__cta"
               href={
                 event.data.series === '3bs1h'
-                  ? `/events/3bs1h/${event.data.edition}`
+                  ? `/events/3bs1h/${event.data.edition}/`
                   : getRelativeLocaleUrl(lang, `/events/${event.id}`)
               }
             >
