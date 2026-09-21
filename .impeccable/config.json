@@ -113,6 +113,15 @@
         ],
         "createdAt": "2026-09-16T14:09:28.004Z",
         "reason": "detector matches the literal substring 'width' inside stroke-width (an SVG paint attribute animated on .year-line, line 449) - not the CSS box-model width property; no layout thrash, confirmed no other transition:width in this file"
+      },
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "src/components/Picture.astro"
+        ],
+        "createdAt": "2026-09-21T12:43:45.544Z",
+        "reason": "reusable component: src/srcset are dynamic props (withExt()/src), not literal empty/placeholder values - false positive on static analysis"
       }
     ]
   }

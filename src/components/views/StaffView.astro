@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
+import Picture from '../Picture.astro';
 import type { Locale } from '../../i18n/utils';
 import { organizationId } from '../../utils/schema';
 
@@ -359,7 +360,7 @@ const staffSchema = {
       {staff.map((group) => (
         <div class="staff-card">
           <div class="staff-card__photo">
-            <img src={group.image} alt={group.imageAlt} loading="lazy" />
+            <Picture src={group.image} alt={group.imageAlt} loading="lazy" />
           </div>
           <div class="staff-card__body">
             {group.people.map((p) => (

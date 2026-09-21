@@ -4,6 +4,10 @@ dist/
 .astro/
 # generated chat-widget content corpus (rebuilt by `npm run build`)
 netlify/functions/site-content.json
+# generated AVIF/WebP siblings for public/images/**/*.{jpg,jpeg,png}
+# (rebuilt by `npm run build`, see scripts/generate-image-variants.mjs)
+public/images/**/*.webp
+public/images/**/*.avif
 
 # dependencies
 node_modules/

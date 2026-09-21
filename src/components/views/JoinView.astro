@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
+import Picture from '../Picture.astro';
 import WhatsAppButton from '../WhatsAppButton.astro';
 import { FARM_AREA_ACRES } from '../../data/site-facts';
 import { MEMBER_FAMILY_COUNT } from '../../data/members';
@@ -144,11 +145,11 @@ const c = content[lang];
 
     <div class="member-pair">
       <figure>
-        <img src="/images/members/reva-and-ranjan.jpg" alt="Reva and Ranjan, TVC member family" loading="lazy" />
+        <Picture src="/images/members/reva-and-ranjan.jpg" alt="Reva and Ranjan, TVC member family" loading="lazy" />
         <figcaption>Reva &amp; Ranjan</figcaption>
       </figure>
       <figure>
-        <img src="/images/members/rajiv-and-kritika.jpg" alt="Rajiv and Kritika, TVC member family" loading="lazy" />
+        <Picture src="/images/members/rajiv-and-kritika.jpg" alt="Rajiv and Kritika, TVC member family" loading="lazy" />
         <figcaption>Rajiv &amp; Kritika</figcaption>
       </figure>
       <p class="member-pair__note">{c.memberPairNote}</p>

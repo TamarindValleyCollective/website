@@ -1,5 +1,6 @@
 ---
 import LocationInset from './LocationInset.astro';
+import Picture from './Picture.astro';
 
 interface CameraLocation {
   lat: number;
@@ -25,9 +26,9 @@ const { beforeSrc, afterSrc, beforeAlt, afterAlt, beforeLabel, afterLabel, befor
 
 <div class="compare">
   <div class="compare__frame">
-    <img class="compare__img" src={afterSrc} alt={afterAlt} loading="lazy" />
+    <Picture class="compare__img" src={afterSrc} alt={afterAlt} loading="lazy" />
     <div class="compare__before-wrap">
-      <img class="compare__img" src={beforeSrc} alt={beforeAlt} loading="lazy" />
+      <Picture class="compare__img" src={beforeSrc} alt={beforeAlt} loading="lazy" />
       {beforeLocation && (
         <div class="compare__inset compare__inset--before">
           <LocationInset

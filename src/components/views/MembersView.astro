@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
+import Picture from '../Picture.astro';
 import type { Locale } from '../../i18n/utils';
 import { members as membersData, memberSlug, MEMBER_FAMILY_COUNT, type Member } from '../../data/members';
 
@@ -173,11 +174,11 @@ const detailedById = new Set(detailed.map((d) => d.i));
         const photoBlock = photos.length > 1 ? (
           <div class="member-photo-stack">
             {photos.slice(0, 3).map((src) => (
-              <img src={src} alt="" class="member-photo member-photo--stacked" loading="lazy" />
+              <Picture src={src} alt="" class="member-photo member-photo--stacked" loading="lazy" />
             ))}
           </div>
         ) : photos.length === 1 ? (
-          <img src={photos[0]} alt={detailedById.has(i) ? '' : m.name} class="member-photo" loading="lazy" />
+          <Picture src={photos[0]} alt={detailedById.has(i) ? '' : m.name} class="member-photo" loading="lazy" />
         ) : (
           <div class="member-photo member-photo--placeholder" aria-hidden="true">{initials(m.name)}</div>
         );
@@ -580,7 +581,12 @@ const detailedById = new Set(detailed.map((d) => d.i));
     box-shadow: 0 0 0 1px var(--tvc-line);
   }
 
-  .member-photo--stacked:not(:first-child) {
+  /* Each stacked photo is now wrapped in a <picture> (see Picture.astro) -
+     :not(:first-child) on .member-photo--stacked itself would always match
+     (each is the only, and therefore first, child of its own <picture>), so
+     the "not the first shown photo" check has to look at the <picture>
+     wrapper's position instead. */
+  .member-photo-stack picture:not(:first-child) .member-photo--stacked {
     margin-left: -18px;
   }
 
