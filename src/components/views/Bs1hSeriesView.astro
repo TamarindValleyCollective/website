@@ -91,7 +91,7 @@ const articleSchema = {
       {editions.map((event) => {
         const isUpcoming = event.data.date >= today;
         return (
-          <a class="bs1h-edition-card" href={`/events/3bs1h/${event.data.edition}`}>
+          <a class="bs1h-edition-card" href={`/events/3bs1h/${event.data.edition}/`}>
             {event.data.coverImage && (
               <img class="bs1h-edition-card__cover" src={event.data.coverImage} alt={event.data.coverImageAlt ?? event.data.title} loading="lazy" />
             )}

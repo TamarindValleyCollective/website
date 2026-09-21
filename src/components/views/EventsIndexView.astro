@@ -58,7 +58,7 @@ const pastCards: PastCard[] = [
 // relevant for English, since that versioned route is English-only for now
 // and kn/ta 3bs1h editions still live at their original flat URLs.
 function eventHref(e: (typeof allEvents)[number]) {
-  if (lang === 'en' && e.data.series === '3bs1h') return `/events/3bs1h/${e.data.edition}`;
+  if (lang === 'en' && e.data.series === '3bs1h') return `/events/3bs1h/${e.data.edition}/`;
   return getRelativeLocaleUrl(lang, `/events/${bareSlug(e.id)}`);
 }
 
@@ -273,7 +273,7 @@ const eventsSchema = {
               </ul>
             </a>
           ) : (
-            <a class="card card--stack" href="/events/3bs1h" data-tags={tagsAttr(item.latest)}>
+            <a class="card card--stack" href="/events/3bs1h/" data-tags={tagsAttr(item.latest)}>
               <div class="card-stack__media">
                 {/* A dedicated clean photo, not item.latest.data.coverImage -
                     that's the 5th edition's own cover, one of the old mockup
@@ -327,7 +327,7 @@ const eventsSchema = {
               </span>
               <p class="date">{formatDateRange(item.latest.data.date, item.latest.data.endDate, lang)}</p>
               <div class="card-stack__title-row">
-                <h3><a href="/events/3bs1h">3Bs&amp;1H</a></h3>
+                <h3><a href="/events/3bs1h/">3Bs&amp;1H</a></h3>
                 <span class="tag card-stack__badge">{item.count} editions</span>
               </div>
               <p class="excerpt">TVC's recurring biodiversity walk — see every edition on its own page →</p>
