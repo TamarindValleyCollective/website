@@ -118,7 +118,11 @@ const outreachSchema =
       <div class="grid">
         {posts.map((p) => (
           <a class="card" href={getRelativeLocaleUrl(lang, `/people/outreach/${bareSlug(p.id)}`)}>
-            {p.data.coverImage && <Picture src={p.data.coverImage} alt={p.data.coverImageAlt ?? p.data.title} loading="lazy" />}
+            {p.data.coverImage && (
+              <Picture src={p.data.coverImage}>
+                <img src={p.data.coverImage} alt={p.data.coverImageAlt ?? p.data.title} loading="lazy" />
+              </Picture>
+            )}
             <h3>{p.data.title}</h3>
             <p>{p.data.excerpt}</p>
           </a>

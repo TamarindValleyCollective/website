@@ -360,7 +360,9 @@ const staffSchema = {
       {staff.map((group) => (
         <div class="staff-card">
           <div class="staff-card__photo">
-            <Picture src={group.image} alt={group.imageAlt} loading="lazy" />
+            <Picture src={group.image}>
+              <img src={group.image} alt={group.imageAlt} loading="lazy" />
+            </Picture>
           </div>
           <div class="staff-card__body">
             {group.people.map((p) => (

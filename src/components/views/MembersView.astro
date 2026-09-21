@@ -174,11 +174,15 @@ const detailedById = new Set(detailed.map((d) => d.i));
         const photoBlock = photos.length > 1 ? (
           <div class="member-photo-stack">
             {photos.slice(0, 3).map((src) => (
-              <Picture src={src} alt="" class="member-photo member-photo--stacked" loading="lazy" />
+              <Picture src={src}>
+                <img src={src} alt="" class="member-photo member-photo--stacked" loading="lazy" />
+              </Picture>
             ))}
           </div>
         ) : photos.length === 1 ? (
-          <Picture src={photos[0]} alt={detailedById.has(i) ? '' : m.name} class="member-photo" loading="lazy" />
+          <Picture src={photos[0]}>
+            <img src={photos[0]} alt={detailedById.has(i) ? '' : m.name} class="member-photo" loading="lazy" />
+          </Picture>
         ) : (
           <div class="member-photo member-photo--placeholder" aria-hidden="true">{initials(m.name)}</div>
         );

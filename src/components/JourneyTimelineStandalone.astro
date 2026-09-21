@@ -347,7 +347,11 @@ function tm(month: string): string {
   {yearSections.map((y, i) => (
     <section class="jt-year" id={`jt-y-${i}`} data-year-index={i}>
       <div class="jt-year-bg" aria-hidden="true">
-        {y.cards.find((c) => c.img) && <Picture src={y.cards.find((c) => c.img)!.img!} alt="" loading="lazy" />}
+        {y.cards.find((c) => c.img) && (
+          <Picture src={y.cards.find((c) => c.img)!.img!}>
+            <img src={y.cards.find((c) => c.img)!.img!} alt="" loading="lazy" />
+          </Picture>
+        )}
       </div>
       <div class="jt-year-head">
         <p class="jt-year-eyebrow" data-eyebrow={i}>{tm(y.cards[0].month)} {y.year}</p>
@@ -359,12 +363,14 @@ function tm(month: string): string {
           {y.cards.map((card) => (
             card.img ? (
               <div class="jt-card" role="button" tabindex="0" aria-label={`${c.viewPhotoPrefix} ${tm(card.month)} ${y.year}`}>
-                <Picture
-                  src={card.img}
-                  alt={card.text}
-                  loading="lazy"
-                  style={card.fit === 'contain' ? 'object-fit:contain;background:var(--jt-surface);' : ''}
-                />
+                <Picture src={card.img}>
+                  <img
+                    src={card.img}
+                    alt={card.text}
+                    loading="lazy"
+                    style={card.fit === 'contain' ? 'object-fit:contain;background:var(--jt-surface);' : ''}
+                  />
+                </Picture>
                 <span class="jt-card-hint" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3H4v5M15 3h5v5M9 21H4v-5M15 21h5v-5"/></svg>
                 </span>

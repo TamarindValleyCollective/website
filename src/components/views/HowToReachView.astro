@@ -162,7 +162,9 @@ const c = content[lang];
     <div class="route-grid">
       <div class="route-col">
         <h2>{c.tnDirectionsHeading}</h2>
-        <Picture class="route-map" src="/images/pages/how-to-reach/route-tn-hosur-thally.webp" alt={c.tnMapTitle} loading="lazy" width="653" height="587" />
+        <Picture src="/images/pages/how-to-reach/route-tn-hosur-thally.webp">
+          <img class="route-map" src="/images/pages/how-to-reach/route-tn-hosur-thally.webp" alt={c.tnMapTitle} loading="lazy" width="653" height="587" />
+        </Picture>
         <p class="caption">{c.tnMapCaption} — <a href={TN_ROUTE_MAP_URL} target="_blank" rel="noopener noreferrer">{c.viewRouteLink}</a></p>
         <ol>
           {c.tnDirections.map((step) => <li>{step}</li>)}
@@ -170,7 +172,9 @@ const c = content[lang];
       </div>
       <div class="route-col">
         <h2>{c.kaDirectionsHeading}</h2>
-        <Picture class="route-map" src="/images/pages/how-to-reach/route-ka-kanakapura.webp" alt={c.kaMapTitle} loading="lazy" width="653" height="587" />
+        <Picture src="/images/pages/how-to-reach/route-ka-kanakapura.webp">
+          <img class="route-map" src="/images/pages/how-to-reach/route-ka-kanakapura.webp" alt={c.kaMapTitle} loading="lazy" width="653" height="587" />
+        </Picture>
         <p class="caption">{c.kaMapCaption} — <a href={KA_ROUTE_MAP_URL} target="_blank" rel="noopener noreferrer">{c.viewRouteLink}</a></p>
         <ol>
           {c.kaDirections.map((step) => <li>{step}</li>)}

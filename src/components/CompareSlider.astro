@@ -26,9 +26,13 @@ const { beforeSrc, afterSrc, beforeAlt, afterAlt, beforeLabel, afterLabel, befor
 
 <div class="compare">
   <div class="compare__frame">
-    <Picture class="compare__img" src={afterSrc} alt={afterAlt} loading="lazy" />
+    <Picture src={afterSrc}>
+      <img class="compare__img" src={afterSrc} alt={afterAlt} loading="lazy" />
+    </Picture>
     <div class="compare__before-wrap">
-      <Picture class="compare__img" src={beforeSrc} alt={beforeAlt} loading="lazy" />
+      <Picture src={beforeSrc}>
+        <img class="compare__img" src={beforeSrc} alt={beforeAlt} loading="lazy" />
+      </Picture>
       {beforeLocation && (
         <div class="compare__inset compare__inset--before">
           <LocationInset

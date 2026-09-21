@@ -62,7 +62,9 @@ const photosJson = JSON.stringify(allPhotos).replace(/<\/script/gi, '<\\/script'
         <div class="thumb-row">
           {item.images.map((img, j) => (
             <button type="button" class="thumb-btn" data-photo-index={itemRanges[i].start + j} aria-label={img.alt}>
-              <Picture src={img.src} alt={img.alt} loading="lazy" />
+              <Picture src={img.src}>
+                <img src={img.src} alt={img.alt} loading="lazy" />
+              </Picture>
             </button>
           ))}
         </div>

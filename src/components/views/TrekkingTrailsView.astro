@@ -144,7 +144,9 @@ const trailsSchema = {
     <div class="trail-list">
       {c.trails.map((tr) => (
         <div class="trail card">
-          <Picture src={tr.image} alt={tr.imageAlt} loading="lazy" />
+          <Picture src={tr.image}>
+            <img src={tr.image} alt={tr.imageAlt} loading="lazy" />
+          </Picture>
           <div>
             <h2>{tr.name}</h2>
             <p class="distance">{tr.distance}</p>

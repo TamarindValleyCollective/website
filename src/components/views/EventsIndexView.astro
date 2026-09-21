@@ -203,7 +203,11 @@ const eventsSchema = {
                 <span class="countdown__num">{countdownLabel(daysAway, lang)}</span>
               </div>
               <div class:list={['upcoming-card__media', { 'upcoming-card__media--empty': !e.data.coverImage }]}>
-                {e.data.coverImage && <Picture src={e.data.coverImage} alt={e.data.coverImageAlt ?? e.data.title} loading="lazy" />}
+                {e.data.coverImage && (
+                  <Picture src={e.data.coverImage}>
+                    <img src={e.data.coverImage} alt={e.data.coverImageAlt ?? e.data.title} loading="lazy" />
+                  </Picture>
+                )}
               </div>
               <div>
                 <p class="date">{formatDateRange(e.data.date, e.data.endDate, lang)}</p>
@@ -256,7 +260,9 @@ const eventsSchema = {
           item.kind === 'event' ? (
             <a class="card" href={eventHref(item.event)} data-tags={tagsAttr(item.event)}>
               {item.event.data.coverImage ? (
-                <Picture src={item.event.data.coverImage} alt={item.event.data.coverImageAlt ?? item.event.data.title} loading="lazy" />
+                <Picture src={item.event.data.coverImage}>
+                  <img src={item.event.data.coverImage} alt={item.event.data.coverImageAlt ?? item.event.data.title} loading="lazy" />
+                </Picture>
               ) : (
                 // Same gradient fallback as .upcoming-card__media--empty above,
                 // instead of leaving a bare text card - a past event with no
@@ -282,7 +288,9 @@ const eventsSchema = {
                     hero for the same issue already fixed there). This card
                     represents the whole series, not one edition, so it gets
                     the same photo used on the hub's hero. */}
-                <Picture class="card-stack__cover" src="/images/events/3bs1h/card.jpg" alt="An Indian Silverbill at TVC" loading="lazy" />
+                <Picture src="/images/events/3bs1h/card.jpg">
+                  <img class="card-stack__cover" src="/images/events/3bs1h/card.jpg" alt="An Indian Silverbill at TVC" loading="lazy" />
+                </Picture>
                 {/* Overlaid on the photo itself, not sitting in flow below it
                     - the cream (reversed) mark, not the green one used
                     elsewhere, since it needs to read against a photo, not a
