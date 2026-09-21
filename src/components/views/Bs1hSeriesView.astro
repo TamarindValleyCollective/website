@@ -5,6 +5,7 @@
 // hand-authored page living alongside a generic collection template.
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
+import Picture from '../Picture.astro';
 import { getCollection } from 'astro:content';
 import { formatDateRange } from '../../utils/events';
 
@@ -24,6 +25,11 @@ const articleSchema = {
   description:
     "3Bs&1H is TVC's recurring dusk-to-dawn biodiversity walk - Birds, Butterflies, Bees & Herps - now in its sixth edition.",
   image: new URL('/images/events/3bs1h/hero.jpg', Astro.site).toString(),
+  // This page's actual first-commit date (`git log --follow`) - a real
+  // freshness signal rather than a fabricated one, since this overview page
+  // has no collection-backed `date` field of its own (individual editions do,
+  // via the `events` collection's Event schema below).
+  datePublished: '2026-09-06',
   publisher: {
     '@type': 'Organization',
     name: 'Tamarind Valley Collective',
@@ -93,7 +99,7 @@ const articleSchema = {
         return (
           <a class="bs1h-edition-card" href={`/events/3bs1h/${event.data.edition}/`}>
             {event.data.coverImage && (
-              <img class="bs1h-edition-card__cover" src={event.data.coverImage} alt={event.data.coverImageAlt ?? event.data.title} loading="lazy" />
+              <Picture class="bs1h-edition-card__cover" src={event.data.coverImage} alt={event.data.coverImageAlt ?? event.data.title} loading="lazy" />
             )}
             <div class="bs1h-edition-card__body">
               <span class="bs1h-edition-card__num">

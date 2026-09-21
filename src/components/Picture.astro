@@ -1,0 +1,58 @@
+---
+// Drop-in replacement for a plain <img src="/images/..."> pointing at a
+// local raster under public/images/ - adds AVIF/WebP <source>s ahead of the
+// original file as the final fallback. Deliberately NOT astro:assets'
+// built-in <Image>/<Picture>, which requires the source to be an ESM import
+// from src/ - these images are referenced by plain string paths from content
+// collection frontmatter and reused as BaseLayout's OG/JSON-LD `image` prop
+// (see its own comments on WhatsApp's preview-crawler dimension matching);
+// migrating every one of those call sites to an import was a much larger,
+// riskier change than this. See scripts/generate-image-variants.mjs, which
+// writes the sibling .webp/.avif files this component points at.
+//
+// Only meaningful for a build (`astro build` runs the generator first) -
+// `astro dev` never runs that script, so in dev these <source>s point at
+// files that don't exist yet. That's safe: per the HTML picture-element
+// source-selection algorithm, a <source> whose resource fails to load is
+// skipped in favor of the next candidate, eventually reaching the
+// always-present <img> fallback - no dev-only branch needed here.
+interface Props {
+  src: string;
+  alt: string;
+  // Accepts either, matching plain HTML <img width/height> attributes
+  // (some call sites carry over quoted numeric literals like width="543"
+  // from the raw <img> tags this replaces).
+  width?: number | string;
+  height?: number | string;
+  loading?: 'lazy' | 'eager';
+  class?: string;
+  style?: string;
+}
+
+const { src, alt, width, height, loading = 'lazy', class: className, style } = Astro.props as Props;
+// Some callers map over a mixed array of local paths and full remote URLs
+// (e.g. HomeView's explore cards, some of which point at media.tvc.farm) -
+// the generator script only ever writes siblings for local files, so a
+// remote src skips straight to the plain <img>.
+const isLocal = src.startsWith('/');
+const withExt = (ext: string) => src.replace(/\.[^./]+$/, `.${ext}`);
+---
+
+<picture>
+  {isLocal && <source srcset={withExt('avif')} type="image/avif" />}
+  {isLocal && <source srcset={withExt('webp')} type="image/webp" />}
+  <img src={src} alt={alt} width={width} height={height} loading={loading} class={className} style={style} />
+</picture>
+
+<style>
+  /* Every call site this replaces had a plain <img> sitting directly in a
+     flex/grid container, sized via rules on the img itself (width:100%,
+     object-fit, aspect-ratio, or grid-item placement) - <picture> defaults
+     to display:inline, which would otherwise become the flex/grid item
+     instead of the <img>, breaking that sizing. `contents` removes the
+     <picture> from the box tree entirely, so the <img> behaves exactly as
+     if it were still the direct child. */
+  picture {
+    display: contents;
+  }
+</style>

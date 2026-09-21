@@ -2,6 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import CompareSlider from '../CompareSlider.astro';
+import Picture from '../Picture.astro';
 import { PRINCIPLES } from '../../data/principles';
 import { FARM_AREA_ACRES, ELEPHANT_CORRIDOR_CLAUSE } from '../../data/site-facts';
 import { MEMBER_FAMILY_COUNT } from '../../data/members';
@@ -181,7 +182,7 @@ const aboutSchema = {
     <p>{c.farmingText}</p>
 
     <div class="farming-photo">
-      <img src="/images/pages/home/gallery-3.jpg" alt="A harvest of okra, beans, greens, and vegetables from the farm" loading="lazy" />
+      <Picture src="/images/pages/home/gallery-3.jpg" alt="A harvest of okra, beans, greens, and vegetables from the farm" loading="lazy" />
     </div>
 
     <div class="two-col">
@@ -207,7 +208,7 @@ const aboutSchema = {
   <section class="section section--tint">
     <div class="wrapper">
       <a class="teaser" href={`/${lang === 'en' ? '' : lang + '/'}about/design/`}>
-        <img class="teaser__media" src="/images/pages/home/gallery-2.jpg" alt="" loading="lazy" />
+        <Picture class="teaser__media" src="/images/pages/home/gallery-2.jpg" alt="" loading="lazy" />
         <div class="teaser__body">
           <h2>{c.designHeading}</h2>
           <p>{c.designText}</p>
@@ -219,7 +220,7 @@ const aboutSchema = {
 
   <section class="section wrapper">
     <a class="teaser" href={`/${lang === 'en' ? '' : lang + '/'}people/`}>
-      <img class="teaser__media" src="/images/pages/staff/hero-thumb.webp" alt="" loading="lazy" />
+      <Picture class="teaser__media" src="/images/pages/staff/hero-thumb.webp" alt="" loading="lazy" />
       <div class="teaser__body">
         <h2>{c.peopleHeading}</h2>
         <p>{c.peopleText}</p>
@@ -231,7 +232,7 @@ const aboutSchema = {
   <section class="section section--tint" id="join">
     <div class="wrapper join">
       <a class="teaser teaser--centered" href={`/${lang === 'en' ? '' : lang + '/'}join/`}>
-        <img class="teaser__media" src="/images/members/reva-and-ranjan.jpg" alt="" loading="lazy" />
+        <Picture class="teaser__media" src="/images/members/reva-and-ranjan.jpg" alt="" loading="lazy" />
         <div class="teaser__body">
           <h2>{t('joinTeaser.heading')}</h2>
           <p>{t('joinTeaser.text', { families: MEMBER_FAMILY_COUNT })}</p>

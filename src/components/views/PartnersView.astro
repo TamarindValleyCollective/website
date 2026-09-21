@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
+import Picture from '../Picture.astro';
 import { getCollection, render } from 'astro:content';
 import { type Locale } from '../../i18n/utils';
 
@@ -90,7 +91,7 @@ const partnersSchema = {
       {partnersWithContent.map(({ entry: p, Content }) => (
         <article class="partner" id={p.id}>
           <div class="partner__head">
-            {p.data.coverImage && <img src={p.data.coverImage} alt={partnerTitle(p)} class="partner__logo" loading="lazy" />}
+            {p.data.coverImage && <Picture src={p.data.coverImage} alt={partnerTitle(p)} class="partner__logo" loading="lazy" />}
             <div class="partner__heading">
               <h2>{partnerTitle(p)}</h2>
               <a class="partner__sitelink" href={p.data.url} target="_blank" rel="noopener noreferrer">{c.visitLink}</a>

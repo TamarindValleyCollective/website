@@ -1,4 +1,6 @@
 ---
+import Picture from './Picture.astro';
+
 interface Props {
   eyebrow?: string;
   title: string;
@@ -23,7 +25,13 @@ const { eyebrow, title, intro, image, imageAlt = '', imagePosition, brandClass =
 {image ? (
   <>
     <div class="hero-bg">
-      <img class="hero-bg__image" src={image} alt={imageAlt} style={imagePosition ? `object-position: ${imagePosition}` : undefined} />
+      <Picture
+        class="hero-bg__image"
+        src={image}
+        alt={imageAlt}
+        loading="eager"
+        style={imagePosition ? `object-position: ${imagePosition}` : undefined}
+      />
       <div class="hero-bg__scrim"></div>
     </div>
     <section class={`hero hero--image ${brandClass}`.trim()}>

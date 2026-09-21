@@ -29,6 +29,7 @@
 // entries of hand-written prose across 10 years, a careful full
 // translation was out of scope for this pass. Flagged as follow-up work.
 import type { Locale } from '../i18n/utils';
+import Picture from './Picture.astro';
 
 interface Props {
   lang: Locale;
@@ -346,7 +347,7 @@ function tm(month: string): string {
   {yearSections.map((y, i) => (
     <section class="jt-year" id={`jt-y-${i}`} data-year-index={i}>
       <div class="jt-year-bg" aria-hidden="true">
-        {y.cards.find((c) => c.img) && <img src={y.cards.find((c) => c.img)!.img!} alt="" loading="lazy" />}
+        {y.cards.find((c) => c.img) && <Picture src={y.cards.find((c) => c.img)!.img!} alt="" loading="lazy" />}
       </div>
       <div class="jt-year-head">
         <p class="jt-year-eyebrow" data-eyebrow={i}>{tm(y.cards[0].month)} {y.year}</p>
@@ -358,7 +359,7 @@ function tm(month: string): string {
           {y.cards.map((card) => (
             card.img ? (
               <div class="jt-card" role="button" tabindex="0" aria-label={`${c.viewPhotoPrefix} ${tm(card.month)} ${y.year}`}>
-                <img
+                <Picture
                   src={card.img}
                   alt={card.text}
                   loading="lazy"

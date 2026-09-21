@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import HomeStats from '../HomeStats.astro';
+import Picture from '../Picture.astro';
 import WhatsNextBanner from '../WhatsNextBanner.astro';
 import { PRINCIPLES } from '../../data/principles';
 import { FARM_AREA_ACRES } from '../../data/site-facts';
@@ -285,7 +286,7 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
       </div>
       <div class="doors">
         <a class="door door--explore" href="#explore">
-          <img src="/images/pages/journey/hero-thumb.webp" alt="" loading="lazy" />
+          <Picture src="/images/pages/journey/hero-thumb.webp" alt="" loading="lazy" />
           <div class="door__inner">
             <span class="door__tag">{c.doorExploreTag}</span>
             <h3>{c.doorExploreTitle}</h3>
@@ -294,7 +295,7 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
           </div>
         </a>
         <a class="door door--engage" href="#engage">
-          <img src="/images/pages/while-at-farm/hero-thumb.webp" alt="" loading="lazy" />
+          <Picture src="/images/pages/while-at-farm/hero-thumb.webp" alt="" loading="lazy" />
           <div class="door__inner">
             <span class="door__tag">{c.doorEngageTag}</span>
             <h3>{c.doorEngageTitle}</h3>
@@ -312,7 +313,7 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
       <div class="principle-grid">
         {PRINCIPLES.map((p) => (
           <div class="principle-card">
-            <img class="principle-card__photo" src={PRINCIPLE_PHOTOS[p.key].src} alt={PRINCIPLE_PHOTOS[p.key].alt} loading="lazy" />
+            <Picture class="principle-card__photo" src={PRINCIPLE_PHOTOS[p.key].src} alt={PRINCIPLE_PHOTOS[p.key].alt} loading="lazy" />
             <div class="principle-card__scrim"></div>
             <div class="principle-card__text">
               <h4>{t(`principles.${p.key}.name`)}</h4>
@@ -331,7 +332,7 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
       <div class="explore-grid">
         {exploreCards.map((card) => (
           <a class="explore-card" href={getRelativeLocaleUrl(lang, card.href)}>
-            <img src={card.img} alt="" loading="lazy" />
+            <Picture src={card.img} alt="" loading="lazy" />
             <div class="explore-card__body">
               <h3>{card.title}</h3>
               <p>{card.desc}</p>
@@ -349,7 +350,7 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
         {engageRungs.map((r) => (
           <a class:list={['rung', r.tone]} href={getRelativeLocaleUrl(lang, r.href)}>
             <div class="rung__step">{r.step}</div>
-            <div class="rung__media"><img src={r.img} alt="" loading="lazy" style={r.objectPosition ? `object-position: ${r.objectPosition}` : undefined} /></div>
+            <div class="rung__media"><Picture src={r.img} alt="" loading="lazy" style={r.objectPosition ? `object-position: ${r.objectPosition}` : undefined} /></div>
             <div class="rung__text">
               <span class="rung__tag">{r.tag}</span>
               <h3>{r.title}</h3>
