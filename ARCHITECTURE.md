@@ -771,21 +771,17 @@ never touches Netlify either.
   enumerating subdomains one at a time. `/privacy` and the cookie banner (all 3 locales) name it
   alongside GA, since it collects materially different data (session recordings/heatmaps, not
   aggregate pageviews).
-  - **Known issue (2026-09-19): dashboard sign-in broken for `contact@tvc.farm`.** The tag
-    fires fine (data collection is unaffected), but the project id `xttq21yf39`'s dashboard at
-    `clarity.microsoft.com` can't be reached with this account. Reproduced with browser
-    automation: both "Sign in to Google" (silent `prompt=none` approval, valid code, `hd=tvc.farm`
-    confirmed - Google's side works) and "Sign in to Microsoft" (a real password reset completed
-    successfully) land back on Clarity's own "Welcome back" sign-in wall instead of the dashboard,
-    with no console error either time. Clearing `clarity.microsoft.com`'s localStorage/
-    sessionStorage (which held a stale token from an earlier failed attempt) didn't change the
-    behavior, ruling out stale client-side state. Suspected cause: the project was
-    auto-provisioned by Bing Webmaster Tools rather than created directly through Clarity's own
-    sign-up flow (see above), which may have left the account in a state normal OAuth sign-in
-    can't reach - this looks like a Microsoft Clarity platform bug, not fixable from this repo.
-    Untried: clearing `clarity.microsoft.com` cookies via Chrome's own settings UI (unreachable
-    from browser automation), an Incognito window, a different browser. Escalated to Microsoft
-    support - ticket `UCM000007493055`, filed 2026-09-19.
+  - **Dashboard sign-in issue (2026-09-19), resolved 2026-09-21.** For two days, the project id
+    `xttq21yf39`'s dashboard at `clarity.microsoft.com` couldn't be reached with the
+    `contact@tvc.farm` account (the tag itself fired fine throughout - data collection was never
+    affected). Reproduced at the time with browser automation: both "Sign in to Google" (silent
+    `prompt=none` approval, valid code, `hd=tvc.farm` confirmed - Google's side worked) and "Sign
+    in to Microsoft" (a real password reset completed successfully) landed back on Clarity's own
+    "Welcome back" sign-in wall instead of the dashboard, with no console error either time.
+    Escalated to Microsoft support - ticket `UCM000007493055`, filed 2026-09-19. `contact@tvc.farm`
+    confirmed sign-in now works (2026-09-21) - whether it was Microsoft's fix or one of the
+    untried workarounds (clearing `clarity.microsoft.com` cookies via Chrome's own settings UI, an
+    incognito window, a different browser) isn't confirmed either way.
 - **WeatherWidget** (`/ecosystem/geography`) — fetches current temperature/humidity/conditions
   for the farm's coordinates from Open-Meteo (free, no API key) on page load, cached in
   `localStorage` for 15 minutes. Hides itself if the fetch fails rather than showing broken UI.
@@ -892,7 +888,7 @@ never touches Netlify either.
 | Visit inquiry form + WhatsApp CTA (Netlify Forms) | ✅ Live and verified — confirmed via Netlify's Forms API (`visit-inquiry`), **1 real submission recorded** (2026-08-04); replaces the "Book via Linger" redirect on `/visit/camping`, `/visit/day-visit`, `/visit/trekking-trails` |
 | Event interest widget + counter (Netlify Function, Blobs, Forms) | ✅ Live — "Want this to happen again?" on past event pages (`/events/<slug>`), public count via `/api/event-interest` + Netlify Blobs, optional-email entries via Netlify Forms; verified `/api/event-interest` responds live in production |
 | Google Analytics (GA4) | ✅ Live — `G-795FTPB47P`, loaded site-wide from `BaseLayout.astro`, skipped on localhost, consent-gated via `CookieConsent.astro` and `/privacy`. Was silently broken 2026-08-21 to 2026-09-19: CSP allowlisted the wrong collect domain, then (2026-09-17) a wildcard that didn't cover the bare apex domain the real hit lands on - fixed and verified for real this time (triggered a `securitypolicyviolation` DOM event against production to confirm zero remaining blocks) |
-| Microsoft Clarity | 🟢 Built and verified against a real CSP-enforcing response via `netlify dev` (script tag, bundle, and collect beacon all confirmed unblocked under the `*.clarity.ms` wildcard) — same consent gate as GA. Project id `xttq21yf39`, reusing the one Bing Webmaster Tools had already auto-provisioned. Not yet confirmed against production traffic (no real visitor session recorded in the Clarity dashboard yet, since this hasn't deployed) |
+| Microsoft Clarity | ✅ Live — deployed, tag firing (script tag, bundle, and collect beacon confirmed unblocked under the `*.clarity.ms` CSP wildcard), same consent gate as GA. Project id `xttq21yf39`, reusing the one Bing Webmaster Tools had already auto-provisioned. The `contact@tvc.farm` dashboard sign-in issue (see below) is resolved as of 2026-09-21 — sign-in confirmed working |
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
 | Live rainfall chart/table/monsoon stat (`/ecosystem/weather`, `/api/rainfall`) | ✅ Live — reads the community's rainfall-log Sheet live, `RAINFALL_SHEET_ID` set on Netlify (all deploy contexts); multi-year line chart with year-filter checkboxes; verified against `tvc.farm/ecosystem/weather` and `tvc.farm/api/rainfall` directly |
 | Site search (nav icon / `/` key), AI-only via `/api/search-ai` | ✅ Live — deployed 2026-09-21, verified directly against `tvc.farm/api/search-ai` returning a real, grounded answer with source links from the Gemini free tier. Submit-triggered UI behavior (Enter, mobile keyboard action, tap) confirmed in a real browser pre-deploy. Pagefind (the prior client-side keyword index) was removed the same day in favor of this AI-only search |
