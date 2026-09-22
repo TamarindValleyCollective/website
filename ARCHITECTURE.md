@@ -589,9 +589,13 @@ On every push to `main`, Netlify runs:
 ### 3. Hosting — Netlify (live)
 
 The Netlify project is owned by the `contact@tvc.farm` account (moved there from a personal
-account on 2026-07-18). **Deploys are manual, not auto-triggered from GitHub pushes** — merging
-to `main` alone does not ship anything; production is updated by running `npm run build` then
-`netlify deploy --prod` (needs the linked `.netlify/state.json` or an explicit `--site` id).
+account on 2026-07-18). **Deploys auto-trigger from GitHub pushes to `main`** — confirmed
+2026-09-22 in the Deploys tab ("Auto publishing is on. Deploys from `main` are published
+automatically") and by watching a live merge and a follow-up commit each build within the same
+minute they were pushed. (An earlier version of this doc claimed deploys were manual, based on a
+real 2026-09-20 observation — that's no longer accurate, cause unconfirmed. If deploy behavior
+matters for something you're about to do, re-verify against the live Deploys tab rather than
+trusting this note, since it's already flipped once.)
 
 - **Static CDN** — serves every prerendered page directly; the large majority of the site
   needs nothing more than this. Confirmed live via response headers
