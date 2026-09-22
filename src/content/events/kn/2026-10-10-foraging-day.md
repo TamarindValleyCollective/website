@@ -11,7 +11,7 @@ price:
     label: "ಪ್ರತಿ ವ್ಯಕ್ತಿಗೆ"
 whatsapp:
   number: "918548065772"
-  contactName: "Linger Leisure"
+  contactName: "Linger"
 ---
 
 ಪ್ರಕೃತಿಯೊಳಗೆ ಹೆಜ್ಜೆ ಇಡಿ, ಕಲಿಯಿರಿ, ಅಡುಗೆ ಮಾಡಿ, ಮತ್ತು ಭೂಮಿ ನೀಡುವುದನ್ನು ಸೇವಿಸಿ.

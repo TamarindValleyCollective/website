@@ -14,7 +14,7 @@ price:
     label: "per person"
 whatsapp:
   number: "918548065772"
-  contactName: "Linger Leisure"
+  contactName: "Linger"
 ---
 
 Step into nature, learn, cook, and eat what the earth gives you.
