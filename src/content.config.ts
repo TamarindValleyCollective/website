@@ -87,6 +87,19 @@ const events = defineCollection({
     // without a direct WhatsApp line of their own; they keep whatever contact
     // method they put in their own body content instead.
     whatsapp: z.object({ number: z.string(), contactName: z.string() }).optional(),
+    // Opts this event into the reusable direct-payment booking flow
+    // (EventDetailView.astro renders EventBookingForm.astro instead of the
+    // hand-authored `#cta` block other events put in their own body) - the
+    // value is the reference_id of a Payment Link created by hand for this
+    // event (e.g. via the Razorpay MCP), whose amount is the trusted
+    // per-person price. netlify/functions/event-booking.mts reads that
+    // price and creates a fresh per-booking link for (price × attendee
+    // count) on submit; that base link is never paid directly once this is
+    // set. Omit for events using BookingInquiry (3bs1h) or their own
+    // hand-authored CTA (a partner's own form, a plain WhatsApp link, etc).
+    // Prototype as of 2026-09 - proven out on one event before any other
+    // uses it; see RAZORPAY.md.
+    razorpayReferenceId: z.string().optional(),
   }),
 });
 

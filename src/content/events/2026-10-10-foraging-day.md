@@ -15,6 +15,7 @@ price:
 whatsapp:
   number: "918548065772"
   contactName: "Linger"
+razorpayReferenceId: "foraging-day-2026-10-10"
 ---
 
 Step into nature, learn, cook, and eat what the earth gives you.
@@ -36,13 +37,3 @@ Join **[@foragingtrailsandtales](https://www.instagram.com/foragingtrailsandtale
 - Breakfast & lunch
 - Guided foraging walk
 - Hands-on cooking workshop with what you forage
-
-<div class="cta card" id="cta">
-
-## Register
-
-₹2,250 per person. Pay online to confirm your spot with Foraging Trails & Tales.
-
-<a class="button" href="https://rzp.io/rzp/RjF4hjJ1">Pay & register →</a>
-
-</div>
