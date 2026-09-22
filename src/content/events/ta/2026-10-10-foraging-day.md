@@ -11,7 +11,7 @@ price:
     label: "ஒரு நபருக்கு"
 whatsapp:
   number: "918548065772"
-  contactName: "Foraging Trails & Tales"
+  contactName: "Linger Leisure"
 ---
 
 இயற்கைக்குள் நுழையுங்கள், கற்றுக்கொள்ளுங்கள், சமையுங்கள், மற்றும் பூமி தரும் உணவை உண்ணுங்கள்.
