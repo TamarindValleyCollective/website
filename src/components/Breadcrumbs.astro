@@ -13,10 +13,11 @@ interface Props {
 const { pathname, pageTitle, lang } = Astro.props;
 const t = useTranslations(lang);
 
-// No section (the homepage itself, or a page outside Explore/Engage) means
-// there's no useful trail to show — skip rendering rather than show a
-// half-empty breadcrumb. sectionFor() only knows about bare (locale-less)
-// paths, so strip the /kn or /ta prefix before matching.
+// No section (the homepage itself, or a page outside every NAV_SECTIONS
+// entry - e.g. Resource Centre, legal pages) means there's no useful trail
+// to show — skip rendering rather than show a half-empty breadcrumb.
+// sectionFor() only knows about bare (locale-less) paths, so strip the /kn
+// or /ta prefix before matching.
 //
 // Astro's static output always gives Astro.url.pathname a trailing slash
 // (e.g. `/people/`), but every href in site-map.ts is written without one.
@@ -29,17 +30,22 @@ const t = useTranslations(lang);
 const rawBarePathname = stripLocalePrefix(pathname);
 const barePathname = rawBarePathname.length > 1 ? rawBarePathname.replace(/\/$/, '') : rawBarePathname;
 const section = barePathname === '/' ? null : sectionFor(barePathname);
-const sectionLabelKey = section?.label === 'Explore' ? 'nav.explore' : 'nav.engage';
 
-// Any page nested under a top-level nav item's own URL (About/design,
-// People/outreach/some-post, Events/some-event, ...) gets that item as an
-// intermediate crumb, so the trail reads "About Us / The Design" instead of
-// dropping straight from the section to the leaf page with no way back to
-// the parent. Excludes each item's own listing page (parentLinkFor only
-// matches genuine sub-pages, not the item's own href) - otherwise /events
-// would repeat itself ("Events" pointing at /events, then the current-page
-// crumb also at /events), the way no section's index page repeats its own
-// top-level crumb.
+// A NAV_SECTIONS entry now doubles as both the umbrella ("About Us") and a
+// real page in its own right - unlike the old Explore/Engage labels, which
+// were never a page you could actually be standing on. So when the current
+// page IS the section's own landing page (viewing /visit itself, say), skip
+// the section crumb entirely rather than show "Visit Us / Visit Us" — the
+// current-page crumb below already carries that label.
+const sectionIsCurrentPage = section?.href !== undefined && section.href === barePathname;
+
+// Any page nested under a section *child's* own URL (People/outreach/
+// some-post, Ecosystem/biodiversity, ...) gets that child as an
+// intermediate crumb, so the trail reads "About Us / People / Outreach"
+// instead of dropping straight from the section to the leaf page with no
+// way back to the parent. Flat children (Our Journey, The Design, Join Us,
+// Visit's leaf pages) never match here, since nothing nests further under
+// them - same reasoning as sectionIsCurrentPage above, one level down.
 const parentLink = parentLinkFor(barePathname);
 const parentHref = parentLink ? getRelativeLocaleUrl(lang, parentLink.href) : '';
 
@@ -58,46 +64,70 @@ const currentLabel = navKey ? t(`nav.${navKey}`) : pageTitle;
 
 // getRelativeLocaleUrl unconditionally appends a trailing slash, which
 // would land after the hash (`/kn/#explore/`) and break the anchor if
-// passed the raw `/#explore` — split the hash off first and reattach it to
-// the already-slashed path instead.
-const sectionHref = section ? (() => {
-  const [bare, hash] = section.href.split('#');
+// passed a raw hash href — split the hash off first and reattach it to the
+// already-slashed path instead. Some sections (More) have no href at all,
+// since they're not a real page - sectionHref stays undefined for those,
+// and the crumb below renders as plain text rather than a link.
+const sectionHref = section?.href ? (() => {
+  const [bare, hash] = section.href!.split('#');
   const localized = getRelativeLocaleUrl(lang, bare || '/');
   return hash ? `${localized}#${hash}` : localized;
-})() : '';
+})() : undefined;
+
+const showSectionCrumb = section !== null && !sectionIsCurrentPage;
 
 // Mirrors the visual trail above 1:1 so the two never drift apart - same
-// stops (Home / section / [parent] / current page), just as schema.org
+// stops (Home / [section] / [parent] / current page), just as schema.org
 // BreadcrumbList instead of markup. Last item's `item` URL is included too;
 // Google's guidance treats omitting it on the current page as optional, not
-// required.
-const breadcrumbSchema = section ? {
-  '@context': 'https://schema.org',
-  '@type': 'BreadcrumbList',
-  itemListElement: [
+// required. Positions are assigned by array order rather than hardcoded,
+// since section/parent crumbs are each conditionally present now.
+const breadcrumbSchema = section ? (() => {
+  const items: { '@type': 'ListItem'; position: number; name: string; item?: string }[] = [
     { '@type': 'ListItem', position: 1, name: t('common.home'), item: new URL(getRelativeLocaleUrl(lang, '/'), Astro.site).toString() },
-    { '@type': 'ListItem', position: 2, name: t(sectionLabelKey), item: new URL(sectionHref, Astro.site).toString() },
-    ...(parentLink
-      ? [{ '@type': 'ListItem', position: 3, name: t(`nav.${parentLink.key}`), item: new URL(parentHref, Astro.site).toString() }]
-      : []),
-    { '@type': 'ListItem', position: parentLink ? 4 : 3, name: currentLabel, item: new URL(pathname, Astro.site).toString() },
-  ],
-} : null;
+  ];
+  if (showSectionCrumb) {
+    items.push({
+      '@type': 'ListItem',
+      position: items.length + 1,
+      name: t(`nav.${section.key}`),
+      ...(sectionHref ? { item: new URL(sectionHref, Astro.site).toString() } : {}),
+    });
+  }
+  if (parentLink) {
+    items.push({
+      '@type': 'ListItem',
+      position: items.length + 1,
+      name: t(`nav.${parentLink.key}`),
+      item: new URL(parentHref, Astro.site).toString(),
+    });
+  }
+  items.push({ '@type': 'ListItem', position: items.length + 1, name: currentLabel, item: new URL(pathname, Astro.site).toString() });
+  return { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: items };
+})() : null;
 ---
 
 {section && (
   <nav class="breadcrumbs" aria-label="Breadcrumb">
     <div class="wrapper breadcrumbs__inner">
       <a href={getRelativeLocaleUrl(lang, '/')}>{t('common.home')}</a>
-      <span class="breadcrumbs__sep" aria-hidden="true">/</span>
-      <a href={sectionHref}>{t(sectionLabelKey)}</a>
-      <span class="breadcrumbs__sep" aria-hidden="true">/</span>
-      {parentLink && (
+      {showSectionCrumb && (
         <>
-          <a href={parentHref}>{t(`nav.${parentLink.key}`)}</a>
           <span class="breadcrumbs__sep" aria-hidden="true">/</span>
+          {sectionHref ? (
+            <a href={sectionHref}>{t(`nav.${section.key}`)}</a>
+          ) : (
+            <span class="breadcrumbs__static">{t(`nav.${section.key}`)}</span>
+          )}
         </>
       )}
+      {parentLink && (
+        <>
+          <span class="breadcrumbs__sep" aria-hidden="true">/</span>
+          <a href={parentHref}>{t(`nav.${parentLink.key}`)}</a>
+        </>
+      )}
+      <span class="breadcrumbs__sep" aria-hidden="true">/</span>
       <span class="breadcrumbs__current" aria-current="page">{currentLabel}</span>
     </div>
   </nav>
@@ -128,6 +158,14 @@ const breadcrumbSchema = section ? {
 
   .breadcrumbs a:hover {
     color: var(--tvc-green);
+  }
+
+  /* Non-navigating section crumb (e.g. "More", which has no landing page of
+     its own) - same weight/color as a real crumb link, just without the
+     hover state, so it doesn't read as clickable when it isn't. */
+  .breadcrumbs__static {
+    color: var(--tvc-ink-soft);
+    font-weight: 600;
   }
 
   .breadcrumbs__sep {

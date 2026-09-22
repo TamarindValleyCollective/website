@@ -1,11 +1,23 @@
-// Single source of truth for the site's Explore/Engage information architecture —
-// Nav, Footer, and Breadcrumbs all read from this file so the three never drift
-// out of sync with each other or with the homepage's own Explore/Engage sections.
+// Single source of truth for the site's top-nav information architecture —
+// Nav and Breadcrumbs both read from this file so the two never drift out
+// of sync with each other. Task-based grouping (what a visitor came here to
+// do), not an internal taxonomy like the old Explore/Engage split: only
+// Visit Us and About Us have genuine sub-pages, so only those two get a
+// dropdown; Events and In Pictures are flat top-level links; Join Us and
+// Contact Us (low-priority right now - membership is near capacity, and
+// Resource Centre is deliberately left out entirely below) sit in a small
+// "More" catch-all.
+//
+// The homepage's own "Explore, or engage" section (src/components/views/
+// HomeView.astro) does NOT read from this file — it's hand-authored
+// marketing copy per locale (taglines, card descriptions, imagery) that
+// still reflects the old Explore/Engage framing. Migrating that is a
+// separate, copy-heavy task, not a mechanical follow of this structure.
 
 export interface SiteLink {
   label: string;
-  // Dictionary key under `nav.*` (src/i18n/{en,kn,ta}.ts) - lets Nav/Footer/
-  // the homepage render a translated label instead of the English `label`
+  // Dictionary key under `nav.*` (src/i18n/{en,kn,ta}.ts) - lets Nav/
+  // Breadcrumbs render a translated label instead of the English `label`
   // fallback above, without this file needing to know about locales itself.
   key: string;
   href: string;
@@ -17,13 +29,25 @@ export interface SiteLink {
   children?: SiteLink[];
 }
 
-export const EXPLORE_LINKS: SiteLink[] = [
-  {
-    label: 'About Us',
-    key: 'about',
-    href: '/about',
-    children: [{ label: 'The Design', key: 'aboutDesign', href: '/about/design' }],
-  },
+// One top-level nav entry: either a flat link with no dropdown (Events, In
+// Pictures), or a group whose `children` open in a dropdown - optionally
+// itself a real page (`href` set, like Visit Us/About Us) rather than a
+// non-navigating toggle (like More, which has no landing page of its own).
+export type NavSection =
+  | { kind: 'link'; key: string; href: string }
+  | { kind: 'dropdown'; key: string; href?: string; children: SiteLink[] };
+
+const VISIT_CHILDREN: SiteLink[] = [
+  { label: 'Day Visit', key: 'dayVisit', href: '/visit/day-visit' },
+  { label: 'Overnight Stay', key: 'camping', href: '/visit/camping' },
+  { label: 'Host an Event', key: 'hostAnEvent', href: '/visit/host-an-event' },
+  { label: 'Trekking Trails', key: 'trekkingTrails', href: '/visit/trekking-trails' },
+  { label: 'How to Reach', key: 'howToReach', href: '/visit/how-to-reach' },
+];
+
+const ABOUT_CHILDREN: SiteLink[] = [
+  { label: 'The Design', key: 'aboutDesign', href: '/about/design' },
+  { label: 'Our Journey', key: 'ourJourney', href: '/our-journey' },
   {
     label: 'People',
     key: 'people',
@@ -35,8 +59,6 @@ export const EXPLORE_LINKS: SiteLink[] = [
       { label: 'Outreach', key: 'communityOutreach', href: '/people/outreach' },
     ],
   },
-  { label: 'Our Journey', key: 'ourJourney', href: '/our-journey' },
-  { label: 'In Pictures', key: 'inPictures', href: '/in-pictures' },
   {
     label: 'Ecosystem',
     key: 'ecosystem',
@@ -47,53 +69,60 @@ export const EXPLORE_LINKS: SiteLink[] = [
       { label: 'Weather', key: 'weather', href: '/ecosystem/weather' },
     ],
   },
-  { label: 'Resource Centre', key: 'resourceCentre', href: '/resource-centre' },
-  { label: 'Events', key: 'events', href: '/events' },
 ];
 
-export const ENGAGE_LINKS: SiteLink[] = [
-  {
-    label: 'Visit Us',
-    key: 'visitTvc',
-    href: '/visit',
-    children: [
-      { label: 'Day Visit', key: 'dayVisit', href: '/visit/day-visit' },
-      { label: 'Overnight Stay', key: 'camping', href: '/visit/camping' },
-      { label: 'Host an Event', key: 'hostAnEvent', href: '/visit/host-an-event' },
-      { label: 'Trekking Trails', key: 'trekkingTrails', href: '/visit/trekking-trails' },
-      { label: 'How to Reach', key: 'howToReach', href: '/visit/how-to-reach' },
-    ],
-  },
+const MORE_CHILDREN: SiteLink[] = [
   { label: 'Join Us', key: 'join', href: '/join' },
   { label: 'Contact Us', key: 'contact', href: '/contact' },
 ];
 
-// Path prefixes used to classify a page (including dynamic slug pages, which
-// inherit their parent's prefix — e.g. /events/some-event matches /events)
-// as belonging to Explore or Engage, for the breadcrumb trail.
-export const EXPLORE_PREFIXES = [
-  '/about',
-  '/people',
-  '/our-journey',
-  '/in-pictures',
-  '/ecosystem',
-  '/resource-centre',
-  '/events',
+// About Us leads (orientation/trust before the ask), then Visit Us
+// (the primary conversion action), then Events, In Pictures, and the More
+// catch-all - same priority order as the homepage's "story, then visit"
+// section.
+export const NAV_SECTIONS: NavSection[] = [
+  { kind: 'dropdown', key: 'about', href: '/about', children: ABOUT_CHILDREN },
+  { kind: 'dropdown', key: 'visitTvc', href: '/visit', children: VISIT_CHILDREN },
+  { kind: 'link', key: 'events', href: '/events' },
+  { kind: 'link', key: 'inPictures', href: '/in-pictures' },
+  { kind: 'dropdown', key: 'more', children: MORE_CHILDREN },
 ];
 
-export const ENGAGE_PREFIXES = ['/visit', '/join', '/contact'];
+// Resource Centre (/resource-centre) is deliberately NOT in NAV_SECTIONS -
+// its content is still too thin to advertise via menu or give it a
+// breadcrumb trail back to a "section". The page itself stays live; it's
+// just not discoverable through Nav or Breadcrumbs until it's enriched.
 
-export function sectionFor(pathname: string): { label: 'Explore' | 'Engage'; href: string } | null {
+// Every direct child across all dropdown sections (People, Ecosystem, Our
+// Journey, The Design, Visit's 5 sub-pages, Join Us, Contact Us) - used by
+// parentLinkFor/navKeyFor below without re-walking NAV_SECTIONS by hand.
+const ALL_CHILDREN: SiteLink[] = NAV_SECTIONS.flatMap((section) => (section.kind === 'dropdown' ? section.children : []));
+
+// Every link in the tree at any depth - top sections with their own page,
+// their direct children, and those children's own children (People's and
+// Ecosystem's grandchildren) - for navKeyFor's exact-href lookup.
+const ALL_LINKS: SiteLink[] = [
+  ...NAV_SECTIONS.flatMap((section) => (section.href ? [{ label: '', key: section.key, href: section.href }] : [])),
+  ...ALL_CHILDREN,
+  ...ALL_CHILDREN.flatMap((child) => child.children ?? []),
+];
+
+// Classifies a page (including dynamic slug pages, which inherit their
+// parent's prefix - e.g. /events/some-event matches /events) as belonging
+// to one of NAV_SECTIONS, for the breadcrumb trail's first crumb after
+// Home. Returns null for pages outside every section (the homepage,
+// Resource Centre, legal pages, ...) - Breadcrumbs skips rendering rather
+// than show a half-empty trail.
+export function sectionFor(pathname: string): { key: string; href?: string } | null {
   const matches = (prefix: string) => pathname === prefix || pathname.startsWith(prefix + '/');
-  if (EXPLORE_PREFIXES.some(matches)) return { label: 'Explore', href: '/#explore' };
-  if (ENGAGE_PREFIXES.some(matches)) return { label: 'Engage', href: '/#engage' };
+  for (const section of NAV_SECTIONS) {
+    const ownHrefs = [section.href, ...(section.kind === 'dropdown' ? section.children.map((child) => child.href) : [])].filter(
+      (href): href is string => href !== undefined,
+    );
+    if (ownHrefs.some(matches)) return { key: section.key, href: section.href };
+  }
   return null;
 }
-
-const ALL_LINKS: SiteLink[] = [...EXPLORE_LINKS, ...ENGAGE_LINKS].flatMap((link) => [
-  link,
-  ...(link.children ?? []),
-]);
 
 // Breadcrumbs' final "current page" crumb needs a label for the page - and
 // several pages have drifted into using a bespoke marketing title there
@@ -110,21 +139,16 @@ export function navKeyFor(pathname: string): string | null {
   return ALL_LINKS.find((link) => link.href === pathname)?.key ?? null;
 }
 
-const TOP_LEVEL_LINKS: SiteLink[] = [...EXPLORE_LINKS, ...ENGAGE_LINKS];
-
-// Any page one or more levels under a top-level nav item's own URL (e.g.
-// /about/design, /people/outreach/some-post, /events/some-event) reads as a
-// child of that item, and the breadcrumb should say so with an intermediate
-// crumb - "About Us / The Design", not just "The Design" floating under the
-// bare section name. This used to be hand-rolled once, just for Events
-// (individual events and the 3bs1h hub landing straight on a leaf page with
-// no way back to the listing); generalizing it here gives every section's
-// sub-pages the same "how do I get back to the parent" affordance, declared
-// or not - it doesn't require the sub-page to be one of `children` above,
-// only that its URL nests under the top-level item's own href, so dynamic
-// routes (event slugs, outreach posts, the partners/ananas write-up) get it
-// for free too. Only one intermediate level is shown even for URLs nested
-// two deep (e.g. /events/3bs1h/6) - same depth Events already used.
+// Any page nested one level under a *child* link's own URL (e.g.
+// /people/outreach/some-post under People, /ecosystem/biodiversity under
+// Ecosystem) reads as a child of that item, and the breadcrumb should say
+// so with an intermediate crumb between the section and the current page -
+// "About Us / People / Outreach", not just "Outreach" floating directly
+// under the section. Only People and Ecosystem currently have their own
+// children; flat children (Our Journey, The Design, Join Us, Visit's leaf
+// pages) never match here, since nothing nests further under them - same
+// as how a section's own index page doesn't repeat itself as its own
+// parent crumb.
 export function parentLinkFor(pathname: string): SiteLink | null {
-  return TOP_LEVEL_LINKS.find((link) => pathname.startsWith(link.href + '/')) ?? null;
+  return ALL_CHILDREN.find((link) => pathname.startsWith(link.href + '/')) ?? null;
 }

@@ -52,39 +52,41 @@ const PRINCIPLE_PHOTOS: Record<string, { src: string; alt: string }> = {
 // prose per card/rung lives in the content object below, keyed by the same
 // index as its English counterpart.
 // Explore-grid cards render at a fixed 140px-tall strip (see .explore-card
-// img below), so six of these deliberately point at dedicated small
-// thumbnails instead of the same full-size hero/display photo other pages
-// use at their own real size — a PageSpeed pass (2026-08-04) found this
-// grid alone pulling in 1.6MB+ of oversized images on the homepage, the
-// worst single offender being the in-pictures thumb below (a 698KB "display"
-// R2 asset for a 362x140 card; the project's own curate-photos.mjs already
-// uploads a "-thumb" variant alongside every "-display" one). The People
-// card points at a small crop of the staff group photo (hero-thumb.webp)
-// rather than a single member's 400x400 headshot — a square selfie-style
-// portrait center-crops badly into this wide a strip, cutting faces at the
+// img below), so these deliberately point at dedicated small thumbnails
+// instead of the same full-size hero/display photo other pages use at
+// their own real size — a PageSpeed pass (2026-08-04) found this grid alone
+// pulling in 1.6MB+ of oversized images on the homepage, the worst single
+// offender being the in-pictures thumb below (a 698KB "display" R2 asset
+// for a 362x140 card; the project's own curate-photos.mjs already uploads
+// a "-thumb" variant alongside every "-display" one). The People card
+// points at a small crop of the staff group photo (hero-thumb.webp) rather
+// than a single member's 400x400 headshot — a square selfie-style portrait
+// center-crops badly into this wide a strip, cutting faces at the
 // hairline; a photo where everyone's already lined up at one head height
 // crops cleanly (see also the rung__media fix below for the same reason).
+//
+// Mirrors Nav's "About Us" dropdown (About Us, Our Journey, People,
+// Ecosystem) plus the two flat peer items (In Pictures, Events) — same six
+// destinations the nav treats as first-class, same order. Down from 9:
+// Resource Centre is dropped (its content is too thin to advertise, same
+// reasoning as pulling it from Nav/Breadcrumbs), and the three separate
+// Biodiversity/Geography/Weather cards fold into one Ecosystem card,
+// matching how the nav demotes them to grandchildren under Ecosystem
+// rather than showing them as independent destinations.
 const exploreLinks = [
   { href: '/about', img: '/images/pages/home/gallery-1-thumb.webp' },
-  { href: '/people', img: '/images/pages/staff/hero-thumb.webp' },
   { href: '/our-journey', img: '/images/pages/journey/hero-thumb.webp' },
+  { href: '/people', img: '/images/pages/staff/hero-thumb.webp' },
+  { href: '/ecosystem', img: '/images/pages/trekking/watering-hole-thumb.webp' },
   { href: '/in-pictures', img: 'https://media.tvc.farm/photos/2024/2024-08-18-img-1880-thumb.jpg' },
-  { href: '/ecosystem/biodiversity', img: '/images/pages/trekking/watering-hole-thumb.webp' },
-  { href: '/ecosystem/landscape', img: '/images/pages/home/gallery-2.jpg' },
-  { href: '/ecosystem/weather', img: '/images/pages/home/gallery-4.jpg' },
-  // Both were pointing at the same full-size photo used elsewhere at its own
-  // real size - center-cropped into this grid's wide strip it cut the jar
-  // pyramid's cap and the foragers' heads. These -thumb variants are
-  // pre-cropped to the card's own aspect ratio instead of leaving it to a
-  // center crop.
-  { href: '/resource-centre', img: '/images/products/tamarind-chutney-thumb.webp' },
   { href: '/events', img: '/images/events/2026-08-01-foraging-day/hero-thumb.webp' },
 ];
 
-// Deliberately 5 curated rungs, not a 1:1 mirror of every ENGAGE_LINKS page
-// the way exploreLinks mirrors EXPLORE_LINKS -- this ladder is "levels of
-// engagement" (day visit -> overnight -> work with us -> host an event ->
-// join), not a page index. Trekking Trails and How to Reach are folded
+// Deliberately 5 curated rungs, not a page index (exploreLinks above is now
+// curated too, not a full index, but still one card per real destination -
+// this ladder condenses several pages per rung) -- "levels of engagement"
+// (day visit -> overnight -> work with us -> host an event -> join).
+// Trekking Trails and How to Reach are folded
 // into the "Come for a day"/"Spend the night" rungs they support; Contact
 // Us has no rung since it isn't a level of engagement in its own right.
 // Host an Event breaks that "not a page index" rule on purpose -- it's a
@@ -116,35 +118,32 @@ const content = {
     heroEyebrow: 'Not just a farm — a regenerative ecosystem.',
     heroTitle: 'Regenerating a Corner of the Melagiris',
     heroIntro: 'Once stripped bare by exploitative farming, now a thriving food forest and wildlife habitat — permaculture and reforestation turned it around.',
-    forkEyebrow: 'Choose your path',
-    forkTitle: 'Explore, or engage',
-    forkIntro: 'Learn about the land and the people, or come experience it yourself — from a first visit to joining the collective.',
+    forkEyebrow: 'Start here',
+    forkTitle: 'The story, then the visit',
+    forkIntro: 'Get to know the land and the people first, then come experience it yourself — from a first visit to joining the collective.',
     doorExploreTag: 'Learn',
-    doorExploreTitle: 'Explore TVC',
+    doorExploreTitle: 'About TVC',
     doorExploreDesc: 'Our story, the land, the journey so far, and the life it holds — nine years of it.',
     doorExploreArrow: 'See everything ↓',
     doorEngageTag: 'Take part',
-    doorEngageTitle: 'Engage with TVC',
+    doorEngageTitle: 'Come Experience It',
     doorEngageDesc: 'Visit for a day, stay the night, work alongside us, or learn how membership works.',
     doorEngageArrow: 'Find your level ↓',
     principlesLabel: 'Principles',
     principlesHint: 'What guides every decision here',
     principlesMore: 'More on what we stand for →',
-    exploreLabel: 'Explore',
-    exploreHint: 'Every informational page on the site',
+    exploreLabel: 'About TVC',
+    exploreHint: 'The story, the land, and the people',
     exploreCards: [
       { title: 'About Us', desc: 'Why TVC exists, what we stand for, and how the land is laid out.' },
-      { title: 'People', desc: 'The member families, local staff, partners, and community that make TVC possible.' },
       { title: 'Our Journey', desc: 'From degraded land to a regenerating ecosystem, walked year by year in photos.' },
+      { title: 'People', desc: 'The member families, local staff, partners, and community that make TVC possible.' },
+      { title: 'Ecosystem', desc: 'Over 100 bird species, live weather, and where TVC sits in the wider Melagiri wildlife corridor.' },
       { title: 'In Pictures', desc: "Pictures are worth 10,000 words — an old proverb, still true." },
-      { title: 'Biodiversity', desc: 'Over 100 bird species — live sightings from iNaturalist.' },
-      { title: 'Geography', desc: "Where TVC sits in the Melagiri Hills, and its place in a wider wildlife corridor." },
-      { title: 'Weather', desc: 'Live weather at TVC, and the rainfall and monsoon patterns that shape the seasons.' },
-      { title: 'Resource Centre', desc: 'Lantana furniture and learning programs from TVC.' },
       { title: 'Events', desc: 'Camps, workshops, biodiversity walks, and retreats — upcoming and past.' },
     ],
-    engageLabel: 'Engage',
-    engageHint: 'Four levels, one ladder',
+    engageLabel: 'Visit & Get Involved',
+    engageHint: 'Five ways to be part of it',
     engageRungs: [
       { tag: 'Visit us — a day trip', title: 'Come for a day', desc: 'A farm tour, bird watching, star gazing, board games by the fire — a Picnic, a Hike, or a Do Nothing day, hour by hour.', cta: 'Plan a day visit →' },
       { tag: 'Stay with us — overnight', title: 'Spend the night', desc: 'A two-day stay under some of the darkest skies around — sunset hike, campfire, and a guided farm tour.', cta: 'Book an overnight stay →' },
@@ -158,37 +157,34 @@ const content = {
   kn: {
     metaDescription: `ಇದು ಕೇವಲ ಒಂದು ಫಾರ್ಮ್ ಅಲ್ಲ — ಒಂದು ಪುನರುಜ್ಜೀವನಗೊಳ್ಳುತ್ತಿರುವ ಪರಿಸರ ವ್ಯವಸ್ಥೆ: ಕನಕಪುರದ ಬಳಿಯ ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ ${FARM_AREA_ACRES} ಎಕರೆಗಳು, 2017ರಿಂದ ${MEMBER_FAMILY_COUNT} ಕುಟುಂಬಗಳಿಂದ ಪರ್ಮಾಕಲ್ಚರ್ ಮತ್ತು ಮರು ಅರಣ್ಯೀಕರಣದ ಮೂಲಕ ಪುನರುಜ್ಜೀವನಗೊಂಡಿದೆ.`,
     heroEyebrow: 'ಇದು ಕೇವಲ ಒಂದು ಫಾರ್ಮ್ ಅಲ್ಲ — ಒಂದು ಪುನರುಜ್ಜೀವನಗೊಳ್ಳುತ್ತಿರುವ ಪರಿಸರ ವ್ಯವಸ್ಥೆ.',
-    heroTitle: 'ಮೇಲಗಿರಿಗಳ ಒಂದು ಮೂಲೆಯನ್ನು ಪುನರುಜ್ಜೀವನಗೊಳಿಸುವುದು',
+    heroTitle: 'ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ ಒಂದು ಮೂಲೆಯನ್ನು ಪುನರುಜ್ಜೀವನಗೊಳಿಸುವುದು',
     heroIntro: 'ಒಮ್ಮೆ ಶೋಷಣಾತ್ಮಕ ಕೃಷಿಯಿಂದ ಬರಿದಾಗಿ ಸುಲಿದಿತ್ತು, ಈಗ ಒಂದು ಸಮೃದ್ಧ ಆಹಾರ ಅರಣ್ಯ ಮತ್ತು ವನ್ಯಜೀವಿ ಆವಾಸಸ್ಥಾನ — ಪರ್ಮಾಕಲ್ಚರ್ ಮತ್ತು ಮರು ಅರಣ್ಯೀಕರಣ ಇದನ್ನು ಬದಲಾಯಿಸಿತು.',
-    forkEyebrow: 'ನೀವು ಇಲ್ಲಿ ಸಮಯವನ್ನು ಹೇಗೆ ಕಳೆಯಲು ಬಯಸುತ್ತೀರಿ?',
-    forkTitle: 'ಅನ್ವೇಷಿಸಿ, ಅಥವಾ ಭಾಗಿಯಾಗಿ',
-    forkIntro: 'ಭೂಮಿ ಮತ್ತು ಜನರ ಬಗ್ಗೆ ತಿಳಿದುಕೊಳ್ಳಿ, ಅಥವಾ ಸ್ವತಃ ಬಂದು ಅನುಭವಿಸಿ — ಮೊದಲ ಭೇಟಿಯಿಂದ ಹಿಡಿದು ಸಂಘಟನೆಗೆ ಸೇರುವವರೆಗೆ.',
+    forkEyebrow: 'ಇಲ್ಲಿಂದ ಪ್ರಾರಂಭಿಸಿ',
+    forkTitle: 'ಮೊದಲು ಕಥೆ, ನಂತರ ಭೇಟಿ',
+    forkIntro: 'ಮೊದಲು ಭೂಮಿ ಮತ್ತು ಜನರ ಬಗ್ಗೆ ತಿಳಿದುಕೊಳ್ಳಿ, ನಂತರ ಸ್ವತಃ ಬಂದು ಅನುಭವಿಸಿ — ಮೊದಲ ಭೇಟಿಯಿಂದ ಹಿಡಿದು ಸಂಘಟನೆಗೆ ಸೇರುವವರೆಗೆ.',
     doorExploreTag: 'ಕಲಿಯಿರಿ',
-    doorExploreTitle: 'TVC ಅನ್ನು ಅನ್ವೇಷಿಸಿ',
+    doorExploreTitle: 'TVC ಬಗ್ಗೆ',
     doorExploreDesc: 'ನಮ್ಮ ಕಥೆ, ಭೂಮಿ, ಇಲ್ಲಿಯವರೆಗಿನ ಪಯಣ, ಮತ್ತು ಅದು ಹೊಂದಿರುವ ಜೀವನ — ಒಂಬತ್ತು ವರ್ಷಗಳ ಪಯಣ.',
     doorExploreArrow: 'ಎಲ್ಲವನ್ನೂ ನೋಡಿ ↓',
     doorEngageTag: 'ಭಾಗವಹಿಸಿ',
-    doorEngageTitle: 'TVC ಜೊತೆ ಭಾಗಿಯಾಗಿ',
+    doorEngageTitle: 'ಇಲ್ಲಿ ಬಂದು ಅನುಭವಿಸಿ',
     doorEngageDesc: 'ಒಂದು ದಿನ ಭೇಟಿ ನೀಡಿ, ರಾತ್ರಿ ಉಳಿಯಿರಿ, ನಮ್ಮೊಂದಿಗೆ ಕೆಲಸ ಮಾಡಿ, ಅಥವಾ ಸದಸ್ಯತ್ವ ಹೇಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ ಎಂಬುದನ್ನು ತಿಳಿಯಿರಿ.',
     doorEngageArrow: 'ನಿಮ್ಮ ಮಟ್ಟವನ್ನು ಹುಡುಕಿ ↓',
     principlesLabel: 'ತತ್ವಗಳು',
     principlesHint: 'ಇಲ್ಲಿನ ಪ್ರತಿಯೊಂದು ನಿರ್ಧಾರಕ್ಕೂ ಮಾರ್ಗದರ್ಶನ ನೀಡುವುದು',
     principlesMore: 'ನಾವು ಏನನ್ನು ಪ್ರತಿಪಾದಿಸುತ್ತೇವೆ ಎಂಬುದರ ಕುರಿತು ಇನ್ನಷ್ಟು →',
-    exploreLabel: 'ಅನ್ವೇಷಿಸಿ',
-    exploreHint: 'ಸೈಟ್‌ನ ಪ್ರತಿಯೊಂದು ಮಾಹಿತಿ ಪುಟ',
+    exploreLabel: 'TVC ಬಗ್ಗೆ',
+    exploreHint: 'ಕಥೆ, ಭೂಮಿ, ಮತ್ತು ಜನರು',
     exploreCards: [
       { title: 'ನಮ್ಮ ಬಗ್ಗೆ', desc: 'TVC ಏಕೆ ಅಸ್ತಿತ್ವದಲ್ಲಿದೆ, ನಾವು ಏನನ್ನು ಪ್ರತಿಪಾದಿಸುತ್ತೇವೆ, ಮತ್ತು ಭೂಮಿಯನ್ನು ಹೇಗೆ ವಿನ್ಯಾಸಗೊಳಿಸಲಾಗಿದೆ.' },
-      { title: 'ಜನರು', desc: 'TVC ಅನ್ನು ಸಾಧ್ಯವಾಗಿಸುವ ಸದಸ್ಯ ಕುಟುಂಬಗಳು, ಸ್ಥಳೀಯ ಸಿಬ್ಬಂದಿ, ಪಾಲುದಾರರು ಮತ್ತು ಸಮುದಾಯ.' },
       { title: 'ನಮ್ಮ ಪಯಣ', desc: 'ಅವನತಿ ಹೊಂದಿದ ಭೂಮಿಯಿಂದ ಪುನರುಜ್ಜೀವನಗೊಳ್ಳುತ್ತಿರುವ ಪರಿಸರ ವ್ಯವಸ್ಥೆಯವರೆಗೆ, ವರ್ಷದಿಂದ ವರ್ಷಕ್ಕೆ ಚಿತ್ರಗಳಲ್ಲಿ ನಡೆದ ಪಯಣ.' },
+      { title: 'ಜನರು', desc: 'TVC ಅನ್ನು ಸಾಧ್ಯವಾಗಿಸುವ ಸದಸ್ಯ ಕುಟುಂಬಗಳು, ಸ್ಥಳೀಯ ಸಿಬ್ಬಂದಿ, ಪಾಲುದಾರರು ಮತ್ತು ಸಮುದಾಯ.' },
+      { title: 'ಪರಿಸರ ವ್ಯವಸ್ಥೆ', desc: '100ಕ್ಕೂ ಹೆಚ್ಚು ಪಕ್ಷಿ ಪ್ರಭೇದಗಳು, ನೇರ ಹವಾಮಾನ, ಮತ್ತು ವಿಶಾಲ ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳ ವನ್ಯಜೀವಿ ಕಾರಿಡಾರ್‌ನಲ್ಲಿ TVC ಎಲ್ಲಿದೆ ಎಂಬುದು.' },
       { title: 'ಚಿತ್ರಗಳಲ್ಲಿ', desc: 'ಚಿತ್ರಗಳು 10,000 ಪದಗಳಿಗೆ ಸಮ — ಒಂದು ಹಳೆಯ ಗಾದೆ, ಇನ್ನೂ ನಿಜ.' },
-      { title: 'ಜೀವವೈವಿಧ್ಯ', desc: '100ಕ್ಕೂ ಹೆಚ್ಚು ಪಕ್ಷಿ ಪ್ರಭೇದಗಳು — iNaturalist ನಿಂದ ನೇರ ವೀಕ್ಷಣೆಗಳು.' },
-      { title: 'ಭೂಗೋಳ', desc: 'ಮೇಲಗಿರಿ ಬೆಟ್ಟಗಳಲ್ಲಿ TVC ಎಲ್ಲಿದೆ, ಮತ್ತು ವಿಶಾಲ ವನ್ಯಜೀವಿ ಕಾರಿಡಾರ್‌ನಲ್ಲಿ ಅದರ ಸ್ಥಾನ.' },
-      { title: 'ಹವಾಮಾನ', desc: 'TVC ಯಲ್ಲಿ ನೇರ ಹವಾಮಾನ, ಮತ್ತು ಋತುಗಳನ್ನು ರೂಪಿಸುವ ಮಳೆ ಹಾಗೂ ಮಾನ್ಸೂನ್ ಮಾದರಿಗಳು.' },
-      { title: 'ಸಂಪನ್ಮೂಲ ಕೇಂದ್ರ', desc: 'TVC ಯ ಲಂಟಾನಾ ಪೀಠೋಪಕರಣಗಳು ಮತ್ತು ಕಲಿಕಾ ಕಾರ್ಯಕ್ರಮಗಳು.' },
       { title: 'ಕಾರ್ಯಕ್ರಮಗಳು', desc: 'ಶಿಬಿರಗಳು, ಕಾರ್ಯಾಗಾರಗಳು, ಜೀವವೈವಿಧ್ಯ ನಡಿಗೆಗಳು ಮತ್ತು ರಿಟ್ರೀಟ್‌ಗಳು — ಮುಂಬರುವ ಮತ್ತು ಹಿಂದಿನ.' },
     ],
-    engageLabel: 'ಭಾಗಿಯಾಗಿ',
-    engageHint: 'ನಾಲ್ಕು ಹಂತಗಳು, ಒಂದು ಏಣಿ',
+    engageLabel: 'ಭೇಟಿ ಮತ್ತು ಭಾಗವಹಿಸುವಿಕೆ',
+    engageHint: 'ಭಾಗವಾಗಲು ಐದು ಮಾರ್ಗಗಳು',
     engageRungs: [
       { tag: 'ನಮ್ಮನ್ನು ಭೇಟಿ ಮಾಡಿ — ಒಂದು ದಿನದ ಪ್ರವಾಸ', title: 'ಒಂದು ದಿನಕ್ಕೆ ಬನ್ನಿ', desc: 'ಒಂದು ಫಾರ್ಮ್ ಪ್ರವಾಸ, ಪಕ್ಷಿ ವೀಕ್ಷಣೆ, ನಕ್ಷತ್ರ ವೀಕ್ಷಣೆ, ಬೆಂಕಿಯ ಬಳಿ ಬೋರ್ಡ್ ಆಟಗಳು — ಒಂದು ಪಿಕ್ನಿಕ್, ಒಂದು ಹೈಕ್, ಅಥವಾ ಗಂಟೆ ಗಂಟೆಗೂ ಏನೂ ಮಾಡದ ದಿನ.', cta: 'ಒಂದು ದಿನದ ಭೇಟಿಯನ್ನು ಯೋಜಿಸಿ →' },
       { tag: 'ನಮ್ಮೊಂದಿಗೆ ಉಳಿಯಿರಿ — ರಾತ್ರಿಯಿಡೀ', title: 'ರಾತ್ರಿ ಕಳೆಯಿರಿ', desc: 'ಸುತ್ತಮುತ್ತಲಿನ ಅತ್ಯಂತ ಕತ್ತಲೆಯ ಆಕಾಶದ ಕೆಳಗೆ ಎರಡು ದಿನಗಳ ವಾಸ್ತವ್ಯ — ಸೂರ್ಯಾಸ್ತ ನಡಿಗೆ, ಕ್ಯಾಂಪ್‌ಫೈರ್, ಮತ್ತು ಮಾರ್ಗದರ್ಶಿತ ಫಾರ್ಮ್ ಪ್ರವಾಸ.', cta: 'ರಾತ್ರಿ ವಾಸ್ತವ್ಯವನ್ನು ಬುಕ್ ಮಾಡಿ →' },
@@ -202,37 +198,34 @@ const content = {
   ta: {
     metaDescription: `இது வெறும் பண்ணை அல்ல — ஒரு மீட்டெடுக்கப்படும் சுற்றுச்சூழல் அமைப்பு: கனகபுரா அருகே மேலகிரி மலைகளின் ${FARM_AREA_ACRES} ஏக்கர்கள், 2017 முதல் ${MEMBER_FAMILY_COUNT} குடும்பங்களால் இயற்கை வேளாண்மை மற்றும் மறு காடாக்கம் மூலம் மீட்டெடுக்கப்பட்டுள்ளது.`,
     heroEyebrow: 'இது வெறும் பண்ணை அல்ல — ஒரு மீட்டெடுக்கப்படும் சுற்றுச்சூழல் அமைப்பு.',
-    heroTitle: 'மேலகிரியின் மடியில் ஒரு பசுமை மீளுயிர்ப்பு',
+    heroTitle: 'மேலகிரி மலைகளின் மடியில் ஒரு பசுமை மீளுயிர்ப்பு',
     heroIntro: 'சுரண்டல் விவசாயத்தால் தரிசான நிலம், இப்போது செழிப்பானதோர் உணவுக் காடாகவும் வனவிலங்கு வாழிடமாகவும் — இயற்கை வேளாண்மையும் மறு காடாக்கமும் இணைந்த மாற்றம்.',
-    forkEyebrow: 'நீங்கள் இங்கே நேரத்தை எப்படி செலவிட விரும்புகிறீர்கள்?',
-    forkTitle: 'ஆராயுங்கள், அல்லது ஈடுபடுங்கள்',
-    forkIntro: 'நிலம் மற்றும் மக்களைப் பற்றி அறியுங்கள், அல்லது நேரில் வந்து அனுபவியுங்கள் — முதல் வருகையிலிருந்து கூட்டமைப்பில் இணைவது வரை.',
+    forkEyebrow: 'இங்கிருந்து தொடங்குங்கள்',
+    forkTitle: 'முதலில் கதை, பிறகு வருகை',
+    forkIntro: 'முதலில் நிலம் மற்றும் மக்களைப் பற்றி அறிந்துகொள்ளுங்கள், பிறகு நேரில் வந்து அனுபவியுங்கள் — முதல் வருகையிலிருந்து கூட்டமைப்பில் இணைவது வரை.',
     doorExploreTag: 'கற்றுக்கொள்ளுங்கள்',
-    doorExploreTitle: 'TVC-யை ஆராயுங்கள்',
+    doorExploreTitle: 'TVC பற்றி',
     doorExploreDesc: 'எங்கள் கதை, நிலம், இதுவரையிலான பயணம், மற்றும் அது கொண்டிருக்கும் வாழ்க்கை — ஒன்பது வருட பயணம்.',
     doorExploreArrow: 'அனைத்தையும் காண்க ↓',
     doorEngageTag: 'பங்கேற்கவும்',
-    doorEngageTitle: 'TVC-உடன் இணையுங்கள்',
+    doorEngageTitle: 'இங்கே வந்து அனுபவியுங்கள்',
     doorEngageDesc: 'ஒரு நாள் வருகை தாருங்கள், இரவு தங்குங்கள், எங்களுடன் இணைந்து பணியாற்றுங்கள், அல்லது உறுப்பினர் நிலை எப்படி செயல்படுகிறது என்பதை அறியுங்கள்.',
     doorEngageArrow: 'உங்கள் நிலையைக் கண்டறியுங்கள் ↓',
     principlesLabel: 'கொள்கைகள்',
     principlesHint: 'இங்குள்ள ஒவ்வொரு முடிவையும் வழிநடத்துவது',
     principlesMore: 'நாங்கள் எதை பிரதிநிதித்துவப்படுத்துகிறோம் என்பது பற்றி மேலும் →',
-    exploreLabel: 'ஆராயுங்கள்',
-    exploreHint: 'தளத்தில் உள்ள ஒவ்வொரு தகவல் பக்கமும்',
+    exploreLabel: 'TVC பற்றி',
+    exploreHint: 'கதை, நிலம், மற்றும் மக்கள்',
     exploreCards: [
       { title: 'எங்களைப் பற்றி', desc: 'TVC ஏன் இருக்கிறது, நாங்கள் எதை பிரதிநிதித்துவப்படுத்துகிறோம், மற்றும் நிலம் எப்படி வடிவமைக்கப்பட்டுள்ளது.' },
-      { title: 'மக்கள்', desc: 'TVC-ஐ சாத்தியமாக்கும் உறுப்பினர் குடும்பங்கள், உள்ளூர் ஊழியர்கள், கூட்டாளர்கள் மற்றும் சமூகம்.' },
       { title: 'எங்கள் பயணம்', desc: 'சிதைந்த நிலத்திலிருந்து மீட்டெடுக்கப்படும் சுற்றுச்சூழல் அமைப்பு வரை, ஆண்டுதோறும் புகைப்படங்களில் நடந்த பயணம்.' },
+      { title: 'மக்கள்', desc: 'TVC-ஐ சாத்தியமாக்கும் உறுப்பினர் குடும்பங்கள், உள்ளூர் ஊழியர்கள், கூட்டாளர்கள் மற்றும் சமூகம்.' },
+      { title: 'சூழலமைப்பு', desc: '100க்கும் மேற்பட்ட பறவை இனங்கள், நேரடி வானிலை, மற்றும் பரந்த மேலகிரி மலைகளின் வனவிலங்கு தாழ்வாரத்தில் TVC எங்கே அமைந்துள்ளது.' },
       { title: 'படங்களில்', desc: 'படங்கள் 10,000 வார்த்தைகளுக்கு சமம் — ஒரு பழைய பழமொழி, இன்னும் உண்மை.' },
-      { title: 'பல்லுயிர் பெருக்கம்', desc: '100க்கும் மேற்பட்ட பறவை இனங்கள் — iNaturalist இலிருந்து நேரடி பார்வைகள்.' },
-      { title: 'புவியியல்', desc: 'மேலகிரி மலைகளில் TVC எங்கே அமைந்துள்ளது, மற்றும் பரந்த வனவிலங்கு தாழ்வாரத்தில் அதன் இடம்.' },
-      { title: 'வானிலை', desc: 'TVC-யில் நேரடி வானிலை, மற்றும் பருவங்களை வடிவமைக்கும் மழை மற்றும் பருவமழை முறைகள்.' },
-      { title: 'வள மையம்', desc: 'TVC-யின் லாண்டானா மரச்சாமான்கள் மற்றும் கற்றல் திட்டங்கள்.' },
       { title: 'நிகழ்வுகள்', desc: 'முகாம்கள், பட்டறைகள், பல்லுயிர் நடைப்பயணங்கள் மற்றும் தியான முகாம்கள் — வரவிருக்கும் மற்றும் கடந்த.' },
     ],
-    engageLabel: 'ஈடுபடுங்கள்',
-    engageHint: 'நான்கு நிலைகள், ஒரு ஏணி',
+    engageLabel: 'வருகை மற்றும் பங்கேற்பு',
+    engageHint: 'பங்காக இருக்க ஐந்து வழிகள்',
     engageRungs: [
       { tag: 'எங்களைப் பார்வையிடுங்கள் — ஒரு நாள் பயணம்', title: 'ஒரு நாளுக்கு வாருங்கள்', desc: 'ஒரு பண்ணை சுற்றுப்பயணம், பறவை பார்வையிடல், நட்சத்திர பார்வையிடல், நெருப்பின் அருகே பலகை விளையாட்டுகள் — ஒரு பிக்னிக், ஒரு நடைபயணம், அல்லது மணிக்கு மணி ஒன்றும் செய்யாத நாள்.', cta: 'ஒரு நாள் வருகையைத் திட்டமிடுங்கள் →' },
       { tag: 'எங்களுடன் தங்குங்கள் — இரவு தங்குமிடம்', title: 'இரவைக் கழியுங்கள்', desc: 'சுற்றியுள்ள மிக இருண்ட வானங்களின் கீழ் ஒரு இரண்டு நாள் தங்குமிடம் — சூரிய அஸ்தமன நடைபயணம், முகாம் நெருப்பு, மற்றும் வழிகாட்டப்பட்ட பண்ணை சுற்றுப்பயணம்.', cta: 'இரவு தங்குமிடத்தை முன்பதிவு செய்யுங்கள் →' },
