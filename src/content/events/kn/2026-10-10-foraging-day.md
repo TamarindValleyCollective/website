@@ -1,24 +1,22 @@
 ---
 title: "ಫೊರೇಜಿಂಗ್ ಟ್ರೇಲ್ಸ್ & ಟೇಲ್ಸ್ ಜೊತೆ ಫೊರೇಜಿಂಗ್ ದಿನ"
-date: 2026-08-01
+date: 2026-10-10
 excerpt: "ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ನಲ್ಲಿ ಫೊರೇಜಿಂಗ್ ಟ್ರೇಲ್ಸ್ & ಟೇಲ್ಸ್ ಜೊತೆ ಫೊರೇಜಿಂಗ್, ಅಡುಗೆ, ಮತ್ತು ಒಟ್ಟಿಗೆ ಊಟ ಮಾಡುವ ಒಂದು ಪೂರ್ಣ ದಿನ — ಮಾರ್ಗದರ್ಶಿತ ಫೊರೇಜಿಂಗ್ ನಡಿಗೆ, ಹ್ಯಾಂಡ್ಸ್-ಆನ್ ಅಡುಗೆ ಕಾರ್ಯಾಗಾರ, ಮತ್ತು ಫಾರ್ಮ್-ಟು-ಟೇಬಲ್ ಮಧ್ಯಾಹ್ನದ ಊಟ."
-coverImage: "/images/events/2026-08-01-foraging-day/hero.jpeg"
+coverImage: "/images/events/2026-10-10-foraging-day/hero.jpeg"
 organizer: "Foraging Trails & Tales"
 tags: ["ಕಾರ್ಯಾಗಾರ", "ಆಹಾರ", "ಆಹಾರ ಸಂಗ್ರಹ"]
-draft: true
+draft: false
+price:
+  - amount: "₹2,250"
+    label: "ಪ್ರತಿ ವ್ಯಕ್ತಿಗೆ"
+whatsapp:
+  number: "918548065772"
+  contactName: "Foraging Trails & Tales"
 ---
 
 ಪ್ರಕೃತಿಯೊಳಗೆ ಹೆಜ್ಜೆ ಇಡಿ, ಕಲಿಯಿರಿ, ಅಡುಗೆ ಮಾಡಿ, ಮತ್ತು ಭೂಮಿ ನೀಡುವುದನ್ನು ಸೇವಿಸಿ.
 
 ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ನಲ್ಲಿ ಒಂದು ಶನಿವಾರದ ಫೊರೇಜಿಂಗ್, ಅಡುಗೆ, ಮತ್ತು ಒಟ್ಟಿಗೆ ಊಟ ಮಾಡುವಿಕೆಗಾಗಿ **[@foragingtrailsandtales](https://www.instagram.com/foragingtrailsandtales/)** ಅವರೊಂದಿಗೆ ಸೇರಿ.
-
-<figure class="poster">
-
-![ಪೂರ್ಣ ವೇಳಾಪಟ್ಟಿ, ದರ ಮತ್ತು ನೋಂದಣಿ ವಿವರಗಳೊಂದಿಗೆ ಫೊರೇಜಿಂಗ್ ದಿನ ಕಾರ್ಯಕ್ರಮದ ಪೋಸ್ಟರ್](/images/events/2026-08-01-foraging-day/poster.jpeg)
-
-<figcaption>ಮೂಲ ಕಾರ್ಯಕ್ರಮದ ಪೋಸ್ಟರ್</figcaption>
-
-</figure>
 
 ## ವೇಳಾಪಟ್ಟಿ
 
@@ -30,22 +28,18 @@ draft: true
 | 12:00 – 1:30 | ನಿಮ್ಮ ಸಂಗ್ರಹವನ್ನು ಅಡುಗೆ ಮಾಡಿ |
 | 1:30 – 2:30 | ಫಾರ್ಮ್-ಟು-ಟೇಬಲ್ ಮಧ್ಯಾಹ್ನದ ಊಟ |
 
-## ಒಳಗೊಂಡಿರುವುದು — ₹2,250
+## ಒಳಗೊಂಡಿರುವುದು
 
 - ಬೆಳಗಿನ ಉಪಾಹಾರ ಮತ್ತು ಮಧ್ಯಾಹ್ನದ ಊಟ
 - ಮಾರ್ಗದರ್ಶಿತ ಫೊರೇಜಿಂಗ್ ನಡಿಗೆ
 - ನೀವು ಸಂಗ್ರಹಿಸಿದ್ದರೊಂದಿಗೆ ಹ್ಯಾಂಡ್ಸ್-ಆನ್ ಅಡುಗೆ ಕಾರ್ಯಾಗಾರ
 
-<div class="cta card">
+<div class="cta card" id="cta">
 
 ## ನೋಂದಣಿ
 
-**ಪ್ರತಿ ವ್ಯಕ್ತಿಗೆ ₹2,250**
+ಪ್ರತಿ ವ್ಯಕ್ತಿಗೆ ₹2,250. ನಿಮ್ಮ ಸ್ಥಾನವನ್ನು Foraging Trails & Tales ಜೊತೆ ಖಚಿತಪಡಿಸಲು ಆನ್‌ಲೈನ್‌ನಲ್ಲಿ ಪಾವತಿಸಿ.
 
-<a class="button" href="https://rzp.io/rzp/Pry5rI8r">ಪಾವತಿಸಿ & ನೋಂದಾಯಿಸಿ →</a>
-
-ಅಥವಾ ನೋಂದಾಯಿಸಲು WhatsApp ನಲ್ಲಿ **[+91 85480 65772](https://wa.me/918548065772)** ಗೆ ಸಂದೇಶ ಕಳುಹಿಸಿ.
+<a class="button" href="https://rzp.io/rzp/RjF4hjJ1">ಪಾವತಿಸಿ & ನೋಂದಾಯಿಸಿ →</a>
 
 </div>
-
-`#FarmToTable` `#ForagingKarnataka` `#NatureWorkshop` `#NaturalFarming`
