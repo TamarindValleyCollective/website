@@ -76,10 +76,14 @@ const MORE_CHILDREN: SiteLink[] = [
   { label: 'Contact Us', key: 'contact', href: '/contact' },
 ];
 
+// About Us leads (orientation/trust before the ask), then Visit Us
+// (the primary conversion action), then Events, In Pictures, and the More
+// catch-all - same priority order as the homepage's "story, then visit"
+// section.
 export const NAV_SECTIONS: NavSection[] = [
+  { kind: 'dropdown', key: 'about', href: '/about', children: ABOUT_CHILDREN },
   { kind: 'dropdown', key: 'visitTvc', href: '/visit', children: VISIT_CHILDREN },
   { kind: 'link', key: 'events', href: '/events' },
-  { kind: 'dropdown', key: 'about', href: '/about', children: ABOUT_CHILDREN },
   { kind: 'link', key: 'inPictures', href: '/in-pictures' },
   { kind: 'dropdown', key: 'more', children: MORE_CHILDREN },
 ];
