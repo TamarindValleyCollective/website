@@ -32,6 +32,7 @@ export default {
     howToReach: 'How to Reach',
     join: 'Join Us',
     contact: 'Contact Us',
+    more: 'More',
   },
   footer: {
     tagline: 'Not just a farm — a regenerative ecosystem.',

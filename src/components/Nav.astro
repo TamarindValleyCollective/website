@@ -1,5 +1,5 @@
 ---
-import { EXPLORE_LINKS, ENGAGE_LINKS } from '../data/site-map';
+import { NAV_SECTIONS, type NavSection } from '../data/site-map';
 import HeaderWeather from './HeaderWeather.astro';
 import SiteSearch from './SiteSearch.astro';
 import LanguageSwitcher from './LanguageSwitcher.astro';
@@ -16,35 +16,20 @@ const t = useTranslations(lang);
 const homeHref = getRelativeLocaleUrl(lang, '/');
 const localizedHref = (href: string) => getRelativeLocaleUrl(lang, href);
 
-// Mirrors the homepage's own Explore/Engage fork (src/pages/index.astro) so
-// the nav reads as the same map wherever you are on the site, not a
-// different grouping than the one you land on at "/". Explore stays wide
-// (7 top-level items — a single column runs uncomfortably tall, see
-// .nav__dropdown--wide below for the two-column treatment); Engage is down
-// to 3 top-level items now that Visit's sub-pages nest under it, so a
-// single column reads better.
-const navItems = [
-  { label: t('nav.explore'), wide: true, children: EXPLORE_LINKS },
-  { label: t('nav.engage'), wide: false, children: ENGAGE_LINKS },
-];
-
-// Wide dropdowns render as two independent flex columns rather than a
-// CSS grid - a grid locks matching rows in both columns to the same
-// height, so an item with nested children (People, Ecosystem) stretches
-// its shorter row-mate (About Us, Resource Centre) and leaves visible
-// dead space under it. Splitting into two separate column arrays up
-// front lets each column size to its own content.
-function dropdownColumns(children: typeof EXPLORE_LINKS, wide: boolean) {
-  if (!wide) return [children];
-  const half = Math.ceil(children.length / 2);
-  return [children.slice(0, half), children.slice(half)];
-}
+// Task-based nav, read straight from site-map.ts's NAV_SECTIONS - "Explore"
+// and "Engage" named an internal taxonomy, not what a visitor came here to
+// do, and forced a click before anyone saw a real destination name. Flat
+// items name the thing directly; only Visit Us and About Us keep a
+// dropdown, since they're the two with genuine sub-pages.
+const navItems = NAV_SECTIONS;
 
 // Compared against the bare (locale-stripped) path so a Kannada/Tamil route
 // still highlights the right item.
 const currentPath = stripLocalePrefix(Astro.url.pathname);
 const isActive = (href: string) => currentPath === href || currentPath.startsWith(href + '/');
-const isSectionActive = (children: { href: string }[]) => children.some((child) => isActive(child.href));
+const isGroupActive = (entry: NavSection) =>
+  (entry.href !== undefined && isActive(entry.href)) ||
+  (entry.kind === 'dropdown' && entry.children.some((child) => isActive(child.href)));
 ---
 
 <header class="nav">
@@ -59,42 +44,57 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
 
     <div class="nav__right">
       <nav class="nav__menu" id="nav-menu">
-        {navItems.map((item) => (
+        {navItems.map((item) => item.kind === 'link' ? (
+          <a href={localizedHref(item.href)} class:list={['nav__link', { 'is-active': isActive(item.href) }]}>
+            {t(`nav.${item.key}`)}
+          </a>
+        ) : (
           <div class="nav__item">
-            <button
-              type="button"
-              class:list={['nav__link', 'nav__link--toggle', { 'is-active': isSectionActive(item.children) }]}
-              aria-haspopup="true"
-            >
-              {item.label}
-              <svg class="nav__caret" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
-                <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-            <div class:list={['nav__dropdown', { 'nav__dropdown--wide': item.wide }]}>
-              {dropdownColumns(item.children, item.wide).map((column) => (
-                <div class="nav__col">
-                  {column.map((child) => (
-                    <div class="nav__subitem">
-                      <a href={localizedHref(child.href)} class:list={['nav__sublink', { 'is-active': isActive(child.href) }]}>
-                        {t(`nav.${child.key}`)}
-                      </a>
-                      {child.children && (
-                        <div class="nav__subgroup">
-                          {child.children.map((grandchild) => (
-                            <a
-                              href={localizedHref(grandchild.href)}
-                              class:list={['nav__subsublink', { 'is-active': isActive(grandchild.href) }]}
-                            >
-                              {t(`nav.${grandchild.key}`)}
-                            </a>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ))}
+            {item.href ? (
+              <a
+                href={localizedHref(item.href)}
+                class:list={['nav__link', 'nav__link--toggle', 'nav__link--toggle-anchor', { 'is-active': isGroupActive(item) }]}
+                aria-haspopup="true"
+              >
+                {t(`nav.${item.key}`)}
+                <svg class="nav__caret" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+                  <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </a>
+            ) : (
+              <button
+                type="button"
+                class:list={['nav__link', 'nav__link--toggle', { 'is-active': isGroupActive(item) }]}
+                aria-haspopup="true"
+              >
+                {t(`nav.${item.key}`)}
+                <svg class="nav__caret" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+                  <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            )}
+            <div class="nav__dropdown">
+              <div class="nav__col">
+                {item.children.map((child) => (
+                  <div class="nav__subitem">
+                    <a href={localizedHref(child.href)} class:list={['nav__sublink', { 'is-active': isActive(child.href) }]}>
+                      {t(`nav.${child.key}`)}
+                    </a>
+                    {child.children && (
+                      <div class="nav__subgroup">
+                        {child.children.map((grandchild) => (
+                          <a
+                            href={localizedHref(grandchild.href)}
+                            class:list={['nav__subsublink', { 'is-active': isActive(grandchild.href) }]}
+                          >
+                            {t(`nav.${grandchild.key}`)}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         ))}
@@ -205,6 +205,13 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
     cursor: default;
   }
 
+  /* Visit Us / About are real pages, not just dropdown triggers — the toggle
+     itself navigates on click, so (unlike the button-only toggles) it gets
+     a pointer cursor. */
+  .nav__link--toggle-anchor {
+    cursor: pointer;
+  }
+
   .nav__link:hover {
     color: var(--tvc-green);
   }
@@ -250,19 +257,6 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
   .nav__item:hover .nav__dropdown,
   .nav__item:focus-within .nav__dropdown {
     display: flex;
-  }
-
-  /* Explore has 7 items — a single column runs uncomfortably tall, so it
-     splits into two side-by-side flex columns (see dropdownColumns() above)
-     rather than a CSS grid — a grid ties matching rows across both columns
-     to the same height, which stretched short items into dead space
-     whenever their row-mate had nested children. Declared after the rules
-     above so it wins the flex-direction tie on hover/focus. */
-  .nav__dropdown--wide {
-    flex-direction: row;
-    align-items: flex-start;
-    gap: 4px;
-    min-width: 360px;
   }
 
   .nav__col {
@@ -346,7 +340,13 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
     display: block;
   }
 
-  @media (max-width: 860px) {
+  /* 1180px, not 860px — the flat nav now carries 6 top-level items (Visit
+     Us, Events, About Us, In Pictures, Join Us, More) instead of the old
+     2 (Explore, Engage), so it needs meaningfully more room before the
+     desktop row layout fits without wrapping. Below this, drop straight to
+     the hamburger menu rather than leaving a mid-width zone where the row
+     silently wraps to a second line and misaligns with nav__controls. */
+  @media (max-width: 1180px) {
     .nav__toggle {
       display: flex;
     }
@@ -398,11 +398,6 @@ const isSectionActive = (children: { href: string }[]) => children.some((child) 
       border: none;
       box-shadow: none;
       padding: 0 0 6px 16px;
-      min-width: 0;
-    }
-
-    .nav__dropdown--wide {
-      flex-direction: column;
       min-width: 0;
     }
 
