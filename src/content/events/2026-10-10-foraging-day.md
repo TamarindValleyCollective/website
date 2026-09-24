@@ -22,6 +22,16 @@ Step into nature, learn, cook, and eat what the earth gives you.
 
 Join **[@foragingtrailsandtales](https://www.instagram.com/foragingtrailsandtales/)** for a Saturday of foraging, cooking, and eating together at Tamarind Valley Collective.
 
+The day is led by **[Subhashini](https://www.instagram.com/greensofkanakapura/) and [Archana](https://www.instagram.com/mylittlethoughtslane/)** of **[Foraging Trails and Tales](/people/partners#foraging-trails-and-tales)**, who guide people in search of wild edible greens around Bengaluru — foraging walks, plant identification, and farm-to-table cooking sessions. They ran TVC's first Forage & Feast camp night in October 2025.
+
+<figure class="poster">
+
+![Foraging Day event poster with the schedule, what's included, ₹2,250 registration fee, and Linger's WhatsApp contact details, set against a photo of the farm's Malabar Hut](/images/events/2026-10-10-foraging-day/poster.jpeg)
+
+<figcaption>The event poster</figcaption>
+
+</figure>
+
 ## Schedule
 
 | Time | Activity |

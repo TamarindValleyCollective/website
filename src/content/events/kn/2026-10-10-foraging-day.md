@@ -18,6 +18,16 @@ whatsapp:
 
 ತಮರಿಂಡ್ ವ್ಯಾಲಿ ಕಲೆಕ್ಟಿವ್‌ನಲ್ಲಿ ಒಂದು ಶನಿವಾರದ ಫೊರೇಜಿಂಗ್, ಅಡುಗೆ, ಮತ್ತು ಒಟ್ಟಿಗೆ ಊಟ ಮಾಡುವಿಕೆಗಾಗಿ **[@foragingtrailsandtales](https://www.instagram.com/foragingtrailsandtales/)** ಅವರೊಂದಿಗೆ ಸೇರಿ.
 
+ಈ ದಿನವನ್ನು **[ಸುಭಾಷಿಣಿ](https://www.instagram.com/greensofkanakapura/) ಮತ್ತು [ಅರ್ಚನಾ](https://www.instagram.com/mylittlethoughtslane/)** ಅವರು, **[ಫೊರೇಜಿಂಗ್ ಟ್ರೈಲ್ಸ್ ಆ್ಯಂಡ್ ಟೇಲ್ಸ್](/people/partners#foraging-trails-and-tales)** ಮೂಲಕ ಮುನ್ನಡೆಸುತ್ತಾರೆ — ಇವರು ಬೆಂಗಳೂರಿನ ಸುತ್ತಮುತ್ತ ಕಾಡು-ಆಹಾರ ನಡಿಗೆಗಳು, ಸಸ್ಯ ಗುರುತಿಸುವಿಕೆ, ಮತ್ತು ಫಾರ್ಮ್-ಟು-ಟೇಬಲ್ ಅಡುಗೆ ಅವಧಿಗಳನ್ನು ನಡೆಸುತ್ತಾರೆ. ಅಕ್ಟೋಬರ್ 2025 ರಲ್ಲಿ TVC ಯ ಮೊದಲ ಫೊರೇಜ್ & ಫೀಸ್ಟ್ ಕ್ಯಾಂಪ್ ರಾತ್ರಿಯನ್ನು ಇವರೇ ನಡೆಸಿಕೊಟ್ಟರು.
+
+<figure class="poster">
+
+![ವೇಳಾಪಟ್ಟಿ, ಒಳಗೊಂಡಿರುವುದು, ₹2,250 ನೋಂದಣಿ ಶುಲ್ಕ, ಮತ್ತು Linger ಅವರ WhatsApp ಸಂಪರ್ಕ ವಿವರಗಳೊಂದಿಗೆ Foraging Day ಈವೆಂಟ್ ಪೋಸ್ಟರ್](/images/events/2026-10-10-foraging-day/poster.jpeg)
+
+<figcaption>ಈವೆಂಟ್ ಪೋಸ್ಟರ್</figcaption>
+
+</figure>
+
 ## ವೇಳಾಪಟ್ಟಿ
 
 | ಸಮಯ | ಚಟುವಟಿಕೆ |

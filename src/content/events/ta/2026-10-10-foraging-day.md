@@ -18,6 +18,16 @@ whatsapp:
 
 Tamarind Valley Collective-இல் ஒரு சனிக்கிழமை உணவு தேடுதல், சமைத்தல், மற்றும் ஒன்றாக உண்ணுவதற்காக **[@foragingtrailsandtales](https://www.instagram.com/foragingtrailsandtales/)** உடன் இணையுங்கள்.
 
+இந்த நாளை **[சுபாஷினி](https://www.instagram.com/greensofkanakapura/) மற்றும் [அர்ச்சனா](https://www.instagram.com/mylittlethoughtslane/)** அவர்கள், **[ஃபோரேஜிங் டிரெயில்ஸ் அண்ட் டேல்ஸ்](/people/partners#foraging-trails-and-tales)** மூலம் நடத்துகிறார்கள் — இவர்கள் பெங்களூரு சுற்றுவட்டாரத்தில் காட்டு-உணவு நடைப்பயணங்கள், தாவர இனங்காணல், மற்றும் பண்ணையிலிருந்து-மேசைக்கு சமையல் அமர்வுகளை நடத்துகிறார்கள். அக்டோபர் 2025 இல் TVC-யின் முதல் Forage & Feast முகாம் இரவையும் இவர்களே நடத்தினர்.
+
+<figure class="poster">
+
+![அட்டவணை, சேர்க்கப்பட்டவை, ₹2,250 பதிவுக் கட்டணம், மற்றும் Linger-இன் WhatsApp தொடர்பு விவரங்களுடன் கூடிய Foraging Day நிகழ்வு போஸ்டர்](/images/events/2026-10-10-foraging-day/poster.jpeg)
+
+<figcaption>நிகழ்வு போஸ்டர்</figcaption>
+
+</figure>
+
 ## அட்டவணை
 
 | நேரம் | செயல்பாடு |
