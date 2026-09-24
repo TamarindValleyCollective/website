@@ -42,14 +42,17 @@ export async function fetchBasePaymentLink(referenceId: string): Promise<Razorpa
   if (!res.ok) {
     throw new Error(`Razorpay fetch payment_links failed: ${res.status} ${await res.text()}`);
   }
-  const data = (await res.json()) as { items: RazorpayPaymentLink[] };
-  if (data.items.length === 0) {
+  // Razorpay's list endpoints use "payment_links" as the collection key here
+  // (not "items" - that's the shape of some of their other list endpoints,
+  // e.g. orders/payments; confirmed against the real API, see PR fixing this).
+  const data = (await res.json()) as { payment_links: RazorpayPaymentLink[] };
+  if (data.payment_links.length === 0) {
     throw new Error(`No Payment Link found with reference_id "${referenceId}"`);
   }
-  if (data.items.length > 1) {
+  if (data.payment_links.length > 1) {
     throw new Error(`Multiple Payment Links found with reference_id "${referenceId}" — expected exactly one`);
   }
-  return data.items[0];
+  return data.payment_links[0];
 }
 
 export interface CreatePaymentLinkParams {
