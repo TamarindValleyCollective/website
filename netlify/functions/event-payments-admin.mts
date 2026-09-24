@@ -17,7 +17,7 @@
 import {
   listPaymentsForEvent,
   getPaymentById,
-  recordRefund,
+  recordRefundInitiated,
   requestCancellationIfNew,
 } from '../../scripts/lib/event-payments-db.mjs';
 import { createRefund } from './lib/razorpay';
@@ -89,12 +89,16 @@ async function authenticate(req: Request): Promise<AuthResult> {
   return { ok: true, email };
 }
 
-// A row counts as cancelled once refunded_at is set — cancellation_
-// requested_at alone (0019) only means a guest asked; see the 0020
-// migration comment. "requested" surfaces a guest ask still waiting on an
-// admin to act, distinct from a plain "paid" row with no request at all.
-function statusFor(row: any): 'paid' | 'requested' | 'refunded' {
+// Razorpay is the source of truth for whether a refund actually completed —
+// refunded_at is only ever set by razorpay-webhook.mts's refund.processed
+// handler (confirmRefundProcessed), never by initiation itself. A row counts
+// as cancelled/refunded once that's set; "requested" surfaces a guest ask
+// still waiting on an admin to act, distinct from a plain "paid" row with no
+// request at all. See the 0020/0022 migration comments.
+function statusFor(row: any): 'paid' | 'requested' | 'refund_initiated' | 'refund_failed' | 'refunded' {
   if (row.refunded_at) return 'refunded';
+  if (row.refund_status === 'failed') return 'refund_failed';
+  if (row.refund_initiated_at) return 'refund_initiated';
   if (row.cancellation_requested_at) return 'requested';
   return 'paid';
 }
@@ -135,6 +139,7 @@ async function handleBookings(url: URL): Promise<Response> {
     currency: r.currency,
     createdAt: r.created_at,
     cancellationRequestedAt: r.cancellation_requested_at,
+    refundInitiatedAt: r.refund_initiated_at,
     refundedAt: r.refunded_at,
     refundAmount: r.refund_amount,
     refundStatus: r.refund_status,
@@ -176,8 +181,8 @@ async function sendRefundEmail(params: {
   const html = `<!doctype html>
 <html><head><meta charset="utf-8" /></head>
 <body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f;">
-  <p>We've issued a refund of <strong>${formatAmount(params.refundAmount, params.currency)}</strong> for your booking for <strong>${params.eventTitle}</strong> (payment ${params.paymentId}).</p>
-  <p>It should reach your original payment method within a few business days, per Razorpay's usual refund timelines.</p>
+  <p>We've started a refund of <strong>${formatAmount(params.refundAmount, params.currency)}</strong> for your booking for <strong>${params.eventTitle}</strong> (payment ${params.paymentId}).</p>
+  <p>It's being processed by Razorpay now and should reach your original payment method within a few business days.</p>
   <p>Questions? Reply to this email or reach us at <a href="mailto:core-team@tvc.farm">core-team@tvc.farm</a>.</p>
 </body></html>`;
   const res = await fetch(RESEND_API_URL, {
@@ -187,7 +192,7 @@ async function sendRefundEmail(params: {
       from: FROM,
       to: [params.payerEmail],
       cc: NOTIFY_CC,
-      subject: `Refund issued — ${params.eventTitle}`,
+      subject: `Refund initiated — ${params.eventTitle}`,
       html,
     }),
   });
@@ -221,6 +226,13 @@ async function handleRefund(req: Request, adminEmail: string): Promise<Response>
   }
   if (!row) return jsonResponse({ error: 'Booking not found' }, 404);
   if (row.refunded_at) return jsonResponse({ error: 'This booking has already been refunded' }, 409);
+  // A previously *failed* attempt can be retried (refund_status === 'failed'
+  // with refunded_at still null) — anything else with an initiation on
+  // record (pending/created, not yet confirmed either way) is still in
+  // flight and shouldn't get a second, concurrent refund started against it.
+  if (row.refund_initiated_at && row.refund_status !== 'failed') {
+    return jsonResponse({ error: 'A refund is already in progress for this booking' }, 409);
+  }
   if (amount > row.amount) {
     return jsonResponse({ error: 'Refund amount cannot exceed the amount paid' }, 400);
   }
@@ -240,9 +252,11 @@ async function handleRefund(req: Request, adminEmail: string): Promise<Response>
   // The refund is real at this point — a failure past here only affects our
   // own records/notifications, so it's logged rather than surfaced as if
   // the refund itself failed (same asymmetry as whatsapp-admin.mts's
-  // Meta-succeeded-but-local-write-failed handling).
+  // Meta-succeeded-but-local-write-failed handling). This only ever records
+  // *initiation* — refunded_at gets set later, by razorpay-webhook.mts's
+  // refund.processed handler, once Razorpay itself confirms completion.
   try {
-    await recordRefund(id, {
+    await recordRefundInitiated(id, {
       razorpayRefundId: refund.id,
       amount: refund.amount,
       status: refund.status,

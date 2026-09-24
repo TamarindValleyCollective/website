@@ -1,8 +1,9 @@
 // Data-access layer for the event_payments table (see
 // supabase/migrations/0018_event_payments.sql,
 // 0019_event_payments_cancellation.sql,
-// 0020_event_payments_refunds.sql, 0021_event_payments_mode.sql) in the
-// "TVC ERP" Supabase project.
+// 0020_event_payments_refunds.sql, 0021_event_payments_mode.sql,
+// 0022_event_payments_refund_initiated.sql) in the "TVC ERP" Supabase
+// project.
 // Mirrors supabase.mjs/accommodation-db.mjs's hand-rolled PostgREST style
 // (no @supabase/supabase-js) and reuses supabase.mjs's restHeaders for the
 // same service_role auth. Used by netlify/functions/razorpay-webhook.mts
@@ -162,35 +163,105 @@ export async function listPaymentsForEvent(eventReferenceId) {
   return res.json();
 }
 
-// Records a refund actually issued through Razorpay's API, but only the
-// first time for a given row — guarded on refunded_at=is.null the same way
-// requestCancellationIfNew guards cancellation_requested_at, so a
-// double-click (or a retried request) can't record — or imply — a second
-// refund against the same payment. The caller (event-payments-admin.mts)
-// calls Razorpay first and only reaches this once that's confirmed to have
-// succeeded, so "recorded" here always means "money actually moved." A
-// proactive admin refund may not have gone through the guest-facing
-// /cancel-booking request flow at all — the caller separately calls
-// requestCancellationIfNew for the same id when that's the case, so the row
-// reads as fully cancelled either way without this function overwriting an
-// earlier guest-initiated timestamp itself.
+// Records that a refund has been *initiated* — called by
+// event-payments-admin.mts right after a successful Razorpay API call, and
+// by razorpay-webhook.mts's refund.created handler for refunds started
+// directly in the Razorpay dashboard (where there's no admin-page moment to
+// record it from at all). Deliberately does NOT set refunded_at — Razorpay
+// is the source of truth for whether a refund actually completed, not our
+// own synchronous API response or the mere existence of a refund object, so
+// this only ever produces a "refund initiated" state until
+// confirmRefundProcessed() below hears otherwise.
+//
+// Guarded on refund_initiated_at=is.null OR the row's last attempt having
+// failed, so: whichever of the two callers reaches Supabase first wins for
+// a *first* attempt (same idempotent-update shape as
+// requestCancellationIfNew — normally our own admin-triggered POST, since
+// it happens synchronously right after the Razorpay call succeeds, well
+// before that same event reaches us again via webhook); and a *retried*
+// attempt after event-payments-admin.mts's own failed-attempt check
+// overwrites the stale failed attempt's fields with the new one's.
 /**
  * @param {string} id row id
  * @param {{ razorpayRefundId: string, amount: number, status: string, refundedBy: string }} params
- * @returns {Promise<boolean>} true if this call is the one that recorded the refund
+ * @returns {Promise<boolean>} true if this call is the one that recorded the initiation
  */
-export async function recordRefund(id, { razorpayRefundId, amount, status, refundedBy }) {
-  const res = await fetch(`${supabaseUrl()}/rest/v1/event_payments?id=eq.${id}&refunded_at=is.null`, {
-    method: 'PATCH',
-    headers: restHeaders({ Prefer: 'return=representation' }),
-    body: JSON.stringify({
-      razorpay_refund_id: razorpayRefundId,
-      refund_amount: amount,
-      refund_status: status,
-      refunded_at: new Date().toISOString(),
-      refunded_by: refundedBy,
-    }),
-  });
+export async function recordRefundInitiated(id, { razorpayRefundId, amount, status, refundedBy }) {
+  const res = await fetch(
+    `${supabaseUrl()}/rest/v1/event_payments?id=eq.${id}&or=(refund_initiated_at.is.null,refund_status.eq.failed)`,
+    {
+      method: 'PATCH',
+      headers: restHeaders({ Prefer: 'return=representation' }),
+      body: JSON.stringify({
+        razorpay_refund_id: razorpayRefundId,
+        refund_amount: amount,
+        refund_status: status,
+        refund_initiated_at: new Date().toISOString(),
+        refunded_by: refundedBy,
+      }),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`Supabase update to event_payments failed: ${res.status} ${await res.text()}`);
+  }
+  const rows = await res.json();
+  return rows.length > 0;
+}
+
+// The only place refunded_at gets set — called from razorpay-webhook.mts's
+// refund.processed handler, i.e. only once Razorpay itself confirms the
+// refund actually completed. This is what the dashboard's "cancelled"/net-
+// collected stats key off, not initiation.
+//
+// Guarded on razorpay_refund_id matching the specific refund that was
+// confirmed (not just "this row has some refund recorded") and
+// refunded_at=is.null, so a retried/duplicate webhook delivery is a no-op
+// and a stale confirmation for an old, superseded refund attempt can't
+// clobber a newer one.
+/**
+ * @param {string} id row id
+ * @param {string} razorpayRefundId the specific refund (rfnd_xxx) that was confirmed
+ * @param {string} status Razorpay's own status string, e.g. 'processed'
+ * @returns {Promise<boolean>} true if this call is the one that confirmed the row
+ */
+export async function confirmRefundProcessed(id, razorpayRefundId, status) {
+  const res = await fetch(
+    `${supabaseUrl()}/rest/v1/event_payments?id=eq.${encodeURIComponent(id)}&razorpay_refund_id=eq.${encodeURIComponent(razorpayRefundId)}&refunded_at=is.null`,
+    {
+      method: 'PATCH',
+      headers: restHeaders({ Prefer: 'return=representation' }),
+      body: JSON.stringify({ refund_status: status, refunded_at: new Date().toISOString() }),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`Supabase update to event_payments failed: ${res.status} ${await res.text()}`);
+  }
+  const rows = await res.json();
+  return rows.length > 0;
+}
+
+// Records that an initiated refund actually failed — refunded_at was never
+// optimistically set (see recordRefundInitiated above), so there's nothing
+// to revert, just refund_status to update so the row stops reading as
+// "in progress" and the admin can retry.
+//
+// Same razorpay_refund_id + refunded_at=is.null guard as
+// confirmRefundProcessed: only applies to the specific attempt that failed,
+// and never touches a row whose refund already confirmed processed.
+/**
+ * @param {string} id row id
+ * @param {string} razorpayRefundId the specific refund (rfnd_xxx) that failed
+ * @returns {Promise<boolean>} true if this call is the one that recorded the failure
+ */
+export async function markRefundFailed(id, razorpayRefundId) {
+  const res = await fetch(
+    `${supabaseUrl()}/rest/v1/event_payments?id=eq.${encodeURIComponent(id)}&razorpay_refund_id=eq.${encodeURIComponent(razorpayRefundId)}&refunded_at=is.null`,
+    {
+      method: 'PATCH',
+      headers: restHeaders({ Prefer: 'return=representation' }),
+      body: JSON.stringify({ refund_status: 'failed' }),
+    },
+  );
   if (!res.ok) {
     throw new Error(`Supabase update to event_payments failed: ${res.status} ${await res.text()}`);
   }

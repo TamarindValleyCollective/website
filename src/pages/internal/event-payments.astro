@@ -298,6 +298,19 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     color: var(--tvc-ink-soft);
   }
 
+  .badge--refund-initiated {
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+  }
+
+  .badge--refund-failed {
+    /* Same pale-red/dark-red pairing as global.css's .callout--red — that
+       comment confirms #f9e2df needs the darker #9c4438 text, not
+       --tvc-error-text/--tvc-orange-text, to actually pass WCAG AA. */
+    background: #f9e2df;
+    color: #9c4438;
+  }
+
   .refund-row td {
     background: var(--tvc-cream);
   }
@@ -370,7 +383,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     currency: string;
     createdAt: string;
     refundAmount: number | null;
-    status: 'paid' | 'requested' | 'refunded';
+    status: 'paid' | 'requested' | 'refund_initiated' | 'refund_failed' | 'refunded';
     isTest: boolean;
   }
 
@@ -501,6 +514,8 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
 
   function statusBadge(status: Booking['status']): string {
     if (status === 'refunded') return '<span class="badge badge--refunded">Refunded</span>';
+    if (status === 'refund_failed') return '<span class="badge badge--refund-failed">Refund failed</span>';
+    if (status === 'refund_initiated') return '<span class="badge badge--refund-initiated">Refund initiated</span>';
     if (status === 'requested') return '<span class="badge badge--requested">Cancellation requested</span>';
     return '<span class="badge badge--paid">Paid</span>';
   }
@@ -661,11 +676,18 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
       if (booking.status === 'refunded') {
         actionCell.textContent = `Refunded ${formatAmount(booking.refundAmount ?? 0, booking.currency)}`;
         actionCell.className = 'payer-contact';
+      } else if (booking.status === 'refund_initiated') {
+        // No button here — a second concurrent attempt would be rejected
+        // server-side anyway (event-payments-admin.mts's in-progress check).
+        // Razorpay's own refund.processed/refund.failed webhook is what
+        // moves this row forward, not another click.
+        actionCell.textContent = 'Awaiting Razorpay confirmation';
+        actionCell.className = 'payer-contact';
       } else {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'button';
-        btn.textContent = 'Cancel & refund';
+        btn.textContent = booking.status === 'refund_failed' ? 'Retry refund' : 'Cancel & refund';
         btn.addEventListener('click', () => openRefundRow(booking));
         actionCell.appendChild(btn);
       }

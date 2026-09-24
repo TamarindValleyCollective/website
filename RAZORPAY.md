@@ -66,18 +66,32 @@ Linger + the guest.
   save (a real gap we hit and fixed 2026-09-24: the webhook secret was updated but the running
   function still had the old value until the next deploy).
 
-**Refunds sync back regardless of where they're initiated.** `razorpay-webhook.mts` also handles
-`refund.created`/`refund.processed`, looking the payment up by `razorpay_payment_id` and recording
-the refund the same way `event-payments-admin.mts`'s own refund action does
-(`recordRefund()`, refunded-by set to `'razorpay (synced via webhook)'` since there's no signed-in
-admin to attribute it to on this path). This means a refund issued straight from the Razorpay
-dashboard — not through `/internal/event-payments` — still shows up correctly there.
-`recordRefund()`'s `refunded_at is.null` guard makes both paths safe together: whichever one
-reaches Supabase first wins, the other is a no-op. **Requires `refund.created` and
-`refund.processed` to actually be added to the webhook's subscribed events in the Razorpay
-dashboard** — Razorpay's webhook-management API is Partner-only (OAuth + a sub-merchant
-`account_id`), not available to a direct merchant account like this one, so this can't be done
-via API and needs the dashboard toggle.
+**Razorpay is the source of truth for whether a refund actually completed — not our own API call.**
+Initiating a refund (from `/internal/event-payments`, or directly in the Razorpay dashboard) only
+ever marks an `event_payments` row **refund initiated**; `refunded_at` — the field the dashboard's
+stats and "cancelled" status actually key off — is set only once Razorpay's own
+`refund.processed` webhook confirms it. `razorpay-webhook.mts` handles all three refund events:
+
+- `refund.created` — records initiation (`recordRefundInitiated()`) if nothing has recorded it yet.
+  For an admin-triggered refund this is normally a no-op (`event-payments-admin.mts` already
+  recorded initiation synchronously right after its own Razorpay API call succeeded); for a refund
+  started directly in the Razorpay dashboard, this is the *only* place it gets recorded at all.
+- `refund.processed` — the only place `refunded_at` gets set (`confirmRefundProcessed()`).
+- `refund.failed` — flips `refund_status` to `'failed'` (`markRefundFailed()`) so the row reads as
+  refund-attempt-failed rather than either "still paid" (wrong — money may be mid-transit) or
+  silently stuck showing "refund initiated" forever. `/internal/event-payments` lets an admin
+  retry from there.
+
+All three guard on `razorpay_refund_id` (and `refunded_at is.null` where relevant) so whichever
+path reaches Supabase first wins and a duplicate/out-of-order webhook delivery is a no-op — see
+`scripts/lib/event-payments-db.mjs`'s comments on each function for the exact guard shape.
+Migration `0022_event_payments_refund_initiated.sql` adds the `refund_initiated_at` column this
+depends on. **Requires `refund.created`, `refund.processed`, and `refund.failed` to actually be
+added to the webhook's subscribed events in the Razorpay dashboard** — Razorpay's
+webhook-management API is Partner-only (OAuth + a sub-merchant `account_id`), not available to a
+direct merchant account like this one, so this can't be done via API and needs the dashboard
+toggle (done 2026-09-24, all four refund events enabled — `refund.speed_changed` too, though
+nothing acts on it since it doesn't change whether a refund completed).
 - `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` / `RESEND_API_KEY` — all reused as-is from the
   WhatsApp integration, no new credentials needed.
 
@@ -90,17 +104,21 @@ reverified directly against the API before going live.
 **Internal admin page:** `/internal/event-payments` (Google Sign-In + the same core-team
 allow-list as `/internal/whatsapp`/`/internal/photo-pool`, via
 `netlify/functions/event-payments-admin.mts`) shows registrations, cancellations, and money
-collected per event, and can **issue a real refund** for a booking — calling Razorpay's refund
+collected per event, and can **trigger a real refund** for a booking — calling Razorpay's refund
 API (`POST /v1/payments/:id/refund`, via `createRefund` in `netlify/functions/lib/razorpay.ts`)
 directly, since Razorpay's own MCP server has fetch/list tools for refunds but no way to create
 one. The page pre-fills a suggested amount from `/refund-policy`'s day-before-event tiers
 (75%/50%/0%), which the admin can override, and requires an explicit two-step confirm before
-anything is sent — no one-click refund. A successful refund is recorded on the `event_payments`
-row (`razorpay_refund_id`, `refund_amount`, `refund_status`, `refunded_at`, `refunded_by` —
-migration `0020_event_payments_refunds.sql`) and emails the payer a confirmation (cc
-`core-team@tvc.farm`/`stay@linger.in`). This is the same underlying table `/cancel-booking`
-writes `cancellation_requested_at` to (a guest-initiated *request*, not a refund) — a row only
-counts as cancelled in this page's stats once `refunded_at` is actually set.
+anything is sent — no one-click refund. A successful API call only ever records **initiation**
+(`razorpay_refund_id`, `refund_amount`, `refund_status`, `refund_initiated_at`, `refunded_by` —
+migration `0020_event_payments_refunds.sql`/`0022_event_payments_refund_initiated.sql`) and emails
+the payer that a refund has started (cc `core-team@tvc.farm`/`stay@linger.in`); `refunded_at`
+itself is set later, only once Razorpay's `refund.processed` webhook confirms completion — see
+"Razorpay is the source of truth" above. A row shows a **Refund initiated** badge in between, and
+**Refund failed** with a retry option if Razorpay reports `refund.failed`. This is the same
+underlying table `/cancel-booking` writes `cancellation_requested_at` to (a guest-initiated
+*request*, not a refund) — a row only counts as cancelled in this page's stats once `refunded_at`
+is actually set.
 
 **Test-mode payments are hidden by default.** Razorpay's `payment_link.paid` webhook payload
 carries no explicit test/live flag, so `razorpay-webhook.mts` derives one itself at the moment it
