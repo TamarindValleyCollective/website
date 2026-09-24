@@ -88,6 +88,38 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
 </style>
 
 <script>
+  // Same-device convenience only, no server lookup - a returning visitor on
+  // the same browser gets name/email/phone prefilled from their last
+  // successful booking (any event, since this form is reused across all of
+  // them). Deliberately not a cross-device "existing customer" lookup by
+  // phone/email, which would need to be gated behind proof of ownership
+  // (e.g. a WhatsApp-delivered code) to avoid becoming a PII-enumeration
+  // endpoint - out of scope for this simple prefill.
+  const CONTACT_STORAGE_KEY = 'tvc-booking-contact';
+
+  interface SavedContact {
+    name: string;
+    email: string;
+    phone: string;
+  }
+
+  function loadSavedContact(): SavedContact | null {
+    try {
+      const raw = localStorage.getItem(CONTACT_STORAGE_KEY);
+      return raw ? (JSON.parse(raw) as SavedContact) : null;
+    } catch {
+      return null; // private browsing, blocked storage, corrupt value, etc.
+    }
+  }
+
+  function saveContact(contact: SavedContact) {
+    try {
+      localStorage.setItem(CONTACT_STORAGE_KEY, JSON.stringify(contact));
+    } catch {
+      // Same as above - a failed save just means no prefill next time.
+    }
+  }
+
   function toIntOrNull(s: string): number | null {
     const cleaned = s.replace(/[^\d]/g, '');
     return cleaned ? Number.parseInt(cleaned, 10) : null;
@@ -96,10 +128,20 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
   document.querySelectorAll<HTMLFormElement>('.event-booking-form').forEach((form) => {
     const referenceId = form.dataset.referenceId ?? '';
     const unitAmount = toIntOrNull(form.dataset.unitAmount ?? '');
+    const nameInput = form.querySelector<HTMLInputElement>('input[name="name"]');
+    const emailInput = form.querySelector<HTMLInputElement>('input[name="email"]');
+    const phoneInput = form.querySelector<HTMLInputElement>('input[name="phone"]');
     const countSelect = form.querySelector<HTMLSelectElement>('select[name="attendeeCount"]');
     const totalEl = form.querySelector<HTMLElement>('.field-total__amount');
     const errorEl = form.querySelector<HTMLElement>('.booking-form__error');
     const submitBtn = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+
+    const saved = loadSavedContact();
+    if (saved) {
+      if (nameInput && !nameInput.value) nameInput.value = saved.name;
+      if (emailInput && !emailInput.value) emailInput.value = saved.email;
+      if (phoneInput && !phoneInput.value) phoneInput.value = saved.phone;
+    }
 
     function updateTotal() {
       if (!countSelect || !totalEl || unitAmount === null) return;
@@ -135,6 +177,11 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
         });
         const json = await res.json();
         if (!res.ok || !json.url) throw new Error(json.error || 'Something went wrong');
+        saveContact({
+          name: String(data.get('name') ?? ''),
+          email: String(data.get('email') ?? ''),
+          phone: String(data.get('phone') ?? ''),
+        });
         window.location.href = json.url;
       } catch (err) {
         if (errorEl) {
