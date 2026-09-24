@@ -95,7 +95,7 @@ flowchart TD
         FUNC_SRC8["netlify/functions/whatsapp-stale-alert.mts<br/>Scheduled function (cron, every 15 min) —<br/>emails core-team@tvc.farm one digest of<br/>WhatsApp conversations unread 60+ min,<br/>re-sent hourly per conversation until read"]
         FUNC_SRC9["netlify/functions/accommodation-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>full tent-booking CRUD backed by Postgres<br/>(EXCLUDE constraints make double-booking<br/>physically impossible), guest directory,<br/>full audit log, past-booking justification"]
         FUNC_SRC11["netlify/functions/event-booking.mts<br/>Serverless function — reads an event's base<br/>Payment Link price via Razorpay's API,<br/>multiplies by attendee count, creates a<br/>fresh per-booking Payment Link, redirects"]
-        FUNC_SRC12["netlify/functions/razorpay-webhook.mts<br/>Serverless function — verifies payment_link.paid<br/>signature, records payment in Supabase<br/>(idempotent), emails a branded receipt"]
+        FUNC_SRC12["netlify/functions/razorpay-webhook.mts<br/>Serverless function — verifies signature, records<br/>payment_link.paid in Supabase (idempotent), emails<br/>a branded receipt; also syncs refund.created/<br/>refund.processed back regardless of where a refund<br/>was initiated"]
         FUNC_SRC13["netlify/functions/cancel-booking.mts<br/>Serverless function — records a guest's<br/>cancellation request (not an automatic<br/>refund), notifies TVC + Linger + guest"]
         FUNC_SRC14["netlify/functions/event-payments-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>per-event registrations/cancellations/money<br/>collected from Supabase, issues real Razorpay<br/>refunds (tier-suggested, admin-confirmed)"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
@@ -198,7 +198,7 @@ flowchart TD
     APIFN8 -.->|"send digest email"| RESEND
     BOOKINGFORM --> APIFN11
     APIFN11 -.->|"fetch base link price,<br/>create per-booking link"| RAZORPAY
-    RAZORPAY -.->|"payment_link.paid webhook"| APIFN12
+    RAZORPAY -.->|"payment_link.paid /<br/>refund.created / refund.processed webhooks"| APIFN12
     APIFN12 -.->|"record payment<br/>(idempotent)"| SUPABASE
     APIFN12 -.->|"send branded receipt"| RESEND
     CANCELPAGE --> APIFN13
@@ -510,7 +510,12 @@ outside both the local machine and Netlify (the member-update-email workflow).
   directly, or by `event-booking.mts` above on a per-booking link. **Live** as of 2026-09-24 — a
   real signature-mismatch was hit and fixed the same day (the webhook secret was updated in both
   places, but Netlify Functions only pick up an environment variable change on the *next* deploy,
-  not immediately — a real, documented Netlify behavior, not a bug in this code).
+  not immediately — a real, documented Netlify behavior, not a bug in this code). Also subscribed
+  to `refund.created`/`refund.processed` (added to the dashboard config 2026-09-24) — a refund
+  issued straight from the Razorpay dashboard, not through `/internal/event-payments`, still gets
+  recorded on the matching row via `recordRefund()`, the same idempotent-guarded update
+  `event-payments-admin.mts`'s own refund action uses, so whichever path reaches Supabase first
+  wins and the other is a no-op.
 - **`netlify/functions/cancel-booking.mts`** — backs `src/pages/cancel-booking.astro`, linked
   from the receipt email above. A guest-initiated **cancellation request**, not an automatic
   refund: TVC's `/refund-policy` has day-before-event tiers a human applies by hand, so this only

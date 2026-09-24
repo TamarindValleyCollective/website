@@ -1,18 +1,27 @@
 // Netlify Function (v2 API) — Razorpay's webhook endpoint, subscribed to
-// payment_link.paid (configured in the Razorpay dashboard, Settings >
-// Webhooks; see RAZORPAY.md's setup notes). Records every event payment and
-// emails a branded receipt, with zero per-event code: everything it needs
-// (which event, how many people) travels in the Payment Link's own `notes`,
-// set either by hand when a base link is created (see RAZORPAY.md's table)
-// or by event-booking.mts when it creates a per-booking link on top of one.
+// payment_link.paid and refund.created/refund.processed (configured in the
+// Razorpay dashboard, Settings > Webhooks; see RAZORPAY.md's setup notes).
+// Records every event payment and emails a branded receipt, with zero
+// per-event code: everything it needs (which event, how many people)
+// travels in the Payment Link's own `notes`, set either by hand when a base
+// link is created (see RAZORPAY.md's table) or by event-booking.mts when it
+// creates a per-booking link on top of one.
 //
 // Payments made by paying a base link directly (no EventBookingForm/
 // event-booking.mts involved — e.g. the very first links created before
 // this flow existed) are also recorded correctly: notes.baseReferenceId is
 // simply absent, so this falls back to the link's own reference_id, and
 // attendeeCount defaults to 1.
+//
+// Also syncs refunds back to event_payments regardless of where they were
+// initiated — event-payments-admin.mts's own refund action already writes
+// the row directly, but a refund issued straight from the Razorpay
+// dashboard (or any other API caller) would otherwise never reach our
+// records. recordRefund()'s refunded_at=is.null guard makes handling both
+// paths safe: whichever one reaches Supabase first wins, the other is a
+// no-op.
 import { verifyWebhookSignature } from './lib/razorpay';
-import { recordPaymentIfNew, markReceiptSent } from '../../scripts/lib/event-payments-db.mjs';
+import { recordPaymentIfNew, markReceiptSent, getPaymentByRazorpayId, recordRefund } from '../../scripts/lib/event-payments-db.mjs';
 import { buildReceiptSubject, buildReceiptHtml } from './lib/payment-receipt';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
@@ -46,11 +55,19 @@ interface RazorpayPaymentLinkEntity {
   currency: string;
 }
 
+interface RazorpayRefundEntity {
+  id: string;
+  amount: number;
+  payment_id: string;
+  status: string;
+}
+
 interface RazorpayWebhookPayload {
   event: string;
   payload: {
     payment_link?: { entity: RazorpayPaymentLinkEntity };
     payment?: { entity: RazorpayPaymentEntity };
+    refund?: { entity: RazorpayRefundEntity };
   };
 }
 
@@ -85,6 +102,45 @@ async function sendReceiptEmail(params: {
   }
 }
 
+async function handleRefundEvent(payload: RazorpayWebhookPayload): Promise<Response> {
+  const refund = payload.payload.refund?.entity;
+  if (!refund) {
+    console.error(`[razorpay-webhook] ${payload.event} payload missing refund entity`);
+    return jsonResponse({ error: 'Malformed payload' }, 400);
+  }
+
+  let row;
+  try {
+    row = await getPaymentByRazorpayId(refund.payment_id);
+  } catch (err) {
+    console.error('[razorpay-webhook] Failed to look up payment for refund sync', err);
+    return jsonResponse({ error: 'Failed to reach the payment store' }, 500);
+  }
+  if (!row) {
+    // A refund against a payment this table never recorded (e.g. one of the
+    // hand-linked Payment Links documented separately in RAZORPAY.md, paid
+    // and refunded entirely outside this module) — nothing to sync.
+    return jsonResponse({ ok: true, skipped: 'no matching event_payments row' });
+  }
+
+  try {
+    // 'razorpay (synced via webhook)' rather than an admin's email — this
+    // path fires for a refund issued directly in the Razorpay dashboard (or
+    // by any other API caller), not through event-payments-admin.mts, so
+    // there's no signed-in admin to attribute it to.
+    const recordedNow = await recordRefund(row.id, {
+      razorpayRefundId: refund.id,
+      amount: refund.amount,
+      status: refund.status,
+      refundedBy: 'razorpay (synced via webhook)',
+    });
+    return jsonResponse({ ok: true, recorded: recordedNow });
+  } catch (err) {
+    console.error('[razorpay-webhook] Failed to sync refund', err);
+    return jsonResponse({ error: 'Failed to record refund' }, 500);
+  }
+}
+
 export default async (req: Request): Promise<Response> => {
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
 
@@ -109,8 +165,16 @@ export default async (req: Request): Promise<Response> => {
     return jsonResponse({ error: 'Invalid request body' }, 400);
   }
 
-  // Only payment_link.paid is subscribed to in the dashboard, but ack
-  // anything else with 200 rather than erroring — Razorpay retries non-2xx
+  // refund.created and refund.processed both land here — whichever arrives
+  // first records the refund (recordRefund's own guard makes the second a
+  // no-op), so there's no need to pick just one.
+  if (payload.event === 'refund.created' || payload.event === 'refund.processed') {
+    return handleRefundEvent(payload);
+  }
+
+  // Ack anything else (including refund.failed, not handled — a failed
+  // refund attempt leaves the booking as still-paid, which is already
+  // correct) with 200 rather than erroring — Razorpay retries non-2xx
   // responses, and a future webhook subscribed to more events shouldn't
   // start failing here just because this function hasn't caught up yet.
   if (payload.event !== 'payment_link.paid') {
