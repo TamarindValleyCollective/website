@@ -99,17 +99,30 @@ function statusFor(row: any): 'paid' | 'requested' | 'refunded' {
   return 'paid';
 }
 
+// `mode` is set at webhook time (razorpay-webhook.mts) from whichever
+// Razorpay key actually processed the payment — deterministic, not a guess.
+// A row with no mode recorded (shouldn't happen post-migration 0021, but
+// defensive against any gap) is treated as real rather than hidden: showing
+// an uncertain row is a smaller mistake than hiding a real registration.
+function isTestPayment(row: any): boolean {
+  return row.mode === 'test';
+}
+
 async function handleBookings(url: URL): Promise<Response> {
   const eventReferenceId = url.searchParams.get('eventReferenceId')?.trim();
   if (!eventReferenceId) return jsonResponse({ error: 'eventReferenceId is required' }, 400);
+  const includeTest = url.searchParams.get('includeTest') === '1';
 
-  let rows: any[];
+  let allRows: any[];
   try {
-    rows = await listPaymentsForEvent(eventReferenceId);
+    allRows = await listPaymentsForEvent(eventReferenceId);
   } catch (err) {
     console.error('Failed to list event_payments', err);
     return jsonResponse({ error: 'Failed to reach the payment store' }, 502);
   }
+
+  const testPaymentCount = allRows.filter(isTestPayment).length;
+  const rows = includeTest ? allRows : allRows.filter((r) => !isTestPayment(r));
 
   const bookings = rows.map((r) => ({
     id: r.id,
@@ -127,6 +140,7 @@ async function handleBookings(url: URL): Promise<Response> {
     refundStatus: r.refund_status,
     refundedBy: r.refunded_by,
     status: statusFor(r),
+    isTest: isTestPayment(r),
   }));
 
   const grossCollected = rows.reduce((sum, r) => sum + r.amount, 0);
@@ -134,6 +148,7 @@ async function handleBookings(url: URL): Promise<Response> {
 
   return jsonResponse({
     bookings,
+    testPaymentCount,
     aggregates: {
       bookingCount: rows.length,
       totalAttendees: rows.reduce((sum, r) => sum + (r.attendee_count ?? 1), 0),

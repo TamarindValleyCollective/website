@@ -1,7 +1,8 @@
 // Data-access layer for the event_payments table (see
 // supabase/migrations/0018_event_payments.sql,
 // 0019_event_payments_cancellation.sql,
-// 0020_event_payments_refunds.sql) in the "TVC ERP" Supabase project.
+// 0020_event_payments_refunds.sql, 0021_event_payments_mode.sql) in the
+// "TVC ERP" Supabase project.
 // Mirrors supabase.mjs/accommodation-db.mjs's hand-rolled PostgREST style
 // (no @supabase/supabase-js) and reuses supabase.mjs's restHeaders for the
 // same service_role auth. Used by netlify/functions/razorpay-webhook.mts
@@ -22,7 +23,7 @@ function supabaseUrl() {
 // round-trip (the same race a plain read-then-write would have under
 // concurrent retries).
 /**
- * @param {{ eventReferenceId: string, eventTitle: string, razorpayPaymentId: string, razorpayPaymentLinkId: string, amount: number, currency: string, attendeeCount?: number, payerName?: string | null, payerEmail?: string, payerContact?: string }} params
+ * @param {{ eventReferenceId: string, eventTitle: string, razorpayPaymentId: string, razorpayPaymentLinkId: string, amount: number, currency: string, attendeeCount?: number, payerName?: string | null, payerEmail?: string, payerContact?: string, mode: 'test' | 'live' }} params
  * @returns {Promise<{ id: string } | null>} the inserted row, or null if razorpayPaymentId was already recorded
  */
 export async function recordPaymentIfNew({
@@ -36,6 +37,7 @@ export async function recordPaymentIfNew({
   payerName,
   payerEmail,
   payerContact,
+  mode,
 }) {
   const res = await fetch(`${supabaseUrl()}/rest/v1/event_payments?on_conflict=razorpay_payment_id`, {
     method: 'POST',
@@ -52,6 +54,7 @@ export async function recordPaymentIfNew({
         payer_name: payerName ?? null,
         payer_email: payerEmail ?? null,
         payer_contact: payerContact ?? null,
+        mode,
       },
     ]),
   });

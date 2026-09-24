@@ -57,6 +57,12 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
       <p id="status" class="hint" hidden></p>
 
       <div id="results" hidden>
+        <p id="test-payments-notice" class="hint test-payments-notice" hidden>
+          <label>
+            <input type="checkbox" id="include-test-toggle" />
+            <span id="test-payments-notice-text"></span>
+          </label>
+        </p>
         <div class="stats">
           <div class="stat card">
             <span class="stat-label">Registrations</span>
@@ -182,6 +188,22 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     padding: 8px 10px;
     border: 1px solid var(--tvc-line);
     border-radius: 8px;
+  }
+
+  .test-payments-notice {
+    margin: 0 0 16px;
+  }
+
+  .test-payments-notice label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+
+  .badge--test {
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
   }
 
   .stats {
@@ -349,6 +371,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     createdAt: string;
     refundAmount: number | null;
     status: 'paid' | 'requested' | 'refunded';
+    isTest: boolean;
   }
 
   interface Aggregates {
@@ -376,6 +399,9 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   const statusEl = document.getElementById('status') as HTMLElement;
   const results = document.getElementById('results') as HTMLElement;
   const bookingsBody = document.getElementById('bookings-body') as HTMLElement;
+  const testPaymentsNotice = document.getElementById('test-payments-notice') as HTMLElement;
+  const testPaymentsNoticeText = document.getElementById('test-payments-notice-text') as HTMLElement;
+  const includeTestToggle = document.getElementById('include-test-toggle') as HTMLInputElement;
 
   let currentEvent: EventOption | null = null;
   let openRefundRowId: string | null = null;
@@ -593,8 +619,17 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     });
   }
 
-  function renderBookings(data: { bookings: Booking[]; aggregates: Aggregates }) {
-    const { bookings, aggregates } = data;
+  function renderBookings(data: { bookings: Booking[]; aggregates: Aggregates; testPaymentCount: number }) {
+    const { bookings, aggregates, testPaymentCount } = data;
+
+    if (testPaymentCount > 0) {
+      testPaymentsNotice.hidden = false;
+      testPaymentsNoticeText.textContent = includeTestToggle.checked
+        ? `Showing ${testPaymentCount} test payment${testPaymentCount === 1 ? '' : 's'} (Razorpay test-mode) alongside real ones.`
+        : `${testPaymentCount} test payment${testPaymentCount === 1 ? '' : 's'} hidden (Razorpay test-mode — excluded from the stats below).`;
+    } else {
+      testPaymentsNotice.hidden = true;
+    }
 
     document.getElementById('stat-bookings')!.textContent = String(aggregates.bookingCount);
     document.getElementById('stat-attendees')!.textContent = `${aggregates.totalAttendees} attendee${aggregates.totalAttendees === 1 ? '' : 's'}`;
@@ -619,7 +654,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
         <td>${booking.attendeeCount}</td>
         <td>${formatAmount(booking.amount, booking.currency)}</td>
         <td>${formatDate(booking.createdAt)}</td>
-        <td>${statusBadge(booking.status)}</td>
+        <td>${statusBadge(booking.status)}${booking.isTest ? ' <span class="badge badge--test">Test</span>' : ''}</td>
         <td></td>
       `;
       const actionCell = tr.lastElementChild as HTMLElement;
@@ -646,7 +681,8 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     statusEl.hidden = false;
     statusEl.textContent = 'Loading…';
     try {
-      const res = await authedFetch(`/api/event-payments-admin/bookings?eventReferenceId=${encodeURIComponent(referenceId)}`);
+      const includeTestParam = includeTestToggle.checked ? '&includeTest=1' : '';
+      const res = await authedFetch(`/api/event-payments-admin/bookings?eventReferenceId=${encodeURIComponent(referenceId)}${includeTestParam}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to load');
       statusEl.hidden = true;
@@ -659,6 +695,10 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
       }
     }
   }
+
+  includeTestToggle.addEventListener('change', () => {
+    if (currentEvent) loadBookings(currentEvent.referenceId);
+  });
 
   eventSelect.addEventListener('change', () => {
     const referenceId = eventSelect.value;
