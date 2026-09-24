@@ -89,6 +89,15 @@ migration `0020_event_payments_refunds.sql`) and emails the payer a confirmation
 writes `cancellation_requested_at` to (a guest-initiated *request*, not a refund) — a row only
 counts as cancelled in this page's stats once `refunded_at` is actually set.
 
+**Test-mode payments are hidden by default.** There's no explicit test/live flag stored on an
+`event_payments` row (Razorpay's webhook payload doesn't carry one), but Razorpay auto-fills
+`void@razorpay.com` as the payer's email for test-mode card/UPI payments — confirmed against the
+real rows recorded proving this module out (2026-09-24, `payer_email = 'void@razorpay.com'` on
+every one of them). The dashboard filters those out of the booking list and stats by default,
+with a "Showing N test payments" checkbox to include them when needed (e.g. verifying the webhook
+chain still works). This is a heuristic tied to Razorpay's own test-mode behavior, not a stored
+flag — see `isTestPayment()` in `event-payments-admin.mts`.
+
 **Events using this flow:**
 
 | Event | Amount | Base Payment Link | Reference ID |

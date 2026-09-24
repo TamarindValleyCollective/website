@@ -99,17 +99,33 @@ function statusFor(row: any): 'paid' | 'requested' | 'refunded' {
   return 'paid';
 }
 
+// Razorpay auto-fills this exact address as the payer's email for test-mode
+// card/UPI payments (confirmed against real rows recorded while proving out
+// this module — see RAZORPAY.md). There's no explicit test/live flag on the
+// payment entity to record at webhook time, so this is the only reliable
+// signal available after the fact; it's a heuristic, not a stored flag, but
+// it correctly identifies every test row seen so far.
+const RAZORPAY_TEST_PAYER_EMAIL = 'void@razorpay.com';
+
+function isTestPayment(row: any): boolean {
+  return row.payer_email?.toLowerCase() === RAZORPAY_TEST_PAYER_EMAIL;
+}
+
 async function handleBookings(url: URL): Promise<Response> {
   const eventReferenceId = url.searchParams.get('eventReferenceId')?.trim();
   if (!eventReferenceId) return jsonResponse({ error: 'eventReferenceId is required' }, 400);
+  const includeTest = url.searchParams.get('includeTest') === '1';
 
-  let rows: any[];
+  let allRows: any[];
   try {
-    rows = await listPaymentsForEvent(eventReferenceId);
+    allRows = await listPaymentsForEvent(eventReferenceId);
   } catch (err) {
     console.error('Failed to list event_payments', err);
     return jsonResponse({ error: 'Failed to reach the payment store' }, 502);
   }
+
+  const testPaymentCount = allRows.filter(isTestPayment).length;
+  const rows = includeTest ? allRows : allRows.filter((r) => !isTestPayment(r));
 
   const bookings = rows.map((r) => ({
     id: r.id,
@@ -127,6 +143,7 @@ async function handleBookings(url: URL): Promise<Response> {
     refundStatus: r.refund_status,
     refundedBy: r.refunded_by,
     status: statusFor(r),
+    isTest: isTestPayment(r),
   }));
 
   const grossCollected = rows.reduce((sum, r) => sum + r.amount, 0);
@@ -134,6 +151,7 @@ async function handleBookings(url: URL): Promise<Response> {
 
   return jsonResponse({
     bookings,
+    testPaymentCount,
     aggregates: {
       bookingCount: rows.length,
       totalAttendees: rows.reduce((sum, r) => sum + (r.attendee_count ?? 1), 0),
