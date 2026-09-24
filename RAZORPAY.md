@@ -54,9 +54,11 @@ Linger + the guest.
 
 **Live configuration** (Netlify env vars, all deploy contexts):
 
-- `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` — regenerated live keys (`rzp_live_TfqrvSD3tpm2iA`
-  as of 2026-09-24; the account's original live key from 2026-07-27 had no saved secret, so it
-  was regenerated rather than recovered).
+- `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` — regenerated live keys as of 2026-09-24 (see
+  Netlify's env var settings for the actual `rzp_live_...` Key ID — not repeated here verbatim
+  since Netlify's build-time secret scanner blocks any deploy whose scanned files contain a
+  configured secret's literal value, key ID included); the account's original live key from
+  2026-07-27 had no saved secret, so it was regenerated rather than recovered.
 - `RAZORPAY_WEBHOOK_SECRET` — an arbitrary shared secret, same value entered on both this env var
   and the Razorpay dashboard webhook config (Settings → Webhooks, Live mode → `payment_link.paid`
   → `https://tvc.farm/api/razorpay-webhook`). Environment variable changes only take effect on
@@ -71,6 +73,21 @@ payment-links list response as `{ items: [...] }`, but the real field is `paymen
 had only ever been tested against constructed mock `Request` objects before, never Razorpay's
 real API, so the wrong-shape assumption went undetected until the first live test. Fixed and
 reverified directly against the API before going live.
+
+**Internal admin page:** `/internal/event-payments` (Google Sign-In + the same core-team
+allow-list as `/internal/whatsapp`/`/internal/photo-pool`, via
+`netlify/functions/event-payments-admin.mts`) shows registrations, cancellations, and money
+collected per event, and can **issue a real refund** for a booking — calling Razorpay's refund
+API (`POST /v1/payments/:id/refund`, via `createRefund` in `netlify/functions/lib/razorpay.ts`)
+directly, since Razorpay's own MCP server has fetch/list tools for refunds but no way to create
+one. The page pre-fills a suggested amount from `/refund-policy`'s day-before-event tiers
+(75%/50%/0%), which the admin can override, and requires an explicit two-step confirm before
+anything is sent — no one-click refund. A successful refund is recorded on the `event_payments`
+row (`razorpay_refund_id`, `refund_amount`, `refund_status`, `refunded_at`, `refunded_by` —
+migration `0020_event_payments_refunds.sql`) and emails the payer a confirmation (cc
+`core-team@tvc.farm`/`stay@linger.in`). This is the same underlying table `/cancel-booking`
+writes `cancellation_requested_at` to (a guest-initiated *request*, not a refund) — a row only
+counts as cancelled in this page's stats once `refunded_at` is actually set.
 
 **Events using this flow:**
 

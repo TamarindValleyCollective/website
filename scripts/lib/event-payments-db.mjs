@@ -1,6 +1,7 @@
 // Data-access layer for the event_payments table (see
 // supabase/migrations/0018_event_payments.sql,
-// 0019_event_payments_cancellation.sql) in the "TVC ERP" Supabase project.
+// 0019_event_payments_cancellation.sql,
+// 0020_event_payments_refunds.sql) in the "TVC ERP" Supabase project.
 // Mirrors supabase.mjs/accommodation-db.mjs's hand-rolled PostgREST style
 // (no @supabase/supabase-js) and reuses supabase.mjs's restHeaders for the
 // same service_role auth. Used by netlify/functions/razorpay-webhook.mts
@@ -114,6 +115,78 @@ export async function requestCancellationIfNew(id) {
     method: 'PATCH',
     headers: restHeaders({ Prefer: 'return=representation' }),
     body: JSON.stringify({ cancellation_requested_at: new Date().toISOString() }),
+  });
+  if (!res.ok) {
+    throw new Error(`Supabase update to event_payments failed: ${res.status} ${await res.text()}`);
+  }
+  const rows = await res.json();
+  return rows.length > 0;
+}
+
+// Single row lookup by its own id (not the Razorpay payment id) — used by
+// event-payments-admin.mts's refund action, which the admin UI addresses by
+// this row's id rather than the payment id it doesn't otherwise surface.
+/**
+ * @param {string} id
+ * @returns {Promise<Record<string, unknown> | null>}
+ */
+export async function getPaymentById(id) {
+  const res = await fetch(`${supabaseUrl()}/rest/v1/event_payments?id=eq.${encodeURIComponent(id)}&select=*`, {
+    headers: restHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`Supabase read from event_payments failed: ${res.status} ${await res.text()}`);
+  }
+  const rows = await res.json();
+  return rows[0] ?? null;
+}
+
+// Every booking row for one event, newest first — the source data for
+// src/pages/internal/event-payments.astro's table and aggregates (see
+// netlify/functions/event-payments-admin.mts).
+/**
+ * @param {string} eventReferenceId
+ * @returns {Promise<Array<Record<string, unknown>>>}
+ */
+export async function listPaymentsForEvent(eventReferenceId) {
+  const res = await fetch(
+    `${supabaseUrl()}/rest/v1/event_payments?event_reference_id=eq.${encodeURIComponent(eventReferenceId)}&select=*&order=created_at.desc`,
+    { headers: restHeaders() },
+  );
+  if (!res.ok) {
+    throw new Error(`Supabase read from event_payments failed: ${res.status} ${await res.text()}`);
+  }
+  return res.json();
+}
+
+// Records a refund actually issued through Razorpay's API, but only the
+// first time for a given row — guarded on refunded_at=is.null the same way
+// requestCancellationIfNew guards cancellation_requested_at, so a
+// double-click (or a retried request) can't record — or imply — a second
+// refund against the same payment. The caller (event-payments-admin.mts)
+// calls Razorpay first and only reaches this once that's confirmed to have
+// succeeded, so "recorded" here always means "money actually moved." A
+// proactive admin refund may not have gone through the guest-facing
+// /cancel-booking request flow at all — the caller separately calls
+// requestCancellationIfNew for the same id when that's the case, so the row
+// reads as fully cancelled either way without this function overwriting an
+// earlier guest-initiated timestamp itself.
+/**
+ * @param {string} id row id
+ * @param {{ razorpayRefundId: string, amount: number, status: string, refundedBy: string }} params
+ * @returns {Promise<boolean>} true if this call is the one that recorded the refund
+ */
+export async function recordRefund(id, { razorpayRefundId, amount, status, refundedBy }) {
+  const res = await fetch(`${supabaseUrl()}/rest/v1/event_payments?id=eq.${id}&refunded_at=is.null`, {
+    method: 'PATCH',
+    headers: restHeaders({ Prefer: 'return=representation' }),
+    body: JSON.stringify({
+      razorpay_refund_id: razorpayRefundId,
+      refund_amount: amount,
+      refund_status: status,
+      refunded_at: new Date().toISOString(),
+      refunded_by: refundedBy,
+    }),
   });
   if (!res.ok) {
     throw new Error(`Supabase update to event_payments failed: ${res.status} ${await res.text()}`);
