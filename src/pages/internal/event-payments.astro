@@ -1,0 +1,699 @@
+---
+// Internal admin tool: per-event registrations/cancellations/money-collected
+// for events using the direct-payment flow (razorpayReferenceId — see
+// RAZORPAY.md's "Event payment tracking" section), plus the ability to
+// trigger an actual Razorpay refund for a booking. See
+// netlify/functions/event-payments-admin.mts for the API this talks to.
+// Deliberately unlinked from nav; gated by Google Sign-In plus the same
+// "core team" allow-list photo-pool.astro/whatsapp.astro/
+// accommodation-calendar.astro use (PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID) —
+// see event-payments-admin.mts's header comment for why it's reused rather
+// than a new Sheet.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+// Only events actually wired up for direct payment have anything to show
+// here — an event using the inquiry-first BookingInquiry flow has no
+// event_payments rows at all. English-only (kn/ta sibling entries share the
+// same razorpayReferenceId and would just duplicate the dropdown).
+const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/') && !e.id.startsWith('ta/') && Boolean(e.data.razorpayReferenceId)))
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
+  .map((e) => ({
+    referenceId: e.data.razorpayReferenceId as string,
+    title: e.data.title,
+    // yyyy-mm-dd only — the /refund-policy tiers key off the event's own
+    // start date, and a plain date (no time-of-day) is all that's on the
+    // content file anyway.
+    date: e.data.date.toISOString().slice(0, 10),
+    draft: e.data.draft ?? false,
+  }));
+---
+
+<BaseLayout title="Event Payments" description="Internal event payment tracking and refunds." noindex>
+  <section class="section wrapper">
+    <h1>Event Payments</h1>
+    <p class="hint">Registrations, cancellations, and money collected per event — and where to issue a refund.</p>
+
+    <div id="gate" class="gate card">
+      <p class="gate-copy">Sign in with the Google account you manage event payments with.</p>
+      <div id="g_id_signin"></div>
+      <p id="gate-error" class="error" hidden></p>
+    </div>
+
+    <div id="forbidden" class="gate card" hidden>
+      <p class="gate-copy">Signed in as <strong id="forbidden-email"></strong>, but this Google account isn't authorized to view event payments.</p>
+      <p class="hint" style="margin: 4px 0 12px;">Ask an admin to add it to the allow-list.</p>
+      <button type="button" id="use-different-account" class="button">Use a different account</button>
+    </div>
+
+    <div id="app" hidden>
+      <label class="event-picker">
+        Event
+        <select id="event-select">
+          <option value="">Choose an event…</option>
+        </select>
+      </label>
+
+      <p id="status" class="hint" hidden></p>
+
+      <div id="results" hidden>
+        <div class="stats">
+          <div class="stat card">
+            <span class="stat-label">Registrations</span>
+            <span class="stat-value" id="stat-bookings"></span>
+            <span class="stat-sub" id="stat-attendees"></span>
+          </div>
+          <div class="stat card">
+            <span class="stat-label">Cancelled</span>
+            <span class="stat-value" id="stat-cancelled"></span>
+            <span class="stat-sub" id="stat-pending"></span>
+          </div>
+          <div class="stat card">
+            <span class="stat-label">Gross collected</span>
+            <span class="stat-value" id="stat-gross"></span>
+          </div>
+          <div class="stat card">
+            <span class="stat-label">Net collected</span>
+            <span class="stat-value" id="stat-net"></span>
+            <span class="stat-sub" id="stat-refunded"></span>
+          </div>
+        </div>
+
+        <div class="table-scroll">
+          <table class="bookings-table">
+            <thead>
+              <tr>
+                <th>Payer</th>
+                <th>Attendees</th>
+                <th>Amount</th>
+                <th>Paid</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="bookings-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+<script type="application/json" id="events-data" set:html={JSON.stringify(paidEvents)} />
+
+<style>
+  .section.wrapper {
+    padding-top: 32px;
+    padding-bottom: 32px;
+  }
+
+  .hint {
+    color: var(--tvc-ink-soft);
+    margin: -8px 0 24px;
+  }
+
+  .card {
+    background: #fff;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .gate {
+    max-width: 420px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+  }
+
+  .gate-copy {
+    font-size: 0.9rem;
+    color: var(--tvc-ink-soft);
+    margin: 0 0 14px;
+  }
+
+  .error {
+    color: var(--tvc-error-text);
+    font-size: 0.85rem;
+    margin: 10px 0 0;
+  }
+
+  .button {
+    appearance: none;
+    border: 1px solid var(--tvc-line);
+    background: #fff;
+    border-radius: 999px;
+    padding: 8px 18px;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.86rem;
+    cursor: pointer;
+  }
+
+  .button--primary {
+    background: var(--tvc-green);
+    border-color: var(--tvc-green);
+    color: #fff;
+  }
+
+  .button--danger {
+    background: var(--tvc-error-text);
+    border-color: var(--tvc-error-text);
+    color: #fff;
+  }
+
+  .button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .event-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.86rem;
+    font-weight: 600;
+    max-width: 420px;
+    margin-bottom: 20px;
+  }
+
+  .event-picker select {
+    font: inherit;
+    padding: 8px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 8px;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .stat {
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .stat-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tvc-ink-soft);
+  }
+
+  .stat-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+  }
+
+  .stat-sub {
+    font-size: 0.78rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .table-scroll {
+    overflow-x: auto;
+  }
+
+  .bookings-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.86rem;
+  }
+
+  .bookings-table th,
+  .bookings-table td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--tvc-line);
+    vertical-align: top;
+  }
+
+  .bookings-table th {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tvc-ink-soft);
+  }
+
+  .payer-name {
+    font-weight: 600;
+  }
+
+  .payer-contact {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .badge--paid {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+  }
+
+  .badge--requested {
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+  }
+
+  .badge--refunded {
+    background: var(--tvc-line);
+    color: var(--tvc-ink-soft);
+  }
+
+  .refund-row td {
+    background: var(--tvc-cream);
+  }
+
+  .refund-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 420px;
+  }
+
+  .refund-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.84rem;
+    font-weight: 600;
+  }
+
+  .refund-form input,
+  .refund-form textarea {
+    font: inherit;
+    padding: 6px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 8px;
+  }
+
+  .refund-tier-hint {
+    font-size: 0.78rem;
+    color: var(--tvc-ink-soft);
+    font-weight: 400;
+  }
+
+  .refund-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .refund-confirm {
+    padding: 10px 12px;
+    background: var(--tvc-orange-tint);
+    border-radius: 8px;
+    font-size: 0.86rem;
+  }
+
+  .refund-confirm p {
+    margin: 0 0 8px;
+  }
+</style>
+
+<script>
+  declare const google: any;
+
+  interface EventOption {
+    referenceId: string;
+    title: string;
+    date: string;
+    draft: boolean;
+  }
+
+  interface Booking {
+    id: string;
+    razorpayPaymentId: string;
+    payerName: string | null;
+    payerEmail: string | null;
+    payerContact: string | null;
+    attendeeCount: number;
+    amount: number;
+    currency: string;
+    createdAt: string;
+    refundAmount: number | null;
+    status: 'paid' | 'requested' | 'refunded';
+  }
+
+  interface Aggregates {
+    bookingCount: number;
+    totalAttendees: number;
+    grossCollected: number;
+    totalRefunded: number;
+    netCollected: number;
+    cancelledCount: number;
+    pendingRequestCount: number;
+  }
+
+  const STORAGE_KEY = 'tvc-event-payments-idtoken';
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+
+  const EVENTS: EventOption[] = JSON.parse(document.getElementById('events-data')!.textContent!);
+
+  const gate = document.getElementById('gate') as HTMLElement;
+  const gateError = document.getElementById('gate-error') as HTMLElement;
+  const forbidden = document.getElementById('forbidden') as HTMLElement;
+  const forbiddenEmail = document.getElementById('forbidden-email') as HTMLElement;
+  const useDifferentAccountBtn = document.getElementById('use-different-account') as HTMLButtonElement;
+  const app = document.getElementById('app') as HTMLElement;
+  const eventSelect = document.getElementById('event-select') as HTMLSelectElement;
+  const statusEl = document.getElementById('status') as HTMLElement;
+  const results = document.getElementById('results') as HTMLElement;
+  const bookingsBody = document.getElementById('bookings-body') as HTMLElement;
+
+  let currentEvent: EventOption | null = null;
+  let openRefundRowId: string | null = null;
+
+  function getToken(): string | null {
+    return sessionStorage.getItem(STORAGE_KEY);
+  }
+  function clearToken() {
+    sessionStorage.removeItem(STORAGE_KEY);
+  }
+
+  function decodeTokenEmail(token: string): string {
+    const payloadB64 = token.split('.')[1] ?? '';
+    const base64 = payloadB64.replace(/-/g, '+').replace(/_/g, '/').padEnd(payloadB64.length + ((4 - (payloadB64.length % 4)) % 4), '=');
+    try {
+      return JSON.parse(atob(base64)).email ?? 'unknown';
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    app.hidden = true;
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+
+  function showForbidden(token: string) {
+    gate.hidden = true;
+    app.hidden = true;
+    forbidden.hidden = false;
+    forbiddenEmail.textContent = decodeTokenEmail(token);
+  }
+
+  function showApp() {
+    gate.hidden = true;
+    forbidden.hidden = true;
+    app.hidden = false;
+  }
+
+  async function authedFetch(input: string, init: RequestInit = {}): Promise<Response> {
+    const token = getToken();
+    const res = await fetch(input, {
+      ...init,
+      headers: { ...init.headers, authorization: `Bearer ${token ?? ''}` },
+    });
+    if (res.status === 401) {
+      clearToken();
+      showGate('Your session expired — sign in again.');
+      throw new Error('Unauthorized');
+    }
+    if (res.status === 403) {
+      showForbidden(token!);
+      throw new Error('Forbidden');
+    }
+    return res;
+  }
+
+  function populateEventSelect() {
+    for (const ev of EVENTS) {
+      const opt = document.createElement('option');
+      opt.value = ev.referenceId;
+      opt.textContent = `${ev.title} — ${ev.date}${ev.draft ? ' (draft)' : ''}`;
+      eventSelect.appendChild(opt);
+    }
+  }
+
+  function formatAmount(amountPaise: number, currency: string): string {
+    const amount = amountPaise / 100;
+    return currency === 'INR' ? `₹${amount.toLocaleString('en-IN')}` : `${amount.toLocaleString('en-IN')} ${currency}`;
+  }
+
+  function formatDate(iso: string): string {
+    return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' });
+  }
+
+  // /refund-policy's day-before-event tiers (src/pages/refund-policy.astro):
+  // 7+ days → 75%, 48h–7 days → 50%, <48h → 0%. Mirrored here only to
+  // pre-fill a *suggested* amount — the admin can always override it, and
+  // event-payments-admin.mts doesn't re-derive or enforce this tier itself.
+  function suggestedRefundFraction(eventDateISO: string): number {
+    const eventDate = new Date(`${eventDateISO}T00:00:00+05:30`);
+    const hoursUntil = (eventDate.getTime() - Date.now()) / (60 * 60 * 1000);
+    if (hoursUntil >= 7 * 24) return 0.75;
+    if (hoursUntil >= 48) return 0.5;
+    return 0;
+  }
+
+  function tierLabel(fraction: number): string {
+    if (fraction === 0.75) return '75% — 7+ days before the event';
+    if (fraction === 0.5) return '50% — 48 hours to 7 days before the event';
+    return '0% — less than 48 hours before the event';
+  }
+
+  function statusBadge(status: Booking['status']): string {
+    if (status === 'refunded') return '<span class="badge badge--refunded">Refunded</span>';
+    if (status === 'requested') return '<span class="badge badge--requested">Cancellation requested</span>';
+    return '<span class="badge badge--paid">Paid</span>';
+  }
+
+  function escapeHtml(s: unknown): string {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function closeRefundRow() {
+    if (!openRefundRowId) return;
+    document.getElementById(`refund-row-${openRefundRowId}`)?.remove();
+    openRefundRowId = null;
+  }
+
+  function openRefundRow(booking: Booking) {
+    closeRefundRow();
+    if (!currentEvent) return;
+    openRefundRowId = booking.id;
+
+    const triggerRow = document.getElementById(`booking-row-${booking.id}`)!;
+    const tr = document.createElement('tr');
+    tr.id = `refund-row-${booking.id}`;
+    tr.className = 'refund-row';
+    const td = document.createElement('td');
+    td.colSpan = 6;
+
+    const fraction = suggestedRefundFraction(currentEvent.date);
+    const suggestedPaise = Math.round(booking.amount * fraction);
+    const suggestedRupees = (suggestedPaise / 100).toFixed(2);
+
+    td.innerHTML = `
+      <form class="refund-form" data-booking-id="${booking.id}">
+        <label>
+          Refund amount (₹)
+          <input type="number" step="0.01" min="0" max="${(booking.amount / 100).toFixed(2)}" value="${suggestedRupees}" required class="refund-amount" />
+          <span class="refund-tier-hint">Suggested per /refund-policy: ${tierLabel(fraction)}. Full amount paid: ${formatAmount(booking.amount, booking.currency)}.</span>
+        </label>
+        <label>
+          Reason <span class="refund-tier-hint">(optional, kept for the audit trail)</span>
+          <textarea rows="2" class="refund-reason"></textarea>
+        </label>
+        <p class="error refund-error" hidden></p>
+        <div id="refund-review-${booking.id}"></div>
+        <div class="refund-actions">
+          <button type="submit" class="button button--primary refund-review-btn">Review refund</button>
+          <button type="button" class="button refund-cancel-btn">Cancel</button>
+        </div>
+      </form>
+    `;
+    tr.appendChild(td);
+    triggerRow.after(tr);
+
+    const form = tr.querySelector('.refund-form') as HTMLFormElement;
+    const errorEl = tr.querySelector('.refund-error') as HTMLElement;
+    const reviewEl = tr.querySelector(`#refund-review-${booking.id}`) as HTMLElement;
+    const reviewBtn = tr.querySelector('.refund-review-btn') as HTMLButtonElement;
+
+    (tr.querySelector('.refund-cancel-btn') as HTMLButtonElement).addEventListener('click', closeRefundRow);
+
+    form.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      errorEl.hidden = true;
+      const amountInput = tr.querySelector('.refund-amount') as HTMLInputElement;
+      const rupees = Number(amountInput.value);
+      if (!Number.isFinite(rupees) || rupees <= 0) {
+        errorEl.textContent = 'Enter a valid refund amount.';
+        errorEl.hidden = false;
+        return;
+      }
+      const amountPaise = Math.round(rupees * 100);
+      if (amountPaise > booking.amount) {
+        errorEl.textContent = 'Refund amount cannot exceed the amount paid.';
+        errorEl.hidden = false;
+        return;
+      }
+
+      // Two-step: this button only ever reveals a confirm step — the actual
+      // POST that moves money fires from the confirm button below, never
+      // from a single click on the form itself.
+      reviewEl.innerHTML = `
+        <div class="refund-confirm">
+          <p>Refund <strong>${formatAmount(amountPaise, booking.currency)}</strong> to <strong>${escapeHtml(booking.payerEmail ?? 'this payer')}</strong> for payment <code>${escapeHtml(booking.razorpayPaymentId)}</code>? This cannot be undone from here.</p>
+          <button type="button" class="button button--danger refund-confirm-btn">Yes, refund ${formatAmount(amountPaise, booking.currency)}</button>
+        </div>
+      `;
+      reviewBtn.hidden = true;
+
+      reviewEl.querySelector('.refund-confirm-btn')!.addEventListener('click', async () => {
+        const confirmBtn = reviewEl.querySelector('.refund-confirm-btn') as HTMLButtonElement;
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Issuing refund…';
+        try {
+          const res = await authedFetch('/api/event-payments-admin/refund', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              id: booking.id,
+              amount: amountPaise,
+              reason: (tr.querySelector('.refund-reason') as HTMLTextAreaElement).value.trim() || undefined,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error ?? 'Refund failed');
+          closeRefundRow();
+          if (currentEvent) await loadBookings(currentEvent.referenceId);
+        } catch (err) {
+          const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
+          if (!handled) {
+            errorEl.textContent = err instanceof Error ? err.message : 'Refund failed';
+            errorEl.hidden = false;
+            reviewEl.innerHTML = '';
+            reviewBtn.hidden = false;
+          }
+        }
+      });
+    });
+  }
+
+  function renderBookings(data: { bookings: Booking[]; aggregates: Aggregates }) {
+    const { bookings, aggregates } = data;
+
+    document.getElementById('stat-bookings')!.textContent = String(aggregates.bookingCount);
+    document.getElementById('stat-attendees')!.textContent = `${aggregates.totalAttendees} attendee${aggregates.totalAttendees === 1 ? '' : 's'}`;
+    document.getElementById('stat-cancelled')!.textContent = String(aggregates.cancelledCount);
+    document.getElementById('stat-pending')!.textContent = aggregates.pendingRequestCount > 0 ? `${aggregates.pendingRequestCount} pending request${aggregates.pendingRequestCount === 1 ? '' : 's'}` : '';
+    const currency = bookings[0]?.currency ?? 'INR';
+    document.getElementById('stat-gross')!.textContent = formatAmount(aggregates.grossCollected, currency);
+    document.getElementById('stat-net')!.textContent = formatAmount(aggregates.netCollected, currency);
+    document.getElementById('stat-refunded')!.textContent = aggregates.totalRefunded > 0 ? `${formatAmount(aggregates.totalRefunded, currency)} refunded` : '';
+
+    bookingsBody.innerHTML = '';
+    openRefundRowId = null;
+    for (const booking of bookings) {
+      const tr = document.createElement('tr');
+      tr.id = `booking-row-${booking.id}`;
+      tr.innerHTML = `
+        <td>
+          <span class="payer-name">${escapeHtml(booking.payerName ?? '—')}</span>
+          <span class="payer-contact">${escapeHtml(booking.payerEmail ?? '')}</span>
+          <span class="payer-contact">${escapeHtml(booking.payerContact ?? '')}</span>
+        </td>
+        <td>${booking.attendeeCount}</td>
+        <td>${formatAmount(booking.amount, booking.currency)}</td>
+        <td>${formatDate(booking.createdAt)}</td>
+        <td>${statusBadge(booking.status)}</td>
+        <td></td>
+      `;
+      const actionCell = tr.lastElementChild as HTMLElement;
+      if (booking.status === 'refunded') {
+        actionCell.textContent = `Refunded ${formatAmount(booking.refundAmount ?? 0, booking.currency)}`;
+        actionCell.className = 'payer-contact';
+      } else {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'button';
+        btn.textContent = 'Cancel & refund';
+        btn.addEventListener('click', () => openRefundRow(booking));
+        actionCell.appendChild(btn);
+      }
+      bookingsBody.appendChild(tr);
+    }
+
+    results.hidden = false;
+  }
+
+  async function loadBookings(referenceId: string) {
+    closeRefundRow();
+    results.hidden = true;
+    statusEl.hidden = false;
+    statusEl.textContent = 'Loading…';
+    try {
+      const res = await authedFetch(`/api/event-payments-admin/bookings?eventReferenceId=${encodeURIComponent(referenceId)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed to load');
+      statusEl.hidden = true;
+      renderBookings(data);
+    } catch (err) {
+      const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
+      if (!handled) {
+        statusEl.hidden = false;
+        statusEl.textContent = 'Failed to load this event’s bookings — try again.';
+      }
+    }
+  }
+
+  eventSelect.addEventListener('change', () => {
+    const referenceId = eventSelect.value;
+    if (!referenceId) {
+      results.hidden = true;
+      statusEl.hidden = true;
+      currentEvent = null;
+      return;
+    }
+    currentEvent = EVENTS.find((e) => e.referenceId === referenceId) ?? null;
+    loadBookings(referenceId);
+  });
+
+  function handleCredentialResponse(response: { credential: string }) {
+    sessionStorage.setItem(STORAGE_KEY, response.credential);
+    showApp();
+  }
+
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: 'outline', size: 'large' });
+  }
+
+  useDifferentAccountBtn.addEventListener('click', () => {
+    clearToken();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
+  populateEventSelect();
+
+  if (getToken()) {
+    showApp();
+  } else {
+    showGate();
+  }
+</script>

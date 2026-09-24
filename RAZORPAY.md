@@ -72,6 +72,21 @@ had only ever been tested against constructed mock `Request` objects before, nev
 real API, so the wrong-shape assumption went undetected until the first live test. Fixed and
 reverified directly against the API before going live.
 
+**Internal admin page:** `/internal/event-payments` (Google Sign-In + the same core-team
+allow-list as `/internal/whatsapp`/`/internal/photo-pool`, via
+`netlify/functions/event-payments-admin.mts`) shows registrations, cancellations, and money
+collected per event, and can **issue a real refund** for a booking — calling Razorpay's refund
+API (`POST /v1/payments/:id/refund`, via `createRefund` in `netlify/functions/lib/razorpay.ts`)
+directly, since Razorpay's own MCP server has fetch/list tools for refunds but no way to create
+one. The page pre-fills a suggested amount from `/refund-policy`'s day-before-event tiers
+(75%/50%/0%), which the admin can override, and requires an explicit two-step confirm before
+anything is sent — no one-click refund. A successful refund is recorded on the `event_payments`
+row (`razorpay_refund_id`, `refund_amount`, `refund_status`, `refunded_at`, `refunded_by` —
+migration `0020_event_payments_refunds.sql`) and emails the payer a confirmation (cc
+`core-team@tvc.farm`/`stay@linger.in`). This is the same underlying table `/cancel-booking`
+writes `cancellation_requested_at` to (a guest-initiated *request*, not a refund) — a row only
+counts as cancelled in this page's stats once `refunded_at` is actually set.
+
 **Events using this flow:**
 
 | Event | Amount | Base Payment Link | Reference ID |

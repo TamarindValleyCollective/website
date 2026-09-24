@@ -11,7 +11,7 @@
 under the Netlify account owned by `contact@tvc.farm` (ownership moved there from a personal
 account on 2026-07-18). The site is almost entirely static (prerendered HTML/CSS/JS, no server
 at request time), with a small set of deliberate exceptions that need a serverless backend:
-fourteen Netlify Functions (the site-wide chat assistant, `/api/search-ai` backing the site
+fifteen Netlify Functions (the site-wide chat assistant, `/api/search-ai` backing the site
 search's AI answer (Gemini API free tier first, falling back to the same Anthropic API
 the chat assistant uses), the event-interest counter backing past
 events' "Want this to happen again?" widget, `/api/photo-pool` backing the internal, unlinked
@@ -25,10 +25,12 @@ WhatsApp reply dashboard at `/internal/whatsapp`, a scheduled (cron, no HTTP pat
 `/api/accommodation-admin` backing the internal, unlinked tent-booking dashboard at
 `/internal/accommodation-calendar` — the public, aggregate-only availability view this admin
 tool was originally built alongside was deliberately **not** shipped to production with it
-(dropped 2026-08-30, approach TBD), and three functions backing the reusable event payment
+(dropped 2026-08-30, approach TBD), and four functions backing the reusable event payment
 module — `/api/event-booking` (creates a per-booking Razorpay Payment Link), `/api/razorpay-
-webhook` (records a paid booking, emails a receipt), and `/api/cancel-booking` (records a guest's
-cancellation request) — live as of 2026-09-24, see `RAZORPAY.md`), Netlify Blobs
+webhook` (records a paid booking, emails a receipt), `/api/cancel-booking` (records a guest's
+cancellation request), and `/api/event-payments-admin` (backs the internal, unlinked per-event
+payments dashboard at `/internal/event-payments` — registrations/cancellations/money collected,
+and can issue a real Razorpay refund) — live as of 2026-09-24, see `RAZORPAY.md`), Netlify Blobs
 (public storage for the event-interest counter — the site's only *readable* server-side state
 that isn't gated behind a secret; everything else below is either write-only or, for photo-pool,
 gated), and Netlify Forms (the membership enquiry form on `/join`, the general enquiry form on
@@ -79,6 +81,7 @@ flowchart TD
         INTERNALPAGE["src/pages/internal/photo-pool.astro<br/>Unlinked, noindex — photo review dashboard shell"]
         INTERNALPAGE2["src/pages/internal/whatsapp.astro<br/>Unlinked, noindex — WhatsApp reply dashboard shell,<br/>two-pane chat UI, 15s visibility-gated polling"]
         INTERNALPAGE3["src/pages/internal/accommodation-calendar.astro<br/>Unlinked, noindex — tent-booking dashboard shell,<br/>day/week/month calendar, guest directory, audit log"]
+        INTERNALPAGE4["src/pages/internal/event-payments.astro<br/>Unlinked, noindex — event dropdown, stats,<br/>booking table, tier-suggested refund flow"]
         COMPONENTS["src/components/<br/>Nav, Footer, PageHero, ChatWidget,<br/>CookieConsent, JourneyTimelineStandalone,<br/>BiodiversityExplorer, PhotoGallery"]
         CONTENT["src/content/*<br/>Markdown collections: events, partners,<br/>community-outreach, photos"]
         FUNC_SRC["netlify/functions/chat.mts<br/>Serverless function, calls Anthropic API server-side"]
@@ -94,6 +97,7 @@ flowchart TD
         FUNC_SRC11["netlify/functions/event-booking.mts<br/>Serverless function — reads an event's base<br/>Payment Link price via Razorpay's API,<br/>multiplies by attendee count, creates a<br/>fresh per-booking Payment Link, redirects"]
         FUNC_SRC12["netlify/functions/razorpay-webhook.mts<br/>Serverless function — verifies payment_link.paid<br/>signature, records payment in Supabase<br/>(idempotent), emails a branded receipt"]
         FUNC_SRC13["netlify/functions/cancel-booking.mts<br/>Serverless function — records a guest's<br/>cancellation request (not an automatic<br/>refund), notifies TVC + Linger + guest"]
+        FUNC_SRC14["netlify/functions/event-payments-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>per-event registrations/cancellations/money<br/>collected from Supabase, issues real Razorpay<br/>refunds (tier-suggested, admin-confirmed)"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
     end
 
@@ -119,6 +123,7 @@ flowchart TD
         APIFN11["Netlify Function: /api/event-booking<br/>Deployed and live — real live Razorpay keys,<br/>Payment Link creation verified 2026-09-24"]
         APIFN12["Netlify Function: /api/razorpay-webhook<br/>Deployed and live — live-mode webhook<br/>configured, signature verification confirmed"]
         APIFN13["Netlify Function: /api/cancel-booking<br/>Deployed and live"]
+        APIFN14["Netlify Function: /api/event-payments-admin<br/>Deployed and live — backs /internal/event-payments,<br/>issues real refunds via Razorpay's API"]
         BLOBS["Netlify Blobs<br/>'event-interest' store — one JSON record per<br/>past event id, {count, emails[]}, optimistic-<br/>concurrency writes. Reset via netlify blobs:delete<br/>event-interest &lt;id&gt;.<br/>'search-ai-rate-limit' store — per-IP window +<br/>daily Anthropic-fallback budget records"]
         FORMS["Netlify Forms<br/>Captures /contact membership + general<br/>enquiries, /visit/host-an-event inquiries,<br/>/visit camping·day-visit·trekking inquiries,<br/>and event-interest submissions with an email"]
     end
@@ -149,6 +154,7 @@ flowchart TD
         POOLDASH["Photo Pool dashboard (/internal/photo-pool)<br/>Google Sign-In gated client-side shell — shows uploader,<br/>EXIF/GPS, editable description; unlinked, noindex,<br/>sitemap-excluded"]
         WHATSAPPDASH["WhatsApp dashboard (/internal/whatsapp)<br/>Google Sign-In gated two-pane chat UI — conversation<br/>list + thread + reply box; unlinked, noindex,<br/>sitemap-excluded"]
         ACCOMMODATIONDASH["Accommodation Allocation (/internal/accommodation-calendar)<br/>Google Sign-In gated tent-booking dashboard —<br/>day/week/month views, guest directory + typeahead,<br/>audit log; unlinked, noindex, sitemap-excluded"]
+        EVENTPAYDASH["Event Payments (/internal/event-payments)<br/>Google Sign-In gated dashboard — event dropdown,<br/>registrations/cancellations/money-collected stats,<br/>tier-suggested refund with two-step confirm;<br/>unlinked, noindex, sitemap-excluded"]
     end
 
     subgraph EXTERNAL["External services (called directly by the browser)"]
@@ -168,7 +174,7 @@ flowchart TD
         RESEND["Resend API<br/>Transactional email — noreply@tvc.farm,<br/>domain verified 2026-08-19,<br/>called from the GitHub Action above<br/>and whatsapp-stale-alert.mts"]
         WAMETA["Meta WhatsApp Cloud API<br/>Sends inbound message + template-status<br/>events to /api/whatsapp-webhook;<br/>receives replies from whatsapp-admin.mts;<br/>see WHATSAPP.md for setup status"]
         SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages,<br/>event_payments — service_role key, called<br/>server-side only"]
-        RAZORPAY["Razorpay API<br/>Payment Links (create/fetch) +<br/>payment_link.paid webhook.<br/>Live keys as of 2026-09-24 —<br/>see RAZORPAY.md"]
+        RAZORPAY["Razorpay API<br/>Payment Links (create/fetch) +<br/>payment_link.paid webhook + refunds<br/>(admin-triggered, event-payments-admin.mts).<br/>Live keys as of 2026-09-24 —<br/>see RAZORPAY.md"]
     end
 
     SRC --> BUILD
@@ -235,6 +241,13 @@ flowchart TD
     APIFN9 -.->|"read allow-list rows<br/>(own dedicated Sheet)"| GSHEET
     APIFN9 -.->|"verify staff ID token"| GIDTOKEN
     ACCOMMODATIONDASH -.->|"Sign in with Google"| GIDTOKEN
+    EVENTPAYDASH --> APIFN14
+    APIFN14 -.->|"read/write bookings,<br/>record refunds"| SUPABASE
+    APIFN14 -.->|"issue refund"| RAZORPAY
+    APIFN14 -.->|"send refund<br/>confirmation email"| RESEND
+    APIFN14 -.->|"read allow-list rows"| GSHEET
+    APIFN14 -.->|"verify staff ID token"| GIDTOKEN
+    EVENTPAYDASH -.->|"Sign in with Google"| GIDTOKEN
 
     classDef staticStyle fill:#e8f2ea,stroke:#17723b,color:#0f5029
     classDef netlifyStyle fill:#fdead3,stroke:#f78520,color:#9a5310
@@ -243,8 +256,8 @@ flowchart TD
     classDef localStyle fill:#eef0f5,stroke:#6b7280,color:#374151
     classDef ciStyle fill:#eef4fb,stroke:#3b6ea5,color:#1c3f5f
 
-    class PAGES,INTERNALPAGE,INTERNALPAGE2,INTERNALPAGE3,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH,WHATSAPPDASH,ACCOMMODATIONDASH,BOOKINGFORM,CANCELPAGE staticStyle
-    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,BLOBS,FORMS,ANTHROPIC netlifyStyle
+    class PAGES,INTERNALPAGE,INTERNALPAGE2,INTERNALPAGE3,INTERNALPAGE4,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH,WHATSAPPDASH,ACCOMMODATIONDASH,EVENTPAYDASH,BOOKINGFORM,CANCELPAGE staticStyle
+    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,FUNC_SRC14,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,APIFN14,BLOBS,FORMS,ANTHROPIC netlifyStyle
     class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,SUPABASE,GEMINI,RAZORPAY externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL,SCRIPT_GSC localStyle
@@ -288,6 +301,15 @@ outside both the local machine and Netlify (the member-update-email workflow).
   view (`AvailabilityView.astro` + `/visit/availability`) that was **deliberately not shipped**
   with this initial production launch — dropped rather than deferred, pending a rethink of that
   approach.
+- **`src/pages/internal/event-payments.astro`** — unlinked, `noindex`, sitemap-excluded. Same
+  Google Sign-In shell pattern as the three pages above, backing per-event payment tracking (see
+  `netlify/functions/event-payments-admin.mts` below): an event dropdown (built at request time
+  from the `events` content collection, filtered to entries with a `razorpayReferenceId`), a
+  stats row (registrations/attendees, cancelled/pending count, gross/net collected), and a
+  booking table. A "Cancel & refund" action per row expands an inline form pre-filled with a
+  suggested amount from `/refund-policy`'s day-before-event tiers (computed client-side from the
+  event's own `date`), then requires a second explicit "Yes, refund ₹X" click before it ever
+  calls the admin function — no amount is sent to Razorpay from a single click.
 - **`src/components/`** — shared UI: Nav, Footer, PageHero, the ChatWidget, the year-by-year
   `JourneyTimelineStandalone` component, the live `BiodiversityExplorer`, and `PhotoGallery`
   (In Pictures - filters, Grid/Map toggle, lightbox; its map, `photo-map.ts`, reuses the same
@@ -468,12 +490,14 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `items` as the code originally assumed) was found and fixed via this first real test, since the
   code had only ever previously been exercised against constructed mock `Request` objects — see
   `RAZORPAY.md`.
-- **`netlify/functions/lib/razorpay.ts`** — shared Razorpay REST helpers for the three functions
+- **`netlify/functions/lib/razorpay.ts`** — shared Razorpay REST helpers for the functions
   below: `fetchBasePaymentLink()`, `createPaymentLink()` (hand-rolled `fetch` + Basic Auth, no
   `razorpay` npm package, matching this repo's small-hand-rolled-client-over-heavy-SDK preference —
-  see `google-drive.mjs`/`supabase.mjs`), and `verifyWebhookSignature()` (HMAC-SHA256 over the raw
+  see `google-drive.mjs`/`supabase.mjs`), `verifyWebhookSignature()` (HMAC-SHA256 over the raw
   webhook body using `RAZORPAY_WEBHOOK_SECRET`, same shape as `whatsapp-webhook.mts`'s Meta
-  signature check).
+  signature check), and `createRefund()` (`POST /payments/:id/refund` — Razorpay's MCP server has
+  fetch/list tools for refunds but no way to create one, so `event-payments-admin.mts` below goes
+  straight to the REST API like everything else in this file).
 - **`netlify/functions/razorpay-webhook.mts`** — Razorpay's webhook endpoint, subscribed to
   `payment_link.paid` (Razorpay dashboard, Settings → Webhooks — a separate config per Test/Live
   mode; see `RAZORPAY.md`'s setup notes). Verifies the signature, then records the payment in the
@@ -495,13 +519,30 @@ outside both the local machine and Netlify (the member-update-email workflow).
   use elsewhere on the site. A `GET ?paymentId=` returns the booking summary for the page to show
   before the guest confirms; `POST` records the request. Reusable the same way
   `razorpay-webhook.mts` is — nothing here is specific to one event.
+- **`netlify/functions/event-payments-admin.mts`** — backs `/internal/event-payments`, the
+  per-event registrations/cancellations/money-collected dashboard. Google Sign-In gated, same
+  pattern and same "core team" allow-list (`PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID`) as
+  `whatsapp-admin.mts`/`accommodation-admin.mts`. `GET ?eventReferenceId=` returns every booking
+  for that event plus computed aggregates (gross/net collected, cancelled count, pending
+  cancellation-request count). `POST` with `{ id, amount, reason? }` issues a **real refund**:
+  looks the row up, rejects it if already refunded or `amount` exceeds what was paid, calls
+  `createRefund()` (`lib/razorpay.ts`), records the result on the row
+  (`razorpay_refund_id`/`refund_amount`/`refund_status`/`refunded_at`/`refunded_by` —
+  `supabase/migrations/0020_event_payments_refunds.sql`), backfills
+  `cancellation_requested_at` if the guest never went through `/cancel-booking` first, and emails
+  the payer a refund confirmation via Resend. The page itself pre-fills a suggested amount from
+  `/refund-policy`'s day-before-event tiers and requires a two-step confirm before this endpoint
+  is ever called — nothing here re-derives or enforces that tier server-side, the admin's typed
+  amount is what's sent.
 - **`scripts/lib/event-payments-db.mjs`** — hand-rolled Supabase PostgREST REST client (same
   style as `supabase.mjs`/`accommodation-db.mjs`) for the `event_payments` table
-  (`supabase/migrations/0018_event_payments.sql`, `0019_event_payments_cancellation.sql`).
-  `recordPaymentIfNew()` (ignore-duplicates insert, keyed on a unique index over
-  `razorpay_payment_id`), `getPaymentByRazorpayId()`, and `requestCancellationIfNew()`
-  (cancel-only-if-not-already-requested update) are used by `razorpay-webhook.mts` and
-  `cancel-booking.mts` above.
+  (`supabase/migrations/0018_event_payments.sql`, `0019_event_payments_cancellation.sql`,
+  `0020_event_payments_refunds.sql`). `recordPaymentIfNew()` (ignore-duplicates insert, keyed on a
+  unique index over `razorpay_payment_id`), `getPaymentByRazorpayId()`, and
+  `requestCancellationIfNew()` (cancel-only-if-not-already-requested update) are used by
+  `razorpay-webhook.mts` and `cancel-booking.mts` above; `listPaymentsForEvent()`,
+  `getPaymentById()`, and `recordRefund()` (refund-only-if-not-already-refunded update) are used
+  by `event-payments-admin.mts` above.
 - **`scripts/lib/supabase.mjs`** — hand-rolled Supabase PostgREST REST client (`fetch` + the
   `service_role` key, no `@supabase/supabase-js` dependency — matching this repo's preference for
   small hand-rolled clients over heavy libraries) for the `whatsapp_conversations`/
@@ -966,6 +1007,14 @@ never touches Netlify either.
   dropped, not deferred**, before this launch (2026-08-30): the admin tool graduated to
   production on its own, and the public-facing approach is being rethought from scratch rather
   than shipped as originally designed.
+- **Event Payments** (`/internal/event-payments`) — same shape as the three tools above: unlinked,
+  `noindex`, Google Sign-In gated, reusing `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID`'s "core team"
+  allow-list rather than a fourth dedicated Sheet (real money movement is at least as sensitive as
+  WhatsApp/photo access, same staff bracket). Built 2026-09-24, the same day the event payment
+  module itself went live, once Sharath asked not just for a read-only dashboard but for the
+  ability to trigger the cancellation refund itself from the same page — see `RAZORPAY.md`'s
+  "Internal admin page" note and `event-payments-admin.mts` above for how the refund actually
+  reaches Razorpay.
 
 ## Current Production Status
 
@@ -995,6 +1044,7 @@ never touches Netlify either.
 | WhatsApp unread digest (`whatsapp-stale-alert.mts`, scheduled) | ✅ Live — cron every 15 minutes, emails `core-team@tvc.farm` one digest of conversations unread 60+ minutes, re-sent hourly per conversation until read. Replaces the old per-message email (2026-08-20) |
 | Accommodation Allocation dashboard (`/internal/accommodation-calendar`, `/api/accommodation-admin`) | ✅ Live — merged to `main` and deployed 2026-08-30 (PR #116); verified directly against production (`/internal/accommodation-calendar` returns 200, `/api/accommodation-admin/bookings` returns 401 unauthenticated as expected for the Google Sign-In gate, `accommodation-admin` listed among the deploy's live functions). The public availability view (`/visit/availability`) built alongside it was **not** included in this launch — dropped 2026-08-30, pending a rethink; confirmed 404 on production |
 | Event payment tracking (`EventBookingForm`, `/api/event-booking`, `/api/razorpay-webhook`, `/api/cancel-booking`) | ✅ Live as of 2026-09-24 — real live-mode Razorpay keys and webhook configured; a real Payment Link creation verified directly against the live API. One event uses it so far (Foraging Day, 10 Oct 2026); reusable for any event with no code change — see `RAZORPAY.md`. Full webhook→Supabase→receipt chain confirmed in Test mode with two real test payments; Live mode confirmed only through Payment Link creation (an unpaid dry run), not yet through an actual completed live payment |
+| Event Payments dashboard + refund trigger (`/internal/event-payments`, `/api/event-payments-admin`) | 🟠 Built 2026-09-24, migration `0020_event_payments_refunds.sql` applied to the live "TVC ERP" project — not yet deployed/verified against production. Registrations/cancellations/money-collected read against real `event_payments` rows; the refund action itself (`createRefund` → live Razorpay API) has not yet been exercised against a real payment — see the Verification section of the change that added this row before treating a refund as proven end-to-end |
 
 The membership/general enquiry forms are fully live — Sheets logging verified with real
 production `POST`s, and email routes to `core-team@tvc.farm` via the site-wide Netlify Forms
