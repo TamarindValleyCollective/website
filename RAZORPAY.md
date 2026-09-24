@@ -54,9 +54,11 @@ Linger + the guest.
 
 **Live configuration** (Netlify env vars, all deploy contexts):
 
-- `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` — regenerated live keys (`rzp_live_TfqrvSD3tpm2iA`
-  as of 2026-09-24; the account's original live key from 2026-07-27 had no saved secret, so it
-  was regenerated rather than recovered).
+- `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` — regenerated live keys as of 2026-09-24 (see
+  Netlify's env var settings for the actual `rzp_live_...` Key ID — not repeated here verbatim
+  since Netlify's build-time secret scanner blocks any deploy whose scanned files contain a
+  configured secret's literal value, key ID included); the account's original live key from
+  2026-07-27 had no saved secret, so it was regenerated rather than recovered.
 - `RAZORPAY_WEBHOOK_SECRET` — an arbitrary shared secret, same value entered on both this env var
   and the Razorpay dashboard webhook config (Settings → Webhooks, Live mode → `payment_link.paid`
   → `https://tvc.farm/api/razorpay-webhook`). Environment variable changes only take effect on
