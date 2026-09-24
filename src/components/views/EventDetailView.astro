@@ -5,6 +5,7 @@ import AddToCalendar from '../AddToCalendar.astro';
 import BookingInquiry from '../BookingInquiry.astro';
 import WhatsAppButton from '../WhatsAppButton.astro';
 import AccommodationGallery from '../AccommodationGallery.astro';
+import EventBookingForm from '../EventBookingForm.astro';
 import { render, getCollection, type CollectionEntry } from 'astro:content';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import { formatDateRange, durationTag } from '../../utils/events';
@@ -314,6 +315,24 @@ const brand =
               <p class="cancellation-note">
                 Need to cancel or reschedule? TVC's standard <a href="/refund-policy/">cancellation &amp; refund policy</a> applies.
               </p>
+            </div>
+          )}
+          {/* The reusable direct-payment flow (see content.config.ts's
+              razorpayReferenceId, EventBookingForm.astro,
+              netlify/functions/event-booking.mts) - rendered here rather
+              than left to the event's own body/Content so it can be a real
+              interactive component, not hand-authored HTML+JS repeated per
+              event. An event using this should NOT also put its own
+              hand-authored `#cta` block in the markdown body - this is the
+              one #cta the sidebar's "Request to book" link jumps to. */}
+          {isUpcoming && event.data.razorpayReferenceId && (
+            <div id="cta">
+              <h2>Register</h2>
+              <EventBookingForm
+                referenceId={event.data.razorpayReferenceId}
+                unitAmount={event.data.price![0].amount}
+                unitLabel={event.data.price![0].label}
+              />
             </div>
           )}
         </div>

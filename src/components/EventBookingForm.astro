@@ -1,0 +1,151 @@
+---
+// Reusable "pay online, for N people" booking form — any event opts in by
+// setting `razorpayReferenceId` in its content file (see content.config.ts
+// and EventDetailView.astro, which renders this in place of the inquiry-
+// first BookingInquiry flow when that field is set). Submitting posts to
+// netlify/functions/event-booking.mts, which creates a fresh per-booking
+// Razorpay Payment Link for (unit price × attendee count) and returns its
+// URL; this component redirects the browser there on success.
+//
+// English-only for now (unlike BookingInquiry, which is i18n'd) — this is
+// the prototype of the flow; worth carrying over the kn/ta treatment once
+// it's proven out on a real event.
+interface Props {
+  referenceId: string;
+  unitAmount: string; // display only, e.g. "₹2,250" — the charged amount always comes from the base Payment Link server-side, never from this string
+  unitLabel: string; // e.g. "per person"
+}
+
+const { referenceId, unitAmount, unitLabel } = Astro.props;
+const fieldId = referenceId.replace(/[^a-z0-9]+/gi, '-');
+const MAX_ATTENDEES = 10;
+const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
+---
+
+<div class="booking-form">
+  <form class="event-booking-form card site-form" id={`${fieldId}-form`} data-reference-id={referenceId} data-unit-amount={unitAmount}>
+    <p class="form-honeypot" aria-hidden="true">
+      <label>Leave this field blank <input name="botField" tabindex="-1" autocomplete="off" /></label>
+    </p>
+
+    <div class="site-form-grid">
+      <div>
+        <label for={`${fieldId}-name`}>Name</label>
+        <input id={`${fieldId}-name`} type="text" name="name" autocomplete="name" required />
+      </div>
+      <div>
+        <label for={`${fieldId}-email`}>Email</label>
+        <input id={`${fieldId}-email`} type="email" name="email" placeholder="you@example.com" autocomplete="email" required />
+      </div>
+      <div>
+        <label for={`${fieldId}-phone`}>Phone</label>
+        <input id={`${fieldId}-phone`} type="tel" name="phone" placeholder="+91 98765 43210" autocomplete="tel" required />
+      </div>
+      <div>
+        <label for={`${fieldId}-count`}>Number of people</label>
+        <select id={`${fieldId}-count`} name="attendeeCount" required>
+          {counts.map((n) => <option value={n} selected={n === 1}>{n}</option>)}
+        </select>
+      </div>
+    </div>
+
+    <div class="field-total">
+      <span class="field-total__label">Total ({unitAmount} {unitLabel})</span>
+      <span class="field-total__amount" id={`${fieldId}-total`}>{unitAmount}</span>
+    </div>
+
+    <button class="button" type="submit">Pay &amp; register &rarr;</button>
+    <p class="booking-form__error" role="alert" hidden></p>
+  </form>
+</div>
+
+<style>
+  .field-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: var(--tvc-green-tint);
+    margin-bottom: 16px;
+  }
+
+  .field-total__label {
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+
+  .field-total__amount {
+    font-weight: 700;
+    font-size: 1.15rem;
+  }
+
+  .booking-form__error {
+    color: #a3312a;
+    font-size: 0.9rem;
+    margin-top: 12px;
+  }
+</style>
+
+<script>
+  function toIntOrNull(s: string): number | null {
+    const cleaned = s.replace(/[^\d]/g, '');
+    return cleaned ? Number.parseInt(cleaned, 10) : null;
+  }
+
+  document.querySelectorAll<HTMLFormElement>('.event-booking-form').forEach((form) => {
+    const referenceId = form.dataset.referenceId ?? '';
+    const unitAmount = toIntOrNull(form.dataset.unitAmount ?? '');
+    const countSelect = form.querySelector<HTMLSelectElement>('select[name="attendeeCount"]');
+    const totalEl = form.querySelector<HTMLElement>('.field-total__amount');
+    const errorEl = form.querySelector<HTMLElement>('.booking-form__error');
+    const submitBtn = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+
+    function updateTotal() {
+      if (!countSelect || !totalEl || unitAmount === null) return;
+      const count = Number(countSelect.value) || 1;
+      totalEl.textContent = `₹${(unitAmount * count).toLocaleString('en-IN')}`;
+    }
+    countSelect?.addEventListener('change', updateTotal);
+    updateTotal();
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (errorEl) errorEl.hidden = true;
+
+      const data = new FormData(form);
+      if (data.get('botField')) return; // silently drop, matches server-side honeypot
+
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Starting payment…';
+      }
+
+      try {
+        const res = await fetch('/api/event-booking', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            referenceId,
+            name: data.get('name'),
+            email: data.get('email'),
+            phone: data.get('phone'),
+            attendeeCount: Number(data.get('attendeeCount')),
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.url) throw new Error(json.error || 'Something went wrong');
+        window.location.href = json.url;
+      } catch (err) {
+        if (errorEl) {
+          errorEl.textContent = err instanceof Error ? err.message : 'Something went wrong — try again.';
+          errorEl.hidden = false;
+        }
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Pay & register →';
+        }
+      }
+    });
+  });
+</script>

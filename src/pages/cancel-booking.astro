@@ -1,0 +1,113 @@
+---
+// Guest-initiated cancellation REQUEST (not an automatic refund - see
+// netlify/functions/cancel-booking.mts's own comment on why). Reached via
+// the "Need to cancel?" link in every payment receipt email
+// (payment-receipt.ts), which carries ?paymentId=pay_xxx. English-only for
+// now, matching EventBookingForm - this is the prototype of the flow.
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHero from '../components/PageHero.astro';
+---
+
+<BaseLayout title="Cancel a booking" description="Request to cancel a paid event booking at Tamarind Valley Collective." translated={false}>
+  <PageHero eyebrow="Bookings" title="Cancel a booking" intro="We'll pass your request straight to our team." />
+
+  <section class="section wrapper prose prose--wide">
+    <div id="cb-loading">
+      <p>Looking up your booking&hellip;</p>
+    </div>
+
+    <div id="cb-not-found" hidden>
+      <p>We couldn't find a booking for this link. If you think that's wrong, email <a href="mailto:core-team@tvc.farm">core-team@tvc.farm</a> with your payment confirmation.</p>
+    </div>
+
+    <div id="cb-already" class="card" hidden>
+      <p>A cancellation request for <strong id="cb-already-title"></strong> is already on file for this booking. Our team will follow up directly — no need to request again.</p>
+    </div>
+
+    <div id="cb-summary" class="card" hidden>
+      <p>You're requesting cancellation for:</p>
+      <table role="presentation" style="margin: 16px 0;">
+        <tr><td style="padding: 6px 16px 6px 0; color: var(--tvc-ink-soft);">Event</td><td id="cb-title" style="font-weight: 600;"></td></tr>
+        <tr><td style="padding: 6px 16px 6px 0; color: var(--tvc-ink-soft);">People</td><td id="cb-count"></td></tr>
+        <tr><td style="padding: 6px 16px 6px 0; color: var(--tvc-ink-soft);">Amount paid</td><td id="cb-amount" style="font-weight: 700;"></td></tr>
+      </table>
+      <p style="font-size: 0.9rem; color: var(--tvc-ink-soft);">This sends a request to our team — it doesn't cancel or refund anything automatically. We'll follow up by email with next steps, based on our <a href="/refund-policy">cancellation &amp; refund policy</a>.</p>
+      <button class="button" id="cb-confirm-btn">Request cancellation</button>
+      <p id="cb-error" role="alert" style="color: #a3312a; margin-top: 12px;" hidden></p>
+    </div>
+
+    <div id="cb-done" class="card" hidden>
+      <p>Your cancellation request has been sent. We'll be in touch by email shortly.</p>
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  const paymentId = new URLSearchParams(window.location.search).get('paymentId');
+  const loading = document.getElementById('cb-loading')!;
+  const notFound = document.getElementById('cb-not-found')!;
+  const already = document.getElementById('cb-already')!;
+  const summary = document.getElementById('cb-summary')!;
+  const done = document.getElementById('cb-done')!;
+  const errorEl = document.getElementById('cb-error')!;
+
+  function formatInr(amountPaise: number): string {
+    return `₹${(amountPaise / 100).toLocaleString('en-IN')}`;
+  }
+
+  function show(el: HTMLElement) {
+    [loading, notFound, already, summary, done].forEach((e) => (e.hidden = e !== el));
+  }
+
+  async function init() {
+    if (!paymentId) {
+      show(notFound);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/cancel-booking?paymentId=${encodeURIComponent(paymentId)}`);
+      if (res.status === 404) {
+        show(notFound);
+        return;
+      }
+      if (!res.ok) throw new Error('lookup failed');
+      const data = await res.json();
+
+      if (data.alreadyRequested) {
+        document.getElementById('cb-already-title')!.textContent = data.eventTitle;
+        show(already);
+        return;
+      }
+
+      document.getElementById('cb-title')!.textContent = data.eventTitle;
+      document.getElementById('cb-count')!.textContent = String(data.attendeeCount);
+      document.getElementById('cb-amount')!.textContent = formatInr(data.amount);
+      show(summary);
+    } catch {
+      show(notFound);
+    }
+  }
+
+  document.getElementById('cb-confirm-btn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget as HTMLButtonElement;
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    errorEl.hidden = true;
+    try {
+      const res = await fetch('/api/cancel-booking', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ paymentId }),
+      });
+      if (!res.ok) throw new Error('request failed');
+      show(done);
+    } catch {
+      errorEl.textContent = 'Something went wrong — try again, or email core-team@tvc.farm directly.';
+      errorEl.hidden = false;
+      btn.disabled = false;
+      btn.textContent = 'Request cancellation';
+    }
+  });
+
+  init();
+</script>
