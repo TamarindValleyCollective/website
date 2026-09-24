@@ -95,7 +95,7 @@ flowchart TD
         FUNC_SRC8["netlify/functions/whatsapp-stale-alert.mts<br/>Scheduled function (cron, every 15 min) —<br/>emails core-team@tvc.farm one digest of<br/>WhatsApp conversations unread 60+ min,<br/>re-sent hourly per conversation until read"]
         FUNC_SRC9["netlify/functions/accommodation-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>full tent-booking CRUD backed by Postgres<br/>(EXCLUDE constraints make double-booking<br/>physically impossible), guest directory,<br/>full audit log, past-booking justification"]
         FUNC_SRC11["netlify/functions/event-booking.mts<br/>Serverless function — reads an event's base<br/>Payment Link price via Razorpay's API,<br/>multiplies by attendee count, creates a<br/>fresh per-booking Payment Link, redirects"]
-        FUNC_SRC12["netlify/functions/razorpay-webhook.mts<br/>Serverless function — verifies signature, records<br/>payment_link.paid in Supabase (idempotent), emails<br/>a branded receipt; also syncs refund.created/<br/>refund.processed back regardless of where a refund<br/>was initiated"]
+        FUNC_SRC12["netlify/functions/razorpay-webhook.mts<br/>Serverless function — verifies signature, records<br/>payment_link.paid in Supabase (idempotent), emails<br/>a branded receipt; also handles refund.created/<br/>processed/failed — Razorpay's own confirmation is<br/>the only thing that marks a row actually refunded"]
         FUNC_SRC13["netlify/functions/cancel-booking.mts<br/>Serverless function — records a guest's<br/>cancellation request (not an automatic<br/>refund), notifies TVC + Linger + guest"]
         FUNC_SRC14["netlify/functions/event-payments-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>per-event registrations/cancellations/money<br/>collected from Supabase, issues real Razorpay<br/>refunds (tier-suggested, admin-confirmed)"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
@@ -198,7 +198,7 @@ flowchart TD
     APIFN8 -.->|"send digest email"| RESEND
     BOOKINGFORM --> APIFN11
     APIFN11 -.->|"fetch base link price,<br/>create per-booking link"| RAZORPAY
-    RAZORPAY -.->|"payment_link.paid /<br/>refund.created / refund.processed webhooks"| APIFN12
+    RAZORPAY -.->|"payment_link.paid / refund.created /<br/>refund.processed / refund.failed webhooks"| APIFN12
     APIFN12 -.->|"record payment<br/>(idempotent)"| SUPABASE
     APIFN12 -.->|"send branded receipt"| RESEND
     CANCELPAGE --> APIFN13
@@ -511,11 +511,17 @@ outside both the local machine and Netlify (the member-update-email workflow).
   real signature-mismatch was hit and fixed the same day (the webhook secret was updated in both
   places, but Netlify Functions only pick up an environment variable change on the *next* deploy,
   not immediately — a real, documented Netlify behavior, not a bug in this code). Also subscribed
-  to `refund.created`/`refund.processed` (added to the dashboard config 2026-09-24) — a refund
-  issued straight from the Razorpay dashboard, not through `/internal/event-payments`, still gets
-  recorded on the matching row via `recordRefund()`, the same idempotent-guarded update
-  `event-payments-admin.mts`'s own refund action uses, so whichever path reaches Supabase first
-  wins and the other is a no-op.
+  to `refund.created`/`refund.processed`/`refund.failed` (added to the dashboard config
+  2026-09-24) — Razorpay is treated as the source of truth for whether a refund actually
+  completed, not our own synchronous API response: `refund.created` records that a refund
+  started (`recordRefundInitiated()` — the only place a refund issued straight from the Razorpay
+  dashboard, not through `/internal/event-payments`, gets recorded at all), `refund.processed` is
+  the *only* place `refunded_at` itself gets set (`confirmRefundProcessed()`), and `refund.failed`
+  flips `refund_status` to `'failed'` (`markRefundFailed()`) so a row that didn't actually go
+  through reads as failed rather than silently stuck. All three guard on `razorpay_refund_id` (and
+  `refunded_at is.null` where relevant), so whichever path — our own admin action or this webhook
+  — reaches Supabase first for a given step wins, and a duplicate/out-of-order delivery is a
+  no-op.
 - **`netlify/functions/cancel-booking.mts`** — backs `src/pages/cancel-booking.astro`, linked
   from the receipt email above. A guest-initiated **cancellation request**, not an automatic
   refund: TVC's `/refund-policy` has day-before-event tiers a human applies by hand, so this only
@@ -529,25 +535,30 @@ outside both the local machine and Netlify (the member-update-email workflow).
   pattern and same "core team" allow-list (`PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID`) as
   `whatsapp-admin.mts`/`accommodation-admin.mts`. `GET ?eventReferenceId=` returns every booking
   for that event plus computed aggregates (gross/net collected, cancelled count, pending
-  cancellation-request count). `POST` with `{ id, amount, reason? }` issues a **real refund**:
-  looks the row up, rejects it if already refunded or `amount` exceeds what was paid, calls
-  `createRefund()` (`lib/razorpay.ts`), records the result on the row
-  (`razorpay_refund_id`/`refund_amount`/`refund_status`/`refunded_at`/`refunded_by` —
-  `supabase/migrations/0020_event_payments_refunds.sql`), backfills
-  `cancellation_requested_at` if the guest never went through `/cancel-booking` first, and emails
-  the payer a refund confirmation via Resend. The page itself pre-fills a suggested amount from
-  `/refund-policy`'s day-before-event tiers and requires a two-step confirm before this endpoint
-  is ever called — nothing here re-derives or enforces that tier server-side, the admin's typed
-  amount is what's sent.
+  cancellation-request count). `POST` with `{ id, amount, reason? }` **triggers** a real refund:
+  looks the row up, rejects it if already refunded or already has a non-failed refund in progress
+  or `amount` exceeds what was paid, calls `createRefund()` (`lib/razorpay.ts`), and records only
+  **initiation** on the row (`razorpay_refund_id`/`refund_amount`/`refund_status`/
+  `refund_initiated_at`/`refunded_by` — `supabase/migrations/0020_event_payments_refunds.sql`/
+  `0022_event_payments_refund_initiated.sql`) — `refunded_at` itself is set later, only by
+  `razorpay-webhook.mts`'s `refund.processed` handler once Razorpay confirms completion. Also
+  backfills `cancellation_requested_at` if the guest never went through `/cancel-booking` first,
+  and emails the payer that a refund has started via Resend. The page itself pre-fills a suggested
+  amount from `/refund-policy`'s day-before-event tiers and requires a two-step confirm before
+  this endpoint is ever called — nothing here re-derives or enforces that tier server-side, the
+  admin's typed amount is what's sent.
 - **`scripts/lib/event-payments-db.mjs`** — hand-rolled Supabase PostgREST REST client (same
   style as `supabase.mjs`/`accommodation-db.mjs`) for the `event_payments` table
-  (`supabase/migrations/0018_event_payments.sql`, `0019_event_payments_cancellation.sql`,
-  `0020_event_payments_refunds.sql`). `recordPaymentIfNew()` (ignore-duplicates insert, keyed on a
-  unique index over `razorpay_payment_id`), `getPaymentByRazorpayId()`, and
-  `requestCancellationIfNew()` (cancel-only-if-not-already-requested update) are used by
-  `razorpay-webhook.mts` and `cancel-booking.mts` above; `listPaymentsForEvent()`,
-  `getPaymentById()`, and `recordRefund()` (refund-only-if-not-already-refunded update) are used
-  by `event-payments-admin.mts` above.
+  (`supabase/migrations/0018_event_payments.sql` through `0022_event_payments_refund_initiated.sql`).
+  `recordPaymentIfNew()` (ignore-duplicates insert, keyed on a unique index over
+  `razorpay_payment_id`), `getPaymentByRazorpayId()`, and `requestCancellationIfNew()`
+  (cancel-only-if-not-already-requested update) are used by `razorpay-webhook.mts` and
+  `cancel-booking.mts` above; `listPaymentsForEvent()`, `getPaymentById()`,
+  `recordRefundInitiated()` (guarded on no initiation yet, or the last one having failed —
+  used by both `event-payments-admin.mts` and `razorpay-webhook.mts`'s `refund.created`
+  handler), `confirmRefundProcessed()` (the only function that sets `refunded_at`, guarded on the
+  specific `razorpay_refund_id` and not already confirmed), and `markRefundFailed()` (guarded the
+  same way) are used by `event-payments-admin.mts` and `razorpay-webhook.mts` above.
 - **`scripts/lib/supabase.mjs`** — hand-rolled Supabase PostgREST REST client (`fetch` + the
   `service_role` key, no `@supabase/supabase-js` dependency — matching this repo's preference for
   small hand-rolled clients over heavy libraries) for the `whatsapp_conversations`/

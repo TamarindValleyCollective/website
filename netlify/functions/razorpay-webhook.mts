@@ -1,6 +1,7 @@
 // Netlify Function (v2 API) — Razorpay's webhook endpoint, subscribed to
-// payment_link.paid and refund.created/refund.processed (configured in the
-// Razorpay dashboard, Settings > Webhooks; see RAZORPAY.md's setup notes).
+// payment_link.paid, refund.created, refund.processed, and refund.failed
+// (configured in the Razorpay dashboard, Settings > Webhooks; see
+// RAZORPAY.md's setup notes).
 // Records every event payment and emails a branded receipt, with zero
 // per-event code: everything it needs (which event, how many people)
 // travels in the Payment Link's own `notes`, set either by hand when a base
@@ -21,7 +22,14 @@
 // paths safe: whichever one reaches Supabase first wins, the other is a
 // no-op.
 import { verifyWebhookSignature } from './lib/razorpay';
-import { recordPaymentIfNew, markReceiptSent, getPaymentByRazorpayId, recordRefund } from '../../scripts/lib/event-payments-db.mjs';
+import {
+  recordPaymentIfNew,
+  markReceiptSent,
+  getPaymentByRazorpayId,
+  recordRefundInitiated,
+  confirmRefundProcessed,
+  markRefundFailed,
+} from '../../scripts/lib/event-payments-db.mjs';
 import { buildReceiptSubject, buildReceiptHtml } from './lib/payment-receipt';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
@@ -102,7 +110,9 @@ async function sendReceiptEmail(params: {
   }
 }
 
-async function handleRefundEvent(payload: RazorpayWebhookPayload): Promise<Response> {
+// Common lookup step for all three refund events below — Razorpay's refund
+// entity carries the original payment_id, not our own row id.
+async function findRowForRefund(payload: RazorpayWebhookPayload): Promise<{ row: any; refund: RazorpayRefundEntity } | Response> {
   const refund = payload.payload.refund?.entity;
   if (!refund) {
     console.error(`[razorpay-webhook] ${payload.event} payload missing refund entity`);
@@ -122,22 +132,71 @@ async function handleRefundEvent(payload: RazorpayWebhookPayload): Promise<Respo
     // and refunded entirely outside this module) — nothing to sync.
     return jsonResponse({ ok: true, skipped: 'no matching event_payments row' });
   }
+  return { row, refund };
+}
+
+// refund.created — the refund now exists at Razorpay, but Razorpay is the
+// source of truth for whether it actually completes, not the mere fact of
+// its creation, so this only ever marks the row "refund initiated"
+// (recordRefundInitiated), never "refunded". Mainly matters for a refund
+// started directly in the Razorpay dashboard: event-payments-admin.mts's
+// own refund action already calls recordRefundInitiated synchronously
+// right after its Razorpay API call succeeds, so this arriving afterward
+// for that same refund is just a no-op confirmation (its own is.null guard
+// handles that).
+async function handleRefundCreated(payload: RazorpayWebhookPayload): Promise<Response> {
+  const found = await findRowForRefund(payload);
+  if (found instanceof Response) return found;
+  const { row, refund } = found;
 
   try {
-    // 'razorpay (synced via webhook)' rather than an admin's email — this
-    // path fires for a refund issued directly in the Razorpay dashboard (or
-    // by any other API caller), not through event-payments-admin.mts, so
-    // there's no signed-in admin to attribute it to.
-    const recordedNow = await recordRefund(row.id, {
+    const recordedNow = await recordRefundInitiated(row.id, {
       razorpayRefundId: refund.id,
       amount: refund.amount,
       status: refund.status,
-      refundedBy: 'razorpay (synced via webhook)',
+      // 'razorpay (dashboard)' rather than an admin's email — this path is
+      // what actually fires for a refund started directly in the Razorpay
+      // dashboard; there's no signed-in admin here to attribute it to.
+      refundedBy: 'razorpay (dashboard)',
     });
     return jsonResponse({ ok: true, recorded: recordedNow });
   } catch (err) {
-    console.error('[razorpay-webhook] Failed to sync refund', err);
+    console.error('[razorpay-webhook] Failed to record refund initiation', err);
     return jsonResponse({ error: 'Failed to record refund' }, 500);
+  }
+}
+
+// refund.processed — Razorpay's own confirmation that the refund actually
+// completed. This is the only place refunded_at gets set.
+async function handleRefundProcessed(payload: RazorpayWebhookPayload): Promise<Response> {
+  const found = await findRowForRefund(payload);
+  if (found instanceof Response) return found;
+  const { row, refund } = found;
+
+  try {
+    const confirmedNow = await confirmRefundProcessed(row.id, refund.id, refund.status);
+    return jsonResponse({ ok: true, confirmed: confirmedNow });
+  } catch (err) {
+    console.error('[razorpay-webhook] Failed to confirm processed refund', err);
+    return jsonResponse({ error: 'Failed to record refund' }, 500);
+  }
+}
+
+// refund.failed — the initiated refund didn't go through. refunded_at was
+// never optimistically set (see handleRefundCreated above), so there's
+// nothing to revert; this just flips refund_status so the row stops
+// reading as "in progress" and an admin can retry.
+async function handleRefundFailed(payload: RazorpayWebhookPayload): Promise<Response> {
+  const found = await findRowForRefund(payload);
+  if (found instanceof Response) return found;
+  const { row, refund } = found;
+
+  try {
+    const recordedNow = await markRefundFailed(row.id, refund.id);
+    return jsonResponse({ ok: true, recorded: recordedNow });
+  } catch (err) {
+    console.error('[razorpay-webhook] Failed to record refund failure', err);
+    return jsonResponse({ error: 'Failed to record refund failure' }, 500);
   }
 }
 
@@ -165,18 +224,15 @@ export default async (req: Request): Promise<Response> => {
     return jsonResponse({ error: 'Invalid request body' }, 400);
   }
 
-  // refund.created and refund.processed both land here — whichever arrives
-  // first records the refund (recordRefund's own guard makes the second a
-  // no-op), so there's no need to pick just one.
-  if (payload.event === 'refund.created' || payload.event === 'refund.processed') {
-    return handleRefundEvent(payload);
-  }
+  if (payload.event === 'refund.created') return handleRefundCreated(payload);
+  if (payload.event === 'refund.processed') return handleRefundProcessed(payload);
+  if (payload.event === 'refund.failed') return handleRefundFailed(payload);
 
-  // Ack anything else (including refund.failed, not handled — a failed
-  // refund attempt leaves the booking as still-paid, which is already
-  // correct) with 200 rather than erroring — Razorpay retries non-2xx
-  // responses, and a future webhook subscribed to more events shouldn't
-  // start failing here just because this function hasn't caught up yet.
+  // Ack anything else (including refund.speed_changed, not acted on — it
+  // doesn't change whether the refund completed) with 200 rather than
+  // erroring — Razorpay retries non-2xx responses, and a future webhook
+  // subscribed to more events shouldn't start failing here just because
+  // this function hasn't caught up yet.
   if (payload.event !== 'payment_link.paid') {
     return jsonResponse({ ok: true, skipped: payload.event });
   }
