@@ -41,8 +41,9 @@ export function buildReceiptHtml(params: ReceiptParams): string {
 <body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f; background:#faf7ee; margin:0; padding:32px 16px;">
   <table role="presentation" width="100%" style="max-width:560px; margin:0 auto; background:#fff; border:1px solid #e2ddc9; border-radius:12px; overflow:hidden;">
     <tr>
-      <td style="background:#3d6e52; padding:24px 28px;">
-        <span style="color:#fff; font-weight:700; font-size:1.1rem;">Tamarind Valley Collective</span>
+      <td style="background:#3d6e52; padding:20px 28px;">
+        <img src="https://tvc.farm/images/brand/tvc-logo-mark.png" width="32" height="32" alt="" style="vertical-align:middle; border-radius:50%; margin-right:10px;" />
+        <span style="color:#fff; font-weight:700; font-size:1.1rem; vertical-align:middle;">Tamarind Valley Collective</span>
       </td>
     </tr>
     <tr>
