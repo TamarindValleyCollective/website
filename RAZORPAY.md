@@ -60,11 +60,24 @@ Linger + the guest.
   configured secret's literal value, key ID included); the account's original live key from
   2026-07-27 had no saved secret, so it was regenerated rather than recovered.
 - `RAZORPAY_WEBHOOK_SECRET` — an arbitrary shared secret, same value entered on both this env var
-  and the Razorpay dashboard webhook config (Settings → Webhooks, Live mode → `payment_link.paid`
-  → `https://tvc.farm/api/razorpay-webhook`). Environment variable changes only take effect on
-  Netlify Functions after a fresh deploy — not immediately on save (a real gap we hit and fixed
-  2026-09-24: the webhook secret was updated but the running function still had the old value
-  until the next deploy).
+  and the Razorpay dashboard webhook config (Settings → Webhooks, Live mode → `payment_link.paid`,
+  `refund.created`, `refund.processed` → `https://tvc.farm/api/razorpay-webhook`). Environment
+  variable changes only take effect on Netlify Functions after a fresh deploy — not immediately on
+  save (a real gap we hit and fixed 2026-09-24: the webhook secret was updated but the running
+  function still had the old value until the next deploy).
+
+**Refunds sync back regardless of where they're initiated.** `razorpay-webhook.mts` also handles
+`refund.created`/`refund.processed`, looking the payment up by `razorpay_payment_id` and recording
+the refund the same way `event-payments-admin.mts`'s own refund action does
+(`recordRefund()`, refunded-by set to `'razorpay (synced via webhook)'` since there's no signed-in
+admin to attribute it to on this path). This means a refund issued straight from the Razorpay
+dashboard — not through `/internal/event-payments` — still shows up correctly there.
+`recordRefund()`'s `refunded_at is.null` guard makes both paths safe together: whichever one
+reaches Supabase first wins, the other is a no-op. **Requires `refund.created` and
+`refund.processed` to actually be added to the webhook's subscribed events in the Razorpay
+dashboard** — Razorpay's webhook-management API is Partner-only (OAuth + a sub-merchant
+`account_id`), not available to a direct merchant account like this one, so this can't be done
+via API and needs the dashboard toggle.
 - `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` / `RESEND_API_KEY` — all reused as-is from the
   WhatsApp integration, no new credentials needed.
 
