@@ -829,15 +829,23 @@ never touches Netlify either.
   site on its own: a human still has to run `scripts/pull-approved-photos.mjs` then
   `scripts/curate-photos.mjs` and `git push` afterward. A curator's saved description becomes the
   photo's actual caption once published — see `pull-approved-photos.mjs` and `curate-photos.mjs`
-  above. **Fully configured, not yet deployed**: Google Cloud service account, the four-folder
-  Drive tree (Inbox/Approved/Rejected/Published, `tvc-photo-pool@tvc-farm.iam.gserviceaccount.com`
-  as Editor), an OAuth 2.0 Client ID (Web application, published to Production — no verification
-  needed since it only requests non-sensitive `openid`/`email`/`profile` scopes), the curator
-  allow-list Sheet (shared view-only with the same service account, Sheets API enabled on the
-  project), and all Netlify env vars are set up; verified end-to-end via `netlify dev`, including
-  a real Google Sign-In with an allow-listed account (dashboard loads, list/thumbnail/approve/
-  reject/description all functional) and the same account removed from the allow-list (clean 403
-  with working recovery). Awaiting a push to `main` to actually go live.
+  above. **Live**: Google Cloud service account, the four-folder Drive tree (Inbox/Approved/
+  Rejected/Published, `tvc-photo-pool@tvc-farm.iam.gserviceaccount.com` as Editor), an OAuth 2.0
+  Client ID (Web application, published to Production — no verification needed since it only
+  requests non-sensitive `openid`/`email`/`profile` scopes), the curator allow-list Sheet (shared
+  view-only with the same service account, Sheets API enabled on the project), and all Netlify
+  env vars are set up; verified end-to-end via `netlify dev`, including a real Google Sign-In with
+  an allow-listed account (dashboard loads, list/thumbnail/approve/reject/description all
+  functional) and the same account removed from the allow-list (clean 403 with working recovery).
+  **CSP note (fixed 2026-09-24):** each card fetches its Drive thumbnail through the authenticated
+  Netlify Function (Drive's `thumbnailLink` can't be hit directly from the browser without
+  re-attaching credentials) and renders it via `URL.createObjectURL(blob)` — a `blob:` URL.
+  `scripts/generate-csp.mjs`'s `img-src` never allowlisted `blob:` (only `'self' data:` plus the
+  public-site image hosts), so every thumbnail on this page silently failed to decode under the
+  enforcing CSP shipped 2026-08-21 — reported as "can't see the images," reproduced live (thumb
+  fetch returns a valid JPEG; a browser-native `<img blob:...>` load, even of a locally-generated
+  synthetic blob, fails; the same bytes decode fine as a `data:` URL or with no CSP present).
+  `img-src` now includes `blob:`.
 - **WhatsApp dashboard** (`/internal/whatsapp`, 2026-08-20) — staff-only, same shape as Photo Pool
   above: unlinked, `noindex`, Google Sign-In gated, reusing the exact same curator allow-list
   Sheet. Shows every conversation persisted by `whatsapp-webhook.mts` in the "TVC ERP" Supabase

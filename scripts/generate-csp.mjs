@@ -75,7 +75,13 @@ const csp = [
   "default-src 'self'",
   `script-src ${scriptSrc}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: https://media.tvc.farm https://*.inaturalist.org https://inaturalist-open-data.s3.amazonaws.com https://*.tile.openstreetmap.org",
+  // blob: is needed for /internal/photo-pool: it fetches each Drive
+  // thumbnail through the authenticated Netlify Function (Drive's
+  // thumbnailLink can't be hit directly from the browser) and renders it via
+  // URL.createObjectURL(blob) - without blob: here, every thumbnail on that
+  // page silently fails to decode (CSP img-src violations don't throw a JS
+  // error the way a blocked script would).
+  "img-src 'self' data: blob: https://media.tvc.farm https://*.inaturalist.org https://inaturalist-open-data.s3.amazonaws.com https://*.tile.openstreetmap.org",
   "font-src 'self'",
   // GA4's actual runtime hit lands on analytics.google.com (a fallback to
   // stats.g.doubleclick.net too) - not www.google-analytics.com, that's a
