@@ -99,16 +99,13 @@ function statusFor(row: any): 'paid' | 'requested' | 'refunded' {
   return 'paid';
 }
 
-// Razorpay auto-fills this exact address as the payer's email for test-mode
-// card/UPI payments (confirmed against real rows recorded while proving out
-// this module — see RAZORPAY.md). There's no explicit test/live flag on the
-// payment entity to record at webhook time, so this is the only reliable
-// signal available after the fact; it's a heuristic, not a stored flag, but
-// it correctly identifies every test row seen so far.
-const RAZORPAY_TEST_PAYER_EMAIL = 'void@razorpay.com';
-
+// `mode` is set at webhook time (razorpay-webhook.mts) from whichever
+// Razorpay key actually processed the payment — deterministic, not a guess.
+// A row with no mode recorded (shouldn't happen post-migration 0021, but
+// defensive against any gap) is treated as real rather than hidden: showing
+// an uncertain row is a smaller mistake than hiding a real registration.
 function isTestPayment(row: any): boolean {
-  return row.payer_email?.toLowerCase() === RAZORPAY_TEST_PAYER_EMAIL;
+  return row.mode === 'test';
 }
 
 async function handleBookings(url: URL): Promise<Response> {

@@ -129,6 +129,14 @@ export default async (req: Request): Promise<Response> => {
   const eventTitle = notes.event || paymentLink.description || eventReferenceId;
   const attendeeCount = Number.parseInt(notes.attendeeCount ?? '1', 10) || 1;
   const payerName = notes.primaryContactName || null;
+  // Which mode actually processed this payment, so event-payments-admin.mts
+  // can filter test payments out of the dashboard deterministically instead
+  // of guessing from payer_email. Whichever key is active right now is the
+  // one that authenticated this exact request — test-mode payments can only
+  // ever be made against rzp_test_ keys in the first place. Defaults to
+  // 'live' if the key is somehow unset, since hiding a real registration
+  // would be worse than showing an uncertain one.
+  const mode = process.env.RAZORPAY_KEY_ID?.startsWith('rzp_test_') ? 'test' : 'live';
 
   let recorded;
   try {
@@ -143,6 +151,7 @@ export default async (req: Request): Promise<Response> => {
       payerName,
       payerEmail: payment.email,
       payerContact: payment.contact,
+      mode,
     });
   } catch (err) {
     console.error('[razorpay-webhook] Failed to record payment', err);

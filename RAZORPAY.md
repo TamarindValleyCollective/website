@@ -89,14 +89,19 @@ migration `0020_event_payments_refunds.sql`) and emails the payer a confirmation
 writes `cancellation_requested_at` to (a guest-initiated *request*, not a refund) — a row only
 counts as cancelled in this page's stats once `refunded_at` is actually set.
 
-**Test-mode payments are hidden by default.** There's no explicit test/live flag stored on an
-`event_payments` row (Razorpay's webhook payload doesn't carry one), but Razorpay auto-fills
-`void@razorpay.com` as the payer's email for test-mode card/UPI payments — confirmed against the
-real rows recorded proving this module out (2026-09-24, `payer_email = 'void@razorpay.com'` on
-every one of them). The dashboard filters those out of the booking list and stats by default,
-with a "Showing N test payments" checkbox to include them when needed (e.g. verifying the webhook
-chain still works). This is a heuristic tied to Razorpay's own test-mode behavior, not a stored
-flag — see `isTestPayment()` in `event-payments-admin.mts`.
+**Test-mode payments are hidden by default.** Razorpay's `payment_link.paid` webhook payload
+carries no explicit test/live flag, so `razorpay-webhook.mts` derives one itself at the moment it
+handles each webhook — `mode` is `'test'` if `RAZORPAY_KEY_ID` starts with `rzp_test_`, `'live'`
+otherwise (migration `0021_event_payments_mode.sql`) — and stores it on the row. This is
+deterministic, not a guess: whichever key is active is the one that actually authenticated that
+payment, since a test card/UPI can only ever be paid against test-mode keys in the first place.
+(An earlier version of this filter matched Razorpay's test-mode "quick pay" default email,
+`void@razorpay.com` — plausible from the data seen so far, but never confirmed as guaranteed
+Razorpay-wide behavior, so replaced with this instead.) The dashboard filters `mode = 'test'` rows
+out of the booking list and stats by default, with a "Showing N test payments" checkbox to
+include them when needed (e.g. verifying the webhook chain still works) — see `isTestPayment()`
+in `event-payments-admin.mts`. The five rows recorded proving this module out on 2026-09-24 (before
+the switch to live keys that same day) were backfilled to `mode = 'test'` by the migration itself.
 
 **Events using this flow:**
 
