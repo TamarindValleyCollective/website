@@ -11,7 +11,7 @@
 under the Netlify account owned by `contact@tvc.farm` (ownership moved there from a personal
 account on 2026-07-18). The site is almost entirely static (prerendered HTML/CSS/JS, no server
 at request time), with a small set of deliberate exceptions that need a serverless backend:
-eleven Netlify Functions (the site-wide chat assistant, `/api/search-ai` backing the site
+fourteen Netlify Functions (the site-wide chat assistant, `/api/search-ai` backing the site
 search's AI answer (Gemini API free tier first, falling back to the same Anthropic API
 the chat assistant uses), the event-interest counter backing past
 events' "Want this to happen again?" widget, `/api/photo-pool` backing the internal, unlinked
@@ -25,7 +25,10 @@ WhatsApp reply dashboard at `/internal/whatsapp`, a scheduled (cron, no HTTP pat
 `/api/accommodation-admin` backing the internal, unlinked tent-booking dashboard at
 `/internal/accommodation-calendar` — the public, aggregate-only availability view this admin
 tool was originally built alongside was deliberately **not** shipped to production with it
-(dropped 2026-08-30, approach TBD)), Netlify Blobs
+(dropped 2026-08-30, approach TBD), and three functions backing the reusable event payment
+module — `/api/event-booking` (creates a per-booking Razorpay Payment Link), `/api/razorpay-
+webhook` (records a paid booking, emails a receipt), and `/api/cancel-booking` (records a guest's
+cancellation request) — live as of 2026-09-24, see `RAZORPAY.md`), Netlify Blobs
 (public storage for the event-interest counter — the site's only *readable* server-side state
 that isn't gated behind a secret; everything else below is either write-only or, for photo-pool,
 gated), and Netlify Forms (the membership enquiry form on `/join`, the general enquiry form on
@@ -42,7 +45,12 @@ fully configured and **verified directly against production** (`/internal/photo-
 `/api/enquiry` is **live and verified**: its two Google Sheets
 are created, shared Editor-access with the service account, and their ids set as
 `MEMBERSHIP_ENQUIRY_SHEET_ID`/`GENERAL_ENQUIRY_SHEET_ID` — a direct `POST` to
-`https://tvc.farm/api/enquiry` for each form type appended a real row successfully. Email
+`https://tvc.farm/api/enquiry` for each form type appended a real row successfully. The event
+payment module (`event-booking.mts`/`razorpay-webhook.mts`/`cancel-booking.mts`) is **live** as
+of 2026-09-24: real `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET`/`RAZORPAY_WEBHOOK_SECRET` are set, a
+live-mode webhook is configured, and a real Payment Link creation was verified directly against
+the live API — see `RAZORPAY.md` for the full writeup, including a real bug found going live.
+Email
 notification for this form and every other form without its own override runs through one
 site-wide "Email notification" rule (Site configuration → Forms → Form notifications, no
 per-form `form_name` set), pointed at `core-team@tvc.farm` (moved from `contact@tvc.farm` on
@@ -83,6 +91,9 @@ flowchart TD
         FUNC_SRC7["netlify/functions/whatsapp-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>lists conversations/messages from Supabase,<br/>sends replies via Meta's Send Message API"]
         FUNC_SRC8["netlify/functions/whatsapp-stale-alert.mts<br/>Scheduled function (cron, every 15 min) —<br/>emails core-team@tvc.farm one digest of<br/>WhatsApp conversations unread 60+ min,<br/>re-sent hourly per conversation until read"]
         FUNC_SRC9["netlify/functions/accommodation-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>full tent-booking CRUD backed by Postgres<br/>(EXCLUDE constraints make double-booking<br/>physically impossible), guest directory,<br/>full audit log, past-booking justification"]
+        FUNC_SRC11["netlify/functions/event-booking.mts<br/>Serverless function — reads an event's base<br/>Payment Link price via Razorpay's API,<br/>multiplies by attendee count, creates a<br/>fresh per-booking Payment Link, redirects"]
+        FUNC_SRC12["netlify/functions/razorpay-webhook.mts<br/>Serverless function — verifies payment_link.paid<br/>signature, records payment in Supabase<br/>(idempotent), emails a branded receipt"]
+        FUNC_SRC13["netlify/functions/cancel-booking.mts<br/>Serverless function — records a guest's<br/>cancellation request (not an automatic<br/>refund), notifies TVC + Linger + guest"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
     end
 
@@ -105,6 +116,9 @@ flowchart TD
         APIFN7["Netlify Function: /api/whatsapp-admin<br/>Deployed and live — real conversations<br/>read/replied to via /internal/whatsapp"]
         APIFN8["Netlify Function: whatsapp-stale-alert<br/>Scheduled (cron), no HTTP path —<br/>deployed and live"]
         APIFN9["Netlify Function: /api/accommodation-admin<br/>Deployed and live — merged 2026-08-30,<br/>verified against production"]
+        APIFN11["Netlify Function: /api/event-booking<br/>Deployed and live — real live Razorpay keys,<br/>Payment Link creation verified 2026-09-24"]
+        APIFN12["Netlify Function: /api/razorpay-webhook<br/>Deployed and live — live-mode webhook<br/>configured, signature verification confirmed"]
+        APIFN13["Netlify Function: /api/cancel-booking<br/>Deployed and live"]
         BLOBS["Netlify Blobs<br/>'event-interest' store — one JSON record per<br/>past event id, {count, emails[]}, optimistic-<br/>concurrency writes. Reset via netlify blobs:delete<br/>event-interest &lt;id&gt;.<br/>'search-ai-rate-limit' store — per-IP window +<br/>daily Anthropic-fallback budget records"]
         FORMS["Netlify Forms<br/>Captures /contact membership + general<br/>enquiries, /visit/host-an-event inquiries,<br/>/visit camping·day-visit·trekking inquiries,<br/>and event-interest submissions with an email"]
     end
@@ -127,6 +141,8 @@ flowchart TD
         CLARITY["Microsoft Clarity<br/>Loaded from BaseLayout, same consent gate<br/>as GA, skipped on localhost"]
         WEATHER["WeatherWidget (/ecosystem/geography)<br/>Fetches current conditions from<br/>Open-Meteo, no API key"]
         RAINFALL["Rainfall chart/table/monsoon stat<br/>(/ecosystem/weather)<br/>Fetches /api/rainfall client-side,<br/>1hr-cached in localStorage"]
+        BOOKINGFORM["EventBookingForm.astro<br/>(rendered on an opted-in event's page)<br/>name/email/phone/headcount, calls<br/>/api/event-booking, redirects to Razorpay.<br/>Prefills from a returning visitor's<br/>last booking via localStorage"]
+        CANCELPAGE["/cancel-booking page<br/>Linked from the receipt email —<br/>shows booking summary, confirms<br/>cancellation request via /api/cancel-booking"]
     end
 
     subgraph INTERNAL5["5 · Internal tool — staff-only, not part of the public site flow"]
@@ -151,7 +167,8 @@ flowchart TD
         GSC["Google Search Console API<br/>urlInspection.index.inspect — read-only,<br/>same service account (Full user on the<br/>property as of 2026-08-08),<br/>called from a local script only"]
         RESEND["Resend API<br/>Transactional email — noreply@tvc.farm,<br/>domain verified 2026-08-19,<br/>called from the GitHub Action above<br/>and whatsapp-stale-alert.mts"]
         WAMETA["Meta WhatsApp Cloud API<br/>Sends inbound message + template-status<br/>events to /api/whatsapp-webhook;<br/>receives replies from whatsapp-admin.mts;<br/>see WHATSAPP.md for setup status"]
-        SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages —<br/>service_role key, called server-side only<br/>(whatsapp-webhook.mts writes,<br/>whatsapp-admin.mts reads + writes)"]
+        SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages,<br/>event_payments — service_role key, called<br/>server-side only"]
+        RAZORPAY["Razorpay API<br/>Payment Links (create/fetch) +<br/>payment_link.paid webhook.<br/>Live keys as of 2026-09-24 —<br/>see RAZORPAY.md"]
     end
 
     SRC --> BUILD
@@ -173,6 +190,14 @@ flowchart TD
     APIFN6 -.->|"upsert conversation,<br/>insert inbound message"| SUPABASE
     APIFN8 -.->|"query unread 60+ min"| SUPABASE
     APIFN8 -.->|"send digest email"| RESEND
+    BOOKINGFORM --> APIFN11
+    APIFN11 -.->|"fetch base link price,<br/>create per-booking link"| RAZORPAY
+    RAZORPAY -.->|"payment_link.paid webhook"| APIFN12
+    APIFN12 -.->|"record payment<br/>(idempotent)"| SUPABASE
+    APIFN12 -.->|"send branded receipt"| RESEND
+    CANCELPAGE --> APIFN13
+    APIFN13 -.->|"look up + record<br/>cancellation request"| SUPABASE
+    APIFN13 -.->|"notify TVC + Linger + guest"| RESEND
     SCRIPT_CURATE -.->|"S3-compatible upload"| R2
     SCRIPT_CURATE -->|"writes"| CONTENT
     SCRIPT_CAPTION -.->|"vision request per photo"| ANTHROPIC
@@ -218,9 +243,9 @@ flowchart TD
     classDef localStyle fill:#eef0f5,stroke:#6b7280,color:#374151
     classDef ciStyle fill:#eef4fb,stroke:#3b6ea5,color:#1c3f5f
 
-    class PAGES,INTERNALPAGE,INTERNALPAGE2,INTERNALPAGE3,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH,WHATSAPPDASH,ACCOMMODATIONDASH staticStyle
-    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,BLOBS,FORMS,ANTHROPIC netlifyStyle
-    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,SUPABASE,GEMINI externalStyle
+    class PAGES,INTERNALPAGE,INTERNALPAGE2,INTERNALPAGE3,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH,WHATSAPPDASH,ACCOMMODATIONDASH,BOOKINGFORM,CANCELPAGE staticStyle
+    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,BLOBS,FORMS,ANTHROPIC netlifyStyle
+    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,SUPABASE,GEMINI,RAZORPAY externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL,SCRIPT_GSC localStyle
     class GHA_MEMBER ciStyle
@@ -428,6 +453,55 @@ outside both the local machine and Netlify (the member-update-email workflow).
   availability view this once also backed (`listBookingsForAvailability`) was removed when that
   view was dropped from this launch (2026-08-30) — a future public view is separate, undesigned
   work.
+- **`netlify/functions/event-booking.mts`** — backs `EventBookingForm.astro` (rendered on any
+  event whose content frontmatter sets `razorpayReferenceId` — see `content.config.ts` and
+  `EventDetailView.astro`). A reusable, event-agnostic flow: each opted-in event has its own
+  hand-created base Razorpay Payment Link (created via the Razorpay MCP, same as every link in
+  `RAZORPAY.md`'s table) whose amount is the trusted per-person price and whose `reference_id` is
+  what the event's frontmatter points at — that link is never paid directly. This function looks
+  it up by `reference_id` via Razorpay's REST API, multiplies its price by the attendee count the
+  visitor submitted, creates a fresh one-off Payment Link for that total (carrying
+  `baseReferenceId`/`event`/`attendeeCount`/`primaryContactName` in `notes` so
+  `razorpay-webhook.mts` below needs no per-event code of its own), and redirects the browser to
+  it. **Live** as of 2026-09-24 — real live-mode keys, one real Payment Link creation verified
+  directly against the API. A genuine bug (Razorpay's list endpoint returns `payment_links`, not
+  `items` as the code originally assumed) was found and fixed via this first real test, since the
+  code had only ever previously been exercised against constructed mock `Request` objects — see
+  `RAZORPAY.md`.
+- **`netlify/functions/lib/razorpay.ts`** — shared Razorpay REST helpers for the three functions
+  below: `fetchBasePaymentLink()`, `createPaymentLink()` (hand-rolled `fetch` + Basic Auth, no
+  `razorpay` npm package, matching this repo's small-hand-rolled-client-over-heavy-SDK preference —
+  see `google-drive.mjs`/`supabase.mjs`), and `verifyWebhookSignature()` (HMAC-SHA256 over the raw
+  webhook body using `RAZORPAY_WEBHOOK_SECRET`, same shape as `whatsapp-webhook.mts`'s Meta
+  signature check).
+- **`netlify/functions/razorpay-webhook.mts`** — Razorpay's webhook endpoint, subscribed to
+  `payment_link.paid` (Razorpay dashboard, Settings → Webhooks — a separate config per Test/Live
+  mode; see `RAZORPAY.md`'s setup notes). Verifies the signature, then records the payment in the
+  `event_payments` table (Supabase "TVC ERP" project, via
+  `scripts/lib/event-payments-db.mjs`'s ignore-duplicates insert on `razorpay_payment_id` — safe
+  against Razorpay's documented at-least-once webhook delivery/retries) and emails a branded
+  receipt (`netlify/functions/lib/payment-receipt.ts`, with the TVC logo mark) via Resend, CC'd to
+  `core-team@tvc.farm` and `stay@linger.in`. Zero per-event code: which event and how many people
+  travel entirely in the Payment Link's own `notes`, set either by hand on a base link paid
+  directly, or by `event-booking.mts` above on a per-booking link. **Live** as of 2026-09-24 — a
+  real signature-mismatch was hit and fixed the same day (the webhook secret was updated in both
+  places, but Netlify Functions only pick up an environment variable change on the *next* deploy,
+  not immediately — a real, documented Netlify behavior, not a bug in this code).
+- **`netlify/functions/cancel-booking.mts`** — backs `src/pages/cancel-booking.astro`, linked
+  from the receipt email above. A guest-initiated **cancellation request**, not an automatic
+  refund: TVC's `/refund-policy` has day-before-event tiers a human applies by hand, so this only
+  records that a guest asked (`requestCancellationIfNew`, idempotent) and emails TVC + Linger +
+  the guest — the same "request, human follows up" shape `BookingInquiry.astro`'s forms already
+  use elsewhere on the site. A `GET ?paymentId=` returns the booking summary for the page to show
+  before the guest confirms; `POST` records the request. Reusable the same way
+  `razorpay-webhook.mts` is — nothing here is specific to one event.
+- **`scripts/lib/event-payments-db.mjs`** — hand-rolled Supabase PostgREST REST client (same
+  style as `supabase.mjs`/`accommodation-db.mjs`) for the `event_payments` table
+  (`supabase/migrations/0018_event_payments.sql`, `0019_event_payments_cancellation.sql`).
+  `recordPaymentIfNew()` (ignore-duplicates insert, keyed on a unique index over
+  `razorpay_payment_id`), `getPaymentByRazorpayId()`, and `requestCancellationIfNew()`
+  (cancel-only-if-not-already-requested update) are used by `razorpay-webhook.mts` and
+  `cancel-booking.mts` above.
 - **`scripts/lib/supabase.mjs`** — hand-rolled Supabase PostgREST REST client (`fetch` + the
   `service_role` key, no `@supabase/supabase-js` dependency — matching this repo's preference for
   small hand-rolled clients over heavy libraries) for the `whatsapp_conversations`/
@@ -635,7 +709,18 @@ trusting this note, since it's already flipped once.)
   (`RAINFALL_SHEET_ID`, shared Viewer-access only, since this path never writes) live on every
   page view for the `/ecosystem/weather` chart/table/monsoon stat. `search-ai.mts` serves
   `/api/search-ai`, backing the site search's AI answer — deployed and live, verified directly
-  against production 2026-09-21, answering from the Gemini free tier.
+  against production 2026-09-21, answering from the Gemini free tier. `event-booking.mts`,
+  `razorpay-webhook.mts`, and `cancel-booking.mts` serve `/api/event-booking`,
+  `/api/razorpay-webhook`, and `/api/cancel-booking` — **live** as of 2026-09-24.
+  `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET` (real `rzp_live_...` credentials, regenerated 2026-09-24
+  since the account's original 2026-07-27 live key had no saved secret) and
+  `RAZORPAY_WEBHOOK_SECRET` (an arbitrary shared value, entered identically on this env var and on
+  the Razorpay dashboard's live-mode webhook config) are set for all deploy contexts; a real
+  Payment Link creation was verified directly against the live API, and the webhook's signature
+  verification was confirmed after a real gap was found and fixed (see `RAZORPAY.md`: updating an
+  environment variable doesn't take effect on Netlify Functions until the *next* deploy).
+  `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`RESEND_API_KEY` are reused as-is from the WhatsApp
+  integration below — no new credentials needed for those.
 - **Netlify Blobs** — live. Two stores. `event-interest` holds one JSON record per past event id
   (`{count, emails[]}`), written only by `event-interest.mts` (optimistic-concurrency writes via
   ETag `onlyIfMatch`/`onlyIfNew`, with a bounded retry loop, so two concurrent submissions can't
@@ -909,6 +994,7 @@ never touches Netlify either.
 | WhatsApp reply dashboard (`/internal/whatsapp`, `/api/whatsapp-admin`) | ✅ Live — verified end-to-end with real WhatsApp messages and real replies sent from production. Unread indicators, real pagination, message previews, per-reply responder names, WhatsApp/iMessage-style avatars, and a full visual pass added 2026-08-20 after real usage surfaced gaps |
 | WhatsApp unread digest (`whatsapp-stale-alert.mts`, scheduled) | ✅ Live — cron every 15 minutes, emails `core-team@tvc.farm` one digest of conversations unread 60+ minutes, re-sent hourly per conversation until read. Replaces the old per-message email (2026-08-20) |
 | Accommodation Allocation dashboard (`/internal/accommodation-calendar`, `/api/accommodation-admin`) | ✅ Live — merged to `main` and deployed 2026-08-30 (PR #116); verified directly against production (`/internal/accommodation-calendar` returns 200, `/api/accommodation-admin/bookings` returns 401 unauthenticated as expected for the Google Sign-In gate, `accommodation-admin` listed among the deploy's live functions). The public availability view (`/visit/availability`) built alongside it was **not** included in this launch — dropped 2026-08-30, pending a rethink; confirmed 404 on production |
+| Event payment tracking (`EventBookingForm`, `/api/event-booking`, `/api/razorpay-webhook`, `/api/cancel-booking`) | ✅ Live as of 2026-09-24 — real live-mode Razorpay keys and webhook configured; a real Payment Link creation verified directly against the live API. One event uses it so far (Foraging Day, 10 Oct 2026); reusable for any event with no code change — see `RAZORPAY.md`. Full webhook→Supabase→receipt chain confirmed in Test mode with two real test payments; Live mode confirmed only through Payment Link creation (an unpaid dry run), not yet through an actual completed live payment |
 
 The membership/general enquiry forms are fully live — Sheets logging verified with real
 production `POST`s, and email routes to `core-team@tvc.farm` via the site-wide Netlify Forms
