@@ -294,10 +294,17 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
      label's hint text) is covered by the identical :global() rule too,
      since :global() still matches inside the un-scoped static markup. */
   /* Same story as .refund-tier-hint/.refund-confirm above: the confirm/
-     danger/refresh buttons inside bulk-cancel-review's innerHTML need the
-     :global() form of .button and its variants too — the plain rules above
-     (used by this panel's *static* Review/Cancel buttons) never match them. */
-  :global(#bulk-cancel-panel .button) {
+     refresh buttons inside bulk-cancel-review's innerHTML need the :global()
+     form of .button and its variants too. Scoped to #bulk-cancel-review
+     specifically (the dynamic-content container), NOT the whole
+     #bulk-cancel-panel — a real bug found live: scoping this to the whole
+     panel gave it higher specificity (id+class) than the plain
+     .button--primary rule above (class only), so it silently overrode the
+     *static* Review button's green background with this rule's plain white
+     one, leaving white text on a white button. #bulk-cancel-review-btn and
+     #bulk-cancel-close-btn are siblings of #bulk-cancel-review, not inside
+     it, so this scope can't touch them again. */
+  :global(#bulk-cancel-review .button) {
     appearance: none;
     border: 1px solid var(--tvc-line);
     background: #fff;
@@ -309,13 +316,13 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     cursor: pointer;
   }
 
-  :global(#bulk-cancel-panel .button--danger) {
+  :global(#bulk-cancel-review .button--danger) {
     background: var(--tvc-error-text);
     border-color: var(--tvc-error-text);
     color: #fff;
   }
 
-  :global(#bulk-cancel-panel .button:disabled) {
+  :global(#bulk-cancel-review .button:disabled) {
     opacity: 0.5;
     cursor: not-allowed;
   }
