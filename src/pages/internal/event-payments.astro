@@ -87,7 +87,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
         </div>
 
         <div id="bulk-cancel-section" class="bulk-cancel">
-          <button type="button" id="bulk-cancel-open" class="button button--danger-outline">Cancel entire event &amp; refund everyone</button>
+          <button type="button" id="bulk-cancel-open" class="button button--danger-outline button--small">Cancel event</button>
           <div id="bulk-cancel-panel" class="bulk-cancel-panel card" hidden>
             <p id="bulk-cancel-summary" class="bulk-cancel-summary"></p>
             <label class="bulk-cancel-field">
@@ -198,17 +198,31 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     cursor: not-allowed;
   }
 
+  .button--small {
+    padding: 5px 12px;
+    font-size: 0.78rem;
+  }
+
+  /* A small, secondary trigger for a rare/destructive action shouldn't sit
+     in its own full-width row — right-aligned and tightly spaced so it
+     reads as "also available here", not as a second headline action next
+     to the stats above it. */
   .bulk-cancel {
-    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    margin-bottom: 12px;
   }
 
   .bulk-cancel-panel {
     margin-top: 10px;
     padding: 16px 18px;
     max-width: 420px;
+    width: 100%;
     display: flex;
     flex-direction: column;
     gap: 10px;
+    text-align: left;
   }
 
   .bulk-cancel-summary {
@@ -236,27 +250,88 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
      panel lives in the static template, unlike the per-row refund form
      which is built via innerHTML inside #bookings-body and needs the
      :global() rules further down (see that block's own comment). */
-  .refund-tier-hint {
-    font-size: 0.78rem;
-    color: var(--tvc-ink-soft);
-    font-weight: 400;
-  }
-
   .refund-actions {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
   }
 
-  .refund-confirm {
+  /* :global(), not plain — bulk-cancel-review's *contents* (.refund-tier-hint's
+     "Refunded N of M" message, .refund-confirm, .bulk-cancel-breakdown) are
+     all built via innerHTML at runtime, same as the per-row refund form
+     inside #bookings-body further down. Astro's scoped CSS only tags
+     elements present in this file's static template, so a plain selector
+     here would silently never match — .refund-actions above stays plain
+     because both its uses (Reason label, this form's own Review/Cancel
+     buttons) are static; .refund-tier-hint's *static* use (the Reason
+     label's hint text) is covered by the identical :global() rule too,
+     since :global() still matches inside the un-scoped static markup. */
+  /* Same story as .refund-tier-hint/.refund-confirm above: the confirm/
+     danger/refresh buttons inside bulk-cancel-review's innerHTML need the
+     :global() form of .button and its variants too — the plain rules above
+     (used by this panel's *static* Review/Cancel buttons) never match them. */
+  :global(#bulk-cancel-panel .button) {
+    appearance: none;
+    border: 1px solid var(--tvc-line);
+    background: #fff;
+    border-radius: 999px;
+    padding: 8px 18px;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.86rem;
+    cursor: pointer;
+  }
+
+  :global(#bulk-cancel-panel .button--danger) {
+    background: var(--tvc-error-text);
+    border-color: var(--tvc-error-text);
+    color: #fff;
+  }
+
+  :global(#bulk-cancel-panel .button:disabled) {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  :global(#bulk-cancel-panel .refund-tier-hint) {
+    font-size: 0.78rem;
+    color: var(--tvc-ink-soft);
+    font-weight: 400;
+  }
+
+  :global(#bulk-cancel-panel .refund-confirm) {
     padding: 10px 12px;
     background: var(--tvc-orange-tint);
     border-radius: 8px;
     font-size: 0.86rem;
   }
 
-  .refund-confirm p {
+  :global(#bulk-cancel-panel .refund-confirm p) {
     margin: 0 0 8px;
+  }
+
+  :global(#bulk-cancel-panel .bulk-cancel-breakdown) {
+    list-style: none;
+    margin: 0 0 8px;
+    padding: 0;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--tvc-line);
+    border-radius: 8px;
+    background: #fff;
+  }
+
+  :global(#bulk-cancel-panel .bulk-cancel-breakdown li) {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 10px;
+    font-size: 0.84rem;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  :global(#bulk-cancel-panel .bulk-cancel-breakdown li:last-child) {
+    border-bottom: none;
   }
 
   .event-picker {
@@ -1038,11 +1113,20 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     const eligible = eligibleForBulkRefund(currentBookings);
     const currency = currentBookings[0]?.currency ?? 'INR';
     const fraction = percent / 100;
-    const total = eligible.reduce((sum, b) => sum + Math.round(b.amount * fraction), 0);
+    // The actual plan being approved: who gets how much, not just an
+    // aggregate — an admin cancelling a whole event should see the per-
+    // person breakdown before confirming, the same way a single-row refund
+    // already shows the one payer/amount being sent.
+    const breakdown = eligible.map((b) => ({ name: b.payerName ?? b.payerEmail ?? 'Unknown payer', amount: Math.round(b.amount * fraction) }));
+    const total = breakdown.reduce((sum, row) => sum + row.amount, 0);
 
     bulkCancelReview.innerHTML = `
       <div class="refund-confirm">
-        <p>Refund <strong>${eligible.length}</strong> booking${eligible.length === 1 ? '' : 's'} at <strong>${percent}%</strong> each, totaling <strong>${formatAmount(total, currency)}</strong>? This cannot be undone from here.</p>
+        <p>Refund <strong>${eligible.length}</strong> booking${eligible.length === 1 ? '' : 's'} at <strong>${percent}%</strong> each:</p>
+        <ul class="bulk-cancel-breakdown">
+          ${breakdown.map((row) => `<li><span>${escapeHtml(row.name)}</span><span>${formatAmount(row.amount, currency)}</span></li>`).join('')}
+        </ul>
+        <p>Total <strong>${formatAmount(total, currency)}</strong>. This cannot be undone from here.</p>
         <button type="button" class="button button--danger bulk-cancel-confirm-btn">Yes, refund ${eligible.length} booking${eligible.length === 1 ? '' : 's'}</button>
       </div>
     `;
@@ -1064,12 +1148,37 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
             includeTest: includeTestToggle.checked,
           }),
         });
-        const resData = await res.json();
-        if (!res.ok) throw new Error(resData.error ?? 'Bulk refund failed');
-        // Left showing until the table refresh below replaces this panel's
-        // contents entirely (renderBookings calls closeBulkCancelPanel).
-        bulkCancelReview.innerHTML = `<p class="refund-tier-hint">Refunded ${resData.succeeded} of ${resData.attempted} eligible bookings. Reloading…</p>`;
-        if (currentEvent) await loadBookings(currentEvent.referenceId);
+        const resData: { succeeded: number; attempted: number; results: Array<{ id: string; ok: boolean; error?: string }> } = await res.json();
+        if (!res.ok) throw new Error((resData as unknown as { error?: string }).error ?? 'Bulk refund failed');
+
+        const failures = resData.results.filter((r) => !r.ok);
+        const summary = `Refunded ${resData.succeeded} of ${resData.attempted} eligible bookings.`;
+
+        if (failures.length === 0) {
+          // Left showing until the reload below replaces this panel's
+          // contents entirely (renderBookings calls closeBulkCancelPanel).
+          bulkCancelReview.innerHTML = `<p class="refund-tier-hint">${summary} Reloading…</p>`;
+          if (currentEvent) await loadBookings(currentEvent.referenceId);
+          return;
+        }
+
+        // Don't auto-reload here — renderBookings() would call
+        // closeBulkCancelPanel() and wipe this list before the admin can
+        // read *why* each one failed (e.g. Razorpay rejecting a refund for
+        // insufficient account balance, hit for real 2026-09-25 — see
+        // refundOneBooking()'s error message). The successful ones are
+        // already refunded regardless; a manual refresh just catches the
+        // table up once the admin has seen the failures.
+        bulkCancelReview.innerHTML = `
+          <p class="refund-tier-hint">${summary} ${failures.length} failed:</p>
+          <ul class="bulk-cancel-breakdown">
+            ${failures.map((f) => `<li><span>${escapeHtml(currentBookings.find((b) => b.id === f.id)?.payerName ?? f.id)}</span><span>${escapeHtml(f.error ?? 'Unknown error')}</span></li>`).join('')}
+          </ul>
+          <button type="button" class="button bulk-cancel-refresh-btn">Refresh table</button>
+        `;
+        bulkCancelReview.querySelector('.bulk-cancel-refresh-btn')!.addEventListener('click', () => {
+          if (currentEvent) loadBookings(currentEvent.referenceId);
+        });
       } catch (err) {
         const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
         if (!handled) {

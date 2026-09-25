@@ -572,7 +572,11 @@ outside both the local machine and Netlify (the member-update-email workflow).
   call, for a full-event cancellation (weather, low turnout), sequentially against Razorpay so one
   failure doesn't take the batch down. `netCollected` now subtracts each row's known `fee_amount`
   (see `fee_amount` below) rather than just refunds, and the response includes
-  `unreconciledFeeCount` for rows that haven't been fee-checked yet.
+  `unreconciledFeeCount` for rows that haven't been fee-checked yet. A shared `refundOneBooking()`
+  backs both the single-row and bulk paths; on a Razorpay rejection it surfaces Razorpay's own
+  `error.description` (parsed in `lib/razorpay.ts`'s `createRefund()`) instead of a generic message
+  — found live that refunding a pre-settlement payment can fail with "account does not have enough
+  balance," which previously only reached server logs, never the admin clicking the button.
 - **`scripts/lib/event-payments-db.mjs`** — hand-rolled Supabase PostgREST REST client (same
   style as `supabase.mjs`/`accommodation-db.mjs`) for the `event_payments` table
   (`supabase/migrations/0018_event_payments.sql` through `0024_event_payments_fees.sql`).
