@@ -82,6 +82,28 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
             <span class="stat-label">Net collected</span>
             <span class="stat-value" id="stat-net"></span>
             <span class="stat-sub" id="stat-refunded"></span>
+            <span class="stat-sub" id="stat-fees"></span>
+          </div>
+        </div>
+
+        <div id="bulk-cancel-section" class="bulk-cancel">
+          <button type="button" id="bulk-cancel-open" class="button button--danger-outline">Cancel entire event &amp; refund everyone</button>
+          <div id="bulk-cancel-panel" class="bulk-cancel-panel card" hidden>
+            <p id="bulk-cancel-summary" class="bulk-cancel-summary"></p>
+            <label class="bulk-cancel-field">
+              Refund percentage
+              <input type="number" id="bulk-cancel-percent" min="1" max="100" step="1" value="100" />
+            </label>
+            <label class="bulk-cancel-field">
+              Reason <span class="refund-tier-hint">(kept for the audit trail)</span>
+              <textarea id="bulk-cancel-reason" rows="2"></textarea>
+            </label>
+            <p class="error" id="bulk-cancel-error" hidden></p>
+            <div id="bulk-cancel-review"></div>
+            <div class="refund-actions">
+              <button type="button" id="bulk-cancel-review-btn" class="button button--primary">Review</button>
+              <button type="button" id="bulk-cancel-close-btn" class="button">Cancel</button>
+            </div>
           </div>
         </div>
 
@@ -166,9 +188,75 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     color: #fff;
   }
 
+  .button--danger-outline {
+    color: var(--tvc-error-text);
+    border-color: var(--tvc-error-text);
+  }
+
   .button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .bulk-cancel {
+    margin-bottom: 20px;
+  }
+
+  .bulk-cancel-panel {
+    margin-top: 10px;
+    padding: 16px 18px;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .bulk-cancel-summary {
+    margin: 0;
+    font-size: 0.86rem;
+  }
+
+  .bulk-cancel-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.84rem;
+    font-weight: 600;
+  }
+
+  .bulk-cancel-field input,
+  .bulk-cancel-field textarea {
+    font: inherit;
+    padding: 6px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 8px;
+  }
+
+  /* Plain (non-:global) versions of the refund form's shared bits — this
+     panel lives in the static template, unlike the per-row refund form
+     which is built via innerHTML inside #bookings-body and needs the
+     :global() rules further down (see that block's own comment). */
+  .refund-tier-hint {
+    font-size: 0.78rem;
+    color: var(--tvc-ink-soft);
+    font-weight: 400;
+  }
+
+  .refund-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .refund-confirm {
+    padding: 10px 12px;
+    background: var(--tvc-orange-tint);
+    border-radius: 8px;
+    font-size: 0.86rem;
+  }
+
+  .refund-confirm p {
+    margin: 0 0 8px;
   }
 
   .event-picker {
@@ -199,7 +287,17 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     cursor: pointer;
   }
 
-  .badge--test {
+  /* Missing :global() until now — same innerHTML-injection issue the block
+     comment above #bookings-body td explains, this badge just hadn't been
+     caught: astro:scoped CSS never tags dynamically-created elements, so
+     this rule silently never matched and the "Test" pill rendered with only
+     the base .badge shape, no orange fill. */
+  :global(#bookings-body .badge--test) {
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+  }
+
+  :global(#bookings-body .badge--duplicate) {
     background: var(--tvc-orange-tint);
     color: var(--tvc-orange-text);
   }
@@ -474,9 +572,14 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     amount: number;
     currency: string;
     createdAt: string;
+    eventDate: string | null;
+    cancellationRequestedAt: string | null;
     refundAmount: number | null;
     status: 'paid' | 'requested' | 'refund_initiated' | 'refund_failed' | 'refunded';
     isTest: boolean;
+    isDuplicate: boolean;
+    paymentMethod: string | null;
+    feeAmount: number | null;
   }
 
   interface Aggregates {
@@ -484,7 +587,9 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     totalAttendees: number;
     grossCollected: number;
     totalRefunded: number;
+    totalFees: number;
     netCollected: number;
+    unreconciledFeeCount: number;
     cancelledCount: number;
     pendingRequestCount: number;
   }
@@ -507,8 +612,18 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   const testPaymentsNotice = document.getElementById('test-payments-notice') as HTMLElement;
   const testPaymentsNoticeText = document.getElementById('test-payments-notice-text') as HTMLElement;
   const includeTestToggle = document.getElementById('include-test-toggle') as HTMLInputElement;
+  const bulkCancelOpenBtn = document.getElementById('bulk-cancel-open') as HTMLButtonElement;
+  const bulkCancelPanel = document.getElementById('bulk-cancel-panel') as HTMLElement;
+  const bulkCancelSummary = document.getElementById('bulk-cancel-summary') as HTMLElement;
+  const bulkCancelPercent = document.getElementById('bulk-cancel-percent') as HTMLInputElement;
+  const bulkCancelReason = document.getElementById('bulk-cancel-reason') as HTMLTextAreaElement;
+  const bulkCancelError = document.getElementById('bulk-cancel-error') as HTMLElement;
+  const bulkCancelReview = document.getElementById('bulk-cancel-review') as HTMLElement;
+  const bulkCancelReviewBtn = document.getElementById('bulk-cancel-review-btn') as HTMLButtonElement;
+  const bulkCancelCloseBtn = document.getElementById('bulk-cancel-close-btn') as HTMLButtonElement;
 
   let currentEvent: EventOption | null = null;
+  let currentBookings: Booking[] = [];
   let openBookingId: string | null = null;
 
   function getToken(): string | null {
@@ -590,9 +705,20 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   // 7+ days → 75%, 48h–7 days → 50%, <48h → 0%. Mirrored here only to
   // pre-fill a *suggested* amount — the admin can always override it, and
   // event-payments-admin.mts doesn't re-derive or enforce this tier itself.
-  function suggestedRefundFraction(eventDateISO: string): number {
+  //
+  // Both dates are inputs, not "now"/"the event's current date":
+  // - referenceDateISO is when the guest actually asked to cancel
+  //   (booking.cancellationRequestedAt), not whenever the admin happens to
+  //   open this form — a delayed admin response must not shrink the guest's
+  //   entitled tier.
+  // - eventDateISO is the date the guest paid against
+  //   (booking.eventDate), not the event content file's *current* date —
+  //   an event rescheduled after payments came in (already happened once,
+  //   Foraging Day) must not retroactively change what was already earned.
+  function suggestedRefundFraction(eventDateISO: string, referenceDateISO: string): number {
     const eventDate = new Date(`${eventDateISO}T00:00:00+05:30`);
-    const hoursUntil = (eventDate.getTime() - Date.now()) / (60 * 60 * 1000);
+    const referenceDate = new Date(referenceDateISO);
+    const hoursUntil = (eventDate.getTime() - referenceDate.getTime()) / (60 * 60 * 1000);
     if (hoursUntil >= 7 * 24) return 0.75;
     if (hoursUntil >= 48) return 0.5;
     return 0;
@@ -677,6 +803,8 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
         <div class="detail-field"><span class="detail-label">Phone</span>${escapeHtml(booking.payerContact ?? '—')}</div>
         <div class="detail-field"><span class="detail-label">Attendees</span>${booking.attendeeCount}</div>
         <div class="detail-field"><span class="detail-label">Paid</span>${formatDate(booking.createdAt)}</div>
+        <div class="detail-field"><span class="detail-label">Method</span>${escapeHtml(booking.paymentMethod ?? '—')}</div>
+        <div class="detail-field"><span class="detail-label">Razorpay fee</span>${booking.feeAmount != null ? formatAmount(booking.feeAmount, booking.currency) : 'not yet reconciled'}</div>
       </div>
       <div class="detail-action" id="detail-action-${booking.id}"></div>
     `;
@@ -689,16 +817,23 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   function openRefundForm(booking: Booking, container: HTMLElement) {
     if (!currentEvent) return;
 
-    const fraction = suggestedRefundFraction(currentEvent.date);
+    // Fall back to the event's current content-file date for any booking
+    // recorded before event_date existed (see event-payments-admin.mts).
+    const eventDateISO = booking.eventDate ?? currentEvent.date;
+    const referenceDateISO = booking.cancellationRequestedAt ?? new Date().toISOString();
+    const fraction = suggestedRefundFraction(eventDateISO, referenceDateISO);
     const suggestedPaise = Math.round(booking.amount * fraction);
     const suggestedRupees = (suggestedPaise / 100).toFixed(2);
+    const referenceDateNote = booking.cancellationRequestedAt
+      ? `the cancellation request received ${formatDate(booking.cancellationRequestedAt)}`
+      : `today’s date (no cancellation request on file for this booking)`;
 
     container.innerHTML = `
       <form class="refund-form" data-booking-id="${booking.id}">
         <label>
           Refund amount (₹)
           <input type="number" step="0.01" min="0" max="${(booking.amount / 100).toFixed(2)}" value="${suggestedRupees}" required class="refund-amount" />
-          <span class="refund-tier-hint">Suggested per /refund-policy: ${tierLabel(fraction)}. Full amount paid: ${formatAmount(booking.amount, booking.currency)}.</span>
+          <span class="refund-tier-hint">Suggested per /refund-policy: ${tierLabel(fraction)}, based on ${referenceDateNote}. Full amount paid: ${formatAmount(booking.amount, booking.currency)}.</span>
         </label>
         <label>
           Reason <span class="refund-tier-hint">(optional, kept for the audit trail)</span>
@@ -780,6 +915,8 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
 
   function renderBookings(data: { bookings: Booking[]; aggregates: Aggregates; testPaymentCount: number }) {
     const { bookings, aggregates, testPaymentCount } = data;
+    currentBookings = bookings;
+    closeBulkCancelPanel();
 
     if (testPaymentCount > 0) {
       testPaymentsNotice.hidden = false;
@@ -798,6 +935,17 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     document.getElementById('stat-gross')!.textContent = formatAmount(aggregates.grossCollected, currency);
     document.getElementById('stat-net')!.textContent = formatAmount(aggregates.netCollected, currency);
     document.getElementById('stat-refunded')!.textContent = aggregates.totalRefunded > 0 ? `${formatAmount(aggregates.totalRefunded, currency)} refunded` : '';
+    const feesEl = document.getElementById('stat-fees')!;
+    if (aggregates.totalFees > 0 || aggregates.unreconciledFeeCount > 0) {
+      const feeText = aggregates.totalFees > 0 ? `${formatAmount(aggregates.totalFees, currency)} in Razorpay fees deducted` : '';
+      const unreconciledText =
+        aggregates.unreconciledFeeCount > 0
+          ? `${feeText ? ' — ' : ''}${aggregates.unreconciledFeeCount} payment${aggregates.unreconciledFeeCount === 1 ? '' : 's'} not yet fee-reconciled (net may be slightly high)`
+          : '';
+      feesEl.textContent = `${feeText}${unreconciledText}`;
+    } else {
+      feesEl.textContent = '';
+    }
 
     bookingsBody.innerHTML = '';
     openBookingId = null;
@@ -811,7 +959,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
       tr.innerHTML = `
         <td>${escapeHtml(booking.payerName ?? '—')}</td>
         <td>${formatAmount(booking.amount, booking.currency)}</td>
-        <td>${statusBadge(booking.status)}${booking.isTest ? ' <span class="badge badge--test">Test</span>' : ''}</td>
+        <td>${statusBadge(booking.status)}${booking.isTest ? ' <span class="badge badge--test">Test</span>' : ''}${booking.isDuplicate ? ' <span class="badge badge--duplicate" title="Another live booking from this email exists for this event">Possible duplicate</span>' : ''}</td>
         <td><span class="row-chevron">›</span></td>
       `;
       tr.addEventListener('click', () => openBookingDetail(booking));
@@ -847,6 +995,92 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
       }
     }
   }
+
+  // A booking is a candidate for the "cancel entire event" action under the
+  // same rule handleBulkRefund applies server-side: not already refunded,
+  // and not already mid-flight on a still-live refund attempt (a previously
+  // *failed* one is fair game to retry).
+  function eligibleForBulkRefund(bookings: Booking[]): Booking[] {
+    return bookings.filter((b) => b.status === 'paid' || b.status === 'refund_failed');
+  }
+
+  function closeBulkCancelPanel() {
+    bulkCancelPanel.hidden = true;
+    bulkCancelError.hidden = true;
+    bulkCancelReview.innerHTML = '';
+    bulkCancelReviewBtn.hidden = false;
+    bulkCancelPercent.value = '100';
+    bulkCancelReason.value = '';
+  }
+
+  bulkCancelOpenBtn.addEventListener('click', () => {
+    const eligible = eligibleForBulkRefund(currentBookings);
+    const currency = currentBookings[0]?.currency ?? 'INR';
+    const total = eligible.reduce((sum, b) => sum + b.amount, 0);
+    bulkCancelSummary.textContent =
+      eligible.length === 0
+        ? 'No bookings for this event are eligible for a refund right now.'
+        : `${eligible.length} booking${eligible.length === 1 ? '' : 's'} eligible, totaling ${formatAmount(total, currency)} at 100%.`;
+    bulkCancelReviewBtn.disabled = eligible.length === 0;
+    bulkCancelPanel.hidden = false;
+  });
+
+  bulkCancelCloseBtn.addEventListener('click', closeBulkCancelPanel);
+
+  bulkCancelReviewBtn.addEventListener('click', () => {
+    bulkCancelError.hidden = true;
+    const percent = Number(bulkCancelPercent.value);
+    if (!Number.isFinite(percent) || percent <= 0 || percent > 100) {
+      bulkCancelError.textContent = 'Enter a refund percentage between 1 and 100.';
+      bulkCancelError.hidden = false;
+      return;
+    }
+    const eligible = eligibleForBulkRefund(currentBookings);
+    const currency = currentBookings[0]?.currency ?? 'INR';
+    const fraction = percent / 100;
+    const total = eligible.reduce((sum, b) => sum + Math.round(b.amount * fraction), 0);
+
+    bulkCancelReview.innerHTML = `
+      <div class="refund-confirm">
+        <p>Refund <strong>${eligible.length}</strong> booking${eligible.length === 1 ? '' : 's'} at <strong>${percent}%</strong> each, totaling <strong>${formatAmount(total, currency)}</strong>? This cannot be undone from here.</p>
+        <button type="button" class="button button--danger bulk-cancel-confirm-btn">Yes, refund ${eligible.length} booking${eligible.length === 1 ? '' : 's'}</button>
+      </div>
+    `;
+    bulkCancelReviewBtn.hidden = true;
+
+    bulkCancelReview.querySelector('.bulk-cancel-confirm-btn')!.addEventListener('click', async () => {
+      const confirmBtn = bulkCancelReview.querySelector('.bulk-cancel-confirm-btn') as HTMLButtonElement;
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Refunding…';
+      try {
+        if (!currentEvent) throw new Error('No event selected');
+        const res = await authedFetch('/api/event-payments-admin/bulk-refund', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            eventReferenceId: currentEvent.referenceId,
+            fraction,
+            reason: bulkCancelReason.value.trim() || undefined,
+            includeTest: includeTestToggle.checked,
+          }),
+        });
+        const resData = await res.json();
+        if (!res.ok) throw new Error(resData.error ?? 'Bulk refund failed');
+        // Left showing until the table refresh below replaces this panel's
+        // contents entirely (renderBookings calls closeBulkCancelPanel).
+        bulkCancelReview.innerHTML = `<p class="refund-tier-hint">Refunded ${resData.succeeded} of ${resData.attempted} eligible bookings. Reloading…</p>`;
+        if (currentEvent) await loadBookings(currentEvent.referenceId);
+      } catch (err) {
+        const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
+        if (!handled) {
+          bulkCancelError.textContent = err instanceof Error ? err.message : 'Bulk refund failed';
+          bulkCancelError.hidden = false;
+          bulkCancelReview.innerHTML = '';
+          bulkCancelReviewBtn.hidden = false;
+        }
+      }
+    });
+  });
 
   includeTestToggle.addEventListener('change', () => {
     if (currentEvent) loadBookings(currentEvent.referenceId);

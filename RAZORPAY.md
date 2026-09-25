@@ -146,6 +146,59 @@ include them when needed (e.g. verifying the webhook chain still works) — see 
 in `event-payments-admin.mts`. The five rows recorded proving this module out on 2026-09-24 (before
 the switch to live keys that same day) were backfilled to `mode = 'test'` by the migration itself.
 
+**Refund-tier suggestion now keys off the right dates (2026-09-25).** The suggested refund
+percentage on `/internal/event-payments` used to compute days-until-event from *today's date* and
+the event content file's *current* date — two bugs found while planning a settlement-reconciliation
+pass: a delayed admin response could unfairly shrink a guest's entitled tier (should use the date
+the guest *asked* to cancel), and an event rescheduled after payments came in (already happened
+once, Foraging Day) would retroactively change what guests had already earned (should use the date
+the guest *paid against*). Fixed by threading a new `eventDate` prop through
+`EventBookingForm.astro` → `event-booking.mts` → the per-booking Payment Link's `notes.eventDate` →
+`razorpay-webhook.mts` → a new `event_date` column (migration
+`0023_event_payments_event_date.sql`), and using `cancellation_requested_at` instead of "now" for
+the other date. Rows recorded before this (null `event_date`) still fall back to the event's
+current content-file date, same as before.
+
+**Duplicate-payment guard (2026-09-25).** `event-booking.mts` used to mint a fresh, randomly-suffixed
+Payment Link on every submit — a guest who double-clicked Pay, or hit back and resubmitted before
+finishing checkout, got two live, unpaid links instead of being handed the same one. Now the
+per-booking Payment Link's `reference_id` is deterministic per (event, email) — a resubmit for the
+same booking reuses the still-open link (`fetchPaymentLinksByReferenceId`) instead of creating a
+new one. Separately, before creating any link, the function checks whether this email already has
+a *paid, live* booking for this event (`countActivePaymentsForEmail`) and — rather than blocking a
+legitimate second booking — returns a `duplicateWarning` the form surfaces inline, requiring one
+explicit "Yes, book again" click (`confirmDuplicate: true`) before a second charge happens.
+`/internal/event-payments` also flags existing paid rows sharing a payer email within the same
+event as **Possible duplicate**, for any pair that predates this guard.
+
+**Cancel an entire event in one action (2026-09-25).** A full-event cancellation (weather, low
+turnout) used to mean refunding every booking one at a time through the per-row form.
+`/internal/event-payments` now has a "Cancel entire event & refund everyone" action: pick a refund
+percentage (100% by default — the fair call when the cancellation is TVC's, not the guest's, so
+`/refund-policy`'s day-before-event tiers don't apply), review the computed count and total, and
+confirm once. Backed by a new `POST /api/event-payments-admin/bulk-refund` that refunds every still-
+eligible booking sequentially (not in parallel, so one Razorpay failure doesn't take the batch down)
+using the same underlying refund logic as a single row.
+
+**Payment method + real Razorpay fees (2026-09-25).** "Net collected" was gross minus refunds only
+— it never subtracted Razorpay's own cut, so it overstated what TVC actually banks. Razorpay's fee
+is locked in at capture and never reversed on refund, and it isn't a flat rate (varies by payment
+method; confirmed empirically against a real settled payment, ~3% on one UPI/method-unconfirmed
+transaction). `razorpay-webhook.mts` now captures `payment.entity.method` (`payment_method`
+column) synchronously — but *not* `fee`/`tax`, which Razorpay doesn't reliably populate by the time
+the webhook fires. Those are backfilled instead by a new standalone script,
+`scripts/reconcile-event-payment-fees.mjs` (polls `GET /payments/:id` for any row paid more than 6
+hours ago with no `fee_reconciled_at` yet), wired to run nightly via
+`.github/workflows/reconcile-event-payment-fees.yml` — **not yet live**, since that workflow needs
+`RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET`/`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` added as GitHub
+Actions repo secrets first (same values already in Netlify's env vars). New columns:
+`payment_method`, `fee_amount`, `fee_reconciled_at` (migration `0024_event_payments_fees.sql`).
+`/internal/event-payments`'s "Net collected" now subtracts every row's known `fee_amount` and
+surfaces an "N payments not yet fee-reconciled" caveat whenever some rows haven't been checked yet,
+rather than silently presenting a number that isn't final. Deliberately doesn't attempt
+settlement-batch linkage (`settlement_id`/`settled_at`) yet — that needs Razorpay's separate
+Settlement Reconciliation report, not the plain Payment entity this fix reads from.
+
 **Events using this flow:**
 
 | Event | Amount | Base Payment Link | Reference ID |

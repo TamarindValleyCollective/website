@@ -1,0 +1,44 @@
+name: Reconcile event payment fees
+
+# Backfills event_payments.fee_amount with Razorpay's actual per-payment fee
+# (see scripts/reconcile-event-payment-fees.mjs,
+# supabase/migrations/0024_event_payments_fees.sql) — daily, since fee/tax
+# on a payment isn't reliably available right after capture, only becomes
+# checkable some hours later.
+#
+# Needs RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET and SUPABASE_URL/
+# SUPABASE_SERVICE_ROLE_KEY as repo secrets — same values already used as
+# Netlify env vars for the live event-payments module (see RAZORPAY.md), not
+# yet copied over here as of this workflow's creation. Without them this job
+# will run and fail at the first Razorpay/Supabase call; add the four repo
+# secrets (Settings > Secrets and variables > Actions) to turn it on for
+# real.
+
+on:
+  schedule:
+    - cron: '0 22 * * *' # ~03:30 IST, well after any same-day event payments
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Log what would be reconciled without writing anything'
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Reconcile fees
+        env:
+          RAZORPAY_KEY_ID: ${{ secrets.RAZORPAY_KEY_ID }}
+          RAZORPAY_KEY_SECRET: ${{ secrets.RAZORPAY_KEY_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/reconcile-event-payment-fees.mjs ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}

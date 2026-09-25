@@ -24,7 +24,7 @@ function supabaseUrl() {
 // round-trip (the same race a plain read-then-write would have under
 // concurrent retries).
 /**
- * @param {{ eventReferenceId: string, eventTitle: string, razorpayPaymentId: string, razorpayPaymentLinkId: string, amount: number, currency: string, attendeeCount?: number, payerName?: string | null, payerEmail?: string | null, payerContact?: string | null, mode: 'test' | 'live' }} params
+ * @param {{ eventReferenceId: string, eventTitle: string, razorpayPaymentId: string, razorpayPaymentLinkId: string, amount: number, currency: string, attendeeCount?: number, payerName?: string | null, payerEmail?: string | null, payerContact?: string | null, mode: 'test' | 'live', eventDate?: string | null, paymentMethod?: string | null }} params
  * @returns {Promise<{ id: string } | null>} the inserted row, or null if razorpayPaymentId was already recorded
  */
 export async function recordPaymentIfNew({
@@ -39,6 +39,8 @@ export async function recordPaymentIfNew({
   payerEmail,
   payerContact,
   mode,
+  eventDate,
+  paymentMethod,
 }) {
   const res = await fetch(`${supabaseUrl()}/rest/v1/event_payments?on_conflict=razorpay_payment_id`, {
     method: 'POST',
@@ -56,6 +58,8 @@ export async function recordPaymentIfNew({
         payer_email: payerEmail ?? null,
         payer_contact: payerContact ?? null,
         mode,
+        event_date: eventDate ?? null,
+        payment_method: paymentMethod ?? null,
       },
     ]),
   });
@@ -106,6 +110,31 @@ export async function getPaymentByRazorpayId(razorpayPaymentId) {
   return rows[0] ?? null;
 }
 
+// How many *other* real, still-standing bookings this email already has for
+// this event — event-booking.mts's duplicate-payment guard (see that
+// function's comment) checks this before creating a new per-booking Payment
+// Link, so a guest who already paid can be warned before paying a second
+// time rather than only discoverable afterward on the admin dashboard.
+// Excludes refunded rows (money already given back — no longer a live
+// duplicate) and test-mode rows (never a real charge); case-insensitive,
+// matching how event-payments-admin.mts flags duplicates in the dashboard.
+/**
+ * @param {string} eventReferenceId
+ * @param {string} email
+ * @returns {Promise<number>}
+ */
+export async function countActivePaymentsForEmail(eventReferenceId, email) {
+  const res = await fetch(
+    `${supabaseUrl()}/rest/v1/event_payments?event_reference_id=eq.${encodeURIComponent(eventReferenceId)}&payer_email=ilike.${encodeURIComponent(email)}&refunded_at=is.null&mode=eq.live&select=id`,
+    { headers: restHeaders() },
+  );
+  if (!res.ok) {
+    throw new Error(`Supabase read from event_payments failed: ${res.status} ${await res.text()}`);
+  }
+  const rows = await res.json();
+  return rows.length;
+}
+
 // Records a cancellation request, but only the first time — a second call
 // for an already-requested id is a no-op (returns false) so
 // cancel-booking.mts can tell "just recorded" from "already had one on
@@ -125,6 +154,47 @@ export async function requestCancellationIfNew(id) {
   }
   const rows = await res.json();
   return rows.length > 0;
+}
+
+// Rows whose actual Razorpay fee hasn't been checked yet — the work list for
+// scripts/reconcile-event-payment-fees.mjs. Only rows old enough that
+// Razorpay has plausibly finished computing fee/tax (the script itself
+// applies the age cutoff via `olderThanIso`, passed in rather than computed
+// here so the cutoff logic — and its comment — lives in one place).
+/**
+ * @param {string} olderThanIso created_at cutoff — only rows paid before this are due
+ * @returns {Promise<Array<{ id: string, razorpay_payment_id: string }>>}
+ */
+export async function listUnreconciledPayments(olderThanIso) {
+  const res = await fetch(
+    `${supabaseUrl()}/rest/v1/event_payments?fee_reconciled_at=is.null&created_at=lt.${encodeURIComponent(olderThanIso)}&mode=eq.live&select=id,razorpay_payment_id`,
+    { headers: restHeaders() },
+  );
+  if (!res.ok) {
+    throw new Error(`Supabase read from event_payments failed: ${res.status} ${await res.text()}`);
+  }
+  return res.json();
+}
+
+// Records the real fee+tax Razorpay charged for one payment, once
+// GET /payments/:id actually has it — see scripts/reconcile-event-payment-fees.mjs.
+// Fee is a sunk cost from the moment of capture regardless of what happens
+// after (refunded or not, see the reconciliation-scenarios planning notes),
+// so this is never re-checked or reverted once recorded.
+/**
+ * @param {string} id row id
+ * @param {number} feeAmount paise (Razorpay's fee + tax combined)
+ * @returns {Promise<void>}
+ */
+export async function recordFeeReconciled(id, feeAmount) {
+  const res = await fetch(`${supabaseUrl()}/rest/v1/event_payments?id=eq.${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: restHeaders({ Prefer: 'return=minimal' }),
+    body: JSON.stringify({ fee_amount: feeAmount, fee_reconciled_at: new Date().toISOString() }),
+  });
+  if (!res.ok) {
+    throw new Error(`Supabase update to event_payments failed: ${res.status} ${await res.text()}`);
+  }
 }
 
 // Single row lookup by its own id (not the Razorpay payment id) — used by

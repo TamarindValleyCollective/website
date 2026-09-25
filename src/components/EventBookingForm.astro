@@ -14,6 +14,13 @@ interface Props {
   referenceId: string;
   unitAmount: string; // display only, e.g. "₹2,250" — the charged amount always comes from the base Payment Link server-side, never from this string
   unitLabel: string; // e.g. "per person"
+  // yyyy-mm-dd, the event's own date at the moment this form renders —
+  // carried through to event-booking.mts so the resulting booking row
+  // remembers what date the guest actually paid against. Needed because the
+  // /internal/event-payments refund-tier suggestion otherwise keys off the
+  // event content file's *current* date, which drifts if the event gets
+  // rescheduled after payments already came in (see event-payments.astro).
+  eventDate: string;
   // Rendered as an <h2> above the form, same convention as
   // BookingInquiry.astro's own `heading` prop — the "book this" moment
   // should look and read the same way whichever of the two flows an event
@@ -21,7 +28,7 @@ interface Props {
   heading?: string;
 }
 
-const { referenceId, unitAmount, unitLabel, heading } = Astro.props;
+const { referenceId, unitAmount, unitLabel, eventDate, heading } = Astro.props;
 const fieldId = referenceId.replace(/[^a-z0-9]+/gi, '-');
 const MAX_ATTENDEES = 10;
 const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
@@ -29,7 +36,7 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
 
 <div class="booking-form">
   {heading && <h2 class="booking-form__heading">{heading}</h2>}
-  <form class="event-booking-form card site-form" id={`${fieldId}-form`} data-reference-id={referenceId} data-unit-amount={unitAmount}>
+  <form class="event-booking-form card site-form" id={`${fieldId}-form`} data-reference-id={referenceId} data-unit-amount={unitAmount} data-event-date={eventDate}>
     <p class="form-honeypot" aria-hidden="true">
       <label>Leave this field blank <input name="botField" tabindex="-1" autocomplete="off" /></label>
     </p>
@@ -63,6 +70,10 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
 
     <button class="button" type="submit">Pay &amp; register →</button>
     <p class="booking-form__error" role="alert" hidden></p>
+    <div class="booking-form__duplicate-warning" role="alert" hidden>
+      <p class="booking-form__duplicate-text"></p>
+      <button type="button" class="button booking-form__confirm-duplicate">Yes, book again</button>
+    </div>
   </form>
 </div>
 
@@ -104,6 +115,19 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
     color: #a3312a;
     font-size: 0.9rem;
     margin-top: 12px;
+  }
+
+  .booking-form__duplicate-warning {
+    margin-top: 12px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: var(--tvc-orange-tint);
+  }
+
+  .booking-form__duplicate-text {
+    margin: 0 0 10px;
+    font-size: 0.88rem;
+    color: var(--tvc-orange-text);
   }
 </style>
 
@@ -147,6 +171,7 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
 
   document.querySelectorAll<HTMLFormElement>('.event-booking-form').forEach((form) => {
     const referenceId = form.dataset.referenceId ?? '';
+    const eventDate = form.dataset.eventDate ?? '';
     const unitAmount = toIntOrNull(form.dataset.unitAmount ?? '');
     const nameInput = form.querySelector<HTMLInputElement>('input[name="name"]');
     const emailInput = form.querySelector<HTMLInputElement>('input[name="email"]');
@@ -155,6 +180,9 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
     const totalEl = form.querySelector<HTMLElement>('.field-total__amount');
     const errorEl = form.querySelector<HTMLElement>('.booking-form__error');
     const submitBtn = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    const duplicateWarningEl = form.querySelector<HTMLElement>('.booking-form__duplicate-warning');
+    const duplicateTextEl = form.querySelector<HTMLElement>('.booking-form__duplicate-text');
+    const confirmDuplicateBtn = form.querySelector<HTMLButtonElement>('.booking-form__confirm-duplicate');
 
     const saved = loadSavedContact();
     if (saved) {
@@ -171,13 +199,15 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
     countSelect?.addEventListener('change', updateTotal);
     updateTotal();
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
+    // Two-step when the server reports this email already has a paid
+    // booking for this event (see event-booking.mts's countActivePaymentsForEmail
+    // check): not a hard block, since a second booking can be legitimate
+    // (e.g. paying for a separate group under the same email), but the
+    // guest gets a chance to notice before paying twice by mistake. The
+    // confirm button re-sends the same submitted values with
+    // confirmDuplicate: true, which skips the check server-side.
+    async function attemptBooking(data: FormData, confirmDuplicate: boolean) {
       if (errorEl) errorEl.hidden = true;
-
-      const data = new FormData(form);
-      if (data.get('botField')) return; // silently drop, matches server-side honeypot
-
       if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.textContent = 'Starting payment…';
@@ -189,13 +219,29 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             referenceId,
+            eventDate,
             name: data.get('name'),
             email: data.get('email'),
             phone: data.get('phone'),
             attendeeCount: Number(data.get('attendeeCount')),
+            confirmDuplicate,
           }),
         });
         const json = await res.json();
+
+        if (res.ok && json.duplicateWarning) {
+          if (duplicateWarningEl && duplicateTextEl) {
+            duplicateTextEl.textContent = `Heads up: this email already has ${json.existingCount === 1 ? 'a paid booking' : `${json.existingCount} paid bookings`} for this event. If that's intentional (e.g. booking for another group), confirm below to continue.`;
+            duplicateWarningEl.hidden = false;
+          }
+          if (confirmDuplicateBtn) confirmDuplicateBtn.onclick = () => attemptBooking(data, true);
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Pay & register →';
+          }
+          return;
+        }
+
         if (!res.ok || !json.url) throw new Error(json.error || 'Something went wrong');
         saveContact({
           name: String(data.get('name') ?? ''),
@@ -213,6 +259,16 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
           submitBtn.textContent = 'Pay & register →';
         }
       }
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (duplicateWarningEl) duplicateWarningEl.hidden = true;
+
+      const data = new FormData(form);
+      if (data.get('botField')) return; // silently drop, matches server-side honeypot
+
+      attemptBooking(data, false);
     });
   });
 </script>

@@ -128,6 +128,21 @@ async function handleBookings(url: URL): Promise<Response> {
   const testPaymentCount = allRows.filter(isTestPayment).length;
   const rows = includeTest ? allRows : allRows.filter((r) => !isTestPayment(r));
 
+  // Flags rows sharing a payer_email with another still-live (non-refunded)
+  // row in this same event — surfaces a guest who ended up with two paid
+  // bookings (accidental resubmit, or a real "I paid but nothing happened"
+  // retry) directly in the table instead of only being discoverable by
+  // opening every row and comparing emails by eye. Not itself a merge
+  // action — the remedy is the existing per-row refund flow, on whichever of
+  // the flagged rows the admin decides shouldn't stand.
+  const liveEmailCounts = new Map<string, number>();
+  for (const r of rows) {
+    if (!r.payer_email || r.refunded_at) continue;
+    const key = String(r.payer_email).toLowerCase();
+    liveEmailCounts.set(key, (liveEmailCounts.get(key) ?? 0) + 1);
+  }
+  const isDuplicate = (r: any) => Boolean(r.payer_email) && !r.refunded_at && (liveEmailCounts.get(String(r.payer_email).toLowerCase()) ?? 0) > 1;
+
   const bookings = rows.map((r) => ({
     id: r.id,
     razorpayPaymentId: r.razorpay_payment_id,
@@ -138,6 +153,7 @@ async function handleBookings(url: URL): Promise<Response> {
     amount: r.amount,
     currency: r.currency,
     createdAt: r.created_at,
+    eventDate: r.event_date,
     cancellationRequestedAt: r.cancellation_requested_at,
     refundInitiatedAt: r.refund_initiated_at,
     refundedAt: r.refunded_at,
@@ -146,10 +162,19 @@ async function handleBookings(url: URL): Promise<Response> {
     refundedBy: r.refunded_by,
     status: statusFor(r),
     isTest: isTestPayment(r),
+    isDuplicate: isDuplicate(r),
+    paymentMethod: r.payment_method,
+    feeAmount: r.fee_amount,
   }));
 
   const grossCollected = rows.reduce((sum, r) => sum + r.amount, 0);
   const totalRefunded = rows.reduce((sum, r) => sum + (r.refunded_at ? (r.refund_amount ?? 0) : 0), 0);
+  // Razorpay's fee is a sunk cost from the moment of capture — charged
+  // regardless of whether the booking later got refunded (see
+  // supabase/migrations/0024_event_payments_fees.sql) — so every row with a
+  // known fee_amount counts here, not just still-live ones.
+  const totalFees = rows.reduce((sum, r) => sum + (r.fee_amount ?? 0), 0);
+  const unreconciledFeeCount = rows.filter((r) => r.fee_amount == null).length;
 
   return jsonResponse({
     bookings,
@@ -159,7 +184,13 @@ async function handleBookings(url: URL): Promise<Response> {
       totalAttendees: rows.reduce((sum, r) => sum + (r.attendee_count ?? 1), 0),
       grossCollected,
       totalRefunded,
-      netCollected: grossCollected - totalRefunded,
+      totalFees,
+      // Provisionally high for any row whose fee_amount is still null (see
+      // scripts/reconcile-event-payment-fees.mjs) rather than guessing a
+      // percentage — unreconciledFeeCount below is what tells the dashboard
+      // (and the admin reading it) that this number isn't final yet.
+      netCollected: grossCollected - totalRefunded - totalFees,
+      unreconciledFeeCount,
       cancelledCount: rows.filter((r) => r.refunded_at).length,
       pendingRequestCount: rows.filter((r) => r.cancellation_requested_at && !r.refunded_at).length,
     },
@@ -201,6 +232,63 @@ async function sendRefundEmail(params: {
   }
 }
 
+// The actual work of refunding one already-looked-up row — shared by
+// handleRefund (one booking, from the per-row form) and handleBulkRefund
+// (every eligible booking in an event, from the "cancel entire event"
+// action). Validation of *which* row is eligible and *how much* to refund
+// happens in each caller, since the two have different rules (a single
+// admin-typed override vs. a uniform fraction applied across many rows).
+async function refundOneBooking(row: any, amount: number, adminEmail: string, reason: string | undefined): Promise<{ ok: true; refund: { id: string; amount: number; status: string } } | { ok: false; error: string }> {
+  let refund;
+  try {
+    refund = await createRefund({
+      paymentId: row.razorpay_payment_id,
+      amount,
+      notes: { refundedBy: adminEmail, ...(reason ? { reason } : {}) },
+    });
+  } catch (err) {
+    console.error('Failed to create Razorpay refund', err);
+    return { ok: false, error: 'Razorpay rejected the refund — no money has moved' };
+  }
+
+  // The refund is real at this point — a failure past here only affects our
+  // own records/notifications, so it's logged rather than surfaced as if
+  // the refund itself failed (same asymmetry as whatsapp-admin.mts's
+  // Meta-succeeded-but-local-write-failed handling). This only ever records
+  // *initiation* — refunded_at gets set later, by razorpay-webhook.mts's
+  // refund.processed handler, once Razorpay itself confirms completion.
+  try {
+    await recordRefundInitiated(row.id, {
+      razorpayRefundId: refund.id,
+      amount: refund.amount,
+      status: refund.status,
+      refundedBy: adminEmail,
+    });
+  } catch (err) {
+    console.error('Refund succeeded on Razorpay but failed to record locally', err);
+  }
+
+  if (!row.cancellation_requested_at) {
+    requestCancellationIfNew(row.id).catch((err) => console.error('Failed to backfill cancellation_requested_at', err));
+  }
+
+  if (row.payer_email) {
+    try {
+      await sendRefundEmail({
+        payerEmail: row.payer_email,
+        eventTitle: row.event_title,
+        refundAmount: refund.amount,
+        currency: row.currency,
+        paymentId: row.razorpay_payment_id,
+      });
+    } catch (err) {
+      console.error('Refund succeeded but failed to send notification email', err);
+    }
+  }
+
+  return { ok: true, refund: { id: refund.id, amount: refund.amount, status: refund.status } };
+}
+
 async function handleRefund(req: Request, adminEmail: string): Promise<Response> {
   let body: { id?: string; amount?: number; reason?: string };
   try {
@@ -237,54 +325,69 @@ async function handleRefund(req: Request, adminEmail: string): Promise<Response>
     return jsonResponse({ error: 'Refund amount cannot exceed the amount paid' }, 400);
   }
 
-  let refund;
+  const outcome = await refundOneBooking(row, amount, adminEmail, reason);
+  if (!outcome.ok) return jsonResponse({ error: outcome.error }, 502);
+  return jsonResponse({ ok: true, refund: outcome.refund });
+}
+
+// Refunds every still-eligible booking for one event in a single admin
+// action — a full-event cancellation (weather, low turnout) otherwise means
+// working through the per-row refund form once per booking. `fraction`
+// applies uniformly (e.g. 1 = full refund for everyone, the fair default
+// when the cancellation is TVC's call rather than a guest's, so the
+// day-before-event tiers in /refund-policy don't apply) — there's no
+// per-row override here, unlike the single-booking flow's admin-editable
+// amount; splitting that finely for a mass cancellation isn't worth the
+// added review-step complexity. Runs sequentially against Razorpay's API
+// (not in parallel) to keep failures isolated to the row that hit them
+// rather than one one failure taking down a Promise.all batch.
+async function handleBulkRefund(req: Request, adminEmail: string): Promise<Response> {
+  let body: { eventReferenceId?: string; fraction?: number; reason?: string; includeTest?: boolean };
   try {
-    refund = await createRefund({
-      paymentId: row.razorpay_payment_id,
-      amount,
-      notes: { refundedBy: adminEmail, ...(reason ? { reason } : {}) },
-    });
-  } catch (err) {
-    console.error('Failed to create Razorpay refund', err);
-    return jsonResponse({ error: 'Razorpay rejected the refund — no money has moved' }, 502);
+    body = await req.json();
+  } catch {
+    return jsonResponse({ error: 'Invalid request body' }, 400);
   }
 
-  // The refund is real at this point — a failure past here only affects our
-  // own records/notifications, so it's logged rather than surfaced as if
-  // the refund itself failed (same asymmetry as whatsapp-admin.mts's
-  // Meta-succeeded-but-local-write-failed handling). This only ever records
-  // *initiation* — refunded_at gets set later, by razorpay-webhook.mts's
-  // refund.processed handler, once Razorpay itself confirms completion.
+  const eventReferenceId = (body.eventReferenceId ?? '').trim();
+  const fraction = Number(body.fraction);
+  const reason = body.reason?.trim() || undefined;
+  const includeTest = Boolean(body.includeTest);
+  if (!eventReferenceId) return jsonResponse({ error: 'eventReferenceId is required' }, 400);
+  if (!Number.isFinite(fraction) || fraction <= 0 || fraction > 1) {
+    return jsonResponse({ error: 'fraction must be greater than 0 and at most 1' }, 400);
+  }
+
+  let allRows: any[];
   try {
-    await recordRefundInitiated(id, {
-      razorpayRefundId: refund.id,
-      amount: refund.amount,
-      status: refund.status,
-      refundedBy: adminEmail,
-    });
+    allRows = await listPaymentsForEvent(eventReferenceId);
   } catch (err) {
-    console.error('Refund succeeded on Razorpay but failed to record locally', err);
+    console.error('Failed to list event_payments', err);
+    return jsonResponse({ error: 'Failed to reach the payment store' }, 502);
   }
 
-  if (!row.cancellation_requested_at) {
-    requestCancellationIfNew(id).catch((err) => console.error('Failed to backfill cancellation_requested_at', err));
-  }
+  // Same eligibility as a single refund would require row-by-row: not
+  // already refunded, and not already mid-flight on a still-live attempt
+  // (a previously *failed* one is fair game to retry here too).
+  const eligible = allRows.filter((r) => !r.refunded_at && (!r.refund_initiated_at || r.refund_status === 'failed') && (includeTest || r.mode !== 'test'));
 
-  if (row.payer_email) {
-    try {
-      await sendRefundEmail({
-        payerEmail: row.payer_email,
-        eventTitle: row.event_title,
-        refundAmount: refund.amount,
-        currency: row.currency,
-        paymentId: row.razorpay_payment_id,
-      });
-    } catch (err) {
-      console.error('Refund succeeded but failed to send notification email', err);
+  const results: Array<{ id: string; ok: boolean; error?: string }> = [];
+  for (const row of eligible) {
+    const amount = Math.round(row.amount * fraction);
+    if (amount <= 0) {
+      results.push({ id: row.id, ok: false, error: 'Computed refund amount is zero' });
+      continue;
     }
+    const outcome = await refundOneBooking(row, amount, adminEmail, reason);
+    results.push(outcome.ok ? { id: row.id, ok: true } : { id: row.id, ok: false, error: outcome.error });
   }
 
-  return jsonResponse({ ok: true, refund: { id: refund.id, amount: refund.amount, status: refund.status } });
+  return jsonResponse({
+    ok: true,
+    attempted: eligible.length,
+    succeeded: results.filter((r) => r.ok).length,
+    results,
+  });
 }
 
 export default async (req: Request): Promise<Response> => {
@@ -295,10 +398,11 @@ export default async (req: Request): Promise<Response> => {
 
   if (url.pathname === '/api/event-payments-admin/bookings' && req.method === 'GET') return handleBookings(url);
   if (url.pathname === '/api/event-payments-admin/refund' && req.method === 'POST') return handleRefund(req, auth.email);
+  if (url.pathname === '/api/event-payments-admin/bulk-refund' && req.method === 'POST') return handleBulkRefund(req, auth.email);
 
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
 export const config = {
-  path: ['/api/event-payments-admin/bookings', '/api/event-payments-admin/refund'],
+  path: ['/api/event-payments-admin/bookings', '/api/event-payments-admin/refund', '/api/event-payments-admin/bulk-refund'],
 };

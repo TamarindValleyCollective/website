@@ -55,6 +55,26 @@ export async function fetchBasePaymentLink(referenceId: string): Promise<Razorpa
   return data.payment_links[0];
 }
 
+// Same lookup as fetchBasePaymentLink, but for a per-booking link
+// (event-booking.mts's idempotency guard, see that function's comment). A
+// per-booking reference_id is only *usually* one-to-one with a link — an
+// email that already has a paid booking and starts a genuinely separate one
+// gets a second link under the same deterministic reference_id (Razorpay
+// doesn't enforce reference_id uniqueness), so unlike fetchBasePaymentLink
+// this never throws on the count: zero and "more than one" are both normal,
+// expected shapes here, and the caller decides what to do with whichever
+// ones come back.
+export async function fetchPaymentLinksByReferenceId(referenceId: string): Promise<RazorpayPaymentLink[]> {
+  const res = await fetch(`${API_BASE}/payment_links?reference_id=${encodeURIComponent(referenceId)}`, {
+    headers: { Authorization: authHeader() },
+  });
+  if (!res.ok) {
+    throw new Error(`Razorpay fetch payment_links failed: ${res.status} ${await res.text()}`);
+  }
+  const data = (await res.json()) as { payment_links: RazorpayPaymentLink[] };
+  return data.payment_links;
+}
+
 export interface CreatePaymentLinkParams {
   amount: number;
   currency: string;
@@ -94,6 +114,35 @@ export async function createPaymentLink(params: CreatePaymentLinkParams): Promis
     throw new Error(`Razorpay create payment_link failed: ${res.status} ${await res.text()}`);
   }
   return (await res.json()) as RazorpayPaymentLink;
+}
+
+export interface RazorpayPaymentDetail {
+  id: string;
+  amount: number;
+  currency: string;
+  method: string;
+  captured: boolean;
+  // Paise, Razorpay's own cut — both null until Razorpay has actually
+  // computed them, which doesn't reliably happen by the time
+  // payment_link.paid fires (see scripts/reconcile-event-payment-fees.mjs,
+  // which polls this endpoint after the fact rather than trusting the
+  // webhook payload for these two fields).
+  fee: number | null;
+  tax: number | null;
+}
+
+// GET /payments/:id — used only by scripts/reconcile-event-payment-fees.mjs
+// to poll for the fee/tax the payment_link.paid webhook payload doesn't
+// reliably carry yet (see that script). Everything else in this file reads
+// from the webhook payload or a Payment Link, not this endpoint.
+export async function fetchPayment(paymentId: string): Promise<RazorpayPaymentDetail> {
+  const res = await fetch(`${API_BASE}/payments/${paymentId}`, {
+    headers: { Authorization: authHeader() },
+  });
+  if (!res.ok) {
+    throw new Error(`Razorpay fetch payment failed: ${res.status} ${await res.text()}`);
+  }
+  return (await res.json()) as RazorpayPaymentDetail;
 }
 
 export interface RazorpayRefund {

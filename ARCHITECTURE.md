@@ -489,7 +489,14 @@ outside both the local machine and Netlify (the member-update-email workflow).
   directly against the API. A genuine bug (Razorpay's list endpoint returns `payment_links`, not
   `items` as the code originally assumed) was found and fixed via this first real test, since the
   code had only ever previously been exercised against constructed mock `Request` objects — see
-  `RAZORPAY.md`.
+  `RAZORPAY.md`. Also carries `notes.eventDate` (the event's date at booking time, from
+  `EventBookingForm`'s new `eventDate` prop — see `event_date` below) and, since 2026-09-25, guards
+  against duplicate payments two ways: the per-booking Payment Link's `reference_id` is now
+  deterministic per (event, email) so a resubmit before paying reuses the same still-open link
+  (`fetchPaymentLinksByReferenceId`) instead of minting a new one, and a `POST` for an email that
+  already has a paid, live booking for this event returns `{ duplicateWarning, existingCount }`
+  instead of creating a link until the caller confirms with `confirmDuplicate: true`
+  (`countActivePaymentsForEmail`, `scripts/lib/event-payments-db.mjs`) — see `RAZORPAY.md`.
 - **`netlify/functions/lib/razorpay.ts`** — shared Razorpay REST helpers for the functions
   below: `fetchBasePaymentLink()`, `createPaymentLink()` (hand-rolled `fetch` + Basic Auth, no
   `razorpay` npm package, matching this repo's small-hand-rolled-client-over-heavy-SDK preference —
@@ -513,7 +520,11 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `payment.entity.email`/`.contact`: Razorpay's test-mode/Quick Pay checkout was found to
   substitute its own `void@razorpay.com` placeholder for email regardless of what was prefilled,
   so trusting our own captured value is more reliable — falls back to the payment entity only for
-  Payment Links paid without going through this form (no `notes` at all). **Live** as of 2026-09-24 — a
+  Payment Links paid without going through this form (no `notes` at all). Also captures
+  `payment.entity.method` (`payment_method` column) and `notes.eventDate` (`event_date` column,
+  null for bookings made before 2026-09-25) — but deliberately *not* `payment.entity.fee`/`.tax`,
+  which Razorpay doesn't reliably populate by the time this webhook fires; those are backfilled
+  separately (see `scripts/reconcile-event-payment-fees.mjs` below). **Live** as of 2026-09-24 — a
   real signature-mismatch was hit and fixed the same day (the webhook secret was updated in both
   places, but Netlify Functions only pick up an environment variable change on the *next* deploy,
   not immediately — a real, documented Netlify behavior, not a bug in this code). Also subscribed
@@ -550,12 +561,21 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `razorpay-webhook.mts`'s `refund.processed` handler once Razorpay confirms completion. Also
   backfills `cancellation_requested_at` if the guest never went through `/cancel-booking` first,
   and emails the payer that a refund has started via Resend. The page itself pre-fills a suggested
-  amount from `/refund-policy`'s day-before-event tiers and requires a two-step confirm before
-  this endpoint is ever called — nothing here re-derives or enforces that tier server-side, the
-  admin's typed amount is what's sent.
+  amount from `/refund-policy`'s day-before-event tiers (now based on the guest's actual
+  cancellation-request date and the event date they paid against, not "today"/the event's current
+  date — see `event_date` below) and requires a two-step confirm before this endpoint is ever
+  called — nothing here re-derives or enforces that tier server-side, the admin's typed amount is
+  what's sent. Since 2026-09-25 also flags a booking `isDuplicate` when another live (non-refunded)
+  row shares its payer email within the same event, and exposes a second endpoint,
+  `POST /api/event-payments-admin/bulk-refund` (`{ eventReferenceId, fraction, reason?,
+  includeTest? }`) — refunds every still-eligible booking for an event at a uniform fraction in one
+  call, for a full-event cancellation (weather, low turnout), sequentially against Razorpay so one
+  failure doesn't take the batch down. `netCollected` now subtracts each row's known `fee_amount`
+  (see `fee_amount` below) rather than just refunds, and the response includes
+  `unreconciledFeeCount` for rows that haven't been fee-checked yet.
 - **`scripts/lib/event-payments-db.mjs`** — hand-rolled Supabase PostgREST REST client (same
   style as `supabase.mjs`/`accommodation-db.mjs`) for the `event_payments` table
-  (`supabase/migrations/0018_event_payments.sql` through `0022_event_payments_refund_initiated.sql`).
+  (`supabase/migrations/0018_event_payments.sql` through `0024_event_payments_fees.sql`).
   `recordPaymentIfNew()` (ignore-duplicates insert, keyed on a unique index over
   `razorpay_payment_id`), `getPaymentByRazorpayId()`, and `requestCancellationIfNew()`
   (cancel-only-if-not-already-requested update) are used by `razorpay-webhook.mts` and
@@ -564,7 +584,18 @@ outside both the local machine and Netlify (the member-update-email workflow).
   used by both `event-payments-admin.mts` and `razorpay-webhook.mts`'s `refund.created`
   handler), `confirmRefundProcessed()` (the only function that sets `refunded_at`, guarded on the
   specific `razorpay_refund_id` and not already confirmed), and `markRefundFailed()` (guarded the
-  same way) are used by `event-payments-admin.mts` and `razorpay-webhook.mts` above.
+  same way) are used by `event-payments-admin.mts` and `razorpay-webhook.mts` above. Since
+  2026-09-25 also `countActivePaymentsForEmail()` (`event-booking.mts`'s duplicate guard),
+  `listUnreconciledPayments()`/`recordFeeReconciled()` (`scripts/reconcile-event-payment-fees.mjs`
+  below).
+- **`scripts/reconcile-event-payment-fees.mjs`** — standalone script (not a Netlify Function),
+  added 2026-09-25. Polls Razorpay's `GET /payments/:id` for every `event_payments` row paid more
+  than 6 hours ago with no `fee_reconciled_at` yet, and records `fee + tax` (paise) as
+  `fee_amount` once Razorpay has actually computed them — a row whose fee still comes back null
+  just stays unreconciled for the next run. Meant to run nightly via
+  `.github/workflows/reconcile-event-payment-fees.yml`, cron `0 22 * * *` (~03:30 IST) — **not yet
+  live**, that workflow needs `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET`/`SUPABASE_URL`/
+  `SUPABASE_SERVICE_ROLE_KEY` added as GitHub Actions repo secrets first. See `RAZORPAY.md`.
 - **`scripts/lib/supabase.mjs`** — hand-rolled Supabase PostgREST REST client (`fetch` + the
   `service_role` key, no `@supabase/supabase-js` dependency — matching this repo's preference for
   small hand-rolled clients over heavy libraries) for the `whatsapp_conversations`/
@@ -1066,7 +1097,7 @@ never touches Netlify either.
 | WhatsApp unread digest (`whatsapp-stale-alert.mts`, scheduled) | ✅ Live — cron every 15 minutes, emails `core-team@tvc.farm` one digest of conversations unread 60+ minutes, re-sent hourly per conversation until read. Replaces the old per-message email (2026-08-20) |
 | Accommodation Allocation dashboard (`/internal/accommodation-calendar`, `/api/accommodation-admin`) | ✅ Live — merged to `main` and deployed 2026-08-30 (PR #116); verified directly against production (`/internal/accommodation-calendar` returns 200, `/api/accommodation-admin/bookings` returns 401 unauthenticated as expected for the Google Sign-In gate, `accommodation-admin` listed among the deploy's live functions). The public availability view (`/visit/availability`) built alongside it was **not** included in this launch — dropped 2026-08-30, pending a rethink; confirmed 404 on production |
 | Event payment tracking (`EventBookingForm`, `/api/event-booking`, `/api/razorpay-webhook`, `/api/cancel-booking`) | ✅ Live as of 2026-09-24 — real live-mode Razorpay keys and webhook configured; a real Payment Link creation verified directly against the live API. One event uses it so far (Foraging Day, 10 Oct 2026); reusable for any event with no code change — see `RAZORPAY.md`. Full webhook→Supabase→receipt chain confirmed in Test mode with two real test payments; Live mode confirmed only through Payment Link creation (an unpaid dry run), not yet through an actual completed live payment |
-| Event Payments dashboard + refund trigger (`/internal/event-payments`, `/api/event-payments-admin`) | 🟠 Deployed to production 2026-09-24 (merged to `main`, migrations `0020`-`0022` applied to the live "TVC ERP" project) — registrations/cancellations/money-collected read against real `event_payments` rows, and test-mode/live-mode filtering plus the refund-initiated/refund-processed/refund-failed status split (see `RAZORPAY.md`) are all live. Still **not yet exercised**: no real refund has actually been triggered end-to-end against a live payment (`createRefund` → live Razorpay API → `refund.processed` webhook → `refunded_at` set) — do that once before fully trusting the refund flow for a real cancellation |
+| Event Payments dashboard + refund trigger (`/internal/event-payments`, `/api/event-payments-admin`) | 🟠 Deployed to production 2026-09-24 (merged to `main`, migrations `0020`-`0024` applied to the live "TVC ERP" project) — registrations/cancellations/money-collected read against real `event_payments` rows, and test-mode/live-mode filtering plus the refund-initiated/refund-processed/refund-failed status split (see `RAZORPAY.md`) are all live. 2026-09-25: refund-tier date fix, duplicate-payment guard, bulk event-wide cancellation, and payment-method capture shipped; fee reconciliation (`fee_amount`) is written but the nightly script that populates it isn't running yet — needs repo secrets added (see `RAZORPAY.md`). Still **not yet exercised**: no real refund has actually been triggered end-to-end against a live payment (`createRefund` → live Razorpay API → `refund.processed` webhook → `refunded_at` set) — do that once before fully trusting the refund flow for a real cancellation |
 
 The membership/general enquiry forms are fully live — Sheets logging verified with real
 production `POST`s, and email routes to `core-team@tvc.farm` via the site-wide Netlify Forms

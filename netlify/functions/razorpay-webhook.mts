@@ -52,6 +52,12 @@ interface RazorpayPaymentEntity {
   currency: string;
   email?: string;
   contact?: string;
+  // 'card' | 'netbanking' | 'wallet' | 'upi' | 'emi' | ... — Razorpay's own
+  // string, stored as-is rather than mapped to an enum here since new
+  // methods appear over time and this is display/reconciliation data, not
+  // branching logic. Always present on a captured payment, unlike fee/tax
+  // (see scripts/reconcile-event-payment-fees.mjs for those).
+  method?: string;
 }
 
 interface RazorpayPaymentLinkEntity {
@@ -261,6 +267,13 @@ export default async (req: Request): Promise<Response> => {
   // bookings made before this fallback existed.
   const payerEmail = notes.primaryContactEmail || payment.email || null;
   const payerContact = notes.primaryContactPhone || payment.contact || null;
+  // yyyy-mm-dd the event was scheduled for at the moment this guest paid
+  // (EventBookingForm's eventDate prop, see that component's comment) — null
+  // for Payment Links paid without going through event-booking.mts (no
+  // notes at all) and for bookings made before this field existed.
+  // event-payments.astro falls back to the event's *current* content-file
+  // date in both cases, same behavior as before this existed.
+  const eventDate = notes.eventDate || null;
   // Which mode actually processed this payment, so event-payments-admin.mts
   // can filter test payments out of the dashboard deterministically instead
   // of guessing from payer_email. Whichever key is active right now is the
@@ -284,6 +297,8 @@ export default async (req: Request): Promise<Response> => {
       payerEmail,
       payerContact,
       mode,
+      eventDate,
+      paymentMethod: payment.method ?? null,
     });
   } catch (err) {
     console.error('[razorpay-webhook] Failed to record payment', err);
