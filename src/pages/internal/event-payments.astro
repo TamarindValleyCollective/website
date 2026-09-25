@@ -90,11 +90,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Email</th>
-                <th>Phone</th>
-                <th>Attendees</th>
                 <th>Amount</th>
-                <th>Paid</th>
                 <th>Status</th>
                 <th></th>
               </tr>
@@ -260,15 +256,14 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     color: var(--tvc-ink-soft);
   }
 
-  .bookings-table th:nth-child(4),
-  .bookings-table th:nth-child(5),
+  .bookings-table th:nth-child(2),
   .bookings-table th:last-child {
     text-align: right;
   }
 
-  /* Everything below targets #bookings-body's contents, which renderBookings()
-     and openRefundRow() build with innerHTML/createElement in the <script>
-     below — Astro's scoped CSS only tags elements present in this file's
+  /* Everything below targets #bookings-body's contents, which renderBookings(),
+     openBookingDetail(), and openRefundForm() build with innerHTML/createElement
+     in the <script> below — Astro's scoped CSS only tags elements present in this file's
      static template, so a plain selector here would silently never match a
      row, badge, button, or refund form. :global() opts each one out of that
      scoping, and the #bookings-body id keeps the reach limited to this table
@@ -281,10 +276,34 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     white-space: nowrap;
   }
 
-  :global(#bookings-body td:nth-child(4)),
-  :global(#bookings-body td:nth-child(5)),
+  :global(#bookings-body td:nth-child(2)),
   :global(#bookings-body td:last-child) {
     text-align: right;
+  }
+
+  /* Each booking row is a click/keyboard-activated toggle for its own detail
+     row (openBookingDetail() below) — the table only ever shows Name/Amount/
+     Status by default, matching /refund-policy's other admin tools' pattern
+     of a compact summary row that expands for detail + the actual action. */
+  :global(#bookings-body .booking-row) {
+    cursor: pointer;
+  }
+
+  :global(#bookings-body .booking-row:hover td),
+  :global(#bookings-body .booking-row.is-open td) {
+    background: var(--tvc-cream);
+  }
+
+  /* Plain-text chevron, not an icon font — matches accommodation-calendar.astro's
+     .tent-summary/.tent-group-chevron convention (this page's admin-tool sibling). */
+  :global(#bookings-body .row-chevron) {
+    display: inline-block;
+    color: var(--tvc-ink-soft);
+    transition: transform 200ms ease;
+  }
+
+  :global(#bookings-body .booking-row.is-open .row-chevron) {
+    transform: rotate(90deg);
   }
 
   :global(#bookings-body .cell-muted) {
@@ -359,19 +378,33 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     cursor: not-allowed;
   }
 
-  /* The per-row Cancel & refund / Retry refund trigger sits inline in a
-     dense table row — the site's standard pill CTA (sized for a standalone
-     button) reads as oversized there, so this one shrinks to fit the row. */
-  :global(#bookings-body td:last-child > .button) {
-    padding: 5px 12px;
-    border-radius: 6px;
-    font-size: 0.8rem;
-  }
-
-  :global(#bookings-body .refund-row td) {
+  :global(#bookings-body .detail-row td) {
     background: var(--tvc-cream);
     text-align: left;
     white-space: normal;
+    cursor: default;
+    padding-top: 14px;
+    padding-bottom: 16px;
+  }
+
+  :global(#bookings-body .detail-contact) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 28px;
+    margin-bottom: 14px;
+  }
+
+  :global(#bookings-body .detail-field) {
+    font-size: 0.86rem;
+  }
+
+  :global(#bookings-body .detail-label) {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tvc-ink-soft);
   }
 
   :global(#bookings-body .refund-form) {
@@ -476,7 +509,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   const includeTestToggle = document.getElementById('include-test-toggle') as HTMLInputElement;
 
   let currentEvent: EventOption | null = null;
-  let openRefundRowId: string | null = null;
+  let openBookingId: string | null = null;
 
   function getToken(): string | null {
     return sessionStorage.getItem(STORAGE_KEY);
@@ -583,29 +616,84 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  function closeRefundRow() {
-    if (!openRefundRowId) return;
-    document.getElementById(`refund-row-${openRefundRowId}`)?.remove();
-    openRefundRowId = null;
+  function closeBookingDetail() {
+    if (!openBookingId) return;
+    document.getElementById(`detail-row-${openBookingId}`)?.remove();
+    const prevTrigger = document.getElementById(`booking-row-${openBookingId}`);
+    prevTrigger?.classList.remove('is-open');
+    prevTrigger?.setAttribute('aria-expanded', 'false');
+    openBookingId = null;
   }
 
-  function openRefundRow(booking: Booking) {
-    closeRefundRow();
-    if (!currentEvent) return;
-    openRefundRowId = booking.id;
+  // Shared by the initial detail-row render and by the refund form's own
+  // Cancel button, so cancelling a refund attempt returns to the same
+  // button/status text a fresh row-expand would have shown.
+  function renderActionArea(container: HTMLElement, booking: Booking) {
+    container.innerHTML = '';
+    if (booking.status === 'refunded') {
+      const span = document.createElement('span');
+      span.className = 'cell-muted';
+      span.textContent = `Refunded ${formatAmount(booking.refundAmount ?? 0, booking.currency)}`;
+      container.appendChild(span);
+    } else if (booking.status === 'refund_initiated') {
+      // No button here — a second concurrent attempt would be rejected
+      // server-side anyway (event-payments-admin.mts's in-progress check).
+      // Razorpay's own refund.processed/refund.failed webhook is what
+      // moves this row forward, not another click.
+      const span = document.createElement('span');
+      span.className = 'cell-muted';
+      span.textContent = 'Awaiting Razorpay confirmation';
+      container.appendChild(span);
+    } else {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'button';
+      btn.textContent = booking.status === 'refund_failed' ? 'Retry refund' : 'Cancel & refund';
+      btn.addEventListener('click', () => openRefundForm(booking, container));
+      container.appendChild(btn);
+    }
+  }
+
+  function openBookingDetail(booking: Booking) {
+    if (openBookingId === booking.id) {
+      closeBookingDetail();
+      return;
+    }
+    closeBookingDetail();
+    openBookingId = booking.id;
 
     const triggerRow = document.getElementById(`booking-row-${booking.id}`)!;
+    triggerRow.classList.add('is-open');
+    triggerRow.setAttribute('aria-expanded', 'true');
+
     const tr = document.createElement('tr');
-    tr.id = `refund-row-${booking.id}`;
-    tr.className = 'refund-row';
+    tr.id = `detail-row-${booking.id}`;
+    tr.className = 'detail-row';
     const td = document.createElement('td');
-    td.colSpan = 8;
+    td.colSpan = 4;
+    td.innerHTML = `
+      <div class="detail-contact">
+        <div class="detail-field"><span class="detail-label">Email</span>${escapeHtml(booking.payerEmail ?? '—')}</div>
+        <div class="detail-field"><span class="detail-label">Phone</span>${escapeHtml(booking.payerContact ?? '—')}</div>
+        <div class="detail-field"><span class="detail-label">Attendees</span>${booking.attendeeCount}</div>
+        <div class="detail-field"><span class="detail-label">Paid</span>${formatDate(booking.createdAt)}</div>
+      </div>
+      <div class="detail-action" id="detail-action-${booking.id}"></div>
+    `;
+    tr.appendChild(td);
+    triggerRow.after(tr);
+
+    renderActionArea(td.querySelector(`#detail-action-${booking.id}`) as HTMLElement, booking);
+  }
+
+  function openRefundForm(booking: Booking, container: HTMLElement) {
+    if (!currentEvent) return;
 
     const fraction = suggestedRefundFraction(currentEvent.date);
     const suggestedPaise = Math.round(booking.amount * fraction);
     const suggestedRupees = (suggestedPaise / 100).toFixed(2);
 
-    td.innerHTML = `
+    container.innerHTML = `
       <form class="refund-form" data-booking-id="${booking.id}">
         <label>
           Refund amount (₹)
@@ -624,20 +712,18 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
         </div>
       </form>
     `;
-    tr.appendChild(td);
-    triggerRow.after(tr);
 
-    const form = tr.querySelector('.refund-form') as HTMLFormElement;
-    const errorEl = tr.querySelector('.refund-error') as HTMLElement;
-    const reviewEl = tr.querySelector(`#refund-review-${booking.id}`) as HTMLElement;
-    const reviewBtn = tr.querySelector('.refund-review-btn') as HTMLButtonElement;
+    const form = container.querySelector('.refund-form') as HTMLFormElement;
+    const errorEl = container.querySelector('.refund-error') as HTMLElement;
+    const reviewEl = container.querySelector(`#refund-review-${booking.id}`) as HTMLElement;
+    const reviewBtn = container.querySelector('.refund-review-btn') as HTMLButtonElement;
 
-    (tr.querySelector('.refund-cancel-btn') as HTMLButtonElement).addEventListener('click', closeRefundRow);
+    (container.querySelector('.refund-cancel-btn') as HTMLButtonElement).addEventListener('click', () => renderActionArea(container, booking));
 
     form.addEventListener('submit', (ev) => {
       ev.preventDefault();
       errorEl.hidden = true;
-      const amountInput = tr.querySelector('.refund-amount') as HTMLInputElement;
+      const amountInput = container.querySelector('.refund-amount') as HTMLInputElement;
       const rupees = Number(amountInput.value);
       if (!Number.isFinite(rupees) || rupees <= 0) {
         errorEl.textContent = 'Enter a valid refund amount.';
@@ -673,12 +759,11 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
             body: JSON.stringify({
               id: booking.id,
               amount: amountPaise,
-              reason: (tr.querySelector('.refund-reason') as HTMLTextAreaElement).value.trim() || undefined,
+              reason: (container.querySelector('.refund-reason') as HTMLTextAreaElement).value.trim() || undefined,
             }),
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error ?? 'Refund failed');
-          closeRefundRow();
           if (currentEvent) await loadBookings(currentEvent.referenceId);
         } catch (err) {
           const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
@@ -715,39 +800,27 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     document.getElementById('stat-refunded')!.textContent = aggregates.totalRefunded > 0 ? `${formatAmount(aggregates.totalRefunded, currency)} refunded` : '';
 
     bookingsBody.innerHTML = '';
-    openRefundRowId = null;
+    openBookingId = null;
     for (const booking of bookings) {
       const tr = document.createElement('tr');
       tr.id = `booking-row-${booking.id}`;
+      tr.className = 'booking-row';
+      tr.tabIndex = 0;
+      tr.setAttribute('role', 'button');
+      tr.setAttribute('aria-expanded', 'false');
       tr.innerHTML = `
         <td>${escapeHtml(booking.payerName ?? '—')}</td>
-        <td>${escapeHtml(booking.payerEmail ?? '—')}</td>
-        <td>${escapeHtml(booking.payerContact ?? '—')}</td>
-        <td>${booking.attendeeCount}</td>
         <td>${formatAmount(booking.amount, booking.currency)}</td>
-        <td>${formatDate(booking.createdAt)}</td>
         <td>${statusBadge(booking.status)}${booking.isTest ? ' <span class="badge badge--test">Test</span>' : ''}</td>
-        <td></td>
+        <td><span class="row-chevron">›</span></td>
       `;
-      const actionCell = tr.lastElementChild as HTMLElement;
-      if (booking.status === 'refunded') {
-        actionCell.textContent = `Refunded ${formatAmount(booking.refundAmount ?? 0, booking.currency)}`;
-        actionCell.className = 'cell-muted';
-      } else if (booking.status === 'refund_initiated') {
-        // No button here — a second concurrent attempt would be rejected
-        // server-side anyway (event-payments-admin.mts's in-progress check).
-        // Razorpay's own refund.processed/refund.failed webhook is what
-        // moves this row forward, not another click.
-        actionCell.textContent = 'Awaiting Razorpay confirmation';
-        actionCell.className = 'cell-muted';
-      } else {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'button';
-        btn.textContent = booking.status === 'refund_failed' ? 'Retry refund' : 'Cancel & refund';
-        btn.addEventListener('click', () => openRefundRow(booking));
-        actionCell.appendChild(btn);
-      }
+      tr.addEventListener('click', () => openBookingDetail(booking));
+      tr.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          openBookingDetail(booking);
+        }
+      });
       bookingsBody.appendChild(tr);
     }
 
@@ -755,7 +828,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   }
 
   async function loadBookings(referenceId: string) {
-    closeRefundRow();
+    closeBookingDetail();
     results.hidden = true;
     statusEl.hidden = false;
     statusEl.textContent = 'Loading…';
