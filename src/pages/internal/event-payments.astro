@@ -89,7 +89,9 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
           <table class="bookings-table">
             <thead>
               <tr>
-                <th>Payer</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Phone</th>
                 <th>Attendees</th>
                 <th>Amount</th>
                 <th>Paid</th>
@@ -263,12 +265,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     color: var(--tvc-ink-soft);
   }
 
-  .payer-name {
-    font-weight: 600;
-  }
-
-  .payer-contact {
-    display: block;
+  .cell-muted {
     font-size: 0.78rem;
     color: var(--tvc-ink-soft);
   }
@@ -661,11 +658,9 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
       const tr = document.createElement('tr');
       tr.id = `booking-row-${booking.id}`;
       tr.innerHTML = `
-        <td>
-          <span class="payer-name">${escapeHtml(booking.payerName ?? '—')}</span>
-          <span class="payer-contact">${escapeHtml(booking.payerEmail ?? '')}</span>
-          <span class="payer-contact">${escapeHtml(booking.payerContact ?? '')}</span>
-        </td>
+        <td>${escapeHtml(booking.payerName ?? '—')}</td>
+        <td>${escapeHtml(booking.payerEmail ?? '—')}</td>
+        <td>${escapeHtml(booking.payerContact ?? '—')}</td>
         <td>${booking.attendeeCount}</td>
         <td>${formatAmount(booking.amount, booking.currency)}</td>
         <td>${formatDate(booking.createdAt)}</td>
@@ -675,14 +670,14 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
       const actionCell = tr.lastElementChild as HTMLElement;
       if (booking.status === 'refunded') {
         actionCell.textContent = `Refunded ${formatAmount(booking.refundAmount ?? 0, booking.currency)}`;
-        actionCell.className = 'payer-contact';
+        actionCell.className = 'cell-muted';
       } else if (booking.status === 'refund_initiated') {
         // No button here — a second concurrent attempt would be rejected
         // server-side anyway (event-payments-admin.mts's in-progress check).
         // Razorpay's own refund.processed/refund.failed webhook is what
         // moves this row forward, not another click.
         actionCell.textContent = 'Awaiting Razorpay confirmation';
-        actionCell.className = 'payer-contact';
+        actionCell.className = 'cell-muted';
       } else {
         const btn = document.createElement('button');
         btn.type = 'button';
