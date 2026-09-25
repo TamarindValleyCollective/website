@@ -86,9 +86,10 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
           </div>
         </div>
 
-        <div id="bulk-cancel-section" class="bulk-cancel">
+        <div id="bulk-cancel-section" class="bulk-cancel" hidden>
           <button type="button" id="bulk-cancel-open" class="button button--danger-outline button--small">Cancel event</button>
           <div id="bulk-cancel-panel" class="bulk-cancel-panel card" hidden>
+            <p class="bulk-cancel-warning">⚠️ This refunds every eligible booking for this event and cannot be undone. Only use this for a full-event cancellation (e.g. weather, low turnout) — not to fix a single booking.</p>
             <p id="bulk-cancel-summary" class="bulk-cancel-summary"></p>
             <label class="bulk-cancel-field">
               Refund percentage
@@ -214,6 +215,13 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     margin-bottom: 12px;
   }
 
+  /* Same display-vs-[hidden] issue as .bulk-cancel-panel below — an explicit
+     display:flex here beats the browser's default [hidden] { display: none }
+     unless overridden explicitly. */
+  .bulk-cancel[hidden] {
+    display: none;
+  }
+
   .bulk-cancel-panel {
     margin-top: 10px;
     padding: 16px 18px;
@@ -223,6 +231,25 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     flex-direction: column;
     gap: 10px;
     text-align: left;
+  }
+
+  /* Explicit display:flex above beats the browser's own [hidden] { display:
+     none } — author CSS always overrides the UA stylesheet regardless of
+     source order or specificity — so without this the panel showed up
+     immediately, `hidden` attribute or not. Higher specificity than the
+     plain class rule above, so this wins whenever the attribute is present. */
+  .bulk-cancel-panel[hidden] {
+    display: none;
+  }
+
+  .bulk-cancel-warning {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #f9e2df;
+    color: #9c4438;
+    font-size: 0.84rem;
+    font-weight: 600;
   }
 
   .bulk-cancel-summary {
@@ -687,6 +714,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   const testPaymentsNotice = document.getElementById('test-payments-notice') as HTMLElement;
   const testPaymentsNoticeText = document.getElementById('test-payments-notice-text') as HTMLElement;
   const includeTestToggle = document.getElementById('include-test-toggle') as HTMLInputElement;
+  const bulkCancelSection = document.getElementById('bulk-cancel-section') as HTMLElement;
   const bulkCancelOpenBtn = document.getElementById('bulk-cancel-open') as HTMLButtonElement;
   const bulkCancelPanel = document.getElementById('bulk-cancel-panel') as HTMLElement;
   const bulkCancelSummary = document.getElementById('bulk-cancel-summary') as HTMLElement;
@@ -1195,15 +1223,32 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     if (currentEvent) loadBookings(currentEvent.referenceId);
   });
 
+  // Bulk-cancelling an event that has already happened doesn't make sense —
+  // hidden entirely rather than just disabled, matching "should not be
+  // available" for a rare, destructive action. Available through the end of
+  // the event's own day (Asia/Kolkata): a same-day weather cancellation is a
+  // real use case, so this isn't gone until the day after. If a mass refund
+  // is ever needed for a past event anyway, that's a job for the Razorpay
+  // dashboard directly — razorpay-webhook.mts's refund.created/processed
+  // handlers already sync a refund issued from there into event_payments
+  // exactly like one issued from this page (see RAZORPAY.md), so nothing
+  // about that fallback needs building here.
+  function isEventConcluded(eventDateISO: string): boolean {
+    const endOfEventDay = new Date(`${eventDateISO}T23:59:59+05:30`);
+    return Date.now() > endOfEventDay.getTime();
+  }
+
   eventSelect.addEventListener('change', () => {
     const referenceId = eventSelect.value;
     if (!referenceId) {
       results.hidden = true;
       statusEl.hidden = true;
       currentEvent = null;
+      bulkCancelSection.hidden = true;
       return;
     }
     currentEvent = EVENTS.find((e) => e.referenceId === referenceId) ?? null;
+    bulkCancelSection.hidden = !currentEvent || isEventConcluded(currentEvent.date);
     loadBookings(referenceId);
   });
 
