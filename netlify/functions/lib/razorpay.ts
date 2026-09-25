@@ -96,6 +96,37 @@ export async function createPaymentLink(params: CreatePaymentLinkParams): Promis
   return (await res.json()) as RazorpayPaymentLink;
 }
 
+export interface RazorpayRefund {
+  id: string;
+  amount: number;
+  status: string;
+  payment_id: string;
+}
+
+// Issues a refund against an already-captured payment (see
+// event-payments-admin.mts) — Razorpay's own MCP server exposes fetch/list
+// tools for refunds but no way to create one, so this goes straight to
+// their REST API like every other call in this file. `amount` is always
+// sent explicitly (paise): Razorpay treats an omitted amount as "refund the
+// full payment", but the caller here always computes one (a
+// /refund-policy tier suggestion or an admin override), so passing it
+// explicitly avoids relying on that default.
+export async function createRefund(params: {
+  paymentId: string;
+  amount: number;
+  notes?: Record<string, string>;
+}): Promise<RazorpayRefund> {
+  const res = await fetch(`${API_BASE}/payments/${params.paymentId}/refund`, {
+    method: 'POST',
+    headers: { Authorization: authHeader(), 'content-type': 'application/json' },
+    body: JSON.stringify({ amount: params.amount, speed: 'normal', notes: params.notes }),
+  });
+  if (!res.ok) {
+    throw new Error(`Razorpay create refund failed: ${res.status} ${await res.text()}`);
+  }
+  return (await res.json()) as RazorpayRefund;
+}
+
 // Webhook signature verification (X-Razorpay-Signature: HMAC-SHA256 over the
 // raw body, using the webhook secret chosen when the webhook was created in
 // the Razorpay dashboard — see RAZORPAY.md's setup notes). Same shape as

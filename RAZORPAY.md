@@ -54,15 +54,44 @@ Linger + the guest.
 
 **Live configuration** (Netlify env vars, all deploy contexts):
 
-- `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` — regenerated live keys (`rzp_live_TfqrvSD3tpm2iA`
-  as of 2026-09-24; the account's original live key from 2026-07-27 had no saved secret, so it
-  was regenerated rather than recovered).
+- `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` — regenerated live keys as of 2026-09-24 (see
+  Netlify's env var settings for the actual `rzp_live_...` Key ID — not repeated here verbatim
+  since Netlify's build-time secret scanner blocks any deploy whose scanned files contain a
+  configured secret's literal value, key ID included); the account's original live key from
+  2026-07-27 had no saved secret, so it was regenerated rather than recovered.
 - `RAZORPAY_WEBHOOK_SECRET` — an arbitrary shared secret, same value entered on both this env var
-  and the Razorpay dashboard webhook config (Settings → Webhooks, Live mode → `payment_link.paid`
-  → `https://tvc.farm/api/razorpay-webhook`). Environment variable changes only take effect on
-  Netlify Functions after a fresh deploy — not immediately on save (a real gap we hit and fixed
-  2026-09-24: the webhook secret was updated but the running function still had the old value
-  until the next deploy).
+  and the Razorpay dashboard webhook config (Settings → Webhooks, Live mode → `payment_link.paid`,
+  `refund.created`, `refund.processed` → `https://tvc.farm/api/razorpay-webhook`). Environment
+  variable changes only take effect on Netlify Functions after a fresh deploy — not immediately on
+  save (a real gap we hit and fixed 2026-09-24: the webhook secret was updated but the running
+  function still had the old value until the next deploy).
+
+**Razorpay is the source of truth for whether a refund actually completed — not our own API call.**
+Initiating a refund (from `/internal/event-payments`, or directly in the Razorpay dashboard) only
+ever marks an `event_payments` row **refund initiated**; `refunded_at` — the field the dashboard's
+stats and "cancelled" status actually key off — is set only once Razorpay's own
+`refund.processed` webhook confirms it. `razorpay-webhook.mts` handles all three refund events:
+
+- `refund.created` — records initiation (`recordRefundInitiated()`) if nothing has recorded it yet.
+  For an admin-triggered refund this is normally a no-op (`event-payments-admin.mts` already
+  recorded initiation synchronously right after its own Razorpay API call succeeded); for a refund
+  started directly in the Razorpay dashboard, this is the *only* place it gets recorded at all.
+- `refund.processed` — the only place `refunded_at` gets set (`confirmRefundProcessed()`).
+- `refund.failed` — flips `refund_status` to `'failed'` (`markRefundFailed()`) so the row reads as
+  refund-attempt-failed rather than either "still paid" (wrong — money may be mid-transit) or
+  silently stuck showing "refund initiated" forever. `/internal/event-payments` lets an admin
+  retry from there.
+
+All three guard on `razorpay_refund_id` (and `refunded_at is.null` where relevant) so whichever
+path reaches Supabase first wins and a duplicate/out-of-order webhook delivery is a no-op — see
+`scripts/lib/event-payments-db.mjs`'s comments on each function for the exact guard shape.
+Migration `0022_event_payments_refund_initiated.sql` adds the `refund_initiated_at` column this
+depends on. **Requires `refund.created`, `refund.processed`, and `refund.failed` to actually be
+added to the webhook's subscribed events in the Razorpay dashboard** — Razorpay's
+webhook-management API is Partner-only (OAuth + a sub-merchant `account_id`), not available to a
+direct merchant account like this one, so this can't be done via API and needs the dashboard
+toggle (done 2026-09-24, all four refund events enabled — `refund.speed_changed` too, though
+nothing acts on it since it doesn't change whether a refund completed).
 - `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` / `RESEND_API_KEY` — all reused as-is from the
   WhatsApp integration, no new credentials needed.
 
@@ -71,6 +100,39 @@ payment-links list response as `{ items: [...] }`, but the real field is `paymen
 had only ever been tested against constructed mock `Request` objects before, never Razorpay's
 real API, so the wrong-shape assumption went undetected until the first live test. Fixed and
 reverified directly against the API before going live.
+
+**Internal admin page:** `/internal/event-payments` (Google Sign-In + the same core-team
+allow-list as `/internal/whatsapp`/`/internal/photo-pool`, via
+`netlify/functions/event-payments-admin.mts`) shows registrations, cancellations, and money
+collected per event, and can **trigger a real refund** for a booking — calling Razorpay's refund
+API (`POST /v1/payments/:id/refund`, via `createRefund` in `netlify/functions/lib/razorpay.ts`)
+directly, since Razorpay's own MCP server has fetch/list tools for refunds but no way to create
+one. The page pre-fills a suggested amount from `/refund-policy`'s day-before-event tiers
+(75%/50%/0%), which the admin can override, and requires an explicit two-step confirm before
+anything is sent — no one-click refund. A successful API call only ever records **initiation**
+(`razorpay_refund_id`, `refund_amount`, `refund_status`, `refund_initiated_at`, `refunded_by` —
+migration `0020_event_payments_refunds.sql`/`0022_event_payments_refund_initiated.sql`) and emails
+the payer that a refund has started (cc `core-team@tvc.farm`/`stay@linger.in`); `refunded_at`
+itself is set later, only once Razorpay's `refund.processed` webhook confirms completion — see
+"Razorpay is the source of truth" above. A row shows a **Refund initiated** badge in between, and
+**Refund failed** with a retry option if Razorpay reports `refund.failed`. This is the same
+underlying table `/cancel-booking` writes `cancellation_requested_at` to (a guest-initiated
+*request*, not a refund) — a row only counts as cancelled in this page's stats once `refunded_at`
+is actually set.
+
+**Test-mode payments are hidden by default.** Razorpay's `payment_link.paid` webhook payload
+carries no explicit test/live flag, so `razorpay-webhook.mts` derives one itself at the moment it
+handles each webhook — `mode` is `'test'` if `RAZORPAY_KEY_ID` starts with `rzp_test_`, `'live'`
+otherwise (migration `0021_event_payments_mode.sql`) — and stores it on the row. This is
+deterministic, not a guess: whichever key is active is the one that actually authenticated that
+payment, since a test card/UPI can only ever be paid against test-mode keys in the first place.
+(An earlier version of this filter matched Razorpay's test-mode "quick pay" default email,
+`void@razorpay.com` — plausible from the data seen so far, but never confirmed as guaranteed
+Razorpay-wide behavior, so replaced with this instead.) The dashboard filters `mode = 'test'` rows
+out of the booking list and stats by default, with a "Showing N test payments" checkbox to
+include them when needed (e.g. verifying the webhook chain still works) — see `isTestPayment()`
+in `event-payments-admin.mts`. The five rows recorded proving this module out on 2026-09-24 (before
+the switch to live keys that same day) were backfilled to `mode = 'test'` by the migration itself.
 
 **Events using this flow:**
 
