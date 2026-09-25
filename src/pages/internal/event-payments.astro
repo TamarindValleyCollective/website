@@ -250,27 +250,49 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     font-size: 0.86rem;
   }
 
-  .bookings-table th,
-  .bookings-table td {
+  .bookings-table th {
     text-align: left;
     padding: 10px 12px;
     border-bottom: 1px solid var(--tvc-line);
-    vertical-align: top;
-  }
-
-  .bookings-table th {
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--tvc-ink-soft);
   }
 
-  .cell-muted {
+  .bookings-table th:nth-child(4),
+  .bookings-table th:nth-child(5),
+  .bookings-table th:last-child {
+    text-align: right;
+  }
+
+  /* Everything below targets #bookings-body's contents, which renderBookings()
+     and openRefundRow() build with innerHTML/createElement in the <script>
+     below — Astro's scoped CSS only tags elements present in this file's
+     static template, so a plain selector here would silently never match a
+     row, badge, button, or refund form. :global() opts each one out of that
+     scoping, and the #bookings-body id keeps the reach limited to this table
+     instead of leaking onto the rest of the page. */
+  :global(#bookings-body td) {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--tvc-line);
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  :global(#bookings-body td:nth-child(4)),
+  :global(#bookings-body td:nth-child(5)),
+  :global(#bookings-body td:last-child) {
+    text-align: right;
+  }
+
+  :global(#bookings-body .cell-muted) {
     font-size: 0.78rem;
     color: var(--tvc-ink-soft);
   }
 
-  .badge {
+  :global(#bookings-body .badge) {
     display: inline-block;
     padding: 2px 10px;
     border-radius: 999px;
@@ -280,27 +302,27 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     letter-spacing: 0.03em;
   }
 
-  .badge--paid {
+  :global(#bookings-body .badge--paid) {
     background: var(--tvc-green-tint);
     color: var(--tvc-green-dark);
   }
 
-  .badge--requested {
+  :global(#bookings-body .badge--requested) {
     background: var(--tvc-orange-tint);
     color: var(--tvc-orange-text);
   }
 
-  .badge--refunded {
+  :global(#bookings-body .badge--refunded) {
     background: var(--tvc-line);
     color: var(--tvc-ink-soft);
   }
 
-  .badge--refund-initiated {
+  :global(#bookings-body .badge--refund-initiated) {
     background: var(--tvc-orange-tint);
     color: var(--tvc-orange-text);
   }
 
-  .badge--refund-failed {
+  :global(#bookings-body .badge--refund-failed) {
     /* Same pale-red/dark-red pairing as global.css's .callout--red — that
        comment confirms #f9e2df needs the darker #9c4438 text, not
        --tvc-error-text/--tvc-orange-text, to actually pass WCAG AA. */
@@ -308,18 +330,58 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     color: #9c4438;
   }
 
-  .refund-row td {
-    background: var(--tvc-cream);
+  :global(#bookings-body .button) {
+    appearance: none;
+    border: 1px solid var(--tvc-line);
+    background: #fff;
+    border-radius: 999px;
+    padding: 8px 18px;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.86rem;
+    cursor: pointer;
   }
 
-  .refund-form {
+  :global(#bookings-body .button--primary) {
+    background: var(--tvc-green);
+    border-color: var(--tvc-green);
+    color: #fff;
+  }
+
+  :global(#bookings-body .button--danger) {
+    background: var(--tvc-error-text);
+    border-color: var(--tvc-error-text);
+    color: #fff;
+  }
+
+  :global(#bookings-body .button:disabled) {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* The per-row Cancel & refund / Retry refund trigger sits inline in a
+     dense table row — the site's standard pill CTA (sized for a standalone
+     button) reads as oversized there, so this one shrinks to fit the row. */
+  :global(#bookings-body td:last-child > .button) {
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+  }
+
+  :global(#bookings-body .refund-row td) {
+    background: var(--tvc-cream);
+    text-align: left;
+    white-space: normal;
+  }
+
+  :global(#bookings-body .refund-form) {
     display: flex;
     flex-direction: column;
     gap: 10px;
     max-width: 420px;
   }
 
-  .refund-form label {
+  :global(#bookings-body .refund-form label) {
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -327,34 +389,34 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     font-weight: 600;
   }
 
-  .refund-form input,
-  .refund-form textarea {
+  :global(#bookings-body .refund-form input),
+  :global(#bookings-body .refund-form textarea) {
     font: inherit;
     padding: 6px 10px;
     border: 1px solid var(--tvc-line);
     border-radius: 8px;
   }
 
-  .refund-tier-hint {
+  :global(#bookings-body .refund-tier-hint) {
     font-size: 0.78rem;
     color: var(--tvc-ink-soft);
     font-weight: 400;
   }
 
-  .refund-actions {
+  :global(#bookings-body .refund-actions) {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
   }
 
-  .refund-confirm {
+  :global(#bookings-body .refund-confirm) {
     padding: 10px 12px;
     background: var(--tvc-orange-tint);
     border-radius: 8px;
     font-size: 0.86rem;
   }
 
-  .refund-confirm p {
+  :global(#bookings-body .refund-confirm p) {
     margin: 0 0 8px;
   }
 </style>
@@ -537,7 +599,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     tr.id = `refund-row-${booking.id}`;
     tr.className = 'refund-row';
     const td = document.createElement('td');
-    td.colSpan = 6;
+    td.colSpan = 8;
 
     const fraction = suggestedRefundFraction(currentEvent.date);
     const suggestedPaise = Math.round(booking.amount * fraction);
