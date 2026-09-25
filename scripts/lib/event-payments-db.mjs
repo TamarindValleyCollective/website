@@ -24,7 +24,7 @@ function supabaseUrl() {
 // round-trip (the same race a plain read-then-write would have under
 // concurrent retries).
 /**
- * @param {{ eventReferenceId: string, eventTitle: string, razorpayPaymentId: string, razorpayPaymentLinkId: string, amount: number, currency: string, attendeeCount?: number, payerName?: string | null, payerEmail?: string, payerContact?: string, mode: 'test' | 'live' }} params
+ * @param {{ eventReferenceId: string, eventTitle: string, razorpayPaymentId: string, razorpayPaymentLinkId: string, amount: number, currency: string, attendeeCount?: number, payerName?: string | null, payerEmail?: string | null, payerContact?: string | null, mode: 'test' | 'live' }} params
  * @returns {Promise<{ id: string } | null>} the inserted row, or null if razorpayPaymentId was already recorded
  */
 export async function recordPaymentIfNew({

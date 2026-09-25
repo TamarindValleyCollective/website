@@ -507,7 +507,13 @@ outside both the local machine and Netlify (the member-update-email workflow).
   receipt (`netlify/functions/lib/payment-receipt.ts`, with the TVC logo mark) via Resend, CC'd to
   `core-team@tvc.farm` and `stay@linger.in`. Zero per-event code: which event and how many people
   travel entirely in the Payment Link's own `notes`, set either by hand on a base link paid
-  directly, or by `event-booking.mts` above on a per-booking link. **Live** as of 2026-09-24 — a
+  directly, or by `event-booking.mts` above on a per-booking link. `payer_email`/`payer_contact`
+  are read from those same `notes` (`primaryContactEmail`/`primaryContactPhone` — what the visitor
+  actually typed into `EventBookingForm`), not from the confirmed payment's own
+  `payment.entity.email`/`.contact`: Razorpay's test-mode/Quick Pay checkout was found to
+  substitute its own `void@razorpay.com` placeholder for email regardless of what was prefilled,
+  so trusting our own captured value is more reliable — falls back to the payment entity only for
+  Payment Links paid without going through this form (no `notes` at all). **Live** as of 2026-09-24 — a
   real signature-mismatch was hit and fixed the same day (the webhook secret was updated in both
   places, but Netlify Functions only pick up an environment variable change on the *next* deploy,
   not immediately — a real, documented Netlify behavior, not a bug in this code). Also subscribed

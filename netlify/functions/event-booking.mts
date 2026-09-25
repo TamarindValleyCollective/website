@@ -98,6 +98,8 @@ export default async (req: Request): Promise<Response> => {
         event: eventTitle,
         attendeeCount: String(attendeeCount),
         primaryContactName: name,
+        primaryContactEmail: email,
+        primaryContactPhone: phone,
       },
       customerName: name,
       customerEmail: email,

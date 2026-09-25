@@ -52,6 +52,18 @@ signature, records the payment in the `event_payments` table (Supabase project "
 (TVC's `/refund-policy` has day-before-event tiers a human applies by hand), and notifies TVC +
 Linger + the guest.
 
+**A real bug found reviewing early test data:** every payer's name/email/phone that
+`EventBookingForm` collects is sent to Razorpay as the Payment Link's `customer` object (prefills
+checkout), but `razorpay-webhook.mts` originally read the *confirmed payment's* own
+`payment.entity.email`/`.contact` back for its records — and Razorpay's test-mode/Quick Pay
+checkout substitutes its own `void@razorpay.com` placeholder for email there regardless of what
+was prefilled (phone came through correctly; only email was affected). Fixed by also carrying
+`primaryContactEmail`/`primaryContactPhone` in the Payment Link's `notes` (same as the existing
+`primaryContactName`) and having the webhook prefer those — the value the visitor actually
+typed — falling back to `payment.entity.email`/`.contact` only for Payment Links paid without
+going through this form (e.g. the hand-linked links documented below, which have no `notes` at
+all). The five pre-fix test rows had their `payer_email` corrected by hand in Supabase to match.
+
 **Live configuration** (Netlify env vars, all deploy contexts):
 
 - `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` — regenerated live keys as of 2026-09-24 (see

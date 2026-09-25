@@ -249,6 +249,18 @@ export default async (req: Request): Promise<Response> => {
   const eventTitle = notes.event || paymentLink.description || eventReferenceId;
   const attendeeCount = Number.parseInt(notes.attendeeCount ?? '1', 10) || 1;
   const payerName = notes.primaryContactName || null;
+  // Prefer what the visitor actually typed into EventBookingForm (carried
+  // through in notes, same as primaryContactName) over Razorpay's own
+  // payment.entity.email/.contact — confirmed against real test-mode rows
+  // that Razorpay's test/Quick Pay checkout substitutes its own
+  // void@razorpay.com placeholder for email regardless of what was prefilled
+  // via the Payment Link's customer.email, even though .contact (phone) came
+  // through correctly. Falls back to the payment entity for Payment Links
+  // paid directly without going through event-booking.mts (no notes at
+  // all — e.g. the hand-linked links documented in RAZORPAY.md) and for
+  // bookings made before this fallback existed.
+  const payerEmail = notes.primaryContactEmail || payment.email || null;
+  const payerContact = notes.primaryContactPhone || payment.contact || null;
   // Which mode actually processed this payment, so event-payments-admin.mts
   // can filter test payments out of the dashboard deterministically instead
   // of guessing from payer_email. Whichever key is active right now is the
@@ -269,8 +281,8 @@ export default async (req: Request): Promise<Response> => {
       currency: payment.currency,
       attendeeCount,
       payerName,
-      payerEmail: payment.email,
-      payerContact: payment.contact,
+      payerEmail,
+      payerContact,
       mode,
     });
   } catch (err) {
@@ -287,10 +299,10 @@ export default async (req: Request): Promise<Response> => {
     return jsonResponse({ ok: true, duplicate: true });
   }
 
-  if (payment.email) {
+  if (payerEmail) {
     try {
       await sendReceiptEmail({
-        to: payment.email,
+        to: payerEmail,
         eventTitle,
         amount: payment.amount,
         currency: payment.currency,
