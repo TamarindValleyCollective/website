@@ -327,8 +327,8 @@ const brand =
               one #cta the sidebar's "Request to book" link jumps to. */}
           {isUpcoming && event.data.razorpayReferenceId && (
             <div id="cta">
-              <h2>Register</h2>
               <EventBookingForm
+                heading="Register"
                 referenceId={event.data.razorpayReferenceId}
                 unitAmount={event.data.price![0].amount}
                 unitLabel={event.data.price![0].label}
@@ -646,11 +646,13 @@ const brand =
   }
 
   /* Keeps the booking CTA aligned with this article's own reading column -
-     BookingInquiry.astro has no opinion on width (its other callers sit in
-     plain, non-.prose sections that stretch full-width), so without this it
-     would stretch past where every paragraph and table above it stops,
-     reading as a mismatched, wider "box" rather than the column's own close. */
-  .prose :global(.booking-inquiry) {
+     BookingInquiry.astro/EventBookingForm.astro have no opinion on width
+     (their other callers sit in plain, non-.prose sections that stretch
+     full-width), so without this they'd stretch past where every paragraph
+     and table above them stops, reading as a mismatched, wider "box" rather
+     than the column's own close. */
+  .prose :global(.booking-inquiry),
+  .prose :global(.booking-form) {
     max-width: 72ch;
   }
 
@@ -663,7 +665,8 @@ const brand =
   .prose--wide :global(p),
   .prose--wide :global(table),
   .prose--wide :global(.cta),
-  .prose--wide :global(.booking-inquiry) {
+  .prose--wide :global(.booking-inquiry),
+  .prose--wide :global(.booking-form) {
     max-width: none;
   }
 

@@ -14,19 +14,26 @@ interface Props {
   referenceId: string;
   unitAmount: string; // display only, e.g. "₹2,250" — the charged amount always comes from the base Payment Link server-side, never from this string
   unitLabel: string; // e.g. "per person"
+  // Rendered as an <h2> above the form, same convention as
+  // BookingInquiry.astro's own `heading` prop — the "book this" moment
+  // should look and read the same way whichever of the two flows an event
+  // uses.
+  heading?: string;
 }
 
-const { referenceId, unitAmount, unitLabel } = Astro.props;
+const { referenceId, unitAmount, unitLabel, heading } = Astro.props;
 const fieldId = referenceId.replace(/[^a-z0-9]+/gi, '-');
 const MAX_ATTENDEES = 10;
 const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
 ---
 
 <div class="booking-form">
+  {heading && <h2 class="booking-form__heading">{heading}</h2>}
   <form class="event-booking-form card site-form" id={`${fieldId}-form`} data-reference-id={referenceId} data-unit-amount={unitAmount}>
     <p class="form-honeypot" aria-hidden="true">
       <label>Leave this field blank <input name="botField" tabindex="-1" autocomplete="off" /></label>
     </p>
+    <p class="form-required-note">All fields are required.</p>
 
     <div class="site-form-grid">
       <div>
@@ -54,12 +61,25 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
       <span class="field-total__amount" id={`${fieldId}-total`}>{unitAmount}</span>
     </div>
 
-    <button class="button" type="submit">Pay &amp; register &rarr;</button>
+    <button class="button" type="submit">Pay & register →</button>
     <p class="booking-form__error" role="alert" hidden></p>
   </form>
 </div>
 
 <style>
+  /* Same section-separator treatment as BookingInquiry.astro's
+     .booking-inquiry — a "book this" moment should look and read the same
+     way site-wide regardless of which of the two flows an event uses. */
+  .booking-form {
+    margin-top: 40px;
+    padding-top: 32px;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .booking-form__heading {
+    margin-top: 0;
+  }
+
   .field-total {
     display: flex;
     justify-content: space-between;
