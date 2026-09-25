@@ -173,12 +173,28 @@ event as **Possible duplicate**, for any pair that predates this guard.
 
 **Cancel an entire event in one action (2026-09-25).** A full-event cancellation (weather, low
 turnout) used to mean refunding every booking one at a time through the per-row form.
-`/internal/event-payments` now has a "Cancel entire event & refund everyone" action: pick a refund
-percentage (100% by default — the fair call when the cancellation is TVC's, not the guest's, so
-`/refund-policy`'s day-before-event tiers don't apply), review the computed count and total, and
-confirm once. Backed by a new `POST /api/event-payments-admin/bulk-refund` that refunds every still-
-eligible booking sequentially (not in parallel, so one Razorpay failure doesn't take the batch down)
-using the same underlying refund logic as a single row.
+`/internal/event-payments` now has a compact "Cancel event" button (kept small/right-aligned
+rather than a full-width CTA, since it's a rare, destructive action that shouldn't compete with the
+stats above it) that opens a form: pick a refund percentage (100% by default — the fair call when
+the cancellation is TVC's, not the guest's, so `/refund-policy`'s day-before-event tiers don't
+apply), review the *actual per-booking breakdown* (who gets how much, not just a count+total —
+that's the plan being approved, not a guess), and confirm once. Backed by a new
+`POST /api/event-payments-admin/bulk-refund` that refunds every still-eligible booking sequentially
+(not in parallel, so one Razorpay failure doesn't take the batch down) using the same underlying
+refund logic as a single row. A failed row's real Razorpay rejection reason is shown per-row (not
+folded into a silent "X of Y succeeded" count) — the table only auto-refreshes on full success, so
+a partial failure's reasons stay visible until the admin explicitly refreshes.
+
+**Refund failures now show Razorpay's real reason (2026-09-25).** Found live: refunding a
+pre-settlement payment (even a tiny ₹10 test) can fail with *"Your account does not have enough
+balance to carry out the refund operation"* — Razorpay needs available settled balance (or a
+manual top-up) to fund a refund before the underlying payment itself has settled; this isn't
+specific to test payments and can hit any real cancellation made before a booking's payment
+settles. Previously `event-payments-admin.mts` swallowed Razorpay's actual error and showed a
+generic "rejected — no money has moved" message, logging the real reason server-side only.
+`createRefund()` (`lib/razorpay.ts`) now parses Razorpay's `error.description` (written to be
+human-readable) and surfaces it verbatim to the admin, for both the single-row and bulk-refund
+flows.
 
 **Payment method + real Razorpay fees (2026-09-25).** "Net collected" was gross minus refunds only
 — it never subtracted Razorpay's own cut, so it overstated what TVC actually banks. Razorpay's fee

@@ -17,6 +17,26 @@ function authHeader(): string {
   return `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}`;
 }
 
+// Razorpay's error responses are `{ error: { code, description, ... } }` —
+// `description` is written to be shown to a human (e.g. "Your account does
+// not have enough balance to carry out the refund operation..."), unlike the
+// raw response body this repo's other API calls just dump into their thrown
+// Error's message. Used by createRefund() below so a caller like
+// event-payments-admin.mts can surface *why* a refund was rejected to the
+// admin, not just that it was — confirmed against a real rejection (an
+// account with no settled balance yet tried to refund a pre-settlement
+// payment, 2026-09-25).
+async function razorpayErrorDescription(res: Response): Promise<string> {
+  const text = await res.text();
+  try {
+    const description = JSON.parse(text)?.error?.description;
+    if (typeof description === 'string' && description) return description;
+  } catch {
+    // Not JSON, or not the expected shape — fall through to the raw body.
+  }
+  return `${res.status} ${text}`;
+}
+
 export interface RazorpayPaymentLink {
   id: string;
   reference_id: string | null;
@@ -171,7 +191,7 @@ export async function createRefund(params: {
     body: JSON.stringify({ amount: params.amount, speed: 'normal', notes: params.notes }),
   });
   if (!res.ok) {
-    throw new Error(`Razorpay create refund failed: ${res.status} ${await res.text()}`);
+    throw new Error(await razorpayErrorDescription(res));
   }
   return (await res.json()) as RazorpayRefund;
 }

@@ -248,7 +248,14 @@ async function refundOneBooking(row: any, amount: number, adminEmail: string, re
     });
   } catch (err) {
     console.error('Failed to create Razorpay refund', err);
-    return { ok: false, error: 'Razorpay rejected the refund — no money has moved' };
+    // createRefund() throws Razorpay's own human-readable `error.description`
+    // when the response has that shape (e.g. "Your account does not have
+    // enough balance to carry out the refund operation...", hit for real
+    // 2026-09-25 refunding a pre-settlement payment) — surface that instead
+    // of a generic message, so the admin knows *why* and what to do about
+    // it, not just that money didn't move.
+    const reason = err instanceof Error ? err.message : 'Unknown error';
+    return { ok: false, error: `Razorpay rejected the refund — no money has moved. ${reason}` };
   }
 
   // The refund is real at this point — a failure past here only affects our
