@@ -185,6 +185,18 @@ refund logic as a single row. A failed row's real Razorpay rejection reason is s
 folded into a silent "X of Y succeeded" count) — the table only auto-refreshes on full success, so
 a partial failure's reasons stay visible until the admin explicitly refreshes.
 
+Only available for an event that hasn't concluded yet (through the end of its own day, Asia/Kolkata
+— a same-day weather cancellation is still fine) — bulk-refunding a past event doesn't make sense
+from this page. If one is ever genuinely needed for a past event, that's a job for the Razorpay
+dashboard directly; `razorpay-webhook.mts` already syncs a refund issued there into `event_payments`
+the same as one issued from this page, so no code is needed for that fallback. **Two real display
+bugs found immediately after this shipped** (both `.bulk-cancel`/`.bulk-cancel-panel`, fixed same
+day): an explicit `display: flex` on each beat the browser's own `[hidden] { display: none }`
+(author CSS always overrides the UA stylesheet, regardless of specificity/source order), so the
+whole "Cancel event" form showed up unconditionally instead of only after clicking the button —
+added the missing `[hidden]` overrides for both. Also added a prominent warning banner at the top
+of the panel given how easy that made it to trigger by accident.
+
 **Refund failures now show Razorpay's real reason (2026-09-25).** Found live: refunding a
 pre-settlement payment (even a tiny ₹10 test) can fail with *"Your account does not have enough
 balance to carry out the refund operation"* — Razorpay needs available settled balance (or a
