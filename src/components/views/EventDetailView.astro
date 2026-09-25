@@ -332,6 +332,7 @@ const brand =
                 referenceId={event.data.razorpayReferenceId}
                 unitAmount={event.data.price![0].amount}
                 unitLabel={event.data.price![0].label}
+                eventDate={event.data.date.toISOString().slice(0, 10)}
               />
             </div>
           )}
