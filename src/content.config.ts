@@ -26,6 +26,16 @@ const events = defineCollection({
     // custom dimensions needed).
     coverImageWidth: z.number().int().positive().optional(),
     coverImageHeight: z.number().int().positive().optional(),
+    // Overrides coverImage for the social-preview (og:image/twitter:image)
+    // only - the on-page hero banner (PageHero) always uses coverImage.
+    // Lets a link-preview show a designed poster (WhatsApp, etc.) without
+    // that poster becoming the page's own hero background. Same real-file-
+    // dimensions requirement as coverImageWidth/Height above. Omit to fall
+    // back to coverImage/coverImageWidth/coverImageHeight for the preview
+    // too, same as before this field existed.
+    shareImage: z.string().optional(),
+    shareImageWidth: z.number().int().positive().optional(),
+    shareImageHeight: z.number().int().positive().optional(),
     organizer: z.string().optional(),
     tags: z.array(z.string()).default([]),
     // Groups editions of the same recurring event under one visual identity

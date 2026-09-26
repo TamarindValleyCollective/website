@@ -6,6 +6,9 @@ coverImage: "/images/events/2026-10-10-foraging-day/hero.jpeg"
 coverImageAlt: "Participants foraging for wild greens in a grassy meadow during Foraging Day."
 coverImageWidth: 720
 coverImageHeight: 480
+shareImage: "/images/events/2026-10-10-foraging-day/poster.jpeg"
+shareImageWidth: 1122
+shareImageHeight: 1402
 organizer: "Foraging Trails & Tales"
 tags: ["workshop", "food", "foraging"]
 draft: false
@@ -20,7 +23,7 @@ razorpayReferenceId: "foraging-day-2026-10-10"
 
 Step into nature, learn, cook, and eat what the earth gives you.
 
-Join **[@foragingtrailsandtales](https://www.instagram.com/foragingtrailsandtales/)** for a Saturday of foraging, cooking, and eating together at Tamarind Valley Collective.
+Join **@foragingtrailsandtales** for a Saturday of foraging, cooking, and eating together at Tamarind Valley Collective.
 
 The day is led by **[Subhashini](https://www.instagram.com/greensofkanakapura/) and [Archana](https://www.instagram.com/mylittlethoughtslane/)** of **[Foraging Trails and Tales](/people/partners#foraging-trails-and-tales)**, who guide people in search of wild edible greens around Bengaluru — foraging walks, plant identification, and farm-to-table cooking sessions. They ran TVC's first Forage & Feast camp night in October 2025.
 
