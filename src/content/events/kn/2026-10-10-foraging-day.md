@@ -22,6 +22,14 @@ whatsapp:
 
 <figure class="poster">
 
+![ಫೊರೇಜಿಂಗ್ ಟ್ರೈಲ್ಸ್ ಆ್ಯಂಡ್ ಟೇಲ್ಸ್‌ನ ಸುಭಾಷಿಣಿ ಮತ್ತು ಅರ್ಚನಾ ಸಂಗ್ರಹಿಸಿದ ಕಾಡು ಸೊಪ್ಪುಗಳನ್ನು ಒಟ್ಟಿಗೆ ಪರಿಶೀಲಿಸುತ್ತಿರುವುದು](/images/events/2026-10-10-foraging-day/subhashini-and-archana.jpeg)
+
+<figcaption>ಫೊರೇಜಿಂಗ್ ಟ್ರೈಲ್ಸ್ ಆ್ಯಂಡ್ ಟೇಲ್ಸ್‌ನ ಸುಭಾಷಿಣಿ ಮತ್ತು ಅರ್ಚನಾ</figcaption>
+
+</figure>
+
+<figure class="poster">
+
 ![ವೇಳಾಪಟ್ಟಿ, ಒಳಗೊಂಡಿರುವುದು, ₹2,250 ನೋಂದಣಿ ಶುಲ್ಕ, ಮತ್ತು Linger ಅವರ WhatsApp ಸಂಪರ್ಕ ವಿವರಗಳೊಂದಿಗೆ Foraging Day ಈವೆಂಟ್ ಪೋಸ್ಟರ್](/images/events/2026-10-10-foraging-day/poster.jpeg)
 
 <figcaption>ಈವೆಂಟ್ ಪೋಸ್ಟರ್</figcaption>

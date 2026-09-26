@@ -26,6 +26,14 @@ The day is led by **[Subhashini](https://www.instagram.com/greensofkanakapura/) 
 
 <figure class="poster">
 
+![Subhashini and Archana of Foraging Trails and Tales examining foraged wild greens together](/images/events/2026-10-10-foraging-day/subhashini-and-archana.jpeg)
+
+<figcaption>Subhashini and Archana of Foraging Trails and Tales</figcaption>
+
+</figure>
+
+<figure class="poster">
+
 ![Foraging Day event poster with the schedule, what's included, ₹2,250 registration fee, and Linger's WhatsApp contact details, set against a photo of the farm's Malabar Hut](/images/events/2026-10-10-foraging-day/poster.jpeg)
 
 <figcaption>The event poster</figcaption>

@@ -22,6 +22,14 @@ Tamarind Valley Collective-இல் ஒரு சனிக்கிழமை �
 
 <figure class="poster">
 
+![ஃபோரேஜிங் டிரெயில்ஸ் அண்ட் டேல்ஸின் சுபாஷினி மற்றும் அர்ச்சனா சேகரித்த காட்டு கீரைகளை ஒன்றாகப் பரிசோதிக்கும் காட்சி](/images/events/2026-10-10-foraging-day/subhashini-and-archana.jpeg)
+
+<figcaption>ஃபோரேஜிங் டிரெயில்ஸ் அண்ட் டேல்ஸின் சுபாஷினி மற்றும் அர்ச்சனா</figcaption>
+
+</figure>
+
+<figure class="poster">
+
 ![அட்டவணை, சேர்க்கப்பட்டவை, ₹2,250 பதிவுக் கட்டணம், மற்றும் Linger-இன் WhatsApp தொடர்பு விவரங்களுடன் கூடிய Foraging Day நிகழ்வு போஸ்டர்](/images/events/2026-10-10-foraging-day/poster.jpeg)
 
 <figcaption>நிகழ்வு போஸ்டர்</figcaption>

@@ -12,4 +12,6 @@ tvcConnection_kn: "ಅಕ್ಟೋಬರ್ 2025 ರಲ್ಲಿ TVC ಯ ಮೊ�
 tvcConnection_ta: "அக்டோபர் 2025 இல் TVC-யின் முதல் Forage & Feast முகாம் இரவை நடத்தினர் — நடப்பட்டதை மட்டுமல்ல, இயற்கையாக வளர்வதை உண்ணும் நோக்கில் அமைந்த நடை-சேகரிப்பு-சமையல்-உண்ணும் இரவு தங்குமிடம்."
 ---
 
-Foraging Trails and Tales is run by Subhashini and Archana, who lead people in search of wild edible greens around Bengaluru — foraging walks, plant identification, and farm-to-table cooking sessions at partner farms like Chiguru Farm in Harohalli.
+Subhashini and Archana are two urban foragers who came together through a shared love for edible greens. Through Foraging Trails and Tales, they run guided wild food walks and full-day farm-to-table workshops, gathering what's in season and cooking a meal with what they find, working to bring the lost art of foraging and the skill of identifying wild edible greens back into the limelight.
+
+They continue to learn from local communities and the people who keep this knowledge and tradition alive, documenting their discoveries on Instagram to make wild foods and the knowledge around them more visible and accessible.
