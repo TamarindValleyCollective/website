@@ -3,6 +3,9 @@ title: "Foraging Trails & Tales உடன் உணவு தேடும் ந
 date: 2026-10-10
 excerpt: "Tamarind Valley Collective-இல் Foraging Trails & Tales உடன் உணவு தேடுதல், சமைத்தல், மற்றும் ஒன்றாக உண்ணும் ஒரு முழு நாள் — வழிகாட்டப்பட்ட உணவு தேடும் நடைபயணம், செய்முறை சமையல் பட்டறை, மற்றும் பண்ணையிலிருந்து-மேசைக்கு மதிய உணவு."
 coverImage: "/images/events/2026-10-10-foraging-day/hero.jpeg"
+shareImage: "/images/events/2026-10-10-foraging-day/poster.jpeg"
+shareImageWidth: 1122
+shareImageHeight: 1402
 organizer: "Foraging Trails & Tales"
 tags: ["பட்டறை", "உணவு", "உணவு தேடுதல்"]
 draft: false
@@ -16,9 +19,17 @@ whatsapp:
 
 இயற்கைக்குள் நுழையுங்கள், கற்றுக்கொள்ளுங்கள், சமையுங்கள், மற்றும் பூமி தரும் உணவை உண்ணுங்கள்.
 
-Tamarind Valley Collective-இல் ஒரு சனிக்கிழமை உணவு தேடுதல், சமைத்தல், மற்றும் ஒன்றாக உண்ணுவதற்காக **[@foragingtrailsandtales](https://www.instagram.com/foragingtrailsandtales/)** உடன் இணையுங்கள்.
+Tamarind Valley Collective-இல் ஒரு சனிக்கிழமை உணவு தேடுதல், சமைத்தல், மற்றும் ஒன்றாக உண்ணுவதற்காக **[ஃபோரேஜிங் டிரெயில்ஸ் அண்ட் டேல்ஸ்](/people/partners#foraging-trails-and-tales)** உடன் இணையுங்கள்.
 
-இந்த நாளை **[சுபாஷினி](https://www.instagram.com/greensofkanakapura/) மற்றும் [அர்ச்சனா](https://www.instagram.com/mylittlethoughtslane/)** அவர்கள், **[ஃபோரேஜிங் டிரெயில்ஸ் அண்ட் டேல்ஸ்](/people/partners#foraging-trails-and-tales)** மூலம் நடத்துகிறார்கள் — இவர்கள் பெங்களூரு சுற்றுவட்டாரத்தில் காட்டு-உணவு நடைப்பயணங்கள், தாவர இனங்காணல், மற்றும் பண்ணையிலிருந்து-மேசைக்கு சமையல் அமர்வுகளை நடத்துகிறார்கள். அக்டோபர் 2025 இல் TVC-யின் முதல் Forage & Feast முகாம் இரவையும் இவர்களே நடத்தினர்.
+இந்த நாளை **[சுபாஷினி](https://www.instagram.com/greensofkanakapura/) மற்றும் [அர்ச்சனா](https://www.instagram.com/mylittlethoughtslane/)** அவர்கள், ஃபோரேஜிங் டிரெயில்ஸ் அண்ட் டேல்ஸ் மூலம் நடத்துகிறார்கள் — இவர்கள் பெங்களூரு சுற்றுவட்டாரத்தில் காட்டு-உணவு நடைப்பயணங்கள், தாவர இனங்காணல், மற்றும் பண்ணையிலிருந்து-மேசைக்கு சமையல் அமர்வுகளை நடத்துகிறார்கள். அக்டோபர் 2025 இல் TVC-யின் முதல் Forage & Feast முகாம் இரவையும் இவர்களே நடத்தினர்.
+
+<figure class="poster">
+
+![ஃபோரேஜிங் டிரெயில்ஸ் அண்ட் டேல்ஸின் சுபாஷினி மற்றும் அர்ச்சனா சேகரித்த காட்டு கீரைகளை ஒன்றாகப் பரிசோதிக்கும் காட்சி](/images/events/2026-10-10-foraging-day/subhashini-and-archana.jpeg)
+
+<figcaption>ஃபோரேஜிங் டிரெயில்ஸ் அண்ட் டேல்ஸின் சுபாஷினி மற்றும் அர்ச்சனா</figcaption>
+
+</figure>
 
 <figure class="poster">
 

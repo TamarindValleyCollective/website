@@ -54,7 +54,13 @@ const whatsappMessage = `Hi! I'd like to book a spot for ${event.data.title} (${
 // site's apple-touch-icon (the bug this guards against). An event missing
 // coverImageWidth/Height degrades to BaseLayout's own sitewide default
 // image+dimensions instead of repeating that failure.
-const hasSizedCoverImage = Boolean(event.data.coverImage && event.data.coverImageWidth && event.data.coverImageHeight);
+// shareImage (e.g. a designed poster) overrides coverImage for this
+// preview only, so the on-page hero below keeps using coverImage - see
+// shareImage's own comment in content.config.ts.
+const socialImage = event.data.shareImage ?? event.data.coverImage;
+const socialImageWidth = event.data.shareImage ? event.data.shareImageWidth : event.data.coverImageWidth;
+const socialImageHeight = event.data.shareImage ? event.data.shareImageHeight : event.data.coverImageHeight;
+const hasSizedCoverImage = Boolean(socialImage && socialImageWidth && socialImageHeight);
 const calendarEvent = {
   uid: canonicalId,
   title: event.data.title,
@@ -174,9 +180,9 @@ const brand =
   lang={lang}
   title={event.data.title}
   description={event.data.excerpt}
-  image={hasSizedCoverImage ? event.data.coverImage : undefined}
-  imageWidth={hasSizedCoverImage ? event.data.coverImageWidth : undefined}
-  imageHeight={hasSizedCoverImage ? event.data.coverImageHeight : undefined}
+  image={hasSizedCoverImage ? socialImage : undefined}
+  imageWidth={hasSizedCoverImage ? socialImageWidth : undefined}
+  imageHeight={hasSizedCoverImage ? socialImageHeight : undefined}
   schema={[eventSchema]}
 >
   <PageHero eyebrow={formatDateRange(event.data.date, event.data.endDate, lang)} title={event.data.title} image={event.data.coverImage} imageAlt={event.data.coverImageAlt ?? event.data.title} {...brand} />
