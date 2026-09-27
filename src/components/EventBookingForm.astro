@@ -234,7 +234,11 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
             duplicateTextEl.textContent = `Heads up: this email already has ${json.existingCount === 1 ? 'a paid booking' : `${json.existingCount} paid bookings`} for this event. If that's intentional (e.g. booking for another group), confirm below to continue.`;
             duplicateWarningEl.hidden = false;
           }
-          if (confirmDuplicateBtn) confirmDuplicateBtn.onclick = () => attemptBooking(data, true);
+          // Re-read the form here rather than reusing `data` — the guest may
+          // have edited a field (e.g. fixed a typo'd email) while looking at
+          // the warning, and this button isn't a submit, so nothing else
+          // would pick that up.
+          if (confirmDuplicateBtn) confirmDuplicateBtn.onclick = () => attemptBooking(new FormData(form), true);
           if (submitBtn) {
             submitBtn.disabled = false;
             submitBtn.textContent = 'Pay & register →';

@@ -1109,9 +1109,12 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   // A booking is a candidate for the "cancel entire event" action under the
   // same rule handleBulkRefund applies server-side: not already refunded,
   // and not already mid-flight on a still-live refund attempt (a previously
-  // *failed* one is fair game to retry).
+  // *failed* one is fair game to retry). Includes 'requested' — a pending
+  // cancellation request has no refund_initiated_at either, so the server
+  // sweeps it in too; this preview must match or the admin approves a
+  // breakdown that understates who's actually about to get refunded.
   function eligibleForBulkRefund(bookings: Booking[]): Booking[] {
-    return bookings.filter((b) => b.status === 'paid' || b.status === 'refund_failed');
+    return bookings.filter((b) => b.status === 'paid' || b.status === 'requested' || b.status === 'refund_failed');
   }
 
   function closeBulkCancelPanel() {

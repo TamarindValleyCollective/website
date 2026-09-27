@@ -124,15 +124,24 @@ export async function getPaymentByRazorpayId(razorpayPaymentId) {
  * @returns {Promise<number>}
  */
 export async function countActivePaymentsForEmail(eventReferenceId, email) {
+  // Matched in JS, not via a `payer_email=ilike.<email>` filter: PostgREST
+  // passes `%`/`_` (and translates a bare `*`) straight through as SQL
+  // wildcards, and event-booking.mts's email format check doesn't exclude
+  // any of those — a crafted address like "*@*.*" would ILIKE-match nearly
+  // every row in the event, leaking how many unrelated bookings exist. An
+  // exact, case-insensitive comparison here has no such wildcard surface,
+  // and matches how event-payments-admin.mts's own duplicate flag compares
+  // payer_email.
   const res = await fetch(
-    `${supabaseUrl()}/rest/v1/event_payments?event_reference_id=eq.${encodeURIComponent(eventReferenceId)}&payer_email=ilike.${encodeURIComponent(email)}&refunded_at=is.null&mode=eq.live&select=id`,
+    `${supabaseUrl()}/rest/v1/event_payments?event_reference_id=eq.${encodeURIComponent(eventReferenceId)}&refunded_at=is.null&mode=eq.live&select=payer_email`,
     { headers: restHeaders() },
   );
   if (!res.ok) {
     throw new Error(`Supabase read from event_payments failed: ${res.status} ${await res.text()}`);
   }
   const rows = await res.json();
-  return rows.length;
+  const target = email.toLowerCase();
+  return rows.filter((r) => String(r.payer_email ?? '').toLowerCase() === target).length;
 }
 
 // Records a cancellation request, but only the first time — a second call
