@@ -21,12 +21,21 @@ on TVC's behalf; nothing about it is wired into the site itself.
 | Facebook | `page` | Tamarind Valley Collective |
 | LinkedIn | `page` | `tvcfarm` |
 
-**Posts published so far:** on 2026-07-30, an "our website just got a fresh new look" post was
-queued to Instagram and Facebook, announcing `tvc.farm` and summarizing the site's Explore/Engage
-navigation structure, using the homepage hero image
-(`https://tvc.farm/images/pages/home/hero.jpg`) as the asset. Both were added to each channel's
-queue (`addToQueue`), not published immediately — check Buffer for actual send times. LinkedIn
-wasn't included in that round.
+**Posts published so far:**
+
+- 2026-07-30: an "our website just got a fresh new look" post was queued to Instagram and
+  Facebook, announcing `tvc.farm` and summarizing the site's Explore/Engage navigation structure,
+  using the homepage hero image (`https://tvc.farm/images/pages/home/hero.jpg`) as the asset.
+  Both were added to each channel's queue (`addToQueue`), not published immediately. LinkedIn
+  wasn't included in that round.
+- 2026-09-28: three separate posts (one per member) celebrating TVC members' talks at IndiaFOSS
+  2026, queued across all three channels. Om's post (Instagram + Facebook + LinkedIn) uses two
+  Sanchaya project graphics hosted at
+  `tvc.farm/images/community-outreach/indiafoss-2026/` (added in the same PR, not wired into any
+  page — asset hosting only). Kiran Jonnalagadda's and Thejesh GN's posts (Facebook + LinkedIn
+  only — no image asset available, and Instagram requires one) use a `linkAttachment` card to
+  their respective FOSS United CFP talk pages instead. All seven were added via `addToQueue` /
+  `automatic` scheduling — check Buffer for actual send times.
 
 ## What the Buffer MCP server can do
 
