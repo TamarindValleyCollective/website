@@ -123,74 +123,14 @@ export function datesInMonth(monthStr) {
   return out;
 }
 
-// Normalizes a guest's mobile number to E.164 (+<country code><digits>),
-// defaulting to +91 (India) when no country code is given - this farm's
-// guests are overwhelmingly Indian, and a bare 10-digit number typed into
-// this field is always meant as a local Indian mobile number, not a
-// landline (the whole point of collecting it is reaching a guest on
-// WhatsApp/SMS). Returns null for empty input (field is optional) or for
-// anything that doesn't parse as a plausible mobile number, so callers can
-// tell "not provided" apart from "provided but invalid" and reject the
-// latter rather than silently dropping it.
-//
-// Imported by both the client script (accommodation-calendar.astro, for
-// instant feedback) and the server (accommodation-admin.mts, the actual
-// gate) - one implementation, so "what counts as a valid mobile number"
-// can't drift between the two.
-export function normalizeMobileNumber(raw) {
-  if (!raw) return null;
-  let trimmed = raw.trim();
-  if (!trimmed) return null;
-
-  // "00" is the international-dialling-prefix convention many countries use
-  // in place of "+" (e.g. "0044 7911 123456") - fold it to a real leading
-  // '+' up front so both spellings of "here's my number, dialled from
-  // abroad" are treated identically by everything below. Checked against a
-  // spaces/hyphens-only strip (not a full digit strip) so a genuine single
-  // leading trunk '0' - a different, domestic-only convention, handled
-  // separately further down - never gets misread as this one.
-  const compact = trimmed.replace(/[\s-]/g, '');
-  if (/^00\d/.test(compact)) trimmed = `+${compact.slice(2)}`;
-
-  const hasCountryCode = trimmed.startsWith('+');
-  const digits = trimmed.replace(/\D/g, '');
-  if (!digits) return null;
-
-  if (hasCountryCode) {
-    // Generic E.164 plausibility check (8-15 digits total after the '+',
-    // first digit non-zero - matches the DB's own
-    // accommodation_people_mobile_number_format CHECK constraint exactly).
-    // Real per-country mobile-vs-landline validation needs a library like
-    // libphonenumber - disproportionate here given this farm's guest mix,
-    // so a country code other than +91 just gets this looser check rather
-    // than a false sense of per-country strictness.
-    if (digits.length < 8 || digits.length > 15 || digits[0] === '0') return null;
-    return `+${digits}`;
-  }
-
-  // No '+' or "00" prefix, but the digits still carry India's own country
-  // code typed bare - "91 98765 43210" or "919876543210" rather than
-  // "+919876543210" - a very common way people paste or type it. Recognize
-  // that specific shape (12 digits, starting "91", the remaining 10 forming
-  // a valid Indian mobile number) before falling through to "no country
-  // code at all".
-  if (digits.length === 12 && digits.startsWith('91') && /^[6-9]\d{9}$/.test(digits.slice(2))) {
-    return `+${digits}`;
-  }
-
-  // A single leading trunk '0' is sometimes present by habit (how a
-  // domestic number is dialled in-country, or copied straight from a
-  // phone's own contacts export) - strip exactly one before the check
-  // below, never more.
-  const withoutTrunkZero = digits.length === 11 && digits[0] === '0' ? digits.slice(1) : digits;
-
-  // No country code given - assume India. Indian mobile numbers are
-  // exactly 10 digits and start with 6-9 under TRAI's numbering plan;
-  // landline numbers and any other length are rejected outright rather
-  // than accepted as if they were a mobile number.
-  if (!/^[6-9]\d{9}$/.test(withoutTrunkZero)) return null;
-  return `+91${withoutTrunkZero}`;
-}
+// Guest mobile numbers default to India (this farm's guests are
+// overwhelmingly Indian) but the underlying normalizer (phone.mjs, shared
+// across any form that collects a number, not just this one) accepts a
+// number with its own country code regardless. Re-exported under this
+// module's own name since accommodation-admin.mts/accommodation-calendar.astro
+// already import it from here - one call site to update, not two, if that
+// ever needs to change.
+export { normalizeMobileNumber } from './phone.mjs';
 
 // A generic "does this look like an email" shape check, not a real
 // RFC 5322 validator - matches the same permissive local@domain.tld pattern
