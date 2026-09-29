@@ -1107,7 +1107,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   .mobile-number-warning,
-  .email-warning {
+  .email-warning,
+  .guest-multi-tent-note {
     margin: 0;
     font-size: 0.76rem;
     color: var(--tvc-orange-text);
@@ -1937,6 +1938,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       </div>
       <p class="mobile-number-warning" hidden></p>
       <div class="mobile-number-conflict" hidden></div>
+      <p class="guest-multi-tent-note" hidden></p>
       <p class="email-warning" hidden></p>
       <div class="preferences-field">
         <input type="text" data-field="preferences" class="preferences-input" placeholder="Preferences / allergies" value="${guest.preferences ?? ''}" hidden />
@@ -2012,6 +2014,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     const emailInput = row.querySelector('[data-field="email"]') as HTMLInputElement;
     const mobileWarning = row.querySelector('.mobile-number-warning') as HTMLElement;
     const mobileConflict = row.querySelector('.mobile-number-conflict') as HTMLElement;
+    const multiTentNote = row.querySelector('.guest-multi-tent-note') as HTMLElement;
     const emailWarning = row.querySelector('.email-warning') as HTMLElement;
     const genderSelect = row.querySelector('[data-field="gender"]') as HTMLSelectElement;
     const historyToggle = row.querySelector('.guest-history-toggle') as HTMLButtonElement;
@@ -2154,6 +2157,37 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       });
     }
 
+    // A family with one shared contact number legitimately spans two tents
+    // - accommodation_resolve_person matches by mobile+name, so the same
+    // name typed into two tents' guest slots resolves to the same person,
+    // which used to be a hard server-side block and no longer is (Sharath,
+    // 2026-09-29 - see migration 0025's own comment for why). This is a
+    // heads-up only, not a gate: still flags a genuine copy-paste mistake
+    // (the same guest pasted into the wrong tent) without stopping an
+    // intentional multi-tent family booking from saving. Checked against
+    // sibling rows already in the DOM - no server round-trip needed, and
+    // stays accurate to whatever's currently typed even before saving.
+    function checkSameGuestOtherTent() {
+      multiTentNote.hidden = true;
+      const name = nameInput.value.trim().toLowerCase();
+      const normalizedMobile = normalizeMobileNumber(mobileInput.value);
+      if (!name || !normalizedMobile) return;
+      const myOption = row.closest('.tent-option');
+      for (const otherOption of Array.from(tentsContainer.querySelectorAll<HTMLElement>('.tent-option'))) {
+        if (otherOption === myOption) continue;
+        if (!(otherOption.querySelector('.tent-checkbox') as HTMLInputElement).checked) continue;
+        for (const otherRow of Array.from(otherOption.querySelectorAll<HTMLElement>('.guest-row'))) {
+          const otherName = (otherRow.querySelector('[data-field="name"]') as HTMLInputElement).value.trim().toLowerCase();
+          const otherMobile = normalizeMobileNumber((otherRow.querySelector('[data-field="mobileNumber"]') as HTMLInputElement).value);
+          if (otherName !== name || otherMobile !== normalizedMobile) continue;
+          const unit = UNITS.find((u) => u.id === otherOption.dataset.tentId);
+          multiTentNote.hidden = false;
+          multiTentNote.textContent = `ℹ Same name + mobile as a guest already entered in ${unit?.label ?? otherOption.dataset.tentId} - they'll be recorded as booked in both tents.`;
+          return;
+        }
+      }
+    }
+
     // Same validation the server enforces (normalizeMobileNumber, imported
     // from the one shared implementation) - this is UX-only, an instant
     // heads-up before the round-trip to the server that will reject it for
@@ -2178,6 +2212,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       mobileWarning.hidden = !invalid;
       mobileWarning.textContent = invalid ? '⚠ Doesn’t look like a valid mobile number (10 digits for India, or include a country code).' : '';
       if (!invalid) checkMobileConflict();
+      checkSameGuestOtherTent();
       mobileRevealed = false;
       renderMobileMask();
     });
@@ -2231,8 +2266,12 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     }, 250);
 
     nameInput.addEventListener('blur', () => {
-      // Let a click on a dropdown button register before it disappears.
-      setTimeout(closeDropdown, 150);
+      // Let a click on a dropdown button register (and fill name/mobile
+      // from the picked match) before re-checking against sibling tents.
+      setTimeout(() => {
+        closeDropdown();
+        checkSameGuestOtherTent();
+      }, 150);
     });
 
     historyToggle.addEventListener('click', async () => {
