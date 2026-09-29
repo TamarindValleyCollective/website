@@ -3260,11 +3260,19 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id: b.id, reason }),
       });
-      if (!res.ok) throw new Error('Request failed');
+      if (!res.ok) {
+        // Surface the server's actual reason (e.g. "a reason is required to
+        // cancel a past booking") instead of a generic message - a swallowed
+        // 422 here used to look identical to "the delete silently failed",
+        // leaving the booking (and its unique-constraint row) still live and
+        // blocking the very re-save the admin was trying to make.
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? `Request failed (${res.status})`);
+      }
       await loadView();
     } catch (err) {
       const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
-      if (!handled) alert('Failed to cancel booking — try again.');
+      if (!handled) alert(err instanceof Error ? `Failed to cancel booking: ${err.message}` : 'Failed to cancel booking — try again.');
     }
   }
 
@@ -3546,7 +3554,16 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
     try {
       const months = monthsTouchingRange(start, end);
-      const responses = await Promise.all(months.map((m) => authedFetch(`/api/accommodation-admin/bookings?month=${m}`)));
+      const fetchMonths = () => Promise.all(months.map((m) => authedFetch(`/api/accommodation-admin/bookings?month=${m}`)));
+      let responses = await fetchMonths();
+      if (responses.some((res) => !res.ok)) {
+        // One transient blip (a momentary 5xx, a dropped connection) used to
+        // leave currentBookings holding its pre-refresh contents forever -
+        // e.g. right after a successful delete, the just-removed booking
+        // would keep showing as "occupied" with no indication the reload
+        // itself was what failed. Retry once before giving up.
+        responses = await fetchMonths();
+      }
       if (responses.some((res) => !res.ok)) {
         showStatus('Failed to load bookings — try refreshing.');
         return;
