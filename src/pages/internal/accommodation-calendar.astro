@@ -1912,7 +1912,14 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
           </label>
           <div class="guest-field guest-field--mobile">
             <span class="guest-field-label">Mobile</span>
-            <input type="tel" data-field="mobileNumber" placeholder="Mobile" required value="${guest.mobileNumber ?? ''}" />
+            <!-- required only for a genuinely new guest (no personId yet) - a
+              legacy guest predating this requirement must not retroactively
+              block saving the booking, especially since their own row can be
+              collapsed/invisible inside a different tent's accordion group at
+              save time, making the browser's native validation fail with zero
+              visible feedback (Sharath, 2026-09-29: silently couldn't cancel
+              one guest out of an old multi-guest event booking). -->
+            <input type="tel" data-field="mobileNumber" placeholder="Mobile" ${guest.personId ? '' : 'required'} value="${guest.mobileNumber ?? ''}" />
             <span class="masked-field-display" hidden>
               <span class="masked-field-text"></span>
               <button type="button" class="masked-field-edit-btn">Edit</button>
