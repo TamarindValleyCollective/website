@@ -5,7 +5,8 @@ Tracks changes requested through and made by the AI assistant — not a full rep
 
 Logs live one file per month under `CHANGELOG/`, newest month first:
 
-- [2026-09](CHANGELOG/2026-09.md) — current
+- [2026-10](CHANGELOG/2026-10.md) — current
+- [2026-09](CHANGELOG/2026-09.md)
 - [2026-08](CHANGELOG/2026-08.md)
 - [2026-07](CHANGELOG/2026-07.md)
 
