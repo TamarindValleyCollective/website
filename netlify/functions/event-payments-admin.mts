@@ -165,32 +165,82 @@ async function handleBookings(url: URL): Promise<Response> {
     isDuplicate: isDuplicate(r),
     paymentMethod: r.payment_method,
     feeAmount: r.fee_amount,
+    feeTax: r.fee_tax,
+    refundFee: r.refund_fee,
+    settlementId: r.settlement_id,
+    settledAt: r.settled_at,
+    refundSettledAt: r.refund_settled_at,
   }));
 
-  const grossCollected = rows.reduce((sum, r) => sum + r.amount, 0);
-  const totalRefunded = rows.reduce((sum, r) => sum + (r.refunded_at ? (r.refund_amount ?? 0) : 0), 0);
+  const sum = (pick: (r: any) => number) => rows.reduce((total, r) => total + pick(r), 0);
+  const grossCollected = sum((r) => r.amount);
+  const totalRefunded = sum((r) => (r.refunded_at ? (r.refund_amount ?? 0) : 0));
   // Razorpay's fee is a sunk cost from the moment of capture — charged
-  // regardless of whether the booking later got refunded (see
-  // supabase/migrations/0024_event_payments_fees.sql) — so every row with a
-  // known fee_amount counts here, not just still-live ones.
-  const totalFees = rows.reduce((sum, r) => sum + (r.fee_amount ?? 0), 0);
+  // regardless of whether the booking later got refunded, even when the
+  // refund lands before the payment's settlement cycle (confirmed on the
+  // first live refund, see supabase/migrations/0027_event_payments_fee_tax_settlement.sql)
+  // — so every row with a known fee_amount counts here, not just still-live
+  // ones. fee_amount already includes GST; fee_tax is the GST portion of it.
+  const totalFees = sum((r) => r.fee_amount ?? 0);
+  const totalFeeTax = sum((r) => r.fee_tax ?? 0);
+  // What cancellations cost TVC on top of the refund itself: the MDR on
+  // payments that were later refunded, which TVC absorbs rather than
+  // deducting from the guest's refund by default.
+  const feesOnRefunded = sum((r) => (r.refunded_at ? (r.fee_amount ?? 0) : 0));
+  // Razorpay's charge for the refund itself — zero for normal-speed refunds,
+  // non-zero for instant ones. Only known once the refund has settled.
+  const totalRefundFees = sum((r) => r.refund_fee ?? 0);
   const unreconciledFeeCount = rows.filter((r) => r.fee_amount == null).length;
+
+  // TVC absorbs MDR rather than passing it on, and the rate differs by
+  // payment method — so the dashboard tallies fees per method, with the
+  // effective rate computed only over payments whose fee is actually known.
+  const methods = new Map<string, { method: string; count: number; gross: number; reconciledGross: number; fees: number; feeTax: number }>();
+  for (const r of rows) {
+    const method = r.payment_method ?? 'unknown';
+    const m = methods.get(method) ?? { method, count: 0, gross: 0, reconciledGross: 0, fees: 0, feeTax: 0 };
+    m.count += 1;
+    m.gross += r.amount;
+    if (r.fee_amount != null) {
+      m.reconciledGross += r.amount;
+      m.fees += r.fee_amount;
+      m.feeTax += r.fee_tax ?? 0;
+    }
+    methods.set(method, m);
+  }
+  const feesByMethod = [...methods.values()].sort((a, b) => b.gross - a.gross);
+
+  // What has actually reached (or been netted out of) TVC's bank account,
+  // per Razorpay's settlement report: each settled payment contributes its
+  // amount minus fee, each settled refund debits its amount plus refund fee.
+  const settledNet =
+    sum((r) => (r.settlement_id ? r.amount - (r.fee_amount ?? 0) : 0)) -
+    sum((r) => (r.refund_settlement_id ? (r.refund_amount ?? 0) + (r.refund_fee ?? 0) : 0));
+  const unsettledCount = rows.filter((r) => !r.settlement_id || (r.refunded_at && !r.refund_settlement_id)).length;
+  const settlementIds = new Set(rows.flatMap((r) => [r.settlement_id, r.refund_settlement_id].filter(Boolean)));
 
   return jsonResponse({
     bookings,
     testPaymentCount,
     aggregates: {
       bookingCount: rows.length,
-      totalAttendees: rows.reduce((sum, r) => sum + (r.attendee_count ?? 1), 0),
+      totalAttendees: rows.reduce((total, r) => total + (r.attendee_count ?? 1), 0),
       grossCollected,
       totalRefunded,
       totalFees,
+      totalFeeTax,
+      feesOnRefunded,
+      totalRefundFees,
+      feesByMethod,
       // Provisionally high for any row whose fee_amount is still null (see
       // scripts/reconcile-event-payment-fees.mjs) rather than guessing a
       // percentage — unreconciledFeeCount below is what tells the dashboard
       // (and the admin reading it) that this number isn't final yet.
-      netCollected: grossCollected - totalRefunded - totalFees,
+      netCollected: grossCollected - totalRefunded - totalFees - totalRefundFees,
       unreconciledFeeCount,
+      settledNet,
+      unsettledCount,
+      settlementCount: settlementIds.size,
       cancelledCount: rows.filter((r) => r.refunded_at).length,
       pendingRequestCount: rows.filter((r) => r.cancellation_requested_at && !r.refunded_at).length,
     },

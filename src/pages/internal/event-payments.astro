@@ -75,16 +75,79 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
             <span class="stat-sub" id="stat-pending"></span>
           </div>
           <div class="stat card">
-            <span class="stat-label">Gross collected</span>
+            <span class="stat-label">Collected</span>
             <span class="stat-value" id="stat-gross"></span>
+            <span class="stat-sub" id="stat-gross-sub"></span>
           </div>
           <div class="stat card">
-            <span class="stat-label">Net collected</span>
+            <span class="stat-label">Net to TVC</span>
             <span class="stat-value" id="stat-net"></span>
-            <span class="stat-sub" id="stat-refunded"></span>
             <span class="stat-sub" id="stat-fees"></span>
           </div>
         </div>
+
+        <!-- Money breakdown: TVC absorbs Razorpay's MDR rather than passing it
+             on, and the rate differs by payment method, so this tallies what
+             was charged (MDR vs GST, per method) and what actually settled.
+             See event-payments-admin.mts's aggregates for how each is derived. -->
+        <details class="money card" open>
+          <summary class="money-summary">Money breakdown</summary>
+          <dl class="ledger">
+            <div class="ledger-row">
+              <dt>Collected</dt>
+              <dd id="ledger-gross"></dd>
+              <dd class="ledger-note" id="ledger-gross-note"></dd>
+            </div>
+            <div class="ledger-row">
+              <dt>− Refunded</dt>
+              <dd id="ledger-refunded"></dd>
+              <dd class="ledger-note" id="ledger-refunded-note"></dd>
+            </div>
+            <div class="ledger-row">
+              <dt>− Razorpay fees</dt>
+              <dd id="ledger-fees"></dd>
+              <dd class="ledger-note" id="ledger-fees-note"></dd>
+            </div>
+            <div class="ledger-row ledger-row--sub" id="ledger-fees-refunded-row">
+              <dt>of which on refunded bookings</dt>
+              <dd id="ledger-fees-refunded"></dd>
+              <dd class="ledger-note">cost of cancellations, absorbed by TVC</dd>
+            </div>
+            <div class="ledger-row" id="ledger-refund-fees-row">
+              <dt>− Refund charges</dt>
+              <dd id="ledger-refund-fees"></dd>
+              <dd class="ledger-note">Razorpay's charge for instant refunds</dd>
+            </div>
+            <div class="ledger-row ledger-row--total">
+              <dt>= Net to TVC</dt>
+              <dd id="ledger-net"></dd>
+              <dd class="ledger-note" id="ledger-net-note"></dd>
+            </div>
+            <div class="ledger-row ledger-row--settled">
+              <dt>Settled to bank</dt>
+              <dd id="ledger-settled"></dd>
+              <dd class="ledger-note" id="ledger-settled-note"></dd>
+            </div>
+          </dl>
+
+          <h3 class="money-heading">Fees by payment method</h3>
+          <div class="table-scroll">
+            <table class="methods-table">
+              <thead>
+                <tr>
+                  <th>Method</th>
+                  <th>Payments</th>
+                  <th>Collected</th>
+                  <th>MDR</th>
+                  <th>GST</th>
+                  <th>Total fee</th>
+                  <th>Effective rate</th>
+                </tr>
+              </thead>
+              <tbody id="methods-body"></tbody>
+            </table>
+          </div>
+        </details>
 
         <div id="bulk-cancel-section" class="bulk-cancel" hidden>
           <button type="button" id="bulk-cancel-open" class="button button--danger-outline button--small">Cancel event</button>
@@ -443,6 +506,129 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     color: var(--tvc-ink-soft);
   }
 
+  .money {
+    padding: 14px 16px;
+    margin-bottom: 24px;
+  }
+
+  .money-summary {
+    cursor: pointer;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger {
+    margin: 12px 0 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ledger-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 16px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .ledger-row dt {
+    font-weight: 600;
+  }
+
+  .ledger-row dd {
+    margin: 0;
+    text-align: right;
+    font-weight: 600;
+  }
+
+  .ledger-row[hidden],
+  .ledger-row .ledger-note:empty {
+    display: none;
+  }
+
+  .ledger-row .ledger-note {
+    grid-column: 1 / -1;
+    text-align: left;
+    font-size: 0.78rem;
+    font-weight: 400;
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger-row--sub {
+    padding-left: 16px;
+  }
+
+  .ledger-row--sub dt,
+  .ledger-row--sub dd {
+    font-weight: 400;
+    font-size: 0.86rem;
+  }
+
+  .ledger-row--total {
+    border-bottom-width: 2px;
+  }
+
+  .ledger-row--total dt,
+  .ledger-row--total dd {
+    font-weight: 700;
+    font-size: 1.05rem;
+  }
+
+  .ledger-row--settled {
+    border-bottom: none;
+  }
+
+  .money-heading {
+    margin: 20px 0 8px;
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tvc-ink-soft);
+  }
+
+  .methods-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.86rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .methods-table th {
+    text-align: right;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--tvc-line);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tvc-ink-soft);
+    white-space: nowrap;
+  }
+
+  .methods-table th:first-child {
+    text-align: left;
+  }
+
+  /* #methods-body rows are built with innerHTML in renderBookings() — see the
+     #bookings-body note below on why these need :global(). */
+  :global(#methods-body td) {
+    text-align: right;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--tvc-line);
+    white-space: nowrap;
+  }
+
+  :global(#methods-body td:first-child) {
+    text-align: left;
+  }
+
+  :global(#methods-body .cell-muted) {
+    color: var(--tvc-ink-soft);
+  }
+
   .table-scroll {
     overflow-x: auto;
   }
@@ -689,6 +875,20 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     isDuplicate: boolean;
     paymentMethod: string | null;
     feeAmount: number | null;
+    feeTax: number | null;
+    refundFee: number | null;
+    settlementId: string | null;
+    settledAt: string | null;
+    refundSettledAt: string | null;
+  }
+
+  interface MethodFees {
+    method: string;
+    count: number;
+    gross: number;
+    reconciledGross: number;
+    fees: number;
+    feeTax: number;
   }
 
   interface Aggregates {
@@ -697,8 +897,15 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     grossCollected: number;
     totalRefunded: number;
     totalFees: number;
+    totalFeeTax: number;
+    feesOnRefunded: number;
+    totalRefundFees: number;
+    feesByMethod: MethodFees[];
     netCollected: number;
     unreconciledFeeCount: number;
+    settledNet: number;
+    unsettledCount: number;
+    settlementCount: number;
     cancelledCount: number;
     pendingRequestCount: number;
   }
@@ -807,6 +1014,28 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     return currency === 'INR' ? `₹${amount.toLocaleString('en-IN')}` : `${amount.toLocaleString('en-IN')} ${currency}`;
   }
 
+  // Always two decimals — fees are routinely sub-rupee (₹0.20 MDR on a ₹10
+  // payment), where formatAmount's "₹0.2" reads like a typo.
+  function formatMoney(amountPaise: number, currency: string): string {
+    const sign = amountPaise < 0 ? '−' : '';
+    const amount = (Math.abs(amountPaise) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return currency === 'INR' ? `${sign}₹${amount}` : `${sign}${amount} ${currency}`;
+  }
+
+  // Razorpay's payment.method values, as people say them.
+  const METHOD_LABELS: Record<string, string> = { upi: 'UPI', card: 'Card', netbanking: 'Netbanking', wallet: 'Wallet', emi: 'EMI', paylater: 'Pay Later', unknown: 'Not recorded' };
+  function methodLabel(method: string): string {
+    return METHOD_LABELS[method] ?? method;
+  }
+
+  function formatRate(fees: number, gross: number): string {
+    return gross > 0 ? `${((fees / gross) * 100).toFixed(2)}%` : '—';
+  }
+
+  function plural(n: number, word: string): string {
+    return `${n} ${word}${n === 1 ? '' : 's'}`;
+  }
+
   function formatDate(iso: string): string {
     return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' });
   }
@@ -913,8 +1142,10 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
         <div class="detail-field"><span class="detail-label">Phone</span>${escapeHtml(booking.payerContact ?? '—')}</div>
         <div class="detail-field"><span class="detail-label">Attendees</span>${booking.attendeeCount}</div>
         <div class="detail-field"><span class="detail-label">Paid</span>${formatDate(booking.createdAt)}</div>
-        <div class="detail-field"><span class="detail-label">Method</span>${escapeHtml(booking.paymentMethod ?? '—')}</div>
-        <div class="detail-field"><span class="detail-label">Razorpay fee</span>${booking.feeAmount != null ? formatAmount(booking.feeAmount, booking.currency) : 'not yet reconciled'}</div>
+        <div class="detail-field"><span class="detail-label">Method</span>${escapeHtml(booking.paymentMethod ? methodLabel(booking.paymentMethod) : "—")}</div>
+        <div class="detail-field"><span class="detail-label">Razorpay fee</span>${booking.feeAmount != null ? `${formatMoney(booking.feeAmount, booking.currency)} (MDR ${formatMoney(booking.feeAmount - (booking.feeTax ?? 0), booking.currency)} + GST ${formatMoney(booking.feeTax ?? 0, booking.currency)}, ${formatRate(booking.feeAmount, booking.amount)})` : 'not yet reconciled'}</div>
+        <div class="detail-field"><span class="detail-label">Settled</span>${booking.settledAt ? `${formatDate(booking.settledAt)} <code>${escapeHtml(booking.settlementId)}</code>` : 'awaiting settlement'}</div>
+        ${booking.refundSettledAt ? `<div class="detail-field"><span class="detail-label">Refund settled</span>${formatDate(booking.refundSettledAt)}${booking.refundFee ? ` · refund charge ${formatMoney(booking.refundFee, booking.currency)}` : ''}</div>` : ''}
       </div>
       <div class="detail-action" id="detail-action-${booking.id}"></div>
     `;
@@ -987,8 +1218,8 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
       // from a single click on the form itself.
       reviewEl.innerHTML = `
         <div class="refund-confirm">
-          <p>Refund <strong>${formatAmount(amountPaise, booking.currency)}</strong> to <strong>${escapeHtml(booking.payerEmail ?? 'this payer')}</strong> for payment <code>${escapeHtml(booking.razorpayPaymentId)}</code>? This cannot be undone from here.</p>
-          <button type="button" class="button button--danger refund-confirm-btn">Yes, refund ${formatAmount(amountPaise, booking.currency)}</button>
+          <p>Refund <strong>${formatMoney(amountPaise, booking.currency)}</strong> to <strong>${escapeHtml(booking.payerEmail ?? 'this payer')}</strong> for payment <code>${escapeHtml(booking.razorpayPaymentId)}</code>? This cannot be undone from here.</p>
+          <button type="button" class="button button--danger refund-confirm-btn">Yes, refund ${formatMoney(amountPaise, booking.currency)}</button>
         </div>
       `;
       reviewBtn.hidden = true;
@@ -1023,6 +1254,69 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     });
   }
 
+  function setText(id: string, text: string) {
+    document.getElementById(id)!.textContent = text;
+  }
+
+  // The stat cards plus the "Money breakdown" ledger and per-method fee
+  // table — see event-payments-admin.mts's aggregates for each figure.
+  function renderMoney(a: Aggregates, currency: string) {
+    const money = (paise: number) => formatMoney(paise, currency);
+    const reconciledGross = a.feesByMethod.reduce((total, m) => total + m.reconciledGross, 0);
+    const unreconciledNote = a.unreconciledFeeCount > 0 ? `${plural(a.unreconciledFeeCount, 'payment')} not yet fee-reconciled, so net may be slightly high` : '';
+
+    setText('stat-gross', money(a.grossCollected));
+    setText('stat-gross-sub', plural(a.bookingCount, 'payment'));
+    setText('stat-net', money(a.netCollected));
+    setText('stat-fees', a.totalFees + a.totalRefundFees > 0 ? `after ${money(a.totalFees + a.totalRefundFees)} in Razorpay charges` : unreconciledNote);
+
+    setText('ledger-gross', money(a.grossCollected));
+    setText('ledger-gross-note', a.feesByMethod.map((m) => `${methodLabel(m.method)} ${money(m.gross)}`).join(' · '));
+    setText('ledger-refunded', money(a.totalRefunded));
+    setText('ledger-refunded-note', a.cancelledCount > 0 ? plural(a.cancelledCount, 'refund') : '');
+    setText('ledger-fees', money(a.totalFees));
+    setText(
+      'ledger-fees-note',
+      [`MDR ${money(a.totalFees - a.totalFeeTax)} + GST ${money(a.totalFeeTax)}`, reconciledGross > 0 ? `${formatRate(a.totalFees, reconciledGross)} effective` : '', unreconciledNote]
+        .filter(Boolean)
+        .join(' · '),
+    );
+    document.getElementById('ledger-fees-refunded-row')!.hidden = a.feesOnRefunded === 0;
+    setText('ledger-fees-refunded', money(a.feesOnRefunded));
+    document.getElementById('ledger-refund-fees-row')!.hidden = a.totalRefundFees === 0;
+    setText('ledger-refund-fees', money(a.totalRefundFees));
+    setText('ledger-net', money(a.netCollected));
+    setText('ledger-net-note', a.netCollected < 0 ? 'TVC is out of pocket on this event so far' : '');
+    setText('ledger-settled', money(a.settledNet));
+    setText(
+      'ledger-settled-note',
+      [
+        a.settlementCount > 0 ? `across ${plural(a.settlementCount, 'Razorpay settlement')}` : 'nothing settled yet',
+        a.unsettledCount > 0 ? `${plural(a.unsettledCount, 'payment')} still awaiting settlement` : '',
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    );
+
+    const methodsBody = document.getElementById('methods-body')!;
+    methodsBody.innerHTML = a.feesByMethod
+      .map((m) => {
+        const known = m.reconciledGross > 0;
+        const pending = m.count > 0 && m.reconciledGross < m.gross;
+        return `
+          <tr>
+            <td>${escapeHtml(methodLabel(m.method))}</td>
+            <td>${m.count}</td>
+            <td>${money(m.gross)}</td>
+            <td>${known ? money(m.fees - m.feeTax) : '<span class="cell-muted">pending</span>'}</td>
+            <td>${known ? money(m.feeTax) : '<span class="cell-muted">pending</span>'}</td>
+            <td>${known ? money(m.fees) : '<span class="cell-muted">pending</span>'}</td>
+            <td>${known ? formatRate(m.fees, m.reconciledGross) : '—'}${pending && known ? ' <span class="cell-muted">(partial)</span>' : ''}</td>
+          </tr>`;
+      })
+      .join('');
+  }
+
   function renderBookings(data: { bookings: Booking[]; aggregates: Aggregates; testPaymentCount: number }) {
     const { bookings, aggregates, testPaymentCount } = data;
     currentBookings = bookings;
@@ -1042,20 +1336,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     document.getElementById('stat-cancelled')!.textContent = String(aggregates.cancelledCount);
     document.getElementById('stat-pending')!.textContent = aggregates.pendingRequestCount > 0 ? `${aggregates.pendingRequestCount} pending request${aggregates.pendingRequestCount === 1 ? '' : 's'}` : '';
     const currency = bookings[0]?.currency ?? 'INR';
-    document.getElementById('stat-gross')!.textContent = formatAmount(aggregates.grossCollected, currency);
-    document.getElementById('stat-net')!.textContent = formatAmount(aggregates.netCollected, currency);
-    document.getElementById('stat-refunded')!.textContent = aggregates.totalRefunded > 0 ? `${formatAmount(aggregates.totalRefunded, currency)} refunded` : '';
-    const feesEl = document.getElementById('stat-fees')!;
-    if (aggregates.totalFees > 0 || aggregates.unreconciledFeeCount > 0) {
-      const feeText = aggregates.totalFees > 0 ? `${formatAmount(aggregates.totalFees, currency)} in Razorpay fees deducted` : '';
-      const unreconciledText =
-        aggregates.unreconciledFeeCount > 0
-          ? `${feeText ? ' — ' : ''}${aggregates.unreconciledFeeCount} payment${aggregates.unreconciledFeeCount === 1 ? '' : 's'} not yet fee-reconciled (net may be slightly high)`
-          : '';
-      feesEl.textContent = `${feeText}${unreconciledText}`;
-    } else {
-      feesEl.textContent = '';
-    }
+    renderMoney(aggregates, currency);
 
     bookingsBody.innerHTML = '';
     openBookingId = null;
@@ -1280,6 +1561,19 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   });
 
   populateEventSelect();
+
+  // `astro dev` only: /internal/event-payments?demo swaps the real API for
+  // dummy data (see _event-payments-demo.ts). import.meta.env.DEV is false
+  // in a production build, so this branch — and the demo module — is
+  // dropped from what ships.
+  if (import.meta.env.DEV && new URLSearchParams(location.search).has('demo')) {
+    const { installEventPaymentsDemo } = await import('./_event-payments-demo');
+    installEventPaymentsDemo(STORAGE_KEY, (referenceId) => EVENTS.find((ev) => ev.referenceId === referenceId)?.date ?? null);
+    const notice = document.createElement('p');
+    notice.className = 'hint';
+    notice.textContent = 'Demo mode: dummy bookings, and refunds here never reach Razorpay.';
+    app.prepend(notice);
+  }
 
   if (getToken()) {
     showApp();

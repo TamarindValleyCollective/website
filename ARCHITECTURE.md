@@ -174,7 +174,7 @@ flowchart TD
         RESEND["Resend API<br/>Transactional email — noreply@tvc.farm,<br/>domain verified 2026-08-19,<br/>called from the GitHub Action above<br/>and whatsapp-stale-alert.mts"]
         WAMETA["Meta WhatsApp Cloud API<br/>Sends inbound message + template-status<br/>events to /api/whatsapp-webhook;<br/>receives replies from whatsapp-admin.mts;<br/>see WHATSAPP.md for setup status"]
         SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages,<br/>event_payments — service_role key, called<br/>server-side only"]
-        RAZORPAY["Razorpay API<br/>Payment Links (create/fetch) +<br/>payment_link.paid webhook + refunds<br/>(admin-triggered, event-payments-admin.mts).<br/>Live keys as of 2026-09-24 —<br/>see RAZORPAY.md"]
+        RAZORPAY["Razorpay API<br/>Payment Links (create/fetch) +<br/>payment_link.paid webhook + refunds<br/>(admin-triggered, event-payments-admin.mts) +<br/>payment fees and settlement recon<br/>(nightly reconcile-event-payment-fees.mjs).<br/>Live keys as of 2026-09-24 —<br/>see RAZORPAY.md"]
     end
 
     SRC --> BUILD
@@ -572,14 +572,19 @@ outside both the local machine and Netlify (the member-update-email workflow).
   call, for a full-event cancellation (weather, low turnout), sequentially against Razorpay so one
   failure doesn't take the batch down. `netCollected` now subtracts each row's known `fee_amount`
   (see `fee_amount` below) rather than just refunds, and the response includes
-  `unreconciledFeeCount` for rows that haven't been fee-checked yet. A shared `refundOneBooking()`
+  `unreconciledFeeCount` for rows that haven't been fee-checked yet. Since 2026-10-01 the
+  aggregates also carry the fee tally TVC absorbs: `totalFeeTax` (GST portion; MDR = `totalFees` −
+  that), `feesOnRefunded`, `totalRefundFees` (subtracted from `netCollected` too), `feesByMethod`
+  (per payment method: count, gross, fees, GST, plus the gross whose fee is known so the effective
+  rate isn't diluted by unreconciled rows), and `settledNet`/`settlementCount`/`unsettledCount`
+  from the settlement columns. A shared `refundOneBooking()`
   backs both the single-row and bulk paths; on a Razorpay rejection it surfaces Razorpay's own
   `error.description` (parsed in `lib/razorpay.ts`'s `createRefund()`) instead of a generic message
   — found live that refunding a pre-settlement payment can fail with "account does not have enough
   balance," which previously only reached server logs, never the admin clicking the button.
 - **`scripts/lib/event-payments-db.mjs`** — hand-rolled Supabase PostgREST REST client (same
   style as `supabase.mjs`/`accommodation-db.mjs`) for the `event_payments` table
-  (`supabase/migrations/0018_event_payments.sql` through `0024_event_payments_fees.sql`).
+  (`supabase/migrations/0018_event_payments.sql` through `0027_event_payments_fee_tax_settlement.sql`).
   `recordPaymentIfNew()` (ignore-duplicates insert, keyed on a unique index over
   `razorpay_payment_id`), `getPaymentByRazorpayId()`, and `requestCancellationIfNew()`
   (cancel-only-if-not-already-requested update) are used by `razorpay-webhook.mts` and
@@ -591,15 +596,19 @@ outside both the local machine and Netlify (the member-update-email workflow).
   same way) are used by `event-payments-admin.mts` and `razorpay-webhook.mts` above. Since
   2026-09-25 also `countActivePaymentsForEmail()` (`event-booking.mts`'s duplicate guard),
   `listUnreconciledPayments()`/`recordFeeReconciled()` (`scripts/reconcile-event-payment-fees.mjs`
-  below).
+  below), and since 2026-10-01 `listUnsettledPayments()`/`recordSettlement()` (its settlement pass).
 - **`scripts/reconcile-event-payment-fees.mjs`** — standalone script (not a Netlify Function),
-  added 2026-09-25. Polls Razorpay's `GET /payments/:id` for every `event_payments` row paid more
-  than 6 hours ago with no `fee_reconciled_at` yet, and records `fee + tax` (paise) as
-  `fee_amount` once Razorpay has actually computed them — a row whose fee still comes back null
-  just stays unreconciled for the next run. Meant to run nightly via
-  `.github/workflows/reconcile-event-payment-fees.yml`, cron `0 22 * * *` (~03:30 IST) — **not yet
-  live**, that workflow needs `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET`/`SUPABASE_URL`/
-  `SUPABASE_SERVICE_ROLE_KEY` added as GitHub Actions repo secrets first. See `RAZORPAY.md`.
+  added 2026-09-25, two passes over live rows. **Fees:** polls Razorpay's `GET /payments/:id` for
+  every row paid more than 6 hours ago with no `fee_reconciled_at` yet, and records Razorpay's
+  `fee` (which already includes GST) as `fee_amount` and `tax` as `fee_tax` once Razorpay has
+  computed them (before 2026-10-01 it stored `fee + tax`, double-counting GST — migration `0027`
+  re-queued existing rows). **Settlements** (2026-10-01): reads Razorpay's Settlement
+  Reconciliation report (`GET /settlements/recon/combined`, per month since the oldest unsettled
+  row) and records which settlement each payment and processed refund landed in, plus each
+  refund's own fee. Runs nightly via `.github/workflows/reconcile-event-payment-fees.yml`, cron
+  `0 22 * * *` (~03:30 IST), live with repo secrets since 2026-09-26. Can't run locally via
+  `netlify dev:exec`: Netlify masks the Sensitive-flagged service-role key on read. Trigger it
+  with `gh workflow run` instead. See `RAZORPAY.md`.
 - **`scripts/lib/supabase.mjs`** — hand-rolled Supabase PostgREST REST client (`fetch` + the
   `service_role` key, no `@supabase/supabase-js` dependency — matching this repo's preference for
   small hand-rolled clients over heavy libraries) for the `whatsapp_conversations`/
