@@ -1218,8 +1218,8 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
       // from a single click on the form itself.
       reviewEl.innerHTML = `
         <div class="refund-confirm">
-          <p>Refund <strong>${formatAmount(amountPaise, booking.currency)}</strong> to <strong>${escapeHtml(booking.payerEmail ?? 'this payer')}</strong> for payment <code>${escapeHtml(booking.razorpayPaymentId)}</code>? This cannot be undone from here.</p>
-          <button type="button" class="button button--danger refund-confirm-btn">Yes, refund ${formatAmount(amountPaise, booking.currency)}</button>
+          <p>Refund <strong>${formatMoney(amountPaise, booking.currency)}</strong> to <strong>${escapeHtml(booking.payerEmail ?? 'this payer')}</strong> for payment <code>${escapeHtml(booking.razorpayPaymentId)}</code>? This cannot be undone from here.</p>
+          <button type="button" class="button button--danger refund-confirm-btn">Yes, refund ${formatMoney(amountPaise, booking.currency)}</button>
         </div>
       `;
       reviewBtn.hidden = true;
@@ -1561,6 +1561,19 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   });
 
   populateEventSelect();
+
+  // `astro dev` only: /internal/event-payments?demo swaps the real API for
+  // dummy data (see _event-payments-demo.ts). import.meta.env.DEV is false
+  // in a production build, so this branch — and the demo module — is
+  // dropped from what ships.
+  if (import.meta.env.DEV && new URLSearchParams(location.search).has('demo')) {
+    const { installEventPaymentsDemo } = await import('./_event-payments-demo');
+    installEventPaymentsDemo(STORAGE_KEY, (referenceId) => EVENTS.find((ev) => ev.referenceId === referenceId)?.date ?? null);
+    const notice = document.createElement('p');
+    notice.className = 'hint';
+    notice.textContent = 'Demo mode: dummy bookings, and refunds here never reach Razorpay.';
+    app.prepend(notice);
+  }
 
   if (getToken()) {
     showApp();
