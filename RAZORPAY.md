@@ -227,6 +227,32 @@ rather than silently presenting a number that isn't final. Deliberately doesn't 
 settlement-batch linkage (`settlement_id`/`settled_at`) yet — that needs Razorpay's separate
 Settlement Reconciliation report, not the plain Payment entity this fix reads from.
 
+**Fee tally by payment method + settlement tracking (2026-10-01).** TVC absorbs Razorpay's MDR
+rather than passing it on to guests, and the rate differs by payment method, so the dashboard now
+keeps a proper tally. What the first live refund showed (`pay_TgKoHVIxQB8M1p`, ₹10 Visa credit
+card, refunded ₹9.80 *before* its settlement cycle): the ₹0.20 (2%) MDR was still charged. Razorpay
+takes it when the payment is captured, and refunding before settlement doesn't reverse it. The
+refund itself cost nothing (normal-speed refunds have no fee; instant refunds would). The 29 Sep
+settlement `setl_ThlvKvVKkj5WFW` netted the ₹9.80 credit against the ₹9.80 refund for a ₹0 payout
+with no UTR. Only ₹9.80 could be refunded because that was the unsettled balance at the time; with
+enough other balance a full ₹10 refund would have gone through, and the fee would still have been
+kept, leaving TVC at −₹0.20.
+- **Fixed GST double-count:** Razorpay's Payment entity `fee` is "Fee (including GST)" and `tax` is
+  "GST charged" — i.e. tax is already inside fee. The reconcile script previously stored
+  `fee + tax`; it now stores `fee_amount = fee`, `fee_tax = tax` (MDR = the difference).
+- **Settlements:** the same nightly script now also reads `GET /settlements/recon/combined` (one
+  call per month since the oldest unsettled row) and records `settlement_id`/`settled_at`/
+  `settlement_utr` per payment, plus `refund_settlement_id`/`refund_settled_at`/`refund_fee`/
+  `refund_fee_tax` per refund (migration `0027_event_payments_fee_tax_settlement.sql`).
+- **Dashboard:** "Money breakdown" ledger — Collected − Refunded − Razorpay fees (MDR + GST,
+  effective %, "of which on refunded bookings") − refund charges = Net to TVC, then "Settled to
+  bank" — plus a fees-by-payment-method table (count, collected, MDR, GST, total fee, effective
+  rate). Each booking's detail shows its fee split and settlement.
+- The GitHub Actions secrets the reconcile workflow needs are in place; it has been running
+  nightly since 2026-09-26. It can't be run locally via `netlify dev:exec`, because Netlify masks
+  the Sensitive-flagged `SUPABASE_SERVICE_ROLE_KEY` on read. Use `gh workflow run
+  reconcile-event-payment-fees.yml` instead.
+
 **Events using this flow:**
 
 | Event | Amount | Base Payment Link | Reference ID |

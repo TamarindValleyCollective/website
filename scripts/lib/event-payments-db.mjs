@@ -185,21 +185,62 @@ export async function listUnreconciledPayments(olderThanIso) {
   return res.json();
 }
 
-// Records the real fee+tax Razorpay charged for one payment, once
+// Records the real fee Razorpay charged for one payment, once
 // GET /payments/:id actually has it — see scripts/reconcile-event-payment-fees.mjs.
 // Fee is a sunk cost from the moment of capture regardless of what happens
 // after (refunded or not, see the reconciliation-scenarios planning notes),
 // so this is never re-checked or reverted once recorded.
 /**
  * @param {string} id row id
- * @param {number} feeAmount paise (Razorpay's fee + tax combined)
+ * @param {{ feeAmount: number, feeTax: number, paymentMethod?: string | null }} fee paise — feeAmount is Razorpay's `fee` (already includes GST), feeTax its `tax` (the GST portion), see migration 0027
  * @returns {Promise<void>}
  */
-export async function recordFeeReconciled(id, feeAmount) {
+export async function recordFeeReconciled(id, { feeAmount, feeTax, paymentMethod }) {
   const res = await fetch(`${supabaseUrl()}/rest/v1/event_payments?id=eq.${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: restHeaders({ Prefer: 'return=minimal' }),
-    body: JSON.stringify({ fee_amount: feeAmount, fee_reconciled_at: new Date().toISOString() }),
+    body: JSON.stringify({
+      fee_amount: feeAmount,
+      fee_tax: feeTax,
+      ...(paymentMethod ? { payment_method: paymentMethod } : {}),
+      fee_reconciled_at: new Date().toISOString(),
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`Supabase update to event_payments failed: ${res.status} ${await res.text()}`);
+  }
+}
+
+// Live rows whose payment, or processed refund, hasn't been matched to a
+// Razorpay settlement yet — see scripts/reconcile-event-payment-fees.mjs's
+// settlement pass (migration 0027).
+/**
+ * @returns {Promise<Array<{ id: string, razorpay_payment_id: string, razorpay_refund_id: string | null, created_at: string, refunded_at: string | null, settlement_id: string | null, refund_settlement_id: string | null }>>}
+ */
+export async function listUnsettledPayments() {
+  const res = await fetch(
+    `${supabaseUrl()}/rest/v1/event_payments?mode=eq.live&or=(settlement_id.is.null,and(refunded_at.not.is.null,refund_settlement_id.is.null))&select=id,razorpay_payment_id,razorpay_refund_id,created_at,refunded_at,settlement_id,refund_settlement_id`,
+    { headers: restHeaders() },
+  );
+  if (!res.ok) {
+    throw new Error(`Supabase read from event_payments failed: ${res.status} ${await res.text()}`);
+  }
+  return res.json();
+}
+
+// Partial update for the settlement pass — only ever the settlement_*/
+// refund_settlement_*/refund_fee* columns, never anything the webhook or
+// admin refund flow owns.
+/**
+ * @param {string} id row id
+ * @param {{ settlement_id?: string, settled_at?: string, settlement_utr?: string | null, refund_settlement_id?: string, refund_settled_at?: string, refund_fee?: number, refund_fee_tax?: number }} fields
+ * @returns {Promise<void>}
+ */
+export async function recordSettlement(id, fields) {
+  const res = await fetch(`${supabaseUrl()}/rest/v1/event_payments?id=eq.${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: restHeaders({ Prefer: 'return=minimal' }),
+    body: JSON.stringify(fields),
   });
   if (!res.ok) {
     throw new Error(`Supabase update to event_payments failed: ${res.status} ${await res.text()}`);
