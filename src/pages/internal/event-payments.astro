@@ -582,6 +582,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
 
   .money-heading {
     margin: 20px 0 8px;
+    font-family: inherit;
     font-size: 0.72rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -622,7 +623,6 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
 
   :global(#methods-body td:first-child) {
     text-align: left;
-    text-transform: capitalize;
   }
 
   :global(#methods-body .cell-muted) {
@@ -1017,8 +1017,15 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   // Always two decimals — fees are routinely sub-rupee (₹0.20 MDR on a ₹10
   // payment), where formatAmount's "₹0.2" reads like a typo.
   function formatMoney(amountPaise: number, currency: string): string {
-    const amount = (amountPaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return currency === 'INR' ? `₹${amount}` : `${amount} ${currency}`;
+    const sign = amountPaise < 0 ? '−' : '';
+    const amount = (Math.abs(amountPaise) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return currency === 'INR' ? `${sign}₹${amount}` : `${sign}${amount} ${currency}`;
+  }
+
+  // Razorpay's payment.method values, as people say them.
+  const METHOD_LABELS: Record<string, string> = { upi: 'UPI', card: 'Card', netbanking: 'Netbanking', wallet: 'Wallet', emi: 'EMI', paylater: 'Pay Later', unknown: 'Not recorded' };
+  function methodLabel(method: string): string {
+    return METHOD_LABELS[method] ?? method;
   }
 
   function formatRate(fees: number, gross: number): string {
@@ -1135,7 +1142,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
         <div class="detail-field"><span class="detail-label">Phone</span>${escapeHtml(booking.payerContact ?? '—')}</div>
         <div class="detail-field"><span class="detail-label">Attendees</span>${booking.attendeeCount}</div>
         <div class="detail-field"><span class="detail-label">Paid</span>${formatDate(booking.createdAt)}</div>
-        <div class="detail-field"><span class="detail-label">Method</span>${escapeHtml(booking.paymentMethod ?? '—')}</div>
+        <div class="detail-field"><span class="detail-label">Method</span>${escapeHtml(booking.paymentMethod ? methodLabel(booking.paymentMethod) : "—")}</div>
         <div class="detail-field"><span class="detail-label">Razorpay fee</span>${booking.feeAmount != null ? `${formatMoney(booking.feeAmount, booking.currency)} (MDR ${formatMoney(booking.feeAmount - (booking.feeTax ?? 0), booking.currency)} + GST ${formatMoney(booking.feeTax ?? 0, booking.currency)}, ${formatRate(booking.feeAmount, booking.amount)})` : 'not yet reconciled'}</div>
         <div class="detail-field"><span class="detail-label">Settled</span>${booking.settledAt ? `${formatDate(booking.settledAt)} <code>${escapeHtml(booking.settlementId)}</code>` : 'awaiting settlement'}</div>
         ${booking.refundSettledAt ? `<div class="detail-field"><span class="detail-label">Refund settled</span>${formatDate(booking.refundSettledAt)}${booking.refundFee ? ` · refund charge ${formatMoney(booking.refundFee, booking.currency)}` : ''}</div>` : ''}
@@ -1261,10 +1268,10 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     setText('stat-gross', money(a.grossCollected));
     setText('stat-gross-sub', plural(a.bookingCount, 'payment'));
     setText('stat-net', money(a.netCollected));
-    setText('stat-fees', a.totalFees > 0 ? `after ${money(a.totalFees)} in Razorpay fees` : unreconciledNote);
+    setText('stat-fees', a.totalFees + a.totalRefundFees > 0 ? `after ${money(a.totalFees + a.totalRefundFees)} in Razorpay charges` : unreconciledNote);
 
     setText('ledger-gross', money(a.grossCollected));
-    setText('ledger-gross-note', a.feesByMethod.map((m) => `${m.method} ${money(m.gross)}`).join(' · '));
+    setText('ledger-gross-note', a.feesByMethod.map((m) => `${methodLabel(m.method)} ${money(m.gross)}`).join(' · '));
     setText('ledger-refunded', money(a.totalRefunded));
     setText('ledger-refunded-note', a.cancelledCount > 0 ? plural(a.cancelledCount, 'refund') : '');
     setText('ledger-fees', money(a.totalFees));
@@ -1298,7 +1305,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
         const pending = m.count > 0 && m.reconciledGross < m.gross;
         return `
           <tr>
-            <td>${escapeHtml(m.method)}</td>
+            <td>${escapeHtml(methodLabel(m.method))}</td>
             <td>${m.count}</td>
             <td>${money(m.gross)}</td>
             <td>${known ? money(m.fees - m.feeTax) : '<span class="cell-muted">pending</span>'}</td>
