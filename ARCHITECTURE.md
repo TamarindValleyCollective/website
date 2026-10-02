@@ -390,8 +390,11 @@ outside both the local machine and Netlify (the member-update-email workflow).
   cells with a literal "0" instead of leaving them blank, so blankness alone can't signal "not
   logged yet"). "Daily rain data" (a flat table, one row per calendar year+month, day-of-month
   columns) is what makes a fair "same stretch last year" comparison possible, summing each year
-  from April 1 through today's exact date rather than comparing a partial year against another
-  year's full total. Reuses `scripts/lib/google-drive.mjs`'s `getSheetValues()` (a small
+  from Jan 1 through today's exact date rather than comparing a partial year against another
+  year's full total. Until the current month has at least one day logged (typically the first
+  day or two of each month), the cutoff steps back to the end of the latest logged month and
+  that month's pre-filled "0" is treated as not-yet-reached, so the stat, chart line and
+  today-marker all stop at the same date instead of the stat blanking to "—". Reuses `scripts/lib/google-drive.mjs`'s `getSheetValues()` (a small
   generalization of the existing single-column `getAllowedEmails()` reader into a full-grid one,
   used by both now).
 - **`netlify/functions/whatsapp-webhook.mts`** — the WhatsApp Cloud API webhook endpoint (see

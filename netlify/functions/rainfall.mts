@@ -231,13 +231,32 @@ export default async (req: Request): Promise<Response> => {
     const nowYear = Number(parts.year);
     const nowMonth = Number(parts.month);
     const nowDay = Number(parts.day);
-    const cutoffMonth = CALENDAR_MONTH_ORDER[nowMonth - 1];
 
     const calendarYears = buildCalendarYears(monthlyByYear, nowYear, nowMonth);
     const dailyByCalendarYear = parseDailyTabByCalendarYear(dailyRows, nowYear, nowMonth, nowDay);
 
-    const monsoonToDate = sumCalendarYearToDate(nowYear, monthlyByYear, dailyByCalendarYear, cutoffMonth, nowDay);
-    const sameSpanLastYear = sumCalendarYearToDate(nowYear - 1, monthlyByYear, dailyByCalendarYear, cutoffMonth, nowDay);
+    // The Sheet is filled in by hand, so the first day or two of a month
+    // usually have nothing logged yet — Sheets drops the blank row, leaving
+    // no day-level data for the current month, and sumCalendarYearToDate()
+    // would (correctly) refuse to guess, blanking the stat tile. Rather than
+    // read those blanks as "no rain", step the cutoff back to the end of the
+    // latest month that does have entries ("1 Jan – 30 Sep" on 2 Oct), and
+    // treat the unlogged month's pre-filled monthly "0" as not-yet-reached
+    // too, so the chart's line and today-marker stop at the same point the
+    // stat does. Never steps back past Jan — no cutoff, no claim, as before.
+    let cutoffMonthIdx = nowMonth - 1;
+    let cutoffDay = nowDay;
+    const thisYearDaily = new Map((dailyByCalendarYear[nowYear] ?? []).map((m) => [m.month, m.days]));
+    while (cutoffMonthIdx > 0 && !(thisYearDaily.get(CALENDAR_MONTH_ORDER[cutoffMonthIdx])?.length)) {
+      const unlogged = calendarYears.find((y) => y.year === nowYear)?.monthly[cutoffMonthIdx];
+      if (unlogged && !unlogged.mm) unlogged.mm = null;
+      cutoffMonthIdx--;
+      cutoffDay = new Date(Date.UTC(nowYear, cutoffMonthIdx + 1, 0)).getUTCDate();
+    }
+    const cutoffMonth = CALENDAR_MONTH_ORDER[cutoffMonthIdx];
+
+    const monsoonToDate = sumCalendarYearToDate(nowYear, monthlyByYear, dailyByCalendarYear, cutoffMonth, cutoffDay);
+    const sameSpanLastYear = sumCalendarYearToDate(nowYear - 1, monthlyByYear, dailyByCalendarYear, cutoffMonth, cutoffDay);
 
     return jsonResponse({
       asOf: new Date().toISOString(),
@@ -246,7 +265,7 @@ export default async (req: Request): Promise<Response> => {
       monsoonToDate,
       sameSpanLastYear,
       cutoffMonth,
-      cutoffDay: nowDay,
+      cutoffDay,
       cutoffCalendarYear: nowYear,
     });
   } catch (err) {
