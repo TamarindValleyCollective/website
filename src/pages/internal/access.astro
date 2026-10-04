@@ -34,6 +34,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       <section id="stepup" class="banner" aria-live="polite">
         <p id="stepup-text" class="banner-text"></p>
         <form id="verify-form" class="banner-form" hidden>
+          <button type="button" id="verify-passkey" class="button" hidden>Use a passkey</button>
           <label class="visually-hidden" for="verify-code">Code</label>
           <input type="text" id="verify-code" name="verify-code" inputmode="numeric" autocomplete="one-time-code" required />
           <button type="submit" class="button">Unlock changes</button>
@@ -141,7 +142,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   }
 
   .note {
-    font-size: 0.88rem;
+    font-size: 0.9rem;
     color: var(--tvc-ink-soft);
     margin: 0 0 10px;
   }
@@ -153,7 +154,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   .error {
     color: var(--tvc-error-text);
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     margin: 10px 0 0;
   }
 
@@ -168,16 +169,16 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     display: flex;
     flex-direction: column;
     gap: 4px;
-    font-size: 0.82rem;
+    font-size: 0.9rem;
     color: var(--tvc-ink-soft);
   }
 
   .inline-form input,
   .inline-form select {
     font: inherit;
-    font-size: 0.95rem;
+    font-size: 1rem;
     padding: 8px 10px;
-    border: 1px solid var(--tvc-line);
+    border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
     background: var(--tvc-white);
     color: var(--tvc-ink);
@@ -192,7 +193,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   .tab {
     font: inherit;
-    font-size: 0.95rem;
+    font-size: 1rem;
     background: none;
     border: none;
     border-bottom: 3px solid transparent;
@@ -218,7 +219,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   .link-button {
     font: inherit;
-    font-size: 0.88rem;
+    font-size: 0.9rem;
     background: none;
     border: none;
     padding: 8px 4px;
@@ -264,7 +265,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     letter-spacing: 0.18em;
     width: 9.5em;
     padding: 8px 10px;
-    border: 1px solid var(--tvc-line);
+    border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
     background: var(--tvc-white);
     color: var(--tvc-ink);
@@ -277,6 +278,14 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   .banner-error {
     flex-basis: 100%;
     margin: 0;
+  }
+
+  /* The shared .button is the large marketing pill; a tool's toolbar wants it compact. */
+  .toolbar .button,
+  .banner-form .button,
+  .inline-form .button {
+    padding: 10px 20px;
+    font-size: 1rem;
   }
 
   /* ---- people x tools grid */
@@ -301,7 +310,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     min-width: 780px;
     border-collapse: separate;
     border-spacing: 0;
-    font-size: 0.92rem;
+    font-size: 1rem;
   }
 
   .matrix :global(th),
@@ -338,8 +347,8 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     background: var(--tvc-green-tint);
   }
 
-  .matrix :global(tr.is-inactive > *) {
-    opacity: 0.65;
+  .matrix :global(tr.is-inactive .person-name) {
+    color: var(--tvc-ink-soft);
   }
 
   .matrix :global(tr.is-new .person-cell) {
@@ -359,7 +368,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   }
 
   .matrix :global(.badge) {
-    font-size: 0.72rem;
+    font-size: 0.8rem;
     font-weight: 600;
     padding: 1px 8px;
     border-radius: var(--radius-sm);
@@ -374,14 +383,27 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   .matrix :global(.role-select) {
     font: inherit;
-    font-size: 0.88rem;
+    font-size: 1rem;
     width: 100%;
-    min-width: 8.5em;
-    padding: 7px 8px;
-    border: 1px solid var(--tvc-line);
+    min-width: 9em;
+    min-height: 40px;
+    padding: 6px 8px;
+    border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
     background: var(--tvc-white);
     color: var(--tvc-ink-soft);
+  }
+
+  /* Nothing granted: no box until you reach for it, so the roles that are set stand out. */
+  .matrix :global(.role-select[data-role='']) {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .matrix :global(.role-select[data-role='']:hover),
+  .matrix :global(.role-select[data-role='']:focus-visible) {
+    border-color: var(--tvc-line-strong);
+    background: var(--tvc-white);
   }
 
   .matrix :global(.role-select[data-role='read_only']) {
@@ -415,7 +437,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   .matrix :global(.cell-note) {
     display: block;
     margin-top: 4px;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     color: var(--tvc-error-text);
   }
 
@@ -425,9 +447,9 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   .matrix :global(.limit-button) {
     font: inherit;
-    font-size: 0.78rem;
-    margin-top: 4px;
-    padding: 0;
+    font-size: 0.8rem;
+    margin-top: 2px;
+    padding: 8px 0;
     background: none;
     border: none;
     color: var(--tvc-ink-soft);
@@ -449,7 +471,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   .matrix :global(.limits-title) {
     flex-basis: 100%;
     margin: 0;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     color: var(--tvc-ink-soft);
   }
 
@@ -457,14 +479,15 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.88rem;
+    font-size: 0.9rem;
   }
 
   .matrix :global(.row-action) {
     font: inherit;
-    font-size: 0.82rem;
-    padding: 5px 10px;
-    border: 1px solid var(--tvc-line);
+    font-size: 0.9rem;
+    min-height: 40px;
+    padding: 6px 12px;
+    border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-sm);
     background: var(--tvc-white);
     color: var(--tvc-ink);
@@ -472,10 +495,17 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     white-space: nowrap;
   }
 
+  /* Deactivating is rare and recoverable: plain red text, not a filled block on every row. */
   .matrix :global(.row-action--danger) {
-    border-color: var(--callout-red-text);
-    background: var(--callout-red-bg);
+    border-color: transparent;
+    background: transparent;
     color: var(--callout-red-text);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .matrix :global(.row-action--danger:hover) {
+    background: var(--callout-red-bg);
   }
 
   .matrix :global(.row-action:disabled) {
@@ -511,7 +541,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   .roles-guide :global(h2) {
     margin: 0;
     padding: 14px 16px;
-    font-size: 1.05rem;
+    font-size: 1.125rem;
   }
 
   .roles-guide :global(table) {
@@ -583,7 +613,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   .events :global(.event-time) {
     display: block;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     color: var(--tvc-ink-soft);
   }
 </style>
@@ -600,6 +630,8 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     setToken,
     staffFetch,
     stepUpExpiry,
+    passkeyStepUp,
+    passkeysSupported,
     wireCodeEntry,
   } from '../../../scripts/lib/staff-client.mjs';
 
@@ -631,7 +663,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     roles: PersonRole[];
   }
   interface PeopleResponse {
-    me: { id: string; ready: boolean; stepUpValid: boolean };
+    me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean };
     modules: ModuleInfo[];
     people: Person[];
   }
@@ -659,6 +691,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   const verifyForm = $<HTMLFormElement>('verify-form');
   const verifyCode = $<HTMLInputElement>('verify-code');
   const verifySwitch = $('verify-switch');
+  const verifyPasskey = $<HTMLButtonElement>('verify-passkey');
   const banner = $('stepup');
   const verifyEntry = wireCodeEntry({ form: verifyForm, input: verifyCode, toggle: verifySwitch });
   const verifyError = $('verify-error');
@@ -773,10 +806,33 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       const wasHidden = verifyForm.hidden;
       stepupText.textContent = 'Viewing only. Enter your authenticator code to make changes:';
       verifyForm.hidden = false;
+      verifyPasskey.hidden = !(state.me.hasPasskey && passkeysSupported());
       stepupLink.hidden = true;
       if (wasHidden && document.activeElement === document.body) verifyCode.focus();
     }
   }
+
+  verifyPasskey.addEventListener('click', async () => {
+    verifyError.hidden = true;
+    verifyPasskey.disabled = true;
+    try {
+      const result: any = await passkeyStepUp(call);
+      if (result.cancelled) return;
+      if (result.status === 200) {
+        saveStepUp(result.data.stepUpToken, result.data.expiresInSeconds);
+        renderStepUp();
+        renderPeople();
+      } else if (result.status === 429) {
+        show(verifyError, `Too many wrong attempts. Try again in about ${minutesLabel((result.data.retryAfterSeconds ?? 900) * 1000)}.`);
+      } else {
+        show(verifyError, result.data?.error ?? 'That passkey did not work.');
+      }
+    } catch (err) {
+      if (!handled(err)) show(verifyError, 'Your device could not use the passkey. Try again, or enter a code.');
+    } finally {
+      verifyPasskey.disabled = false;
+    }
+  });
 
   verifyForm.addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -990,7 +1046,9 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       ...state.modules.map((m) => h('th', { text: m.label, attrs: { scope: 'col' } })),
       h('th', { attrs: { scope: 'col' } }, h('span', { class: 'visually-hidden', text: 'Actions' })),
     );
-    const rows = state.people.flatMap(personRows);
+    const order = (p: Person) => (!p.active ? 2 : p.isSuperAdmin ? 0 : 1);
+    const sorted = state.people.map((p, i) => ({ p, i })).sort((a, b) => order(a.p) - order(b.p) || a.i - b.i).map((x) => x.p);
+    const rows = sorted.flatMap(personRows);
     peopleList.replaceChildren(...(rows.length ? rows : [h('tr', { class: 'empty-row' }, h('td', { text: 'Nobody has been added yet.', attrs: { colspan: String(state.modules.length + 2) } }))]));
     const active = state.people.filter((p) => p.active).length;
     peopleCount.textContent = `${state.people.length} ${state.people.length === 1 ? 'person' : 'people'}${active === state.people.length ? '' : `, ${active} active`}`;
@@ -1000,6 +1058,13 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       refocus = null;
       peopleList.querySelector<HTMLElement>(`select[data-person="${pid}"][data-module="${mid}"]`)?.focus();
     }
+  }
+
+  // A drawn check mark (static markup, no data in it).
+  function tickMark(): HTMLElement {
+    const mark = h('span', { class: 'tick', attrs: { role: 'img', 'aria-label': 'Yes' } });
+    mark.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7.5l3 3 6-7"/></svg>';
+    return mark;
   }
 
   // The read-only "what can each role do" matrix, one table per tool.
@@ -1029,7 +1094,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
               h('th', { text: descriptions.get(id) ?? id, attrs: { scope: 'row' } }),
               ...roleCols.map((r) => {
                 const has = module.roles.find((x) => x.role === r)?.capabilities.some((c) => c.id === id) ?? false;
-                return h('td', { class: 'col-role' }, has ? h('span', { class: 'tick', text: '✓', attrs: { role: 'img', 'aria-label': 'Yes' } }) : h('span', { class: 'dash', text: '–', attrs: { role: 'img', 'aria-label': 'No' } }));
+                return h('td', { class: 'col-role' }, has ? tickMark() : h('span', { class: 'dash', text: '–', attrs: { role: 'img', 'aria-label': 'No' } }));
               }),
             ),
           ),

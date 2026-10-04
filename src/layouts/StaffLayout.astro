@@ -199,6 +199,13 @@ const ICONS: Record<string, string> = {
      centred column. In the staff shell that cap is lifted so tables, grids and
      the inbox use the whole screen; each page keeps its own padding, and
      forms and cards keep their own sensible inner widths. */
+  /* One title style for every tool: the older pages used 1.6rem to 2.9rem. */
+  #staff-main :global(h1) {
+    font-size: 1.75rem;
+    line-height: 1.2;
+    margin: 0 0 8px;
+  }
+
   #staff-main[data-width='full'] :global(.wrapper) {
     max-width: none;
     margin: 0;
@@ -210,7 +217,7 @@ const ICONS: Record<string, string> = {
     top: 0;
     align-self: start;
     height: 100vh;
-    width: 252px;
+    width: 276px;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -241,7 +248,7 @@ const ICONS: Record<string, string> = {
   .brand-name {
     font-family: var(--font-wordmark);
     font-weight: 700;
-    font-size: 1.05rem;
+    font-size: 1.125rem;
     color: var(--tvc-green-dark);
     white-space: nowrap;
   }
@@ -266,9 +273,9 @@ const ICONS: Record<string, string> = {
   .group-label {
     margin: 18px 0 6px;
     padding: 0 10px;
-    font-size: 0.72rem;
+    font-size: 0.8rem;
     font-weight: 600;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
     color: var(--tvc-ink-soft);
     white-space: nowrap;
@@ -282,12 +289,12 @@ const ICONS: Record<string, string> = {
     gap: 12px;
     width: 100%;
     box-sizing: border-box;
-    padding: 9px 10px;
+    padding: 12px 10px;
     border: none;
     border-radius: var(--radius-sm);
     background: none;
     font: inherit;
-    font-size: 0.92rem;
+    font-size: 1rem;
     color: var(--tvc-ink);
     text-decoration: none;
     text-align: left;
@@ -345,7 +352,7 @@ const ICONS: Record<string, string> = {
   .account-name {
     margin: 0 0 6px;
     padding: 0 10px;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     font-weight: 600;
     color: var(--tvc-ink);
     overflow: hidden;

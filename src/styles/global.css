@@ -98,6 +98,7 @@
   --tvc-ink: #22291f;
   --tvc-ink-soft: #57604f;
   --tvc-line: #e2ddc9;
+  --tvc-line-strong: #8c8873; /* borders of controls (inputs, selects, buttons): 3.5:1 on white */
 
   /* Form/validation error state - distinct from .callout--red's softer,
      earth-tone red (used for editorial content) since this trio was

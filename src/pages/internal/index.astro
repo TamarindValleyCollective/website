@@ -42,9 +42,6 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       <ul id="admin-tools" class="tools"></ul>
     </div>
 
-    <p id="signed-in" class="note" hidden>
-      <button type="button" id="sign-out" class="link-button">Sign out</button>
-    </p>
   </section>
 </StaffLayout>
 
@@ -66,7 +63,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   }
 
   h2 {
-    font-size: 1.1rem;
+    font-size: 1.125rem;
     margin: 28px 0 10px;
   }
 
@@ -90,14 +87,14 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   }
 
   .note {
-    font-size: 0.88rem;
+    font-size: 0.9rem;
     color: var(--tvc-ink-soft);
     margin: 0 0 10px;
   }
 
   .error {
     color: var(--tvc-error-text);
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     margin: 10px 0 0;
   }
 
@@ -106,16 +103,15 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     margin: 0;
     padding: 0;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-    gap: 14px;
-    max-width: 760px;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
   }
 
   /* The cards are built by the script, so they need :global(). */
   .tools :global(a.tool) {
     display: block;
     height: 100%;
-    padding: 16px 18px;
+    padding: 20px 22px;
     background: var(--tvc-white);
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
@@ -131,25 +127,17 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   .tools :global(.tool-name) {
     display: block;
+    font-size: 1.125rem;
     font-weight: 600;
   }
 
   .tools :global(.tool-meta) {
     display: block;
     margin-top: 4px;
-    font-size: 0.82rem;
+    font-size: 0.9rem;
     color: var(--tvc-ink-soft);
   }
 
-  .link-button {
-    font: inherit;
-    background: none;
-    border: none;
-    padding: 0;
-    color: var(--tvc-ink-soft);
-    text-decoration: underline;
-    cursor: pointer;
-  }
 </style>
 
 <script>
@@ -177,7 +165,6 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   const noTools = $('no-tools');
   const adminSection = $('admin-section');
   const adminList = $('admin-tools');
-  const signedIn = $('signed-in');
 
   function card(tool: Tool, meta: string): HTMLElement {
     const link = document.createElement('a');
@@ -200,7 +187,6 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     forbidden.hidden = true;
     toolsSection.hidden = true;
     adminSection.hidden = true;
-    signedIn.hidden = true;
     statusEl.hidden = true;
     welcome.textContent = 'Sign in to see the tools you can use.';
     gateError.hidden = !message;
@@ -212,7 +198,6 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     gate.hidden = true;
     toolsSection.hidden = true;
     adminSection.hidden = true;
-    signedIn.hidden = true;
     statusEl.hidden = true;
     forbidden.hidden = false;
     forbiddenEmail.textContent = decodeTokenEmail(getToken() ?? '');
@@ -234,7 +219,6 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       noTools.hidden = hasTools || hasAdmin;
       adminList.replaceChildren(...(data.adminTools as Tool[]).map((t) => card(t, t.description ?? '')));
       adminSection.hidden = data.adminTools.length === 0;
-      signedIn.hidden = false;
     } catch (err) {
       if (err instanceof StaffAuthError) {
         if (err.kind === 'unauthorized') showGate('Your session expired — sign in again.');
@@ -264,7 +248,6 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     showGate();
   }
   $('use-different-account').addEventListener('click', signOut);
-  $('sign-out').addEventListener('click', signOut);
 
   if (getToken()) load();
   else showGate();

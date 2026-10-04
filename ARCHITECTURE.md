@@ -573,9 +573,21 @@ outside both the local machine and Netlify (the member-update-email workflow).
   signs in with Google (first factor) and then proves a second factor to get a ten-minute,
   stateless, HMAC-signed step-up token bound to them, sent as `X-Stepup-Token`. Methods held at
   once: an authenticator app (TOTP, RFC 6238 — checked against the RFC's published vectors) and
-  ten single-use recovery codes; passkeys are the planned third (the `passkey` type is reserved
-  in `staff_mfa_factors`). The Access module is to unlock only with at least two different methods
-  enrolled. TOTP secrets are stored AES-256-GCM encrypted and recovery codes only as an HMAC, both
+  ten single-use recovery codes, and **passkeys** (WebAuthn: Face ID, Touch ID or a security key;
+  `lib/staff-webauthn.ts` wraps `@simplewebauthn/server`). A passkey is stored as a `passkey` row in
+  `staff_mfa_factors` (public key and counter in `credential`, never a private key) and is bound to
+  the site: the relying-party id is `tvc.farm` and only `https://tvc.farm`, `https://www.tvc.farm`
+  and localhost (for trying it locally) are accepted origins, so previews and look-alike domains
+  fail. User verification (biometric/PIN) is required and no attestation statement is requested.
+  Each registration/sign-in challenge is a row in `staff_webauthn_challenges` (migration
+  `0030_staff_webauthn_challenges.sql`) consumed by deleting it, so a response is accepted once;
+  five wrong attempts share the same 15-minute lockout as codes. Adding a passkey when other methods
+  exist, and removing one, need a step-up; removing is refused when it would leave a ready person
+  with fewer than two methods. A first passkey also issues the recovery codes. Passkey routes live
+  under `/api/staff-mfa/passkey/*`; the browser glue is `registerPasskey`/`passkeyStepUp` in
+  `scripts/lib/staff-client.mjs`, shown on Security (add, name, remove, unlock) and as "Use a
+  passkey" in the Access unlock strip. The Access module unlocks only with at least two different
+  methods enrolled. TOTP secrets are stored AES-256-GCM encrypted and recovery codes only as an HMAC, both
   keyed from one Netlify variable, `STAFF_MFA_KEY` (32+ random bytes, base64, set by a human, never
   in the repo or the assistant's hands); if it is missing every keyed operation fails closed with
   `MFA_NOT_CONFIGURED`. **Losing or changing that key invalidates every stored authenticator and
@@ -602,8 +614,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   target, is taken straight back out). It deliberately cannot create, promote, deactivate or
   remove a super admin (that stays a manual database step, so the last one can't be removed from
   here), never deletes anyone (people are deactivated so history keeps its names), and never
-  returns an email: an address is typed once to add someone and no response contains one, people
-  are shown by name or an opaque `Person XXXX` tag. The role/capability descriptions the screen
+  returns an email: an address is typed once to add someone and no response contains one. People
+  are shown by name, or until Google fills one in by their address masked (`p••••@tvc.farm`, built
+  server-side by `maskEmail`; the function reads the address only to mask it). The role/capability descriptions the screen
   shows come from `MODULE_INFO` in `staff-registry.ts`, which also now owns the booking-type list
   that `accommodation-admin.mts` validates against. The shared "which methods does this person
   have" query moved to `lib/staff-mfa-store.ts`.
@@ -638,7 +651,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   focus and after sign-in) and shows only tools the person holds a role in; it is navigation only,
   never authorisation. The collapsed/expanded choice is kept in `localStorage`
   (`tvc-staff-nav-collapsed`); WhatsApp and the accommodation calendar start collapsed to give
-  their wide layouts room. Each link is still a full page load (in-page navigation, per-tool
+  their wide layouts room. The shell owns the page title style (one `h1` size for every tool) and the only Sign-out
+  control; staff screens use a four-step type scale (0.8 / 0.9 / 1 / 1.125 rem) and
+  `--tvc-line-strong` for control borders (3:1 on white; `--tvc-line` stays for dividers). Each link is still a full page load (in-page navigation, per-tool
   sub-menus and tabs are later steps); `components/StaffNav.astro` was removed. Where each tool
   lives is `MODULE_INFO[...].path` in `staff-registry.ts`.
 - **`scripts/lib/accommodation-db.mjs`** — hand-rolled Supabase PostgREST REST client (same style
