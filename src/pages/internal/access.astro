@@ -1,0 +1,872 @@
+---
+// Internal Access page for super admins (issue #89): see who is in the system,
+// give or take away each person's role in each tool, add a person, deactivate
+// or reactivate someone, and read the activity log. Backed by
+// netlify/functions/staff-admin.mts, which is where the rules live — super
+// admins only, two second-factor methods enrolled, a fresh step-up for every
+// change, everything logged before it happens. This page only presents that.
+//
+// Emails are never shown: people appear by name, and an address is typed once
+// to add someone. Every value from the server is placed with textContent.
+// Deliberately unlinked from the site nav and noindex.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import StaffNav from '../../components/StaffNav.astro';
+---
+
+<BaseLayout title="Access" description="Who can do what in the internal tools." noindex>
+  <section class="section wrapper">
+    <StaffNav current="access" />
+    <h1>Access</h1>
+    <p class="hint">Who can use which internal tool, and what they can do in it. Only super admins can open this page.</p>
+
+    <div id="gate" class="gate card">
+      <p class="gate-copy">Sign in with your super-admin Google account.</p>
+      <div id="g_id_signin"></div>
+      <p id="gate-error" class="error" hidden></p>
+    </div>
+
+    <div id="forbidden" class="gate card" hidden>
+      <p class="gate-copy">Signed in as <strong id="forbidden-email"></strong>, but this Google account isn't a super admin.</p>
+      <button type="button" id="use-different-account" class="button button--outline">Use a different account</button>
+    </div>
+
+    <p id="status" class="hint" hidden></p>
+
+    <div id="panel" hidden>
+      <section id="stepup" class="card block" aria-live="polite">
+        <p id="stepup-text" class="note"></p>
+        <form id="verify-form" class="inline-form" hidden>
+          <label>
+            Method
+            <select id="verify-method">
+              <option value="totp">Authenticator app</option>
+              <option value="recovery">Recovery code</option>
+            </select>
+          </label>
+          <label>
+            Code
+            <input type="text" id="verify-code" autocomplete="one-time-code" required />
+          </label>
+          <button type="submit" class="button">Unlock changes</button>
+        </form>
+        <p id="stepup-link" class="note" hidden><a href="/internal/security/">Set up your second factors →</a></p>
+        <p id="verify-error" class="error" hidden></p>
+      </section>
+
+      <div class="tabs" role="tablist" aria-label="Access sections">
+        <button type="button" role="tab" id="tab-people" aria-selected="true" aria-controls="pane-people" class="tab">People</button>
+        <button type="button" role="tab" id="tab-activity" aria-selected="false" aria-controls="pane-activity" class="tab">Activity</button>
+      </div>
+
+      <section id="pane-people" role="tabpanel" aria-labelledby="tab-people">
+        <form id="add-form" class="card block inline-form">
+          <label>
+            Email of the person to add
+            <input type="email" id="add-email" autocomplete="off" required />
+          </label>
+          <label>
+            Name (optional)
+            <input type="text" id="add-name" autocomplete="off" maxlength="100" />
+          </label>
+          <button type="submit" id="add-submit" class="button">Add person</button>
+          <p class="note full">The address is used once to recognise them when they sign in with Google, and is never shown again. Their name fills in from Google on their first sign-in.</p>
+        </form>
+        <p id="add-message" class="note" hidden></p>
+        <p id="people-error" class="error" hidden></p>
+        <ul id="people" class="people"></ul>
+      </section>
+
+      <section id="pane-activity" role="tabpanel" aria-labelledby="tab-activity" hidden>
+        <ul id="events" class="events"></ul>
+        <p id="events-empty" class="note" hidden>No activity yet.</p>
+        <p id="events-error" class="error" hidden></p>
+        <button type="button" id="events-more" class="button button--outline" hidden>Load older</button>
+      </section>
+    </div>
+  </section>
+</BaseLayout>
+
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style>
+  .section.wrapper {
+    padding-top: 32px;
+    padding-bottom: 32px;
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+
+  .hint {
+    color: var(--tvc-ink-soft);
+    margin: -8px 0 24px;
+  }
+
+  .card {
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .gate {
+    max-width: 420px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+  }
+
+  .gate-copy {
+    font-size: 0.9rem;
+    color: var(--tvc-ink-soft);
+    margin: 0 0 14px;
+  }
+
+  .block {
+    max-width: 760px;
+    padding: 18px 22px;
+    margin-bottom: 18px;
+  }
+
+  .note {
+    font-size: 0.88rem;
+    color: var(--tvc-ink-soft);
+    margin: 0 0 10px;
+  }
+
+  .note.full {
+    flex-basis: 100%;
+    margin: 0;
+  }
+
+  .error {
+    color: var(--tvc-error-text);
+    font-size: 0.85rem;
+    margin: 10px 0 0;
+  }
+
+  .inline-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+  }
+
+  .inline-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .inline-form input,
+  .inline-form select,
+  .people :global(select) {
+    font: inherit;
+    font-size: 0.95rem;
+    padding: 8px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+  }
+
+  .tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--tvc-line);
+    max-width: 760px;
+  }
+
+  .tab {
+    font: inherit;
+    font-size: 0.95rem;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    padding: 8px 14px;
+    color: var(--tvc-ink-soft);
+    cursor: pointer;
+  }
+
+  .tab[aria-selected='true'] {
+    color: var(--tvc-ink);
+    font-weight: 600;
+    border-bottom-color: var(--tvc-orange);
+  }
+
+  .people,
+  .events {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-width: 760px;
+  }
+
+  /* Everything below targets nodes the script creates, so it needs :global()
+     (Astro's scoped styles don't reach elements made at runtime). */
+  .people :global(.person) {
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+    margin-bottom: 12px;
+    padding: 14px 18px;
+  }
+
+  .people :global(.person.is-inactive) {
+    opacity: 0.7;
+  }
+
+  .people :global(.person-head) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+  }
+
+  .people :global(.person-name) {
+    font-weight: 600;
+    margin-right: 4px;
+  }
+
+  .people :global(.badge) {
+    font-size: 0.74rem;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+  }
+
+  .people :global(.badge--warn) {
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+  }
+
+  .people :global(.spacer) {
+    flex: 1;
+  }
+
+  .people :global(.summary) {
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+    margin: 6px 0 0;
+  }
+
+  .people :global(.person-body) {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .people :global(.module-row) {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .people :global(.module-row:last-of-type) {
+    border-bottom: none;
+  }
+
+  .people :global(.module-line) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+  }
+
+  .people :global(.module-label) {
+    font-weight: 600;
+    font-size: 0.92rem;
+    min-width: 170px;
+  }
+
+  .people :global(.allows) {
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
+    margin: 6px 0 0;
+  }
+
+  .people :global(.scope) {
+    margin: 8px 0 0;
+    font-size: 0.85rem;
+  }
+
+  .people :global(.scope label) {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0 14px 4px 0;
+  }
+
+  .people :global(.row-status) {
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .people :global(.row-status.is-error) {
+    color: var(--tvc-error-text);
+  }
+
+  .people :global(.danger-zone) {
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: center;
+  }
+
+  .people :global(.button--danger) {
+    background: var(--callout-red-bg);
+    border-color: var(--callout-red-text);
+    color: var(--callout-red-text);
+  }
+
+  .events :global(.event) {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--tvc-line);
+    font-size: 0.9rem;
+  }
+
+  .events :global(.event-time) {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--tvc-ink-soft);
+  }
+</style>
+
+<script>
+  import {
+    StaffAuthError,
+    clearStepUp,
+    clearToken,
+    decodeTokenEmail,
+    getToken,
+    minutesLabel,
+    saveStepUp,
+    setToken,
+    staffFetch,
+    stepUpExpiry,
+  } from '../../../scripts/lib/staff-client.mjs';
+
+  declare const google: any;
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+
+  interface Capability {
+    id: string;
+    description: string;
+  }
+  interface ModuleInfo {
+    id: string;
+    label: string;
+    roles: { role: string; capabilities: Capability[] }[];
+    scopeTypes: string[] | null;
+  }
+  interface PersonRole {
+    module: string;
+    role: string;
+    scope: { allowedTypes?: string[] } | null;
+  }
+  interface Person {
+    id: string;
+    label: string;
+    active: boolean;
+    isSuperAdmin: boolean;
+    isMe: boolean;
+    mfa: { methodCount: number; ready: boolean } | null;
+    roles: PersonRole[];
+  }
+  interface PeopleResponse {
+    me: { id: string; ready: boolean; stepUpValid: boolean };
+    modules: ModuleInfo[];
+    people: Person[];
+  }
+  interface AuditEvent {
+    id: number;
+    at: string;
+    action: string;
+    module: string | null;
+    actor: { id: string; label: string } | null;
+    target: { id: string; label: string } | null;
+    detail: any;
+  }
+
+  const ROLE_LABELS: Record<string, string> = { admin: 'Admin', user: 'User', read_only: 'Read-only' };
+  const ROLE_ORDER = ['', 'read_only', 'user', 'admin']; // '' = no access
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const gate = $('gate');
+  const gateError = $('gate-error');
+  const forbidden = $('forbidden');
+  const forbiddenEmail = $('forbidden-email');
+  const statusEl = $('status');
+  const panel = $('panel');
+  const stepupText = $('stepup-text');
+  const verifyForm = $<HTMLFormElement>('verify-form');
+  const verifyMethod = $<HTMLSelectElement>('verify-method');
+  const verifyCode = $<HTMLInputElement>('verify-code');
+  const verifyError = $('verify-error');
+  const stepupLink = $('stepup-link');
+  const tabPeople = $('tab-people');
+  const tabActivity = $('tab-activity');
+  const panePeople = $('pane-people');
+  const paneActivity = $('pane-activity');
+  const addForm = $<HTMLFormElement>('add-form');
+  const addEmail = $<HTMLInputElement>('add-email');
+  const addName = $<HTMLInputElement>('add-name');
+  const addSubmit = $<HTMLButtonElement>('add-submit');
+  const addMessage = $('add-message');
+  const peopleError = $('people-error');
+  const peopleList = $('people');
+  const eventsList = $('events');
+  const eventsEmpty = $('events-empty');
+  const eventsError = $('events-error');
+  const eventsMore = $<HTMLButtonElement>('events-more');
+
+  let state: PeopleResponse | null = null;
+  const openPeople = new Set<string>(); // which people's editors are expanded
+  let nextBefore: number | null = null;
+  let activityLoaded = false;
+
+  // Small DOM builder: text always goes in as textContent, never as markup.
+  function h<K extends keyof HTMLElementTagNameMap>(
+    tag: K,
+    props: { class?: string; text?: string; attrs?: Record<string, string>; on?: Record<string, EventListener> } = {},
+    ...children: (Node | string)[]
+  ): HTMLElementTagNameMap[K] {
+    const node = document.createElement(tag);
+    if (props.class) node.className = props.class;
+    if (props.text !== undefined) node.textContent = props.text;
+    for (const [k, v] of Object.entries(props.attrs ?? {})) node.setAttribute(k, v);
+    for (const [k, fn] of Object.entries(props.on ?? {})) node.addEventListener(k, fn);
+    node.append(...children);
+    return node;
+  }
+
+  const humanize = (s: string) => s.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase());
+  const roleLabel = (r: string | null | undefined) => (r ? (ROLE_LABELS[r] ?? r) : 'no access');
+  const moduleLabel = (id: string | null) => state?.modules.find((m) => m.id === id)?.label ?? (id ? humanize(id) : '');
+
+  // ---- who can change things right now
+  function canEdit(): boolean {
+    return Boolean(state?.me.ready) && stepUpExpiry() !== null;
+  }
+
+  function show(el: HTMLElement, message: string) {
+    el.hidden = false;
+    el.textContent = message;
+  }
+
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    panel.hidden = true;
+    statusEl.hidden = true;
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+
+  function showForbidden(token: string) {
+    gate.hidden = true;
+    panel.hidden = true;
+    statusEl.hidden = true;
+    forbidden.hidden = false;
+    forbiddenEmail.textContent = decodeTokenEmail(token);
+  }
+
+  // Runs a request; a session that has ended or an account that isn't allowed
+  // swaps the page for the sign-in or "not a super admin" panel and stops.
+  async function call(path: string, init?: { method?: string; body?: unknown }) {
+    try {
+      return await staffFetch(path, init);
+    } catch (err) {
+      if (err instanceof StaffAuthError) {
+        if (err.kind === 'unauthorized') showGate('Your session expired — sign in again.');
+        else showForbidden(getToken() ?? '');
+      }
+      throw err;
+    }
+  }
+  const handled = (err: unknown) => err instanceof StaffAuthError;
+
+  // ---- the "unlock changes" card
+  function renderStepUp() {
+    if (!state) return;
+    const exp = stepUpExpiry();
+    verifyError.hidden = true;
+    if (!state.me.ready) {
+      stepupText.textContent = 'You need two different second-factor methods set up before you can change anything. You can look around in the meantime.';
+      verifyForm.hidden = true;
+      stepupLink.hidden = false;
+    } else if (exp) {
+      stepupText.textContent = `Changes are unlocked for about ${minutesLabel(exp - Date.now())}.`;
+      verifyForm.hidden = true;
+      stepupLink.hidden = true;
+    } else {
+      stepupText.textContent = "Viewing only. Prove it's you to make changes:";
+      verifyForm.hidden = false;
+      stepupLink.hidden = true;
+    }
+  }
+
+  verifyForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    verifyError.hidden = true;
+    try {
+      const { status, data } = await call('/api/staff-mfa/verify', { method: 'POST', body: { method: verifyMethod.value, code: verifyCode.value } });
+      if (status === 200) {
+        saveStepUp(data.stepUpToken, data.expiresInSeconds);
+        verifyCode.value = '';
+        renderStepUp();
+        renderPeople();
+      } else if (status === 429) {
+        show(verifyError, `Too many wrong codes. Try again in about ${minutesLabel((data.retryAfterSeconds ?? 900) * 1000)}.`);
+      } else {
+        show(verifyError, data.error ?? 'That code did not work.');
+      }
+    } catch (err) {
+      if (!handled(err)) show(verifyError, 'Could not reach the server — try again.');
+    }
+  });
+
+  // ---- people
+  function summaryText(p: Person): string {
+    if (p.roles.length === 0) return 'No access to any tool yet.';
+    return p.roles.map((r) => `${moduleLabel(r.module)}: ${roleLabel(r.role)}`).join(' · ');
+  }
+
+  function describeRole(module: ModuleInfo, role: string): string {
+    if (!role) return 'Cannot open this tool.';
+    const caps = module.roles.find((r) => r.role === role)?.capabilities ?? [];
+    return caps.map((c) => c.description).join('; ') + '.';
+  }
+
+  function moduleRow(p: Person, module: ModuleInfo): HTMLElement {
+    const current = p.roles.find((r) => r.module === module.id) ?? null;
+    const editable = canEdit();
+
+    const select = h('select', { attrs: { 'aria-label': `${module.label} access for ${p.label}` } });
+    for (const value of ROLE_ORDER) select.append(h('option', { text: value ? ROLE_LABELS[value] : 'No access', attrs: { value } }));
+    select.value = current?.role ?? '';
+    select.disabled = !editable;
+
+    const allows = h('p', { class: 'allows', text: describeRole(module, select.value) });
+    const status = h('span', { class: 'row-status' });
+    const save = h('button', { class: 'button', text: 'Save', attrs: { type: 'button' } });
+    save.disabled = true;
+
+    // Booking-type limits exist only for a "User" in the accommodation calendar.
+    let scopeBox: HTMLElement | null = null;
+    let limitToggle: HTMLInputElement | null = null;
+    const typeBoxes: HTMLInputElement[] = [];
+    if (module.scopeTypes) {
+      const limited = Boolean(current?.scope?.allowedTypes?.length);
+      limitToggle = h('input', { attrs: { type: 'checkbox' } });
+      limitToggle.checked = limited;
+      limitToggle.disabled = !editable;
+      const typeLabels = module.scopeTypes.map((t) => {
+        const box = h('input', { attrs: { type: 'checkbox', value: t } });
+        box.checked = current?.scope?.allowedTypes?.includes(t) ?? false;
+        box.disabled = !editable;
+        typeBoxes.push(box);
+        return h('label', {}, box, humanize(t));
+      });
+      const typeWrap = h('div', {}, ...typeLabels);
+      typeWrap.hidden = !limited;
+      scopeBox = h('div', { class: 'scope' }, h('label', {}, limitToggle, 'Limit to specific booking types'), typeWrap);
+      limitToggle.addEventListener('change', () => {
+        typeWrap.hidden = !limitToggle!.checked;
+        dirty();
+      });
+      typeBoxes.forEach((b) => b.addEventListener('change', dirty));
+      scopeBox.hidden = select.value !== 'user';
+    }
+
+    function dirty() {
+      status.textContent = '';
+      status.classList.remove('is-error');
+      save.disabled = !canEdit();
+    }
+    select.addEventListener('change', () => {
+      allows.textContent = describeRole(module, select.value);
+      if (scopeBox) scopeBox.hidden = select.value !== 'user';
+      dirty();
+    });
+
+    save.addEventListener('click', async () => {
+      save.disabled = true;
+      status.classList.remove('is-error');
+      status.textContent = 'Saving…';
+      const body: Record<string, unknown> = { personId: p.id, module: module.id, role: select.value || null };
+      if (module.scopeTypes && select.value === 'user' && limitToggle?.checked) {
+        body.scope = { allowedTypes: typeBoxes.filter((b) => b.checked).map((b) => b.value) };
+      }
+      try {
+        const { status: code, data } = await call('/api/staff-admin/roles', { method: 'POST', body });
+        if (code === 200) {
+          await loadPeople(); // re-draws with what the server now holds
+        } else {
+          status.classList.add('is-error');
+          status.textContent = data.error ?? 'Could not save.';
+          if (data.code === 'STEP_UP_REQUIRED') await loadPeople();
+          else save.disabled = false;
+        }
+      } catch (err) {
+        if (!handled(err)) {
+          status.classList.add('is-error');
+          status.textContent = 'Could not reach the server — try again.';
+          save.disabled = false;
+        }
+      }
+    });
+
+    return h(
+      'div',
+      { class: 'module-row' },
+      h('div', { class: 'module-line' }, h('span', { class: 'module-label', text: module.label }), select, save, status),
+      allows,
+      ...(scopeBox ? [scopeBox] : []),
+    );
+  }
+
+  function personCard(p: Person): HTMLElement {
+    const open = openPeople.has(p.id);
+    const body = h('div', { class: 'person-body' });
+    body.hidden = !open;
+
+    const toggle = h('button', { class: 'button button--outline', text: open ? 'Close' : 'Edit access', attrs: { type: 'button', 'aria-expanded': String(open) } });
+    toggle.addEventListener('click', () => {
+      const nowOpen = body.hidden;
+      body.hidden = !nowOpen;
+      toggle.textContent = nowOpen ? 'Close' : 'Edit access';
+      toggle.setAttribute('aria-expanded', String(nowOpen));
+      if (nowOpen) openPeople.add(p.id);
+      else openPeople.delete(p.id);
+    });
+
+    for (const module of state!.modules) body.append(moduleRow(p, module));
+
+    // Super admins are managed in the database, never from this screen.
+    if (!p.isSuperAdmin && !p.isMe) {
+      const statusLine = h('span', { class: 'row-status' });
+      const toggleActive = h('button', {
+        class: p.active ? 'button button--danger' : 'button button--outline',
+        text: p.active ? 'Deactivate' : 'Reactivate',
+        attrs: { type: 'button' },
+      });
+      toggleActive.disabled = !canEdit();
+      toggleActive.addEventListener('click', async () => {
+        if (p.active && !confirm(`Deactivate ${p.label}? They lose access to every tool straight away. You can reactivate them later.`)) return;
+        toggleActive.disabled = true;
+        try {
+          const { status, data } = await call('/api/staff-admin/people/active', { method: 'POST', body: { personId: p.id, active: !p.active } });
+          if (status === 200) await loadPeople();
+          else {
+            statusLine.classList.add('is-error');
+            statusLine.textContent = data.error ?? 'Could not change that.';
+            toggleActive.disabled = false;
+          }
+        } catch (err) {
+          if (!handled(err)) {
+            statusLine.classList.add('is-error');
+            statusLine.textContent = 'Could not reach the server — try again.';
+            toggleActive.disabled = false;
+          }
+        }
+      });
+      body.append(h('div', { class: 'danger-zone' }, toggleActive, statusLine));
+    } else {
+      body.append(h('p', { class: 'note', text: p.isMe ? 'This is you. Your own access is changed here like anyone else’s; being a super admin is managed in the database.' : 'Super admins are managed directly in the database, not here.' }));
+    }
+
+    const head = h('div', { class: 'person-head' }, h('span', { class: 'person-name', text: p.label }));
+    if (p.isMe) head.append(h('span', { class: 'badge', text: 'You' }));
+    if (p.isSuperAdmin) head.append(h('span', { class: 'badge', text: 'Super admin' }));
+    if (p.isSuperAdmin && p.mfa) head.append(h('span', { class: p.mfa.ready ? 'badge' : 'badge badge--warn', text: p.mfa.ready ? 'Second factors ready' : `${p.mfa.methodCount} of 2 methods` }));
+    if (!p.active) head.append(h('span', { class: 'badge badge--warn', text: 'Deactivated' }));
+    head.append(h('span', { class: 'spacer' }), toggle);
+
+    return h('li', { class: p.active ? 'person' : 'person is-inactive' }, head, h('p', { class: 'summary', text: summaryText(p) }), body);
+  }
+
+  function renderPeople() {
+    if (!state) return;
+    peopleList.replaceChildren(...state.people.map(personCard));
+  }
+
+  async function loadPeople() {
+    peopleError.hidden = true;
+    try {
+      const { status, data } = await call('/api/staff-admin/people');
+      if (status !== 200) throw new Error('load failed');
+      state = data as PeopleResponse;
+      gate.hidden = true;
+      forbidden.hidden = true;
+      statusEl.hidden = true;
+      panel.hidden = false;
+      renderStepUp();
+      renderPeople();
+    } catch (err) {
+      if (!handled(err)) {
+        statusEl.hidden = false;
+        statusEl.textContent = 'Failed to load — try refreshing.';
+      }
+    }
+  }
+
+  // ---- adding someone
+  addForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    addMessage.hidden = true;
+    peopleError.hidden = true;
+    if (!canEdit()) {
+      show(peopleError, "Prove it's you above before adding someone.");
+      return;
+    }
+    addSubmit.disabled = true;
+    try {
+      const { status, data } = await call('/api/staff-admin/people', { method: 'POST', body: { email: addEmail.value, name: addName.value } });
+      if (status === 201) {
+        addEmail.value = ''; // typed once; not kept on the page
+        addName.value = '';
+        openPeople.add(data.person.id);
+        show(addMessage, `${data.person.label} added. Choose which tools they can use below.`);
+        await loadPeople();
+      } else if (status === 409 && data.code === 'EXISTS') {
+        addEmail.value = '';
+        openPeople.add(data.personId);
+        show(addMessage, `${data.label} is already in the system — their access is open below.`);
+        await loadPeople();
+      } else {
+        show(peopleError, data.error ?? 'Could not add that person.');
+      }
+    } catch (err) {
+      if (!handled(err)) show(peopleError, 'Could not reach the server — try again.');
+    } finally {
+      addSubmit.disabled = false;
+    }
+  });
+
+  // ---- activity
+  function describe(ev: AuditEvent): string {
+    const a = ev.actor?.label ?? 'Someone';
+    const t = ev.target?.label ?? 'someone';
+    const m = moduleLabel(ev.module);
+    const d = ev.detail ?? {};
+    const types = Array.isArray(d.scope?.allowedTypes) ? ` (limited to ${d.scope.allowedTypes.map(humanize).join(', ')})` : '';
+    switch (ev.action) {
+      case 'staff.person_added':
+        return `${a} added ${t}.`;
+      case 'staff.person_deactivated':
+        return `${a} deactivated ${t}.`;
+      case 'staff.person_reactivated':
+        return `${a} reactivated ${t}.`;
+      case 'staff.role_set':
+        return `${a} set ${t} to ${roleLabel(d.role)} in ${m}${types}${d.previousRole ? `, was ${roleLabel(d.previousRole)}` : ''}.`;
+      case 'staff.role_removed':
+        return `${a} removed ${t}’s access to ${m}${d.previousRole ? ` (was ${roleLabel(d.previousRole)})` : ''}.`;
+      case 'role_granted':
+        return `${t} was given ${roleLabel(d.role)} access to ${m} (carried over from the old sign-in lists).`;
+      case 'role_changed':
+        return `${t}’s access to ${m} changed from ${roleLabel(d.from)} to ${roleLabel(d.to)}.`;
+      case 'staff_mfa.totp_started':
+        return `${a} started setting up an authenticator app.`;
+      case 'staff_mfa.totp_confirmed':
+        return `${a} set up an authenticator app.`;
+      case 'staff_mfa.verified':
+        return `${a} proved a second factor (${d.method === 'recovery' ? 'recovery code' : 'authenticator app'}).`;
+      case 'staff_mfa.failed':
+        return `${a} entered a wrong second-factor code${d.locked ? ' and was locked out for a while' : ''}.`;
+      case 'staff_mfa.recovery_regenerated':
+        return `${a} generated new recovery codes.`;
+      case 'staff_mfa.reset':
+        return `${a} reset ${t}’s second factors.`;
+      case 'whatsapp.reply':
+        return `${a} replied in the WhatsApp inbox.`;
+      case 'whatsapp.block_requested':
+        return `${a} blocked a WhatsApp contact.`;
+      case 'whatsapp.unblock_requested':
+        return `${a} unblocked a WhatsApp contact.`;
+      case 'photo-pool.approve':
+        return `${a} approved a photo.`;
+      case 'photo-pool.reject':
+        return `${a} rejected a photo.`;
+      case 'photo-pool.describe':
+        return `${a} edited a photo’s description.`;
+      case 'event-payments.refund_requested':
+        return `${a} started a refund.`;
+      default:
+        return `${a}: ${ev.action}${m ? ` (${m})` : ''}.`;
+    }
+  }
+
+  async function loadEvents(more: boolean) {
+    eventsError.hidden = true;
+    eventsMore.disabled = true;
+    try {
+      const { status, data } = await call(`/api/staff-admin/activity?limit=30${more && nextBefore !== null ? `&before=${nextBefore}` : ''}`);
+      if (status !== 200) throw new Error('load failed');
+      if (!more) eventsList.replaceChildren();
+      for (const ev of data.events as AuditEvent[]) {
+        eventsList.append(h('li', { class: 'event' }, h('span', { class: 'event-time', text: new Date(ev.at).toLocaleString() }), describe(ev)));
+      }
+      nextBefore = data.nextBefore;
+      eventsMore.hidden = nextBefore === null;
+      eventsEmpty.hidden = eventsList.children.length > 0;
+      activityLoaded = true;
+    } catch (err) {
+      if (!handled(err)) show(eventsError, 'Could not load the activity — try again.');
+    } finally {
+      eventsMore.disabled = false;
+    }
+  }
+  eventsMore.addEventListener('click', () => loadEvents(true));
+
+  function selectTab(which: 'people' | 'activity') {
+    const people = which === 'people';
+    tabPeople.setAttribute('aria-selected', String(people));
+    tabActivity.setAttribute('aria-selected', String(!people));
+    panePeople.hidden = !people;
+    paneActivity.hidden = people;
+    if (!people && !activityLoaded) loadEvents(false);
+  }
+  tabPeople.addEventListener('click', () => selectTab('people'));
+  tabActivity.addEventListener('click', () => selectTab('activity'));
+
+  // ---- sign-in
+  function handleCredentialResponse(response: { credential: string }) {
+    setToken(response.credential);
+    loadPeople();
+  }
+
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: 'outline', size: 'large' });
+  }
+
+  $('use-different-account').addEventListener('click', () => {
+    clearToken();
+    clearStepUp();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
+  // Keep the countdown honest, and lock the edit controls the moment the
+  // step-up lapses (the server would refuse them anyway).
+  let wasUnlocked = false;
+  setInterval(() => {
+    if (!state || panel.hidden) return;
+    const unlocked = canEdit();
+    renderStepUp();
+    if (wasUnlocked && !unlocked) renderPeople();
+    wasUnlocked = unlocked;
+  }, 15000);
+
+  if (getToken()) loadPeople();
+  else showGate();
+</script>

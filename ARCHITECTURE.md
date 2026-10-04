@@ -499,8 +499,8 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `whatsapp-admin.mts`, `event-payments-admin.mts` and `accommodation-admin.mts` now all gate on
   `requireStaff` (2026-10), so the Google Sheet allow-lists are no longer read by anything (the
   Sheets and their `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID` / `ACCOMMODATION_ALLOWED_EMAILS_SHEET_ID`
-  env vars can be retired). Access is changed with SQL on `staff_module_roles` until the
-  Access screen ships (its API, `staff-admin.mts`, is below). Masking helpers live in `lib/staff-masking.ts`. The first time an
+  env vars can be retired). Access is changed on `/internal/access` (super admins only; the
+  API, `staff-admin.mts`, is below) or, as before, with SQL on `staff_module_roles`. Masking helpers live in `lib/staff-masking.ts`. The first time an
   authorized person signs in with an empty `staff_users.name`, `requireStaff` copies the name
   from their Google account (guarded by `name=is.null`, so it never overwrites one on file).
 - **`netlify/functions/staff-mfa.mts` + `lib/staff-mfa-crypto.ts` + `/internal/security`** —
@@ -544,6 +544,22 @@ outside both the local machine and Netlify (the member-update-email workflow).
   shows come from `MODULE_INFO` in `staff-registry.ts`, which also now owns the booking-type list
   that `accommodation-admin.mts` validates against. The shared "which methods does this person
   have" query moved to `lib/staff-mfa-store.ts`.
+- **`/internal/access`, `/internal` and `netlify/functions/staff-me.mts`** — the screens in front
+  of that API. `/internal/access` (super admins only) lists people **by name** with their role in
+  each tool and, in words, what that role allows; lets you give, change or remove a role (with an
+  optional accommodation booking-type limit), add a person, deactivate or reactivate someone, and
+  read the activity log with ids shown as names. It starts read-only and offers an "unlock changes"
+  form (authenticator or recovery code) that stores the step-up for ten minutes; without two
+  enrolled methods it links to `/internal/security` instead. Names are placed with `textContent`
+  only, so a name that looks like HTML is displayed, never run, and an address is typed once to add
+  someone and then never shown. `/internal` is the landing page: one sign-in and a list of the tools
+  you hold a role in (from `staff-me.mts`, which answers only about the caller, returns no email and
+  lists a tool only because a role exists — each tool still checks its own capability), plus Access
+  and Security for super admins. `/internal`, `/internal/access` and `/internal/security` share one
+  Google sign-in and one step-up per browser tab through `scripts/lib/staff-client.mjs` (storage
+  keys `tvc-staff-idtoken` / `tvc-staff-stepup`); the four older tools keep their own sign-in for
+  now, so a shared menu on them is a later step. `components/StaffNav.astro` is the link row on the
+  two admin pages. Where each tool lives is `MODULE_INFO[...].path` in `staff-registry.ts`.
 - **`scripts/lib/accommodation-db.mjs`** — hand-rolled Supabase PostgREST REST client (same style
   as `supabase.mjs` below, no `@supabase/supabase-js`), the sole data-access layer for
   `accommodation-admin.mts`. Conflict-checking lives entirely in Postgres (see above) — this file

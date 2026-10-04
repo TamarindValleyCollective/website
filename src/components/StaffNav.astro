@@ -1,0 +1,48 @@
+---
+// A one-line link row for the super-admin pages (/internal/access and
+// /internal/security), so moving between them and back to the landing page
+// doesn't mean retyping a URL. Static links only; what each page lets you do
+// is decided by the server, not by whether a link is shown.
+interface Props {
+  current: 'access' | 'security';
+}
+const { current } = Astro.props;
+const links = [
+  { id: 'home', label: '← Internal home', href: '/internal/' },
+  { id: 'access', label: 'Access', href: '/internal/access/' },
+  { id: 'security', label: 'Security', href: '/internal/security/' },
+];
+---
+
+<nav class="staff-nav" aria-label="Staff pages">
+  {links.map((l) => <a href={l.href} aria-current={l.id === current ? 'page' : undefined}>{l.label}</a>)}
+</nav>
+
+<style>
+  .staff-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    margin: 0 0 18px;
+    font-size: 0.88rem;
+  }
+
+  .staff-nav a {
+    color: var(--tvc-ink-soft);
+    text-decoration: none;
+    padding: 2px 0;
+    border-bottom: 2px solid transparent;
+  }
+
+  .staff-nav a:hover,
+  .staff-nav a:focus-visible {
+    color: var(--tvc-ink);
+    border-bottom-color: var(--tvc-orange);
+  }
+
+  .staff-nav a[aria-current='page'] {
+    color: var(--tvc-ink);
+    font-weight: 600;
+    border-bottom-color: var(--tvc-orange);
+  }
+</style>

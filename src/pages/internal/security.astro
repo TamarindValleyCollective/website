@@ -10,10 +10,12 @@
 // require at least two before it unlocks. Nothing secret is rendered with
 // innerHTML: every value is placed with textContent.
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import StaffNav from '../../components/StaffNav.astro';
 ---
 
 <BaseLayout title="Security" description="Second factors for super admins." noindex>
   <section class="section wrapper">
+    <StaffNav current="security" />
     <h1>Security</h1>
     <p class="hint">Second factors for super admins. You sign in with Google first, then prove a second factor to unlock the tools that manage access.</p>
 
@@ -297,11 +299,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
 <script>
   import { buildQrSvg } from '../../../scripts/lib/qr-svg.mjs';
+  // One sign-in and one step-up are shared with /internal and /internal/access.
+  import { TOKEN_KEY as STORAGE_KEY, STEPUP_KEY } from '../../../scripts/lib/staff-client.mjs';
 
   declare const google: any;
 
-  const STORAGE_KEY = 'tvc-security-idtoken';
-  const STEPUP_KEY = 'tvc-security-stepup';
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
   interface AdminRow {

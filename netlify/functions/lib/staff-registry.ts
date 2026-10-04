@@ -57,9 +57,10 @@ export const ROLES: readonly Role[] = ['admin', 'user', 'read_only'];
 // Kept beside MODULES so a new capability gets a sentence saying what it lets
 // a person do. If one is missing, the Access screen falls back to showing the
 // capability's own name rather than hiding the module.
-export const MODULE_INFO: Record<ModuleId, { label: string; capabilities: Record<string, string> }> = {
+export const MODULE_INFO: Record<ModuleId, { label: string; path: string; capabilities: Record<string, string> }> = {
   'photo-pool': {
     label: 'Photo pool',
+    path: '/internal/photo-pool/',
     capabilities: {
       view: 'See the photo inbox',
       review: 'Approve, reject and describe photos',
@@ -67,6 +68,7 @@ export const MODULE_INFO: Record<ModuleId, { label: string; capabilities: Record
   },
   whatsapp: {
     label: 'WhatsApp inbox',
+    path: '/internal/whatsapp/',
     capabilities: {
       view: 'Read conversations',
       reply: 'Send replies',
@@ -75,6 +77,7 @@ export const MODULE_INFO: Record<ModuleId, { label: string; capabilities: Record
   },
   'event-payments': {
     label: 'Event payments',
+    path: '/internal/event-payments/',
     capabilities: {
       view: 'See bookings and totals',
       refund: 'Issue refunds, single or for a whole event',
@@ -82,6 +85,7 @@ export const MODULE_INFO: Record<ModuleId, { label: string; capabilities: Record
   },
   accommodation: {
     label: 'Accommodation calendar',
+    path: '/internal/accommodation-calendar/',
     capabilities: {
       view: 'See the calendar and guests',
       edit: 'Create, change and cancel bookings (limited to the booking types below if any are chosen)',
