@@ -145,24 +145,24 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   }
 
   .block h2 {
-    font-size: 1.1rem;
+    font-size: 1.125rem;
     margin: 0 0 10px;
   }
 
   .block h3 {
-    font-size: 0.95rem;
+    font-size: 1rem;
     margin: 20px 0 6px;
   }
 
   .note {
-    font-size: 0.88rem;
+    font-size: 0.9rem;
     color: var(--tvc-ink-soft);
     margin: 0 0 12px;
   }
 
   .error {
     color: var(--tvc-error-text);
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     margin: 10px 0 0;
   }
 
@@ -191,7 +191,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   }
 
   :global(.badge) {
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     font-weight: 600;
     padding: 2px 10px;
     border-radius: var(--radius-sm);
@@ -214,7 +214,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   .manual summary {
     cursor: pointer;
-    font-size: 0.88rem;
+    font-size: 0.9rem;
     color: var(--tvc-ink-soft);
     margin-bottom: 8px;
   }
@@ -226,7 +226,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   }
 
   .secret {
-    font-size: 1.05rem;
+    font-size: 1.125rem;
     font-weight: 600;
     word-break: break-all;
     background: var(--tvc-green-tint);
@@ -242,16 +242,29 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   }
 
   .codes :global(li) {
-    font-size: 0.95rem;
+    font-size: 1rem;
     font-weight: 600;
     background: var(--tvc-green-tint);
     border-radius: var(--radius-sm);
     padding: 6px 10px;
   }
 
+  /* Cards sit side by side on a wide screen instead of one narrow column. */
+  #panel {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+    gap: 18px;
+    align-items: start;
+  }
+
+  #panel > .block {
+    max-width: none;
+    margin-bottom: 0;
+  }
+
   .link-button {
     font: inherit;
-    font-size: 0.88rem;
+    font-size: 0.9rem;
     background: none;
     border: none;
     padding: 8px 4px;
@@ -271,14 +284,14 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     display: flex;
     flex-direction: column;
     gap: 4px;
-    font-size: 0.82rem;
+    font-size: 0.9rem;
     color: var(--tvc-ink-soft);
   }
 
   .inline-form input,
   .inline-form select {
     font: inherit;
-    font-size: 0.95rem;
+    font-size: 1rem;
     padding: 8px 10px;
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius-field);

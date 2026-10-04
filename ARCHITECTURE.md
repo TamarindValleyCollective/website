@@ -608,7 +608,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   focus and after sign-in) and shows only tools the person holds a role in; it is navigation only,
   never authorisation. The collapsed/expanded choice is kept in `localStorage`
   (`tvc-staff-nav-collapsed`); WhatsApp and the accommodation calendar start collapsed to give
-  their wide layouts room. Each link is still a full page load (in-page navigation, per-tool
+  their wide layouts room. The shell owns the page title style (one `h1` size for every tool) and the only Sign-out
+  control; staff screens use a four-step type scale (0.8 / 0.9 / 1 / 1.125 rem) and
+  `--tvc-line-strong` for control borders (3:1 on white; `--tvc-line` stays for dividers). Each link is still a full page load (in-page navigation, per-tool
   sub-menus and tabs are later steps); `components/StaffNav.astro` was removed. Where each tool
   lives is `MODULE_INFO[...].path` in `staff-registry.ts`.
 - **`scripts/lib/accommodation-db.mjs`** — hand-rolled Supabase PostgREST REST client (same style

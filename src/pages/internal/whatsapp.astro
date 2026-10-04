@@ -12,7 +12,6 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     <div class="page-head">
       <h1>WhatsApp</h1>
       <p class="page-head-sub">+91 80 4110 9754 · replies only send within 24h of the customer's last message</p>
-      <button type="button" id="logout-btn" class="logout-btn" hidden>Sign out</button>
     </div>
 
     <div id="gate" class="gate card">
@@ -100,39 +99,10 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     margin-bottom: 20px;
   }
 
-  .page-head h1 {
-    margin: 0;
-    font-size: 1.6rem;
-  }
-
   .page-head-sub {
     margin: 0;
     font-size: 0.85rem;
     color: var(--tvc-ink-soft);
-  }
-
-  .logout-btn {
-    margin-left: auto;
-    appearance: none;
-    border: 1px solid var(--tvc-line);
-    background: var(--tvc-white);
-    border-radius: 999px;
-    padding: 5px 14px;
-    font: inherit;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--tvc-ink-soft);
-    cursor: pointer;
-    transition: background-color 150ms ease-out;
-  }
-
-  .logout-btn:hover {
-    background: var(--tvc-cream);
-  }
-
-  .logout-btn:focus-visible {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 2px;
   }
 
   .card {
@@ -677,7 +647,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     .app {
       grid-template-columns: 1fr;
       grid-template-rows: 1fr;
-      height: calc(100vh - 160px);
+      height: calc(100dvh - 140px); /* phone top bar (52px) + page padding and heading */
       min-height: 360px;
     }
 
@@ -746,7 +716,6 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   const forbidden = document.getElementById('forbidden') as HTMLElement;
   const forbiddenEmail = document.getElementById('forbidden-email') as HTMLElement;
   const useDifferentAccountBtn = document.getElementById('use-different-account') as HTMLButtonElement;
-  const logoutBtn = document.getElementById('logout-btn') as HTMLButtonElement;
   const app = document.getElementById('app') as HTMLElement;
   const conversationsStatus = document.getElementById('conversations-status') as HTMLElement;
   const conversationsSkeleton = document.getElementById('conversations-skeleton') as HTMLElement;
@@ -800,7 +769,6 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     gate.hidden = false;
     forbidden.hidden = true;
     app.hidden = true;
-    logoutBtn.hidden = true;
     stopPolling();
     gateError.hidden = !message;
     if (message) gateError.textContent = message;
@@ -810,7 +778,6 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   function showForbidden(token: string) {
     gate.hidden = true;
     app.hidden = true;
-    logoutBtn.hidden = true;
     stopPolling();
     forbidden.hidden = false;
     forbiddenEmail.textContent = decodeTokenEmail(token);
@@ -1231,17 +1198,10 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     showGate();
   });
 
-  logoutBtn.addEventListener('click', () => {
-    clearToken();
-    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
-    showGate();
-  });
-
   async function startApp() {
     gate.hidden = true;
     forbidden.hidden = true;
     app.hidden = false;
-    logoutBtn.hidden = false;
     await loadConversations();
     startPolling();
   }
