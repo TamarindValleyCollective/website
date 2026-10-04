@@ -17,6 +17,7 @@
 // the log can't be written, so nothing happens unrecorded. Staff are recorded
 // by id; the log holds ids, module names, roles and booking types only.
 import { requireSuperAdmin, logStaffAction, type SuperAdmin } from './lib/staff-access';
+import { maskEmail } from './lib/staff-masking';
 import { requireAccessAdmin, stepUpIsValid } from './lib/staff-admin-guard';
 import { MfaNotConfiguredError } from './lib/staff-mfa-crypto';
 import { mfaSummary, rest } from './lib/staff-mfa-store';
@@ -36,7 +37,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type RoleScope = { allowedTypes?: string[] } | null;
-type PersonRow = { id: string; name: string | null; active: boolean; is_super_admin: boolean };
+type PersonRow = { id: string; name: string | null; email?: string | null; active: boolean; is_super_admin: boolean };
 type RoleRow = { staff_id: string; module: string; role: Role; scope: RoleScope };
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -44,10 +45,14 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 }
 
-// A person is shown by name, or by a short opaque tag until Google fills one
-// in on their first sign-in — never by email.
-function labelFor(p: { id: string; name: string | null }): string {
-  return p.name ?? `Person ${p.id.slice(0, 4).toUpperCase()}`;
+// A person is shown by name. Until Google fills one in on their first sign-in
+// they are shown by their address with all but the first character of the
+// local part hidden ("p••••@tvc.farm"), so the person who added them can tell
+// who it is without the address ever being sent. The address is read only to be
+// masked here; the full value never appears in a response. With no address to
+// go on, a short opaque tag is used.
+function labelFor(p: { id: string; name: string | null; email?: string | null }): string {
+  return p.name ?? (p.email ? maskEmail(p.email) : `Person ${p.id.slice(0, 4).toUpperCase()}`);
 }
 
 async function readJson<T>(req: Request): Promise<T | null> {
@@ -93,9 +98,9 @@ function moduleCatalog() {
 
 // -------------------------------------------------------------------- reads
 async function handleList(req: Request, admin: SuperAdmin): Promise<Response> {
-  // No email is selected: it never leaves the database through this route.
+  // The address is selected only so an unnamed person can be shown masked (labelFor); it is not sent.
   const [peopleRes, rolesRes] = await Promise.all([
-    rest('/staff_users?select=id,name,active,is_super_admin&order=created_at.asc'),
+    rest('/staff_users?select=id,name,email,active,is_super_admin&order=created_at.asc'),
     rest('/staff_module_roles?select=staff_id,module,role,scope'),
   ]);
   const people = (await peopleRes.json()) as PersonRow[];
@@ -167,8 +172,8 @@ async function handleActivity(url: URL): Promise<Response> {
   const ids = [...new Set(rows.flatMap((r) => [r.actor_id, r.target_id]).filter((x): x is string => Boolean(x) && UUID.test(x as string)))];
   const labels = new Map<string, string>();
   if (ids.length) {
-    const peopleRes = await rest(`/staff_users?id=in.(${ids.join(',')})&select=id,name`);
-    for (const p of (await peopleRes.json()) as { id: string; name: string | null }[]) labels.set(p.id, labelFor(p));
+    const peopleRes = await rest(`/staff_users?id=in.(${ids.join(',')})&select=id,name,email`);
+    for (const p of (await peopleRes.json()) as { id: string; name: string | null; email: string | null }[]) labels.set(p.id, labelFor(p));
   }
   const who = (id: string | null) => (id ? { id, label: labels.get(id) ?? `Person ${id.slice(0, 4).toUpperCase()}` } : null);
 
@@ -187,8 +192,8 @@ async function handleAddPerson(req: Request, admin: SuperAdmin): Promise<Respons
   const name = String(body.name ?? '').trim().slice(0, 100) || null;
 
   // Seen by super admins only. It names the person but never shows the address.
-  const existing = await rest(`/staff_users?email=eq.${encodeURIComponent(email)}&select=id,name`);
-  const found = ((await existing.json()) as { id: string; name: string | null }[])[0];
+  const existing = await rest(`/staff_users?email=eq.${encodeURIComponent(email)}&select=id,name,email`);
+  const found = ((await existing.json()) as { id: string; name: string | null; email: string | null }[])[0];
   if (found) return jsonResponse({ error: 'This person is already in the system.', code: 'EXISTS', personId: found.id, label: labelFor(found) }, 409);
 
   const created = await rest('/staff_users', {
