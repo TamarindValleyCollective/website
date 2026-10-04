@@ -124,7 +124,7 @@ flowchart TD
         APIFN12["Netlify Function: /api/razorpay-webhook<br/>Deployed and live — live-mode webhook<br/>configured, signature verification confirmed"]
         APIFN13["Netlify Function: /api/cancel-booking<br/>Deployed and live"]
         APIFN14["Netlify Function: /api/event-payments-admin<br/>Deployed and live — backs /internal/event-payments,<br/>issues real refunds via Razorpay's API"]
-        BLOBS["Netlify Blobs<br/>'event-interest' store — one JSON record per<br/>past event id, {count, emails[]}, optimistic-<br/>concurrency writes. Reset via netlify blobs:delete<br/>event-interest &lt;id&gt;.<br/>'search-ai-rate-limit' store — per-IP window +<br/>daily Anthropic-fallback budget records"]
+        BLOBS["Netlify Blobs<br/>'event-interest' store — one JSON record per<br/>past event id, {count, emails[]}, optimistic-<br/>concurrency writes. Reset via netlify blobs:delete<br/>event-interest &lt;id&gt;.<br/>'search-ai-rate-limit' store — per-IP window +<br/>daily Anthropic-fallback budget records.<br/>'chat-rate-limit' store — per-IP window +<br/>global daily message cap for /api/chat"]
         FORMS["Netlify Forms<br/>Captures /contact membership + general<br/>enquiries, /visit/host-an-event inquiries,<br/>/visit camping·day-visit·trekking inquiries,<br/>and event-interest submissions with an email"]
     end
 
@@ -327,6 +327,14 @@ outside both the local machine and Netlify (the member-update-email workflow).
   social) — the last three of those fields only ever render client-side from the Members page's
   popup JSON, so they're invisible to `build-chat-context.mjs`'s static-HTML scrape no matter how
   the page corpus itself is tuned.
+- **`netlify/functions/lib/rate-limit.ts`** — shared rate limiting for the two public, unauthenticated
+  LLM endpoints (`chat.mts`, `search-ai.mts`): `checkIpRateLimit` (per-IP fixed window) and
+  `checkDailyCap` (global, date-keyed so it resets itself), both on Netlify Blobs. `chat.mts` had
+  no limit at all until 2026-10-04 and spends paid Anthropic credits on every message; it now
+  allows 20 messages per IP per 10 minutes and 500 per day across everyone (constants at the top of
+  `chat.mts`), and fails *open* — logging, not blocking — if Blobs itself errors, so a storage
+  hiccup can't take the chat down. Part of the groundwork for the planned usage/free-tier
+  dashboard (a new admin module); see that module's docs once it lands.
 - **`netlify/functions/lib/site-retrieval.ts`** — shared retrieval + Anthropic-call plumbing
   factored out of `chat.mts` so it and `search-ai.mts` below can't drift apart:
   `selectRelevantPages()`, `matchMembers()`, `formatPages()`/`formatMembers()`, the

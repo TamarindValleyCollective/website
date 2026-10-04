@@ -21,9 +21,33 @@ import {
   buildLanguageInstruction,
   callAnthropic,
 } from './lib/site-retrieval';
+import { checkIpRateLimit, checkDailyCap, clientIp } from './lib/rate-limit';
 
 const MODEL = 'claude-sonnet-5';
 const MAX_HISTORY_MESSAGES = 12;
+
+// This endpoint is public and unauthenticated, and every valid message spends
+// paid Anthropic credits. Two independent guards (see lib/rate-limit.ts): a
+// per-IP window so one client can't loop, and a global daily cap so many IPs
+// each under the per-IP limit can't collectively drain the credits. The
+// numbers are deliberately generous for real visitors (a long chat is ~10
+// messages) - tune them here if traffic or the credit balance changes.
+const RATE_LIMIT_STORE = 'chat-rate-limit';
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const RATE_LIMIT_MAX_REQUESTS = 20;
+const DAILY_CAP = 500;
+const LIMIT_REACHED_MESSAGE = "Looks like I've hit my limit for the moment — try again in a bit, or reach out via the Contact page!";
+
+// A Blobs outage shouldn't take the chat down with it, so a failing limiter
+// lets the request through (and logs it) rather than blocking everyone.
+async function allowed(check: () => Promise<boolean>): Promise<boolean> {
+  try {
+    return await check();
+  } catch (err) {
+    console.error('[chat] Rate limiter unavailable, allowing request', err);
+    return true;
+  }
+}
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -71,6 +95,16 @@ export default async (req: Request): Promise<Response> => {
     return jsonResponse({ error: 'Message is too long.' }, 400);
   }
 
+  // Per-IP first, so an abusive client is rejected before it can count
+  // against the global daily cap that protects everyone else.
+  if (!(await allowed(() => checkIpRateLimit(RATE_LIMIT_STORE, clientIp(req), RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX_REQUESTS)))) {
+    return jsonResponse({ error: 'Too many messages in a short time. Please try again in a few minutes.' }, 429);
+  }
+  if (!(await allowed(() => checkDailyCap(RATE_LIMIT_STORE, 'daily', DAILY_CAP)))) {
+    console.warn('[chat] Daily message cap reached');
+    return jsonResponse({ error: LIMIT_REACHED_MESSAGE }, 429);
+  }
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     console.error('[chat] ANTHROPIC_API_KEY is not set');
@@ -110,10 +144,7 @@ export default async (req: Request): Promise<Response> => {
       // catch-all, since there's nothing transient about it that "try
       // again shortly" would fix.
       if (result.errorType === 'billing_error') {
-        return jsonResponse(
-          { error: "Looks like I've hit my limit for the moment — try again in a bit, or reach out via the Contact page!" },
-          502,
-        );
+        return jsonResponse({ error: LIMIT_REACHED_MESSAGE }, 502);
       }
 
       return jsonResponse({ error: 'The assistant is having trouble right now. Please try again shortly.' }, 502);

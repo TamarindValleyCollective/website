@@ -5,7 +5,6 @@
 // chat.mts uses only if Gemini is unset, rate-limited, or erroring - so a
 // free-tier hiccup degrades to a paid-but-working answer instead of an
 // outright failure.
-import { getStore } from '@netlify/blobs';
 import {
   selectRelevantPages,
   formatPages,
@@ -15,6 +14,7 @@ import {
   callAnthropic,
   type SitePage,
 } from './lib/site-retrieval';
+import { checkIpRateLimit, checkDailyCap, clientIp } from './lib/rate-limit';
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 // Overridable via env var so a future model rename/deprecation doesn't need
@@ -54,34 +54,7 @@ const RATE_LIMIT_MAX_REQUESTS = 10;
 // date-scoped, so there's nothing to prune.
 const ANTHROPIC_FALLBACK_DAILY_CAP = 200;
 
-interface RateLimitRecord {
-  count: number;
-  windowStart: number;
-}
-
-async function checkIpRateLimit(ip: string): Promise<boolean> {
-  const store = getStore('search-ai-rate-limit');
-  const now = Date.now();
-  const record = (await store.get(`ip:${ip}`, { type: 'json' })) as RateLimitRecord | null;
-
-  if (record && now - record.windowStart < RATE_LIMIT_WINDOW_MS) {
-    if (record.count >= RATE_LIMIT_MAX_REQUESTS) return false;
-    await store.setJSON(`ip:${ip}`, { count: record.count + 1, windowStart: record.windowStart });
-    return true;
-  }
-
-  await store.setJSON(`ip:${ip}`, { count: 1, windowStart: now });
-  return true;
-}
-
-async function checkAnthropicFallbackBudget(): Promise<boolean> {
-  const store = getStore('search-ai-rate-limit');
-  const key = `anthropic-fallback:${new Date().toISOString().slice(0, 10)}`;
-  const count = ((await store.get(key, { type: 'json' })) as number | null) ?? 0;
-  if (count >= ANTHROPIC_FALLBACK_DAILY_CAP) return false;
-  await store.setJSON(key, count + 1);
-  return true;
-}
+const RATE_LIMIT_STORE = 'search-ai-rate-limit';
 
 const SEARCH_INSTRUCTIONS = `You are answering a single search query typed into the site search box on the Tamarind Valley Collective (TVC) website (tvc.farm), a 100-acre permaculture farm community near Kanakapura, India.
 
@@ -167,9 +140,7 @@ export default async (req: Request): Promise<Response> => {
     return jsonResponse({ error: 'Query is too long.' }, 400);
   }
 
-  const clientIp =
-    req.headers.get('x-nf-client-connection-ip') ?? req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
-  if (!(await checkIpRateLimit(clientIp))) {
+  if (!(await checkIpRateLimit(RATE_LIMIT_STORE, clientIp(req), RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX_REQUESTS))) {
     return jsonResponse({ error: 'Too many requests. Please try again in a few minutes.' }, 429);
   }
 
@@ -204,7 +175,7 @@ export default async (req: Request): Promise<Response> => {
     return jsonResponse({ error: 'AI search is having trouble right now. Please try again shortly.' }, 502);
   }
 
-  if (!(await checkAnthropicFallbackBudget())) {
+  if (!(await checkDailyCap(RATE_LIMIT_STORE, 'anthropic-fallback', ANTHROPIC_FALLBACK_DAILY_CAP))) {
     console.warn('[search-ai] Anthropic fallback daily budget exhausted');
     return jsonResponse({ error: 'AI search is having trouble right now. Please try again shortly.' }, 502);
   }
