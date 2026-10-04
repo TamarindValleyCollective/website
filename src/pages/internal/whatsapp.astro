@@ -4,17 +4,10 @@
 // lets staff reply, via netlify/functions/whatsapp-admin.mts. Deliberately
 // unlinked from nav; gated by Google Sign-In plus the same curator allow-list
 // photo-pool.astro uses, not a shared password. See WHATSAPP.md.
-import BaseLayout from '../../layouts/BaseLayout.astro';
+import StaffLayout from '../../layouts/StaffLayout.astro';
 ---
 
-<BaseLayout
-  title="WhatsApp"
-  description="Internal WhatsApp reply dashboard."
-  image="/images/pages/whatsapp-admin/og.png"
-  imageWidth={1200}
-  imageHeight={630}
-  noindex
->
+<StaffLayout title="WhatsApp" description="Internal WhatsApp reply dashboard." current="whatsapp" collapseByDefault>
   <section class="section wrapper">
     <div class="page-head">
       <h1>WhatsApp</h1>
@@ -75,7 +68,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       </div>
     </div>
   </section>
-</BaseLayout>
+</StaffLayout>
 
 <script is:inline src="https://accounts.google.com/gsi/client"></script>
 

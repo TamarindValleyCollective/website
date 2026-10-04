@@ -9,13 +9,11 @@
 // single-use recovery codes today, passkeys later. The Access module will
 // require at least two before it unlocks. Nothing secret is rendered with
 // innerHTML: every value is placed with textContent.
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import StaffNav from '../../components/StaffNav.astro';
+import StaffLayout from '../../layouts/StaffLayout.astro';
 ---
 
-<BaseLayout title="Security" description="Second factors for super admins." noindex>
+<StaffLayout title="Security" description="Second factors for super admins." current="security">
   <section class="section wrapper">
-    <StaffNav current="security" />
     <h1>Security</h1>
     <p class="hint">Second factors for super admins. You sign in with Google first, then prove a second factor to unlock the tools that manage access.</p>
 
@@ -108,7 +106,7 @@ import StaffNav from '../../components/StaffNav.astro';
       </section>
     </div>
   </section>
-</BaseLayout>
+</StaffLayout>
 
 <script is:inline src="https://accounts.google.com/gsi/client"></script>
 

@@ -9,10 +9,10 @@
 // Every internal page shares one sign-in for the tab (scripts/lib/staff-client.mjs),
 // including the four tools, so opening a tool from here doesn't ask again.
 // Deliberately unlinked from the site nav and noindex.
-import BaseLayout from '../../layouts/BaseLayout.astro';
+import StaffLayout from '../../layouts/StaffLayout.astro';
 ---
 
-<BaseLayout title="Internal tools" description="Your internal tools." noindex>
+<StaffLayout title="Internal tools" description="Your internal tools." current="home">
   <section class="section wrapper">
     <h1>Internal tools</h1>
     <p id="welcome" class="hint">Sign in to see the tools you can use.</p>
@@ -46,7 +46,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       <button type="button" id="sign-out" class="link-button">Sign out</button>
     </p>
   </section>
-</BaseLayout>
+</StaffLayout>
 
 <script is:inline src="https://accounts.google.com/gsi/client"></script>
 

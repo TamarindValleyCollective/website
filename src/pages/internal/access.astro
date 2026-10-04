@@ -9,13 +9,11 @@
 // Emails are never shown: people appear by name, and an address is typed once
 // to add someone. Every value from the server is placed with textContent.
 // Deliberately unlinked from the site nav and noindex.
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import StaffNav from '../../components/StaffNav.astro';
+import StaffLayout from '../../layouts/StaffLayout.astro';
 ---
 
-<BaseLayout title="Access" description="Who can do what in the internal tools." noindex>
+<StaffLayout title="Access" description="Who can do what in the internal tools." current="access">
   <section class="section wrapper">
-    <StaffNav current="access" />
     <h1>Access</h1>
     <p class="hint">Who can use which internal tool, and what they can do in it. Only super admins can open this page.</p>
 
@@ -84,7 +82,7 @@ import StaffNav from '../../components/StaffNav.astro';
       </section>
     </div>
   </section>
-</BaseLayout>
+</StaffLayout>
 
 <script is:inline src="https://accounts.google.com/gsi/client"></script>
 

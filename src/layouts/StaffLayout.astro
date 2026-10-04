@@ -1,0 +1,643 @@
+---
+// The shell around every internal staff page (issue #89): a left menu listing
+// the tools the signed-in person holds a role in, with their name and Sign out
+// at the bottom. It replaces the public website's header, footer, cookie banner,
+// chat widget and analytics on these pages, none of which belong on a tool that
+// shows guest and payment data.
+//
+// The menu items are rendered here from the same registry the server uses for
+// permissions (labels and paths: MODULE_INFO), but start hidden. A small script
+// asks /api/staff-me which tools this person has a role in and reveals just
+// those; the current page's item is always shown. Showing or hiding an item is
+// only a convenience — every tool checks the person's role on the server for
+// every request.
+//
+// Desktop: a sticky left menu that collapses to an icon strip (the choice is
+// remembered on this device; WhatsApp and the accommodation calendar start
+// collapsed because they need the width). Phone: a top bar with a menu button
+// that slides the list over the page.
+import '../styles/global.css';
+import { MODULE_INFO, type ModuleId } from '../../netlify/functions/lib/staff-registry';
+
+interface Props {
+  title: string;
+  description?: string;
+  current: 'home' | ModuleId | 'access' | 'security';
+  // Start with the menu collapsed unless the person has chosen otherwise.
+  collapseByDefault?: boolean;
+  // 'full' (default): the content uses all the room to the right of the menu,
+  // like the Netlify and Supabase dashboards. 'readable' keeps the public
+  // site's 1120px column, for a page that is mostly prose.
+  width?: 'full' | 'readable';
+}
+const { title, description = 'Internal tools for Tamarind Valley Collective.', current, collapseByDefault = false, width = 'full' } = Astro.props;
+
+const toolIds: ModuleId[] = ['photo-pool', 'whatsapp', 'event-payments', 'accommodation'];
+const adminItems = [
+  { id: 'access', label: 'Access', path: '/internal/access/' },
+  { id: 'security', label: 'Security', path: '/internal/security/' },
+] as const;
+
+// Simple stroke icons, decorative (the text label is what screen readers read).
+const ICONS: Record<string, string> = {
+  home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',
+  'photo-pool': '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/>',
+  whatsapp: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.5A8 8 0 1 1 21 12z"/>',
+  'event-payments': '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',
+  accommodation: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  access: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M17 11a3 3 0 1 0 0-6M21 20c0-2.5-1.5-4.6-3.7-5.5"/>',
+  security: '<path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
+};
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="description" content={description} />
+    <meta name="generator" content={Astro.generator} />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>{title} · TVC Internal</title>
+    <!-- Sets the menu's expanded/collapsed state before first paint so the
+         page doesn't jump. Runs before the body exists. -->
+    <script is:inline define:vars={{ collapseByDefault }}>
+      (function () {
+        var saved = null;
+        try {
+          saved = localStorage.getItem('tvc-staff-nav-collapsed');
+        } catch (e) {}
+        var collapsed = saved === null ? collapseByDefault : saved === '1';
+        document.documentElement.setAttribute('data-nav', collapsed ? 'collapsed' : 'expanded');
+      })();
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#staff-main">Skip to content</a>
+    <div class="shell">
+      <header class="topbar">
+        <button type="button" id="menu-open" class="icon-button" aria-label="Open the menu" aria-controls="staff-sidebar" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
+            <path d="M4 6h16M4 12h16M4 18h16"></path>
+          </svg>
+        </button>
+        <span class="topbar-title">TVC Internal</span>
+      </header>
+
+      <aside class="sidebar" id="staff-sidebar" aria-label="Internal tools">
+        <div class="brand">
+          <img src="/images/brand/tvc-logo-mark.svg" width="30" height="30" alt="" />
+          <span class="label brand-name">TVC Internal</span>
+          <button type="button" id="menu-close" class="icon-button menu-close" aria-label="Close the menu">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
+              <path d="M6 6l12 12M18 6L6 18"></path>
+            </svg>
+          </button>
+        </div>
+
+        <nav class="menu" aria-label="Tools">
+          <ul>
+            <li>
+              <a href="/internal/" title="Home" aria-current={current === 'home' ? 'page' : undefined}>
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" set:html={ICONS.home} />
+                <span class="label">Home</span>
+              </a>
+            </li>
+          </ul>
+
+          <p class="group-label" id="group-tools">Tools</p>
+          <ul aria-labelledby="group-tools" class="group-list">
+            {toolIds.map((id) => (
+              <li data-module={id} data-current={current === id ? 'true' : undefined} hidden={current !== id}>
+                <a href={MODULE_INFO[id].path} title={MODULE_INFO[id].label} aria-current={current === id ? 'page' : undefined}>
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" set:html={ICONS[id]} />
+                  <span class="label">{MODULE_INFO[id].label}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+
+          <div id="admin-group" data-current={adminItems.some((a) => a.id === current) ? 'true' : undefined} hidden={!adminItems.some((a) => a.id === current)}>
+            <p class="group-label" id="group-admin">Admin</p>
+            <ul aria-labelledby="group-admin" class="group-list">
+              {adminItems.map((item) => (
+                <li>
+                  <a href={item.path} title={item.label} aria-current={current === item.id ? 'page' : undefined}>
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" set:html={ICONS[item.id]} />
+                    <span class="label">{item.label}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </nav>
+
+        <div class="account">
+          <p class="account-name label" id="staff-name" hidden></p>
+          <button type="button" id="sign-out" class="account-button" title="Sign out" hidden>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <path d="M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4"></path>
+              <path d="M16 8l4 4-4 4M20 12H9"></path>
+            </svg>
+            <span class="label">Sign out</span>
+          </button>
+          <button type="button" id="collapse" class="account-button collapse-button" aria-label="Collapse the menu" aria-pressed="false" title="Collapse the menu">
+            <svg class="collapse-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <path d="M15 6l-6 6 6 6"></path>
+            </svg>
+            <span class="label">Collapse</span>
+          </button>
+        </div>
+      </aside>
+
+      <div class="scrim" id="scrim" hidden></div>
+
+      <main id="staff-main" data-width={width}>
+        <slot />
+      </main>
+    </div>
+  </body>
+</html>
+
+<style>
+  :global(body) {
+    margin: 0;
+    background: var(--tvc-cream);
+  }
+
+  .skip-link {
+    position: absolute;
+    left: 8px;
+    top: -48px;
+    z-index: 100;
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    padding: 8px 14px;
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .skip-link:focus {
+    top: 8px;
+  }
+
+  .shell {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    min-height: 100vh;
+  }
+
+  #staff-main {
+    min-width: 0; /* lets wide tables and the calendar scroll instead of stretching the page */
+    background: var(--tvc-cream);
+  }
+
+  /* The pages wrap their content in the public site's .wrapper, a 1120px
+     centred column. In the staff shell that cap is lifted so tables, grids and
+     the inbox use the whole screen; each page keeps its own padding, and
+     forms and cards keep their own sensible inner widths. */
+  #staff-main[data-width='full'] :global(.wrapper) {
+    max-width: none;
+    margin: 0;
+  }
+
+  /* ---------------------------------------------------------------- sidebar */
+  .sidebar {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    width: 252px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    background: var(--tvc-white);
+    border-right: 1px solid var(--tvc-line);
+    overflow-x: hidden;
+    overflow-y: auto;
+    z-index: 40;
+    transition: width 0.18s ease;
+  }
+
+  html[data-nav='collapsed'] .sidebar {
+    width: 68px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 19px;
+    min-height: 32px;
+  }
+
+  .brand img {
+    flex: none;
+  }
+
+  .brand-name {
+    font-family: var(--font-wordmark);
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--tvc-green-dark);
+    white-space: nowrap;
+  }
+
+  .menu {
+    flex: 1;
+    padding: 4px 10px;
+  }
+
+  .menu ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .menu li[hidden],
+  .menu div[hidden],
+  .account [hidden] {
+    display: none;
+  }
+
+  .group-label {
+    margin: 18px 0 6px;
+    padding: 0 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--tvc-ink-soft);
+    white-space: nowrap;
+  }
+
+  .menu a,
+  .account-button {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 9px 10px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    font: inherit;
+    font-size: 0.92rem;
+    color: var(--tvc-ink);
+    text-decoration: none;
+    text-align: left;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .menu a svg,
+  .account-button svg {
+    flex: none;
+  }
+
+  .menu a .label,
+  .account-button .label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .menu a:hover,
+  .account-button:hover {
+    background: var(--tvc-green-tint);
+  }
+
+  .menu a:focus-visible,
+  .account-button:focus-visible,
+  .icon-button:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 1px;
+  }
+
+  .menu a[aria-current='page'] {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+    font-weight: 600;
+  }
+
+  /* The orange mark is non-text, which is what --tvc-orange is for. */
+  .menu a[aria-current='page']::before {
+    content: '';
+    position: absolute;
+    left: -10px;
+    top: 7px;
+    bottom: 7px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--tvc-orange);
+  }
+
+  .account {
+    padding: 10px;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .account-name {
+    margin: 0 0 6px;
+    padding: 0 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--tvc-ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .account-button {
+    color: var(--tvc-ink-soft);
+  }
+
+  .collapse-icon {
+    transition: transform 0.18s ease;
+  }
+
+  html[data-nav='collapsed'] .collapse-icon {
+    transform: rotate(180deg);
+  }
+
+  .icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--tvc-ink);
+    cursor: pointer;
+  }
+
+  /* Phone-only pieces: hidden by default, shown in the phone query below. This
+     comes after .icon-button on purpose; declared before it, .icon-button's
+     display would win and the close button would show on desktop. */
+  .topbar,
+  .menu-close,
+  .scrim {
+    display: none;
+  }
+
+  /* --------------------------------------------- collapsed (desktop only) */
+  @media (min-width: 900px) {
+    html[data-nav='collapsed'] .label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+
+    html[data-nav='collapsed'] .group-label {
+      margin: 12px 10px 6px;
+      padding: 0;
+      height: 1px;
+      overflow: hidden;
+      font-size: 0;
+      background: var(--tvc-line);
+    }
+
+    html[data-nav='collapsed'] .brand {
+      padding: 16px 19px;
+    }
+  }
+
+  /* ------------------------------------------------------------ phones */
+  @media (max-width: 899px) {
+    .shell {
+      grid-template-columns: 1fr;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 52px;
+      padding: 0 8px;
+      background: var(--tvc-white);
+      border-bottom: 1px solid var(--tvc-line);
+    }
+
+    .topbar-title {
+      font-family: var(--font-wordmark);
+      font-weight: 700;
+      color: var(--tvc-green-dark);
+    }
+
+    /* Explicit full height: the desktop rule's align-self: start would otherwise
+       shrink this fixed panel to its content, leaving the account area floating
+       under the list instead of at the bottom. */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      height: 100dvh;
+      width: min(300px, 86vw);
+      z-index: 70;
+      transform: translateX(-100%);
+      transition: transform 0.2s ease;
+      box-shadow: var(--shadow-soft);
+    }
+
+    html[data-nav='collapsed'] .sidebar {
+      width: min(300px, 86vw);
+    }
+
+    html[data-menu='open'] .sidebar {
+      transform: none;
+    }
+
+    .menu-close {
+      display: inline-flex;
+      margin-left: auto;
+    }
+
+    .collapse-button {
+      display: none;
+    }
+
+    .scrim {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      background: rgba(34, 41, 31, 0.45);
+    }
+
+    html[data-menu='open'] .scrim {
+      display: block;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sidebar,
+    .collapse-icon {
+      transition: none;
+    }
+  }
+</style>
+
+<script>
+  import { StaffAuthError, clearStepUp, clearToken, getToken, staffFetch } from '../../scripts/lib/staff-client.mjs';
+
+  declare const google: any;
+
+  interface Me {
+    name: string | null;
+    isSuperAdmin: boolean;
+    tools: { module: string }[];
+  }
+
+  const CACHE_KEY = 'tvc-staff-me'; // sessionStorage: the last answer from /api/staff-me, for this sign-in only
+  const COLLAPSE_KEY = 'tvc-staff-nav-collapsed'; // localStorage: a per-device preference
+  const FRESH_MS = 60_000;
+  const MAX_AGE_MS = 10 * 60_000;
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const root = document.documentElement;
+  const toolItems = Array.from(document.querySelectorAll<HTMLElement>('li[data-module]'));
+  const adminGroup = $('admin-group');
+  const nameEl = $('staff-name');
+  const signOutBtn = $<HTMLButtonElement>('sign-out');
+  const collapseBtn = $<HTMLButtonElement>('collapse');
+  const menuOpen = $<HTMLButtonElement>('menu-open');
+  const menuClose = $<HTMLButtonElement>('menu-close');
+  const scrim = $('scrim');
+  const sidebar = $('staff-sidebar');
+
+  // ---- what to show: the person's tools (cache keyed to this sign-in)
+  const fingerprint = (token: string) => token.slice(-24);
+
+  function readCache(token: string | null): { at: number; me: Me } | null {
+    if (!token) return null;
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(CACHE_KEY) ?? 'null');
+      if (saved && saved.fp === fingerprint(token) && Date.now() - saved.at < MAX_AGE_MS) return { at: saved.at, me: saved.me };
+    } catch {
+      // treated as no cache
+    }
+    return null;
+  }
+
+  function writeCache(token: string, me: Me) {
+    try {
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({ fp: fingerprint(token), at: Date.now(), me }));
+    } catch {
+      // storage blocked: the menu just refetches each page
+    }
+  }
+
+  function apply(me: Me | null) {
+    for (const li of toolItems) li.hidden = li.dataset.current !== 'true' && !me?.tools.some((t) => t.module === li.dataset.module);
+    adminGroup.hidden = adminGroup.dataset.current !== 'true' && !me?.isSuperAdmin;
+    nameEl.hidden = !me?.name;
+    nameEl.textContent = me?.name ?? ''; // text only, whatever the name contains
+    signOutBtn.hidden = !me;
+  }
+
+  let pollTimer: number | undefined;
+
+  async function refresh() {
+    const token = getToken();
+    if (!token) {
+      apply(null);
+      startPolling();
+      return;
+    }
+    const cached = readCache(token);
+    if (cached) apply(cached.me);
+    if (cached && Date.now() - cached.at < FRESH_MS) return;
+    try {
+      const { status, data } = await staffFetch('/api/staff-me');
+      if (status === 200) {
+        writeCache(token, data as Me);
+        apply(data as Me);
+      }
+    } catch (err) {
+      if (err instanceof StaffAuthError && err.kind === 'forbidden') apply({ name: null, isSuperAdmin: false, tools: [] });
+      else apply(null); // signed out or the session ended: only Home, and wait for a new sign-in
+      if (err instanceof StaffAuthError && err.kind === 'unauthorized') startPolling();
+    }
+  }
+
+  // The pages sign people in themselves, so the menu notices a new sign-in by
+  // checking storage; it stops as soon as it has an answer.
+  function startPolling() {
+    if (pollTimer !== undefined) return;
+    pollTimer = window.setInterval(() => {
+      if (!getToken()) return;
+      window.clearInterval(pollTimer);
+      pollTimer = undefined;
+      refresh();
+    }, 1000);
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refresh();
+  });
+
+  signOutBtn.addEventListener('click', () => {
+    clearToken();
+    clearStepUp();
+    try {
+      sessionStorage.removeItem(CACHE_KEY);
+    } catch {
+      // nothing to clear
+    }
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    location.reload(); // each page then shows its own sign-in panel
+  });
+
+  // ---- collapse (desktop)
+  function setCollapsed(collapsed: boolean) {
+    root.setAttribute('data-nav', collapsed ? 'collapsed' : 'expanded');
+    collapseBtn.setAttribute('aria-pressed', String(collapsed));
+    const label = collapsed ? 'Expand the menu' : 'Collapse the menu';
+    collapseBtn.setAttribute('aria-label', label);
+    collapseBtn.title = label;
+    collapseBtn.querySelector('.label')!.textContent = collapsed ? 'Expand' : 'Collapse';
+  }
+  setCollapsed(root.getAttribute('data-nav') === 'collapsed');
+  collapseBtn.addEventListener('click', () => {
+    const next = root.getAttribute('data-nav') !== 'collapsed';
+    setCollapsed(next);
+    try {
+      localStorage.setItem(COLLAPSE_KEY, next ? '1' : '0');
+    } catch {
+      // preference just isn't remembered
+    }
+  });
+
+  // ---- slide-over menu (phones)
+  function setMenu(open: boolean) {
+    if (open) root.setAttribute('data-menu', 'open');
+    else root.removeAttribute('data-menu');
+    scrim.hidden = !open;
+    menuOpen.setAttribute('aria-expanded', String(open));
+    if (open) sidebar.querySelector<HTMLElement>('a[aria-current="page"], .menu a')?.focus();
+    else menuOpen.focus();
+  }
+  menuOpen.addEventListener('click', () => setMenu(true));
+  menuClose.addEventListener('click', () => setMenu(false));
+  scrim.addEventListener('click', () => setMenu(false));
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && root.getAttribute('data-menu') === 'open') setMenu(false);
+  });
+  sidebar.addEventListener('click', (ev) => {
+    if ((ev.target as HTMLElement).closest('.menu a') && root.getAttribute('data-menu') === 'open') setMenu(false);
+  });
+
+  refresh();
+</script>
