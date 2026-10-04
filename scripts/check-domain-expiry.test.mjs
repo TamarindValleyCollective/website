@@ -1,7 +1,7 @@
-// Run with: node --test scripts/check-domain-expiry.test.mjs
+// Run with: node --test scripts/check-domain-expiry.test.mjs (tests scripts/lib/domain-expiry.mjs)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRdap, daysUntil, shouldAlert, rdapBaseFromBootstrap } from './check-domain-expiry.mjs';
+import { parseRdap, daysUntil, shouldAlert, rdapBaseFromBootstrap } from './lib/domain-expiry.mjs';
 
 test('parseRdap reads expiry, registrar and status', () => {
   const r = parseRdap({

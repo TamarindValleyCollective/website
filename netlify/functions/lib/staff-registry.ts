@@ -40,6 +40,12 @@ export const MODULES = {
     edit: WRITERS,
     admin: ADMIN_ONLY,
   },
+  usage: {
+    view: ALL,
+    // Type in readings from provider dashboards, and set the prices/limits the
+    // estimates use. Changes what the alerts say, so admins only.
+    configure: ADMIN_ONLY,
+  },
 } as const satisfies Record<string, Record<string, readonly Role[]>>;
 
 export type ModuleId = keyof typeof MODULES;
@@ -90,6 +96,14 @@ export const MODULE_INFO: Record<ModuleId, { label: string; path: string; capabi
       view: 'See the calendar and guests',
       edit: 'Create, change and cancel bookings (a User can be limited to chosen booking types)',
       admin: 'Everything in the calendar, with no booking-type limit',
+    },
+  },
+  usage: {
+    label: 'Usage & limits',
+    path: '/internal/usage/',
+    capabilities: {
+      view: 'See free-tier and credit usage, and active warnings',
+      configure: 'Enter readings from provider dashboards and set prices and limits',
     },
   },
 };
