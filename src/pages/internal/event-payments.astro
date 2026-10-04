@@ -308,7 +308,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   .bulk-cancel-warning {
     margin: 0;
     padding: 10px 12px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     background: #f9e2df;
     color: #9c4438;
     font-size: 0.84rem;
@@ -333,7 +333,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     font: inherit;
     padding: 6px 10px;
     border: 1px solid var(--tvc-line);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
   }
 
   /* Plain (non-:global) versions of the refund form's shared bits — this
@@ -399,7 +399,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   :global(#bulk-cancel-panel .refund-confirm) {
     padding: 10px 12px;
     background: var(--tvc-orange-tint);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     font-size: 0.86rem;
   }
 
@@ -414,7 +414,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     max-height: 200px;
     overflow-y: auto;
     border: 1px solid var(--tvc-line);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     background: #fff;
   }
 
@@ -445,7 +445,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     font: inherit;
     padding: 8px 10px;
     border: 1px solid var(--tvc-line);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
   }
 
   .test-payments-notice {
@@ -820,7 +820,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     font: inherit;
     padding: 6px 10px;
     border: 1px solid var(--tvc-line);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
   }
 
   :global(#bookings-body .refund-tier-hint) {
@@ -838,7 +838,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   :global(#bookings-body .refund-confirm) {
     padding: 10px 12px;
     background: var(--tvc-orange-tint);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     font-size: 0.86rem;
   }
 

@@ -428,7 +428,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     font: inherit;
     padding: 6px 10px;
     border: 1px solid var(--tvc-line);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
   }
 
   /* Applied by setFormEditable() when a role can view but not write a
@@ -485,7 +485,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   fieldset {
     border: 1px solid var(--tvc-line);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     padding: 10px 14px;
   }
 
@@ -935,7 +935,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     margin-top: 6px;
     padding: 8px 10px;
     border: 1px dashed var(--tvc-line);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     background: none;
     font: inherit;
     font-size: 0.82rem;
@@ -982,7 +982,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
        (below) so no field ever renders underneath it. */
     padding: 10px 40px 10px 12px;
     border: 1px solid var(--tvc-line);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     background: var(--tvc-cream);
   }
 
@@ -1278,7 +1278,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     font: inherit;
     padding: 6px 10px;
     border: 1px solid var(--tvc-line);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
   }
 
   .reason-overlay-actions {

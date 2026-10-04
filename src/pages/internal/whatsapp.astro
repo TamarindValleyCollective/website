@@ -228,7 +228,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
   .skeleton-row {
     height: 52px;
-    border-radius: 10px;
+    border-radius: var(--radius-field);
     margin-bottom: 8px;
     background: linear-gradient(90deg, var(--tvc-line) 25%, var(--tvc-cream) 50%, var(--tvc-line) 75%);
     background-size: 200% 100%;
@@ -632,7 +632,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     max-height: 120px;
     padding: 8px 12px;
     border: 1px solid var(--tvc-line);
-    border-radius: 10px;
+    border-radius: var(--radius-field);
     font: inherit;
     font-size: 0.88rem;
     resize: vertical;

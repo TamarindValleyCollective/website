@@ -96,7 +96,7 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
     justify-content: space-between;
     align-items: baseline;
     padding: 10px 14px;
-    border-radius: 10px;
+    border-radius: var(--radius-field);
     background: var(--tvc-green-tint);
     margin-bottom: 16px;
   }
@@ -120,7 +120,7 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
   .booking-form__duplicate-warning {
     margin-top: 12px;
     padding: 12px 14px;
-    border-radius: 10px;
+    border-radius: var(--radius-field);
     background: var(--tvc-orange-tint);
   }
 
