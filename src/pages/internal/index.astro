@@ -6,9 +6,8 @@
 // checks the capability it needs on every request. Super admins also see the
 // Access and Security pages.
 //
-// This page and /internal/access and /internal/security share one sign-in for
-// the tab. The four older tools keep their own sign-in for now, so opening one
-// asks you to sign in again the first time.
+// Every internal page shares one sign-in for the tab (scripts/lib/staff-client.mjs),
+// including the four tools, so opening a tool from here doesn't ask again.
 // Deliberately unlinked from the site nav and noindex.
 import BaseLayout from '../../layouts/BaseLayout.astro';
 ---

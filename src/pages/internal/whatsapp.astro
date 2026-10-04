@@ -713,7 +713,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 <script>
   declare const google: any;
 
-  const STORAGE_KEY = 'tvc-whatsapp-idtoken';
+  // One Google sign-in for every internal tool in this tab: the same stored
+  // sign-in as /internal, /internal/access and /internal/security (see
+  // scripts/lib/staff-client.mjs), so signing in once opens them all. Each tool
+  // still checks its own role on the server for every request.
+  import { TOKEN_KEY as STORAGE_KEY } from '../../../scripts/lib/staff-client.mjs';
   // This inbox is signed into from one shared Google account used by several
   // staff, so the ID token's own name claim can't tell them apart — each
   // person types their own name once, remembered on that browser (localStorage,

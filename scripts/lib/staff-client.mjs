@@ -1,10 +1,10 @@
-// Browser-side helpers shared by the staff pages that sit on the new access
-// model: /internal (landing), /internal/access and /internal/security. One
-// Google sign-in and one step-up proof are kept in sessionStorage under shared
-// keys, so signing in or proving a second factor on any of these pages carries
-// to the others for as long as the tab is open. (The four older tools —
-// photo pool, WhatsApp, event payments, accommodation — keep their own keys
-// for now.)
+// Browser-side helpers shared by every internal staff page: /internal
+// (landing), /internal/access, /internal/security, and the four tools (photo
+// pool, WhatsApp, event payments, accommodation calendar), which import
+// TOKEN_KEY from here. One Google sign-in is kept in sessionStorage under a
+// shared key, so signing in on any of these pages carries to all the others for
+// as long as the tab is open, and one step-up proof (used by Access and
+// Security) is kept under another.
 //
 // Nothing here is a security boundary: the server re-checks the Google token
 // and the step-up token on every request. This only stores them for the tab
