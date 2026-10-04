@@ -6,8 +6,13 @@
 // admins only, two second-factor methods enrolled, a fresh step-up for every
 // change, everything logged before it happens. This page only presents that.
 //
-// Emails are never shown: people appear by name, and an address is typed once
-// to add someone. Every value from the server is placed with textContent.
+// Full email addresses are never shown: people appear by name, with a masked
+// address ("p••••@tvc.farm") under it, and a full address is typed once to add
+// someone. Every value from the server is placed with textContent.
+//
+// People tab: a list of people on the left and, for the one selected, a row per
+// tool with its role dropdown (so adding tools adds rows, never columns). "Who
+// can use what" is the same data grouped by tool.
 // Deliberately unlinked from the site nav and noindex.
 import StaffLayout from '../../layouts/StaffLayout.astro';
 ---
@@ -46,6 +51,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
       <div class="tabs" role="tablist" aria-label="Access sections">
         <button type="button" role="tab" id="tab-people" aria-selected="true" aria-controls="pane-people" class="tab">People</button>
+        <button type="button" role="tab" id="tab-modules" aria-selected="false" aria-controls="pane-modules" class="tab">Who can use what</button>
         <button type="button" role="tab" id="tab-roles" aria-selected="false" aria-controls="pane-roles" class="tab">What each role can do</button>
         <button type="button" role="tab" id="tab-activity" aria-selected="false" aria-controls="pane-activity" class="tab">Activity</button>
       </div>
@@ -73,15 +79,16 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
         <p id="add-message" class="note" hidden></p>
         <p id="people-error" class="error" hidden></p>
 
-        <div class="grid-wrap card">
-          <table id="matrix" class="matrix">
-            <thead>
-              <tr id="matrix-head"></tr>
-            </thead>
-            <tbody id="people"></tbody>
-          </table>
+        <div class="people-layout">
+          <ul id="people" class="people-list" aria-label="People"></ul>
+          <section id="person-detail" class="person-detail card" aria-live="polite"></section>
         </div>
         <p class="note legend">Changes save as soon as you pick a role. “No access” hides the tool from that person entirely.</p>
+      </section>
+
+      <section id="pane-modules" role="tabpanel" aria-labelledby="tab-modules" hidden>
+        <p class="note">Everyone with access to each tool, by role. Deactivated people are left out. Select a name to open their access.</p>
+        <div id="modules-view" class="modules-view"></div>
       </section>
 
       <section id="pane-roles" role="tabpanel" aria-labelledby="tab-roles" hidden>
@@ -90,6 +97,11 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       </section>
 
       <section id="pane-activity" role="tabpanel" aria-labelledby="tab-activity" hidden>
+        <div class="events-tools">
+          <label class="visually-hidden" for="events-search">Search the activity</label>
+          <input type="search" id="events-search" class="events-search" placeholder="Search by person, tool or action" autocomplete="off" />
+          <p id="events-count" class="note" role="status"></p>
+        </div>
         <ul id="events" class="events"></ul>
         <p id="events-empty" class="note" hidden>No activity yet.</p>
         <p id="events-error" class="error" hidden></p>
@@ -189,6 +201,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     gap: 6px;
     margin-bottom: 16px;
     border-bottom: 1px solid var(--tvc-line);
+    overflow-x: auto; /* four tabs don't fit a phone: scroll them rather than wrap the labels */
   }
 
   .tab {
@@ -200,6 +213,8 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     padding: 8px 14px;
     color: var(--tvc-ink-soft);
     cursor: pointer;
+    flex: none;
+    white-space: nowrap;
   }
 
   .tab[aria-selected='true'] {
@@ -280,7 +295,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     margin: 0;
   }
 
-  /* ---- people x tools grid */
+  /* ---- people tab: a list of people, and the selected person's tools as rows */
   .toolbar {
     display: flex;
     align-items: center;
@@ -293,80 +308,79 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     margin: 0;
   }
 
-  .grid-wrap {
-    overflow-x: auto;
+  .people-layout {
+    display: grid;
+    grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
   }
 
-  .matrix {
+  .people-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+  }
+
+  .people-layout :global(.person-item) {
+    display: block;
     width: 100%;
-    min-width: 760px;
-    border-collapse: separate;
-    border-spacing: 0;
-    font-size: 1rem;
-  }
-
-  .matrix :global(th),
-  .matrix :global(td) {
-    padding: 12px 10px;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    font: inherit;
     text-align: left;
-    vertical-align: top;
-    border-bottom: 1px solid var(--tvc-line);
-  }
-
-  .matrix thead :global(th) {
-    background: var(--tvc-green-tint);
-    color: var(--tvc-ink-soft);
-    font-size: 0.8rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    white-space: nowrap;
-  }
-
-  .matrix :global(tbody tr:last-child > *) {
-    border-bottom: none;
-  }
-
-  .matrix :global(.person-cell) {
-    position: sticky;
-    left: 0;
-    z-index: 1;
-    min-width: 160px;
+    color: var(--tvc-ink);
     background: var(--tvc-white);
-    font-weight: 400;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
   }
 
-  .matrix thead :global(.person-cell) {
+  .people-layout :global(.person-item:hover) {
     background: var(--tvc-green-tint);
   }
 
-  .matrix :global(tr.is-inactive .person-name) {
-    color: var(--tvc-ink-soft);
+  .people-layout :global(.person-item:focus-visible) {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 1px;
   }
 
-  .matrix :global(tr.is-new .person-cell) {
+  /* The orange bar is a non-text mark, which is what --tvc-orange is for. */
+  .people-layout :global(.person-item[aria-current='true']) {
+    background: var(--tvc-green-tint);
+    border-color: var(--tvc-green);
     box-shadow: inset 3px 0 0 var(--tvc-orange);
   }
 
-  .matrix :global(.person-name) {
+  .people-layout :global(.person-item.is-new:not([aria-current='true'])) {
+    box-shadow: inset 3px 0 0 var(--tvc-orange);
+  }
+
+  .people-layout :global(.person-item.is-inactive .person-name) {
+    color: var(--tvc-ink-soft);
+  }
+
+  .people-layout :global(.person-name) {
     display: block;
     font-weight: 600;
   }
 
-  .matrix :global(.person-email) {
+  .people-layout :global(.person-email),
+  .people-layout :global(.person-summary) {
     display: block;
     font-size: 0.8rem;
-    font-weight: 400;
     color: var(--tvc-ink-soft);
   }
 
-  .matrix :global(.badges) {
+  .people-layout :global(.badges) {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
     margin-top: 4px;
   }
 
-  .matrix :global(.badge) {
+  .people-layout :global(.badge) {
     font-size: 0.8rem;
     font-weight: 600;
     padding: 1px 8px;
@@ -375,16 +389,81 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     color: var(--tvc-green-dark);
   }
 
-  .matrix :global(.badge--warn) {
+  .people-layout :global(.badge--warn) {
     background: var(--tvc-orange-tint);
     color: var(--tvc-orange-text);
   }
 
-  .matrix :global(.role-select) {
+  .person-detail {
+    padding: 18px 22px;
+    min-width: 0;
+  }
+
+  .person-detail :global(.detail-head) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px 16px;
+    padding-bottom: 14px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .person-detail :global(.detail-title) {
+    margin: 0;
+    font-size: 1.25rem;
+  }
+
+  .person-detail :global(.detail-action) {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  .person-detail :global(.module-rows) {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .person-detail :global(.module-row) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 220px);
+    gap: 8px 16px;
+    align-items: start;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .person-detail :global(.module-row:last-child),
+  .person-detail :global(.limits-row:last-child) {
+    border-bottom: none;
+  }
+
+  .person-detail :global(.module-name) {
+    display: block;
+    font-weight: 600;
+  }
+
+  .person-detail :global(.module-blurb) {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.8rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .person-detail :global(.limits-row) {
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    background: var(--tvc-cream);
+    border-radius: var(--radius-sm);
+  }
+
+  .person-detail :global(.role-select) {
     font: inherit;
     font-size: 1rem;
     width: 100%;
-    min-width: 7.5em;
     min-height: 36px;
     padding: 4px 8px;
     border: 1px solid var(--tvc-line-strong);
@@ -394,57 +473,57 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   }
 
   /* Nothing granted: no box until you reach for it, so the roles that are set stand out. */
-  .matrix :global(.role-select[data-role='']) {
+  .person-detail :global(.role-select[data-role='']) {
     border-color: transparent;
     background: transparent;
   }
 
-  .matrix :global(.role-select[data-role='']:hover),
-  .matrix :global(.role-select[data-role='']:focus-visible) {
+  .person-detail :global(.role-select[data-role='']:hover),
+  .person-detail :global(.role-select[data-role='']:focus-visible) {
     border-color: var(--tvc-line-strong);
     background: var(--tvc-white);
   }
 
-  .matrix :global(.role-select[data-role='read_only']) {
+  .person-detail :global(.role-select[data-role='read_only']) {
     background: var(--tvc-stone);
     color: var(--tvc-ink);
   }
 
-  .matrix :global(.role-select[data-role='user']) {
+  .person-detail :global(.role-select[data-role='user']) {
     background: var(--tvc-green-tint);
     border-color: var(--tvc-green);
     color: var(--tvc-green-dark);
     font-weight: 600;
   }
 
-  .matrix :global(.role-select[data-role='admin']) {
+  .person-detail :global(.role-select[data-role='admin']) {
     background: var(--tvc-green-dark);
     border-color: var(--tvc-green-dark);
     color: var(--tvc-white);
     font-weight: 600;
   }
 
-  .matrix :global(.role-select:disabled) {
+  .person-detail :global(.role-select:disabled) {
     cursor: not-allowed;
     opacity: 0.75;
   }
 
-  .matrix :global(.role-select.is-error) {
+  .person-detail :global(.role-select.is-error) {
     border-color: var(--tvc-error-text);
   }
 
-  .matrix :global(.cell-note) {
+  .person-detail :global(.cell-note) {
     display: block;
     margin-top: 4px;
     font-size: 0.8rem;
     color: var(--tvc-error-text);
   }
 
-  .matrix :global(.cell-note--quiet) {
+  .person-detail :global(.cell-note--quiet) {
     color: var(--tvc-ink-soft);
   }
 
-  .matrix :global(.limit-button) {
+  .person-detail :global(.limit-button) {
     font: inherit;
     font-size: 0.8rem;
     margin-top: 2px;
@@ -456,32 +535,28 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     cursor: pointer;
   }
 
-  .matrix :global(.detail-row > td) {
-    background: var(--tvc-cream);
-  }
-
-  .matrix :global(.limits) {
+  .person-detail :global(.limits) {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 18px;
   }
 
-  .matrix :global(.limits-title) {
+  .person-detail :global(.limits-title) {
     flex-basis: 100%;
     margin: 0;
     font-size: 0.9rem;
     color: var(--tvc-ink-soft);
   }
 
-  .matrix :global(.limits label) {
+  .person-detail :global(.limits label) {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     font-size: 0.9rem;
   }
 
-  .matrix :global(.row-action) {
+  .person-detail :global(.row-action) {
     font: inherit;
     font-size: 0.9rem;
     min-height: 36px;
@@ -494,8 +569,8 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     white-space: nowrap;
   }
 
-  /* Deactivating is rare and recoverable: plain red text, not a filled block on every row. */
-  .matrix :global(.row-action--danger) {
+  /* Deactivating is rare and recoverable: plain red text, not a filled block. */
+  .person-detail :global(.row-action--danger) {
     border-color: transparent;
     background: transparent;
     color: var(--callout-red-text);
@@ -503,99 +578,142 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     text-underline-offset: 3px;
   }
 
-  .matrix :global(.row-action--danger:hover) {
+  .person-detail :global(.row-action--danger:hover) {
     background: var(--callout-red-bg);
   }
 
-  .matrix :global(.row-action:disabled) {
+  .person-detail :global(.row-action:disabled) {
     cursor: not-allowed;
     opacity: 0.55;
   }
 
-  .matrix :global(.empty-row td) {
-    text-align: center;
+  .person-detail :global(.empty) {
+    margin: 0;
     color: var(--tvc-ink-soft);
-    padding: 28px 14px;
   }
 
   .legend {
     margin-top: 10px;
   }
 
-  /* ---- "what each role can do": a read-only permission matrix per tool */
-  .roles-guide {
+  /* ---- "who can use what": one card per tool, people grouped by role */
+  .modules-view {
     display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 16px;
-    max-width: 860px;
+    align-items: start;
   }
 
-  .roles-guide :global(.guide) {
+  .modules-view :global(.module-card) {
+    padding: 16px 18px;
     background: var(--tvc-white);
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
-    overflow-x: auto;
   }
 
-  .roles-guide :global(h2) {
-    margin: 0;
-    padding: 14px 16px;
+  .modules-view :global(h2) {
+    margin: 0 0 8px;
     font-size: 1.125rem;
   }
 
-  .roles-guide :global(table) {
-    width: 100%;
-    min-width: 520px;
-    border-collapse: collapse;
-    font-size: 0.9rem;
+  .modules-view :global(.role-group) {
+    margin: 10px 0 0;
   }
 
-  .roles-guide :global(th),
-  .roles-guide :global(td) {
-    padding: 10px 16px;
-    text-align: left;
-    border-top: 1px solid var(--tvc-line);
-  }
-
-  .roles-guide :global(thead th) {
-    background: var(--tvc-green-tint);
-    color: var(--tvc-ink-soft);
+  .modules-view :global(.role-group-title) {
+    margin: 0 0 4px;
     font-size: 0.8rem;
     font-weight: 600;
-  }
-
-  .roles-guide :global(.col-role) {
-    text-align: center;
-    width: 110px;
-  }
-
-  .roles-guide :global(.tick),
-  .roles-guide :global(.dash) {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    border-radius: 6px;
-    font-size: 0.8rem;
-    line-height: 1;
-  }
-
-  .roles-guide :global(.tick) {
-    background: var(--tvc-green-dark);
-    color: var(--tvc-white);
-  }
-
-  .roles-guide :global(.dash) {
-    border: 1px solid var(--tvc-line);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
     color: var(--tvc-ink-soft);
+  }
+
+  .modules-view :global(.chips) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .modules-view :global(.chip) {
+    font: inherit;
+    font-size: 0.9rem;
+    min-height: 32px;
+    padding: 2px 10px;
+    color: var(--tvc-green-dark);
+    background: var(--tvc-green-tint);
+    border: 1px solid transparent;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .modules-view :global(.chip:hover),
+  .modules-view :global(.chip:focus-visible) {
+    border-color: var(--tvc-green);
+  }
+
+  .modules-view :global(.chip small) {
+    margin-left: 4px;
+    color: var(--tvc-ink-soft);
+  }
+
+  .modules-view :global(.nobody) {
+    margin: 10px 0 0;
+    font-size: 0.9rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  /* ---- "what each role can do": one card per tool, one line per distinct role */
+  .roles-guide {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
+
+  .roles-guide :global(.guide) {
+    padding: 16px 18px;
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .roles-guide :global(h2) {
+    margin: 0 0 6px;
+    font-size: 1.125rem;
+  }
+
+  .roles-guide :global(.role-list) {
+    margin: 0;
+  }
+
+  .roles-guide :global(.role-name) {
+    margin-top: 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--tvc-ink-soft);
+  }
+
+  .roles-guide :global(.role-text) {
+    margin: 2px 0 0;
+    font-size: 0.9rem;
   }
 
   /* Touch screens get the larger targets back. */
   @media (pointer: coarse) {
-    .matrix :global(.role-select),
-    .matrix :global(.row-action) {
+    .person-detail :global(.role-select),
+    .person-detail :global(.row-action) {
       min-height: 44px;
+    }
+  }
+
+  @media (max-width: 899px) {
+    .people-layout {
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 
@@ -603,6 +721,32 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     .toolbar {
       flex-wrap: wrap;
     }
+
+    .person-detail :global(.module-row) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .events-tools {
+    max-width: 760px;
+    margin-bottom: 12px;
+  }
+
+  .events-search {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 420px;
+    font: inherit;
+    font-size: 1rem;
+    padding: 8px 10px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+  }
+
+  .events-tools .note {
+    margin: 6px 0 0;
   }
 
   .events {
@@ -706,15 +850,18 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   const verifyError = $('verify-error');
   const stepupLink = $('stepup-link');
   const tabPeople = $('tab-people');
+  const tabModules = $('tab-modules');
   const tabRoles = $('tab-roles');
   const tabActivity = $('tab-activity');
   const panePeople = $('pane-people');
+  const paneModules = $('pane-modules');
   const paneRoles = $('pane-roles');
   const paneActivity = $('pane-activity');
   const addToggle = $<HTMLButtonElement>('add-toggle');
   const peopleCount = $('people-count');
   const saveMessage = $('save-message');
-  const matrixHead = $('matrix-head');
+  const modulesView = $('modules-view');
+  const personDetail = $('person-detail');
   const rolesGuide = $('roles-guide');
   const addForm = $<HTMLFormElement>('add-form');
   const addEmail = $<HTMLInputElement>('add-email');
@@ -724,6 +871,8 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   const peopleError = $('people-error');
   const peopleList = $('people');
   const eventsList = $('events');
+  const eventsSearch = $<HTMLInputElement>('events-search');
+  const eventsCount = $('events-count');
   const eventsEmpty = $('events-empty');
   const eventsError = $('events-error');
   const eventsMore = $<HTMLButtonElement>('events-more');
@@ -731,9 +880,11 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   let state: PeopleResponse | null = null;
   const openLimits = new Set<string>(); // people whose booking-type limits are expanded
   let newPersonId: string | null = null; // highlighted after being added
+  let selectedId: string | null = null; // the person whose tools are shown
   let refocus: string | null = null; // `${personId}|${moduleId}` to refocus after a redraw
   let nextBefore: number | null = null;
   let activityLoaded = false;
+  let allEvents: AuditEvent[] = []; // every event loaded so far; the search filters these
 
   // Small DOM builder: text always goes in as textContent, never as markup.
   function h<K extends keyof HTMLElementTagNameMap>(
@@ -883,6 +1034,13 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     return caps.map((c) => c.description).join('; ') + '.';
   }
 
+  // The one-line "what this role allows" under a tool's name follows the dropdown.
+  function syncBlurb(select: HTMLSelectElement, module: ModuleInfo) {
+    select.title = describeRole(module, select.value);
+    const blurb = select.closest('.module-row')?.querySelector('.module-blurb');
+    if (blurb) blurb.textContent = select.title;
+  }
+
   function announce(message: string, isError = false) {
     saveMessage.hidden = !message;
     saveMessage.textContent = message;
@@ -905,6 +1063,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       }
       select.value = previous;
       select.dataset.role = previous;
+      syncBlurb(select, module);
       select.classList.add('is-error');
       cellNote.textContent = data.error ?? 'Could not save.';
       announce(data.error ?? 'Could not save that change.', true);
@@ -913,6 +1072,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       if (!handled(err)) {
         select.value = previous;
         select.dataset.role = previous;
+        syncBlurb(select, module);
         select.classList.add('is-error');
         cellNote.textContent = 'Could not reach the server.';
         announce('Could not reach the server — try again.', true);
@@ -922,7 +1082,8 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     }
   }
 
-  function roleCell(p: Person, module: ModuleInfo): HTMLElement {
+  // One tool for the selected person: its name and what their role allows, and the dropdown.
+  function moduleRow(p: Person, module: ModuleInfo): HTMLElement {
     const current = p.roles.find((r) => r.module === module.id) ?? null;
     const select = h('select', { class: 'role-select', attrs: { 'aria-label': `${module.label} access for ${p.label}`, 'data-person': p.id, 'data-module': module.id } });
     for (const value of ROLE_ORDER) select.append(h('option', { text: value ? ROLE_LABELS[value] : 'No access', attrs: { value } }));
@@ -932,7 +1093,13 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     select.title = describeRole(module, select.value);
 
     const note = h('span', { class: 'cell-note', attrs: { role: 'alert' } });
-    const cell = h('td', {}, select, note);
+    const control = h('div', { class: 'module-control' }, select, note);
+    const row = h(
+      'li',
+      { class: 'module-row' },
+      h('div', { class: 'module-info' }, h('span', { class: 'module-name', text: module.label }), h('span', { class: 'module-blurb', text: select.title })),
+      control,
+    );
 
     // The accommodation calendar lets a "User" be limited to some booking types.
     if (module.scopeTypes && current?.role === 'user') {
@@ -947,15 +1114,15 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
         else openLimits.add(p.id);
         renderPeople();
       });
-      cell.append(button);
+      control.append(button);
     }
 
     select.addEventListener('change', () => {
       select.dataset.role = select.value;
-      select.title = describeRole(module, select.value);
+      syncBlurb(select, module);
       void saveRole(p, module, select.value, select, note);
     });
-    return cell;
+    return row;
   }
 
   function limitsRow(p: Person, module: ModuleInfo): HTMLElement {
@@ -1001,29 +1168,47 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       save,
       status,
     );
-    return h('tr', { class: 'detail-row' }, h('td', { attrs: { colspan: String(state!.modules.length + 2) } }, limits));
+    return h('li', { class: 'limits-row' }, limits);
   }
 
-  function personRows(p: Person): HTMLElement[] {
+  function personBadges(p: Person): HTMLElement {
     const badges = h('div', { class: 'badges' });
     if (p.isMe) badges.append(h('span', { class: 'badge', text: 'You' }));
     if (p.isSuperAdmin) badges.append(h('span', { class: 'badge', text: 'Super admin' }));
     if (p.isSuperAdmin && p.mfa) badges.append(h('span', { class: p.mfa.ready ? 'badge' : 'badge badge--warn', text: p.mfa.ready ? 'Second factors ready' : `${p.mfa.methodCount} of 2 methods` }));
     if (!p.active) badges.append(h('span', { class: 'badge badge--warn', text: 'Deactivated' }));
+    return badges;
+  }
 
-    const identity = h('span', { class: 'person-name', text: p.label });
-    const nameBlock = p.maskedEmail ? [identity, h('span', { class: 'person-email', text: p.maskedEmail })] : [identity];
-
-    const rowClasses = [!p.active ? 'is-inactive' : '', p.id === newPersonId ? 'is-new' : ''].filter(Boolean).join(' ');
-    const row = h(
-      'tr',
-      { class: rowClasses, attrs: { 'data-person-row': p.id } },
-      h('th', { class: 'person-cell', attrs: { scope: 'row' } }, ...nameBlock, badges),
+  // One person in the list on the left.
+  function personItem(p: Person): HTMLElement {
+    const granted = p.roles.length;
+    const classes = ['person-item', !p.active ? 'is-inactive' : '', p.id === newPersonId ? 'is-new' : ''].filter(Boolean).join(' ');
+    const item = h(
+      'button',
+      { class: classes, attrs: { type: 'button', 'data-person-row': p.id } },
+      h('span', { class: 'person-name', text: p.label }),
+      ...(p.maskedEmail ? [h('span', { class: 'person-email', text: p.maskedEmail })] : []),
+      personBadges(p),
+      h('span', { class: 'person-summary', text: granted ? `${granted} tool${granted === 1 ? '' : 's'}` : p.isSuperAdmin ? 'Manages access' : 'No tools' }),
     );
-    for (const module of state!.modules) row.append(roleCell(p, module));
+    if (p.id === selectedId) item.setAttribute('aria-current', 'true');
+    item.addEventListener('click', () => {
+      selectedId = p.id;
+      renderPeople();
+      // On a phone the list is stacked above the details, so bring the details into view.
+      if (window.matchMedia('(max-width: 899px)').matches) personDetail.scrollIntoView({ block: 'start' });
+    });
+    return item;
+  }
+
+  // The selected person: who they are, deactivate/reactivate, and a row per tool.
+  function personPanel(p: Person): HTMLElement[] {
+    const head = h('div', { class: 'detail-head' });
+    head.append(h('div', {}, h('h2', { class: 'detail-title', text: p.label }), ...(p.maskedEmail ? [h('span', { class: 'person-email', text: p.maskedEmail })] : []), personBadges(p)));
 
     // Super admins are managed in the database, never from this screen.
-    const actions = h('td');
+    const action = h('div', { class: 'detail-action' });
     if (!p.isSuperAdmin && !p.isMe) {
       const statusLine = h('span', { class: 'cell-note' });
       const toggleActive = h('button', {
@@ -1051,80 +1236,99 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
           }
         }
       });
-      actions.append(toggleActive, statusLine);
+      action.append(toggleActive, statusLine);
     } else {
-      actions.append(h('span', { class: 'cell-note cell-note--quiet', text: p.isMe ? 'Your own account' : 'Managed in the database' }));
+      action.append(h('span', { class: 'cell-note cell-note--quiet', text: p.isMe ? 'Your own account' : 'Managed in the database' }));
     }
-    row.append(actions);
+    head.append(action);
 
-    const out: HTMLElement[] = [row];
-    const accommodation = state!.modules.find((m) => m.scopeTypes);
-    if (accommodation && openLimits.has(p.id) && p.roles.find((r) => r.module === accommodation.id)?.role === 'user') out.push(limitsRow(p, accommodation));
-    return out;
+    const rows = h('ul', { class: 'module-rows' });
+    for (const module of state!.modules) {
+      rows.append(moduleRow(p, module));
+      if (module.scopeTypes && openLimits.has(p.id) && p.roles.find((r) => r.module === module.id)?.role === 'user') rows.append(limitsRow(p, module));
+    }
+    return [head, rows];
   }
 
   function renderPeople() {
     if (!state) return;
-    // Header: person + one column per tool + actions
-    matrixHead.replaceChildren(
-      h('th', { class: 'person-cell', text: 'Person', attrs: { scope: 'col' } }),
-      ...state.modules.map((m) => h('th', { text: m.label, attrs: { scope: 'col' } })),
-      h('th', { attrs: { scope: 'col' } }, h('span', { class: 'visually-hidden', text: 'Actions' })),
-    );
     const order = (p: Person) => (!p.active ? 2 : p.isSuperAdmin ? 0 : 1);
     const sorted = state.people.map((p, i) => ({ p, i })).sort((a, b) => order(a.p) - order(b.p) || a.i - b.i).map((x) => x.p);
-    const rows = sorted.flatMap(personRows);
-    peopleList.replaceChildren(...(rows.length ? rows : [h('tr', { class: 'empty-row' }, h('td', { text: 'Nobody has been added yet.', attrs: { colspan: String(state.modules.length + 2) } }))]));
+    if (!sorted.some((p) => p.id === selectedId)) selectedId = sorted[0]?.id ?? null;
+    peopleList.replaceChildren(...sorted.map((p) => h('li', {}, personItem(p))));
+    const selected = sorted.find((p) => p.id === selectedId);
+    personDetail.replaceChildren(...(selected ? personPanel(selected) : [h('p', { class: 'empty', text: 'Nobody has been added yet.' })]));
     const active = state.people.filter((p) => p.active).length;
     peopleCount.textContent = `${state.people.length} ${state.people.length === 1 ? 'person' : 'people'}${active === state.people.length ? '' : `, ${active} active`}`;
+    renderModulesView();
     renderRolesGuide();
     if (refocus) {
       const [pid, mid] = refocus.split('|');
       refocus = null;
-      peopleList.querySelector<HTMLElement>(`select[data-person="${pid}"][data-module="${mid}"]`)?.focus();
+      personDetail.querySelector<HTMLElement>(`select[data-person="${pid}"][data-module="${mid}"]`)?.focus();
     }
   }
 
-  // A drawn check mark (static markup, no data in it).
-  function tickMark(): HTMLElement {
-    const mark = h('span', { class: 'tick', attrs: { role: 'img', 'aria-label': 'Yes' } });
-    mark.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7.5l3 3 6-7"/></svg>';
-    return mark;
+  // "Who can use what": every active person under each tool, grouped by role. Read-only;
+  // selecting a name opens that person on the People tab.
+  function renderModulesView() {
+    if (!state) return;
+    const groups = [['admin', 'Admin'], ['user', 'User'], ['read_only', 'Read-only']] as const;
+    const people = state.people.filter((p) => p.active);
+    modulesView.replaceChildren(
+      ...state.modules.map((module) => {
+        const card = h('div', { class: 'module-card' }, h('h2', { text: module.label }));
+        let any = false;
+        for (const [role, title] of groups) {
+          const members = people.filter((p) => p.roles.some((r) => r.module === module.id && r.role === role));
+          if (!members.length) continue;
+          any = true;
+          const chips = h('div', { class: 'chips' });
+          for (const p of members) {
+            const chip = h('button', { class: 'chip', text: p.label, attrs: { type: 'button' } });
+            if (p.maskedEmail) chip.append(h('small', { text: p.maskedEmail }));
+            chip.addEventListener('click', () => {
+              selectedId = p.id;
+              renderPeople();
+              selectTab('people');
+              personDetail.scrollIntoView({ block: 'nearest' });
+            });
+            chips.append(chip);
+          }
+          card.append(h('div', { class: 'role-group' }, h('p', { class: 'role-group-title', text: title }), chips));
+        }
+        if (!any) card.append(h('p', { class: 'nobody', text: 'Nobody has access yet.' }));
+        return card;
+      }),
+    );
   }
 
-  // The read-only "what can each role do" matrix, one table per tool.
+  // "What each role can do": per tool, one line per distinct role. A role that carries the
+  // same things as the one below it shares its line ("User, Admin"); a role that carries
+  // everything the previous one does, plus more, lists only the extras ("Also: …"). Where the
+  // roles don't nest (a capability kept from admins, say) the full list is shown instead.
   function renderRolesGuide() {
     if (!state) return;
+    const order = ['read_only', 'user', 'admin'];
+    type Caps = { id: string; description: string }[];
+    const sameSet = (x: Caps, y: Caps) => x.length === y.length && x.every((c) => y.some((d) => d.id === c.id));
     rolesGuide.replaceChildren(
       ...state.modules.map((module) => {
-        const ids: string[] = [];
-        const descriptions = new Map<string, string>();
-        for (const r of module.roles) {
-          for (const c of r.capabilities) {
-            if (!descriptions.has(c.id)) {
-              descriptions.set(c.id, c.description);
-              ids.push(c.id);
-            }
-          }
+        const groups: { roles: string[]; caps: Caps; prev: Caps | null }[] = [];
+        for (const role of order) {
+          const caps = module.roles.find((r) => r.role === role)?.capabilities ?? [];
+          const last = groups[groups.length - 1];
+          if (last && sameSet(last.caps, caps)) last.roles.push(role);
+          else groups.push({ roles: [role], caps, prev: last?.caps ?? null });
         }
-        const roleCols = ['read_only', 'user', 'admin'];
-        const thead = h('thead', {}, h('tr', {}, h('th', { text: 'Can…', attrs: { scope: 'col' } }), ...roleCols.map((r) => h('th', { class: 'col-role', text: ROLE_LABELS[r], attrs: { scope: 'col' } }))));
-        const tbody = h(
-          'tbody',
-          {},
-          ...ids.map((id) =>
-            h(
-              'tr',
-              {},
-              h('th', { text: descriptions.get(id) ?? id, attrs: { scope: 'row' } }),
-              ...roleCols.map((r) => {
-                const has = module.roles.find((x) => x.role === r)?.capabilities.some((c) => c.id === id) ?? false;
-                return h('td', { class: 'col-role' }, has ? tickMark() : h('span', { class: 'dash', text: '–', attrs: { role: 'img', 'aria-label': 'No' } }));
-              }),
-            ),
-          ),
-        );
-        return h('div', { class: 'guide' }, h('h2', { text: module.label }), h('table', {}, thead, tbody));
+        const list = h('dl', { class: 'role-list' });
+        for (const g of groups) {
+          const nested = g.prev !== null && g.prev.length > 0 && g.prev.every((c) => g.caps.some((d) => d.id === c.id));
+          const shown = nested ? g.caps.filter((c) => !g.prev!.some((d) => d.id === c.id)) : g.caps;
+          const text = g.caps.length === 0 ? 'Cannot open this tool.' : `${nested ? 'Also: ' : ''}${shown.map((c) => c.description).join('; ')}.`;
+          list.append(h('dt', { class: 'role-name', text: g.roles.map((r) => ROLE_LABELS[r]).join(', ') }), h('dd', { class: 'role-text', text }));
+        }
+        return h('div', { class: 'guide' }, h('h2', { text: module.label }), list);
       }),
     );
   }
@@ -1172,17 +1376,19 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
         addEmail.value = ''; // typed once; not kept on the page
         addName.value = '';
         newPersonId = data.person.id;
+        selectedId = data.person.id;
         addForm.hidden = true;
         addToggle.setAttribute('aria-expanded', 'false');
-        show(addMessage, `${data.person.label} added. Choose which tools they can use in their row below.`);
+        show(addMessage, `${data.person.label} added. Choose which tools they can use below.`);
         await loadPeople();
         peopleList.querySelector(`[data-person-row="${newPersonId}"]`)?.scrollIntoView({ block: 'nearest' });
       } else if (status === 409 && data.code === 'EXISTS') {
         addEmail.value = '';
         newPersonId = data.personId;
+        selectedId = data.personId;
         addForm.hidden = true;
         addToggle.setAttribute('aria-expanded', 'false');
-        show(addMessage, `${data.label} is already in the system — their row is highlighted below.`);
+        show(addMessage, `${data.label} is already in the system — they are selected below.`);
         await loadPeople();
       } else {
         show(peopleError, data.error ?? 'Could not add that person.');
@@ -1247,35 +1453,58 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     }
   }
 
+  // One line in the log, plus the masked addresses that tell apart two people who share a
+  // name (a person with no name is already shown by their masked address in the sentence).
+  function eventItem(ev: AuditEvent): HTMLElement {
+    const who = [ev.actor?.maskedEmail && `By ${ev.actor.maskedEmail}`, ev.target?.maskedEmail && `About ${ev.target.maskedEmail}`].filter(Boolean).join(' · ');
+    const item = h('li', { class: 'event' }, h('span', { class: 'event-time', text: new Date(ev.at).toLocaleString() }), describe(ev));
+    if (who) item.append(h('span', { class: 'event-who', text: who }));
+    return item;
+  }
+
+  // Everything a person might type to find an event: the sentence, both people and their
+  // masked addresses, the tool, the action and the date as shown.
+  function eventText(ev: AuditEvent): string {
+    return [describe(ev), ev.actor?.label, ev.actor?.maskedEmail, ev.target?.label, ev.target?.maskedEmail, moduleLabel(ev.module), ev.action, new Date(ev.at).toLocaleString()]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+  }
+
+  // The search only covers events already loaded, and says so while it is in use.
+  function renderEvents() {
+    const words = eventsSearch.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const shown = words.length ? allEvents.filter((ev) => { const text = eventText(ev); return words.every((w) => text.includes(w)); }) : allEvents;
+    eventsList.replaceChildren(...shown.map(eventItem));
+    eventsEmpty.hidden = shown.length > 0;
+    eventsEmpty.textContent = words.length ? 'No loaded events match that.' : 'No activity yet.';
+    eventsCount.textContent = words.length ? `${shown.length} of ${allEvents.length} loaded events match.${nextBefore !== null ? ' Select “Load older” to search further back.' : ''}` : '';
+  }
+
   async function loadEvents(more: boolean) {
     eventsError.hidden = true;
     eventsMore.disabled = true;
     try {
-      const { status, data } = await call(`/api/staff-admin/activity?limit=30${more && nextBefore !== null ? `&before=${nextBefore}` : ''}`);
+      const { status, data } = await call(`/api/staff-admin/activity?limit=100${more && nextBefore !== null ? `&before=${nextBefore}` : ''}`);
       if (status !== 200) throw new Error('load failed');
-      if (!more) eventsList.replaceChildren();
-      for (const ev of data.events as AuditEvent[]) {
-        // Masked addresses tell apart two people who share a name; a person with no name
-        // is already shown by their masked address in the sentence.
-        const who = [ev.actor?.maskedEmail && `By ${ev.actor.maskedEmail}`, ev.target?.maskedEmail && `About ${ev.target.maskedEmail}`].filter(Boolean).join(' · ');
-        const item = h('li', { class: 'event' }, h('span', { class: 'event-time', text: new Date(ev.at).toLocaleString() }), describe(ev));
-        if (who) item.append(h('span', { class: 'event-who', text: who }));
-        eventsList.append(item);
-      }
+      allEvents = more ? [...allEvents, ...(data.events as AuditEvent[])] : (data.events as AuditEvent[]);
       nextBefore = data.nextBefore;
       eventsMore.hidden = nextBefore === null;
-      eventsEmpty.hidden = eventsList.children.length > 0;
       activityLoaded = true;
+      renderEvents();
     } catch (err) {
       if (!handled(err)) show(eventsError, 'Could not load the activity — try again.');
     } finally {
       eventsMore.disabled = false;
     }
   }
+  eventsSearch.addEventListener('input', () => {
+    if (activityLoaded) renderEvents();
+  });
   eventsMore.addEventListener('click', () => loadEvents(true));
 
-  function selectTab(which: 'people' | 'roles' | 'activity') {
-    const tabs = { people: [tabPeople, panePeople], roles: [tabRoles, paneRoles], activity: [tabActivity, paneActivity] } as const;
+  function selectTab(which: 'people' | 'modules' | 'roles' | 'activity') {
+    const tabs = { people: [tabPeople, panePeople], modules: [tabModules, paneModules], roles: [tabRoles, paneRoles], activity: [tabActivity, paneActivity] } as const;
     for (const [name, [tab, pane]] of Object.entries(tabs)) {
       tab.setAttribute('aria-selected', String(name === which));
       pane.hidden = name !== which;
@@ -1283,6 +1512,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     if (which === 'activity' && !activityLoaded) loadEvents(false);
   }
   tabPeople.addEventListener('click', () => selectTab('people'));
+  tabModules.addEventListener('click', () => selectTab('modules'));
   tabRoles.addEventListener('click', () => selectTab('roles'));
   tabActivity.addEventListener('click', () => selectTab('activity'));
 
