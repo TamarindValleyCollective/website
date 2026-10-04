@@ -235,10 +235,10 @@ that Phase 3 step below is still open.
       for later since replying isn't blocking anything else in this checklist.
 - [x] **Build a reply admin page — done 2026-08-20.** `/internal/whatsapp` (a two-pane chat UI:
       conversation list + selected thread, reply textarea, 15-second polling gated on tab
-      visibility), backed by `netlify/functions/whatsapp-admin.mts`. Gated behind the same Google
-      Sign-In + allow-list pattern as `/internal/photo-pool` — reuses `photo-pool.mts`'s
-      `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID` allow-list rather than standing up a second Sheet, since
-      it's the same core-team staff (a one-line env var change if that ever needs to diverge).
+      visibility), backed by `netlify/functions/whatsapp-admin.mts`. Gated behind Google
+      Sign-In plus per-module staff roles (`requireStaff`, role in the `whatsapp` module — migrated
+      2026-10 from the shared `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID` Sheet allow-list). The contact's
+      phone number is never sent to the browser (see ARCHITECTURE.md).
       Message history is persisted in Postgres via the existing "TVC ERP" Supabase project
       (`mljavkvkxdejvpzadnrp`) — two tables, `whatsapp_conversations` and `whatsapp_messages` (see
       `supabase/migrations/0001_whatsapp_reply_admin.sql`), written through a small hand-rolled

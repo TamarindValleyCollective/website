@@ -107,7 +107,7 @@ export async function listConversations({ limit = 100 } = {}) {
   return res.json();
 }
 
-// Searches conversations by contact name/phone, or by message content —
+// Searches conversations by contact name, or by message content —
 // two separate REST calls merged in JS rather than one query, since
 // PostgREST has no clean way to OR a top-level column condition together
 // with a condition on an inner-joined embedded resource in a single
@@ -115,16 +115,23 @@ export async function listConversations({ limit = 100 } = {}) {
 // message (not necessarily the latest one) is what gets shown as the
 // preview — more useful for search than always showing the latest message,
 // same idea as how a real search UI highlights the matched snippet.
-export async function searchConversations(query, { limit = 50 } = {}) {
+//
+// Never matches on the phone number: it's a contact detail the admin UI must
+// not reveal, and a partial-match search would let anyone recover it digit by
+// digit. `matchNames: false` also drops the name match, for roles that only
+// see masked names (the same letter-by-letter recovery otherwise).
+export async function searchConversations(query, { limit = 50, matchNames = true } = {}) {
   const pattern = encodeURIComponent(`*${query}*`);
 
   const [byFieldRes, byMessageRes] = await Promise.all([
-    restFetch(
-      `/whatsapp_conversations?select=*,whatsapp_messages(body,direction,created_at)` +
-        `&whatsapp_messages.order=created_at.desc&whatsapp_messages.limit=1` +
-        `&or=(display_name.ilike.${pattern},wa_phone.ilike.${pattern})` +
-        `&order=last_message_at.desc&limit=${limit}`,
-    ),
+    matchNames
+      ? restFetch(
+          `/whatsapp_conversations?select=*,whatsapp_messages(body,direction,created_at)` +
+            `&whatsapp_messages.order=created_at.desc&whatsapp_messages.limit=1` +
+            `&display_name=ilike.${pattern}` +
+            `&order=last_message_at.desc&limit=${limit}`,
+        )
+      : Promise.resolve(new Response('[]')),
     restFetch(
       `/whatsapp_conversations?select=*,whatsapp_messages!inner(body,direction,created_at)` +
         `&whatsapp_messages.body=ilike.${pattern}` +

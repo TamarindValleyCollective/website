@@ -275,7 +275,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     takenAt: string;
     thumbUrl: string;
     description: string;
-    uploader?: { name?: string; email?: string };
+    uploader?: { name?: string };
     exif?: PoolPhotoExif;
   }
 
@@ -352,6 +352,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     return res;
   }
 
+  // Set from each list response; controls a read-only role shouldn't get.
+  let canReview = false;
+
   async function renderCard(photo: PoolPhoto): Promise<HTMLElement> {
     const card = document.createElement('div');
     card.className = 'photo-card card';
@@ -389,7 +392,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const uploader = document.createElement('p');
     uploader.className = 'uploader';
     uploader.textContent = photo.uploader
-      ? `Uploaded by ${photo.uploader.name ?? photo.uploader.email ?? 'unknown'}`
+      ? `Uploaded by ${photo.uploader.name ?? 'unknown'}`
       : 'Uploader unknown';
 
     const exifList = document.createElement('ul');
@@ -499,6 +502,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
     actions.append(approveBtn, rejectBtn);
     card.append(mediaEl, name, date, uploader, exifList, descLabel, descRow, descStatus, actions);
+    // Read-only roles can look but not change anything; the server enforces
+    // this too, this just stops the controls from offering what would 403.
+    if (!canReview) {
+      card.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLTextAreaElement>('button, input, textarea').forEach((el) => {
+        el.disabled = true;
+      });
+      actions.hidden = true;
+    }
     return card;
   }
 
@@ -515,7 +526,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         showStatus('Failed to load the photo pool — try refreshing.');
         return;
       }
-      const data = (await res.json()) as { photos: PoolPhoto[] };
+      const data = (await res.json()) as { photos: PoolPhoto[]; canReview: boolean };
+      canReview = data.canReview;
 
       if (data.photos.length === 0) {
         showStatus('Inbox is empty.');

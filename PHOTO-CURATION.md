@@ -71,8 +71,8 @@ the next deploy.
 
 ## Troubleshooting
 
-- **"This Google account isn't authorized to review photos"** — your account isn't on the
-  curator Sheet yet; ask an admin to add it, then use "Use a different account" (or just sign in
+- **"This Google account isn't authorized to review photos"** — your account has no
+  role in the photo-pool module yet; ask a super admin to grant you one, then use "Use a different account" (or just sign in
   again) to retry.
 - **Sign-in seems to do nothing** — try again once the page has fully loaded; the sign-in button
   needs Google's script to finish loading first.
