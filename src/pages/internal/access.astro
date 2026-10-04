@@ -618,7 +618,8 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     font-size: 0.9rem;
   }
 
-  .events :global(.event-time) {
+  .events :global(.event-time),
+  .events :global(.event-who) {
     display: block;
     font-size: 0.8rem;
     color: var(--tvc-ink-soft);
@@ -680,8 +681,8 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     at: string;
     action: string;
     module: string | null;
-    actor: { id: string; label: string } | null;
-    target: { id: string; label: string } | null;
+    actor: { id: string; label: string; maskedEmail?: string | null } | null;
+    target: { id: string; label: string; maskedEmail?: string | null } | null;
     detail: any;
   }
 
@@ -1254,7 +1255,12 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       if (status !== 200) throw new Error('load failed');
       if (!more) eventsList.replaceChildren();
       for (const ev of data.events as AuditEvent[]) {
-        eventsList.append(h('li', { class: 'event' }, h('span', { class: 'event-time', text: new Date(ev.at).toLocaleString() }), describe(ev)));
+        // Masked addresses tell apart two people who share a name; a person with no name
+        // is already shown by their masked address in the sentence.
+        const who = [ev.actor?.maskedEmail && `By ${ev.actor.maskedEmail}`, ev.target?.maskedEmail && `About ${ev.target.maskedEmail}`].filter(Boolean).join(' · ');
+        const item = h('li', { class: 'event' }, h('span', { class: 'event-time', text: new Date(ev.at).toLocaleString() }), describe(ev));
+        if (who) item.append(h('span', { class: 'event-who', text: who }));
+        eventsList.append(item);
       }
       nextBefore = data.nextBefore;
       eventsMore.hidden = nextBefore === null;
