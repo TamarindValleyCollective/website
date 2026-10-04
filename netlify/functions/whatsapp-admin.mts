@@ -3,14 +3,19 @@
 // persisted by whatsapp-webhook.mts and sends replies via Meta's Send
 // Message API. See WHATSAPP.md for the full setup context.
 //
-// Gated by Google Sign-In, same pattern as photo-pool.mts: a staff member
-// authenticates with their own Google account (client-side via Google
-// Identity Services), and this Function verifies the resulting ID token
-// itself (google-id-token.mjs) before checking the verified email against
-// the same curator allow-list photo-pool.mts uses (PHOTO_POOL_ALLOWED_
-// EMAILS_SHEET_ID) — reused rather than standing up a second Sheet, since
-// it's the same "core team" staff; point this at a different Sheet ID later
-// if that ever needs to diverge.
+// Gated by Google Sign-In plus the shared staff access model (issue #89):
+// requireStaff (lib/staff-access.ts) verifies the ID token and checks the
+// caller's role in the "whatsapp" module — `view` to read, `reply` to send,
+// `manage` to block/unblock. This replaced the shared "Photo Pool Curators"
+// Sheet allow-list (2026-10).
+//
+// Privacy: a contact's phone number never leaves this Function — replies and
+// blocks look it up server-side by conversation id, but no response carries
+// it, and search never matches on it. Contact names are visible to roles that
+// operate the inbox and masked for read-only roles (lib/staff-masking.ts); a
+// contact with no name gets an opaque "Contact XXXX" label rather than their
+// number. Message bodies are sent to anyone who can `view`, since that
+// content is what the inbox is for.
 import {
   listConversations,
   searchConversations,
@@ -20,8 +25,9 @@ import {
   markConversationRead,
   setConversationBlocked,
 } from '../../scripts/lib/supabase.mjs';
-import { getAllowedEmails } from '../../scripts/lib/google-drive.mjs';
-import { verifyGoogleIdToken } from '../../scripts/lib/google-id-token.mjs';
+import { requireStaff, logStaffAction, type StaffGrant } from './lib/staff-access';
+import { canSeeNames, maskName } from './lib/staff-masking';
+import { roleHasCapability, type Capability } from './lib/staff-registry';
 
 const WHATSAPP_GRAPH_API_VERSION = 'v21.0';
 
@@ -32,76 +38,43 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-type AuthResult = { ok: true; email: string; name?: string } | { ok: false; status: 401 | 403 | 500; error: string };
-
-// Same short cache rationale as photo-pool.mts: an admin adding a row to the
-// allow-list Sheet takes effect almost immediately, without hitting the
-// Sheets API on every poll of an active reply session.
-const ALLOWED_EMAILS_TTL_MS = 2 * 60 * 1000;
-let cachedAllowedEmails: { emails: string[]; expiresAt: number } | null = null;
-
-async function getCachedAllowedEmails(): Promise<string[]> {
-  if (cachedAllowedEmails && cachedAllowedEmails.expiresAt > Date.now()) {
-    return cachedAllowedEmails.emails;
-  }
-  const sheetId = process.env.PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID;
-  if (!sheetId) throw new Error('Missing PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID');
-  const emails = await getAllowedEmails(sheetId);
-  cachedAllowedEmails = { emails, expiresAt: Date.now() + ALLOWED_EMAILS_TTL_MS };
-  return emails;
+// Opaque stand-in label for a contact with no WhatsApp profile name — the
+// first characters of the conversation id, never any part of the number.
+function contactLabel(conversationId: string): string {
+  return `Contact ${conversationId.slice(0, 4).toUpperCase()}`;
 }
 
-async function authenticate(req: Request): Promise<AuthResult> {
-  const authHeader = req.headers.get('authorization') ?? '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!token) return { ok: false, status: 401, error: 'Sign-in required' };
-
-  const clientId = process.env.PUBLIC_GOOGLE_CLIENT_ID;
-  if (!clientId) {
-    console.error('Missing PUBLIC_GOOGLE_CLIENT_ID');
-    return { ok: false, status: 500, error: 'Server misconfigured' };
-  }
-
-  let email: string;
-  let name: string | undefined;
+// Routine actions are logged after they succeed; a failed audit write is
+// reported but doesn't undo a message Meta already delivered.
+async function auditBestEffort(staff: StaffGrant, action: string, conversationId: string): Promise<void> {
   try {
-    const payload = await verifyGoogleIdToken(token, { audience: clientId });
-    email = String(payload.email).toLowerCase();
-    name = typeof payload.name === 'string' ? payload.name : undefined;
+    await logStaffAction({ actorId: staff.id, action, module: 'whatsapp', detail: { conversationId } });
   } catch (err) {
-    console.error('ID token verification failed', err);
-    return { ok: false, status: 401, error: 'Invalid or expired session' };
+    console.error('Failed to write staff audit log', err);
   }
-
-  try {
-    const allowed = await getCachedAllowedEmails();
-    if (!allowed.includes(email)) {
-      return { ok: false, status: 403, error: 'This Google account is not authorized to use the WhatsApp inbox' };
-    }
-  } catch (err) {
-    console.error('Failed to check the staff allow-list', err);
-    return { ok: false, status: 500, error: 'Server misconfigured' };
-  }
-
-  return { ok: true, email, name };
 }
 
-async function handleConversations(url: URL): Promise<Response> {
+async function handleConversations(url: URL, staff: StaffGrant): Promise<Response> {
   const limitParam = Number(url.searchParams.get('limit'));
   const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : undefined;
   const search = url.searchParams.get('search')?.trim();
+  const namesVisible = canSeeNames(staff.role);
 
   try {
     const conversations = search
-      ? await searchConversations(search, limit ? { limit } : {})
+      ? await searchConversations(search, { ...(limit ? { limit } : {}), matchNames: namesVisible })
       : await listConversations(limit ? { limit } : {});
     return jsonResponse({
+      capabilities: {
+        reply: roleHasCapability('whatsapp', staff.role, 'reply'),
+        manage: roleHasCapability('whatsapp', staff.role, 'manage'),
+      },
       conversations: conversations.map((c: any) => {
         const lastMessage = c.whatsapp_messages?.[0];
         return {
           id: c.id,
-          waPhone: c.wa_phone,
-          displayName: c.display_name,
+          // Never the phone number. See contactLabel/maskName above.
+          label: c.display_name ? (namesVisible ? c.display_name : maskName(c.display_name)) : contactLabel(c.id),
           lastMessageAt: c.last_message_at,
           // Global, not per-user — see the migration comment for why. A
           // conversation with no last_read_at has never been opened by anyone.
@@ -143,7 +116,7 @@ async function handleMessages(url: URL): Promise<Response> {
   }
 }
 
-async function handleReply(req: Request, fallbackResponderLabel?: string): Promise<Response> {
+async function handleReply(req: Request, staff: StaffGrant): Promise<Response> {
   let payload: { conversationId?: string; body?: string; responderName?: string };
   try {
     payload = await req.json();
@@ -160,12 +133,13 @@ async function handleReply(req: Request, fallbackResponderLabel?: string): Promi
   // shared Google account rather than each person's own, so the ID token's
   // name claim can't tell them apart. The page asks each person to type
   // their own name once (kept in localStorage), sent here as responderName;
-  // fall back to the Google account's own name/email only if that's somehow
-  // missing (an old cached page from before this existed, say). The
+  // fall back to the staff member's registered name only if that's somehow
+  // missing (an old cached page from before this existed, say) — never their
+  // email, which would otherwise be printed into the customer's chat. The
   // signature is part of the actual text sent to the customer, not just
   // internal metadata, so it's included in what's stored too, to keep the
   // thread showing exactly what was sent.
-  const signerLabel = responderName?.trim() || fallbackResponderLabel;
+  const signerLabel = responderName?.trim() || staff.name || undefined;
   const signedBody = signerLabel ? `${body}\n\n- ${signerLabel}` : body;
 
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
@@ -221,12 +195,14 @@ async function handleReply(req: Request, fallbackResponderLabel?: string): Promi
   const waMessageId = metaData?.messages?.[0]?.id;
   try {
     const saved = await insertMessage({ conversationId, direction: 'outbound', body: signedBody, waMessageId, status: 'sent' });
+    await auditBestEffort(staff, 'whatsapp.reply', conversationId);
     return jsonResponse({ ok: true, message: saved });
   } catch (err) {
     // The WhatsApp send itself succeeded — Meta already delivered it — a
     // failure here only means our own copy wasn't recorded; still report
     // success to the caller since a "failed" state would be misleading.
     console.error('Send succeeded but failed to record the outbound message', err);
+    await auditBestEffort(staff, 'whatsapp.reply', conversationId);
     return jsonResponse({ ok: true, message: null });
   }
 }
@@ -240,7 +216,7 @@ async function handleReply(req: Request, fallbackResponderLabel?: string): Promi
 // the source of truth, so a failed Supabase write after a successful Meta
 // call still leaves the block in effect, just unreflected in the badge
 // until the next successful toggle.
-async function handleBlock(req: Request): Promise<Response> {
+async function handleBlock(req: Request, staff: StaffGrant): Promise<Response> {
   let payload: { conversationId?: string; blocked?: boolean };
   try {
     payload = await req.json();
@@ -268,6 +244,20 @@ async function handleBlock(req: Request): Promise<Response> {
     return jsonResponse({ error: 'Failed to reach the message store' }, 502);
   }
   if (!conversation) return jsonResponse({ error: 'Conversation not found' }, 404);
+
+  // Blocking cuts a person off from the number, so it's logged *before* it
+  // happens and refused if the log can't be written — unlike routine replies.
+  try {
+    await logStaffAction({
+      actorId: staff.id,
+      action: blocked ? 'whatsapp.block_requested' : 'whatsapp.unblock_requested',
+      module: 'whatsapp',
+      detail: { conversationId },
+    });
+  } catch (err) {
+    console.error('Failed to write staff audit log; refusing to block/unblock', err);
+    return jsonResponse({ error: 'Server misconfigured' }, 500);
+  }
 
   let metaRes: Response;
   let metaData: any;
@@ -305,17 +295,26 @@ async function handleBlock(req: Request): Promise<Response> {
 }
 
 export default async (req: Request): Promise<Response> => {
-  const auth = await authenticate(req);
-  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
-
   const url = new URL(req.url);
 
-  if (url.pathname === '/api/whatsapp-admin/conversations' && req.method === 'GET') return handleConversations(url);
-  if (url.pathname === '/api/whatsapp-admin/messages' && req.method === 'GET') return handleMessages(url);
-  if (url.pathname === '/api/whatsapp-admin/reply' && req.method === 'POST') return handleReply(req, auth.name ?? auth.email);
-  if (url.pathname === '/api/whatsapp-admin/block' && req.method === 'POST') return handleBlock(req);
+  // Pick the route first so each one is gated by the capability it needs:
+  // reading is `view`, sending is `reply`, blocking is `manage`.
+  type Route = { capability: Capability<'whatsapp'>; run: (staff: StaffGrant) => Promise<Response> };
+  const route: Route | null =
+    url.pathname === '/api/whatsapp-admin/conversations' && req.method === 'GET'
+      ? { capability: 'view', run: (staff) => handleConversations(url, staff) }
+      : url.pathname === '/api/whatsapp-admin/messages' && req.method === 'GET'
+        ? { capability: 'view', run: () => handleMessages(url) }
+        : url.pathname === '/api/whatsapp-admin/reply' && req.method === 'POST'
+          ? { capability: 'reply', run: (staff) => handleReply(req, staff) }
+          : url.pathname === '/api/whatsapp-admin/block' && req.method === 'POST'
+            ? { capability: 'manage', run: (staff) => handleBlock(req, staff) }
+            : null;
+  if (!route) return jsonResponse({ error: 'Not found' }, 404);
 
-  return jsonResponse({ error: 'Not found' }, 404);
+  const auth = await requireStaff(req, 'whatsapp', route.capability);
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  return route.run(auth.staff);
 };
 
 export const config = {

@@ -6,23 +6,25 @@
 // scripts/pull-approved-photos.mjs for the next step (Approved -> local
 // folder -> the existing scripts/curate-photos.mjs pipeline, unchanged).
 //
-// Gated by Google Sign-In: a curator authenticates with their own Google
-// account (client-side via Google Identity Services), and this Function
-// verifies the resulting ID token itself (google-id-token.mjs) before
-// checking the verified email against a live allow-list — a one-column
-// Google Sheet (getAllowedEmails in google-drive.mjs), not a static env var,
-// so adding a curator is just adding a row. A real Google Group isn't an
-// option since curators are a mix of Workspace and personal Gmail accounts;
-// group-membership APIs only work within a Workspace domain you administer.
+// Gated by Google Sign-In plus the shared staff access model (issue #89): a
+// curator authenticates with their own Google account (client-side via
+// Google Identity Services), and requireStaff (lib/staff-access.ts) verifies
+// the ID token and checks their role in the "photo-pool" module — `view` for
+// listing/thumbnails, `review` for approve/reject/description. This replaced
+// a one-column "Photo Pool Curators" Google Sheet allow-list (2026-10).
+//
+// Privacy: the uploader's email never leaves this Function, and their name
+// is masked for read-only roles (lib/staff-masking.ts).
 import {
   listFiles,
   getFile,
   moveFile,
   updateDescription,
   fetchThumbnail,
-  getAllowedEmails,
 } from '../../scripts/lib/google-drive.mjs';
-import { verifyGoogleIdToken } from '../../scripts/lib/google-id-token.mjs';
+import { requireStaff, logStaffAction, type StaffGrant } from './lib/staff-access';
+import { roleHasCapability, type Capability } from './lib/staff-registry';
+import { canSeeNames, maskName } from './lib/staff-masking';
 
 interface DriveImageMetadata {
   time?: string;
@@ -96,59 +98,17 @@ function requireInboxMembership(file: { parents?: string[] }, inboxId: string): 
   return null;
 }
 
-type AuthResult = { ok: true; email: string } | { ok: false; status: 401 | 403 | 500; error: string };
-
-// Short cache so an admin adding a row to the allow-list Sheet takes effect
-// almost immediately, without hitting the Sheets API on every card load in
-// an active review session.
-const ALLOWED_EMAILS_TTL_MS = 2 * 60 * 1000;
-let cachedAllowedEmails: { emails: string[]; expiresAt: number } | null = null;
-
-async function getCachedAllowedEmails(): Promise<string[]> {
-  if (cachedAllowedEmails && cachedAllowedEmails.expiresAt > Date.now()) {
-    return cachedAllowedEmails.emails;
+// Routine moderation actions are logged after they succeed; a failed audit
+// write is reported but doesn't undo a Drive move that already happened.
+async function auditBestEffort(staff: StaffGrant, action: string, fileId: string): Promise<void> {
+  try {
+    await logStaffAction({ actorId: staff.id, action, module: 'photo-pool', detail: { fileId } });
+  } catch (err) {
+    console.error('Failed to write staff audit log', err);
   }
-  const sheetId = process.env.PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID;
-  if (!sheetId) throw new Error('Missing PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID');
-  const emails = await getAllowedEmails(sheetId);
-  cachedAllowedEmails = { emails, expiresAt: Date.now() + ALLOWED_EMAILS_TTL_MS };
-  return emails;
 }
 
-async function authenticate(req: Request): Promise<AuthResult> {
-  const authHeader = req.headers.get('authorization') ?? '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!token) return { ok: false, status: 401, error: 'Sign-in required' };
-
-  const clientId = process.env.PUBLIC_GOOGLE_CLIENT_ID;
-  if (!clientId) {
-    console.error('Missing PUBLIC_GOOGLE_CLIENT_ID');
-    return { ok: false, status: 500, error: 'Server misconfigured' };
-  }
-
-  let email: string;
-  try {
-    const payload = await verifyGoogleIdToken(token, { audience: clientId });
-    email = String(payload.email).toLowerCase();
-  } catch (err) {
-    console.error('ID token verification failed', err);
-    return { ok: false, status: 401, error: 'Invalid or expired session' };
-  }
-
-  try {
-    const allowed = await getCachedAllowedEmails();
-    if (!allowed.includes(email)) {
-      return { ok: false, status: 403, error: 'This Google account is not authorized to review photos' };
-    }
-  } catch (err) {
-    console.error('Failed to check the curator allow-list', err);
-    return { ok: false, status: 500, error: 'Server misconfigured' };
-  }
-
-  return { ok: true, email };
-}
-
-async function handleList(): Promise<Response> {
+async function handleList(staff: StaffGrant): Promise<Response> {
   const inboxId = process.env.GDRIVE_INBOX_FOLDER_ID;
   if (!inboxId) {
     console.error('Missing GDRIVE_INBOX_FOLDER_ID');
@@ -158,6 +118,7 @@ async function handleList(): Promise<Response> {
   try {
     const files = (await listFiles(inboxId)) as DriveFile[];
     return jsonResponse({
+      canReview: roleHasCapability('photo-pool', staff.role, 'review'),
       photos: files.map((f) => {
         const uploader = f.lastModifyingUser ?? f.owners?.[0];
         return {
@@ -166,7 +127,10 @@ async function handleList(): Promise<Response> {
           takenAt: normalizeExifTime(f.imageMediaMetadata?.time) ?? f.createdTime,
           thumbUrl: `/api/photo-pool/thumb?id=${encodeURIComponent(f.id)}`,
           description: f.description ?? '',
-          uploader: uploader ? { name: uploader.displayName, email: uploader.emailAddress } : undefined,
+          // Name only, never the email; masked for read-only roles.
+          uploader: uploader?.displayName
+            ? { name: canSeeNames(staff.role) ? uploader.displayName : maskName(uploader.displayName) }
+            : undefined,
           exif: formatExif(f.imageMediaMetadata),
         };
       }),
@@ -204,7 +168,7 @@ async function handleThumb(url: URL): Promise<Response> {
   }
 }
 
-async function handleDecision(req: Request): Promise<Response> {
+async function handleDecision(req: Request, staff: StaffGrant): Promise<Response> {
   let payload: { id?: string; decision?: string };
   try {
     payload = await req.json();
@@ -233,6 +197,7 @@ async function handleDecision(req: Request): Promise<Response> {
     if (authError) return authError;
 
     await moveFile(id, inboxId, targetId);
+    await auditBestEffort(staff, `photo-pool.${decision}`, id);
     return jsonResponse({ ok: true });
   } catch (err) {
     console.error('Failed to move Drive file', err);
@@ -240,7 +205,7 @@ async function handleDecision(req: Request): Promise<Response> {
   }
 }
 
-async function handleDescription(req: Request): Promise<Response> {
+async function handleDescription(req: Request, staff: StaffGrant): Promise<Response> {
   let payload: { id?: string; description?: string };
   try {
     payload = await req.json();
@@ -265,6 +230,7 @@ async function handleDescription(req: Request): Promise<Response> {
     if (authError) return authError;
 
     await updateDescription(id, description);
+    await auditBestEffort(staff, 'photo-pool.describe', id);
     return jsonResponse({ ok: true });
   } catch (err) {
     console.error('Failed to update Drive file description', err);
@@ -273,17 +239,26 @@ async function handleDescription(req: Request): Promise<Response> {
 }
 
 export default async (req: Request): Promise<Response> => {
-  const auth = await authenticate(req);
-  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
-
   const url = new URL(req.url);
 
-  if (url.pathname === '/api/photo-pool/thumb' && req.method === 'GET') return handleThumb(url);
-  if (url.pathname === '/api/photo-pool/description' && req.method === 'POST') return handleDescription(req);
-  if (url.pathname === '/api/photo-pool' && req.method === 'GET') return handleList();
-  if (url.pathname === '/api/photo-pool' && req.method === 'POST') return handleDecision(req);
+  // Pick the route first so each one is gated by the capability it needs:
+  // reading is `view`, anything that changes Drive is `review`.
+  type Route = { capability: Capability<'photo-pool'>; run: (staff: StaffGrant) => Promise<Response> };
+  const route: Route | null =
+    url.pathname === '/api/photo-pool/thumb' && req.method === 'GET'
+      ? { capability: 'view', run: () => handleThumb(url) }
+      : url.pathname === '/api/photo-pool/description' && req.method === 'POST'
+        ? { capability: 'review', run: (staff) => handleDescription(req, staff) }
+        : url.pathname === '/api/photo-pool' && req.method === 'GET'
+          ? { capability: 'view', run: (staff) => handleList(staff) }
+          : url.pathname === '/api/photo-pool' && req.method === 'POST'
+            ? { capability: 'review', run: (staff) => handleDecision(req, staff) }
+            : null;
+  if (!route) return jsonResponse({ error: 'Not found' }, 404);
 
-  return jsonResponse({ error: 'Not found' }, 404);
+  const auth = await requireStaff(req, 'photo-pool', route.capability);
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  return route.run(auth.staff);
 };
 
 export const config = {

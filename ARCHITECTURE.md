@@ -87,7 +87,7 @@ flowchart TD
         FUNC_SRC["netlify/functions/chat.mts<br/>Serverless function, calls Anthropic API server-side"]
         FUNC_SRC10["netlify/functions/search-ai.mts<br/>Serverless function — the site search's only result<br/>type (no client-side keyword index). Gemini API free<br/>tier first, falls back to Anthropic. Shares retrieval<br/>logic with chat.mts via netlify/functions/lib/site-<br/>retrieval.ts. Self-rate-limits per-IP + a daily<br/>Anthropic-fallback budget via Blobs"]
         FUNC_SRC2["netlify/functions/event-interest.mts<br/>Serverless function, reads/writes Netlify Blobs"]
-        FUNC_SRC3["netlify/functions/photo-pool.mts<br/>Serverless function, Google Sign-In gated —<br/>verifies ID token, checks a Sheet-backed<br/>allow-list, lists Inbox (+ uploader/EXIF/GPS/<br/>description), moves photos, saves descriptions"]
+        FUNC_SRC3["netlify/functions/photo-pool.mts<br/>Serverless function, Google Sign-In gated —<br/>verifies ID token, checks the caller&#39;s<br/>role (staff_module_roles), lists Inbox (+ uploader/EXIF/GPS/<br/>description), moves photos, saves descriptions"]
         FUNC_SRC4["netlify/functions/enquiry.mts<br/>Serverless function — appends a row to a<br/>Google Sheet per membership/general enquiry,<br/>fired via sendBeacon alongside each form's<br/>own native Netlify Forms submission"]
         FUNC_SRC5["netlify/functions/rainfall.mts<br/>Serverless function — reads the community's<br/>rainfall-log Sheet (monthly + daily tabs) on<br/>every page view, computes the monsoon<br/>to-date stat, returns JSON"]
         FUNC_SRC6["netlify/functions/whatsapp-webhook.mts<br/>Serverless function — verifies Meta's GET<br/>handshake and each POST's HMAC signature,<br/>persists to Supabase per incoming WhatsApp<br/>message (no inbox exists for Cloud API<br/>numbers otherwise)"]
@@ -168,12 +168,12 @@ flowchart TD
         CLARITYEXT["Microsoft Clarity<br/>www.clarity.ms tag → scripts.clarity.ms<br/>bundle → *.clarity.ms/collect (subdomain<br/>varies, load-balanced)"]
         METEO["Open-Meteo API<br/>Free, no key required"]
         GDRIVE["Google Drive API<br/>Shared Inbox/Approved/Rejected/Published<br/>folders — service-account auth,<br/>called server-side only (Function + local script)"]
-        GSHEET["Google Sheets API<br/>Curator allow-list (read, photo-pool.mts) +<br/>membership/general enquiry logs (write,<br/>enquiry.mts) + rainfall log (read,<br/>rainfall.mts) + Members story-form<br/>responses (read + write Processed-at/Notes,<br/>check-member-story-responses.mjs) —<br/>same service account, called server-side<br/>only (Functions) or from a local script"]
+        GSHEET["Google Sheets API<br/>membership/general enquiry logs (write,<br/>enquiry.mts) + rainfall log (read,<br/>rainfall.mts) + Members story-form<br/>responses (read + write Processed-at/Notes,<br/>check-member-story-responses.mjs) —<br/>same service account, called server-side<br/>only (Functions) or from a local script"]
         GIDTOKEN["Google Identity Services / OAuth<br/>Curator sign-in (browser) +<br/>ID token verification against<br/>Google's public JWKS (photo-pool.mts)"]
         GSC["Google Search Console API<br/>urlInspection.index.inspect — read-only,<br/>same service account (Full user on the<br/>property as of 2026-08-08),<br/>called from a local script only"]
         RESEND["Resend API<br/>Transactional email — noreply@tvc.farm,<br/>domain verified 2026-08-19,<br/>called from the GitHub Action above<br/>and whatsapp-stale-alert.mts"]
         WAMETA["Meta WhatsApp Cloud API<br/>Sends inbound message + template-status<br/>events to /api/whatsapp-webhook;<br/>receives replies from whatsapp-admin.mts;<br/>see WHATSAPP.md for setup status"]
-        SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages,<br/>event_payments — service_role key, called<br/>server-side only"]
+        SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages,<br/>event_payments, staff_users/staff_module_roles/<br/>staff_audit_log (not yet wired to any Function) —<br/>service_role key, called server-side only"]
         RAZORPAY["Razorpay API<br/>Payment Links (create/fetch) +<br/>payment_link.paid webhook + refunds<br/>(admin-triggered, event-payments-admin.mts) +<br/>payment fees and settlement recon<br/>(nightly reconcile-event-payment-fees.mjs).<br/>Live keys as of 2026-09-24 —<br/>see RAZORPAY.md"]
     end
 
@@ -227,13 +227,13 @@ flowchart TD
     CF --> INTERNAL5
     POOLDASH --> APIFN3
     APIFN3 -.->|"list Inbox, proxy thumbnails,<br/>move on approve/reject"| GDRIVE
-    APIFN3 -.->|"read allow-list rows"| GSHEET
+    APIFN3 -.->|"check staff role"| SUPABASE
     APIFN3 -.->|"verify curator's ID token"| GIDTOKEN
     POOLDASH -.->|"Sign in with Google"| GIDTOKEN
     WHATSAPPDASH --> APIFN7
     APIFN7 -.->|"list/read conversations + messages"| SUPABASE
     APIFN7 -.->|"send reply"| WAMETA
-    APIFN7 -.->|"read allow-list rows"| GSHEET
+    APIFN7 -.->|"check staff role"| SUPABASE
     APIFN7 -.->|"verify staff ID token"| GIDTOKEN
     WHATSAPPDASH -.->|"Sign in with Google"| GIDTOKEN
     ACCOMMODATIONDASH --> APIFN9
@@ -349,11 +349,13 @@ outside both the local machine and Netlify (the member-update-email workflow).
 - **`netlify/functions/photo-pool.mts`** — backs `/internal/photo-pool`. Gated by real Google
   Sign-In rather than a shared password: a curator authenticates client-side via Google Identity
   Services, and this Function verifies the resulting ID token itself
-  (`scripts/lib/google-id-token.mjs`) before checking the verified email against a live
-  allow-list — a one-column Google Sheet (`getAllowedEmails` in `google-drive.mjs`), not a static
-  env var, so adding a curator is just adding a row, no redeploy. A real Google Group wasn't an
-  option since curators are a mix of Workspace and personal Gmail accounts (group-membership APIs
-  only work within a Workspace domain you administer). Once authenticated and authorized, it
+  (`scripts/lib/google-id-token.mjs`) before checking the person's role in the `photo-pool`
+  module (`view` to list/thumbnail, `review` to approve/reject/describe) via the shared
+  `requireStaff` helper below — migrated 2026-10 from a one-column "Photo Pool Curators" Google
+  Sheet allow-list. A real Google Group wasn't an option since curators are a mix of Workspace
+  and personal Gmail accounts (group-membership APIs only work within a Workspace domain you
+  administer). The uploader's email is never sent to the browser, and their name is masked for
+  `read_only` roles. Once authenticated and authorized, it
   lists images in the Drive "Inbox" folder (with uploader/EXIF/GPS/description), proxies their
   thumbnails, saves an edited description to a file's Drive `description` field on its own, and
   moves a file to "Approved" or "Rejected" on a curator's decision. Drive itself is the state
@@ -414,10 +416,15 @@ outside both the local machine and Netlify (the member-update-email workflow).
   emails turned out to be more clutter than signal.
 - **`netlify/functions/whatsapp-admin.mts`** — backs `/internal/whatsapp`, the WhatsApp reply
   dashboard (2026-08-20). Same Google Sign-In auth pattern as `photo-pool.mts` (verifies the ID
-  token, checks it against `photo-pool.mts`'s own `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID` allow-list —
-  reused rather than a second Sheet, since it's the same core-team staff). Four routes: list
-  conversations (optionally filtered by a `search` query param — matches contact name, phone, or
-  message content via `scripts/lib/supabase.mjs`'s `searchConversations`, two REST calls merged
+  token, then `requireStaff` checks the caller's role in the `whatsapp` module: `view` to read,
+  `reply` to send, `manage` to block — migrated 2026-10 from the shared Sheet allow-list). A
+  contact's phone number never leaves this Function: replies and blocks look it up server-side by
+  conversation id, responses carry only a `label` (the contact's name, masked for `read_only`
+  roles, or an opaque "Contact XXXX" when they have none), and search never matches on it. Reply
+  signatures no longer fall back to the staff member's email, which used to be printed into the
+  customer's chat. Blocking is audit-logged before it happens and refused if the log write fails.
+  Four routes: list conversations (optionally filtered by a `search` query param — matches contact
+  name (not for `read_only` roles) or message content, never phone, via `scripts/lib/supabase.mjs`'s `searchConversations`, two REST calls merged
   client-side since PostgREST can't `OR` a top-level column condition with an inner-embedded-
   resource condition in one request), list one conversation's messages (both reading from
   Supabase), send a reply — which calls Meta's Send Message API directly (`WHATSAPP_ACCESS_
@@ -469,6 +476,26 @@ outside both the local machine and Netlify (the member-update-email workflow).
   (`accommodation_booking_audit_log`, populated by table triggers, not application code, so no
   write path can bypass it) records every create/update/delete, and editing or deleting a booking
   whose stay has already happened requires and records a reason.
+- **`netlify/functions/lib/staff-access.ts` + `staff-registry.ts`** — the shared access layer
+  for the internal admin tools (issue #89), meant to replace the per-function Sheet allow-lists
+  above. `requireStaff(req, module, capability)` verifies the Google ID token (for tvc.farm /
+  syntropic.in addresses the token's `hd` claim must match, so a non-org-managed account with
+  such an address is refused), then looks the person up in `staff_users` /
+  `staff_module_roles` (TVC ERP Supabase project, migration `0028_staff_access.sql`, service_role
+  only — RLS on with no policies) and checks that their role in that module carries the
+  capability. Roles are `admin`/`user`/`read_only` per module, with an optional `scope` (the
+  accommodation `restricted` role's allowed booking types); `super_admin` is a global flag that
+  manages access and grants **no** implicit module access. What each role may do lives in
+  `staff-registry.ts`, not the database. Every denial returns the same 403 so responses don't
+  reveal who exists; lookup errors fail closed; a 30-second cache means a revoked role takes
+  effect within seconds. `logStaffAction` appends to the append-only `staff_audit_log`, which
+  stores staff ids, never emails. **Status:** tables, the helper, and role rows for everyone on the
+  two Sheet allow-lists (9 staff, 21 grants, backfilled 2026-10-04 and applied as data, not a
+  migration, so staff emails stay out of version control) exist. `photo-pool.mts` and
+  `whatsapp-admin.mts` now gate on `requireStaff` (2026-10); `event-payments-admin.mts` and
+  `accommodation-admin.mts` still use their Sheets, so for those two the Sheets remain the live
+  gate and can drift from the tables (a Sheet edit does not update the tables, and vice versa).
+  Masking helpers live in `lib/staff-masking.ts`.
 - **`scripts/lib/accommodation-db.mjs`** — hand-rolled Supabase PostgREST REST client (same style
   as `supabase.mjs` below, no `@supabase/supabase-js`), the sole data-access layer for
   `accommodation-admin.mts`. Conflict-checking lives entirely in Postgres (see above) — this file
@@ -1107,7 +1134,7 @@ never touches Netlify either.
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
 | Live rainfall chart/table/monsoon stat (`/ecosystem/weather`, `/api/rainfall`) | ✅ Live — reads the community's rainfall-log Sheet live, `RAINFALL_SHEET_ID` set on Netlify (all deploy contexts); multi-year line chart with year-filter checkboxes; verified against `tvc.farm/ecosystem/weather` and `tvc.farm/api/rainfall` directly |
 | Site search (nav icon / `/` key), AI-only via `/api/search-ai` | ✅ Live — deployed 2026-09-21, verified directly against `tvc.farm/api/search-ai` returning a real, grounded answer with source links from the Gemini free tier. Submit-triggered UI behavior (Enter, mobile keyboard action, tap) confirmed in a real browser pre-deploy. Pagefind (the prior client-side keyword index) was removed the same day in favor of this AI-only search |
-| Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | ✅ Live — Drive folders, service account, Google Sign-In OAuth client, curator allow-list Sheet, all Netlify env vars configured; verified against production directly (`/internal/photo-pool` returns 200, `/api/photo-pool` returns 401 unauthenticated as expected for the Google Sign-In-gated function) |
+| Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | ✅ Live — Drive folders, service account, Google Sign-In OAuth client, staff roles (Supabase `staff_module_roles`, formerly a curator Sheet), all Netlify env vars configured; verified against production directly (`/internal/photo-pool` returns 200, `/api/photo-pool` returns 401 unauthenticated as expected for the Google Sign-In-gated function) |
 | WhatsApp webhook (`/api/whatsapp-webhook`) | ✅ Live — verified end-to-end with a real WhatsApp message to `+91 80 4110 9754` on 2026-08-19. Two real bugs found and fixed along the way: the number wasn't actually registered for Cloud API messaging (blocked by a stuck migration from the old AiSensy WABA, which still held the number), and the WABA was never subscribed to the app's webhook (`POST /{waba-id}/subscribed_apps` — a separate step from the App Dashboard's webhook config). Persists every inbound message to Supabase (2026-08-20); no longer emails per-message (see the stale-alert row below). See `WHATSAPP.md` |
 | WhatsApp reply dashboard (`/internal/whatsapp`, `/api/whatsapp-admin`) | ✅ Live — verified end-to-end with real WhatsApp messages and real replies sent from production. Unread indicators, real pagination, message previews, per-reply responder names, WhatsApp/iMessage-style avatars, and a full visual pass added 2026-08-20 after real usage surfaced gaps |
 | WhatsApp unread digest (`whatsapp-stale-alert.mts`, scheduled) | ✅ Live — cron every 15 minutes, emails `core-team@tvc.farm` one digest of conversations unread 60+ minutes, re-sent hourly per conversation until read. Replaces the old per-message email (2026-08-20) |

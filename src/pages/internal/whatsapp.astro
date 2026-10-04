@@ -37,7 +37,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     <div id="app" class="app" hidden>
       <div class="conversations card">
         <div class="search-row">
-          <input type="search" id="conversation-search" placeholder="Search name, phone, or message…" aria-label="Search conversations" />
+          <input type="search" id="conversation-search" placeholder="Search name or message…" aria-label="Search conversations" />
         </div>
         <ul id="conversations-list"></ul>
         <p id="conversations-status" class="pane-status" hidden></p>
@@ -57,7 +57,6 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           <span id="thread-avatar" class="avatar avatar-lg" aria-hidden="true"></span>
           <div class="thread-header-text">
             <strong id="thread-name"></strong>
-            <span id="thread-phone" class="thread-phone"></span>
           </div>
           <button type="button" id="block-btn" class="block-btn">Block</button>
         </div>
@@ -429,12 +428,6 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     font-size: 0.95rem;
   }
 
-  .thread-phone {
-    display: block;
-    font-size: 0.76rem;
-    color: var(--tvc-ink-soft);
-  }
-
   .thread-header-text {
     flex: 1;
     min-width: 0;
@@ -732,8 +725,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
   interface Conversation {
     id: string;
-    waPhone: string;
-    displayName: string | null;
+    // Display name (masked for read-only roles) or an opaque "Contact XXXX"
+    // — the contact's phone number is never sent to the browser.
+    label: string;
     lastMessageAt: string;
     unread: boolean;
     lastMessagePreview: string | null;
@@ -767,7 +761,6 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   const backToListBtn = document.getElementById('back-to-list') as HTMLButtonElement;
   const threadAvatar = document.getElementById('thread-avatar') as HTMLElement;
   const threadName = document.getElementById('thread-name') as HTMLElement;
-  const threadPhone = document.getElementById('thread-phone') as HTMLElement;
   const blockBtn = document.getElementById('block-btn') as HTMLButtonElement;
   const messagesEl = document.getElementById('messages') as HTMLElement;
   const composer = document.getElementById('composer') as HTMLElement;
@@ -870,7 +863,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   // No real photo to show — Meta's Cloud API never sends one (see the CSS
   // comment on .avatar) — so this mirrors WhatsApp's own initials fallback:
   // first letter of up to the first two words, a color picked deterministically
-  // from the phone number so the same contact always gets the same color.
+  // from the conversation id so the same contact always gets the same color.
   // The raw --tvc-orange/--tvc-sky-blue tokens only hit 3.5-3.7:1 contrast
   // against the white initials text (fails WCAG AA's 4.5:1 for text this
   // small) — using this codebase's existing darker "-text" variants of the
@@ -884,16 +877,16 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     'var(--tvc-green-dark)',
   ];
 
-  function getInitials(displayName: string | null, waPhone: string): string {
-    const source = displayName?.trim();
-    if (!source) return waPhone.slice(-2);
+  function getInitials(label: string | null, fallback: string): string {
+    const source = label?.trim();
+    if (!source) return fallback.slice(0, 2).toUpperCase();
     const words = source.split(/\s+/).filter(Boolean);
     return words.length > 1 ? `${words[0][0]}${words[1][0]}`.toUpperCase() : source.slice(0, 2).toUpperCase();
   }
 
-  function getAvatarColor(waPhone: string): string {
+  function getAvatarColor(key: string): string {
     let hash = 0;
-    for (let i = 0; i < waPhone.length; i++) hash = (hash * 31 + waPhone.charCodeAt(i)) >>> 0;
+    for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
     return AVATAR_COLORS[hash % AVATAR_COLORS.length];
   }
 
@@ -905,8 +898,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     return avatar;
   }
 
-  function buildAvatar(conv: Pick<Conversation, 'displayName' | 'waPhone'>, size: 'xs' | 'sm' | 'lg'): HTMLElement {
-    return buildAvatarEl(getInitials(conv.displayName, conv.waPhone), conv.waPhone, size);
+  function buildAvatar(conv: Pick<Conversation, 'label' | 'id'>, size: 'xs' | 'sm' | 'lg'): HTMLElement {
+    return buildAvatarEl(getInitials(conv.label, conv.id), conv.id, size);
   }
 
   function renderConversations(conversations: Conversation[]) {
@@ -944,7 +937,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
       const name = document.createElement('span');
       name.className = 'name';
-      name.textContent = conv.displayName || `+${conv.waPhone}`;
+      name.textContent = conv.label;
       nameGroup.append(name);
 
       if (conv.isBlocked) {
@@ -991,7 +984,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       row.className = `message-row ${m.direction}`;
 
       // Inbound avatars match the customer's avatar everywhere else (list,
-      // header) — keyed by their phone. Outbound avatars are keyed by
+      // header) — keyed by their conversation id. Outbound avatars are keyed by
       // whichever staff name is in the signature, so different repliers
       // in the same thread get visibly different avatars, same as the
       // customer would see distinct people in a group chat.
@@ -1029,6 +1022,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
+  // What this signed-in role may do; refreshed on every conversation poll.
+  let capabilities = { reply: false, manage: false };
+
   async function loadConversations() {
     try {
       const params = new URLSearchParams({ limit: String(conversationsLimit) });
@@ -1040,7 +1036,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         conversationsStatus.textContent = 'Failed to load conversations.';
         return;
       }
-      const data = (await res.json()) as { conversations: Conversation[] };
+      const data = (await res.json()) as { conversations: Conversation[]; capabilities: { reply: boolean; manage: boolean } };
+      capabilities = data.capabilities;
       renderConversations(data.conversations);
       // A full page back implies there may be more beyond it; a short page
       // means we've reached the end. Not exact (an exact-multiple total
@@ -1073,11 +1070,13 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     threadEmpty.hidden = true;
     threadHeader.hidden = false;
     messagesEl.hidden = false;
-    composer.hidden = false;
-    threadAvatar.textContent = getInitials(conv.displayName, conv.waPhone);
-    threadAvatar.style.background = getAvatarColor(conv.waPhone);
-    threadName.textContent = conv.displayName || `+${conv.waPhone}`;
-    threadPhone.textContent = `+${conv.waPhone}`;
+    // Read-only roles can read the thread but not reply or block; the
+    // server enforces this too, this just stops the page offering it.
+    composer.hidden = !capabilities.reply;
+    blockBtn.hidden = !capabilities.manage;
+    threadAvatar.textContent = getInitials(conv.label, conv.id);
+    threadAvatar.style.background = getAvatarColor(conv.id);
+    threadName.textContent = conv.label;
     updateBlockBtn(conv.isBlocked);
     document.querySelectorAll('.conversation-item').forEach((el) => el.classList.remove('active'));
     // Optimistic — the real read-state update happens server-side as a side
@@ -1106,7 +1105,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const nextBlocked = !selectedConversation.isBlocked;
     // Blocking silences a real customer with no way to reach us short of a
     // new number — worth a confirm; unblocking is reversible, so it isn't.
-    if (nextBlocked && !confirm(`Block ${selectedConversation.displayName || `+${selectedConversation.waPhone}`}? They won't be able to message this number until unblocked.`)) {
+    if (nextBlocked && !confirm(`Block ${selectedConversation.label}? They won't be able to message this number until unblocked.`)) {
       return;
     }
 
