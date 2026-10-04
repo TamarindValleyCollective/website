@@ -19,78 +19,10 @@
 // quiet when it breaks is worse than none.
 import { appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { DEFAULT_DOMAINS, daysUntil, lookupDomain, shouldAlert } from './lib/domain-expiry.mjs';
 
-const DEFAULT_DOMAINS = ['tvc.farm', 'syntropic.in'];
 const NOTIFY_TO = ['core-team@tvc.farm'];
 const FROM = 'TVC Website <noreply@tvc.farm>';
-const IANA_BOOTSTRAP = 'https://data.iana.org/rdap/dns.json';
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-// ---- pure helpers (unit-tested) -------------------------------------------
-
-// Pulls what we need out of an RDAP domain response. Returns
-// { expiresAt: Date | null, registrar: string | null, statuses: string[] }.
-export function parseRdap(json) {
-  const expiryEvent = (json?.events ?? []).find((e) => e.eventAction === 'expiration');
-  const expiresAt = expiryEvent?.eventDate ? new Date(expiryEvent.eventDate) : null;
-
-  let registrar = null;
-  for (const entity of json?.entities ?? []) {
-    if (!(entity.roles ?? []).includes('registrar')) continue;
-    const fn = (entity.vcardArray?.[1] ?? []).find((field) => field[0] === 'fn');
-    registrar = fn?.[3] ?? entity.handle ?? null;
-    break;
-  }
-
-  return {
-    expiresAt: expiresAt && !Number.isNaN(expiresAt.getTime()) ? expiresAt : null,
-    registrar,
-    statuses: json?.status ?? [],
-  };
-}
-
-// Whole days from `now` until `expiresAt` (negative once expired). Rounds
-// down so "13 days 23 hours left" reads as 13, never as a comforting 14.
-export function daysUntil(expiresAt, now = new Date()) {
-  return Math.floor((expiresAt.getTime() - now.getTime()) / DAY_MS);
-}
-
-export function shouldAlert(daysLeft) {
-  return daysLeft === 60 || daysLeft === 30 || daysLeft <= 14;
-}
-
-// Picks the RDAP base URL for a domain's TLD out of IANA's bootstrap JSON.
-export function rdapBaseFromBootstrap(bootstrap, domain) {
-  const tld = domain.split('.').pop().toLowerCase();
-  for (const [tlds, urls] of bootstrap?.services ?? []) {
-    if (tlds.includes(tld)) {
-      const url = urls.find((u) => u.startsWith('https://')) ?? urls[0];
-      return url.endsWith('/') ? url : `${url}/`;
-    }
-  }
-  return null;
-}
-
-// ---- I/O ------------------------------------------------------------------
-
-async function getJson(url) {
-  const res = await fetch(url, { headers: { accept: 'application/rdap+json, application/json' }, signal: AbortSignal.timeout(20_000) });
-  if (!res.ok) throw new Error(`${url} -> ${res.status}`);
-  return res.json();
-}
-
-async function lookupDomain(domain) {
-  let rdapUrl = null;
-  try {
-    const base = rdapBaseFromBootstrap(await getJson(IANA_BOOTSTRAP), domain);
-    if (base) rdapUrl = `${base}domain/${domain}`;
-  } catch (err) {
-    console.warn(`[domain-expiry] IANA bootstrap lookup failed (${err.message}); trying rdap.org`);
-  }
-  const parsed = parseRdap(await getJson(rdapUrl ?? `https://rdap.org/domain/${domain}`));
-  if (!parsed.expiresAt) throw new Error(`no expiration date in the RDAP response for ${domain}`);
-  return parsed;
-}
 
 function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
