@@ -280,14 +280,6 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     margin: 0;
   }
 
-  /* The shared .button is the large marketing pill; a tool's toolbar wants it compact. */
-  .toolbar .button,
-  .banner-form .button,
-  .inline-form .button {
-    padding: 10px 20px;
-    font-size: 1rem;
-  }
-
   /* ---- people x tools grid */
   .toolbar {
     display: flex;
@@ -307,7 +299,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   .matrix {
     width: 100%;
-    min-width: 780px;
+    min-width: 760px;
     border-collapse: separate;
     border-spacing: 0;
     font-size: 1rem;
@@ -315,7 +307,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   .matrix :global(th),
   .matrix :global(td) {
-    padding: 12px 14px;
+    padding: 12px 10px;
     text-align: left;
     vertical-align: top;
     border-bottom: 1px solid var(--tvc-line);
@@ -338,7 +330,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     position: sticky;
     left: 0;
     z-index: 1;
-    min-width: 190px;
+    min-width: 160px;
     background: var(--tvc-white);
     font-weight: 400;
   }
@@ -385,9 +377,9 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     font: inherit;
     font-size: 1rem;
     width: 100%;
-    min-width: 9em;
-    min-height: 40px;
-    padding: 6px 8px;
+    min-width: 7.5em;
+    min-height: 36px;
+    padding: 4px 8px;
     border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
     background: var(--tvc-white);
@@ -485,8 +477,8 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   .matrix :global(.row-action) {
     font: inherit;
     font-size: 0.9rem;
-    min-height: 40px;
-    padding: 6px 12px;
+    min-height: 36px;
+    padding: 4px 12px;
     border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-sm);
     background: var(--tvc-white);
@@ -590,6 +582,14 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   .roles-guide :global(.dash) {
     border: 1px solid var(--tvc-line);
     color: var(--tvc-ink-soft);
+  }
+
+  /* Touch screens get the larger targets back. */
+  @media (pointer: coarse) {
+    .matrix :global(.role-select),
+    .matrix :global(.row-action) {
+      min-height: 44px;
+    }
   }
 
   @media (max-width: 640px) {

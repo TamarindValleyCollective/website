@@ -206,6 +206,44 @@ const ICONS: Record<string, string> = {
     margin: 0 0 8px;
   }
 
+  /* Staff buttons. The shared .button is the public site's large orange pill; inside the
+     staff shell it becomes a compact, quiet control (36px, small radius). These rules are
+     deliberately low specificity (main .button) so a page's own modifier classes
+     (--danger, --primary, --icon...) still win, and global.css is untouched. */
+  main :global(.button) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 0 14px;
+    border: 1px solid var(--tvc-green-dark);
+    border-radius: var(--radius-sm);
+    background: var(--tvc-green-dark);
+    color: var(--tvc-white);
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.2;
+    box-shadow: none;
+  }
+
+  main :global(.button--outline) {
+    border-color: var(--tvc-line-strong);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+  }
+
+  main :global(.button:disabled) {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  @media (pointer: coarse) {
+    main :global(.button) {
+      min-height: 44px;
+    }
+  }
+
   #staff-main[data-width='full'] :global(.wrapper) {
     max-width: none;
     margin: 0;

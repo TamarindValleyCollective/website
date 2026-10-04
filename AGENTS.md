@@ -51,6 +51,9 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
 - Orange has three jobs: `--tvc-orange-cta` fills the primary `.button` only; `--tvc-orange` is for
   non-text marks (focus rings, underlines, hover); small orange text uses `--tvc-orange-text`, and
   orange on dark green uses `--tvc-orange-light`. Never white text on `--tvc-orange-cta`.
+- Inside the staff shell (`StaffLayout.astro`) `.button` is a compact 36px dark-green control, not the
+  public orange pill; don't restyle buttons per page, add a modifier class only when a page needs a
+  different colour.
 - Use `--radius` (14px, cards), `--radius-sm` (8px), `--radius-field` (10px) and `--shadow-soft`
   rather than literals.
 - Fonts: headings use `--font-display`, everything else `--font-body`; `--font-wordmark` is only
