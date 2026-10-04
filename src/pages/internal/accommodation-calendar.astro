@@ -1465,7 +1465,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   declare const google: any;
 
-  const STORAGE_KEY = 'tvc-accommodation-idtoken';
+  // One Google sign-in for every internal tool in this tab: the same stored
+  // sign-in as /internal, /internal/access and /internal/security (see
+  // scripts/lib/staff-client.mjs), so signing in once opens them all. Each tool
+  // still checks its own role on the server for every request.
+  import { TOKEN_KEY as STORAGE_KEY } from '../../../scripts/lib/staff-client.mjs';
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
   interface EventOption {

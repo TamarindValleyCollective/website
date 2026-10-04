@@ -555,11 +555,13 @@ outside both the local machine and Netlify (the member-update-email workflow).
   someone and then never shown. `/internal` is the landing page: one sign-in and a list of the tools
   you hold a role in (from `staff-me.mts`, which answers only about the caller, returns no email and
   lists a tool only because a role exists — each tool still checks its own capability), plus Access
-  and Security for super admins. `/internal`, `/internal/access` and `/internal/security` share one
-  Google sign-in and one step-up per browser tab through `scripts/lib/staff-client.mjs` (storage
-  keys `tvc-staff-idtoken` / `tvc-staff-stepup`); the four older tools keep their own sign-in for
-  now, so a shared menu on them is a later step. `components/StaffNav.astro` is the link row on the
-  two admin pages. Where each tool lives is `MODULE_INFO[...].path` in `staff-registry.ts`.
+  and Security for super admins. **Every internal page shares one Google sign-in per browser tab**
+  through `scripts/lib/staff-client.mjs` (storage key `tvc-staff-idtoken`, imported by the photo
+  pool, WhatsApp, event payments and accommodation pages as well as the new ones), so signing in
+  once opens them all and "use a different account" signs out of all of them; Access and Security
+  also share one step-up (`tvc-staff-stepup`). Each tool still checks its own role on the server for
+  every request. A shared menu across the tools is a later step. `components/StaffNav.astro` is the
+  link row on the two admin pages. Where each tool lives is `MODULE_INFO[...].path` in `staff-registry.ts`.
 - **`scripts/lib/accommodation-db.mjs`** — hand-rolled Supabase PostgREST REST client (same style
   as `supabase.mjs` below, no `@supabase/supabase-js`), the sole data-access layer for
   `accommodation-admin.mts`. Conflict-checking lives entirely in Postgres (see above) — this file
