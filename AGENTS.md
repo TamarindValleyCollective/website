@@ -51,7 +51,8 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
 
 `npm run lint:css` checks this (Stylelint); the `Design language` GitHub Action runs it on every
 PR. Raw hex colors and radius literals are warnings for now, so existing ones don't block a PR,
-but don't add new ones. Update this section in the same change if the rules change.
+but don't add new ones. A color that genuinely isn't a TVC color (a third-party brand, a data
+color) gets a `/* stylelint-disable-next-line color-no-hex -- reason */` comment above it. Update this section in the same change if the rules change.
 
 ## Change log
 

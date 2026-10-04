@@ -204,7 +204,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   }
 
   .card {
-    background: #fff;
+    background: var(--tvc-white);
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
@@ -231,7 +231,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   .button {
     appearance: none;
     border: 1px solid var(--tvc-line);
-    background: #fff;
+    background: var(--tvc-white);
     border-radius: 999px;
     padding: 8px 18px;
     font: inherit;
@@ -243,13 +243,13 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   .button--primary {
     background: var(--tvc-green);
     border-color: var(--tvc-green);
-    color: #fff;
+    color: var(--tvc-white);
   }
 
   .button--danger {
     background: var(--tvc-error-text);
     border-color: var(--tvc-error-text);
-    color: #fff;
+    color: var(--tvc-white);
   }
 
   .button--danger-outline {
@@ -370,7 +370,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   :global(#bulk-cancel-review .button) {
     appearance: none;
     border: 1px solid var(--tvc-line);
-    background: #fff;
+    background: var(--tvc-white);
     border-radius: 999px;
     padding: 8px 18px;
     font: inherit;
@@ -382,7 +382,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   :global(#bulk-cancel-review .button--danger) {
     background: var(--tvc-error-text);
     border-color: var(--tvc-error-text);
-    color: #fff;
+    color: var(--tvc-white);
   }
 
   :global(#bulk-cancel-review .button:disabled) {
@@ -415,7 +415,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     overflow-y: auto;
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius-sm);
-    background: #fff;
+    background: var(--tvc-white);
   }
 
   :global(#bulk-cancel-panel .bulk-cancel-breakdown li) {
@@ -745,7 +745,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   :global(#bookings-body .button) {
     appearance: none;
     border: 1px solid var(--tvc-line);
-    background: #fff;
+    background: var(--tvc-white);
     border-radius: 999px;
     padding: 8px 18px;
     font: inherit;
@@ -757,13 +757,13 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   :global(#bookings-body .button--primary) {
     background: var(--tvc-green);
     border-color: var(--tvc-green);
-    color: #fff;
+    color: var(--tvc-white);
   }
 
   :global(#bookings-body .button--danger) {
     background: var(--tvc-error-text);
     border-color: var(--tvc-error-text);
-    color: #fff;
+    color: var(--tvc-white);
   }
 
   :global(#bookings-body .button:disabled) {

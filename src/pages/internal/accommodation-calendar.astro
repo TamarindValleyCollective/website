@@ -213,7 +213,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   .card {
-    background: #fff;
+    background: var(--tvc-white);
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
@@ -240,7 +240,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   .button {
     appearance: none;
     border: 1px solid var(--tvc-line);
-    background: #fff;
+    background: var(--tvc-white);
     border-radius: 999px;
     padding: 8px 18px;
     font: inherit;
@@ -252,7 +252,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   .button--primary {
     background: var(--tvc-green);
     border-color: var(--tvc-green);
-    color: #fff;
+    color: var(--tvc-white);
   }
 
   .month-nav {
@@ -289,7 +289,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   .view-toggle-btn--active {
     background: var(--tvc-green);
     border-color: var(--tvc-green);
-    color: #fff;
+    color: var(--tvc-white);
   }
 
   /* Below this width, Prev/label/Next alone are already tight - let the
@@ -572,6 +572,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
      past-dimming, which only covers the one status that otherwise looked
      identical whether it was bookable or not). */
   .grid-table th.col--past {
+    /* stylelint-disable-next-line color-no-hex -- internal admin tool, neutral greys */
     background: #d8d8d8;
   }
 
@@ -590,7 +591,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     text-align: left;
     position: sticky;
     left: 0;
-    background: #fff;
+    background: var(--tvc-white);
     font-weight: 600;
   }
 
@@ -601,7 +602,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
      own comment on that same clash). */
   .group-row td.group-row-label {
     background: var(--tvc-green);
-    color: #fff;
+    color: var(--tvc-white);
     font-weight: 700;
     font-size: 0.68rem;
     text-transform: uppercase;
@@ -622,6 +623,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
      matches the header's own col--past shading rather than inventing a
      second grey. */
   .cell--free:not([data-tent-id]) {
+    /* stylelint-disable-next-line color-no-hex -- internal admin tool, neutral greys */
     background: #d8d8d8;
   }
 
@@ -630,6 +632,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   .cell--closed {
+    /* stylelint-disable-next-line color-no-hex -- internal admin tool, neutral greys */
     background: #e6e6e6;
   }
 
@@ -676,7 +679,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: #fff;
+    color: var(--tvc-white);
     background: var(--tvc-green);
     border-radius: 999px;
   }
@@ -723,10 +726,12 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   .day-row--closed {
+    /* stylelint-disable-next-line color-no-hex -- internal admin tool, neutral greys */
     background: #e6e6e6;
   }
 
   .day-row--free-past {
+    /* stylelint-disable-next-line color-no-hex -- internal admin tool, neutral greys */
     background: #d8d8d8;
     color: var(--tvc-ink-soft);
   }
@@ -757,7 +762,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     align-items: center;
     gap: 12px;
     padding: 12px 16px;
-    background: #fff;
+    background: var(--tvc-white);
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
   }
@@ -807,7 +812,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: #fff;
+    color: var(--tvc-white);
     background: var(--tvc-green);
     padding: 3px 10px;
     border-radius: 999px;
@@ -1158,7 +1163,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     top: calc(100% + 4px);
     left: 0;
     z-index: 5;
-    background: #fff;
+    background: var(--tvc-white);
     border: 1px solid var(--tvc-line);
     border-radius: 6px;
     box-shadow: var(--shadow-soft);
@@ -1260,7 +1265,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   .reason-overlay-card {
-    background: #fff;
+    background: var(--tvc-white);
     border-radius: var(--radius);
     padding: 20px 24px;
     max-width: 420px;
@@ -1344,7 +1349,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
      their own look so a destructive action never renders identically to a
      safe one (Edit vs Cancel were indistinguishable before this). */
   .button.button:not(.button--primary):not(.button--danger) {
-    background: #fff;
+    background: var(--tvc-white);
     color: var(--tvc-ink);
   }
 
@@ -1358,7 +1363,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
      visibly different treatment from neutral ones (Edit, +Guest) so the two
      are never one indistinguishable pill color. */
   .button.button--danger {
-    background: #fff;
+    background: var(--tvc-white);
     border-color: var(--tvc-error-text);
     color: var(--tvc-error-text);
   }
@@ -1367,7 +1372,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   .button.button--danger:focus-visible {
     background: var(--tvc-error-text);
     border-color: var(--tvc-error-text);
-    color: #fff;
+    color: var(--tvc-white);
   }
 
   /* An icon-only dismiss button reads as a lopsided, over-wide oval when it

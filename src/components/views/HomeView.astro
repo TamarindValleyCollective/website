@@ -456,7 +456,7 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
   }
 
   .hero h1 {
-    color: #fff;
+    color: var(--tvc-white);
     font-size: clamp(2.2rem, 5vw, 3.2rem);
   }
 
@@ -553,7 +553,7 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
     position: relative;
     z-index: 1;
     padding: 32px;
-    color: #fff;
+    color: var(--tvc-white);
     width: 100%;
   }
 
@@ -570,16 +570,18 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
 
   .door--explore .door__tag {
     background: rgba(255, 255, 255, 0.16);
+    /* stylelint-disable-next-line color-no-hex -- pale green tag text on a translucent dark ground */
     color: #d7ecd9;
   }
 
   .door--engage .door__tag {
     background: var(--tvc-orange);
+    /* stylelint-disable-next-line color-no-hex -- dark brown for contrast on the orange fill (--tvc-ink is only 4.3:1 here) */
     color: #2a1400;
   }
 
   .door h3 {
-    color: #fff;
+    color: var(--tvc-white);
     font-size: 1.6rem;
     margin-bottom: 8px;
   }
@@ -638,11 +640,11 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
     position: relative;
     z-index: 1;
     padding: 18px;
-    color: #fff;
+    color: var(--tvc-white);
   }
 
   .principle-card h4 {
-    color: #fff;
+    color: var(--tvc-white);
     margin-bottom: 6px;
     font-size: 1.05rem;
   }
@@ -712,7 +714,7 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
     color: inherit;
     border-radius: var(--radius);
     overflow: hidden;
-    background: #fff;
+    background: var(--tvc-white);
     border: 1px solid var(--tvc-line);
     transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
   }
@@ -828,7 +830,7 @@ const engageRungs = engageLinks.map((link, i) => ({ ...link, ...c.engageRungs[i]
   }
 
   .tone-1 {
-    background: #fff;
+    background: var(--tvc-white);
     border: 1px solid var(--tvc-line);
   }
   .tone-1 .rung__step { color: var(--tvc-green); }
