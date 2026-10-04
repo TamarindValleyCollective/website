@@ -98,7 +98,7 @@ const [rx, ry] = edgePoint(heading + coneHalfAngle);
 
   .location-inset__boundary {
     fill: rgba(255, 255, 255, 0.14);
-    stroke: #fff;
+    stroke: var(--tvc-white);
     stroke-width: 1.4;
   }
 
@@ -107,8 +107,9 @@ const [rx, ry] = edgePoint(heading + coneHalfAngle);
   }
 
   .location-inset__dot {
+    /* stylelint-disable-next-line color-no-hex -- map pin blue, data color */
     fill: #4da3ff;
-    stroke: #fff;
+    stroke: var(--tvc-white);
     stroke-width: 2;
   }
 

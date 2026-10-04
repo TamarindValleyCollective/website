@@ -113,7 +113,7 @@ const isGroupActive = (entry: NavSection) =>
 
 <style>
   .nav {
-    background: #fff;
+    background: var(--tvc-white);
     border-bottom: 1px solid var(--tvc-line);
     position: sticky;
     top: 0;
@@ -246,7 +246,7 @@ const isGroupActive = (entry: NavSection) =>
     transform: translateX(calc(-50% + var(--dropdown-shift, 0px)));
     flex-direction: column;
     min-width: 210px;
-    background: #fff;
+    background: var(--tvc-white);
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
@@ -357,7 +357,7 @@ const isGroupActive = (entry: NavSection) =>
       top: 100%;
       left: 0;
       right: 0;
-      background: #fff;
+      background: var(--tvc-white);
       border-bottom: 1px solid var(--tvc-line);
       flex-direction: column;
       /* Undo the base rule's flex-wrap: wrap and justify-content: flex-end

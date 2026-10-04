@@ -217,6 +217,7 @@ const stringsJsonSafe = JSON.stringify(strings).replace(/<\/script/gi, '<\\/scri
     height: 240px;
     margin: 0 auto 20px;
     border-radius: var(--radius);
+    /* stylelint-disable-next-line color-no-hex -- loading-skeleton shimmer highlight */
     background: linear-gradient(90deg, var(--tvc-line) 25%, #f3f0e2 37%, var(--tvc-line) 63%);
     background-size: 400% 100%;
     animation: shimmer 1.4s ease infinite;
@@ -306,7 +307,7 @@ const stringsJsonSafe = JSON.stringify(strings).replace(/<\/script/gi, '<\\/scri
     align-items: center;
     gap: 6px;
     border: 1px solid var(--tvc-line);
-    background: #fff;
+    background: var(--tvc-white);
     color: var(--tvc-ink-soft);
     padding: 5px 12px 5px 6px;
     border-radius: 999px;
@@ -323,7 +324,7 @@ const stringsJsonSafe = JSON.stringify(strings).replace(/<\/script/gi, '<\\/scri
   :global(.leaderboard__item.is-active) {
     background: var(--tvc-ink);
     border-color: var(--tvc-ink);
-    color: #fff;
+    color: var(--tvc-white);
   }
 
   :global(.leaderboard__rank) {
@@ -341,7 +342,7 @@ const stringsJsonSafe = JSON.stringify(strings).replace(/<\/script/gi, '<\\/scri
 
   :global(.leaderboard__item.is-active .leaderboard__rank) {
     background: var(--tvc-orange);
-    color: #fff;
+    color: var(--tvc-white);
   }
 
   :global(.leaderboard__count) {
@@ -372,8 +373,8 @@ const stringsJsonSafe = JSON.stringify(strings).replace(/<\/script/gi, '<\\/scri
     appearance: none;
     -webkit-appearance: none;
     border: 1px solid var(--tvc-line);
-    background: #fff;
-    background-color: #fff;
+    background: var(--tvc-white);
+    background-color: var(--tvc-white);
     color: var(--tvc-ink-soft);
     padding: 5px 14px;
     border-radius: 999px;
@@ -387,7 +388,7 @@ const stringsJsonSafe = JSON.stringify(strings).replace(/<\/script/gi, '<\\/scri
     background: var(--tvc-ink);
     background-color: var(--tvc-ink);
     border-color: var(--tvc-ink);
-    color: #fff;
+    color: var(--tvc-white);
   }
 
   .view-toggle {
@@ -411,7 +412,7 @@ const stringsJsonSafe = JSON.stringify(strings).replace(/<\/script/gi, '<\\/scri
 
   .view-toggle__btn.is-active {
     background: var(--tvc-ink);
-    color: #fff;
+    color: var(--tvc-white);
   }
 
   .contributor-filter {
@@ -436,7 +437,7 @@ const stringsJsonSafe = JSON.stringify(strings).replace(/<\/script/gi, '<\\/scri
     appearance: none;
     -webkit-appearance: none;
     border: none;
-    background: #fff;
+    background: var(--tvc-white);
     color: var(--tvc-ink-soft);
     font-weight: 600;
     font-size: 0.78rem;
@@ -447,7 +448,7 @@ const stringsJsonSafe = JSON.stringify(strings).replace(/<\/script/gi, '<\\/scri
 
   .contributor-filter #contributor-filter-clear:hover {
     background: var(--tvc-ink);
-    color: #fff;
+    color: var(--tvc-white);
   }
 
   .explorer__map-wrap {
@@ -514,7 +515,7 @@ const stringsJsonSafe = JSON.stringify(strings).replace(/<\/script/gi, '<\\/scri
     -webkit-appearance: none;
     border: none;
     background: rgba(23, 41, 31, 0.72);
-    color: #fff;
+    color: var(--tvc-white);
     font-weight: 600;
     font-size: 0.7rem;
     padding: 4px 10px;
@@ -592,7 +593,7 @@ const stringsJsonSafe = JSON.stringify(strings).replace(/<\/script/gi, '<\\/scri
   }
 
   .detail-panel {
-    background: #fff;
+    background: var(--tvc-white);
     border-radius: var(--radius);
     max-width: 760px;
     width: 100%;
@@ -618,7 +619,7 @@ const stringsJsonSafe = JSON.stringify(strings).replace(/<\/script/gi, '<\\/scri
     width: 14px;
     height: 14px;
     border-radius: 50%;
-    border: 2px solid #fff;
+    border: 2px solid var(--tvc-white);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
   }
 

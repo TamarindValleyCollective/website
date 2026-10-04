@@ -472,7 +472,7 @@ const eventsSchema = {
     grid-template-columns: 130px 140px 1fr;
     align-items: center;
     gap: 24px;
-    background: #fff;
+    background: var(--tvc-white);
     border: 1px solid rgba(247, 133, 32, 0.35);
     border-radius: 18px;
     padding: 22px 26px;
@@ -586,7 +586,7 @@ const eventsSchema = {
   .chip {
     appearance: none;
     border: 1px solid var(--tvc-line);
-    background: #fff;
+    background: var(--tvc-white);
     color: var(--tvc-ink-soft);
     border-radius: 999px;
     padding: 6px 14px;
@@ -606,7 +606,7 @@ const eventsSchema = {
   .chip.is-active {
     background: var(--tvc-green);
     border-color: var(--tvc-green);
-    color: #fff;
+    color: var(--tvc-white);
   }
 
   /* Content tags are already sorted most-used-first (see tagCounts above),
@@ -625,6 +625,7 @@ const eventsSchema = {
   .chip--duration.is-active {
     background: var(--tvc-orange);
     border-color: var(--tvc-orange);
+    /* stylelint-disable-next-line color-no-hex -- dark brown for contrast on the orange fill (--tvc-ink is only 4.3:1 here) */
     color: #2a1400;
   }
 
@@ -633,7 +634,7 @@ const eventsSchema = {
     border: 1px solid var(--tvc-line);
     border-radius: 999px;
     padding: 3px;
-    background: #fff;
+    background: var(--tvc-white);
     flex-shrink: 0;
   }
 
@@ -652,7 +653,7 @@ const eventsSchema = {
 
   .view-toggle__btn.is-active {
     background: var(--tvc-green-dark);
-    color: #fff;
+    color: var(--tvc-white);
   }
 
   .result-count {
@@ -767,7 +768,7 @@ const eventsSchema = {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: #fff;
+    background: var(--tvc-white);
     border: 2px solid var(--tvc-green);
   }
 

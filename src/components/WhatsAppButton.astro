@@ -27,8 +27,9 @@ const { href, class: className } = Astro.props;
     display: inline-flex;
     align-items: center;
     gap: 10px;
+    /* stylelint-disable-next-line color-no-hex -- WhatsApp brand green, not a TVC color */
     background: #25d366;
-    color: #fff;
+    color: var(--tvc-white);
     font-weight: 600;
     padding: 16px 30px;
     border-radius: 999px;
@@ -40,6 +41,7 @@ const { href, class: className } = Astro.props;
   }
 
   .whatsapp-btn:hover {
+    /* stylelint-disable-next-line color-no-hex -- WhatsApp brand green, not a TVC color */
     background: #1fb959;
   }
 
