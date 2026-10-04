@@ -173,7 +173,7 @@ flowchart TD
         GSC["Google Search Console API<br/>urlInspection.index.inspect — read-only,<br/>same service account (Full user on the<br/>property as of 2026-08-08),<br/>called from a local script only"]
         RESEND["Resend API<br/>Transactional email — noreply@tvc.farm,<br/>domain verified 2026-08-19,<br/>called from the GitHub Action above<br/>and whatsapp-stale-alert.mts"]
         WAMETA["Meta WhatsApp Cloud API<br/>Sends inbound message + template-status<br/>events to /api/whatsapp-webhook;<br/>receives replies from whatsapp-admin.mts;<br/>see WHATSAPP.md for setup status"]
-        SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages,<br/>event_payments — service_role key, called<br/>server-side only"]
+        SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages,<br/>event_payments, staff_users/staff_module_roles/<br/>staff_audit_log (not yet wired to any Function) —<br/>service_role key, called server-side only"]
         RAZORPAY["Razorpay API<br/>Payment Links (create/fetch) +<br/>payment_link.paid webhook + refunds<br/>(admin-triggered, event-payments-admin.mts) +<br/>payment fees and settlement recon<br/>(nightly reconcile-event-payment-fees.mjs).<br/>Live keys as of 2026-09-24 —<br/>see RAZORPAY.md"]
     end
 
@@ -469,6 +469,22 @@ outside both the local machine and Netlify (the member-update-email workflow).
   (`accommodation_booking_audit_log`, populated by table triggers, not application code, so no
   write path can bypass it) records every create/update/delete, and editing or deleting a booking
   whose stay has already happened requires and records a reason.
+- **`netlify/functions/lib/staff-access.ts` + `staff-registry.ts`** — the shared access layer
+  for the internal admin tools (issue #89), meant to replace the per-function Sheet allow-lists
+  above. `requireStaff(req, module, capability)` verifies the Google ID token (for tvc.farm /
+  syntropic.in addresses the token's `hd` claim must match, so a non-org-managed account with
+  such an address is refused), then looks the person up in `staff_users` /
+  `staff_module_roles` (TVC ERP Supabase project, migration `0028_staff_access.sql`, service_role
+  only — RLS on with no policies) and checks that their role in that module carries the
+  capability. Roles are `admin`/`user`/`read_only` per module, with an optional `scope` (the
+  accommodation `restricted` role's allowed booking types); `super_admin` is a global flag that
+  manages access and grants **no** implicit module access. What each role may do lives in
+  `staff-registry.ts`, not the database. Every denial returns the same 403 so responses don't
+  reveal who exists; lookup errors fail closed; a 30-second cache means a revoked role takes
+  effect within seconds. `logStaffAction` appends to the append-only `staff_audit_log`, which
+  stores staff ids, never emails. **Status:** tables, three seeded super admins and the helper
+  exist; no Function calls `requireStaff` yet, so the Sheet allow-lists above are still the live
+  gate until each module is migrated (and the existing Sheet users are backfilled with roles).
 - **`scripts/lib/accommodation-db.mjs`** — hand-rolled Supabase PostgREST REST client (same style
   as `supabase.mjs` below, no `@supabase/supabase-js`), the sole data-access layer for
   `accommodation-admin.mts`. Conflict-checking lives entirely in Postgres (see above) — this file
