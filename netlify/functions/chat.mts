@@ -22,6 +22,7 @@ import {
   callAnthropic,
 } from './lib/site-retrieval';
 import { checkIpRateLimit, checkDailyCap, clientIp } from './lib/rate-limit';
+import { recordUsage } from './lib/usage-meter';
 
 const MODEL = 'claude-sonnet-5';
 const MAX_HISTORY_MESSAGES = 12;
@@ -102,6 +103,7 @@ export default async (req: Request): Promise<Response> => {
   }
   if (!(await allowed(() => checkDailyCap(RATE_LIMIT_STORE, 'daily', DAILY_CAP)))) {
     console.warn('[chat] Daily message cap reached');
+    await recordUsage('anthropic', { chat_cap_hits: 1 });
     return jsonResponse({ error: LIMIT_REACHED_MESSAGE }, 429);
   }
 

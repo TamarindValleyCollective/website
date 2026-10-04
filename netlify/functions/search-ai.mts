@@ -15,6 +15,7 @@ import {
   type SitePage,
 } from './lib/site-retrieval';
 import { checkIpRateLimit, checkDailyCap, clientIp } from './lib/rate-limit';
+import { recordUsage } from './lib/usage-meter';
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 // Overridable via env var so a future model rename/deprecation doesn't need
@@ -100,10 +101,18 @@ async function callGemini(apiKey: string, systemText: string, query: string): Pr
 
     if (!res.ok) {
       console.warn('[search-ai] Gemini API error', res.status, await res.text());
+      // 429 = the free-tier quota (or rate limit) is exhausted - the signal
+      // the usage dashboard cares most about, so it gets its own counter.
+      await recordUsage('gemini', { errors: 1, quota_exhausted: res.status === 429 ? 1 : 0 });
       return null;
     }
 
     const data = await res.json();
+    await recordUsage('gemini', {
+      requests: 1,
+      input_tokens: data.usageMetadata?.promptTokenCount,
+      output_tokens: data.usageMetadata?.candidatesTokenCount,
+    });
     if (data.promptFeedback?.blockReason) {
       console.warn('[search-ai] Gemini blocked the request', data.promptFeedback.blockReason);
       return null;
@@ -168,6 +177,8 @@ export default async (req: Request): Promise<Response> => {
     if (reply) {
       return jsonResponse({ reply, sources, provider: 'gemini' });
     }
+    // Gemini failed: from here the answer (if any) costs paid Anthropic credits.
+    await recordUsage('gemini', { fallbacks_to_anthropic: anthropicKey ? 1 : 0 });
   }
 
   if (!anthropicKey) {
@@ -177,6 +188,7 @@ export default async (req: Request): Promise<Response> => {
 
   if (!(await checkDailyCap(RATE_LIMIT_STORE, 'anthropic-fallback', ANTHROPIC_FALLBACK_DAILY_CAP))) {
     console.warn('[search-ai] Anthropic fallback daily budget exhausted');
+    await recordUsage('anthropic', { search_fallback_cap_hits: 1 });
     return jsonResponse({ error: 'AI search is having trouble right now. Please try again shortly.' }, 502);
   }
 

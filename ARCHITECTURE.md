@@ -74,6 +74,7 @@ flowchart TD
 
     subgraph CIACTIONS["0c · GitHub Actions — CI, on push to main"]
         GHA_MEMBER["member-update-email.yml<br/>+ send-member-update-email.mjs<br/>On push touching src/data/members.ts:<br/>diffs it, classifies changed cards<br/>new/updated, emails members@tvc.farm,<br/>BCCing each changed member's own address"]
+        GHA_DOMAIN["domain-expiry.yml + check-domain-expiry.mjs<br/>Daily cron: reads each domain's expiry date from<br/>the registry's public RDAP service, emails<br/>core-team@tvc.farm at 60/30 days then daily from 14.<br/>Holds no database credentials; runs off Netlify<br/>on purpose, so it still alerts if Netlify pauses"]
     end
 
     subgraph SRC["1 · Source — github.com/TamarindValleyCollective/website (main)"]
@@ -98,6 +99,7 @@ flowchart TD
         FUNC_SRC12["netlify/functions/razorpay-webhook.mts<br/>Serverless function — verifies signature, records<br/>payment_link.paid in Supabase (idempotent), emails<br/>a branded receipt; also handles refund.created/<br/>processed/failed — Razorpay's own confirmation is<br/>the only thing that marks a row actually refunded"]
         FUNC_SRC13["netlify/functions/cancel-booking.mts<br/>Serverless function — records a guest's<br/>cancellation request (not an automatic<br/>refund), notifies TVC + Linger + guest"]
         FUNC_SRC14["netlify/functions/event-payments-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>per-event registrations/cancellations/money<br/>collected from Supabase, issues real Razorpay<br/>refunds (tier-suggested, admin-confirmed)"]
+        FUNC_SRC15["netlify/functions/usage-collect.mts<br/>Scheduled function (cron, every 6 hours) — appends<br/>the Supabase database size to usage_snapshots for<br/>the free-tier usage dashboard. Reuses existing<br/>Supabase credentials; no new secret"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
     end
 
@@ -124,6 +126,7 @@ flowchart TD
         APIFN12["Netlify Function: /api/razorpay-webhook<br/>Deployed and live — live-mode webhook<br/>configured, signature verification confirmed"]
         APIFN13["Netlify Function: /api/cancel-booking<br/>Deployed and live"]
         APIFN14["Netlify Function: /api/event-payments-admin<br/>Deployed and live — backs /internal/event-payments,<br/>issues real refunds via Razorpay's API"]
+        APIFN15["Netlify Function: usage-collect<br/>Scheduled (cron), no HTTP path"]
         BLOBS["Netlify Blobs<br/>'event-interest' store — one JSON record per<br/>past event id, {count, emails[]}, optimistic-<br/>concurrency writes. Reset via netlify blobs:delete<br/>event-interest &lt;id&gt;.<br/>'search-ai-rate-limit' store — per-IP window +<br/>daily Anthropic-fallback budget records.<br/>'chat-rate-limit' store — per-IP window +<br/>global daily message cap for /api/chat"]
         FORMS["Netlify Forms<br/>Captures /contact membership + general<br/>enquiries, /visit/host-an-event inquiries,<br/>/visit camping·day-visit·trekking inquiries,<br/>and event-interest submissions with an email"]
     end
@@ -173,8 +176,9 @@ flowchart TD
         GSC["Google Search Console API<br/>urlInspection.index.inspect — read-only,<br/>same service account (Full user on the<br/>property as of 2026-08-08),<br/>called from a local script only"]
         RESEND["Resend API<br/>Transactional email — noreply@tvc.farm,<br/>domain verified 2026-08-19,<br/>called from the GitHub Action above<br/>and whatsapp-stale-alert.mts"]
         WAMETA["Meta WhatsApp Cloud API<br/>Sends inbound message + template-status<br/>events to /api/whatsapp-webhook;<br/>receives replies from whatsapp-admin.mts;<br/>see WHATSAPP.md for setup status"]
-        SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages,<br/>event_payments, staff_users/staff_module_roles/<br/>staff_audit_log (gate all four admin Functions),<br/>staff_mfa_factors/staff_recovery_codes/<br/>staff_mfa_state (super-admin second factors) —<br/>service_role key, called server-side only"]
+        SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages,<br/>event_payments, staff_users/staff_module_roles/<br/>staff_audit_log (gate all four admin Functions),<br/>staff_mfa_factors/staff_recovery_codes/<br/>staff_mfa_state (super-admin second factors),<br/>usage_daily/usage_snapshots (free-tier metering) —<br/>service_role key, called server-side only"]
         RAZORPAY["Razorpay API<br/>Payment Links (create/fetch) +<br/>payment_link.paid webhook + refunds<br/>(admin-triggered, event-payments-admin.mts) +<br/>payment fees and settlement recon<br/>(nightly reconcile-event-payment-fees.mjs).<br/>Live keys as of 2026-09-24 —<br/>see RAZORPAY.md"]
+        RDAP["Registry RDAP service (via IANA bootstrap,<br/>rdap.org fallback)<br/>Public, no key — domain expiry dates for<br/>tvc.farm and syntropic.in"]
     end
 
     SRC --> BUILD
@@ -249,6 +253,12 @@ flowchart TD
     APIFN14 -.->|"verify staff ID token"| GIDTOKEN
     EVENTPAYDASH -.->|"Sign in with Google"| GIDTOKEN
 
+    GHA_DOMAIN -.->|"look up expiry dates"| RDAP
+    GHA_DOMAIN -.->|"send renewal reminder"| RESEND
+    APIFN15 -.->|"db size snapshot"| SUPABASE
+    APIFN -.->|"per-call usage counts"| SUPABASE
+    APIFN10 -.->|"per-call usage counts"| SUPABASE
+
     classDef staticStyle fill:#e8f2ea,stroke:#17723b,color:#0f5029
     classDef netlifyStyle fill:#fdead3,stroke:#f78520,color:#9a5310
     classDef externalStyle fill:#f6f1e7,stroke:#c9c2a8,color:#22291f
@@ -257,11 +267,11 @@ flowchart TD
     classDef ciStyle fill:#eef4fb,stroke:#3b6ea5,color:#1c3f5f
 
     class PAGES,INTERNALPAGE,INTERNALPAGE2,INTERNALPAGE3,INTERNALPAGE4,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH,WHATSAPPDASH,ACCOMMODATIONDASH,EVENTPAYDASH,BOOKINGFORM,CANCELPAGE staticStyle
-    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,FUNC_SRC14,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,APIFN14,BLOBS,FORMS,ANTHROPIC netlifyStyle
-    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,SUPABASE,GEMINI,RAZORPAY externalStyle
+    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,FUNC_SRC14,FUNC_SRC15,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,APIFN14,APIFN15,BLOBS,FORMS,ANTHROPIC netlifyStyle
+    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,SUPABASE,GEMINI,RAZORPAY,RDAP externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL,SCRIPT_GSC localStyle
-    class GHA_MEMBER ciStyle
+    class GHA_MEMBER,GHA_DOMAIN ciStyle
 ```
 
 **Legend:** 🟢 static / no server required · 🟠 depends on Netlify specifically (Functions or
@@ -335,6 +345,21 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `chat.mts`), and fails *open* — logging, not blocking — if Blobs itself errors, so a storage
   hiccup can't take the chat down. Part of the groundwork for the planned usage/free-tier
   dashboard (a new admin module); see that module's docs once it lands.
+- **`netlify/functions/lib/usage-meter.ts` + `usage-collect.mts` + `scripts/check-domain-expiry.mjs`**
+  — groundwork for the free-tier usage dashboard (a planned admin module; the dashboard page and
+  threshold emails come next). There is no usage API to read for an individual Anthropic account or
+  the Gemini free tier, so we count our own calls: `callAnthropic()` and `search-ai.mts`'s Gemini call
+  add requests/tokens/error counts (incl. `billing_errors`, Gemini `quota_exhausted`) to per-day
+  running totals in Supabase `usage_daily` through the atomic `usage_record()` function. Metering
+  never fails a request (errors are logged and swallowed, 2s timeout), and stores counts only — no
+  message text, IPs or emails. `usage-collect.mts` (scheduled, every 6h) records the database size
+  to `usage_snapshots` against the free plan's 500 MB. Both tables and functions are service_role
+  only (migration `0030_usage_metering.sql`, applied to production 2026-10-04; RLS on, no policies). Domain renewals are checked by the
+  `domain-expiry.yml` GitHub Action instead: it reads each domain's expiry from the registry's public
+  RDAP service (no key, same answer whichever registrar holds it) and emails `core-team@tvc.farm` at
+  60 and 30 days, then daily from 14. It runs in GitHub, not Netlify, deliberately — if Netlify
+  pauses the site over exhausted credits a Netlify-hosted monitor would go silent too — and it holds
+  no database credentials, only the `RESEND_API_KEY` already used by `member-update-email.yml`.
 - **`netlify/functions/lib/site-retrieval.ts`** — shared retrieval + Anthropic-call plumbing
   factored out of `chat.mts` so it and `search-ai.mts` below can't drift apart:
   `selectRelevantPages()`, `matchMembers()`, `formatPages()`/`formatMembers()`, the

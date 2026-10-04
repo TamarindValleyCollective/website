@@ -58,6 +58,17 @@ either domain — it's (or, for `tvc.farm`, was) registrar-only.
   same Cloudflare account used for `tvc.farm`'s DNS — see `ARCHITECTURE.md`'s "Cloudflare R2"
   section. It has nothing to do with `syntropic.in`.
 
+## Renewal monitoring
+
+`.github/workflows/domain-expiry.yml` runs `scripts/check-domain-expiry.mjs` daily. It reads each
+domain's expiry date from the registry's own public RDAP service (no login, no API key; the same
+answer whichever registrar holds the domain, so it keeps working through the `tvc.farm` registrar
+transfer) and emails `core-team@tvc.farm` at 60 and 30 days out, then daily from 14 days until the
+date moves. A lookup that fails also emails and fails the run. The run's summary table also shows the
+registrar RDAP reports — handy for confirming the `tvc.farm` transfer to Cloudflare actually
+completed. Domains checked: `tvc.farm`, `syntropic.in` (override with the `DOMAINS` env var). If a
+domain is added, moved or retired, update the default list in the script and this doc together.
+
 ## `tvc.farm`
 
 - **Registrar**: transferring from Squarespace Domains
