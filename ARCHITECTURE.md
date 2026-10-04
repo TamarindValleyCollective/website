@@ -482,9 +482,11 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `staff-registry.ts`, not the database. Every denial returns the same 403 so responses don't
   reveal who exists; lookup errors fail closed; a 30-second cache means a revoked role takes
   effect within seconds. `logStaffAction` appends to the append-only `staff_audit_log`, which
-  stores staff ids, never emails. **Status:** tables, three seeded super admins and the helper
-  exist; no Function calls `requireStaff` yet, so the Sheet allow-lists above are still the live
-  gate until each module is migrated (and the existing Sheet users are backfilled with roles).
+  stores staff ids, never emails. **Status:** tables, the helper, and role rows for everyone on the
+  two Sheet allow-lists (9 staff, 21 grants, backfilled 2026-10-04 and applied as data, not a
+  migration, so staff emails stay out of git) exist; no Function calls `requireStaff` yet, so the
+  Sheet allow-lists above are still the live gate until each module is migrated. Until then the
+  two sources can drift: a Sheet edit does not update the tables, and vice versa.
 - **`scripts/lib/accommodation-db.mjs`** — hand-rolled Supabase PostgREST REST client (same style
   as `supabase.mjs` below, no `@supabase/supabase-js`), the sole data-access layer for
   `accommodation-admin.mts`. Conflict-checking lives entirely in Postgres (see above) — this file
