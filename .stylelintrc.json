@@ -50,7 +50,6 @@
   "ignoreFiles": [
     "dist/**",
     "node_modules/**",
-    "src/styles/global.css",
-    "src/components/views/WeatherView.astro"
+    "src/styles/global.css"
   ]
 }
