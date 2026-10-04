@@ -356,7 +356,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   LLM endpoints (`chat.mts`, `search-ai.mts`): `checkIpRateLimit` (per-IP fixed window) and
   `checkDailyCap` (global, date-keyed so it resets itself), both on Netlify Blobs. `chat.mts` had
   no limit at all until 2026-10-04 and spends paid Anthropic credits on every message; it now
-  allows 20 messages per IP per 10 minutes and 500 per day across everyone (constants at the top of
+  allows 20 messages per IP per 10 minutes and 100 per day across everyone (lowered from 500 on 2026-10-04 after measuring ~14k input tokens per message; constants at the top of
   `chat.mts`), and fails *open* — logging, not blocking — if Blobs itself errors, so a storage
   hiccup can't take the chat down. Part of the groundwork for the planned usage/free-tier
   dashboard (a new admin module); see that module's docs once it lands.

@@ -31,12 +31,15 @@ const MAX_HISTORY_MESSAGES = 12;
 // paid Anthropic credits. Two independent guards (see lib/rate-limit.ts): a
 // per-IP window so one client can't loop, and a global daily cap so many IPs
 // each under the per-IP limit can't collectively drain the credits. The
-// numbers are deliberately generous for real visitors (a long chat is ~10
-// messages) - tune them here if traffic or the credit balance changes.
+// per-IP limit is generous for real visitors (a long chat is ~10 messages).
+// The daily cap is deliberately tight: measured on 2026-10-04, one message
+// uses ~14,000 input tokens (the retrieved site pages), so 500 a day could
+// cost more than the whole credit balance. Tune it here as the balance, the
+// token prices (see /internal/usage) or the traffic change.
 const RATE_LIMIT_STORE = 'chat-rate-limit';
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 const RATE_LIMIT_MAX_REQUESTS = 20;
-const DAILY_CAP = 500;
+const DAILY_CAP = 100;
 const LIMIT_REACHED_MESSAGE = "Looks like I've hit my limit for the moment — try again in a bit, or reach out via the Contact page!";
 
 // A Blobs outage shouldn't take the chat down with it, so a failing limiter

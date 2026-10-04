@@ -51,6 +51,11 @@ Domain renewals are separate (GitHub Action): at 60 and 30 days, then daily from
    the Anthropic input/output token prices (USD per million tokens, from Anthropic's pricing page),
    the Gemini daily request limit (from the project's rate limits in Google AI Studio), and a first
    reading for Netlify, Resend and Cloudflare R2.
+   Current values (entered 2026-10-04): Anthropic **$2 input / $10 output per million tokens**, checked
+   against Anthropic's pricing page for `claude-sonnet-5`, the one model both Claude call sites use
+   (`chat.mts` and the paid fallback in `search-ai.mts`). **If either file's model changes, update
+   the prices on the page too** — they are a typed-in setting, not read from the code. Cache reads
+   and writes are priced as 0.1x and 1.25x of the input price automatically.
 4. Keep the readings fresh: warnings use the latest entry, and a reading more than a month old is
    flagged on the page.
 
