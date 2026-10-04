@@ -13,6 +13,9 @@ export type Factor = {
   secret_encrypted: string | null;
   confirmed_at: string | null;
   last_used_step: number | null;
+  credential: { id: string; publicKey: string; counter: number; transports?: string[] } | null; // passkeys only
+  created_at: string;
+  last_used_at: string | null;
 };
 
 export async function rest(path: string, init: RequestInit = {}): Promise<Response> {
@@ -24,7 +27,7 @@ export async function rest(path: string, init: RequestInit = {}): Promise<Respon
 }
 
 export async function getFactors(staffId: string): Promise<Factor[]> {
-  const res = await rest(`/staff_mfa_factors?staff_id=eq.${staffId}&select=id,staff_id,type,label,secret_encrypted,confirmed_at,last_used_step&order=created_at.desc`);
+  const res = await rest(`/staff_mfa_factors?staff_id=eq.${staffId}&select=id,staff_id,type,label,secret_encrypted,confirmed_at,last_used_step,credential,created_at,last_used_at&order=created_at.desc`);
   return (await res.json()) as Factor[];
 }
 
@@ -40,8 +43,9 @@ export async function unusedRecoveryCodeCount(staffId: string): Promise<number> 
 export async function mfaSummary(staffId: string) {
   const [factors, recoveryRemaining] = await Promise.all([getFactors(staffId), unusedRecoveryCodeCount(staffId)]);
   const totp = factors.some((f) => f.type === 'totp' && f.confirmed_at);
-  const passkey = factors.some((f) => f.type === 'passkey' && f.confirmed_at);
+  const passkeyCount = factors.filter((f) => f.type === 'passkey' && f.confirmed_at).length;
+  const passkey = passkeyCount > 0;
   const recovery = recoveryRemaining > 0;
   const methodCount = [totp, recovery, passkey].filter(Boolean).length;
-  return { factors, totp, passkey, recovery, recoveryRemaining, methodCount, ready: methodCount >= 2 };
+  return { factors, totp, passkey, passkeyCount, recovery, recoveryRemaining, methodCount, ready: methodCount >= 2 };
 }

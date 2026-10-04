@@ -543,9 +543,21 @@ outside both the local machine and Netlify (the member-update-email workflow).
   signs in with Google (first factor) and then proves a second factor to get a ten-minute,
   stateless, HMAC-signed step-up token bound to them, sent as `X-Stepup-Token`. Methods held at
   once: an authenticator app (TOTP, RFC 6238 — checked against the RFC's published vectors) and
-  ten single-use recovery codes; passkeys are the planned third (the `passkey` type is reserved
-  in `staff_mfa_factors`). The Access module is to unlock only with at least two different methods
-  enrolled. TOTP secrets are stored AES-256-GCM encrypted and recovery codes only as an HMAC, both
+  ten single-use recovery codes, and **passkeys** (WebAuthn: Face ID, Touch ID or a security key;
+  `lib/staff-webauthn.ts` wraps `@simplewebauthn/server`). A passkey is stored as a `passkey` row in
+  `staff_mfa_factors` (public key and counter in `credential`, never a private key) and is bound to
+  the site: the relying-party id is `tvc.farm` and only `https://tvc.farm`, `https://www.tvc.farm`
+  and localhost (for trying it locally) are accepted origins, so previews and look-alike domains
+  fail. User verification (biometric/PIN) is required and no attestation statement is requested.
+  Each registration/sign-in challenge is a row in `staff_webauthn_challenges` (migration
+  `0030_staff_webauthn_challenges.sql`) consumed by deleting it, so a response is accepted once;
+  five wrong attempts share the same 15-minute lockout as codes. Adding a passkey when other methods
+  exist, and removing one, need a step-up; removing is refused when it would leave a ready person
+  with fewer than two methods. A first passkey also issues the recovery codes. Passkey routes live
+  under `/api/staff-mfa/passkey/*`; the browser glue is `registerPasskey`/`passkeyStepUp` in
+  `scripts/lib/staff-client.mjs`, shown on Security (add, name, remove, unlock) and as "Use a
+  passkey" in the Access unlock strip. The Access module unlocks only with at least two different
+  methods enrolled. TOTP secrets are stored AES-256-GCM encrypted and recovery codes only as an HMAC, both
   keyed from one Netlify variable, `STAFF_MFA_KEY` (32+ random bytes, base64, set by a human, never
   in the repo or the assistant's hands); if it is missing every keyed operation fails closed with
   `MFA_NOT_CONFIGURED`. **Losing or changing that key invalidates every stored authenticator and

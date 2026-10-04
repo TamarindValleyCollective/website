@@ -3,9 +3,9 @@
 // with Google as usual (first factor), then proves a second factor to get a
 // short-lived step-up token that the surfaces managing access itself require.
 //
-// Methods a person can hold at once: an authenticator app (TOTP, RFC 6238)
-// and single-use recovery codes today; passkeys are the planned third (the
-// table already has room for them). The Access module will only unlock for
+// Methods a person can hold at once: an authenticator app (TOTP, RFC 6238),
+// single-use recovery codes, and passkeys (WebAuthn: Face ID, Touch ID, a
+// security key; lib/staff-webauthn.ts). The Access module will only unlock for
 // someone with at least two different methods enrolled — `ready` below — and
 // a second super admin can reset someone's enrolment if they lose both.
 //
@@ -17,6 +17,8 @@
 // Guessing is bounded: five wrong codes lock the person out for 15 minutes.
 import { requireSuperAdmin, logStaffAction, type SuperAdmin } from './lib/staff-access';
 import { getFactors, mfaSummary, rest, unusedRecoveryCodeCount } from './lib/staff-mfa-store';
+import { WebAuthnOriginError, finishAuthentication, finishRegistration, startAuthentication, startRegistration, type StoredPasskey } from './lib/staff-webauthn';
+import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server';
 import {
   MfaNotConfiguredError,
   STEPUP_TTL_MS,
@@ -150,6 +152,9 @@ async function handleStatus(req: Request, admin: SuperAdmin): Promise<Response> 
 
   return jsonResponse({
     methods: { totp: mine.totp, recovery: mine.recovery, recoveryCodesRemaining: mine.recoveryRemaining, passkey: mine.passkey },
+    passkeys: mine.factors
+      .filter((f) => f.type === 'passkey' && f.confirmed_at)
+      .map((f) => ({ id: f.id, label: f.label ?? 'Passkey', createdAt: f.created_at, lastUsedAt: f.last_used_at })),
     pendingTotp: mine.factors.some((f) => f.type === 'totp' && !f.confirmed_at),
     methodCount: mine.methodCount,
     ready: mine.ready,
@@ -266,6 +271,137 @@ async function handleVerify(req: Request, admin: SuperAdmin): Promise<Response> 
   });
 }
 
+// ---------------------------------------------------------------- passkeys
+function passkeysOf(factors: Awaited<ReturnType<typeof getFactors>>): (StoredPasskey & { factorId: string })[] {
+  return factors.filter((f) => f.type === 'passkey' && f.confirmed_at && f.credential).map((f) => ({ ...f.credential!, factorId: f.id }));
+}
+
+function originProblem(err: unknown): Response | null {
+  return err instanceof WebAuthnOriginError ? jsonResponse({ error: err.message, code: 'PASSKEY_ORIGIN' }, 400) : null;
+}
+
+async function handlePasskeyRegisterOptions(req: Request, admin: SuperAdmin): Promise<Response> {
+  const mine = await mfaSummary(admin.id);
+  // Adding a way in to an account that already has protection must be proven with
+  // one of the existing ones, or a stolen Google session could add its own.
+  if (mine.methodCount > 0 && !hasValidStepUp(req, admin)) {
+    return jsonResponse({ error: 'Verify a second factor before adding a passkey.', code: 'STEP_UP_REQUIRED' }, 403);
+  }
+  try {
+    const label = admin.name ?? admin.googleName ?? `Super admin ${admin.id.slice(0, 4).toUpperCase()}`;
+    return jsonResponse({ options: await startRegistration(req, { id: admin.id, label }, passkeysOf(mine.factors)) });
+  } catch (err) {
+    const problem = originProblem(err);
+    if (problem) return problem;
+    throw err;
+  }
+}
+
+async function handlePasskeyRegisterVerify(req: Request, admin: SuperAdmin): Promise<Response> {
+  const body = await readJson<{ response?: RegistrationResponseJSON; name?: string }>(req);
+  if (!body?.response || typeof body.response !== 'object') return jsonResponse({ error: 'Invalid request body' }, 400);
+  const mine = await mfaSummary(admin.id);
+  if (mine.methodCount > 0 && !hasValidStepUp(req, admin)) {
+    return jsonResponse({ error: 'Verify a second factor before adding a passkey.', code: 'STEP_UP_REQUIRED' }, 403);
+  }
+  let passkey: StoredPasskey | null;
+  try {
+    passkey = await finishRegistration(req, admin.id, body.response);
+  } catch (err) {
+    const problem = originProblem(err);
+    if (problem) return problem;
+    throw err;
+  }
+  if (!passkey) {
+    await auditSoft(admin, 'staff_mfa.failed', { method: 'passkey', during: 'enrolment' });
+    return jsonResponse({ error: 'That passkey could not be verified. Try adding it again.', code: 'PASSKEY_FAILED' }, 400);
+  }
+  if (passkeysOf(mine.factors).some((c) => c.id === passkey!.id)) return jsonResponse({ error: 'That passkey is already added.', code: 'EXISTS' }, 409);
+
+  const label = String(body.name ?? '').trim().slice(0, 40) || 'Passkey';
+  if (!(await auditStrict(admin, 'staff_mfa.passkey_added', { label }))) return jsonResponse({ error: 'Could not write the audit log.' }, 500);
+  const now = new Date().toISOString();
+  await rest('/staff_mfa_factors', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ staff_id: admin.id, type: 'passkey', label, credential: passkey, confirmed_at: now }),
+  });
+  // A first method of any kind comes with recovery codes (the second method), shown once.
+  const hasRecovery = (await unusedRecoveryCodeCount(admin.id)) > 0;
+  const recoveryCodes = hasRecovery ? undefined : await storeRecoveryCodes(admin.id);
+  return jsonResponse({ ok: true, recoveryCodes }, 201);
+}
+
+async function handlePasskeyAuthOptions(req: Request, admin: SuperAdmin): Promise<Response> {
+  const lockedUntil = await getLockedUntil(admin.id);
+  if (lockedUntil) return lockedResponse(lockedUntil);
+  const passkeys = passkeysOf(await getFactors(admin.id));
+  if (passkeys.length === 0) return jsonResponse({ error: 'No passkey is set up yet.', code: 'NO_PASSKEY' }, 409);
+  try {
+    return jsonResponse({ options: await startAuthentication(req, admin.id, passkeys) });
+  } catch (err) {
+    const problem = originProblem(err);
+    if (problem) return problem;
+    throw err;
+  }
+}
+
+async function handlePasskeyAuthVerify(req: Request, admin: SuperAdmin): Promise<Response> {
+  const body = await readJson<{ response?: AuthenticationResponseJSON }>(req);
+  if (!body?.response || typeof body.response !== 'object') return jsonResponse({ error: 'Invalid request body' }, 400);
+  const lockedUntil = await getLockedUntil(admin.id);
+  if (lockedUntil) return lockedResponse(lockedUntil);
+
+  const passkeys = passkeysOf(await getFactors(admin.id));
+  let result: Awaited<ReturnType<typeof finishAuthentication>>;
+  try {
+    result = await finishAuthentication(req, admin.id, body.response, passkeys);
+  } catch (err) {
+    const problem = originProblem(err);
+    if (problem) return problem;
+    throw err;
+  }
+  if (!result) {
+    const { lockedUntil: locked } = await registerFailure(admin.id);
+    await auditSoft(admin, 'staff_mfa.failed', { method: 'passkey', locked: Boolean(locked) });
+    return locked ? lockedResponse(locked) : jsonResponse({ error: 'That passkey did not work.', code: 'WRONG_CODE' }, 400);
+  }
+
+  const used = passkeys.find((c) => c.id === result!.passkey.id)!;
+  await rest(`/staff_mfa_factors?id=eq.${used.factorId}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ credential: { id: used.id, publicKey: used.publicKey, counter: result.newCounter, transports: used.transports }, last_used_at: new Date().toISOString() }),
+  });
+  await clearFailures(admin.id);
+  await auditSoft(admin, 'staff_mfa.verified', { method: 'passkey' });
+  return jsonResponse({
+    stepUpToken: signStepUp(admin.id, 'passkey', Date.now()),
+    expiresInSeconds: STEPUP_TTL_MS / 1000,
+    method: 'passkey',
+    recoveryCodesRemaining: await unusedRecoveryCodeCount(admin.id),
+  });
+}
+
+async function handlePasskeyRemove(req: Request, admin: SuperAdmin): Promise<Response> {
+  if (!hasValidStepUp(req, admin)) return jsonResponse({ error: 'Verify a second factor first.', code: 'STEP_UP_REQUIRED' }, 403);
+  const body = await readJson<{ id?: string }>(req);
+  const id = body?.id ?? '';
+  if (!UUID.test(id)) return jsonResponse({ error: 'id must be a UUID' }, 400);
+  const mine = await mfaSummary(admin.id);
+  const target = mine.factors.find((f) => f.id === id && f.type === 'passkey' && f.confirmed_at);
+  if (!target) return jsonResponse({ error: 'Passkey not found' }, 404);
+  // Removing the last of two ways in would lock this person out of Access.
+  const stillHasPasskey = mine.passkeyCount > 1;
+  const after = [mine.totp, mine.recovery, stillHasPasskey].filter(Boolean).length;
+  if (mine.ready && after < 2) {
+    return jsonResponse({ error: 'Removing this passkey would leave you with only one way to prove it is you. Set up another method first.', code: 'LAST_METHOD' }, 409);
+  }
+  if (!(await auditStrict(admin, 'staff_mfa.passkey_removed', { label: target.label ?? 'Passkey' }))) return jsonResponse({ error: 'Could not write the audit log.' }, 500);
+  await rest(`/staff_mfa_factors?id=eq.${id}&staff_id=eq.${admin.id}`, { method: 'DELETE' });
+  return jsonResponse({ ok: true });
+}
+
 async function handleRegenerateRecovery(req: Request, admin: SuperAdmin): Promise<Response> {
   if (!hasValidStepUp(req, admin)) return jsonResponse({ error: 'Verify a second factor first.', code: 'STEP_UP_REQUIRED' }, 403);
   if (!(await auditStrict(admin, 'staff_mfa.recovery_regenerated'))) return jsonResponse({ error: 'Could not write the audit log.' }, 500);
@@ -307,7 +443,17 @@ export default async (req: Request): Promise<Response> => {
               ? (a) => handleRegenerateRecovery(req, a)
               : url.pathname === '/api/staff-mfa/reset' && req.method === 'POST'
                 ? (a) => handleReset(req, a)
-                : null;
+                : url.pathname === '/api/staff-mfa/passkey/register-options' && req.method === 'POST'
+                  ? (a) => handlePasskeyRegisterOptions(req, a)
+                  : url.pathname === '/api/staff-mfa/passkey/register-verify' && req.method === 'POST'
+                    ? (a) => handlePasskeyRegisterVerify(req, a)
+                    : url.pathname === '/api/staff-mfa/passkey/auth-options' && req.method === 'POST'
+                      ? (a) => handlePasskeyAuthOptions(req, a)
+                      : url.pathname === '/api/staff-mfa/passkey/auth-verify' && req.method === 'POST'
+                        ? (a) => handlePasskeyAuthVerify(req, a)
+                        : url.pathname === '/api/staff-mfa/passkey/remove' && req.method === 'POST'
+                          ? (a) => handlePasskeyRemove(req, a)
+                          : null;
   if (!route) return jsonResponse({ error: 'Not found' }, 404);
 
   const auth = await requireSuperAdmin(req);
@@ -333,5 +479,10 @@ export const config = {
     '/api/staff-mfa/verify',
     '/api/staff-mfa/recovery-codes',
     '/api/staff-mfa/reset',
+    '/api/staff-mfa/passkey/register-options',
+    '/api/staff-mfa/passkey/register-verify',
+    '/api/staff-mfa/passkey/auth-options',
+    '/api/staff-mfa/passkey/auth-verify',
+    '/api/staff-mfa/passkey/remove',
   ],
 };

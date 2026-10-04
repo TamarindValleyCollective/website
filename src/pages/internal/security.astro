@@ -62,6 +62,20 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
         </div>
       </section>
 
+      <section id="passkey-card" class="card block" hidden>
+        <h2>Passkeys</h2>
+        <p class="note" id="passkey-intro">Use Face ID, Touch ID or a security key instead of typing a code. A passkey only works on tvc.farm and never leaves your device.</p>
+        <ul id="passkeys" class="methods"></ul>
+        <form id="passkey-form" class="inline-form">
+          <label>
+            Name (optional)
+            <input type="text" id="passkey-name" name="passkey-name" maxlength="40" placeholder="e.g. my iPhone" autocomplete="off" />
+          </label>
+          <button type="submit" id="passkey-add" class="button">Add a passkey</button>
+        </form>
+        <p id="passkey-error" class="error" hidden></p>
+      </section>
+
       <section id="codes-card" class="card block" hidden>
         <h2>Your recovery codes</h2>
         <p class="note"><strong>Shown once.</strong> Each code works one time if you lose your authenticator. Store them somewhere safe and separate from your phone.</p>
@@ -82,6 +96,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
             <input type="text" id="verify-code" name="verify-code" inputmode="numeric" autocomplete="one-time-code" required />
           </label>
           <button type="submit" class="button">Verify</button>
+          <button type="button" id="verify-passkey" class="button button--outline" hidden>Use a passkey</button>
           <button type="button" id="verify-switch" class="link-button">Use a recovery code</button>
         </form>
         <p id="verify-error" class="error" hidden></p>
@@ -316,7 +331,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 <script>
   import { buildQrSvg } from '../../../scripts/lib/qr-svg.mjs';
   // One sign-in and one step-up are shared with /internal and /internal/access.
-  import { TOKEN_KEY as STORAGE_KEY, STEPUP_KEY, wireCodeEntry } from '../../../scripts/lib/staff-client.mjs';
+  import { TOKEN_KEY as STORAGE_KEY, STEPUP_KEY, passkeyStepUp, passkeysSupported, registerPasskey, wireCodeEntry } from '../../../scripts/lib/staff-client.mjs';
 
   declare const google: any;
 
@@ -331,6 +346,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   interface Status {
     methods: { totp: boolean; recovery: boolean; recoveryCodesRemaining: number; passkey: boolean };
+    passkeys: { id: string; label: string; createdAt: string; lastUsedAt: string | null }[];
     pendingTotp: boolean;
     methodCount: number;
     ready: boolean;
@@ -365,6 +381,13 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   const verifyForm = $<HTMLFormElement>('verify-form');
   const verifyCode = $<HTMLInputElement>('verify-code');
   const verifySwitch = $('verify-switch');
+  const verifyPasskey = $<HTMLButtonElement>('verify-passkey');
+  const passkeyCard = $('passkey-card');
+  const passkeyList = $('passkeys');
+  const passkeyForm = $<HTMLFormElement>('passkey-form');
+  const passkeyName = $<HTMLInputElement>('passkey-name');
+  const passkeyAdd = $<HTMLButtonElement>('passkey-add');
+  const passkeyError = $('passkey-error');
   const verifyEntry = wireCodeEntry({ form: verifyForm, input: verifyCode, toggle: verifySwitch });
   wireCodeEntry({ form: totpForm, input: totpCode });
   const verifyError = $('verify-error');
@@ -498,11 +521,11 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     methodsList.replaceChildren(
       li('Authenticator app', status.methods.totp ? 'On' : 'Not set up', status.methods.totp),
       li('Recovery codes', status.methods.recovery ? `${status.methods.recoveryCodesRemaining} left` : 'None', status.methods.recovery),
-      li('Passkey', 'Coming later', false),
+      li('Passkey', status.methods.passkey ? `${status.passkeys.length} added` : passkeysSupported() ? 'Not set up' : 'Not available here', status.methods.passkey),
     );
     readyNote.textContent = status.ready
       ? `You have ${status.methodCount} different methods set up — enough to unlock the access tools.`
-      : `You have ${status.methodCount} of the 2 different methods needed. Set up an authenticator app and you get recovery codes with it.`;
+      : `You have ${status.methodCount} of the 2 different methods needed. Set up an authenticator app or a passkey and you get recovery codes with it.`;
 
     if (status.lockedUntil) {
       const minutes = Math.max(1, Math.ceil((Date.parse(status.lockedUntil) - Date.now()) / 60000));
@@ -516,6 +539,9 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       : 'Use an authenticator app on your phone to generate a 6-digit code each time you need to prove it is you.';
     totpStartBtn.textContent = status.methods.totp ? 'Replace authenticator app' : 'Set up authenticator app';
 
+    renderPasskeys(status);
+    verifyPasskey.hidden = !(status.methods.passkey && passkeysSupported());
+
     // Only offer the switch when both methods exist; with just one, use it.
     verifySwitch.hidden = !(status.methods.totp && status.methods.recovery);
     verifyEntry.setRecovery(!status.methods.totp);
@@ -526,13 +552,86 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     if (active) renderAdmins(status.admins);
   }
 
+  function renderPasskeys(status: Status) {
+    passkeyCard.hidden = !passkeysSupported();
+    passkeyList.replaceChildren(
+      ...status.passkeys.map((k) => {
+        const item = document.createElement('li');
+        const info = document.createElement('span');
+        const added = new Date(k.createdAt).toLocaleDateString();
+        info.textContent = k.lastUsedAt ? `${k.label} — added ${added}, last used ${new Date(k.lastUsedAt).toLocaleDateString()}` : `${k.label} — added ${added}`;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'button button--danger';
+        btn.textContent = 'Remove';
+        btn.addEventListener('click', () => removePasskey(k));
+        item.append(info, btn);
+        return item;
+      }),
+    );
+  }
+
+  async function removePasskey(k: { id: string; label: string }) {
+    passkeyError.hidden = true;
+    if (!confirm(`Remove the passkey "${k.label}"? You will no longer be able to use it.`)) return;
+    try {
+      const { status, data } = await api('/api/staff-mfa/passkey/remove', { method: 'POST', body: { id: k.id } });
+      if (status === 200) await loadStatus();
+      else showError(passkeyError, data.error ?? 'Could not remove that passkey.');
+    } catch {
+      // handled by api()
+    }
+  }
+
+  passkeyForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    passkeyError.hidden = true;
+    passkeyAdd.disabled = true;
+    try {
+      const result: any = await registerPasskey(api, passkeyName.value);
+      if (result.cancelled) return;
+      if (result.status === 201) {
+        passkeyName.value = '';
+        if (result.data.recoveryCodes) showCodes(result.data.recoveryCodes);
+        await loadStatus();
+      } else {
+        showError(passkeyError, result.data?.error ?? 'Could not add that passkey.');
+      }
+    } catch {
+      showError(passkeyError, 'Your device could not create a passkey. Try again, or use the authenticator app.');
+    } finally {
+      passkeyAdd.disabled = false;
+    }
+  });
+
+  verifyPasskey.addEventListener('click', async () => {
+    verifyError.hidden = true;
+    verifyPasskey.disabled = true;
+    try {
+      const result: any = await passkeyStepUp(api);
+      if (result.cancelled) return;
+      if (result.status === 200) {
+        sessionStorage.setItem(STEPUP_KEY, JSON.stringify({ token: result.data.stepUpToken, exp: Date.now() + result.data.expiresInSeconds * 1000 }));
+        await loadStatus();
+      } else if (result.status === 429) {
+        showError(verifyError, lockedMessage(result.data));
+      } else {
+        showError(verifyError, result.data?.error ?? 'That passkey did not work.');
+      }
+    } catch {
+      showError(verifyError, 'Your device could not use the passkey. Try again, or enter a code.');
+    } finally {
+      verifyPasskey.disabled = false;
+    }
+  });
+
   function renderStepUpState() {
     const exp = stepUpExpiry();
     if (exp) {
       const minutes = Math.max(1, Math.ceil((exp - Date.now()) / 60000));
       stepupState.textContent = `Step-up is active for about ${minutes} more minute${minutes === 1 ? '' : 's'}.`;
     } else {
-      stepupState.textContent = lastStatus && lastStatus.methodCount === 0 ? 'Set up a method above first.' : 'Not active. Enter a code to unlock the access tools for ten minutes.';
+      stepupState.textContent = lastStatus && lastStatus.methodCount === 0 ? 'Set up a method above first.' : 'Not active. Enter a code or use a passkey to unlock the access tools for ten minutes.';
     }
   }
 

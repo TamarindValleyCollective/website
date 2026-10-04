@@ -158,7 +158,7 @@ export function hashRecoveryCode(code: string): string {
 
 // ------------------------------------------------------- step-up tokens
 export const STEPUP_TTL_MS = 10 * 60 * 1000;
-export type StepUpMethod = 'totp' | 'recovery';
+export type StepUpMethod = 'totp' | 'recovery' | 'passkey';
 
 type StepUpClaims = { sid: string; m: StepUpMethod; iat: number; exp: number };
 

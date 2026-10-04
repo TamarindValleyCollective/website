@@ -138,3 +138,101 @@ export function wireCodeEntry({ form, input, toggle }) {
     },
   };
 }
+
+// ---------------------------------------------------------------- passkeys
+// Thin glue between the server's WebAuthn JSON (lib/staff-webauthn.ts) and the
+// browser's navigator.credentials, which wants binary buffers. `api` is the
+// page's own fetch helper: (path, { method, body }) -> { status, data }.
+const b64urlToBuffer = (s) => {
+  const pad = '='.repeat((4 - (s.length % 4)) % 4);
+  const bin = atob((s + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(bin, (c) => c.charCodeAt(0)).buffer;
+};
+const bufferToB64url = (buf) => {
+  const bytes = new Uint8Array(buf);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+
+export const passkeysSupported = () => typeof window !== 'undefined' && Boolean(window.PublicKeyCredential) && Boolean(navigator.credentials);
+
+// The person closed the prompt or the device said no: not an error worth shouting about.
+const isCancelled = (err) => err && (err.name === 'NotAllowedError' || err.name === 'AbortError');
+
+// Asks the device to make a passkey, returns { status, data } from the server
+// (201 on success, possibly with recovery codes), or { cancelled: true }.
+export async function registerPasskey(api, name) {
+  const first = await api('/api/staff-mfa/passkey/register-options', { method: 'POST', body: {} });
+  if (first.status !== 200) return first;
+  const o = first.data.options;
+  let cred;
+  try {
+    cred = await navigator.credentials.create({
+      publicKey: {
+        ...o,
+        challenge: b64urlToBuffer(o.challenge),
+        user: { ...o.user, id: b64urlToBuffer(o.user.id) },
+        excludeCredentials: (o.excludeCredentials ?? []).map((c) => ({ ...c, id: b64urlToBuffer(c.id) })),
+      },
+    });
+  } catch (err) {
+    if (isCancelled(err)) return { cancelled: true };
+    throw err;
+  }
+  if (!cred) return { cancelled: true };
+  return api('/api/staff-mfa/passkey/register-verify', {
+    method: 'POST',
+    body: {
+      name,
+      response: {
+        id: cred.id,
+        rawId: bufferToB64url(cred.rawId),
+        type: cred.type,
+        response: {
+          clientDataJSON: bufferToB64url(cred.response.clientDataJSON),
+          attestationObject: bufferToB64url(cred.response.attestationObject),
+          transports: cred.response.getTransports?.() ?? [],
+        },
+        clientExtensionResults: cred.getClientExtensionResults?.() ?? {},
+        authenticatorAttachment: cred.authenticatorAttachment ?? undefined,
+      },
+    },
+  });
+}
+
+// Proves a second factor with a passkey. Returns the server's { status, data }
+// (200 carries the step-up token, like the code route), or { cancelled: true }.
+export async function passkeyStepUp(api) {
+  const first = await api('/api/staff-mfa/passkey/auth-options', { method: 'POST', body: {} });
+  if (first.status !== 200) return first;
+  const o = first.data.options;
+  let cred;
+  try {
+    cred = await navigator.credentials.get({
+      publicKey: { ...o, challenge: b64urlToBuffer(o.challenge), allowCredentials: (o.allowCredentials ?? []).map((c) => ({ ...c, id: b64urlToBuffer(c.id) })) },
+    });
+  } catch (err) {
+    if (isCancelled(err)) return { cancelled: true };
+    throw err;
+  }
+  if (!cred) return { cancelled: true };
+  return api('/api/staff-mfa/passkey/auth-verify', {
+    method: 'POST',
+    body: {
+      response: {
+        id: cred.id,
+        rawId: bufferToB64url(cred.rawId),
+        type: cred.type,
+        response: {
+          clientDataJSON: bufferToB64url(cred.response.clientDataJSON),
+          authenticatorData: bufferToB64url(cred.response.authenticatorData),
+          signature: bufferToB64url(cred.response.signature),
+          userHandle: cred.response.userHandle ? bufferToB64url(cred.response.userHandle) : undefined,
+        },
+        clientExtensionResults: cred.getClientExtensionResults?.() ?? {},
+        authenticatorAttachment: cred.authenticatorAttachment ?? undefined,
+      },
+    },
+  });
+}
