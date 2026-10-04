@@ -53,7 +53,12 @@ const RATE_LIMIT_MAX_REQUESTS = 10;
 // distinct IPs each individually under the per-IP limit can't collectively
 // exhaust the paid-provider budget. Resets naturally since the key is
 // date-scoped, so there's nothing to prune.
-const ANTHROPIC_FALLBACK_DAILY_CAP = 200;
+// Lowered 200 -> 50 on 2026-10-04: a search request measured ~9.5k input
+// tokens, so on the paid fallback (claude-sonnet-5, $2/$10 per MTok) each one
+// costs ~2 cents and 200/day could cost ~$4/day against a small credit balance.
+// 50 caps the worst case near $1/day. Raise it if Gemini's free quota (500
+// requests/day) starts running out for real reasons.
+const ANTHROPIC_FALLBACK_DAILY_CAP = 50;
 
 const RATE_LIMIT_STORE = 'search-ai-rate-limit';
 
