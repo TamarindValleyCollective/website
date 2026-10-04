@@ -553,14 +553,21 @@ outside both the local machine and Netlify (the member-update-email workflow).
   that `accommodation-admin.mts` validates against. The shared "which methods does this person
   have" query moved to `lib/staff-mfa-store.ts`.
 - **`/internal/access`, `/internal` and `netlify/functions/staff-me.mts`** — the screens in front
-  of that API. `/internal/access` (super admins only) lists people **by name** with their role in
-  each tool and, in words, what that role allows; lets you give, change or remove a role (with an
-  optional accommodation booking-type limit), add a person, deactivate or reactivate someone, and
-  read the activity log with ids shown as names. It starts read-only and offers an "unlock changes"
-  form (authenticator or recovery code) that stores the step-up for ten minutes; without two
-  enrolled methods it links to `/internal/security` instead. Names are placed with `textContent`
+  of that API. `/internal/access` (super admins only) is a **people × tools grid**: one row per
+  person (by name), one column per tool, and each cell a role picker (No access / Read-only / User /
+  Admin, coloured by level) that **saves as soon as it is changed** (a refused change puts the cell
+  back and says why). A User in the accommodation calendar gets a "Limited to N booking types" control
+  that opens the booking-type checkboxes. Row actions deactivate/reactivate; adding a person is a
+  button that reveals the email form. A second tab, "What each role can do", is a read-only permission
+  matrix per tool (capabilities × Read-only/User/Admin, built from the registry), and a third is the
+  activity log with ids shown as names. The page starts read-only; a slim "unlock changes" strip
+  takes the authenticator code (see below) and keeps the step-up for ten minutes; without two enrolled
+  methods it links to `/internal/security` instead. Names are placed with `textContent`
   only, so a name that looks like HTML is displayed, never run, and an address is typed once to add
-  someone and then never shown. `/internal` is the landing page: one sign-in and a list of the tools
+  someone and then never shown. **Code entry** (`wireCodeEntry` in `scripts/lib/staff-client.mjs`,
+  used by Access and Security) is a single numeric `autocomplete="one-time-code"` field with no
+  method dropdown in front of it; six digits submit automatically, and "Use a recovery code" swaps the
+  same field to plain text. `/internal` is the landing page: one sign-in and a list of the tools
   you hold a role in (from `staff-me.mts`, which answers only about the caller, returns no email and
   lists a tool only because a role exists — each tool still checks its own capability), plus Access
   and Security for super admins. **Every internal page shares one Google sign-in per browser tab**
@@ -568,8 +575,17 @@ outside both the local machine and Netlify (the member-update-email workflow).
   pool, WhatsApp, event payments and accommodation pages as well as the new ones), so signing in
   once opens them all and "use a different account" signs out of all of them; Access and Security
   also share one step-up (`tvc-staff-stepup`). Each tool still checks its own role on the server for
-  every request. A shared menu across the tools is a later step. `components/StaffNav.astro` is the
-  link row on the two admin pages. Where each tool lives is `MODULE_INFO[...].path` in `staff-registry.ts`.
+  every request. **All seven internal pages share one app shell, `layouts/StaffLayout.astro`**: a
+  collapsible left menu (Home, the four tools, and Access/Security for super admins) that sits
+  flush left with the page content using the full remaining width, a slide-over menu with a top bar
+  on phones, and none of the public site's header, footer or analytics (the pages stay `noindex`).
+  The menu reads `/api/staff-me` (cached in `sessionStorage` key `tvc-staff-me`, refreshed on
+  focus and after sign-in) and shows only tools the person holds a role in; it is navigation only,
+  never authorisation. The collapsed/expanded choice is kept in `localStorage`
+  (`tvc-staff-nav-collapsed`); WhatsApp and the accommodation calendar start collapsed to give
+  their wide layouts room. Each link is still a full page load (in-page navigation, per-tool
+  sub-menus and tabs are later steps); `components/StaffNav.astro` was removed. Where each tool
+  lives is `MODULE_INFO[...].path` in `staff-registry.ts`.
 - **`scripts/lib/accommodation-db.mjs`** — hand-rolled Supabase PostgREST REST client (same style
   as `supabase.mjs` below, no `@supabase/supabase-js`), the sole data-access layer for
   `accommodation-admin.mts`. Conflict-checking lives entirely in Postgres (see above) — this file
