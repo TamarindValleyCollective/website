@@ -354,7 +354,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   never fails a request (errors are logged and swallowed, 2s timeout), and stores counts only — no
   message text, IPs or emails. `usage-collect.mts` (scheduled, every 6h) records the database size
   to `usage_snapshots` against the free plan's 500 MB. Both tables and functions are service_role
-  only (migration `0030_usage_metering.sql`; RLS on, no policies). Domain renewals are checked by the
+  only (migration `0030_usage_metering.sql`, applied to production 2026-10-04; RLS on, no policies). Domain renewals are checked by the
   `domain-expiry.yml` GitHub Action instead: it reads each domain's expiry from the registry's public
   RDAP service (no key, same answer whichever registrar holds it) and emails `core-team@tvc.farm` at
   60 and 30 days, then daily from 14. It runs in GitHub, not Netlify, deliberately — if Netlify
