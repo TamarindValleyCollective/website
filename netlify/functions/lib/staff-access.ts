@@ -198,18 +198,18 @@ export async function requireStaff<M extends ModuleId>(
   };
 }
 
-export type SuperAdmin = StaffIdentity & { googleName: string | null };
+export type ActivePerson = StaffIdentity & { googleName: string | null };
 
-export type SuperAdminAuthResult =
-  | { ok: true; admin: SuperAdmin }
+export type ActivePersonAuthResult =
+  | { ok: true; person: ActivePerson }
   | { ok: false; status: 401 | 403 | 500; error: string };
 
-// For the surfaces that manage access itself (second-factor enrolment, and
-// later the Access module): the caller must be an active super admin. A
-// super admin has no implicit module access — this checks the flag only, and
-// never grants anything in a module. Deliberately uncached, so removing a
-// super admin takes effect on their very next request.
-export async function requireSuperAdmin(req: Request): Promise<SuperAdminAuthResult> {
+// Who is signed in, if they are someone we know and have not deactivated —
+// regardless of what they may do. Used by the landing page to show a person
+// only the tools they hold a role in, and as the base of requireSuperAdmin.
+// Deliberately uncached: deactivating someone takes effect on their next
+// request. Their email is read here to find them and stays on the server.
+export async function requireActivePerson(req: Request): Promise<ActivePersonAuthResult> {
   const verified = await verifyStaffToken(req);
   if (!verified.ok) return verified;
 
@@ -227,17 +227,34 @@ export async function requireSuperAdmin(req: Request): Promise<SuperAdminAuthRes
     if (!res.ok) throw new Error(`staff_users lookup failed: ${res.status}`);
     user = ((await res.json()) as NonNullable<typeof user>[])[0];
   } catch (err) {
-    console.error('Failed to look up super admin', err);
+    console.error('Failed to look up staff member', err);
     return { ok: false, status: 500, error: 'Server misconfigured' };
   }
 
-  if (!user || !user.active || !user.is_super_admin) return { ok: false, status: 403, error: 'Not authorized' };
+  if (!user || !user.active) return { ok: false, status: 403, error: 'Not authorized' };
 
   await maybeFillName(user, verified.googleName);
   return {
     ok: true,
-    admin: { id: user.id, email: user.email, name: user.name, isSuperAdmin: true, googleName: verified.googleName },
+    person: { id: user.id, email: user.email, name: user.name, isSuperAdmin: user.is_super_admin, googleName: verified.googleName },
   };
+}
+
+export type SuperAdmin = ActivePerson;
+
+export type SuperAdminAuthResult =
+  | { ok: true; admin: SuperAdmin }
+  | { ok: false; status: 401 | 403 | 500; error: string };
+
+// For the surfaces that manage access itself (second-factor enrolment, and
+// the Access module): the caller must be an active super admin. A super admin
+// has no implicit module access — this checks the flag only, and never grants
+// anything in a module.
+export async function requireSuperAdmin(req: Request): Promise<SuperAdminAuthResult> {
+  const auth = await requireActivePerson(req);
+  if (!auth.ok) return auth;
+  if (!auth.person.isSuperAdmin) return { ok: false, status: 403, error: 'Not authorized' };
+  return { ok: true, admin: auth.person };
 }
 
 // Appends to staff_audit_log. Throws on failure so a caller doing something
