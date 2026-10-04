@@ -15,8 +15,8 @@
 // an HMAC, both keyed from STAFF_MFA_KEY (lib/staff-mfa-crypto.ts). If that
 // variable is missing every keyed operation fails closed with a clear error.
 // Guessing is bounded: five wrong codes lock the person out for 15 minutes.
-import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { requireSuperAdmin, logStaffAction, type SuperAdmin } from './lib/staff-access';
+import { getFactors, mfaSummary, rest, unusedRecoveryCodeCount } from './lib/staff-mfa-store';
 import {
   MfaNotConfiguredError,
   STEPUP_TTL_MS,
@@ -37,16 +37,6 @@ const MAX_FAILURES = 5;
 const LOCK_MS = 15 * 60 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type Factor = {
-  id: string;
-  staff_id: string;
-  type: 'totp' | 'passkey';
-  label: string | null;
-  secret_encrypted: string | null;
-  confirmed_at: string | null;
-  last_used_step: number | null;
-};
-
 function jsonResponse(body: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -55,25 +45,7 @@ function jsonResponse(body: unknown, status = 200, extraHeaders: Record<string, 
   });
 }
 
-async function rest(path: string, init: RequestInit = {}): Promise<Response> {
-  const base = process.env.SUPABASE_URL;
-  if (!base) throw new Error('Missing SUPABASE_URL');
-  const res = await fetch(`${base}/rest/v1${path}`, { ...init, headers: restHeaders(init.headers as Record<string, string>) });
-  if (!res.ok) throw new Error(`Supabase ${init.method ?? 'GET'} ${path.split('?')[0]} failed: ${res.status}`);
-  return res;
-}
-
 // ---------------------------------------------------------------- queries
-async function getFactors(staffId: string): Promise<Factor[]> {
-  const res = await rest(`/staff_mfa_factors?staff_id=eq.${staffId}&select=id,staff_id,type,label,secret_encrypted,confirmed_at,last_used_step&order=created_at.desc`);
-  return (await res.json()) as Factor[];
-}
-
-async function unusedRecoveryCodeCount(staffId: string): Promise<number> {
-  const res = await rest(`/staff_recovery_codes?staff_id=eq.${staffId}&used_at=is.null&select=id`);
-  return ((await res.json()) as unknown[]).length;
-}
-
 async function getLockedUntil(staffId: string): Promise<number | null> {
   const res = await rest(`/staff_mfa_state?staff_id=eq.${staffId}&select=failed_attempts,locked_until`);
   const [state] = (await res.json()) as { failed_attempts: number; locked_until: string | null }[];
@@ -161,17 +133,8 @@ function lockedResponse(until: number): Response {
 }
 
 // ---------------------------------------------------------------- handlers
-async function methodsFor(staffId: string) {
-  const [factors, recoveryRemaining] = await Promise.all([getFactors(staffId), unusedRecoveryCodeCount(staffId)]);
-  const totp = factors.some((f) => f.type === 'totp' && f.confirmed_at);
-  const passkey = factors.some((f) => f.type === 'passkey' && f.confirmed_at);
-  const recovery = recoveryRemaining > 0;
-  const methodCount = [totp, recovery, passkey].filter(Boolean).length;
-  return { factors, totp, passkey, recovery, recoveryRemaining, methodCount, ready: methodCount >= 2 };
-}
-
 async function handleStatus(req: Request, admin: SuperAdmin): Promise<Response> {
-  const mine = await methodsFor(admin.id);
+  const mine = await mfaSummary(admin.id);
   const lockedUntil = await getLockedUntil(admin.id);
 
   // The other super admins, by name or an opaque tag (never an email), so a
@@ -180,7 +143,7 @@ async function handleStatus(req: Request, admin: SuperAdmin): Promise<Response> 
   const others = ((await res.json()) as { id: string; name: string | null }[]).filter((a) => a.id !== admin.id);
   const admins = await Promise.all(
     others.map(async (a) => {
-      const m = await methodsFor(a.id);
+      const m = await mfaSummary(a.id);
       return { id: a.id, label: a.name ?? `Super admin ${a.id.slice(0, 4).toUpperCase()}`, methodCount: m.methodCount, ready: m.ready };
     }),
   );
