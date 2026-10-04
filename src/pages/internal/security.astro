@@ -1,0 +1,685 @@
+---
+// Internal security page for super admins (issue #89): set up and manage the
+// second factors that protect the tools which manage access itself. Backed by
+// netlify/functions/staff-mfa.mts. Deliberately unlinked from nav and
+// noindex; gated by Google Sign-In plus the super-admin flag (a normal
+// module role is not enough).
+//
+// A super admin can hold several methods at once — an authenticator app and
+// single-use recovery codes today, passkeys later. The Access module will
+// require at least two before it unlocks. Nothing secret is rendered with
+// innerHTML: every value is placed with textContent.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Security" description="Second factors for super admins." noindex>
+  <section class="section wrapper">
+    <h1>Security</h1>
+    <p class="hint">Second factors for super admins. You sign in with Google first, then prove a second factor to unlock the tools that manage access.</p>
+
+    <div id="gate" class="gate card">
+      <p class="gate-copy">Sign in with your super-admin Google account.</p>
+      <div id="g_id_signin"></div>
+      <p id="gate-error" class="error" hidden></p>
+    </div>
+
+    <div id="forbidden" class="gate card" hidden>
+      <p class="gate-copy">Signed in as <strong id="forbidden-email"></strong>, but this Google account isn't a super admin.</p>
+      <button type="button" id="use-different-account" class="button button--outline">Use a different account</button>
+    </div>
+
+    <p id="status" class="hint" hidden></p>
+
+    <div id="panel" hidden>
+      <section class="card block">
+        <h2>Your second factors</h2>
+        <ul id="methods" class="methods"></ul>
+        <p id="ready-note" class="note"></p>
+        <p id="locked-note" class="error" hidden></p>
+      </section>
+
+      <section class="card block">
+        <h2>Authenticator app</h2>
+        <p class="note" id="totp-intro"></p>
+        <button type="button" id="totp-start" class="button">Set up authenticator app</button>
+        <p id="totp-error" class="error" hidden></p>
+        <div id="totp-setup" hidden>
+          <p class="note">Add this key to an authenticator app (Google Authenticator, 1Password, Authy…) — choose "enter a setup key" and pick time-based. On a phone you can tap the link instead.</p>
+          <p class="secret" id="totp-secret" aria-label="Setup key"></p>
+          <p class="note"><a id="totp-link" href="#">Open in authenticator app</a></p>
+          <form id="totp-confirm-form" class="inline-form">
+            <label>
+              6-digit code from the app
+              <input type="text" id="totp-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required />
+            </label>
+            <button type="submit" class="button">Confirm</button>
+          </form>
+        </div>
+      </section>
+
+      <section id="codes-card" class="card block" hidden>
+        <h2>Your recovery codes</h2>
+        <p class="note"><strong>Shown once.</strong> Each code works one time if you lose your authenticator. Store them somewhere safe and separate from your phone.</p>
+        <ul id="codes" class="codes"></ul>
+        <div class="row">
+          <button type="button" id="codes-copy" class="button button--outline">Copy</button>
+          <button type="button" id="codes-download" class="button button--outline">Download .txt</button>
+          <button type="button" id="codes-done" class="button">I've saved them</button>
+        </div>
+      </section>
+
+      <section class="card block">
+        <h2>Prove it's you</h2>
+        <p id="stepup-state" class="note"></p>
+        <form id="verify-form" class="inline-form">
+          <label>
+            Method
+            <select id="verify-method">
+              <option value="totp">Authenticator app</option>
+              <option value="recovery">Recovery code</option>
+            </select>
+          </label>
+          <label>
+            Code
+            <input type="text" id="verify-code" autocomplete="one-time-code" required />
+          </label>
+          <button type="submit" class="button">Verify</button>
+        </form>
+        <p id="verify-error" class="error" hidden></p>
+      </section>
+
+      <section id="manage-card" class="card block" hidden>
+        <h2>Manage</h2>
+        <p class="note">Available while your step-up is active.</p>
+        <div class="row">
+          <button type="button" id="regen-codes" class="button button--outline">Generate new recovery codes</button>
+        </div>
+        <h3>Other super admins</h3>
+        <p class="note">If someone has lost both their authenticator and their recovery codes, reset them here. They then set up again from scratch.</p>
+        <ul id="admins" class="admins"></ul>
+        <p id="manage-error" class="error" hidden></p>
+      </section>
+    </div>
+  </section>
+</BaseLayout>
+
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style>
+  .section.wrapper {
+    padding-top: 32px;
+    padding-bottom: 32px;
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+
+  .hint {
+    color: var(--tvc-ink-soft);
+    margin: -8px 0 24px;
+  }
+
+  .card {
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .gate {
+    max-width: 420px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+  }
+
+  .gate-copy {
+    font-size: 0.9rem;
+    color: var(--tvc-ink-soft);
+    margin: 0 0 14px;
+  }
+
+  .block {
+    max-width: 640px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+  }
+
+  .block h2 {
+    font-size: 1.1rem;
+    margin: 0 0 10px;
+  }
+
+  .block h3 {
+    font-size: 0.95rem;
+    margin: 20px 0 6px;
+  }
+
+  .note {
+    font-size: 0.88rem;
+    color: var(--tvc-ink-soft);
+    margin: 0 0 12px;
+  }
+
+  .error {
+    color: var(--tvc-error-text);
+    font-size: 0.85rem;
+    margin: 10px 0 0;
+  }
+
+  .methods,
+  .admins,
+  .codes {
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 0;
+  }
+
+  .methods :global(li),
+  .admins :global(li) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--tvc-line);
+    font-size: 0.9rem;
+  }
+
+  .methods :global(li:last-child),
+  .admins :global(li:last-child) {
+    border-bottom: none;
+  }
+
+  :global(.badge) {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+  }
+
+  :global(.badge--on) {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+  }
+
+  .secret,
+  .codes :global(li) {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.08em;
+  }
+
+  .secret {
+    font-size: 1.05rem;
+    font-weight: 600;
+    word-break: break-all;
+    background: var(--tvc-green-tint);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    margin: 0 0 8px;
+  }
+
+  .codes {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 6px 14px;
+  }
+
+  .codes :global(li) {
+    font-size: 0.95rem;
+    font-weight: 600;
+    background: var(--tvc-green-tint);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+  }
+
+  .inline-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+  }
+
+  .inline-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .inline-form input,
+  .inline-form select {
+    font: inherit;
+    font-size: 0.95rem;
+    padding: 8px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+  }
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  :global(.button--danger) {
+    background: var(--callout-red-bg);
+    border-color: var(--callout-red-text);
+    color: var(--callout-red-text);
+  }
+</style>
+
+<script>
+  declare const google: any;
+
+  const STORAGE_KEY = 'tvc-security-idtoken';
+  const STEPUP_KEY = 'tvc-security-stepup';
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+
+  interface AdminRow {
+    id: string;
+    label: string;
+    methodCount: number;
+    ready: boolean;
+  }
+
+  interface Status {
+    methods: { totp: boolean; recovery: boolean; recoveryCodesRemaining: number; passkey: boolean };
+    pendingTotp: boolean;
+    methodCount: number;
+    ready: boolean;
+    stepUpValid: boolean;
+    lockedUntil: string | null;
+    admins: AdminRow[];
+  }
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const gate = $('gate');
+  const gateError = $('gate-error');
+  const forbidden = $('forbidden');
+  const forbiddenEmail = $('forbidden-email');
+  const statusEl = $('status');
+  const panel = $('panel');
+  const methodsList = $('methods');
+  const readyNote = $('ready-note');
+  const lockedNote = $('locked-note');
+  const totpIntro = $('totp-intro');
+  const totpStartBtn = $<HTMLButtonElement>('totp-start');
+  const totpSetup = $('totp-setup');
+  const totpSecret = $('totp-secret');
+  const totpLink = $<HTMLAnchorElement>('totp-link');
+  const totpForm = $<HTMLFormElement>('totp-confirm-form');
+  const totpCode = $<HTMLInputElement>('totp-code');
+  const totpError = $('totp-error');
+  const codesCard = $('codes-card');
+  const codesList = $('codes');
+  const stepupState = $('stepup-state');
+  const verifyForm = $<HTMLFormElement>('verify-form');
+  const verifyMethod = $<HTMLSelectElement>('verify-method');
+  const verifyCode = $<HTMLInputElement>('verify-code');
+  const verifyError = $('verify-error');
+  const manageCard = $('manage-card');
+  const adminsList = $('admins');
+  const manageError = $('manage-error');
+
+  let lastStatus: Status | null = null;
+  let currentCodes: string[] = [];
+
+  // ---- session + step-up storage (this tab only)
+  const getToken = () => sessionStorage.getItem(STORAGE_KEY);
+  const clearToken = () => sessionStorage.removeItem(STORAGE_KEY);
+
+  function getStepUp(): string | null {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(STEPUP_KEY) ?? 'null') as { token: string; exp: number } | null;
+      if (saved && saved.exp > Date.now()) return saved.token;
+    } catch {
+      // fall through to cleared
+    }
+    sessionStorage.removeItem(STEPUP_KEY);
+    return null;
+  }
+  function stepUpExpiry(): number | null {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(STEPUP_KEY) ?? 'null') as { exp: number } | null;
+      return saved && saved.exp > Date.now() ? saved.exp : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function decodeTokenEmail(token: string): string {
+    const payloadB64 = token.split('.')[1] ?? '';
+    const base64 = payloadB64.replace(/-/g, '+').replace(/_/g, '/').padEnd(payloadB64.length + ((4 - (payloadB64.length % 4)) % 4), '=');
+    try {
+      return JSON.parse(atob(base64)).email ?? 'unknown';
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    panel.hidden = true;
+    statusEl.hidden = true;
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+
+  function showForbidden(token: string) {
+    gate.hidden = true;
+    panel.hidden = true;
+    statusEl.hidden = true;
+    forbidden.hidden = false;
+    forbiddenEmail.textContent = decodeTokenEmail(token);
+  }
+
+  function showError(el: HTMLElement, message: string) {
+    el.hidden = false;
+    el.textContent = message;
+  }
+
+  // A 403 that carries STEP_UP_REQUIRED means "signed in, but prove a second
+  // factor" — not "you aren't a super admin", so it must not show the
+  // forbidden panel.
+  async function api(path: string, init: { method?: string; body?: unknown } = {}): Promise<{ status: number; data: any }> {
+    const token = getToken();
+    const stepUp = getStepUp();
+    const res = await fetch(path, {
+      method: init.method ?? 'GET',
+      headers: {
+        authorization: `Bearer ${token ?? ''}`,
+        ...(init.body !== undefined ? { 'content-type': 'application/json' } : {}),
+        ...(stepUp ? { 'x-stepup-token': stepUp } : {}),
+      },
+      body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) {
+      clearToken();
+      showGate('Your session expired — sign in again.');
+      throw new Error('Unauthorized');
+    }
+    if (res.status === 403 && data.code !== 'STEP_UP_REQUIRED') {
+      showForbidden(token!);
+      throw new Error('Forbidden');
+    }
+    return { status: res.status, data };
+  }
+
+  function lockedMessage(data: any): string {
+    const minutes = Math.max(1, Math.ceil((data.retryAfterSeconds ?? 900) / 60));
+    return `Too many wrong codes. Try again in about ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+  }
+
+  // ---- rendering
+  function li(label: string, badgeText: string, on: boolean): HTMLLIElement {
+    const item = document.createElement('li');
+    const name = document.createElement('span');
+    name.textContent = label;
+    const badge = document.createElement('span');
+    badge.className = on ? 'badge badge--on' : 'badge';
+    badge.textContent = badgeText;
+    item.append(name, badge);
+    return item;
+  }
+
+  function render(status: Status) {
+    lastStatus = status;
+    panel.hidden = false;
+    gate.hidden = true;
+    forbidden.hidden = true;
+    statusEl.hidden = true;
+
+    methodsList.replaceChildren(
+      li('Authenticator app', status.methods.totp ? 'On' : 'Not set up', status.methods.totp),
+      li('Recovery codes', status.methods.recovery ? `${status.methods.recoveryCodesRemaining} left` : 'None', status.methods.recovery),
+      li('Passkey', 'Coming later', false),
+    );
+    readyNote.textContent = status.ready
+      ? `You have ${status.methodCount} different methods set up — enough to unlock the access tools.`
+      : `You have ${status.methodCount} of the 2 different methods needed. Set up an authenticator app and you get recovery codes with it.`;
+
+    if (status.lockedUntil) {
+      const minutes = Math.max(1, Math.ceil((Date.parse(status.lockedUntil) - Date.now()) / 60000));
+      showError(lockedNote, `Locked after too many wrong codes. Try again in about ${minutes} minute${minutes === 1 ? '' : 's'}.`);
+    } else {
+      lockedNote.hidden = true;
+    }
+
+    totpIntro.textContent = status.methods.totp
+      ? 'An authenticator app is set up. Replacing it needs a second factor first, and the old one stops working once the new one is confirmed.'
+      : 'Use an authenticator app on your phone to generate a 6-digit code each time you need to prove it is you.';
+    totpStartBtn.textContent = status.methods.totp ? 'Replace authenticator app' : 'Set up authenticator app';
+
+    verifyMethod.querySelector<HTMLOptionElement>('option[value="totp"]')!.disabled = !status.methods.totp;
+    verifyMethod.querySelector<HTMLOptionElement>('option[value="recovery"]')!.disabled = !status.methods.recovery;
+    verifyMethod.value = status.methods.totp ? 'totp' : 'recovery';
+    renderStepUpState();
+
+    const active = stepUpExpiry() !== null;
+    manageCard.hidden = !active;
+    if (active) renderAdmins(status.admins);
+  }
+
+  function renderStepUpState() {
+    const exp = stepUpExpiry();
+    if (exp) {
+      const minutes = Math.max(1, Math.ceil((exp - Date.now()) / 60000));
+      stepupState.textContent = `Step-up is active for about ${minutes} more minute${minutes === 1 ? '' : 's'}.`;
+    } else {
+      stepupState.textContent = lastStatus && lastStatus.methodCount === 0 ? 'Set up a method above first.' : 'Not active. Enter a code to unlock the access tools for ten minutes.';
+    }
+  }
+
+  function renderAdmins(admins: AdminRow[]) {
+    if (admins.length === 0) {
+      const empty = document.createElement('li');
+      empty.textContent = 'No other super admins.';
+      adminsList.replaceChildren(empty);
+      return;
+    }
+    adminsList.replaceChildren(
+      ...admins.map((a) => {
+        const item = document.createElement('li');
+        const info = document.createElement('span');
+        info.textContent = `${a.label} — ${a.ready ? 'ready' : `${a.methodCount} of 2 methods`}`;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'button button--danger';
+        btn.textContent = 'Reset';
+        btn.addEventListener('click', () => resetAdmin(a));
+        item.append(info, btn);
+        return item;
+      }),
+    );
+  }
+
+  function showCodes(codes: string[]) {
+    currentCodes = codes;
+    codesList.replaceChildren(
+      ...codes.map((code) => {
+        const item = document.createElement('li');
+        item.textContent = code;
+        return item;
+      }),
+    );
+    codesCard.hidden = false;
+    codesCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function hideCodes() {
+    currentCodes = [];
+    codesList.replaceChildren();
+    codesCard.hidden = true;
+  }
+
+  // ---- actions
+  async function loadStatus() {
+    gate.hidden = true;
+    statusEl.hidden = false;
+    statusEl.textContent = 'Loading…';
+    try {
+      const { status, data } = await api('/api/staff-mfa/status');
+      if (status !== 200) throw new Error('status failed');
+      render(data as Status);
+    } catch (err) {
+      const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
+      if (!handled) {
+        statusEl.hidden = false;
+        statusEl.textContent = 'Failed to load — try refreshing.';
+      }
+    }
+  }
+
+  totpStartBtn.addEventListener('click', async () => {
+    totpError.hidden = true;
+    totpStartBtn.disabled = true;
+    try {
+      const { status, data } = await api('/api/staff-mfa/totp/start', { method: 'POST' });
+      if (status === 403 && data.code === 'STEP_UP_REQUIRED') {
+        showError(totpError, 'Verify a second factor below first, then replace the authenticator.');
+        return;
+      }
+      if (status !== 200) {
+        showError(totpError, data.error ?? 'Could not start setup.');
+        return;
+      }
+      totpSecret.textContent = (data.secret as string).replace(/(.{4})/g, '$1 ').trim();
+      totpLink.href = data.otpauthUri;
+      totpSetup.hidden = false;
+      totpCode.value = '';
+      totpCode.focus();
+    } catch {
+      // api() already showed the gate or forbidden panel
+    } finally {
+      totpStartBtn.disabled = false;
+    }
+  });
+
+  totpForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    totpError.hidden = true;
+    try {
+      const { status, data } = await api('/api/staff-mfa/totp/confirm', { method: 'POST', body: { code: totpCode.value } });
+      if (status === 200) {
+        totpSetup.hidden = true;
+        totpSecret.textContent = '';
+        totpLink.removeAttribute('href');
+        if (data.recoveryCodes) showCodes(data.recoveryCodes);
+        await loadStatus();
+      } else if (status === 429) {
+        showError(totpError, lockedMessage(data));
+      } else {
+        showError(totpError, data.error ?? 'That code did not match.');
+      }
+    } catch {
+      // handled by api()
+    }
+  });
+
+  verifyForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    verifyError.hidden = true;
+    try {
+      const { status, data } = await api('/api/staff-mfa/verify', { method: 'POST', body: { method: verifyMethod.value, code: verifyCode.value } });
+      if (status === 200) {
+        sessionStorage.setItem(STEPUP_KEY, JSON.stringify({ token: data.stepUpToken, exp: Date.now() + data.expiresInSeconds * 1000 }));
+        verifyCode.value = '';
+        await loadStatus();
+      } else if (status === 429) {
+        showError(verifyError, lockedMessage(data));
+      } else {
+        showError(verifyError, data.error ?? 'That code did not work.');
+      }
+    } catch {
+      // handled by api()
+    }
+  });
+
+  $('regen-codes').addEventListener('click', async () => {
+    manageError.hidden = true;
+    if (!confirm('Generate new recovery codes? The old ones stop working immediately.')) return;
+    try {
+      const { status, data } = await api('/api/staff-mfa/recovery-codes', { method: 'POST' });
+      if (status === 200) {
+        showCodes(data.recoveryCodes);
+        await loadStatus();
+      } else {
+        showError(manageError, data.error ?? 'Could not generate new codes.');
+      }
+    } catch {
+      // handled by api()
+    }
+  });
+
+  async function resetAdmin(admin: AdminRow) {
+    manageError.hidden = true;
+    if (!confirm(`Reset the second factors for ${admin.label}? They will have to set everything up again.`)) return;
+    try {
+      const { status, data } = await api('/api/staff-mfa/reset', { method: 'POST', body: { targetId: admin.id } });
+      if (status === 200) await loadStatus();
+      else showError(manageError, data.error ?? 'Could not reset.');
+    } catch {
+      // handled by api()
+    }
+  }
+
+  $('codes-copy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(currentCodes.join('\n'));
+    } catch {
+      // clipboard blocked: the codes are still on screen to copy by hand
+    }
+  });
+
+  $('codes-download').addEventListener('click', () => {
+    const blob = new Blob([`TVC admin recovery codes\nEach code works once.\n\n${currentCodes.join('\n')}\n`], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'tvc-recovery-codes.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  $('codes-done').addEventListener('click', hideCodes);
+
+  // ---- sign-in
+  function handleCredentialResponse(response: { credential: string }) {
+    sessionStorage.setItem(STORAGE_KEY, response.credential);
+    loadStatus();
+  }
+
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: 'outline', size: 'large' });
+  }
+
+  $('use-different-account').addEventListener('click', () => {
+    clearToken();
+    sessionStorage.removeItem(STEPUP_KEY);
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
+  // Keep the "N minutes left" text honest, and lock the manage section the
+  // moment the step-up lapses.
+  setInterval(() => {
+    if (!lastStatus || panel.hidden) return;
+    renderStepUpState();
+    if (stepUpExpiry() === null && !manageCard.hidden) manageCard.hidden = true;
+  }, 15000);
+
+  if (getToken()) loadStatus();
+  else showGate();
+</script>
