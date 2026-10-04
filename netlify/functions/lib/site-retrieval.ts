@@ -3,6 +3,7 @@
 // widget) and search-ai.mts (the site search's "Ask AI" answer). Kept in one
 // place so the keyword-retrieval scoring and the Claude response-parsing
 // quirk (see callAnthropic below) can't drift between the two call sites.
+import { recordUsage } from './usage-meter';
 import siteContent from '../site-content.json' with { type: 'json' };
 import { members, type Member } from '../../../src/data/members';
 
@@ -190,10 +191,20 @@ export async function callAnthropic(params: {
     } catch {
       // not JSON - errorType stays undefined, caller falls back to a generic message
     }
+    // billing_error means the credits are gone - worth its own counter so the
+    // usage dashboard can say so instead of burying it in generic errors.
+    await recordUsage('anthropic', { errors: 1, billing_errors: errorType === 'billing_error' ? 1 : 0 });
     return { ok: false, status: res.status, errorType };
   }
 
   const data = await res.json();
+  await recordUsage('anthropic', {
+    requests: 1,
+    input_tokens: data.usage?.input_tokens,
+    output_tokens: data.usage?.output_tokens,
+    cache_read_tokens: data.usage?.cache_read_input_tokens,
+    cache_write_tokens: data.usage?.cache_creation_input_tokens,
+  });
   const textBlock = data.content?.find((block: { type: string }) => block.type === 'text');
   return { ok: true, text: textBlock?.text ?? '' };
 }
