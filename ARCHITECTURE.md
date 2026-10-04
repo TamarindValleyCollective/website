@@ -500,7 +500,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `requireStaff` (2026-10), so the Google Sheet allow-lists are no longer read by anything (the
   Sheets and their `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID` / `ACCOMMODATION_ALLOWED_EMAILS_SHEET_ID`
   env vars can be retired). Access is now changed with SQL on `staff_module_roles` until the
-  Access module exists. Masking helpers live in `lib/staff-masking.ts`.
+  Access module exists. Masking helpers live in `lib/staff-masking.ts`. The first time an
+  authorized person signs in with an empty `staff_users.name`, `requireStaff` copies the name
+  from their Google account (guarded by `name=is.null`, so it never overwrites one on file).
 - **`scripts/lib/accommodation-db.mjs`** — hand-rolled Supabase PostgREST REST client (same style
   as `supabase.mjs` below, no `@supabase/supabase-js`), the sole data-access layer for
   `accommodation-admin.mts`. Conflict-checking lives entirely in Postgres (see above) — this file
