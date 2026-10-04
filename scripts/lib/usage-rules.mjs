@@ -187,6 +187,7 @@ function money(n) {
 // }
 // Returns [{ key, level: 'warn'|'critical', service, title, detail }]. `key`
 // identifies the underlying condition so a repeat of it isn't mailed twice.
+/** @param {{ now?: Date, daily?: any[], snapshots?: Record<string, any>, settings?: any }} input */
 export function evaluateAlerts({ now = new Date(), daily = [], snapshots = {}, settings = {} }) {
   const alerts = [];
   const today = utcDay(now);

@@ -33,6 +33,13 @@ project, unrelated to the website itself, kept here alongside `RAZORPAY.md`/`BUF
 that's where TVC's other operational tooling docs live. **Update it in the same change**
 whenever that changes — the sync script, sheet layout, trigger cadence, or Drive folder.
 
+## Usage & limits documentation
+
+`USAGE.md` documents the free-tier / credit usage dashboard (`/internal/usage`) and its alert
+emails — what is measured vs typed in, the thresholds, the setup steps, and how to add a meter.
+**Update it in the same change** whenever that changes — a new service tracked, a changed
+threshold, a new typed-in meter, a new alert rule.
+
 ## Design language
 
 `src/styles/global.css` is the single source of truth for TVC's design tokens (colors, type,

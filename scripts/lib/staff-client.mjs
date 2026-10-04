@@ -72,6 +72,7 @@ export function decodeTokenEmail(token) {
 // "step-up needed" 403 or a wrong-code 400. Throws StaffAuthError only when
 // the whole session needs replacing: a 401 clears the stored token, a plain
 // 403 leaves it (re-signing in would likely pick the same account).
+/** @param {string} path @param {{ method?: string, body?: unknown }} [options] */
 export async function staffFetch(path, { method = 'GET', body } = {}) {
   const token = getToken();
   const stepUp = getStepUp();

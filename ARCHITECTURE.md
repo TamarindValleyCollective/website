@@ -83,6 +83,7 @@ flowchart TD
         INTERNALPAGE2["src/pages/internal/whatsapp.astro<br/>Unlinked, noindex — WhatsApp reply dashboard shell,<br/>two-pane chat UI, 15s visibility-gated polling"]
         INTERNALPAGE3["src/pages/internal/accommodation-calendar.astro<br/>Unlinked, noindex — tent-booking dashboard shell,<br/>day/week/month calendar, guest directory, audit log"]
         INTERNALPAGE4["src/pages/internal/event-payments.astro<br/>Unlinked, noindex — event dropdown, stats,<br/>booking table, tier-suggested refund flow"]
+        INTERNALPAGE5["src/pages/internal/usage.astro<br/>Unlinked, noindex — usage &amp; limits dashboard:<br/>alerts, per-service meters, domain renewals,<br/>admin forms for typed-in readings"]
         COMPONENTS["src/components/<br/>Nav, Footer, PageHero, ChatWidget,<br/>CookieConsent, JourneyTimelineStandalone,<br/>BiodiversityExplorer, PhotoGallery"]
         CONTENT["src/content/*<br/>Markdown collections: events, partners,<br/>community-outreach, photos"]
         FUNC_SRC["netlify/functions/chat.mts<br/>Serverless function, calls Anthropic API server-side"]
@@ -100,6 +101,8 @@ flowchart TD
         FUNC_SRC13["netlify/functions/cancel-booking.mts<br/>Serverless function — records a guest's<br/>cancellation request (not an automatic<br/>refund), notifies TVC + Linger + guest"]
         FUNC_SRC14["netlify/functions/event-payments-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>per-event registrations/cancellations/money<br/>collected from Supabase, issues real Razorpay<br/>refunds (tier-suggested, admin-confirmed)"]
         FUNC_SRC15["netlify/functions/usage-collect.mts<br/>Scheduled function (cron, every 6 hours) — appends<br/>the Supabase database size to usage_snapshots for<br/>the free-tier usage dashboard. Reuses existing<br/>Supabase credentials; no new secret"]
+        FUNC_SRC16["netlify/functions/usage-admin.mts<br/>Serverless function, Google Sign-In gated (usage module) —<br/>overview of free-tier/credit usage, live domain<br/>expiry lookups, typed-in provider readings and<br/>price/limit settings (admins only, audit-logged)"]
+        FUNC_SRC17["netlify/functions/usage-alerts.mts<br/>Scheduled function (cron, hourly) — evaluates the<br/>usage rules and emails core-team@tvc.farm one digest<br/>per new or worsened warning; remembers what it sent"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
     end
 
@@ -127,6 +130,8 @@ flowchart TD
         APIFN13["Netlify Function: /api/cancel-booking<br/>Deployed and live"]
         APIFN14["Netlify Function: /api/event-payments-admin<br/>Deployed and live — backs /internal/event-payments,<br/>issues real refunds via Razorpay's API"]
         APIFN15["Netlify Function: usage-collect<br/>Scheduled (cron), no HTTP path"]
+        APIFN16["Netlify Function: /api/usage-admin<br/>Deployed with the usage dashboard"]
+        APIFN17["Netlify Function: usage-alerts<br/>Scheduled (cron, hourly), no HTTP path"]
         BLOBS["Netlify Blobs<br/>'event-interest' store — one JSON record per<br/>past event id, {count, emails[]}, optimistic-<br/>concurrency writes. Reset via netlify blobs:delete<br/>event-interest &lt;id&gt;.<br/>'search-ai-rate-limit' store — per-IP window +<br/>daily Anthropic-fallback budget records.<br/>'chat-rate-limit' store — per-IP window +<br/>global daily message cap for /api/chat"]
         FORMS["Netlify Forms<br/>Captures /contact membership + general<br/>enquiries, /visit/host-an-event inquiries,<br/>/visit camping·day-visit·trekking inquiries,<br/>and event-interest submissions with an email"]
     end
@@ -158,6 +163,7 @@ flowchart TD
         WHATSAPPDASH["WhatsApp dashboard (/internal/whatsapp)<br/>Google Sign-In gated two-pane chat UI — conversation<br/>list + thread + reply box; unlinked, noindex,<br/>sitemap-excluded"]
         ACCOMMODATIONDASH["Accommodation Allocation (/internal/accommodation-calendar)<br/>Google Sign-In gated tent-booking dashboard —<br/>day/week/month views, guest directory + typeahead,<br/>audit log; unlinked, noindex, sitemap-excluded"]
         EVENTPAYDASH["Event Payments (/internal/event-payments)<br/>Google Sign-In gated dashboard — event dropdown,<br/>registrations/cancellations/money-collected stats,<br/>tier-suggested refund with two-step confirm;<br/>unlinked, noindex, sitemap-excluded"]
+        USAGEDASH["Usage &amp; limits (/internal/usage)<br/>Google Sign-In gated dashboard — Anthropic, Gemini,<br/>Supabase measured; Netlify, Resend, Cloudflare R2 and the<br/>Anthropic credit balance typed in by an admin; domain<br/>renewals read live; unlinked, noindex, sitemap-excluded"]
     end
 
     subgraph EXTERNAL["External services (called directly by the browser)"]
@@ -176,7 +182,7 @@ flowchart TD
         GSC["Google Search Console API<br/>urlInspection.index.inspect — read-only,<br/>same service account (Full user on the<br/>property as of 2026-08-08),<br/>called from a local script only"]
         RESEND["Resend API<br/>Transactional email — noreply@tvc.farm,<br/>domain verified 2026-08-19,<br/>called from the GitHub Action above<br/>and whatsapp-stale-alert.mts"]
         WAMETA["Meta WhatsApp Cloud API<br/>Sends inbound message + template-status<br/>events to /api/whatsapp-webhook;<br/>receives replies from whatsapp-admin.mts;<br/>see WHATSAPP.md for setup status"]
-        SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages,<br/>event_payments, staff_users/staff_module_roles/<br/>staff_audit_log (gate all four admin Functions),<br/>staff_mfa_factors/staff_recovery_codes/<br/>staff_mfa_state (super-admin second factors),<br/>usage_daily/usage_snapshots (free-tier metering) —<br/>service_role key, called server-side only"]
+        SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages,<br/>event_payments, staff_users/staff_module_roles/<br/>staff_audit_log (gate all four admin Functions),<br/>staff_mfa_factors/staff_recovery_codes/<br/>staff_mfa_state (super-admin second factors),<br/>usage_daily/usage_snapshots/usage_settings/<br/>usage_alert_state (free-tier metering + alerts) —<br/>service_role key, called server-side only"]
         RAZORPAY["Razorpay API<br/>Payment Links (create/fetch) +<br/>payment_link.paid webhook + refunds<br/>(admin-triggered, event-payments-admin.mts) +<br/>payment fees and settlement recon<br/>(nightly reconcile-event-payment-fees.mjs).<br/>Live keys as of 2026-09-24 —<br/>see RAZORPAY.md"]
         RDAP["Registry RDAP service (via IANA bootstrap,<br/>rdap.org fallback)<br/>Public, no key — domain expiry dates for<br/>tvc.farm and syntropic.in"]
     end
@@ -259,6 +265,15 @@ flowchart TD
     APIFN -.->|"per-call usage counts"| SUPABASE
     APIFN10 -.->|"per-call usage counts"| SUPABASE
 
+    USAGEDASH --> APIFN16
+    APIFN16 -.->|"read usage_daily/usage_snapshots/settings,<br/>write readings + settings"| SUPABASE
+    APIFN16 -.->|"live domain expiry"| RDAP
+    APIFN16 -.->|"check staff role"| SUPABASE
+    APIFN16 -.->|"verify staff ID token"| GIDTOKEN
+    USAGEDASH -.->|"Sign in with Google"| GIDTOKEN
+    APIFN17 -.->|"read usage data, remember<br/>alerts already sent"| SUPABASE
+    APIFN17 -.->|"send alert digest"| RESEND
+
     classDef staticStyle fill:#e8f2ea,stroke:#17723b,color:#0f5029
     classDef netlifyStyle fill:#fdead3,stroke:#f78520,color:#9a5310
     classDef externalStyle fill:#f6f1e7,stroke:#c9c2a8,color:#22291f
@@ -266,8 +281,8 @@ flowchart TD
     classDef localStyle fill:#eef0f5,stroke:#6b7280,color:#374151
     classDef ciStyle fill:#eef4fb,stroke:#3b6ea5,color:#1c3f5f
 
-    class PAGES,INTERNALPAGE,INTERNALPAGE2,INTERNALPAGE3,INTERNALPAGE4,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH,WHATSAPPDASH,ACCOMMODATIONDASH,EVENTPAYDASH,BOOKINGFORM,CANCELPAGE staticStyle
-    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,FUNC_SRC14,FUNC_SRC15,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,APIFN14,APIFN15,BLOBS,FORMS,ANTHROPIC netlifyStyle
+    class PAGES,INTERNALPAGE,INTERNALPAGE2,INTERNALPAGE3,INTERNALPAGE4,INTERNALPAGE5,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH,WHATSAPPDASH,ACCOMMODATIONDASH,EVENTPAYDASH,USAGEDASH,BOOKINGFORM,CANCELPAGE staticStyle
+    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,FUNC_SRC14,FUNC_SRC15,FUNC_SRC16,FUNC_SRC17,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,APIFN14,APIFN15,APIFN16,APIFN17,BLOBS,FORMS,ANTHROPIC netlifyStyle
     class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,SUPABASE,GEMINI,RAZORPAY,RDAP externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL,SCRIPT_GSC localStyle
@@ -346,8 +361,8 @@ outside both the local machine and Netlify (the member-update-email workflow).
   hiccup can't take the chat down. Part of the groundwork for the planned usage/free-tier
   dashboard (a new admin module); see that module's docs once it lands.
 - **`netlify/functions/lib/usage-meter.ts` + `usage-collect.mts` + `scripts/check-domain-expiry.mjs`**
-  — groundwork for the free-tier usage dashboard (a planned admin module; the dashboard page and
-  threshold emails come next). There is no usage API to read for an individual Anthropic account or
+  — the measuring half of the free-tier usage dashboard (see the next bullet for the dashboard
+  itself). There is no usage API to read for an individual Anthropic account or
   the Gemini free tier, so we count our own calls: `callAnthropic()` and `search-ai.mts`'s Gemini call
   add requests/tokens/error counts (incl. `billing_errors`, Gemini `quota_exhausted`) to per-day
   running totals in Supabase `usage_daily` through the atomic `usage_record()` function. Metering
@@ -360,6 +375,21 @@ outside both the local machine and Netlify (the member-update-email workflow).
   60 and 30 days, then daily from 14. It runs in GitHub, not Netlify, deliberately — if Netlify
   pauses the site over exhausted credits a Netlify-hosted monitor would go silent too — and it holds
   no database credentials, only the `RESEND_API_KEY` already used by `member-update-email.yml`.
+- **`netlify/functions/usage-admin.mts` + `usage-alerts.mts` + `/internal/usage` +
+  `scripts/lib/usage-rules.mjs`** — the usage & limits module (see `USAGE.md`). A new `usage` staff
+  module (`view` for any role, `configure` admin-only). `usage-admin.mts` serves the page: the
+  overview (Anthropic and Gemini counts, Supabase size, typed-in readings, active warnings), a
+  separate `/domains` route (live RDAP lookups with a 4s timeout, cached an hour, so a slow registry
+  can't hold up the page), and the two admin writes — a typed-in reading from a provider's own
+  dashboard and the price/limit settings — each audit-logged by staff id before it is written and
+  refused if the log can't be written. Nothing it returns contains an email or message text.
+  `usage-alerts.mts` (hourly) evaluates the same rules and emails `core-team@tvc.farm` one digest,
+  mailing a condition once and again only if it gets worse; `usage_alert_state` remembers what has
+  been sent and forgets it when the condition clears. All thresholds and the Anthropic credit
+  *estimate* (typed-in balance minus metered spend since, using admin-entered token prices) live in
+  `usage-rules.mjs`, pure functions with unit tests. Tables from migration `0031_usage_dashboard.sql`.
+  Typed-in services (Netlify, Resend, Cloudflare R2, the Anthropic balance) are typed in on purpose:
+  holding an API credential for each would add a secret broader than a usage reading is worth.
 - **`netlify/functions/lib/site-retrieval.ts`** — shared retrieval + Anthropic-call plumbing
   factored out of `chat.mts` so it and `search-ai.mts` below can't drift apart:
   `selectRelevantPages()`, `matchMembers()`, `formatPages()`/`formatMembers()`, the

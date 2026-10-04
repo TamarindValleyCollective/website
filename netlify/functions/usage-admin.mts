@@ -157,7 +157,7 @@ async function handleDomains(req: Request): Promise<Response> {
     (DEFAULT_DOMAINS as string[]).map(async (domain) => {
       try {
         const info = await lookupDomain(domain, { timeoutMs: 4000 });
-        return { domain, expiresOn: info.expiresAt.toISOString().slice(0, 10), daysLeft: daysUntil(info.expiresAt, now), registrar: info.registrar };
+        return { domain, expiresOn: info.expiresAt!.toISOString().slice(0, 10), daysLeft: daysUntil(info.expiresAt!, now), registrar: info.registrar };
       } catch (err) {
         console.warn('[usage-admin] domain lookup failed', domain, err);
         return { domain, error: 'Could not check right now' };
