@@ -8,13 +8,13 @@
 
 **Both domains' DNS is now on Cloudflare.** `syntropic.in` moved off Netlify DNS onto Cloudflare
 at some point after 2026-07-29 (exact date not captured — noticed 2026-08-27 while checking this
-doc for drift); `tvc.farm`'s registrar is separately being moved from Squarespace to Cloudflare
-too (transfer initiated 2026-08-27, DNS already at Cloudflare beforehand):
+doc for drift); `tvc.farm`'s registrar was separately moved from Squarespace to Cloudflare
+(transfer initiated 2026-08-27, completed by 2026-10-04; DNS was already at Cloudflare beforehand):
 
 | | `tvc.farm` | `syntropic.in` |
 |---|---|---|
 | **Role** | The live site | Old member-directory domain — redirects here now |
-| **Registrar** | **Transfer in progress: Squarespace Domains → Cloudflare Registrar** (initiated 2026-08-27). Squarespace pricing was $50/year; Cloudflare's is $30.20/year (at-cost, no markup). | **Squarespace Domains** (renews 2027-08-20 for $20, registrant: Sharath Jeppu) |
+| **Registrar** | **Cloudflare Registrar** — transfer from Squarespace Domains (initiated 2026-08-27) is complete; confirmed 2026-10-04 by the domain-expiry check, which reads the registry's own record (registrar "Cloudflare, Inc", **expires 2027-11-19**). Cloudflare's price is $30.20/year (at-cost, no markup) vs Squarespace's $50. | **Squarespace Domains** (renews 2027-08-20 for $20, registrant: Sharath Jeppu) |
 | **DNS host** | **Cloudflare** (`adaline.ns.cloudflare.com`, `cartman.ns.cloudflare.com`) | **Cloudflare** — same two nameservers, same account. Was Netlify DNS as of 2026-07-29; migrated since |
 | **Path to Netlify** | Cloudflare proxies (orange-cloud) straight to the Netlify site, via a CNAME to `tvc.netlify.app` | Apex is an **A record → `75.2.60.5`** (Netlify's shared load-balancer IP), proxied; `www` is a CNAME to `tvc.netlify.app`, proxied — same pattern as `tvc.farm` |
 | **What visitors see** | The actual site | A 301 redirect to `https://tvc.farm/`, applied by a `netlify.toml` rule — not a DNS-level redirect |
@@ -71,14 +71,14 @@ domain is added, moved or retired, update the default list in the script and thi
 
 ## `tvc.farm`
 
-- **Registrar**: transferring from Squarespace Domains
-  (`account.squarespace.com/domains/managed/tvc.farm`, renewed 2026-11-19 for $50) to
-  **Cloudflare Registrar**, initiated 2026-08-27. Cloudflare charges at-cost with no markup —
+- **Registrar**: **Cloudflare Registrar** (transfer from Squarespace Domains initiated
+  2026-08-27; found complete on 2026-10-04, expiry now **2027-11-19**). Previously
+  `account.squarespace.com/domains/managed/tvc.farm`, which would have renewed 2026-11-19 for $50. Cloudflare charges at-cost with no markup —
   $30.20/year for `.farm`, versus Squarespace's $50/year. DNS was already on Cloudflare before
-  this (see above); this transfer only moves where the domain is *registered*, not where its DNS
+  this (see above); the transfer only moved where the domain is *registered*, not where its DNS
   is hosted. WHOIS privacy was on at Squarespace (a plain `whois tvc.farm` lookup returned only
   the `.farm` registry's own referral info, not registrant/registrar details) — Cloudflare
-  Registrar includes free WHOIS privacy too, so this should carry over once the transfer
+  Registrar includes free WHOIS privacy too, so this should have carried over now the transfer
   completes.
 - **DNS**: Cloudflare, proxied (orange-cloud) — see `ARCHITECTURE.md` for the full hosting
   picture. Confirmed via `dig NS tvc.farm`:
@@ -120,7 +120,7 @@ domain is added, moved or retired, update the default list in the script and thi
 - **Registrar**: Squarespace Domains (`account.squarespace.com/domains/managed/syntropic.in`) —
   registrant Sharath Jeppu, renewed 2026-08-27 through 2027-08-20 for $20. This is a holdover
   from Google Domains' migration to Squarespace; the underlying registry backend (Key-Systems
-  GmbH / RRPProxy) predates that move. (Not part of the `tvc.farm` registrar transfer above —
+  GmbH / RRPProxy) predates that move. (The registry's own RDAP record, read by the domain-expiry check, lists the sponsoring registrar as "Hosting Concepts B.V. dba Openprovider" and expiry 2027-08-20 — the reseller chain behind Squarespace; the date matches.) (Not part of the `tvc.farm` registrar transfer above —
   `syntropic.in` stays at Squarespace.)
 - **DNS**: Cloudflare, same account as `tvc.farm` ("TVC"). Confirmed via `dig NS syntropic.in`:
   ```
