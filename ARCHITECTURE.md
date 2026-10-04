@@ -245,7 +245,7 @@ flowchart TD
     APIFN14 -.->|"read/write bookings,<br/>record refunds"| SUPABASE
     APIFN14 -.->|"issue refund"| RAZORPAY
     APIFN14 -.->|"send refund<br/>confirmation email"| RESEND
-    APIFN14 -.->|"read allow-list rows"| GSHEET
+    APIFN14 -.->|"check staff role,<br/>audit refunds"| SUPABASE
     APIFN14 -.->|"verify staff ID token"| GIDTOKEN
     EVENTPAYDASH -.->|"Sign in with Google"| GIDTOKEN
 
@@ -492,9 +492,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   stores staff ids, never emails. **Status:** tables, the helper, and role rows for everyone on the
   two Sheet allow-lists (9 staff, 21 grants, backfilled 2026-10-04 and applied as data, not a
   migration, so staff emails stay out of version control) exist. `photo-pool.mts` and
-  `whatsapp-admin.mts` now gate on `requireStaff` (2026-10); `event-payments-admin.mts` and
-  `accommodation-admin.mts` still use their Sheets, so for those two the Sheets remain the live
-  gate and can drift from the tables (a Sheet edit does not update the tables, and vice versa).
+  `whatsapp-admin.mts` and `event-payments-admin.mts` now gate on `requireStaff` (2026-10);
+  `accommodation-admin.mts` still uses its Sheet, so for that one the Sheet remains the live gate
+  and can drift from the tables (a Sheet edit does not update the tables, and vice versa).
   Masking helpers live in `lib/staff-masking.ts`.
 - **`scripts/lib/accommodation-db.mjs`** — hand-rolled Supabase PostgREST REST client (same style
   as `supabase.mjs` below, no `@supabase/supabase-js`), the sole data-access layer for
@@ -578,9 +578,16 @@ outside both the local machine and Netlify (the member-update-email workflow).
   before the guest confirms; `POST` records the request. Reusable the same way
   `razorpay-webhook.mts` is — nothing here is specific to one event.
 - **`netlify/functions/event-payments-admin.mts`** — backs `/internal/event-payments`, the
-  per-event registrations/cancellations/money-collected dashboard. Google Sign-In gated, same
-  pattern and same "core team" allow-list (`PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID`) as
-  `whatsapp-admin.mts`/`accommodation-admin.mts`. `GET ?eventReferenceId=` returns every booking
+  per-event registrations/cancellations/money-collected dashboard. Google Sign-In gated, then
+  `requireStaff` checks the caller's role in the `event-payments` module — `view` to read,
+  admin-only `refund` for both refund routes (migrated 2026-10 from the shared "core team" Sheet
+  allow-list). Payer **email and phone never leave this Function**: each booking carries a
+  `payerLabel` (the name, masked for `read_only` roles, or an opaque "Payer XXXX") and
+  `hasEmail`/`hasPhone` flags; the duplicate-booking flag is still computed server-side from the
+  email, and the refund email is sent to the stored address server-side. The staff member is
+  recorded by id (not email) in `refunded_by` and in the notes stored by Razorpay, and every
+  refund is audit-logged **before** any money moves (refused if the log write fails).
+  `GET ?eventReferenceId=` returns every booking
   for that event plus computed aggregates (gross/net collected, cancelled count, pending
   cancellation-request count). `POST` with `{ id, amount, reason? }` **triggers** a real refund:
   looks the row up, rejects it if already refunded or already has a non-failed refund in progress

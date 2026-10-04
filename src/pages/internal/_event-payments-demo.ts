@@ -89,9 +89,11 @@ function bookingsResponse(eventDate: string | null) {
     .map((r) => ({
       id: r.id,
       razorpayPaymentId: `pay_DEMO000000000${r.id.slice(-1).toUpperCase()}`,
-      payerName: r.name,
-      payerEmail: r.email,
-      payerContact: r.contact,
+      // Same shape the real API sends: a display label plus on-file flags,
+      // never the email or phone themselves.
+      payerLabel: r.name,
+      hasEmail: Boolean(r.email),
+      hasPhone: Boolean(r.contact),
       attendeeCount: r.attendees,
       amount: r.amount,
       currency: 'INR',
@@ -133,6 +135,7 @@ function bookingsResponse(eventDate: string | null) {
   }
 
   return {
+    canRefund: true,
     bookings,
     testPaymentCount: 0,
     aggregates: {
