@@ -593,7 +593,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `MFA_NOT_CONFIGURED`. **Losing or changing that key invalidates every stored authenticator and
   every recovery code at once** — there is no rotation procedure yet, so keep a copy in a password
   manager. A used code can't be replayed (a per-factor last-used time step, guarded atomically in
-  the database), five wrong codes lock a person out for 15 minutes, a second super admin can reset
+  the database), five wrong codes lock a person out for 15 minutes (a genuine code that was just used — a double tap or a retried slow request — is refused as `CODE_ALREADY_USED` and not counted; the pages also send one check at a time), a second super admin can reset
   someone's enrolment, and every security event goes to `staff_audit_log` as ids and method names
   only. Only an active `is_super_admin` passes `requireSuperAdmin` (which grants no module access).
   Tables: migration `0029_staff_mfa.sql`. Wrong codes answer 400, not 401, so the page can tell a
