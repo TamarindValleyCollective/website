@@ -1,0 +1,22 @@
+name: Design language
+
+on:
+  pull_request:
+    paths:
+      - 'src/**/*.astro'
+      - 'src/**/*.css'
+      - '.stylelintrc.json'
+
+jobs:
+  stylelint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Errors (an undefined --custom-property) fail the job; warnings (raw hex colors,
+      # radius literals) are reported in the log but don't block merging yet.
+      - run: npm run lint:css

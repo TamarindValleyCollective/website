@@ -33,6 +33,26 @@ project, unrelated to the website itself, kept here alongside `RAZORPAY.md`/`BUF
 that's where TVC's other operational tooling docs live. **Update it in the same change**
 whenever that changes — the sync script, sheet layout, trigger cadence, or Drive folder.
 
+## Design language
+
+`src/styles/global.css` is the single source of truth for TVC's design tokens (colors, type,
+spacing, radii, shadows); the design-system artifact is a derived reference copy, so if the two
+disagree `global.css` wins. In any `.astro` or `.css` file:
+
+- Use a `--tvc-*` color token, never a raw hex. Add a token to `global.css` first if one is missing.
+- Never reference a custom property that `global.css` doesn't define (CI fails on this).
+- Orange has three jobs: `--tvc-orange-cta` fills the primary `.button` only; `--tvc-orange` is for
+  non-text marks (focus rings, underlines, hover); small orange text uses `--tvc-orange-text`, and
+  orange on dark green uses `--tvc-orange-light`. Never white text on `--tvc-orange-cta`.
+- Use `--radius` (14px, cards), `--radius-sm` (8px), `--radius-field` (10px) and `--shadow-soft`
+  rather than literals.
+- Fonts: headings use `--font-display`, everything else `--font-body`; `--font-wordmark` is only
+  for the nav/footer lockup, and the `--font-3bs1h-*` faces only inside the 3Bs&1H series.
+
+`npm run lint:css` checks this (Stylelint); the `Design language` GitHub Action runs it on every
+PR. Raw hex colors and radius literals are warnings for now, so existing ones don't block a PR,
+but don't add new ones. Update this section in the same change if the rules change.
+
 ## Change log
 
 `CHANGELOG.md` is a short index; the actual entries live one file per month under
