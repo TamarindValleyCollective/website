@@ -63,8 +63,13 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   }
 
   h2 {
-    font-size: 1.125rem;
-    margin: 28px 0 10px;
+    margin: 32px 0 12px;
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--tvc-ink-soft);
   }
 
   .card {
@@ -107,46 +112,129 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     gap: 16px;
   }
 
-  /* The cards are built by the script, so they need :global(). */
+  /* The tiles are built by the script, so they need :global(). Each is an
+     icon badge, the name, a one-line purpose, and the person's role with an
+     arrow along the bottom. */
   .tools :global(a.tool) {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
     height: 100%;
-    padding: 20px 22px;
+    box-sizing: border-box;
+    padding: 20px 22px 18px;
     background: var(--tvc-white);
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
     color: var(--tvc-ink);
     text-decoration: none;
+    transition: transform 0.15s ease, border-color 0.15s ease;
   }
 
   .tools :global(a.tool:hover),
   .tools :global(a.tool:focus-visible) {
     border-color: var(--tvc-orange);
+    transform: translateY(-2px);
+  }
+
+  .tools :global(a.tool:focus-visible) {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .tools :global(.tool-icon) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin-bottom: 14px;
+    border-radius: var(--radius-field);
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
   }
 
   .tools :global(.tool-name) {
-    display: block;
+    font-family: var(--font-display);
     font-size: 1.125rem;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .tools :global(.tool-desc) {
+    flex: 1;
+    margin-top: 4px;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    color: var(--tvc-ink-soft);
+  }
+
+  .tools :global(.tool-foot) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: 16px;
+    min-height: 24px;
+  }
+
+  .tools :global(.tool-role) {
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+    font-size: 0.8rem;
     font-weight: 600;
   }
 
-  .tools :global(.tool-meta) {
-    display: block;
-    margin-top: 4px;
-    font-size: 0.9rem;
-    color: var(--tvc-ink-soft);
+  .tools :global(.tool-arrow) {
+    margin-left: auto;
+    color: var(--tvc-green-dark);
+    opacity: 0.5;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+  }
+
+  .tools :global(a.tool:hover .tool-arrow),
+  .tools :global(a.tool:focus-visible .tool-arrow) {
+    opacity: 1;
+    transform: translateX(3px);
+  }
+
+  /* Admin tiles: same layout, quieter badge and a green-dark outline so they read as a separate group. */
+  .tools :global(a.tool--admin) {
+    border-color: var(--tvc-green-dark);
+  }
+
+  .tools :global(a.tool--admin .tool-icon) {
+    background: var(--tvc-green-dark);
+    color: var(--tvc-white);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tools :global(a.tool),
+    .tools :global(.tool-arrow) {
+      transition: none;
+    }
+
+    .tools :global(a.tool:hover),
+    .tools :global(a.tool:focus-visible),
+    .tools :global(a.tool:hover .tool-arrow),
+    .tools :global(a.tool:focus-visible .tool-arrow) {
+      transform: none;
+    }
   }
 
 </style>
 
 <script>
+  import { STAFF_ICONS } from '../../lib/staff-icons';
   import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch } from '../../../scripts/lib/staff-client.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
   interface Tool {
+    module?: string;
     label: string;
     path: string;
     roleLabel?: string;
@@ -166,17 +254,56 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   const adminSection = $('admin-section');
   const adminList = $('admin-tools');
 
-  function card(tool: Tool, meta: string): HTMLElement {
+  // What each tool is for, shown on its tile. Admin tiles bring their own text.
+  const DESCRIPTIONS: Record<string, string> = {
+    'photo-pool': 'Review and describe photos sent in for the website',
+    whatsapp: 'Read and reply to WhatsApp conversations',
+    'event-payments': 'Bookings, totals and refunds for events',
+    accommodation: 'Stay calendar, guests and bookings',
+    usage: 'Free-tier and credit usage, and warnings',
+  };
+
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+
+  // Icon markup comes from our own constants (src/lib/staff-icons.ts), never from the server.
+  function icon(paths: string, size: number, className: string): SVGElement {
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', String(size));
+    svg.setAttribute('height', String(size));
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '1.8');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    svg.setAttribute('class', className);
+    svg.innerHTML = paths;
+    return svg;
+  }
+
+  function span(className: string, text?: string): HTMLSpanElement {
+    const el = document.createElement('span');
+    el.className = className;
+    if (text !== undefined) el.textContent = text;
+    return el;
+  }
+
+  function card(tool: Tool, kind: 'tool' | 'admin'): HTMLElement {
+    const key = tool.module ?? tool.label.toLowerCase();
     const link = document.createElement('a');
-    link.className = 'tool';
+    link.className = kind === 'admin' ? 'tool tool--admin' : 'tool';
     link.href = tool.path;
-    const name = document.createElement('span');
-    name.className = 'tool-name';
-    name.textContent = tool.label;
-    const detail = document.createElement('span');
-    detail.className = 'tool-meta';
-    detail.textContent = meta;
-    link.append(name, detail);
+
+    const badge = span('tool-icon');
+    badge.append(icon(STAFF_ICONS[key] ?? STAFF_ICONS.home, 22, 'tool-icon-svg'));
+
+    const foot = span('tool-foot');
+    if (tool.roleLabel) foot.append(span('tool-role', tool.roleLabel));
+    foot.append(icon('<path d="M5 12h14M13 6l6 6-6 6"/>', 18, 'tool-arrow'));
+
+    link.append(badge, span('tool-name', tool.label), span('tool-desc', tool.description ?? DESCRIPTIONS[key] ?? ''), foot);
     const item = document.createElement('li');
     item.append(link);
     return item;
@@ -212,12 +339,12 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       if (status !== 200) throw new Error('load failed');
       statusEl.hidden = true;
       welcome.textContent = data.name ? `Welcome, ${data.name}.` : 'Welcome.';
-      toolsList.replaceChildren(...(data.tools as Tool[]).map((t) => card(t, `Your role: ${t.roleLabel}`)));
+      toolsList.replaceChildren(...(data.tools as Tool[]).map((t) => card(t, 'tool')));
       const hasTools = data.tools.length > 0;
       const hasAdmin = data.adminTools.length > 0;
       toolsSection.hidden = !hasTools && hasAdmin; // a super admin with no tool roles sees just Administration
       noTools.hidden = hasTools || hasAdmin;
-      adminList.replaceChildren(...(data.adminTools as Tool[]).map((t) => card(t, t.description ?? '')));
+      adminList.replaceChildren(...(data.adminTools as Tool[]).map((t) => card(t, 'admin')));
       adminSection.hidden = data.adminTools.length === 0;
     } catch (err) {
       if (err instanceof StaffAuthError) {
