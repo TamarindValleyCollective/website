@@ -1,0 +1,55 @@
+{
+  "plugins": [
+    "stylelint-value-no-unknown-custom-properties"
+  ],
+  "overrides": [
+    {
+      "files": [
+        "**/*.astro"
+      ],
+      "customSyntax": "postcss-html"
+    },
+    {
+      "files": [
+        "src/components/JourneyTimelineStandalone.astro"
+      ],
+      "rules": {
+        "csstools/value-no-unknown-custom-properties": null
+      }
+    }
+  ],
+  "rules": {
+    "csstools/value-no-unknown-custom-properties": [
+      true,
+      {
+        "importFrom": [
+          "src/styles/global.css"
+        ],
+        "severity": "error"
+      }
+    ],
+    "color-no-hex": [
+      true,
+      {
+        "severity": "warning",
+        "message": "Use a --tvc-* color token from src/styles/global.css instead of a raw hex value (see Design language in AGENTS.md)."
+      }
+    ],
+    "declaration-property-value-disallowed-list": [
+      {
+        "border-radius": [
+          "/^(8|10)px$/"
+        ]
+      },
+      {
+        "severity": "warning",
+        "message": "Use var(--radius-sm) (8px) or var(--radius-field) (10px) instead of the literal."
+      }
+    ]
+  },
+  "ignoreFiles": [
+    "dist/**",
+    "node_modules/**",
+    "src/styles/global.css"
+  ]
+}
