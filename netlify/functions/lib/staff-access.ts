@@ -61,17 +61,30 @@ async function lookupStaff(email: string, module: ModuleId): Promise<StaffRow | 
 
   const supabaseUrl = process.env.SUPABASE_URL;
   if (!supabaseUrl) throw new Error('Missing SUPABASE_URL');
-  // The embedded-resource filter narrows only the nested roles to this
-  // module; the parent staff_users row comes back (with an empty roles
-  // array) for a known user who simply has no role here.
-  const query =
-    `email=eq.${encodeURIComponent(email)}` +
-    `&select=id,email,name,active,is_super_admin,staff_module_roles(role,scope)` +
-    `&staff_module_roles.module=eq.${encodeURIComponent(module)}`;
-  const res = await fetch(`${supabaseUrl}/rest/v1/staff_users?${query}`, { headers: restHeaders() });
-  if (!res.ok) throw new Error(`staff_users lookup failed: ${res.status}`);
-  const rows = (await res.json()) as StaffRow[];
-  const row = rows[0] ?? null;
+  // Two plain queries, not one embedded select: staff_module_roles has two
+  // foreign keys to staff_users (staff_id and granted_by), so PostgREST can't
+  // infer which one an `staff_module_roles(...)` embed means and answers
+  // PGRST201 / HTTP 300. That broke every admin page when this first shipped.
+  const userRes = await fetch(
+    `${supabaseUrl}/rest/v1/staff_users?email=eq.${encodeURIComponent(email)}` +
+      `&select=id,email,name,active,is_super_admin`,
+    { headers: restHeaders() },
+  );
+  if (!userRes.ok) throw new Error(`staff_users lookup failed: ${userRes.status}`);
+  const user = ((await userRes.json()) as Omit<StaffRow, 'staff_module_roles'>[])[0];
+
+  let row: StaffRow | null = null;
+  if (user) {
+    // A known user with no role in this module gets an empty array, which
+    // requireStaff turns into the same 403 as an unknown user.
+    const roleRes = await fetch(
+      `${supabaseUrl}/rest/v1/staff_module_roles?staff_id=eq.${user.id}` +
+        `&module=eq.${encodeURIComponent(module)}&select=role,scope`,
+      { headers: restHeaders() },
+    );
+    if (!roleRes.ok) throw new Error(`staff_module_roles lookup failed: ${roleRes.status}`);
+    row = { ...user, staff_module_roles: (await roleRes.json()) as StaffRow['staff_module_roles'] };
+  }
   cache.set(key, { row, expiresAt: Date.now() + CACHE_TTL_MS });
   return row;
 }
