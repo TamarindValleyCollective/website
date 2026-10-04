@@ -175,11 +175,17 @@ async function handleActivity(url: URL): Promise<Response> {
   // checked anyway before being placed in a query.
   const ids = [...new Set(rows.flatMap((r) => [r.actor_id, r.target_id]).filter((x): x is string => Boolean(x) && UUID.test(x as string)))];
   const labels = new Map<string, string>();
+  const masked = new Map<string, string>();
   if (ids.length) {
     const peopleRes = await rest(`/staff_users?id=in.(${ids.join(',')})&select=id,name,email`);
-    for (const p of (await peopleRes.json()) as { id: string; name: string | null; email: string | null }[]) labels.set(p.id, labelFor(p));
+    for (const p of (await peopleRes.json()) as { id: string; name: string | null; email: string | null }[]) {
+      labels.set(p.id, labelFor(p));
+      // Same rule as the people list: only alongside a name, masked here, never the full address.
+      if (p.name && p.email) masked.set(p.id, maskEmail(p.email));
+    }
   }
-  const who = (id: string | null) => (id ? { id, label: labels.get(id) ?? `Person ${id.slice(0, 4).toUpperCase()}` } : null);
+  const who = (id: string | null) =>
+    id ? { id, label: labels.get(id) ?? `Person ${id.slice(0, 4).toUpperCase()}`, maskedEmail: masked.get(id) ?? null } : null;
 
   return jsonResponse({
     events: rows.map((r) => ({ id: r.id, at: r.at, action: r.action, module: r.module, actor: who(r.actor_id), target: who(r.target_id), detail: r.detail })),
