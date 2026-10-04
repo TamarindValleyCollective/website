@@ -238,7 +238,7 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
   }
 
   .stat-tile {
-    background: #fff;
+    background: var(--tvc-white);
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
@@ -286,6 +286,7 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
      line charts need adjacent-pair separation (not all-pairs, per the
      skill), and this site has no dark mode, so light-mode hexes only. */
   .rainfall-chart-wrap {
+    /* stylelint-disable color-no-hex -- chart series colors are data colors, chosen for adjacent-pair separation, not TVC palette colors */
     --series-1: #2a78d6;
     --series-2: #eb6834;
     --series-3: #1baf7a;
@@ -294,7 +295,8 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
     --series-6: #008300;
     --series-7: #4a3aa7;
     --series-8: #e34948;
-    --chart-surface: #faf7ee;
+    /* stylelint-enable color-no-hex */
+    --chart-surface: var(--tvc-cream);
   }
 
   .rainfall-chart-topline {
@@ -314,7 +316,7 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
     border: 1px solid var(--tvc-line);
     border-radius: 999px;
     padding: 2px;
-    background: #fff;
+    background: var(--tvc-white);
   }
 
   .rainfall-mode-toggle :global(.mode-btn) {
@@ -331,7 +333,7 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
 
   .rainfall-mode-toggle :global(.mode-btn[aria-pressed='true']) {
     background: var(--tvc-green);
-    color: #fff;
+    color: var(--tvc-white);
   }
 
   .rainfall-legend {
@@ -383,7 +385,7 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
   }
 
   .rainfall-summary {
-    background: #f9e2df;
+    background: var(--callout-red-bg);
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
@@ -395,7 +397,7 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
     margin: 0 0 6px;
     /* #f9e2df fails WCAG AA against --tvc-orange-text (3.9:1) - darkened
        red-brown for the same reason --tvc-orange-text exists. */
-    color: #9c4438;
+    color: var(--callout-red-text);
   }
 
   .rainfall-summary-body {
@@ -524,9 +526,9 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
     top: 0;
     left: 0;
     pointer-events: none;
-    background: #fff;
+    background: var(--tvc-white);
     border: 1px solid var(--tvc-line);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     box-shadow: var(--shadow-soft);
     padding: 8px 10px;
     font-size: 0.8rem;
