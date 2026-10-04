@@ -247,13 +247,19 @@ function daysInMonth(year: number, monthIndex0: number): number {
 // as buildLineChartGeometry's monthX indices — monthPos i means "cumulative
 // through end of calendar month i" — so day d of D in month i lands at
 // i - 1 + d/D, reaching exactly i on the month's last day.
+export interface CumulativePoint {
+  monthPos: number;
+  mm: number;
+  daily: boolean; // a real logged day, vs. a month-end jump from the monthly total
+}
+
 export function buildDailyCumulativePoints(
   year: number,
   monthly: CalendarMonthEntry[],
   dailyMonths: DailyMonthEntry[] | undefined
-): { monthPos: number; mm: number }[] {
+): CumulativePoint[] {
   const dailyByMonth = new Map((dailyMonths ?? []).map((m) => [m.month, m.days]));
-  const points: { monthPos: number; mm: number }[] = [];
+  const points: CumulativePoint[] = [];
   let running = 0;
 
   for (let i = 0; i < CALENDAR_MONTH_ORDER.length; i++) {
@@ -265,15 +271,43 @@ export function buildDailyCumulativePoints(
       const totalDays = daysInMonth(year, i);
       for (let d = 0; d < days.length; d++) {
         running += days[d];
-        points.push({ monthPos: i - 1 + (d + 1) / totalDays, mm: running });
+        points.push({ monthPos: i - 1 + (d + 1) / totalDays, mm: running, daily: true });
       }
     } else {
       running += entry.mm;
-      points.push({ monthPos: i, mm: running });
+      points.push({ monthPos: i, mm: running, daily: false });
     }
   }
 
   return points;
+}
+
+// Centered moving average of the running total, for drawing the cumulative
+// line only — a rain day is otherwise a vertical step followed by a flat
+// stretch, which reads as noise at this chart's scale. Averages each daily
+// point with up to SMOOTHING_HALF_WINDOW logged days either side, shrinking
+// the window symmetrically near the edges of a run of daily points, so the
+// first and last points (Jan 1 / the latest logged day) keep their exact
+// values and the line still ends on the same total as the stat tile.
+// Month-end jump points (months with no daily coverage) are a month apart,
+// not a day, so they're never averaged and split runs.
+const SMOOTHING_HALF_WINDOW = 3; // 7-day window
+
+export function smoothCumulative(points: CumulativePoint[]): number[] {
+  return points.map((p, i) => {
+    if (!p.daily) return p.mm;
+    let half = 0;
+    while (
+      half < SMOOTHING_HALF_WINDOW &&
+      points[i - half - 1]?.daily &&
+      points[i + half + 1]?.daily
+    ) {
+      half++;
+    }
+    let sum = 0;
+    for (let j = i - half; j <= i + half; j++) sum += points[j].mm;
+    return sum / (2 * half + 1);
+  });
 }
 
 // Cumulative-mode counterpart to buildLineChartGeometry(): same chart frame
@@ -304,10 +338,14 @@ export function buildCumulativeLineChartGeometry(
     Math.min(chartWidth - chartPadRight, Math.max(chartPadLeft, chartPadLeft + (plotWidth * monthPos) / (CALENDAR_MONTH_ORDER.length - 1)));
   const toY = (mm: number) => chartPadTop + (plotHeight - (mm / maxMm) * plotHeight);
 
+  // Only the drawn line's height is smoothed — each point's `mm` stays the
+  // real running total, since the today-marker's hover readout and the
+  // end-dot read it directly (see attachTodayMarker in WeatherView.astro).
   const years: YearLine[] = calendarYears.map((y, idx) => {
-    const points: LinePoint[] = perYearPoints[idx].map((p) => ({
+    const smoothed = smoothCumulative(perYearPoints[idx]);
+    const points: LinePoint[] = perYearPoints[idx].map((p, i) => ({
       x: toX(p.monthPos),
-      y: toY(p.mm),
+      y: toY(smoothed[i]),
       month: CALENDAR_MONTH_ORDER[Math.min(11, Math.max(0, Math.ceil(p.monthPos - 1e-9)))],
       mm: p.mm,
     }));

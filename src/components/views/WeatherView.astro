@@ -1064,21 +1064,25 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
     if (!lastYear?.endPoint) return;
     const todayX = lastYear.endPoint.x;
 
-    function mmAt(points: { x: number; mm: number }[]): number | null {
+    // Interpolates both the real running total (`mm`, for the tooltip) and
+    // the drawn line's height (`y`, for the dot) — the two differ slightly
+    // since the cumulative line is drawn smoothed (see smoothCumulative() in
+    // src/utils/rainfall.ts), and the dot has to sit on the line as drawn.
+    function valueAt(points: { x: number; y: number; mm: number }[]): { mm: number; y: number } | null {
       if (points.length === 0) return null;
       const firstPt = points[0];
       const lastPt = points[points.length - 1];
-      if (todayX <= firstPt.x) return firstPt.mm;
-      if (todayX >= lastPt.x) return lastPt.mm;
+      if (todayX <= firstPt.x) return { mm: firstPt.mm, y: firstPt.y };
+      if (todayX >= lastPt.x) return { mm: lastPt.mm, y: lastPt.y };
       for (let i = 0; i < points.length - 1; i++) {
         const a = points[i];
         const b = points[i + 1];
         if (todayX >= a.x && todayX <= b.x) {
           const t = b.x === a.x ? 0 : (todayX - a.x) / (b.x - a.x);
-          return a.mm + (b.mm - a.mm) * t;
+          return { mm: a.mm + (b.mm - a.mm) * t, y: a.y + (b.y - a.y) * t };
         }
       }
-      return lastPt.mm;
+      return { mm: lastPt.mm, y: lastPt.y };
     }
 
     const dots = new Map<number, SVGCircleElement>();
@@ -1094,16 +1098,16 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
     function show() {
       const rows = geometry.years
         .filter((y) => !isHidden(y.year))
-        .map((y) => ({ year: y.year, colorVar: y.colorVar, mm: mmAt(y.points) }))
-        .filter((r) => r.mm != null);
+        .map((y) => ({ year: y.year, colorVar: y.colorVar, at: valueAt(y.points) }))
+        .filter((r) => r.at != null)
+        .map((r) => ({ year: r.year, colorVar: r.colorVar, mm: r.at!.mm, y: r.at!.y }));
       if (rows.length === 0) return;
 
       for (const row of rows) {
         const dot = dots.get(row.year);
         if (!dot) continue;
-        const y = geometry.chartPadTop + (geometry.plotHeight - (row.mm! / geometry.maxMm) * geometry.plotHeight);
         dot.setAttribute('cx', String(todayX));
-        dot.setAttribute('cy', String(y));
+        dot.setAttribute('cy', String(row.y));
         dot.classList.add('active');
       }
       const shownYears = new Set(rows.map((r) => r.year));
