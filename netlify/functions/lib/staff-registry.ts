@@ -88,7 +88,7 @@ export const MODULE_INFO: Record<ModuleId, { label: string; path: string; capabi
     path: '/internal/accommodation-calendar/',
     capabilities: {
       view: 'See the calendar and guests',
-      edit: 'Create, change and cancel bookings (limited to the booking types below if any are chosen)',
+      edit: 'Create, change and cancel bookings (a User can be limited to chosen booking types)',
       admin: 'Everything in the calendar, with no booking-type limit',
     },
   },

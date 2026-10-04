@@ -31,33 +31,31 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     <p id="status" class="hint" hidden></p>
 
     <div id="panel" hidden>
-      <section id="stepup" class="card block" aria-live="polite">
-        <p id="stepup-text" class="note"></p>
-        <form id="verify-form" class="inline-form" hidden>
-          <label>
-            Method
-            <select id="verify-method">
-              <option value="totp">Authenticator app</option>
-              <option value="recovery">Recovery code</option>
-            </select>
-          </label>
-          <label>
-            Code
-            <input type="text" id="verify-code" autocomplete="one-time-code" required />
-          </label>
+      <section id="stepup" class="banner" aria-live="polite">
+        <p id="stepup-text" class="banner-text"></p>
+        <form id="verify-form" class="banner-form" hidden>
+          <label class="visually-hidden" for="verify-code">Code</label>
+          <input type="text" id="verify-code" name="verify-code" inputmode="numeric" autocomplete="one-time-code" required />
           <button type="submit" class="button">Unlock changes</button>
+          <button type="button" id="verify-switch" class="link-button">Use a recovery code</button>
         </form>
-        <p id="stepup-link" class="note" hidden><a href="/internal/security/">Set up your second factors →</a></p>
-        <p id="verify-error" class="error" hidden></p>
+        <a id="stepup-link" class="banner-link" href="/internal/security/" hidden>Set up your second factors →</a>
+        <p id="verify-error" class="error banner-error" hidden></p>
       </section>
 
       <div class="tabs" role="tablist" aria-label="Access sections">
         <button type="button" role="tab" id="tab-people" aria-selected="true" aria-controls="pane-people" class="tab">People</button>
+        <button type="button" role="tab" id="tab-roles" aria-selected="false" aria-controls="pane-roles" class="tab">What each role can do</button>
         <button type="button" role="tab" id="tab-activity" aria-selected="false" aria-controls="pane-activity" class="tab">Activity</button>
       </div>
 
       <section id="pane-people" role="tabpanel" aria-labelledby="tab-people">
-        <form id="add-form" class="card block inline-form">
+        <div class="toolbar">
+          <p id="people-count" class="note"></p>
+          <button type="button" id="add-toggle" class="button" aria-expanded="false" aria-controls="add-form">Add person</button>
+        </div>
+
+        <form id="add-form" class="card block inline-form" hidden>
           <label>
             Email of the person to add
             <input type="email" id="add-email" autocomplete="off" required />
@@ -69,9 +67,25 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
           <button type="submit" id="add-submit" class="button">Add person</button>
           <p class="note full">The address is used once to recognise them when they sign in with Google, and is never shown again. Their name fills in from Google on their first sign-in.</p>
         </form>
+
+        <p id="save-message" class="note" role="status" hidden></p>
         <p id="add-message" class="note" hidden></p>
         <p id="people-error" class="error" hidden></p>
-        <ul id="people" class="people"></ul>
+
+        <div class="grid-wrap card">
+          <table id="matrix" class="matrix">
+            <thead>
+              <tr id="matrix-head"></tr>
+            </thead>
+            <tbody id="people"></tbody>
+          </table>
+        </div>
+        <p class="note legend">Changes save as soon as you pick a role. “No access” hides the tool from that person entirely.</p>
+      </section>
+
+      <section id="pane-roles" role="tabpanel" aria-labelledby="tab-roles" hidden>
+        <p class="note">What each role lets someone do, tool by tool. This is fixed in the code and changes only through a reviewed update.</p>
+        <div id="roles-guide" class="roles-guide"></div>
       </section>
 
       <section id="pane-activity" role="tabpanel" aria-labelledby="tab-activity" hidden>
@@ -159,8 +173,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   }
 
   .inline-form input,
-  .inline-form select,
-  .people :global(select) {
+  .inline-form select {
     font: inherit;
     font-size: 0.95rem;
     padding: 8px 10px;
@@ -175,7 +188,6 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     gap: 6px;
     margin-bottom: 16px;
     border-bottom: 1px solid var(--tvc-line);
-    max-width: 760px;
   }
 
   .tab {
@@ -195,132 +207,372 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     border-bottom-color: var(--tvc-orange);
   }
 
-  .people,
-  .events {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    max-width: 760px;
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
-  /* Everything below targets nodes the script creates, so it needs :global()
-     (Astro's scoped styles don't reach elements made at runtime). */
-  .people :global(.person) {
-    background: var(--tvc-white);
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-soft);
-    margin-bottom: 12px;
-    padding: 14px 18px;
+  .link-button {
+    font: inherit;
+    font-size: 0.88rem;
+    background: none;
+    border: none;
+    padding: 8px 4px;
+    color: var(--tvc-ink-soft);
+    text-decoration: underline;
+    cursor: pointer;
   }
 
-  .people :global(.person.is-inactive) {
-    opacity: 0.7;
-  }
-
-  .people :global(.person-head) {
+  /* ---- the "unlock changes" strip: one quiet line, not a card of its own */
+  .banner {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px 10px;
+    gap: 8px 16px;
+    padding: 10px 16px;
+    margin-bottom: 18px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-cream);
   }
 
-  .people :global(.person-name) {
-    font-weight: 600;
-    margin-right: 4px;
+  .banner.is-unlocked {
+    background: var(--tvc-green-tint);
+    border-color: var(--tvc-green);
   }
 
-  .people :global(.badge) {
-    font-size: 0.74rem;
+  .banner-text {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--tvc-ink);
+  }
+
+  .banner-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .banner-form input {
+    font: inherit;
+    font-size: 1rem;
+    letter-spacing: 0.18em;
+    width: 9.5em;
+    padding: 8px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+  }
+
+  .banner-link {
+    font-size: 0.9rem;
+  }
+
+  .banner-error {
+    flex-basis: 100%;
+    margin: 0;
+  }
+
+  /* ---- people x tools grid */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .toolbar .note {
+    margin: 0;
+  }
+
+  .grid-wrap {
+    overflow-x: auto;
+  }
+
+  .matrix {
+    width: 100%;
+    min-width: 780px;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.92rem;
+  }
+
+  .matrix :global(th),
+  .matrix :global(td) {
+    padding: 12px 14px;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .matrix thead :global(th) {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-ink-soft);
+    font-size: 0.8rem;
     font-weight: 600;
-    padding: 2px 9px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+
+  .matrix :global(tbody tr:last-child > *) {
+    border-bottom: none;
+  }
+
+  .matrix :global(.person-cell) {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    min-width: 190px;
+    background: var(--tvc-white);
+    font-weight: 400;
+  }
+
+  .matrix thead :global(.person-cell) {
+    background: var(--tvc-green-tint);
+  }
+
+  .matrix :global(tr.is-inactive > *) {
+    opacity: 0.65;
+  }
+
+  .matrix :global(tr.is-new .person-cell) {
+    box-shadow: inset 3px 0 0 var(--tvc-orange);
+  }
+
+  .matrix :global(.person-name) {
+    display: block;
+    font-weight: 600;
+  }
+
+  .matrix :global(.badges) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  .matrix :global(.badge) {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 1px 8px;
     border-radius: var(--radius-sm);
     background: var(--tvc-green-tint);
     color: var(--tvc-green-dark);
   }
 
-  .people :global(.badge--warn) {
+  .matrix :global(.badge--warn) {
     background: var(--tvc-orange-tint);
     color: var(--tvc-orange-text);
   }
 
-  .people :global(.spacer) {
-    flex: 1;
-  }
-
-  .people :global(.summary) {
-    font-size: 0.85rem;
+  .matrix :global(.role-select) {
+    font: inherit;
+    font-size: 0.88rem;
+    width: 100%;
+    min-width: 8.5em;
+    padding: 7px 8px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
     color: var(--tvc-ink-soft);
-    margin: 6px 0 0;
   }
 
-  .people :global(.person-body) {
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid var(--tvc-line);
+  .matrix :global(.role-select[data-role='read_only']) {
+    background: var(--tvc-stone);
+    color: var(--tvc-ink);
   }
 
-  .people :global(.module-row) {
-    padding: 10px 0;
-    border-bottom: 1px solid var(--tvc-line);
-  }
-
-  .people :global(.module-row:last-of-type) {
-    border-bottom: none;
-  }
-
-  .people :global(.module-line) {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px 12px;
-  }
-
-  .people :global(.module-label) {
+  .matrix :global(.role-select[data-role='user']) {
+    background: var(--tvc-green-tint);
+    border-color: var(--tvc-green);
+    color: var(--tvc-green-dark);
     font-weight: 600;
-    font-size: 0.92rem;
-    min-width: 170px;
   }
 
-  .people :global(.allows) {
-    font-size: 0.82rem;
-    color: var(--tvc-ink-soft);
-    margin: 6px 0 0;
+  .matrix :global(.role-select[data-role='admin']) {
+    background: var(--tvc-green-dark);
+    border-color: var(--tvc-green-dark);
+    color: var(--tvc-white);
+    font-weight: 600;
   }
 
-  .people :global(.scope) {
-    margin: 8px 0 0;
-    font-size: 0.85rem;
+  .matrix :global(.role-select:disabled) {
+    cursor: not-allowed;
+    opacity: 0.75;
   }
 
-  .people :global(.scope label) {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    margin: 0 14px 4px 0;
+  .matrix :global(.role-select.is-error) {
+    border-color: var(--tvc-error-text);
   }
 
-  .people :global(.row-status) {
-    font-size: 0.82rem;
-    color: var(--tvc-ink-soft);
-  }
-
-  .people :global(.row-status.is-error) {
+  .matrix :global(.cell-note) {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.78rem;
     color: var(--tvc-error-text);
   }
 
-  .people :global(.danger-zone) {
-    margin-top: 12px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 12px;
-    align-items: center;
+  .matrix :global(.cell-note--quiet) {
+    color: var(--tvc-ink-soft);
   }
 
-  .people :global(.button--danger) {
-    background: var(--callout-red-bg);
+  .matrix :global(.limit-button) {
+    font: inherit;
+    font-size: 0.78rem;
+    margin-top: 4px;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--tvc-ink-soft);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .matrix :global(.detail-row > td) {
+    background: var(--tvc-cream);
+  }
+
+  .matrix :global(.limits) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 18px;
+  }
+
+  .matrix :global(.limits-title) {
+    flex-basis: 100%;
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .matrix :global(.limits label) {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.88rem;
+  }
+
+  .matrix :global(.row-action) {
+    font: inherit;
+    font-size: 0.82rem;
+    padding: 5px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-sm);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .matrix :global(.row-action--danger) {
     border-color: var(--callout-red-text);
+    background: var(--callout-red-bg);
     color: var(--callout-red-text);
+  }
+
+  .matrix :global(.row-action:disabled) {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .matrix :global(.empty-row td) {
+    text-align: center;
+    color: var(--tvc-ink-soft);
+    padding: 28px 14px;
+  }
+
+  .legend {
+    margin-top: 10px;
+  }
+
+  /* ---- "what each role can do": a read-only permission matrix per tool */
+  .roles-guide {
+    display: grid;
+    gap: 16px;
+    max-width: 860px;
+  }
+
+  .roles-guide :global(.guide) {
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+    overflow-x: auto;
+  }
+
+  .roles-guide :global(h2) {
+    margin: 0;
+    padding: 14px 16px;
+    font-size: 1.05rem;
+  }
+
+  .roles-guide :global(table) {
+    width: 100%;
+    min-width: 520px;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+
+  .roles-guide :global(th),
+  .roles-guide :global(td) {
+    padding: 10px 16px;
+    text-align: left;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .roles-guide :global(thead th) {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-ink-soft);
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  .roles-guide :global(.col-role) {
+    text-align: center;
+    width: 110px;
+  }
+
+  .roles-guide :global(.tick),
+  .roles-guide :global(.dash) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    line-height: 1;
+  }
+
+  .roles-guide :global(.tick) {
+    background: var(--tvc-green-dark);
+    color: var(--tvc-white);
+  }
+
+  .roles-guide :global(.dash) {
+    border: 1px solid var(--tvc-line);
+    color: var(--tvc-ink-soft);
+  }
+
+  @media (max-width: 640px) {
+    .toolbar {
+      flex-wrap: wrap;
+    }
+  }
+
+  .events {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-width: 760px;
   }
 
   .events :global(.event) {
@@ -348,6 +600,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     setToken,
     staffFetch,
     stepUpExpiry,
+    wireCodeEntry,
   } from '../../../scripts/lib/staff-client.mjs';
 
   declare const google: any;
@@ -404,14 +657,23 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   const panel = $('panel');
   const stepupText = $('stepup-text');
   const verifyForm = $<HTMLFormElement>('verify-form');
-  const verifyMethod = $<HTMLSelectElement>('verify-method');
   const verifyCode = $<HTMLInputElement>('verify-code');
+  const verifySwitch = $('verify-switch');
+  const banner = $('stepup');
+  const verifyEntry = wireCodeEntry({ form: verifyForm, input: verifyCode, toggle: verifySwitch });
   const verifyError = $('verify-error');
   const stepupLink = $('stepup-link');
   const tabPeople = $('tab-people');
+  const tabRoles = $('tab-roles');
   const tabActivity = $('tab-activity');
   const panePeople = $('pane-people');
+  const paneRoles = $('pane-roles');
   const paneActivity = $('pane-activity');
+  const addToggle = $<HTMLButtonElement>('add-toggle');
+  const peopleCount = $('people-count');
+  const saveMessage = $('save-message');
+  const matrixHead = $('matrix-head');
+  const rolesGuide = $('roles-guide');
   const addForm = $<HTMLFormElement>('add-form');
   const addEmail = $<HTMLInputElement>('add-email');
   const addName = $<HTMLInputElement>('add-name');
@@ -425,7 +687,9 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   const eventsMore = $<HTMLButtonElement>('events-more');
 
   let state: PeopleResponse | null = null;
-  const openPeople = new Set<string>(); // which people's editors are expanded
+  const openLimits = new Set<string>(); // people whose booking-type limits are expanded
+  let newPersonId: string | null = null; // highlighted after being added
+  let refocus: string | null = null; // `${personId}|${moduleId}` to refocus after a redraw
   let nextBefore: number | null = null;
   let activityLoaded = false;
 
@@ -491,11 +755,12 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   }
   const handled = (err: unknown) => err instanceof StaffAuthError;
 
-  // ---- the "unlock changes" card
+  // ---- the "unlock changes" strip
   function renderStepUp() {
     if (!state) return;
     const exp = stepUpExpiry();
     verifyError.hidden = true;
+    banner.classList.toggle('is-unlocked', Boolean(state.me.ready && exp));
     if (!state.me.ready) {
       stepupText.textContent = 'You need two different second-factor methods set up before you can change anything. You can look around in the meantime.';
       verifyForm.hidden = true;
@@ -505,9 +770,11 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       verifyForm.hidden = true;
       stepupLink.hidden = true;
     } else {
-      stepupText.textContent = "Viewing only. Prove it's you to make changes:";
+      const wasHidden = verifyForm.hidden;
+      stepupText.textContent = 'Viewing only. Enter your authenticator code to make changes:';
       verifyForm.hidden = false;
       stepupLink.hidden = true;
+      if (wasHidden && document.activeElement === document.body) verifyCode.focus();
     }
   }
 
@@ -515,7 +782,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     ev.preventDefault();
     verifyError.hidden = true;
     try {
-      const { status, data } = await call('/api/staff-mfa/verify', { method: 'POST', body: { method: verifyMethod.value, code: verifyCode.value } });
+      const { status, data } = await call('/api/staff-mfa/verify', { method: 'POST', body: { method: verifyEntry.method(), code: verifyCode.value } });
       if (status === 200) {
         saveStepUp(data.stepUpToken, data.expiresInSeconds);
         verifyCode.value = '';
@@ -532,127 +799,154 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   });
 
   // ---- people
-  function summaryText(p: Person): string {
-    if (p.roles.length === 0) return 'No access to any tool yet.';
-    return p.roles.map((r) => `${moduleLabel(r.module)}: ${roleLabel(r.role)}`).join(' · ');
-  }
-
   function describeRole(module: ModuleInfo, role: string): string {
     if (!role) return 'Cannot open this tool.';
     const caps = module.roles.find((r) => r.role === role)?.capabilities ?? [];
     return caps.map((c) => c.description).join('; ') + '.';
   }
 
-  function moduleRow(p: Person, module: ModuleInfo): HTMLElement {
-    const current = p.roles.find((r) => r.module === module.id) ?? null;
-    const editable = canEdit();
+  function announce(message: string, isError = false) {
+    saveMessage.hidden = !message;
+    saveMessage.textContent = message;
+    saveMessage.classList.toggle('error', isError);
+  }
 
-    const select = h('select', { attrs: { 'aria-label': `${module.label} access for ${p.label}` } });
+  async function saveRole(p: Person, module: ModuleInfo, role: string, select: HTMLSelectElement, cellNote: HTMLElement) {
+    const previous = p.roles.find((r) => r.module === module.id)?.role ?? '';
+    select.disabled = true;
+    select.classList.remove('is-error');
+    cellNote.textContent = '';
+    announce(`Saving ${module.label} for ${p.label}…`);
+    try {
+      const { status, data } = await call('/api/staff-admin/roles', { method: 'POST', body: { personId: p.id, module: module.id, role: role || null } });
+      if (status === 200) {
+        refocus = `${p.id}|${module.id}`;
+        announce(`${p.label}: ${module.label} is now ${roleLabel(role)}.`);
+        await loadPeople(); // re-draws with what the server now holds
+        return;
+      }
+      select.value = previous;
+      select.dataset.role = previous;
+      select.classList.add('is-error');
+      cellNote.textContent = data.error ?? 'Could not save.';
+      announce(data.error ?? 'Could not save that change.', true);
+      if (data.code === 'STEP_UP_REQUIRED') await loadPeople();
+    } catch (err) {
+      if (!handled(err)) {
+        select.value = previous;
+        select.dataset.role = previous;
+        select.classList.add('is-error');
+        cellNote.textContent = 'Could not reach the server.';
+        announce('Could not reach the server — try again.', true);
+      }
+    } finally {
+      select.disabled = !canEdit();
+    }
+  }
+
+  function roleCell(p: Person, module: ModuleInfo): HTMLElement {
+    const current = p.roles.find((r) => r.module === module.id) ?? null;
+    const select = h('select', { class: 'role-select', attrs: { 'aria-label': `${module.label} access for ${p.label}`, 'data-person': p.id, 'data-module': module.id } });
     for (const value of ROLE_ORDER) select.append(h('option', { text: value ? ROLE_LABELS[value] : 'No access', attrs: { value } }));
     select.value = current?.role ?? '';
-    select.disabled = !editable;
+    select.dataset.role = select.value;
+    select.disabled = !canEdit();
+    select.title = describeRole(module, select.value);
 
-    const allows = h('p', { class: 'allows', text: describeRole(module, select.value) });
-    const status = h('span', { class: 'row-status' });
-    const save = h('button', { class: 'button', text: 'Save', attrs: { type: 'button' } });
-    save.disabled = true;
+    const note = h('span', { class: 'cell-note', attrs: { role: 'alert' } });
+    const cell = h('td', {}, select, note);
 
-    // Booking-type limits exist only for a "User" in the accommodation calendar.
-    let scopeBox: HTMLElement | null = null;
-    let limitToggle: HTMLInputElement | null = null;
-    const typeBoxes: HTMLInputElement[] = [];
-    if (module.scopeTypes) {
-      const limited = Boolean(current?.scope?.allowedTypes?.length);
-      limitToggle = h('input', { attrs: { type: 'checkbox' } });
-      limitToggle.checked = limited;
-      limitToggle.disabled = !editable;
-      const typeLabels = module.scopeTypes.map((t) => {
-        const box = h('input', { attrs: { type: 'checkbox', value: t } });
-        box.checked = current?.scope?.allowedTypes?.includes(t) ?? false;
-        box.disabled = !editable;
-        typeBoxes.push(box);
-        return h('label', {}, box, humanize(t));
+    // The accommodation calendar lets a "User" be limited to some booking types.
+    if (module.scopeTypes && current?.role === 'user') {
+      const limited = current.scope?.allowedTypes ?? [];
+      const button = h('button', {
+        class: 'limit-button',
+        text: limited.length ? `Limited to ${limited.length} booking type${limited.length === 1 ? '' : 's'}` : 'All booking types',
+        attrs: { type: 'button', 'aria-expanded': String(openLimits.has(p.id)) },
       });
-      const typeWrap = h('div', {}, ...typeLabels);
-      typeWrap.hidden = !limited;
-      scopeBox = h('div', { class: 'scope' }, h('label', {}, limitToggle, 'Limit to specific booking types'), typeWrap);
-      limitToggle.addEventListener('change', () => {
-        typeWrap.hidden = !limitToggle!.checked;
-        dirty();
+      button.addEventListener('click', () => {
+        if (openLimits.has(p.id)) openLimits.delete(p.id);
+        else openLimits.add(p.id);
+        renderPeople();
       });
-      typeBoxes.forEach((b) => b.addEventListener('change', dirty));
-      scopeBox.hidden = select.value !== 'user';
+      cell.append(button);
     }
 
-    function dirty() {
-      status.textContent = '';
-      status.classList.remove('is-error');
-      save.disabled = !canEdit();
-    }
     select.addEventListener('change', () => {
-      allows.textContent = describeRole(module, select.value);
-      if (scopeBox) scopeBox.hidden = select.value !== 'user';
-      dirty();
+      select.dataset.role = select.value;
+      select.title = describeRole(module, select.value);
+      void saveRole(p, module, select.value, select, note);
     });
+    return cell;
+  }
 
+  function limitsRow(p: Person, module: ModuleInfo): HTMLElement {
+    const current = p.roles.find((r) => r.module === module.id);
+    const editable = canEdit();
+    const boxes: HTMLInputElement[] = module.scopeTypes!.map((t) => {
+      const box = h('input', { attrs: { type: 'checkbox', value: t } });
+      box.checked = current?.scope?.allowedTypes?.includes(t) ?? false;
+      box.disabled = !editable;
+      return box;
+    });
+    const status = h('span', { class: 'cell-note' });
+    const save = h('button', { class: 'row-action', text: 'Save limits', attrs: { type: 'button' } });
+    save.disabled = !editable;
     save.addEventListener('click', async () => {
+      const chosen = boxes.filter((b) => b.checked).map((b) => b.value);
       save.disabled = true;
-      status.classList.remove('is-error');
       status.textContent = 'Saving…';
-      const body: Record<string, unknown> = { personId: p.id, module: module.id, role: select.value || null };
-      if (module.scopeTypes && select.value === 'user' && limitToggle?.checked) {
-        body.scope = { allowedTypes: typeBoxes.filter((b) => b.checked).map((b) => b.value) };
-      }
       try {
-        const { status: code, data } = await call('/api/staff-admin/roles', { method: 'POST', body });
+        const { status: code, data } = await call('/api/staff-admin/roles', {
+          method: 'POST',
+          body: { personId: p.id, module: module.id, role: 'user', ...(chosen.length ? { scope: { allowedTypes: chosen } } : {}) },
+        });
         if (code === 200) {
-          await loadPeople(); // re-draws with what the server now holds
+          announce(chosen.length ? `${p.label} can now edit only ${chosen.length} booking type${chosen.length === 1 ? '' : 's'} in the calendar.` : `${p.label} can edit every booking type in the calendar.`);
+          await loadPeople();
         } else {
-          status.classList.add('is-error');
           status.textContent = data.error ?? 'Could not save.';
-          if (data.code === 'STEP_UP_REQUIRED') await loadPeople();
-          else save.disabled = false;
+          save.disabled = !canEdit();
         }
       } catch (err) {
         if (!handled(err)) {
-          status.classList.add('is-error');
-          status.textContent = 'Could not reach the server — try again.';
-          save.disabled = false;
+          status.textContent = 'Could not reach the server.';
+          save.disabled = !canEdit();
         }
       }
     });
-
-    return h(
+    const limits = h(
       'div',
-      { class: 'module-row' },
-      h('div', { class: 'module-line' }, h('span', { class: 'module-label', text: module.label }), select, save, status),
-      allows,
-      ...(scopeBox ? [scopeBox] : []),
+      { class: 'limits' },
+      h('p', { class: 'limits-title', text: `Booking types ${p.label} may edit in the ${module.label.toLowerCase()} (none ticked = all of them):` }),
+      ...boxes.map((b) => h('label', {}, b, humanize(b.value))),
+      save,
+      status,
     );
+    return h('tr', { class: 'detail-row' }, h('td', { attrs: { colspan: String(state!.modules.length + 2) } }, limits));
   }
 
-  function personCard(p: Person): HTMLElement {
-    const open = openPeople.has(p.id);
-    const body = h('div', { class: 'person-body' });
-    body.hidden = !open;
+  function personRows(p: Person): HTMLElement[] {
+    const badges = h('div', { class: 'badges' });
+    if (p.isMe) badges.append(h('span', { class: 'badge', text: 'You' }));
+    if (p.isSuperAdmin) badges.append(h('span', { class: 'badge', text: 'Super admin' }));
+    if (p.isSuperAdmin && p.mfa) badges.append(h('span', { class: p.mfa.ready ? 'badge' : 'badge badge--warn', text: p.mfa.ready ? 'Second factors ready' : `${p.mfa.methodCount} of 2 methods` }));
+    if (!p.active) badges.append(h('span', { class: 'badge badge--warn', text: 'Deactivated' }));
 
-    const toggle = h('button', { class: 'button button--outline', text: open ? 'Close' : 'Edit access', attrs: { type: 'button', 'aria-expanded': String(open) } });
-    toggle.addEventListener('click', () => {
-      const nowOpen = body.hidden;
-      body.hidden = !nowOpen;
-      toggle.textContent = nowOpen ? 'Close' : 'Edit access';
-      toggle.setAttribute('aria-expanded', String(nowOpen));
-      if (nowOpen) openPeople.add(p.id);
-      else openPeople.delete(p.id);
-    });
-
-    for (const module of state!.modules) body.append(moduleRow(p, module));
+    const rowClasses = [!p.active ? 'is-inactive' : '', p.id === newPersonId ? 'is-new' : ''].filter(Boolean).join(' ');
+    const row = h(
+      'tr',
+      { class: rowClasses, attrs: { 'data-person-row': p.id } },
+      h('th', { class: 'person-cell', attrs: { scope: 'row' } }, h('span', { class: 'person-name', text: p.label }), badges),
+    );
+    for (const module of state!.modules) row.append(roleCell(p, module));
 
     // Super admins are managed in the database, never from this screen.
+    const actions = h('td');
     if (!p.isSuperAdmin && !p.isMe) {
-      const statusLine = h('span', { class: 'row-status' });
+      const statusLine = h('span', { class: 'cell-note' });
       const toggleActive = h('button', {
-        class: p.active ? 'button button--danger' : 'button button--outline',
+        class: p.active ? 'row-action row-action--danger' : 'row-action',
         text: p.active ? 'Deactivate' : 'Reactivate',
         attrs: { type: 'button' },
       });
@@ -662,38 +956,87 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
         toggleActive.disabled = true;
         try {
           const { status, data } = await call('/api/staff-admin/people/active', { method: 'POST', body: { personId: p.id, active: !p.active } });
-          if (status === 200) await loadPeople();
-          else {
-            statusLine.classList.add('is-error');
+          if (status === 200) {
+            announce(`${p.label} ${p.active ? 'deactivated' : 'reactivated'}.`);
+            await loadPeople();
+          } else {
             statusLine.textContent = data.error ?? 'Could not change that.';
-            toggleActive.disabled = false;
+            toggleActive.disabled = !canEdit();
           }
         } catch (err) {
           if (!handled(err)) {
-            statusLine.classList.add('is-error');
-            statusLine.textContent = 'Could not reach the server — try again.';
-            toggleActive.disabled = false;
+            statusLine.textContent = 'Could not reach the server.';
+            toggleActive.disabled = !canEdit();
           }
         }
       });
-      body.append(h('div', { class: 'danger-zone' }, toggleActive, statusLine));
+      actions.append(toggleActive, statusLine);
     } else {
-      body.append(h('p', { class: 'note', text: p.isMe ? 'This is you. Your own access is changed here like anyone else’s; being a super admin is managed in the database.' : 'Super admins are managed directly in the database, not here.' }));
+      actions.append(h('span', { class: 'cell-note cell-note--quiet', text: p.isMe ? 'Your own account' : 'Managed in the database' }));
     }
+    row.append(actions);
 
-    const head = h('div', { class: 'person-head' }, h('span', { class: 'person-name', text: p.label }));
-    if (p.isMe) head.append(h('span', { class: 'badge', text: 'You' }));
-    if (p.isSuperAdmin) head.append(h('span', { class: 'badge', text: 'Super admin' }));
-    if (p.isSuperAdmin && p.mfa) head.append(h('span', { class: p.mfa.ready ? 'badge' : 'badge badge--warn', text: p.mfa.ready ? 'Second factors ready' : `${p.mfa.methodCount} of 2 methods` }));
-    if (!p.active) head.append(h('span', { class: 'badge badge--warn', text: 'Deactivated' }));
-    head.append(h('span', { class: 'spacer' }), toggle);
-
-    return h('li', { class: p.active ? 'person' : 'person is-inactive' }, head, h('p', { class: 'summary', text: summaryText(p) }), body);
+    const out: HTMLElement[] = [row];
+    const accommodation = state!.modules.find((m) => m.scopeTypes);
+    if (accommodation && openLimits.has(p.id) && p.roles.find((r) => r.module === accommodation.id)?.role === 'user') out.push(limitsRow(p, accommodation));
+    return out;
   }
 
   function renderPeople() {
     if (!state) return;
-    peopleList.replaceChildren(...state.people.map(personCard));
+    // Header: person + one column per tool + actions
+    matrixHead.replaceChildren(
+      h('th', { class: 'person-cell', text: 'Person', attrs: { scope: 'col' } }),
+      ...state.modules.map((m) => h('th', { text: m.label, attrs: { scope: 'col' } })),
+      h('th', { attrs: { scope: 'col' } }, h('span', { class: 'visually-hidden', text: 'Actions' })),
+    );
+    const rows = state.people.flatMap(personRows);
+    peopleList.replaceChildren(...(rows.length ? rows : [h('tr', { class: 'empty-row' }, h('td', { text: 'Nobody has been added yet.', attrs: { colspan: String(state.modules.length + 2) } }))]));
+    const active = state.people.filter((p) => p.active).length;
+    peopleCount.textContent = `${state.people.length} ${state.people.length === 1 ? 'person' : 'people'}${active === state.people.length ? '' : `, ${active} active`}`;
+    renderRolesGuide();
+    if (refocus) {
+      const [pid, mid] = refocus.split('|');
+      refocus = null;
+      peopleList.querySelector<HTMLElement>(`select[data-person="${pid}"][data-module="${mid}"]`)?.focus();
+    }
+  }
+
+  // The read-only "what can each role do" matrix, one table per tool.
+  function renderRolesGuide() {
+    if (!state) return;
+    rolesGuide.replaceChildren(
+      ...state.modules.map((module) => {
+        const ids: string[] = [];
+        const descriptions = new Map<string, string>();
+        for (const r of module.roles) {
+          for (const c of r.capabilities) {
+            if (!descriptions.has(c.id)) {
+              descriptions.set(c.id, c.description);
+              ids.push(c.id);
+            }
+          }
+        }
+        const roleCols = ['read_only', 'user', 'admin'];
+        const thead = h('thead', {}, h('tr', {}, h('th', { text: 'Can…', attrs: { scope: 'col' } }), ...roleCols.map((r) => h('th', { class: 'col-role', text: ROLE_LABELS[r], attrs: { scope: 'col' } }))));
+        const tbody = h(
+          'tbody',
+          {},
+          ...ids.map((id) =>
+            h(
+              'tr',
+              {},
+              h('th', { text: descriptions.get(id) ?? id, attrs: { scope: 'row' } }),
+              ...roleCols.map((r) => {
+                const has = module.roles.find((x) => x.role === r)?.capabilities.some((c) => c.id === id) ?? false;
+                return h('td', { class: 'col-role' }, has ? h('span', { class: 'tick', text: '✓', attrs: { role: 'img', 'aria-label': 'Yes' } }) : h('span', { class: 'dash', text: '–', attrs: { role: 'img', 'aria-label': 'No' } }));
+              }),
+            ),
+          ),
+        );
+        return h('div', { class: 'guide' }, h('h2', { text: module.label }), h('table', {}, thead, tbody));
+      }),
+    );
   }
 
   async function loadPeople() {
@@ -717,6 +1060,13 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   }
 
   // ---- adding someone
+  addToggle.addEventListener('click', () => {
+    const opening = addForm.hidden;
+    addForm.hidden = !opening;
+    addToggle.setAttribute('aria-expanded', String(opening));
+    if (opening) addEmail.focus();
+  });
+
   addForm.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     addMessage.hidden = true;
@@ -731,13 +1081,18 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       if (status === 201) {
         addEmail.value = ''; // typed once; not kept on the page
         addName.value = '';
-        openPeople.add(data.person.id);
-        show(addMessage, `${data.person.label} added. Choose which tools they can use below.`);
+        newPersonId = data.person.id;
+        addForm.hidden = true;
+        addToggle.setAttribute('aria-expanded', 'false');
+        show(addMessage, `${data.person.label} added. Choose which tools they can use in their row below.`);
         await loadPeople();
+        peopleList.querySelector(`[data-person-row="${newPersonId}"]`)?.scrollIntoView({ block: 'nearest' });
       } else if (status === 409 && data.code === 'EXISTS') {
         addEmail.value = '';
-        openPeople.add(data.personId);
-        show(addMessage, `${data.label} is already in the system — their access is open below.`);
+        newPersonId = data.personId;
+        addForm.hidden = true;
+        addToggle.setAttribute('aria-expanded', 'false');
+        show(addMessage, `${data.label} is already in the system — their row is highlighted below.`);
         await loadPeople();
       } else {
         show(peopleError, data.error ?? 'Could not add that person.');
@@ -824,15 +1179,16 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   }
   eventsMore.addEventListener('click', () => loadEvents(true));
 
-  function selectTab(which: 'people' | 'activity') {
-    const people = which === 'people';
-    tabPeople.setAttribute('aria-selected', String(people));
-    tabActivity.setAttribute('aria-selected', String(!people));
-    panePeople.hidden = !people;
-    paneActivity.hidden = people;
-    if (!people && !activityLoaded) loadEvents(false);
+  function selectTab(which: 'people' | 'roles' | 'activity') {
+    const tabs = { people: [tabPeople, panePeople], roles: [tabRoles, paneRoles], activity: [tabActivity, paneActivity] } as const;
+    for (const [name, [tab, pane]] of Object.entries(tabs)) {
+      tab.setAttribute('aria-selected', String(name === which));
+      pane.hidden = name !== which;
+    }
+    if (which === 'activity' && !activityLoaded) loadEvents(false);
   }
   tabPeople.addEventListener('click', () => selectTab('people'));
+  tabRoles.addEventListener('click', () => selectTab('roles'));
   tabActivity.addEventListener('click', () => selectTab('activity'));
 
   // ---- sign-in
