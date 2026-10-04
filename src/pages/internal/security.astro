@@ -55,7 +55,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
           <form id="totp-confirm-form" class="inline-form">
             <label>
               6-digit code from the app
-              <input type="text" id="totp-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required />
+              <input type="text" id="totp-code" name="totp-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required />
             </label>
             <button type="submit" class="button">Confirm</button>
           </form>
@@ -78,17 +78,11 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
         <p id="stepup-state" class="note"></p>
         <form id="verify-form" class="inline-form">
           <label>
-            Method
-            <select id="verify-method">
-              <option value="totp">Authenticator app</option>
-              <option value="recovery">Recovery code</option>
-            </select>
-          </label>
-          <label>
             Code
-            <input type="text" id="verify-code" autocomplete="one-time-code" required />
+            <input type="text" id="verify-code" name="verify-code" inputmode="numeric" autocomplete="one-time-code" required />
           </label>
           <button type="submit" class="button">Verify</button>
+          <button type="button" id="verify-switch" class="link-button">Use a recovery code</button>
         </form>
         <p id="verify-error" class="error" hidden></p>
       </section>
@@ -255,6 +249,17 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     padding: 6px 10px;
   }
 
+  .link-button {
+    font: inherit;
+    font-size: 0.88rem;
+    background: none;
+    border: none;
+    padding: 8px 4px;
+    color: var(--tvc-ink-soft);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
   .inline-form {
     display: flex;
     flex-wrap: wrap;
@@ -298,7 +303,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 <script>
   import { buildQrSvg } from '../../../scripts/lib/qr-svg.mjs';
   // One sign-in and one step-up are shared with /internal and /internal/access.
-  import { TOKEN_KEY as STORAGE_KEY, STEPUP_KEY } from '../../../scripts/lib/staff-client.mjs';
+  import { TOKEN_KEY as STORAGE_KEY, STEPUP_KEY, wireCodeEntry } from '../../../scripts/lib/staff-client.mjs';
 
   declare const google: any;
 
@@ -345,8 +350,10 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   const codesList = $('codes');
   const stepupState = $('stepup-state');
   const verifyForm = $<HTMLFormElement>('verify-form');
-  const verifyMethod = $<HTMLSelectElement>('verify-method');
   const verifyCode = $<HTMLInputElement>('verify-code');
+  const verifySwitch = $('verify-switch');
+  const verifyEntry = wireCodeEntry({ form: verifyForm, input: verifyCode, toggle: verifySwitch });
+  wireCodeEntry({ form: totpForm, input: totpCode });
   const verifyError = $('verify-error');
   const manageCard = $('manage-card');
   const adminsList = $('admins');
@@ -496,9 +503,9 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       : 'Use an authenticator app on your phone to generate a 6-digit code each time you need to prove it is you.';
     totpStartBtn.textContent = status.methods.totp ? 'Replace authenticator app' : 'Set up authenticator app';
 
-    verifyMethod.querySelector<HTMLOptionElement>('option[value="totp"]')!.disabled = !status.methods.totp;
-    verifyMethod.querySelector<HTMLOptionElement>('option[value="recovery"]')!.disabled = !status.methods.recovery;
-    verifyMethod.value = status.methods.totp ? 'totp' : 'recovery';
+    // Only offer the switch when both methods exist; with just one, use it.
+    verifySwitch.hidden = !(status.methods.totp && status.methods.recovery);
+    verifyEntry.setRecovery(!status.methods.totp);
     renderStepUpState();
 
     const active = stepUpExpiry() !== null;
@@ -625,7 +632,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     ev.preventDefault();
     verifyError.hidden = true;
     try {
-      const { status, data } = await api('/api/staff-mfa/verify', { method: 'POST', body: { method: verifyMethod.value, code: verifyCode.value } });
+      const { status, data } = await api('/api/staff-mfa/verify', { method: 'POST', body: { method: verifyEntry.method(), code: verifyCode.value } });
       if (status === 200) {
         sessionStorage.setItem(STEPUP_KEY, JSON.stringify({ token: data.stepUpToken, exp: Date.now() + data.expiresInSeconds * 1000 }));
         verifyCode.value = '';

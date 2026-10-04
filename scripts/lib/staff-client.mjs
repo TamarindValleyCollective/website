@@ -98,3 +98,43 @@ export function minutesLabel(ms) {
   const minutes = Math.max(1, Math.ceil(ms / 60000));
   return `${minutes} minute${minutes === 1 ? '' : 's'}`;
 }
+
+// One-time-code entry shared by every "prove it's you" form. Built so password
+// managers and phones can fill it: a single numeric field marked as a
+// one-time-code (no "method" dropdown in front of it), submitted automatically
+// once six digits are in, so a filled-in code needs no extra tap. A recovery
+// code is the rarer path and switches the same field to plain text.
+// `toggle` is optional (the setup confirm form has no recovery option).
+/** @param {{ form: HTMLFormElement, input: HTMLInputElement, toggle?: HTMLElement }} parts */
+export function wireCodeEntry({ form, input, toggle }) {
+  let recovery = false;
+  const apply = () => {
+    input.setAttribute('inputmode', recovery ? 'text' : 'numeric');
+    input.setAttribute('autocomplete', recovery ? 'off' : 'one-time-code');
+    input.setAttribute('maxlength', recovery ? '40' : '7'); // "123 456" with the space some apps show
+    input.setAttribute('placeholder', recovery ? 'Recovery code' : '6-digit code');
+    input.setAttribute('autocapitalize', 'off');
+    input.setAttribute('autocorrect', 'off');
+    input.setAttribute('spellcheck', 'false');
+    if (toggle) toggle.textContent = recovery ? 'Use the authenticator code instead' : 'Use a recovery code';
+  };
+  apply();
+  input.addEventListener('input', () => {
+    if (!recovery && /^\d{6}$/.test(input.value.replace(/\s/g, ''))) form.requestSubmit();
+  });
+  toggle?.addEventListener('click', () => {
+    recovery = !recovery;
+    input.value = '';
+    apply();
+    input.focus();
+  });
+  return {
+    method: () => (recovery ? 'recovery' : 'totp'),
+    setRecovery(value) {
+      if (recovery === value) return;
+      recovery = value;
+      input.value = '';
+      apply();
+    },
+  };
+}
