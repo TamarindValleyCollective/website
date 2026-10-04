@@ -93,6 +93,21 @@ async function lookupStaff(email: string, module: ModuleId): Promise<StaffRow | 
   return row;
 }
 
+// First sign-in with an empty registered name: copy the name from their Google
+// account (the ID token's `name` claim). `name=is.null` in the filter makes
+// this safe against a race and means a name already on file is never
+// overwritten. Best-effort — a failure only leaves the name empty for now.
+async function fillNameIfEmpty(staffId: string, name: string): Promise<void> {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  if (!supabaseUrl) throw new Error('Missing SUPABASE_URL');
+  const res = await fetch(`${supabaseUrl}/rest/v1/staff_users?id=eq.${staffId}&name=is.null`, {
+    method: 'PATCH',
+    headers: restHeaders({ Prefer: 'return=minimal' }),
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error(`staff_users name update failed: ${res.status}`);
+}
+
 // Verifies the caller's Google ID token and checks that they hold a role in
 // `module` that carries `capability`. The one call every admin Function
 // makes before doing anything.
@@ -139,6 +154,17 @@ export async function requireStaff<M extends ModuleId>(
   const grant = row?.active ? row.staff_module_roles[0] : undefined;
   if (!row || !grant || !roleHasCapability(module, grant.role, capability)) {
     return { ok: false, status: 403, error: 'Not authorized' };
+  }
+
+  // Only for someone who passed every check above, so an unauthorized
+  // Google account can never cause a write.
+  if (!row.name && googleName) {
+    try {
+      await fillNameIfEmpty(row.id, googleName);
+      row.name = googleName; // the cached row, so the next request skips this
+    } catch (err) {
+      console.error('Failed to fill the staff name from Google', err);
+    }
   }
 
   return {
