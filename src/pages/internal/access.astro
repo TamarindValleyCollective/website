@@ -34,6 +34,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       <section id="stepup" class="banner" aria-live="polite">
         <p id="stepup-text" class="banner-text"></p>
         <form id="verify-form" class="banner-form" hidden>
+          <button type="button" id="verify-passkey" class="button" hidden>Use a passkey</button>
           <label class="visually-hidden" for="verify-code">Code</label>
           <input type="text" id="verify-code" name="verify-code" inputmode="numeric" autocomplete="one-time-code" required />
           <button type="submit" class="button">Unlock changes</button>
@@ -629,6 +630,8 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     setToken,
     staffFetch,
     stepUpExpiry,
+    passkeyStepUp,
+    passkeysSupported,
     wireCodeEntry,
   } from '../../../scripts/lib/staff-client.mjs';
 
@@ -660,7 +663,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     roles: PersonRole[];
   }
   interface PeopleResponse {
-    me: { id: string; ready: boolean; stepUpValid: boolean };
+    me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean };
     modules: ModuleInfo[];
     people: Person[];
   }
@@ -688,6 +691,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   const verifyForm = $<HTMLFormElement>('verify-form');
   const verifyCode = $<HTMLInputElement>('verify-code');
   const verifySwitch = $('verify-switch');
+  const verifyPasskey = $<HTMLButtonElement>('verify-passkey');
   const banner = $('stepup');
   const verifyEntry = wireCodeEntry({ form: verifyForm, input: verifyCode, toggle: verifySwitch });
   const verifyError = $('verify-error');
@@ -802,10 +806,33 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       const wasHidden = verifyForm.hidden;
       stepupText.textContent = 'Viewing only. Enter your authenticator code to make changes:';
       verifyForm.hidden = false;
+      verifyPasskey.hidden = !(state.me.hasPasskey && passkeysSupported());
       stepupLink.hidden = true;
       if (wasHidden && document.activeElement === document.body) verifyCode.focus();
     }
   }
+
+  verifyPasskey.addEventListener('click', async () => {
+    verifyError.hidden = true;
+    verifyPasskey.disabled = true;
+    try {
+      const result: any = await passkeyStepUp(call);
+      if (result.cancelled) return;
+      if (result.status === 200) {
+        saveStepUp(result.data.stepUpToken, result.data.expiresInSeconds);
+        renderStepUp();
+        renderPeople();
+      } else if (result.status === 429) {
+        show(verifyError, `Too many wrong attempts. Try again in about ${minutesLabel((result.data.retryAfterSeconds ?? 900) * 1000)}.`);
+      } else {
+        show(verifyError, result.data?.error ?? 'That passkey did not work.');
+      }
+    } catch (err) {
+      if (!handled(err)) show(verifyError, 'Your device could not use the passkey. Try again, or enter a code.');
+    } finally {
+      verifyPasskey.disabled = false;
+    }
+  });
 
   verifyForm.addEventListener('submit', async (ev) => {
     ev.preventDefault();

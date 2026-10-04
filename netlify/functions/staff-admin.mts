@@ -108,13 +108,13 @@ async function handleList(req: Request, admin: SuperAdmin): Promise<Response> {
 
   // Second-factor readiness is shown for super admins only (they are the ones
   // it applies to); a handful of small queries, not one per visitor.
-  const mfaById = new Map<string, { methodCount: number; ready: boolean }>();
+  const mfaById = new Map<string, { methodCount: number; ready: boolean; passkey: boolean }>();
   await Promise.all(
     people
       .filter((p) => p.is_super_admin && p.active)
       .map(async (p) => {
         const m = await mfaSummary(p.id);
-        mfaById.set(p.id, { methodCount: m.methodCount, ready: m.ready });
+        mfaById.set(p.id, { methodCount: m.methodCount, ready: m.ready, passkey: m.passkey });
       }),
   );
 
@@ -126,7 +126,7 @@ async function handleList(req: Request, admin: SuperAdmin): Promise<Response> {
   }
 
   return jsonResponse({
-    me: { id: admin.id, ready: mfaById.get(admin.id)?.ready ?? false, stepUpValid },
+    me: { id: admin.id, ready: mfaById.get(admin.id)?.ready ?? false, hasPasskey: mfaById.get(admin.id)?.passkey ?? false, stepUpValid },
     modules: moduleCatalog(),
     people: people.map((p) => ({
       id: p.id,
