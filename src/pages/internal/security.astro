@@ -740,8 +740,17 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     }
   });
 
+  // One request at a time: a slow response must not invite a second tap or a second auto-submit
+  // with the same code (the server would reject the repeat).
+  let verifying = false;
   verifyForm.addEventListener('submit', async (ev) => {
     ev.preventDefault();
+    if (verifying) return;
+    verifying = true;
+    const submit = verifyForm.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    const label = submit.textContent;
+    submit.disabled = true;
+    submit.textContent = 'Checking…';
     verifyError.hidden = true;
     try {
       const { status, data } = await api('/api/staff-mfa/verify', { method: 'POST', body: { method: verifyEntry.method(), code: verifyCode.value } });
@@ -756,6 +765,10 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       }
     } catch {
       // handled by api()
+    } finally {
+      verifying = false;
+      submit.disabled = false;
+      submit.textContent = label;
     }
   });
 

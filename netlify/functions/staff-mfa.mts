@@ -230,9 +230,15 @@ async function handleVerify(req: Request, admin: SuperAdmin): Promise<Response> 
   if (lockedUntil) return lockedResponse(lockedUntil);
 
   let ok = false;
+  // A code that is genuine but was just used (a double tap, a slow response that
+  // got retried, two requests racing) is not a wrong guess: refuse it, but don't
+  // count it toward the lockout. Only a code that was never valid counts.
+  let alreadyUsed = false;
   if (method === 'totp') {
     const factor = (await getFactors(admin.id)).find((f) => f.type === 'totp' && f.confirmed_at && f.secret_encrypted);
-    const step = factor ? verifyTotp(decryptSecret(factor.secret_encrypted!), code.replace(/\s/g, ''), Date.now(), factor.last_used_step) : null;
+    const plain = code.replace(/\s/g, '');
+    const step = factor ? verifyTotp(decryptSecret(factor.secret_encrypted!), plain, Date.now(), factor.last_used_step) : null;
+    if (factor && step === null && verifyTotp(decryptSecret(factor.secret_encrypted!), plain, Date.now(), null) !== null) alreadyUsed = true;
     if (factor && step !== null) {
       // Atomic replay guard: only the request that moves last_used_step
       // forward wins, so a code accepted once can't be accepted again, even
@@ -243,6 +249,7 @@ async function handleVerify(req: Request, admin: SuperAdmin): Promise<Response> 
         body: JSON.stringify({ last_used_step: step, last_used_at: new Date().toISOString() }),
       });
       ok = ((await res.json()) as unknown[]).length > 0;
+      if (!ok) alreadyUsed = true; // lost the race to an identical, valid request
     }
   } else {
     // Single use: marking it used and checking it was unused is one statement.
@@ -254,6 +261,10 @@ async function handleVerify(req: Request, admin: SuperAdmin): Promise<Response> 
     ok = ((await res.json()) as unknown[]).length > 0;
   }
 
+  if (!ok && alreadyUsed) {
+    await auditSoft(admin, 'staff_mfa.failed', { method, reused: true });
+    return jsonResponse({ error: 'That code was just used. Wait for the next code in your app, then try again.', code: 'CODE_ALREADY_USED' }, 400);
+  }
   if (!ok) {
     const { lockedUntil: locked } = await registerFailure(admin.id);
     await auditSoft(admin, 'staff_mfa.failed', { method, locked: Boolean(locked) });
