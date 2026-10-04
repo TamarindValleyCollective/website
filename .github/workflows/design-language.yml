@@ -17,6 +17,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # Errors (an undefined --custom-property) fail the job; warnings (raw hex colors,
-      # radius literals) are reported in the log but don't block merging yet.
+      # Errors (an undefined --custom-property, a raw hex color) fail the job; warnings
+      # (radius literals) are reported in the log but don't block merging yet.
       - run: npm run lint:css

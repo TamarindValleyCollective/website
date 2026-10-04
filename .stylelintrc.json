@@ -31,8 +31,8 @@
     "color-no-hex": [
       true,
       {
-        "severity": "warning",
-        "message": "Use a --tvc-* color token from src/styles/global.css instead of a raw hex value (see Design language in AGENTS.md)."
+        "severity": "error",
+        "message": "Use a --tvc-* color token from src/styles/global.css instead of a raw hex value. If it genuinely isn't a TVC color, add /* stylelint-disable-next-line color-no-hex -- reason */ (see Design language in AGENTS.md)."
       }
     ],
     "declaration-property-value-disallowed-list": [
