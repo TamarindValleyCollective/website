@@ -499,8 +499,8 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `whatsapp-admin.mts`, `event-payments-admin.mts` and `accommodation-admin.mts` now all gate on
   `requireStaff` (2026-10), so the Google Sheet allow-lists are no longer read by anything (the
   Sheets and their `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID` / `ACCOMMODATION_ALLOWED_EMAILS_SHEET_ID`
-  env vars can be retired). Access is now changed with SQL on `staff_module_roles` until the
-  Access module exists. Masking helpers live in `lib/staff-masking.ts`. The first time an
+  env vars can be retired). Access is changed with SQL on `staff_module_roles` until the
+  Access screen ships (its API, `staff-admin.mts`, is below). Masking helpers live in `lib/staff-masking.ts`. The first time an
   authorized person signs in with an empty `staff_users.name`, `requireStaff` copies the name
   from their Google account (guarded by `name=is.null`, so it never overwrites one on file).
 - **`netlify/functions/staff-mfa.mts` + `lib/staff-mfa-crypto.ts` + `/internal/security`** —
@@ -527,6 +527,23 @@ outside both the local machine and Netlify (the member-update-email workflow).
   (bundled at build; the secret never goes to an online QR service), with the typed key and an
   `otpauth://` link as fallbacks; the secret and QR are wiped from the page when setup finishes
   or the session ends.
+- **`netlify/functions/staff-admin.mts` + `lib/staff-admin-guard.ts`** — the API behind the
+  Access module (issue #89): who is in the system, who holds which module role, an activity feed,
+  and the changes themselves. **Super admins only.** Reading (`GET /api/staff-admin/people`,
+  `/activity`) needs a signed-in super admin; every change (`POST` add a person, set or remove a
+  module role with an optional accommodation booking-type limit, deactivate or reactivate) goes
+  through `requireAccessAdmin`, which also requires **two different second-factor methods already
+  enrolled** (`MFA_NOT_READY` otherwise) and a **valid step-up token** from `/internal/security`
+  (`STEP_UP_REQUIRED`). Each change is written to `staff_audit_log` *before* it is made and is
+  refused if the entry can't be written (a newly added person, who must exist to be the entry's
+  target, is taken straight back out). It deliberately cannot create, promote, deactivate or
+  remove a super admin (that stays a manual database step, so the last one can't be removed from
+  here), never deletes anyone (people are deactivated so history keeps its names), and never
+  returns an email: an address is typed once to add someone and no response contains one, people
+  are shown by name or an opaque `Person XXXX` tag. The role/capability descriptions the screen
+  shows come from `MODULE_INFO` in `staff-registry.ts`, which also now owns the booking-type list
+  that `accommodation-admin.mts` validates against. The shared "which methods does this person
+  have" query moved to `lib/staff-mfa-store.ts`.
 - **`scripts/lib/accommodation-db.mjs`** — hand-rolled Supabase PostgREST REST client (same style
   as `supabase.mjs` below, no `@supabase/supabase-js`), the sole data-access layer for
   `accommodation-admin.mts`. Conflict-checking lives entirely in Postgres (see above) — this file

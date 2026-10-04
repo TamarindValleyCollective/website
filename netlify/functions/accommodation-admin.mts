@@ -29,11 +29,10 @@
 // by id, not email, in created_by/updated_by and the booking audit log.
 import { requireStaff, type StaffGrant } from './lib/staff-access';
 import { canSeeNames, maskName } from './lib/staff-masking';
-import type { Capability } from './lib/staff-registry';
+import { BOOKING_TYPES, type BookingType, type Capability } from './lib/staff-registry';
 import { ACCOMMODATION_UNITS, normalizeMobileNumber, isValidEmail } from '../../scripts/lib/accommodation.mjs';
 import { listBookingsForAdmin, createBooking, updateBooking, deleteBooking, searchGuests, listStaysForPerson, getBookingById } from '../../scripts/lib/accommodation-db.mjs';
 
-type BookingType = 'public-event' | 'private-event' | 'casual-stay' | 'member-stay' | 'unit-closure' | 'farm-closure';
 
 interface Guest {
   personId?: string;
@@ -111,7 +110,7 @@ function pageAccess(staff: StaffGrant): { role: 'admin' | 'restricted' | 'viewer
   return { role: 'admin', allowedTypes: null };
 }
 
-const VALID_TYPES: BookingType[] = ['public-event', 'private-event', 'casual-stay', 'member-stay', 'unit-closure', 'farm-closure'];
+const VALID_TYPES: readonly BookingType[] = BOOKING_TYPES;
 const UNITS_BY_ID = new Map(ACCOMMODATION_UNITS.map((u) => [u.id, u]));
 const VALID_AGE_GROUPS = ['Adult', 'Child'];
 const VALID_GENDERS = ['Male', 'Female', 'NA'];
