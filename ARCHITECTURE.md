@@ -404,7 +404,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   directly against `tvc.farm/api/search-ai` on 2026-09-21, answering from the Gemini free tier as
   expected. Being public and unauthenticated, this
   endpoint also rate-limits itself: a per-IP fixed window before any provider call, plus a separate
-  global daily cap on Anthropic-fallback invocations specifically, both backed by a Netlify Blobs
+  global daily cap on Anthropic-fallback invocations specifically (50 a day, lowered from 200 on 2026-10-04 after measuring ~9.5k tokens per search), both backed by a Netlify Blobs
   store (`search-ai-rate-limit`, see Hosting below) — guards against cost exhaustion on the paid
   fallback from either a single abusive client or many distinct ones.
 - **`netlify/functions/event-interest.mts`** — powers the "Want this to happen again?" widget
