@@ -26,7 +26,7 @@ const content = {
 } as const;
 const c = content[lang];
 
-const WINDOW_DAYS = 7;
+const WINDOW_DAYS = 3;
 const today = new Date();
 
 function dayDiff(a: Date, b: Date): number {
@@ -40,9 +40,32 @@ function dayDiff(a: Date, b: Date): number {
 // Only photos with real camera EXIF -- photos with no EXIF get a synthetic
 // YYYY-MM-01 fallback takenAt (see curate-photos.mjs), which isn't an actual
 // "taken around this time of year" fact and would be misleading to include.
-const matches = photos
+const candidates = photos
   .filter((p) => p.data.camera && dayDiff(p.data.takenAt, today) <= WINDOW_DAYS)
   .sort((a, b) => a.data.takenAt.valueOf() - b.data.takenAt.valueOf());
+
+// Cap the section so one big shoot day can't fill the whole strip: take
+// photos round-robin across distinct days (one from each day, then a second
+// from each, ...) until MAX_TILES, then restore chronological order.
+const MAX_TILES = 5;
+const byDay = new Map<string, typeof candidates>();
+for (const p of candidates) {
+  const key = p.data.takenAt.toISOString().slice(0, 10);
+  byDay.set(key, [...(byDay.get(key) ?? []), p]);
+}
+const picked = new Set<(typeof candidates)[number]>();
+for (let round = 0; picked.size < MAX_TILES; round++) {
+  let added = false;
+  for (const dayPhotos of byDay.values()) {
+    if (picked.size >= MAX_TILES) break;
+    if (round < dayPhotos.length) {
+      picked.add(dayPhotos[round]);
+      added = true;
+    }
+  }
+  if (!added) break;
+}
+const matches = candidates.filter((p) => picked.has(p));
 
 const dateFmt: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', year: 'numeric' };
 ---
@@ -56,7 +79,7 @@ const dateFmt: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', yea
     </div>
     <div class="otd__grid">
       {matches.map((p) => (
-        <a class="otd__item" href={p.data.src} target="_blank" rel="noopener noreferrer">
+        <a class="otd__item" href={p.data.src} data-slug={p.id} target="_blank" rel="noopener noreferrer">
           <img src={p.data.thumbSrc ?? p.data.src} alt={captionFor(p)} loading="lazy" />
           <div class="otd__caption">
             <p>{captionFor(p)}</p>

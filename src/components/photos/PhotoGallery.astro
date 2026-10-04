@@ -512,6 +512,11 @@ const uiStringsJsonSafe = JSON.stringify(c).replace(/<\/script/gi, '<\\/script')
     height: 100%;
     object-fit: contain;
     max-height: 90vh;
+    transition: opacity 0.2s ease;
+  }
+
+  .lightbox-image img.is-loading {
+    opacity: 0.75;
   }
 
   .lightbox-close {
@@ -958,12 +963,50 @@ const uiStringsJsonSafe = JSON.stringify(c).replace(/<\/script/gi, '<\\/script')
     if (lb) lb.hidden = true;
   }
 
+  // Warm the browser cache for the photos either side of the current one so
+  // stepping through the carousel is instant.
+  function preloadNeighbours(slug: string) {
+    const idx = PHOTOS.findIndex((p) => p.slug === slug);
+    if (idx < 0) return;
+    [PHOTOS[(idx + 1) % PHOTOS.length], PHOTOS[(idx - 1 + PHOTOS.length) % PHOTOS.length]].forEach((n) => {
+      new Image().src = n.src;
+    });
+  }
+
+  // "From the archive" tiles (OnThisDay.astro) are plain links to the raw
+  // image as a no-JS fallback; with JS they open the same lightbox instead.
+  document.querySelectorAll<HTMLAnchorElement>('.otd__item[data-slug]').forEach((a) => {
+    a.addEventListener('click', (e) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+      e.preventDefault();
+      openLightbox(a.dataset.slug!);
+    });
+  });
+
   function renderLightbox() {
     const p = byslug.get(currentSlug!);
     if (!p) return;
 
-    (document.getElementById('lb-img') as HTMLImageElement).src = p.src;
-    (document.getElementById('lb-img') as HTMLImageElement).alt = p.caption;
+    // Show the already-cached grid thumbnail immediately so next/prev never
+    // leaves a blank frame while the full-size image downloads, then swap in
+    // the full image once it's loaded. The check on currentSlug drops a late
+    // load from a photo the visitor has already navigated past.
+    const lbImg = document.getElementById('lb-img') as HTMLImageElement;
+    lbImg.alt = p.caption;
+    if (lbImg.dataset.full !== p.src) {
+      lbImg.dataset.full = p.src;
+      lbImg.src = p.thumbSrc;
+      lbImg.classList.add('is-loading');
+      const full = new Image();
+      full.onload = () => {
+        if (currentSlug !== p.slug) return;
+        lbImg.src = p.src;
+        lbImg.classList.remove('is-loading');
+      };
+      full.onerror = () => lbImg.classList.remove('is-loading');
+      full.src = p.src;
+    }
+    preloadNeighbours(p.slug);
     const dateEl = document.getElementById('lb-date');
     if (dateEl) dateEl.textContent = formatDate(p.takenAt);
     const captionEl = document.getElementById('lb-caption');
