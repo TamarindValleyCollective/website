@@ -8,7 +8,7 @@
 // Google Sign-In plus a live allow-list, same shell pattern as
 // photo-pool.astro/whatsapp.astro (own Sheet/env var - see
 // accommodation-admin.mts's header comment for why it isn't shared).
-import BaseLayout from '../../layouts/BaseLayout.astro';
+import StaffLayout from '../../layouts/StaffLayout.astro';
 import { getCollection } from 'astro:content';
 import { ACCOMMODATION_UNITS } from '../../../scripts/lib/accommodation.mjs';
 import { durationDays } from '../../utils/events';
@@ -44,7 +44,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }));
 ---
 
-<BaseLayout title="Accommodation Allocation" description="Internal accommodation booking tool." noindex>
+<StaffLayout title="Accommodation Allocation" description="Internal accommodation booking tool." current="accommodation" collapseByDefault>
   <section class="section wrapper">
     <h1>Accommodation Allocation</h1>
     <p class="hint">Record who's in which tent, for how long. The public site only ever shows aggregate availability derived from this.</p>
@@ -181,7 +181,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       </div>
     </div>
   </section>
-</BaseLayout>
+</StaffLayout>
 
 <script is:inline src="https://accounts.google.com/gsi/client"></script>
 
@@ -395,17 +395,6 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       flex-direction: column;
       gap: 10px;
     }
-  }
-
-  /* The site-wide chat bubble (ChatWidget.astro, rendered by BaseLayout on
-     every page including this internal one) sits at z-index 100, above the
-     booking modal's own z-index 90 - on mobile it physically overlapped the
-     second tent row's "+ Guest" button by ~15px (design critique,
-     2026-09-10), so a tap aimed at +Guest could silently open marketing
-     chat instead. :global() since #cw-root belongs to a different
-     component's template, outside this page's own scoped-style subtree. */
-  :global(body:has(#booking-modal:not([hidden])) #cw-root) {
-    display: none;
   }
 
   .form {
