@@ -18,7 +18,7 @@ on TVC's behalf; nothing about it is wired into the site itself.
 | Channel | Service | Handle |
 |---|---|---|
 | Instagram | `business` | `tamarindvalleycollective` |
-| Facebook | `page` | Tamarind Valley Collective |
+| Facebook | `page` | Tamarind Valley Collective (was **disconnected** on 2026-09-26, but reconnected by 2026-09-28 when posts queued to it fine — at the time `list_channels`/`get_channel` returned `isDisconnected: true` with no reason surfaced by the API; check `isDisconnected` before queueing) |
 | LinkedIn | `page` | `tvcfarm` |
 
 **Posts published so far:**
@@ -28,6 +28,12 @@ on TVC's behalf; nothing about it is wired into the site itself.
   using the homepage hero image (`https://tvc.farm/images/pages/home/hero.jpg`) as the asset.
   Both were added to each channel's queue (`addToQueue`), not published immediately. LinkedIn
   wasn't included in that round.
+- 2026-09-26: a Foraging Day promo post (event on 2026-10-10) queued to Instagram and LinkedIn,
+  using the event poster (`https://tvc.farm/images/events/2026-10-10-foraging-day/poster.jpeg`) as
+  the asset. Facebook skipped since it was disconnected then. Instagram used `schedulingType: notification`
+  (needs manual approval in Buffer before it sends); LinkedIn doesn't support that mode via the API
+  (`schedulingType: automatic` required instead), so that one auto-publishes at its queue slot
+  unless edited/deleted first in Buffer.
 - 2026-09-28: three separate posts (one per member) celebrating TVC members' talks at IndiaFOSS
   2026, queued across all three channels. Om's post (Instagram + Facebook + LinkedIn) uses two
   Sanchaya project graphics hosted at
