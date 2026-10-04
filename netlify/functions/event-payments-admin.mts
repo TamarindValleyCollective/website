@@ -7,13 +7,16 @@
 // straight to Razorpay's REST API (netlify/functions/lib/razorpay.ts) —
 // their MCP server has no refund-creation tool, only fetch/list ones.
 //
-// Auth follows the exact pattern whatsapp-admin.mts/accommodation-admin.mts
-// already established: Google Sign-In client-side, this Function verifies
-// the ID token itself (google-id-token.mjs) against the same "core team"
-// allow-list photo-pool.mts/whatsapp-admin.mts use
-// (PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID) — reused rather than standing up a
-// third Sheet, since real money movement is at least as sensitive as
-// WhatsApp/photo access and belongs to the same staff bracket.
+// Auth: Google Sign-In client-side; requireStaff (lib/staff-access.ts)
+// verifies the ID token and checks the caller's role in the "event-payments"
+// module — `view` to read bookings, `refund` (admin only) to move money.
+// Migrated 2026-10 from the shared "core team" Sheet allow-list.
+//
+// Privacy: a payer's email and phone number never leave this Function (the
+// page sees only whether each is on file); refunds and the refund email look
+// them up server-side. The payer's name is masked for read-only roles. The
+// staff member is recorded by id, not email, in `refunded_by` and in the
+// notes sent to Razorpay. Every refund is audit-logged before any money moves.
 import {
   listPaymentsForEvent,
   getPaymentById,
@@ -21,8 +24,9 @@ import {
   requestCancellationIfNew,
 } from '../../scripts/lib/event-payments-db.mjs';
 import { createRefund } from './lib/razorpay';
-import { getAllowedEmails } from '../../scripts/lib/google-drive.mjs';
-import { verifyGoogleIdToken } from '../../scripts/lib/google-id-token.mjs';
+import { requireStaff, logStaffAction, type StaffGrant } from './lib/staff-access';
+import { canSeeNames, maskName } from './lib/staff-masking';
+import { roleHasCapability, type Capability } from './lib/staff-registry';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const FROM = 'Tamarind Valley Collective <noreply@tvc.farm>';
@@ -35,58 +39,6 @@ function jsonResponse(body: unknown, status = 200): Response {
 function formatAmount(amountPaise: number, currency: string): string {
   const amount = amountPaise / 100;
   return currency === 'INR' ? `₹${amount.toLocaleString('en-IN')}` : `${amount.toLocaleString('en-IN')} ${currency}`;
-}
-
-type AuthResult = { ok: true; email: string } | { ok: false; status: 401 | 403 | 500; error: string };
-
-// Same short-cache rationale as whatsapp-admin.mts/photo-pool.mts: an admin
-// adding a row to the allow-list Sheet takes effect almost immediately,
-// without hitting the Sheets API on every poll.
-const ALLOWED_EMAILS_TTL_MS = 2 * 60 * 1000;
-let cachedAllowedEmails: { emails: string[]; expiresAt: number } | null = null;
-
-async function getCachedAllowedEmails(): Promise<string[]> {
-  if (cachedAllowedEmails && cachedAllowedEmails.expiresAt > Date.now()) {
-    return cachedAllowedEmails.emails;
-  }
-  const sheetId = process.env.PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID;
-  if (!sheetId) throw new Error('Missing PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID');
-  const emails = await getAllowedEmails(sheetId);
-  cachedAllowedEmails = { emails, expiresAt: Date.now() + ALLOWED_EMAILS_TTL_MS };
-  return emails;
-}
-
-async function authenticate(req: Request): Promise<AuthResult> {
-  const authHeader = req.headers.get('authorization') ?? '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!token) return { ok: false, status: 401, error: 'Sign-in required' };
-
-  const clientId = process.env.PUBLIC_GOOGLE_CLIENT_ID;
-  if (!clientId) {
-    console.error('Missing PUBLIC_GOOGLE_CLIENT_ID');
-    return { ok: false, status: 500, error: 'Server misconfigured' };
-  }
-
-  let email: string;
-  try {
-    const payload = await verifyGoogleIdToken(token, { audience: clientId });
-    email = String(payload.email).toLowerCase();
-  } catch (err) {
-    console.error('ID token verification failed', err);
-    return { ok: false, status: 401, error: 'Invalid or expired session' };
-  }
-
-  try {
-    const allowed = await getCachedAllowedEmails();
-    if (!allowed.includes(email)) {
-      return { ok: false, status: 403, error: 'This Google account is not authorized to view event payments' };
-    }
-  } catch (err) {
-    console.error('Failed to check the staff allow-list', err);
-    return { ok: false, status: 500, error: 'Server misconfigured' };
-  }
-
-  return { ok: true, email };
 }
 
 // Razorpay is the source of truth for whether a refund actually completed —
@@ -112,7 +64,7 @@ function isTestPayment(row: any): boolean {
   return row.mode === 'test';
 }
 
-async function handleBookings(url: URL): Promise<Response> {
+async function handleBookings(url: URL, staff: StaffGrant): Promise<Response> {
   const eventReferenceId = url.searchParams.get('eventReferenceId')?.trim();
   if (!eventReferenceId) return jsonResponse({ error: 'eventReferenceId is required' }, 400);
   const includeTest = url.searchParams.get('includeTest') === '1';
@@ -143,12 +95,19 @@ async function handleBookings(url: URL): Promise<Response> {
   }
   const isDuplicate = (r: any) => Boolean(r.payer_email) && !r.refunded_at && (liveEmailCounts.get(String(r.payer_email).toLowerCase()) ?? 0) > 1;
 
+  const namesVisible = canSeeNames(staff.role);
   const bookings = rows.map((r) => ({
     id: r.id,
     razorpayPaymentId: r.razorpay_payment_id,
-    payerName: r.payer_name,
-    payerEmail: r.payer_email,
-    payerContact: r.payer_contact,
+    // Name (masked for read-only roles) or an opaque "Payer XXXX". The
+    // email and phone are never sent — only whether each is on file.
+    payerLabel: r.payer_name
+      ? namesVisible
+        ? r.payer_name
+        : maskName(r.payer_name)
+      : `Payer ${String(r.id).slice(0, 4).toUpperCase()}`,
+    hasEmail: Boolean(r.payer_email),
+    hasPhone: Boolean(r.payer_contact),
     attendeeCount: r.attendee_count,
     amount: r.amount,
     currency: r.currency,
@@ -159,7 +118,6 @@ async function handleBookings(url: URL): Promise<Response> {
     refundedAt: r.refunded_at,
     refundAmount: r.refund_amount,
     refundStatus: r.refund_status,
-    refundedBy: r.refunded_by,
     status: statusFor(r),
     isTest: isTestPayment(r),
     isDuplicate: isDuplicate(r),
@@ -220,6 +178,7 @@ async function handleBookings(url: URL): Promise<Response> {
   const settlementIds = new Set(rows.flatMap((r) => [r.settlement_id, r.refund_settlement_id].filter(Boolean)));
 
   return jsonResponse({
+    canRefund: roleHasCapability('event-payments', staff.role, 'refund'),
     bookings,
     testPaymentCount,
     aggregates: {
@@ -288,13 +247,29 @@ async function sendRefundEmail(params: {
 // action). Validation of *which* row is eligible and *how much* to refund
 // happens in each caller, since the two have different rules (a single
 // admin-typed override vs. a uniform fraction applied across many rows).
-async function refundOneBooking(row: any, amount: number, adminEmail: string, reason: string | undefined): Promise<{ ok: true; refund: { id: string; amount: number; status: string } } | { ok: false; error: string }> {
+async function refundOneBooking(row: any, amount: number, staff: StaffGrant, reason: string | undefined): Promise<{ ok: true; refund: { id: string; amount: number; status: string } } | { ok: false; error: string }> {
+  // Logged *before* any money moves, and refused if the log can't be
+  // written. Only ids and amounts — the free-text reason can contain
+  // anything, so it is not copied into the audit log.
+  try {
+    await logStaffAction({
+      actorId: staff.id,
+      action: 'event-payments.refund_requested',
+      module: 'event-payments',
+      detail: { bookingId: row.id, amount, reasonProvided: Boolean(reason) },
+    });
+  } catch (err) {
+    console.error('Failed to write staff audit log; refusing to refund', err);
+    return { ok: false, error: 'Could not write the audit log — no money has moved.' };
+  }
+
   let refund;
   try {
     refund = await createRefund({
       paymentId: row.razorpay_payment_id,
       amount,
-      notes: { refundedBy: adminEmail, ...(reason ? { reason } : {}) },
+      // The staff id, not their email: this note is stored by Razorpay.
+      notes: { refundedBy: staff.id, ...(reason ? { reason } : {}) },
     });
   } catch (err) {
     console.error('Failed to create Razorpay refund', err);
@@ -319,7 +294,7 @@ async function refundOneBooking(row: any, amount: number, adminEmail: string, re
       razorpayRefundId: refund.id,
       amount: refund.amount,
       status: refund.status,
-      refundedBy: adminEmail,
+      refundedBy: staff.id,
     });
   } catch (err) {
     console.error('Refund succeeded on Razorpay but failed to record locally', err);
@@ -346,7 +321,7 @@ async function refundOneBooking(row: any, amount: number, adminEmail: string, re
   return { ok: true, refund: { id: refund.id, amount: refund.amount, status: refund.status } };
 }
 
-async function handleRefund(req: Request, adminEmail: string): Promise<Response> {
+async function handleRefund(req: Request, staff: StaffGrant): Promise<Response> {
   let body: { id?: string; amount?: number; reason?: string };
   try {
     body = await req.json();
@@ -382,7 +357,7 @@ async function handleRefund(req: Request, adminEmail: string): Promise<Response>
     return jsonResponse({ error: 'Refund amount cannot exceed the amount paid' }, 400);
   }
 
-  const outcome = await refundOneBooking(row, amount, adminEmail, reason);
+  const outcome = await refundOneBooking(row, amount, staff, reason);
   if (!outcome.ok) return jsonResponse({ error: outcome.error }, 502);
   return jsonResponse({ ok: true, refund: outcome.refund });
 }
@@ -398,7 +373,7 @@ async function handleRefund(req: Request, adminEmail: string): Promise<Response>
 // added review-step complexity. Runs sequentially against Razorpay's API
 // (not in parallel) to keep failures isolated to the row that hit them
 // rather than one one failure taking down a Promise.all batch.
-async function handleBulkRefund(req: Request, adminEmail: string): Promise<Response> {
+async function handleBulkRefund(req: Request, staff: StaffGrant): Promise<Response> {
   let body: { eventReferenceId?: string; fraction?: number; reason?: string; includeTest?: boolean };
   try {
     body = await req.json();
@@ -435,7 +410,7 @@ async function handleBulkRefund(req: Request, adminEmail: string): Promise<Respo
       results.push({ id: row.id, ok: false, error: 'Computed refund amount is zero' });
       continue;
     }
-    const outcome = await refundOneBooking(row, amount, adminEmail, reason);
+    const outcome = await refundOneBooking(row, amount, staff, reason);
     results.push(outcome.ok ? { id: row.id, ok: true } : { id: row.id, ok: false, error: outcome.error });
   }
 
@@ -448,16 +423,24 @@ async function handleBulkRefund(req: Request, adminEmail: string): Promise<Respo
 }
 
 export default async (req: Request): Promise<Response> => {
-  const auth = await authenticate(req);
-  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
-
   const url = new URL(req.url);
 
-  if (url.pathname === '/api/event-payments-admin/bookings' && req.method === 'GET') return handleBookings(url);
-  if (url.pathname === '/api/event-payments-admin/refund' && req.method === 'POST') return handleRefund(req, auth.email);
-  if (url.pathname === '/api/event-payments-admin/bulk-refund' && req.method === 'POST') return handleBulkRefund(req, auth.email);
+  // Pick the route first so each one is gated by the capability it needs:
+  // reading is `view`; both refund routes move real money and need `refund`.
+  type Route = { capability: Capability<'event-payments'>; run: (staff: StaffGrant) => Promise<Response> };
+  const route: Route | null =
+    url.pathname === '/api/event-payments-admin/bookings' && req.method === 'GET'
+      ? { capability: 'view', run: (staff) => handleBookings(url, staff) }
+      : url.pathname === '/api/event-payments-admin/refund' && req.method === 'POST'
+        ? { capability: 'refund', run: (staff) => handleRefund(req, staff) }
+        : url.pathname === '/api/event-payments-admin/bulk-refund' && req.method === 'POST'
+          ? { capability: 'refund', run: (staff) => handleBulkRefund(req, staff) }
+          : null;
+  if (!route) return jsonResponse({ error: 'Not found' }, 404);
 
-  return jsonResponse({ error: 'Not found' }, 404);
+  const auth = await requireStaff(req, 'event-payments', route.capability);
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  return route.run(auth.staff);
 };
 
 export const config = {

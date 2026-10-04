@@ -4,11 +4,10 @@
 // RAZORPAY.md's "Event payment tracking" section), plus the ability to
 // trigger an actual Razorpay refund for a booking. See
 // netlify/functions/event-payments-admin.mts for the API this talks to.
-// Deliberately unlinked from nav; gated by Google Sign-In plus the same
-// "core team" allow-list photo-pool.astro/whatsapp.astro/
-// accommodation-calendar.astro use (PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID) —
-// see event-payments-admin.mts's header comment for why it's reused rather
-// than a new Sheet.
+// Deliberately unlinked from nav; gated by Google Sign-In plus per-module
+// staff roles (`view` to read, admin-only `refund` to move money) — see
+// event-payments-admin.mts's header comment. Payer email and phone are never
+// sent to this page, only whether each is on file.
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { getCollection } from 'astro:content';
 
@@ -860,9 +859,11 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   interface Booking {
     id: string;
     razorpayPaymentId: string;
-    payerName: string | null;
-    payerEmail: string | null;
-    payerContact: string | null;
+    // Name (masked for read-only roles) or an opaque "Payer XXXX". The
+    // payer's email and phone are never sent to the browser.
+    payerLabel: string;
+    hasEmail: boolean;
+    hasPhone: boolean;
     attendeeCount: number;
     amount: number;
     currency: string;
@@ -1093,6 +1094,9 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   // Shared by the initial detail-row render and by the refund form's own
   // Cancel button, so cancelling a refund attempt returns to the same
   // button/status text a fresh row-expand would have shown.
+  // Set from each bookings response; gates the refund controls.
+  let canRefund = false;
+
   function renderActionArea(container: HTMLElement, booking: Booking) {
     container.innerHTML = '';
     if (booking.status === 'refunded') {
@@ -1108,6 +1112,13 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
       const span = document.createElement('span');
       span.className = 'cell-muted';
       span.textContent = 'Awaiting Razorpay confirmation';
+      container.appendChild(span);
+    } else if (!canRefund) {
+      // Read-only and user roles can see bookings but not move money; the
+      // server enforces this too.
+      const span = document.createElement('span');
+      span.className = 'cell-muted';
+      span.textContent = 'Refunds need an admin';
       container.appendChild(span);
     } else {
       const btn = document.createElement('button');
@@ -1138,8 +1149,8 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     td.colSpan = 4;
     td.innerHTML = `
       <div class="detail-contact">
-        <div class="detail-field"><span class="detail-label">Email</span>${escapeHtml(booking.payerEmail ?? '—')}</div>
-        <div class="detail-field"><span class="detail-label">Phone</span>${escapeHtml(booking.payerContact ?? '—')}</div>
+        <div class="detail-field"><span class="detail-label">Email</span>${booking.hasEmail ? 'On file (hidden)' : '—'}</div>
+        <div class="detail-field"><span class="detail-label">Phone</span>${booking.hasPhone ? 'On file (hidden)' : '—'}</div>
         <div class="detail-field"><span class="detail-label">Attendees</span>${booking.attendeeCount}</div>
         <div class="detail-field"><span class="detail-label">Paid</span>${formatDate(booking.createdAt)}</div>
         <div class="detail-field"><span class="detail-label">Method</span>${escapeHtml(booking.paymentMethod ? methodLabel(booking.paymentMethod) : "—")}</div>
@@ -1218,7 +1229,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
       // from a single click on the form itself.
       reviewEl.innerHTML = `
         <div class="refund-confirm">
-          <p>Refund <strong>${formatMoney(amountPaise, booking.currency)}</strong> to <strong>${escapeHtml(booking.payerEmail ?? 'this payer')}</strong> for payment <code>${escapeHtml(booking.razorpayPaymentId)}</code>? This cannot be undone from here.</p>
+          <p>Refund <strong>${formatMoney(amountPaise, booking.currency)}</strong> to <strong>${escapeHtml(booking.payerLabel)}</strong>${booking.hasEmail ? ' (a confirmation email will be sent)' : ''} for payment <code>${escapeHtml(booking.razorpayPaymentId)}</code>? This cannot be undone from here.</p>
           <button type="button" class="button button--danger refund-confirm-btn">Yes, refund ${formatMoney(amountPaise, booking.currency)}</button>
         </div>
       `;
@@ -1317,8 +1328,10 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
       .join('');
   }
 
-  function renderBookings(data: { bookings: Booking[]; aggregates: Aggregates; testPaymentCount: number }) {
+  function renderBookings(data: { bookings: Booking[]; aggregates: Aggregates; testPaymentCount: number; canRefund: boolean }) {
     const { bookings, aggregates, testPaymentCount } = data;
+    canRefund = data.canRefund;
+    if (!canRefund) bulkCancelSection.hidden = true;
     currentBookings = bookings;
     closeBulkCancelPanel();
 
@@ -1348,7 +1361,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
       tr.setAttribute('role', 'button');
       tr.setAttribute('aria-expanded', 'false');
       tr.innerHTML = `
-        <td>${escapeHtml(booking.payerName ?? '—')}</td>
+        <td>${escapeHtml(booking.payerLabel)}</td>
         <td>${formatAmount(booking.amount, booking.currency)}</td>
         <td>${statusBadge(booking.status)}${booking.isTest ? ' <span class="badge badge--test">Test</span>' : ''}${booking.isDuplicate ? ' <span class="badge badge--duplicate" title="Another live booking from this email exists for this event">Possible duplicate</span>' : ''}</td>
         <td><span class="row-chevron">›</span></td>
@@ -1436,7 +1449,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     // aggregate — an admin cancelling a whole event should see the per-
     // person breakdown before confirming, the same way a single-row refund
     // already shows the one payer/amount being sent.
-    const breakdown = eligible.map((b) => ({ name: b.payerName ?? b.payerEmail ?? 'Unknown payer', amount: Math.round(b.amount * fraction) }));
+    const breakdown = eligible.map((b) => ({ name: b.payerLabel, amount: Math.round(b.amount * fraction) }));
     const total = breakdown.reduce((sum, row) => sum + row.amount, 0);
 
     bulkCancelReview.innerHTML = `
@@ -1491,7 +1504,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
         bulkCancelReview.innerHTML = `
           <p class="refund-tier-hint">${summary} ${failures.length} failed:</p>
           <ul class="bulk-cancel-breakdown">
-            ${failures.map((f) => `<li><span>${escapeHtml(currentBookings.find((b) => b.id === f.id)?.payerName ?? f.id)}</span><span>${escapeHtml(f.error ?? 'Unknown error')}</span></li>`).join('')}
+            ${failures.map((f) => `<li><span>${escapeHtml(currentBookings.find((b) => b.id === f.id)?.payerLabel ?? f.id)}</span><span>${escapeHtml(f.error ?? 'Unknown error')}</span></li>`).join('')}
           </ul>
           <button type="button" class="button bulk-cancel-refresh-btn">Refresh table</button>
         `;

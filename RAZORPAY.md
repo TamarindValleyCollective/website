@@ -113,16 +113,16 @@ had only ever been tested against constructed mock `Request` objects before, nev
 real API, so the wrong-shape assumption went undetected until the first live test. Fixed and
 reverified directly against the API before going live.
 
-**Internal admin page:** `/internal/event-payments` (Google Sign-In + the same core-team
-allow-list as `/internal/whatsapp`/`/internal/photo-pool`, via
-`netlify/functions/event-payments-admin.mts`) shows registrations, cancellations, and money
+**Internal admin page:** `/internal/event-payments` (Google Sign-In + per-module staff roles —
+`view` to read, admin-only `refund` — via
+`netlify/functions/event-payments-admin.mts`; payer email and phone are never sent to the page) shows registrations, cancellations, and money
 collected per event, and can **trigger a real refund** for a booking — calling Razorpay's refund
 API (`POST /v1/payments/:id/refund`, via `createRefund` in `netlify/functions/lib/razorpay.ts`)
 directly, since Razorpay's own MCP server has fetch/list tools for refunds but no way to create
 one. The page pre-fills a suggested amount from `/refund-policy`'s day-before-event tiers
 (75%/50%/0%), which the admin can override, and requires an explicit two-step confirm before
 anything is sent — no one-click refund. A successful API call only ever records **initiation**
-(`razorpay_refund_id`, `refund_amount`, `refund_status`, `refund_initiated_at`, `refunded_by` —
+(`razorpay_refund_id`, `refund_amount`, `refund_status`, `refund_initiated_at`, `refunded_by` (the staff member's id from 2026-10, an email before that) —
 migration `0020_event_payments_refunds.sql`/`0022_event_payments_refund_initiated.sql`) and emails
 the payer that a refund has started (cc `core-team@tvc.farm`/`stay@linger.in`); `refunded_at`
 itself is set later, only once Razorpay's `refund.processed` webhook confirms completion — see
