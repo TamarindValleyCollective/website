@@ -522,7 +522,11 @@ outside both the local machine and Netlify (the member-update-email workflow).
   someone's enrolment, and every security event goes to `staff_audit_log` as ids and method names
   only. Only an active `is_super_admin` passes `requireSuperAdmin` (which grants no module access).
   Tables: migration `0029_staff_mfa.sql`. Wrong codes answer 400, not 401, so the page can tell a
-  bad code from an expired Google session.
+  bad code from an expired Google session. The setup page shows the authenticator QR code, drawn
+  in the browser by `scripts/lib/qr-svg.mjs` using the zero-dependency `qrcode-generator` package
+  (bundled at build; the secret never goes to an online QR service), with the typed key and an
+  `otpauth://` link as fallbacks; the secret and QR are wiped from the page when setup finishes
+  or the session ends.
 - **`scripts/lib/accommodation-db.mjs`** — hand-rolled Supabase PostgREST REST client (same style
   as `supabase.mjs` below, no `@supabase/supabase-js`), the sole data-access layer for
   `accommodation-admin.mts`. Conflict-checking lives entirely in Postgres (see above) — this file

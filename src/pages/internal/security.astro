@@ -44,9 +44,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         <button type="button" id="totp-start" class="button">Set up authenticator app</button>
         <p id="totp-error" class="error" hidden></p>
         <div id="totp-setup" hidden>
-          <p class="note">Add this key to an authenticator app (Google Authenticator, 1Password, Authy…) — choose "enter a setup key" and pick time-based. On a phone you can tap the link instead.</p>
-          <p class="secret" id="totp-secret" aria-label="Setup key"></p>
-          <p class="note"><a id="totp-link" href="#">Open in authenticator app</a></p>
+          <p class="note">Open your authenticator app (Google Authenticator, 1Password, Authy…), add a new account, and scan this code. It's drawn in your browser; nothing is sent anywhere.</p>
+          <div id="totp-qr" class="qr"></div>
+          <details id="totp-manual" class="manual">
+            <summary>Can't scan? Enter the key by hand</summary>
+            <p class="note">Choose "enter a setup key" and pick time-based. On a phone you can tap the link instead.</p>
+            <p class="secret" id="totp-secret" aria-label="Setup key"></p>
+            <p class="note"><a id="totp-link" href="#">Open in authenticator app</a></p>
+          </details>
           <form id="totp-confirm-form" class="inline-form">
             <label>
               6-digit code from the app
@@ -205,6 +210,21 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     color: var(--tvc-green-dark);
   }
 
+  .qr {
+    margin: 0 0 14px;
+  }
+
+  .manual {
+    margin: 0 0 14px;
+  }
+
+  .manual summary {
+    cursor: pointer;
+    font-size: 0.88rem;
+    color: var(--tvc-ink-soft);
+    margin-bottom: 8px;
+  }
+
   .secret,
   .codes :global(li) {
     font-variant-numeric: tabular-nums;
@@ -276,6 +296,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 </style>
 
 <script>
+  import { buildQrSvg } from '../../../scripts/lib/qr-svg.mjs';
+
   declare const google: any;
 
   const STORAGE_KEY = 'tvc-security-idtoken';
@@ -313,6 +335,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   const totpStartBtn = $<HTMLButtonElement>('totp-start');
   const totpSetup = $('totp-setup');
   const totpSecret = $('totp-secret');
+  const totpQr = $('totp-qr');
+  const totpManual = $<HTMLDetailsElement>('totp-manual');
   const totpLink = $<HTMLAnchorElement>('totp-link');
   const totpForm = $<HTMLFormElement>('totp-confirm-form');
   const totpCode = $<HTMLInputElement>('totp-code');
@@ -364,7 +388,18 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     }
   }
 
+  // The setup secret, its QR code and the otpauth link are wiped from the page
+  // whenever setup finishes or the session ends, so none of it lingers.
+  function clearSetup() {
+    totpQr.replaceChildren();
+    totpSecret.textContent = '';
+    totpLink.removeAttribute('href');
+    totpManual.open = false;
+    totpSetup.hidden = true;
+  }
+
   function showGate(message?: string) {
+    clearSetup();
     gate.hidden = false;
     forbidden.hidden = true;
     panel.hidden = true;
@@ -375,6 +410,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
 
   function showForbidden(token: string) {
+    clearSetup();
     gate.hidden = true;
     panel.hidden = true;
     statusEl.hidden = true;
@@ -555,6 +591,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       }
       totpSecret.textContent = (data.secret as string).replace(/(.{4})/g, '$1 ').trim();
       totpLink.href = data.otpauthUri;
+      totpQr.replaceChildren(buildQrSvg(document, data.otpauthUri, 'QR code for your authenticator app'));
       totpSetup.hidden = false;
       totpCode.value = '';
       totpCode.focus();
@@ -571,9 +608,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     try {
       const { status, data } = await api('/api/staff-mfa/totp/confirm', { method: 'POST', body: { code: totpCode.value } });
       if (status === 200) {
-        totpSetup.hidden = true;
-        totpSecret.textContent = '';
-        totpLink.removeAttribute('href');
+        clearSetup();
         if (data.recoveryCodes) showCodes(data.recoveryCodes);
         await loadStatus();
       } else if (status === 429) {

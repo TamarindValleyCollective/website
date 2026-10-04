@@ -21,6 +21,7 @@
     "cheerio": "^1.2.0",
     "leaflet": "^1.9.4",
     "libphonenumber-js": "^1.13.14",
+    "qrcode-generator": "^2.0.4",
     "rehype-external-links": "^3.0.0"
   },
   "devDependencies": {
