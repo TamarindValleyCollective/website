@@ -6,10 +6,12 @@
 // page and API still check the capability they need on every request, so this
 // list is a convenience and grants nothing.
 //
-// Super admins additionally get the Access and Security pages. No email is
-// returned: the caller is shown by name, or by nothing at all if there isn't
-// one yet.
+// Super admins additionally get the Access and Security pages. The caller's
+// address is returned only masked ("p••••@tvc.farm"), so the sidebar can show
+// which account is signed in when someone holds two; the full address is never
+// sent.
 import { requireActivePerson } from './lib/staff-access';
+import { maskEmail } from './lib/staff-masking';
 import { rest } from './lib/staff-mfa-store';
 import { MODULE_INFO, isModuleId, isRole } from './lib/staff-registry';
 
@@ -32,6 +34,7 @@ export default async (req: Request): Promise<Response> => {
     const roles = (await res.json()) as { module: string; role: string }[];
     return jsonResponse({
       name: person.name ?? person.googleName ?? null,
+      maskedEmail: person.email ? maskEmail(person.email) : null,
       isSuperAdmin: person.isSuperAdmin,
       tools: roles
         .filter((r) => isModuleId(r.module) && isRole(r.role))

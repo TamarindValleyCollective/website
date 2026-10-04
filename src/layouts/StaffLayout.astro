@@ -126,6 +126,7 @@ const adminItems = [
 
         <div class="account">
           <p class="account-name label" id="staff-name" hidden></p>
+          <p class="account-email label" id="staff-email" hidden></p>
           <button type="button" id="sign-out" class="account-button" title="Sign out" hidden>
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
               <path d="M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4"></path>
@@ -387,6 +388,21 @@ const adminItems = [
     white-space: nowrap;
   }
 
+  /* Sits right under the name, so it takes the name's bottom margin. */
+  .account-name:not([hidden]) + .account-email {
+    margin-top: -4px;
+  }
+
+  .account-email {
+    margin: 0 0 6px;
+    padding: 0 10px;
+    font-size: 0.8rem;
+    color: var(--tvc-ink-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .account-button {
     color: var(--tvc-ink-soft);
   }
@@ -531,6 +547,7 @@ const adminItems = [
 
   interface Me {
     name: string | null;
+    maskedEmail?: string | null; // masked by the server; absent in answers cached before this existed
     isSuperAdmin: boolean;
     tools: { module: string }[];
   }
@@ -545,6 +562,7 @@ const adminItems = [
   const toolItems = Array.from(document.querySelectorAll<HTMLElement>('li[data-module]'));
   const adminGroup = $('admin-group');
   const nameEl = $('staff-name');
+  const emailEl = $('staff-email');
   const signOutBtn = $<HTMLButtonElement>('sign-out');
   const collapseBtn = $<HTMLButtonElement>('collapse');
   const menuOpen = $<HTMLButtonElement>('menu-open');
@@ -579,6 +597,8 @@ const adminItems = [
     adminGroup.hidden = adminGroup.dataset.current !== 'true' && !me?.isSuperAdmin;
     nameEl.hidden = !me?.name;
     nameEl.textContent = me?.name ?? ''; // text only, whatever the name contains
+    emailEl.hidden = !me?.maskedEmail;
+    emailEl.textContent = me?.maskedEmail ?? '';
     signOutBtn.hidden = !me;
   }
 
