@@ -547,8 +547,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   target, is taken straight back out). It deliberately cannot create, promote, deactivate or
   remove a super admin (that stays a manual database step, so the last one can't be removed from
   here), never deletes anyone (people are deactivated so history keeps its names), and never
-  returns an email: an address is typed once to add someone and no response contains one, people
-  are shown by name or an opaque `Person XXXX` tag. The role/capability descriptions the screen
+  returns an email: an address is typed once to add someone and no response contains one. People
+  are shown by name, or until Google fills one in by their address masked (`p••••@tvc.farm`, built
+  server-side by `maskEmail`; the function reads the address only to mask it). The role/capability descriptions the screen
   shows come from `MODULE_INFO` in `staff-registry.ts`, which also now owns the booking-type list
   that `accommodation-admin.mts` validates against. The shared "which methods does this person
   have" query moved to `lib/staff-mfa-store.ts`.
