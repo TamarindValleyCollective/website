@@ -173,7 +173,7 @@ flowchart TD
         GSC["Google Search Console API<br/>urlInspection.index.inspect — read-only,<br/>same service account (Full user on the<br/>property as of 2026-08-08),<br/>called from a local script only"]
         RESEND["Resend API<br/>Transactional email — noreply@tvc.farm,<br/>domain verified 2026-08-19,<br/>called from the GitHub Action above<br/>and whatsapp-stale-alert.mts"]
         WAMETA["Meta WhatsApp Cloud API<br/>Sends inbound message + template-status<br/>events to /api/whatsapp-webhook;<br/>receives replies from whatsapp-admin.mts;<br/>see WHATSAPP.md for setup status"]
-        SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages,<br/>event_payments, staff_users/staff_module_roles/<br/>staff_audit_log (not yet wired to any Function) —<br/>service_role key, called server-side only"]
+        SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages,<br/>event_payments, staff_users/staff_module_roles/<br/>staff_audit_log (gate all four admin Functions),<br/>staff_mfa_factors/staff_recovery_codes/<br/>staff_mfa_state (super-admin second factors) —<br/>service_role key, called server-side only"]
         RAZORPAY["Razorpay API<br/>Payment Links (create/fetch) +<br/>payment_link.paid webhook + refunds<br/>(admin-triggered, event-payments-admin.mts) +<br/>payment fees and settlement recon<br/>(nightly reconcile-event-payment-fees.mjs).<br/>Live keys as of 2026-09-24 —<br/>see RAZORPAY.md"]
     end
 
@@ -503,6 +503,26 @@ outside both the local machine and Netlify (the member-update-email workflow).
   Access module exists. Masking helpers live in `lib/staff-masking.ts`. The first time an
   authorized person signs in with an empty `staff_users.name`, `requireStaff` copies the name
   from their Google account (guarded by `name=is.null`, so it never overwrites one on file).
+- **`netlify/functions/staff-mfa.mts` + `lib/staff-mfa-crypto.ts` + `/internal/security`** —
+  second factors and step-up authentication for **super admins** (issue #89), built ahead of the
+  Access module that will consume them (nothing requires a step-up yet except replacing your own
+  authenticator, regenerating recovery codes, and resetting another super admin). A super admin
+  signs in with Google (first factor) and then proves a second factor to get a ten-minute,
+  stateless, HMAC-signed step-up token bound to them, sent as `X-Stepup-Token`. Methods held at
+  once: an authenticator app (TOTP, RFC 6238 — checked against the RFC's published vectors) and
+  ten single-use recovery codes; passkeys are the planned third (the `passkey` type is reserved
+  in `staff_mfa_factors`). The Access module is to unlock only with at least two different methods
+  enrolled. TOTP secrets are stored AES-256-GCM encrypted and recovery codes only as an HMAC, both
+  keyed from one Netlify variable, `STAFF_MFA_KEY` (32+ random bytes, base64, set by a human, never
+  in the repo or the assistant's hands); if it is missing every keyed operation fails closed with
+  `MFA_NOT_CONFIGURED`. **Losing or changing that key invalidates every stored authenticator and
+  every recovery code at once** — there is no rotation procedure yet, so keep a copy in a password
+  manager. A used code can't be replayed (a per-factor last-used time step, guarded atomically in
+  the database), five wrong codes lock a person out for 15 minutes, a second super admin can reset
+  someone's enrolment, and every security event goes to `staff_audit_log` as ids and method names
+  only. Only an active `is_super_admin` passes `requireSuperAdmin` (which grants no module access).
+  Tables: migration `0029_staff_mfa.sql`. Wrong codes answer 400, not 401, so the page can tell a
+  bad code from an expired Google session.
 - **`scripts/lib/accommodation-db.mjs`** — hand-rolled Supabase PostgREST REST client (same style
   as `supabase.mjs` below, no `@supabase/supabase-js`), the sole data-access layer for
   `accommodation-admin.mts`. Conflict-checking lives entirely in Postgres (see above) — this file
