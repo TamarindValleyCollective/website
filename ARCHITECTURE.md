@@ -238,7 +238,7 @@ flowchart TD
     WHATSAPPDASH -.->|"Sign in with Google"| GIDTOKEN
     ACCOMMODATIONDASH --> APIFN9
     APIFN9 -.->|"read/write bookings, guests,<br/>audit log"| SUPABASE
-    APIFN9 -.->|"read allow-list rows<br/>(own dedicated Sheet)"| GSHEET
+    APIFN9 -.->|"check staff role"| SUPABASE
     APIFN9 -.->|"verify staff ID token"| GIDTOKEN
     ACCOMMODATIONDASH -.->|"Sign in with Google"| GIDTOKEN
     EVENTPAYDASH --> APIFN14
@@ -448,21 +448,23 @@ outside both the local machine and Netlify (the member-update-email workflow).
   each message gets its own full 60-minute countdown), so a single missed email can't let a
   message silently go unanswered.
 - **`netlify/functions/accommodation-admin.mts`** — backs `/internal/accommodation-calendar`.
-  Same Google Sign-In auth pattern as `photo-pool.mts`/`whatsapp-admin.mts` (verifies the ID
-  token, checks it against an allow-list), but its own dedicated
-  `ACCOMMODATION_ALLOWED_EMAILS_SHEET_ID` Sheet rather than reusing
-  `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID` — split out 2026-08-30 so calendar access isn't a side
-  effect of photo/WhatsApp access or vice versa. Beyond the allow-list gate, each row carries a
-  role (`scripts/lib/accommodation-access.mjs`): `admin` (read/write every booking type — today's
-  default), `restricted` (read everything, write only a listed subset of booking types, e.g. a
-  Linger contact scoped to `casual-stay`/`public-event`), or `viewer` (read-only). Every role sees
-  the full grid; only writes are type-scoped, and `canWriteType()` enforces that server-side in
-  `accommodation-admin.mts` against both a booking's existing type and its new type on
-  update/delete — never left to the client form to hide options for. Designed to migrate cleanly
-  to the shared `admin_access(email, tool, role, allowed_types)` Supabase table parked from the
-  2026-08-31 admin-console session: `getAccessRecord()`'s return shape already matches that
-  table's row shape, so adopting it later is a rewrite of `accommodation-access.mjs`'s internals
-  only, not of `accommodation-admin.mts` or the UI. Full booking CRUD plus guest search/history,
+  Same Google Sign-In auth pattern as `photo-pool.mts`/`whatsapp-admin.mts`: `requireStaff`
+  checks the caller's role in the `accommodation` module — `view` to read, `edit` to write and to
+  search the guest directory. Migrated 2026-10 from its own dedicated "Accommodation Calendar -
+  Allowed Emails" Sheet (split out 2026-08-30 so calendar access isn't a side effect of
+  photo/WhatsApp access); the old roles map onto the shared ones: `admin` -> `admin`,
+  `restricted` -> `user` with `scope.allowedTypes` (write only a listed subset of booking types,
+  e.g. a Linger contact scoped to `casual-stay`/`public-event`), `viewer` -> `read_only`. Every
+  role sees the full grid; only writes are type-scoped, and `canWriteType()` enforces that
+  server-side in `accommodation-admin.mts` against both a booking's existing type and its new
+  type on update/delete — never left to the client form to hide options for. The page still
+  reasons in the old three roles, so the server translates (`pageAccess`). **Guest mobile and
+  email are write-only**: they never leave the Function (responses carry `hasMobile`/`hasEmail`
+  and a short `ref` tag to tell same-named guests apart in the typeahead); the page shows "On file
+  (hidden)" with a Replace button, and a save that omits them keeps the stored values because
+  `accommodation_resolve_person` coalesces missing values. Guest names and preferences/allergies
+  are withheld/masked for `read_only`, and `created_by`/`updated_by`/the booking audit log now hold
+  the staff id, not an email. Full booking CRUD plus guest search/history,
   all against the `accommodation_*` tables in the "TVC ERP" Supabase project via
   `scripts/lib/accommodation-db.mjs`. The core guarantee this whole feature was built around:
   double-booking a tent is *physically impossible*, not just checked for in application code — an
@@ -492,10 +494,11 @@ outside both the local machine and Netlify (the member-update-email workflow).
   stores staff ids, never emails. **Status:** tables, the helper, and role rows for everyone on the
   two Sheet allow-lists (9 staff, 21 grants, backfilled 2026-10-04 and applied as data, not a
   migration, so staff emails stay out of version control) exist. `photo-pool.mts` and
-  `whatsapp-admin.mts` and `event-payments-admin.mts` now gate on `requireStaff` (2026-10);
-  `accommodation-admin.mts` still uses its Sheet, so for that one the Sheet remains the live gate
-  and can drift from the tables (a Sheet edit does not update the tables, and vice versa).
-  Masking helpers live in `lib/staff-masking.ts`.
+  `whatsapp-admin.mts`, `event-payments-admin.mts` and `accommodation-admin.mts` now all gate on
+  `requireStaff` (2026-10), so the Google Sheet allow-lists are no longer read by anything (the
+  Sheets and their `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID` / `ACCOMMODATION_ALLOWED_EMAILS_SHEET_ID`
+  env vars can be retired). Access is now changed with SQL on `staff_module_roles` until the
+  Access module exists. Masking helpers live in `lib/staff-masking.ts`.
 - **`scripts/lib/accommodation-db.mjs`** — hand-rolled Supabase PostgREST REST client (same style
   as `supabase.mjs` below, no `@supabase/supabase-js`), the sole data-access layer for
   `accommodation-admin.mts`. Conflict-checking lives entirely in Postgres (see above) — this file
