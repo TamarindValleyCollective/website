@@ -309,8 +309,8 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     margin: 0;
     padding: 10px 12px;
     border-radius: var(--radius-sm);
-    background: #f9e2df;
-    color: #9c4438;
+    background: var(--callout-red-bg);
+    color: var(--callout-red-text);
     font-size: 0.84rem;
     font-weight: 600;
   }
@@ -738,8 +738,8 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     /* Same pale-red/dark-red pairing as global.css's .callout--red — that
        comment confirms #f9e2df needs the darker #9c4438 text, not
        --tvc-error-text/--tvc-orange-text, to actually pass WCAG AA. */
-    background: #f9e2df;
-    color: #9c4438;
+    background: var(--callout-red-bg);
+    color: var(--callout-red-text);
   }
 
   :global(#bookings-body .button) {

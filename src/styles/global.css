@@ -138,6 +138,15 @@
      that were never defined. Values match what those fallbacks rendered, so
      defining them changes nothing visually - except orange-strong, now the
      text-safe orange instead of a third, off-palette #a85712. */
+  /* Callout, footer and hero-intro colors that were literals scattered across
+     global.css and a few components; named here so there is one definition. */
+  --callout-sky-bg: #eef4f6;
+  --callout-red-bg: #f9e2df;
+  --callout-red-text: #9c4438;
+  --footer-text: #eef5ee;
+  --footer-text-muted: #b9d0bc;
+  --hero-intro-light: #eef2ea;
+
   --tvc-orange-strong: var(--tvc-orange-text);
   --tvc-ink-faint: var(--tvc-ink-soft);
   --tvc-surface: #fff;
@@ -398,7 +407,7 @@ img {
 }
 
 .callout--sky {
-  background: #eef4f6;
+  background: var(--callout-sky-bg);
 }
 
 .callout--sky .eyebrow {
@@ -412,13 +421,13 @@ img {
      match the site's earth-tone palette. No named --tvc-* token for red
      yet since this is the only consumer; promote to one if a second
      .callout--red use turns up. */
-  background: #f9e2df;
+  background: var(--callout-red-bg);
 }
 
 .callout--red .eyebrow {
   /* #f9e2df fails WCAG AA against --tvc-orange-text (3.9:1) - a darker
      red-brown gets back to 5.15:1, same reasoning as --tvc-orange-text. */
-  color: #9c4438;
+  color: var(--callout-red-text);
 }
 
 /* One shared note ("All fields are required unless marked optional") at
