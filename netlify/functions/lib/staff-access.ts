@@ -37,7 +37,11 @@ export type StaffIdentity = {
   isSuperAdmin: boolean;
 };
 
-export type StaffGrant = StaffIdentity & { role: Role; scope: RoleScope };
+// googleName is the profile name on the Google ID token for *this* request
+// (null if the account has none) — not stored, and distinct from `name`, the
+// one registered in staff_users. Callers that need a display name fall back
+// from `name` to this.
+export type StaffGrant = StaffIdentity & { role: Role; scope: RoleScope; googleName: string | null };
 
 export type StaffAuthResult =
   | { ok: true; staff: StaffGrant }
@@ -108,9 +112,11 @@ export async function requireStaff<M extends ModuleId>(
   }
 
   let email: string;
+  let googleName: string | null = null;
   try {
     const payload = await verifyGoogleIdToken(token, { audience: clientId });
     email = String(payload.email).toLowerCase();
+    googleName = typeof payload.name === 'string' && payload.name.trim() ? payload.name.trim() : null;
     const domain = email.split('@')[1];
     if (MANAGED_DOMAINS.has(domain) && payload.hd !== domain) {
       return { ok: false, status: 403, error: 'Not authorized' };
@@ -144,6 +150,7 @@ export async function requireStaff<M extends ModuleId>(
       isSuperAdmin: row.is_super_admin,
       role: grant.role,
       scope: grant.scope,
+      googleName,
     },
   };
 }

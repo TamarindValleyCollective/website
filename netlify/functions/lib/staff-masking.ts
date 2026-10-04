@@ -17,6 +17,17 @@ export function canSeeNames(role: Role): boolean {
   return role !== 'read_only';
 }
 
+// "priya.raman@tvc.farm" -> "p••••@tvc.farm". Keeps the first character of the
+// local part and the domain, so it identifies the account to someone who
+// already knows it without spelling out the address. The dots are capped (as
+// in maskName) so the length of the local part isn't given away either.
+export function maskEmail(email: string): string {
+  const at = email.indexOf('@');
+  if (at <= 0) return '•'.repeat(4);
+  const local = [...email.slice(0, at)];
+  return `${local[0]}${'•'.repeat(Math.min(Math.max(local.length - 1, 3), 4))}${email.slice(at)}`;
+}
+
 // "Priya Raman" -> "P•••• R••••". Keeps the first letter of each word (so
 // an auditor can still tell threads apart) and caps the dots so the length
 // doesn't give the name away. Uses code points, not UTF-16 units, so Kannada

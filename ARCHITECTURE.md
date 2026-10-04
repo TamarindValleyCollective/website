@@ -420,9 +420,11 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `reply` to send, `manage` to block — migrated 2026-10 from the shared Sheet allow-list). A
   contact's phone number never leaves this Function: replies and blocks look it up server-side by
   conversation id, responses carry only a `label` (the contact's name, masked for `read_only`
-  roles, or an opaque "Contact XXXX" when they have none), and search never matches on it. Reply
-  signatures no longer fall back to the staff member's email, which used to be printed into the
-  customer's chat. Blocking is audit-logged before it happens and refused if the log write fails.
+  roles, or an opaque "Contact XXXX" when they have none), and search never matches on it. The
+  reply signature is the name typed on the page; only if that is missing does it fall back to the
+  staff member's registered name, then the name on their Google account (the ID token's `name`
+  claim), then a masked address like `a••••@gmail.com` (`maskEmail`) — never the full email, which
+  used to be printed into the customer's chat. Blocking is audit-logged before it happens and refused if the log write fails.
   Four routes: list conversations (optionally filtered by a `search` query param — matches contact
   name (not for `read_only` roles) or message content, never phone, via `scripts/lib/supabase.mjs`'s `searchConversations`, two REST calls merged
   client-side since PostgREST can't `OR` a top-level column condition with an inner-embedded-
