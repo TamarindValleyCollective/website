@@ -134,6 +134,17 @@
   --tvc-3bs1h-paper: #fbf8f1;
   --tvc-3bs1h-dark: #12271a;
 
+  /* Tokens that components already referenced (with inline fallbacks) but
+     that were never defined. Values match what those fallbacks rendered, so
+     defining them changes nothing visually - except orange-strong, now the
+     text-safe orange instead of a third, off-palette #a85712. */
+  --tvc-orange-strong: var(--tvc-orange-text);
+  --tvc-ink-faint: var(--tvc-ink-soft);
+  --tvc-surface: #fff;
+  /* Light orange for hover/eyebrow on dark grounds (tvc-green-dark footer,
+     photo-hero scrim), where --tvc-orange is only 2.66:1. */
+  --tvc-orange-light: #ffd8a8;
+
   --font-wordmark: 'Quicksand', -apple-system, 'Segoe UI', sans-serif;
   --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
   --font-body: 'Inter', -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -141,6 +152,8 @@
   --font-3bs1h-label: 'Archivo', -apple-system, 'Segoe UI', sans-serif;
 
   --radius: 14px;
+  --radius-sm: 8px;
+  --radius-field: 10px;
   --shadow-soft: 0 4px 18px rgba(34, 41, 31, 0.1);
 
   --space-section: 96px;

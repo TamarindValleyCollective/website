@@ -578,7 +578,7 @@ const uiStringsJsonSafe = JSON.stringify(c).replace(/<\/script/gi, '<\\/script')
   }
 
   .lightbox-detail .date {
-    color: var(--tvc-orange);
+    color: var(--tvc-orange-text);
     font-weight: 700;
     font-size: 0.8rem;
     text-transform: uppercase;
@@ -628,7 +628,7 @@ const uiStringsJsonSafe = JSON.stringify(c).replace(/<\/script/gi, '<\\/script')
     gap: 10px;
     align-items: center;
     padding: 8px;
-    border-radius: 10px;
+    border-radius: var(--radius-field);
     cursor: pointer;
     background: none;
     border: none;
@@ -643,7 +643,7 @@ const uiStringsJsonSafe = JSON.stringify(c).replace(/<\/script/gi, '<\\/script')
   .map-sidebar-item img {
     width: 44px;
     height: 44px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     object-fit: cover;
     flex-shrink: 0;
   }
@@ -747,7 +747,7 @@ const uiStringsJsonSafe = JSON.stringify(c).replace(/<\/script/gi, '<\\/script')
   .photo-popup img {
     width: 100%;
     max-width: 160px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     margin-bottom: 6px;
   }
 
