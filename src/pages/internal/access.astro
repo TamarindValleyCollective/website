@@ -352,6 +352,13 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     font-weight: 600;
   }
 
+  .matrix :global(.person-email) {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: var(--tvc-ink-soft);
+  }
+
   .matrix :global(.badges) {
     display: flex;
     flex-wrap: wrap;
@@ -656,6 +663,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   interface Person {
     id: string;
     label: string;
+    maskedEmail?: string | null;
     active: boolean;
     isSuperAdmin: boolean;
     isMe: boolean;
@@ -1002,11 +1010,14 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     if (p.isSuperAdmin && p.mfa) badges.append(h('span', { class: p.mfa.ready ? 'badge' : 'badge badge--warn', text: p.mfa.ready ? 'Second factors ready' : `${p.mfa.methodCount} of 2 methods` }));
     if (!p.active) badges.append(h('span', { class: 'badge badge--warn', text: 'Deactivated' }));
 
+    const identity = h('span', { class: 'person-name', text: p.label });
+    const nameBlock = p.maskedEmail ? [identity, h('span', { class: 'person-email', text: p.maskedEmail })] : [identity];
+
     const rowClasses = [!p.active ? 'is-inactive' : '', p.id === newPersonId ? 'is-new' : ''].filter(Boolean).join(' ');
     const row = h(
       'tr',
       { class: rowClasses, attrs: { 'data-person-row': p.id } },
-      h('th', { class: 'person-cell', attrs: { scope: 'row' } }, h('span', { class: 'person-name', text: p.label }), badges),
+      h('th', { class: 'person-cell', attrs: { scope: 'row' } }, ...nameBlock, badges),
     );
     for (const module of state!.modules) row.append(roleCell(p, module));
 

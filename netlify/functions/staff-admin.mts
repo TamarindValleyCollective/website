@@ -131,6 +131,10 @@ async function handleList(req: Request, admin: SuperAdmin): Promise<Response> {
     people: people.map((p) => ({
       id: p.id,
       label: labelFor(p),
+      // Shown under the name so two people with the same name can be told apart.
+      // Null while the name is missing, because the label is then the masked
+      // address already. Masked here; the full address is never sent.
+      maskedEmail: p.name && p.email ? maskEmail(p.email) : null,
       active: p.active,
       isSuperAdmin: p.is_super_admin,
       isMe: p.id === admin.id,
