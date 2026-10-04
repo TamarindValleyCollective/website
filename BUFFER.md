@@ -18,7 +18,7 @@ on TVC's behalf; nothing about it is wired into the site itself.
 | Channel | Service | Handle |
 |---|---|---|
 | Instagram | `business` | `tamarindvalleycollective` |
-| Facebook | `page` | Tamarind Valley Collective (**disconnected** as of 2026-09-26 — `list_channels`/`get_channel` return `isDisconnected: true` with no reason surfaced by the API; reconnect via Buffer's own dashboard, which shows the actual cause) |
+| Facebook | `page` | Tamarind Valley Collective (was **disconnected** on 2026-09-26, but reconnected by 2026-09-28 when posts queued to it fine — at the time `list_channels`/`get_channel` returned `isDisconnected: true` with no reason surfaced by the API; check `isDisconnected` before queueing) |
 | LinkedIn | `page` | `tvcfarm` |
 
 **Posts published so far:**
@@ -30,7 +30,7 @@ on TVC's behalf; nothing about it is wired into the site itself.
   wasn't included in that round.
 - 2026-09-26: a Foraging Day promo post (event on 2026-10-10) queued to Instagram and LinkedIn,
   using the event poster (`https://tvc.farm/images/events/2026-10-10-foraging-day/poster.jpeg`) as
-  the asset. Facebook skipped since it's disconnected. Instagram used `schedulingType: notification`
+  the asset. Facebook skipped since it was disconnected then. Instagram used `schedulingType: notification`
   (needs manual approval in Buffer before it sends); LinkedIn doesn't support that mode via the API
   (`schedulingType: automatic` required instead), so that one auto-publishes at its queue slot
   unless edited/deleted first in Buffer.
