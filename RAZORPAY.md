@@ -88,7 +88,7 @@ stats and "cancelled" status actually key off — is set only once Razorpay's ow
   For an admin-triggered refund this is normally a no-op (`event-payments-admin.mts` already
   recorded initiation synchronously right after its own Razorpay API call succeeded); for a refund
   started directly in the Razorpay dashboard, this is the *only* place it gets recorded at all.
-- `refund.processed` — the only place `refunded_at` gets set (`confirmRefundProcessed()`). The call that confirms it also emails the payer "Refund processed — <event>" (cc `core-team@tvc.farm`/`stay@linger.in`), once; this is the only email a refund started directly in the Razorpay dashboard produces.
+- `refund.processed` — sets `refunded_at` (`confirmRefundProcessed()`), as does `event-payments-admin.mts` itself when Razorpay's own create-refund response already says `processed` (test-mode refunds are instant, and the test-mode webhook isn't subscribed to refund events, so waiting for the webhook left them stuck on "Refund initiated"; found 2026-10-10). The update is idempotent, so whichever path confirms first flips the row and sends the email. The call that confirms it also emails the payer "Refund processed — <event>" (cc `core-team@tvc.farm`/`stay@linger.in`), once; this is the only email a refund started directly in the Razorpay dashboard produces.
 - `refund.failed` — flips `refund_status` to `'failed'` (`markRefundFailed()`) so the row reads as
   refund-attempt-failed rather than either "still paid" (wrong — money may be mid-transit) or
   silently stuck showing "refund initiated" forever. It also emails a failure alert (once — only on the call that recorded it) to `core-team@tvc.farm`, cc `stay@linger.in`. `/internal/event-payments` lets an admin
