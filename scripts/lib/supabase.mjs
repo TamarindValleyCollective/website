@@ -414,3 +414,21 @@ export async function getMessage(messageId) {
   const rows = await res.json();
   return rows[0] ?? null;
 }
+
+// The last few messages of each given conversation, newest first (one embedded
+// query, with a per-conversation limit). Used to work out which conversations
+// still wait on a reply, for the list's "Needs reply" filter.
+/**
+ * @param {string[]} conversationIds
+ * @param {number} perConversation
+ * @returns {Promise<Map<string, Array<{ direction: 'inbound' | 'outbound', body: string, created_at: string }>>>}
+ */
+export async function listRecentMessagesByConversation(conversationIds, perConversation = 4) {
+  if (conversationIds.length === 0) return new Map();
+  const res = await restFetch(
+    `/whatsapp_conversations?id=in.(${conversationIds.join(',')})&select=id,whatsapp_messages(direction,body,created_at)` +
+      `&whatsapp_messages.order=created_at.desc&whatsapp_messages.limit=${perConversation}`,
+  );
+  const rows = await res.json();
+  return new Map(rows.map((r) => [r.id, r.whatsapp_messages ?? []]));
+}

@@ -525,6 +525,14 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `whatsapp_conversations.last_stale_alert_at`, reset to null on every new inbound message so
   each message gets its own full 60-minute countdown), so a single missed email can't let a
   message silently go unanswered.
+- **WhatsApp guest panel** — `whatsapp-admin.mts`'s `GET /api/whatsapp-admin/guest` calls
+  `lib/guest-context.ts`, which matches the conversation's number (normalized E.164) to the guest's
+  online bookings (`event_payments`, via `scripts/lib/event-payments-db.mjs`, plus per-booking WhatsApp
+  delivery from `whatsapp_template_sends`) and stays (`accommodation_people` / `accommodation_guests`,
+  via `scripts/lib/accommodation-db.mjs`). Each section is gated by the viewer's role in its own module
+  (`requireStaff` for `event-payments` and `accommodation`), and no contact detail is returned. The
+  conversation list also carries `needsReply` (`lib/whatsapp-guest.ts`), from the last messages
+  fetched by `listRecentMessagesByConversation`.
 - **`netlify/functions/whatsapp-suggest.mts`** — the inbox's "Suggest reply" (POST
   `/api/whatsapp-suggest`, `reply` capability of the `whatsapp` module). Reads the last messages of a
   conversation from Supabase, retrieves the relevant site pages (`lib/site-retrieval.ts`) and asks Claude

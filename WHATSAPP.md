@@ -125,6 +125,34 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
   padding used to float them inside the card), and on a phone the header's actions drop to their own
   full-width row. Page-local modifiers are written `.button.x`, because the staff shell's
   `main .button` otherwise beats a class-only rule (Astro's scoping adds no specificity).
+- **Guest panel and "Needs reply" filter (2026-10-10).**
+  - **Needs reply**: a chip row under the search box ("All" / "Needs reply" with a count) filters the
+    list to conversations whose latest message no person has answered yet. The out-of-hours auto-reply
+    and the STOP confirmation don't count as an answer, a STOP/START needs no reply, and a blocked
+    contact never waits on us. Computed server-side (`needsReply` in `lib/whatsapp-guest.ts`) from each
+    conversation's last few messages, filtered in the browser, remembered for the tab. Separate from
+    the unread dot: unread = nobody has opened it, needs reply = nobody has answered it.
+  - **Guest panel**: a third column from 1280px (a slide-over opened with the header's "Guest" button
+    below that; on a phone it sits under the top bar). Shows when they first wrote, where they came
+    from, whether WhatsApp updates are allowed, the **Stop/Resume updates** and **Block** buttons (moved
+    here from the header), **Online bookings** (events paid on the site: event, date, guests, amount,
+    paid/refund/cancellation state, whether they agreed to WhatsApp updates, and the delivery status of
+    the confirmation/reminder sent) and **Stays** (accommodation allocations of ANY kind: event stays
+    including manually entered ones like 3Bs&1H, member stays, casual stays; with the tent and dates,
+    and people who share a number listed separately). `GET /api/whatsapp-admin/guest`, via
+    `lib/guest-context.ts`.
+  - **Access and privacy**: each section needs the viewer's role in THAT module (`event-payments` or
+    `accommodation` view); someone without it sees "limited to people with access to…" rather than
+    nothing. Names are masked for read-only accommodation roles. No phone number, email or payment id
+    is ever returned.
+  - **Matching limits**: bookings and stays are matched on the normalized phone number only (never on
+    name). A guest entered without a mobile number, or under a different one, won't appear. Online
+    bookings are matched by fetching the newest 800 bookings and normalizing each number (it is stored
+    as the guest typed it), fine at TVC's volume; if bookings reach the thousands, store a normalized
+    number on each row. `lib/guest-context.ts` is deliberately independent of WhatsApp so a future
+    Guests page can reuse it. No migration.
+  - Checked in Chrome against a mock backend at 1500, 1100 and ~430px; the data logic is tested with
+    mocked Supabase (matching across number formats, role gating, masking, failure isolation).
 - **Suggested replies (2026-10-10).** A "Suggest reply" button in the inbox composer
   (`whatsapp-suggest.mts`, `reply` capability) drafts an answer for a staff member to read, edit and
   send; it never sends anything itself. The draft is grounded in the site's own pages (the same
