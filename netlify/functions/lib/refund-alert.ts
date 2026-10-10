@@ -6,6 +6,7 @@
 // every failure rather than one per booking.
 
 import { routeEmail } from './email-routing';
+import { EMAIL_COLORS, escapeHtml, formatAmount, renderStaffEmail } from './email-layout';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const FROM = 'Tamarind Valley Collective <noreply@tvc.farm>';
@@ -25,14 +26,7 @@ export interface RefundFailure {
   error?: string;
 }
 
-export function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-export function formatAmount(amountPaise: number, currency: string): string {
-  const amount = amountPaise / 100;
-  return currency === 'INR' ? `₹${amount.toLocaleString('en-IN')}` : `${amount.toLocaleString('en-IN')} ${currency}`;
-}
+export { escapeHtml, formatAmount };
 
 export async function sendRefundFailureAlert(failures: RefundFailure[], context: { bulk: boolean; succeeded?: number }): Promise<void> {
   if (failures.length === 0) return;
@@ -41,7 +35,7 @@ export async function sendRefundFailureAlert(failures: RefundFailure[], context:
       (f) => `<li style="margin-bottom:10px;">
         <strong>${escapeHtml(f.payerName ?? 'Unknown guest')}</strong> — ${escapeHtml(f.eventTitle)}, ${f.attendeeCount} ${f.attendeeCount === 1 ? 'person' : 'people'}, paid ${formatAmount(f.paidAmount, f.currency)}<br>
         <span style="font-family:ui-monospace,monospace; font-size:12px;">${escapeHtml(f.paymentId)}</span><br>
-        <span style="color:#8a2f1f;">${escapeHtml(f.error ?? 'Razorpay reported the refund as failed after accepting it.')}</span>
+        <span style="color:${EMAIL_COLORS.danger};">${escapeHtml(f.error ?? 'Razorpay reported the refund as failed after accepting it.')}</span>
       </li>`,
     )
     .join('');
@@ -50,21 +44,18 @@ export async function sendRefundFailureAlert(failures: RefundFailure[], context:
     : failures[0].error
       ? `<p>Razorpay rejected a refund, so no money has moved. The guest has not been emailed.</p>`
       : `<p>Razorpay accepted a refund and then reported it as failed. The guest was already told it was initiated, so they'll be waiting on it.</p>`;
-  const html = `<!doctype html>
-<html><head><meta charset="utf-8" /></head>
-<body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f;">
-  ${intro}
+  const html = `${intro}
   <ul style="padding-left:18px;">${items}</ul>
-  <p>Common fix for "insufficient balance": top up the Razorpay account balance, then retry from <a href="https://tvc.farm/internal/event-payments">the Event Payments dashboard</a> (for a full-event cancellation, run "Cancel event" again — it only retries bookings that aren't already refunded).</p>
-</body></html>`;
+  <p style="margin-bottom:0;">Common fix for "insufficient balance": top up the Razorpay account balance, then retry from <a href="https://tvc.farm/internal/event-payments">the Event Payments dashboard</a> (for a full-event cancellation, run "Cancel event" again — it only retries bookings that aren't already refunded).</p>`;
 
   await sendStaffAlert(`⚠️ ${failures.length} refund${failures.length === 1 ? '' : 's'} failed — ${failures[0].eventTitle}`, html, failures.every((f) => f.isTest));
 }
 
-// Internal alert to TVC's shared inbox + Linger — never the guest. Also used
+// Internal alert to TVC's shared inbox + Linger — never the guest. `bodyHtml`
+// is just the inner content; it's wrapped in the branded staff shell here. Also used
 // for non-refund "someone needs to act" alerts (guest cancellation requests,
 // a payment that landed after an event was cancelled).
-export async function sendStaffAlert(subject: string, html: string, isTest = false): Promise<void> {
+export async function sendStaffAlert(subject: string, bodyHtml: string, isTest = false): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('[refund-alert] RESEND_API_KEY is not set — cannot send staff alert');
@@ -73,7 +64,7 @@ export async function sendStaffAlert(subject: string, html: string, isTest = fal
   const res = await fetch(RESEND_API_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ from: FROM, html, ...routeEmail(isTest, { to: ALERT_TO, cc: ALERT_CC, subject }) }),
+    body: JSON.stringify({ from: FROM, html: renderStaffEmail(bodyHtml), ...routeEmail(isTest, { to: ALERT_TO, cc: ALERT_CC, subject }) }),
   });
   if (!res.ok) {
     throw new Error(`Resend send failed: ${res.status} ${await res.text()}`);

@@ -20,6 +20,7 @@
 import { appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { DEFAULT_DOMAINS, daysUntil, lookupDomain, shouldAlert } from './lib/domain-expiry.mjs';
+import { renderStaffEmail } from './lib/email-layout.mjs';
 
 const NOTIFY_TO = ['core-team@tvc.farm'];
 const FROM = 'TVC Website <noreply@tvc.farm>';
@@ -85,11 +86,9 @@ async function main() {
         ? `Domain EXPIRED: ${worst.domain}`
         : `Domain renewal: ${worst.domain} expires in ${worst.daysLeft} day${worst.daysLeft === 1 ? '' : 's'}`
       : 'Domain expiry check failed';
-    const html = `<!doctype html><html><body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f;">
-<p>${worst ? 'A TVC domain is coming up for renewal.' : 'The daily domain expiry check could not finish.'}</p>
+    const html = renderStaffEmail(`<p style="margin-top:0;">${worst ? 'A TVC domain is coming up for renewal.' : 'The daily domain expiry check could not finish.'}</p>
 <table style="border-collapse:collapse;"><thead><tr style="text-align:left; font-size:13px; color:#57604f;"><th style="padding:6px 12px;">Domain</th><th style="padding:6px 12px;">Expires</th><th style="padding:6px 12px;">Left</th><th style="padding:6px 12px;">Registrar</th></tr></thead><tbody>${rows}</tbody></table>
-<p style="font-size:13px; color:#57604f;">Renew at the registrar shown. See DOMAINS.md in the website repo for where each domain lives. This is sent at 60 and 30 days, then daily from 14 days until the expiry date moves.</p>
-</body></html>`;
+<p style="font-size:13px; color:#57604f;">Renew at the registrar shown. See DOMAINS.md in the website repo for where each domain lives. This is sent at 60 and 30 days, then daily from 14 days until the expiry date moves.</p>`);
     await sendEmail(subject, html);
   }
 

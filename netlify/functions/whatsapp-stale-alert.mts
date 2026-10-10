@@ -7,6 +7,7 @@
 // gets missed shouldn't mean a message silently goes unanswered. See
 // WHATSAPP.md.
 import { listStaleUnreadConversations, markStaleAlertSent } from '../../scripts/lib/supabase.mjs';
+import { renderStaffEmail } from './lib/email-layout';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const FROM = 'TVC Website <noreply@tvc.farm>';
@@ -60,12 +61,8 @@ export default async (): Promise<Response> => {
 
   const subject = stale.length === 1 ? '1 WhatsApp message waiting for a reply' : `${stale.length} WhatsApp messages waiting for a reply`;
 
-  const html = `<!doctype html>
-<html>
-<head><meta charset="utf-8" /></head>
-<body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f;">
-  <p>${stale.length === 1 ? 'This message has' : 'These messages have'} been unread for over an hour on <a href="https://tvc.farm/internal/whatsapp">+91 80 4110 9754</a>:</p>
-  <table style="border-collapse:collapse; width:100%; max-width:560px;">
+  const html = renderStaffEmail(`  <p style="margin-top:0;">${stale.length === 1 ? 'This message has' : 'These messages have'} been unread for over an hour on <a href="https://tvc.farm/internal/whatsapp">+91 80 4110 9754</a>:</p>
+  <table style="border-collapse:collapse; width:100%;">
     <thead>
       <tr style="text-align:left; font-size:13px; color:#57604f;">
         <th style="padding:8px 12px; border-bottom:2px solid #294a36;">From</th>
@@ -75,9 +72,7 @@ export default async (): Promise<Response> => {
     </thead>
     <tbody>${rows}</tbody>
   </table>
-  <p style="font-size:13px; color:#57604f;">You'll get this again in an hour for anything still unread — sign in at <a href="https://tvc.farm/internal/whatsapp">tvc.farm/internal/whatsapp</a> to reply.</p>
-</body>
-</html>`;
+  <p style="font-size:13px; color:#57604f;">You'll get this again in an hour for anything still unread — sign in at <a href="https://tvc.farm/internal/whatsapp">tvc.farm/internal/whatsapp</a> to reply.</p>`);
 
   try {
     const res = await fetch(RESEND_API_URL, {
