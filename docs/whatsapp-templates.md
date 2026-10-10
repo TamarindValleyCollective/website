@@ -226,6 +226,14 @@ form's checkbox: `false` sends nothing; `true` sends everything; `null` (older b
 refund/cancellation messages but not the new confirmation or reminder, which need an explicit
 `true`. The reminder query also filters on `whatsapp_opt_in = true`. Staff alerts are unaffected.
 
+## STOP opt-out (2026-10-10)
+
+Replying STOP (exact keyword; also "unsubscribe", "opt out", "stop whatsapp") adds the number to
+`whatsapp_opt_outs` (migration `0035`) and sends a confirmation; START reverses it. Every template
+send is checked against that list first (any template, any recipient), and nothing is sent if the
+list can't be read. To opt someone out by hand, insert their E.164 number (`+91…`) into
+`whatsapp_opt_outs`; to restore them, delete the row.
+
 ## Out-of-hours auto-reply (2026-10-10)
 
 Not a template: the guest has just messaged us, so a normal text is allowed. With

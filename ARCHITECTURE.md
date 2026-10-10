@@ -525,6 +525,10 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `whatsapp_conversations.last_stale_alert_at`, reset to null on every new inbound message so
   each message gets its own full 60-minute countdown), so a single missed email can't let a
   message silently go unanswered.
+- **WhatsApp STOP opt-out** — `whatsapp-webhook.mts` treats an exact STOP/START text
+  (`lib/whatsapp-optout.ts`) as a command: it writes/deletes the sender's E.164 number in
+  `whatsapp_opt_outs` (migration `0035`) and replies with a confirmation. `lib/whatsapp-send.ts`
+  checks that table before every template send and fails closed if it can't be read.
 - **WhatsApp consent** — `EventBookingForm.astro` has an optional "send updates on WhatsApp"
   checkbox; `event-booking.mts` puts the answer in the Payment Link's `notes.whatsappOptIn`,
   `razorpay-webhook.mts` stores it as `event_payments.whatsapp_opt_in` (migration `0034`), and

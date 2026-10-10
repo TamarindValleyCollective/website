@@ -63,9 +63,17 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
   `false` = none, email only; `null` (booked before the checkbox, or paid through a hand-made link)
   = refund/cancellation messages still go out as before, but the new confirmation and reminder
   require an explicit `true`. Changing the box never reuses an open Payment Link that carries the
-  old answer. The privacy page has a "WhatsApp booking updates" section. **Not built:** automatic
-  STOP/opt-out handling — a guest who replies "stop" lands in the inbox like any message, and
-  staff must turn their messages off by hand (no UI for that yet; set `whatsapp_opt_in = false`).
+  old answer. The privacy page has a "WhatsApp booking updates" section.
+- **STOP / START (2026-10-10).** A guest who replies exactly STOP (also "unsubscribe", "opt out",
+  "stop whatsapp"…) is added to `whatsapp_opt_outs` (migration `0035`, **apply before deploying**)
+  and gets a confirmation; START removes them. `sendWhatsAppTemplate` checks that list on every
+  send, whatever the booking's own opt-in says, and **fails closed** (sends nothing) if the list
+  can't be read. Exact keywords only — "cancel my booking" or "please stop calling" are normal
+  messages; "cancel" is deliberately not a keyword. If saving the opt-out fails the webhook returns
+  500 so Meta retries rather than confirming something that didn't happen. The out-of-hours
+  auto-reply doesn't also fire on a STOP. Covers all template sends, staff alerts included. The
+  approved templates themselves don't mention STOP (their text is frozen); the booking checkbox and
+  the privacy page do.
 - **Migration `0033` applied to TVC ERP 2026-10-10**, and PR #318 merged the same day.
 
 ## Direct Meta Cloud API integration — setup checklist

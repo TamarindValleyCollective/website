@@ -10,7 +10,7 @@
 // sent to WHATSAPP_TEST_NUMBER (and skipped when that isn't set), never to
 // the guest's number.
 import { normalizeMobileNumber } from '../../../scripts/lib/phone.mjs';
-import { recordTemplateSend } from '../../../scripts/lib/supabase.mjs';
+import { recordTemplateSend, isOptedOut } from '../../../scripts/lib/supabase.mjs';
 import { WHATSAPP_TEMPLATES, type WhatsAppTemplateName } from './whatsapp-templates';
 
 const GRAPH_API_VERSION = 'v21.0';
@@ -99,6 +99,16 @@ export async function sendWhatsAppTemplate(opts: {
     const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
     if (!phoneNumberId || !accessToken) {
       console.error('[whatsapp-send] Missing WHATSAPP_PHONE_NUMBER_ID or WHATSAPP_ACCESS_TOKEN');
+      return 'failed';
+    }
+
+    // The guest replied STOP at some point (whatsapp-webhook.mts). Checked on
+    // every send, whatever the booking's own opt-in says. Fails closed: if the
+    // list can't be read, don't message someone who may have opted out.
+    try {
+      if (await isOptedOut(e164)) return 'skipped';
+    } catch (err) {
+      console.error('[whatsapp-send] Could not check the opt-out list; not sending', err);
       return 'failed';
     }
 
