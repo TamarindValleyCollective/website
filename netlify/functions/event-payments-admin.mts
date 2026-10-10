@@ -71,10 +71,34 @@ function isTestPayment(row: any): boolean {
   return row.mode === 'test';
 }
 
+type Mode = 'live' | 'test';
+
+// The page shows exactly one mode at a time and every action acts only on
+// that mode's rows — test and real bookings are never mixed. An unknown or
+// missing value is 'live', the safe default.
+function parseMode(value: unknown): Mode {
+  return value === 'test' ? 'test' : 'live';
+}
+
+// Which Razorpay keys THIS server is running with. A test booking can only be
+// refunded with test keys (and a live one with live keys), so an action on
+// the other mode is refused up front with a clear message rather than
+// failing row by row at Razorpay. In practice: test bookings are simulated
+// by running locally with test keys, against the same database.
+function serverMode(): Mode {
+  return process.env.RAZORPAY_KEY_ID?.startsWith('rzp_test_') ? 'test' : 'live';
+}
+
+function modeMismatchError(mode: Mode): string {
+  return mode === 'test'
+    ? 'This server is using live Razorpay keys, so test bookings can’t be refunded here — nothing has changed. Run the dashboard locally with test keys (netlify dev) to simulate refunds.'
+    : 'This server is using test Razorpay keys, so live bookings can’t be refunded here — nothing has changed.';
+}
+
 async function handleBookings(url: URL, staff: StaffGrant): Promise<Response> {
   const eventReferenceId = url.searchParams.get('eventReferenceId')?.trim();
   if (!eventReferenceId) return jsonResponse({ error: 'eventReferenceId is required' }, 400);
-  const includeTest = url.searchParams.get('includeTest') === '1';
+  const mode = parseMode(url.searchParams.get('mode'));
 
   let allRows: any[];
   try {
@@ -85,7 +109,8 @@ async function handleBookings(url: URL, staff: StaffGrant): Promise<Response> {
   }
 
   const testPaymentCount = allRows.filter(isTestPayment).length;
-  const rows = includeTest ? allRows : allRows.filter((r) => !isTestPayment(r));
+  const livePaymentCount = allRows.length - testPaymentCount;
+  const rows = allRows.filter((r) => isTestPayment(r) === (mode === 'test'));
 
   // Flags rows sharing a payer_email with another still-live (non-refunded)
   // row in this same event — surfaces a guest who ended up with two paid
@@ -188,7 +213,10 @@ async function handleBookings(url: URL, staff: StaffGrant): Promise<Response> {
   return jsonResponse({
     canRefund: roleHasCapability('event-payments', staff.role, 'refund'),
     bookings,
+    mode,
+    serverMode: serverMode(),
     testPaymentCount,
+    livePaymentCount,
     aggregates: {
       bookingCount: rows.length,
       totalAttendees: rows.reduce((total, r) => total + (r.attendee_count ?? 1), 0),
@@ -428,6 +456,7 @@ async function handleRefund(req: Request, staff: StaffGrant): Promise<Response> 
   if (amount > row.amount) {
     return jsonResponse({ error: 'Refund amount cannot exceed the amount paid' }, 400);
   }
+  if (parseMode(row.mode) !== serverMode()) return jsonResponse({ error: modeMismatchError(parseMode(row.mode)) }, 409);
 
   const outcome = await refundOneBooking(row, amount, staff, reason);
   if (!outcome.ok) {
@@ -510,7 +539,7 @@ async function handleDecline(req: Request, staff: StaffGrant): Promise<Response>
 // (not in parallel) to keep failures isolated to the row that hit them
 // rather than one one failure taking down a Promise.all batch.
 async function handleBulkRefund(req: Request, staff: StaffGrant): Promise<Response> {
-  let body: { eventReferenceId?: string; fraction?: number; reason?: string; includeTest?: boolean };
+  let body: { eventReferenceId?: string; fraction?: number; reason?: string; mode?: string };
   try {
     body = await req.json();
   } catch {
@@ -520,11 +549,12 @@ async function handleBulkRefund(req: Request, staff: StaffGrant): Promise<Respon
   const eventReferenceId = (body.eventReferenceId ?? '').trim();
   const fraction = Number(body.fraction);
   const reason = body.reason?.trim() || undefined;
-  const includeTest = Boolean(body.includeTest);
+  const mode = parseMode(body.mode);
   if (!eventReferenceId) return jsonResponse({ error: 'eventReferenceId is required' }, 400);
   if (!Number.isFinite(fraction) || fraction <= 0 || fraction > 1) {
     return jsonResponse({ error: 'fraction must be greater than 0 and at most 1' }, 400);
   }
+  if (mode !== serverMode()) return jsonResponse({ error: modeMismatchError(mode) }, 409);
 
   let allRows: any[];
   try {
@@ -537,7 +567,7 @@ async function handleBulkRefund(req: Request, staff: StaffGrant): Promise<Respon
   // Same eligibility as a single refund would require row-by-row: not
   // already refunded, and not already mid-flight on a still-live attempt
   // (a previously *failed* one is fair game to retry here too).
-  const eligible = allRows.filter((r) => !r.refunded_at && (!r.refund_initiated_at || r.refund_status === 'failed') && (includeTest || r.mode !== 'test'));
+  const eligible = allRows.filter((r) => !r.refunded_at && (!r.refund_initiated_at || r.refund_status === 'failed') && isTestPayment(r) === (mode === 'test'));
 
   // One audit entry for the event cancellation itself (each refund below
   // also logs its own). Refused if it can't be written, like the per-refund
@@ -547,7 +577,7 @@ async function handleBulkRefund(req: Request, staff: StaffGrant): Promise<Respon
       actorId: staff.id,
       action: 'event-payments.event_cancelled',
       module: 'event-payments',
-      detail: { eventReferenceId, fraction, eligibleCount: eligible.length, includeTest, reasonProvided: Boolean(reason) },
+      detail: { eventReferenceId, fraction, eligibleCount: eligible.length, mode, reasonProvided: Boolean(reason) },
     });
   } catch (err) {
     console.error('Failed to write staff audit log; refusing to cancel event', err);
@@ -561,7 +591,12 @@ async function handleBulkRefund(req: Request, staff: StaffGrant): Promise<Respon
   // already created for someone mid-checkout stay payable; closing the base
   // link only stops new ones from being created.)
   let registration: { closed: boolean; note: string };
-  try {
+  if (mode === 'test') {
+    // The event's base Payment Link is shared between test and real
+    // bookings — simulating a cancellation must never close real
+    // registration.
+    registration = { closed: true, note: 'Test mode: online registration was left open.' };
+  } else try {
     const base = await fetchBasePaymentLink(eventReferenceId);
     if (base.status === 'created') {
       await cancelPaymentLink(base.id);
@@ -601,8 +636,6 @@ async function handleBulkRefund(req: Request, staff: StaffGrant): Promise<Respon
     attempted: eligible.length,
     succeeded: results.filter((r) => r.ok).length,
     registration,
-    // Test-mode bookings left alone because include-test wasn't ticked.
-    skippedTest: includeTest ? 0 : allRows.filter((r) => !r.refunded_at && (!r.refund_initiated_at || r.refund_status === 'failed') && r.mode === 'test').length,
     results,
   });
 }

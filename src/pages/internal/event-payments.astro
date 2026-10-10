@@ -56,12 +56,11 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
       <p id="status" class="hint" hidden></p>
 
       <div id="results" hidden>
-        <p id="test-payments-notice" class="hint test-payments-notice" hidden>
-          <label>
-            <input type="checkbox" id="include-test-toggle" />
-            <span id="test-payments-notice-text"></span>
-          </label>
-        </p>
+        <div id="mode-switch" class="mode-switch" role="group" aria-label="Which bookings to show">
+          <button type="button" class="mode-btn is-active" data-mode="live" aria-pressed="true">Live <span class="mode-count" id="mode-live-count"></span></button>
+          <button type="button" class="mode-btn" data-mode="test" aria-pressed="false">Test <span class="mode-count" id="mode-test-count"></span></button>
+        </div>
+        <p id="test-mode-banner" class="test-mode-banner" hidden></p>
         <div class="stats">
           <div class="stat card">
             <span class="stat-label">Registrations</span>
@@ -231,6 +230,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     appearance: none;
     border: 1px solid var(--tvc-line);
     background: var(--tvc-white);
+    color: var(--tvc-ink);
     border-radius: 999px;
     padding: 8px 18px;
     font: inherit;
@@ -370,6 +370,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     appearance: none;
     border: 1px solid var(--tvc-line);
     background: var(--tvc-white);
+    color: var(--tvc-ink);
     border-radius: 999px;
     padding: 8px 18px;
     font: inherit;
@@ -381,6 +382,12 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   :global(#bulk-cancel-review .button--danger) {
     background: var(--tvc-error-text);
     border-color: var(--tvc-error-text);
+    color: var(--tvc-white);
+  }
+
+  :global(#bulk-cancel-review .button:hover:not(:disabled)) {
+    background: var(--tvc-green);
+    border-color: var(--tvc-green);
     color: var(--tvc-white);
   }
 
@@ -447,15 +454,43 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     border-radius: var(--radius-sm);
   }
 
-  .test-payments-notice {
+  .mode-switch {
+    display: inline-flex;
+    border: 1px solid var(--tvc-line);
+    border-radius: 999px;
+    overflow: hidden;
     margin: 0 0 16px;
   }
 
-  .test-payments-notice label {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
+  .mode-btn {
+    appearance: none;
+    border: 0;
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.86rem;
+    padding: 8px 20px;
     cursor: pointer;
+  }
+
+  .mode-btn.is-active {
+    background: var(--tvc-green);
+    color: var(--tvc-white);
+  }
+
+  .mode-count {
+    font-weight: 400;
+    opacity: 0.8;
+  }
+
+  .test-mode-banner {
+    margin: 0 0 16px;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+    font-size: 0.88rem;
   }
 
   /* Missing :global() until now — same innerHTML-injection issue the block
@@ -750,6 +785,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     appearance: none;
     border: 1px solid var(--tvc-line);
     background: var(--tvc-white);
+    color: var(--tvc-ink);
     border-radius: 999px;
     padding: 8px 18px;
     font: inherit;
@@ -767,6 +803,15 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   :global(#bookings-body .button--danger) {
     background: var(--tvc-error-text);
     border-color: var(--tvc-error-text);
+    color: var(--tvc-white);
+  }
+
+  /* global.css's .button:hover (white text on green) loses to the id-scoped
+     background above, leaving white text on a white button while hovering.
+     Re-state hover at the same specificity so text always stays readable. */
+  :global(#bookings-body .button:hover:not(:disabled)) {
+    background: var(--tvc-green);
+    border-color: var(--tvc-green);
     color: var(--tvc-white);
   }
 
@@ -935,9 +980,11 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   const statusEl = document.getElementById('status') as HTMLElement;
   const results = document.getElementById('results') as HTMLElement;
   const bookingsBody = document.getElementById('bookings-body') as HTMLElement;
-  const testPaymentsNotice = document.getElementById('test-payments-notice') as HTMLElement;
-  const testPaymentsNoticeText = document.getElementById('test-payments-notice-text') as HTMLElement;
-  const includeTestToggle = document.getElementById('include-test-toggle') as HTMLInputElement;
+  const testModeBanner = document.getElementById('test-mode-banner') as HTMLElement;
+  const modeButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.mode-btn'));
+  // Exactly one mode is shown and acted on at a time — test and real
+  // bookings are never mixed on screen or in the bulk "Cancel event".
+  let viewMode: 'live' | 'test' = 'live';
   const bulkCancelSection = document.getElementById('bulk-cancel-section') as HTMLElement;
   const bulkCancelOpenBtn = document.getElementById('bulk-cancel-open') as HTMLButtonElement;
   const bulkCancelPanel = document.getElementById('bulk-cancel-panel') as HTMLElement;
@@ -1406,20 +1453,28 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
       .join('');
   }
 
-  function renderBookings(data: { bookings: Booking[]; aggregates: Aggregates; testPaymentCount: number; canRefund: boolean }) {
-    const { bookings, aggregates, testPaymentCount } = data;
+  function renderBookings(data: { bookings: Booking[]; aggregates: Aggregates; testPaymentCount: number; livePaymentCount: number; serverMode: 'live' | 'test'; canRefund: boolean }) {
+    const { bookings, aggregates, testPaymentCount, livePaymentCount } = data;
     canRefund = data.canRefund;
     if (!canRefund) bulkCancelSection.hidden = true;
     currentBookings = bookings;
     closeBulkCancelPanel();
 
-    if (testPaymentCount > 0) {
-      testPaymentsNotice.hidden = false;
-      testPaymentsNoticeText.textContent = includeTestToggle.checked
-        ? `Showing ${testPaymentCount} test payment${testPaymentCount === 1 ? '' : 's'} (Razorpay test-mode) alongside real ones.`
-        : `${testPaymentCount} test payment${testPaymentCount === 1 ? '' : 's'} hidden (Razorpay test-mode — excluded from the stats below).`;
+    document.getElementById('mode-live-count')!.textContent = `(${livePaymentCount})`;
+    document.getElementById('mode-test-count')!.textContent = `(${testPaymentCount})`;
+    for (const b of modeButtons) {
+      const active = b.dataset.mode === viewMode;
+      b.classList.toggle('is-active', active);
+      b.setAttribute('aria-pressed', String(active));
+    }
+    if (viewMode === 'test') {
+      testModeBanner.hidden = false;
+      testModeBanner.textContent =
+        data.serverMode === 'test'
+          ? 'Test mode — Razorpay test bookings only. Real bookings are not shown and nothing here touches them.'
+          : 'Test mode — Razorpay test bookings only; real bookings are not shown. This server uses live Razorpay keys, so test bookings can’t be refunded here (declining works). Run the dashboard locally with test keys (netlify dev) to simulate refunds.';
     } else {
-      testPaymentsNotice.hidden = true;
+      testModeBanner.hidden = true;
     }
 
     document.getElementById('stat-bookings')!.textContent = String(aggregates.bookingCount);
@@ -1463,8 +1518,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     statusEl.hidden = false;
     statusEl.textContent = 'Loading…';
     try {
-      const includeTestParam = includeTestToggle.checked ? '&includeTest=1' : '';
-      const res = await authedFetch(`/api/event-payments-admin/bookings?eventReferenceId=${encodeURIComponent(referenceId)}${includeTestParam}`);
+      const res = await authedFetch(`/api/event-payments-admin/bookings?eventReferenceId=${encodeURIComponent(referenceId)}&mode=${viewMode}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to load');
       statusEl.hidden = true;
@@ -1562,16 +1616,16 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
             eventReferenceId: currentEvent.referenceId,
             fraction,
             reason: bulkCancelReason.value.trim() || undefined,
-            includeTest: includeTestToggle.checked,
+            mode: viewMode,
           }),
         });
-        const resData: { succeeded: number; attempted: number; registration?: { closed: boolean; note: string }; skippedTest?: number; results: Array<{ id: string; ok: boolean; error?: string }> } = await res.json();
+        const resData: { succeeded: number; attempted: number; registration?: { closed: boolean; note: string }; results: Array<{ id: string; ok: boolean; error?: string }> } = await res.json();
         if (!res.ok) throw new Error((resData as unknown as { error?: string }).error ?? 'Bulk refund failed');
 
         const failures = resData.results.filter((r) => !r.ok);
-        const summary = `Refunded ${resData.succeeded} of ${resData.attempted} eligible bookings. ${resData.registration ? escapeHtml(resData.registration.note) : ''}${resData.skippedTest ? ` ${resData.skippedTest} test-mode booking${resData.skippedTest === 1 ? ' was' : 's were'} left alone.` : ''}`;
+        const summary = `Refunded ${resData.succeeded} of ${resData.attempted} eligible bookings. ${resData.registration ? escapeHtml(resData.registration.note) : ''}`;
 
-        if (failures.length === 0 && (resData.registration?.closed ?? true) && !resData.skippedTest) {
+        if (failures.length === 0 && (resData.registration?.closed ?? true)) {
           // Left showing until the reload below replaces this panel's
           // contents entirely (renderBookings calls closeBulkCancelPanel).
           bulkCancelReview.innerHTML = `<p class="refund-tier-hint">${summary} Reloading…</p>`;
@@ -1608,9 +1662,14 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     });
   });
 
-  includeTestToggle.addEventListener('change', () => {
-    if (currentEvent) loadBookings(currentEvent.referenceId);
-  });
+  for (const b of modeButtons) {
+    b.addEventListener('click', () => {
+      const next = b.dataset.mode === 'test' ? 'test' : 'live';
+      if (next === viewMode) return;
+      viewMode = next;
+      if (currentEvent) loadBookings(currentEvent.referenceId);
+    });
+  }
 
   // Bulk-cancelling an event that has already happened doesn't make sense —
   // hidden entirely rather than just disabled, matching "should not be
