@@ -23,10 +23,12 @@ import {
   recordRefundInitiated,
   requestCancellationIfNew,
   declineCancellationRequest,
+  confirmRefundProcessed,
 } from '../../scripts/lib/event-payments-db.mjs';
 import { createRefund, fetchBasePaymentLink, cancelPaymentLink } from './lib/razorpay';
 import { sendRefundFailureAlert, failureFromRow } from './lib/refund-alert';
 import { routeEmail } from './lib/email-routing';
+import { sendRefundCompletedEmail } from './lib/refund-completed-email';
 import { requireStaff, logStaffAction, type StaffGrant } from './lib/staff-access';
 import { canSeeNames, maskName } from './lib/staff-masking';
 import { roleHasCapability, type Capability } from './lib/staff-registry';
@@ -422,6 +424,31 @@ async function refundOneBooking(row: any, amount: number, staff: StaffGrant, rea
       });
     } catch (err) {
       console.error('Refund succeeded but failed to send notification email', err);
+    }
+  }
+
+  // Razorpay's own create-refund response can already say 'processed' (test
+  // mode refunds are instant, and so are some live ones). That IS Razorpay's
+  // confirmation, so don't wait for a refund.processed webhook that may never
+  // come (the test-mode webhook isn't subscribed to refund events) — confirm
+  // now. confirmRefundProcessed is idempotent, so if the webhook also arrives
+  // only one of the two flips the row and sends the "Refund processed" email.
+  if (refund.status === 'processed') {
+    try {
+      const confirmedNow = await confirmRefundProcessed(row.id, refund.id, refund.status);
+      if (confirmedNow && row.payer_email) {
+        await sendRefundCompletedEmail({
+          to: row.payer_email,
+          eventTitle: row.event_title,
+          refundAmount: refund.amount,
+          currency: row.currency,
+          paymentId: row.razorpay_payment_id,
+          refundId: refund.id,
+          isTest: row.mode === 'test',
+        });
+      }
+    } catch (err) {
+      console.error('Refund processed instantly but failed to confirm/notify', err);
     }
   }
 
