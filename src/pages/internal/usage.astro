@@ -1,0 +1,888 @@
+---
+// Usage & limits (internal): how much of each free tier and credit balance the
+// website is using, which warnings are active, and when each domain expires.
+// Backed by netlify/functions/usage-admin.mts; the hourly alert emails come from
+// usage-alerts.mts and use the same rules (scripts/lib/usage-rules.mjs).
+//
+// Same shell as the other internal tools: Google Sign-In gated, one sign-in per
+// tab (scripts/lib/staff-client.mjs), unlinked, noindex. Everything the server
+// returns is placed with textContent only, never as HTML.
+//
+// Two kinds of figures, labelled as such on the page: MEASURED (our own call
+// counts and the Supabase size) and TYPED IN (read off a provider's own
+// dashboard by an admin, because we deliberately hold no credentials for those
+// services). Status is always a word plus an icon, never colour alone.
+import StaffLayout from '../../layouts/StaffLayout.astro';
+---
+
+<StaffLayout title="Usage & limits" description="Free-tier and credit usage." current="usage">
+  <section class="usage section wrapper">
+    <h1>Usage &amp; limits</h1>
+    <p id="intro" class="hint">Sign in to see how much of our free tiers and credits we are using.</p>
+
+    <div id="gate" class="gate card">
+      <p class="gate-copy">Sign in with your Google account.</p>
+      <div id="g_id_signin"></div>
+      <p id="gate-error" class="error" hidden></p>
+    </div>
+
+    <div id="forbidden" class="gate card" hidden>
+      <p class="gate-copy">Signed in as <strong id="forbidden-email"></strong>, but this account doesn't have access to Usage &amp; limits.</p>
+      <p class="gate-copy">Ask a super admin to give you a role for it, then sign in again.</p>
+      <button type="button" id="use-different-account" class="button button--outline">Use a different account</button>
+    </div>
+
+    <p id="status" class="hint" hidden></p>
+
+    <div id="content" hidden>
+      <section aria-labelledby="alerts-title" class="block">
+        <h2 id="alerts-title">Needs attention</h2>
+        <div id="alerts" role="status"></div>
+      </section>
+
+      <section aria-labelledby="services-title" class="block">
+        <h2 id="services-title">Services</h2>
+        <div id="cards" class="cards"></div>
+      </section>
+
+      <section aria-labelledby="domains-title" class="block">
+        <h2 id="domains-title">Domain renewals</h2>
+        <div id="domains" class="card pad"><p class="muted">Checking the registries…</p></div>
+      </section>
+
+      <section id="admin" aria-labelledby="admin-title" class="block" hidden>
+        <h2 id="admin-title">Update readings</h2>
+        <p class="muted lead">Some services have no safe way for us to read their usage automatically, so an admin types the figure in from the provider's own dashboard. Warnings use the latest entry, so keep them fresh.</p>
+        <div id="readings" class="forms"></div>
+        <h2 class="sub">Prices &amp; limits</h2>
+        <form id="settings-form" class="card pad form" novalidate>
+          <p class="muted">Turns Anthropic token counts into an estimated spend, and sets a daily request limit for Gemini. Both are optional; warnings that depend on a missing one stay quiet.</p>
+          <div class="fields">
+            <label>Anthropic input price <span class="muted">(USD per million tokens)</span><input type="number" step="any" min="0" inputmode="decimal" id="price-input" /></label>
+            <label>Anthropic output price <span class="muted">(USD per million tokens)</span><input type="number" step="any" min="0" inputmode="decimal" id="price-output" /></label>
+            <label>Gemini daily request limit <span class="muted">(from your Google AI Studio project)</span><input type="number" step="1" min="1" inputmode="numeric" id="gemini-limit" /></label>
+          </div>
+          <div class="actions"><button type="submit" class="button">Save</button><span id="settings-msg" class="msg" role="status"></span></div>
+        </form>
+      </section>
+
+      <p class="muted foot" id="foot"></p>
+      <p id="signed-in" class="note"><button type="button" id="sign-out" class="link-button">Sign out</button></p>
+    </div>
+  </section>
+</StaffLayout>
+
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style is:global>
+  .usage [hidden] {
+    display: none !important;
+  }
+
+  .usage.section.wrapper {
+    padding-top: 32px;
+    padding-bottom: 48px;
+  }
+
+  .usage .hint,
+  .usage .muted {
+    color: var(--tvc-ink-soft);
+  }
+
+  .usage .hint {
+    margin: -8px 0 24px;
+  }
+
+  .usage .lead {
+    margin: 0 0 16px;
+    max-width: 62ch;
+  }
+
+  .usage h2 {
+    font-size: 1.1rem;
+    margin: 0 0 12px;
+  }
+
+  .usage h2.sub {
+    margin-top: 28px;
+  }
+
+  .usage .block {
+    margin-bottom: 32px;
+  }
+
+  .usage .card {
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .usage .card.pad,
+  .usage .gate {
+    padding: 18px 20px;
+  }
+
+  .usage .gate {
+    max-width: 420px;
+    margin-bottom: 24px;
+  }
+
+  .usage .gate-copy {
+    font-size: 0.9rem;
+    color: var(--tvc-ink-soft);
+    margin: 0 0 14px;
+  }
+
+  .usage .error {
+    color: var(--tvc-error-text);
+    font-size: 0.85rem;
+    margin: 10px 0 0;
+  }
+
+  .usage .note,
+  .usage .foot {
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .usage .link-button {
+    font: inherit;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--tvc-ink-soft);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  /* ---- status pill: a word and an icon, colour is only reinforcement ---- */
+  .usage .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px 3px 8px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .usage .pill svg {
+    flex: none;
+  }
+
+  .usage .pill--ok {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+  }
+
+  .usage .pill--warn {
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+  }
+
+  .usage .pill--critical {
+    background: var(--tvc-error-bg);
+    color: var(--tvc-error-text);
+  }
+
+  .usage .pill--none {
+    background: var(--tvc-stone);
+    color: var(--tvc-ink-soft);
+  }
+
+  /* ---- alerts ---- */
+  .usage .alert-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 10px;
+  }
+
+  .usage .alert {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    align-items: start;
+    padding: 12px 16px;
+    border: 1px solid var(--tvc-line);
+    border-left-width: 4px;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-white);
+  }
+
+  .usage .alert--warn {
+    border-left-color: var(--tvc-orange);
+  }
+
+  .usage .alert--critical {
+    border-left-color: var(--tvc-error-text);
+  }
+
+  .usage .alert-title {
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .usage .alert-detail {
+    margin: 4px 0 0;
+    font-size: 0.88rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .usage .all-clear {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    margin: 0;
+  }
+
+  /* ---- service cards ---- */
+  .usage .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+    gap: 16px;
+    align-items: start;
+  }
+
+  .usage .svc {
+    padding: 18px 20px;
+  }
+
+  .usage .svc-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 4px;
+  }
+
+  .usage .svc-title {
+    margin: 0;
+    font-size: 1.05rem;
+  }
+
+  .usage .svc-kind {
+    margin: 2px 0 14px;
+    font-size: 0.78rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .usage .hero {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 1.9rem;
+    line-height: 1.15;
+    color: var(--tvc-ink);
+  }
+
+  .usage .hero-sub {
+    margin: 2px 0 10px;
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  /* meter: a thin track with a fill; the numbers beside it carry the value */
+  .usage .meter {
+    height: 8px;
+    border-radius: 4px;
+    background: var(--tvc-stone);
+    overflow: hidden;
+    margin: 6px 0 4px;
+  }
+
+  .usage .meter-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: var(--tvc-green);
+  }
+
+  .usage .meter-fill--warn {
+    background: var(--tvc-orange);
+  }
+
+  .usage .meter-fill--critical {
+    background: var(--tvc-error-text);
+  }
+
+  .usage .meter-caption {
+    margin: 0 0 12px;
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .usage .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin: 12px 0 0;
+    padding: 12px 0 0;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .usage .stat dt {
+    font-size: 0.74rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .usage .stat dd {
+    margin: 2px 0 0;
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+
+  .usage .stat dd small {
+    display: block;
+    font-weight: 400;
+    font-size: 0.74rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .usage .spark {
+    margin: 12px 0 0;
+  }
+
+  .usage .spark svg {
+    display: block;
+    width: 100%;
+    height: 44px;
+  }
+
+  .usage .spark-line {
+    fill: none;
+    stroke: var(--tvc-green);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .usage .spark-base {
+    stroke: var(--tvc-line);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .usage .spark figcaption {
+    margin-top: 4px;
+    font-size: 0.76rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .usage .svc-note {
+    margin: 12px 0 0;
+    font-size: 0.8rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  /* ---- domains table ---- */
+  .usage #domains {
+    overflow-x: auto;
+  }
+
+  .usage td small {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.76rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .usage table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+  }
+
+  .usage th {
+    text-align: left;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+    padding: 0 12px 8px 0;
+  }
+
+  .usage td {
+    padding: 8px 12px 8px 0;
+    border-top: 1px solid var(--tvc-line);
+    vertical-align: middle;
+  }
+
+  /* ---- forms ---- */
+  .usage .forms {
+    display: grid;
+    gap: 10px;
+    max-width: 720px;
+  }
+
+  .usage details.card > summary {
+    padding: 14px 18px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .usage details.card[open] > summary {
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .usage .form {
+    max-width: 720px;
+  }
+
+  .usage details .form {
+    padding: 16px 18px;
+  }
+
+  .usage .fields {
+    display: grid;
+    gap: 14px;
+    margin: 12px 0;
+  }
+
+  .usage label {
+    display: grid;
+    gap: 4px;
+    font-size: 0.88rem;
+    font-weight: 600;
+  }
+
+  .usage label .muted {
+    font-weight: 400;
+  }
+
+  .usage input {
+    font: inherit;
+    padding: 8px 10px;
+    max-width: 280px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+  }
+
+  .usage input:focus-visible,
+  .usage summary:focus-visible,
+  .usage .link-button:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .usage .actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .usage .msg {
+    font-size: 0.85rem;
+    color: var(--tvc-green-dark);
+  }
+
+  .usage .msg--error {
+    color: var(--tvc-error-text);
+  }
+
+  @media (max-width: 520px) {
+    .usage .stats {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+</style>
+
+<script>
+  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch } from '../../../scripts/lib/staff-client.mjs';
+
+  declare const google: any;
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const SVG = 'http://www.w3.org/2000/svg';
+
+  // ---- tiny DOM helper: text only, never HTML -----------------------------
+  type Kid = Node | string | null | undefined | false;
+  function h(tag: string, props: { class?: string; text?: string; attrs?: Record<string, string> } = {}, ...kids: Kid[]): HTMLElement {
+    const el = document.createElement(tag);
+    if (props.class) el.className = props.class;
+    if (props.text !== undefined) el.textContent = props.text;
+    for (const [k, v] of Object.entries(props.attrs ?? {})) el.setAttribute(k, v);
+    for (const kid of kids) if (kid) el.append(kid);
+    return el;
+  }
+
+  // ---- formatting ----------------------------------------------------------
+  const nf = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
+  const compact = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e4 ? `${(n / 1e3).toFixed(0)}k` : nf.format(n));
+  const usd = (n: number) => `$${n.toFixed(2)}`;
+  const mb = (bytes: number) => `${nf.format(bytes / 1024 / 1024)} MB`;
+  const dateText = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  const daysAgo = (iso: string) => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
+  const ago = (iso: string) => (daysAgo(iso) === 0 ? 'today' : daysAgo(iso) === 1 ? 'yesterday' : `${daysAgo(iso)} days ago`);
+
+  type Level = 'warn' | 'critical' | null;
+  const LABEL = { ok: 'OK', warn: 'Warning', critical: 'Critical', none: 'Not set up' } as const;
+
+  // Icons give status a second signal besides colour.
+  const ICON: Record<string, string> = {
+    ok: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/>',
+    warn: '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.2v.1"/>',
+    critical: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5M12 16v.1"/>',
+    none: '<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>',
+  };
+  function icon(kind: string): SVGElement {
+    const svg = document.createElementNS(SVG, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', '16');
+    svg.setAttribute('height', '16');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    svg.innerHTML = ICON[kind]; // fixed constants above, no server data
+    return svg;
+  }
+  function pill(level: Level | 'none', okText?: string): HTMLElement {
+    const kind = level ?? 'ok';
+    return h('span', { class: `pill pill--${kind}` }, icon(kind), okText && kind === 'ok' ? okText : LABEL[kind]);
+  }
+
+  // A meter shows `fraction` (0..1) of a track. The words beside it carry the numbers.
+  function meter(fraction: number, level: Level, label: string, valueText: string): HTMLElement {
+    const pctNow = Math.max(0, Math.min(100, Math.round(fraction * 100)));
+    const track = h('div', { class: 'meter', attrs: { role: 'meter', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(pctNow), 'aria-valuetext': valueText, 'aria-label': label } });
+    const fill = h('div', { class: `meter-fill${level ? ` meter-fill--${level}` : ''}` });
+    fill.style.width = `${pctNow}%`;
+    track.append(fill);
+    return track;
+  }
+
+  // A plain trend line: one series, no axes, last point marked, with a text equivalent.
+  function sparkline(points: { label: string; value: number }[], what: string, unit: (n: number) => string): HTMLElement {
+    const W = 300;
+    const H = 44;
+    const pad = 5;
+    const max = Math.max(1, ...points.map((p) => p.value));
+    const x = (i: number) => pad + (i * (W - 2 * pad)) / Math.max(1, points.length - 1);
+    const y = (v: number) => H - pad - (v / max) * (H - 2 * pad);
+    const svg = document.createElementNS(SVG, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    const peak = points.reduce((a, b) => (b.value > a.value ? b : a), points[0]);
+    const total = points.reduce((s, p) => s + p.value, 0);
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', `${what}, last ${points.length} days: ${unit(total)} in total, busiest ${peak.label} with ${unit(peak.value)}.`);
+    const base = document.createElementNS(SVG, 'line');
+    base.setAttribute('class', 'spark-base');
+    base.setAttribute('x1', String(pad));
+    base.setAttribute('x2', String(W - pad));
+    base.setAttribute('y1', String(H - pad));
+    base.setAttribute('y2', String(H - pad));
+    const line = document.createElementNS(SVG, 'polyline');
+    line.setAttribute('class', 'spark-line');
+    line.setAttribute('points', points.map((p, i) => `${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' '));
+    svg.append(base, line);
+    const lastP = points[points.length - 1];
+    return h('figure', { class: 'spark', attrs: { style: 'margin-left:0;margin-right:0' } }, svg, h('figcaption', { text: `${what}, last ${points.length} days · busiest: ${peak.label} (${unit(peak.value)}) · latest: ${unit(lastP.value)}` }));
+  }
+
+  const dayLabel = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+  function stat(label: string, value: string, sub?: string): HTMLElement {
+    return h('div', { class: 'stat' }, h('dt', { text: label }), h('dd', { text: value }, sub ? h('small', { text: sub }) : null));
+  }
+
+  function card(title: string, kind: string, level: Level | 'none', ...body: Kid[]): HTMLElement {
+    return h('article', { class: 'card svc' }, h('div', { class: 'svc-head' }, h('h3', { class: 'svc-title', text: title }), pill(level)), h('p', { class: 'svc-kind', text: kind }), ...body);
+  }
+
+  // ---- the cards -------------------------------------------------------------
+  type Overview = any;
+
+  function anthropicCard(o: Overview): HTMLElement {
+    const a = o.anthropic;
+    const est = a.credit.estimate;
+    const reading = a.credit.reading;
+    const parts: Kid[] = [];
+    let level: Level | 'none' = est?.level ?? null;
+    if (a.billingErrorsRecent > 0) level = 'critical';
+    if (!reading && !a.billingErrorsRecent) level = 'none';
+
+    if (a.billingErrorsRecent > 0) {
+      parts.push(h('p', { class: 'hero-sub', text: `Credits look exhausted: ${a.billingErrorsRecent} request${a.billingErrorsRecent === 1 ? ' was' : 's were'} refused for billing reasons since yesterday.` }));
+    }
+    if (est) {
+      parts.push(h('p', { class: 'hero', text: `about ${usd(est.remaining)}` }), h('p', { class: 'hero-sub', text: `credit left, estimated, of ${usd(est.total ?? est.remaining)}` }));
+      if (est.total) parts.push(meter(est.remaining / est.total, est.level, 'Anthropic credit left', `${Math.round((est.remaining / est.total) * 100)}% left`), h('p', { class: 'meter-caption', text: `${Math.round((est.remaining / est.total) * 100)}% left · based on the ${usd(reading.value)} entered ${ago(reading.capturedAt)}, minus ${usd(est.spent)} of metered usage since` }));
+    } else if (reading) {
+      parts.push(h('p', { class: 'hero', text: usd(reading.value) }), h('p', { class: 'hero-sub', text: `entered ${ago(reading.capturedAt)}. Add the token prices below to turn usage into a live estimate.` }));
+    } else {
+      parts.push(h('p', { class: 'hero-sub', text: 'No credit balance entered yet. An admin can add it below so we can warn before it runs out.' }));
+    }
+    if (a.credit.expiresInDays !== null) {
+      parts.push(h('p', { class: 'hero-sub', text: a.credit.expiresInDays < 0 ? `Credit expired on ${dateText(reading.expiresOn)}.` : `Credit expires on ${dateText(reading.expiresOn)} (${a.credit.expiresInDays} day${a.credit.expiresInDays === 1 ? '' : 's'}).` }));
+    }
+    parts.push(
+      h('dl', { class: 'stats' },
+        stat('Today', nf.format(a.today.requests), `${compact(a.today.input_tokens + a.today.output_tokens)} tokens${a.today.costUsd !== null ? ` · ${usd(a.today.costUsd)}` : ''}`),
+        stat('Last 7 days', nf.format(a.last7.requests), `${compact(a.last7.input_tokens + a.last7.output_tokens)} tokens${a.last7.costUsd !== null ? ` · ${usd(a.last7.costUsd)}` : ''}`),
+        stat('This month', nf.format(a.month.requests), `${compact(a.month.input_tokens + a.month.output_tokens)} tokens${a.month.costUsd !== null ? ` · ${usd(a.month.costUsd)}` : ''}`),
+      ),
+      sparkline(a.requestsSeries.map((p: any) => ({ label: dayLabel(p.day), value: p.value })), 'Requests per day', (n) => `${nf.format(n)} request${n === 1 ? '' : 's'}`),
+    );
+    if (a.chatCapHitsToday || a.searchFallbackCapHitsToday) {
+      parts.push(h('p', { class: 'svc-note', text: `Today the site turned away ${a.chatCapHitsToday} chat message(s) and ${a.searchFallbackCapHitsToday} paid search fallback(s) because a daily cap was reached.` }));
+    }
+    parts.push(h('p', { class: 'svc-note', text: 'Counts only what the website itself sends (chat and the search fallback), not other uses of the same key. Dollar figures are estimates from the prices below.' }));
+    return card('Anthropic (Claude)', 'Usage measured by the website · credit balance typed in', level, ...parts);
+  }
+
+  function geminiCard(o: Overview): HTMLElement {
+    const g = o.gemini;
+    const limit: number | null = g.dailyLimit;
+    const frac = limit ? g.today.requests / limit : 0;
+    const level: Level = g.today.quotaExhausted > 0 ? 'warn' : limit && frac >= 0.9 ? 'critical' : limit && frac >= 0.7 ? 'warn' : null;
+    const parts: Kid[] = [h('p', { class: 'hero', text: nf.format(g.today.requests) }), h('p', { class: 'hero-sub', text: limit ? `requests today of ${nf.format(limit)} allowed` : 'requests today (no daily limit entered)' })];
+    if (limit) parts.push(meter(frac, level, 'Gemini requests used today', `${Math.round(frac * 100)}% of today's limit`), h('p', { class: 'meter-caption', text: `${Math.round(frac * 100)}% of today's limit` }));
+    if (g.today.quotaExhausted > 0) parts.push(h('p', { class: 'hero-sub', text: `Google refused ${g.today.quotaExhausted} request(s) today: the free quota ran out.` }));
+    parts.push(
+      h('dl', { class: 'stats' },
+        stat('Last 7 days', nf.format(g.last7.requests), 'requests'),
+        stat('Refused (7 days)', nf.format(g.last7.quotaExhausted), 'free quota hit'),
+        stat('Fell back to paid', nf.format(g.last7.fallbacksToAnthropic), 'searches, 7 days'),
+      ),
+      sparkline(g.requestsSeries.map((p: any) => ({ label: dayLabel(p.day), value: p.value })), 'Requests per day', (n) => `${nf.format(n)} request${n === 1 ? '' : 's'}`),
+      h('p', { class: 'svc-note', text: 'Powers the "Ask AI" search answer. Days here are UTC; Google resets its own daily quota at a different hour.' }),
+    );
+    return card('Google Gemini', 'Measured by the website', level, ...parts);
+  }
+
+  function supabaseCard(o: Overview): HTMLElement {
+    const s = o.supabase;
+    if (!s.reading) return card('Supabase database', 'Measured every 6 hours', 'none', h('p', { class: 'hero-sub', text: 'No measurement recorded yet.' }));
+    const frac = s.reading.limitBytes ? s.reading.bytes / s.reading.limitBytes : 0;
+    const level: Level = frac >= 0.9 ? 'critical' : frac >= 0.7 ? 'warn' : null;
+    const parts: Kid[] = [h('p', { class: 'hero', text: mb(s.reading.bytes) }), h('p', { class: 'hero-sub', text: s.reading.limitBytes ? `of ${mb(s.reading.limitBytes)} on the free plan` : 'database size' })];
+    if (s.reading.limitBytes) parts.push(meter(frac, level, 'Supabase database size', `${Math.round(frac * 100)}% of the free size`), h('p', { class: 'meter-caption', text: `${frac < 0.01 ? 'under 1' : Math.round(frac * 100)}% used · measured ${ago(s.reading.capturedAt)}` }));
+    if (s.history.length > 1) {
+      parts.push(sparkline(s.history.map((p: any) => ({ label: dateText(p.at), value: p.bytes / 1024 / 1024 })), 'Database size in MB', (n) => `${nf.format(n)} MB`));
+    }
+    parts.push(h('p', { class: 'svc-note', text: 'The free plan stops accepting new data at the limit. The Supabase dashboard is the authority if the two ever differ.' }));
+    return card('Supabase database', 'Measured by the website', level, ...parts);
+  }
+
+  function manualCard(m: any): HTMLElement {
+    const r = m.reading;
+    if (!r) return card(m.label, 'Typed in from the provider', 'none', h('p', { class: 'hero-sub', text: `No reading yet. Find it at ${m.where}, then an admin can enter it below.` }));
+    const frac = r.limit ? r.value / r.limit : 0;
+    const stale = daysAgo(r.capturedAt) > 35;
+    const parts: Kid[] = [h('p', { class: 'hero', text: `${nf.format(r.value)} ${m.unit}` }), h('p', { class: 'hero-sub', text: r.limit ? `of ${nf.format(r.limit)} included` : 'limit not entered' })];
+    if (r.limit) parts.push(meter(frac, m.level, `${m.label} used`, `${Math.round(frac * 100)}% used`), h('p', { class: 'meter-caption', text: `${Math.round(frac * 100)}% used` }));
+    parts.push(h('p', { class: 'svc-note', text: `Typed in on ${dateText(r.capturedAt)} (${ago(r.capturedAt)}) from ${m.where}.${stale ? ' This reading is more than a month old, so treat it with caution and update it.' : ''}` }));
+    return card(m.label, 'Typed in from the provider', m.level, ...parts);
+  }
+
+  // ---- alerts ----------------------------------------------------------------
+  function renderAlerts(alerts: any[]) {
+    const box = $('alerts');
+    if (alerts.length === 0) {
+      box.replaceChildren(h('p', { class: 'card all-clear' }, pill(null, 'All clear'), h('span', { text: 'Nothing is close to a limit, as far as we can measure.' })));
+      return;
+    }
+    const sorted = [...alerts].sort((a, b) => Number(b.level === 'critical') - Number(a.level === 'critical'));
+    box.replaceChildren(
+      h('ul', { class: 'alert-list' }, ...sorted.map((a) => h('li', { class: `alert alert--${a.level}` }, pill(a.level), h('div', {}, h('p', { class: 'alert-title', text: a.title }), h('p', { class: 'alert-detail', text: a.detail + (a.emailedAt ? ` Emailed to the core team ${ago(a.emailedAt)}.` : '') }))))),
+    );
+  }
+
+  // ---- admin forms -----------------------------------------------------------
+  function readingForm(meterInfo: any, last: { value?: number; limit?: number | null; expiresOn?: string | null } | null, withExpiry: boolean): HTMLElement {
+    const id = meterInfo.id as string;
+    const field = (name: string, label: string, value?: number | string | null, type = 'number') => {
+      const input = h('input', { attrs: { name, type, ...(type === 'number' ? { step: 'any', min: '0', inputmode: 'decimal' } : {}), ...(value !== undefined && value !== null ? { value: String(value) } : {}), 'data-field': name } });
+      return h('label', {}, label, input);
+    };
+    const msg = h('span', { class: 'msg', attrs: { role: 'status' } });
+    const form = h('form', { class: 'form', attrs: { novalidate: '' } },
+      h('p', { class: 'muted', text: `Find this at ${meterInfo.where}.` }),
+      h('div', { class: 'fields' }, field('value', meterInfo.valueLabel, last?.value), field('limit', meterInfo.limitLabel, last?.limit), withExpiry ? field('expiresOn', 'Credit expires on (optional)', last?.expiresOn ?? '', 'date') : null),
+      h('div', { class: 'actions' }, h('button', { class: 'button', text: 'Save reading', attrs: { type: 'submit' } }), msg),
+    );
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const get = (n: string) => (form.querySelector(`[data-field="${n}"]`) as HTMLInputElement | null)?.value.trim() ?? '';
+      const value = get('value') === '' ? NaN : Number(get('value'));
+      const limit = get('limit') === '' ? NaN : Number(get('limit'));
+      msg.className = 'msg msg--error';
+      if (!Number.isFinite(value) || !Number.isFinite(limit)) {
+        msg.textContent = 'Enter both numbers.';
+        return;
+      }
+      msg.className = 'msg';
+      msg.textContent = 'Saving…';
+      try {
+        const { status, data } = await staffFetch('/api/usage-admin/reading', { method: 'POST', body: { meter: id, value, limit, ...(withExpiry && get('expiresOn') ? { expiresOn: get('expiresOn') } : {}) } });
+        if (status !== 200) throw new Error(data.error ?? 'Could not save');
+        await load();
+        $('readings').querySelectorAll('details').forEach((d) => ((d as HTMLDetailsElement).open = false));
+      } catch (err) {
+        msg.className = 'msg msg--error';
+        msg.textContent = err instanceof StaffAuthError ? 'Your session ended or this account cannot change readings.' : (err as Error).message;
+      }
+    });
+    return h('details', { class: 'card' }, h('summary', { text: `${meterInfo.label}${last?.value !== undefined ? ` · last entered ${last.value}` : ''}` }), form);
+  }
+
+  function renderAdmin(o: Overview) {
+    $('admin').hidden = !o.canConfigure;
+    if (!o.canConfigure) return;
+    const a = o.anthropic.credit;
+    const forms: HTMLElement[] = [readingForm(a.meter, a.reading ? { value: a.reading.value, limit: a.reading.total, expiresOn: a.reading.expiresOn } : null, true)];
+    for (const m of o.manual) forms.push(readingForm(m, m.reading ? { value: m.reading.value, limit: m.reading.limit } : null, false));
+    $('readings').replaceChildren(...forms);
+    ($('price-input') as HTMLInputElement).value = o.settings.anthropicPrices?.input ?? '';
+    ($('price-output') as HTMLInputElement).value = o.settings.anthropicPrices?.output ?? '';
+    ($('gemini-limit') as HTMLInputElement).value = o.settings.geminiDailyRequests ?? '';
+  }
+
+  $('settings-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const msg = $('settings-msg');
+    const pIn = ($('price-input') as HTMLInputElement).value.trim();
+    const pOut = ($('price-output') as HTMLInputElement).value.trim();
+    const gem = ($('gemini-limit') as HTMLInputElement).value.trim();
+    const body: Record<string, unknown> = {};
+    msg.className = 'msg msg--error';
+    if (pIn || pOut) {
+      if (!pIn || !pOut) {
+        msg.textContent = 'Enter both Anthropic prices, or leave both empty.';
+        return;
+      }
+      body.anthropicPrices = { input: Number(pIn), output: Number(pOut) };
+    }
+    if (gem) body.geminiDailyRequests = Number(gem);
+    if (Object.keys(body).length === 0) {
+      msg.textContent = 'Nothing to save.';
+      return;
+    }
+    msg.className = 'msg';
+    msg.textContent = 'Saving…';
+    try {
+      const { status, data } = await staffFetch('/api/usage-admin/settings', { method: 'POST', body });
+      if (status !== 200) throw new Error(data.error ?? 'Could not save');
+      await load();
+      msg.textContent = 'Saved.';
+    } catch (err) {
+      msg.className = 'msg msg--error';
+      msg.textContent = err instanceof StaffAuthError ? 'Your session ended or this account cannot change settings.' : (err as Error).message;
+    }
+  });
+
+  // ---- domains ---------------------------------------------------------------
+  async function loadDomains() {
+    const box = $('domains');
+    try {
+      const { status, data } = await staffFetch('/api/usage-admin/domains');
+      if (status !== 200) throw new Error('failed');
+      const rows = (data.domains as any[]).map((d) => {
+        if (d.error) return h('tr', {}, h('td', { text: d.domain }), h('td', { attrs: { colspan: '3' }, class: 'muted', text: d.error }));
+        const lvl: Level = d.daysLeft <= 14 ? 'critical' : d.daysLeft <= 60 ? 'warn' : null;
+        return h('tr', {}, h('td', {}, d.domain, h('small', { text: d.registrar ?? 'registrar unknown' })), h('td', { text: dateText(`${d.expiresOn}T00:00:00Z`) }), h('td', { text: d.daysLeft < 0 ? 'expired' : `${nf.format(d.daysLeft)} days` }), h('td', {}, pill(lvl, 'OK')));
+      });
+      box.replaceChildren(
+        h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Domain' }), h('th', { text: 'Expires' }), h('th', { text: 'Time left' }), h('th', { text: 'Status' }))), h('tbody', {}, ...rows)),
+        h('p', { class: 'svc-note', text: 'Read live from the registries. The core team is also emailed at 60 and 30 days before expiry, then daily from 14 days.' }),
+      );
+    } catch {
+      box.replaceChildren(h('p', { class: 'muted', text: 'Could not check the registries right now. The daily email check is unaffected.' }));
+    }
+  }
+
+  // ---- load & sign-in ----------------------------------------------------------
+  const gate = $('gate');
+  const gateError = $('gate-error');
+  const forbidden = $('forbidden');
+  const statusEl = $('status');
+  const content = $('content');
+  const intro = $('intro');
+
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    content.hidden = true;
+    statusEl.hidden = true;
+    intro.textContent = 'Sign in to see how much of our free tiers and credits we are using.';
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+
+  function showForbidden() {
+    gate.hidden = true;
+    content.hidden = true;
+    statusEl.hidden = true;
+    forbidden.hidden = false;
+    $('forbidden-email').textContent = decodeTokenEmail(getToken() ?? '');
+  }
+
+  let firstLoad = true;
+  async function load() {
+    gate.hidden = true;
+    forbidden.hidden = true;
+    if (firstLoad) {
+      statusEl.hidden = false;
+      statusEl.textContent = 'Loading…';
+    }
+    try {
+      const { status, data } = await staffFetch('/api/usage-admin/overview');
+      if (status !== 200) throw new Error('load failed');
+      statusEl.hidden = true;
+      intro.textContent = 'Free tiers and credits the website relies on. "Measured" figures come from our own systems; "typed in" ones come from a provider\'s dashboard and are only as fresh as the last entry.';
+      renderAlerts(data.alerts);
+      $('cards').replaceChildren(anthropicCard(data), geminiCard(data), supabaseCard(data), ...data.manual.map(manualCard));
+      renderAdmin(data);
+      $('foot').textContent = `Updated ${new Date(data.generatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}. Counts use UTC days. Warnings are emailed to the core team once, and again only if they get worse.`;
+      content.hidden = false;
+      if (firstLoad) {
+        firstLoad = false;
+        loadDomains();
+      }
+    } catch (err) {
+      if (err instanceof StaffAuthError) {
+        if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+        else showForbidden();
+      } else {
+        statusEl.hidden = false;
+        statusEl.textContent = 'Failed to load. Try refreshing.';
+      }
+    }
+  }
+
+  function handleCredentialResponse(response: { credential: string }) {
+    setToken(response.credential);
+    load();
+  }
+
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: 'outline', size: 'large' });
+  }
+
+  function signOut() {
+    clearToken();
+    clearStepUp();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    firstLoad = true;
+    showGate();
+  }
+  $('use-different-account').addEventListener('click', signOut);
+  $('sign-out').addEventListener('click', signOut);
+
+  if (getToken()) load();
+  else showGate();
+</script>

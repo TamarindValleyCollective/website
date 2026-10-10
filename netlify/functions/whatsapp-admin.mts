@@ -26,7 +26,7 @@ import {
   setConversationBlocked,
 } from '../../scripts/lib/supabase.mjs';
 import { requireStaff, logStaffAction, type StaffGrant } from './lib/staff-access';
-import { canSeeNames, maskName } from './lib/staff-masking';
+import { canSeeNames, maskEmail, maskName } from './lib/staff-masking';
 import { roleHasCapability, type Capability } from './lib/staff-registry';
 
 const WHATSAPP_GRAPH_API_VERSION = 'v21.0';
@@ -132,14 +132,14 @@ async function handleReply(req: Request, staff: StaffGrant): Promise<Response> {
   // Multiple staff share one WhatsApp inbox — often signed into a single
   // shared Google account rather than each person's own, so the ID token's
   // name claim can't tell them apart. The page asks each person to type
-  // their own name once (kept in localStorage), sent here as responderName;
-  // fall back to the staff member's registered name only if that's somehow
-  // missing (an old cached page from before this existed, say) — never their
-  // email, which would otherwise be printed into the customer's chat. The
-  // signature is part of the actual text sent to the customer, not just
-  // internal metadata, so it's included in what's stored too, to keep the
-  // thread showing exactly what was sent.
-  const signerLabel = responderName?.trim() || staff.name || undefined;
+  // their own name once (kept in localStorage), sent here as responderName.
+  // The fallbacks below only apply if that's somehow missing (an old cached
+  // page from before this existed, say): the name registered for the staff
+  // member, then the name on their Google account, then a masked form of
+  // their address — never the full email. The signature is part of the actual
+  // text sent to the customer, not just internal metadata, so it's included
+  // in what's stored too, to keep the thread showing exactly what was sent.
+  const signerLabel = responderName?.trim() || staff.name || staff.googleName || maskEmail(staff.email);
   const signedBody = signerLabel ? `${body}\n\n- ${signerLabel}` : body;
 
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;

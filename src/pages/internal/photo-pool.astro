@@ -7,10 +7,10 @@
 // unmodified scripts/curate-photos.mjs pipeline. Deliberately unlinked from
 // nav; gated by Google Sign-In (see netlify/functions/photo-pool.mts) plus
 // a live curator allow-list, not a shared password.
-import BaseLayout from '../../layouts/BaseLayout.astro';
+import StaffLayout from '../../layouts/StaffLayout.astro';
 ---
 
-<BaseLayout title="Photo Pool" description="Internal photo review dashboard." noindex>
+<StaffLayout title="Photo Pool" description="Internal photo review dashboard." current="photo-pool">
   <section class="section wrapper">
     <h1>Photo Pool</h1>
     <p class="hint">Review photos dropped into the shared Drive Inbox folder, then approve or reject each one.</p>
@@ -30,7 +30,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     <p id="status" class="hint" hidden></p>
     <div id="grid" class="grid" hidden></div>
   </section>
-</BaseLayout>
+</StaffLayout>
 
 <script is:inline src="https://accounts.google.com/gsi/client"></script>
 
@@ -257,7 +257,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 <script>
   declare const google: any;
 
-  const STORAGE_KEY = 'tvc-photo-pool-idtoken';
+  // One Google sign-in for every internal tool in this tab: the same stored
+  // sign-in as /internal, /internal/access and /internal/security (see
+  // scripts/lib/staff-client.mjs), so signing in once opens them all. Each tool
+  // still checks its own role on the server for every request.
+  import { TOKEN_KEY as STORAGE_KEY } from '../../../scripts/lib/staff-client.mjs';
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
   interface PoolPhotoExif {

@@ -9,28 +9,30 @@
 // file with no auth and no access to this data, so a routing mistake here
 // can't leak guest PII to a visitor.
 //
-// Auth follows the exact pattern photo-pool.mts/whatsapp-admin.mts already
-// established: Google Sign-In client-side, this Function verifies the ID
-// token itself (google-id-token.mjs) against a live allow-list. Unlike those
-// two, this uses its OWN Sheet/env var (ACCOMMODATION_ALLOWED_EMAILS_SHEET_ID)
-// rather than reusing PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID - Madhavan isn't
-// "core team" in the sense that list means, and shouldn't gain photo/WhatsApp
-// access as a side effect of getting calendar access (or vice versa).
+// Auth: Google Sign-In client-side; requireStaff (lib/staff-access.ts)
+// verifies the ID token and checks the caller's role in the "accommodation"
+// module — `view` to read, `edit` to create/update/delete and to search the
+// guest directory. Migrated 2026-10 from the dedicated "Accommodation
+// Calendar - Allowed Emails" Sheet; its three roles map onto the shared ones:
+// admin -> admin, restricted -> user with scope.allowedTypes, viewer ->
+// read_only. A `user` row may carry scope.allowedTypes to limit which booking
+// types they can write; writes are enforced here (canWriteType), not just
+// hidden in the UI — the type is attacker-controlled in the request body, so
+// canWriteType() gates handleCreate/handleUpdate/handleDelete directly.
 //
-// Beyond the allow-list gate, each email carries a role (see
-// accommodation-access.mjs for the Sheet schema/full contract): 'admin' can
-// read/write every booking type; 'restricted' can read everything but write
-// only its own allowedTypes; 'viewer' can only read. Type-scoped writes are
-// enforced here, not just hidden in the UI - the type is attacker-controlled
-// in the request body, so canWriteType() gates handleCreate/handleUpdate/
-// handleDelete directly rather than trusting the client form to hide options.
-import { getAccessRecord } from '../../scripts/lib/accommodation-access.mjs';
-import { verifyGoogleIdToken } from '../../scripts/lib/google-id-token.mjs';
+// Privacy: a guest's mobile number and email are write-only — they never
+// leave this Function. Responses carry hasMobile/hasEmail flags instead; the
+// page shows "On file (hidden)" and lets staff replace a value, and a save
+// that omits them keeps the stored ones (accommodation_resolve_person
+// coalesces). Names and preferences/allergies are sent in full to roles that
+// operate the calendar and withheld/masked for read_only. Staff are recorded
+// by id, not email, in created_by/updated_by and the booking audit log.
+import { requireStaff, type StaffGrant } from './lib/staff-access';
+import { canSeeNames, maskName } from './lib/staff-masking';
+import { BOOKING_TYPES, type BookingType, type Capability } from './lib/staff-registry';
 import { ACCOMMODATION_UNITS, normalizeMobileNumber, isValidEmail } from '../../scripts/lib/accommodation.mjs';
 import { listBookingsForAdmin, createBooking, updateBooking, deleteBooking, searchGuests, listStaysForPerson, getBookingById } from '../../scripts/lib/accommodation-db.mjs';
 
-type BookingType = 'public-event' | 'private-event' | 'casual-stay' | 'member-stay' | 'unit-closure' | 'farm-closure';
-type Role = 'admin' | 'restricted' | 'viewer';
 
 interface Guest {
   personId?: string;
@@ -81,53 +83,34 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-type AuthResult =
-  | { ok: true; email: string; role: Role; allowedTypes: BookingType[] | null }
-  | { ok: false; status: 401 | 403 | 500; error: string };
-
 // Whether an authenticated caller may create/edit/delete a booking of the
-// given type - never how much they can *read*, which stays the same
-// (everything) across all three roles per Sharath's call to keep the grid
-// fully visible to everyone allow-listed, restriction only on writes.
-function canWriteType(auth: Extract<AuthResult, { ok: true }>, type: BookingType): boolean {
-  if (auth.role === 'admin') return true;
-  if (auth.role === 'restricted') return auth.allowedTypes?.includes(type) ?? false;
-  return false; // viewer
+// given type - never how much they can *read*, which is the same for every
+// role (the whole grid), restriction only on writes. `admin` writes anything;
+// `user` writes the types in scope.allowedTypes, or any type when the row
+// carries no scope; `read_only` writes nothing.
+function canWriteType(staff: StaffGrant, type: BookingType): boolean {
+  if (staff.role === 'admin') return true;
+  if (staff.role === 'user') {
+    const allowed = staff.scope?.allowedTypes;
+    return allowed ? allowed.includes(type) : true;
+  }
+  return false;
 }
 
-async function authenticate(req: Request): Promise<AuthResult> {
-  const authHeader = req.headers.get('authorization') ?? '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!token) return { ok: false, status: 401, error: 'Sign-in required' };
-
-  const clientId = process.env.PUBLIC_GOOGLE_CLIENT_ID;
-  if (!clientId) {
-    console.error('Missing PUBLIC_GOOGLE_CLIENT_ID');
-    return { ok: false, status: 500, error: 'Server misconfigured' };
+// The page (accommodation-calendar.astro) still reasons in the old three
+// roles, so hand it that shape: a `user` with a type scope is its
+// 'restricted', one without is indistinguishable from 'admin' for the page's
+// purposes (writes everything). The server-side canWriteType above is the
+// real gate either way.
+function pageAccess(staff: StaffGrant): { role: 'admin' | 'restricted' | 'viewer'; allowedTypes: BookingType[] | null } {
+  if (staff.role === 'read_only') return { role: 'viewer', allowedTypes: null };
+  if (staff.role === 'user' && staff.scope?.allowedTypes) {
+    return { role: 'restricted', allowedTypes: staff.scope.allowedTypes as BookingType[] };
   }
-
-  let email: string;
-  try {
-    const payload = await verifyGoogleIdToken(token, { audience: clientId });
-    email = String(payload.email).toLowerCase();
-  } catch (err) {
-    console.error('ID token verification failed', err);
-    return { ok: false, status: 401, error: 'Invalid or expired session' };
-  }
-
-  try {
-    const access = await getAccessRecord(email);
-    if (!access) {
-      return { ok: false, status: 403, error: 'This Google account is not authorized to manage the accommodation calendar' };
-    }
-    return { ok: true, email, role: access.role as Role, allowedTypes: access.allowedTypes as BookingType[] | null };
-  } catch (err) {
-    console.error('Failed to check the accommodation-calendar allow-list', err);
-    return { ok: false, status: 500, error: 'Server misconfigured' };
-  }
+  return { role: 'admin', allowedTypes: null };
 }
 
-const VALID_TYPES: BookingType[] = ['public-event', 'private-event', 'casual-stay', 'member-stay', 'unit-closure', 'farm-closure'];
+const VALID_TYPES: readonly BookingType[] = BOOKING_TYPES;
 const UNITS_BY_ID = new Map(ACCOMMODATION_UNITS.map((u) => [u.id, u]));
 const VALID_AGE_GROUPS = ['Adult', 'Child'];
 const VALID_GENDERS = ['Male', 'Female', 'NA'];
@@ -208,15 +191,58 @@ function validateBookingInput(input: Partial<Booking>): string | null {
   return null;
 }
 
-async function handleList(url: URL, auth: Extract<AuthResult, { ok: true }>): Promise<Response> {
+// Short, non-reversible tag that tells two same-named guests apart in the
+// page's typeahead now that their numbers are no longer shown.
+function personRef(id: string): string {
+  return id.slice(0, 4).toUpperCase();
+}
+
+// What a caller may see of one directory person: contact details are never
+// sent (only whether each is on file); the name is masked and the
+// preferences/allergies withheld for read-only roles.
+function shapePerson(p: any, staff: StaffGrant) {
+  const visible = canSeeNames(staff.role);
+  return {
+    name: visible ? p.name : maskName(p.name ?? ''),
+    hasMobile: Boolean(p.mobileNumber),
+    hasEmail: Boolean(p.email),
+    gender: p.gender,
+    preferences: visible ? p.preferences : undefined,
+  };
+}
+
+// Strips a raw booking (from accommodation-db.mjs, which still carries the
+// real mobile/email so the data layer stays honest) down to what the browser
+// may see. createdBy/updatedBy are dropped too: the page never displayed them
+// and they held staff emails.
+function shapeBooking(b: any, staff: StaffGrant) {
+  const { createdBy: _createdBy, updatedBy: _updatedBy, ...rest } = b;
+  return {
+    ...rest,
+    tents: (b.tents ?? []).map((t: any) => ({
+      ...t,
+      guests: (t.guests ?? []).map((g: any) => ({
+        personId: g.personId,
+        ageGroup: g.ageGroup,
+        ...shapePerson(g, staff),
+      })),
+    })),
+  };
+}
+
+async function handleList(url: URL, staff: StaffGrant): Promise<Response> {
   const month = url.searchParams.get('month');
   if (!month || !/^\d{4}-\d{2}$/.test(month)) return jsonResponse({ error: 'month is required, as YYYY-MM' }, 400);
 
   const bookings = await listBookingsForAdmin({ month });
-  return jsonResponse({ units: ACCOMMODATION_UNITS, bookings, access: { role: auth.role, allowedTypes: auth.allowedTypes } });
+  return jsonResponse({
+    units: ACCOMMODATION_UNITS,
+    bookings: bookings.map((b: any) => shapeBooking(b, staff)),
+    access: pageAccess(staff),
+  });
 }
 
-async function handleCreate(req: Request, auth: Extract<AuthResult, { ok: true }>): Promise<Response> {
+async function handleCreate(req: Request, staff: StaffGrant): Promise<Response> {
   let payload: Partial<Booking>;
   try {
     payload = await req.json();
@@ -226,7 +252,7 @@ async function handleCreate(req: Request, auth: Extract<AuthResult, { ok: true }
 
   const validationError = validateBookingInput(payload);
   if (validationError) return jsonResponse({ error: validationError }, 400);
-  if (!canWriteType(auth, payload.type!)) {
+  if (!canWriteType(staff, payload.type!)) {
     return jsonResponse({ error: `You are not authorized to create a "${payload.type}" booking` }, 403);
   }
 
@@ -241,9 +267,9 @@ async function handleCreate(req: Request, auth: Extract<AuthResult, { ok: true }
       nights: payload.nights!,
       tents: payload.tents ?? [],
       note: payload.note,
-      createdBy: auth.email,
+      createdBy: staff.id,
     });
-    return jsonResponse({ booking });
+    return jsonResponse({ booking: shapeBooking(booking, staff) });
   } catch (err) {
     // 409 here means accommodation_create_booking's EXCLUDE-constraint-backed
     // conflict check rejected an overlapping tent/night - the error message
@@ -256,7 +282,7 @@ async function handleCreate(req: Request, auth: Extract<AuthResult, { ok: true }
   }
 }
 
-async function handleUpdate(req: Request, auth: Extract<AuthResult, { ok: true }>): Promise<Response> {
+async function handleUpdate(req: Request, staff: StaffGrant): Promise<Response> {
   let payload: Partial<Booking> & { id?: string; reason?: string };
   try {
     payload = await req.json();
@@ -275,7 +301,7 @@ async function handleUpdate(req: Request, auth: Extract<AuthResult, { ok: true }
   // scope into a type nobody's watching.
   const existing = await getBookingById(payload.id);
   if (!existing) return jsonResponse({ error: 'Booking not found' }, 404);
-  if (!canWriteType(auth, existing.type) || !canWriteType(auth, payload.type!)) {
+  if (!canWriteType(staff, existing.type) || !canWriteType(staff, payload.type!)) {
     return jsonResponse({ error: 'You are not authorized to edit this booking' }, 403);
   }
 
@@ -291,10 +317,10 @@ async function handleUpdate(req: Request, auth: Extract<AuthResult, { ok: true }
       nights: payload.nights!,
       tents: payload.tents ?? [],
       note: payload.note,
-      updatedBy: auth.email,
+      updatedBy: staff.id,
       reason: payload.reason,
     });
-    return jsonResponse({ booking });
+    return jsonResponse({ booking: shapeBooking(booking, staff) });
   } catch (err) {
     // 404: accommodation_update_booking found no row for this id. 409: its
     // conflict check rejected an overlapping tent/night (message already
@@ -309,7 +335,7 @@ async function handleUpdate(req: Request, auth: Extract<AuthResult, { ok: true }
   }
 }
 
-async function handleDelete(req: Request, auth: Extract<AuthResult, { ok: true }>): Promise<Response> {
+async function handleDelete(req: Request, staff: StaffGrant): Promise<Response> {
   let payload: { id?: string; reason?: string };
   try {
     payload = await req.json();
@@ -321,12 +347,12 @@ async function handleDelete(req: Request, auth: Extract<AuthResult, { ok: true }
 
   const existing = await getBookingById(payload.id);
   if (!existing) return jsonResponse({ error: 'Booking not found' }, 404);
-  if (!canWriteType(auth, existing.type)) {
+  if (!canWriteType(staff, existing.type)) {
     return jsonResponse({ error: 'You are not authorized to cancel this booking' }, 403);
   }
 
   try {
-    await deleteBooking(payload.id, { deletedBy: auth.email, reason: payload.reason });
+    await deleteBooking(payload.id, { deletedBy: staff.id, reason: payload.reason });
     return jsonResponse({ ok: true });
   } catch (err) {
     const status = (err as { status?: number }).status;
@@ -337,36 +363,51 @@ async function handleDelete(req: Request, auth: Extract<AuthResult, { ok: true }
   }
 }
 
-async function handleGuestSearch(url: URL): Promise<Response> {
+async function handleGuestSearch(url: URL, staff: StaffGrant): Promise<Response> {
   const mobile = url.searchParams.get('mobile');
   const query = url.searchParams.get('q');
   if (!mobile && !query?.trim()) return jsonResponse({ error: 'q or mobile is required' }, 400);
 
+  // `mobile` is an exact match against what the caller typed, used by the
+  // page to notice that a number already belongs to someone else. It returns
+  // who (a name), never the stored number or email.
   const matches = await searchGuests({ query: query?.trim(), mobileNumber: mobile ?? undefined });
-  return jsonResponse({ matches });
+  return jsonResponse({ matches: matches.map((m: any) => ({ id: m.id, ref: personRef(m.id), ...shapePerson(m, staff) })) });
 }
 
-async function handleGuestStays(id: string): Promise<Response> {
+async function handleGuestStays(id: string, staff: StaffGrant): Promise<Response> {
   const result = await listStaysForPerson(id);
   if (!result) return jsonResponse({ error: 'Guest not found' }, 404);
-  return jsonResponse(result);
+  return jsonResponse({ person: { id: result.person.id, ref: personRef(result.person.id), ...shapePerson(result.person, staff) }, stays: result.stays });
 }
 
 export default async (req: Request): Promise<Response> => {
-  const auth = await authenticate(req);
-  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
-
   const url = new URL(req.url);
   const staysMatch = url.pathname.match(/^\/api\/accommodation-admin\/guests\/([^/]+)\/stays$/);
 
-  if (url.pathname === '/api/accommodation-admin/bookings' && req.method === 'GET') return handleList(url, auth);
-  if (url.pathname === '/api/accommodation-admin/bookings' && req.method === 'POST') return handleCreate(req, auth);
-  if (url.pathname === '/api/accommodation-admin/bookings/update' && req.method === 'POST') return handleUpdate(req, auth);
-  if (url.pathname === '/api/accommodation-admin/bookings/delete' && req.method === 'POST') return handleDelete(req, auth);
-  if (url.pathname === '/api/accommodation-admin/guests/search' && req.method === 'GET') return handleGuestSearch(url);
-  if (staysMatch && req.method === 'GET') return handleGuestStays(staysMatch[1]);
+  // Pick the route first so each one is gated by the capability it needs:
+  // reading is `view`; writing and searching the directory (which exists to
+  // fill in a booking form) is `edit`.
+  type Route = { capability: Capability<'accommodation'>; run: (staff: StaffGrant) => Promise<Response> };
+  const route: Route | null =
+    url.pathname === '/api/accommodation-admin/bookings' && req.method === 'GET'
+      ? { capability: 'view', run: (staff) => handleList(url, staff) }
+      : url.pathname === '/api/accommodation-admin/bookings' && req.method === 'POST'
+        ? { capability: 'edit', run: (staff) => handleCreate(req, staff) }
+        : url.pathname === '/api/accommodation-admin/bookings/update' && req.method === 'POST'
+          ? { capability: 'edit', run: (staff) => handleUpdate(req, staff) }
+          : url.pathname === '/api/accommodation-admin/bookings/delete' && req.method === 'POST'
+            ? { capability: 'edit', run: (staff) => handleDelete(req, staff) }
+            : url.pathname === '/api/accommodation-admin/guests/search' && req.method === 'GET'
+              ? { capability: 'edit', run: (staff) => handleGuestSearch(url, staff) }
+              : staysMatch && req.method === 'GET'
+                ? { capability: 'view', run: (staff) => handleGuestStays(staysMatch[1], staff) }
+                : null;
+  if (!route) return jsonResponse({ error: 'Not found' }, 404);
 
-  return jsonResponse({ error: 'Not found' }, 404);
+  const auth = await requireStaff(req, 'accommodation', route.capability);
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  return route.run(auth.staff);
 };
 
 export const config = {

@@ -4,22 +4,14 @@
 // lets staff reply, via netlify/functions/whatsapp-admin.mts. Deliberately
 // unlinked from nav; gated by Google Sign-In plus the same curator allow-list
 // photo-pool.astro uses, not a shared password. See WHATSAPP.md.
-import BaseLayout from '../../layouts/BaseLayout.astro';
+import StaffLayout from '../../layouts/StaffLayout.astro';
 ---
 
-<BaseLayout
-  title="WhatsApp"
-  description="Internal WhatsApp reply dashboard."
-  image="/images/pages/whatsapp-admin/og.png"
-  imageWidth={1200}
-  imageHeight={630}
-  noindex
->
+<StaffLayout title="WhatsApp" description="Internal WhatsApp reply dashboard." current="whatsapp" collapseByDefault>
   <section class="section wrapper">
     <div class="page-head">
       <h1>WhatsApp</h1>
       <p class="page-head-sub">+91 80 4110 9754 · replies only send within 24h of the customer's last message</p>
-      <button type="button" id="logout-btn" class="logout-btn" hidden>Sign out</button>
     </div>
 
     <div id="gate" class="gate card">
@@ -75,7 +67,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       </div>
     </div>
   </section>
-</BaseLayout>
+</StaffLayout>
 
 <script is:inline src="https://accounts.google.com/gsi/client"></script>
 
@@ -107,39 +99,10 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     margin-bottom: 20px;
   }
 
-  .page-head h1 {
-    margin: 0;
-    font-size: 1.6rem;
-  }
-
   .page-head-sub {
     margin: 0;
     font-size: 0.85rem;
     color: var(--tvc-ink-soft);
-  }
-
-  .logout-btn {
-    margin-left: auto;
-    appearance: none;
-    border: 1px solid var(--tvc-line);
-    background: var(--tvc-white);
-    border-radius: 999px;
-    padding: 5px 14px;
-    font: inherit;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--tvc-ink-soft);
-    cursor: pointer;
-    transition: background-color 150ms ease-out;
-  }
-
-  .logout-btn:hover {
-    background: var(--tvc-cream);
-  }
-
-  .logout-btn:focus-visible {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 2px;
   }
 
   .card {
@@ -684,7 +647,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     .app {
       grid-template-columns: 1fr;
       grid-template-rows: 1fr;
-      height: calc(100vh - 160px);
+      height: calc(100dvh - 140px); /* phone top bar (52px) + page padding and heading */
       min-height: 360px;
     }
 
@@ -713,7 +676,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 <script>
   declare const google: any;
 
-  const STORAGE_KEY = 'tvc-whatsapp-idtoken';
+  // One Google sign-in for every internal tool in this tab: the same stored
+  // sign-in as /internal, /internal/access and /internal/security (see
+  // scripts/lib/staff-client.mjs), so signing in once opens them all. Each tool
+  // still checks its own role on the server for every request.
+  import { TOKEN_KEY as STORAGE_KEY } from '../../../scripts/lib/staff-client.mjs';
   // This inbox is signed into from one shared Google account used by several
   // staff, so the ID token's own name claim can't tell them apart — each
   // person types their own name once, remembered on that browser (localStorage,
@@ -749,7 +716,6 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   const forbidden = document.getElementById('forbidden') as HTMLElement;
   const forbiddenEmail = document.getElementById('forbidden-email') as HTMLElement;
   const useDifferentAccountBtn = document.getElementById('use-different-account') as HTMLButtonElement;
-  const logoutBtn = document.getElementById('logout-btn') as HTMLButtonElement;
   const app = document.getElementById('app') as HTMLElement;
   const conversationsStatus = document.getElementById('conversations-status') as HTMLElement;
   const conversationsSkeleton = document.getElementById('conversations-skeleton') as HTMLElement;
@@ -803,7 +769,6 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     gate.hidden = false;
     forbidden.hidden = true;
     app.hidden = true;
-    logoutBtn.hidden = true;
     stopPolling();
     gateError.hidden = !message;
     if (message) gateError.textContent = message;
@@ -813,7 +778,6 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   function showForbidden(token: string) {
     gate.hidden = true;
     app.hidden = true;
-    logoutBtn.hidden = true;
     stopPolling();
     forbidden.hidden = false;
     forbiddenEmail.textContent = decodeTokenEmail(token);
@@ -1234,17 +1198,10 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     showGate();
   });
 
-  logoutBtn.addEventListener('click', () => {
-    clearToken();
-    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
-    showGate();
-  });
-
   async function startApp() {
     gate.hidden = true;
     forbidden.hidden = true;
     app.hidden = false;
-    logoutBtn.hidden = false;
     await loadConversations();
     startPolling();
   }

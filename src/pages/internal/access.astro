@@ -1,0 +1,1551 @@
+---
+// Internal Access page for super admins (issue #89): see who is in the system,
+// give or take away each person's role in each tool, add a person, deactivate
+// or reactivate someone, and read the activity log. Backed by
+// netlify/functions/staff-admin.mts, which is where the rules live — super
+// admins only, two second-factor methods enrolled, a fresh step-up for every
+// change, everything logged before it happens. This page only presents that.
+//
+// Full email addresses are never shown: people appear by name, with a masked
+// address ("p••••@tvc.farm") under it, and a full address is typed once to add
+// someone. Every value from the server is placed with textContent.
+//
+// People tab: a list of people on the left and, for the one selected, a row per
+// tool with its role dropdown (so adding tools adds rows, never columns). "Who
+// can use what" is the same data grouped by tool.
+// Deliberately unlinked from the site nav and noindex.
+import StaffLayout from '../../layouts/StaffLayout.astro';
+---
+
+<StaffLayout title="Access" description="Who can do what in the internal tools." current="access">
+  <section class="section wrapper">
+    <h1>Access</h1>
+    <p class="hint">Who can use which internal tool, and what they can do in it. Only super admins can open this page.</p>
+
+    <div id="gate" class="gate card">
+      <p class="gate-copy">Sign in with your super-admin Google account.</p>
+      <div id="g_id_signin"></div>
+      <p id="gate-error" class="error" hidden></p>
+    </div>
+
+    <div id="forbidden" class="gate card" hidden>
+      <p class="gate-copy">Signed in as <strong id="forbidden-email"></strong>, but this Google account isn't a super admin.</p>
+      <button type="button" id="use-different-account" class="button button--outline">Use a different account</button>
+    </div>
+
+    <p id="status" class="hint" hidden></p>
+
+    <div id="panel" hidden>
+      <section id="stepup" class="banner" aria-live="polite">
+        <p id="stepup-text" class="banner-text"></p>
+        <form id="verify-form" class="banner-form" hidden>
+          <button type="button" id="verify-passkey" class="button" hidden>Use a passkey</button>
+          <label class="visually-hidden" for="verify-code">Code</label>
+          <input type="text" id="verify-code" name="verify-code" inputmode="numeric" autocomplete="one-time-code" required />
+          <button type="submit" class="button">Unlock changes</button>
+          <button type="button" id="verify-switch" class="link-button">Use a recovery code</button>
+        </form>
+        <a id="stepup-link" class="banner-link" href="/internal/security/" hidden>Set up your second factors →</a>
+        <p id="verify-error" class="error banner-error" hidden></p>
+      </section>
+
+      <div class="tabs" role="tablist" aria-label="Access sections">
+        <button type="button" role="tab" id="tab-people" aria-selected="true" aria-controls="pane-people" class="tab">People</button>
+        <button type="button" role="tab" id="tab-modules" aria-selected="false" aria-controls="pane-modules" class="tab">Who can use what</button>
+        <button type="button" role="tab" id="tab-roles" aria-selected="false" aria-controls="pane-roles" class="tab">What each role can do</button>
+        <button type="button" role="tab" id="tab-activity" aria-selected="false" aria-controls="pane-activity" class="tab">Activity</button>
+      </div>
+
+      <section id="pane-people" role="tabpanel" aria-labelledby="tab-people">
+        <div class="toolbar">
+          <p id="people-count" class="note"></p>
+          <button type="button" id="add-toggle" class="button" aria-expanded="false" aria-controls="add-form">Add person</button>
+        </div>
+
+        <form id="add-form" class="card block inline-form" hidden>
+          <label>
+            Email of the person to add
+            <input type="email" id="add-email" autocomplete="off" required />
+          </label>
+          <label>
+            Name (optional)
+            <input type="text" id="add-name" autocomplete="off" maxlength="100" />
+          </label>
+          <button type="submit" id="add-submit" class="button">Add person</button>
+          <p class="note full">The address is used once to recognise them when they sign in with Google, and is never shown again. Their name fills in from Google on their first sign-in.</p>
+        </form>
+
+        <p id="save-message" class="note" role="status" hidden></p>
+        <p id="add-message" class="note" hidden></p>
+        <p id="people-error" class="error" hidden></p>
+
+        <div class="people-layout">
+          <ul id="people" class="people-list" aria-label="People"></ul>
+          <section id="person-detail" class="person-detail card" aria-live="polite"></section>
+        </div>
+        <p class="note legend">Changes save as soon as you pick a role. “No access” hides the tool from that person entirely.</p>
+      </section>
+
+      <section id="pane-modules" role="tabpanel" aria-labelledby="tab-modules" hidden>
+        <p class="note">Everyone with access to each tool, by role. Deactivated people are left out. Select a name to open their access.</p>
+        <div id="modules-view" class="modules-view"></div>
+      </section>
+
+      <section id="pane-roles" role="tabpanel" aria-labelledby="tab-roles" hidden>
+        <p class="note">What each role lets someone do, tool by tool. This is fixed in the code and changes only through a reviewed update.</p>
+        <div id="roles-guide" class="roles-guide"></div>
+      </section>
+
+      <section id="pane-activity" role="tabpanel" aria-labelledby="tab-activity" hidden>
+        <div class="events-tools">
+          <label class="visually-hidden" for="events-search">Search the activity</label>
+          <input type="search" id="events-search" class="events-search" placeholder="Search by person, tool or action" autocomplete="off" />
+          <p id="events-count" class="note" role="status"></p>
+        </div>
+        <ul id="events" class="events"></ul>
+        <p id="events-empty" class="note" hidden>No activity yet.</p>
+        <p id="events-error" class="error" hidden></p>
+        <button type="button" id="events-more" class="button button--outline" hidden>Load older</button>
+      </section>
+    </div>
+  </section>
+</StaffLayout>
+
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style>
+  .section.wrapper {
+    padding-top: 32px;
+    padding-bottom: 32px;
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+
+  .hint {
+    color: var(--tvc-ink-soft);
+    margin: -8px 0 24px;
+  }
+
+  .card {
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .gate {
+    max-width: 420px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+  }
+
+  .gate-copy {
+    font-size: 0.9rem;
+    color: var(--tvc-ink-soft);
+    margin: 0 0 14px;
+  }
+
+  .block {
+    max-width: 760px;
+    padding: 18px 22px;
+    margin-bottom: 18px;
+  }
+
+  .note {
+    font-size: 0.9rem;
+    color: var(--tvc-ink-soft);
+    margin: 0 0 10px;
+  }
+
+  .note.full {
+    flex-basis: 100%;
+    margin: 0;
+  }
+
+  .error {
+    color: var(--tvc-error-text);
+    font-size: 0.9rem;
+    margin: 10px 0 0;
+  }
+
+  .inline-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+  }
+
+  .inline-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.9rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .inline-form input,
+  .inline-form select {
+    font: inherit;
+    font-size: 1rem;
+    padding: 8px 10px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+  }
+
+  .tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--tvc-line);
+    overflow-x: auto; /* four tabs don't fit a phone: scroll them rather than wrap the labels */
+  }
+
+  .tab {
+    font: inherit;
+    font-size: 1rem;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    padding: 8px 14px;
+    color: var(--tvc-ink-soft);
+    cursor: pointer;
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .tab[aria-selected='true'] {
+    color: var(--tvc-ink);
+    font-weight: 600;
+    border-bottom-color: var(--tvc-orange);
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .link-button {
+    font: inherit;
+    font-size: 0.9rem;
+    background: none;
+    border: none;
+    padding: 8px 4px;
+    color: var(--tvc-ink-soft);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  /* ---- the "unlock changes" strip: one quiet line, not a card of its own */
+  .banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    padding: 10px 16px;
+    margin-bottom: 18px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-cream);
+  }
+
+  .banner.is-unlocked {
+    background: var(--tvc-green-tint);
+    border-color: var(--tvc-green);
+  }
+
+  .banner-text {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--tvc-ink);
+  }
+
+  .banner-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .banner-form input {
+    font: inherit;
+    font-size: 1rem;
+    letter-spacing: 0.18em;
+    width: 9.5em;
+    padding: 8px 10px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+  }
+
+  .banner-link {
+    font-size: 0.9rem;
+  }
+
+  .banner-error {
+    flex-basis: 100%;
+    margin: 0;
+  }
+
+  /* ---- people tab: a list of people, and the selected person's tools as rows */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .toolbar .note {
+    margin: 0;
+  }
+
+  .people-layout {
+    display: grid;
+    grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+
+  .people-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+  }
+
+  .people-layout :global(.person-item) {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    font: inherit;
+    text-align: left;
+    color: var(--tvc-ink);
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+
+  .people-layout :global(.person-item:hover) {
+    background: var(--tvc-green-tint);
+  }
+
+  .people-layout :global(.person-item:focus-visible) {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 1px;
+  }
+
+  /* The orange bar is a non-text mark, which is what --tvc-orange is for. */
+  .people-layout :global(.person-item[aria-current='true']) {
+    background: var(--tvc-green-tint);
+    border-color: var(--tvc-green);
+    box-shadow: inset 3px 0 0 var(--tvc-orange);
+  }
+
+  .people-layout :global(.person-item.is-new:not([aria-current='true'])) {
+    box-shadow: inset 3px 0 0 var(--tvc-orange);
+  }
+
+  .people-layout :global(.person-item.is-inactive .person-name) {
+    color: var(--tvc-ink-soft);
+  }
+
+  .people-layout :global(.person-name) {
+    display: block;
+    font-weight: 600;
+  }
+
+  .people-layout :global(.person-email),
+  .people-layout :global(.person-summary) {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .people-layout :global(.badges) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  .people-layout :global(.badge) {
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 1px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+  }
+
+  .people-layout :global(.badge--warn) {
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+  }
+
+  .person-detail {
+    padding: 18px 22px;
+    min-width: 0;
+  }
+
+  .person-detail :global(.detail-head) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px 16px;
+    padding-bottom: 14px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .person-detail :global(.detail-title) {
+    margin: 0;
+    font-size: 1.25rem;
+  }
+
+  .person-detail :global(.detail-action) {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  .person-detail :global(.module-rows) {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .person-detail :global(.module-row) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 220px);
+    gap: 8px 16px;
+    align-items: start;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .person-detail :global(.module-row:last-child),
+  .person-detail :global(.limits-row:last-child) {
+    border-bottom: none;
+  }
+
+  .person-detail :global(.module-name) {
+    display: block;
+    font-weight: 600;
+  }
+
+  .person-detail :global(.module-blurb) {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.8rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .person-detail :global(.limits-row) {
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    background: var(--tvc-cream);
+    border-radius: var(--radius-sm);
+  }
+
+  .person-detail :global(.role-select) {
+    font: inherit;
+    font-size: 1rem;
+    width: 100%;
+    min-height: 36px;
+    padding: 4px 8px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    color: var(--tvc-ink-soft);
+  }
+
+  /* Nothing granted: no box until you reach for it, so the roles that are set stand out. */
+  .person-detail :global(.role-select[data-role='']) {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .person-detail :global(.role-select[data-role='']:hover),
+  .person-detail :global(.role-select[data-role='']:focus-visible) {
+    border-color: var(--tvc-line-strong);
+    background: var(--tvc-white);
+  }
+
+  .person-detail :global(.role-select[data-role='read_only']) {
+    background: var(--tvc-stone);
+    color: var(--tvc-ink);
+  }
+
+  .person-detail :global(.role-select[data-role='user']) {
+    background: var(--tvc-green-tint);
+    border-color: var(--tvc-green);
+    color: var(--tvc-green-dark);
+    font-weight: 600;
+  }
+
+  .person-detail :global(.role-select[data-role='admin']) {
+    background: var(--tvc-green-dark);
+    border-color: var(--tvc-green-dark);
+    color: var(--tvc-white);
+    font-weight: 600;
+  }
+
+  .person-detail :global(.role-select:disabled) {
+    cursor: not-allowed;
+    opacity: 0.75;
+  }
+
+  .person-detail :global(.role-select.is-error) {
+    border-color: var(--tvc-error-text);
+  }
+
+  .person-detail :global(.cell-note) {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.8rem;
+    color: var(--tvc-error-text);
+  }
+
+  .person-detail :global(.cell-note--quiet) {
+    color: var(--tvc-ink-soft);
+  }
+
+  .person-detail :global(.limit-button) {
+    font: inherit;
+    font-size: 0.8rem;
+    margin-top: 2px;
+    padding: 8px 0;
+    background: none;
+    border: none;
+    color: var(--tvc-ink-soft);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .person-detail :global(.limits) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 18px;
+  }
+
+  .person-detail :global(.limits-title) {
+    flex-basis: 100%;
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .person-detail :global(.limits label) {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9rem;
+  }
+
+  .person-detail :global(.row-action) {
+    font: inherit;
+    font-size: 0.9rem;
+    min-height: 36px;
+    padding: 4px 12px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  /* Deactivating is rare and recoverable: plain red text, not a filled block. */
+  .person-detail :global(.row-action--danger) {
+    border-color: transparent;
+    background: transparent;
+    color: var(--callout-red-text);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .person-detail :global(.row-action--danger:hover) {
+    background: var(--callout-red-bg);
+  }
+
+  .person-detail :global(.row-action:disabled) {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .person-detail :global(.empty) {
+    margin: 0;
+    color: var(--tvc-ink-soft);
+  }
+
+  .legend {
+    margin-top: 10px;
+  }
+
+  /* ---- "who can use what": one card per tool, people grouped by role */
+  .modules-view {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
+
+  .modules-view :global(.module-card) {
+    padding: 16px 18px;
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .modules-view :global(h2) {
+    margin: 0 0 8px;
+    font-size: 1.125rem;
+  }
+
+  .modules-view :global(.role-group) {
+    margin: 10px 0 0;
+  }
+
+  .modules-view :global(.role-group-title) {
+    margin: 0 0 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--tvc-ink-soft);
+  }
+
+  .modules-view :global(.chips) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .modules-view :global(.chip) {
+    font: inherit;
+    font-size: 0.9rem;
+    min-height: 32px;
+    padding: 2px 10px;
+    color: var(--tvc-green-dark);
+    background: var(--tvc-green-tint);
+    border: 1px solid transparent;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .modules-view :global(.chip:hover),
+  .modules-view :global(.chip:focus-visible) {
+    border-color: var(--tvc-green);
+  }
+
+  .modules-view :global(.chip small) {
+    margin-left: 4px;
+    color: var(--tvc-ink-soft);
+  }
+
+  .modules-view :global(.nobody) {
+    margin: 10px 0 0;
+    font-size: 0.9rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  /* ---- "what each role can do": one card per tool, one line per distinct role */
+  .roles-guide {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
+
+  .roles-guide :global(.guide) {
+    padding: 16px 18px;
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .roles-guide :global(h2) {
+    margin: 0 0 6px;
+    font-size: 1.125rem;
+  }
+
+  .roles-guide :global(.role-list) {
+    margin: 0;
+  }
+
+  .roles-guide :global(.role-name) {
+    margin-top: 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--tvc-ink-soft);
+  }
+
+  .roles-guide :global(.role-text) {
+    margin: 2px 0 0;
+    font-size: 0.9rem;
+  }
+
+  /* Touch screens get the larger targets back. */
+  @media (pointer: coarse) {
+    .person-detail :global(.role-select),
+    .person-detail :global(.row-action) {
+      min-height: 44px;
+    }
+  }
+
+  @media (max-width: 899px) {
+    .people-layout {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .toolbar {
+      flex-wrap: wrap;
+    }
+
+    .person-detail :global(.module-row) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .events-tools {
+    max-width: 760px;
+    margin-bottom: 12px;
+  }
+
+  .events-search {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 420px;
+    font: inherit;
+    font-size: 1rem;
+    padding: 8px 10px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+  }
+
+  .events-tools .note {
+    margin: 6px 0 0;
+  }
+
+  .events {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-width: 760px;
+  }
+
+  .events :global(.event) {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--tvc-line);
+    font-size: 0.9rem;
+  }
+
+  .events :global(.event-time),
+  .events :global(.event-who) {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--tvc-ink-soft);
+  }
+</style>
+
+<script>
+  import {
+    StaffAuthError,
+    clearStepUp,
+    clearToken,
+    decodeTokenEmail,
+    getToken,
+    minutesLabel,
+    saveStepUp,
+    setToken,
+    staffFetch,
+    stepUpExpiry,
+    passkeyStepUp,
+    passkeysSupported,
+    wireCodeEntry,
+  } from '../../../scripts/lib/staff-client.mjs';
+
+  declare const google: any;
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+
+  interface Capability {
+    id: string;
+    description: string;
+  }
+  interface ModuleInfo {
+    id: string;
+    label: string;
+    roles: { role: string; capabilities: Capability[] }[];
+    scopeTypes: string[] | null;
+  }
+  interface PersonRole {
+    module: string;
+    role: string;
+    scope: { allowedTypes?: string[] } | null;
+  }
+  interface Person {
+    id: string;
+    label: string;
+    maskedEmail?: string | null;
+    active: boolean;
+    isSuperAdmin: boolean;
+    isMe: boolean;
+    mfa: { methodCount: number; ready: boolean } | null;
+    roles: PersonRole[];
+  }
+  interface PeopleResponse {
+    me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean };
+    modules: ModuleInfo[];
+    people: Person[];
+  }
+  interface AuditEvent {
+    id: number;
+    at: string;
+    action: string;
+    module: string | null;
+    actor: { id: string; label: string; maskedEmail?: string | null } | null;
+    target: { id: string; label: string; maskedEmail?: string | null } | null;
+    detail: any;
+  }
+
+  const ROLE_LABELS: Record<string, string> = { admin: 'Admin', user: 'User', read_only: 'Read-only' };
+  const ROLE_ORDER = ['', 'read_only', 'user', 'admin']; // '' = no access
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const gate = $('gate');
+  const gateError = $('gate-error');
+  const forbidden = $('forbidden');
+  const forbiddenEmail = $('forbidden-email');
+  const statusEl = $('status');
+  const panel = $('panel');
+  const stepupText = $('stepup-text');
+  const verifyForm = $<HTMLFormElement>('verify-form');
+  const verifyCode = $<HTMLInputElement>('verify-code');
+  const verifySwitch = $('verify-switch');
+  const verifyPasskey = $<HTMLButtonElement>('verify-passkey');
+  const banner = $('stepup');
+  const verifyEntry = wireCodeEntry({ form: verifyForm, input: verifyCode, toggle: verifySwitch });
+  const verifyError = $('verify-error');
+  const stepupLink = $('stepup-link');
+  const tabPeople = $('tab-people');
+  const tabModules = $('tab-modules');
+  const tabRoles = $('tab-roles');
+  const tabActivity = $('tab-activity');
+  const panePeople = $('pane-people');
+  const paneModules = $('pane-modules');
+  const paneRoles = $('pane-roles');
+  const paneActivity = $('pane-activity');
+  const addToggle = $<HTMLButtonElement>('add-toggle');
+  const peopleCount = $('people-count');
+  const saveMessage = $('save-message');
+  const modulesView = $('modules-view');
+  const personDetail = $('person-detail');
+  const rolesGuide = $('roles-guide');
+  const addForm = $<HTMLFormElement>('add-form');
+  const addEmail = $<HTMLInputElement>('add-email');
+  const addName = $<HTMLInputElement>('add-name');
+  const addSubmit = $<HTMLButtonElement>('add-submit');
+  const addMessage = $('add-message');
+  const peopleError = $('people-error');
+  const peopleList = $('people');
+  const eventsList = $('events');
+  const eventsSearch = $<HTMLInputElement>('events-search');
+  const eventsCount = $('events-count');
+  const eventsEmpty = $('events-empty');
+  const eventsError = $('events-error');
+  const eventsMore = $<HTMLButtonElement>('events-more');
+
+  let state: PeopleResponse | null = null;
+  const openLimits = new Set<string>(); // people whose booking-type limits are expanded
+  let newPersonId: string | null = null; // highlighted after being added
+  let selectedId: string | null = null; // the person whose tools are shown
+  let refocus: string | null = null; // `${personId}|${moduleId}` to refocus after a redraw
+  let nextBefore: number | null = null;
+  let activityLoaded = false;
+  let allEvents: AuditEvent[] = []; // every event loaded so far; the search filters these
+
+  // Small DOM builder: text always goes in as textContent, never as markup.
+  function h<K extends keyof HTMLElementTagNameMap>(
+    tag: K,
+    props: { class?: string; text?: string; attrs?: Record<string, string>; on?: Record<string, EventListener> } = {},
+    ...children: (Node | string)[]
+  ): HTMLElementTagNameMap[K] {
+    const node = document.createElement(tag);
+    if (props.class) node.className = props.class;
+    if (props.text !== undefined) node.textContent = props.text;
+    for (const [k, v] of Object.entries(props.attrs ?? {})) node.setAttribute(k, v);
+    for (const [k, fn] of Object.entries(props.on ?? {})) node.addEventListener(k, fn);
+    node.append(...children);
+    return node;
+  }
+
+  const humanize = (s: string) => s.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase());
+  const roleLabel = (r: string | null | undefined) => (r ? (ROLE_LABELS[r] ?? r) : 'no access');
+  const moduleLabel = (id: string | null) => state?.modules.find((m) => m.id === id)?.label ?? (id ? humanize(id) : '');
+
+  // ---- who can change things right now
+  function canEdit(): boolean {
+    return Boolean(state?.me.ready) && stepUpExpiry() !== null;
+  }
+
+  function show(el: HTMLElement, message: string) {
+    el.hidden = false;
+    el.textContent = message;
+  }
+
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    panel.hidden = true;
+    statusEl.hidden = true;
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+
+  function showForbidden(token: string) {
+    gate.hidden = true;
+    panel.hidden = true;
+    statusEl.hidden = true;
+    forbidden.hidden = false;
+    forbiddenEmail.textContent = decodeTokenEmail(token);
+  }
+
+  // Runs a request; a session that has ended or an account that isn't allowed
+  // swaps the page for the sign-in or "not a super admin" panel and stops.
+  async function call(path: string, init?: { method?: string; body?: unknown }) {
+    try {
+      return await staffFetch(path, init);
+    } catch (err) {
+      if (err instanceof StaffAuthError) {
+        if (err.kind === 'unauthorized') showGate('Your session expired — sign in again.');
+        else showForbidden(getToken() ?? '');
+      }
+      throw err;
+    }
+  }
+  const handled = (err: unknown) => err instanceof StaffAuthError;
+
+  // ---- the "unlock changes" strip
+  function renderStepUp() {
+    if (!state) return;
+    const exp = stepUpExpiry();
+    verifyError.hidden = true;
+    banner.classList.toggle('is-unlocked', Boolean(state.me.ready && exp));
+    if (!state.me.ready) {
+      stepupText.textContent = 'You need two different second-factor methods set up before you can change anything. You can look around in the meantime.';
+      verifyForm.hidden = true;
+      stepupLink.hidden = false;
+    } else if (exp) {
+      stepupText.textContent = `Changes are unlocked for about ${minutesLabel(exp - Date.now())}.`;
+      verifyForm.hidden = true;
+      stepupLink.hidden = true;
+    } else {
+      const wasHidden = verifyForm.hidden;
+      stepupText.textContent = 'Viewing only. Enter your authenticator code to make changes:';
+      verifyForm.hidden = false;
+      verifyPasskey.hidden = !(state.me.hasPasskey && passkeysSupported());
+      stepupLink.hidden = true;
+      if (wasHidden && document.activeElement === document.body) verifyCode.focus();
+    }
+  }
+
+  verifyPasskey.addEventListener('click', async () => {
+    verifyError.hidden = true;
+    verifyPasskey.disabled = true;
+    try {
+      const result: any = await passkeyStepUp(call);
+      if (result.cancelled) return;
+      if (result.status === 200) {
+        saveStepUp(result.data.stepUpToken, result.data.expiresInSeconds);
+        renderStepUp();
+        renderPeople();
+      } else if (result.status === 429) {
+        show(verifyError, `Too many wrong attempts. Try again in about ${minutesLabel((result.data.retryAfterSeconds ?? 900) * 1000)}.`);
+      } else {
+        show(verifyError, result.data?.error ?? 'That passkey did not work.');
+      }
+    } catch (err) {
+      if (!handled(err)) show(verifyError, 'Your device could not use the passkey. Try again, or enter a code.');
+    } finally {
+      verifyPasskey.disabled = false;
+    }
+  });
+
+  // One request at a time: a slow response must not invite a second tap or a second auto-submit
+  // with the same code (the server would reject the repeat).
+  let verifying = false;
+  verifyForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    if (verifying) return;
+    verifying = true;
+    const submit = verifyForm.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    const label = submit.textContent;
+    submit.disabled = true;
+    submit.textContent = 'Checking…';
+    verifyError.hidden = true;
+    try {
+      const { status, data } = await call('/api/staff-mfa/verify', { method: 'POST', body: { method: verifyEntry.method(), code: verifyCode.value } });
+      if (status === 200) {
+        saveStepUp(data.stepUpToken, data.expiresInSeconds);
+        verifyCode.value = '';
+        renderStepUp();
+        renderPeople();
+      } else if (status === 429) {
+        show(verifyError, `Too many wrong codes. Try again in about ${minutesLabel((data.retryAfterSeconds ?? 900) * 1000)}.`);
+      } else {
+        show(verifyError, data.error ?? 'That code did not work.');
+      }
+    } catch (err) {
+      if (!handled(err)) show(verifyError, 'Could not reach the server — try again.');
+    } finally {
+      verifying = false;
+      submit.disabled = false;
+      submit.textContent = label;
+    }
+  });
+
+  // ---- people
+  function describeRole(module: ModuleInfo, role: string): string {
+    if (!role) return 'Cannot open this tool.';
+    const caps = module.roles.find((r) => r.role === role)?.capabilities ?? [];
+    return caps.map((c) => c.description).join('; ') + '.';
+  }
+
+  // The one-line "what this role allows" under a tool's name follows the dropdown.
+  function syncBlurb(select: HTMLSelectElement, module: ModuleInfo) {
+    select.title = describeRole(module, select.value);
+    const blurb = select.closest('.module-row')?.querySelector('.module-blurb');
+    if (blurb) blurb.textContent = select.title;
+  }
+
+  function announce(message: string, isError = false) {
+    saveMessage.hidden = !message;
+    saveMessage.textContent = message;
+    saveMessage.classList.toggle('error', isError);
+  }
+
+  async function saveRole(p: Person, module: ModuleInfo, role: string, select: HTMLSelectElement, cellNote: HTMLElement) {
+    const previous = p.roles.find((r) => r.module === module.id)?.role ?? '';
+    select.disabled = true;
+    select.classList.remove('is-error');
+    cellNote.textContent = '';
+    announce(`Saving ${module.label} for ${p.label}…`);
+    try {
+      const { status, data } = await call('/api/staff-admin/roles', { method: 'POST', body: { personId: p.id, module: module.id, role: role || null } });
+      if (status === 200) {
+        refocus = `${p.id}|${module.id}`;
+        announce(`${p.label}: ${module.label} is now ${roleLabel(role)}.`);
+        await loadPeople(); // re-draws with what the server now holds
+        return;
+      }
+      select.value = previous;
+      select.dataset.role = previous;
+      syncBlurb(select, module);
+      select.classList.add('is-error');
+      cellNote.textContent = data.error ?? 'Could not save.';
+      announce(data.error ?? 'Could not save that change.', true);
+      if (data.code === 'STEP_UP_REQUIRED') await loadPeople();
+    } catch (err) {
+      if (!handled(err)) {
+        select.value = previous;
+        select.dataset.role = previous;
+        syncBlurb(select, module);
+        select.classList.add('is-error');
+        cellNote.textContent = 'Could not reach the server.';
+        announce('Could not reach the server — try again.', true);
+      }
+    } finally {
+      select.disabled = !canEdit();
+    }
+  }
+
+  // One tool for the selected person: its name and what their role allows, and the dropdown.
+  function moduleRow(p: Person, module: ModuleInfo): HTMLElement {
+    const current = p.roles.find((r) => r.module === module.id) ?? null;
+    const select = h('select', { class: 'role-select', attrs: { 'aria-label': `${module.label} access for ${p.label}`, 'data-person': p.id, 'data-module': module.id } });
+    for (const value of ROLE_ORDER) select.append(h('option', { text: value ? ROLE_LABELS[value] : 'No access', attrs: { value } }));
+    select.value = current?.role ?? '';
+    select.dataset.role = select.value;
+    select.disabled = !canEdit();
+    select.title = describeRole(module, select.value);
+
+    const note = h('span', { class: 'cell-note', attrs: { role: 'alert' } });
+    const control = h('div', { class: 'module-control' }, select, note);
+    const row = h(
+      'li',
+      { class: 'module-row' },
+      h('div', { class: 'module-info' }, h('span', { class: 'module-name', text: module.label }), h('span', { class: 'module-blurb', text: select.title })),
+      control,
+    );
+
+    // The accommodation calendar lets a "User" be limited to some booking types.
+    if (module.scopeTypes && current?.role === 'user') {
+      const limited = current.scope?.allowedTypes ?? [];
+      const button = h('button', {
+        class: 'limit-button',
+        text: limited.length ? `Limited to ${limited.length} booking type${limited.length === 1 ? '' : 's'}` : 'All booking types',
+        attrs: { type: 'button', 'aria-expanded': String(openLimits.has(p.id)) },
+      });
+      button.addEventListener('click', () => {
+        if (openLimits.has(p.id)) openLimits.delete(p.id);
+        else openLimits.add(p.id);
+        renderPeople();
+      });
+      control.append(button);
+    }
+
+    select.addEventListener('change', () => {
+      select.dataset.role = select.value;
+      syncBlurb(select, module);
+      void saveRole(p, module, select.value, select, note);
+    });
+    return row;
+  }
+
+  function limitsRow(p: Person, module: ModuleInfo): HTMLElement {
+    const current = p.roles.find((r) => r.module === module.id);
+    const editable = canEdit();
+    const boxes: HTMLInputElement[] = module.scopeTypes!.map((t) => {
+      const box = h('input', { attrs: { type: 'checkbox', value: t } });
+      box.checked = current?.scope?.allowedTypes?.includes(t) ?? false;
+      box.disabled = !editable;
+      return box;
+    });
+    const status = h('span', { class: 'cell-note' });
+    const save = h('button', { class: 'row-action', text: 'Save limits', attrs: { type: 'button' } });
+    save.disabled = !editable;
+    save.addEventListener('click', async () => {
+      const chosen = boxes.filter((b) => b.checked).map((b) => b.value);
+      save.disabled = true;
+      status.textContent = 'Saving…';
+      try {
+        const { status: code, data } = await call('/api/staff-admin/roles', {
+          method: 'POST',
+          body: { personId: p.id, module: module.id, role: 'user', ...(chosen.length ? { scope: { allowedTypes: chosen } } : {}) },
+        });
+        if (code === 200) {
+          announce(chosen.length ? `${p.label} can now edit only ${chosen.length} booking type${chosen.length === 1 ? '' : 's'} in the calendar.` : `${p.label} can edit every booking type in the calendar.`);
+          await loadPeople();
+        } else {
+          status.textContent = data.error ?? 'Could not save.';
+          save.disabled = !canEdit();
+        }
+      } catch (err) {
+        if (!handled(err)) {
+          status.textContent = 'Could not reach the server.';
+          save.disabled = !canEdit();
+        }
+      }
+    });
+    const limits = h(
+      'div',
+      { class: 'limits' },
+      h('p', { class: 'limits-title', text: `Booking types ${p.label} may edit in the ${module.label.toLowerCase()} (none ticked = all of them):` }),
+      ...boxes.map((b) => h('label', {}, b, humanize(b.value))),
+      save,
+      status,
+    );
+    return h('li', { class: 'limits-row' }, limits);
+  }
+
+  function personBadges(p: Person): HTMLElement {
+    const badges = h('div', { class: 'badges' });
+    if (p.isMe) badges.append(h('span', { class: 'badge', text: 'You' }));
+    if (p.isSuperAdmin) badges.append(h('span', { class: 'badge', text: 'Super admin' }));
+    if (p.isSuperAdmin && p.mfa) badges.append(h('span', { class: p.mfa.ready ? 'badge' : 'badge badge--warn', text: p.mfa.ready ? 'Second factors ready' : `${p.mfa.methodCount} of 2 methods` }));
+    if (!p.active) badges.append(h('span', { class: 'badge badge--warn', text: 'Deactivated' }));
+    return badges;
+  }
+
+  // One person in the list on the left.
+  function personItem(p: Person): HTMLElement {
+    const granted = p.roles.length;
+    const classes = ['person-item', !p.active ? 'is-inactive' : '', p.id === newPersonId ? 'is-new' : ''].filter(Boolean).join(' ');
+    const item = h(
+      'button',
+      { class: classes, attrs: { type: 'button', 'data-person-row': p.id } },
+      h('span', { class: 'person-name', text: p.label }),
+      ...(p.maskedEmail ? [h('span', { class: 'person-email', text: p.maskedEmail })] : []),
+      personBadges(p),
+      h('span', { class: 'person-summary', text: granted ? `${granted} tool${granted === 1 ? '' : 's'}` : p.isSuperAdmin ? 'Manages access' : 'No tools' }),
+    );
+    if (p.id === selectedId) item.setAttribute('aria-current', 'true');
+    item.addEventListener('click', () => {
+      selectedId = p.id;
+      renderPeople();
+      // On a phone the list is stacked above the details, so bring the details into view.
+      if (window.matchMedia('(max-width: 899px)').matches) personDetail.scrollIntoView({ block: 'start' });
+    });
+    return item;
+  }
+
+  // The selected person: who they are, deactivate/reactivate, and a row per tool.
+  function personPanel(p: Person): HTMLElement[] {
+    const head = h('div', { class: 'detail-head' });
+    head.append(h('div', {}, h('h2', { class: 'detail-title', text: p.label }), ...(p.maskedEmail ? [h('span', { class: 'person-email', text: p.maskedEmail })] : []), personBadges(p)));
+
+    // Super admins are managed in the database, never from this screen.
+    const action = h('div', { class: 'detail-action' });
+    if (!p.isSuperAdmin && !p.isMe) {
+      const statusLine = h('span', { class: 'cell-note' });
+      const toggleActive = h('button', {
+        class: p.active ? 'row-action row-action--danger' : 'row-action',
+        text: p.active ? 'Deactivate' : 'Reactivate',
+        attrs: { type: 'button' },
+      });
+      toggleActive.disabled = !canEdit();
+      toggleActive.addEventListener('click', async () => {
+        if (p.active && !confirm(`Deactivate ${p.label}? They lose access to every tool straight away. You can reactivate them later.`)) return;
+        toggleActive.disabled = true;
+        try {
+          const { status, data } = await call('/api/staff-admin/people/active', { method: 'POST', body: { personId: p.id, active: !p.active } });
+          if (status === 200) {
+            announce(`${p.label} ${p.active ? 'deactivated' : 'reactivated'}.`);
+            await loadPeople();
+          } else {
+            statusLine.textContent = data.error ?? 'Could not change that.';
+            toggleActive.disabled = !canEdit();
+          }
+        } catch (err) {
+          if (!handled(err)) {
+            statusLine.textContent = 'Could not reach the server.';
+            toggleActive.disabled = !canEdit();
+          }
+        }
+      });
+      action.append(toggleActive, statusLine);
+    } else {
+      action.append(h('span', { class: 'cell-note cell-note--quiet', text: p.isMe ? 'Your own account' : 'Managed in the database' }));
+    }
+    head.append(action);
+
+    const rows = h('ul', { class: 'module-rows' });
+    for (const module of state!.modules) {
+      rows.append(moduleRow(p, module));
+      if (module.scopeTypes && openLimits.has(p.id) && p.roles.find((r) => r.module === module.id)?.role === 'user') rows.append(limitsRow(p, module));
+    }
+    return [head, rows];
+  }
+
+  function renderPeople() {
+    if (!state) return;
+    const order = (p: Person) => (!p.active ? 2 : p.isSuperAdmin ? 0 : 1);
+    const sorted = state.people.map((p, i) => ({ p, i })).sort((a, b) => order(a.p) - order(b.p) || a.i - b.i).map((x) => x.p);
+    if (!sorted.some((p) => p.id === selectedId)) selectedId = sorted[0]?.id ?? null;
+    peopleList.replaceChildren(...sorted.map((p) => h('li', {}, personItem(p))));
+    const selected = sorted.find((p) => p.id === selectedId);
+    personDetail.replaceChildren(...(selected ? personPanel(selected) : [h('p', { class: 'empty', text: 'Nobody has been added yet.' })]));
+    const active = state.people.filter((p) => p.active).length;
+    peopleCount.textContent = `${state.people.length} ${state.people.length === 1 ? 'person' : 'people'}${active === state.people.length ? '' : `, ${active} active`}`;
+    renderModulesView();
+    renderRolesGuide();
+    if (refocus) {
+      const [pid, mid] = refocus.split('|');
+      refocus = null;
+      personDetail.querySelector<HTMLElement>(`select[data-person="${pid}"][data-module="${mid}"]`)?.focus();
+    }
+  }
+
+  // "Who can use what": every active person under each tool, grouped by role. Read-only;
+  // selecting a name opens that person on the People tab.
+  function renderModulesView() {
+    if (!state) return;
+    const groups = [['admin', 'Admin'], ['user', 'User'], ['read_only', 'Read-only']] as const;
+    const people = state.people.filter((p) => p.active);
+    modulesView.replaceChildren(
+      ...state.modules.map((module) => {
+        const card = h('div', { class: 'module-card' }, h('h2', { text: module.label }));
+        let any = false;
+        for (const [role, title] of groups) {
+          const members = people.filter((p) => p.roles.some((r) => r.module === module.id && r.role === role));
+          if (!members.length) continue;
+          any = true;
+          const chips = h('div', { class: 'chips' });
+          for (const p of members) {
+            const chip = h('button', { class: 'chip', text: p.label, attrs: { type: 'button' } });
+            if (p.maskedEmail) chip.append(h('small', { text: p.maskedEmail }));
+            chip.addEventListener('click', () => {
+              selectedId = p.id;
+              renderPeople();
+              selectTab('people');
+              personDetail.scrollIntoView({ block: 'nearest' });
+            });
+            chips.append(chip);
+          }
+          card.append(h('div', { class: 'role-group' }, h('p', { class: 'role-group-title', text: title }), chips));
+        }
+        if (!any) card.append(h('p', { class: 'nobody', text: 'Nobody has access yet.' }));
+        return card;
+      }),
+    );
+  }
+
+  // "What each role can do": per tool, one line per distinct role. A role that carries the
+  // same things as the one below it shares its line ("User, Admin"); a role that carries
+  // everything the previous one does, plus more, lists only the extras ("Also: …"). Where the
+  // roles don't nest (a capability kept from admins, say) the full list is shown instead.
+  function renderRolesGuide() {
+    if (!state) return;
+    const order = ['read_only', 'user', 'admin'];
+    type Caps = { id: string; description: string }[];
+    const sameSet = (x: Caps, y: Caps) => x.length === y.length && x.every((c) => y.some((d) => d.id === c.id));
+    rolesGuide.replaceChildren(
+      ...state.modules.map((module) => {
+        const groups: { roles: string[]; caps: Caps; prev: Caps | null }[] = [];
+        for (const role of order) {
+          const caps = module.roles.find((r) => r.role === role)?.capabilities ?? [];
+          const last = groups[groups.length - 1];
+          if (last && sameSet(last.caps, caps)) last.roles.push(role);
+          else groups.push({ roles: [role], caps, prev: last?.caps ?? null });
+        }
+        const list = h('dl', { class: 'role-list' });
+        for (const g of groups) {
+          const nested = g.prev !== null && g.prev.length > 0 && g.prev.every((c) => g.caps.some((d) => d.id === c.id));
+          const shown = nested ? g.caps.filter((c) => !g.prev!.some((d) => d.id === c.id)) : g.caps;
+          const text = g.caps.length === 0 ? 'Cannot open this tool.' : `${nested ? 'Also: ' : ''}${shown.map((c) => c.description).join('; ')}.`;
+          list.append(h('dt', { class: 'role-name', text: g.roles.map((r) => ROLE_LABELS[r]).join(', ') }), h('dd', { class: 'role-text', text }));
+        }
+        return h('div', { class: 'guide' }, h('h2', { text: module.label }), list);
+      }),
+    );
+  }
+
+  async function loadPeople() {
+    peopleError.hidden = true;
+    try {
+      const { status, data } = await call('/api/staff-admin/people');
+      if (status !== 200) throw new Error('load failed');
+      state = data as PeopleResponse;
+      gate.hidden = true;
+      forbidden.hidden = true;
+      statusEl.hidden = true;
+      panel.hidden = false;
+      renderStepUp();
+      renderPeople();
+    } catch (err) {
+      if (!handled(err)) {
+        statusEl.hidden = false;
+        statusEl.textContent = 'Failed to load — try refreshing.';
+      }
+    }
+  }
+
+  // ---- adding someone
+  addToggle.addEventListener('click', () => {
+    const opening = addForm.hidden;
+    addForm.hidden = !opening;
+    addToggle.setAttribute('aria-expanded', String(opening));
+    if (opening) addEmail.focus();
+  });
+
+  addForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    addMessage.hidden = true;
+    peopleError.hidden = true;
+    if (!canEdit()) {
+      show(peopleError, "Prove it's you above before adding someone.");
+      return;
+    }
+    addSubmit.disabled = true;
+    try {
+      const { status, data } = await call('/api/staff-admin/people', { method: 'POST', body: { email: addEmail.value, name: addName.value } });
+      if (status === 201) {
+        addEmail.value = ''; // typed once; not kept on the page
+        addName.value = '';
+        newPersonId = data.person.id;
+        selectedId = data.person.id;
+        addForm.hidden = true;
+        addToggle.setAttribute('aria-expanded', 'false');
+        show(addMessage, `${data.person.label} added. Choose which tools they can use below.`);
+        await loadPeople();
+        peopleList.querySelector(`[data-person-row="${newPersonId}"]`)?.scrollIntoView({ block: 'nearest' });
+      } else if (status === 409 && data.code === 'EXISTS') {
+        addEmail.value = '';
+        newPersonId = data.personId;
+        selectedId = data.personId;
+        addForm.hidden = true;
+        addToggle.setAttribute('aria-expanded', 'false');
+        show(addMessage, `${data.label} is already in the system — they are selected below.`);
+        await loadPeople();
+      } else {
+        show(peopleError, data.error ?? 'Could not add that person.');
+      }
+    } catch (err) {
+      if (!handled(err)) show(peopleError, 'Could not reach the server — try again.');
+    } finally {
+      addSubmit.disabled = false;
+    }
+  });
+
+  // ---- activity
+  function describe(ev: AuditEvent): string {
+    const a = ev.actor?.label ?? 'Someone';
+    const t = ev.target?.label ?? 'someone';
+    const m = moduleLabel(ev.module);
+    const d = ev.detail ?? {};
+    const types = Array.isArray(d.scope?.allowedTypes) ? ` (limited to ${d.scope.allowedTypes.map(humanize).join(', ')})` : '';
+    switch (ev.action) {
+      case 'staff.person_added':
+        return `${a} added ${t}.`;
+      case 'staff.person_deactivated':
+        return `${a} deactivated ${t}.`;
+      case 'staff.person_reactivated':
+        return `${a} reactivated ${t}.`;
+      case 'staff.role_set':
+        return `${a} set ${t} to ${roleLabel(d.role)} in ${m}${types}${d.previousRole ? `, was ${roleLabel(d.previousRole)}` : ''}.`;
+      case 'staff.role_removed':
+        return `${a} removed ${t}’s access to ${m}${d.previousRole ? ` (was ${roleLabel(d.previousRole)})` : ''}.`;
+      case 'role_granted':
+        return `${t} was given ${roleLabel(d.role)} access to ${m} (carried over from the old sign-in lists).`;
+      case 'role_changed':
+        return `${t}’s access to ${m} changed from ${roleLabel(d.from)} to ${roleLabel(d.to)}.`;
+      case 'staff_mfa.totp_started':
+        return `${a} started setting up an authenticator app.`;
+      case 'staff_mfa.totp_confirmed':
+        return `${a} set up an authenticator app.`;
+      case 'staff_mfa.verified':
+        return `${a} proved a second factor (${d.method === 'recovery' ? 'recovery code' : 'authenticator app'}).`;
+      case 'staff_mfa.failed':
+        return `${a} entered a wrong second-factor code${d.locked ? ' and was locked out for a while' : ''}.`;
+      case 'staff_mfa.recovery_regenerated':
+        return `${a} generated new recovery codes.`;
+      case 'staff_mfa.reset':
+        return `${a} reset ${t}’s second factors.`;
+      case 'whatsapp.reply':
+        return `${a} replied in the WhatsApp inbox.`;
+      case 'whatsapp.block_requested':
+        return `${a} blocked a WhatsApp contact.`;
+      case 'whatsapp.unblock_requested':
+        return `${a} unblocked a WhatsApp contact.`;
+      case 'photo-pool.approve':
+        return `${a} approved a photo.`;
+      case 'photo-pool.reject':
+        return `${a} rejected a photo.`;
+      case 'photo-pool.describe':
+        return `${a} edited a photo’s description.`;
+      case 'event-payments.refund_requested':
+        return `${a} started a refund.`;
+      default:
+        return `${a}: ${ev.action}${m ? ` (${m})` : ''}.`;
+    }
+  }
+
+  // One line in the log, plus the masked addresses that tell apart two people who share a
+  // name (a person with no name is already shown by their masked address in the sentence).
+  function eventItem(ev: AuditEvent): HTMLElement {
+    const who = [ev.actor?.maskedEmail && `By ${ev.actor.maskedEmail}`, ev.target?.maskedEmail && `About ${ev.target.maskedEmail}`].filter(Boolean).join(' · ');
+    const item = h('li', { class: 'event' }, h('span', { class: 'event-time', text: new Date(ev.at).toLocaleString() }), describe(ev));
+    if (who) item.append(h('span', { class: 'event-who', text: who }));
+    return item;
+  }
+
+  // Everything a person might type to find an event: the sentence, both people and their
+  // masked addresses, the tool, the action and the date as shown.
+  function eventText(ev: AuditEvent): string {
+    return [describe(ev), ev.actor?.label, ev.actor?.maskedEmail, ev.target?.label, ev.target?.maskedEmail, moduleLabel(ev.module), ev.action, new Date(ev.at).toLocaleString()]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+  }
+
+  // The search only covers events already loaded, and says so while it is in use.
+  function renderEvents() {
+    const words = eventsSearch.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const shown = words.length ? allEvents.filter((ev) => { const text = eventText(ev); return words.every((w) => text.includes(w)); }) : allEvents;
+    eventsList.replaceChildren(...shown.map(eventItem));
+    eventsEmpty.hidden = shown.length > 0;
+    eventsEmpty.textContent = words.length ? 'No loaded events match that.' : 'No activity yet.';
+    eventsCount.textContent = words.length ? `${shown.length} of ${allEvents.length} loaded events match.${nextBefore !== null ? ' Select “Load older” to search further back.' : ''}` : '';
+  }
+
+  async function loadEvents(more: boolean) {
+    eventsError.hidden = true;
+    eventsMore.disabled = true;
+    try {
+      const { status, data } = await call(`/api/staff-admin/activity?limit=100${more && nextBefore !== null ? `&before=${nextBefore}` : ''}`);
+      if (status !== 200) throw new Error('load failed');
+      allEvents = more ? [...allEvents, ...(data.events as AuditEvent[])] : (data.events as AuditEvent[]);
+      nextBefore = data.nextBefore;
+      eventsMore.hidden = nextBefore === null;
+      activityLoaded = true;
+      renderEvents();
+    } catch (err) {
+      if (!handled(err)) show(eventsError, 'Could not load the activity — try again.');
+    } finally {
+      eventsMore.disabled = false;
+    }
+  }
+  eventsSearch.addEventListener('input', () => {
+    if (activityLoaded) renderEvents();
+  });
+  eventsMore.addEventListener('click', () => loadEvents(true));
+
+  function selectTab(which: 'people' | 'modules' | 'roles' | 'activity') {
+    const tabs = { people: [tabPeople, panePeople], modules: [tabModules, paneModules], roles: [tabRoles, paneRoles], activity: [tabActivity, paneActivity] } as const;
+    for (const [name, [tab, pane]] of Object.entries(tabs)) {
+      tab.setAttribute('aria-selected', String(name === which));
+      pane.hidden = name !== which;
+    }
+    if (which === 'activity' && !activityLoaded) loadEvents(false);
+  }
+  tabPeople.addEventListener('click', () => selectTab('people'));
+  tabModules.addEventListener('click', () => selectTab('modules'));
+  tabRoles.addEventListener('click', () => selectTab('roles'));
+  tabActivity.addEventListener('click', () => selectTab('activity'));
+
+  // ---- sign-in
+  function handleCredentialResponse(response: { credential: string }) {
+    setToken(response.credential);
+    loadPeople();
+  }
+
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: 'outline', size: 'large' });
+  }
+
+  $('use-different-account').addEventListener('click', () => {
+    clearToken();
+    clearStepUp();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
+  // Keep the countdown honest, and lock the edit controls the moment the
+  // step-up lapses (the server would refuse them anyway).
+  let wasUnlocked = false;
+  setInterval(() => {
+    if (!state || panel.hidden) return;
+    const unlocked = canEdit();
+    renderStepUp();
+    if (wasUnlocked && !unlocked) renderPeople();
+    wasUnlocked = unlocked;
+  }, 15000);
+
+  if (getToken()) loadPeople();
+  else showGate();
+</script>

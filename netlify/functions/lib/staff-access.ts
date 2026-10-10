@@ -37,7 +37,11 @@ export type StaffIdentity = {
   isSuperAdmin: boolean;
 };
 
-export type StaffGrant = StaffIdentity & { role: Role; scope: RoleScope };
+// googleName is the profile name on the Google ID token for *this* request
+// (null if the account has none) — not stored, and distinct from `name`, the
+// one registered in staff_users. Callers that need a display name fall back
+// from `name` to this.
+export type StaffGrant = StaffIdentity & { role: Role; scope: RoleScope; googleName: string | null };
 
 export type StaffAuthResult =
   | { ok: true; staff: StaffGrant }
@@ -89,14 +93,29 @@ async function lookupStaff(email: string, module: ModuleId): Promise<StaffRow | 
   return row;
 }
 
-// Verifies the caller's Google ID token and checks that they hold a role in
-// `module` that carries `capability`. The one call every admin Function
-// makes before doing anything.
-export async function requireStaff<M extends ModuleId>(
-  req: Request,
-  module: M,
-  capability: Capability<M>,
-): Promise<StaffAuthResult> {
+// First sign-in with an empty registered name: copy the name from their Google
+// account (the ID token's `name` claim). `name=is.null` in the filter makes
+// this safe against a race and means a name already on file is never
+// overwritten. Best-effort — a failure only leaves the name empty for now.
+async function fillNameIfEmpty(staffId: string, name: string): Promise<void> {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  if (!supabaseUrl) throw new Error('Missing SUPABASE_URL');
+  const res = await fetch(`${supabaseUrl}/rest/v1/staff_users?id=eq.${staffId}&name=is.null`, {
+    method: 'PATCH',
+    headers: restHeaders({ Prefer: 'return=minimal' }),
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error(`staff_users name update failed: ${res.status}`);
+}
+
+type TokenResult =
+  | { ok: true; email: string; googleName: string | null }
+  | { ok: false; status: 401 | 403 | 500; error: string };
+
+// Verifies the caller's Google ID token — signature, audience, expiry, and,
+// for our own Workspace domains, the `hd` claim. Says nothing about what the
+// person may do; requireStaff / requireSuperAdmin decide that.
+async function verifyStaffToken(req: Request): Promise<TokenResult> {
   const authHeader = req.headers.get('authorization') ?? '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
   if (!token) return { ok: false, status: 401, error: 'Sign-in required' };
@@ -107,18 +126,44 @@ export async function requireStaff<M extends ModuleId>(
     return { ok: false, status: 500, error: 'Server misconfigured' };
   }
 
-  let email: string;
   try {
     const payload = await verifyGoogleIdToken(token, { audience: clientId });
-    email = String(payload.email).toLowerCase();
+    const email = String(payload.email).toLowerCase();
+    const googleName = typeof payload.name === 'string' && payload.name.trim() ? payload.name.trim() : null;
     const domain = email.split('@')[1];
     if (MANAGED_DOMAINS.has(domain) && payload.hd !== domain) {
       return { ok: false, status: 403, error: 'Not authorized' };
     }
+    return { ok: true, email, googleName };
   } catch (err) {
     console.error('ID token verification failed', err);
     return { ok: false, status: 401, error: 'Invalid or expired session' };
   }
+}
+
+// Copies the Google name into an empty registered name; see fillNameIfEmpty.
+// Only ever called for someone who has passed every access check.
+async function maybeFillName(row: { id: string; name: string | null }, googleName: string | null): Promise<void> {
+  if (row.name || !googleName) return;
+  try {
+    await fillNameIfEmpty(row.id, googleName);
+    row.name = googleName; // the cached row, so the next request skips this
+  } catch (err) {
+    console.error('Failed to fill the staff name from Google', err);
+  }
+}
+
+// Verifies the caller's Google ID token and checks that they hold a role in
+// `module` that carries `capability`. The one call every admin Function
+// makes before doing anything.
+export async function requireStaff<M extends ModuleId>(
+  req: Request,
+  module: M,
+  capability: Capability<M>,
+): Promise<StaffAuthResult> {
+  const verified = await verifyStaffToken(req);
+  if (!verified.ok) return verified;
+  const { email, googleName } = verified;
 
   let row: StaffRow | null;
   try {
@@ -135,6 +180,10 @@ export async function requireStaff<M extends ModuleId>(
     return { ok: false, status: 403, error: 'Not authorized' };
   }
 
+  // Only for someone who passed every check above, so an unauthorized
+  // Google account can never cause a write.
+  await maybeFillName(row, googleName);
+
   return {
     ok: true,
     staff: {
@@ -144,8 +193,68 @@ export async function requireStaff<M extends ModuleId>(
       isSuperAdmin: row.is_super_admin,
       role: grant.role,
       scope: grant.scope,
+      googleName,
     },
   };
+}
+
+export type ActivePerson = StaffIdentity & { googleName: string | null };
+
+export type ActivePersonAuthResult =
+  | { ok: true; person: ActivePerson }
+  | { ok: false; status: 401 | 403 | 500; error: string };
+
+// Who is signed in, if they are someone we know and have not deactivated —
+// regardless of what they may do. Used by the landing page to show a person
+// only the tools they hold a role in, and as the base of requireSuperAdmin.
+// Deliberately uncached: deactivating someone takes effect on their next
+// request. Their email is read here to find them and stays on the server.
+export async function requireActivePerson(req: Request): Promise<ActivePersonAuthResult> {
+  const verified = await verifyStaffToken(req);
+  if (!verified.ok) return verified;
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  if (!supabaseUrl) {
+    console.error('Missing SUPABASE_URL');
+    return { ok: false, status: 500, error: 'Server misconfigured' };
+  }
+  let user: { id: string; email: string; name: string | null; active: boolean; is_super_admin: boolean } | undefined;
+  try {
+    const res = await fetch(
+      `${supabaseUrl}/rest/v1/staff_users?email=eq.${encodeURIComponent(verified.email)}&select=id,email,name,active,is_super_admin`,
+      { headers: restHeaders() },
+    );
+    if (!res.ok) throw new Error(`staff_users lookup failed: ${res.status}`);
+    user = ((await res.json()) as NonNullable<typeof user>[])[0];
+  } catch (err) {
+    console.error('Failed to look up staff member', err);
+    return { ok: false, status: 500, error: 'Server misconfigured' };
+  }
+
+  if (!user || !user.active) return { ok: false, status: 403, error: 'Not authorized' };
+
+  await maybeFillName(user, verified.googleName);
+  return {
+    ok: true,
+    person: { id: user.id, email: user.email, name: user.name, isSuperAdmin: user.is_super_admin, googleName: verified.googleName },
+  };
+}
+
+export type SuperAdmin = ActivePerson;
+
+export type SuperAdminAuthResult =
+  | { ok: true; admin: SuperAdmin }
+  | { ok: false; status: 401 | 403 | 500; error: string };
+
+// For the surfaces that manage access itself (second-factor enrolment, and
+// the Access module): the caller must be an active super admin. A super admin
+// has no implicit module access — this checks the flag only, and never grants
+// anything in a module.
+export async function requireSuperAdmin(req: Request): Promise<SuperAdminAuthResult> {
+  const auth = await requireActivePerson(req);
+  if (!auth.ok) return auth;
+  if (!auth.person.isSuperAdmin) return { ok: false, status: 403, error: 'Not authorized' };
+  return { ok: true, admin: auth.person };
 }
 
 // Appends to staff_audit_log. Throws on failure so a caller doing something

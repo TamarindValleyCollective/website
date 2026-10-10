@@ -74,6 +74,7 @@ flowchart TD
 
     subgraph CIACTIONS["0c · GitHub Actions — CI, on push to main"]
         GHA_MEMBER["member-update-email.yml<br/>+ send-member-update-email.mjs<br/>On push touching src/data/members.ts:<br/>diffs it, classifies changed cards<br/>new/updated, emails members@tvc.farm,<br/>BCCing each changed member's own address"]
+        GHA_DOMAIN["domain-expiry.yml + check-domain-expiry.mjs<br/>Daily cron: reads each domain's expiry date from<br/>the registry's public RDAP service, emails<br/>core-team@tvc.farm at 60/30 days then daily from 14.<br/>Holds no database credentials; runs off Netlify<br/>on purpose, so it still alerts if Netlify pauses"]
     end
 
     subgraph SRC["1 · Source — github.com/TamarindValleyCollective/website (main)"]
@@ -82,6 +83,7 @@ flowchart TD
         INTERNALPAGE2["src/pages/internal/whatsapp.astro<br/>Unlinked, noindex — WhatsApp reply dashboard shell,<br/>two-pane chat UI, 15s visibility-gated polling"]
         INTERNALPAGE3["src/pages/internal/accommodation-calendar.astro<br/>Unlinked, noindex — tent-booking dashboard shell,<br/>day/week/month calendar, guest directory, audit log"]
         INTERNALPAGE4["src/pages/internal/event-payments.astro<br/>Unlinked, noindex — event dropdown, stats,<br/>booking table, tier-suggested refund flow"]
+        INTERNALPAGE5["src/pages/internal/usage.astro<br/>Unlinked, noindex — usage &amp; limits dashboard:<br/>alerts, per-service meters, domain renewals,<br/>admin forms for typed-in readings"]
         COMPONENTS["src/components/<br/>Nav, Footer, PageHero, ChatWidget,<br/>CookieConsent, JourneyTimelineStandalone,<br/>BiodiversityExplorer, PhotoGallery"]
         CONTENT["src/content/*<br/>Markdown collections: events, partners,<br/>community-outreach, photos"]
         FUNC_SRC["netlify/functions/chat.mts<br/>Serverless function, calls Anthropic API server-side"]
@@ -98,6 +100,9 @@ flowchart TD
         FUNC_SRC12["netlify/functions/razorpay-webhook.mts<br/>Serverless function — verifies signature, records<br/>payment_link.paid in Supabase (idempotent), emails<br/>a branded receipt; also handles refund.created/<br/>processed/failed — Razorpay's own confirmation is<br/>the only thing that marks a row actually refunded"]
         FUNC_SRC13["netlify/functions/cancel-booking.mts<br/>Serverless function — records a guest's<br/>cancellation request (not an automatic<br/>refund), notifies TVC + Linger + guest"]
         FUNC_SRC14["netlify/functions/event-payments-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>per-event registrations/cancellations/money<br/>collected from Supabase, issues real Razorpay<br/>refunds (tier-suggested, admin-confirmed)"]
+        FUNC_SRC15["netlify/functions/usage-collect.mts<br/>Scheduled function (cron, every 6 hours) — appends<br/>the Supabase database size to usage_snapshots for<br/>the free-tier usage dashboard. Reuses existing<br/>Supabase credentials; no new secret"]
+        FUNC_SRC16["netlify/functions/usage-admin.mts<br/>Serverless function, Google Sign-In gated (usage module) —<br/>overview of free-tier/credit usage, live domain<br/>expiry lookups, typed-in provider readings and<br/>price/limit settings (admins only, audit-logged)"]
+        FUNC_SRC17["netlify/functions/usage-alerts.mts<br/>Scheduled function (cron, hourly) — evaluates the<br/>usage rules and emails core-team@tvc.farm one digest<br/>per new or worsened warning; remembers what it sent"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
     end
 
@@ -124,7 +129,10 @@ flowchart TD
         APIFN12["Netlify Function: /api/razorpay-webhook<br/>Deployed and live — live-mode webhook<br/>configured, signature verification confirmed"]
         APIFN13["Netlify Function: /api/cancel-booking<br/>Deployed and live"]
         APIFN14["Netlify Function: /api/event-payments-admin<br/>Deployed and live — backs /internal/event-payments,<br/>issues real refunds via Razorpay's API"]
-        BLOBS["Netlify Blobs<br/>'event-interest' store — one JSON record per<br/>past event id, {count, emails[]}, optimistic-<br/>concurrency writes. Reset via netlify blobs:delete<br/>event-interest &lt;id&gt;.<br/>'search-ai-rate-limit' store — per-IP window +<br/>daily Anthropic-fallback budget records"]
+        APIFN15["Netlify Function: usage-collect<br/>Scheduled (cron), no HTTP path"]
+        APIFN16["Netlify Function: /api/usage-admin<br/>Deployed with the usage dashboard"]
+        APIFN17["Netlify Function: usage-alerts<br/>Scheduled (cron, hourly), no HTTP path"]
+        BLOBS["Netlify Blobs<br/>'event-interest' store — one JSON record per<br/>past event id, {count, emails[]}, optimistic-<br/>concurrency writes. Reset via netlify blobs:delete<br/>event-interest &lt;id&gt;.<br/>'search-ai-rate-limit' store — per-IP window +<br/>daily Anthropic-fallback budget records.<br/>'chat-rate-limit' store — per-IP window +<br/>global daily message cap for /api/chat"]
         FORMS["Netlify Forms<br/>Captures /contact membership + general<br/>enquiries, /visit/host-an-event inquiries,<br/>/visit camping·day-visit·trekking inquiries,<br/>and event-interest submissions with an email"]
     end
 
@@ -155,6 +163,7 @@ flowchart TD
         WHATSAPPDASH["WhatsApp dashboard (/internal/whatsapp)<br/>Google Sign-In gated two-pane chat UI — conversation<br/>list + thread + reply box; unlinked, noindex,<br/>sitemap-excluded"]
         ACCOMMODATIONDASH["Accommodation Allocation (/internal/accommodation-calendar)<br/>Google Sign-In gated tent-booking dashboard —<br/>day/week/month views, guest directory + typeahead,<br/>audit log; unlinked, noindex, sitemap-excluded"]
         EVENTPAYDASH["Event Payments (/internal/event-payments)<br/>Google Sign-In gated dashboard — event dropdown,<br/>registrations/cancellations/money-collected stats,<br/>tier-suggested refund with two-step confirm;<br/>unlinked, noindex, sitemap-excluded"]
+        USAGEDASH["Usage &amp; limits (/internal/usage)<br/>Google Sign-In gated dashboard — Anthropic, Gemini,<br/>Supabase measured; Netlify, Resend, Cloudflare R2 and the<br/>Anthropic credit balance typed in by an admin; domain<br/>renewals read live; unlinked, noindex, sitemap-excluded"]
     end
 
     subgraph EXTERNAL["External services (called directly by the browser)"]
@@ -173,8 +182,9 @@ flowchart TD
         GSC["Google Search Console API<br/>urlInspection.index.inspect — read-only,<br/>same service account (Full user on the<br/>property as of 2026-08-08),<br/>called from a local script only"]
         RESEND["Resend API<br/>Transactional email — noreply@tvc.farm,<br/>domain verified 2026-08-19,<br/>called from the GitHub Action above<br/>and whatsapp-stale-alert.mts"]
         WAMETA["Meta WhatsApp Cloud API<br/>Sends inbound message + template-status<br/>events to /api/whatsapp-webhook;<br/>receives replies from whatsapp-admin.mts;<br/>see WHATSAPP.md for setup status"]
-        SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages,<br/>event_payments, staff_users/staff_module_roles/<br/>staff_audit_log (not yet wired to any Function) —<br/>service_role key, called server-side only"]
+        SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages,<br/>event_payments, staff_users/staff_module_roles/<br/>staff_audit_log (gate all four admin Functions),<br/>staff_mfa_factors/staff_recovery_codes/<br/>staff_mfa_state (super-admin second factors),<br/>usage_daily/usage_snapshots/usage_settings/<br/>usage_alert_state (free-tier metering + alerts) —<br/>service_role key, called server-side only"]
         RAZORPAY["Razorpay API<br/>Payment Links (create/fetch) +<br/>payment_link.paid webhook + refunds<br/>(admin-triggered, event-payments-admin.mts) +<br/>payment fees and settlement recon<br/>(nightly reconcile-event-payment-fees.mjs).<br/>Live keys as of 2026-09-24 —<br/>see RAZORPAY.md"]
+        RDAP["Registry RDAP service (via IANA bootstrap,<br/>rdap.org fallback)<br/>Public, no key — domain expiry dates for<br/>tvc.farm and syntropic.in"]
     end
 
     SRC --> BUILD
@@ -238,7 +248,7 @@ flowchart TD
     WHATSAPPDASH -.->|"Sign in with Google"| GIDTOKEN
     ACCOMMODATIONDASH --> APIFN9
     APIFN9 -.->|"read/write bookings, guests,<br/>audit log"| SUPABASE
-    APIFN9 -.->|"read allow-list rows<br/>(own dedicated Sheet)"| GSHEET
+    APIFN9 -.->|"check staff role"| SUPABASE
     APIFN9 -.->|"verify staff ID token"| GIDTOKEN
     ACCOMMODATIONDASH -.->|"Sign in with Google"| GIDTOKEN
     EVENTPAYDASH --> APIFN14
@@ -249,6 +259,21 @@ flowchart TD
     APIFN14 -.->|"verify staff ID token"| GIDTOKEN
     EVENTPAYDASH -.->|"Sign in with Google"| GIDTOKEN
 
+    GHA_DOMAIN -.->|"look up expiry dates"| RDAP
+    GHA_DOMAIN -.->|"send renewal reminder"| RESEND
+    APIFN15 -.->|"db size snapshot"| SUPABASE
+    APIFN -.->|"per-call usage counts"| SUPABASE
+    APIFN10 -.->|"per-call usage counts"| SUPABASE
+
+    USAGEDASH --> APIFN16
+    APIFN16 -.->|"read usage_daily/usage_snapshots/settings,<br/>write readings + settings"| SUPABASE
+    APIFN16 -.->|"live domain expiry"| RDAP
+    APIFN16 -.->|"check staff role"| SUPABASE
+    APIFN16 -.->|"verify staff ID token"| GIDTOKEN
+    USAGEDASH -.->|"Sign in with Google"| GIDTOKEN
+    APIFN17 -.->|"read usage data, remember<br/>alerts already sent"| SUPABASE
+    APIFN17 -.->|"send alert digest"| RESEND
+
     classDef staticStyle fill:#e8f2ea,stroke:#17723b,color:#0f5029
     classDef netlifyStyle fill:#fdead3,stroke:#f78520,color:#9a5310
     classDef externalStyle fill:#f6f1e7,stroke:#c9c2a8,color:#22291f
@@ -256,12 +281,12 @@ flowchart TD
     classDef localStyle fill:#eef0f5,stroke:#6b7280,color:#374151
     classDef ciStyle fill:#eef4fb,stroke:#3b6ea5,color:#1c3f5f
 
-    class PAGES,INTERNALPAGE,INTERNALPAGE2,INTERNALPAGE3,INTERNALPAGE4,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH,WHATSAPPDASH,ACCOMMODATIONDASH,EVENTPAYDASH,BOOKINGFORM,CANCELPAGE staticStyle
-    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,FUNC_SRC14,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,APIFN14,BLOBS,FORMS,ANTHROPIC netlifyStyle
-    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,SUPABASE,GEMINI,RAZORPAY externalStyle
+    class PAGES,INTERNALPAGE,INTERNALPAGE2,INTERNALPAGE3,INTERNALPAGE4,INTERNALPAGE5,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH,WHATSAPPDASH,ACCOMMODATIONDASH,EVENTPAYDASH,USAGEDASH,BOOKINGFORM,CANCELPAGE staticStyle
+    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,FUNC_SRC14,FUNC_SRC15,FUNC_SRC16,FUNC_SRC17,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,APIFN14,APIFN15,APIFN16,APIFN17,BLOBS,FORMS,ANTHROPIC netlifyStyle
+    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,SUPABASE,GEMINI,RAZORPAY,RDAP externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL,SCRIPT_GSC localStyle
-    class GHA_MEMBER ciStyle
+    class GHA_MEMBER,GHA_DOMAIN ciStyle
 ```
 
 **Legend:** 🟢 static / no server required · 🟠 depends on Netlify specifically (Functions or
@@ -327,6 +352,44 @@ outside both the local machine and Netlify (the member-update-email workflow).
   social) — the last three of those fields only ever render client-side from the Members page's
   popup JSON, so they're invisible to `build-chat-context.mjs`'s static-HTML scrape no matter how
   the page corpus itself is tuned.
+- **`netlify/functions/lib/rate-limit.ts`** — shared rate limiting for the two public, unauthenticated
+  LLM endpoints (`chat.mts`, `search-ai.mts`): `checkIpRateLimit` (per-IP fixed window) and
+  `checkDailyCap` (global, date-keyed so it resets itself), both on Netlify Blobs. `chat.mts` had
+  no limit at all until 2026-10-04 and spends paid Anthropic credits on every message; it now
+  allows 20 messages per IP per 10 minutes and 100 per day across everyone (lowered from 500 on 2026-10-04 after measuring ~14k input tokens per message; constants at the top of
+  `chat.mts`), and fails *open* — logging, not blocking — if Blobs itself errors, so a storage
+  hiccup can't take the chat down. Part of the groundwork for the planned usage/free-tier
+  dashboard (a new admin module); see that module's docs once it lands.
+- **`netlify/functions/lib/usage-meter.ts` + `usage-collect.mts` + `scripts/check-domain-expiry.mjs`**
+  — the measuring half of the free-tier usage dashboard (see the next bullet for the dashboard
+  itself). There is no usage API to read for an individual Anthropic account or
+  the Gemini free tier, so we count our own calls: `callAnthropic()` and `search-ai.mts`'s Gemini call
+  add requests/tokens/error counts (incl. `billing_errors`, Gemini `quota_exhausted`) to per-day
+  running totals in Supabase `usage_daily` through the atomic `usage_record()` function. Metering
+  never fails a request (errors are logged and swallowed, 2s timeout), and stores counts only — no
+  message text, IPs or emails. `usage-collect.mts` (scheduled, every 6h) records the database size
+  to `usage_snapshots` against the free plan's 500 MB. Both tables and functions are service_role
+  only (migration `0030_usage_metering.sql`, applied to production 2026-10-04; RLS on, no policies). Domain renewals are checked by the
+  `domain-expiry.yml` GitHub Action instead: it reads each domain's expiry from the registry's public
+  RDAP service (no key, same answer whichever registrar holds it) and emails `core-team@tvc.farm` at
+  60 and 30 days, then daily from 14. It runs in GitHub, not Netlify, deliberately — if Netlify
+  pauses the site over exhausted credits a Netlify-hosted monitor would go silent too — and it holds
+  no database credentials, only the `RESEND_API_KEY` already used by `member-update-email.yml`.
+- **`netlify/functions/usage-admin.mts` + `usage-alerts.mts` + `/internal/usage` +
+  `scripts/lib/usage-rules.mjs`** — the usage & limits module (see `USAGE.md`). A new `usage` staff
+  module (`view` for any role, `configure` admin-only). `usage-admin.mts` serves the page: the
+  overview (Anthropic and Gemini counts, Supabase size, typed-in readings, active warnings), a
+  separate `/domains` route (live RDAP lookups with a 4s timeout, cached an hour, so a slow registry
+  can't hold up the page), and the two admin writes — a typed-in reading from a provider's own
+  dashboard and the price/limit settings — each audit-logged by staff id before it is written and
+  refused if the log can't be written. Nothing it returns contains an email or message text.
+  `usage-alerts.mts` (hourly) evaluates the same rules and emails `core-team@tvc.farm` one digest,
+  mailing a condition once and again only if it gets worse; `usage_alert_state` remembers what has
+  been sent and forgets it when the condition clears. All thresholds and the Anthropic credit
+  *estimate* (typed-in balance minus metered spend since, using admin-entered token prices) live in
+  `usage-rules.mjs`, pure functions with unit tests. Tables from migration `0031_usage_dashboard.sql`.
+  Typed-in services (Netlify, Resend, Cloudflare R2, the Anthropic balance) are typed in on purpose:
+  holding an API credential for each would add a secret broader than a usage reading is worth.
 - **`netlify/functions/lib/site-retrieval.ts`** — shared retrieval + Anthropic-call plumbing
   factored out of `chat.mts` so it and `search-ai.mts` below can't drift apart:
   `selectRelevantPages()`, `matchMembers()`, `formatPages()`/`formatMembers()`, the
@@ -341,7 +404,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   directly against `tvc.farm/api/search-ai` on 2026-09-21, answering from the Gemini free tier as
   expected. Being public and unauthenticated, this
   endpoint also rate-limits itself: a per-IP fixed window before any provider call, plus a separate
-  global daily cap on Anthropic-fallback invocations specifically, both backed by a Netlify Blobs
+  global daily cap on Anthropic-fallback invocations specifically (50 a day, lowered from 200 on 2026-10-04 after measuring ~9.5k tokens per search), both backed by a Netlify Blobs
   store (`search-ai-rate-limit`, see Hosting below) — guards against cost exhaustion on the paid
   fallback from either a single abusive client or many distinct ones.
 - **`netlify/functions/event-interest.mts`** — powers the "Want this to happen again?" widget
@@ -420,9 +483,11 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `reply` to send, `manage` to block — migrated 2026-10 from the shared Sheet allow-list). A
   contact's phone number never leaves this Function: replies and blocks look it up server-side by
   conversation id, responses carry only a `label` (the contact's name, masked for `read_only`
-  roles, or an opaque "Contact XXXX" when they have none), and search never matches on it. Reply
-  signatures no longer fall back to the staff member's email, which used to be printed into the
-  customer's chat. Blocking is audit-logged before it happens and refused if the log write fails.
+  roles, or an opaque "Contact XXXX" when they have none), and search never matches on it. The
+  reply signature is the name typed on the page; only if that is missing does it fall back to the
+  staff member's registered name, then the name on their Google account (the ID token's `name`
+  claim), then a masked address like `a••••@gmail.com` (`maskEmail`) — never the full email, which
+  used to be printed into the customer's chat. Blocking is audit-logged before it happens and refused if the log write fails.
   Four routes: list conversations (optionally filtered by a `search` query param — matches contact
   name (not for `read_only` roles) or message content, never phone, via `scripts/lib/supabase.mjs`'s `searchConversations`, two REST calls merged
   client-side since PostgREST can't `OR` a top-level column condition with an inner-embedded-
@@ -448,21 +513,23 @@ outside both the local machine and Netlify (the member-update-email workflow).
   each message gets its own full 60-minute countdown), so a single missed email can't let a
   message silently go unanswered.
 - **`netlify/functions/accommodation-admin.mts`** — backs `/internal/accommodation-calendar`.
-  Same Google Sign-In auth pattern as `photo-pool.mts`/`whatsapp-admin.mts` (verifies the ID
-  token, checks it against an allow-list), but its own dedicated
-  `ACCOMMODATION_ALLOWED_EMAILS_SHEET_ID` Sheet rather than reusing
-  `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID` — split out 2026-08-30 so calendar access isn't a side
-  effect of photo/WhatsApp access or vice versa. Beyond the allow-list gate, each row carries a
-  role (`scripts/lib/accommodation-access.mjs`): `admin` (read/write every booking type — today's
-  default), `restricted` (read everything, write only a listed subset of booking types, e.g. a
-  Linger contact scoped to `casual-stay`/`public-event`), or `viewer` (read-only). Every role sees
-  the full grid; only writes are type-scoped, and `canWriteType()` enforces that server-side in
-  `accommodation-admin.mts` against both a booking's existing type and its new type on
-  update/delete — never left to the client form to hide options for. Designed to migrate cleanly
-  to the shared `admin_access(email, tool, role, allowed_types)` Supabase table parked from the
-  2026-08-31 admin-console session: `getAccessRecord()`'s return shape already matches that
-  table's row shape, so adopting it later is a rewrite of `accommodation-access.mjs`'s internals
-  only, not of `accommodation-admin.mts` or the UI. Full booking CRUD plus guest search/history,
+  Same Google Sign-In auth pattern as `photo-pool.mts`/`whatsapp-admin.mts`: `requireStaff`
+  checks the caller's role in the `accommodation` module — `view` to read, `edit` to write and to
+  search the guest directory. Migrated 2026-10 from its own dedicated "Accommodation Calendar -
+  Allowed Emails" Sheet (split out 2026-08-30 so calendar access isn't a side effect of
+  photo/WhatsApp access); the old roles map onto the shared ones: `admin` -> `admin`,
+  `restricted` -> `user` with `scope.allowedTypes` (write only a listed subset of booking types,
+  e.g. a Linger contact scoped to `casual-stay`/`public-event`), `viewer` -> `read_only`. Every
+  role sees the full grid; only writes are type-scoped, and `canWriteType()` enforces that
+  server-side in `accommodation-admin.mts` against both a booking's existing type and its new
+  type on update/delete — never left to the client form to hide options for. The page still
+  reasons in the old three roles, so the server translates (`pageAccess`). **Guest mobile and
+  email are write-only**: they never leave the Function (responses carry `hasMobile`/`hasEmail`
+  and a short `ref` tag to tell same-named guests apart in the typeahead); the page shows "On file
+  (hidden)" with a Replace button, and a save that omits them keeps the stored values because
+  `accommodation_resolve_person` coalesces missing values. Guest names and preferences/allergies
+  are withheld/masked for `read_only`, and `created_by`/`updated_by`/the booking audit log now hold
+  the staff id, not an email. Full booking CRUD plus guest search/history,
   all against the `accommodation_*` tables in the "TVC ERP" Supabase project via
   `scripts/lib/accommodation-db.mjs`. The core guarantee this whole feature was built around:
   double-booking a tent is *physically impossible*, not just checked for in application code — an
@@ -492,10 +559,105 @@ outside both the local machine and Netlify (the member-update-email workflow).
   stores staff ids, never emails. **Status:** tables, the helper, and role rows for everyone on the
   two Sheet allow-lists (9 staff, 21 grants, backfilled 2026-10-04 and applied as data, not a
   migration, so staff emails stay out of version control) exist. `photo-pool.mts` and
-  `whatsapp-admin.mts` and `event-payments-admin.mts` now gate on `requireStaff` (2026-10);
-  `accommodation-admin.mts` still uses its Sheet, so for that one the Sheet remains the live gate
-  and can drift from the tables (a Sheet edit does not update the tables, and vice versa).
-  Masking helpers live in `lib/staff-masking.ts`.
+  `whatsapp-admin.mts`, `event-payments-admin.mts` and `accommodation-admin.mts` now all gate on
+  `requireStaff` (2026-10), so the Google Sheet allow-lists are no longer read by anything (the
+  Sheets and their `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID` / `ACCOMMODATION_ALLOWED_EMAILS_SHEET_ID`
+  env vars can be retired). Access is changed on `/internal/access` (super admins only; the
+  API, `staff-admin.mts`, is below) or, as before, with SQL on `staff_module_roles`. Masking helpers live in `lib/staff-masking.ts`. The first time an
+  authorized person signs in with an empty `staff_users.name`, `requireStaff` copies the name
+  from their Google account (guarded by `name=is.null`, so it never overwrites one on file).
+- **`netlify/functions/staff-mfa.mts` + `lib/staff-mfa-crypto.ts` + `/internal/security`** —
+  second factors and step-up authentication for **super admins** (issue #89), built ahead of the
+  Access module that will consume them (nothing requires a step-up yet except replacing your own
+  authenticator, regenerating recovery codes, and resetting another super admin). A super admin
+  signs in with Google (first factor) and then proves a second factor to get a ten-minute,
+  stateless, HMAC-signed step-up token bound to them, sent as `X-Stepup-Token`. Methods held at
+  once: an authenticator app (TOTP, RFC 6238 — checked against the RFC's published vectors) and
+  ten single-use recovery codes, and **passkeys** (WebAuthn: Face ID, Touch ID or a security key;
+  `lib/staff-webauthn.ts` wraps `@simplewebauthn/server`). A passkey is stored as a `passkey` row in
+  `staff_mfa_factors` (public key and counter in `credential`, never a private key) and is bound to
+  the site: the relying-party id is `tvc.farm` and only `https://tvc.farm`, `https://www.tvc.farm`
+  and localhost (for trying it locally) are accepted origins, so previews and look-alike domains
+  fail. User verification (biometric/PIN) is required and no attestation statement is requested.
+  Each registration/sign-in challenge is a row in `staff_webauthn_challenges` (migration
+  `0030_staff_webauthn_challenges.sql`) consumed by deleting it, so a response is accepted once;
+  five wrong attempts share the same 15-minute lockout as codes. Adding a passkey when other methods
+  exist, and removing one, need a step-up; removing is refused when it would leave a ready person
+  with fewer than two methods. A first passkey also issues the recovery codes. Passkey routes live
+  under `/api/staff-mfa/passkey/*`; the browser glue is `registerPasskey`/`passkeyStepUp` in
+  `scripts/lib/staff-client.mjs`, shown on Security (add, name, remove, unlock) and as "Use a
+  passkey" in the Access unlock strip. The Access module unlocks only with at least two different
+  methods enrolled. TOTP secrets are stored AES-256-GCM encrypted and recovery codes only as an HMAC, both
+  keyed from one Netlify variable, `STAFF_MFA_KEY` (32+ random bytes, base64, set by a human, never
+  in the repo or the assistant's hands); if it is missing every keyed operation fails closed with
+  `MFA_NOT_CONFIGURED`. **Losing or changing that key invalidates every stored authenticator and
+  every recovery code at once** — there is no rotation procedure yet, so keep a copy in a password
+  manager. A used code can't be replayed (a per-factor last-used time step, guarded atomically in
+  the database), five wrong codes lock a person out for 15 minutes (a genuine code that was just used — a double tap or a retried slow request — is refused as `CODE_ALREADY_USED` and not counted; the pages also send one check at a time), a second super admin can reset
+  someone's enrolment, and every security event goes to `staff_audit_log` as ids and method names
+  only. Only an active `is_super_admin` passes `requireSuperAdmin` (which grants no module access).
+  Tables: migration `0029_staff_mfa.sql`. Wrong codes answer 400, not 401, so the page can tell a
+  bad code from an expired Google session. The setup page shows the authenticator QR code, drawn
+  in the browser by `scripts/lib/qr-svg.mjs` using the zero-dependency `qrcode-generator` package
+  (bundled at build; the secret never goes to an online QR service), with the typed key and an
+  `otpauth://` link as fallbacks; the secret and QR are wiped from the page when setup finishes
+  or the session ends.
+- **`netlify/functions/staff-admin.mts` + `lib/staff-admin-guard.ts`** — the API behind the
+  Access module (issue #89): who is in the system, who holds which module role, an activity feed,
+  and the changes themselves. **Super admins only.** Reading (`GET /api/staff-admin/people`,
+  `/activity`) needs a signed-in super admin; every change (`POST` add a person, set or remove a
+  module role with an optional accommodation booking-type limit, deactivate or reactivate) goes
+  through `requireAccessAdmin`, which also requires **two different second-factor methods already
+  enrolled** (`MFA_NOT_READY` otherwise) and a **valid step-up token** from `/internal/security`
+  (`STEP_UP_REQUIRED`). Each change is written to `staff_audit_log` *before* it is made and is
+  refused if the entry can't be written (a newly added person, who must exist to be the entry's
+  target, is taken straight back out). It deliberately cannot create, promote, deactivate or
+  remove a super admin (that stays a manual database step, so the last one can't be removed from
+  here), never deletes anyone (people are deactivated so history keeps its names), and never
+  returns an email: an address is typed once to add someone and no response contains one. People
+  are shown by name, or until Google fills one in by their address masked (`p••••@tvc.farm`, built
+  server-side by `maskEmail`; the function reads the address only to mask it). The role/capability descriptions the screen
+  shows come from `MODULE_INFO` in `staff-registry.ts`, which also now owns the booking-type list
+  that `accommodation-admin.mts` validates against. The shared "which methods does this person
+  have" query moved to `lib/staff-mfa-store.ts`.
+- **`/internal/access`, `/internal` and `netlify/functions/staff-me.mts`** — the screens in front
+  of that API. `/internal/access` (super admins only) is a **people × tools grid**: one row per
+  person (by name), one column per tool, and each cell a role picker (No access / Read-only / User /
+  Admin, coloured by level) that **saves as soon as it is changed** (a refused change puts the cell
+  back and says why). A User in the accommodation calendar gets a "Limited to N booking types" control
+  that opens the booking-type checkboxes. Row actions deactivate/reactivate; adding a person is a
+  button that reveals the email form. A second tab, "What each role can do", is a read-only permission
+  matrix per tool (capabilities × Read-only/User/Admin, built from the registry), and a third is the
+  activity log with ids shown as names. The page starts read-only; a slim "unlock changes" strip
+  takes the authenticator code (see below) and keeps the step-up for ten minutes; without two enrolled
+  methods it links to `/internal/security` instead. Names are placed with `textContent`
+  only, so a name that looks like HTML is displayed, never run, and an address is typed once to add
+  someone and then never shown. **Code entry** (`wireCodeEntry` in `scripts/lib/staff-client.mjs`,
+  used by Access and Security) is a single numeric `autocomplete="one-time-code"` field with no
+  method dropdown in front of it; six digits submit automatically, and "Use a recovery code" swaps the
+  same field to plain text. `/internal` is the landing page: one sign-in and a list of the tools
+  you hold a role in (from `staff-me.mts`, which answers only about the caller, returns no email and
+  lists a tool only because a role exists — each tool still checks its own capability), plus Access
+  and Security for super admins. **Every internal page shares one Google sign-in per browser tab**
+  through `scripts/lib/staff-client.mjs` (storage key `tvc-staff-idtoken`, imported by the photo
+  pool, WhatsApp, event payments and accommodation pages as well as the new ones), so signing in
+  once opens them all and "use a different account" signs out of all of them; Access and Security
+  also share one step-up (`tvc-staff-stepup`). Each tool still checks its own role on the server for
+  every request. **All seven internal pages share one app shell, `layouts/StaffLayout.astro`**: a
+  collapsible left menu (Home, the four tools, and Access/Security for super admins) that sits
+  flush left with the page content using the full remaining width, a slide-over menu with a top bar
+  on phones, and none of the public site's header, footer or analytics (the pages stay `noindex`).
+  The menu reads `/api/staff-me` (cached in `sessionStorage` key `tvc-staff-me`, refreshed on
+  focus and after sign-in) and shows only tools the person holds a role in; it is navigation only,
+  never authorisation. The collapsed/expanded choice is kept in `localStorage`
+  (`tvc-staff-nav-collapsed`); WhatsApp and the accommodation calendar start collapsed to give
+  their wide layouts room. The shell owns the page title style (one `h1` size for every tool), the only Sign-out
+  control, and a compact **staff button** style (the public site's large orange `.button` becomes a
+  36px dark-green control with a quiet outlined secondary, via low-specificity `main .button` rules in
+  `StaffLayout.astro` so a page's own `--danger`/`--primary` modifiers still win; 44px on touch screens); staff screens use a four-step type scale (0.8 / 0.9 / 1 / 1.125 rem) and
+  `--tvc-line-strong` for control borders (3:1 on white; `--tvc-line` stays for dividers). Each link is still a full page load (in-page navigation, per-tool
+  sub-menus and tabs are later steps); `components/StaffNav.astro` was removed. Where each tool
+  lives is `MODULE_INFO[...].path` in `staff-registry.ts`.
 - **`scripts/lib/accommodation-db.mjs`** — hand-rolled Supabase PostgREST REST client (same style
   as `supabase.mjs` below, no `@supabase/supabase-js`), the sole data-access layer for
   `accommodation-admin.mts`. Conflict-checking lives entirely in Postgres (see above) — this file

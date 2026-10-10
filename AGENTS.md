@@ -33,6 +33,13 @@ project, unrelated to the website itself, kept here alongside `RAZORPAY.md`/`BUF
 that's where TVC's other operational tooling docs live. **Update it in the same change**
 whenever that changes — the sync script, sheet layout, trigger cadence, or Drive folder.
 
+## Usage & limits documentation
+
+`USAGE.md` documents the free-tier / credit usage dashboard (`/internal/usage`) and its alert
+emails — what is measured vs typed in, the thresholds, the setup steps, and how to add a meter.
+**Update it in the same change** whenever that changes — a new service tracked, a changed
+threshold, a new typed-in meter, a new alert rule.
+
 ## Design language
 
 `src/styles/global.css` is the single source of truth for TVC's design tokens (colors, type,
@@ -44,6 +51,9 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
 - Orange has three jobs: `--tvc-orange-cta` fills the primary `.button` only; `--tvc-orange` is for
   non-text marks (focus rings, underlines, hover); small orange text uses `--tvc-orange-text`, and
   orange on dark green uses `--tvc-orange-light`. Never white text on `--tvc-orange-cta`.
+- Inside the staff shell (`StaffLayout.astro`) `.button` is a compact 36px dark-green control, not the
+  public orange pill; don't restyle buttons per page, add a modifier class only when a page needs a
+  different colour.
 - Use `--radius` (14px, cards), `--radius-sm` (8px), `--radius-field` (10px) and `--shadow-soft`
   rather than literals.
 - Fonts: headings use `--font-display`, everything else `--font-body`; `--font-wordmark` is only

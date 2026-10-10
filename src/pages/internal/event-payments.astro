@@ -8,7 +8,7 @@
 // staff roles (`view` to read, admin-only `refund` to move money) — see
 // event-payments-admin.mts's header comment. Payer email and phone are never
 // sent to this page, only whether each is on file.
-import BaseLayout from '../../layouts/BaseLayout.astro';
+import StaffLayout from '../../layouts/StaffLayout.astro';
 import { getCollection } from 'astro:content';
 
 // Only events actually wired up for direct payment have anything to show
@@ -28,7 +28,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   }));
 ---
 
-<BaseLayout title="Event Payments" description="Internal event payment tracking and refunds." noindex>
+<StaffLayout title="Event Payments" description="Internal event payment tracking and refunds." current="event-payments">
   <section class="section wrapper">
     <h1>Event Payments</h1>
     <p class="hint">Registrations, cancellations, and money collected per event — and where to issue a refund.</p>
@@ -186,7 +186,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
       </div>
     </div>
   </section>
-</BaseLayout>
+</StaffLayout>
 
 <script is:inline src="https://accounts.google.com/gsi/client"></script>
 <script type="application/json" id="events-data" set:html={JSON.stringify(paidEvents)} />
@@ -911,7 +911,11 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     pendingRequestCount: number;
   }
 
-  const STORAGE_KEY = 'tvc-event-payments-idtoken';
+  // One Google sign-in for every internal tool in this tab: the same stored
+  // sign-in as /internal, /internal/access and /internal/security (see
+  // scripts/lib/staff-client.mjs), so signing in once opens them all. Each tool
+  // still checks its own role on the server for every request.
+  import { TOKEN_KEY as STORAGE_KEY } from '../../../scripts/lib/staff-client.mjs';
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
   const EVENTS: EventOption[] = JSON.parse(document.getElementById('events-data')!.textContent!);

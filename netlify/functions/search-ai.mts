@@ -5,7 +5,6 @@
 // chat.mts uses only if Gemini is unset, rate-limited, or erroring - so a
 // free-tier hiccup degrades to a paid-but-working answer instead of an
 // outright failure.
-import { getStore } from '@netlify/blobs';
 import {
   selectRelevantPages,
   formatPages,
@@ -15,6 +14,8 @@ import {
   callAnthropic,
   type SitePage,
 } from './lib/site-retrieval';
+import { checkIpRateLimit, checkDailyCap, clientIp } from './lib/rate-limit';
+import { recordUsage } from './lib/usage-meter';
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 // Overridable via env var so a future model rename/deprecation doesn't need
@@ -52,36 +53,14 @@ const RATE_LIMIT_MAX_REQUESTS = 10;
 // distinct IPs each individually under the per-IP limit can't collectively
 // exhaust the paid-provider budget. Resets naturally since the key is
 // date-scoped, so there's nothing to prune.
-const ANTHROPIC_FALLBACK_DAILY_CAP = 200;
+// Lowered 200 -> 50 on 2026-10-04: a search request measured ~9.5k input
+// tokens, so on the paid fallback (claude-sonnet-5, $2/$10 per MTok) each one
+// costs ~2 cents and 200/day could cost ~$4/day against a small credit balance.
+// 50 caps the worst case near $1/day. Raise it if Gemini's free quota (500
+// requests/day) starts running out for real reasons.
+const ANTHROPIC_FALLBACK_DAILY_CAP = 50;
 
-interface RateLimitRecord {
-  count: number;
-  windowStart: number;
-}
-
-async function checkIpRateLimit(ip: string): Promise<boolean> {
-  const store = getStore('search-ai-rate-limit');
-  const now = Date.now();
-  const record = (await store.get(`ip:${ip}`, { type: 'json' })) as RateLimitRecord | null;
-
-  if (record && now - record.windowStart < RATE_LIMIT_WINDOW_MS) {
-    if (record.count >= RATE_LIMIT_MAX_REQUESTS) return false;
-    await store.setJSON(`ip:${ip}`, { count: record.count + 1, windowStart: record.windowStart });
-    return true;
-  }
-
-  await store.setJSON(`ip:${ip}`, { count: 1, windowStart: now });
-  return true;
-}
-
-async function checkAnthropicFallbackBudget(): Promise<boolean> {
-  const store = getStore('search-ai-rate-limit');
-  const key = `anthropic-fallback:${new Date().toISOString().slice(0, 10)}`;
-  const count = ((await store.get(key, { type: 'json' })) as number | null) ?? 0;
-  if (count >= ANTHROPIC_FALLBACK_DAILY_CAP) return false;
-  await store.setJSON(key, count + 1);
-  return true;
-}
+const RATE_LIMIT_STORE = 'search-ai-rate-limit';
 
 const SEARCH_INSTRUCTIONS = `You are answering a single search query typed into the site search box on the Tamarind Valley Collective (TVC) website (tvc.farm), a 100-acre permaculture farm community near Kanakapura, India.
 
@@ -127,10 +106,18 @@ async function callGemini(apiKey: string, systemText: string, query: string): Pr
 
     if (!res.ok) {
       console.warn('[search-ai] Gemini API error', res.status, await res.text());
+      // 429 = the free-tier quota (or rate limit) is exhausted - the signal
+      // the usage dashboard cares most about, so it gets its own counter.
+      await recordUsage('gemini', { errors: 1, quota_exhausted: res.status === 429 ? 1 : 0 });
       return null;
     }
 
     const data = await res.json();
+    await recordUsage('gemini', {
+      requests: 1,
+      input_tokens: data.usageMetadata?.promptTokenCount,
+      output_tokens: data.usageMetadata?.candidatesTokenCount,
+    });
     if (data.promptFeedback?.blockReason) {
       console.warn('[search-ai] Gemini blocked the request', data.promptFeedback.blockReason);
       return null;
@@ -167,9 +154,7 @@ export default async (req: Request): Promise<Response> => {
     return jsonResponse({ error: 'Query is too long.' }, 400);
   }
 
-  const clientIp =
-    req.headers.get('x-nf-client-connection-ip') ?? req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
-  if (!(await checkIpRateLimit(clientIp))) {
+  if (!(await checkIpRateLimit(RATE_LIMIT_STORE, clientIp(req), RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX_REQUESTS))) {
     return jsonResponse({ error: 'Too many requests. Please try again in a few minutes.' }, 429);
   }
 
@@ -197,6 +182,8 @@ export default async (req: Request): Promise<Response> => {
     if (reply) {
       return jsonResponse({ reply, sources, provider: 'gemini' });
     }
+    // Gemini failed: from here the answer (if any) costs paid Anthropic credits.
+    await recordUsage('gemini', { fallbacks_to_anthropic: anthropicKey ? 1 : 0 });
   }
 
   if (!anthropicKey) {
@@ -204,8 +191,9 @@ export default async (req: Request): Promise<Response> => {
     return jsonResponse({ error: 'AI search is having trouble right now. Please try again shortly.' }, 502);
   }
 
-  if (!(await checkAnthropicFallbackBudget())) {
+  if (!(await checkDailyCap(RATE_LIMIT_STORE, 'anthropic-fallback', ANTHROPIC_FALLBACK_DAILY_CAP))) {
     console.warn('[search-ai] Anthropic fallback daily budget exhausted');
+    await recordUsage('anthropic', { search_fallback_cap_hits: 1 });
     return jsonResponse({ error: 'AI search is having trouble right now. Please try again shortly.' }, 502);
   }
 

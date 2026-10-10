@@ -1,0 +1,38 @@
+name: Domain expiry check
+
+# Daily check of when tvc.farm and syntropic.in expire, emailing
+# core-team@tvc.farm at 60 and 30 days out and then daily from 14 days.
+# Runs here rather than on Netlify on purpose: if Netlify ever pauses the site
+# (free-plan credits exhausted), a Netlify-hosted monitor would go silent at the
+# same moment. See scripts/check-domain-expiry.mjs.
+#
+# Only secret used: RESEND_API_KEY (already set for member-update-email.yml).
+# Holds no database credentials by design.
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Print what would be sent instead of emailing (set to 1)'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check domain expiry
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: node scripts/check-domain-expiry.mjs

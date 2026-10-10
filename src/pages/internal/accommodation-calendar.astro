@@ -8,7 +8,7 @@
 // Google Sign-In plus a live allow-list, same shell pattern as
 // photo-pool.astro/whatsapp.astro (own Sheet/env var - see
 // accommodation-admin.mts's header comment for why it isn't shared).
-import BaseLayout from '../../layouts/BaseLayout.astro';
+import StaffLayout from '../../layouts/StaffLayout.astro';
 import { getCollection } from 'astro:content';
 import { ACCOMMODATION_UNITS } from '../../../scripts/lib/accommodation.mjs';
 import { durationDays } from '../../utils/events';
@@ -44,7 +44,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }));
 ---
 
-<BaseLayout title="Accommodation Allocation" description="Internal accommodation booking tool." noindex>
+<StaffLayout title="Accommodation Allocation" description="Internal accommodation booking tool." current="accommodation" collapseByDefault>
   <section class="section wrapper">
     <h1>Accommodation Allocation</h1>
     <p class="hint">Record who's in which tent, for how long. The public site only ever shows aggregate availability derived from this.</p>
@@ -181,7 +181,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       </div>
     </div>
   </section>
-</BaseLayout>
+</StaffLayout>
 
 <script is:inline src="https://accounts.google.com/gsi/client"></script>
 
@@ -395,17 +395,6 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       flex-direction: column;
       gap: 10px;
     }
-  }
-
-  /* The site-wide chat bubble (ChatWidget.astro, rendered by BaseLayout on
-     every page including this internal one) sits at z-index 100, above the
-     booking modal's own z-index 90 - on mobile it physically overlapped the
-     second tent row's "+ Guest" button by ~15px (design critique,
-     2026-09-10), so a tap aimed at +Guest could silently open marketing
-     chat instead. :global() since #cw-root belongs to a different
-     component's template, outside this page's own scoped-style subtree. */
-  :global(body:has(#booking-modal:not([hidden])) #cw-root) {
-    display: none;
   }
 
   .form {
@@ -1463,31 +1452,13 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 <script>
   import { normalizeMobileNumber, isValidEmail } from '../../../scripts/lib/accommodation.mjs';
 
-  // Masks an already-saved guest's contact details for display (Sharath,
-  // 2026-09-15 - this tool isn't Madhavan-only, Linger's team has access
-  // too, so a saved guest's real number/email shouldn't sit in plain text
-  // for whoever else opens that booking). Display-only: the real value
-  // never leaves the underlying <input>/dataset, only what's rendered in
-  // the masked-field-text span differs. Keeps a few characters on each end
-  // so the right guest is still recognisable at a glance without exposing
-  // the whole number/address.
-  function maskMobileNumber(value: string): string {
-    if (!value) return '';
-    if (value.length <= 4) return '•'.repeat(value.length);
-    return value.slice(0, 3) + '•'.repeat(Math.max(value.length - 5, 3)) + value.slice(-2);
-  }
-
-  function maskEmail(value: string): string {
-    if (!value) return '';
-    const at = value.indexOf('@');
-    if (at <= 0) return '•'.repeat(value.length);
-    const local = value.slice(0, at);
-    return `${local.slice(0, 1)}${'•'.repeat(Math.max(local.length - 1, 3))}${value.slice(at)}`;
-  }
-
   declare const google: any;
 
-  const STORAGE_KEY = 'tvc-accommodation-idtoken';
+  // One Google sign-in for every internal tool in this tab: the same stored
+  // sign-in as /internal, /internal/access and /internal/security (see
+  // scripts/lib/staff-client.mjs), so signing in once opens them all. Each tool
+  // still checks its own role on the server for every request.
+  import { TOKEN_KEY as STORAGE_KEY } from '../../../scripts/lib/staff-client.mjs';
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
   interface EventOption {
@@ -1509,8 +1480,13 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   interface Guest {
     personId?: string;
     name?: string;
+    // Only ever a value typed in this session (a new guest, or a replacement
+    // for a saved one) - the server never sends a saved guest's real number
+    // or email, just whether each is on file (hasMobile/hasEmail).
     mobileNumber?: string;
     email?: string;
+    hasMobile?: boolean;
+    hasEmail?: boolean;
     ageGroup?: 'Adult' | 'Child';
     gender?: string;
     preferences?: string;
@@ -1518,9 +1494,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   interface GuestMatch {
     id: string;
+    // Short tag that tells two same-named guests apart in the typeahead.
+    ref: string;
     name: string;
-    mobileNumber?: string;
-    email?: string;
+    hasMobile: boolean;
+    hasEmail: boolean;
     gender?: string;
     preferences?: string;
   }
@@ -1897,6 +1875,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     const ageGroup = guest.ageGroup ?? 'Adult';
     const gender = guest.gender ?? 'NA';
     row.dataset.personId = guest.personId ?? '';
+    row.dataset.hasMobile = guest.hasMobile ? '1' : '';
+    row.dataset.hasEmail = guest.hasEmail ? '1' : '';
     row.innerHTML = `
       <div class="guest-row-main">
         <div class="guest-fields">
@@ -1928,7 +1908,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
             <input type="tel" data-field="mobileNumber" placeholder="Mobile" ${guest.personId ? '' : 'required'} value="${guest.mobileNumber ?? ''}" />
             <span class="masked-field-display" hidden>
               <span class="masked-field-text"></span>
-              <button type="button" class="masked-field-edit-btn">Edit</button>
+              <button type="button" class="masked-field-edit-btn">Replace</button>
             </span>
           </div>
           <div class="guest-field guest-field--email">
@@ -1936,7 +1916,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
             <input type="email" data-field="email" placeholder="Optional" value="${guest.email ?? ''}" />
             <span class="masked-field-display" hidden>
               <span class="masked-field-text"></span>
-              <button type="button" class="masked-field-edit-btn">Edit</button>
+              <button type="button" class="masked-field-edit-btn">Replace</button>
             </span>
           </div>
         </div>
@@ -2031,60 +2011,47 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       dropdown = null;
     }
 
-    // ---- Contact-detail masking (maskMobileNumber/maskEmail, defined
-    // above) - a guest linked to an already-saved directory record
-    // (row.dataset.personId set) shows masked, read-only text instead of
-    // the real value, since this tool isn't Madhavan-only - Linger's team
-    // has access too. Plain text only while genuinely new data is being
-    // typed (no personId yet).
-    //
-    // "Edit" does NOT reveal the real stored value on screen (Sharath,
-    // 2026-09-15: an earlier version showed the full number once Edit was
-    // clicked, defeating the point) - it stashes the real value in
-    // *EditOriginal and clears the input to an empty, focused field whose
-    // placeholder is the *masked* value, so typing replaces the number
-    // without the real one ever having been rendered. Blurring with
-    // nothing typed restores the stashed original (still masked, nothing
-    // was actually changed); blurring with something typed treats it as a
-    // genuine replacement and runs the normal validation/mask path on the
-    // new value. Re-run after every place personId or the value itself
-    // changes (selectMatch, the conflict-resolution buttons below, blur)
-    // so it stays correct in both directions - masking newly-saved data
-    // and unmasking data that turned out not to be a saved match after all.
+    // ---- Contact details are write-only. A guest linked to a saved
+    // directory record (row.dataset.personId) never has their number or
+    // email in the browser at all: the server sends only whether each is on
+    // file (row.dataset.hasMobile / hasEmail). The field shows "On file
+    // (hidden)" with a Replace button; Replace opens an empty input, and
+    // typing a value there replaces the stored one on save. Leaving it
+    // untouched sends nothing, and the server keeps what it has
+    // (accommodation_resolve_person coalesces missing values to the stored
+    // ones). Plain inputs only while genuinely new data is being typed (no
+    // personId yet). Re-run after every place personId or a value changes.
     const mobileMaskWrap = row.querySelector('.guest-field--mobile .masked-field-display') as HTMLElement;
     const mobileMaskText = mobileMaskWrap.querySelector('.masked-field-text') as HTMLElement;
     const emailMaskWrap = row.querySelector('.guest-field--email .masked-field-display') as HTMLElement;
     const emailMaskText = emailMaskWrap.querySelector('.masked-field-text') as HTMLElement;
-    let mobileRevealed = false;
-    let emailRevealed = false;
-    let mobileEditOriginal: string | null = null;
-    let emailEditOriginal: string | null = null;
+    let mobileEditing = false;
+    let emailEditing = false;
 
     function renderMobileMask() {
-      const shouldMask = !mobileRevealed && Boolean(row.dataset.personId) && mobileInput.value.trim() !== '' && mobileWarning.hidden;
+      // Required only for a guest with no saved record - a saved one keeps
+      // the number the server already has.
+      mobileInput.required = !row.dataset.personId;
+      const shouldMask = !mobileEditing && Boolean(row.dataset.personId) && row.dataset.hasMobile === '1' && mobileInput.value.trim() === '';
       mobileInput.hidden = shouldMask;
       mobileMaskWrap.hidden = !shouldMask;
-      if (shouldMask) mobileMaskText.textContent = maskMobileNumber(mobileInput.value.trim());
+      if (shouldMask) mobileMaskText.textContent = 'On file (hidden)';
     }
     function renderEmailMask() {
-      const shouldMask = !emailRevealed && Boolean(row.dataset.personId) && emailInput.value.trim() !== '' && emailWarning.hidden;
+      const shouldMask = !emailEditing && Boolean(row.dataset.personId) && row.dataset.hasEmail === '1' && emailInput.value.trim() === '';
       emailInput.hidden = shouldMask;
       emailMaskWrap.hidden = !shouldMask;
-      if (shouldMask) emailMaskText.textContent = maskEmail(emailInput.value.trim());
+      if (shouldMask) emailMaskText.textContent = 'On file (hidden)';
     }
     mobileMaskWrap.querySelector('.masked-field-edit-btn')!.addEventListener('click', () => {
-      mobileRevealed = true;
-      mobileEditOriginal = mobileInput.value;
-      mobileInput.value = '';
-      mobileInput.placeholder = maskMobileNumber(mobileEditOriginal) || 'Mobile';
+      mobileEditing = true;
+      mobileInput.placeholder = 'Enter new number';
       renderMobileMask();
       mobileInput.focus();
     });
     emailMaskWrap.querySelector('.masked-field-edit-btn')!.addEventListener('click', () => {
-      emailRevealed = true;
-      emailEditOriginal = emailInput.value;
-      emailInput.value = '';
-      emailInput.placeholder = maskEmail(emailEditOriginal) || 'Optional';
+      emailEditing = true;
+      emailInput.placeholder = 'Enter new email';
       renderEmailMask();
       emailInput.focus();
     });
@@ -2093,9 +2060,12 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
     function selectMatch(match: GuestMatch) {
       row.dataset.personId = match.id;
+      row.dataset.hasMobile = match.hasMobile ? '1' : '';
+      row.dataset.hasEmail = match.hasEmail ? '1' : '';
       nameInput.value = match.name;
-      mobileInput.value = match.mobileNumber ?? '';
-      emailInput.value = match.email ?? '';
+      // The directory entry's number and email stay on the server.
+      mobileInput.value = '';
+      emailInput.value = '';
       genderSelect.value = match.gender ?? 'NA';
       preferencesInput.value = match.preferences ?? '';
       renderPreferencesState();
@@ -2103,10 +2073,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       closeDropdown();
       mobileWarning.hidden = true;
       emailWarning.hidden = true;
-      mobileRevealed = false;
-      emailRevealed = false;
-      mobileEditOriginal = null;
-      emailEditOriginal = null;
+      mobileEditing = false;
+      emailEditing = false;
       renderMobileMask();
       renderEmailMask();
     }
@@ -2141,16 +2109,17 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       mobileConflict.querySelector('[data-action="same"]')!.addEventListener('click', () => {
         row.dataset.personId = different.id;
         genderSelect.value = different.gender ?? genderSelect.value;
-        if (!emailInput.value.trim()) emailInput.value = different.email ?? '';
+        // Matched by the number just typed; whether they have an email on
+        // file comes from the server, never the address itself.
+        row.dataset.hasMobile = '1';
+        row.dataset.hasEmail = different.hasEmail ? '1' : '';
         if (!preferencesInput.value.trim()) preferencesInput.value = different.preferences ?? '';
         renderPreferencesState();
         historyToggle.hidden = false;
         mobileConflict.hidden = true;
         emailWarning.hidden = true;
-        mobileRevealed = false;
-        emailRevealed = false;
-        mobileEditOriginal = null;
-        emailEditOriginal = null;
+        mobileEditing = false;
+        emailEditing = false;
         renderMobileMask();
         renderEmailMask();
       });
@@ -2176,7 +2145,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       multiTentNote.hidden = true;
       const name = nameInput.value.trim().toLowerCase();
       const normalizedMobile = normalizeMobileNumber(mobileInput.value);
-      if (!name || !normalizedMobile) return;
+      const myPersonId = row.dataset.personId;
+      if (!name || (!normalizedMobile && !myPersonId)) return;
       const myOption = row.closest('.tent-option');
       for (const otherOption of Array.from(tentsContainer.querySelectorAll<HTMLElement>('.tent-option'))) {
         if (otherOption === myOption) continue;
@@ -2184,7 +2154,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         for (const otherRow of Array.from(otherOption.querySelectorAll<HTMLElement>('.guest-row'))) {
           const otherName = (otherRow.querySelector('[data-field="name"]') as HTMLInputElement).value.trim().toLowerCase();
           const otherMobile = normalizeMobileNumber((otherRow.querySelector('[data-field="mobileNumber"]') as HTMLInputElement).value);
-          if (otherName !== name || otherMobile !== normalizedMobile) continue;
+          // A saved guest carries no number in the browser, so one linked to
+          // the directory is compared by record id instead.
+          const sameDirectoryGuest = Boolean(myPersonId) && myPersonId === otherRow.dataset.personId;
+          if (otherName !== name || !(sameDirectoryGuest || (normalizedMobile && otherMobile === normalizedMobile))) continue;
           const unit = UNITS.find((u) => u.id === otherOption.dataset.tentId);
           multiTentNote.hidden = false;
           multiTentNote.textContent = `ℹ Same name + mobile as a guest already entered in ${unit?.label ?? otherOption.dataset.tentId} - they'll be recorded as booked in both tents.`;
@@ -2199,26 +2172,21 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     // real regardless.
     mobileInput.addEventListener('blur', () => {
       mobileInput.placeholder = 'Mobile';
-      // Edit was opened (see the edit-btn handler above) but nothing new
-      // was typed - restore the real, never-displayed value rather than
-      // leaving the field blank (which would fail the required check and,
-      // if saved, silently erase a real guest's number).
-      if (mobileEditOriginal !== null && mobileInput.value.trim() === '') {
-        mobileInput.value = mobileEditOriginal;
-        mobileEditOriginal = null;
+      // Replace was opened but nothing new was typed - back to "On file";
+      // nothing is sent, so the stored number is kept.
+      if (mobileEditing && mobileInput.value.trim() === '') {
+        mobileEditing = false;
         mobileWarning.hidden = true;
-        mobileRevealed = false;
         renderMobileMask();
         return;
       }
-      mobileEditOriginal = null;
       const raw = mobileInput.value.trim();
       const invalid = raw !== '' && !normalizeMobileNumber(raw);
       mobileWarning.hidden = !invalid;
       mobileWarning.textContent = invalid ? '⚠ Doesn’t look like a valid mobile number (10 digits for India, or include a country code).' : '';
       if (!invalid) checkMobileConflict();
       checkSameGuestOtherTent();
-      mobileRevealed = false;
+      mobileEditing = false;
       renderMobileMask();
     });
 
@@ -2227,26 +2195,25 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     // constraint (migration 0015) is the actual gate.
     emailInput.addEventListener('blur', () => {
       emailInput.placeholder = 'Optional';
-      // Same "opened Edit, typed nothing" restore as mobile above.
-      if (emailEditOriginal !== null && emailInput.value.trim() === '') {
-        emailInput.value = emailEditOriginal;
-        emailEditOriginal = null;
+      // Same "opened Replace, typed nothing" back-out as mobile above.
+      if (emailEditing && emailInput.value.trim() === '') {
+        emailEditing = false;
         emailWarning.hidden = true;
-        emailRevealed = false;
         renderEmailMask();
         return;
       }
-      emailEditOriginal = null;
       const raw = emailInput.value.trim();
       const invalid = raw !== '' && !isValidEmail(raw);
       emailWarning.hidden = !invalid;
       emailWarning.textContent = invalid ? '⚠ Doesn’t look like a valid email address.' : '';
-      emailRevealed = false;
+      emailEditing = false;
       renderEmailMask();
     });
 
     nameInput.addEventListener('input', () => {
       row.dataset.personId = ''; // typing again after a pick means "not necessarily that person anymore"
+      row.dataset.hasMobile = '';
+      row.dataset.hasEmail = '';
       historyToggle.hidden = true;
       closeDropdown();
       debouncedSearch(nameInput.value);
@@ -2263,7 +2230,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       for (const m of matches) {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.textContent = m.mobileNumber ? `${m.name} — ${maskMobileNumber(m.mobileNumber)}` : m.name;
+        btn.textContent = `${m.name} · #${m.ref}`;
         btn.addEventListener('click', () => selectMatch(m));
         dropdown.appendChild(btn);
       }
