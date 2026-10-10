@@ -24,6 +24,10 @@ import {
   insertMessage,
   markConversationRead,
   setConversationBlocked,
+  listOptedOutPhones,
+  addOptOut,
+  removeOptOut,
+  getLatestInboundWaMessageId,
 } from '../../scripts/lib/supabase.mjs';
 import { requireStaff, logStaffAction, type StaffGrant } from './lib/staff-access';
 import { canSeeNames, maskEmail, maskName } from './lib/staff-masking';
@@ -64,6 +68,15 @@ async function handleConversations(url: URL, staff: StaffGrant): Promise<Respons
     const conversations = search
       ? await searchConversations(search, { ...(limit ? { limit } : {}), matchNames: namesVisible })
       : await listConversations(limit ? { limit } : {});
+    // Which of these numbers asked us to stop WhatsApp messages (STOP reply, or
+    // a staff opt-out below). Best-effort: if the list can't be read the inbox
+    // still loads, it just can't show the state.
+    let optedOut = new Set<string>();
+    try {
+      optedOut = await listOptedOutPhones(conversations.map((c: any) => c.wa_phone));
+    } catch (err) {
+      console.error('Failed to read the WhatsApp opt-out list', err);
+    }
     return jsonResponse({
       capabilities: {
         reply: roleHasCapability('whatsapp', staff.role, 'reply'),
@@ -82,6 +95,7 @@ async function handleConversations(url: URL, staff: StaffGrant): Promise<Respons
           lastMessagePreview: lastMessage?.body ?? null,
           lastMessageDirection: lastMessage?.direction ?? null,
           isBlocked: c.is_blocked ?? false,
+          optedOut: optedOut.has(c.wa_phone),
           // Set when the chat started from a Click-to-WhatsApp ad or an
           // Instagram/Facebook post (Meta's `referral` object).
           referral: c.referral_source_type
@@ -299,6 +313,97 @@ async function handleBlock(req: Request, staff: StaffGrant): Promise<Response> {
   return jsonResponse({ ok: true, isBlocked: blocked });
 }
 
+// Staff opt a number out of (or back into) guest WhatsApp template messages —
+// the same whatsapp_opt_outs list a STOP reply writes to, which
+// lib/whatsapp-send.ts checks before every template send. For a guest who
+// asked another way (email, in person), or to undo a mistake. Nothing is sent
+// to the guest. Logged BEFORE it happens and refused if the log can't be
+// written, like blocking: switching someone's messages back on is only right
+// if THEY asked.
+async function handleOptOut(req: Request, staff: StaffGrant): Promise<Response> {
+  let payload: { conversationId?: string; optedOut?: boolean };
+  try {
+    payload = await req.json();
+  } catch {
+    return jsonResponse({ error: 'Invalid request body' }, 400);
+  }
+  const { conversationId, optedOut } = payload;
+  if (!conversationId || typeof optedOut !== 'boolean') {
+    return jsonResponse({ error: 'conversationId and optedOut are required' }, 400);
+  }
+
+  let conversation: { id: string; wa_phone: string } | null;
+  try {
+    conversation = await getConversation(conversationId);
+  } catch (err) {
+    console.error('Failed to look up conversation', err);
+    return jsonResponse({ error: 'Failed to reach the message store' }, 502);
+  }
+  if (!conversation) return jsonResponse({ error: 'Conversation not found' }, 404);
+
+  try {
+    await logStaffAction({
+      actorId: staff.id,
+      action: optedOut ? 'whatsapp.opt_out' : 'whatsapp.opt_in',
+      module: 'whatsapp',
+      detail: { conversationId },
+    });
+  } catch (err) {
+    console.error('Failed to write staff audit log; refusing to change the opt-out list', err);
+    return jsonResponse({ error: 'Server misconfigured' }, 500);
+  }
+
+  try {
+    const phone = `+${conversation.wa_phone}`;
+    if (optedOut) await addOptOut(phone, 'staff');
+    else await removeOptOut(phone);
+  } catch (err) {
+    console.error('Failed to update the WhatsApp opt-out list', err);
+    return jsonResponse({ error: 'Failed to reach the message store' }, 502);
+  }
+  return jsonResponse({ ok: true, optedOut });
+}
+
+// Marks the guest's latest message as read (blue ticks on their phone) and,
+// when `typing` is set, shows "typing…" to them for up to ~25 seconds or until
+// a reply is sent. Both are one Cloud API call against that message's id.
+// Best-effort by design: the inbox page calls this opportunistically, and a
+// failure (no inbound message, outside the 24h window, Meta hiccup) must never
+// surface as an error to staff, so it always answers 200 with `ok`.
+async function handleSeen(req: Request): Promise<Response> {
+  let payload: { conversationId?: string; typing?: boolean };
+  try {
+    payload = await req.json();
+  } catch {
+    return jsonResponse({ error: 'Invalid request body' }, 400);
+  }
+  if (!payload.conversationId) return jsonResponse({ error: 'conversationId is required' }, 400);
+
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+  if (!phoneNumberId || !accessToken) return jsonResponse({ ok: false });
+
+  try {
+    const waMessageId = await getLatestInboundWaMessageId(payload.conversationId);
+    if (!waMessageId) return jsonResponse({ ok: false });
+    const res = await fetch(`https://graph.facebook.com/${WHATSAPP_GRAPH_API_VERSION}/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        status: 'read',
+        message_id: waMessageId,
+        ...(payload.typing ? { typing_indicator: { type: 'text' } } : {}),
+      }),
+    });
+    if (!res.ok) console.error('[whatsapp-admin] Mark-as-read failed', res.status, await res.text());
+    return jsonResponse({ ok: res.ok });
+  } catch (err) {
+    console.error('[whatsapp-admin] Mark-as-read threw', err);
+    return jsonResponse({ ok: false });
+  }
+}
+
 export default async (req: Request): Promise<Response> => {
   const url = new URL(req.url);
 
@@ -314,7 +419,11 @@ export default async (req: Request): Promise<Response> => {
           ? { capability: 'reply', run: (staff) => handleReply(req, staff) }
           : url.pathname === '/api/whatsapp-admin/block' && req.method === 'POST'
             ? { capability: 'manage', run: (staff) => handleBlock(req, staff) }
-            : null;
+            : url.pathname === '/api/whatsapp-admin/opt-out' && req.method === 'POST'
+              ? { capability: 'manage', run: (staff) => handleOptOut(req, staff) }
+              : url.pathname === '/api/whatsapp-admin/seen' && req.method === 'POST'
+                ? { capability: 'reply', run: () => handleSeen(req) }
+                : null;
   if (!route) return jsonResponse({ error: 'Not found' }, 404);
 
   const auth = await requireStaff(req, 'whatsapp', route.capability);
@@ -328,5 +437,7 @@ export const config = {
     '/api/whatsapp-admin/messages',
     '/api/whatsapp-admin/reply',
     '/api/whatsapp-admin/block',
+    '/api/whatsapp-admin/opt-out',
+    '/api/whatsapp-admin/seen',
   ],
 };

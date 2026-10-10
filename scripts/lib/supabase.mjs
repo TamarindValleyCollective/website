@@ -380,3 +380,27 @@ export async function listHealthEvents(limit = 20) {
   const res = await restFetch(`/whatsapp_health_events?select=severity,title,detail,field,created_at&order=created_at.desc&limit=${limit}`);
   return res.json();
 }
+
+// Which of these conversation numbers (bare digits, as stored in wa_phone) are
+// on the STOP opt-out list (whatsapp_opt_outs keys them as "+<digits>"). One
+// query for the whole inbox page, so the conversation list can show the state
+// without a round trip per row.
+/** @param {string[]} waPhones */
+export async function listOptedOutPhones(waPhones) {
+  if (waPhones.length === 0) return new Set();
+  const keys = waPhones.map((p) => `"+${p}"`).join(',');
+  const res = await restFetch(`/whatsapp_opt_outs?phone=in.(${encodeURIComponent(keys)})&select=phone`);
+  return new Set((await res.json()).map((r) => r.phone.replace(/^\+/, '')));
+}
+
+// The newest message the guest sent us that Meta gave an id (needed to mark it
+// read / show "typing…" against it). Null if the guest never wrote.
+/** @param {string} conversationId */
+export async function getLatestInboundWaMessageId(conversationId) {
+  const res = await restFetch(
+    `/whatsapp_messages?conversation_id=eq.${conversationId}&direction=eq.inbound&wa_message_id=not.is.null` +
+      `&select=wa_message_id&order=created_at.desc&limit=1`,
+  );
+  const rows = await res.json();
+  return rows[0]?.wa_message_id ?? null;
+}

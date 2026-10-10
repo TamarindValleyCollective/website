@@ -525,6 +525,11 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `whatsapp_conversations.last_stale_alert_at`, reset to null on every new inbound message so
   each message gets its own full 60-minute countdown), so a single missed email can't let a
   message silently go unanswered.
+- **WhatsApp inbox controls** — `whatsapp-admin.mts` also serves `/api/whatsapp-admin/opt-out`
+  (`manage`: add/remove the contact on `whatsapp_opt_outs`, audit-logged first) and
+  `/api/whatsapp-admin/seen` (`reply`: marks the guest's latest message read and optionally shows
+  the typing indicator, one Cloud API call). The conversation list now carries each contact's
+  opt-out state. Canned replies live in `src/data/whatsapp-quick-replies.ts`.
 - **WhatsApp account-health alerts** — `whatsapp-webhook.mts` passes Meta's non-message webhook
   fields (template status/quality/category, phone-number quality, account updates and alerts)
   through `lib/whatsapp-health.ts`, stores each in `whatsapp_health_events` (migration `0036`,

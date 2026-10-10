@@ -1440,6 +1440,10 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
         return `${a} blocked a WhatsApp contact.`;
       case 'whatsapp.unblock_requested':
         return `${a} unblocked a WhatsApp contact.`;
+      case 'whatsapp.opt_out':
+        return `${a} stopped WhatsApp booking messages to a contact.`;
+      case 'whatsapp.opt_in':
+        return `${a} turned WhatsApp booking messages back on for a contact.`;
       case 'photo-pool.approve':
         return `${a} approved a photo.`;
       case 'photo-pool.reject':

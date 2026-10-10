@@ -5,6 +5,7 @@
 // unlinked from nav; gated by Google Sign-In plus the same curator allow-list
 // photo-pool.astro uses, not a shared password. See WHATSAPP.md.
 import StaffLayout from '../../layouts/StaffLayout.astro';
+import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
 ---
 
 <StaffLayout title="WhatsApp" description="Internal WhatsApp reply dashboard." current="whatsapp" collapseByDefault>
@@ -51,6 +52,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
             <strong id="thread-name"></strong>
             <span id="thread-source" class="thread-source" hidden></span>
           </div>
+          <button type="button" id="optout-btn" class="block-btn">Stop WhatsApp updates</button>
           <button type="button" id="block-btn" class="block-btn">Block</button>
         </div>
         <div id="messages" class="messages" hidden></div>
@@ -58,6 +60,9 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
           <div class="composer-signature">
             <label for="responder-name">Signing as</label>
             <input type="text" id="responder-name" placeholder="Your name" required />
+          </div>
+          <div class="quick-replies" role="group" aria-label="Canned replies">
+            {WHATSAPP_QUICK_REPLIES.map((q) => <button type="button" class="quick-reply" data-text={q.text}>{q.label}</button>)}
           </div>
           <form id="reply-form" class="reply-form">
             <textarea id="reply-input" placeholder="Type a reply…" title="⌘/Ctrl + Enter to send" required></textarea>
@@ -430,6 +435,40 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     outline-offset: 2px;
   }
 
+  .block-btn + .block-btn {
+    margin-left: 6px;
+  }
+
+  .quick-replies {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .quick-reply {
+    appearance: none;
+    border: 1px solid var(--tvc-line);
+    background: var(--tvc-white);
+    color: var(--tvc-ink-soft);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 150ms ease-out;
+  }
+
+  .quick-reply:hover {
+    background: var(--tvc-cream);
+  }
+
+  .quick-reply:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
   .block-btn:disabled {
     opacity: 0.5;
     cursor: default;
@@ -710,6 +749,8 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     lastMessagePreview: string | null;
     lastMessageDirection: 'inbound' | 'outbound' | null;
     isBlocked: boolean;
+    // On the STOP opt-out list: no WhatsApp template messages are sent to them.
+    optedOut: boolean;
     // Click-to-WhatsApp attribution, when the chat began from an ad or post.
     referral: { type: string; headline: string | null; url: string | null } | null;
   }
@@ -741,6 +782,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   const threadName = document.getElementById('thread-name') as HTMLElement;
   const threadSource = document.getElementById('thread-source') as HTMLElement;
   const blockBtn = document.getElementById('block-btn') as HTMLButtonElement;
+  const optOutBtn = document.getElementById('optout-btn') as HTMLButtonElement;
   const messagesEl = document.getElementById('messages') as HTMLElement;
   const composer = document.getElementById('composer') as HTMLElement;
   const responderNameInput = document.getElementById('responder-name') as HTMLInputElement;
@@ -1036,10 +1078,56 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       if (!res.ok) return;
       const data = (await res.json()) as { messages: Message[] };
       renderMessages(data.messages);
+      markSeenIfNew(data.messages);
     } catch {
       // handled by authedFetch
     }
   }
+
+  // Read receipts: when a staff member who can reply has the thread open and the
+  // guest's latest message is one we haven't acknowledged in this browser yet,
+  // tell WhatsApp it was read (blue ticks on the guest's phone). Fire-and-
+  // forget — the server answers 200 even when Meta refuses (no inbound message,
+  // outside the 24h window), and nothing here may ever interrupt reading.
+  // Read-only roles never trigger it, though opening a thread still clears the
+  // inbox's own unread dot for everyone.
+  const seenInbound = new Map<string, string>();
+  function markSeenIfNew(messages: Message[]) {
+    if (!selectedConversationId || !capabilities.reply || document.visibilityState !== 'visible') return;
+    const latestInbound = [...messages].reverse().find((m) => m.direction === 'inbound');
+    if (!latestInbound || seenInbound.get(selectedConversationId) === latestInbound.id) return;
+    seenInbound.set(selectedConversationId, latestInbound.id);
+    authedFetch('/api/whatsapp-admin/seen', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ conversationId: selectedConversationId }),
+    }).catch(() => {});
+  }
+
+  // "typing…" on the guest's phone while staff write a reply. WhatsApp shows it
+  // for about 25 seconds, so re-send at most every 20 while they keep typing.
+  let lastTypingSentAt = 0;
+  replyInput.addEventListener('input', () => {
+    if (!selectedConversationId || !capabilities.reply || !replyInput.value.trim()) return;
+    if (Date.now() - lastTypingSentAt < 20000) return;
+    lastTypingSentAt = Date.now();
+    authedFetch('/api/whatsapp-admin/seen', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ conversationId: selectedConversationId, typing: true }),
+    }).catch(() => {});
+  });
+
+  // Canned replies: drop the text into the reply box (after anything already
+  // typed) for the staff member to edit and send themselves.
+  composer.addEventListener('click', (e) => {
+    const chip = (e.target as HTMLElement).closest<HTMLElement>('.quick-reply');
+    if (!chip) return;
+    const text = chip.dataset.text ?? '';
+    replyInput.value = replyInput.value.trim() ? `${replyInput.value.trimEnd()}\n\n${text}` : text;
+    replyInput.focus();
+    replyInput.setSelectionRange(replyInput.value.length, replyInput.value.length);
+  });
 
   function selectConversation(conv: Conversation) {
     selectedConversationId = conv.id;
@@ -1051,6 +1139,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     // server enforces this too, this just stops the page offering it.
     composer.hidden = !capabilities.reply;
     blockBtn.hidden = !capabilities.manage;
+    optOutBtn.hidden = !capabilities.manage;
     threadAvatar.textContent = getInitials(conv.label, conv.id);
     threadAvatar.style.background = getAvatarColor(conv.id);
     threadName.textContent = conv.label;
@@ -1059,6 +1148,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       ? `Came from a ${conv.referral.type === 'post' ? 'post' : 'WhatsApp ad'}${conv.referral.headline ? `: ${conv.referral.headline}` : ''}`
       : '';
     updateBlockBtn(conv.isBlocked);
+    updateOptOutBtn(conv.optedOut);
     document.querySelectorAll('.conversation-item').forEach((el) => el.classList.remove('active'));
     // Optimistic — the real read-state update happens server-side as a side
     // effect of loadMessages() below (see handleMessages), which the next
@@ -1080,6 +1170,43 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     blockBtn.textContent = isBlocked ? 'Unblock' : 'Block';
     blockBtn.classList.toggle('is-blocked', isBlocked);
   }
+
+  function updateOptOutBtn(optedOut: boolean) {
+    optOutBtn.textContent = optedOut ? 'Updates stopped · Resume' : 'Stop WhatsApp updates';
+    optOutBtn.classList.toggle('is-blocked', optedOut);
+  }
+
+  // Staff opt a number out of (or back into) the booking confirmations, reminders
+  // and refund notices we send by WhatsApp — the same list a STOP reply writes
+  // to. Nothing is sent to the guest. Resuming asks first: it is only right when
+  // the guest themselves asked for the messages back.
+  optOutBtn.addEventListener('click', async () => {
+    if (!selectedConversationId || !selectedConversation) return;
+    const nextOptedOut = !selectedConversation.optedOut;
+    if (!nextOptedOut && !confirm(`Turn WhatsApp booking messages back on for ${selectedConversation.label}? Only do this if they asked for them.`)) return;
+    if (nextOptedOut && !confirm(`Stop WhatsApp booking messages (confirmations, reminders, refund notices) to ${selectedConversation.label}? They will still get emails.`)) return;
+
+    optOutBtn.disabled = true;
+    try {
+      const res = await authedFetch('/api/whatsapp-admin/opt-out', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ conversationId: selectedConversationId, optedOut: nextOptedOut }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || 'Failed to update — try again.');
+        return;
+      }
+      selectedConversation.optedOut = nextOptedOut;
+      updateOptOutBtn(nextOptedOut);
+      loadConversations();
+    } catch {
+      // handled by authedFetch
+    } finally {
+      optOutBtn.disabled = false;
+    }
+  });
 
   blockBtn.addEventListener('click', async () => {
     if (!selectedConversationId || !selectedConversation) return;
