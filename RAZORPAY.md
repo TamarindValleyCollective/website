@@ -151,6 +151,8 @@ and its receipt copied Linger; fixed.
 
 **Test-mode emails.** Every email about a `mode = 'test'` booking (receipt, refund initiated/processed/event-cancelled, decline, guest cancellation acknowledgment, and the staff alerts) goes only to `contact@tvc.farm` with a `[TEST]` subject prefix — never the guest, Linger, or core-team (`netlify/functions/lib/email-routing.ts`), so refund and cancellation flows can be simulated safely.
 
+**Fee and balance warning on refunds.** Razorpay keeps its fee (MDR + GST) when a payment is refunded, and a refund is paid from the account's available balance, which only ever held the net amount (payment minus fee) — so a refund before the payment's own settlement is short by exactly the fee (found 2026-10-10: ₹2,250 UPI payment, ₹53.10 fee, ₹2,196.90 available), and after settlement the balance is zero anyway. Both refund confirm steps (single and "Cancel event") now say TVC bears the fee and that the available balance must cover the refund, with the known fee total for a bulk cancel; add funds in Razorpay (Account & Settings → Balances) before confirming.
+
 **Declining a cancellation request.** A pending request (`Cancellation requested`) also has a
 **Decline request** action (`POST /api/event-payments-admin/decline`, same `refund` capability,
 migration `0029_event_payments_cancellation_declined.sql`): it audit-logs `event-payments.cancellation_declined`,
