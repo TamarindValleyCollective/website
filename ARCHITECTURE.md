@@ -734,7 +734,8 @@ outside both the local machine and Netlify (the member-update-email workflow).
   Razorpay Payment Link so no new bookings arrive. `refund.processed` also emails the payer "Refund processed". The same `lib/refund-alert.ts` `sendStaffAlert()` (to
   `core-team@tvc.farm`, cc `stay@linger.in`) also fires on a guest cancellation request (`cancel-booking.mts`, "Action
   needed") and when a payment lands after registration closed (`razorpay-webhook.mts`). The bulk cancel writes an
-  `event-payments.event_cancelled` staff audit entry. All three guard on `razorpay_refund_id` (and
+  `event-payments.event_cancelled` staff audit entry. `POST /api/event-payments-admin/decline` lets an admin decline a
+  guest's cancellation request (`declineCancellationRequest()`, migration `0029`): audit-logged, guest emailed, booking stays live. All three guard on `razorpay_refund_id` (and
   `refunded_at is.null` where relevant), so whichever path — our own admin action or this webhook
   — reaches Supabase first for a given step wins, and a duplicate/out-of-order delivery is a
   no-op.

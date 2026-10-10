@@ -723,6 +723,11 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     color: var(--tvc-orange-text);
   }
 
+  :global(#bookings-body .badge--declined) {
+    background: var(--tvc-line);
+    color: var(--tvc-ink-soft);
+  }
+
   :global(#bookings-body .badge--refunded) {
     background: var(--tvc-line);
     color: var(--tvc-ink-soft);
@@ -871,7 +876,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     eventDate: string | null;
     cancellationRequestedAt: string | null;
     refundAmount: number | null;
-    status: 'paid' | 'requested' | 'refund_initiated' | 'refund_failed' | 'refunded';
+    status: 'paid' | 'requested' | 'declined' | 'refund_initiated' | 'refund_failed' | 'refunded';
     isTest: boolean;
     isDuplicate: boolean;
     paymentMethod: string | null;
@@ -1079,6 +1084,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     if (status === 'refund_failed') return '<span class="badge badge--refund-failed">Refund failed</span>';
     if (status === 'refund_initiated') return '<span class="badge badge--refund-initiated">Refund initiated</span>';
     if (status === 'requested') return '<span class="badge badge--requested">Cancellation requested</span>';
+    if (status === 'declined') return '<span class="badge badge--declined">Request declined</span>';
     return '<span class="badge badge--paid">Paid</span>';
   }
 
@@ -1131,7 +1137,75 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
       btn.textContent = booking.status === 'refund_failed' ? 'Retry refund' : 'Cancel & refund';
       btn.addEventListener('click', () => openRefundForm(booking, container));
       container.appendChild(btn);
+      if (booking.status === 'requested') {
+        const declineBtn = document.createElement('button');
+        declineBtn.type = 'button';
+        declineBtn.className = 'button';
+        declineBtn.textContent = 'Decline request';
+        declineBtn.addEventListener('click', () => openDeclineForm(booking, container));
+        container.appendChild(declineBtn);
+      }
     }
+  }
+
+  // Declines a guest's cancellation request (booking stays confirmed, guest
+  // is emailed). Two-step like the refund form: the POST only fires from the
+  // confirm button.
+  function openDeclineForm(booking: Booking, container: HTMLElement) {
+    container.innerHTML = `
+      <form class="refund-form" data-booking-id="${booking.id}">
+        <label>
+          Reason <span class="refund-tier-hint">(shown to the guest in the email — keep it kind and factual)</span>
+          <textarea rows="3" class="decline-reason"></textarea>
+        </label>
+        <p class="error refund-error" hidden></p>
+        <div id="decline-review-${booking.id}"></div>
+        <div class="refund-actions">
+          <button type="submit" class="button button--primary decline-review-btn">Review</button>
+          <button type="button" class="button refund-cancel-btn">Cancel</button>
+        </div>
+      </form>
+    `;
+    const form = container.querySelector('.refund-form') as HTMLFormElement;
+    const errorEl = container.querySelector('.refund-error') as HTMLElement;
+    const reviewEl = container.querySelector(`#decline-review-${booking.id}`) as HTMLElement;
+    const reviewBtn = container.querySelector('.decline-review-btn') as HTMLButtonElement;
+    (container.querySelector('.refund-cancel-btn') as HTMLButtonElement).addEventListener('click', () => renderActionArea(container, booking));
+
+    form.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      errorEl.hidden = true;
+      reviewEl.innerHTML = `
+        <div class="refund-confirm">
+          <p>Decline <strong>${escapeHtml(booking.payerLabel)}</strong>’s cancellation request? ${booking.hasEmail ? 'They will be emailed (TVC and Linger copied) and the booking stays confirmed.' : '<strong>They have no email on file and will not be notified</strong> — contact them directly.'}</p>
+          <button type="button" class="button button--danger decline-confirm-btn">Yes, decline request</button>
+        </div>
+      `;
+      reviewBtn.hidden = true;
+      reviewEl.querySelector('.decline-confirm-btn')!.addEventListener('click', async () => {
+        const confirmBtn = reviewEl.querySelector('.decline-confirm-btn') as HTMLButtonElement;
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Declining…';
+        try {
+          const res = await authedFetch('/api/event-payments-admin/decline', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ id: booking.id, reason: (container.querySelector('.decline-reason') as HTMLTextAreaElement).value.trim() || undefined }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error ?? 'Could not decline');
+          if (currentEvent) await loadBookings(currentEvent.referenceId);
+        } catch (err) {
+          const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
+          if (!handled) {
+            errorEl.textContent = err instanceof Error ? err.message : 'Could not decline';
+            errorEl.hidden = false;
+            reviewEl.innerHTML = '';
+            reviewBtn.hidden = false;
+          }
+        }
+      });
+    });
   }
 
   function openBookingDetail(booking: Booking) {
@@ -1412,7 +1486,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   // sweeps it in too; this preview must match or the admin approves a
   // breakdown that understates who's actually about to get refunded.
   function eligibleForBulkRefund(bookings: Booking[]): Booking[] {
-    return bookings.filter((b) => b.status === 'paid' || b.status === 'requested' || b.status === 'refund_failed');
+    return bookings.filter((b) => b.status === 'paid' || b.status === 'requested' || b.status === 'declined' || b.status === 'refund_failed');
   }
 
   function closeBulkCancelPanel() {
