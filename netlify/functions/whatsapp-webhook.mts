@@ -27,11 +27,12 @@
 // unanswered-message digest, once per-message emails turned out to be more
 // clutter than signal for a shared inbox multiple staff check.
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { upsertConversation, insertMessage, updateTemplateSendStatus, templateSendExists, claimAutoAck } from '../../scripts/lib/supabase.mjs';
+import { upsertConversation, insertMessage, updateTemplateSendStatus, templateSendExists, claimAutoAck, addOptOut, removeOptOut } from '../../scripts/lib/supabase.mjs';
 import { getPaymentById } from '../../scripts/lib/event-payments-db.mjs';
 import { sendStaffAlert, escapeHtml } from './lib/refund-alert';
 import { sendWhatsAppText } from './lib/whatsapp-send';
 import { autoAckText, isOutsideHours, shouldAutoAck } from './lib/whatsapp-autoack';
+import { classifyKeyword, STOP_REPLY, START_REPLY } from './lib/whatsapp-optout';
 
 function textResponse(body: string, status = 200): Response {
   return new Response(body, { status, headers: { 'content-type': 'text/plain' } });
@@ -123,6 +124,41 @@ function describeMessage(message: WhatsAppMessage): string {
     default:
       return `[${message.type} message — not shown here]`;
   }
+}
+
+// STOP / START: records the opt-out (or removes it) and confirms with a
+// free-form reply, which is allowed because the guest just messaged us.
+// Returns true when the message was a keyword, so the caller skips the
+// out-of-hours auto-reply. Throws if the opt-out can't be saved, so Meta
+// retries the delivery rather than us telling the guest they're unsubscribed
+// when they aren't (addOptOut/removeOptOut are idempotent). The confirmation
+// itself is best-effort.
+async function handleOptOutKeyword(message: WhatsAppMessage, conversation: { id: string }): Promise<boolean> {
+  if (message.type !== 'text') return false;
+  const keyword = classifyKeyword(message.text?.body);
+  if (!keyword) return false;
+  // A delayed retry of an old STOP is still honoured (it is the guest's
+  // wish), but a confirmation reply to a stale message would be odd.
+  const phone = `+${message.from}`;
+  if (keyword === 'stop') await addOptOut(phone);
+  else await removeOptOut(phone);
+
+  if (Date.now() - Number(message.timestamp) * 1000 > 10 * 60_000) return true;
+  try {
+    const body = keyword === 'stop' ? STOP_REPLY : START_REPLY;
+    const sent = await sendWhatsAppText(message.from, body);
+    await insertMessage({
+      conversationId: conversation.id,
+      direction: 'outbound',
+      body: `[Auto-reply] ${body}`,
+      waMessageId: sent.ok ? (sent.waMessageId ?? undefined) : undefined,
+      status: sent.ok ? 'sent' : 'failed',
+      errorMessage: sent.ok ? undefined : sent.error,
+    });
+  } catch (err) {
+    console.error('[whatsapp-webhook] Failed to confirm opt-out change', err);
+  }
+  return true;
 }
 
 // Replies to the guest outside staffed hours (WHATSAPP_AUTOACK_ENABLED=true,
@@ -248,7 +284,7 @@ export default async (req: Request): Promise<Response> => {
           for (const message of value.messages as WhatsAppMessage[]) {
             const contact = contactsByWaId.get(message.from);
             const conversation = await persistIncomingMessage(message, contact);
-            await maybeAutoAck(message, conversation);
+            if (!(await handleOptOutKeyword(message, conversation))) await maybeAutoAck(message, conversation);
           }
         } else if (change?.field === 'messages' && Array.isArray(value.statuses)) {
           // Delivery receipts for messages WE sent (sent → delivered → read,

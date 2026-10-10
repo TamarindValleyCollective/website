@@ -334,3 +334,27 @@ export async function listTemplateSendsForBookings(bookingIds) {
   );
   return res.json();
 }
+
+// STOP opt-outs (see supabase/migrations/0035_whatsapp_opt_outs.sql), keyed
+// on the E.164 number with its leading "+". isOptedOut() THROWS when the table
+// can't be read, so the sender can fail closed instead of messaging someone
+// who may have asked it not to.
+/** @param {string} phone */
+export async function isOptedOut(phone) {
+  const res = await restFetch(`/whatsapp_opt_outs?phone=eq.${encodeURIComponent(phone)}&select=phone&limit=1`);
+  return (await res.json()).length > 0;
+}
+
+/** @param {string} phone */
+export async function addOptOut(phone, source = 'stop_reply') {
+  await restFetch(`/whatsapp_opt_outs?on_conflict=phone`, {
+    method: 'POST',
+    headers: { Prefer: 'resolution=ignore-duplicates' },
+    body: JSON.stringify([{ phone, source }]),
+  });
+}
+
+/** @param {string} phone */
+export async function removeOptOut(phone) {
+  await restFetch(`/whatsapp_opt_outs?phone=eq.${encodeURIComponent(phone)}`, { method: 'DELETE' });
+}
