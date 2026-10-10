@@ -775,7 +775,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   what's sent. Since 2026-09-25 also flags a booking `isDuplicate` when another live (non-refunded)
   row shares its payer email within the same event, and exposes a second endpoint,
   `POST /api/event-payments-admin/bulk-refund` (`{ eventReferenceId, fraction, reason?,
-  includeTest? }`) — refunds every still-eligible booking for an event at a uniform fraction in one
+  mode: 'live' | 'test' }`; the bookings list takes the same `mode`, so test and real bookings are never mixed) — refunds every still-eligible booking for an event at a uniform fraction in one
   call, for a full-event cancellation (weather, low turnout), sequentially against Razorpay so one
   failure doesn't take the batch down. `netCollected` now subtracts each row's known `fee_amount`
   (see `fee_amount` below) rather than just refunds, and the response includes

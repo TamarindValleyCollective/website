@@ -150,9 +150,13 @@ payment, since a test card/UPI can only ever be paid against test-mode keys in t
 (An earlier version of this filter matched Razorpay's test-mode "quick pay" default email,
 `void@razorpay.com` — plausible from the data seen so far, but never confirmed as guaranteed
 Razorpay-wide behavior, so replaced with this instead.) The dashboard filters `mode = 'test'` rows
-out of the booking list and stats by default, with a "Showing N test payments" checkbox to
-include them when needed (e.g. verifying the webhook chain still works) — see `isTestPayment()`
-in `event-payments-admin.mts`. The five rows recorded proving this module out on 2026-09-24 (before
+out of the booking list and stats: the dashboard has a **Live | Test** switch (default Live) and shows exactly
+one mode at a time, so test and real bookings are never mixed — stats, the booking list, and the bulk "Cancel
+event" all act only on the selected mode (`mode` param on `/bookings` and `/bulk-refund`). A test-mode bulk cancel
+never closes the event's shared Payment Link, and a refund on a mode that doesn't match the server's Razorpay keys
+(e.g. test bookings on the live-keyed production site) is refused up front — simulate test refunds by running
+locally with test keys (`netlify dev`) against the same database. See `isTestPayment()`/`serverMode()` in
+`event-payments-admin.mts`. The five rows recorded proving this module out on 2026-09-24 (before
 the switch to live keys that same day) were backfilled to `mode = 'test'` by the migration itself.
 
 **Refund-tier suggestion now keys off the right dates (2026-09-25).** The suggested refund
