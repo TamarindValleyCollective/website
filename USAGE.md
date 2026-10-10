@@ -60,7 +60,7 @@ Domain renewals are separate (GitHub Action): at 60 and 30 days, then daily from
 4. Netlify (optional but recommended): create a personal access token at
    app.netlify.com → User settings → Applications, and set it as `NETLIFY_ACCESS_TOKEN` on the site
    (Netlify dashboard → Environment variables, flagged secret). The `usage-collect` function picks it
-   up on its next run; check the Netlify card says "limit is read from Netlify automatically".
+   up on its next run. **The token expires 2027-12-30**: renew it before then, or the plan allowance and cycle dates silently stop refreshing (the page keeps showing the last ones). Check the Netlify card says "limit is read from Netlify automatically".
 5. Keep the readings fresh: warnings use the latest entry, and a reading more than a month old is
    flagged on the page.
 
