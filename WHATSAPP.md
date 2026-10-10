@@ -27,7 +27,7 @@ declined — to guests, alongside the existing emails — and a staff alert for 
 enquiries, `enquiry.mts`). Nothing is sent until Meta approves them and the env vars listed there
 are set. Test-mode bookings only ever WhatsApp `WHATSAPP_TEST_NUMBER`. Delivery of each template message is tracked in
 `whatsapp_template_sends` (migration `0032`, updated by `whatsapp-webhook.mts` from Meta's `statuses` events, shown
-per booking on the Event Payments dashboard, with a staff email when a guest message fails). **Status:** merged 2026-10-10 but dormant until migration `0032` is applied to TVC ERP by hand (migrations are not auto-applied); until then sends work normally and the dashboard WhatsApp line stays empty. Not yet confirmed against a real Meta status event.
+per booking on the Event Payments dashboard, with a staff email when a guest message fails). **Status:** live since 2026-10-10 (migration `0032` applied to TVC ERP). Not yet confirmed against a real Meta status event.
 
 **v2 templates (2026-10-10).** All five templates are live. Each now has a drafted `_v2`
 successor (same variables in the same order, plus a text header, a footer, bold key facts and
