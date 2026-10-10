@@ -8,6 +8,7 @@ import {
   anthropicCreditEstimate,
   evaluateAlerts,
   mergeNetlifyPlan,
+  resendAutomaticIsFresh,
   decideNotifications,
   sumDaily,
   addDays,
@@ -216,4 +217,33 @@ test('Netlify credits remaining: warns at 30% / critical at 10% left, nothing ab
   assert.equal(at(300).level, 'warn');
   assert.equal(at(100).level, 'critical');
   assert.equal(at(50, '2026-09-10T00:00:00Z'), undefined);
+});
+
+const resendSnap = (value, limit, captured_at = '2026-10-10T06:00:00Z') => ({ value, limit_value: limit, unit: 'emails', captured_at, detail: { source: 'resend-api' } });
+
+test('Resend API readings alert at 70% / 90% of either quota, and supersede the typed-in meter', () => {
+  const snapshots = {
+    'resend.emails_monthly': resendSnap(2400, 3000), // 80%
+    'resend.emails_daily': resendSnap(95, 100), // 95%
+    'resend.emails_used': { value: 3000, limit_value: 3000, captured_at: '2026-10-01T00:00:00Z' }, // typed-in: would be critical
+  };
+  const alerts = evaluateAlerts({ now: NOW, snapshots });
+  assert.equal(alerts.find((a) => a.key === 'resend:monthly').level, 'warn');
+  assert.equal(alerts.find((a) => a.key === 'resend:daily').level, 'critical');
+  assert.equal(alerts.some((a) => a.key === 'manual:resend.emails_used'), false);
+});
+
+test('Resend API readings that stop refreshing warn once, and the typed-in meter takes over again', () => {
+  const stale = resendSnap(10, 3000, '2026-10-05T00:00:00Z');
+  const snapshots = { 'resend.emails_monthly': stale, 'resend.emails_used': { value: 2700, limit_value: 3000, captured_at: '2026-10-09T00:00:00Z' } };
+  assert.equal(resendAutomaticIsFresh(snapshots, NOW), false);
+  const keys = evaluateAlerts({ now: NOW, snapshots }).map((a) => a.key);
+  assert.ok(keys.includes('resend:stale'));
+  assert.ok(keys.includes('manual:resend.emails_used'));
+  assert.equal(keys.includes('resend:monthly'), false);
+});
+
+test('Resend: no API readings ever recorded means no Resend API alerts', () => {
+  const keys = evaluateAlerts({ now: NOW, snapshots: {} }).map((a) => a.key);
+  assert.equal(keys.some((k) => k.startsWith('resend:')), false);
 });

@@ -95,6 +95,25 @@ export function mergeNetlifyPlan(snapshots, now = new Date()) {
   return { ...snapshots, 'netlify.credits_remaining': { ...used, limit_value: limit, detail: { ...(used.detail ?? {}), cycle_start: cycleStart, cycle_end: cycleEnd, stale_for_cycle: staleForCycle, plan_captured_at: plan.captured_at, plan_stale: planStale } } };
 }
 
+// Resend's quota is read from its Usage API by usage-collect.mts (monthly always; daily only on the
+// free plan). Fresh automatic readings replace the typed-in 'resend.emails_used' meter; if the key
+// can't read usage, or the readings stop, the typed-in one carries on.
+export const RESEND_STALE_DAYS = 2;
+export const RESEND_AUTO_METERS = {
+  'resend.emails_monthly': { label: 'Resend emails this month', period: 'monthly' },
+  'resend.emails_daily': { label: 'Resend emails today', period: 'daily' },
+};
+
+export function resendReadingAgeDays(snapshots, now = new Date()) {
+  const times = Object.keys(RESEND_AUTO_METERS).map((id) => snapshots[id]?.captured_at).filter(Boolean).map((t) => new Date(t).getTime());
+  return times.length ? (now.getTime() - Math.max(...times)) / DAY_MS : null;
+}
+
+export function resendAutomaticIsFresh(snapshots, now = new Date()) {
+  const age = resendReadingAgeDays(snapshots, now);
+  return age !== null && age <= RESEND_STALE_DAYS;
+}
+
 export const SETTING_KEYS = ['anthropic_prices', 'gemini_daily_requests'];
 
 // ---- small helpers --------------------------------------------------------
@@ -294,6 +313,19 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
     add('supabase:db-size', level, 'supabase', `Supabase database is at ${pct(Number(db.value) / Number(db.limit_value))} of its free size`, `${mb(db.value)} used of ${mb(db.limit_value)}. Free projects stop accepting writes at the limit.`);
   }
 
+  // Resend: automatic quota readings, and a warning if they stop (once any has existed).
+  for (const [id, meter] of Object.entries(RESEND_AUTO_METERS)) {
+    const reading = snapshots[id];
+    if (!reading || !isPositiveNumber(Number(reading.limit_value)) || !resendAutomaticIsFresh(snapshots, now)) continue;
+    const value = Number(reading.value);
+    const limit = Number(reading.limit_value);
+    add(`resend:${meter.period}`, levelForUsed(value, limit), 'resend', `${meter.label} at ${pct(value / limit)} of the limit`, `${value} of ${limit} emails used, read from Resend ${utcDay(new Date(reading.captured_at))}. Resend stops sending (HTTP 429) at the limit${meter.period === 'daily' ? ' until it resets' : ''}.`);
+  }
+  const resendAge = resendReadingAgeDays(snapshots, now);
+  if (resendAge !== null && resendAge > RESEND_STALE_DAYS) {
+    add('resend:stale', 'warn', 'resend', 'Resend usage data has stopped refreshing', `The last reading from Resend's Usage API was on ${utcDay(new Date(now.getTime() - resendAge * DAY_MS))}. Check that RESEND_API_KEY can still read usage and the usage-collect logs. The typed-in Resend reading is used meanwhile.`);
+  }
+
   // The Netlify token (usage-collect) stopped refreshing the plan data: expired, revoked, or
   // the API changed. Only once a plan snapshot has existed, so no token yet means no alert.
   const netlifyPlan = snapshots['netlify.plan_credits'];
@@ -304,6 +336,7 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
   // Everything else a person types in. (Anthropic's balance has its own estimate above.)
   for (const [id, meter] of Object.entries(MANUAL_METERS)) {
     if (id === 'anthropic.credit_remaining_usd') continue;
+    if (id === 'resend.emails_used' && resendAutomaticIsFresh(snapshots, now)) continue; // the API reading supersedes it
     const reading = snapshots[id];
     if (!reading || !isPositiveNumber(Number(reading.limit_value))) continue;
     if (reading.detail?.stale_for_cycle) continue; // from a previous billing cycle: the balance has reset since

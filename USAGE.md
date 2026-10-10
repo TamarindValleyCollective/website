@@ -22,7 +22,8 @@ shows how close each one is and emails the core team before it runs out.
 | Google Gemini | **Measured** the same way (requests, tokens, HTTP 429 "quota ran out", fallbacks to paid Anthropic). | Google has no remaining-quota API. A daily request limit can be entered to get percentage warnings. |
 | Supabase database size | **Measured** every 6 hours by `usage-collect.mts` against the free plan's 500 MB. | |
 | Netlify credits | **Credits remaining** is **typed in**, as Netlify's billing page reports it (its API doesn't expose it). The **plan allowance and billing-cycle dates** are **read automatically** every 6 hours from `GET /accounts/{id}` by `usage-collect.mts`, using `NETLIFY_ACCESS_TOKEN`. | The read allowance overrides the typed limit. Credits reset each billing cycle (TVC's runs 19th to 18th), so a reading typed in *before* the current cycle began is flagged on the page and gives no alert. Without the token, everything falls back to fully typed in. |
-| Resend emails, Cloudflare R2 storage | **Typed in** by an admin from the provider's own dashboard, with the limit entered alongside. | On purpose: reading these automatically needs an API credential per service, broader than a usage reading is worth. Phase 3 can revisit (Cloudflare supports a read-only analytics token). |
+| Resend emails | **Read automatically** every 6 hours from Resend's Usage API (`GET /usage`) by `usage-collect.mts`, using the `RESEND_API_KEY` the site already holds: the monthly quota, plus the daily one on the free plan. | If the key can't read usage (a sending-only key may be refused) or the readings stop for 2 days, the typed-in Resend meter carries on and a warning is emailed. A fresh API reading hides the typed-in card and form. |
+| Cloudflare R2 storage | **Typed in** by an admin from the provider's own dashboard, with the limit entered alongside. | On purpose: reading these automatically needs an API credential per service, broader than a usage reading is worth. Phase 3 can revisit (Cloudflare supports a read-only analytics token). |
 | Domain renewals | **Read live** from the registries' public RDAP service (no key), shown on the page; **emailed** by the `domain-expiry.yml` GitHub Action. | The Action runs off Netlify and holds no database credentials, so it still alerts if Netlify pauses. |
 
 ## Alert rules
@@ -39,6 +40,8 @@ when they clear so a recurrence emails again. One digest per hourly run.
 | Gemini requests today ≥ 70% / 90% of the entered daily limit | Warning / Critical |
 | Chat daily cap, or search paid-fallback cap, hit today | Warning |
 | Supabase database ≥ 70% / 90% of its limit | Warning / Critical |
+| Resend emails (monthly or daily, read from its API) ≥ 70% / 90% of the limit | Warning / Critical |
+| Resend usage readings not refreshed for over 2 days | Warning |
 | Netlify plan data (allowance/cycle) not refreshed for over 2 days, i.e. the token has likely expired | Warning |
 | Netlify credits remaining ≤ 30% / ≤ 10% of the plan allowance | Warning / Critical |
 | Any typed-in "used" meter ≥ 70% / 90% of the limit entered with it | Warning / Critical |

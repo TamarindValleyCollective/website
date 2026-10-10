@@ -7,6 +7,10 @@
 // NETLIFY_ACCESS_TOKEN is set. Netlify's API exposes those but NOT credits used,
 // so "used" stays a typed-in reading (see mergeNetlifyPlan in usage-rules.mjs).
 //
+// And Resend's own daily/monthly email quota from its Usage API (GET /usage), using the
+// RESEND_API_KEY the site already holds. If that key can't read usage (a sending-only key may
+// be refused) the page keeps its typed-in Resend reading instead.
+//
 // This only *records*. Turning readings into threshold emails is the
 // dashboard module's job; and anything that must still alert while Netlify
 // itself is paused (domain renewals) deliberately lives in a GitHub Action
@@ -51,6 +55,36 @@ async function recordNetlifyPlan(base: string): Promise<string> {
   }
 }
 
+// Records Resend's email usage against its limits. Never throws, like recordNetlifyPlan.
+async function recordResendUsage(base: string): Promise<string> {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return 'skipped (no RESEND_API_KEY)';
+  try {
+    const res = await fetch('https://api.resend.com/usage', { headers: { Authorization: `Bearer ${key}` } });
+    if (!res.ok) throw new Error(`resend usage fetch failed: ${res.status}`);
+    const emails = (await res.json())?.emails ?? {};
+    const rows = (['monthly', 'daily'] as const)
+      .map((period) => ({ period, q: emails[period] }))
+      // The daily quota only exists on the free plan; skip a period Resend doesn't report.
+      .filter(({ q }) => q && Number.isFinite(Number(q.used)) && Number(q.limit) > 0)
+      .map(({ period, q }) => ({
+        service: 'resend',
+        metric: `emails_${period}`,
+        value: Number(q.used),
+        unit: 'emails',
+        limit_value: Number(q.limit),
+        detail: { source: 'resend-api', resets_at: q.resets_at ?? null },
+      }));
+    if (rows.length === 0) throw new Error('resend usage had no quota figures');
+    const insertRes = await fetch(`${base}/usage_snapshots`, { method: 'POST', headers: restHeaders({ Prefer: 'return=minimal' }), body: JSON.stringify(rows) });
+    if (!insertRes.ok) throw new Error(`resend snapshot insert failed: ${insertRes.status} ${await insertRes.text()}`);
+    return `recorded ${rows.length}`;
+  } catch (err) {
+    console.error('[usage-collect] resend usage failed', err);
+    return 'failed';
+  }
+}
+
 export default async (): Promise<Response> => {
   const base = `${process.env.SUPABASE_URL}/rest/v1`;
   try {
@@ -77,7 +111,8 @@ export default async (): Promise<Response> => {
     if (!insertRes.ok) throw new Error(`snapshot insert failed: ${insertRes.status} ${await insertRes.text()}`);
 
     const netlify = await recordNetlifyPlan(base);
-    return new Response(JSON.stringify({ ok: true, bytes, netlify }), { status: 200 });
+    const resend = await recordResendUsage(base);
+    return new Response(JSON.stringify({ ok: true, bytes, netlify, resend }), { status: 200 });
   } catch (err) {
     console.error('[usage-collect] failed', err);
     return new Response('Failed to record usage snapshot', { status: 500 });
