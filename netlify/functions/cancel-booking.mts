@@ -17,6 +17,7 @@
 // to Foraging Day or any other one event.
 import { getPaymentByRazorpayId, requestCancellationIfNew } from '../../scripts/lib/event-payments-db.mjs';
 import { sendStaffAlert, escapeHtml } from './lib/refund-alert';
+import { routeEmail } from './lib/email-routing';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const FROM = 'Tamarind Valley Collective <noreply@tvc.farm>';
@@ -38,6 +39,7 @@ async function sendCancellationEmail(params: {
   currency: string;
   attendeeCount: number;
   paymentId: string;
+  isTest?: boolean;
 }): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -55,10 +57,12 @@ async function sendCancellationEmail(params: {
     headers: { Authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
     body: JSON.stringify({
       from: FROM,
-      to: [params.payerEmail],
-      cc: NOTIFY_CC,
-      subject: `Cancellation request received — ${params.eventTitle}`,
       html,
+      ...routeEmail(Boolean(params.isTest), {
+        to: [params.payerEmail],
+        cc: NOTIFY_CC,
+        subject: `Cancellation request received — ${params.eventTitle}`,
+      }),
     }),
   });
   if (!res.ok) {
@@ -129,6 +133,7 @@ export default async (req: Request): Promise<Response> => {
   <p>A guest has asked to cancel their booking for <strong>${escapeHtml(payment.event_title)}</strong> (${payment.attendee_count} ${payment.attendee_count === 1 ? 'person' : 'people'}, ${formatAmount(payment.amount, payment.currency)}, payment ${escapeHtml(paymentId)}).</p>
   <p>They've been told TVC will follow up. Review it on <a href="https://tvc.farm/internal/event-payments">the Event Payments dashboard</a> — the refund form there suggests an amount under the <a href="https://tvc.farm/refund-policy">refund policy</a>.${payment.payer_email ? '' : ' <strong>This guest has no email on file</strong>, so they got no acknowledgment — contact them directly.'}</p>
 </body></html>`,
+        payment.mode === 'test',
       );
     } catch (err) {
       console.error('[cancel-booking] Failed to send staff alert', err);
@@ -144,6 +149,7 @@ export default async (req: Request): Promise<Response> => {
         currency: payment.currency,
         attendeeCount: payment.attendee_count,
         paymentId,
+        isTest: payment.mode === 'test',
       });
     } catch (err) {
       // The request is already recorded — a failed notification email

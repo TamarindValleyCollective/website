@@ -26,6 +26,7 @@ import {
 } from '../../scripts/lib/event-payments-db.mjs';
 import { createRefund, fetchBasePaymentLink, cancelPaymentLink } from './lib/razorpay';
 import { sendRefundFailureAlert, failureFromRow } from './lib/refund-alert';
+import { routeEmail } from './lib/email-routing';
 import { requireStaff, logStaffAction, type StaffGrant } from './lib/staff-access';
 import { canSeeNames, maskName } from './lib/staff-masking';
 import { roleHasCapability, type Capability } from './lib/staff-registry';
@@ -229,6 +230,7 @@ async function sendRefundEmail(params: {
   // initiated cancellation.
   eventCancelled?: boolean;
   reason?: string;
+  isTest?: boolean;
 }): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -267,10 +269,12 @@ async function sendRefundEmail(params: {
     headers: { Authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
     body: JSON.stringify({
       from: FROM,
-      to: [params.payerEmail],
-      cc: NOTIFY_CC,
-      subject: params.eventCancelled ? `${params.eventTitle} has been cancelled — your refund is on its way` : `Refund initiated — ${params.eventTitle}`,
       html,
+      ...routeEmail(Boolean(params.isTest), {
+        to: [params.payerEmail],
+        cc: NOTIFY_CC,
+        subject: params.eventCancelled ? `${params.eventTitle} has been cancelled — your refund is on its way` : `Refund initiated — ${params.eventTitle}`,
+      }),
     }),
   });
   if (!res.ok) {
@@ -278,7 +282,7 @@ async function sendRefundEmail(params: {
   }
 }
 
-async function sendDeclineEmail(params: { payerEmail: string; eventTitle: string; reason?: string; paymentId: string }): Promise<void> {
+async function sendDeclineEmail(params: { payerEmail: string; eventTitle: string; reason?: string; paymentId: string; isTest?: boolean }): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('[event-payments-admin] RESEND_API_KEY is not set — cannot send decline notification');
@@ -297,10 +301,12 @@ async function sendDeclineEmail(params: { payerEmail: string; eventTitle: string
     headers: { Authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
     body: JSON.stringify({
       from: FROM,
-      to: [params.payerEmail],
-      cc: NOTIFY_CC,
-      subject: `Update on your cancellation request — ${params.eventTitle}`,
       html,
+      ...routeEmail(Boolean(params.isTest), {
+        to: [params.payerEmail],
+        cc: NOTIFY_CC,
+        subject: `Update on your cancellation request — ${params.eventTitle}`,
+      }),
     }),
   });
   if (!res.ok) {
@@ -384,6 +390,7 @@ async function refundOneBooking(row: any, amount: number, staff: StaffGrant, rea
         attendeeCount: row.attendee_count,
         eventCancelled,
         reason: eventCancelled ? reason : undefined,
+        isTest: row.mode === 'test',
       });
     } catch (err) {
       console.error('Refund succeeded but failed to send notification email', err);
@@ -490,7 +497,7 @@ async function handleDecline(req: Request, staff: StaffGrant): Promise<Response>
 
   if (row.payer_email) {
     try {
-      await sendDeclineEmail({ payerEmail: row.payer_email, eventTitle: row.event_title, reason, paymentId: row.razorpay_payment_id });
+      await sendDeclineEmail({ payerEmail: row.payer_email, eventTitle: row.event_title, reason, paymentId: row.razorpay_payment_id, isTest: row.mode === 'test' });
     } catch (err) {
       console.error('Decline recorded but failed to send notification email', err);
     }

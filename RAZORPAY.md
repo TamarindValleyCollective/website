@@ -132,6 +132,8 @@ underlying table `/cancel-booking` writes `cancellation_requested_at` to (a gues
 *request*, not a refund) — a row only counts as cancelled in this page's stats once `refunded_at`
 is actually set.
 
+**Test-mode emails.** Every email about a `mode = 'test'` booking (receipt, refund initiated/processed/event-cancelled, decline, guest cancellation acknowledgment, and the staff alerts) goes only to `contact@tvc.farm` with a `[TEST]` subject prefix — never the guest, Linger, or core-team (`netlify/functions/lib/email-routing.ts`), so refund and cancellation flows can be simulated safely.
+
 **Declining a cancellation request.** A pending request (`Cancellation requested`) also has a
 **Decline request** action (`POST /api/event-payments-admin/decline`, same `refund` capability,
 migration `0029_event_payments_cancellation_declined.sql`): it audit-logs `event-payments.cancellation_declined`,
