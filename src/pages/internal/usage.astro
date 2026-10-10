@@ -697,6 +697,22 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
   }
 
+  function resendCard(o: Overview): HTMLElement {
+    const r = o.resend;
+    const rows: [string, any][] = [['This month', r.monthly], ['Today', r.daily]];
+    const level: Level = r.monthly?.level === 'critical' || r.daily?.level === 'critical' ? 'critical' : r.monthly?.level === 'warn' || r.daily?.level === 'warn' ? 'warn' : null;
+    const parts: Kid[] = [];
+    for (const [label, x] of rows) {
+      if (!x || !x.limit) continue;
+      const frac = x.used / x.limit;
+      parts.push(
+        h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: `Emails sent ${label.toLowerCase()}` }), h('span', { text: `${nf.format(x.used)} of ${nf.format(x.limit)}${x.resetsAt ? ` · resets ${dateText(x.resetsAt)}` : ''}` })), meter(frac, x.level, `Resend emails ${label.toLowerCase()}`, `${Math.round(frac * 100)}% used`)),
+      );
+    }
+    parts.push(h('p', { class: 'svc-note', text: `Read from Resend's own usage API ${ago((r.monthly ?? r.daily).capturedAt)}, refreshed every 6 hours. Resend stops sending (and the site's emails fail) at the limit.` }));
+    return card('Resend emails', 'Read from Resend automatically', level, ...parts);
+  }
+
   function manualCard(m: any): HTMLElement {
     const r = m.reading;
     if (!r) return card(m.label, 'Typed in from the provider', 'none', h('p', { class: 'hero-sub', text: `No reading yet. Find it at ${m.where}, then an admin can enter it below.` }));
@@ -889,7 +905,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       statusEl.hidden = true;
       intro.textContent = 'Free tiers and credits the website relies on. "Measured" figures come from our own systems; "typed in" ones come from a provider\'s dashboard and are only as fresh as the last entry.';
       renderAlerts(data.alerts);
-      $('cards').replaceChildren(anthropicCard(data), geminiCard(data), supabaseCard(data), ...data.manual.map(manualCard));
+      $('cards').replaceChildren(anthropicCard(data), geminiCard(data), supabaseCard(data), ...(data.resend.fresh ? [resendCard(data)] : []), ...data.manual.map(manualCard));
       renderAdmin(data);
       $('foot').textContent = `Updated ${new Date(data.generatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}. Counts use UTC days. Warnings are emailed to the core team once, and again only if they get worse.`;
       content.hidden = false;

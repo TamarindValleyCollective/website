@@ -21,6 +21,8 @@ import { roleHasCapability } from './lib/staff-registry';
 import {
   MANUAL_METERS,
   mergeNetlifyPlan,
+  resendAutomaticIsFresh,
+  resendReadingAgeDays,
   addDays,
   anthropicCreditEstimate,
   anthropicTokensBetween,
@@ -84,8 +86,11 @@ async function handleOverview(req: Request): Promise<Response> {
 
   const db = snapshots['supabase.db_size_bytes'] ?? null;
 
+  const resendAuto = resendAutomaticIsFresh(snapshots, now);
   const manual = Object.entries(MANUAL_METERS)
     .filter(([id]) => id !== 'anthropic.credit_remaining_usd')
+    // a fresh Resend API reading replaces the typed-in meter's card and form; they come back if the readings stop
+    .filter(([id]) => !(id === 'resend.emails_used' && resendAuto))
     .map(([id, meter]: [string, any]) => {
       const r = snapshots[id] ?? null;
       return {
@@ -137,6 +142,16 @@ async function handleOverview(req: Request): Promise<Response> {
       reading: db ? { bytes: Number(db.value), limitBytes: db.limit_value === null ? null : Number(db.limit_value), capturedAt: db.captured_at } : null,
       history: dbHistory.map((h) => ({ at: h.captured_at, bytes: Number(h.value) })),
     },
+    resend: (() => {
+      const read = (id: string) => {
+        const r = snapshots[id];
+        return r ? { used: Number(r.value), limit: r.limit_value === null ? null : Number(r.limit_value), capturedAt: r.captured_at, resetsAt: (r.detail?.resets_at as string) ?? null } : null;
+      };
+      const monthly = read('resend.emails_monthly');
+      const daily = read('resend.emails_daily');
+      const lvl = (x: { used: number; limit: number | null } | null) => (x && isPositiveNumber(x.limit) ? levelForUsed(x.used, x.limit as number) : null);
+      return { fresh: resendAuto, ageDays: resendReadingAgeDays(snapshots, now), monthly: monthly && { ...monthly, level: lvl(monthly) }, daily: daily && { ...daily, level: lvl(daily) } };
+    })(),
     manual,
     settings: { anthropicPrices: prices, geminiDailyRequests: settings.gemini_daily_requests ?? null },
   });
