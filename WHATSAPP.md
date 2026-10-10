@@ -108,6 +108,16 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
   re-renders on every 15-second poll unless a message changed (a playing voice note used to be
   reset, and the scroll position jumped). The privacy page has a line about this. Checked in a
   browser against a mock backend, not against real Meta media.
+- **Inbox UI pass (2026-10-10).** `/internal/whatsapp` now uses the shared staff controls instead of
+  its own pill buttons: the thread-header actions, "Load more", the media buttons and Send are the
+  staff `.button` (36px, 8px radius; Send is the primary dark-green one, the rest `.button--outline`),
+  the back button is an outline icon button with a drawn chevron, and the search, "Signing as" and
+  reply fields use the 10px field radius with the control border. The canned replies keep a pill, as
+  the same `chip` the biodiversity filters use. A contact who is blocked or opted out shows its
+  button in the red outline state. The two panes now run edge to edge (the shared `.card`'s 28px
+  padding used to float them inside the card), and on a phone the header's actions drop to their own
+  full-width row. Page-local modifiers are written `.button.x`, because the staff shell's
+  `main .button` otherwise beats a class-only rule (Astro's scoping adds no specificity).
 - **Account-health alerts (2026-10-10).** Meta's health webhook fields (template approved / rejected /
   paused / disabled, template and phone-number quality changes, recategorisation, account
   restrictions) are stored in `whatsapp_health_events` (migration `0036`, **apply before
