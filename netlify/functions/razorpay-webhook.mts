@@ -35,6 +35,7 @@ import { sendRefundFailureAlert, failureFromRow, sendStaffAlert, escapeHtml, for
 import { fetchBasePaymentLink, paymentMatchesKeyMode } from './lib/razorpay';
 import { routeEmail } from './lib/email-routing';
 import { sendRefundCompletedEmail } from './lib/refund-completed-email';
+import { sendWhatsAppTemplate, cleanTemplateParam, firstNameOf } from './lib/whatsapp-send';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const FROM = 'Tamarind Valley Collective <noreply@tvc.farm>';
@@ -202,6 +203,14 @@ async function handleRefundProcessed(payload: RazorpayWebhookPayload): Promise<R
       } catch (err) {
         console.error('[razorpay-webhook] Failed to send refund completed email', err);
       }
+    }
+    if (confirmedNow) {
+      await sendWhatsAppTemplate({
+        template: 'tvc_refund_processed',
+        to: row.payer_contact,
+        isTest: row.mode === 'test',
+        params: [cleanTemplateParam(firstNameOf(row.payer_name), 60), formatAmount(refund.amount, row.currency), cleanTemplateParam(row.event_title, 120)],
+      });
     }
     return jsonResponse({ ok: true, confirmed: confirmedNow });
   } catch (err) {

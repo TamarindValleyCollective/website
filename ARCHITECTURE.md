@@ -181,7 +181,7 @@ flowchart TD
         GIDTOKEN["Google Identity Services / OAuth<br/>Curator sign-in (browser) +<br/>ID token verification against<br/>Google's public JWKS (photo-pool.mts)"]
         GSC["Google Search Console API<br/>urlInspection.index.inspect — read-only,<br/>same service account (Full user on the<br/>property as of 2026-08-08),<br/>called from a local script only"]
         RESEND["Resend API<br/>Transactional email — noreply@tvc.farm,<br/>domain verified 2026-08-19,<br/>called from the GitHub Action above<br/>and whatsapp-stale-alert.mts"]
-        WAMETA["Meta WhatsApp Cloud API<br/>Sends inbound message + template-status<br/>events to /api/whatsapp-webhook;<br/>receives replies from whatsapp-admin.mts;<br/>see WHATSAPP.md for setup status"]
+        WAMETA["Meta WhatsApp Cloud API<br/>Sends inbound message + template-status<br/>events to /api/whatsapp-webhook;<br/>receives replies from whatsapp-admin.mts<br/>and (once approved) guest/staff templates<br/>from lib/whatsapp-send.ts; see WHATSAPP.md for setup status"]
         SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages,<br/>event_payments, staff_users/staff_module_roles/<br/>staff_audit_log (gate all four admin Functions),<br/>staff_mfa_factors/staff_recovery_codes/<br/>staff_mfa_state (super-admin second factors),<br/>usage_daily/usage_snapshots/usage_settings/<br/>usage_alert_state (free-tier metering + alerts) —<br/>service_role key, called server-side only"]
         RAZORPAY["Razorpay API<br/>Payment Links (create/fetch) +<br/>payment_link.paid webhook + refunds<br/>(admin-triggered, event-payments-admin.mts) +<br/>payment fees and settlement recon<br/>(nightly reconcile-event-payment-fees.mjs).<br/>Live keys as of 2026-09-24 —<br/>see RAZORPAY.md"]
         RDAP["Registry RDAP service (via IANA bootstrap,<br/>rdap.org fallback)<br/>Public, no key — domain expiry dates for<br/>tvc.farm and syntropic.in"]
@@ -734,7 +734,10 @@ outside both the local machine and Netlify (the member-update-email workflow).
   Razorpay Payment Link so no new bookings arrive. `refund.processed` also emails the payer "Refund processed". The same `lib/refund-alert.ts` `sendStaffAlert()` (to
   `core-team@tvc.farm`, cc `stay@linger.in`) also fires on a guest cancellation request (`cancel-booking.mts`, "Action
   needed") and when a payment lands after registration closed (`razorpay-webhook.mts`). The bulk cancel writes an
-  `event-payments.event_cancelled` staff audit entry. Emails about test-mode bookings are rerouted to `contact@tvc.farm` only (`lib/email-routing.ts`). `POST /api/event-payments-admin/decline` lets an admin decline a
+  `event-payments.event_cancelled` staff audit entry. Alongside those emails, `lib/whatsapp-send.ts` can send approved
+  WhatsApp templates via Meta's Send Message API (event cancelled / refund initiated / processed / request declined
+  to the guest, and a staff alert from `enquiry.mts`) — dormant until each template is approved and listed in
+  `WHATSAPP_APPROVED_TEMPLATES`; see `docs/whatsapp-templates.md` and `WHATSAPP.md`. Emails about test-mode bookings are rerouted to `contact@tvc.farm` only (`lib/email-routing.ts`). `POST /api/event-payments-admin/decline` lets an admin decline a
   guest's cancellation request (`declineCancellationRequest()`, migration `0029`): audit-logged, guest emailed, booking stays live. All three guard on `razorpay_refund_id` (and
   `refunded_at is.null` where relevant), so whichever path — our own admin action or this webhook
   — reaches Supabase first for a given step wins, and a duplicate/out-of-order delivery is a

@@ -96,11 +96,11 @@ export async function markReceiptSent(id) {
 // named in a link only its own payer received."
 /**
  * @param {string} razorpayPaymentId
- * @returns {Promise<{ id: string, event_title: string, amount: number, currency: string, attendee_count: number, payer_email: string | null, created_at: string, cancellation_requested_at: string | null, mode: string } | null>}
+ * @returns {Promise<{ id: string, event_title: string, amount: number, currency: string, attendee_count: number, payer_name: string | null, payer_email: string | null, payer_contact: string | null, created_at: string, cancellation_requested_at: string | null, mode: string } | null>}
  */
 export async function getPaymentByRazorpayId(razorpayPaymentId) {
   const res = await fetch(
-    `${supabaseUrl()}/rest/v1/event_payments?razorpay_payment_id=eq.${encodeURIComponent(razorpayPaymentId)}&select=id,event_title,amount,currency,attendee_count,payer_email,created_at,cancellation_requested_at,mode`,
+    `${supabaseUrl()}/rest/v1/event_payments?razorpay_payment_id=eq.${encodeURIComponent(razorpayPaymentId)}&select=id,event_title,amount,currency,attendee_count,payer_name,payer_email,payer_contact,created_at,cancellation_requested_at,mode`,
     { headers: restHeaders() },
   );
   if (!res.ok) {

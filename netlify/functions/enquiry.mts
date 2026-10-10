@@ -11,6 +11,7 @@
 // specifically to survive the page navigating away right after, which a
 // plain fetch() issued in the same submit handler isn't guaranteed to do.
 import { appendSheetRow } from '../../scripts/lib/google-drive.mjs';
+import { sendStaffWhatsAppAlert, cleanTemplateParam } from './lib/whatsapp-send';
 
 interface EnquiryPayload {
   formType?: string;
@@ -67,6 +68,14 @@ export default async (req: Request): Promise<Response> => {
 
   try {
     await appendSheetRow(sheetId, sheet.range, [new Date().toISOString(), name, email, phone, message]);
+    // Internal WhatsApp heads-up for staff (a no-op until the template is
+    // approved and WHATSAPP_STAFF_ALERT_NUMBERS is set); never affects the
+    // response, since the enquiry itself is already saved.
+    await sendStaffWhatsAppAlert('tvc_staff_enquiry_alert', [
+      cleanTemplateParam(payload.formType, 30),
+      cleanTemplateParam(name, 80),
+      cleanTemplateParam(message, 200),
+    ]);
     return jsonResponse({ ok: true });
   } catch (err) {
     console.error('Failed to append enquiry row', err);
