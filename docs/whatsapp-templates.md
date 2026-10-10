@@ -85,7 +85,7 @@ read env vars at deploy time):
 
 ## v2 — headers, footers, bold key facts and emoji (2026-10-10)
 
-The five templates above are **live**. Each has a `_v2` successor with the **same variables in the
+The five templates above are **live**, and so are their `_v2` successors (approved and verified 2026-10-10). Each has a `_v2` successor with the **same variables in the
 same order**, a plain-text **header**, a **footer**, `*bold*` key facts and a few emoji, so
 messages scan like a small card instead of a paragraph. Submit these in WhatsApp Manager exactly as
 for the originals (Utility, English, **Header: Text**, **Footer** filled in, no buttons), using the
