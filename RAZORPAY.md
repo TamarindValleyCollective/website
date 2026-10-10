@@ -140,11 +140,14 @@ at `/internal/test-event/fake-test-event` (`getStaticPaths` returns nothing in a
 exists there — verified by building). Its TEST-mode base Payment Link is created once with
 `netlify dev:exec node scripts/setup-fake-event.mjs` (refuses live keys; idempotent). To rehearse: run
 `netlify dev --port 8888`, book on that page, pay in test mode (UPI `success@razorpay`, or a test debit card — the
-test credit card used earlier can't be refunded in Razorpay's test mode), then record the payment with
-`netlify dev:exec node scripts/simulate-razorpay-webhook.mjs payment pay_xxx` (Razorpay's test mode has no webhook that
-reaches a local machine; this fetches the real payment and delivers a correctly signed `payment_link.paid` to the local
-server). After a refund, `... refund rfnd_xxx` delivers `refund.processed` the same way. The rows land in the shared
-database with `mode = 'test'`, so the Live | Test switch keeps them apart.
+test credit card used earlier can't be refunded in Razorpay's test mode), then check the dashboard. Razorpay's test-mode webhook is also delivered to production, so the payment (and later
+`refund.processed`) is normally recorded by the production webhook within seconds, with `mode = 'test'` (the webhook
+asks Razorpay whether the payment id exists for its keys: "does not exist" means it belongs to the other mode — see
+`paymentMatchesKeyMode()`), so the Live | Test switch keeps test rows apart and their emails go only to
+`contact@tvc.farm`. `scripts/simulate-razorpay-webhook.mjs payment pay_xxx` / `refund rfnd_xxx` (run via
+`netlify dev:exec`) delivers a signed webhook to the local server instead, as a fallback if production's didn't arrive.
+Before 2026-10-10 the production webhook labelled every payment by its own keys, so a test payment came in as `live`
+and its receipt copied Linger; fixed.
 
 **Test-mode emails.** Every email about a `mode = 'test'` booking (receipt, refund initiated/processed/event-cancelled, decline, guest cancellation acknowledgment, and the staff alerts) goes only to `contact@tvc.farm` with a `[TEST]` subject prefix — never the guest, Linger, or core-team (`netlify/functions/lib/email-routing.ts`), so refund and cancellation flows can be simulated safely.
 
