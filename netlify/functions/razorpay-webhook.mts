@@ -31,6 +31,8 @@ import {
   markRefundFailed,
 } from '../../scripts/lib/event-payments-db.mjs';
 import { buildReceiptSubject, buildReceiptHtml } from './lib/payment-receipt';
+import { sendRefundFailureAlert, failureFromRow, sendStaffAlert, escapeHtml, formatAmount } from './lib/refund-alert';
+import { fetchBasePaymentLink } from './lib/razorpay';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const FROM = 'Tamarind Valley Collective <noreply@tvc.farm>';
@@ -172,6 +174,32 @@ async function handleRefundCreated(payload: RazorpayWebhookPayload): Promise<Res
   }
 }
 
+async function sendRefundCompletedEmail(params: { to: string; eventTitle: string; refundAmount: number; currency: string; paymentId: string; refundId: string }): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.error('[razorpay-webhook] RESEND_API_KEY is not set — cannot send refund completed email');
+    return;
+  }
+  const amount = params.refundAmount / 100;
+  const formatted = params.currency === 'INR' ? `₹${amount.toLocaleString('en-IN')}` : `${amount.toLocaleString('en-IN')} ${params.currency}`;
+  const html = `<!doctype html>
+<html><head><meta charset="utf-8" /></head>
+<body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f;">
+  <p>Your refund of <strong>${formatted}</strong> for <strong>${params.eventTitle}</strong> has been processed.</p>
+  <p>It has been sent to your original payment method. Depending on your bank it can take a few more business days to show up in your account.</p>
+  <p style="font-size:13px; color:#57604f;">Payment ID ${params.paymentId} · Refund ID ${params.refundId}</p>
+  <p>Questions? Reply to this email or reach us at <a href="mailto:core-team@tvc.farm">core-team@tvc.farm</a>.</p>
+</body></html>`;
+  const res = await fetch(RESEND_API_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ from: FROM, to: [params.to], cc: RECEIPT_CC, subject: `Refund processed — ${params.eventTitle}`, html }),
+  });
+  if (!res.ok) {
+    throw new Error(`Resend send failed: ${res.status} ${await res.text()}`);
+  }
+}
+
 // refund.processed — Razorpay's own confirmation that the refund actually
 // completed. This is the only place refunded_at gets set.
 async function handleRefundProcessed(payload: RazorpayWebhookPayload): Promise<Response> {
@@ -181,6 +209,24 @@ async function handleRefundProcessed(payload: RazorpayWebhookPayload): Promise<R
 
   try {
     const confirmedNow = await confirmRefundProcessed(row.id, refund.id, refund.status);
+    // Only the call that actually confirmed it emails, so a redelivered
+    // webhook doesn't send a second one. This also covers a refund started
+    // directly in the Razorpay dashboard, which never got an "initiated"
+    // email from event-payments-admin.mts.
+    if (confirmedNow && row.payer_email) {
+      try {
+        await sendRefundCompletedEmail({
+          to: row.payer_email,
+          eventTitle: row.event_title,
+          refundAmount: refund.amount,
+          currency: row.currency,
+          paymentId: row.razorpay_payment_id,
+          refundId: refund.id,
+        });
+      } catch (err) {
+        console.error('[razorpay-webhook] Failed to send refund completed email', err);
+      }
+    }
     return jsonResponse({ ok: true, confirmed: confirmedNow });
   } catch (err) {
     console.error('[razorpay-webhook] Failed to confirm processed refund', err);
@@ -199,6 +245,13 @@ async function handleRefundFailed(payload: RazorpayWebhookPayload): Promise<Resp
 
   try {
     const recordedNow = await markRefundFailed(row.id, refund.id);
+    // Only the call that actually recorded the failure alerts, so a
+    // redelivered webhook doesn't re-send it.
+    if (recordedNow) {
+      await sendRefundFailureAlert([failureFromRow(row)], { bulk: false }).catch((err) =>
+        console.error('[razorpay-webhook] Failed to send refund failure alert', err),
+      );
+    }
     return jsonResponse({ ok: true, recorded: recordedNow });
   } catch (err) {
     console.error('[razorpay-webhook] Failed to record refund failure', err);
@@ -336,6 +389,29 @@ export default async (req: Request): Promise<Response> => {
     }
   } else {
     console.error(`[razorpay-webhook] Payment ${payment.id} has no email on file — receipt not sent`);
+  }
+
+  // A guest who was already mid-checkout when registration closed (the
+  // event was cancelled, or registration shut some other way) can still
+  // pay their personal link. The payment is recorded and receipted like any
+  // other — this just tells staff, who decide whether to refund. Only
+  // checked for bookings made through event-booking.mts (which set
+  // baseReferenceId); best-effort, never affects the webhook response.
+  if (notes.baseReferenceId) {
+    try {
+      const base = await fetchBasePaymentLink(notes.baseReferenceId);
+      if (base.status !== 'created') {
+        await sendStaffAlert(
+          `⚠️ Payment received after registration closed — ${eventTitle}`,
+          `<!doctype html><html><head><meta charset="utf-8" /></head><body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f;">
+  <p><strong>${escapeHtml(payerName ?? 'A guest')}</strong> paid ${formatAmount(payment.amount, payment.currency)} for <strong>${escapeHtml(eventTitle)}</strong> (${attendeeCount} ${attendeeCount === 1 ? 'person' : 'people'}, payment ${escapeHtml(payment.id)}), but online registration for this event is already closed (${escapeHtml(base.status)}).</p>
+  <p>They were sent a normal receipt. If the event is cancelled, refund them from <a href="https://tvc.farm/internal/event-payments">the Event Payments dashboard</a>.</p>
+</body></html>`,
+        );
+      }
+    } catch (err) {
+      console.error('[razorpay-webhook] Late-payment check failed', err);
+    }
   }
 
   return jsonResponse({ ok: true });

@@ -165,6 +165,20 @@ export async function fetchPayment(paymentId: string): Promise<RazorpayPaymentDe
   return (await res.json()) as RazorpayPaymentDetail;
 }
 
+// Closes a Payment Link so nobody can pay it any more — used when an event
+// is cancelled (event-payments-admin.mts's bulk cancel) so a late booking
+// can't pay for an event that no longer exists. Razorpay: POST
+// /payment_links/:id/cancel.
+export async function cancelPaymentLink(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/payment_links/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+    headers: { Authorization: authHeader() },
+  });
+  if (!res.ok) {
+    throw new Error(await razorpayErrorDescription(res));
+  }
+}
+
 export interface RazorpayRefund {
   id: string;
   amount: number;

@@ -49,7 +49,7 @@ signature, records the payment in the `event_payments` table (Supabase project "
 `mljavkvkxdejvpzadnrp`), and emails a branded receipt (CC'd to `core-team@tvc.farm` and
 `stay@linger.in`). A cancellation link in that receipt leads to `/cancel-booking`
 (`netlify/functions/cancel-booking.mts`) — records a **request only**, not an automatic refund
-(TVC's `/refund-policy` has day-before-event tiers a human applies by hand), and notifies TVC +
+(TVC's `/refund-policy` has day-before-event tiers a human applies by hand), sends TVC + Linger a separate "Action needed" alert (so a request isn't missed even if the guest has no email), and notifies TVC +
 Linger + the guest.
 
 **A real bug found reviewing early test data:** every payer's name/email/phone that
@@ -88,10 +88,10 @@ stats and "cancelled" status actually key off — is set only once Razorpay's ow
   For an admin-triggered refund this is normally a no-op (`event-payments-admin.mts` already
   recorded initiation synchronously right after its own Razorpay API call succeeded); for a refund
   started directly in the Razorpay dashboard, this is the *only* place it gets recorded at all.
-- `refund.processed` — the only place `refunded_at` gets set (`confirmRefundProcessed()`).
+- `refund.processed` — the only place `refunded_at` gets set (`confirmRefundProcessed()`). The call that confirms it also emails the payer "Refund processed — <event>" (cc `core-team@tvc.farm`/`stay@linger.in`), once; this is the only email a refund started directly in the Razorpay dashboard produces.
 - `refund.failed` — flips `refund_status` to `'failed'` (`markRefundFailed()`) so the row reads as
   refund-attempt-failed rather than either "still paid" (wrong — money may be mid-transit) or
-  silently stuck showing "refund initiated" forever. `/internal/event-payments` lets an admin
+  silently stuck showing "refund initiated" forever. It also emails a failure alert (once — only on the call that recorded it) to `core-team@tvc.farm`, cc `stay@linger.in`. `/internal/event-payments` lets an admin
   retry from there.
 
 All three guard on `razorpay_refund_id` (and `refunded_at is.null` where relevant) so whichever
@@ -124,7 +124,7 @@ one. The page pre-fills a suggested amount from `/refund-policy`'s day-before-ev
 anything is sent — no one-click refund. A successful API call only ever records **initiation**
 (`razorpay_refund_id`, `refund_amount`, `refund_status`, `refund_initiated_at`, `refunded_by` (the staff member's id from 2026-10, an email before that) —
 migration `0020_event_payments_refunds.sql`/`0022_event_payments_refund_initiated.sql`) and emails
-the payer that a refund has started (cc `core-team@tvc.farm`/`stay@linger.in`); `refunded_at`
+the payer that a refund has started (cc `core-team@tvc.farm`/`stay@linger.in`) — the email carries a details table: event, people, amount paid, refund amount, amount retained (partial refunds only), date, payment ID and refund ID (the staff-entered reason is left out of single-booking refund emails). The bulk "Cancel event" action sends a different variant — subject "<event> has been cancelled — your refund is on its way", an apology intro, the form's **Reason** text shown to guests verbatim (HTML-escaped; the form label says so), and a pointer to `/events`; `refunded_at`
 itself is set later, only once Razorpay's `refund.processed` webhook confirms completion — see
 "Razorpay is the source of truth" above. A row shows a **Refund initiated** badge in between, and
 **Refund failed** with a retry option if Razorpay reports `refund.failed`. This is the same
@@ -179,7 +179,7 @@ stats above it) that opens a form: pick a refund percentage (100% by default —
 the cancellation is TVC's, not the guest's, so `/refund-policy`'s day-before-event tiers don't
 apply), review the *actual per-booking breakdown* (who gets how much, not just a count+total —
 that's the plan being approved, not a guess), and confirm once. Backed by a new
-`POST /api/event-payments-admin/bulk-refund` that refunds every still-eligible booking sequentially
+`POST /api/event-payments-admin/bulk-refund` that first closes the event's base Payment Link (`cancelPaymentLink()`, so nobody can book a cancelled event mid-refund; a failure is reported to the admin, not fatal; per-guest links already created stay payable) (after writing an `event-payments.event_cancelled` audit entry, and reporting how many test-mode bookings were skipped) and then refunds every still-eligible booking sequentially
 (not in parallel, so one Razorpay failure doesn't take the batch down) using the same underlying
 refund logic as a single row. A failed row's real Razorpay rejection reason is shown per-row (not
 folded into a silent "X of Y succeeded" count) — the table only auto-refreshes on full success, so
