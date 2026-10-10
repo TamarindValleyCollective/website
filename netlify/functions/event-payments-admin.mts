@@ -29,6 +29,7 @@ import { createRefund, fetchBasePaymentLink, cancelPaymentLink } from './lib/raz
 import { sendRefundFailureAlert, failureFromRow } from './lib/refund-alert';
 import { routeEmail } from './lib/email-routing';
 import { sendRefundCompletedEmail } from './lib/refund-completed-email';
+import { listTemplateSendsForBookings } from '../../scripts/lib/supabase.mjs';
 import { sendWhatsAppTemplate, cleanTemplateParam, firstNameOf, asSentence } from './lib/whatsapp-send';
 import { requireStaff, logStaffAction, type StaffGrant } from './lib/staff-access';
 import { canSeeNames, maskName } from './lib/staff-masking';
@@ -131,6 +132,21 @@ async function handleBookings(url: URL, staff: StaffGrant): Promise<Response> {
   }
   const isDuplicate = (r: any) => Boolean(r.payer_email) && !r.refunded_at && (liveEmailCounts.get(String(r.payer_email).toLowerCase()) ?? 0) > 1;
 
+  // WhatsApp delivery state of the template messages sent about these
+  // bookings (whatsapp_template_sends, migration 0032). Best-effort: if the
+  // lookup fails (or the migration isn't applied yet) the dashboard simply
+  // shows no WhatsApp line rather than failing to load.
+  const whatsappByBooking = new Map<string, Array<{ template: string; status: string; errorMessage: string | null; at: string | null }>>();
+  try {
+    for (const send of (await listTemplateSendsForBookings(rows.map((r) => r.id))) as any[]) {
+      const list = whatsappByBooking.get(send.event_payment_id) ?? [];
+      list.push({ template: send.template, status: send.status, errorMessage: send.error_message, at: send.status_at ?? send.created_at });
+      whatsappByBooking.set(send.event_payment_id, list);
+    }
+  } catch (err) {
+    console.error('Failed to load WhatsApp delivery status', err);
+  }
+
   const namesVisible = canSeeNames(staff.role);
   const bookings = rows.map((r) => ({
     id: r.id,
@@ -151,6 +167,7 @@ async function handleBookings(url: URL, staff: StaffGrant): Promise<Response> {
     eventDate: r.event_date,
     cancellationRequestedAt: r.cancellation_requested_at,
     cancellationDeclinedAt: r.cancellation_declined_at,
+    whatsapp: whatsappByBooking.get(r.id) ?? [],
     refundInitiatedAt: r.refund_initiated_at,
     refundedAt: r.refunded_at,
     refundAmount: r.refund_amount,
@@ -438,6 +455,7 @@ async function refundOneBooking(row: any, amount: number, staff: StaffGrant, rea
           template: 'tvc_event_cancelled',
           to: row.payer_contact,
           isTest: row.mode === 'test',
+          bookingId: row.id,
           params: [
             cleanTemplateParam(firstNameOf(row.payer_name), 60),
             cleanTemplateParam(row.event_title, 120),
@@ -449,6 +467,7 @@ async function refundOneBooking(row: any, amount: number, staff: StaffGrant, rea
           template: 'tvc_refund_initiated',
           to: row.payer_contact,
           isTest: row.mode === 'test',
+          bookingId: row.id,
           params: [cleanTemplateParam(firstNameOf(row.payer_name), 60), formatAmount(refund.amount, row.currency), cleanTemplateParam(row.event_title, 120)],
         },
   );
@@ -478,6 +497,7 @@ async function refundOneBooking(row: any, amount: number, staff: StaffGrant, rea
           template: 'tvc_refund_processed',
           to: row.payer_contact,
           isTest: row.mode === 'test',
+          bookingId: row.id,
           params: [cleanTemplateParam(firstNameOf(row.payer_name), 60), formatAmount(refund.amount, row.currency), cleanTemplateParam(row.event_title, 120)],
         });
       }
@@ -596,6 +616,7 @@ async function handleDecline(req: Request, staff: StaffGrant): Promise<Response>
     template: 'tvc_cancellation_declined',
     to: row.payer_contact,
     isTest: row.mode === 'test',
+    bookingId: row.id,
     params: [cleanTemplateParam(firstNameOf(row.payer_name), 60), cleanTemplateParam(row.event_title, 120), reason ? asSentence(reason) : 'We hope you can still join us.'],
   });
   return jsonResponse({ ok: true, emailed: Boolean(row.payer_email) });

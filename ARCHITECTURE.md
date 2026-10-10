@@ -737,7 +737,8 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `event-payments.event_cancelled` staff audit entry. Alongside those emails, `lib/whatsapp-send.ts` can send approved
   WhatsApp templates via Meta's Send Message API (event cancelled / refund initiated / processed / request declined
   to the guest, and a staff alert from `enquiry.mts`) — dormant until each template is approved and listed in
-  `WHATSAPP_APPROVED_TEMPLATES`; see `docs/whatsapp-templates.md` and `WHATSAPP.md`. Emails about test-mode bookings are rerouted to `contact@tvc.farm` only (`lib/email-routing.ts`). `POST /api/event-payments-admin/decline` lets an admin decline a
+  `WHATSAPP_APPROVED_TEMPLATES`; delivery is tracked in `whatsapp_template_sends` (migration `0032`), updated by
+  `whatsapp-webhook.mts` from Meta's delivery `statuses` and shown per booking on the Event Payments dashboard; see `docs/whatsapp-templates.md` and `WHATSAPP.md`. Emails about test-mode bookings are rerouted to `contact@tvc.farm` only (`lib/email-routing.ts`). `POST /api/event-payments-admin/decline` lets an admin decline a
   guest's cancellation request (`declineCancellationRequest()`, migration `0029`): audit-logged, guest emailed, booking stays live. All three guard on `razorpay_refund_id` (and
   `refunded_at is.null` where relevant), so whichever path — our own admin action or this webhook
   — reaches Supabase first for a given step wins, and a duplicate/out-of-order delivery is a

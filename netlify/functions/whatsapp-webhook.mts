@@ -27,7 +27,9 @@
 // unanswered-message digest, once per-message emails turned out to be more
 // clutter than signal for a shared inbox multiple staff check.
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { upsertConversation, insertMessage } from '../../scripts/lib/supabase.mjs';
+import { upsertConversation, insertMessage, updateTemplateSendStatus } from '../../scripts/lib/supabase.mjs';
+import { getPaymentById } from '../../scripts/lib/event-payments-db.mjs';
+import { sendStaffAlert, escapeHtml } from './lib/refund-alert';
 
 function textResponse(body: string, status = 200): Response {
   return new Response(body, { status, headers: { 'content-type': 'text/plain' } });
@@ -85,6 +87,38 @@ async function persistIncomingMessage(message: WhatsAppMessage, contact: WhatsAp
   });
 }
 
+// A delivery receipt for a template message. Records the new status; when it
+// is a FAILURE for a guest-facing template (typically: the number isn't on
+// WhatsApp), emails staff — the guest then only has the email, and nothing
+// else would tell anyone. The alert for a test-mode booking goes to the test
+// inbox only, like every other test-booking email.
+async function handleDeliveryStatus(status: any): Promise<void> {
+  const waMessageId: string | undefined = status?.id;
+  const state: string | undefined = status?.status;
+  if (!waMessageId || !['sent', 'delivered', 'read', 'failed'].includes(state ?? '')) return;
+  const error = Array.isArray(status.errors) ? status.errors[0] : undefined;
+  const updated = (await updateTemplateSendStatus({
+    waMessageId,
+    status: state as 'sent' | 'delivered' | 'read' | 'failed',
+    errorCode: error?.code != null ? String(error.code) : null,
+    errorMessage: error ? [error.title, error.message, error.error_data?.details].filter(Boolean).join(' — ') : null,
+    statusAt: status.timestamp ? new Date(Number(status.timestamp) * 1000).toISOString() : null,
+  })) as Record<string, any> | null;
+  if (!updated || state !== 'failed' || !updated.event_payment_id) return;
+
+  const booking = (await getPaymentById(updated.event_payment_id)) as Record<string, any> | null;
+  const isTest = booking?.mode === 'test';
+  await sendStaffAlert(
+    `⚠️ WhatsApp message not delivered — ${booking?.event_title ?? updated.template}`,
+    `<!doctype html><html><head><meta charset="utf-8" /></head><body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f;">
+  <p>The WhatsApp message <code>${escapeHtml(updated.template)}</code> to <strong>${escapeHtml(booking?.payer_name ?? 'a guest')}</strong> (number ending ${escapeHtml(updated.recipient_last4 ?? '?')}) was <strong>not delivered</strong>.</p>
+  <p style="color:#8a2f1f;">${escapeHtml(updated.error_message ?? 'WhatsApp reported the message as failed.')}</p>
+  <p>They will have received the email only. Check the number on <a href="https://tvc.farm/internal/event-payments">the Event Payments dashboard</a> and contact them another way if it matters.</p>
+</body></html>`,
+    isTest,
+  );
+}
+
 export default async (req: Request): Promise<Response> => {
   const url = new URL(req.url);
 
@@ -138,6 +172,15 @@ export default async (req: Request): Promise<Response> => {
           for (const message of value.messages as WhatsAppMessage[]) {
             const contact = contactsByWaId.get(message.from);
             await persistIncomingMessage(message, contact);
+          }
+        } else if (change?.field === 'messages' && Array.isArray(value.statuses)) {
+          // Delivery receipts for messages WE sent (sent → delivered → read,
+          // or failed). Only template messages are tracked (see
+          // whatsapp_template_sends); a status for anything else matches no
+          // row and is ignored. Errors here are logged, not thrown — a
+          // tracking hiccup must not make Meta retry the whole batch.
+          for (const status of value.statuses) {
+            await handleDeliveryStatus(status).catch((err) => console.error('[whatsapp-webhook] Failed to record delivery status', err));
           }
         } else if (change?.field === 'message_template_status_update') {
           // Low-volume, infrequent — logged only for now rather than also

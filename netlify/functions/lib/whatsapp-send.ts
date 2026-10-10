@@ -10,6 +10,7 @@
 // sent to WHATSAPP_TEST_NUMBER (and skipped when that isn't set), never to
 // the guest's number.
 import { normalizeMobileNumber } from '../../../scripts/lib/phone.mjs';
+import { recordTemplateSend } from '../../../scripts/lib/supabase.mjs';
 import { WHATSAPP_TEMPLATES, type WhatsAppTemplateName } from './whatsapp-templates';
 
 const GRAPH_API_VERSION = 'v21.0';
@@ -46,6 +47,9 @@ export async function sendWhatsAppTemplate(opts: {
   to: string | null | undefined;
   params: string[];
   isTest?: boolean;
+  // The booking this message is about, so its delivery status can be shown
+  // against it on the Event Payments dashboard.
+  bookingId?: string | null;
 }): Promise<'sent' | 'skipped' | 'failed'> {
   try {
     if (!approvedTemplates().has(opts.template)) return 'skipped';
@@ -84,6 +88,18 @@ export async function sendWhatsAppTemplate(opts: {
     if (!res.ok) {
       console.error(`[whatsapp-send] ${opts.template} failed`, res.status, await res.text());
       return 'failed';
+    }
+    // Meta only says "accepted" here; whether it reaches the phone arrives
+    // later as a webhook status event (whatsapp-webhook.mts). Record the
+    // wamid now so that event has a row to update. Best-effort: tracking must
+    // never turn a sent message into a reported failure.
+    try {
+      const waMessageId = (await res.json())?.messages?.[0]?.id;
+      if (waMessageId) {
+        await recordTemplateSend({ waMessageId, template: opts.template, eventPaymentId: opts.bookingId ?? null, recipientLast4: e164.slice(-4) });
+      }
+    } catch (err) {
+      console.error('[whatsapp-send] Failed to record template send for delivery tracking', err);
     }
     return 'sent';
   } catch (err) {

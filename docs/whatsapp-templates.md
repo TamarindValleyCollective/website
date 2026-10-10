@@ -78,6 +78,11 @@ read env vars at deploy time):
   Meta rejects newlines in a variable. The guest-facing reason typed into "Cancel event" is shown in
   `tvc_event_cancelled` exactly as it is in the email.
 - Failures are logged and never block the booking, refund or enquiry they ride along with.
-- Sent template messages are not yet written into the `/internal/whatsapp` conversation list
-  (doing so would bump conversations to "unread" and trigger the hourly stale-alert digest); they
-  appear in WhatsApp Manager's message insights instead.
+- Sent template messages are not written into the `/internal/whatsapp` conversation list (that would
+  bump conversations to "unread" and trigger the hourly stale-alert digest). Instead each one is
+  tracked in `whatsapp_template_sends` (migration `0032`): Meta only says "accepted" when we send,
+  and the later webhook `statuses` events move it through sent → delivered → read, or failed with
+  Meta's reason. The Event Payments dashboard's booking detail shows a **WhatsApp** line per
+  message. A **failed** guest message (typically a number that isn't on WhatsApp) emails staff once
+  (`core-team@tvc.farm`, cc Linger; test bookings only `contact@tvc.farm`), since the guest then has
+  the email only. Only the last 4 digits of the number are stored.

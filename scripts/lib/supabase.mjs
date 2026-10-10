@@ -215,3 +215,74 @@ export async function markStaleAlertSent(conversationIds) {
     body: JSON.stringify({ last_stale_alert_at: new Date().toISOString() }),
   });
 }
+
+// ---- Outbound template delivery tracking (migration 0032) ----
+
+// Records a template message Meta has accepted, keyed by its wamid so the
+// later `statuses` webhook events can update it. Idempotent on wa_message_id.
+/**
+ * @param {{ waMessageId: string, template: string, eventPaymentId?: string | null, recipientLast4?: string | null }} params
+ */
+export async function recordTemplateSend({ waMessageId, template, eventPaymentId, recipientLast4 }) {
+  await restFetch(`/whatsapp_template_sends?on_conflict=wa_message_id`, {
+    method: 'POST',
+    headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+    body: JSON.stringify([
+      {
+        wa_message_id: waMessageId,
+        template,
+        event_payment_id: eventPaymentId ?? null,
+        recipient_last4: recipientLast4 ?? null,
+      },
+    ]),
+  });
+}
+
+// Which earlier statuses a new status may replace. Webhook events can arrive
+// out of order or twice, so a status only ever moves forward
+// (accepted → sent → delivered → read); 'failed' replaces anything not yet
+// delivered. Returns the updated row (null if the wamid isn't one of ours or
+// the update would move backwards) so the caller can act on a failure.
+const STATUS_CAN_REPLACE = {
+  sent: ['accepted'],
+  delivered: ['accepted', 'sent'],
+  read: ['accepted', 'sent', 'delivered'],
+  failed: ['accepted', 'sent'],
+};
+
+/**
+ * @param {{ waMessageId: string, status: 'sent' | 'delivered' | 'read' | 'failed', errorCode?: string | null, errorMessage?: string | null, statusAt?: string | null }} params
+ */
+export async function updateTemplateSendStatus({ waMessageId, status, errorCode, errorMessage, statusAt }) {
+  const replaceable = STATUS_CAN_REPLACE[status];
+  if (!replaceable) return null;
+  const res = await restFetch(
+    `/whatsapp_template_sends?wa_message_id=eq.${encodeURIComponent(waMessageId)}&status=in.(${replaceable.join(',')})`,
+    {
+      method: 'PATCH',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({
+        status,
+        error_code: errorCode ?? null,
+        error_message: errorMessage ?? null,
+        status_at: statusAt ?? new Date().toISOString(),
+      }),
+    },
+  );
+  const rows = await res.json();
+  return rows[0] ?? null;
+}
+
+// Latest delivery state of every template message sent about the given
+// bookings, for the Event Payments dashboard.
+/**
+ * @param {string[]} bookingIds
+ * @returns {Promise<Array<{ event_payment_id: string, template: string, status: string, error_message: string | null, status_at: string | null, created_at: string }>>}
+ */
+export async function listTemplateSendsForBookings(bookingIds) {
+  if (bookingIds.length === 0) return [];
+  const res = await restFetch(
+    `/whatsapp_template_sends?event_payment_id=in.(${bookingIds.map((id) => encodeURIComponent(id)).join(',')})&select=event_payment_id,template,status,error_message,status_at,created_at&order=created_at.asc`,
+  );
+  return res.json();
+}
