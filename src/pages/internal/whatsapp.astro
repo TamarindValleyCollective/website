@@ -49,6 +49,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
           <span id="thread-avatar" class="avatar avatar-lg" aria-hidden="true"></span>
           <div class="thread-header-text">
             <strong id="thread-name"></strong>
+            <span id="thread-source" class="thread-source" hidden></span>
           </div>
           <button type="button" id="block-btn" class="block-btn">Block</button>
         </div>
@@ -396,6 +397,15 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     min-width: 0;
   }
 
+  .thread-source {
+    display: block;
+    font-size: 0.8125rem;
+    color: var(--tvc-ink-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .block-btn {
     flex: 0 0 auto;
     appearance: none;
@@ -700,6 +710,8 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     lastMessagePreview: string | null;
     lastMessageDirection: 'inbound' | 'outbound' | null;
     isBlocked: boolean;
+    // Click-to-WhatsApp attribution, when the chat began from an ad or post.
+    referral: { type: string; headline: string | null; url: string | null } | null;
   }
 
   interface Message {
@@ -727,6 +739,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   const backToListBtn = document.getElementById('back-to-list') as HTMLButtonElement;
   const threadAvatar = document.getElementById('thread-avatar') as HTMLElement;
   const threadName = document.getElementById('thread-name') as HTMLElement;
+  const threadSource = document.getElementById('thread-source') as HTMLElement;
   const blockBtn = document.getElementById('block-btn') as HTMLButtonElement;
   const messagesEl = document.getElementById('messages') as HTMLElement;
   const composer = document.getElementById('composer') as HTMLElement;
@@ -1041,6 +1054,10 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     threadAvatar.textContent = getInitials(conv.label, conv.id);
     threadAvatar.style.background = getAvatarColor(conv.id);
     threadName.textContent = conv.label;
+    threadSource.hidden = !conv.referral;
+    threadSource.textContent = conv.referral
+      ? `Came from a ${conv.referral.type === 'post' ? 'post' : 'WhatsApp ad'}${conv.referral.headline ? `: ${conv.referral.headline}` : ''}`
+      : '';
     updateBlockBtn(conv.isBlocked);
     document.querySelectorAll('.conversation-item').forEach((el) => el.classList.remove('active'));
     // Optimistic — the real read-state update happens server-side as a side

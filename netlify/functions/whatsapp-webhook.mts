@@ -27,9 +27,11 @@
 // unanswered-message digest, once per-message emails turned out to be more
 // clutter than signal for a shared inbox multiple staff check.
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { upsertConversation, insertMessage, updateTemplateSendStatus, templateSendExists } from '../../scripts/lib/supabase.mjs';
+import { upsertConversation, insertMessage, updateTemplateSendStatus, templateSendExists, claimAutoAck } from '../../scripts/lib/supabase.mjs';
 import { getPaymentById } from '../../scripts/lib/event-payments-db.mjs';
 import { sendStaffAlert, escapeHtml } from './lib/refund-alert';
+import { sendWhatsAppText } from './lib/whatsapp-send';
+import { autoAckText, isOutsideHours, shouldAutoAck } from './lib/whatsapp-autoack';
 
 function textResponse(body: string, status = 200): Response {
   return new Response(body, { status, headers: { 'content-type': 'text/plain' } });
@@ -60,6 +62,14 @@ interface WhatsAppMessage {
   timestamp: string;
   type: string;
   text?: { body: string };
+  // Tap on a template's quick-reply button.
+  button?: { text?: string; payload?: string };
+  // Tap on a reply button / list row of an interactive message we sent.
+  interactive?: { button_reply?: { title?: string }; list_reply?: { title?: string } };
+  location?: { name?: string; address?: string };
+  // Present when the conversation started from a Click-to-WhatsApp ad or an
+  // Instagram/Facebook entry point.
+  referral?: { source_type?: string; source_id?: string; source_url?: string; headline?: string };
 }
 
 interface WhatsAppContact {
@@ -72,19 +82,76 @@ interface WhatsAppContact {
 // Meta retry the delivery. insertMessage() dedupes on wa_message_id (see
 // scripts/lib/supabase.mjs), so re-processing an already-persisted message
 // on retry is a safe no-op rather than a duplicate.
-async function persistIncomingMessage(message: WhatsAppMessage, contact: WhatsAppContact | undefined): Promise<void> {
-  const bodyText = message.type === 'text' ? (message.text?.body ?? '') : `[${message.type} message — not shown here]`;
+async function persistIncomingMessage(message: WhatsAppMessage, contact: WhatsAppContact | undefined): Promise<{ id: string }> {
   const conversation = await upsertConversation({
     waPhone: message.from,
     displayName: contact?.profile?.name,
     lastMessageAt: new Date(Number(message.timestamp) * 1000).toISOString(),
+    referral: message.referral
+      ? {
+          sourceType: message.referral.source_type,
+          sourceId: message.referral.source_id,
+          sourceUrl: message.referral.source_url,
+          headline: message.referral.headline,
+        }
+      : null,
   });
   await insertMessage({
     conversationId: conversation.id,
     direction: 'inbound',
-    body: bodyText,
+    body: describeMessage(message),
     waMessageId: message.id,
   });
+  return conversation;
+}
+
+// What the inbox shows for an inbound message. Taps on our template/
+// interactive buttons are real answers ("I need help"), so they read as text
+// rather than an opaque "[button message]".
+function describeMessage(message: WhatsAppMessage): string {
+  switch (message.type) {
+    case 'text':
+      return message.text?.body ?? '';
+    case 'button':
+      return `[Tapped button] ${message.button?.text ?? message.button?.payload ?? ''}`.trim();
+    case 'interactive': {
+      const title = message.interactive?.button_reply?.title ?? message.interactive?.list_reply?.title;
+      return title ? `[Selected] ${title}` : '[interactive reply — not shown here]';
+    }
+    case 'location':
+      return `[Shared a location] ${[message.location?.name, message.location?.address].filter(Boolean).join(', ')}`.trim();
+    default:
+      return `[${message.type} message — not shown here]`;
+  }
+}
+
+// Replies to the guest outside staffed hours (WHATSAPP_AUTOACK_ENABLED=true,
+// hours in WHATSAPP_AUTOACK_HOURS, IST). At most one per conversation per 12
+// hours, claimed atomically in the DB so Meta's duplicate deliveries can't
+// send two. Never throws: an auto-reply is a courtesy, and a failure here
+// must not make Meta retry the whole batch.
+async function maybeAutoAck(message: WhatsAppMessage, conversation: { id: string }): Promise<void> {
+  try {
+    if (process.env.WHATSAPP_AUTOACK_ENABLED !== 'true') return;
+    if (!shouldAutoAck(message.type)) return;
+    // A delayed retry of an old message shouldn't trigger a reply now.
+    if (Date.now() - Number(message.timestamp) * 1000 > 10 * 60_000) return;
+    if (!isOutsideHours(new Date(), process.env.WHATSAPP_AUTOACK_HOURS)) return;
+    if (!(await claimAutoAck(conversation.id))) return;
+
+    const body = autoAckText(process.env.WHATSAPP_AUTOACK_HOURS);
+    const sent = await sendWhatsAppText(message.from, body);
+    await insertMessage({
+      conversationId: conversation.id,
+      direction: 'outbound',
+      body: `[Auto-reply] ${body}`,
+      waMessageId: sent.ok ? (sent.waMessageId ?? undefined) : undefined,
+      status: sent.ok ? 'sent' : 'failed',
+      errorMessage: sent.ok ? undefined : sent.error,
+    });
+  } catch (err) {
+    console.error('[whatsapp-webhook] Auto-reply failed', err);
+  }
 }
 
 // A delivery receipt for a template message. Records the new status; when it
@@ -180,7 +247,8 @@ export default async (req: Request): Promise<Response> => {
           const contactsByWaId = new Map<string, WhatsAppContact>((value.contacts ?? []).map((c: WhatsAppContact) => [c.wa_id, c]));
           for (const message of value.messages as WhatsAppMessage[]) {
             const contact = contactsByWaId.get(message.from);
-            await persistIncomingMessage(message, contact);
+            const conversation = await persistIncomingMessage(message, contact);
+            await maybeAutoAck(message, conversation);
           }
         } else if (change?.field === 'messages' && Array.isArray(value.statuses)) {
           // Delivery receipts for messages WE sent (sent → delivered → read,

@@ -417,3 +417,55 @@ export async function markRefundFailed(id, razorpayRefundId) {
   const rows = await res.json();
   return rows.length > 0;
 }
+
+// Bookings due a pre-event WhatsApp reminder: held for the given event date
+// (YYYY-MM-DD), not yet reminded, and not refunded or mid-refund. A
+// cancelled event refunds every booking, so the refund filter is what stops a
+// "see you tomorrow" going to guests of a cancelled event.
+/**
+ * @param {string} eventDate
+ * @returns {Promise<Array<Record<string, any>>>}
+ */
+export async function listBookingsDueReminder(eventDate) {
+  const res = await fetch(
+    `${supabaseUrl()}/rest/v1/event_payments?event_date=eq.${encodeURIComponent(eventDate)}` +
+      `&whatsapp_reminder_sent_at=is.null&refund_initiated_at=is.null&refunded_at=is.null&select=*`,
+    { headers: restHeaders() },
+  );
+  if (!res.ok) {
+    throw new Error(`Supabase read from event_payments failed: ${res.status} ${await res.text()}`);
+  }
+  return res.json();
+}
+
+// Claims a booking's reminder: an atomic "set it if still null", so two
+// overlapping runs can't both send. Returns true for the run that won.
+// releaseReminderClaim() undoes it when the send itself fails, so the next
+// run retries.
+/**
+ * @param {string} id
+ * @returns {Promise<boolean>}
+ */
+export async function claimReminder(id) {
+  const res = await fetch(`${supabaseUrl()}/rest/v1/event_payments?id=eq.${id}&whatsapp_reminder_sent_at=is.null`, {
+    method: 'PATCH',
+    headers: restHeaders({ Prefer: 'return=representation' }),
+    body: JSON.stringify({ whatsapp_reminder_sent_at: new Date().toISOString() }),
+  });
+  if (!res.ok) {
+    throw new Error(`Supabase update of event_payments failed: ${res.status} ${await res.text()}`);
+  }
+  return (await res.json()).length > 0;
+}
+
+/** @param {string} id */
+export async function releaseReminderClaim(id) {
+  const res = await fetch(`${supabaseUrl()}/rest/v1/event_payments?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: restHeaders(),
+    body: JSON.stringify({ whatsapp_reminder_sent_at: null }),
+  });
+  if (!res.ok) {
+    throw new Error(`Supabase update of event_payments failed: ${res.status} ${await res.text()}`);
+  }
+}

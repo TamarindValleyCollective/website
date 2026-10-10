@@ -44,7 +44,15 @@ async function restFetch(path, options = {}) {
 // message restarts the stale-alert countdown (see whatsapp-stale-alert.mts)
 // rather than inheriting a timestamp from a previous unread streak on this
 // same conversation.
-export async function upsertConversation({ waPhone, displayName, lastMessageAt }) {
+//
+// `referral` (Click-to-WhatsApp: a Meta ad / Instagram / Facebook entry
+// point) is only written when the message actually carried one — merge-
+// duplicates updates just the columns present in the body, so a later plain
+// message never clears an earlier attribution.
+/**
+ * @param {{ waPhone: string, displayName?: string, lastMessageAt: string, referral?: { sourceType?: string, sourceId?: string, sourceUrl?: string, headline?: string } | null }} params
+ */
+export async function upsertConversation({ waPhone, displayName, lastMessageAt, referral }) {
   const res = await restFetch(`/whatsapp_conversations?on_conflict=wa_phone`, {
     method: 'POST',
     headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
@@ -54,11 +62,42 @@ export async function upsertConversation({ waPhone, displayName, lastMessageAt }
         display_name: displayName ?? null,
         last_message_at: lastMessageAt,
         last_stale_alert_at: null,
+        ...(referral
+          ? {
+              referral_source_type: referral.sourceType ?? null,
+              referral_source_id: referral.sourceId ?? null,
+              referral_source_url: referral.sourceUrl ?? null,
+              referral_headline: referral.headline ?? null,
+              referral_at: new Date().toISOString(),
+            }
+          : {}),
       },
     ]),
   });
   const rows = await res.json();
   return rows[0];
+}
+
+// Claims the right to auto-reply to a conversation: sets last_auto_ack_at
+// only if it is null or older than `minHours`, and reports whether this call
+// won. Atomic at the DB level, so Meta's duplicate/overlapping webhook
+// deliveries can't produce two replies.
+/**
+ * @param {string} conversationId
+ * @param {number} minHours
+ * @returns {Promise<boolean>}
+ */
+export async function claimAutoAck(conversationId, minHours = 12) {
+  const cutoff = new Date(Date.now() - minHours * 3600_000).toISOString();
+  const res = await restFetch(
+    `/whatsapp_conversations?id=eq.${conversationId}&or=(last_auto_ack_at.is.null,last_auto_ack_at.lt.${cutoff})`,
+    {
+      method: 'PATCH',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({ last_auto_ack_at: new Date().toISOString() }),
+    },
+  );
+  return (await res.json()).length > 0;
 }
 
 // Inserts one message row. When waMessageId is given, a partial unique index

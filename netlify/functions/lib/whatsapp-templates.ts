@@ -67,6 +67,26 @@ export const WHATSAPP_TEMPLATES = {
     body: '📩 New *{{1}}* enquiry received on the TVC website.\n\n👤 *From:* {{2}}\n💬 *Message:* {{3}}\n\nPlease reply to them from the contact inbox or the enquiries sheet.',
     samples: ['membership', 'Asha Rao', 'I would like to know more about joining the collective.'],
   },
+  // Booking happy path (added 2026-10-10). New names, not v1/v2 successors.
+  // `buttons` are static (a fixed URL, or a quick reply) so sending needs no
+  // button components; they only matter at submission time.
+  tvc_booking_confirmed: {
+    header: 'Booking confirmed',
+    footer: 'Tamarind Valley Collective',
+    body: "Hi {{1}}, you're all set! ✅\n\n🎟️ *Event:* {{2}}\n📅 *Date:* {{3}}\n👥 *Guests:* {{4}}\n💰 *Paid:* {{5}}\n\nA receipt is on its way to your email. Tap below for directions to the farm, or just reply here with any questions.",
+    samples: ['Asha', 'Foraging Day', 'Saturday, 10 October 2026', '2', '₹4,500'],
+    buttons: [{ type: 'url', text: 'Get directions', url: 'https://tvc.farm/visit/how-to-reach' }],
+  },
+  tvc_event_reminder: {
+    header: 'See you tomorrow!',
+    footer: 'Tamarind Valley Collective',
+    body: "Hi {{1}}, a quick reminder that *{{2}}* is on *{{3}}*. 🌿\n\nWe're looking forward to having you at the farm. The route can be tricky, so please check the directions before you set out. If anything has come up, tap below or reply here and we'll help.",
+    samples: ['Asha', 'Foraging Day', 'Saturday, 10 October 2026'],
+    buttons: [
+      { type: 'url', text: 'Get directions', url: 'https://tvc.farm/visit/how-to-reach' },
+      { type: 'quick_reply', text: 'I need help' },
+    ],
+  },
 } as const;
 
 export type WhatsAppTemplateName = keyof typeof WHATSAPP_TEMPLATES;
