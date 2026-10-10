@@ -80,7 +80,9 @@ export const MANUAL_METERS = {
 // 'netlify.credits_used' reading: the allowance replaces the typed limit, and a
 // reading entered before the current cycle began is marked `staleForCycle`
 // because credits reset to zero when a new cycle starts. Returns a new map.
-export function mergeNetlifyPlan(snapshots) {
+export const NETLIFY_PLAN_STALE_DAYS = 2; // collector runs every 6h, so 2 days with no new reading means it is failing
+
+export function mergeNetlifyPlan(snapshots, now = new Date()) {
   const plan = snapshots['netlify.plan_credits'];
   const used = snapshots['netlify.credits_used'];
   if (!plan || !used) return snapshots;
@@ -88,7 +90,9 @@ export function mergeNetlifyPlan(snapshots) {
   const cycleEnd = plan.detail?.next_period_start ?? null;
   const limit = isPositiveNumber(Number(plan.limit_value)) ? Number(plan.limit_value) : used.limit_value;
   const staleForCycle = cycleStart ? new Date(used.captured_at) < new Date(cycleStart) : false;
-  return { ...snapshots, 'netlify.credits_used': { ...used, limit_value: limit, detail: { ...(used.detail ?? {}), cycle_start: cycleStart, cycle_end: cycleEnd, stale_for_cycle: staleForCycle } } };
+  const planAgeDays = (now.getTime() - new Date(plan.captured_at).getTime()) / DAY_MS;
+  const planStale = planAgeDays > NETLIFY_PLAN_STALE_DAYS;
+  return { ...snapshots, 'netlify.credits_used': { ...used, limit_value: limit, detail: { ...(used.detail ?? {}), cycle_start: cycleStart, cycle_end: cycleEnd, stale_for_cycle: staleForCycle, plan_captured_at: plan.captured_at, plan_stale: planStale } } };
 }
 
 export const SETTING_KEYS = ['anthropic_prices', 'gemini_daily_requests'];
@@ -207,7 +211,7 @@ function money(n) {
 // identifies the underlying condition so a repeat of it isn't mailed twice.
 /** @param {{ now?: Date, daily?: any[], snapshots?: Record<string, any>, settings?: any }} input */
 export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSnapshots = {}, settings = {} }) {
-  const snapshots = mergeNetlifyPlan(rawSnapshots);
+  const snapshots = mergeNetlifyPlan(rawSnapshots, now);
   const alerts = [];
   const today = utcDay(now);
   const yesterday = addDays(today, -1);
@@ -288,6 +292,13 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
     const level = levelForUsed(Number(db.value), Number(db.limit_value));
     const mb = (b) => `${(Number(b) / 1024 / 1024).toFixed(0)} MB`;
     add('supabase:db-size', level, 'supabase', `Supabase database is at ${pct(Number(db.value) / Number(db.limit_value))} of its free size`, `${mb(db.value)} used of ${mb(db.limit_value)}. Free projects stop accepting writes at the limit.`);
+  }
+
+  // The Netlify token (usage-collect) stopped refreshing the plan data: expired, revoked, or
+  // the API changed. Only once a plan snapshot has existed, so no token yet means no alert.
+  const netlifyPlan = snapshots['netlify.plan_credits'];
+  if (netlifyPlan && (now.getTime() - new Date(netlifyPlan.captured_at).getTime()) / DAY_MS > NETLIFY_PLAN_STALE_DAYS) {
+    add('netlify:plan-stale', 'warn', 'netlify', 'Netlify plan data has stopped refreshing', `The last plan/billing-cycle reading from the Netlify API was on ${utcDay(new Date(netlifyPlan.captured_at))}. Check NETLIFY_ACCESS_TOKEN (it may have expired or been revoked) and the usage-collect function logs. Until then the credit limit and cycle dates shown are the last known ones.`);
   }
 
   // Everything else a person types in.

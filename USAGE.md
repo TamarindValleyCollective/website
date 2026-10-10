@@ -39,6 +39,7 @@ when they clear so a recurrence emails again. One digest per hourly run.
 | Gemini requests today ≥ 70% / 90% of the entered daily limit | Warning / Critical |
 | Chat daily cap, or search paid-fallback cap, hit today | Warning |
 | Supabase database ≥ 70% / 90% of its limit | Warning / Critical |
+| Netlify plan data (allowance/cycle) not refreshed for over 2 days, i.e. the token has likely expired | Warning |
 | Any typed-in "used" meter ≥ 70% / 90% of the limit entered with it | Warning / Critical |
 
 Domain renewals are separate (GitHub Action): at 60 and 30 days, then daily from 14.

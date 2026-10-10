@@ -200,3 +200,13 @@ test('mergeNetlifyPlan: no plan snapshot leaves the typed reading untouched', ()
   const snapshots = { 'netlify.credits_used': usedSnap('2026-10-04T11:41:00Z') };
   assert.equal(mergeNetlifyPlan(snapshots), snapshots);
 });
+
+test('Netlify plan data older than 2 days warns once; fresh or never-recorded does not', () => {
+  const old = { ...planSnap, captured_at: '2026-10-05T00:00:00Z' }; // 5 days before NOW
+  const has = (snapshots) => evaluateAlerts({ now: NOW, snapshots }).some((a) => a.key === 'netlify:plan-stale');
+  assert.equal(has({ 'netlify.plan_credits': old }), true);
+  assert.equal(has({ 'netlify.plan_credits': planSnap }), false);
+  assert.equal(has({}), false);
+  const merged = mergeNetlifyPlan({ 'netlify.plan_credits': old, 'netlify.credits_used': usedSnap('2026-10-04T11:41:00Z') }, NOW);
+  assert.equal(merged['netlify.credits_used'].detail.plan_stale, true);
+});
