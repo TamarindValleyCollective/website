@@ -121,10 +121,8 @@ export default async (req: Request): Promise<Response> => {
     try {
       await sendStaffAlert(
         `Action needed: cancellation request — ${payment.event_title}`,
-        `<!doctype html><html><head><meta charset="utf-8" /></head><body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f;">
-  <p>A guest has asked to cancel their booking for <strong>${escapeHtml(payment.event_title)}</strong> (${payment.attendee_count} ${payment.attendee_count === 1 ? 'person' : 'people'}, ${formatAmount(payment.amount, payment.currency)}, payment ${escapeHtml(paymentId)}).</p>
-  <p>They've been told TVC will follow up. Review it on <a href="https://tvc.farm/internal/event-payments">the Event Payments dashboard</a> — the refund form there suggests an amount under the <a href="https://tvc.farm/refund-policy">refund policy</a>.${payment.payer_email ? '' : ' <strong>This guest has no email on file</strong>, so they got no acknowledgment — contact them directly.'}</p>
-</body></html>`,
+        `<p style="margin-top:0;">A guest has asked to cancel their booking for <strong>${escapeHtml(payment.event_title)}</strong> (${payment.attendee_count} ${payment.attendee_count === 1 ? 'person' : 'people'}, ${formatAmount(payment.amount, payment.currency)}, payment ${escapeHtml(paymentId)}).</p>
+  <p>They've been told TVC will follow up. Review it on <a href="https://tvc.farm/internal/event-payments">the Event Payments dashboard</a> — the refund form there suggests an amount under the <a href="https://tvc.farm/refund-policy">refund policy</a>.${payment.payer_email ? '' : ' <strong>This guest has no email on file</strong>, so they got no acknowledgment — contact them directly.'}</p>`,
         payment.mode === 'test',
       );
     } catch (err) {
