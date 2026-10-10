@@ -100,7 +100,7 @@ flowchart TD
         FUNC_SRC12["netlify/functions/razorpay-webhook.mts<br/>Serverless function — verifies signature, records<br/>payment_link.paid in Supabase (idempotent), emails<br/>a branded receipt; also handles refund.created/<br/>processed/failed — Razorpay's own confirmation is<br/>the only thing that marks a row actually refunded"]
         FUNC_SRC13["netlify/functions/cancel-booking.mts<br/>Serverless function — records a guest's<br/>cancellation request (not an automatic<br/>refund), notifies TVC + Linger + guest"]
         FUNC_SRC14["netlify/functions/event-payments-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>per-event registrations/cancellations/money<br/>collected from Supabase, issues real Razorpay<br/>refunds (tier-suggested, admin-confirmed)"]
-        FUNC_SRC15["netlify/functions/usage-collect.mts<br/>Scheduled function (cron, every 6 hours) — appends<br/>the Supabase database size, Netlify's plan<br/>credits + billing cycle and Resend's email quota to usage_snapshots for<br/>the free-tier usage dashboard. Optional secret:<br/>NETLIFY_ACCESS_TOKEN"]
+        FUNC_SRC15["netlify/functions/usage-collect.mts<br/>Scheduled function (cron, every 6 hours) — appends<br/>the Supabase database size, Netlify's plan<br/>credits + billing cycle and Resend's email quota to usage_snapshots for<br/>the free-tier usage dashboard. Optional secrets:<br/>NETLIFY_ACCESS_TOKEN, RESEND_USAGE_API_KEY"]
         FUNC_SRC16["netlify/functions/usage-admin.mts<br/>Serverless function, Google Sign-In gated (usage module) —<br/>overview of free-tier/credit usage, live domain<br/>expiry lookups, typed-in provider readings and<br/>price/limit settings (admins only, audit-logged)"]
         FUNC_SRC17["netlify/functions/usage-alerts.mts<br/>Scheduled function (cron, hourly) — evaluates the<br/>usage rules and emails core-team@tvc.farm one digest<br/>per new or worsened warning; remembers what it sent"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
@@ -375,7 +375,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   reads the TVC team's plan credit allowance and billing-cycle dates from the Netlify API
   (`GET /accounts/{id}`; credits *remaining/used* is not exposed, so the remaining balance stays a typed-in reading; the Netlify
   call failing never fails the Supabase one). It likewise reads Resend's daily/monthly email quota
-  from `GET https://api.resend.com/usage` with the existing `RESEND_API_KEY`. Both tables and functions are service_role
+  from `GET https://api.resend.com/usage` with a separate full-access `RESEND_USAGE_API_KEY` (the sending-only key is refused). Both tables and functions are service_role
   only (migration `0030_usage_metering.sql`, applied to production 2026-10-04; RLS on, no policies). Domain renewals are checked by the
   `domain-expiry.yml` GitHub Action instead: it reads each domain's expiry from the registry's public
   RDAP service (no key, same answer whichever registrar holds it) and emails `core-team@tvc.farm` at
