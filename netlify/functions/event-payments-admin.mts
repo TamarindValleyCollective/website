@@ -29,6 +29,7 @@ import { createRefund, fetchBasePaymentLink, cancelPaymentLink } from './lib/raz
 import { sendRefundFailureAlert, failureFromRow } from './lib/refund-alert';
 import { routeEmail } from './lib/email-routing';
 import { sendRefundCompletedEmail } from './lib/refund-completed-email';
+import { sendWhatsAppTemplate, cleanTemplateParam, firstNameOf } from './lib/whatsapp-send';
 import { requireStaff, logStaffAction, type StaffGrant } from './lib/staff-access';
 import { canSeeNames, maskName } from './lib/staff-masking';
 import { roleHasCapability, type Capability } from './lib/staff-registry';
@@ -427,6 +428,31 @@ async function refundOneBooking(row: any, amount: number, staff: StaffGrant, rea
     }
   }
 
+  // WhatsApp alongside the email (a no-op until the templates are approved
+  // and listed in WHATSAPP_APPROVED_TEMPLATES, and for a guest with no usable
+  // number). A whole-event cancellation gets its own template, carrying the
+  // admin's guest-facing reason.
+  await sendWhatsAppTemplate(
+    eventCancelled
+      ? {
+          template: 'tvc_event_cancelled',
+          to: row.payer_contact,
+          isTest: row.mode === 'test',
+          params: [
+            cleanTemplateParam(firstNameOf(row.payer_name), 60),
+            cleanTemplateParam(row.event_title, 120),
+            reason ? cleanTemplateParam(reason, 300) : 'We apologise for the inconvenience.',
+            formatAmount(refund.amount, row.currency),
+          ],
+        }
+      : {
+          template: 'tvc_refund_initiated',
+          to: row.payer_contact,
+          isTest: row.mode === 'test',
+          params: [cleanTemplateParam(firstNameOf(row.payer_name), 60), formatAmount(refund.amount, row.currency), cleanTemplateParam(row.event_title, 120)],
+        },
+  );
+
   // Razorpay's own create-refund response can already say 'processed' (test
   // mode refunds are instant, and so are some live ones). That IS Razorpay's
   // confirmation, so don't wait for a refund.processed webhook that may never
@@ -445,6 +471,14 @@ async function refundOneBooking(row: any, amount: number, staff: StaffGrant, rea
           paymentId: row.razorpay_payment_id,
           refundId: refund.id,
           isTest: row.mode === 'test',
+        });
+      }
+      if (confirmedNow) {
+        await sendWhatsAppTemplate({
+          template: 'tvc_refund_processed',
+          to: row.payer_contact,
+          isTest: row.mode === 'test',
+          params: [cleanTemplateParam(firstNameOf(row.payer_name), 60), formatAmount(refund.amount, row.currency), cleanTemplateParam(row.event_title, 120)],
         });
       }
     } catch (err) {
@@ -558,6 +592,12 @@ async function handleDecline(req: Request, staff: StaffGrant): Promise<Response>
       console.error('Decline recorded but failed to send notification email', err);
     }
   }
+  await sendWhatsAppTemplate({
+    template: 'tvc_cancellation_declined',
+    to: row.payer_contact,
+    isTest: row.mode === 'test',
+    params: [cleanTemplateParam(firstNameOf(row.payer_name), 60), cleanTemplateParam(row.event_title, 120), reason ? cleanTemplateParam(reason, 300) : 'We hope you can still join us.'],
+  });
   return jsonResponse({ ok: true, emailed: Boolean(row.payer_email) });
 }
 

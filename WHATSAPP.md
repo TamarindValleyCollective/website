@@ -19,6 +19,14 @@ anything unread for 60+ minutes, replacing an earlier design that emailed on eve
 Phases 1–4 are done — see the checklist below; only real message templates remain (needed for
 replies outside the 24-hour customer-service window).
 
+**Outbound templates (2026-10-10).** The sending code is built and deployed but dormant:
+`netlify/functions/lib/whatsapp-send.ts` sends an approved template only if its name is in
+`WHATSAPP_APPROVED_TEMPLATES`. Five UTILITY templates are drafted for submission in
+`docs/whatsapp-templates.md` (event cancelled, refund initiated, refund processed, cancellation
+declined — to guests, alongside the existing emails — and a staff alert for new membership/general
+enquiries, `enquiry.mts`). Nothing is sent until Meta approves them and the env vars listed there
+are set. Test-mode bookings only ever WhatsApp `WHATSAPP_TEST_NUMBER`.
+
 ## Direct Meta Cloud API integration — setup checklist
 
 Four phases. Phases 1–3 need your own Meta/Facebook login and (for verification) business
@@ -431,7 +439,7 @@ that Phase 3 step below is still open.
          Explorer (to get a detailed error instead of the UI's generic one) was blocked by Claude's
          own safety classifier — registering a number with a throwaway PIN is the same class of
          action as entering a password, so that diagnostic step was left to Sharath throughout.
-- [ ] Submit real templates in the **UTILITY** category (transactional — confirmations,
+- [ ] (Drafted 2026-10-10 in `docs/whatsapp-templates.md`; waiting on submission + approval, then the env vars there.) Submit real templates in the **UTILITY** category (transactional — confirmations,
       notifications), not MARKETING — cleaner approval, longer free-window eligibility. First
       trigger decided 2026-08-19: an internal staff alert on new Visit/general-enquiry form
       submissions (see resolved decision below) — template content itself still needs drafting.
