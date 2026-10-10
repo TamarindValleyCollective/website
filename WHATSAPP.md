@@ -77,6 +77,21 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
   auto-reply doesn't also fire on a STOP. Covers all template sends, staff alerts included. The
   approved templates themselves don't mention STOP (their text is frozen); the booking checkbox and
   the privacy page do.
+- **Inbox controls (2026-10-10).** In `/internal/whatsapp`:
+  - **Stop / resume WhatsApp updates** button in the thread header (`manage` role): adds or removes
+    the contact on the same `whatsapp_opt_outs` list a STOP reply writes to (source `staff`), for a
+    guest who asked another way. Confirms first, writes the audit log *before* acting and refuses if
+    it can't (`whatsapp.opt_out` / `whatsapp.opt_in`). Nothing is sent to the guest. The button turns
+    red and reads "Updates stopped · Resume" when a contact is opted out, whichever way they got there.
+  - **Canned replies**: chips above the reply box (Directions, Events, Day visit, Camping, Membership,
+    Checking, Closing) that drop editable text into the box; nothing sends by itself. Edit them in
+    `src/data/whatsapp-quick-replies.ts` (links only to pages that exist; no prices or timings).
+  - **Read receipts**: when a staff member who can reply has a thread open and the guest's latest
+    message is new, the guest's phone shows it as read (blue ticks), via `POST
+    /api/whatsapp-admin/seen`. Read-only roles never send one.
+  - **Typing indicator**: "typing…" on the guest's phone while staff write, re-sent at most every 20 s.
+  Both are best-effort (the endpoint always answers 200; Meta may refuse outside the 24-hour window).
+  No migration. Checked in a browser against a mock backend 2026-10-10, not against real WhatsApp.
 - **Account-health alerts (2026-10-10).** Meta's health webhook fields (template approved / rejected /
   paused / disabled, template and phone-number quality changes, recategorisation, account
   restrictions) are stored in `whatsapp_health_events` (migration `0036`, **apply before
