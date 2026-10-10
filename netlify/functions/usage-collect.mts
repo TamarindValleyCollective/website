@@ -62,7 +62,7 @@ async function recordResendUsage(base: string): Promise<string> {
   if (!key) return 'skipped (no RESEND_USAGE_API_KEY)';
   try {
     const res = await fetch('https://api.resend.com/usage', { headers: { Authorization: `Bearer ${key}` } });
-    if (!res.ok) throw new Error(`resend usage fetch failed: ${res.status}`);
+    if (!res.ok) throw new Error(`resend usage fetch failed: ${res.status} ${(await res.text()).slice(0, 300)}`); // Resend's error text, e.g. "API key is invalid"; never contains our key
     const emails = (await res.json())?.emails ?? {};
     const rows = (['monthly', 'daily'] as const)
       .map((period) => ({ period, q: emails[period] }))
