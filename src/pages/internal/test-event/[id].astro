@@ -1,0 +1,36 @@
+---
+// DEV-ONLY booking page for the fake test event (src/content/events/
+// 2027-12-31-fake-test-event.md). Public event pages skip draft events, so a
+// fake event has no page of its own; this renders the real EventBookingForm
+// for it so a test booking can be made end to end in Razorpay test mode.
+//
+// getStaticPaths returns nothing outside `astro dev`, so a production build
+// generates no page at all — there is no URL to find, not merely a hidden one.
+// (Even if one existed, event-booking.mts looks the base Payment Link up with
+// the live keys, which have no "fake-test-event" link.)
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import PageHero from '../../../components/PageHero.astro';
+import EventBookingForm from '../../../components/EventBookingForm.astro';
+
+export async function getStaticPaths() {
+  if (!import.meta.env.DEV) return [];
+  const events = await getCollection('events', (e) => Boolean(e.data.razorpayReferenceId) && e.data.razorpayReferenceId === 'fake-test-event');
+  return events.map((event) => ({ params: { id: 'fake-test-event' }, props: { event } }));
+}
+
+const { event } = Astro.props;
+---
+
+<BaseLayout title="Test booking (internal)" description="Dev-only test booking page." translated={false}>
+  <PageHero eyebrow="Internal — dev only" title={event.data.title} intro="Rehearse bookings in Razorpay test mode. Nothing here exists in production." />
+  <section class="section wrapper">
+    <EventBookingForm
+      heading="Register (test mode)"
+      referenceId={event.data.razorpayReferenceId!}
+      unitAmount={event.data.price![0].amount}
+      unitLabel={event.data.price![0].label}
+      eventDate={event.data.date.toISOString().slice(0, 10)}
+    />
+  </section>
+</BaseLayout>

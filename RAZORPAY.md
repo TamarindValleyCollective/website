@@ -132,6 +132,20 @@ underlying table `/cancel-booking` writes `cancellation_requested_at` to (a gues
 *request*, not a refund) — a row only counts as cancelled in this page's stats once `refunded_at`
 is actually set.
 
+**Rehearsing bookings with the fake event.** Real events can't be used to practise bookings once they're in
+the past, and test bookings must never mix with real ones. `src/content/events/2027-12-31-fake-test-event.md`
+(`draft: true`, `razorpayReferenceId: fake-test-event`, ₹100/person) is a fixture for that: drafts have no public page,
+listing or route, so it appears only in the staff Event Payments dropdown (marked "(draft)") and, in `astro dev` only,
+at `/internal/test-event/fake-test-event` (`getStaticPaths` returns nothing in a production build, so no such page
+exists there — verified by building). Its TEST-mode base Payment Link is created once with
+`netlify dev:exec node scripts/setup-fake-event.mjs` (refuses live keys; idempotent). To rehearse: run
+`netlify dev --port 8888`, book on that page, pay in test mode (UPI `success@razorpay`, or a test debit card — the
+test credit card used earlier can't be refunded in Razorpay's test mode), then record the payment with
+`netlify dev:exec node scripts/simulate-razorpay-webhook.mjs payment pay_xxx` (Razorpay's test mode has no webhook that
+reaches a local machine; this fetches the real payment and delivers a correctly signed `payment_link.paid` to the local
+server). After a refund, `... refund rfnd_xxx` delivers `refund.processed` the same way. The rows land in the shared
+database with `mode = 'test'`, so the Live | Test switch keeps them apart.
+
 **Test-mode emails.** Every email about a `mode = 'test'` booking (receipt, refund initiated/processed/event-cancelled, decline, guest cancellation acknowledgment, and the staff alerts) goes only to `contact@tvc.farm` with a `[TEST]` subject prefix — never the guest, Linger, or core-team (`netlify/functions/lib/email-routing.ts`), so refund and cancellation flows can be simulated safely.
 
 **Declining a cancellation request.** A pending request (`Cancellation requested`) also has a
