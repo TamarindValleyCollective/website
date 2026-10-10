@@ -471,3 +471,25 @@ export async function releaseReminderClaim(id) {
     throw new Error(`Supabase update of event_payments failed: ${res.status} ${await res.text()}`);
   }
 }
+
+// The newest bookings with just the fields the inbox's guest panel shows, for
+// matching a WhatsApp number to a guest's bookings. payer_contact is stored as
+// the guest typed it (any format), so it cannot be matched in SQL: the caller
+// normalizes each one and compares. Bounded, which is fine at TVC's volume; if
+// bookings grow into the thousands, store a normalized number on each row instead.
+/**
+ * @param {number} limit
+ * @returns {Promise<Array<Record<string, any>>>}
+ */
+export async function listRecentPaymentsForContactMatch(limit = 800) {
+  const columns =
+    'id,event_title,event_date,attendee_count,amount,currency,mode,payer_contact,whatsapp_opt_in,refunded_at,refund_initiated_at,refund_status,cancellation_requested_at,cancellation_declined_at,created_at';
+  const res = await fetch(
+    `${supabaseUrl()}/rest/v1/event_payments?select=${columns}&payer_contact=not.is.null&order=created_at.desc&limit=${limit}`,
+    { headers: restHeaders() },
+  );
+  if (!res.ok) {
+    throw new Error(`Supabase read from event_payments failed: ${res.status} ${await res.text()}`);
+  }
+  return res.json();
+}

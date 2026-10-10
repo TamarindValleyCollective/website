@@ -29,7 +29,10 @@ import {
   removeOptOut,
   getLatestInboundWaMessageId,
   getMessage,
+  listRecentMessagesByConversation,
 } from '../../scripts/lib/supabase.mjs';
+import { loadGuestContext } from './lib/guest-context';
+import { needsReply } from './lib/whatsapp-guest';
 import { baseMime, mediaResponseHeaders, MAX_MEDIA_BYTES } from './lib/whatsapp-media';
 import { requireStaff, logStaffAction, type StaffGrant } from './lib/staff-access';
 import { canSeeNames, maskEmail, maskName } from './lib/staff-masking';
@@ -79,6 +82,14 @@ async function handleConversations(url: URL, staff: StaffGrant): Promise<Respons
     } catch (err) {
       console.error('Failed to read the WhatsApp opt-out list', err);
     }
+    // Which conversations still wait on a person to reply (the "Needs reply" filter).
+    // If the lookup fails, fall back to the latest message's direction.
+    let recent = new Map<string, Array<{ direction: 'inbound' | 'outbound'; body: string }>>();
+    try {
+      recent = await listRecentMessagesByConversation(conversations.map((c: any) => c.id));
+    } catch (err) {
+      console.error('Failed to read recent messages for the needs-reply filter', err);
+    }
     return jsonResponse({
       capabilities: {
         reply: roleHasCapability('whatsapp', staff.role, 'reply'),
@@ -98,6 +109,9 @@ async function handleConversations(url: URL, staff: StaffGrant): Promise<Respons
           lastMessageDirection: lastMessage?.direction ?? null,
           isBlocked: c.is_blocked ?? false,
           optedOut: optedOut.has(c.wa_phone),
+          needsReply: recent.has(c.id)
+            ? needsReply(recent.get(c.id)!, c.is_blocked ?? false)
+            : !(c.is_blocked ?? false) && lastMessage?.direction !== 'outbound',
           // Set when the chat started from a Click-to-WhatsApp ad or an
           // Instagram/Facebook post (Meta's `referral` object).
           referral: c.referral_source_type
@@ -317,6 +331,36 @@ async function handleBlock(req: Request, staff: StaffGrant): Promise<Response> {
   return jsonResponse({ ok: true, isBlocked: blocked });
 }
 
+// Everything the inbox can say about the person on the other end, for the guest
+// panel: their event bookings (Event Payments) and stays (Accommodation), matched
+// on the WhatsApp number. The number itself, and every contact detail, stays on
+// the server. Each section is gated by the viewer's role in THAT module (a
+// whatsapp-only person is told it is limited rather than shown nothing), and names
+// are masked for read-only roles like in the accommodation tool.
+async function handleGuest(req: Request, url: URL): Promise<Response> {
+  const conversationId = url.searchParams.get('conversationId');
+  if (!conversationId) return jsonResponse({ error: 'conversationId is required' }, 400);
+
+  let conversation: { id: string; wa_phone: string; created_at?: string } | null;
+  try {
+    conversation = await getConversation(conversationId);
+  } catch (err) {
+    console.error('Failed to look up conversation', err);
+    return jsonResponse({ error: 'Failed to reach the message store' }, 502);
+  }
+  if (!conversation) return jsonResponse({ error: 'Conversation not found' }, 404);
+  const e164 = `+${conversation.wa_phone}`;
+
+  const [payments, accommodation] = await Promise.all([requireStaff(req, 'event-payments', 'view'), requireStaff(req, 'accommodation', 'view')]);
+
+  const context = await loadGuestContext({
+    e164,
+    payments: payments.ok,
+    accommodation: accommodation.ok ? { seeNames: canSeeNames(accommodation.staff.role) } : false,
+  });
+  return jsonResponse({ since: conversation.created_at ?? null, ...context });
+}
+
 // Streams a guest's photo / voice note / video / document to a signed-in staff
 // member. The file lives at Meta (kept ~30 days): look up its media id from our
 // own message row (never from the request), ask Graph for a short-lived URL,
@@ -480,7 +524,9 @@ export default async (req: Request): Promise<Response> => {
       ? { capability: 'view', run: (staff) => handleConversations(url, staff) }
       : url.pathname === '/api/whatsapp-admin/messages' && req.method === 'GET'
         ? { capability: 'view', run: () => handleMessages(url) }
-        : url.pathname === '/api/whatsapp-admin/media' && req.method === 'GET'
+        : url.pathname === '/api/whatsapp-admin/guest' && req.method === 'GET'
+          ? { capability: 'view', run: () => handleGuest(req, url) }
+          : url.pathname === '/api/whatsapp-admin/media' && req.method === 'GET'
           ? { capability: 'view', run: () => handleMedia(url) }
           : url.pathname === '/api/whatsapp-admin/reply' && req.method === 'POST'
           ? { capability: 'reply', run: (staff) => handleReply(req, staff) }
@@ -507,5 +553,6 @@ export const config = {
     '/api/whatsapp-admin/opt-out',
     '/api/whatsapp-admin/seen',
     '/api/whatsapp-admin/media',
+    '/api/whatsapp-admin/guest',
   ],
 };

@@ -42,6 +42,10 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
         <div class="search-row">
           <input type="search" id="conversation-search" placeholder="Search name or message…" aria-label="Search conversations" />
         </div>
+        <div class="list-filters" role="group" aria-label="Filter conversations">
+          <button type="button" class="chip tap-target is-active" data-filter="all" aria-pressed="true">All</button>
+          <button type="button" class="chip tap-target" data-filter="needs-reply" aria-pressed="false">Needs reply<span id="needs-reply-count" class="chip-count"></span></button>
+        </div>
         <ul id="conversations-list"></ul>
         <p id="conversations-status" class="pane-status" hidden></p>
         <div id="conversations-skeleton" class="skeleton-list" aria-hidden="true">
@@ -64,10 +68,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
             <strong id="thread-name"></strong>
             <span id="thread-source" class="thread-source" hidden></span>
           </div>
-          <div class="thread-actions">
-            <button type="button" id="optout-btn" class="button button--outline">Stop WhatsApp updates</button>
-            <button type="button" id="block-btn" class="button button--outline">Block</button>
-          </div>
+          <button type="button" id="guest-toggle" class="button button--outline guest-toggle" aria-expanded="false" aria-controls="guest-panel">Guest</button>
         </div>
         <div id="messages" class="messages" hidden></div>
         <div id="composer" class="composer" hidden>
@@ -121,6 +122,34 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
           <p id="reply-status" class="reply-status" hidden></p>
         </div>
       </div>
+      <aside id="guest-panel" class="guest card" aria-label="Guest details">
+        <div class="guest-head">
+          <h2 class="guest-title">Guest</h2>
+          <button type="button" id="guest-close" class="button button--outline button--icon guest-close" aria-label="Close guest details">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" /></svg>
+          </button>
+        </div>
+        <p id="guest-empty" class="pane-status">Select a conversation to see who you are talking to.</p>
+        <div id="guest-body" class="guest-body" hidden>
+          <dl class="guest-facts">
+            <div><dt>First message</dt><dd id="guest-since">-</dd></div>
+            <div><dt>Came from</dt><dd id="guest-source">-</dd></div>
+            <div><dt>WhatsApp updates</dt><dd id="guest-updates">-</dd></div>
+          </dl>
+          <div class="guest-actions">
+            <button type="button" id="optout-btn" class="button button--outline">Stop WhatsApp updates</button>
+            <button type="button" id="block-btn" class="button button--outline">Block</button>
+          </div>
+          <section class="guest-section" aria-labelledby="guest-bookings-title">
+            <h3 id="guest-bookings-title">Online bookings</h3>
+            <div id="guest-bookings"></div>
+          </section>
+          <section class="guest-section" aria-labelledby="guest-stays-title">
+            <h3 id="guest-stays-title">Stays</h3>
+            <div id="guest-stays"></div>
+          </section>
+        </div>
+      </aside>
     </div>
   </section>
 </StaffLayout>
@@ -192,7 +221,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   .app {
     display: grid;
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: 300px 1fr; /* 280px 1fr 300px from 1280px, see the guest panel below */
     gap: 20px;
     height: 75vh;
     min-height: 520px;
@@ -220,6 +249,19 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     font-size: 0.9rem;
     background: var(--tvc-white);
     color: var(--tvc-ink);
+  }
+
+  .list-filters {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .chip-count {
+    margin-left: 6px;
+    font-variant-numeric: tabular-nums;
   }
 
   .conversations ul {
@@ -444,10 +486,166 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     white-space: nowrap;
   }
 
-  .thread-actions {
+  /* ------------------------------------------------------------ guest panel
+     Who the person on the other end is: when they first wrote, where from, whether
+     we may send them WhatsApp updates, their online bookings and their stays. A
+     third column from 1280px; below that it slides over from the right, opened with
+     the header's "Guest" button. The opt-out and block buttons live here. */
+  .guest {
+    display: none;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .guest-head {
     flex: 0 0 auto;
     display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 56px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .guest-title {
+    margin: 0;
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--tvc-ink);
+  }
+
+  .guest-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 14px 16px 18px;
+    overflow-y: auto;
+  }
+
+  .guest-facts {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+  }
+
+  .guest-facts dt {
+    font-size: 0.78rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .guest-facts dd {
+    margin: 1px 0 0;
+    font-size: 0.88rem;
+    color: var(--tvc-ink);
+  }
+
+  .guest-actions {
+    display: flex;
+    flex-direction: column;
     gap: 8px;
+  }
+
+  .guest-section h3 {
+    margin: 0 0 8px;
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--tvc-ink);
+  }
+
+  :global(.guest-note) {
+    margin: 0;
+    font-size: 0.82rem;
+    line-height: 1.4;
+    color: var(--tvc-ink-soft);
+  }
+
+  :global(.guest-item) {
+    padding: 10px 12px;
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-sm);
+  }
+
+  :global(.guest-item + .guest-item) {
+    margin-top: 8px;
+  }
+
+  :global(.guest-item-title) {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--tvc-ink);
+  }
+
+  :global(.guest-item-line) {
+    margin: 3px 0 0;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: var(--tvc-ink-soft);
+  }
+
+  :global(.guest-person) {
+    margin: 12px 0 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--tvc-ink);
+  }
+
+  :global(.guest-person:first-child) {
+    margin-top: 0;
+  }
+
+  :global(.guest-tag) {
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+
+  :global(.guest-tag.is-warn) {
+    background: var(--tvc-error-bg);
+    color: var(--tvc-error-text);
+  }
+
+  :global(.guest-tag.is-muted) {
+    background: var(--tvc-cream);
+    color: var(--tvc-ink-soft);
+  }
+
+  @media (min-width: 1280px) {
+    .app {
+      grid-template-columns: 280px 1fr 300px;
+    }
+
+    .guest {
+      display: flex;
+    }
+
+    .button.guest-toggle,
+    .button.guest-close {
+      display: none;
+    }
+  }
+
+  @media (max-width: 1279px) {
+    .app.guest-open .guest {
+      display: flex;
+      position: fixed;
+      z-index: 30;
+      top: 72px;
+      right: 16px;
+      bottom: 16px;
+      width: min(380px, calc(100vw - 32px));
+    }
   }
 
   /* Page-local modifiers on the shared staff .button, same convention as the other
@@ -513,6 +711,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     transform: rotate(180deg);
   }
 
+  .chip.is-active,
   .chip.picker-toggle.is-open {
     background: var(--tvc-ink);
     border-color: var(--tvc-ink);
@@ -925,16 +1124,13 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
       display: inline-flex;
     }
 
-    .thread-header {
-      flex-wrap: wrap;
-    }
-
-    .thread-actions {
-      flex: 1 0 100%;
-    }
-
-    .thread-actions .button {
-      flex: 1;
+    /* below the phone top bar (52px), which sits above this drawer */
+    .app.guest-open .guest {
+      top: 60px;
+      right: 8px;
+      bottom: 8px;
+      left: 8px;
+      width: auto;
     }
 
     /* A draft on a phone competes with the conversation for a short screen: while one is
@@ -985,6 +1181,8 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     isBlocked: boolean;
     // On the STOP opt-out list: no WhatsApp template messages are sent to them.
     optedOut: boolean;
+    // The guest's latest message still waits for a person to answer.
+    needsReply: boolean;
     // Click-to-WhatsApp attribution, when the chat began from an ad or post.
     referral: { type: string; headline: string | null; url: string | null } | null;
   }
@@ -1020,6 +1218,17 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   const threadSource = document.getElementById('thread-source') as HTMLElement;
   const blockBtn = document.getElementById('block-btn') as HTMLButtonElement;
   const optOutBtn = document.getElementById('optout-btn') as HTMLButtonElement;
+  const guestToggle = document.getElementById('guest-toggle') as HTMLButtonElement;
+  const guestClose = document.getElementById('guest-close') as HTMLButtonElement;
+  const guestEmpty = document.getElementById('guest-empty') as HTMLElement;
+  const guestBody = document.getElementById('guest-body') as HTMLElement;
+  const guestSince = document.getElementById('guest-since') as HTMLElement;
+  const guestSource = document.getElementById('guest-source') as HTMLElement;
+  const guestUpdates = document.getElementById('guest-updates') as HTMLElement;
+  const guestBookings = document.getElementById('guest-bookings') as HTMLElement;
+  const guestStays = document.getElementById('guest-stays') as HTMLElement;
+  const needsReplyCount = document.getElementById('needs-reply-count') as HTMLElement;
+  const filterChips = [...document.querySelectorAll<HTMLButtonElement>('.list-filters .chip')];
   const messagesEl = document.getElementById('messages') as HTMLElement;
   const composer = document.getElementById('composer') as HTMLElement;
   const responderNameInput = document.getElementById('responder-name') as HTMLInputElement;
@@ -1158,11 +1367,52 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     return buildAvatarEl(getInitials(conv.label, conv.id), conv.id, size);
   }
 
-  function renderConversations(conversations: Conversation[]) {
+  // "All" or "Needs reply" (the guest's latest message hasn't been answered by a
+  // person; the out-of-hours auto-reply and a STOP don't count). Filtered here in
+  // the browser from the page already loaded, and remembered for the tab.
+  let activeFilter: 'all' | 'needs-reply' = 'all';
+  try {
+    if (sessionStorage.getItem('tvc-whatsapp-filter') === 'needs-reply') activeFilter = 'needs-reply';
+  } catch {
+    // storage blocked: the filter just starts on "All"
+  }
+  let loadedConversations: Conversation[] = [];
+
+  function syncFilterChips() {
+    for (const chip of filterChips) {
+      const on = chip.dataset.filter === activeFilter;
+      chip.classList.toggle('is-active', on);
+      chip.setAttribute('aria-pressed', String(on));
+    }
+  }
+  syncFilterChips();
+
+  for (const chip of filterChips) {
+    chip.addEventListener('click', () => {
+      activeFilter = chip.dataset.filter === 'needs-reply' ? 'needs-reply' : 'all';
+      try {
+        sessionStorage.setItem('tvc-whatsapp-filter', activeFilter);
+      } catch {
+        // not remembered; fine
+      }
+      syncFilterChips();
+      renderConversations(loadedConversations);
+    });
+  }
+
+  function renderConversations(allConversations: Conversation[]) {
+    loadedConversations = allConversations;
+    const waiting = allConversations.filter((c) => c.needsReply).length;
+    needsReplyCount.textContent = waiting ? String(waiting) : '';
+    const conversations = activeFilter === 'needs-reply' ? allConversations.filter((c) => c.needsReply) : allConversations;
     conversationsList.innerHTML = '';
     if (conversations.length === 0) {
       conversationsStatus.hidden = false;
-      conversationsStatus.textContent = activeSearch ? `No matches for "${activeSearch}".` : 'No conversations yet.';
+      conversationsStatus.textContent = activeSearch
+        ? `No matches for "${activeSearch}".`
+        : activeFilter === 'needs-reply' && allConversations.length > 0
+          ? 'Nothing is waiting for a reply.'
+          : 'No conversations yet.';
       return;
     }
     conversationsStatus.hidden = true;
@@ -1722,9 +1972,152 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     insertReply(chip.dataset.text ?? '');
   });
 
+  // ---- Guest panel --------------------------------------------------------------
+  // Fetched when a conversation is opened (not on every poll). The server matches the
+  // WhatsApp number to online bookings and stays and returns only what this person's
+  // role may see in those modules; no phone number or contact detail comes back.
+  interface GuestData {
+    since: string | null;
+    eventBookings: {
+      visible: boolean;
+      error?: boolean;
+      items: Array<{ eventTitle: string; eventDate: string | null; attendees: number; amount: string; isTest: boolean; status: string; whatsappOptIn: boolean | null; messages: Array<{ label: string; status: string }> }>;
+    };
+    stays: {
+      visible: boolean;
+      error?: boolean;
+      people: Array<{ name: string; stays: Array<{ startDate: string; nights: number; unit: string; kind: string; title: string | null }> }>;
+    };
+  }
+
+  let guestSeq = 0;
+
+  const formatDay = (ymd: string) => new Date(`${ymd}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  const todayYmd = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  function guestEl(tag: string, className: string, text?: string): HTMLElement {
+    const node = document.createElement(tag);
+    node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function guestTag(text: string, kind: '' | 'is-warn' | 'is-muted' = ''): HTMLElement {
+    return guestEl('span', `guest-tag${kind ? ` ${kind}` : ''}`, text);
+  }
+
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+  function renderBookings(data: GuestData['eventBookings']) {
+    guestBookings.replaceChildren();
+    if (!data.visible) {
+      guestBookings.append(guestEl('p', 'guest-note', 'Booking details are limited to people with access to Event Payments.'));
+      return;
+    }
+    if (data.error) {
+      guestBookings.append(guestEl('p', 'guest-note', "Couldn't load bookings right now."));
+      return;
+    }
+    if (data.items.length === 0) {
+      guestBookings.append(guestEl('p', 'guest-note', 'No online bookings found for this number.'));
+      return;
+    }
+    for (const b of data.items) {
+      const item = guestEl('article', 'guest-item');
+      const title = guestEl('p', 'guest-item-title', b.eventTitle);
+      const bad = /refund|cancel/i.test(b.status);
+      title.append(guestTag(b.status, bad ? 'is-warn' : ''));
+      if (b.isTest) title.append(guestTag('Test', 'is-muted'));
+      const details = [b.eventDate ? formatDay(b.eventDate) : null, plural(b.attendees, 'guest'), b.amount].filter(Boolean).join(' · ');
+      item.append(title, guestEl('p', 'guest-item-line', details));
+      const optIn = b.whatsappOptIn === true ? 'Agreed to WhatsApp updates' : b.whatsappOptIn === false ? 'Declined WhatsApp updates' : 'WhatsApp updates: not asked when they booked';
+      item.append(guestEl('p', 'guest-item-line', optIn));
+      if (b.messages.length) item.append(guestEl('p', 'guest-item-line', b.messages.map((m) => `${m.label}: ${m.status}`).join(' · ')));
+      guestBookings.append(item);
+    }
+  }
+
+  function renderStays(data: GuestData['stays']) {
+    guestStays.replaceChildren();
+    if (!data.visible) {
+      guestStays.append(guestEl('p', 'guest-note', 'Stay details are limited to people with access to Accommodation.'));
+      return;
+    }
+    if (data.error) {
+      guestStays.append(guestEl('p', 'guest-note', "Couldn't load stays right now."));
+      return;
+    }
+    if (data.people.length === 0) {
+      guestStays.append(guestEl('p', 'guest-note', "No stays on record for this number. A guest entered without a mobile number can't be matched."));
+      return;
+    }
+    const today = todayYmd();
+    const showNames = data.people.length > 1 || data.people.some((p) => p.stays.length === 0);
+    for (const person of data.people) {
+      if (showNames) guestStays.append(guestEl('p', 'guest-person', person.name));
+      if (person.stays.length === 0) {
+        guestStays.append(guestEl('p', 'guest-note', 'No stays recorded.'));
+        continue;
+      }
+      for (const stay of person.stays) {
+        const item = guestEl('article', 'guest-item');
+        const title = guestEl('p', 'guest-item-title', stay.title ? `${stay.kind}: ${stay.title}` : stay.kind);
+        if (stay.startDate >= today) title.append(guestTag('Upcoming'));
+        item.append(title, guestEl('p', 'guest-item-line', `${formatDay(stay.startDate)} · ${plural(stay.nights, 'night')} · ${stay.unit}`));
+        guestStays.append(item);
+      }
+    }
+  }
+
+  function showGuestPlaceholders() {
+    guestBookings.replaceChildren(guestEl('p', 'guest-note', 'Loading…'));
+    guestStays.replaceChildren(guestEl('p', 'guest-note', 'Loading…'));
+  }
+
+  async function loadGuest(conv: Conversation) {
+    const seq = ++guestSeq;
+    guestSince.textContent = '-';
+    showGuestPlaceholders();
+    try {
+      const res = await authedFetch(`/api/whatsapp-admin/guest?conversationId=${encodeURIComponent(conv.id)}`);
+      if (seq !== guestSeq) return;
+      if (!res.ok) throw new Error('failed');
+      const data = (await res.json()) as GuestData;
+      if (seq !== guestSeq) return;
+      guestSince.textContent = data.since ? formatDay(data.since.slice(0, 10)) : '-';
+      renderBookings(data.eventBookings);
+      renderStays(data.stays);
+    } catch (err) {
+      if (seq !== guestSeq) return;
+      if (err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden')) return;
+      guestBookings.replaceChildren(guestEl('p', 'guest-note', "Couldn't load guest details right now."));
+      guestStays.replaceChildren();
+    }
+  }
+
+  function setGuestOpen(open: boolean) {
+    app.classList.toggle('guest-open', open);
+    guestToggle.setAttribute('aria-expanded', String(open));
+  }
+  guestToggle.addEventListener('click', () => setGuestOpen(!app.classList.contains('guest-open')));
+  guestClose.addEventListener('click', () => setGuestOpen(false));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && app.classList.contains('guest-open')) setGuestOpen(false);
+  });
+
   function selectConversation(conv: Conversation) {
     closePicker();
     hideSuggestion();
+    setGuestOpen(false);
+    guestEmpty.hidden = true;
+    guestBody.hidden = false;
+    guestSource.textContent = conv.referral
+      ? `${conv.referral.type === 'post' ? 'A post' : 'A WhatsApp ad'}${conv.referral.headline ? `: ${conv.referral.headline}` : ''}`
+      : 'Messaged us directly';
+    loadGuest(conv);
     selectedConversationId = conv.id;
     selectedConversation = conv;
     threadEmpty.hidden = true;
@@ -1769,6 +2162,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   function updateOptOutBtn(optedOut: boolean) {
     optOutBtn.textContent = optedOut ? 'Updates stopped · Resume' : 'Stop WhatsApp updates';
     optOutBtn.classList.toggle('button--danger-outline', optedOut);
+    guestUpdates.textContent = optedOut ? 'Stopped (we will not send booking messages)' : 'Allowed';
   }
 
   // Staff opt a number out of (or back into) the booking confirmations, reminders
