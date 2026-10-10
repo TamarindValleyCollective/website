@@ -50,6 +50,11 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
         <div id="domains" class="card pad"><p class="muted">Checking the registries…</p></div>
       </section>
 
+      <section aria-labelledby="wa-health-title" class="block">
+        <h2 id="wa-health-title">WhatsApp account health</h2>
+        <div id="wa-health" class="card pad"><p class="muted">Loading…</p></div>
+      </section>
+
       <section id="admin" aria-labelledby="admin-title" class="block" hidden>
         <h2 id="admin-title">Update readings</h2>
         <p class="muted lead">Some services have no safe way for us to read their usage automatically, so an admin types the figure in from the provider's own dashboard. Warnings use the latest entry, so keep them fresh.</p>
@@ -438,7 +443,8 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   }
 
   /* ---- domains table ---- */
-  .usage #domains {
+  .usage #domains,
+  .usage #wa-health {
     overflow-x: auto;
   }
 
@@ -966,6 +972,33 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     }
   }
 
+  // ---- WhatsApp account health ---------------------------------------------------
+  async function loadWhatsAppHealth() {
+    const box = $('wa-health');
+    try {
+      const { status, data } = await staffFetch('/api/usage-admin/whatsapp-health');
+      if (status !== 200) throw new Error('failed');
+      const events = data.events as Array<{ severity: string; title: string; detail: string | null; at: string }>;
+      if (events.length === 0) {
+        box.replaceChildren(
+          h('p', { class: 'muted', text: 'No events yet. Meta reports template approvals, quality drops and restrictions here as they happen.' }),
+          h('p', { class: 'svc-note', text: 'The core team is emailed about each one.' }),
+        );
+        return;
+      }
+      const rows = events.map((e) => {
+        const lvl: Level = e.severity === 'critical' ? 'critical' : e.severity === 'warning' ? 'warn' : null;
+        return h('tr', {}, h('td', {}, e.title, e.detail ? h('small', { text: e.detail }) : null), h('td', { text: `${dateText(e.at)}, ${new Date(e.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` }), h('td', {}, pill(lvl, 'Info')));
+      });
+      box.replaceChildren(
+        h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Event' }), h('th', { text: 'When' }), h('th', { text: 'Level' }))), h('tbody', {}, ...rows)),
+        h('p', { class: 'svc-note', text: 'Reported by Meta (template approved, rejected or paused; quality drops; restrictions). The core team is emailed about each one.' }),
+      );
+    } catch {
+      box.replaceChildren(h('p', { class: 'muted', text: 'Could not load WhatsApp events right now.' }));
+    }
+  }
+
   // ---- load & sign-in ----------------------------------------------------------
   const gate = $('gate');
   const gateError = $('gate-error');
@@ -1016,6 +1049,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       if (firstLoad) {
         firstLoad = false;
         loadDomains();
+        loadWhatsAppHealth();
       }
     } catch (err) {
       if (err instanceof StaffAuthError) {

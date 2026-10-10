@@ -77,6 +77,16 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
   auto-reply doesn't also fire on a STOP. Covers all template sends, staff alerts included. The
   approved templates themselves don't mention STOP (their text is frozen); the booking checkbox and
   the privacy page do.
+- **Account-health alerts (2026-10-10).** Meta's health webhook fields (template approved / rejected /
+  paused / disabled, template and phone-number quality changes, recategorisation, account
+  restrictions) are stored in `whatsapp_health_events` (migration `0036`, **apply before
+  deploying**), emailed once to `core-team@tvc.farm`, and listed under "WhatsApp account health" on
+  `/internal/usage`. A Meta retry never re-emails. **Meta only sends them if the fields are
+  subscribed** in the App Dashboard (WhatsApp → Configuration → Webhook fields):
+  `message_template_status_update` (already on), `message_template_quality_update`,
+  `phone_number_quality_update`, `template_category_update`, `account_update`, `account_alerts`.
+  Payload shapes follow Meta's documentation and are untested against real events. Previously a
+  paused template or a quality drop would have failed silently.
 - **Migration `0033` applied to TVC ERP 2026-10-10**, and PR #318 merged the same day.
 
 ## Direct Meta Cloud API integration — setup checklist
