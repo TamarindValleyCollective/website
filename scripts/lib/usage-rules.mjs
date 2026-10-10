@@ -41,13 +41,13 @@ export const MANUAL_METERS = {
     where: 'console.anthropic.com → Billing',
     supportsExpiry: true,
   },
-  'netlify.credits_used': {
+  'netlify.credits_remaining': {
     service: 'netlify',
-    metric: 'credits_used',
+    metric: 'credits_remaining',
     label: 'Netlify credits',
-    kind: 'used',
+    kind: 'remaining',
     unit: 'credits',
-    valueLabel: 'Credits used this billing cycle',
+    valueLabel: 'Credits remaining now (as Netlify shows)',
     limitLabel: 'Credits included in your plan per billing cycle (filled in automatically when the Netlify token is set)',
     where: 'Netlify → Team → Billing and usage',
   },
@@ -77,14 +77,14 @@ export const MANUAL_METERS = {
 // the 19th), and the plan's credit allowance can be read from its API even
 // though credits USED cannot. usage-collect.mts records the allowance and cycle
 // dates as a 'netlify.plan_credits' snapshot; this folds them into the typed-in
-// 'netlify.credits_used' reading: the allowance replaces the typed limit, and a
+// 'netlify.credits_remaining' reading: the allowance replaces the typed limit, and a
 // reading entered before the current cycle began is marked `staleForCycle`
-// because credits reset to zero when a new cycle starts. Returns a new map.
+// because the balance resets when a new cycle starts. Returns a new map.
 export const NETLIFY_PLAN_STALE_DAYS = 2; // collector runs every 6h, so 2 days with no new reading means it is failing
 
 export function mergeNetlifyPlan(snapshots, now = new Date()) {
   const plan = snapshots['netlify.plan_credits'];
-  const used = snapshots['netlify.credits_used'];
+  const used = snapshots['netlify.credits_remaining'];
   if (!plan || !used) return snapshots;
   const cycleStart = plan.detail?.period_start ?? null;
   const cycleEnd = plan.detail?.next_period_start ?? null;
@@ -92,7 +92,7 @@ export function mergeNetlifyPlan(snapshots, now = new Date()) {
   const staleForCycle = cycleStart ? new Date(used.captured_at) < new Date(cycleStart) : false;
   const planAgeDays = (now.getTime() - new Date(plan.captured_at).getTime()) / DAY_MS;
   const planStale = planAgeDays > NETLIFY_PLAN_STALE_DAYS;
-  return { ...snapshots, 'netlify.credits_used': { ...used, limit_value: limit, detail: { ...(used.detail ?? {}), cycle_start: cycleStart, cycle_end: cycleEnd, stale_for_cycle: staleForCycle, plan_captured_at: plan.captured_at, plan_stale: planStale } } };
+  return { ...snapshots, 'netlify.credits_remaining': { ...used, limit_value: limit, detail: { ...(used.detail ?? {}), cycle_start: cycleStart, cycle_end: cycleEnd, stale_for_cycle: staleForCycle, plan_captured_at: plan.captured_at, plan_stale: planStale } } };
 }
 
 export const SETTING_KEYS = ['anthropic_prices', 'gemini_daily_requests'];
@@ -301,12 +301,18 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
     add('netlify:plan-stale', 'warn', 'netlify', 'Netlify plan data has stopped refreshing', `The last plan/billing-cycle reading from the Netlify API was on ${utcDay(new Date(netlifyPlan.captured_at))}. Check NETLIFY_ACCESS_TOKEN (it may have expired or been revoked) and the usage-collect function logs. Until then the credit limit and cycle dates shown are the last known ones.`);
   }
 
-  // Everything else a person types in.
+  // Everything else a person types in. (Anthropic's balance has its own estimate above.)
   for (const [id, meter] of Object.entries(MANUAL_METERS)) {
-    if (meter.kind !== 'used') continue;
+    if (id === 'anthropic.credit_remaining_usd') continue;
     const reading = snapshots[id];
     if (!reading || !isPositiveNumber(Number(reading.limit_value))) continue;
-    if (reading.detail?.stale_for_cycle) continue; // from a previous billing cycle: the count has reset since
+    if (reading.detail?.stale_for_cycle) continue; // from a previous billing cycle: the balance has reset since
+    if (meter.kind === 'remaining') {
+      const left = Number(reading.value);
+      const total = Number(reading.limit_value);
+      add(`manual:${id}`, levelForRemaining(left, total), meter.service, `${meter.label} running low: ${left} of ${total} ${meter.unit} left`, `That is ${pct(left / total)} of the allowance, as last entered on ${utcDay(new Date(reading.captured_at))}. Update the reading on the usage page for a fresh figure.`);
+      continue;
+    }
     const value = Number(reading.value);
     const limit = Number(reading.limit_value);
     add(`manual:${id}`, levelForUsed(value, limit), meter.service, `${meter.label} at ${pct(value / limit)} of the limit`, `${value} of ${limit} ${meter.unit}, as last entered on ${utcDay(new Date(reading.captured_at))}. Update the reading on the usage page for a fresh figure.`);

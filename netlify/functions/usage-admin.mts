@@ -28,6 +28,7 @@ import {
   estimateCostUsd,
   evaluateAlerts,
   isPositiveNumber,
+  levelForRemaining,
   levelForUsed,
   sumDaily,
   utcDay,
@@ -95,7 +96,8 @@ async function handleOverview(req: Request): Promise<Response> {
         valueLabel: meter.valueLabel,
         limitLabel: meter.limitLabel,
         reading: r ? { value: Number(r.value), limit: r.limit_value === null ? null : Number(r.limit_value), capturedAt: r.captured_at, cycleStart: (r.detail?.cycle_start as string) ?? null, cycleEnd: (r.detail?.cycle_end as string) ?? null, staleForCycle: r.detail?.stale_for_cycle === true, planStale: r.detail?.plan_stale === true, planCapturedAt: (r.detail?.plan_captured_at as string) ?? null } : null,
-        level: r && isPositiveNumber(Number(r.limit_value)) ? levelForUsed(Number(r.value), Number(r.limit_value)) : null,
+        kind: meter.kind,
+        level: r && isPositiveNumber(Number(r.limit_value)) && r.detail?.stale_for_cycle !== true ? (meter.kind === 'remaining' ? levelForRemaining(Number(r.value), Number(r.limit_value)) : levelForUsed(Number(r.value), Number(r.limit_value))) : null,
       };
     });
 
