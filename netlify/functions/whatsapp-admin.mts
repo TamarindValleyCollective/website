@@ -28,7 +28,9 @@ import {
   addOptOut,
   removeOptOut,
   getLatestInboundWaMessageId,
+  getMessage,
 } from '../../scripts/lib/supabase.mjs';
+import { baseMime, mediaResponseHeaders, MAX_MEDIA_BYTES } from './lib/whatsapp-media';
 import { requireStaff, logStaffAction, type StaffGrant } from './lib/staff-access';
 import { canSeeNames, maskEmail, maskName } from './lib/staff-masking';
 import { roleHasCapability, type Capability } from './lib/staff-registry';
@@ -127,6 +129,8 @@ async function handleMessages(url: URL): Promise<Response> {
         status: m.status,
         errorMessage: m.error_message,
         createdAt: m.created_at,
+        // The file itself is fetched on demand via /media, never inlined here.
+        media: m.media_id ? { kind: m.media_kind, mime: baseMime(m.media_mime), filename: m.media_filename } : null,
       })),
     });
   } catch (err) {
@@ -313,6 +317,67 @@ async function handleBlock(req: Request, staff: StaffGrant): Promise<Response> {
   return jsonResponse({ ok: true, isBlocked: blocked });
 }
 
+// Streams a guest's photo / voice note / video / document to a signed-in staff
+// member. The file lives at Meta (kept ~30 days): look up its media id from our
+// own message row (never from the request), ask Graph for a short-lived URL,
+// then fetch that URL with the access token and pass the bytes through. Capped
+// at what a Netlify Function can return. Served with headers that stop a crafted
+// file from running anything in this origin (see lib/whatsapp-media.ts).
+async function handleMedia(url: URL): Promise<Response> {
+  const messageId = url.searchParams.get('messageId');
+  if (!messageId) return jsonResponse({ error: 'messageId is required' }, 400);
+
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+  if (!accessToken) {
+    console.error('Missing WHATSAPP_ACCESS_TOKEN');
+    return jsonResponse({ error: 'Server misconfigured' }, 500);
+  }
+
+  let message: { media_id: string | null; media_mime: string | null; media_filename: string | null } | null;
+  try {
+    message = await getMessage(messageId);
+  } catch (err) {
+    console.error('Failed to look up message', err);
+    return jsonResponse({ error: 'Failed to reach the message store' }, 502);
+  }
+  if (!message?.media_id) return jsonResponse({ error: 'No file on this message' }, 404);
+
+  try {
+    const metaRes = await fetch(`https://graph.facebook.com/${WHATSAPP_GRAPH_API_VERSION}/${encodeURIComponent(message.media_id)}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (metaRes.status === 404 || metaRes.status === 410) {
+      return jsonResponse({ error: 'This file has expired on WhatsApp (they keep media for about 30 days).' }, 410);
+    }
+    const info: any = await metaRes.json().catch(() => ({}));
+    if (!metaRes.ok || !info?.url) {
+      // Meta also answers 400 with an error body for an expired / unknown id.
+      const expired = metaRes.status === 400 && /does not exist|expired|unsupported get request/i.test(info?.error?.message ?? '');
+      if (expired) return jsonResponse({ error: 'This file has expired on WhatsApp (they keep media for about 30 days).' }, 410);
+      console.error('[whatsapp-admin] Media lookup failed', metaRes.status, info?.error ?? info);
+      return jsonResponse({ error: 'Could not fetch the file from WhatsApp' }, 502);
+    }
+    if (Number(info.file_size) > MAX_MEDIA_BYTES) {
+      return jsonResponse({ error: 'This file is too large to show here. Open it on the phone or WhatsApp Web.' }, 413);
+    }
+
+    const fileRes = await fetch(info.url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!fileRes.ok) {
+      console.error('[whatsapp-admin] Media download failed', fileRes.status);
+      return jsonResponse({ error: fileRes.status === 404 ? 'This file has expired on WhatsApp.' : 'Could not fetch the file from WhatsApp' }, fileRes.status === 404 ? 410 : 502);
+    }
+    const bytes = await fileRes.arrayBuffer();
+    if (bytes.byteLength > MAX_MEDIA_BYTES) {
+      return jsonResponse({ error: 'This file is too large to show here. Open it on the phone or WhatsApp Web.' }, 413);
+    }
+    // Our own recorded type wins over what the download says; both are guest-controlled.
+    return new Response(bytes, { status: 200, headers: mediaResponseHeaders(message.media_mime ?? info.mime_type, message.media_filename) });
+  } catch (err) {
+    console.error('[whatsapp-admin] Media fetch threw', err);
+    return jsonResponse({ error: 'Could not fetch the file from WhatsApp' }, 502);
+  }
+}
+
 // Staff opt a number out of (or back into) guest WhatsApp template messages —
 // the same whatsapp_opt_outs list a STOP reply writes to, which
 // lib/whatsapp-send.ts checks before every template send. For a guest who
@@ -415,7 +480,9 @@ export default async (req: Request): Promise<Response> => {
       ? { capability: 'view', run: (staff) => handleConversations(url, staff) }
       : url.pathname === '/api/whatsapp-admin/messages' && req.method === 'GET'
         ? { capability: 'view', run: () => handleMessages(url) }
-        : url.pathname === '/api/whatsapp-admin/reply' && req.method === 'POST'
+        : url.pathname === '/api/whatsapp-admin/media' && req.method === 'GET'
+          ? { capability: 'view', run: () => handleMedia(url) }
+          : url.pathname === '/api/whatsapp-admin/reply' && req.method === 'POST'
           ? { capability: 'reply', run: (staff) => handleReply(req, staff) }
           : url.pathname === '/api/whatsapp-admin/block' && req.method === 'POST'
             ? { capability: 'manage', run: (staff) => handleBlock(req, staff) }
@@ -439,5 +506,6 @@ export const config = {
     '/api/whatsapp-admin/block',
     '/api/whatsapp-admin/opt-out',
     '/api/whatsapp-admin/seen',
+    '/api/whatsapp-admin/media',
   ],
 };

@@ -525,6 +525,11 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `whatsapp_conversations.last_stale_alert_at`, reset to null on every new inbound message so
   each message gets its own full 60-minute countdown), so a single missed email can't let a
   message silently go unanswered.
+- **WhatsApp inbound media** — `whatsapp-webhook.mts` records a message's media id/kind/mime/
+  filename (`lib/whatsapp-media.ts`, migration `0037`); `whatsapp-admin.mts`'s `GET
+  /api/whatsapp-admin/media` (`view`) fetches the file from Meta's Graph API on demand (media id
+  looked up server-side, token never leaves the function), capped at 5.5 MB and served inline only
+  for a short allowlist of image/audio/video types. Files are not stored by us.
 - **WhatsApp inbox controls** — `whatsapp-admin.mts` also serves `/api/whatsapp-admin/opt-out`
   (`manage`: add/remove the contact on `whatsapp_opt_outs`, audit-logged first) and
   `/api/whatsapp-admin/seen` (`reply`: marks the guest's latest message read and optionally shows

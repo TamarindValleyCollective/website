@@ -583,6 +583,62 @@ import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
     border: 1px solid var(--tvc-error-border);
   }
 
+  /* Media inside a bubble. All of it is built in the script, so :global like
+     the rest of the bubble. */
+  :global(.msg-media) {
+    margin-bottom: 6px;
+  }
+
+  :global(.msg-media img),
+  :global(.msg-media video) {
+    display: block;
+    max-width: min(260px, 100%);
+    max-height: 260px;
+    border-radius: var(--radius-sm);
+  }
+
+  :global(.msg-media img) {
+    cursor: zoom-in;
+  }
+
+  :global(.msg-media audio) {
+    display: block;
+    width: 240px;
+    max-width: 100%;
+  }
+
+  :global(.msg-media .msg-media-btn) {
+    appearance: none;
+    border: 1px solid var(--tvc-line);
+    background: var(--tvc-white);
+    color: var(--tvc-ink-soft);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  :global(.msg-media .msg-media-btn:hover) {
+    background: var(--tvc-cream);
+  }
+
+  :global(.msg-media .msg-media-btn:focus-visible) {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  :global(.msg-media .msg-media-note) {
+    font-size: 0.78rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  :global(.msg-media .msg-media-error) {
+    font-size: 0.78rem;
+    color: var(--tvc-error-text);
+  }
+
   :global(.bubble .bubble-error) {
     display: block;
     margin-top: 4px;
@@ -762,6 +818,9 @@ import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
     status: 'received' | 'sent' | 'failed';
     errorMessage: string | null;
     createdAt: string;
+    // A photo, voice note, video, document or sticker the guest sent. The file
+    // itself is fetched on demand from /api/whatsapp-admin/media.
+    media: { kind: 'image' | 'audio' | 'video' | 'document' | 'sticker'; mime: string; filename: string | null } | null;
   }
 
   const gate = document.getElementById('gate') as HTMLElement;
@@ -994,7 +1053,118 @@ import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
     }
   }
 
+  // The polling loop calls this every 15s. Rebuilding an unchanged thread would
+  // reset a playing voice note and yank the scroll position, so skip it unless a
+  // message was added or its status changed.
+  let lastRenderKey = '';
+
+  // Files are fetched through the admin function (it holds the WhatsApp token),
+  // once each: the promise is cached by message id and the blob outlives
+  // re-renders. Errors carry the server's plain-language reason (expired, too big).
+  const mediaCache = new Map<string, Promise<string>>();
+  function fetchMedia(messageId: string): Promise<string> {
+    let p = mediaCache.get(messageId);
+    if (!p) {
+      p = (async () => {
+        const res = await authedFetch(`/api/whatsapp-admin/media?messageId=${encodeURIComponent(messageId)}`);
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Could not load this file.');
+        }
+        return URL.createObjectURL(await res.blob());
+      })();
+      mediaCache.set(messageId, p);
+      p.catch(() => mediaCache.delete(messageId));
+    }
+    return p;
+  }
+
+  function mediaButton(label: string, onClick: () => void): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'msg-media-btn';
+    btn.textContent = label;
+    btn.addEventListener('click', onClick);
+    return btn;
+  }
+
+  function mediaText(className: string, text: string): HTMLElement {
+    const el = document.createElement('span');
+    el.className = className;
+    el.textContent = text;
+    return el;
+  }
+
+  function downloadButton(m: Message): HTMLButtonElement {
+    const name = m.media!.filename || 'file';
+    const btn = mediaButton(`Download ${name}`, async () => {
+      btn.disabled = true;
+      try {
+        const url = await fetchMedia(m.id);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        a.click();
+      } catch (err) {
+        btn.replaceWith(mediaText('msg-media-error', (err as Error).message));
+      } finally {
+        btn.disabled = false;
+      }
+    });
+    return btn;
+  }
+
+  // Photos and stickers load by themselves; audio, video and documents wait for
+  // a click, so opening a busy thread doesn't download everything in it.
+  function buildMediaSlot(m: Message): HTMLElement {
+    const media = m.media!;
+    const slot = document.createElement('div');
+    slot.className = 'msg-media';
+
+    const showError = (err: unknown) => slot.replaceChildren(mediaText('msg-media-error', err instanceof Error ? err.message : 'Could not load this file.'));
+
+    if (media.kind === 'image' || media.kind === 'sticker') {
+      slot.append(mediaText('msg-media-note', media.kind === 'sticker' ? 'Loading sticker…' : 'Loading photo…'));
+      fetchMedia(m.id)
+        .then((url) => {
+          const img = document.createElement('img');
+          img.src = url;
+          img.alt = media.kind === 'sticker' ? 'Sticker from the guest' : 'Photo from the guest';
+          img.addEventListener('click', () => window.open(url, '_blank', 'noopener'));
+          slot.replaceChildren(img);
+        })
+        .catch(showError);
+    } else if (media.kind === 'audio' || media.kind === 'video') {
+      const label = media.kind === 'video' ? 'Load video' : 'Play voice note';
+      slot.append(
+        mediaButton(label, async () => {
+          slot.replaceChildren(mediaText('msg-media-note', 'Loading…'));
+          try {
+            const url = await fetchMedia(m.id);
+            const el = document.createElement(media.kind === 'video' ? 'video' : 'audio');
+            // Safari can't play ogg/opus voice notes; offer the file instead of a dead player.
+            if (!el.canPlayType(media.mime)) {
+              slot.replaceChildren(mediaText('msg-media-note', "This browser can't play this format."), downloadButton(m));
+              return;
+            }
+            el.controls = true;
+            el.src = url;
+            slot.replaceChildren(el);
+          } catch (err) {
+            showError(err);
+          }
+        }),
+      );
+    } else {
+      slot.append(downloadButton(m));
+    }
+    return slot;
+  }
+
   function renderMessages(messages: Message[]) {
+    const renderKey = `${selectedConversationId}|${messages.map((m) => `${m.id}:${m.status}`).join(',')}`;
+    if (renderKey === lastRenderKey) return;
+    lastRenderKey = renderKey;
     messagesEl.innerHTML = '';
     for (const m of messages) {
       const { text: bodyText, signature } = m.direction === 'outbound' ? stripSignature(m.body) : { text: m.body, signature: null };
@@ -1019,9 +1189,21 @@ import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
       bubble.className = `bubble ${m.direction}`;
       if (m.status === 'failed') bubble.classList.add('failed');
 
-      const body = document.createElement('span');
-      body.textContent = bodyText;
-      bubble.appendChild(body);
+      // A media message's stored text is a placeholder ("[Photo]", "[Voice note]")
+      // plus any caption; the file shows above, so only the caption is text.
+      let shownText = bodyText;
+      if (m.media) {
+        bubble.appendChild(buildMediaSlot(m));
+        shownText = bodyText.replace(/^\[(Photo|Video|Voice note|Audio|Sticker|Document)\]\s*/, '');
+        // A document's text is "name — caption"; the download button already shows the name.
+        const name = m.media.filename;
+        if (name && shownText.startsWith(name)) shownText = shownText.slice(name.length).replace(/^\s*—\s*/, '');
+      }
+      if (shownText) {
+        const body = document.createElement('span');
+        body.textContent = shownText;
+        bubble.appendChild(body);
+      }
 
       if (m.status === 'failed' && m.errorMessage) {
         const err = document.createElement('span');
