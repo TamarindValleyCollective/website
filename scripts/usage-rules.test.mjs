@@ -148,12 +148,11 @@ test('evaluateAlerts: Supabase size uses the limit stored with the snapshot', ()
 
 test('evaluateAlerts: typed-in used-meters alert on their own limit; remaining-kind ones are handled elsewhere', () => {
   const snapshots = {
-    'netlify.credits_used': { value: 240, limit_value: 300, captured_at: '2026-10-09T00:00:00Z' },
-    'resend.emails_used': { value: 10, limit_value: 3000, captured_at: '2026-10-09T00:00:00Z' },
+    'resend.emails_used': { value: 2400, limit_value: 3000, captured_at: '2026-10-09T00:00:00Z' },
     'anthropic.credit_remaining_usd': { value: 1, limit_value: 50, captured_at: '2026-10-09T00:00:00Z' },
   };
   const alerts = evaluateAlerts({ now: NOW, snapshots, settings: {} });
-  assert.deepEqual(alerts.map((a) => a.key), ['manual:netlify.credits_used']);
+  assert.deepEqual(alerts.map((a) => a.key), ['manual:resend.emails_used']);
   assert.equal(alerts[0].level, 'warn'); // 80%
 });
 
@@ -181,23 +180,23 @@ test('decideNotifications: new alerts send, repeats do not, worsening sends, rec
 });
 
 const planSnap = { value: 1000, limit_value: 1000, unit: 'credits', captured_at: '2026-10-10T00:00:00Z', detail: { period_start: '2026-09-19T00:00:00.000-07:00', next_period_start: '2026-10-19T00:00:00.000-07:00' } };
-const usedSnap = (captured_at, limit_value = 300) => ({ value: 800, limit_value, unit: 'credits', captured_at, detail: { source: 'manual' } });
+const leftSnap = (captured_at, limit_value = 300) => ({ value: 200, limit_value, unit: 'credits', captured_at, detail: { source: 'manual' } });
 
 test('mergeNetlifyPlan: the allowance read from Netlify replaces the typed limit', () => {
-  const out = mergeNetlifyPlan({ 'netlify.plan_credits': planSnap, 'netlify.credits_used': usedSnap('2026-10-04T11:41:00Z') });
-  assert.equal(out['netlify.credits_used'].limit_value, 1000);
-  assert.equal(out['netlify.credits_used'].detail.stale_for_cycle, false);
-  assert.equal(out['netlify.credits_used'].detail.cycle_end, '2026-10-19T00:00:00.000-07:00');
+  const out = mergeNetlifyPlan({ 'netlify.plan_credits': planSnap, 'netlify.credits_remaining': leftSnap('2026-10-04T11:41:00Z') });
+  assert.equal(out['netlify.credits_remaining'].limit_value, 1000);
+  assert.equal(out['netlify.credits_remaining'].detail.stale_for_cycle, false);
+  assert.equal(out['netlify.credits_remaining'].detail.cycle_end, '2026-10-19T00:00:00.000-07:00');
 });
 
 test('mergeNetlifyPlan: a reading from before the cycle began is stale, and does not alert', () => {
-  const snapshots = { 'netlify.plan_credits': planSnap, 'netlify.credits_used': usedSnap('2026-09-10T00:00:00Z') };
-  assert.equal(mergeNetlifyPlan(snapshots)['netlify.credits_used'].detail.stale_for_cycle, true);
-  assert.equal(evaluateAlerts({ now: NOW, snapshots }).some((a) => a.key === 'manual:netlify.credits_used'), false);
+  const snapshots = { 'netlify.plan_credits': planSnap, 'netlify.credits_remaining': leftSnap('2026-09-10T00:00:00Z') };
+  assert.equal(mergeNetlifyPlan(snapshots)['netlify.credits_remaining'].detail.stale_for_cycle, true);
+  assert.equal(evaluateAlerts({ now: NOW, snapshots }).some((a) => a.key === 'manual:netlify.credits_remaining'), false);
 });
 
 test('mergeNetlifyPlan: no plan snapshot leaves the typed reading untouched', () => {
-  const snapshots = { 'netlify.credits_used': usedSnap('2026-10-04T11:41:00Z') };
+  const snapshots = { 'netlify.credits_remaining': leftSnap('2026-10-04T11:41:00Z') };
   assert.equal(mergeNetlifyPlan(snapshots), snapshots);
 });
 
@@ -207,6 +206,14 @@ test('Netlify plan data older than 2 days warns once; fresh or never-recorded do
   assert.equal(has({ 'netlify.plan_credits': old }), true);
   assert.equal(has({ 'netlify.plan_credits': planSnap }), false);
   assert.equal(has({}), false);
-  const merged = mergeNetlifyPlan({ 'netlify.plan_credits': old, 'netlify.credits_used': usedSnap('2026-10-04T11:41:00Z') }, NOW);
-  assert.equal(merged['netlify.credits_used'].detail.plan_stale, true);
+  const merged = mergeNetlifyPlan({ 'netlify.plan_credits': old, 'netlify.credits_remaining': leftSnap('2026-10-04T11:41:00Z') }, NOW);
+  assert.equal(merged['netlify.credits_remaining'].detail.plan_stale, true);
+});
+
+test('Netlify credits remaining: warns at 30% / critical at 10% left, nothing above, silent when stale', () => {
+  const at = (value, captured_at = '2026-10-10T00:00:00Z') => evaluateAlerts({ now: NOW, snapshots: { 'netlify.plan_credits': planSnap, 'netlify.credits_remaining': { ...leftSnap(captured_at), value } } }).find((a) => a.key === 'manual:netlify.credits_remaining');
+  assert.equal(at(403), undefined);
+  assert.equal(at(300).level, 'warn');
+  assert.equal(at(100).level, 'critical');
+  assert.equal(at(50, '2026-09-10T00:00:00Z'), undefined);
 });

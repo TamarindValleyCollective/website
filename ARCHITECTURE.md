@@ -372,7 +372,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   message text, IPs or emails. `usage-collect.mts` (scheduled, every 6h) records the database size
   to `usage_snapshots` against the free plan's 500 MB, and — when `NETLIFY_ACCESS_TOKEN` is set —
   reads the TVC team's plan credit allowance and billing-cycle dates from the Netlify API
-  (`GET /accounts/{id}`; credits *used* is not exposed, so that stays a typed-in reading; the Netlify
+  (`GET /accounts/{id}`; credits *remaining/used* is not exposed, so the remaining balance stays a typed-in reading; the Netlify
   call failing never fails the Supabase one). Both tables and functions are service_role
   only (migration `0030_usage_metering.sql`, applied to production 2026-10-04; RLS on, no policies). Domain renewals are checked by the
   `domain-expiry.yml` GitHub Action instead: it reads each domain's expiry from the registry's public
