@@ -24,6 +24,14 @@ export function cleanTemplateParam(value: string | null | undefined, maxLength =
   return flat.length > maxLength ? `${flat.slice(0, maxLength - 1).trimEnd()}…` : flat;
 }
 
+// A free-text reason is dropped into the middle of a template sentence
+// ("…has been cancelled. {{3}} A refund of…"), so give it a full stop when the
+// admin didn't type one — otherwise the two sentences run together.
+export function asSentence(value: string | null | undefined, maxLength = 300): string {
+  const text = cleanTemplateParam(value, maxLength);
+  return /[.!?…]$/.test(text) ? text : `${text}.`;
+}
+
 export function firstNameOf(fullName: string | null | undefined): string {
   return fullName?.trim().split(/\s+/)[0] || 'there';
 }
