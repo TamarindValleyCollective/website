@@ -85,7 +85,11 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
   subscribed** in the App Dashboard (WhatsApp → Configuration → Webhook fields):
   `message_template_status_update` (already on), `message_template_quality_update`,
   `phone_number_quality_update`, `template_category_update`, `account_update`, `account_alerts`.
-  Payload shapes follow Meta's documentation and are untested against real events. Previously a
+  **Verified 2026-10-10** with Meta's own "Test" button on `message_template_status_update`: the
+  sample event was stored in `whatsapp_health_events` and emailed to core-team (subject "WhatsApp:
+  Template approved: my_message_template"); the usage-page panel is not yet visually checked. The other fields (quality, phone number, category,
+  account) share the pipeline but are still untested against real or sample events. All six fields
+  were confirmed subscribed in the App Dashboard the same day. Previously a
   paused template or a quality drop would have failed silently.
 - **Migration `0033` applied to TVC ERP 2026-10-10**, and PR #318 merged the same day.
 

@@ -250,7 +250,7 @@ async function handleHealthChange(entry: any, field: string, value: any): Promis
     await sendStaffAlert(
       `${marker}WhatsApp: ${event.title}`,
       `<p><strong>${escapeHtml(event.title)}</strong></p>${event.detail ? `<p>${escapeHtml(event.detail)}</p>` : ''}
-  <p style="color:#57604f;">Reported by Meta (${escapeHtml(field)}). ${event.severity === 'info' ? '' : 'Guest WhatsApp messages may be affected — '}see <a href="https://tvc.farm/internal/usage">the usage page</a> for recent events, or WhatsApp Manager for details.</p>`,
+  <p style="color:#57604f;">Reported by Meta (${escapeHtml(field)}). ${event.severity === 'info' ? 'See' : 'Guest WhatsApp messages may be affected — see'} <a href="https://tvc.farm/internal/usage">the usage page</a> for recent events, or WhatsApp Manager for details.</p>`,
     );
   } catch (err) {
     console.error('[whatsapp-webhook] Failed to email health alert', err);
