@@ -41,19 +41,23 @@ import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
           <div class="skeleton-row"></div>
           <div class="skeleton-row"></div>
         </div>
-        <button type="button" id="load-more-conversations" class="load-more-btn" hidden>Load more</button>
+        <button type="button" id="load-more-conversations" class="button button--outline load-more-btn" hidden>Load more</button>
       </div>
       <div class="thread card">
         <p id="thread-empty" class="pane-status">Select a conversation.</p>
         <div id="thread-header" class="thread-header" hidden>
-          <button type="button" id="back-to-list" class="back-btn" aria-label="Back to conversations">‹</button>
+          <button type="button" id="back-to-list" class="button button--outline button--icon back-btn" aria-label="Back to conversations">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5" /></svg>
+          </button>
           <span id="thread-avatar" class="avatar avatar-lg" aria-hidden="true"></span>
           <div class="thread-header-text">
             <strong id="thread-name"></strong>
             <span id="thread-source" class="thread-source" hidden></span>
           </div>
-          <button type="button" id="optout-btn" class="block-btn">Stop WhatsApp updates</button>
-          <button type="button" id="block-btn" class="block-btn">Block</button>
+          <div class="thread-actions">
+            <button type="button" id="optout-btn" class="button button--outline">Stop WhatsApp updates</button>
+            <button type="button" id="block-btn" class="button button--outline">Block</button>
+          </div>
         </div>
         <div id="messages" class="messages" hidden></div>
         <div id="composer" class="composer" hidden>
@@ -62,11 +66,11 @@ import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
             <input type="text" id="responder-name" placeholder="Your name" required />
           </div>
           <div class="quick-replies" role="group" aria-label="Canned replies">
-            {WHATSAPP_QUICK_REPLIES.map((q) => <button type="button" class="quick-reply" data-text={q.text}>{q.label}</button>)}
+            {WHATSAPP_QUICK_REPLIES.map((q) => <button type="button" class="chip tap-target quick-reply" data-text={q.text}>{q.label}</button>)}
           </div>
           <form id="reply-form" class="reply-form">
             <textarea id="reply-input" placeholder="Type a reply…" title="⌘/Ctrl + Enter to send" required></textarea>
-            <button type="submit" id="reply-send">Send</button>
+            <button type="submit" id="reply-send" class="button">Send</button>
           </form>
           <p id="reply-status" class="reply-status" hidden></p>
         </div>
@@ -116,6 +120,11 @@ import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
+    /* The panes run edge to edge (header rule, message area, composer); the shared
+       .card's 28px padding would float them inside the card. The gate panels set
+       their own padding below. */
+    padding: 0;
+    overflow: hidden;
   }
 
   .gate {
@@ -157,17 +166,14 @@ import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
 
   .search-row input {
     width: 100%;
-    padding: 7px 12px;
-    border: 1px solid var(--tvc-line);
-    border-radius: 999px;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
     font: inherit;
-    font-size: 0.85rem;
-    background: var(--tvc-cream);
-  }
-
-  .search-row input:focus-visible {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 1px;
+    font-size: 0.9rem;
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
   }
 
   .conversations ul {
@@ -353,30 +359,11 @@ import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
     font-weight: 500;
   }
 
-  .load-more-btn {
-    display: block;
+  /* Shared .button .button--outline (see StaffLayout); only the layout is local. */
+  .button.load-more-btn {
+    display: flex;
     width: calc(100% - 32px);
     margin: 12px 16px;
-    appearance: none;
-    border: 1px solid var(--tvc-line);
-    background: var(--tvc-white);
-    border-radius: 999px;
-    padding: 8px 0;
-    font: inherit;
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: var(--tvc-ink-soft);
-    cursor: pointer;
-    transition: background-color 150ms ease-out;
-  }
-
-  .load-more-btn:hover {
-    background: var(--tvc-cream);
-  }
-
-  .load-more-btn:focus-visible {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 2px;
   }
 
   .thread {
@@ -411,77 +398,82 @@ import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
     white-space: nowrap;
   }
 
-  .block-btn {
+  .thread-actions {
     flex: 0 0 auto;
-    appearance: none;
-    border: 1px solid var(--tvc-line);
-    background: var(--tvc-white);
-    color: var(--tvc-ink-soft);
-    border-radius: 999px;
-    padding: 5px 14px;
-    font: inherit;
-    font-size: 0.78rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background-color 150ms ease-out;
+    display: flex;
+    gap: 8px;
   }
 
-  .block-btn:hover {
-    background: var(--tvc-cream);
+  /* Page-local modifiers on the shared staff .button, same convention as the other
+     staff pages (written .button.x because the shell's `main .button` would otherwise win):
+     --icon for a square icon-only control, --danger-outline for a control whose
+     current state is a restriction. */
+  .button.button--icon {
+    width: 36px;
+    padding: 0;
   }
 
-  .block-btn:focus-visible {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 2px;
+  .button.button--danger-outline,
+  .button.button--danger-outline:hover {
+    background: var(--tvc-error-bg);
+    border-color: var(--tvc-error-text);
+    color: var(--tvc-error-text);
   }
 
-  .block-btn + .block-btn {
-    margin-left: 6px;
+  @media (pointer: coarse) {
+    .button.button--icon {
+      width: 44px;
+    }
   }
 
   .quick-replies {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 8px;
+    gap: 8px;
+    padding: 12px 16px 0;
   }
 
-  .quick-reply {
+  /* Canned replies are suggestions, not actions, so they use the site's chip
+     (the same pill as the biodiversity filters, see BiodiversityExplorer.astro's
+     .chip) rather than the 8px staff button. .tap-target (global) widens the hit
+     area without growing the pill. */
+  .chip {
     appearance: none;
     border: 1px solid var(--tvc-line);
     background: var(--tvc-white);
     color: var(--tvc-ink-soft);
+    padding: 5px 14px;
     border-radius: 999px;
-    padding: 4px 12px;
     font: inherit;
-    font-size: 0.78rem;
     font-weight: 600;
+    font-size: 0.82rem;
     cursor: pointer;
-    transition: background-color 150ms ease-out;
+    transition:
+      background-color 150ms ease-out,
+      border-color 150ms ease-out,
+      color 150ms ease-out;
   }
 
-  .quick-reply:hover {
-    background: var(--tvc-cream);
+  .chip:hover {
+    background: var(--tvc-green-tint);
+    border-color: var(--tvc-green);
+    color: var(--tvc-green-dark);
   }
 
-  .quick-reply:focus-visible {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 2px;
+  /* Brief confirmation after a click: the chip takes the same ink fill the
+     biodiversity filters use for "selected", for a third of a second, because
+     the text lands in a box that can be out of view on a phone. Declared after
+     :hover so it wins while the pointer is still on the chip. */
+  .chip.is-flash {
+    background: var(--tvc-ink);
+    border-color: var(--tvc-ink);
+    color: var(--tvc-white);
   }
 
-  .block-btn:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
-
-  /* Unblocking a currently-blocked number is the reversible, low-risk action
-     (default button styling); blocking is the one worth a visual warning
-     before it's clicked, same red used for failed-send bubbles elsewhere on
-     this page. */
-  .block-btn.is-blocked {
-    border-color: var(--tvc-error-border);
-    background: var(--tvc-error-bg);
-    color: var(--tvc-error-text);
+  @media (prefers-reduced-motion: reduce) {
+    .chip {
+      transition: none;
+    }
   }
 
   /* Shown in the conversation list next to a blocked contact's name — same
@@ -497,29 +489,8 @@ import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
     padding: 1px 7px;
   }
 
-  .back-btn {
+  .button.back-btn {
     display: none;
-    appearance: none;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border: none;
-    border-radius: 50%;
-    background: none;
-    color: var(--tvc-green-dark);
-    font-size: 1.2rem;
-    line-height: 1;
-    cursor: pointer;
-  }
-
-  .back-btn:hover {
-    background: var(--tvc-cream);
-  }
-
-  .back-btn:focus-visible {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 2px;
   }
 
   .messages {
@@ -560,7 +531,7 @@ import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
 
   :global(.bubble) {
     padding: 8px 12px;
-    border-radius: 14px;
+    border-radius: var(--radius);
     font-size: 0.88rem;
     line-height: 1.4;
     white-space: pre-wrap;
@@ -607,28 +578,6 @@ import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
     max-width: 100%;
   }
 
-  :global(.msg-media .msg-media-btn) {
-    appearance: none;
-    border: 1px solid var(--tvc-line);
-    background: var(--tvc-white);
-    color: var(--tvc-ink-soft);
-    border-radius: 999px;
-    padding: 4px 12px;
-    font: inherit;
-    font-size: 0.78rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  :global(.msg-media .msg-media-btn:hover) {
-    background: var(--tvc-cream);
-  }
-
-  :global(.msg-media .msg-media-btn:focus-visible) {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 2px;
-  }
-
   :global(.msg-media .msg-media-note) {
     font-size: 0.78rem;
     color: var(--tvc-ink-soft);
@@ -662,73 +611,42 @@ import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 16px 0;
-    font-size: 0.76rem;
+    padding: 12px 16px 0;
+    font-size: 0.82rem;
     color: var(--tvc-ink-soft);
   }
 
   .composer-signature input {
-    flex: 0 1 180px;
-    padding: 3px 10px;
-    border: 1px solid var(--tvc-line);
-    border-radius: 999px;
+    flex: 0 1 200px;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
     font: inherit;
-    font-size: 0.78rem;
-  }
-
-  .composer-signature input:focus-visible {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 1px;
+    font-size: 0.9rem;
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
   }
 
   .reply-form {
     display: flex;
+    align-items: flex-end;
     gap: 8px;
-    padding: 8px 16px 12px;
+    padding: 10px 16px 14px;
   }
 
   .reply-form textarea {
     flex: 1;
     min-height: 44px;
     max-height: 120px;
-    padding: 8px 12px;
-    border: 1px solid var(--tvc-line);
+    padding: 9px 12px;
+    border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
     font: inherit;
-    font-size: 0.88rem;
-    resize: vertical;
-  }
-
-  .reply-form textarea:focus-visible {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 1px;
-  }
-
-  .reply-form button {
-    appearance: none;
-    border: 1px solid var(--tvc-green);
+    font-size: 0.9rem;
     background: var(--tvc-white);
-    color: var(--tvc-green-dark);
-    border-radius: 999px;
-    padding: 0 20px;
-    font: inherit;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background-color 150ms ease-out;
-  }
-
-  .reply-form button:hover:not(:disabled) {
-    background: var(--tvc-green-tint);
-  }
-
-  .reply-form button:focus-visible {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 2px;
-  }
-
-  .reply-form button:disabled {
-    opacity: 0.5;
-    cursor: default;
+    color: var(--tvc-ink);
+    resize: vertical;
   }
 
   .reply-status {
@@ -768,8 +686,20 @@ import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
       display: flex;
     }
 
-    .back-btn {
+    .button.back-btn {
       display: inline-flex;
+    }
+
+    .thread-header {
+      flex-wrap: wrap;
+    }
+
+    .thread-actions {
+      flex: 1 0 100%;
+    }
+
+    .thread-actions .button {
+      flex: 1;
     }
 
     :global(.message-row) {
@@ -1082,7 +1012,7 @@ import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
   function mediaButton(label: string, onClick: () => void): HTMLButtonElement {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'msg-media-btn';
+    btn.className = 'button button--outline';
     btn.textContent = label;
     btn.addEventListener('click', onClick);
     return btn;
@@ -1306,6 +1236,8 @@ import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
     const chip = (e.target as HTMLElement).closest<HTMLElement>('.quick-reply');
     if (!chip) return;
     const text = chip.dataset.text ?? '';
+    chip.classList.add('is-flash');
+    setTimeout(() => chip.classList.remove('is-flash'), 350);
     replyInput.value = replyInput.value.trim() ? `${replyInput.value.trimEnd()}\n\n${text}` : text;
     replyInput.focus();
     replyInput.setSelectionRange(replyInput.value.length, replyInput.value.length);
@@ -1350,12 +1282,12 @@ import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
 
   function updateBlockBtn(isBlocked: boolean) {
     blockBtn.textContent = isBlocked ? 'Unblock' : 'Block';
-    blockBtn.classList.toggle('is-blocked', isBlocked);
+    blockBtn.classList.toggle('button--danger-outline', isBlocked);
   }
 
   function updateOptOutBtn(optedOut: boolean) {
     optOutBtn.textContent = optedOut ? 'Updates stopped · Resume' : 'Stop WhatsApp updates';
-    optOutBtn.classList.toggle('is-blocked', optedOut);
+    optOutBtn.classList.toggle('button--danger-outline', optedOut);
   }
 
   // Staff opt a number out of (or back into) the booking confirmations, reminders
