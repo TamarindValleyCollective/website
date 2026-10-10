@@ -21,6 +21,7 @@ import { roleHasCapability } from './lib/staff-registry';
 import {
   MANUAL_METERS,
   mergeNetlifyPlan,
+  r2AutomaticIsFresh,
   resendAutomaticIsFresh,
   resendReadingAgeDays,
   addDays,
@@ -87,10 +88,12 @@ async function handleOverview(req: Request): Promise<Response> {
   const db = snapshots['supabase.db_size_bytes'] ?? null;
 
   const resendAuto = resendAutomaticIsFresh(snapshots, now);
+  const r2Auto = r2AutomaticIsFresh(snapshots, now);
   const manual = Object.entries(MANUAL_METERS)
     .filter(([id]) => id !== 'anthropic.credit_remaining_usd')
     // a fresh Resend API reading replaces the typed-in meter's card and form; they come back if the readings stop
     .filter(([id]) => !(id === 'resend.emails_used' && resendAuto))
+    .filter(([id]) => !(id === 'cloudflare.r2_storage_gb' && r2Auto))
     .map(([id, meter]: [string, any]) => {
       const r = snapshots[id] ?? null;
       return {
@@ -151,6 +154,14 @@ async function handleOverview(req: Request): Promise<Response> {
       const daily = read('resend.emails_daily');
       const lvl = (x: { used: number; limit: number | null } | null) => (x && isPositiveNumber(x.limit) ? levelForUsed(x.used, x.limit as number) : null);
       return { fresh: resendAuto, ageDays: resendReadingAgeDays(snapshots, now), monthly: monthly && { ...monthly, level: lvl(monthly) }, daily: daily && { ...daily, level: lvl(daily) } };
+    })(),
+    r2: (() => {
+      const r = snapshots['cloudflare.r2_storage_bytes'];
+      const limit = r && r.limit_value !== null ? Number(r.limit_value) : null;
+      return {
+        fresh: r2Auto,
+        reading: r ? { bytes: Number(r.value), limitBytes: limit, capturedAt: r.captured_at, objects: Number(r.detail?.objects ?? 0), buckets: Number(r.detail?.buckets ?? 0), level: isPositiveNumber(limit) ? levelForUsed(Number(r.value), limit as number) : null } : null,
+      };
     })(),
     manual,
     settings: { anthropicPrices: prices, geminiDailyRequests: settings.gemini_daily_requests ?? null },

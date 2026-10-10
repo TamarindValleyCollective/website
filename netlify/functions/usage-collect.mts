@@ -12,6 +12,10 @@
 // separate full-access key, RESEND_USAGE_API_KEY, kept apart so the sending key stays restricted
 // and either can be revoked on its own. Without it the page keeps its typed-in Resend reading.
 //
+// And Cloudflare R2 storage (current bytes across all buckets) from Cloudflare's GraphQL
+// analytics API, using a read-only token (Account Analytics: Read) in CLOUDFLARE_ANALYTICS_TOKEN
+// plus the non-secret CLOUDFLARE_ACCOUNT_ID. Without them the typed-in R2 reading carries on.
+//
 // This only *records*. Turning readings into threshold emails is the
 // dashboard module's job; and anything that must still alert while Netlify
 // itself is paused (domain renewals) deliberately lives in a GitHub Action
@@ -86,6 +90,58 @@ async function recordResendUsage(base: string): Promise<string> {
   }
 }
 
+// R2's free tier: 10 GB-month of storage (cloudflare.com/r2 pricing; the Cloudflare dashboard is
+// the authority). Cloudflare counts a GB as 10^9 bytes, so the limit is kept in bytes to match.
+const R2_FREE_STORAGE_BYTES = 10_000_000_000;
+
+const R2_STORAGE_QUERY = `query R2Storage($accountTag: string!, $start: Time!, $end: Time!) {
+  viewer { accounts(filter: { accountTag: $accountTag }) {
+    r2StorageAdaptiveGroups(limit: 1000, filter: { datetime_geq: $start, datetime_leq: $end }, orderBy: [datetime_DESC]) {
+      max { objectCount payloadSize metadataSize }
+      dimensions { datetime bucketName }
+    }
+  } }
+}`;
+
+// Records total R2 storage right now (the newest data point of each bucket, summed). Never throws.
+async function recordR2Storage(base: string): Promise<string> {
+  const token = process.env.CLOUDFLARE_ANALYTICS_TOKEN;
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  if (!token || !accountId) return 'skipped (no CLOUDFLARE_ANALYTICS_TOKEN / CLOUDFLARE_ACCOUNT_ID)';
+  try {
+    const now = new Date();
+    const res = await fetch('https://api.cloudflare.com/client/v4/graphql', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: R2_STORAGE_QUERY, variables: { accountTag: accountId, start: new Date(now.getTime() - 3 * 86_400_000).toISOString(), end: now.toISOString() } }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || body?.errors?.length) throw new Error(`cloudflare graphql failed: ${res.status} ${JSON.stringify(body?.errors ?? null).slice(0, 300)}`);
+    const groups: any[] = body?.data?.viewer?.accounts?.[0]?.r2StorageAdaptiveGroups ?? [];
+    // Rows are newest first: keep each bucket's most recent data point and add them up.
+    const latest = new Map<string, any>();
+    for (const g of groups) if (!latest.has(g.dimensions.bucketName)) latest.set(g.dimensions.bucketName, g.max);
+    if (latest.size === 0) throw new Error('cloudflare returned no R2 storage data');
+    let bytes = 0;
+    let objects = 0;
+    for (const m of latest.values()) {
+      bytes += Number(m.payloadSize) + Number(m.metadataSize);
+      objects += Number(m.objectCount);
+    }
+    if (!Number.isFinite(bytes) || bytes < 0) throw new Error(`unexpected R2 size: ${bytes}`);
+    const insertRes = await fetch(`${base}/usage_snapshots`, {
+      method: 'POST',
+      headers: restHeaders({ Prefer: 'return=minimal' }),
+      body: JSON.stringify({ service: 'cloudflare', metric: 'r2_storage_bytes', value: bytes, unit: 'bytes', limit_value: R2_FREE_STORAGE_BYTES, detail: { source: 'cloudflare-graphql', buckets: latest.size, objects } }),
+    });
+    if (!insertRes.ok) throw new Error(`r2 snapshot insert failed: ${insertRes.status} ${await insertRes.text()}`);
+    return `recorded ${bytes} bytes`;
+  } catch (err) {
+    console.error('[usage-collect] r2 storage failed', err);
+    return 'failed';
+  }
+}
+
 export default async (): Promise<Response> => {
   const base = `${process.env.SUPABASE_URL}/rest/v1`;
   try {
@@ -113,7 +169,8 @@ export default async (): Promise<Response> => {
 
     const netlify = await recordNetlifyPlan(base);
     const resend = await recordResendUsage(base);
-    return new Response(JSON.stringify({ ok: true, bytes, netlify, resend }), { status: 200 });
+    const r2 = await recordR2Storage(base);
+    return new Response(JSON.stringify({ ok: true, bytes, netlify, resend, r2 }), { status: 200 });
   } catch (err) {
     console.error('[usage-collect] failed', err);
     return new Response('Failed to record usage snapshot', { status: 500 });

@@ -114,6 +114,16 @@ export function resendAutomaticIsFresh(snapshots, now = new Date()) {
   return age !== null && age <= RESEND_STALE_DAYS;
 }
 
+// Cloudflare R2 storage is read from Cloudflare's GraphQL analytics API by usage-collect.mts.
+// Same pattern as Resend: a fresh automatic reading supersedes the typed-in
+// 'cloudflare.r2_storage_gb' meter; if it stops, the typed-in one carries on.
+export const R2_STALE_DAYS = 2;
+
+export function r2AutomaticIsFresh(snapshots, now = new Date()) {
+  const reading = snapshots['cloudflare.r2_storage_bytes'];
+  return Boolean(reading) && (now.getTime() - new Date(reading.captured_at).getTime()) / DAY_MS <= R2_STALE_DAYS;
+}
+
 export const SETTING_KEYS = ['anthropic_prices', 'gemini_daily_requests'];
 
 // ---- small helpers --------------------------------------------------------
@@ -326,6 +336,17 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
     add('resend:stale', 'warn', 'resend', 'Resend usage data has stopped refreshing', `The last reading from Resend's Usage API was on ${utcDay(new Date(now.getTime() - resendAge * DAY_MS))}. Check that RESEND_API_KEY can still read usage and the usage-collect logs. The typed-in Resend reading is used meanwhile.`);
   }
 
+  // Cloudflare R2: automatic storage reading, and a warning if it stops (once one has existed).
+  const r2 = snapshots['cloudflare.r2_storage_bytes'];
+  if (r2) {
+    if (!r2AutomaticIsFresh(snapshots, now)) {
+      add('cloudflare:r2-stale', 'warn', 'cloudflare', 'Cloudflare R2 storage data has stopped refreshing', `The last reading from Cloudflare's analytics API was on ${utcDay(new Date(r2.captured_at))}. Check CLOUDFLARE_ANALYTICS_TOKEN (it may have expired or been revoked) and the usage-collect logs. The typed-in R2 reading is used meanwhile.`);
+    } else if (isPositiveNumber(Number(r2.limit_value))) {
+      const gb = (b) => `${(Number(b) / 1e9).toFixed(2)} GB`;
+      add('cloudflare:r2-storage', levelForUsed(Number(r2.value), Number(r2.limit_value)), 'cloudflare', `Cloudflare R2 storage is at ${pct(Number(r2.value) / Number(r2.limit_value))} of the free allowance`, `${gb(r2.value)} of ${gb(r2.limit_value)} used, read from Cloudflare ${utcDay(new Date(r2.captured_at))}. Past the free tier R2 storage is billed per GB-month.`);
+    }
+  }
+
   // The Netlify token (usage-collect) stopped refreshing the plan data: expired, revoked, or
   // the API changed. Only once a plan snapshot has existed, so no token yet means no alert.
   const netlifyPlan = snapshots['netlify.plan_credits'];
@@ -337,6 +358,7 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
   for (const [id, meter] of Object.entries(MANUAL_METERS)) {
     if (id === 'anthropic.credit_remaining_usd') continue;
     if (id === 'resend.emails_used' && resendAutomaticIsFresh(snapshots, now)) continue; // the API reading supersedes it
+    if (id === 'cloudflare.r2_storage_gb' && r2AutomaticIsFresh(snapshots, now)) continue;
     const reading = snapshots[id];
     if (!reading || !isPositiveNumber(Number(reading.limit_value))) continue;
     if (reading.detail?.stale_for_cycle) continue; // from a previous billing cycle: the balance has reset since

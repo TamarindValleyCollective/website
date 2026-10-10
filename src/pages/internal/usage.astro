@@ -697,6 +697,16 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
   }
 
+  function r2Card(o: Overview): HTMLElement {
+    const r = o.r2.reading;
+    const gb = (b: number) => `${(b / 1e9).toFixed(2)} GB`;
+    const frac = r.limitBytes ? r.bytes / r.limitBytes : 0;
+    const parts: Kid[] = [h('p', { class: 'hero', text: gb(r.bytes) }), h('p', { class: 'hero-sub', text: r.limitBytes ? `of ${gb(r.limitBytes)} free` : 'stored' })];
+    if (r.limitBytes) parts.push(meter(frac, r.level, 'Cloudflare R2 storage used', `${Math.round(frac * 100)}% of the free allowance`), h('p', { class: 'meter-caption', text: `${frac < 0.01 ? 'under 1' : Math.round(frac * 100)}% used · ${nf.format(r.objects)} object${r.objects === 1 ? '' : 's'} in ${r.buckets} bucket${r.buckets === 1 ? '' : 's'}` }));
+    parts.push(h('p', { class: 'svc-note', text: `Read from Cloudflare's analytics ${ago(r.capturedAt)}, refreshed every 6 hours. Past the free allowance R2 storage is billed per GB-month; the Cloudflare dashboard is the authority.` }));
+    return card('Cloudflare R2 storage', 'Read from Cloudflare automatically', r.level, ...parts);
+  }
+
   function resendCard(o: Overview): HTMLElement {
     const r = o.resend;
     const rows: [string, any][] = [['This month', r.monthly], ['Today', r.daily]];
@@ -905,7 +915,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       statusEl.hidden = true;
       intro.textContent = 'Free tiers and credits the website relies on. "Measured" figures come from our own systems; "typed in" ones come from a provider\'s dashboard and are only as fresh as the last entry.';
       renderAlerts(data.alerts);
-      $('cards').replaceChildren(anthropicCard(data), geminiCard(data), supabaseCard(data), ...(data.resend.fresh ? [resendCard(data)] : []), ...data.manual.map(manualCard));
+      $('cards').replaceChildren(anthropicCard(data), geminiCard(data), supabaseCard(data), ...(data.resend.fresh ? [resendCard(data)] : []), ...(data.r2.fresh ? [r2Card(data)] : []), ...data.manual.map(manualCard));
       renderAdmin(data);
       $('foot').textContent = `Updated ${new Date(data.generatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}. Counts use UTC days. Warnings are emailed to the core team once, and again only if they get worse.`;
       content.hidden = false;
