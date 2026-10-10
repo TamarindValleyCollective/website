@@ -47,8 +47,11 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
   with a "Get directions" link button) and `tvc_event_reminder` (day-before, 09:00 IST, via the new
   scheduled `whatsapp-event-reminders.mts`; "Get directions" + an "I need help" quick reply). Neither
   sends until Meta approves it and its name is in `WHATSAPP_APPROVED_TEMPLATES`. **Status
-  (2026-10-10): both submitted in WhatsApp Manager (Utility, English), awaiting Meta's decision.**
-  Not yet in `WHATSAPP_APPROVED_TEMPLATES`; add each name and redeploy once approved.
+  (2026-10-10): both submitted in WhatsApp Manager (Utility, English). `tvc_booking_confirmed` is
+  APPROVED; `tvc_event_reminder` is still pending.** Both names are already in
+  `WHATSAPP_APPROVED_TEMPLATES`, so until the reminder is approved the daily reminder run will try
+  to send it, Meta will reject it, and the run will log a failure and release the claim (no guest
+  is messaged). Not yet confirmed against a real booking.
 - **Click-to-WhatsApp attribution**: when a chat starts from an ad or Instagram/Facebook entry point,
   Meta's `referral` object is stored on the conversation (migration `0033`) and shown in the thread
   header. Plain messages never clear it.
