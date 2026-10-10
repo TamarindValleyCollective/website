@@ -17,6 +17,7 @@
 import { requireStaff, logStaffAction } from './lib/staff-access';
 import { rest } from './lib/staff-mfa-store';
 import { loadUsageData } from './lib/usage-store';
+import { listHealthEvents } from '../../scripts/lib/supabase.mjs';
 import { roleHasCapability } from './lib/staff-registry';
 import {
   MANUAL_METERS,
@@ -325,8 +326,25 @@ async function handleSettings(req: Request): Promise<Response> {
   return jsonResponse({ ok: true });
 }
 
+// Recent WhatsApp account-health events (template approved/paused, quality
+// drops...) recorded by whatsapp-webhook.mts. Read-only.
+async function handleWhatsAppHealth(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'usage', 'view');
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  try {
+    const events = await listHealthEvents(15);
+    return jsonResponse({
+      events: events.map((e: any) => ({ severity: e.severity, title: e.title, detail: e.detail, at: e.created_at })),
+    });
+  } catch (err) {
+    console.error('[usage-admin] failed to load WhatsApp health events', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
 export default async (req: Request): Promise<Response> => {
   const { pathname } = new URL(req.url);
+  if (pathname === '/api/usage-admin/whatsapp-health' && req.method === 'GET') return handleWhatsAppHealth(req);
   if (pathname === '/api/usage-admin/overview' && req.method === 'GET') return handleOverview(req);
   if (pathname === '/api/usage-admin/domains' && req.method === 'GET') return handleDomains(req);
   if (pathname === '/api/usage-admin/reading' && req.method === 'POST') return handleReading(req);
@@ -335,5 +353,5 @@ export default async (req: Request): Promise<Response> => {
 };
 
 export const config = {
-  path: ['/api/usage-admin/overview', '/api/usage-admin/domains', '/api/usage-admin/reading', '/api/usage-admin/settings'],
+  path: ['/api/usage-admin/overview', '/api/usage-admin/domains', '/api/usage-admin/whatsapp-health', '/api/usage-admin/reading', '/api/usage-admin/settings'],
 };

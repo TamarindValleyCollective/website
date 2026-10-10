@@ -27,12 +27,13 @@
 // unanswered-message digest, once per-message emails turned out to be more
 // clutter than signal for a shared inbox multiple staff check.
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { upsertConversation, insertMessage, updateTemplateSendStatus, templateSendExists, claimAutoAck, addOptOut, removeOptOut } from '../../scripts/lib/supabase.mjs';
+import { upsertConversation, insertMessage, updateTemplateSendStatus, templateSendExists, claimAutoAck, addOptOut, removeOptOut, recordHealthEvent } from '../../scripts/lib/supabase.mjs';
 import { getPaymentById } from '../../scripts/lib/event-payments-db.mjs';
 import { sendStaffAlert, escapeHtml } from './lib/refund-alert';
 import { sendWhatsAppText } from './lib/whatsapp-send';
 import { autoAckText, isOutsideHours, shouldAutoAck } from './lib/whatsapp-autoack';
 import { classifyKeyword, STOP_REPLY, START_REPLY } from './lib/whatsapp-optout';
+import { classifyHealthEvent, healthEventKey } from './lib/whatsapp-health';
 
 function textResponse(body: string, status = 200): Response {
   return new Response(body, { status, headers: { 'content-type': 'text/plain' } });
@@ -231,6 +232,31 @@ async function handleDeliveryStatus(status: any): Promise<void> {
   );
 }
 
+// Account-health webhook fields (template approved/rejected/paused, quality
+// drops, restrictions — see lib/whatsapp-health.ts). Stored once per delivery
+// and emailed to core-team. Throws if the event can't be stored, so Meta
+// retries; the email is best-effort, and a retry never re-sends it (the
+// stored event_key makes the second insert a no-op).
+async function handleHealthChange(entry: any, field: string, value: any): Promise<void> {
+  const event = classifyHealthEvent(field, value);
+  if (!event) {
+    console.log(`[whatsapp-webhook] ${field}:`, JSON.stringify(value));
+    return;
+  }
+  const row = await recordHealthEvent({ eventKey: healthEventKey(entry, field, value), field, severity: event.severity, title: event.title, detail: event.detail });
+  if (!row) return; // a retry of a delivery we already handled
+  try {
+    const marker = event.severity === 'info' ? '' : '⚠️ ';
+    await sendStaffAlert(
+      `${marker}WhatsApp: ${event.title}`,
+      `<p><strong>${escapeHtml(event.title)}</strong></p>${event.detail ? `<p>${escapeHtml(event.detail)}</p>` : ''}
+  <p style="color:#57604f;">Reported by Meta (${escapeHtml(field)}). ${event.severity === 'info' ? '' : 'Guest WhatsApp messages may be affected — '}see <a href="https://tvc.farm/internal/usage">the usage page</a> for recent events, or WhatsApp Manager for details.</p>`,
+    );
+  } catch (err) {
+    console.error('[whatsapp-webhook] Failed to email health alert', err);
+  }
+}
+
 export default async (req: Request): Promise<Response> => {
   const url = new URL(req.url);
 
@@ -295,10 +321,8 @@ export default async (req: Request): Promise<Response> => {
           for (const status of value.statuses) {
             await handleDeliveryStatus(status).catch((err) => console.error('[whatsapp-webhook] Failed to record delivery status', err));
           }
-        } else if (change?.field === 'message_template_status_update') {
-          // Low-volume, infrequent — logged only for now rather than also
-          // emailed; worth revisiting once templates are actually submitted.
-          console.log('[whatsapp-webhook] Template status update:', JSON.stringify(value));
+        } else if (change?.field && change.field !== 'messages') {
+          await handleHealthChange(entry, change.field, value);
         }
       }
     }

@@ -55,6 +55,18 @@ when they clear so a recurrence emails again. One digest per hourly run.
 
 Domain renewals are separate (GitHub Action): at 60 and 30 days, then daily from 14.
 
+## WhatsApp account health
+
+A fourth block on the page, "WhatsApp account health", lists the 15 most recent account events
+Meta reported (template approved / rejected / paused / disabled, template or phone-number quality
+changes, a template recategorised, account restrictions or alerts). These are recorded by
+`whatsapp-webhook.mts` into `whatsapp_health_events` (migration `0036`) and **each is also emailed
+once** to `core-team@tvc.farm` (subject starts "⚠️ WhatsApp:" for warnings and critical events).
+They aren't threshold meters, so they don't use the alert rules above. Meta only sends these if the
+webhook fields are subscribed (App Dashboard → WhatsApp → Configuration → Webhook fields):
+`message_template_status_update`, `message_template_quality_update`, `phone_number_quality_update`,
+`template_category_update`, `account_update`, `account_alerts`. See `WHATSAPP.md`.
+
 ## Setup checklist
 
 1. Apply migrations `0030` and `0031` to the TVC ERP Supabase project.

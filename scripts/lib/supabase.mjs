@@ -358,3 +358,25 @@ export async function addOptOut(phone, source = 'stop_reply') {
 export async function removeOptOut(phone) {
   await restFetch(`/whatsapp_opt_outs?phone=eq.${encodeURIComponent(phone)}`, { method: 'DELETE' });
 }
+
+// Account-health events from Meta (see migration 0036). recordHealthEvent
+// returns the new row, or null when this exact delivery was already recorded
+// (a Meta retry) so the caller emails only once.
+/**
+ * @param {{ eventKey: string, field: string, severity: 'info' | 'warning' | 'critical', title: string, detail?: string | null }} params
+ */
+export async function recordHealthEvent({ eventKey, field, severity, title, detail }) {
+  const res = await restFetch(`/whatsapp_health_events?on_conflict=event_key`, {
+    method: 'POST',
+    headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
+    body: JSON.stringify([{ event_key: eventKey, field, severity, title, detail: detail ?? null }]),
+  });
+  const rows = await res.json();
+  return rows[0] ?? null;
+}
+
+/** @param {number} limit */
+export async function listHealthEvents(limit = 20) {
+  const res = await restFetch(`/whatsapp_health_events?select=severity,title,detail,field,created_at&order=created_at.desc&limit=${limit}`);
+  return res.json();
+}

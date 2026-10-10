@@ -525,6 +525,11 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `whatsapp_conversations.last_stale_alert_at`, reset to null on every new inbound message so
   each message gets its own full 60-minute countdown), so a single missed email can't let a
   message silently go unanswered.
+- **WhatsApp account-health alerts** — `whatsapp-webhook.mts` passes Meta's non-message webhook
+  fields (template status/quality/category, phone-number quality, account updates and alerts)
+  through `lib/whatsapp-health.ts`, stores each in `whatsapp_health_events` (migration `0036`,
+  deduped by a delivery hash) and emails core-team via `sendStaffAlert`. `usage-admin.mts` serves
+  the latest events at `/api/usage-admin/whatsapp-health` for a panel on `/internal/usage`.
 - **WhatsApp STOP opt-out** — `whatsapp-webhook.mts` treats an exact STOP/START text
   (`lib/whatsapp-optout.ts`) as a command: it writes/deletes the sender's E.164 number in
   `whatsapp_opt_outs` (migration `0035`) and replies with a confirmation. `lib/whatsapp-send.ts`
