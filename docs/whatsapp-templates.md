@@ -170,6 +170,11 @@ Samples: `membership` · `Asha Rao` · `I would like to know more about joining 
 
 ## Booking confirmation and reminder, with buttons (2026-10-10)
 
+**Status:** both templates were submitted in WhatsApp Manager on 2026-10-10 (Utility, English) and
+are awaiting Meta's decision. Once each is approved, add its name to `WHATSAPP_APPROVED_TEMPLATES`
+and redeploy; nothing sends before that. If Meta recategorizes one as Marketing, request a review
+(it's a transactional confirmation/reminder for an existing paid booking) rather than accepting it.
+
 Two new templates (not v1/v2 pairs). Unlike the five above they carry **buttons**, so submit them
 with the button rows shown. Both buttons are static (a fixed link, or a quick reply), so the send
 code needs no button components. Category **Utility**, language **English**, **Header: Text**, footer filled in.
