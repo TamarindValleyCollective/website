@@ -74,7 +74,22 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
           <div class="composer-signature">
             <label for="responder-name">Signing as</label>
             <input type="text" id="responder-name" placeholder="Your name" required />
+            <button type="button" id="suggest-btn" class="button button--outline suggest-btn">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 1.5l1.9 5.1 5.1 1.9-5.1 1.9L10 15.5l-1.9-5.1L3 8.5l5.1-1.9L10 1.5zM16 13l.8 2.2 2.2.8-2.2.8L16 19l-.8-2.2-2.2-.8 2.2-.8L16 13z" /></svg>
+              <span id="suggest-label">Suggest reply</span>
+            </button>
           </div>
+          <div id="suggestion" class="suggestion" role="status" aria-live="polite" hidden>
+            <p class="suggestion-head"><strong>Suggested reply</strong> <span class="suggestion-note">A draft. Check it before you send.</span></p>
+            <p id="suggestion-flag" class="suggestion-flag" hidden></p>
+            <p id="suggestion-text" class="suggestion-text"></p>
+            <p id="suggestion-sources" class="suggestion-sources" hidden></p>
+            <div class="suggestion-actions">
+              <button type="button" id="suggestion-use" class="button">Use this reply</button>
+              <button type="button" id="suggestion-dismiss" class="button button--outline">Dismiss</button>
+            </div>
+          </div>
+          <p id="suggest-error" class="reply-status" hidden></p>
           <div class="quick-replies" role="group" aria-label="Canned replies">
             {pinnedReplies.map((q) => <button type="button" class="chip tap-target quick-reply" data-text={q.text}>{q.label}</button>)}
             <button type="button" id="picker-toggle" class="chip tap-target picker-toggle" aria-expanded="false" aria-controls="reply-picker">
@@ -777,6 +792,65 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     color: var(--tvc-ink-soft);
   }
 
+  .composer-signature {
+    flex-wrap: wrap;
+  }
+
+  .composer-signature .suggest-btn {
+    margin-left: auto;
+  }
+
+  /* The drafted reply, shown above the reply box until it is used or dismissed. */
+  .suggestion {
+    margin: 12px 16px 0;
+    padding: 12px 14px;
+    background: var(--tvc-green-tint);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-sm);
+  }
+
+  .suggestion p {
+    margin: 0;
+  }
+
+  .suggestion-head {
+    font-size: 0.85rem;
+  }
+
+  .suggestion-note {
+    margin-left: 6px;
+    color: var(--tvc-ink-soft);
+  }
+
+  .suggestion-flag {
+    margin-top: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--tvc-orange-text);
+  }
+
+  .suggestion-text {
+    margin-top: 8px;
+    max-height: 9rem;
+    overflow-y: auto;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .suggestion-sources {
+    margin-top: 8px;
+    font-size: 0.8rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .suggestion-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
   .composer-signature input {
     flex: 0 1 200px;
     min-height: 36px;
@@ -861,6 +935,19 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
     .thread-actions .button {
       flex: 1;
+    }
+
+    /* A draft on a phone competes with the conversation for a short screen: while one is
+       open, drop the canned-reply row and trim the card so the guest's message stays
+       readable underneath. */
+    .composer.has-suggestion .quick-replies,
+    .suggestion-note,
+    .suggestion-sources {
+      display: none;
+    }
+
+    .suggestion-text {
+      max-height: 5rem;
     }
 
     :global(.message-row) {
@@ -1391,6 +1478,96 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     }).catch(() => {});
   });
 
+  // ---- Suggested reply --------------------------------------------------------
+  // "Suggest reply" asks the server to draft an answer from the site's own pages
+  // (see netlify/functions/whatsapp-suggest.mts). It only ever fills this card: a
+  // staff member chooses "Use this reply" (it lands in the reply box to edit) and
+  // sends it themselves. A draft that touches a booking, refund or anything the site
+  // doesn't cover comes back flagged for a human check.
+  const suggestBtn = document.getElementById('suggest-btn') as HTMLButtonElement;
+  const suggestLabel = document.getElementById('suggest-label') as HTMLElement;
+  const suggestionEl = document.getElementById('suggestion') as HTMLElement;
+  const suggestionFlag = document.getElementById('suggestion-flag') as HTMLElement;
+  const suggestionText = document.getElementById('suggestion-text') as HTMLElement;
+  const suggestionSources = document.getElementById('suggestion-sources') as HTMLElement;
+  const suggestError = document.getElementById('suggest-error') as HTMLElement;
+  let suggestSeq = 0;
+
+  // Also invalidates a request still in flight, so a slow answer for the thread
+  // you just left can't appear in the one you opened.
+  function hideSuggestion() {
+    suggestSeq++;
+    suggestionEl.hidden = true;
+    composer.classList.remove('has-suggestion');
+    suggestError.hidden = true;
+    suggestBtn.disabled = false;
+    suggestLabel.textContent = 'Suggest reply';
+  }
+
+  suggestBtn.addEventListener('click', async () => {
+    if (!selectedConversationId) return;
+    const conversationId = selectedConversationId;
+    suggestionEl.hidden = true;
+    composer.classList.remove('has-suggestion');
+    suggestError.hidden = true;
+    const seq = ++suggestSeq;
+    suggestBtn.disabled = true;
+    suggestLabel.textContent = 'Drafting…';
+    try {
+      const res = await authedFetch('/api/whatsapp-suggest', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ conversationId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (seq !== suggestSeq) return;
+      if (!res.ok || !data.draft) {
+        suggestError.textContent = data.error || 'Could not draft a reply right now. Please reply by hand.';
+        suggestError.hidden = false;
+        return;
+      }
+      suggestionText.textContent = data.draft;
+      suggestionFlag.hidden = !data.needsStaff;
+      suggestionFlag.textContent = data.needsStaff ? `Needs a human check${data.reason ? `: ${data.reason}` : ''}` : '';
+      suggestionSources.replaceChildren();
+      const sources = (data.sources ?? []) as Array<{ title: string; url: string }>;
+      suggestionSources.hidden = sources.length === 0;
+      if (sources.length) {
+        suggestionSources.append('Based on: ');
+        sources.forEach((s, i) => {
+          if (i > 0) suggestionSources.append(', ');
+          const a = document.createElement('a');
+          a.href = `https://tvc.farm${s.url}`;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.textContent = s.title;
+          suggestionSources.append(a);
+        });
+      }
+      suggestionEl.hidden = false;
+      composer.classList.add('has-suggestion');
+    } catch (err) {
+      if (seq !== suggestSeq) return;
+      if (err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden')) return;
+      suggestError.textContent = 'Could not reach the server. Please reply by hand.';
+      suggestError.hidden = false;
+    } finally {
+      if (seq === suggestSeq) {
+        suggestBtn.disabled = false;
+        suggestLabel.textContent = 'Suggest reply';
+      }
+    }
+  });
+
+  document.getElementById('suggestion-use')!.addEventListener('click', () => {
+    insertReply(suggestionText.textContent ?? '');
+    hideSuggestion();
+  });
+  document.getElementById('suggestion-dismiss')!.addEventListener('click', () => {
+    hideSuggestion();
+    replyInput.focus();
+  });
+
   // ---- Canned replies ---------------------------------------------------------
   // A few pinned replies are pills; the whole library lives in a searchable panel
   // ("More replies", or typing "/" in the reply box), so it can grow without
@@ -1547,6 +1724,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   function selectConversation(conv: Conversation) {
     closePicker();
+    hideSuggestion();
     selectedConversationId = conv.id;
     selectedConversation = conv;
     threadEmpty.hidden = true;
@@ -1729,6 +1907,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
         replyStatus.textContent = data.error || 'Failed to send — try again.';
       } else {
         replyInput.value = '';
+        hideSuggestion();
       }
       await loadMessages();
     } catch {
