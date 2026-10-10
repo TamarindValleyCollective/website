@@ -448,10 +448,32 @@ import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
     font-weight: 600;
     font-size: 0.82rem;
     cursor: pointer;
+    transition:
+      background-color 150ms ease-out,
+      border-color 150ms ease-out,
+      color 150ms ease-out;
   }
 
   .chip:hover {
-    background: var(--tvc-cream);
+    background: var(--tvc-green-tint);
+    border-color: var(--tvc-green);
+    color: var(--tvc-green-dark);
+  }
+
+  /* Brief confirmation after a click: the chip takes the same ink fill the
+     biodiversity filters use for "selected", for a third of a second, because
+     the text lands in a box that can be out of view on a phone. Declared after
+     :hover so it wins while the pointer is still on the chip. */
+  .chip.is-flash {
+    background: var(--tvc-ink);
+    border-color: var(--tvc-ink);
+    color: var(--tvc-white);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chip {
+      transition: none;
+    }
   }
 
   /* Shown in the conversation list next to a blocked contact's name — same
@@ -1214,6 +1236,8 @@ import { WHATSAPP_QUICK_REPLIES } from '../../data/whatsapp-quick-replies';
     const chip = (e.target as HTMLElement).closest<HTMLElement>('.quick-reply');
     if (!chip) return;
     const text = chip.dataset.text ?? '';
+    chip.classList.add('is-flash');
+    setTimeout(() => chip.classList.remove('is-flash'), 350);
     replyInput.value = replyInput.value.trim() ? `${replyInput.value.trimEnd()}\n\n${text}` : text;
     replyInput.focus();
     replyInput.setSelectionRange(replyInput.value.length, replyInput.value.length);

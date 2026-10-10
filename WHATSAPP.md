@@ -113,7 +113,8 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
   staff `.button` (36px, 8px radius; Send is the primary dark-green one, the rest `.button--outline`),
   the back button is an outline icon button with a drawn chevron, and the search, "Signing as" and
   reply fields use the 10px field radius with the control border. The canned replies keep a pill, as
-  the same `chip` the biodiversity filters use. A contact who is blocked or opted out shows its
+  the same `chip` the biodiversity filters use, with a green tint on hover and a third-of-a-second ink
+  fill when clicked (the text lands in a box that can be out of view on a phone). A contact who is blocked or opted out shows its
   button in the red outline state. The two panes now run edge to edge (the shared `.card`'s 28px
   padding used to float them inside the card), and on a phone the header's actions drop to their own
   full-width row. Page-local modifiers are written `.button.x`, because the staff shell's
