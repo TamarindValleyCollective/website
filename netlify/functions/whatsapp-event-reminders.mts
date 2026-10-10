@@ -41,6 +41,7 @@ export default async (): Promise<Response> => {
         to: booking.payer_contact,
         isTest: booking.mode === 'test',
         bookingId: booking.id,
+        optIn: booking.whatsapp_opt_in === true,
         params: [cleanTemplateParam(firstNameOf(booking.payer_name), 60), cleanTemplateParam(booking.event_title, 120), formatEventDate(booking.event_date)],
       });
       tally[result]++;

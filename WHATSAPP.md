@@ -47,11 +47,8 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
   with a "Get directions" link button) and `tvc_event_reminder` (day-before, 09:00 IST, via the new
   scheduled `whatsapp-event-reminders.mts`; "Get directions" + an "I need help" quick reply). Neither
   sends until Meta approves it and its name is in `WHATSAPP_APPROVED_TEMPLATES`. **Status
-  (2026-10-10): both submitted in WhatsApp Manager (Utility, English). `tvc_booking_confirmed` is
-  APPROVED; `tvc_event_reminder` is still pending.** Both names are already in
-  `WHATSAPP_APPROVED_TEMPLATES`, so until the reminder is approved the daily reminder run will try
-  to send it, Meta will reject it, and the run will log a failure and release the claim (no guest
-  is messaged). Not yet confirmed against a real booking.
+  (2026-10-10): both submitted in WhatsApp Manager (Utility, English). both
+  APPROVED and listed in `WHATSAPP_APPROVED_TEMPLATES`.** Not yet confirmed against a real booking.
 - **Click-to-WhatsApp attribution**: when a chat starts from an ad or Instagram/Facebook entry point,
   Meta's `referral` object is stored on the conversation (migration `0033`) and shown in the thread
   header. Plain messages never clear it.
@@ -59,6 +56,16 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
   Off unless `WHATSAPP_AUTOACK_ENABLED=true`.
 - **Inbound buttons and locations** now read as text in the inbox ("[Tapped button] I need help")
   instead of "[button message — not shown here]".
+- **Consent checkbox (2026-10-10).** The event booking form has an optional, unticked-by-default
+  "Send my booking confirmation and updates … on WhatsApp" checkbox. The answer travels in the
+  Payment Link's `notes.whatsappOptIn` and is stored as `event_payments.whatsapp_opt_in`
+  (migration `0034`, **must be applied before deploying**). `true` = all WhatsApp messages;
+  `false` = none, email only; `null` (booked before the checkbox, or paid through a hand-made link)
+  = refund/cancellation messages still go out as before, but the new confirmation and reminder
+  require an explicit `true`. Changing the box never reuses an open Payment Link that carries the
+  old answer. The privacy page has a "WhatsApp booking updates" section. **Not built:** automatic
+  STOP/opt-out handling — a guest who replies "stop" lands in the inbox like any message, and
+  staff must turn their messages off by hand (no UI for that yet; set `whatsapp_opt_in = false`).
 - **Migration `0033` applied to TVC ERP 2026-10-10**, and PR #318 merged the same day.
 
 ## Direct Meta Cloud API integration — setup checklist

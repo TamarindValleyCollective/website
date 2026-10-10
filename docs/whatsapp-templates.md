@@ -171,9 +171,8 @@ Samples: `membership` · `Asha Rao` · `I would like to know more about joining 
 ## Booking confirmation and reminder, with buttons (2026-10-10)
 
 **Status:** both templates were submitted in WhatsApp Manager on 2026-10-10 (Utility, English).
-`tvc_booking_confirmed` is **approved**; `tvc_event_reminder` is **pending**. Both names are already
-in `WHATSAPP_APPROVED_TEMPLATES`. Add a name only once it is approved (an unapproved name makes
-each send fail at Meta) and redeploy. If Meta recategorizes one as Marketing, request a review
+Both are **approved** and listed in `WHATSAPP_APPROVED_TEMPLATES`. Add a name only once it is
+approved (an unapproved name makes each send fail at Meta) and redeploy. If Meta recategorizes one as Marketing, request a review
 (it's a transactional confirmation/reminder for an existing paid booking) rather than accepting it.
 
 Two new templates (not v1/v2 pairs). Unlike the five above they carry **buttons**, so submit them
@@ -219,6 +218,13 @@ cancelled event's guests are never reminded. Bookings with no `event_date` (made
 existed) get no reminder. Each booking is claimed (`event_payments.whatsapp_reminder_sent_at`, migration
 `0033`) before sending, so it can't go twice; if the send fails, or the template isn't approved yet,
 the claim is released and nothing is lost. Test-mode bookings go to `WHATSAPP_TEST_NUMBER` only.
+
+## Guest consent (2026-10-10)
+
+Guest-facing WhatsApp messages respect `event_payments.whatsapp_opt_in`, set from the booking
+form's checkbox: `false` sends nothing; `true` sends everything; `null` (older bookings) still gets
+refund/cancellation messages but not the new confirmation or reminder, which need an explicit
+`true`. The reminder query also filters on `whatsapp_opt_in = true`. Staff alerts are unaffected.
 
 ## Out-of-hours auto-reply (2026-10-10)
 

@@ -27,6 +27,8 @@ interface BookingPayload {
   email?: string;
   phone?: string;
   attendeeCount?: number;
+  // The WhatsApp-updates checkbox. Only an explicit true counts as consent.
+  whatsappOptIn?: boolean;
   confirmDuplicate?: boolean;
   botField?: string;
 }
@@ -60,6 +62,7 @@ export default async (req: Request): Promise<Response> => {
   const email = (payload.email ?? '').trim();
   const phone = (payload.phone ?? '').trim();
   const attendeeCount = Math.trunc(Number(payload.attendeeCount));
+  const whatsappOptIn = payload.whatsappOptIn === true ? 'yes' : 'no';
 
   if (!referenceId || !name || !email || !phone) {
     return jsonResponse({ error: 'name, email, and phone are required' }, 400);
@@ -134,7 +137,7 @@ export default async (req: Request): Promise<Response> => {
       // Reuse only a still-unpaid link for the exact same booking (attendee
       // count, hence amount) — a double-click or back-and-resubmit gets the
       // same open link instead of minting a new charge target each time.
-      const reusable = candidates.find((l) => l.status === 'created' && l.notes?.attendeeCount === String(attendeeCount));
+      const reusable = candidates.find((l) => l.status === 'created' && l.notes?.attendeeCount === String(attendeeCount) && l.notes?.whatsappOptIn === whatsappOptIn);
       if (reusable) {
         link = reusable;
         break;
@@ -163,6 +166,10 @@ export default async (req: Request): Promise<Response> => {
           primaryContactName: name,
           primaryContactEmail: email,
           primaryContactPhone: phone,
+          // Recorded as event_payments.whatsapp_opt_in by razorpay-webhook.mts.
+          // Part of the link-reuse check above, so changing the box never
+          // reuses a link that carries the old answer.
+          whatsappOptIn,
           // Best-effort: a malformed/missing value (an older cached page, a
           // tampered request) just leaves the eventual event_payments row's
           // event_date null, same as any booking made before this field

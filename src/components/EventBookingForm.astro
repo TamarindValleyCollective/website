@@ -40,7 +40,7 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
     <p class="form-honeypot" aria-hidden="true">
       <label>Leave this field blank <input name="botField" tabindex="-1" autocomplete="off" /></label>
     </p>
-    <p class="form-required-note">All fields are required.</p>
+    <p class="form-required-note">All fields are required except the WhatsApp option.</p>
 
     <div class="site-form-grid">
       <div>
@@ -62,6 +62,11 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
         </select>
       </div>
     </div>
+
+    <label class="booking-form__consent" for={`${fieldId}-whatsapp`}>
+      <input id={`${fieldId}-whatsapp`} type="checkbox" name="whatsappOptIn" />
+      <span>Send my booking confirmation and updates (including a reminder the day before) to this number on WhatsApp. Optional, and we'll always email you too.</span>
+    </label>
 
     <div class="field-total">
       <span class="field-total__label">Total ({unitAmount} {unitLabel})</span>
@@ -89,6 +94,25 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
 
   .booking-form__heading {
     margin-top: 0;
+  }
+
+  .booking-form__consent {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 16px;
+    font-size: 0.875rem;
+    font-weight: 400;
+    line-height: 1.45;
+    cursor: pointer;
+  }
+
+  .booking-form__consent input {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    margin: 2px 0 0;
+    accent-color: var(--tvc-green);
   }
 
   .field-total {
@@ -224,6 +248,7 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
             email: data.get('email'),
             phone: data.get('phone'),
             attendeeCount: Number(data.get('attendeeCount')),
+            whatsappOptIn: data.get('whatsappOptIn') === 'on',
             confirmDuplicate,
           }),
         });

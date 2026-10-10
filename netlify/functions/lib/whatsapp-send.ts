@@ -74,8 +74,14 @@ export async function sendWhatsAppTemplate(opts: {
   // The booking this message is about, so its delivery status can be shown
   // against it on the Event Payments dashboard.
   bookingId?: string | null;
+  // The guest's WhatsApp consent (event_payments.whatsapp_opt_in). An explicit
+  // false means they declined, so nothing is sent. null/undefined = unknown
+  // (a booking from before consent was collected): callers decide whether that
+  // is acceptable by passing `=== true` for messages that need explicit consent.
+  optIn?: boolean | null;
 }): Promise<'sent' | 'skipped' | 'failed'> {
   try {
+    if (opts.optIn === false) return 'skipped';
     const template = resolveTemplate(opts.template);
     if (!approvedTemplates().has(template)) return 'skipped';
 
