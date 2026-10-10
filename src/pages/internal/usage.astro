@@ -675,6 +675,15 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     return card('Supabase database', 'Measured by the website', level, ...parts);
   }
 
+  // Netlify's cycle dates come as Pacific-time ISO strings; read the calendar date straight from the
+  // string (not the browser's timezone) so it matches Netlify's page. The API gives the NEXT period's
+  // start, so the cycle's last day is `offset` = -1 from it.
+  function cycleDay(iso: string, offset = 0): string {
+    const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + offset);
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  }
+
   function manualCard(m: any): HTMLElement {
     const r = m.reading;
     if (!r) return card(m.label, 'Typed in from the provider', 'none', h('p', { class: 'hero-sub', text: `No reading yet. Find it at ${m.where}, then an admin can enter it below.` }));
@@ -687,9 +696,9 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     if (r.cycleEnd) {
       const daysLeft = Math.max(0, Math.ceil((new Date(r.cycleEnd).getTime() - Date.now()) / 86_400_000));
       const perDay = remaining && !staleForCycle && daysLeft > 0 ? ` · about ${nf.format(Math.floor(r.value / daysLeft))} credits a day to last` : '';
-      parts.push(h('p', { class: 'meter-caption', text: `Resets in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (${dateText(r.cycleEnd)})${perDay}` }));
+      parts.push(h('p', { class: 'meter-caption', text: `Resets in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (${cycleDay(r.cycleEnd)})${perDay}` }));
     }
-    parts.push(h('p', { class: 'svc-note', text: `Typed in on ${dateText(r.capturedAt)} (${ago(r.capturedAt)}) from ${m.where}.${r.cycleStart ? ` Billing cycle ${dateText(r.cycleStart)} to ${dateText(r.cycleEnd)}; the allowance is read from Netlify automatically.` : ''}${r.planStale ? ` Warning: Netlify plan data was last refreshed ${ago(r.planCapturedAt)}, so the limit and cycle dates may be out of date. Check the Netlify token.` : ''}${staleForCycle ? ' This reading is from a previous billing cycle, so the balance has reset since. Update it.' : ''}${stale ? ' This reading is more than a month old, so treat it with caution and update it.' : ''}` }));
+    parts.push(h('p', { class: 'svc-note', text: `Typed in on ${dateText(r.capturedAt)} (${ago(r.capturedAt)}) from ${m.where}.${r.cycleStart ? ` Billing cycle ${cycleDay(r.cycleStart)} to ${cycleDay(r.cycleEnd, -1)}; the allowance is read from Netlify automatically.` : ''}${r.planStale ? ` Warning: Netlify plan data was last refreshed ${ago(r.planCapturedAt)}, so the limit and cycle dates may be out of date. Check the Netlify token.` : ''}${staleForCycle ? ' This reading is from a previous billing cycle, so the balance has reset since. Update it.' : ''}${stale ? ' This reading is more than a month old, so treat it with caution and update it.' : ''}` }));
     return card(m.label, 'Typed in from the provider', m.level, ...parts);
   }
 
