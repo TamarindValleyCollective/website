@@ -525,6 +525,14 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `whatsapp_conversations.last_stale_alert_at`, reset to null on every new inbound message so
   each message gets its own full 60-minute countdown), so a single missed email can't let a
   message silently go unanswered.
+- **`netlify/functions/whatsapp-suggest.mts`** — the inbox's "Suggest reply" (POST
+  `/api/whatsapp-suggest`, `reply` capability of the `whatsapp` module). Reads the last messages of a
+  conversation from Supabase, retrieves the relevant site pages (`lib/site-retrieval.ts`) and asks Claude
+  (`callAnthropic`, `claude-sonnet-5`) or, if `WHATSAPP_SUGGEST_PROVIDER=gemini`, Gemini first with Claude
+  as the fallback, for a JSON draft (`lib/whatsapp-suggest.ts`: prompt, transcript with no names or
+  numbers, parsing, removal of non-tvc.farm links). Returns the draft, a needs-staff flag with a reason and
+  the pages used; never sends. Per-staff and daily rate limits in Netlify Blobs; usage counted in
+  `usage_daily`.
 - **WhatsApp inbound media** — `whatsapp-webhook.mts` records a message's media id/kind/mime/
   filename (`lib/whatsapp-media.ts`, migration `0037`); `whatsapp-admin.mts`'s `GET
   /api/whatsapp-admin/media` (`view`) fetches the file from Meta's Graph API on demand (media id
