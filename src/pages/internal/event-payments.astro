@@ -1355,6 +1355,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
       reviewEl.innerHTML = `
         <div class="refund-confirm">
           <p>Refund <strong>${formatMoney(amountPaise, booking.currency)}</strong> to <strong>${escapeHtml(booking.payerLabel)}</strong>${booking.hasEmail ? ' (a confirmation email will be sent)' : ''} for payment <code>${escapeHtml(booking.razorpayPaymentId)}</code>? This cannot be undone from here.</p>
+          <p class="refund-tier-hint">Razorpay keeps its ${booking.feeAmount != null ? `<strong>${formatMoney(booking.feeAmount, booking.currency)}</strong> ` : ''}fee on this payment, so TVC bears that cost on top of the refund. Your Razorpay available balance must cover the refund, or it is rejected and nothing moves.</p>
           <button type="button" class="button button--danger refund-confirm-btn">Yes, refund ${formatMoney(amountPaise, booking.currency)}</button>
         </div>
       `;
@@ -1583,6 +1584,15 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     // already shows the one payer/amount being sent.
     const breakdown = eligible.map((b) => ({ name: b.payerLabel, amount: Math.round(b.amount * fraction) }));
     const total = breakdown.reduce((sum, row) => sum + row.amount, 0);
+    // Razorpay keeps its fee (MDR + GST) on a refunded payment, so cancelling
+    // costs TVC that much on top of the refund, and the account balance has to
+    // cover the whole refund even though only the net amount was ever added to
+    // it (a refund after the first payment is settled needs added funds).
+    const knownFees = eligible.reduce((sum, b) => sum + (b.feeAmount ?? 0), 0);
+    const unreconciledFees = eligible.filter((b) => b.feeAmount == null).length;
+    const feeNote = eligible.length
+      ? `<p class="refund-tier-hint">Razorpay keeps its fees on refunded payments, so this costs TVC ${knownFees > 0 ? `about <strong>${formatMoney(knownFees, currency)}</strong> in fees` : 'its Razorpay fees'}${unreconciledFees > 0 ? ` (not yet known for ${unreconciledFees} booking${unreconciledFees === 1 ? '' : 's'})` : ''} on top of the refund. Your Razorpay available balance must cover ${formatAmount(total, currency)}; if it is short the refund is rejected and nothing moves.</p>`
+      : '';
     // Guests with no email on file get refunded but never told anything —
     // flag them here so the admin can contact them directly.
     const noEmail = eligible.filter((b) => !b.hasEmail);
@@ -1598,6 +1608,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
           ${breakdown.map((row) => `<li><span>${escapeHtml(row.name)}</span><span>${formatAmount(row.amount, currency)}</span></li>`).join('')}
         </ul>
         <p>Total <strong>${formatAmount(total, currency)}</strong>. This cannot be undone from here.</p>
+        ${feeNote}
         <button type="button" class="button button--danger bulk-cancel-confirm-btn">Yes, refund ${eligible.length} booking${eligible.length === 1 ? '' : 's'}</button>
       </div>
     `;
