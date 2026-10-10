@@ -241,4 +241,5 @@ Not a template: the guest has just messaged us, so a normal text is allowed. Wit
 courtesy reply saying the team is away, when they're back, and a link to `tvc.farm/visit`. It never
 tries to answer the question. At most one per conversation per 12 hours (`whatsapp_conversations.last_auto_ack_at`,
 claimed atomically), never for reactions or for old messages replayed by a webhook retry, and recorded
-in the thread as "[Auto-reply] …". Off by default.
+in the thread as "[Auto-reply] …". Off unless the flag is set; **switched on 2026-10-10** with the
+default hours (09:00–19:00 IST) and deployed, but not yet confirmed with a real out-of-hours message.

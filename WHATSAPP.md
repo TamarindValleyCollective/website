@@ -53,7 +53,10 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
   Meta's `referral` object is stored on the conversation (migration `0033`) and shown in the thread
   header. Plain messages never clear it.
 - **Out-of-hours auto-reply**: free-form text, rate-limited to one per conversation per 12 hours.
-  Off unless `WHATSAPP_AUTOACK_ENABLED=true`.
+  **Enabled 2026-10-10** (`WHATSAPP_AUTOACK_ENABLED=true` in Netlify, default hours 09:00–19:00 IST,
+  `WHATSAPP_AUTOACK_HOURS` unset); production deploy `6aca69472c7a13f98bc83f1e` (commit `060e18d`)
+  includes it. Not yet confirmed with a real out-of-hours message. To turn it off, set the variable
+  to anything but `true` and redeploy.
 - **Inbound buttons and locations** now read as text in the inbox ("[Tapped button] I need help")
   instead of "[button message — not shown here]".
 - **Consent checkbox (2026-10-10).** The event booking form has an optional, unticked-by-default
