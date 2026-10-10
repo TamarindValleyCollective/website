@@ -16,6 +16,9 @@
 // analytics API, using a read-only token (Account Analytics: Read) in CLOUDFLARE_ANALYTICS_TOKEN
 // plus the non-secret CLOUDFLARE_ACCOUNT_ID. Without them the typed-in R2 reading carries on.
 //
+// And the number of open database connections (usage_db_connections(), migration 0033) against
+// the plan's max_connections, as an early warning that the Netlify functions are hogging the pool.
+//
 // This only *records*. Turning readings into threshold emails is the
 // dashboard module's job; and anything that must still alert while Netlify
 // itself is paused (domain renewals) deliberately lives in a GitHub Action
@@ -25,6 +28,28 @@ import { restHeaders } from '../../scripts/lib/supabase.mjs';
 // Supabase free plan: 500 MB of database per project. From supabase.com/pricing;
 // the Supabase dashboard is the authority if this ever drifts.
 const DB_SIZE_LIMIT_BYTES = 500 * 1024 * 1024;
+
+// Records open database connections vs the plan's maximum. Never throws.
+async function recordDbConnections(base: string): Promise<string> {
+  try {
+    const res = await fetch(`${base}/rpc/usage_db_connections`, { method: 'POST', headers: restHeaders(), body: '{}' });
+    if (!res.ok) throw new Error(`usage_db_connections failed: ${res.status} ${await res.text()}`);
+    const row = (await res.json())?.[0];
+    const inUse = Number(row?.in_use);
+    const max = Number(row?.max_allowed);
+    if (!Number.isFinite(inUse) || !(max > 0)) throw new Error(`unexpected connections reading: ${JSON.stringify(row)}`);
+    const insertRes = await fetch(`${base}/usage_snapshots`, {
+      method: 'POST',
+      headers: restHeaders({ Prefer: 'return=minimal' }),
+      body: JSON.stringify({ service: 'supabase', metric: 'db_connections', value: inUse, unit: 'connections', limit_value: max }),
+    });
+    if (!insertRes.ok) throw new Error(`connections snapshot insert failed: ${insertRes.status} ${await insertRes.text()}`);
+    return `recorded ${inUse}/${max}`;
+  } catch (err) {
+    console.error('[usage-collect] db connections failed', err);
+    return 'failed';
+  }
+}
 
 // TVC team's id on Netlify (not a secret; from `netlify api getAccount`).
 const NETLIFY_ACCOUNT_ID = '6a58597d0f1acc4a465937b6';
@@ -167,10 +192,11 @@ export default async (): Promise<Response> => {
     });
     if (!insertRes.ok) throw new Error(`snapshot insert failed: ${insertRes.status} ${await insertRes.text()}`);
 
+    const connections = await recordDbConnections(base);
     const netlify = await recordNetlifyPlan(base);
     const resend = await recordResendUsage(base);
     const r2 = await recordR2Storage(base);
-    return new Response(JSON.stringify({ ok: true, bytes, netlify, resend, r2 }), { status: 200 });
+    return new Response(JSON.stringify({ ok: true, bytes, connections, netlify, resend, r2 }), { status: 200 });
   } catch (err) {
     console.error('[usage-collect] failed', err);
     return new Response('Failed to record usage snapshot', { status: 500 });

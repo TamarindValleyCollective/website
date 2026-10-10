@@ -40,6 +40,7 @@ export const MANUAL_METERS = {
     limitLabel: 'Total credit you started with / last topped up (USD)',
     where: 'console.anthropic.com → Billing',
     supportsExpiry: true,
+    refreshEveryDays: 14,
   },
   'netlify.credits_remaining': {
     service: 'netlify',
@@ -50,6 +51,7 @@ export const MANUAL_METERS = {
     valueLabel: 'Credits remaining now (as Netlify shows)',
     limitLabel: 'Credits included in your plan per billing cycle (filled in automatically when the Netlify token is set)',
     where: 'Netlify → Team → Billing and usage',
+    refreshEveryDays: 7, // the balance moves fastest of the typed-in ones
   },
   'resend.emails_used': {
     service: 'resend',
@@ -60,6 +62,7 @@ export const MANUAL_METERS = {
     valueLabel: 'Emails sent this period',
     limitLabel: 'Emails allowed in this period (monthly or daily, as Resend shows)',
     where: 'resend.com → Usage',
+    refreshEveryDays: 14,
   },
   'cloudflare.r2_storage_gb': {
     service: 'cloudflare',
@@ -70,6 +73,7 @@ export const MANUAL_METERS = {
     valueLabel: 'Storage used (GB)',
     limitLabel: 'Free storage included (GB)',
     where: 'Cloudflare → R2 → Overview',
+    refreshEveryDays: 14,
   },
 };
 
@@ -122,6 +126,16 @@ export const R2_STALE_DAYS = 2;
 export function r2AutomaticIsFresh(snapshots, now = new Date()) {
   const reading = snapshots['cloudflare.r2_storage_bytes'];
   return Boolean(reading) && (now.getTime() - new Date(reading.captured_at).getTime()) / DAY_MS <= R2_STALE_DAYS;
+}
+
+// usage-collect.mts runs on this cadence (its cron is '0 */6 * * *', UTC). The page shows when the
+// next automatic update is due; keep the two in step.
+export const COLLECTOR_EVERY_HOURS = 6;
+
+// The next collector run strictly after `now` (the top of the next UTC hour divisible by 6).
+export function nextCollectorRun(now = new Date()) {
+  const everyMs = COLLECTOR_EVERY_HOURS * 60 * 60 * 1000;
+  return new Date((Math.floor(now.getTime() / everyMs) + 1) * everyMs);
 }
 
 export const SETTING_KEYS = ['anthropic_prices', 'gemini_daily_requests'];
@@ -334,6 +348,12 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
   const resendAge = resendReadingAgeDays(snapshots, now);
   if (resendAge !== null && resendAge > RESEND_STALE_DAYS) {
     add('resend:stale', 'warn', 'resend', 'Resend usage data has stopped refreshing', `The last reading from Resend's Usage API was on ${utcDay(new Date(now.getTime() - resendAge * DAY_MS))}. Check that RESEND_API_KEY can still read usage and the usage-collect logs. The typed-in Resend reading is used meanwhile.`);
+  }
+
+  // Supabase direct connections (the free plan allows 60): a pool-exhaustion early warning.
+  const conns = snapshots['supabase.db_connections'];
+  if (conns && isPositiveNumber(Number(conns.limit_value))) {
+    add('supabase:connections', levelForUsed(Number(conns.value), Number(conns.limit_value)), 'supabase', `Supabase database connections at ${pct(Number(conns.value) / Number(conns.limit_value))} of the limit`, `${conns.value} of ${conns.limit_value} direct connections open when last measured (${utcDay(new Date(conns.captured_at))}). If they run out, requests fail until some close; look for a function that opens connections without closing them.`);
   }
 
   // Cloudflare R2: automatic storage reading, and a warning if it stops (once one has existed).

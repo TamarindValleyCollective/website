@@ -266,9 +266,55 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   }
 
   .usage .svc-kind {
-    margin: 2px 0 14px;
+    margin: 2px 0 4px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
     font-size: 0.78rem;
     color: var(--tvc-ink-soft);
+  }
+
+  /* how a card's figures get updated: Automatic / Live (no hands) vs Manual (a person types them in) */
+  .usage .mode {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 9px 2px 7px;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .usage .mode svg {
+    width: 13px;
+    height: 13px;
+    flex: none;
+  }
+
+  .usage .mode--auto,
+  .usage .mode--live {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+  }
+
+  .usage .mode--manual,
+  .usage .mode--mixed {
+    background: var(--tvc-stone);
+    color: var(--tvc-ink);
+  }
+
+  .usage .svc-fresh {
+    margin: 0 0 12px;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: var(--tvc-ink-soft);
+  }
+
+  .usage .svc-fresh--late {
+    color: var(--tvc-orange-text);
+    font-weight: 600;
   }
 
   .usage .hero {
@@ -543,6 +589,10 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     warn: '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.2v.1"/>',
     critical: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5M12 16v.1"/>',
     none: '<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>',
+    auto: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/>',
+    live: '<circle cx="12" cy="12" r="2.5"/><path d="M6.3 6.3a8 8 0 0 0 0 11.4M17.7 6.3a8 8 0 0 1 0 11.4"/>',
+    manual: '<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 7l3 3"/>',
+    mixed: '<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 7l3 3"/>',
   };
   function icon(kind: string): SVGElement {
     const svg = document.createElementNS(SVG, 'svg');
@@ -609,8 +659,46 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     return h('div', { class: 'stat' }, h('dt', { text: label }), h('dd', { text: value }, sub ? h('small', { text: sub }) : null));
   }
 
-  function card(title: string, kind: string, level: Level | 'none', ...body: Kid[]): HTMLElement {
-    return h('article', { class: 'card svc' }, h('div', { class: 'svc-head' }, h('h3', { class: 'svc-title', text: title }), pill(level)), h('p', { class: 'svc-kind', text: kind }), ...body);
+  // How a card's figures are kept up to date, shown as a badge plus when the next update is due.
+  type Mode = 'auto' | 'live' | 'manual' | 'mixed';
+  type Kind = string | { mode: Mode; text: string; fresh?: { text: string; late?: boolean }[] };
+  const MODE_LABEL: Record<Mode, string> = { auto: 'Automatic', live: 'Live', manual: 'Manual', mixed: 'Part manual' };
+  let nextRunAt: string | null = null; // from the server: when usage-collect next runs
+  let runEveryHours = 6;
+
+  function inDuration(ms: number): string {
+    const mins = Math.max(1, Math.round(ms / 60_000));
+    return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
+  }
+  const clock = (iso: string) => new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+
+  // "Next update about 11:30 pm (in 3h 12m)"; flagged late when the last automatic reading is more than two cycles old.
+  function nextAutoUpdate(lastAt?: string): { text: string; late?: boolean } {
+    const late = lastAt ? Date.now() - new Date(lastAt).getTime() > 2 * runEveryHours * 3_600_000 + 3_600_000 : false;
+    if (!nextRunAt) return { text: `Updates automatically every ${runEveryHours} hours` };
+    const eta = `Next update about ${clock(nextRunAt)} (in ${inDuration(new Date(nextRunAt).getTime() - Date.now())})`;
+    return late ? { text: `${eta}. Last update was ${ago(lastAt as string)}, so a run was missed.`, late: true } : { text: eta };
+  }
+
+  // "Update due Fri 17 Oct" for a typed-in reading, counted from when it was entered.
+  function nextManualUpdate(capturedAt: string | undefined, everyDays: number | null | undefined): { text: string; late?: boolean } {
+    if (!capturedAt || !everyDays) return { text: 'Updated by hand when the figure changes' };
+    const due = new Date(new Date(capturedAt).getTime() + everyDays * 86_400_000);
+    const dueText = due.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+    return Date.now() > due.getTime() ? { text: `Update overdue (was due ${dueText}) · an admin types it in below`, late: true } : { text: `Update due ${dueText} · an admin types it in below` };
+  }
+
+  function card(title: string, kind: Kind, level: Level | 'none', ...body: Kid[]): HTMLElement {
+    const k = typeof kind === 'string' ? { mode: null, text: kind, fresh: undefined } : kind;
+    const badge = k.mode ? h('span', { class: `mode mode--${k.mode}` }, icon(k.mode), MODE_LABEL[k.mode]) : null;
+    return h(
+      'article',
+      { class: 'card svc' },
+      h('div', { class: 'svc-head' }, h('h3', { class: 'svc-title', text: title }), pill(level)),
+      h('p', { class: 'svc-kind' }, badge, h('span', { text: k.text })),
+      ...(k.fresh ?? []).map((f) => h('p', { class: `svc-fresh${f.late ? ' svc-fresh--late' : ''}`, text: f.text })),
+      ...body,
+    );
   }
 
   // ---- the cards -------------------------------------------------------------
@@ -651,7 +739,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       parts.push(h('p', { class: 'svc-note', text: `Today the site turned away ${a.chatCapHitsToday} chat message(s) and ${a.searchFallbackCapHitsToday} paid search fallback(s) because a daily cap was reached.` }));
     }
     parts.push(h('p', { class: 'svc-note', text: 'Counts only what the website itself sends (chat and the search fallback), not other uses of the same key. Dollar figures are estimates from the prices below.' }));
-    return card('Anthropic (Claude)', 'Usage measured by the website · credit balance typed in', level, ...parts);
+    return card('Anthropic (Claude)', { mode: 'mixed', text: 'Usage measured live · credit balance typed in', fresh: [{ text: 'Usage: updates on every request the site makes.' }, nextManualUpdate(reading?.capturedAt, a.credit.meter.refreshEveryDays)] }, level, ...parts);
   }
 
   function geminiCard(o: Overview): HTMLElement {
@@ -671,12 +759,12 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       sparkline(g.requestsSeries.map((p: any) => ({ label: dayLabel(p.day), value: p.value })), 'Requests per day', (n) => `${nf.format(n)} request${n === 1 ? '' : 's'}`),
       h('p', { class: 'svc-note', text: 'Powers the "Ask AI" search answer. Days here are UTC; Google resets its own daily quota at a different hour.' }),
     );
-    return card('Google Gemini', 'Measured by the website', level, ...parts);
+    return card('Google Gemini', { mode: 'live', text: 'Measured by the website', fresh: [{ text: 'Updates on every search the site makes.' }] }, level, ...parts);
   }
 
   function supabaseCard(o: Overview): HTMLElement {
     const s = o.supabase;
-    if (!s.reading) return card('Supabase database', 'Measured every 6 hours', 'none', h('p', { class: 'hero-sub', text: 'No measurement recorded yet.' }));
+    if (!s.reading) return card('Supabase database', { mode: 'auto', text: 'Measured every 6 hours', fresh: [nextAutoUpdate()] }, 'none', h('p', { class: 'hero-sub', text: 'No measurement recorded yet.' }));
     const frac = s.reading.limitBytes ? s.reading.bytes / s.reading.limitBytes : 0;
     const level: Level = frac >= 0.9 ? 'critical' : frac >= 0.7 ? 'warn' : null;
     const parts: Kid[] = [h('p', { class: 'hero', text: mb(s.reading.bytes) }), h('p', { class: 'hero-sub', text: s.reading.limitBytes ? `of ${mb(s.reading.limitBytes)} on the free plan` : 'database size' })];
@@ -684,8 +772,12 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     if (s.history.length > 1) {
       parts.push(sparkline(s.history.map((p: any) => ({ label: dateText(p.at), value: p.bytes / 1024 / 1024 })), 'Database size in MB', (n) => `${nf.format(n)} MB`));
     }
+    if (s.connections?.max) {
+      const cf = s.connections.inUse / s.connections.max;
+      parts.push(h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: 'Database connections open' }), h('span', { text: `${s.connections.inUse} of ${s.connections.max}` })), meter(cf, s.connections.level, 'Supabase database connections', `${Math.round(cf * 100)}% of the connection limit`)));
+    }
     parts.push(h('p', { class: 'svc-note', text: 'The free plan stops accepting new data at the limit. The Supabase dashboard is the authority if the two ever differ.' }));
-    return card('Supabase database', 'Measured by the website', level, ...parts);
+    return card('Supabase database', { mode: 'auto', text: 'Measured every 6 hours', fresh: [nextAutoUpdate(s.reading.capturedAt)] }, level, ...parts);
   }
 
   // Netlify's cycle dates come as Pacific-time ISO strings; read the calendar date straight from the
@@ -704,7 +796,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     const parts: Kid[] = [h('p', { class: 'hero', text: gb(r.bytes) }), h('p', { class: 'hero-sub', text: r.limitBytes ? `of ${gb(r.limitBytes)} free` : 'stored' })];
     if (r.limitBytes) parts.push(meter(frac, r.level, 'Cloudflare R2 storage used', `${Math.round(frac * 100)}% of the free allowance`), h('p', { class: 'meter-caption', text: `${frac < 0.01 ? 'under 1' : Math.round(frac * 100)}% used · ${nf.format(r.objects)} object${r.objects === 1 ? '' : 's'} in ${r.buckets} bucket${r.buckets === 1 ? '' : 's'}` }));
     parts.push(h('p', { class: 'svc-note', text: `Read from Cloudflare's analytics ${ago(r.capturedAt)}, refreshed every 6 hours. Past the free allowance R2 storage is billed per GB-month; the Cloudflare dashboard is the authority.` }));
-    return card('Cloudflare R2 storage', 'Read from Cloudflare automatically', r.level, ...parts);
+    return card('Cloudflare R2 storage', { mode: 'auto', text: 'Read from Cloudflare', fresh: [nextAutoUpdate(r.capturedAt)] }, r.level, ...parts);
   }
 
   function resendCard(o: Overview): HTMLElement {
@@ -720,12 +812,12 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       );
     }
     parts.push(h('p', { class: 'svc-note', text: `Read from Resend's own usage API ${ago((r.monthly ?? r.daily).capturedAt)}, refreshed every 6 hours. Resend stops sending (and the site's emails fail) at the limit.` }));
-    return card('Resend emails', 'Read from Resend automatically', level, ...parts);
+    return card('Resend emails', { mode: 'auto', text: 'Read from Resend', fresh: [nextAutoUpdate((r.monthly ?? r.daily).capturedAt)] }, level, ...parts);
   }
 
   function manualCard(m: any): HTMLElement {
     const r = m.reading;
-    if (!r) return card(m.label, 'Typed in from the provider', 'none', h('p', { class: 'hero-sub', text: `No reading yet. Find it at ${m.where}, then an admin can enter it below.` }));
+    if (!r) return card(m.label, { mode: 'manual', text: 'Typed in from the provider' }, 'none', h('p', { class: 'hero-sub', text: `No reading yet. Find it at ${m.where}, then an admin can enter it below.` }));
     const remaining = m.kind === 'remaining';
     const frac = r.limit ? (remaining ? 1 - r.value / r.limit : r.value / r.limit) : 0; // always the fraction USED, for the bar
     const staleForCycle = r.staleForCycle === true;
@@ -755,7 +847,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       }
     }
     parts.push(h('p', { class: 'svc-note', text: `Typed in on ${dateText(r.capturedAt)} (${ago(r.capturedAt)}) from ${m.where}.${r.cycleStart ? ` Billing cycle ${cycleDay(r.cycleStart)} to ${cycleDay(r.cycleEnd, -1)}; the allowance is read from Netlify automatically.` : ''}${r.planStale ? ` Warning: Netlify plan data was last refreshed ${ago(r.planCapturedAt)}, so the limit and cycle dates may be out of date. Check the Netlify token.` : ''}${staleForCycle ? ' This reading is from a previous billing cycle, so the balance has reset since. Update it.' : ''}${stale ? ' This reading is more than a month old, so treat it with caution and update it.' : ''}` }));
-    return card(m.label, 'Typed in from the provider', m.level, ...parts);
+    return card(m.label, r.cycleStart ? { mode: 'mixed', text: 'Balance typed in · allowance read from Netlify', fresh: [nextManualUpdate(r.capturedAt, m.refreshEveryDays), { text: 'Allowance and billing cycle: ' + nextAutoUpdate(r.planCapturedAt).text.replace('Next update', 'next update') }] } : { mode: 'manual', text: 'Typed in from the provider', fresh: [nextManualUpdate(r.capturedAt, m.refreshEveryDays)] }, m.level, ...parts);
   }
 
   // ---- alerts ----------------------------------------------------------------
@@ -915,6 +1007,8 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       statusEl.hidden = true;
       intro.textContent = 'Free tiers and credits the website relies on. "Measured" figures come from our own systems; "typed in" ones come from a provider\'s dashboard and are only as fresh as the last entry.';
       renderAlerts(data.alerts);
+      nextRunAt = data.schedule?.nextCollectorRunAt ?? null;
+      runEveryHours = data.schedule?.collectorEveryHours ?? 6;
       $('cards').replaceChildren(anthropicCard(data), geminiCard(data), supabaseCard(data), ...(data.resend.fresh ? [resendCard(data)] : []), ...(data.r2.fresh ? [r2Card(data)] : []), ...data.manual.map(manualCard));
       renderAdmin(data);
       $('foot').textContent = `Updated ${new Date(data.generatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}. Counts use UTC days. Warnings are emailed to the core team once, and again only if they get worse.`;

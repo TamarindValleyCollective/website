@@ -21,6 +21,8 @@ import { roleHasCapability } from './lib/staff-registry';
 import {
   MANUAL_METERS,
   mergeNetlifyPlan,
+  nextCollectorRun,
+  COLLECTOR_EVERY_HOURS,
   r2AutomaticIsFresh,
   resendAutomaticIsFresh,
   resendReadingAgeDays,
@@ -86,6 +88,7 @@ async function handleOverview(req: Request): Promise<Response> {
   });
 
   const db = snapshots['supabase.db_size_bytes'] ?? null;
+  const conns = snapshots['supabase.db_connections'] ?? null;
 
   const resendAuto = resendAutomaticIsFresh(snapshots, now);
   const r2Auto = r2AutomaticIsFresh(snapshots, now);
@@ -101,6 +104,7 @@ async function handleOverview(req: Request): Promise<Response> {
         label: meter.label,
         unit: meter.unit,
         where: meter.where,
+        refreshEveryDays: meter.refreshEveryDays ?? null,
         valueLabel: meter.valueLabel,
         limitLabel: meter.limitLabel,
         reading: r ? { value: Number(r.value), limit: r.limit_value === null ? null : Number(r.limit_value), capturedAt: r.captured_at, cycleStart: (r.detail?.cycle_start as string) ?? null, cycleEnd: (r.detail?.cycle_end as string) ?? null, staleForCycle: r.detail?.stale_for_cycle === true, planStale: r.detail?.plan_stale === true, planCapturedAt: (r.detail?.plan_captured_at as string) ?? null } : null,
@@ -114,6 +118,7 @@ async function handleOverview(req: Request): Promise<Response> {
 
   return jsonResponse({
     generatedAt: now.toISOString(),
+    schedule: { collectorEveryHours: COLLECTOR_EVERY_HOURS, nextCollectorRunAt: nextCollectorRun(now).toISOString() },
     canConfigure,
     alerts,
     anthropic: {
@@ -126,7 +131,7 @@ async function handleOverview(req: Request): Promise<Response> {
       searchFallbackCapHitsToday: count('anthropic', 'search_fallback_cap_hits', today, today),
       requestsSeries: series(daily, 'anthropic', 'requests', today, 14),
       credit: {
-        meter: { id: 'anthropic.credit_remaining_usd', label: creditMeter.label, valueLabel: creditMeter.valueLabel, limitLabel: creditMeter.limitLabel, where: creditMeter.where },
+        meter: { id: 'anthropic.credit_remaining_usd', label: creditMeter.label, valueLabel: creditMeter.valueLabel, limitLabel: creditMeter.limitLabel, where: creditMeter.where, refreshEveryDays: creditMeter.refreshEveryDays ?? null },
         reading: reading
           ? { value: Number(reading.value), total: reading.limit_value === null ? null : Number(reading.limit_value), capturedAt: reading.captured_at, expiresOn: (reading.detail?.expires_on as string) ?? null }
           : null,
@@ -143,6 +148,7 @@ async function handleOverview(req: Request): Promise<Response> {
     },
     supabase: {
       reading: db ? { bytes: Number(db.value), limitBytes: db.limit_value === null ? null : Number(db.limit_value), capturedAt: db.captured_at } : null,
+      connections: conns ? { inUse: Number(conns.value), max: conns.limit_value === null ? null : Number(conns.limit_value), capturedAt: conns.captured_at, level: isPositiveNumber(Number(conns.limit_value)) ? levelForUsed(Number(conns.value), Number(conns.limit_value)) : null } : null,
       history: dbHistory.map((h) => ({ at: h.captured_at, bytes: Number(h.value) })),
     },
     resend: (() => {
