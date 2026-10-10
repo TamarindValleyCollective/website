@@ -7,6 +7,7 @@ import {
   estimateCostUsd,
   anthropicCreditEstimate,
   evaluateAlerts,
+  mergeNetlifyPlan,
   decideNotifications,
   sumDaily,
   addDays,
@@ -177,4 +178,25 @@ test('decideNotifications: new alerts send, repeats do not, worsening sends, rec
   d = decideNotifications([], [{ alert_key: 'k1', level: 'warn' }, { alert_key: 'k2', level: 'critical' }]);
   assert.deepEqual(d.clear.sort(), ['k1', 'k2']);
   assert.equal(d.toSend.length, 0);
+});
+
+const planSnap = { value: 1000, limit_value: 1000, unit: 'credits', captured_at: '2026-10-10T00:00:00Z', detail: { period_start: '2026-09-19T00:00:00.000-07:00', next_period_start: '2026-10-19T00:00:00.000-07:00' } };
+const usedSnap = (captured_at, limit_value = 300) => ({ value: 800, limit_value, unit: 'credits', captured_at, detail: { source: 'manual' } });
+
+test('mergeNetlifyPlan: the allowance read from Netlify replaces the typed limit', () => {
+  const out = mergeNetlifyPlan({ 'netlify.plan_credits': planSnap, 'netlify.credits_used': usedSnap('2026-10-04T11:41:00Z') });
+  assert.equal(out['netlify.credits_used'].limit_value, 1000);
+  assert.equal(out['netlify.credits_used'].detail.stale_for_cycle, false);
+  assert.equal(out['netlify.credits_used'].detail.cycle_end, '2026-10-19T00:00:00.000-07:00');
+});
+
+test('mergeNetlifyPlan: a reading from before the cycle began is stale, and does not alert', () => {
+  const snapshots = { 'netlify.plan_credits': planSnap, 'netlify.credits_used': usedSnap('2026-09-10T00:00:00Z') };
+  assert.equal(mergeNetlifyPlan(snapshots)['netlify.credits_used'].detail.stale_for_cycle, true);
+  assert.equal(evaluateAlerts({ now: NOW, snapshots }).some((a) => a.key === 'manual:netlify.credits_used'), false);
+});
+
+test('mergeNetlifyPlan: no plan snapshot leaves the typed reading untouched', () => {
+  const snapshots = { 'netlify.credits_used': usedSnap('2026-10-04T11:41:00Z') };
+  assert.equal(mergeNetlifyPlan(snapshots), snapshots);
 });

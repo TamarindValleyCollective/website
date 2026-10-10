@@ -3,6 +3,10 @@
 // free-tier usage dashboard. It reuses the Supabase credentials the other
 // functions already hold, so no new secret exists anywhere for it.
 //
+// It also records Netlify's own plan allowance and billing-cycle dates when
+// NETLIFY_ACCESS_TOKEN is set. Netlify's API exposes those but NOT credits used,
+// so "used" stays a typed-in reading (see mergeNetlifyPlan in usage-rules.mjs).
+//
 // This only *records*. Turning readings into threshold emails is the
 // dashboard module's job; and anything that must still alert while Netlify
 // itself is paused (domain renewals) deliberately lives in a GitHub Action
@@ -12,6 +16,40 @@ import { restHeaders } from '../../scripts/lib/supabase.mjs';
 // Supabase free plan: 500 MB of database per project. From supabase.com/pricing;
 // the Supabase dashboard is the authority if this ever drifts.
 const DB_SIZE_LIMIT_BYTES = 500 * 1024 * 1024;
+
+// TVC team's id on Netlify (not a secret; from `netlify api getAccount`).
+const NETLIFY_ACCOUNT_ID = '6a58597d0f1acc4a465937b6';
+
+// Records the plan's credit allowance and billing cycle. Never throws: the
+// Supabase reading above is the primary job and must not fail because of it.
+async function recordNetlifyPlan(base: string): Promise<string> {
+  const token = process.env.NETLIFY_ACCESS_TOKEN;
+  if (!token) return 'skipped (no NETLIFY_ACCESS_TOKEN)';
+  try {
+    const res = await fetch(`https://api.netlify.com/api/v1/accounts/${NETLIFY_ACCOUNT_ID}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error(`netlify account fetch failed: ${res.status}`);
+    const account = await res.json();
+    const credits = Number(account.plan_credits);
+    if (!Number.isFinite(credits) || credits <= 0) throw new Error(`unexpected plan_credits: ${account.plan_credits}`);
+    const insertRes = await fetch(`${base}/usage_snapshots`, {
+      method: 'POST',
+      headers: restHeaders({ Prefer: 'return=minimal' }),
+      body: JSON.stringify({
+        service: 'netlify',
+        metric: 'plan_credits',
+        value: credits,
+        unit: 'credits',
+        limit_value: credits,
+        detail: { source: 'netlify-api', period_start: account.current_billing_period_start ?? null, next_period_start: account.next_billing_period_start ?? null },
+      }),
+    });
+    if (!insertRes.ok) throw new Error(`netlify snapshot insert failed: ${insertRes.status} ${await insertRes.text()}`);
+    return 'recorded';
+  } catch (err) {
+    console.error('[usage-collect] netlify plan failed', err);
+    return 'failed';
+  }
+}
 
 export default async (): Promise<Response> => {
   const base = `${process.env.SUPABASE_URL}/rest/v1`;
@@ -38,7 +76,8 @@ export default async (): Promise<Response> => {
     });
     if (!insertRes.ok) throw new Error(`snapshot insert failed: ${insertRes.status} ${await insertRes.text()}`);
 
-    return new Response(JSON.stringify({ ok: true, bytes }), { status: 200 });
+    const netlify = await recordNetlifyPlan(base);
+    return new Response(JSON.stringify({ ok: true, bytes, netlify }), { status: 200 });
   } catch (err) {
     console.error('[usage-collect] failed', err);
     return new Response('Failed to record usage snapshot', { status: 500 });

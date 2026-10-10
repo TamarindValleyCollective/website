@@ -47,8 +47,8 @@ export const MANUAL_METERS = {
     label: 'Netlify credits',
     kind: 'used',
     unit: 'credits',
-    valueLabel: 'Credits used this month',
-    limitLabel: 'Credits included in your plan per month',
+    valueLabel: 'Credits used this billing cycle',
+    limitLabel: 'Credits included in your plan per billing cycle (filled in automatically when the Netlify token is set)',
     where: 'Netlify → Team → Billing and usage',
   },
   'resend.emails_used': {
@@ -72,6 +72,24 @@ export const MANUAL_METERS = {
     where: 'Cloudflare → R2 → Overview',
   },
 };
+
+// Netlify's billing cycle does not follow the calendar month (ours runs from
+// the 19th), and the plan's credit allowance can be read from its API even
+// though credits USED cannot. usage-collect.mts records the allowance and cycle
+// dates as a 'netlify.plan_credits' snapshot; this folds them into the typed-in
+// 'netlify.credits_used' reading: the allowance replaces the typed limit, and a
+// reading entered before the current cycle began is marked `staleForCycle`
+// because credits reset to zero when a new cycle starts. Returns a new map.
+export function mergeNetlifyPlan(snapshots) {
+  const plan = snapshots['netlify.plan_credits'];
+  const used = snapshots['netlify.credits_used'];
+  if (!plan || !used) return snapshots;
+  const cycleStart = plan.detail?.period_start ?? null;
+  const cycleEnd = plan.detail?.next_period_start ?? null;
+  const limit = isPositiveNumber(Number(plan.limit_value)) ? Number(plan.limit_value) : used.limit_value;
+  const staleForCycle = cycleStart ? new Date(used.captured_at) < new Date(cycleStart) : false;
+  return { ...snapshots, 'netlify.credits_used': { ...used, limit_value: limit, detail: { ...(used.detail ?? {}), cycle_start: cycleStart, cycle_end: cycleEnd, stale_for_cycle: staleForCycle } } };
+}
 
 export const SETTING_KEYS = ['anthropic_prices', 'gemini_daily_requests'];
 
@@ -188,7 +206,8 @@ function money(n) {
 // Returns [{ key, level: 'warn'|'critical', service, title, detail }]. `key`
 // identifies the underlying condition so a repeat of it isn't mailed twice.
 /** @param {{ now?: Date, daily?: any[], snapshots?: Record<string, any>, settings?: any }} input */
-export function evaluateAlerts({ now = new Date(), daily = [], snapshots = {}, settings = {} }) {
+export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSnapshots = {}, settings = {} }) {
+  const snapshots = mergeNetlifyPlan(rawSnapshots);
   const alerts = [];
   const today = utcDay(now);
   const yesterday = addDays(today, -1);
@@ -276,6 +295,7 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots = {}, s
     if (meter.kind !== 'used') continue;
     const reading = snapshots[id];
     if (!reading || !isPositiveNumber(Number(reading.limit_value))) continue;
+    if (reading.detail?.stale_for_cycle) continue; // from a previous billing cycle: the count has reset since
     const value = Number(reading.value);
     const limit = Number(reading.limit_value);
     add(`manual:${id}`, levelForUsed(value, limit), meter.service, `${meter.label} at ${pct(value / limit)} of the limit`, `${value} of ${limit} ${meter.unit}, as last entered on ${utcDay(new Date(reading.captured_at))}. Update the reading on the usage page for a fresh figure.`);
