@@ -81,3 +81,81 @@ read env vars at deploy time):
 - Sent template messages are not yet written into the `/internal/whatsapp` conversation list
   (doing so would bump conversations to "unread" and trigger the hourly stale-alert digest); they
   appear in WhatsApp Manager's message insights instead.
+
+
+## v2 — headers, footers, bold key facts and emoji (2026-10-10)
+
+The five templates above are **live**. Each has a `_v2` successor with the **same variables in the
+same order**, a plain-text **header**, a **footer**, `*bold*` key facts and a few emoji, so
+messages scan like a small card instead of a paragraph. Submit these in WhatsApp Manager exactly as
+for the originals (Utility, English, **Header: Text**, **Footer** filled in, no buttons), using the
+same samples. They are sent automatically instead of the v1 once their `_v2` name is in
+`WHATSAPP_APPROVED_TEMPLATES`; until then the v1 keeps sending, so nothing breaks while Meta
+reviews. After all five are live, keep the v1 names in the list too (harmless) or remove them.
+
+Switch-over: add each `_v2` name to `WHATSAPP_APPROVED_TEMPLATES` as it is approved, then
+redeploy. Header and footer are static text, so the send code needs no extra components.
+
+### `tvc_event_cancelled_v2`
+Header: `Event cancelled` · Footer: `Tamarind Valley Collective`
+```
+Hi {{1}}, we're sorry — *{{2}}* has been cancelled. 😔
+
+{{3}}
+
+💸 *Refund:* {{4}} has been started to your original payment method and should reach you within a few business days.
+
+Questions? Just reply here or email core-team@tvc.farm.
+```
+Samples: `Asha` · `Foraging Day` · `Heavy rain is forecast and the forest trails will not be safe.` · `₹2,250`
+
+### `tvc_refund_initiated_v2`
+Header: `Refund started` · Footer: `Tamarind Valley Collective`
+```
+Hi {{1}}, we've started a refund for your booking. 💸
+
+💰 *Refund:* {{2}}
+🎟️ *Event:* {{3}}
+
+It should reach your original payment method within a few business days.
+
+Questions? Just reply here or email core-team@tvc.farm.
+```
+Samples: `Asha` · `₹2,250` · `Foraging Day`
+
+### `tvc_refund_processed_v2`
+Header: `Refund processed` · Footer: `Tamarind Valley Collective`
+```
+Hi {{1}}, your refund has been processed and sent to your original payment method. ✅
+
+💰 *Refund:* {{2}}
+🎟️ *Event:* {{3}}
+
+Depending on your bank it can take a few more business days to show up.
+
+Questions? Just reply here or email core-team@tvc.farm.
+```
+Samples: `Asha` · `₹2,250` · `Foraging Day`
+
+### `tvc_cancellation_declined_v2`
+Header: `About your cancellation request` · Footer: `Tamarind Valley Collective`
+```
+Hi {{1}}, thanks for your cancellation request for *{{2}}*. We're not able to cancel this booking under our cancellation and refund policy, so it stays confirmed. ✅
+
+📝 {{3}}
+
+If your plans have changed, just reply here or email core-team@tvc.farm and we'll talk it through.
+```
+Samples: `Asha` · `Foraging Day` · `The event is less than 48 hours away.`
+
+### `tvc_staff_enquiry_alert_v2`
+Header: `New website enquiry` · Footer: `TVC website · internal alert`
+```
+📩 New *{{1}}* enquiry received on the TVC website.
+
+👤 *From:* {{2}}
+💬 *Message:* {{3}}
+
+Please reply to them from the contact inbox or the enquiries sheet.
+```
+Samples: `membership` · `Asha Rao` · `I would like to know more about joining the collective.`

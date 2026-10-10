@@ -5,7 +5,7 @@
 // rides along with, so every failure is logged and reported as 'failed'.
 //
 // Safe to ship before the templates are approved: nothing is sent unless the
-// template's name is listed in WHATSAPP_APPROVED_TEMPLATES (comma-separated),
+// template's name (or its `_v2` successor) is listed in WHATSAPP_APPROVED_TEMPLATES (comma-separated),
 // which gets set once Meta has approved it. Test-mode bookings are only ever
 // sent to WHATSAPP_TEST_NUMBER (and skipped when that isn't set), never to
 // the guest's number.
@@ -40,6 +40,13 @@ function approvedTemplates(): Set<string> {
   return new Set((process.env.WHATSAPP_APPROVED_TEMPLATES ?? '').split(',').map((s) => s.trim()).filter(Boolean));
 }
 
+// Call sites name the v1 template; once its `_v2` successor (same variables,
+// see whatsapp-templates.ts) is approved and listed, that one is sent instead.
+function resolveTemplate(name: WhatsAppTemplateName): WhatsAppTemplateName {
+  const v2 = `${name}_v2` as WhatsAppTemplateName;
+  return v2 in WHATSAPP_TEMPLATES && approvedTemplates().has(v2) ? v2 : name;
+}
+
 export async function sendWhatsAppTemplate(opts: {
   template: WhatsAppTemplateName;
   // Raw number as typed by the guest (any common format) — normalized here.
@@ -48,11 +55,12 @@ export async function sendWhatsAppTemplate(opts: {
   isTest?: boolean;
 }): Promise<'sent' | 'skipped' | 'failed'> {
   try {
-    if (!approvedTemplates().has(opts.template)) return 'skipped';
+    const template = resolveTemplate(opts.template);
+    if (!approvedTemplates().has(template)) return 'skipped';
 
-    const expected = (WHATSAPP_TEMPLATES[opts.template].body.match(/\{\{\d+\}\}/g) ?? []).length;
+    const expected = (WHATSAPP_TEMPLATES[template].body.match(/\{\{\d+\}\}/g) ?? []).length;
     if (opts.params.length !== expected) {
-      console.error(`[whatsapp-send] ${opts.template} expects ${expected} params, got ${opts.params.length}`);
+      console.error(`[whatsapp-send] ${template} expects ${expected} params, got ${opts.params.length}`);
       return 'failed';
     }
 
@@ -75,14 +83,14 @@ export async function sendWhatsAppTemplate(opts: {
         to: e164.replace(/^\+/, ''),
         type: 'template',
         template: {
-          name: opts.template,
+          name: template,
           language: { code: 'en' },
           components: [{ type: 'body', parameters: opts.params.map((text) => ({ type: 'text', text })) }],
         },
       }),
     });
     if (!res.ok) {
-      console.error(`[whatsapp-send] ${opts.template} failed`, res.status, await res.text());
+      console.error(`[whatsapp-send] ${template} failed`, res.status, await res.text());
       return 'failed';
     }
     return 'sent';
