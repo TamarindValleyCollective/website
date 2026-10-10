@@ -25,7 +25,7 @@ export const WHATSAPP_TEMPLATES = {
   },
   // Internal: sent to TVC staff, not guests.
   tvc_staff_enquiry_alert: {
-    body: 'New {{1}} enquiry from {{2}} — {{3}}',
+    body: 'New {{1}} enquiry received on the TVC website from {{2}}. Their message: {{3}} Please reply to them from the contact inbox or the enquiries sheet.',
     samples: ['membership', 'Asha Rao', 'I would like to know more about joining the collective.'],
   },
 } as const;

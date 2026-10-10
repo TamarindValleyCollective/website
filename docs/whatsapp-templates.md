@@ -53,8 +53,9 @@ Samples: `Asha` · `Foraging Day` · `The event is less than 48 hours away.`
 
 ### `tvc_staff_enquiry_alert`
 ```
-New {{1}} enquiry from {{2}} — {{3}}
+New {{1}} enquiry received on the TVC website from {{2}}. Their message: {{3}} Please reply to them from the contact inbox or the enquiries sheet.
 ```
+(Meta rejected the first, shorter wording — "too many variables for its length"; a variable can't start or end the body. Submitted 2026-10-10 with this text.)
 Samples: `membership` · `Asha Rao` · `I would like to know more about joining the collective.`
 
 ## Turning sending on (after Meta approves)
