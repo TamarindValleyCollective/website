@@ -25,7 +25,9 @@ replies outside the 24-hour customer-service window).
 `docs/whatsapp-templates.md` (event cancelled, refund initiated, refund processed, cancellation
 declined — to guests, alongside the existing emails — and a staff alert for new membership/general
 enquiries, `enquiry.mts`). Nothing is sent until Meta approves them and the env vars listed there
-are set. Test-mode bookings only ever WhatsApp `WHATSAPP_TEST_NUMBER`.
+are set. Test-mode bookings only ever WhatsApp `WHATSAPP_TEST_NUMBER`. Delivery of each template message is tracked in
+`whatsapp_template_sends` (migration `0032`, updated by `whatsapp-webhook.mts` from Meta's `statuses` events, shown
+per booking on the Event Payments dashboard, with a staff email when a guest message fails).
 
 **v2 templates (2026-10-10).** All five templates are live. Each now has a drafted `_v2`
 successor (same variables in the same order, plus a text header, a footer, bold key facts and

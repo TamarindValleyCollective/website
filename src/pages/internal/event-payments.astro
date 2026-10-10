@@ -926,6 +926,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     isDuplicate: boolean;
     paymentMethod: string | null;
     feeAmount: number | null;
+    whatsapp: Array<{ template: string; status: string; errorMessage: string | null; at: string | null }>;
     feeTax: number | null;
     refundFee: number | null;
     settlementId: string | null;
@@ -1126,6 +1127,29 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     return '0% — less than 48 hours before the event';
   }
 
+  // One line per template message sent about this booking, with how far it
+  // got: accepted by Meta → sent → delivered → read, or failed with Meta's
+  // reason (typically a number that isn't on WhatsApp).
+  const WHATSAPP_TEMPLATE_LABELS: Record<string, string> = {
+    tvc_event_cancelled: 'Event cancelled',
+    tvc_refund_initiated: 'Refund initiated',
+    tvc_refund_processed: 'Refund processed',
+    tvc_cancellation_declined: 'Request declined',
+  };
+  function whatsappSummary(booking: Booking): string {
+    if (!booking.whatsapp?.length) return '—';
+    return booking.whatsapp
+      .map((w) => {
+        // v2 templates are recorded under their _v2 name; same message, same label.
+        const baseName = w.template.replace(/_v2$/, '');
+        const label = WHATSAPP_TEMPLATE_LABELS[baseName] ?? baseName;
+        const state = w.status === 'accepted' ? 'accepted (awaiting delivery)' : w.status;
+        const reason = w.status === 'failed' && w.errorMessage ? ` — ${escapeHtml(w.errorMessage)}` : '';
+        return `${escapeHtml(label)}: ${escapeHtml(state)}${reason}`;
+      })
+      .join('<br />');
+  }
+
   function statusBadge(status: Booking['status']): string {
     if (status === 'refunded') return '<span class="badge badge--refunded">Refunded</span>';
     if (status === 'refund_failed') return '<span class="badge badge--refund-failed">Refund failed</span>';
@@ -1279,6 +1303,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
         <div class="detail-field"><span class="detail-label">Attendees</span>${booking.attendeeCount}</div>
         <div class="detail-field"><span class="detail-label">Paid</span>${formatDate(booking.createdAt)}</div>
         <div class="detail-field"><span class="detail-label">Method</span>${escapeHtml(booking.paymentMethod ? methodLabel(booking.paymentMethod) : "—")}</div>
+        <div class="detail-field"><span class="detail-label">WhatsApp</span>${whatsappSummary(booking)}</div>
         <div class="detail-field"><span class="detail-label">Razorpay fee</span>${booking.feeAmount != null ? `${formatMoney(booking.feeAmount, booking.currency)} (MDR ${formatMoney(booking.feeAmount - (booking.feeTax ?? 0), booking.currency)} + GST ${formatMoney(booking.feeTax ?? 0, booking.currency)}, ${formatRate(booking.feeAmount, booking.amount)})` : 'not yet reconciled'}</div>
         <div class="detail-field"><span class="detail-label">Settled</span>${booking.settledAt ? `${formatDate(booking.settledAt)} <code>${escapeHtml(booking.settlementId)}</code>` : 'awaiting settlement'}</div>
         ${booking.refundSettledAt ? `<div class="detail-field"><span class="detail-label">Refund settled</span>${formatDate(booking.refundSettledAt)}${booking.refundFee ? ` · refund charge ${formatMoney(booking.refundFee, booking.currency)}` : ''}</div>` : ''}

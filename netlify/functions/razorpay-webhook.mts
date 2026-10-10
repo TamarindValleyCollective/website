@@ -209,6 +209,7 @@ async function handleRefundProcessed(payload: RazorpayWebhookPayload): Promise<R
         template: 'tvc_refund_processed',
         to: row.payer_contact,
         isTest: row.mode === 'test',
+        bookingId: row.id,
         params: [cleanTemplateParam(firstNameOf(row.payer_name), 60), formatAmount(refund.amount, row.currency), cleanTemplateParam(row.event_title, 120)],
       });
     }
