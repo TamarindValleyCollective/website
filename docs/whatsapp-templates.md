@@ -220,6 +220,13 @@ existed) get no reminder. Each booking is claimed (`event_payments.whatsapp_remi
 `0033`) before sending, so it can't go twice; if the send fails, or the template isn't approved yet,
 the claim is released and nothing is lost. Test-mode bookings go to `WHATSAPP_TEST_NUMBER` only.
 
+## Guest consent (2026-10-10)
+
+Guest-facing WhatsApp messages respect `event_payments.whatsapp_opt_in`, set from the booking
+form's checkbox: `false` sends nothing; `true` sends everything; `null` (older bookings) still gets
+refund/cancellation messages but not the new confirmation or reminder, which need an explicit
+`true`. The reminder query also filters on `whatsapp_opt_in = true`. Staff alerts are unaffected.
+
 ## Out-of-hours auto-reply (2026-10-10)
 
 Not a template: the guest has just messaged us, so a normal text is allowed. With

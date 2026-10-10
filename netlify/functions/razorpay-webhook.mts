@@ -210,6 +210,7 @@ async function handleRefundProcessed(payload: RazorpayWebhookPayload): Promise<R
         to: row.payer_contact,
         isTest: row.mode === 'test',
         bookingId: row.id,
+        optIn: row.whatsapp_opt_in,
         params: [cleanTemplateParam(firstNameOf(row.payer_name), 60), formatAmount(refund.amount, row.currency), cleanTemplateParam(row.event_title, 120)],
       });
     }
@@ -313,6 +314,9 @@ export default async (req: Request): Promise<Response> => {
   // event-payments.astro falls back to the event's *current* content-file
   // date in both cases, same behavior as before this existed.
   const eventDate = notes.eventDate || null;
+  // The booking form's WhatsApp checkbox (see event-booking.mts). Absent on
+  // links made by hand or before the checkbox existed -> null (unknown).
+  const whatsappOptIn = notes.whatsappOptIn === 'yes' ? true : notes.whatsappOptIn === 'no' ? false : null;
   // Which mode actually processed this payment, so event-payments-admin.mts
   // can filter test payments out of the dashboard deterministically instead
   // of guessing from payer_email. Whichever key is active right now is the
@@ -344,6 +348,7 @@ export default async (req: Request): Promise<Response> => {
       payerContact,
       mode,
       eventDate,
+      whatsappOptIn,
       paymentMethod: payment.method ?? null,
     });
   } catch (err) {
@@ -393,6 +398,9 @@ export default async (req: Request): Promise<Response> => {
     to: payerContact,
     isTest: mode === 'test',
     bookingId: recorded.id,
+    // A new message, so it needs an explicit yes (unlike refund notices to
+    // guests who booked before the checkbox existed).
+    optIn: whatsappOptIn === true,
     params: [
       cleanTemplateParam(firstNameOf(payerName), 60),
       cleanTemplateParam(eventTitle, 120),

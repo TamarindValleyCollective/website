@@ -447,6 +447,7 @@ async function refundOneBooking(row: any, amount: number, staff: StaffGrant, rea
           to: row.payer_contact,
           isTest: row.mode === 'test',
           bookingId: row.id,
+          optIn: row.whatsapp_opt_in,
           params: [
             cleanTemplateParam(firstNameOf(row.payer_name), 60),
             cleanTemplateParam(row.event_title, 120),
@@ -459,6 +460,7 @@ async function refundOneBooking(row: any, amount: number, staff: StaffGrant, rea
           to: row.payer_contact,
           isTest: row.mode === 'test',
           bookingId: row.id,
+          optIn: row.whatsapp_opt_in,
           params: [cleanTemplateParam(firstNameOf(row.payer_name), 60), formatAmount(refund.amount, row.currency), cleanTemplateParam(row.event_title, 120)],
         },
   );
@@ -489,6 +491,7 @@ async function refundOneBooking(row: any, amount: number, staff: StaffGrant, rea
           to: row.payer_contact,
           isTest: row.mode === 'test',
           bookingId: row.id,
+          optIn: row.whatsapp_opt_in,
           params: [cleanTemplateParam(firstNameOf(row.payer_name), 60), formatAmount(refund.amount, row.currency), cleanTemplateParam(row.event_title, 120)],
         });
       }
@@ -608,6 +611,7 @@ async function handleDecline(req: Request, staff: StaffGrant): Promise<Response>
     to: row.payer_contact,
     isTest: row.mode === 'test',
     bookingId: row.id,
+    optIn: row.whatsapp_opt_in,
     params: [cleanTemplateParam(firstNameOf(row.payer_name), 60), cleanTemplateParam(row.event_title, 120), reason ? asSentence(reason) : 'We hope you can still join us.'],
   });
   return jsonResponse({ ok: true, emailed: Boolean(row.payer_email) });

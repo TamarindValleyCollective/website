@@ -525,6 +525,10 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `whatsapp_conversations.last_stale_alert_at`, reset to null on every new inbound message so
   each message gets its own full 60-minute countdown), so a single missed email can't let a
   message silently go unanswered.
+- **WhatsApp consent** — `EventBookingForm.astro` has an optional "send updates on WhatsApp"
+  checkbox; `event-booking.mts` puts the answer in the Payment Link's `notes.whatsappOptIn`,
+  `razorpay-webhook.mts` stores it as `event_payments.whatsapp_opt_in` (migration `0034`), and
+  `lib/whatsapp-send.ts` skips any guest message when it is `false`. See `docs/whatsapp-templates.md`.
 - **`netlify/functions/whatsapp-event-reminders.mts`** — scheduled function (Netlify cron,
   `config.schedule = "30 3 * * *"`, i.e. 09:00 IST, no HTTP path). Sends the `tvc_event_reminder`
   WhatsApp template to every `event_payments` booking whose `event_date` is tomorrow (IST) and that

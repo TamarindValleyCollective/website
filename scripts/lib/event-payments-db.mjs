@@ -24,7 +24,7 @@ function supabaseUrl() {
 // round-trip (the same race a plain read-then-write would have under
 // concurrent retries).
 /**
- * @param {{ eventReferenceId: string, eventTitle: string, razorpayPaymentId: string, razorpayPaymentLinkId: string, amount: number, currency: string, attendeeCount?: number, payerName?: string | null, payerEmail?: string | null, payerContact?: string | null, mode: 'test' | 'live', eventDate?: string | null, paymentMethod?: string | null }} params
+ * @param {{ eventReferenceId: string, eventTitle: string, razorpayPaymentId: string, razorpayPaymentLinkId: string, amount: number, currency: string, attendeeCount?: number, payerName?: string | null, payerEmail?: string | null, payerContact?: string | null, mode: 'test' | 'live', eventDate?: string | null, paymentMethod?: string | null, whatsappOptIn?: boolean | null }} params
  * @returns {Promise<{ id: string } | null>} the inserted row, or null if razorpayPaymentId was already recorded
  */
 export async function recordPaymentIfNew({
@@ -41,6 +41,7 @@ export async function recordPaymentIfNew({
   mode,
   eventDate,
   paymentMethod,
+  whatsappOptIn,
 }) {
   const res = await fetch(`${supabaseUrl()}/rest/v1/event_payments?on_conflict=razorpay_payment_id`, {
     method: 'POST',
@@ -60,6 +61,7 @@ export async function recordPaymentIfNew({
         mode,
         event_date: eventDate ?? null,
         payment_method: paymentMethod ?? null,
+        whatsapp_opt_in: whatsappOptIn ?? null,
       },
     ]),
   });
@@ -418,7 +420,7 @@ export async function markRefundFailed(id, razorpayRefundId) {
   return rows.length > 0;
 }
 
-// Bookings due a pre-event WhatsApp reminder: held for the given event date
+// Bookings due a pre-event WhatsApp reminder: opted in to WhatsApp, held for the given event date
 // (YYYY-MM-DD), not yet reminded, and not refunded or mid-refund. A
 // cancelled event refunds every booking, so the refund filter is what stops a
 // "see you tomorrow" going to guests of a cancelled event.
@@ -429,7 +431,7 @@ export async function markRefundFailed(id, razorpayRefundId) {
 export async function listBookingsDueReminder(eventDate) {
   const res = await fetch(
     `${supabaseUrl()}/rest/v1/event_payments?event_date=eq.${encodeURIComponent(eventDate)}` +
-      `&whatsapp_reminder_sent_at=is.null&refund_initiated_at=is.null&refunded_at=is.null&select=*`,
+      `&whatsapp_opt_in=is.true&whatsapp_reminder_sent_at=is.null&refund_initiated_at=is.null&refunded_at=is.null&select=*`,
     { headers: restHeaders() },
   );
   if (!res.ok) {
