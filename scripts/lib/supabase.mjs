@@ -105,9 +105,9 @@ export async function claimAutoAck(conversationId, minHours = 12) {
 // no-op instead of a duplicate row — Meta documents at-least-once delivery
 // with retries on non-2xx and occasional duplicates even on 2xx.
 /**
- * @param {{ conversationId: string, direction: 'inbound' | 'outbound', body: string, waMessageId?: string, status?: 'received' | 'sent' | 'failed', errorMessage?: string }} params
+ * @param {{ conversationId: string, direction: 'inbound' | 'outbound', body: string, waMessageId?: string, status?: 'received' | 'sent' | 'failed', errorMessage?: string, media?: { id: string, kind: string, mime: string | null, filename: string | null } | null }} params
  */
-export async function insertMessage({ conversationId, direction, body, waMessageId, status, errorMessage }) {
+export async function insertMessage({ conversationId, direction, body, waMessageId, status, errorMessage, media }) {
   const resolvedStatus = status ?? (direction === 'inbound' ? 'received' : 'sent');
   const res = await restFetch(`/whatsapp_messages${waMessageId ? '?on_conflict=wa_message_id' : ''}`, {
     method: 'POST',
@@ -120,6 +120,7 @@ export async function insertMessage({ conversationId, direction, body, waMessage
         wa_message_id: waMessageId ?? null,
         status: resolvedStatus,
         error_message: errorMessage ?? null,
+        ...(media ? { media_id: media.id, media_kind: media.kind, media_mime: media.mime, media_filename: media.filename } : {}),
       },
     ]),
   });
@@ -403,4 +404,13 @@ export async function getLatestInboundWaMessageId(conversationId) {
   );
   const rows = await res.json();
   return rows[0]?.wa_message_id ?? null;
+}
+
+// One message row by its own id (not Meta's) — used to look up the media a
+// message carries before fetching it from Meta for a staff member.
+/** @param {string} messageId */
+export async function getMessage(messageId) {
+  const res = await restFetch(`/whatsapp_messages?id=eq.${encodeURIComponent(messageId)}&select=id,media_id,media_kind,media_mime,media_filename&limit=1`);
+  const rows = await res.json();
+  return rows[0] ?? null;
 }

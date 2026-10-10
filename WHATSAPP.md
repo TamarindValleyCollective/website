@@ -92,6 +92,22 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
   - **Typing indicator**: "typing…" on the guest's phone while staff write, re-sent at most every 20 s.
   Both are best-effort (the endpoint always answers 200; Meta may refuse outside the 24-hour window).
   No migration. Checked in a browser against a mock backend 2026-10-10, not against real WhatsApp.
+- **Inbound media (2026-10-10).** Photos, voice notes, video, documents and stickers guests send now
+  show in the inbox instead of "[image message — not shown here]". The webhook stores only Meta's
+  media id and descriptors on the message (`whatsapp_messages.media_*`, migration `0037`, **apply
+  before deploying**), never the file. A staff member with `view` access sees photos and stickers
+  load by themselves; voice notes, video and documents wait for a click. The file is fetched from
+  Meta on demand through `GET /api/whatsapp-admin/media?messageId=…` (looks the media id up from our
+  own row, asks Graph for a short-lived URL, downloads it with the access token, passes the bytes
+  through). Meta keeps media about 30 days, after which the inbox says the file has expired. Limits
+  and safety: capped at 5.5 MB (a Netlify Function can't return more, so big videos say "open it on
+  the phone"); only jpeg/png/webp/gif, common audio and mp4/3gpp video are served inline —
+  documents, SVG and anything unknown are download-only, with `nosniff` and a sandbox CSP, so a
+  crafted file can't run in the inbox's origin; Meta's media id never reaches the browser. Safari
+  can't play ogg/opus voice notes, so it offers a download instead. The thread also no longer
+  re-renders on every 15-second poll unless a message changed (a playing voice note used to be
+  reset, and the scroll position jumped). The privacy page has a line about this. Checked in a
+  browser against a mock backend, not against real Meta media.
 - **Account-health alerts (2026-10-10).** Meta's health webhook fields (template approved / rejected /
   paused / disabled, template and phone-number quality changes, recategorisation, account
   restrictions) are stored in `whatsapp_health_events` (migration `0036`, **apply before

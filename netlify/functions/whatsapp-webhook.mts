@@ -34,6 +34,7 @@ import { sendWhatsAppText } from './lib/whatsapp-send';
 import { autoAckText, isOutsideHours, shouldAutoAck } from './lib/whatsapp-autoack';
 import { classifyKeyword, STOP_REPLY, START_REPLY } from './lib/whatsapp-optout';
 import { classifyHealthEvent, healthEventKey } from './lib/whatsapp-health';
+import { extractMedia, describeMedia } from './lib/whatsapp-media';
 
 function textResponse(body: string, status = 200): Response {
   return new Response(body, { status, headers: { 'content-type': 'text/plain' } });
@@ -103,6 +104,7 @@ async function persistIncomingMessage(message: WhatsAppMessage, contact: WhatsAp
     direction: 'inbound',
     body: describeMessage(message),
     waMessageId: message.id,
+    media: extractMedia(message),
   });
   return conversation;
 }
@@ -123,7 +125,9 @@ function describeMessage(message: WhatsAppMessage): string {
     case 'location':
       return `[Shared a location] ${[message.location?.name, message.location?.address].filter(Boolean).join(', ')}`.trim();
     default:
-      return `[${message.type} message — not shown here]`;
+      // Photos, voice notes, video, documents and stickers read as their kind
+      // (the file itself is fetched from Meta when staff open it).
+      return describeMedia(message) ?? `[${message.type} message — not shown here]`;
   }
 }
 
