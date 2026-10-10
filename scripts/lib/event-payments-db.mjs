@@ -165,6 +165,35 @@ export async function requestCancellationIfNew(id) {
   return rows.length > 0;
 }
 
+// Marks a guest's cancellation request as declined by staff. Guarded so it
+// only applies to a still-open request (requested, not already declined,
+// no refund started) — the idempotent-update shape of requestCancellationIfNew
+// above, so a double-click can't send two emails.
+/**
+ * @param {string} id row id
+ * @param {{ declinedBy: string, reason?: string }} params
+ * @returns {Promise<boolean>} true if this call is the one that recorded the decline
+ */
+export async function declineCancellationRequest(id, { declinedBy, reason }) {
+  const res = await fetch(
+    `${supabaseUrl()}/rest/v1/event_payments?id=eq.${id}&cancellation_requested_at=not.is.null&cancellation_declined_at=is.null&refund_initiated_at=is.null&refunded_at=is.null`,
+    {
+      method: 'PATCH',
+      headers: restHeaders({ Prefer: 'return=representation' }),
+      body: JSON.stringify({
+        cancellation_declined_at: new Date().toISOString(),
+        cancellation_declined_by: declinedBy,
+        cancellation_decline_reason: reason ?? null,
+      }),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`Supabase update to event_payments failed: ${res.status} ${await res.text()}`);
+  }
+  const rows = await res.json();
+  return rows.length > 0;
+}
+
 // Rows whose actual Razorpay fee hasn't been checked yet — the work list for
 // scripts/reconcile-event-payment-fees.mjs. Only rows old enough that
 // Razorpay has plausibly finished computing fee/tax (the script itself

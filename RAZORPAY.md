@@ -132,6 +132,13 @@ underlying table `/cancel-booking` writes `cancellation_requested_at` to (a gues
 *request*, not a refund) — a row only counts as cancelled in this page's stats once `refunded_at`
 is actually set.
 
+**Declining a cancellation request.** A pending request (`Cancellation requested`) also has a
+**Decline request** action (`POST /api/event-payments-admin/decline`, same `refund` capability,
+migration `0029_event_payments_cancellation_declined.sql`): it audit-logs `event-payments.cancellation_declined`,
+records who/when/why, flips the row to `Request declined`, and emails the guest (cc `core-team@tvc.farm`/
+`stay@linger.in`) that the booking stays confirmed, with the form's reason shown verbatim (the form says so). A declined
+booking is still live: it can later be refunded normally, and a whole-event "Cancel event" still sweeps it in.
+
 **Test-mode payments are hidden by default.** Razorpay's `payment_link.paid` webhook payload
 carries no explicit test/live flag, so `razorpay-webhook.mts` derives one itself at the moment it
 handles each webhook — `mode` is `'test'` if `RAZORPAY_KEY_ID` starts with `rzp_test_`, `'live'`

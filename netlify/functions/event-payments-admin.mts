@@ -22,6 +22,7 @@ import {
   getPaymentById,
   recordRefundInitiated,
   requestCancellationIfNew,
+  declineCancellationRequest,
 } from '../../scripts/lib/event-payments-db.mjs';
 import { createRefund, fetchBasePaymentLink, cancelPaymentLink } from './lib/razorpay';
 import { sendRefundFailureAlert, failureFromRow } from './lib/refund-alert';
@@ -52,10 +53,11 @@ function formatAmount(amountPaise: number, currency: string): string {
 // as cancelled/refunded once that's set; "requested" surfaces a guest ask
 // still waiting on an admin to act, distinct from a plain "paid" row with no
 // request at all. See the 0020/0022 migration comments.
-function statusFor(row: any): 'paid' | 'requested' | 'refund_initiated' | 'refund_failed' | 'refunded' {
+function statusFor(row: any): 'paid' | 'requested' | 'declined' | 'refund_initiated' | 'refund_failed' | 'refunded' {
   if (row.refunded_at) return 'refunded';
   if (row.refund_status === 'failed') return 'refund_failed';
   if (row.refund_initiated_at) return 'refund_initiated';
+  if (row.cancellation_declined_at) return 'declined';
   if (row.cancellation_requested_at) return 'requested';
   return 'paid';
 }
@@ -119,6 +121,7 @@ async function handleBookings(url: URL, staff: StaffGrant): Promise<Response> {
     createdAt: r.created_at,
     eventDate: r.event_date,
     cancellationRequestedAt: r.cancellation_requested_at,
+    cancellationDeclinedAt: r.cancellation_declined_at,
     refundInitiatedAt: r.refund_initiated_at,
     refundedAt: r.refunded_at,
     refundAmount: r.refund_amount,
@@ -206,7 +209,7 @@ async function handleBookings(url: URL, staff: StaffGrant): Promise<Response> {
       unsettledCount,
       settlementCount: settlementIds.size,
       cancelledCount: rows.filter((r) => r.refunded_at).length,
-      pendingRequestCount: rows.filter((r) => r.cancellation_requested_at && !r.refunded_at).length,
+      pendingRequestCount: rows.filter((r) => r.cancellation_requested_at && !r.cancellation_declined_at && !r.refunded_at).length,
     },
   });
 }
@@ -267,6 +270,36 @@ async function sendRefundEmail(params: {
       to: [params.payerEmail],
       cc: NOTIFY_CC,
       subject: params.eventCancelled ? `${params.eventTitle} has been cancelled — your refund is on its way` : `Refund initiated — ${params.eventTitle}`,
+      html,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`Resend send failed: ${res.status} ${await res.text()}`);
+  }
+}
+
+async function sendDeclineEmail(params: { payerEmail: string; eventTitle: string; reason?: string; paymentId: string }): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.error('[event-payments-admin] RESEND_API_KEY is not set — cannot send decline notification');
+    return;
+  }
+  const html = `<!doctype html>
+<html><head><meta charset="utf-8" /></head>
+<body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f;">
+  <p>Thank you for letting us know. We've reviewed your cancellation request for <strong>${params.eventTitle}</strong>, and unfortunately we're not able to cancel and refund this booking under our <a href="https://tvc.farm/refund-policy">cancellation &amp; refund policy</a>.</p>
+  ${params.reason ? `<p style="white-space:pre-line;">${escapeHtml(params.reason)}</p>` : ''}
+  <p>Your booking remains confirmed. If your plans have changed or you think we've got this wrong, reply to this email or reach us at <a href="mailto:core-team@tvc.farm">core-team@tvc.farm</a> and we'll be glad to talk it through.</p>
+  <p style="font-size:13px; color:#57604f;">Payment ID ${escapeHtml(params.paymentId)}</p>
+</body></html>`;
+  const res = await fetch(RESEND_API_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      from: FROM,
+      to: [params.payerEmail],
+      cc: NOTIFY_CC,
+      subject: `Update on your cancellation request — ${params.eventTitle}`,
       html,
     }),
   });
@@ -406,6 +439,65 @@ async function handleRefund(req: Request, staff: StaffGrant): Promise<Response> 
   return jsonResponse({ ok: true, refund: outcome.refund });
 }
 
+// Declines a guest's cancellation request: the booking stays confirmed, the
+// guest is emailed (reason shown verbatim, so the form says it's guest-
+// facing), and the row reads "declined" instead of waiting as "requested".
+// Moves no money, but gated on the same `refund` capability as refunds since
+// it's the same decision.
+async function handleDecline(req: Request, staff: StaffGrant): Promise<Response> {
+  let body: { id?: string; reason?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return jsonResponse({ error: 'Invalid request body' }, 400);
+  }
+  const id = (body.id ?? '').trim();
+  const reason = body.reason?.trim() || undefined;
+  if (!id) return jsonResponse({ error: 'id is required' }, 400);
+
+  let row: any;
+  try {
+    row = await getPaymentById(id);
+  } catch (err) {
+    console.error('Failed to look up event_payments row', err);
+    return jsonResponse({ error: 'Failed to reach the payment store' }, 502);
+  }
+  if (!row) return jsonResponse({ error: 'Booking not found' }, 404);
+  if (!row.cancellation_requested_at) return jsonResponse({ error: 'This booking has no cancellation request to decline' }, 409);
+  if (row.cancellation_declined_at) return jsonResponse({ error: 'This request has already been declined' }, 409);
+  if (row.refunded_at || row.refund_initiated_at) return jsonResponse({ error: 'A refund has already been started for this booking' }, 409);
+
+  try {
+    await logStaffAction({
+      actorId: staff.id,
+      action: 'event-payments.cancellation_declined',
+      module: 'event-payments',
+      detail: { bookingId: row.id, reasonProvided: Boolean(reason) },
+    });
+  } catch (err) {
+    console.error('Failed to write staff audit log; refusing to decline', err);
+    return jsonResponse({ error: 'Could not write the audit log — nothing has been changed.' }, 502);
+  }
+
+  let recordedNow: boolean;
+  try {
+    recordedNow = await declineCancellationRequest(row.id, { declinedBy: staff.id, reason });
+  } catch (err) {
+    console.error('Failed to record declined cancellation', err);
+    return jsonResponse({ error: 'Could not record the decision' }, 502);
+  }
+  if (!recordedNow) return jsonResponse({ error: 'This request changed while you were deciding — refresh and check' }, 409);
+
+  if (row.payer_email) {
+    try {
+      await sendDeclineEmail({ payerEmail: row.payer_email, eventTitle: row.event_title, reason, paymentId: row.razorpay_payment_id });
+    } catch (err) {
+      console.error('Decline recorded but failed to send notification email', err);
+    }
+  }
+  return jsonResponse({ ok: true, emailed: Boolean(row.payer_email) });
+}
+
 // Refunds every still-eligible booking for one event in a single admin
 // action — a full-event cancellation (weather, low turnout) otherwise means
 // working through the per-row refund form once per booking. `fraction`
@@ -526,9 +618,11 @@ export default async (req: Request): Promise<Response> => {
       ? { capability: 'view', run: (staff) => handleBookings(url, staff) }
       : url.pathname === '/api/event-payments-admin/refund' && req.method === 'POST'
         ? { capability: 'refund', run: (staff) => handleRefund(req, staff) }
-        : url.pathname === '/api/event-payments-admin/bulk-refund' && req.method === 'POST'
-          ? { capability: 'refund', run: (staff) => handleBulkRefund(req, staff) }
-          : null;
+        : url.pathname === '/api/event-payments-admin/decline' && req.method === 'POST'
+          ? { capability: 'refund', run: (staff) => handleDecline(req, staff) }
+          : url.pathname === '/api/event-payments-admin/bulk-refund' && req.method === 'POST'
+            ? { capability: 'refund', run: (staff) => handleBulkRefund(req, staff) }
+            : null;
   if (!route) return jsonResponse({ error: 'Not found' }, 404);
 
   const auth = await requireStaff(req, 'event-payments', route.capability);
@@ -537,5 +631,5 @@ export default async (req: Request): Promise<Response> => {
 };
 
 export const config = {
-  path: ['/api/event-payments-admin/bookings', '/api/event-payments-admin/refund', '/api/event-payments-admin/bulk-refund'],
+  path: ['/api/event-payments-admin/bookings', '/api/event-payments-admin/refund', '/api/event-payments-admin/decline', '/api/event-payments-admin/bulk-refund'],
 };
