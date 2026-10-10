@@ -32,7 +32,7 @@ import {
 } from '../../scripts/lib/event-payments-db.mjs';
 import { buildReceiptSubject, buildReceiptHtml } from './lib/payment-receipt';
 import { sendRefundFailureAlert, failureFromRow, sendStaffAlert, escapeHtml, formatAmount } from './lib/refund-alert';
-import { fetchBasePaymentLink } from './lib/razorpay';
+import { fetchBasePaymentLink, paymentMatchesKeyMode } from './lib/razorpay';
 import { routeEmail } from './lib/email-routing';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
@@ -335,7 +335,14 @@ export default async (req: Request): Promise<Response> => {
   // ever be made against rzp_test_ keys in the first place. Defaults to
   // 'live' if the key is somehow unset, since hiding a real registration
   // would be worse than showing an uncertain one.
-  const mode = process.env.RAZORPAY_KEY_ID?.startsWith('rzp_test_') ? 'test' : 'live';
+  const keyMode = process.env.RAZORPAY_KEY_ID?.startsWith('rzp_test_') ? 'test' : 'live';
+  // The test-mode webhook is also delivered to production (confirmed
+  // 2026-10-10: a payment made against test keys on a local machine was
+  // recorded here as 'live', and its receipt went out unrouted, copying
+  // Linger). A payment from the other mode is invisible to this server's keys,
+  // so ask Razorpay: "id does not exist" means it belongs to the other mode.
+  const keyMatch = await paymentMatchesKeyMode(payment.id);
+  const mode = keyMatch === 'mismatch' ? (keyMode === 'live' ? 'test' : 'live') : keyMode;
 
   let recorded;
   try {

@@ -37,6 +37,27 @@ async function razorpayErrorDescription(res: Response): Promise<string> {
   return `${res.status} ${text}`;
 }
 
+// Which Razorpay mode a payment belongs to, relative to the keys this server
+// is running with. Razorpay's webhook payload carries no test/live flag, and
+// the test-mode webhook also reaches production, so a payment can arrive here
+// that was made in the OTHER mode — the API then answers "id does not exist"
+// (test ids are invisible to live keys and vice versa). 'unknown' covers any
+// other failure (network, rate limit), in which case the caller falls back to
+// the key's own mode.
+export async function paymentMatchesKeyMode(paymentId: string): Promise<'match' | 'mismatch' | 'unknown'> {
+  try {
+    const res = await fetch(`${API_BASE}/payments/${encodeURIComponent(paymentId)}`, { headers: { Authorization: authHeader() } });
+    if (res.ok) return 'match';
+    if (res.status === 400 || res.status === 404) {
+      const description = (await res.json().catch(() => null))?.error?.description;
+      if (typeof description === 'string' && /does not exist/i.test(description)) return 'mismatch';
+    }
+    return 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 export interface RazorpayPaymentLink {
   id: string;
   reference_id: string | null;

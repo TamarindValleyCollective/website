@@ -114,17 +114,37 @@ export default async (req: Request): Promise<Response> => {
   // (checked just below), rather than minting a new charge target every
   // submit. Payment Link reference_id caps at 40 chars.
   const emailHash = createHash('sha256').update(email.toLowerCase()).digest('hex').slice(0, 8);
-  const bookingReferenceId = `${referenceId.slice(0, 30)}-${emailHash}`;
+  // Razorpay refuses a second Payment Link with a reference_id that already
+  // exists — even if the first was paid or expired — so a guest booking again
+  // under the same email (the "book again" confirmation above, e.g. a second
+  // group) failed with "Could not start your booking". Booking n gets a
+  // numeric suffix; the first keeps the original id so existing links and the
+  // double-click reuse below are unchanged. Payment Link reference_id caps at
+  // 40 chars: 26 + "-" + 8 + "-" + up to 2 digits fits.
+  const bookingReferenceIdFor = (n: number) =>
+    n === 1 ? `${referenceId.slice(0, 30)}-${emailHash}` : `${referenceId.slice(0, 26)}-${emailHash}-${n}`;
+  const MAX_BOOKINGS_PER_EMAIL = 20;
 
   let link;
+  let bookingReferenceId = bookingReferenceIdFor(1);
   try {
-    const candidates = await fetchPaymentLinksByReferenceId(bookingReferenceId);
-    // Reuse only a still-unpaid link for the exact same booking (attendee
-    // count, hence amount) — anything else (already paid, expired, or the
-    // guest changed the count since their last attempt) falls through to
-    // minting a fresh link rather than risk handing back a link for the
-    // wrong amount or one nobody can pay anymore.
-    link = candidates.find((l) => l.status === 'created' && l.notes?.attendeeCount === String(attendeeCount));
+    for (let n = 1; n <= MAX_BOOKINGS_PER_EMAIL; n++) {
+      const candidateId = bookingReferenceIdFor(n);
+      const candidates = await fetchPaymentLinksByReferenceId(candidateId);
+      // Reuse only a still-unpaid link for the exact same booking (attendee
+      // count, hence amount) — a double-click or back-and-resubmit gets the
+      // same open link instead of minting a new charge target each time.
+      const reusable = candidates.find((l) => l.status === 'created' && l.notes?.attendeeCount === String(attendeeCount));
+      if (reusable) {
+        link = reusable;
+        break;
+      }
+      if (candidates.length === 0) {
+        bookingReferenceId = candidateId; // unused id — mint the new link under it
+        break;
+      }
+      // Taken by a paid/expired/different-size link — try the next number.
+    }
   } catch (err) {
     console.error('[event-booking] Failed to check for a pending payment link', err);
   }
