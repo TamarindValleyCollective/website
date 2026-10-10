@@ -10,6 +10,7 @@ import {
   mergeNetlifyPlan,
   resendAutomaticIsFresh,
   r2AutomaticIsFresh,
+  nextCollectorRun,
   decideNotifications,
   sumDaily,
   addDays,
@@ -266,4 +267,17 @@ test('R2 readings that stop refreshing warn once and hand back to the typed-in m
   assert.ok(keys.includes('cloudflare:r2-stale'));
   assert.ok(keys.includes('manual:cloudflare.r2_storage_gb'));
   assert.equal(evaluateAlerts({ now: NOW, snapshots: {} }).some((a) => a.key.startsWith('cloudflare:')), false);
+});
+
+test('nextCollectorRun: the next 6-hourly UTC slot strictly after now', () => {
+  assert.equal(nextCollectorRun(new Date('2026-10-10T13:20:00Z')).toISOString(), '2026-10-10T18:00:00.000Z');
+  assert.equal(nextCollectorRun(new Date('2026-10-10T18:00:00Z')).toISOString(), '2026-10-11T00:00:00.000Z'); // exactly on a run: the following one
+  assert.equal(nextCollectorRun(new Date('2026-10-10T23:59:59Z')).toISOString(), '2026-10-11T00:00:00.000Z');
+});
+
+test('Supabase connections: warn at 70% / critical at 90% of the limit, quiet below', () => {
+  const at = (n) => evaluateAlerts({ now: NOW, snapshots: { 'supabase.db_connections': { value: n, limit_value: 60, captured_at: '2026-10-10T06:00:00Z' } } }).find((a) => a.key === 'supabase:connections');
+  assert.equal(at(7), undefined);
+  assert.equal(at(45).level, 'warn');
+  assert.equal(at(55).level, 'critical');
 });

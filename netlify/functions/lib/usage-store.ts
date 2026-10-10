@@ -2,7 +2,7 @@
 // migrations 0030/0031) in one place, shared by usage-admin.mts (the
 // dashboard's API) and usage-alerts.mts (the hourly email check) so the page
 // and the emails are computed from exactly the same inputs.
-import { MANUAL_METERS, addDays, mergeNetlifyPlan, utcDay } from '../../../scripts/lib/usage-rules.mjs';
+import { MANUAL_METERS, addDays, utcDay } from '../../../scripts/lib/usage-rules.mjs';
 import { rest } from './staff-mfa-store';
 
 export type DailyRow = { day: string; service: string; metric: string; value: number };
@@ -19,7 +19,7 @@ export type UsageData = {
 };
 
 // The measured meter (Supabase size) plus every typed-in one.
-const SNAPSHOT_METERS: [string, string][] = [['supabase', 'db_size_bytes'], ['netlify', 'plan_credits'], ['resend', 'emails_monthly'], ['resend', 'emails_daily'], ['cloudflare', 'r2_storage_bytes'], ...Object.values(MANUAL_METERS).map((m): [string, string] => [m.service, m.metric])];
+const SNAPSHOT_METERS: [string, string][] = [['supabase', 'db_size_bytes'], ['supabase', 'db_connections'], ['netlify', 'plan_credits'], ['resend', 'emails_monthly'], ['resend', 'emails_daily'], ['cloudflare', 'r2_storage_bytes'], ...Object.values(MANUAL_METERS).map((m): [string, string] => [m.service, m.metric])];
 
 async function json<T>(path: string): Promise<T> {
   return (await (await rest(path)).json()) as T;
