@@ -83,9 +83,15 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
     guest who asked another way. Confirms first, writes the audit log *before* acting and refuses if
     it can't (`whatsapp.opt_out` / `whatsapp.opt_in`). Nothing is sent to the guest. The button turns
     red and reads "Updates stopped · Resume" when a contact is opted out, whichever way they got there.
-  - **Canned replies**: chips above the reply box (Directions, Events, Day visit, Camping, Membership,
-    Checking, Closing) that drop editable text into the box; nothing sends by itself. Edit them in
-    `src/data/whatsapp-quick-replies.ts` (links only to pages that exist; no prices or timings).
+  - **Canned replies**: editable text dropped into the reply box; nothing sends by itself. They live in
+    `src/data/whatsapp-quick-replies.ts` (links only to pages that exist; no prices or timings), each
+    with a `category` and an optional `pinned` flag. Pinned ones (keep it to about five) are the pills
+    above the reply box; **every** reply is in a searchable "More replies" panel grouped by category
+    (it opens upward over the conversation, scrolls on its own, and is sized to the room above the
+    composer so it never clips on a phone), and typing `/` in the reply box opens the same panel
+    filtered by what follows the slash (arrow keys move, Enter inserts in place of the command, Escape
+    closes and keeps the text; a space ends the command). So the library can grow to dozens without
+    crowding the screen. The "More replies" pill takes the ink "selected" look while the panel is open.
   - **Read receipts**: when a staff member who can reply has a thread open and the guest's latest
     message is new, the guest's phone shows it as read (blue ticks), via `POST
     /api/whatsapp-admin/seen`. Read-only roles never send one.
