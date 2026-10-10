@@ -679,10 +679,11 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     const r = m.reading;
     if (!r) return card(m.label, 'Typed in from the provider', 'none', h('p', { class: 'hero-sub', text: `No reading yet. Find it at ${m.where}, then an admin can enter it below.` }));
     const frac = r.limit ? r.value / r.limit : 0;
-    const stale = daysAgo(r.capturedAt) > 35;
+    const staleForCycle = r.staleForCycle === true;
+    const stale = !staleForCycle && daysAgo(r.capturedAt) > 35;
     const parts: Kid[] = [h('p', { class: 'hero', text: `${nf.format(r.value)} ${m.unit}` }), h('p', { class: 'hero-sub', text: r.limit ? `of ${nf.format(r.limit)} included` : 'limit not entered' })];
     if (r.limit) parts.push(meter(frac, m.level, `${m.label} used`, `${Math.round(frac * 100)}% used`), h('p', { class: 'meter-caption', text: `${Math.round(frac * 100)}% used` }));
-    parts.push(h('p', { class: 'svc-note', text: `Typed in on ${dateText(r.capturedAt)} (${ago(r.capturedAt)}) from ${m.where}.${stale ? ' This reading is more than a month old, so treat it with caution and update it.' : ''}` }));
+    parts.push(h('p', { class: 'svc-note', text: `Typed in on ${dateText(r.capturedAt)} (${ago(r.capturedAt)}) from ${m.where}.${r.cycleStart ? ` Billing cycle ${dateText(r.cycleStart)} to ${dateText(r.cycleEnd)}; the limit is read from Netlify automatically.` : ''}${r.planStale ? ` Warning: Netlify plan data was last refreshed ${ago(r.planCapturedAt)}, so the limit and cycle dates may be out of date. Check the Netlify token.` : ''}${staleForCycle ? ' This reading is from a previous billing cycle, so the count has reset since. Update it.' : ''}${stale ? ' This reading is more than a month old, so treat it with caution and update it.' : ''}` }));
     return card(m.label, 'Typed in from the provider', m.level, ...parts);
   }
 

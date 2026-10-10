@@ -47,8 +47,8 @@ export const MANUAL_METERS = {
     label: 'Netlify credits',
     kind: 'used',
     unit: 'credits',
-    valueLabel: 'Credits used this month',
-    limitLabel: 'Credits included in your plan per month',
+    valueLabel: 'Credits used this billing cycle',
+    limitLabel: 'Credits included in your plan per billing cycle (filled in automatically when the Netlify token is set)',
     where: 'Netlify → Team → Billing and usage',
   },
   'resend.emails_used': {
@@ -72,6 +72,28 @@ export const MANUAL_METERS = {
     where: 'Cloudflare → R2 → Overview',
   },
 };
+
+// Netlify's billing cycle does not follow the calendar month (ours runs from
+// the 19th), and the plan's credit allowance can be read from its API even
+// though credits USED cannot. usage-collect.mts records the allowance and cycle
+// dates as a 'netlify.plan_credits' snapshot; this folds them into the typed-in
+// 'netlify.credits_used' reading: the allowance replaces the typed limit, and a
+// reading entered before the current cycle began is marked `staleForCycle`
+// because credits reset to zero when a new cycle starts. Returns a new map.
+export const NETLIFY_PLAN_STALE_DAYS = 2; // collector runs every 6h, so 2 days with no new reading means it is failing
+
+export function mergeNetlifyPlan(snapshots, now = new Date()) {
+  const plan = snapshots['netlify.plan_credits'];
+  const used = snapshots['netlify.credits_used'];
+  if (!plan || !used) return snapshots;
+  const cycleStart = plan.detail?.period_start ?? null;
+  const cycleEnd = plan.detail?.next_period_start ?? null;
+  const limit = isPositiveNumber(Number(plan.limit_value)) ? Number(plan.limit_value) : used.limit_value;
+  const staleForCycle = cycleStart ? new Date(used.captured_at) < new Date(cycleStart) : false;
+  const planAgeDays = (now.getTime() - new Date(plan.captured_at).getTime()) / DAY_MS;
+  const planStale = planAgeDays > NETLIFY_PLAN_STALE_DAYS;
+  return { ...snapshots, 'netlify.credits_used': { ...used, limit_value: limit, detail: { ...(used.detail ?? {}), cycle_start: cycleStart, cycle_end: cycleEnd, stale_for_cycle: staleForCycle, plan_captured_at: plan.captured_at, plan_stale: planStale } } };
+}
 
 export const SETTING_KEYS = ['anthropic_prices', 'gemini_daily_requests'];
 
@@ -188,7 +210,8 @@ function money(n) {
 // Returns [{ key, level: 'warn'|'critical', service, title, detail }]. `key`
 // identifies the underlying condition so a repeat of it isn't mailed twice.
 /** @param {{ now?: Date, daily?: any[], snapshots?: Record<string, any>, settings?: any }} input */
-export function evaluateAlerts({ now = new Date(), daily = [], snapshots = {}, settings = {} }) {
+export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSnapshots = {}, settings = {} }) {
+  const snapshots = mergeNetlifyPlan(rawSnapshots, now);
   const alerts = [];
   const today = utcDay(now);
   const yesterday = addDays(today, -1);
@@ -271,11 +294,19 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots = {}, s
     add('supabase:db-size', level, 'supabase', `Supabase database is at ${pct(Number(db.value) / Number(db.limit_value))} of its free size`, `${mb(db.value)} used of ${mb(db.limit_value)}. Free projects stop accepting writes at the limit.`);
   }
 
+  // The Netlify token (usage-collect) stopped refreshing the plan data: expired, revoked, or
+  // the API changed. Only once a plan snapshot has existed, so no token yet means no alert.
+  const netlifyPlan = snapshots['netlify.plan_credits'];
+  if (netlifyPlan && (now.getTime() - new Date(netlifyPlan.captured_at).getTime()) / DAY_MS > NETLIFY_PLAN_STALE_DAYS) {
+    add('netlify:plan-stale', 'warn', 'netlify', 'Netlify plan data has stopped refreshing', `The last plan/billing-cycle reading from the Netlify API was on ${utcDay(new Date(netlifyPlan.captured_at))}. Check NETLIFY_ACCESS_TOKEN (it may have expired or been revoked) and the usage-collect function logs. Until then the credit limit and cycle dates shown are the last known ones.`);
+  }
+
   // Everything else a person types in.
   for (const [id, meter] of Object.entries(MANUAL_METERS)) {
     if (meter.kind !== 'used') continue;
     const reading = snapshots[id];
     if (!reading || !isPositiveNumber(Number(reading.limit_value))) continue;
+    if (reading.detail?.stale_for_cycle) continue; // from a previous billing cycle: the count has reset since
     const value = Number(reading.value);
     const limit = Number(reading.limit_value);
     add(`manual:${id}`, levelForUsed(value, limit), meter.service, `${meter.label} at ${pct(value / limit)} of the limit`, `${value} of ${limit} ${meter.unit}, as last entered on ${utcDay(new Date(reading.captured_at))}. Update the reading on the usage page for a fresh figure.`);
