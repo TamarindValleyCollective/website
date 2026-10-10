@@ -5,6 +5,8 @@
 // async refund.failed webhook. A bulk "Cancel event" sends ONE alert listing
 // every failure rather than one per booking.
 
+import { routeEmail } from './email-routing';
+
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const FROM = 'Tamarind Valley Collective <noreply@tvc.farm>';
 const ALERT_TO = ['core-team@tvc.farm'];
@@ -17,6 +19,7 @@ export interface RefundFailure {
   paidAmount: number; // paise
   currency: string;
   paymentId: string;
+  isTest?: boolean;
   // Razorpay's own message when the API call was rejected; absent for the
   // async refund.failed webhook, which carries no reason.
   error?: string;
@@ -55,13 +58,13 @@ export async function sendRefundFailureAlert(failures: RefundFailure[], context:
   <p>Common fix for "insufficient balance": top up the Razorpay account balance, then retry from <a href="https://tvc.farm/internal/event-payments">the Event Payments dashboard</a> (for a full-event cancellation, run "Cancel event" again — it only retries bookings that aren't already refunded).</p>
 </body></html>`;
 
-  await sendStaffAlert(`⚠️ ${failures.length} refund${failures.length === 1 ? '' : 's'} failed — ${failures[0].eventTitle}`, html);
+  await sendStaffAlert(`⚠️ ${failures.length} refund${failures.length === 1 ? '' : 's'} failed — ${failures[0].eventTitle}`, html, failures.every((f) => f.isTest));
 }
 
 // Internal alert to TVC's shared inbox + Linger — never the guest. Also used
 // for non-refund "someone needs to act" alerts (guest cancellation requests,
 // a payment that landed after an event was cancelled).
-export async function sendStaffAlert(subject: string, html: string): Promise<void> {
+export async function sendStaffAlert(subject: string, html: string, isTest = false): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('[refund-alert] RESEND_API_KEY is not set — cannot send staff alert');
@@ -70,7 +73,7 @@ export async function sendStaffAlert(subject: string, html: string): Promise<voi
   const res = await fetch(RESEND_API_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ from: FROM, to: ALERT_TO, cc: ALERT_CC, subject, html }),
+    body: JSON.stringify({ from: FROM, html, ...routeEmail(isTest, { to: ALERT_TO, cc: ALERT_CC, subject }) }),
   });
   if (!res.ok) {
     throw new Error(`Resend send failed: ${res.status} ${await res.text()}`);
@@ -85,6 +88,7 @@ export function failureFromRow(row: any, error?: string): RefundFailure {
     paidAmount: row.amount,
     currency: row.currency,
     paymentId: row.razorpay_payment_id,
+    isTest: row.mode === 'test',
     error,
   };
 }

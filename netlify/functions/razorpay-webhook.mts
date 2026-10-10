@@ -33,6 +33,7 @@ import {
 import { buildReceiptSubject, buildReceiptHtml } from './lib/payment-receipt';
 import { sendRefundFailureAlert, failureFromRow, sendStaffAlert, escapeHtml, formatAmount } from './lib/refund-alert';
 import { fetchBasePaymentLink } from './lib/razorpay';
+import { routeEmail } from './lib/email-routing';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const FROM = 'Tamarind Valley Collective <noreply@tvc.farm>';
@@ -96,6 +97,7 @@ async function sendReceiptEmail(params: {
   payerName?: string | null;
   paymentId: string;
   paidAt: Date;
+  isTest?: boolean;
 }): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -107,10 +109,8 @@ async function sendReceiptEmail(params: {
     headers: { Authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
     body: JSON.stringify({
       from: FROM,
-      to: [params.to],
-      cc: RECEIPT_CC,
-      subject: buildReceiptSubject(params),
       html: buildReceiptHtml(params),
+      ...routeEmail(Boolean(params.isTest), { to: [params.to], cc: RECEIPT_CC, subject: buildReceiptSubject(params) }),
     }),
   });
   if (!res.ok) {
@@ -174,7 +174,7 @@ async function handleRefundCreated(payload: RazorpayWebhookPayload): Promise<Res
   }
 }
 
-async function sendRefundCompletedEmail(params: { to: string; eventTitle: string; refundAmount: number; currency: string; paymentId: string; refundId: string }): Promise<void> {
+async function sendRefundCompletedEmail(params: { to: string; eventTitle: string; refundAmount: number; currency: string; paymentId: string; refundId: string; isTest?: boolean }): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('[razorpay-webhook] RESEND_API_KEY is not set — cannot send refund completed email');
@@ -193,7 +193,7 @@ async function sendRefundCompletedEmail(params: { to: string; eventTitle: string
   const res = await fetch(RESEND_API_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ from: FROM, to: [params.to], cc: RECEIPT_CC, subject: `Refund processed — ${params.eventTitle}`, html }),
+    body: JSON.stringify({ from: FROM, html, ...routeEmail(Boolean(params.isTest), { to: [params.to], cc: RECEIPT_CC, subject: `Refund processed — ${params.eventTitle}` }) }),
   });
   if (!res.ok) {
     throw new Error(`Resend send failed: ${res.status} ${await res.text()}`);
@@ -222,6 +222,7 @@ async function handleRefundProcessed(payload: RazorpayWebhookPayload): Promise<R
           currency: row.currency,
           paymentId: row.razorpay_payment_id,
           refundId: refund.id,
+          isTest: row.mode === 'test',
         });
       } catch (err) {
         console.error('[razorpay-webhook] Failed to send refund completed email', err);
@@ -378,6 +379,7 @@ export default async (req: Request): Promise<Response> => {
         payerName,
         paymentId: payment.id,
         paidAt: new Date(),
+        isTest: mode === 'test',
       });
       await markReceiptSent(recorded.id);
     } catch (err) {
@@ -407,6 +409,7 @@ export default async (req: Request): Promise<Response> => {
   <p><strong>${escapeHtml(payerName ?? 'A guest')}</strong> paid ${formatAmount(payment.amount, payment.currency)} for <strong>${escapeHtml(eventTitle)}</strong> (${attendeeCount} ${attendeeCount === 1 ? 'person' : 'people'}, payment ${escapeHtml(payment.id)}), but online registration for this event is already closed (${escapeHtml(base.status)}).</p>
   <p>They were sent a normal receipt. If the event is cancelled, refund them from <a href="https://tvc.farm/internal/event-payments">the Event Payments dashboard</a>.</p>
 </body></html>`,
+          mode === 'test',
         );
       }
     } catch (err) {
