@@ -398,10 +398,8 @@ export default async (req: Request): Promise<Response> => {
       if (base.status !== 'created') {
         await sendStaffAlert(
           `⚠️ Payment received after registration closed — ${eventTitle}`,
-          `<!doctype html><html><head><meta charset="utf-8" /></head><body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f;">
-  <p><strong>${escapeHtml(payerName ?? 'A guest')}</strong> paid ${formatAmount(payment.amount, payment.currency)} for <strong>${escapeHtml(eventTitle)}</strong> (${attendeeCount} ${attendeeCount === 1 ? 'person' : 'people'}, payment ${escapeHtml(payment.id)}), but online registration for this event is already closed (${escapeHtml(base.status)}).</p>
-  <p>They were sent a normal receipt. If the event is cancelled, refund them from <a href="https://tvc.farm/internal/event-payments">the Event Payments dashboard</a>.</p>
-</body></html>`,
+          `<p style="margin-top:0;"><strong>${escapeHtml(payerName ?? 'A guest')}</strong> paid ${formatAmount(payment.amount, payment.currency)} for <strong>${escapeHtml(eventTitle)}</strong> (${attendeeCount} ${attendeeCount === 1 ? 'person' : 'people'}, payment ${escapeHtml(payment.id)}), but online registration for this event is already closed (${escapeHtml(base.status)}).</p>
+  <p>They were sent a normal receipt. If the event is cancelled, refund them from <a href="https://tvc.farm/internal/event-payments">the Event Payments dashboard</a>.</p>`,
           mode === 'test',
         );
       }

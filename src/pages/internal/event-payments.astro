@@ -1140,7 +1140,9 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     if (!booking.whatsapp?.length) return '—';
     return booking.whatsapp
       .map((w) => {
-        const label = WHATSAPP_TEMPLATE_LABELS[w.template] ?? w.template;
+        // v2 templates are recorded under their _v2 name; same message, same label.
+        const baseName = w.template.replace(/_v2$/, '');
+        const label = WHATSAPP_TEMPLATE_LABELS[baseName] ?? baseName;
         const state = w.status === 'accepted' ? 'accepted (awaiting delivery)' : w.status;
         const reason = w.status === 'failed' && w.errorMessage ? ` — ${escapeHtml(w.errorMessage)}` : '';
         return `${escapeHtml(label)}: ${escapeHtml(state)}${reason}`;

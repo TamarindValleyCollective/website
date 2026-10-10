@@ -29,6 +29,18 @@ are set. Test-mode bookings only ever WhatsApp `WHATSAPP_TEST_NUMBER`. Delivery 
 `whatsapp_template_sends` (migration `0032`, updated by `whatsapp-webhook.mts` from Meta's `statuses` events, shown
 per booking on the Event Payments dashboard, with a staff email when a guest message fails).
 
+**v2 templates (2026-10-10).** All five templates are live. Each now has a drafted `_v2`
+successor (same variables in the same order, plus a text header, a footer, bold key facts and
+emoji) in `whatsapp-templates.ts` / `docs/whatsapp-templates.md`. `sendWhatsAppTemplate` sends the
+`_v2` once its name is in `WHATSAPP_APPROVED_TEMPLATES` and the v1 until then, so call sites are
+unchanged. Status: all five approved by Meta and listed in `WHATSAPP_APPROVED_TEMPLATES`
+(2026-10-10). Verified end to end on a test-mode booking: `tvc_cancellation_declined_v2`,
+`tvc_refund_initiated_v2`, `tvc_refund_processed_v2` and `tvc_event_cancelled_v2` arrived with the
+new header, footer and bold text. `tvc_staff_enquiry_alert_v2` is approved but not yet confirmed by
+a real enquiry (it goes to `WHATSAPP_STAFF_ALERT_NUMBERS`, not the test number). Gotcha: a long-running
+`netlify dev` keeps the env vars from when it started, so after changing
+`WHATSAPP_APPROVED_TEMPLATES` restart it, or it keeps sending the v1 wording.
+
 ## Direct Meta Cloud API integration — setup checklist
 
 Four phases. Phases 1–3 need your own Meta/Facebook login and (for verification) business

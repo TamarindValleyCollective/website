@@ -28,6 +28,7 @@ import {
 import { createRefund, fetchBasePaymentLink, cancelPaymentLink } from './lib/razorpay';
 import { sendRefundFailureAlert, failureFromRow } from './lib/refund-alert';
 import { routeEmail } from './lib/email-routing';
+import { EMAIL_COLORS, detailRow, detailTable, emailLink, renderBrandedEmail } from './lib/email-layout';
 import { sendRefundCompletedEmail } from './lib/refund-completed-email';
 import { listTemplateSendsForBookings } from '../../scripts/lib/supabase.mjs';
 import { sendWhatsAppTemplate, cleanTemplateParam, firstNameOf, asSentence } from './lib/whatsapp-send';
@@ -286,32 +287,26 @@ async function sendRefundEmail(params: {
     return;
   }
   const retained = params.paidAmount - params.refundAmount;
-  const row = (label: string, value: string, bold = false) =>
-    `<tr><td style="padding:4px 16px 4px 0; color:#57604f;">${label}</td><td style="padding:4px 0;${bold ? ' font-weight:600;' : ''}">${value}</td></tr>`;
-  const html = `<!doctype html>
-<html><head><meta charset="utf-8" /></head>
-<body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f;">
-  ${
+  const html = renderBrandedEmail(`        ${
     params.eventCancelled
-      ? `<p>We're sorry — we've had to cancel <strong>${params.eventTitle}</strong>.</p>${
+      ? `<p style="margin-top:0;">We're sorry — we've had to cancel <strong>${escapeHtml(params.eventTitle)}</strong>.</p>${
           params.reason ? `<p style="white-space:pre-line;">${escapeHtml(params.reason)}</p>` : ''
         }<p>We've started a refund for your booking.</p>`
-      : `<p>We've started a refund for your booking for <strong>${params.eventTitle}</strong>.</p>`
+      : `<p style="margin-top:0;">We've started a refund for your booking for <strong>${escapeHtml(params.eventTitle)}</strong>.</p>`
   }
-  <table style="border-collapse:collapse; margin:12px 0;">
-    ${row('Event', params.eventTitle)}
-    ${row('People', String(params.attendeeCount))}
-    ${row('Amount paid', formatAmount(params.paidAmount, params.currency))}
-    ${row('Refund amount', formatAmount(params.refundAmount, params.currency), true)}
-    ${retained > 0 ? row('Amount retained', `${formatAmount(retained, params.currency)} (per our <a href="https://tvc.farm/refund-policy">cancellation &amp; refund policy</a>)`) : ''}
-    ${row('Refund initiated on', new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' }))}
-    ${row('Payment ID', params.paymentId)}
-    ${row('Refund ID', params.refundId)}
-  </table>
-  <p>It's being processed by Razorpay now and should reach your original payment method within a few business days.</p>
-  ${params.eventCancelled ? '<p>We hope to host you at another TVC event soon — keep an eye on <a href="https://tvc.farm/events">tvc.farm/events</a>.</p>' : ''}
-  <p>Questions? Reply to this email or reach us at <a href="mailto:core-team@tvc.farm">core-team@tvc.farm</a>.</p>
-</body></html>`;
+        ${detailTable(
+          detailRow('Event', escapeHtml(params.eventTitle)) +
+            detailRow('People', String(params.attendeeCount)) +
+            detailRow('Amount paid', formatAmount(params.paidAmount, params.currency)) +
+            detailRow('Refund amount', formatAmount(params.refundAmount, params.currency), { bold: true }) +
+            (retained > 0 ? detailRow('Amount retained', `${formatAmount(retained, params.currency)} (per our ${emailLink('https://tvc.farm/refund-policy', 'cancellation &amp; refund policy')})`) : '') +
+            detailRow('Refund initiated on', new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })) +
+            detailRow('Payment ID', escapeHtml(params.paymentId)) +
+            detailRow('Refund ID', escapeHtml(params.refundId), { last: true }),
+        )}
+        <p>It's being processed by Razorpay now and should reach your original payment method within a few business days.</p>
+        ${params.eventCancelled ? `<p>We hope to host you at another TVC event soon — keep an eye on ${emailLink('https://tvc.farm/events', 'tvc.farm/events')}.</p>` : ''}
+        <p style="margin-bottom:0;">Questions? Reply to this email or reach us at ${emailLink('mailto:core-team@tvc.farm', 'core-team@tvc.farm')}.</p>`);
   const res = await fetch(RESEND_API_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
@@ -336,14 +331,10 @@ async function sendDeclineEmail(params: { payerEmail: string; eventTitle: string
     console.error('[event-payments-admin] RESEND_API_KEY is not set — cannot send decline notification');
     return;
   }
-  const html = `<!doctype html>
-<html><head><meta charset="utf-8" /></head>
-<body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f;">
-  <p>Thank you for letting us know. We've reviewed your cancellation request for <strong>${params.eventTitle}</strong>, and unfortunately we're not able to cancel and refund this booking under our <a href="https://tvc.farm/refund-policy">cancellation &amp; refund policy</a>.</p>
-  ${params.reason ? `<p style="white-space:pre-line;">${escapeHtml(params.reason)}</p>` : ''}
-  <p>Your booking remains confirmed. If your plans have changed or you think we've got this wrong, reply to this email or reach us at <a href="mailto:core-team@tvc.farm">core-team@tvc.farm</a> and we'll be glad to talk it through.</p>
-  <p style="font-size:13px; color:#57604f;">Payment ID ${escapeHtml(params.paymentId)}</p>
-</body></html>`;
+  const html = renderBrandedEmail(`        <p style="margin-top:0;">Thank you for letting us know. We've reviewed your cancellation request for <strong>${escapeHtml(params.eventTitle)}</strong>, and unfortunately we're not able to cancel and refund this booking under our ${emailLink('https://tvc.farm/refund-policy', 'cancellation &amp; refund policy')}.</p>
+        ${params.reason ? `<p style="white-space:pre-line;">${escapeHtml(params.reason)}</p>` : ''}
+        <p>Your booking remains confirmed. If your plans have changed or you think we've got this wrong, reply to this email or reach us at ${emailLink('mailto:core-team@tvc.farm', 'core-team@tvc.farm')} and we'll be glad to talk it through.</p>
+        <p style="font-size:13px; color:${EMAIL_COLORS.muted}; margin-bottom:0;">Payment ID ${escapeHtml(params.paymentId)}</p>`);
   const res = await fetch(RESEND_API_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },

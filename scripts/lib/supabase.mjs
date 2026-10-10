@@ -273,6 +273,15 @@ export async function updateTemplateSendStatus({ waMessageId, status, errorCode,
   return rows[0] ?? null;
 }
 
+// Whether a template send is on record yet. A delivery event can beat the
+// insert in recordTemplateSend, so the webhook uses this to tell "not recorded
+// yet" (retry) apart from "already at this status" (ignore).
+/** @param {string} waMessageId */
+export async function templateSendExists(waMessageId) {
+  const res = await restFetch(`/whatsapp_template_sends?wa_message_id=eq.${encodeURIComponent(waMessageId)}&select=id&limit=1`);
+  return (await res.json()).length > 0;
+}
+
 // Latest delivery state of every template message sent about the given
 // bookings, for the Event Payments dashboard.
 /**

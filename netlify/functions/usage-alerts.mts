@@ -12,6 +12,7 @@
 // and is mailed when it is *near* the limit, while this function still runs.
 import { rest } from './lib/staff-mfa-store';
 import { loadUsageData } from './lib/usage-store';
+import { renderStaffEmail } from './lib/email-layout';
 import { decideNotifications, evaluateAlerts } from '../../scripts/lib/usage-rules.mjs';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
@@ -36,15 +37,9 @@ async function sendDigest(apiKey: string, alerts: Alert[]): Promise<void> {
       </tr>`,
     )
     .join('');
-  const html = `<!doctype html>
-<html>
-<head><meta charset="utf-8" /></head>
-<body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f;">
-  <p>${alerts.length === 1 ? 'A service' : 'Some services'} the TVC website relies on ${alerts.length === 1 ? 'is' : 'are'} close to a free-tier or credit limit:</p>
-  <table style="border-collapse:collapse; width:100%; max-width:640px;"><tbody>${rows}</tbody></table>
-  <p style="font-size:13px; color:#57604f;">Details and current figures: <a href="${PAGE_URL}">${PAGE_URL}</a> (sign in with Google). Each warning is sent once; you'll hear again only if it gets worse, or after it clears and comes back.</p>
-</body>
-</html>`;
+  const html = renderStaffEmail(`  <p style="margin-top:0;">${alerts.length === 1 ? 'A service' : 'Some services'} the TVC website relies on ${alerts.length === 1 ? 'is' : 'are'} close to a free-tier or credit limit:</p>
+  <table style="border-collapse:collapse; width:100%;"><tbody>${rows}</tbody></table>
+  <p style="font-size:13px; color:#57604f;">Details and current figures: <a href="${PAGE_URL}">${PAGE_URL}</a> (sign in with Google). Each warning is sent once; you'll hear again only if it gets worse, or after it clears and comes back.</p>`);
   const res = await fetch(RESEND_API_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },

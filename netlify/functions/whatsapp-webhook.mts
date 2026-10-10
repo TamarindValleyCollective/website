@@ -27,7 +27,7 @@
 // unanswered-message digest, once per-message emails turned out to be more
 // clutter than signal for a shared inbox multiple staff check.
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { upsertConversation, insertMessage, updateTemplateSendStatus } from '../../scripts/lib/supabase.mjs';
+import { upsertConversation, insertMessage, updateTemplateSendStatus, templateSendExists } from '../../scripts/lib/supabase.mjs';
 import { getPaymentById } from '../../scripts/lib/event-payments-db.mjs';
 import { sendStaffAlert, escapeHtml } from './lib/refund-alert';
 
@@ -97,24 +97,33 @@ async function handleDeliveryStatus(status: any): Promise<void> {
   const state: string | undefined = status?.status;
   if (!waMessageId || !['sent', 'delivered', 'read', 'failed'].includes(state ?? '')) return;
   const error = Array.isArray(status.errors) ? status.errors[0] : undefined;
-  const updated = (await updateTemplateSendStatus({
-    waMessageId,
-    status: state as 'sent' | 'delivered' | 'read' | 'failed',
-    errorCode: error?.code != null ? String(error.code) : null,
-    errorMessage: error ? [error.title, error.message, error.error_data?.details].filter(Boolean).join(' — ') : null,
-    statusAt: status.timestamp ? new Date(Number(status.timestamp) * 1000).toISOString() : null,
-  })) as Record<string, any> | null;
+  const update = async () =>
+    (await updateTemplateSendStatus({
+      waMessageId,
+      status: state as 'sent' | 'delivered' | 'read' | 'failed',
+      errorCode: error?.code != null ? String(error.code) : null,
+      errorMessage: error ? [error.title, error.message, error.error_data?.details].filter(Boolean).join(' — ') : null,
+      statusAt: status.timestamp ? new Date(Number(status.timestamp) * 1000).toISOString() : null,
+    })) as Record<string, any> | null;
+  let updated = await update();
+  // The receipt can arrive before whatsapp-send.ts has recorded the wamid it
+  // just got back from Meta. If the row isn't there yet, give that insert a
+  // moment and try once more, so an early failure isn't silently lost. Only
+  // for failures: other statuses are just display, and replies sent from the
+  // inbox also produce receipts that will never have a row.
+  if (!updated && state === 'failed' && !(await templateSendExists(waMessageId))) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    updated = await update();
+  }
   if (!updated || state !== 'failed' || !updated.event_payment_id) return;
 
   const booking = (await getPaymentById(updated.event_payment_id)) as Record<string, any> | null;
   const isTest = booking?.mode === 'test';
   await sendStaffAlert(
     `⚠️ WhatsApp message not delivered — ${booking?.event_title ?? updated.template}`,
-    `<!doctype html><html><head><meta charset="utf-8" /></head><body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f;">
-  <p>The WhatsApp message <code>${escapeHtml(updated.template)}</code> to <strong>${escapeHtml(booking?.payer_name ?? 'a guest')}</strong> (number ending ${escapeHtml(updated.recipient_last4 ?? '?')}) was <strong>not delivered</strong>.</p>
+    `<p>The WhatsApp message <code>${escapeHtml(String(updated.template).replace(/_v2$/, ''))}</code> to <strong>${escapeHtml(booking?.payer_name ?? 'a guest')}</strong> (number ending ${escapeHtml(updated.recipient_last4 ?? '?')}) was <strong>not delivered</strong>.</p>
   <p style="color:#8a2f1f;">${escapeHtml(updated.error_message ?? 'WhatsApp reported the message as failed.')}</p>
-  <p>They will have received the email only. Check the number on <a href="https://tvc.farm/internal/event-payments">the Event Payments dashboard</a> and contact them another way if it matters.</p>
-</body></html>`,
+  <p>They will have received the email only. Check the number on <a href="https://tvc.farm/internal/event-payments">the Event Payments dashboard</a> and contact them another way if it matters.</p>`,
     isTest,
   );
 }

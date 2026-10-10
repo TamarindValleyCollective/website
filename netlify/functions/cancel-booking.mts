@@ -16,7 +16,8 @@
 // Reusable the same way razorpay-webhook.mts is: nothing here is specific
 // to Foraging Day or any other one event.
 import { getPaymentByRazorpayId, requestCancellationIfNew } from '../../scripts/lib/event-payments-db.mjs';
-import { sendStaffAlert, escapeHtml } from './lib/refund-alert';
+import { sendStaffAlert } from './lib/refund-alert';
+import { escapeHtml, formatAmount, emailLink, renderBrandedEmail } from './lib/email-layout';
 import { routeEmail } from './lib/email-routing';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
@@ -25,11 +26,6 @@ const NOTIFY_CC = ['core-team@tvc.farm', 'stay@linger.in'];
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
-}
-
-function formatAmount(amountPaise: number, currency: string): string {
-  const amount = amountPaise / 100;
-  return currency === 'INR' ? `₹${amount.toLocaleString('en-IN')}` : `${amount.toLocaleString('en-IN')} ${currency}`;
 }
 
 async function sendCancellationEmail(params: {
@@ -46,12 +42,8 @@ async function sendCancellationEmail(params: {
     console.error('[cancel-booking] RESEND_API_KEY is not set — cannot send notification');
     return;
   }
-  const html = `<!doctype html>
-<html><head><meta charset="utf-8" /></head>
-<body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f;">
-  <p>We've received a cancellation request for <strong>${params.eventTitle}</strong> (${params.attendeeCount} ${params.attendeeCount === 1 ? 'person' : 'people'}, ${formatAmount(params.amount, params.currency)}, payment ${params.paymentId}).</p>
-  <p>TVC will follow up by email or WhatsApp shortly with next steps, per our <a href="https://tvc.farm/refund-policy">cancellation &amp; refund policy</a>.</p>
-</body></html>`;
+  const html = renderBrandedEmail(`        <p style="margin-top:0;">We've received a cancellation request for <strong>${escapeHtml(params.eventTitle)}</strong> (${params.attendeeCount} ${params.attendeeCount === 1 ? 'person' : 'people'}, ${formatAmount(params.amount, params.currency)}, payment ${escapeHtml(params.paymentId)}).</p>
+        <p style="margin-bottom:0;">TVC will follow up by email or WhatsApp shortly with next steps, per our ${emailLink('https://tvc.farm/refund-policy', 'cancellation &amp; refund policy')}.</p>`);
   const res = await fetch(RESEND_API_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
@@ -129,10 +121,8 @@ export default async (req: Request): Promise<Response> => {
     try {
       await sendStaffAlert(
         `Action needed: cancellation request — ${payment.event_title}`,
-        `<!doctype html><html><head><meta charset="utf-8" /></head><body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f;">
-  <p>A guest has asked to cancel their booking for <strong>${escapeHtml(payment.event_title)}</strong> (${payment.attendee_count} ${payment.attendee_count === 1 ? 'person' : 'people'}, ${formatAmount(payment.amount, payment.currency)}, payment ${escapeHtml(paymentId)}).</p>
-  <p>They've been told TVC will follow up. Review it on <a href="https://tvc.farm/internal/event-payments">the Event Payments dashboard</a> — the refund form there suggests an amount under the <a href="https://tvc.farm/refund-policy">refund policy</a>.${payment.payer_email ? '' : ' <strong>This guest has no email on file</strong>, so they got no acknowledgment — contact them directly.'}</p>
-</body></html>`,
+        `<p style="margin-top:0;">A guest has asked to cancel their booking for <strong>${escapeHtml(payment.event_title)}</strong> (${payment.attendee_count} ${payment.attendee_count === 1 ? 'person' : 'people'}, ${formatAmount(payment.amount, payment.currency)}, payment ${escapeHtml(paymentId)}).</p>
+  <p>They've been told TVC will follow up. Review it on <a href="https://tvc.farm/internal/event-payments">the Event Payments dashboard</a> — the refund form there suggests an amount under the <a href="https://tvc.farm/refund-policy">refund policy</a>.${payment.payer_email ? '' : ' <strong>This guest has no email on file</strong>, so they got no acknowledgment — contact them directly.'}</p>`,
         payment.mode === 'test',
       );
     } catch (err) {
