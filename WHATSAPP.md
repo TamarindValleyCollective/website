@@ -41,6 +41,22 @@ a real enquiry (it goes to `WHATSAPP_STAFF_ALERT_NUMBERS`, not the test number).
 `netlify dev` keeps the env vars from when it started, so after changing
 `WHATSAPP_APPROVED_TEMPLATES` restart it, or it keeps sending the v1 wording.
 
+**Booking confirmation, reminders, referral attribution, auto-reply (2026-10-10).** Built, dormant
+until configured; details and Meta submission text in `docs/whatsapp-templates.md`.
+- **Two new templates with buttons**: `tvc_booking_confirmed` (sent when a payment is recorded,
+  with a "Get directions" link button) and `tvc_event_reminder` (day-before, 09:00 IST, via the new
+  scheduled `whatsapp-event-reminders.mts`; "Get directions" + an "I need help" quick reply). Neither
+  sends until Meta approves it and its name is in `WHATSAPP_APPROVED_TEMPLATES`.
+- **Click-to-WhatsApp attribution**: when a chat starts from an ad or Instagram/Facebook entry point,
+  Meta's `referral` object is stored on the conversation (migration `0033`) and shown in the thread
+  header. Plain messages never clear it.
+- **Out-of-hours auto-reply**: free-form text, rate-limited to one per conversation per 12 hours.
+  Off unless `WHATSAPP_AUTOACK_ENABLED=true`.
+- **Inbound buttons and locations** now read as text in the inbox ("[Tapped button] I need help")
+  instead of "[button message — not shown here]".
+- **Migration `0033` must be applied to TVC ERP before this deploys** (the webhook's conversation
+  upsert would fail on the new columns otherwise); Supabase migrations aren't auto-applied.
+
 ## Direct Meta Cloud API integration — setup checklist
 
 Four phases. Phases 1–3 need your own Meta/Facebook login and (for verification) business

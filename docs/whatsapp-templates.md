@@ -68,6 +68,8 @@ read env vars at deploy time):
 | `WHATSAPP_APPROVED_TEMPLATES` | comma-separated names that are approved, e.g. `tvc_refund_initiated,tvc_refund_processed` — add each as it's approved |
 | `WHATSAPP_STAFF_ALERT_NUMBERS` | staff numbers for `tvc_staff_enquiry_alert`, comma-separated (any common format, e.g. `+91 98860 12670`) |
 | `WHATSAPP_TEST_NUMBER` | optional: your own number. Test-mode bookings only ever WhatsApp this number (never the guest's); if unset they send nothing |
+| `WHATSAPP_AUTOACK_ENABLED` | `true` turns on the out-of-hours auto-reply (off when unset). See "Out-of-hours auto-reply" below |
+| `WHATSAPP_AUTOACK_HOURS` | optional staffed hours in IST, `HH:MM-HH:MM`; default `09:00-19:00`. Messages outside it get the auto-reply |
 
 `WHATSAPP_PHONE_NUMBER_ID` and `WHATSAPP_ACCESS_TOKEN` are already set for the live integration.
 
@@ -165,3 +167,58 @@ Header: `New website enquiry` · Footer: `TVC website · internal alert`
 Please reply to them from the contact inbox or the enquiries sheet.
 ```
 Samples: `membership` · `Asha Rao` · `I would like to know more about joining the collective.`
+
+## Booking confirmation and reminder, with buttons (2026-10-10)
+
+Two new templates (not v1/v2 pairs). Unlike the five above they carry **buttons**, so submit them
+with the button rows shown. Both buttons are static (a fixed link, or a quick reply), so the send
+code needs no button components. Category **Utility**, language **English**, **Header: Text**, footer filled in.
+
+| Name | Variables | Sent when |
+|---|---|---|
+| `tvc_booking_confirmed` | 1 first name · 2 event · 3 date · 4 guests · 5 amount | a payment is recorded (`razorpay-webhook.mts`), alongside the receipt email |
+| `tvc_event_reminder` | 1 first name · 2 event · 3 date | the day before the event, 09:00 IST (`whatsapp-event-reminders.mts`) |
+
+### `tvc_booking_confirmed`
+Header: `Booking confirmed` · Footer: `Tamarind Valley Collective`
+Button: **Visit website** → URL `https://tvc.farm/visit/how-to-reach`, button text `Get directions`
+```
+Hi {{1}}, you're all set! ✅
+
+🎟️ *Event:* {{2}}
+📅 *Date:* {{3}}
+👥 *Guests:* {{4}}
+💰 *Paid:* {{5}}
+
+A receipt is on its way to your email. Tap below for directions to the farm, or just reply here with any questions.
+```
+Samples: `Asha` · `Foraging Day` · `Saturday, 10 October 2026` · `2` · `₹4,500`
+
+### `tvc_event_reminder`
+Header: `See you tomorrow!` · Footer: `Tamarind Valley Collective`
+Buttons: **Visit website** → `https://tvc.farm/visit/how-to-reach`, text `Get directions`; **Quick reply** `I need help`
+```
+Hi {{1}}, a quick reminder that *{{2}}* is on *{{3}}*. 🌿
+
+We're looking forward to having you at the farm. The route can be tricky, so please check the directions before you set out. If anything has come up, tap below or reply here and we'll help.
+```
+Samples: `Asha` · `Foraging Day` · `Saturday, 10 October 2026`
+
+When a guest taps **I need help**, it arrives as a normal inbound message in `/internal/whatsapp`
+reading "[Tapped button] I need help".
+
+**Reminder rules.** `whatsapp-event-reminders.mts` runs daily at 03:30 UTC (09:00 IST) and picks
+bookings whose `event_date` is tomorrow (IST), not yet reminded, and not refunded or mid-refund — so a
+cancelled event's guests are never reminded. Bookings with no `event_date` (made before that column
+existed) get no reminder. Each booking is claimed (`event_payments.whatsapp_reminder_sent_at`, migration
+`0033`) before sending, so it can't go twice; if the send fails, or the template isn't approved yet,
+the claim is released and nothing is lost. Test-mode bookings go to `WHATSAPP_TEST_NUMBER` only.
+
+## Out-of-hours auto-reply (2026-10-10)
+
+Not a template: the guest has just messaged us, so a normal text is allowed. With
+`WHATSAPP_AUTOACK_ENABLED=true`, a message that arrives outside `WHATSAPP_AUTOACK_HOURS` (IST) gets one
+courtesy reply saying the team is away, when they're back, and a link to `tvc.farm/visit`. It never
+tries to answer the question. At most one per conversation per 12 hours (`whatsapp_conversations.last_auto_ack_at`,
+claimed atomically), never for reactions or for old messages replayed by a webhook retry, and recorded
+in the thread as "[Auto-reply] …". Off by default.

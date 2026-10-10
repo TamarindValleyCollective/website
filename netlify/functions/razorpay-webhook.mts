@@ -35,7 +35,7 @@ import { sendRefundFailureAlert, failureFromRow, sendStaffAlert, escapeHtml, for
 import { fetchBasePaymentLink, paymentMatchesKeyMode } from './lib/razorpay';
 import { routeEmail } from './lib/email-routing';
 import { sendRefundCompletedEmail } from './lib/refund-completed-email';
-import { sendWhatsAppTemplate, cleanTemplateParam, firstNameOf } from './lib/whatsapp-send';
+import { sendWhatsAppTemplate, cleanTemplateParam, firstNameOf, formatEventDate } from './lib/whatsapp-send';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const FROM = 'Tamarind Valley Collective <noreply@tvc.farm>';
@@ -384,6 +384,23 @@ export default async (req: Request): Promise<Response> => {
   } else {
     console.error(`[razorpay-webhook] Payment ${payment.id} has no email on file — receipt not sent`);
   }
+
+  // Booking confirmation on WhatsApp, alongside the receipt email. Never
+  // throws (sendWhatsAppTemplate swallows its own errors), and a re-delivered
+  // webhook returned as a duplicate above, so it is sent once per payment.
+  await sendWhatsAppTemplate({
+    template: 'tvc_booking_confirmed',
+    to: payerContact,
+    isTest: mode === 'test',
+    bookingId: recorded.id,
+    params: [
+      cleanTemplateParam(firstNameOf(payerName), 60),
+      cleanTemplateParam(eventTitle, 120),
+      formatEventDate(eventDate),
+      String(attendeeCount),
+      formatAmount(payment.amount, payment.currency),
+    ],
+  });
 
   // A guest who was already mid-checkout when registration closed (the
   // event was cancelled, or registration shut some other way) can still

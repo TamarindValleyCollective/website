@@ -82,6 +82,11 @@ async function handleConversations(url: URL, staff: StaffGrant): Promise<Respons
           lastMessagePreview: lastMessage?.body ?? null,
           lastMessageDirection: lastMessage?.direction ?? null,
           isBlocked: c.is_blocked ?? false,
+          // Set when the chat started from a Click-to-WhatsApp ad or an
+          // Instagram/Facebook post (Meta's `referral` object).
+          referral: c.referral_source_type
+            ? { type: c.referral_source_type, headline: c.referral_headline ?? null, url: c.referral_source_url ?? null }
+            : null,
         };
       }),
     });

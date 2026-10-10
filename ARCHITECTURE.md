@@ -132,6 +132,7 @@ flowchart TD
         APIFN15["Netlify Function: usage-collect<br/>Scheduled (cron), no HTTP path"]
         APIFN16["Netlify Function: /api/usage-admin<br/>Deployed with the usage dashboard"]
         APIFN17["Netlify Function: usage-alerts<br/>Scheduled (cron, hourly), no HTTP path"]
+        APIFN18["Netlify Function: whatsapp-event-reminders<br/>Scheduled (cron, daily 09:00 IST), no HTTP path —<br/>built, dormant until template approved"]
         BLOBS["Netlify Blobs<br/>'event-interest' store — one JSON record per<br/>past event id, {count, emails[]}, optimistic-<br/>concurrency writes. Reset via netlify blobs:delete<br/>event-interest &lt;id&gt;.<br/>'search-ai-rate-limit' store — per-IP window +<br/>daily Anthropic-fallback budget records.<br/>'chat-rate-limit' store — per-IP window +<br/>global daily message cap for /api/chat"]
         FORMS["Netlify Forms<br/>Captures /contact membership + general<br/>enquiries, /visit/host-an-event inquiries,<br/>/visit camping·day-visit·trekking inquiries,<br/>and event-interest submissions with an email"]
     end
@@ -277,6 +278,8 @@ flowchart TD
     USAGEDASH -.->|"Sign in with Google"| GIDTOKEN
     APIFN17 -.->|"read usage data, remember<br/>alerts already sent"| SUPABASE
     APIFN17 -.->|"send alert digest"| RESEND
+    APIFN18 -.->|"bookings for tomorrow,<br/>claim reminder"| SUPABASE
+    APIFN18 -.->|"send tvc_event_reminder<br/>template"| WAMETA
 
     classDef staticStyle fill:#e8f2ea,stroke:#17723b,color:#0f5029
     classDef netlifyStyle fill:#fdead3,stroke:#f78520,color:#9a5310
@@ -286,7 +289,7 @@ flowchart TD
     classDef ciStyle fill:#eef4fb,stroke:#3b6ea5,color:#1c3f5f
 
     class PAGES,INTERNALPAGE,INTERNALPAGE2,INTERNALPAGE3,INTERNALPAGE4,INTERNALPAGE5,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH,WHATSAPPDASH,ACCOMMODATIONDASH,EVENTPAYDASH,USAGEDASH,BOOKINGFORM,CANCELPAGE staticStyle
-    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,FUNC_SRC14,FUNC_SRC15,FUNC_SRC16,FUNC_SRC17,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,APIFN14,APIFN15,APIFN16,APIFN17,BLOBS,FORMS,ANTHROPIC netlifyStyle
+    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,FUNC_SRC14,FUNC_SRC15,FUNC_SRC16,FUNC_SRC17,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,APIFN14,APIFN15,APIFN16,APIFN17,APIFN18,BLOBS,FORMS,ANTHROPIC netlifyStyle
     class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,SUPABASE,GEMINI,RAZORPAY,RDAP externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL,SCRIPT_GSC localStyle
@@ -522,6 +525,15 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `whatsapp_conversations.last_stale_alert_at`, reset to null on every new inbound message so
   each message gets its own full 60-minute countdown), so a single missed email can't let a
   message silently go unanswered.
+- **`netlify/functions/whatsapp-event-reminders.mts`** — scheduled function (Netlify cron,
+  `config.schedule = "30 3 * * *"`, i.e. 09:00 IST, no HTTP path). Sends the `tvc_event_reminder`
+  WhatsApp template to every `event_payments` booking whose `event_date` is tomorrow (IST) and that
+  isn't refunded or mid-refund. Each booking is claimed via `whatsapp_reminder_sent_at` (migration
+  `0033`) before sending and released if the send fails or the template isn't approved yet. The
+  booking-confirmation template (`tvc_booking_confirmed`) is sent from `razorpay-webhook.mts`, and
+  `whatsapp-webhook.mts` additionally stores Click-to-WhatsApp `referral` data on the conversation
+  and, when `WHATSAPP_AUTOACK_ENABLED=true`, sends a rate-limited out-of-hours auto-reply
+  (`lib/whatsapp-autoack.ts`). See `docs/whatsapp-templates.md`.
 - **`netlify/functions/accommodation-admin.mts`** — backs `/internal/accommodation-calendar`.
   Same Google Sign-In auth pattern as `photo-pool.mts`/`whatsapp-admin.mts`: `requireStaff`
   checks the caller's role in the `accommodation` module — `view` to read, `edit` to write and to
@@ -1328,6 +1340,7 @@ never touches Netlify either.
 | Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | ✅ Live — Drive folders, service account, Google Sign-In OAuth client, staff roles (Supabase `staff_module_roles`, formerly a curator Sheet), all Netlify env vars configured; verified against production directly (`/internal/photo-pool` returns 200, `/api/photo-pool` returns 401 unauthenticated as expected for the Google Sign-In-gated function) |
 | WhatsApp webhook (`/api/whatsapp-webhook`) | ✅ Live — verified end-to-end with a real WhatsApp message to `+91 80 4110 9754` on 2026-08-19. Two real bugs found and fixed along the way: the number wasn't actually registered for Cloud API messaging (blocked by a stuck migration from the old AiSensy WABA, which still held the number), and the WABA was never subscribed to the app's webhook (`POST /{waba-id}/subscribed_apps` — a separate step from the App Dashboard's webhook config). Persists every inbound message to Supabase (2026-08-20); no longer emails per-message (see the stale-alert row below). See `WHATSAPP.md` |
 | WhatsApp reply dashboard (`/internal/whatsapp`, `/api/whatsapp-admin`) | ✅ Live — verified end-to-end with real WhatsApp messages and real replies sent from production. Unread indicators, real pagination, message previews, per-reply responder names, WhatsApp/iMessage-style avatars, and a full visual pass added 2026-08-20 after real usage surfaced gaps |
+| WhatsApp event reminders (`whatsapp-event-reminders.mts`, scheduled) | 🟡 Built and tested against mocks 2026-10-10; sends nothing until migration `0033` is applied and `tvc_event_reminder` is approved by Meta and listed in `WHATSAPP_APPROVED_TEMPLATES` |
 | WhatsApp unread digest (`whatsapp-stale-alert.mts`, scheduled) | ✅ Live — cron every 15 minutes, emails `core-team@tvc.farm` one digest of conversations unread 60+ minutes, re-sent hourly per conversation until read. Replaces the old per-message email (2026-08-20) |
 | Accommodation Allocation dashboard (`/internal/accommodation-calendar`, `/api/accommodation-admin`) | ✅ Live — merged to `main` and deployed 2026-08-30 (PR #116); verified directly against production (`/internal/accommodation-calendar` returns 200, `/api/accommodation-admin/bookings` returns 401 unauthenticated as expected for the Google Sign-In gate, `accommodation-admin` listed among the deploy's live functions). The public availability view (`/visit/availability`) built alongside it was **not** included in this launch — dropped 2026-08-30, pending a rethink; confirmed 404 on production |
 | Event payment tracking (`EventBookingForm`, `/api/event-booking`, `/api/razorpay-webhook`, `/api/cancel-booking`) | ✅ Live as of 2026-09-24 — real live-mode Razorpay keys and webhook configured; a real Payment Link creation verified directly against the live API. One event uses it so far (Foraging Day, 10 Oct 2026); reusable for any event with no code change — see `RAZORPAY.md`. Full webhook→Supabase→receipt chain confirmed in Test mode with two real test payments; Live mode confirmed only through Payment Link creation (an unpaid dry run), not yet through an actual completed live payment |

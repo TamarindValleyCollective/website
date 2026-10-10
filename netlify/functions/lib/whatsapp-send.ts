@@ -37,6 +37,23 @@ export function firstNameOf(fullName: string | null | undefined): string {
   return fullName?.trim().split(/\s+/)[0] || 'there';
 }
 
+// "Saturday, 10 October 2026" from an event_payments.event_date ('YYYY-MM-DD').
+// Parsed as a calendar date (UTC noon) so the weekday can't slip across a
+// timezone boundary. Falls back to a neutral phrase for bookings that have no
+// date on file (made before the column existed), since Meta rejects empty
+// template parameters.
+export function formatEventDate(isoDate: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate ?? '');
+  if (!m) return 'the date on your booking';
+  return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12)).toLocaleDateString('en-IN', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 function approvedTemplates(): Set<string> {
   return new Set((process.env.WHATSAPP_APPROVED_TEMPLATES ?? '').split(',').map((s) => s.trim()).filter(Boolean));
 }
@@ -121,4 +138,28 @@ export async function sendWhatsAppTemplate(opts: {
 export async function sendStaffWhatsAppAlert(template: WhatsAppTemplateName, params: string[]): Promise<void> {
   const numbers = (process.env.WHATSAPP_STAFF_ALERT_NUMBERS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
   await Promise.all(numbers.map((to) => sendWhatsAppTemplate({ template, to, params })));
+}
+
+// A free-form text reply. Only valid inside the 24-hour customer-service
+// window, i.e. in response to a message the guest just sent (the auto-reply in
+// whatsapp-webhook.mts). Never throws.
+export async function sendWhatsAppText(
+  toWaPhone: string,
+  body: string,
+): Promise<{ ok: true; waMessageId: string | null } | { ok: false; error: string }> {
+  try {
+    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+    if (!phoneNumberId || !accessToken) return { ok: false, error: 'Missing WHATSAPP_PHONE_NUMBER_ID or WHATSAPP_ACCESS_TOKEN' };
+    const res = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ messaging_product: 'whatsapp', to: toWaPhone, type: 'text', text: { body } }),
+    });
+    const data: any = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data?.error?.message ?? `WhatsApp API error ${res.status}` };
+    return { ok: true, waMessageId: data?.messages?.[0]?.id ?? null };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
