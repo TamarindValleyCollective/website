@@ -19,7 +19,7 @@ export type UsageData = {
 };
 
 // The measured meter (Supabase size) plus every typed-in one.
-const SNAPSHOT_METERS: [string, string][] = [['supabase', 'db_size_bytes'], ['netlify', 'plan_credits'], ['resend', 'emails_monthly'], ['resend', 'emails_daily'], ...Object.values(MANUAL_METERS).map((m): [string, string] => [m.service, m.metric])];
+const SNAPSHOT_METERS: [string, string][] = [['supabase', 'db_size_bytes'], ['netlify', 'plan_credits'], ['resend', 'emails_monthly'], ['resend', 'emails_daily'], ['cloudflare', 'r2_storage_bytes'], ...Object.values(MANUAL_METERS).map((m): [string, string] => [m.service, m.metric])];
 
 async function json<T>(path: string): Promise<T> {
   return (await (await rest(path)).json()) as T;

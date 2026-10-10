@@ -23,7 +23,7 @@ shows how close each one is and emails the core team before it runs out.
 | Supabase database size | **Measured** every 6 hours by `usage-collect.mts` against the free plan's 500 MB. | |
 | Netlify credits | **Credits remaining** is **typed in**, as Netlify's billing page reports it (its API doesn't expose it). The **plan allowance and billing-cycle dates** are **read automatically** every 6 hours from `GET /accounts/{id}` by `usage-collect.mts`, using `NETLIFY_ACCESS_TOKEN`. | The read allowance overrides the typed limit. Credits reset each billing cycle (TVC's runs 19th to 18th), so a reading typed in *before* the current cycle began is flagged on the page and gives no alert. Without the token, everything falls back to fully typed in. |
 | Resend emails | **Read automatically** every 6 hours from Resend's Usage API (`GET /usage`) by `usage-collect.mts`, using a separate `RESEND_USAGE_API_KEY` (the site's sending-only `RESEND_API_KEY` is refused with HTTP 401, confirmed 2026-10-10): the monthly quota, plus the daily one on the free plan. | The usage key must be a **full-access** Resend key (no read-only type exists), so it is kept separate from the sending key and flagged secret on Netlify (Functions scope); it can be revoked on its own. If the key is missing, refused, or the readings stop for 2 days, the typed-in Resend meter carries on and a warning is emailed. A fresh API reading hides the typed-in card and form. |
-| Cloudflare R2 storage | **Typed in** by an admin from the provider's own dashboard, with the limit entered alongside. | On purpose: reading these automatically needs an API credential per service, broader than a usage reading is worth. Phase 3 can revisit (Cloudflare supports a read-only analytics token). |
+| Cloudflare R2 storage | **Read automatically** every 6 hours from Cloudflare's GraphQL analytics API (`r2StorageAdaptiveGroups`: current bytes across all buckets) by `usage-collect.mts`, using a read-only `CLOUDFLARE_ANALYTICS_TOKEN` (Account Analytics: Read only) and the non-secret `CLOUDFLARE_ACCOUNT_ID`. | Compared with the 10 GB free tier (a GB is 10^9 bytes; the Cloudflare dashboard is the authority). If the token or account id is missing, or readings stop for 2 days, the typed-in R2 meter carries on and a warning is emailed. A fresh API reading hides the typed-in card and form. |
 | Domain renewals | **Read live** from the registries' public RDAP service (no key), shown on the page; **emailed** by the `domain-expiry.yml` GitHub Action. | The Action runs off Netlify and holds no database credentials, so it still alerts if Netlify pauses. |
 
 ## Alert rules
@@ -42,6 +42,8 @@ when they clear so a recurrence emails again. One digest per hourly run.
 | Supabase database ≥ 70% / 90% of its limit | Warning / Critical |
 | Resend emails (monthly or daily, read from its API) ≥ 70% / 90% of the limit | Warning / Critical |
 | Resend usage readings not refreshed for over 2 days | Warning |
+| Cloudflare R2 storage ≥ 70% / 90% of the 10 GB free tier (read from its API) | Warning / Critical |
+| Cloudflare R2 readings not refreshed for over 2 days | Warning |
 | Netlify plan data (allowance/cycle) not refreshed for over 2 days, i.e. the token has likely expired | Warning |
 | Netlify credits remaining ≤ 30% / ≤ 10% of the plan allowance | Warning / Critical |
 | Any typed-in "used" meter ≥ 70% / 90% of the limit entered with it | Warning / Critical |
@@ -67,7 +69,8 @@ Domain renewals are separate (GitHub Action): at 60 and 30 days, then daily from
    (Netlify dashboard → Environment variables, flagged secret). The `usage-collect` function picks it
    up on its next run. **The token expires 2027-12-30**: renew it before then, or the plan allowance and cycle dates silently stop refreshing (the page keeps showing the last ones). Check the Netlify card shows the billing cycle dates, a "resets in N days" line and credits-a-day pace.
 5. Resend (optional): in resend.com → API Keys create a **Full access** key named `tvc-usage-read`, and set it as `RESEND_USAGE_API_KEY` on Netlify (flagged secret, Functions scope), then redeploy. Rotate it alongside `NETLIFY_ACCESS_TOKEN`.
-6. Keep the readings fresh: warnings use the latest entry, and a reading more than a month old is
+6. Cloudflare R2 (optional): in Cloudflare → My Profile → API Tokens, create a custom token with **Account → Account Analytics → Read** and nothing else, restricted to the TVC account. Set it on Netlify as `CLOUDFLARE_ANALYTICS_TOKEN` (flagged secret, Functions scope) with `CLOUDFLARE_ACCOUNT_ID` (not secret; the account id from the Cloudflare dashboard URL), then redeploy. Rotate it alongside the other usage tokens.
+7. Keep the readings fresh: warnings use the latest entry, and a reading more than a month old is
    flagged on the page.
 
 ## Adding a typed-in meter

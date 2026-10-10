@@ -100,7 +100,7 @@ flowchart TD
         FUNC_SRC12["netlify/functions/razorpay-webhook.mts<br/>Serverless function — verifies signature, records<br/>payment_link.paid in Supabase (idempotent), emails<br/>a branded receipt; also handles refund.created/<br/>processed/failed — Razorpay's own confirmation is<br/>the only thing that marks a row actually refunded"]
         FUNC_SRC13["netlify/functions/cancel-booking.mts<br/>Serverless function — records a guest's<br/>cancellation request (not an automatic<br/>refund), notifies TVC + Linger + guest"]
         FUNC_SRC14["netlify/functions/event-payments-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>per-event registrations/cancellations/money<br/>collected from Supabase, issues real Razorpay<br/>refunds (tier-suggested, admin-confirmed)"]
-        FUNC_SRC15["netlify/functions/usage-collect.mts<br/>Scheduled function (cron, every 6 hours) — appends<br/>the Supabase database size, Netlify's plan<br/>credits + billing cycle and Resend's email quota to usage_snapshots for<br/>the free-tier usage dashboard. Optional secrets:<br/>NETLIFY_ACCESS_TOKEN, RESEND_USAGE_API_KEY"]
+        FUNC_SRC15["netlify/functions/usage-collect.mts<br/>Scheduled function (cron, every 6 hours) — appends<br/>the Supabase database size, Netlify's plan<br/>credits + billing cycle and Resend's email quota to usage_snapshots for<br/>the free-tier usage dashboard. Optional secrets:<br/>NETLIFY_ACCESS_TOKEN, RESEND_USAGE_API_KEY,<br/>CLOUDFLARE_ANALYTICS_TOKEN"]
         FUNC_SRC16["netlify/functions/usage-admin.mts<br/>Serverless function, Google Sign-In gated (usage module) —<br/>overview of free-tier/credit usage, live domain<br/>expiry lookups, typed-in provider readings and<br/>price/limit settings (admins only, audit-logged)"]
         FUNC_SRC17["netlify/functions/usage-alerts.mts<br/>Scheduled function (cron, hourly) — evaluates the<br/>usage rules and emails core-team@tvc.farm one digest<br/>per new or worsened warning; remembers what it sent"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
@@ -163,7 +163,7 @@ flowchart TD
         WHATSAPPDASH["WhatsApp dashboard (/internal/whatsapp)<br/>Google Sign-In gated two-pane chat UI — conversation<br/>list + thread + reply box; unlinked, noindex,<br/>sitemap-excluded"]
         ACCOMMODATIONDASH["Accommodation Allocation (/internal/accommodation-calendar)<br/>Google Sign-In gated tent-booking dashboard —<br/>day/week/month views, guest directory + typeahead,<br/>audit log; unlinked, noindex, sitemap-excluded"]
         EVENTPAYDASH["Event Payments (/internal/event-payments)<br/>Google Sign-In gated dashboard — event dropdown,<br/>registrations/cancellations/money-collected stats,<br/>tier-suggested refund with two-step confirm;<br/>unlinked, noindex, sitemap-excluded"]
-        USAGEDASH["Usage &amp; limits (/internal/usage)<br/>Google Sign-In gated dashboard — Anthropic, Gemini,<br/>Supabase measured; Netlify allowance + Resend quota read<br/>from their APIs; Netlify balance, Cloudflare R2 and the<br/>Anthropic credit balance typed in by an admin; domain<br/>renewals read live; unlinked, noindex, sitemap-excluded"]
+        USAGEDASH["Usage &amp; limits (/internal/usage)<br/>Google Sign-In gated dashboard — Anthropic, Gemini,<br/>Supabase measured; Netlify allowance + Resend quota read<br/>from their APIs; Cloudflare R2 storage read from its<br/>analytics API; Netlify balance and the Anthropic credit<br/>balance typed in by an admin; domain<br/>renewals read live; unlinked, noindex, sitemap-excluded"]
     end
 
     subgraph EXTERNAL["External services (called directly by the browser)"]
@@ -265,6 +265,7 @@ flowchart TD
     APIFN15 -.->|"db size snapshot"| SUPABASE
     APIFN15 -.->|"plan credits + cycle"| NETLIFYAPI
     APIFN15 -.->|"email quota read"| RESEND
+    APIFN15 -.->|"R2 storage analytics"| R2
     APIFN -.->|"per-call usage counts"| SUPABASE
     APIFN10 -.->|"per-call usage counts"| SUPABASE
 
@@ -375,7 +376,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   reads the TVC team's plan credit allowance and billing-cycle dates from the Netlify API
   (`GET /accounts/{id}`; credits *remaining/used* is not exposed, so the remaining balance stays a typed-in reading; the Netlify
   call failing never fails the Supabase one). It likewise reads Resend's daily/monthly email quota
-  from `GET https://api.resend.com/usage` with a separate full-access `RESEND_USAGE_API_KEY` (the sending-only key is refused). Both tables and functions are service_role
+  from `GET https://api.resend.com/usage` with a separate full-access `RESEND_USAGE_API_KEY` (the sending-only key is refused), and R2 storage
+  from Cloudflare's GraphQL analytics API (`POST https://api.cloudflare.com/client/v4/graphql`,
+  read-only `CLOUDFLARE_ANALYTICS_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`). Both tables and functions are service_role
   only (migration `0030_usage_metering.sql`, applied to production 2026-10-04; RLS on, no policies). Domain renewals are checked by the
   `domain-expiry.yml` GitHub Action instead: it reads each domain's expiry from the registry's public
   RDAP service (no key, same answer whichever registrar holds it) and emails `core-team@tvc.farm` at
@@ -395,7 +398,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   been sent and forgets it when the condition clears. All thresholds and the Anthropic credit
   *estimate* (typed-in balance minus metered spend since, using admin-entered token prices) live in
   `usage-rules.mjs`, pure functions with unit tests. Tables from migration `0031_usage_dashboard.sql`.
-  Typed-in services (Netlify, Resend, Cloudflare R2, the Anthropic balance) are typed in on purpose:
+  Typed-in services (the Netlify balance, the Anthropic balance, and the fallbacks for Resend and Cloudflare R2) are typed in on purpose:
   holding an API credential for each would add a secret broader than a usage reading is worth.
 - **`netlify/functions/lib/site-retrieval.ts`** — shared retrieval + Anthropic-call plumbing
   factored out of `chat.mts` so it and `search-ai.mts` below can't drift apart:

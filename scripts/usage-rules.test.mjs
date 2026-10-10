@@ -9,6 +9,7 @@ import {
   evaluateAlerts,
   mergeNetlifyPlan,
   resendAutomaticIsFresh,
+  r2AutomaticIsFresh,
   decideNotifications,
   sumDaily,
   addDays,
@@ -246,4 +247,23 @@ test('Resend API readings that stop refreshing warn once, and the typed-in meter
 test('Resend: no API readings ever recorded means no Resend API alerts', () => {
   const keys = evaluateAlerts({ now: NOW, snapshots: {} }).map((a) => a.key);
   assert.equal(keys.some((k) => k.startsWith('resend:')), false);
+});
+
+const r2Snap = (bytes, captured_at = '2026-10-10T06:00:00Z') => ({ value: bytes, limit_value: 10_000_000_000, unit: 'bytes', captured_at, detail: { source: 'cloudflare-graphql', buckets: 1, objects: 120 } });
+
+test('R2 API reading alerts at 70% / 90%, supersedes the typed-in meter, quiet below', () => {
+  const at = (bytes) => evaluateAlerts({ now: NOW, snapshots: { 'cloudflare.r2_storage_bytes': r2Snap(bytes), 'cloudflare.r2_storage_gb': { value: 10, limit_value: 10, captured_at: '2026-10-01T00:00:00Z' } } });
+  assert.equal(at(1e9).length, 0); // 10%, and the typed-in 100% is superseded
+  assert.equal(at(7.5e9).find((a) => a.key === 'cloudflare:r2-storage').level, 'warn');
+  assert.equal(at(9.5e9).find((a) => a.key === 'cloudflare:r2-storage').level, 'critical');
+});
+
+test('R2 readings that stop refreshing warn once and hand back to the typed-in meter; none ever recorded is silent', () => {
+  const stale = r2Snap(1e9, '2026-10-05T00:00:00Z');
+  const snapshots = { 'cloudflare.r2_storage_bytes': stale, 'cloudflare.r2_storage_gb': { value: 9.5, limit_value: 10, captured_at: '2026-10-09T00:00:00Z' } };
+  assert.equal(r2AutomaticIsFresh(snapshots, NOW), false);
+  const keys = evaluateAlerts({ now: NOW, snapshots }).map((a) => a.key);
+  assert.ok(keys.includes('cloudflare:r2-stale'));
+  assert.ok(keys.includes('manual:cloudflare.r2_storage_gb'));
+  assert.equal(evaluateAlerts({ now: NOW, snapshots: {} }).some((a) => a.key.startsWith('cloudflare:')), false);
 });
