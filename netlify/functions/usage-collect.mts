@@ -7,9 +7,10 @@
 // NETLIFY_ACCESS_TOKEN is set. Netlify's API exposes those but NOT credits used,
 // so "used" stays a typed-in reading (see mergeNetlifyPlan in usage-rules.mjs).
 //
-// And Resend's own daily/monthly email quota from its Usage API (GET /usage), using the
-// RESEND_API_KEY the site already holds. If that key can't read usage (a sending-only key may
-// be refused) the page keeps its typed-in Resend reading instead.
+// And Resend's own daily/monthly email quota from its Usage API (GET /usage). That endpoint
+// refuses the site's sending-only RESEND_API_KEY (HTTP 401, confirmed 2026-10-10), so it uses a
+// separate full-access key, RESEND_USAGE_API_KEY, kept apart so the sending key stays restricted
+// and either can be revoked on its own. Without it the page keeps its typed-in Resend reading.
 //
 // This only *records*. Turning readings into threshold emails is the
 // dashboard module's job; and anything that must still alert while Netlify
@@ -57,8 +58,8 @@ async function recordNetlifyPlan(base: string): Promise<string> {
 
 // Records Resend's email usage against its limits. Never throws, like recordNetlifyPlan.
 async function recordResendUsage(base: string): Promise<string> {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) return 'skipped (no RESEND_API_KEY)';
+  const key = process.env.RESEND_USAGE_API_KEY;
+  if (!key) return 'skipped (no RESEND_USAGE_API_KEY)';
   try {
     const res = await fetch('https://api.resend.com/usage', { headers: { Authorization: `Bearer ${key}` } });
     if (!res.ok) throw new Error(`resend usage fetch failed: ${res.status}`);
