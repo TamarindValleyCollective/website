@@ -308,6 +308,19 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     background: var(--tvc-error-text);
   }
 
+  .usage .meter-row-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 10px;
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .usage .meter-row .meter {
+    margin-top: 4px;
+  }
+
   .usage .meter-caption {
     margin: 0 0 12px;
     font-size: 0.82rem;
@@ -692,11 +705,28 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     const staleForCycle = r.staleForCycle === true;
     const stale = !staleForCycle && daysAgo(r.capturedAt) > 35;
     const parts: Kid[] = [h('p', { class: 'hero', text: `${nf.format(r.value)} ${m.unit}` }), h('p', { class: 'hero-sub', text: remaining ? (r.limit ? `left of ${nf.format(r.limit)} included` : 'left (limit not entered)') : r.limit ? `of ${nf.format(r.limit)} included` : 'limit not entered' })];
-    if (r.limit) parts.push(meter(frac, m.level, `${m.label} used`, `${Math.round(frac * 100)}% used`), h('p', { class: 'meter-caption', text: `${Math.round(frac * 100)}% used${remaining ? ` · ${nf.format(r.value)} left` : ''}` }));
-    if (r.cycleEnd) {
-      const daysLeft = Math.max(0, Math.ceil((new Date(r.cycleEnd).getTime() - Date.now()) / 86_400_000));
-      const perDay = remaining && !staleForCycle && daysLeft > 0 ? ` · about ${nf.format(Math.floor(r.value / daysLeft))} credits a day to last` : '';
-      parts.push(h('p', { class: 'meter-caption', text: `Resets in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (${cycleDay(r.cycleEnd)})${perDay}` }));
+    const cycleMs = r.cycleStart && r.cycleEnd ? new Date(r.cycleEnd).getTime() - new Date(r.cycleStart).getTime() : 0;
+    if (remaining && r.limit && cycleMs > 0 && !staleForCycle) {
+      // Two bars that both drain left to right: credits left against days left in the billing cycle.
+      // Credits draining faster than days means spending is ahead of pace.
+      const msLeft = Math.max(0, new Date(r.cycleEnd).getTime() - Date.now());
+      const daysLeft = Math.ceil(msLeft / 86_400_000);
+      const daysTotal = Math.round(cycleMs / 86_400_000);
+      const creditsFrac = Math.max(0, r.value / r.limit);
+      const daysFrac = Math.min(1, msLeft / cycleMs);
+      const row = (label: string, text: string, fraction: number, level: Level, what: string) =>
+        h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: label }), h('span', { text })), meter(fraction, level, what, text));
+      parts.push(
+        row('Credits left', `${nf.format(r.value)} of ${nf.format(r.limit)}`, creditsFrac, m.level, `${m.label} left`),
+        row('Days left', `${daysLeft} of ${daysTotal} · resets ${cycleDay(r.cycleEnd)}`, daysFrac, null, 'Days left in the billing cycle'),
+        h('p', { class: 'meter-caption', text: daysLeft > 0 ? `About ${nf.format(Math.floor(r.value / daysLeft))} credits a day to last until the reset${creditsFrac < daysFrac ? ' · using credits faster than the cycle is passing' : ''}` : 'Resets today' }),
+      );
+    } else {
+      if (r.limit) parts.push(meter(frac, m.level, `${m.label} used`, `${Math.round(frac * 100)}% used`), h('p', { class: 'meter-caption', text: `${Math.round(frac * 100)}% used${remaining ? ` · ${nf.format(r.value)} left` : ''}` }));
+      if (r.cycleEnd) {
+        const daysLeft = Math.max(0, Math.ceil((new Date(r.cycleEnd).getTime() - Date.now()) / 86_400_000));
+        parts.push(h('p', { class: 'meter-caption', text: `Resets in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (${cycleDay(r.cycleEnd)})` }));
+      }
     }
     parts.push(h('p', { class: 'svc-note', text: `Typed in on ${dateText(r.capturedAt)} (${ago(r.capturedAt)}) from ${m.where}.${r.cycleStart ? ` Billing cycle ${cycleDay(r.cycleStart)} to ${cycleDay(r.cycleEnd, -1)}; the allowance is read from Netlify automatically.` : ''}${r.planStale ? ` Warning: Netlify plan data was last refreshed ${ago(r.planCapturedAt)}, so the limit and cycle dates may be out of date. Check the Netlify token.` : ''}${staleForCycle ? ' This reading is from a previous billing cycle, so the balance has reset since. Update it.' : ''}${stale ? ' This reading is more than a month old, so treat it with caution and update it.' : ''}` }));
     return card(m.label, 'Typed in from the provider', m.level, ...parts);
