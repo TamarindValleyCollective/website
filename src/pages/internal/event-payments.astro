@@ -158,7 +158,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
               <input type="number" id="bulk-cancel-percent" min="1" max="100" step="1" value="100" />
             </label>
             <label class="bulk-cancel-field">
-              Reason <span class="refund-tier-hint">(kept for the audit trail)</span>
+              Reason <span class="refund-tier-hint">(shown to guests in the cancellation email — keep it kind and factual)</span>
               <textarea id="bulk-cancel-reason" rows="2"></textarea>
             </label>
             <p class="error" id="bulk-cancel-error" hidden></p>
@@ -1451,9 +1451,16 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     // already shows the one payer/amount being sent.
     const breakdown = eligible.map((b) => ({ name: b.payerLabel, amount: Math.round(b.amount * fraction) }));
     const total = breakdown.reduce((sum, row) => sum + row.amount, 0);
+    // Guests with no email on file get refunded but never told anything —
+    // flag them here so the admin can contact them directly.
+    const noEmail = eligible.filter((b) => !b.hasEmail);
+    const noEmailWarning = noEmail.length
+      ? `<p class="bulk-cancel-warning">⚠️ ${noEmail.length} booking${noEmail.length === 1 ? ' has' : 's have'} no email on file and won't be notified: ${noEmail.map((b) => escapeHtml(b.payerLabel)).join(', ')}. Contact them directly.</p>`
+      : '';
 
     bulkCancelReview.innerHTML = `
       <div class="refund-confirm">
+        ${noEmailWarning}
         <p>Refund <strong>${eligible.length}</strong> booking${eligible.length === 1 ? '' : 's'} at <strong>${percent}%</strong> each:</p>
         <ul class="bulk-cancel-breakdown">
           ${breakdown.map((row) => `<li><span>${escapeHtml(row.name)}</span><span>${formatAmount(row.amount, currency)}</span></li>`).join('')}
@@ -1480,13 +1487,13 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
             includeTest: includeTestToggle.checked,
           }),
         });
-        const resData: { succeeded: number; attempted: number; results: Array<{ id: string; ok: boolean; error?: string }> } = await res.json();
+        const resData: { succeeded: number; attempted: number; registration?: { closed: boolean; note: string }; skippedTest?: number; results: Array<{ id: string; ok: boolean; error?: string }> } = await res.json();
         if (!res.ok) throw new Error((resData as unknown as { error?: string }).error ?? 'Bulk refund failed');
 
         const failures = resData.results.filter((r) => !r.ok);
-        const summary = `Refunded ${resData.succeeded} of ${resData.attempted} eligible bookings.`;
+        const summary = `Refunded ${resData.succeeded} of ${resData.attempted} eligible bookings. ${resData.registration ? escapeHtml(resData.registration.note) : ''}${resData.skippedTest ? ` ${resData.skippedTest} test-mode booking${resData.skippedTest === 1 ? ' was' : 's were'} left alone.` : ''}`;
 
-        if (failures.length === 0) {
+        if (failures.length === 0 && (resData.registration?.closed ?? true) && !resData.skippedTest) {
           // Left showing until the reload below replaces this panel's
           // contents entirely (renderBookings calls closeBulkCancelPanel).
           bulkCancelReview.innerHTML = `<p class="refund-tier-hint">${summary} Reloading…</p>`;
@@ -1502,7 +1509,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
         // already refunded regardless; a manual refresh just catches the
         // table up once the admin has seen the failures.
         bulkCancelReview.innerHTML = `
-          <p class="refund-tier-hint">${summary} ${failures.length} failed:</p>
+          <p class="refund-tier-hint">${summary}${failures.length ? ` ${failures.length} failed:` : ''}</p>
           <ul class="bulk-cancel-breakdown">
             ${failures.map((f) => `<li><span>${escapeHtml(currentBookings.find((b) => b.id === f.id)?.payerLabel ?? f.id)}</span><span>${escapeHtml(f.error ?? 'Unknown error')}</span></li>`).join('')}
           </ul>

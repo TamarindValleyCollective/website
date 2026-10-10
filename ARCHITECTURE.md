@@ -565,7 +565,14 @@ outside both the local machine and Netlify (the member-update-email workflow).
   dashboard, not through `/internal/event-payments`, gets recorded at all), `refund.processed` is
   the *only* place `refunded_at` itself gets set (`confirmRefundProcessed()`), and `refund.failed`
   flips `refund_status` to `'failed'` (`markRefundFailed()`) so a row that didn't actually go
-  through reads as failed rather than silently stuck. All three guard on `razorpay_refund_id` (and
+  through reads as failed rather than silently stuck. Any refund failure — Razorpay rejecting the API call
+  (e.g. insufficient balance) in `event-payments-admin.mts`, or `refund.failed` here — also emails an internal
+  alert via `netlify/functions/lib/refund-alert.ts` to `core-team@tvc.farm` (cc `stay@linger.in`, never the guest); a
+  bulk "Cancel event" sends one summary alert listing every failed booking, and first closes the event's base
+  Razorpay Payment Link so no new bookings arrive. `refund.processed` also emails the payer "Refund processed". The same `lib/refund-alert.ts` `sendStaffAlert()` (to
+  `core-team@tvc.farm`, cc `stay@linger.in`) also fires on a guest cancellation request (`cancel-booking.mts`, "Action
+  needed") and when a payment lands after registration closed (`razorpay-webhook.mts`). The bulk cancel writes an
+  `event-payments.event_cancelled` staff audit entry. All three guard on `razorpay_refund_id` (and
   `refunded_at is.null` where relevant), so whichever path — our own admin action or this webhook
   — reaches Supabase first for a given step wins, and a duplicate/out-of-order delivery is a
   no-op.

@@ -16,6 +16,7 @@
 // Reusable the same way razorpay-webhook.mts is: nothing here is specific
 // to Foraging Day or any other one event.
 import { getPaymentByRazorpayId, requestCancellationIfNew } from '../../scripts/lib/event-payments-db.mjs';
+import { sendStaffAlert, escapeHtml } from './lib/refund-alert';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const FROM = 'Tamarind Valley Collective <noreply@tvc.farm>';
@@ -114,6 +115,24 @@ export default async (req: Request): Promise<Response> => {
   } catch (err) {
     console.error('[cancel-booking] Failed to record cancellation request', err);
     return jsonResponse({ error: 'Could not record your request' }, 502);
+  }
+
+  // Separate from the guest's acknowledgment below (which only reaches TVC
+  // as a CC, and not at all if the guest has no email on file): an
+  // explicit "someone needs to act" alert, since the email promises the
+  // guest a follow-up that nothing else triggers.
+  if (recordedNow) {
+    try {
+      await sendStaffAlert(
+        `Action needed: cancellation request — ${payment.event_title}`,
+        `<!doctype html><html><head><meta charset="utf-8" /></head><body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f;">
+  <p>A guest has asked to cancel their booking for <strong>${escapeHtml(payment.event_title)}</strong> (${payment.attendee_count} ${payment.attendee_count === 1 ? 'person' : 'people'}, ${formatAmount(payment.amount, payment.currency)}, payment ${escapeHtml(paymentId)}).</p>
+  <p>They've been told TVC will follow up. Review it on <a href="https://tvc.farm/internal/event-payments">the Event Payments dashboard</a> — the refund form there suggests an amount under the <a href="https://tvc.farm/refund-policy">refund policy</a>.${payment.payer_email ? '' : ' <strong>This guest has no email on file</strong>, so they got no acknowledgment — contact them directly.'}</p>
+</body></html>`,
+      );
+    } catch (err) {
+      console.error('[cancel-booking] Failed to send staff alert', err);
+    }
   }
 
   if (recordedNow && payment.payer_email) {

@@ -23,7 +23,8 @@ import {
   recordRefundInitiated,
   requestCancellationIfNew,
 } from '../../scripts/lib/event-payments-db.mjs';
-import { createRefund } from './lib/razorpay';
+import { createRefund, fetchBasePaymentLink, cancelPaymentLink } from './lib/razorpay';
+import { sendRefundFailureAlert, failureFromRow } from './lib/refund-alert';
 import { requireStaff, logStaffAction, type StaffGrant } from './lib/staff-access';
 import { canSeeNames, maskName } from './lib/staff-masking';
 import { roleHasCapability, type Capability } from './lib/staff-registry';
@@ -31,6 +32,10 @@ import { roleHasCapability, type Capability } from './lib/staff-registry';
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const FROM = 'Tamarind Valley Collective <noreply@tvc.farm>';
 const NOTIFY_CC = ['core-team@tvc.farm', 'stay@linger.in'];
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -210,19 +215,48 @@ async function sendRefundEmail(params: {
   payerEmail: string;
   eventTitle: string;
   refundAmount: number;
+  paidAmount: number;
   currency: string;
   paymentId: string;
+  refundId: string;
+  attendeeCount: number;
+  // Set only by the bulk "Cancel event" action: TVC called the event off,
+  // so the email says so (and shows `reason`, which the admin typed on the
+  // form knowing guests will read it) instead of reading like a guest-
+  // initiated cancellation.
+  eventCancelled?: boolean;
+  reason?: string;
 }): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('[event-payments-admin] RESEND_API_KEY is not set — cannot send refund notification');
     return;
   }
+  const retained = params.paidAmount - params.refundAmount;
+  const row = (label: string, value: string, bold = false) =>
+    `<tr><td style="padding:4px 16px 4px 0; color:#57604f;">${label}</td><td style="padding:4px 0;${bold ? ' font-weight:600;' : ''}">${value}</td></tr>`;
   const html = `<!doctype html>
 <html><head><meta charset="utf-8" /></head>
 <body style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#22291f;">
-  <p>We've started a refund of <strong>${formatAmount(params.refundAmount, params.currency)}</strong> for your booking for <strong>${params.eventTitle}</strong> (payment ${params.paymentId}).</p>
+  ${
+    params.eventCancelled
+      ? `<p>We're sorry — we've had to cancel <strong>${params.eventTitle}</strong>.</p>${
+          params.reason ? `<p style="white-space:pre-line;">${escapeHtml(params.reason)}</p>` : ''
+        }<p>We've started a refund for your booking.</p>`
+      : `<p>We've started a refund for your booking for <strong>${params.eventTitle}</strong>.</p>`
+  }
+  <table style="border-collapse:collapse; margin:12px 0;">
+    ${row('Event', params.eventTitle)}
+    ${row('People', String(params.attendeeCount))}
+    ${row('Amount paid', formatAmount(params.paidAmount, params.currency))}
+    ${row('Refund amount', formatAmount(params.refundAmount, params.currency), true)}
+    ${retained > 0 ? row('Amount retained', `${formatAmount(retained, params.currency)} (per our <a href="https://tvc.farm/refund-policy">cancellation &amp; refund policy</a>)`) : ''}
+    ${row('Refund initiated on', new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' }))}
+    ${row('Payment ID', params.paymentId)}
+    ${row('Refund ID', params.refundId)}
+  </table>
   <p>It's being processed by Razorpay now and should reach your original payment method within a few business days.</p>
+  ${params.eventCancelled ? '<p>We hope to host you at another TVC event soon — keep an eye on <a href="https://tvc.farm/events">tvc.farm/events</a>.</p>' : ''}
   <p>Questions? Reply to this email or reach us at <a href="mailto:core-team@tvc.farm">core-team@tvc.farm</a>.</p>
 </body></html>`;
   const res = await fetch(RESEND_API_URL, {
@@ -232,7 +266,7 @@ async function sendRefundEmail(params: {
       from: FROM,
       to: [params.payerEmail],
       cc: NOTIFY_CC,
-      subject: `Refund initiated — ${params.eventTitle}`,
+      subject: params.eventCancelled ? `${params.eventTitle} has been cancelled — your refund is on its way` : `Refund initiated — ${params.eventTitle}`,
       html,
     }),
   });
@@ -247,7 +281,7 @@ async function sendRefundEmail(params: {
 // action). Validation of *which* row is eligible and *how much* to refund
 // happens in each caller, since the two have different rules (a single
 // admin-typed override vs. a uniform fraction applied across many rows).
-async function refundOneBooking(row: any, amount: number, staff: StaffGrant, reason: string | undefined): Promise<{ ok: true; refund: { id: string; amount: number; status: string } } | { ok: false; error: string }> {
+async function refundOneBooking(row: any, amount: number, staff: StaffGrant, reason: string | undefined, eventCancelled = false): Promise<{ ok: true; refund: { id: string; amount: number; status: string } } | { ok: false; error: string }> {
   // Logged *before* any money moves, and refused if the log can't be
   // written. Only ids and amounts — the free-text reason can contain
   // anything, so it is not copied into the audit log.
@@ -310,8 +344,13 @@ async function refundOneBooking(row: any, amount: number, staff: StaffGrant, rea
         payerEmail: row.payer_email,
         eventTitle: row.event_title,
         refundAmount: refund.amount,
+        paidAmount: row.amount,
         currency: row.currency,
         paymentId: row.razorpay_payment_id,
+        refundId: refund.id,
+        attendeeCount: row.attendee_count,
+        eventCancelled,
+        reason: eventCancelled ? reason : undefined,
       });
     } catch (err) {
       console.error('Refund succeeded but failed to send notification email', err);
@@ -358,7 +397,12 @@ async function handleRefund(req: Request, staff: StaffGrant): Promise<Response> 
   }
 
   const outcome = await refundOneBooking(row, amount, staff, reason);
-  if (!outcome.ok) return jsonResponse({ error: outcome.error }, 502);
+  if (!outcome.ok) {
+    await sendRefundFailureAlert([failureFromRow(row, outcome.error)], { bulk: false }).catch((err) =>
+      console.error('Failed to send refund failure alert', err),
+    );
+    return jsonResponse({ error: outcome.error }, 502);
+  }
   return jsonResponse({ ok: true, refund: outcome.refund });
 }
 
@@ -403,21 +447,70 @@ async function handleBulkRefund(req: Request, staff: StaffGrant): Promise<Respon
   // (a previously *failed* one is fair game to retry here too).
   const eligible = allRows.filter((r) => !r.refunded_at && (!r.refund_initiated_at || r.refund_status === 'failed') && (includeTest || r.mode !== 'test'));
 
+  // One audit entry for the event cancellation itself (each refund below
+  // also logs its own). Refused if it can't be written, like the per-refund
+  // log. Only ids and counts — the free-text reason isn't copied in.
+  try {
+    await logStaffAction({
+      actorId: staff.id,
+      action: 'event-payments.event_cancelled',
+      module: 'event-payments',
+      detail: { eventReferenceId, fraction, eligibleCount: eligible.length, includeTest, reasonProvided: Boolean(reason) },
+    });
+  } catch (err) {
+    console.error('Failed to write staff audit log; refusing to cancel event', err);
+    return jsonResponse({ error: 'Could not write the audit log — nothing has been changed.' }, 502);
+  }
+
+  // Close registration first, before any money moves, so nobody can book a
+  // cancelled event while the refunds below are running. A failure here
+  // doesn't block the refunds — it's reported back so the admin can close
+  // the Payment Link by hand in the Razorpay dashboard. (Per-guest links
+  // already created for someone mid-checkout stay payable; closing the base
+  // link only stops new ones from being created.)
+  let registration: { closed: boolean; note: string };
+  try {
+    const base = await fetchBasePaymentLink(eventReferenceId);
+    if (base.status === 'created') {
+      await cancelPaymentLink(base.id);
+      registration = { closed: true, note: 'Online registration closed.' };
+    } else {
+      registration = { closed: true, note: 'Online registration was already closed.' };
+    }
+  } catch (err) {
+    console.error('Failed to close registration for cancelled event', err);
+    registration = {
+      closed: false,
+      note: `Could not close online registration automatically (${err instanceof Error ? err.message : 'unknown error'}) — close the event's Payment Link in the Razorpay dashboard.`,
+    };
+  }
+
   const results: Array<{ id: string; ok: boolean; error?: string }> = [];
+  const failedRows: Array<ReturnType<typeof failureFromRow>> = [];
   for (const row of eligible) {
     const amount = Math.round(row.amount * fraction);
     if (amount <= 0) {
       results.push({ id: row.id, ok: false, error: 'Computed refund amount is zero' });
+      failedRows.push(failureFromRow(row, 'Computed refund amount is zero'));
       continue;
     }
-    const outcome = await refundOneBooking(row, amount, staff, reason);
+    const outcome = await refundOneBooking(row, amount, staff, reason, true);
     results.push(outcome.ok ? { id: row.id, ok: true } : { id: row.id, ok: false, error: outcome.error });
+    if (!outcome.ok) failedRows.push(failureFromRow(row, outcome.error));
   }
+
+  // One summary alert for the whole batch, not one per failed booking.
+  await sendRefundFailureAlert(failedRows, { bulk: true, succeeded: results.filter((r) => r.ok).length }).catch((err) =>
+    console.error('Failed to send bulk refund failure alert', err),
+  );
 
   return jsonResponse({
     ok: true,
     attempted: eligible.length,
     succeeded: results.filter((r) => r.ok).length,
+    registration,
+    // Test-mode bookings left alone because include-test wasn't ticked.
+    skippedTest: includeTest ? 0 : allRows.filter((r) => !r.refunded_at && (!r.refund_initiated_at || r.refund_status === 'failed') && r.mode === 'test').length,
     results,
   });
 }
