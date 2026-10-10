@@ -125,6 +125,26 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
   padding used to float them inside the card), and on a phone the header's actions drop to their own
   full-width row. Page-local modifiers are written `.button.x`, because the staff shell's
   `main .button` otherwise beats a class-only rule (Astro's scoping adds no specificity).
+- **Suggested replies (2026-10-10).** A "Suggest reply" button in the inbox composer
+  (`whatsapp-suggest.mts`, `reply` capability) drafts an answer for a staff member to read, edit and
+  send; it never sends anything itself. The draft is grounded in the site's own pages (the same
+  retrieval as the chat widget), so it can't invent prices, dates or policies, and anything about a
+  booking, cancellation or refund, or that the site doesn't cover, comes back flagged "Needs a human
+  check" with a one-line reason. "Based on" links show which pages it used. Safety nets: the model sees
+  only the recent messages labelled Guest/TVC (no names, no numbers, no staff signatures), the
+  conversation is treated as untrusted text, any link that isn't on tvc.farm is removed from the draft
+  and the draft is flagged, and the audit log records who asked (`whatsapp.suggest_reply`), never the
+  content. **Which AI reads the conversation is `WHATSAPP_SUGGEST_PROVIDER`: unset or `anthropic`
+  (default) uses Claude (same `claude-sonnet-5` as the chat widget); `gemini` tries Google first and
+  falls back to Claude if Google fails, as site search does. Google's FREE tier lets Google use
+  submitted content to improve its products and have people review it (see the privacy page), so
+  switch to `gemini` only if the Gemini key is on a paid plan, or if you accept that for guests'
+  private messages.** With the default and a Gemini key also set, nothing goes to Google. Limits:
+  15 per staff member per 10 minutes and 80 a day (`DAILY_CAP` in the function). Usage is counted in
+  the same Anthropic / Gemini meters as the chat widget and search, so it shows on `/internal/usage`.
+  Needs `ANTHROPIC_API_KEY` (already set). No migration. On a phone the canned-reply row hides while
+  a draft is open. Checked in Chrome against a mock backend and with mocked Anthropic/Gemini calls,
+  not against the real models: judge the first real drafts before relying on it.
 - **Account-health alerts (2026-10-10).** Meta's health webhook fields (template approved / rejected /
   paused / disabled, template and phone-number quality changes, recategorisation, account
   restrictions) are stored in `whatsapp_health_events` (migration `0036`, **apply before

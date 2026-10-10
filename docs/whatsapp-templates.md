@@ -70,6 +70,7 @@ read env vars at deploy time):
 | `WHATSAPP_TEST_NUMBER` | optional: your own number. Test-mode bookings only ever WhatsApp this number (never the guest's); if unset they send nothing |
 | `WHATSAPP_AUTOACK_ENABLED` | `true` turns on the out-of-hours auto-reply (off when unset). See "Out-of-hours auto-reply" below |
 | `WHATSAPP_AUTOACK_HOURS` | optional staffed hours in IST, `HH:MM-HH:MM`; default `09:00-19:00`. Messages outside it get the auto-reply |
+| `WHATSAPP_SUGGEST_PROVIDER` | which AI drafts the inbox's suggested replies: unset / `anthropic` = Claude (default); `gemini` = Google first, Claude as fallback. See the privacy note in `WHATSAPP.md` before choosing `gemini` |
 
 `WHATSAPP_PHONE_NUMBER_ID` and `WHATSAPP_ACCESS_TOKEN` are already set for the live integration.
 
