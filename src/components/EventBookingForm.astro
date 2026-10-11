@@ -147,7 +147,11 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
     font-size: 1.15rem;
   }
 
-  .booking-form__done[hidden] {
+  /* .card / .site-form set their own display, which beats the UA's
+     [hidden] rule, so a bare `hidden` attribute left both the submitted
+     form and the "Request received" card on screen. */
+  .booking-form__done[hidden],
+  .event-booking-form[hidden] {
     display: none;
   }
 
