@@ -17,7 +17,7 @@ interested in the farm's ecosystem, biodiversity, and permaculture story.
 
 ## Product Purpose
 
-The website for Tamarind Valley Collective (TVC), a 100-acre permaculture farm collectively
+The website for Tamarind Valley Collective (TVC), a 98-acre permaculture farm collectively
 owned by 53 families, regenerating degraded land near Kanakapura since 2017. It informs
 visitors and prospective members about the farm, and converts visit/event/membership interest
 into bookings and enquiries.
