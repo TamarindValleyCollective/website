@@ -10,6 +10,7 @@
 // attendeeCount, ...) for razorpay-webhook.mts to record the payment with no
 // per-event code.
 import { createHash } from 'node:crypto';
+import { normalizeMobileNumber } from '../../../scripts/lib/phone.mjs';
 import { fetchBasePaymentLink, fetchPaymentLinksByReferenceId, createPaymentLink, type RazorpayPaymentLink } from './razorpay';
 
 const MAX_BOOKINGS_PER_EMAIL = 20;
@@ -99,7 +100,11 @@ export async function getOrCreateBookingLink(params: BookingLinkParams): Promise
     },
     customerName: name,
     customerEmail: email,
-    customerContact: phone,
+    // Razorpay rejects a contact with spaces or outside 8-14 characters, and
+    // the form's own placeholder is "+91 98765 43210". Send E.164 when the
+    // number parses, otherwise omit it rather than fail the whole approval
+    // (the typed number is still in notes.primaryContactPhone).
+    customerContact: normalizeMobileNumber(phone) ?? undefined,
     expireBy,
   });
 }
