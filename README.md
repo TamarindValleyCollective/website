@@ -1,6 +1,6 @@
 # Tamarind Valley Collective — website
 
-The website for [Tamarind Valley Collective](https://tvc.farm) (TVC), a 100-acre permaculture farm collectively owned by 53 families, regenerating degraded land near Kanakapura since 2017.
+The website for [Tamarind Valley Collective](https://tvc.farm) (TVC), a 98-acre permaculture farm collectively owned by 53 families, regenerating degraded land near Kanakapura since 2017.
 
 This is an Astro rebuild of the original site (previously a [Publii](https://getpublii.com/) static export — that export is kept alongside this project as source material for content and images still being migrated over).
 

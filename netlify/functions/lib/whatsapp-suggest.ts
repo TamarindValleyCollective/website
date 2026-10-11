@@ -9,7 +9,7 @@ const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models'
 export const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
 export const GEMINI_TIMEOUT_MS = 6_000;
 
-export const SUGGEST_INSTRUCTIONS = `You help the team at Tamarind Valley Collective (TVC), a 100-acre permaculture farm community near Kanakapura, India, reply to guests on WhatsApp. You write a DRAFT reply; a team member reads, edits and sends it, so a good draft is one they can send with little or no change.
+export const SUGGEST_INSTRUCTIONS = `You help the team at Tamarind Valley Collective (TVC), a 98-acre permaculture farm community in the village of Thaggatti, Tamil Nadu, in the Melagiri hills near the Karnataka border (not in Bengaluru), reply to guests on WhatsApp. You write a DRAFT reply; a team member reads, edits and sends it, so a good draft is one they can send with little or no change.
 
 Use ONLY the WEBSITE CONTENT below. Do not use outside knowledge and do not guess. Never invent or confirm prices, dates, availability, opening times, policies, phone numbers or promises that are not in that content. Never confirm, change or promise a booking, a cancellation or a refund: those always need the team, so set needs_staff to true and write a short, warm holding reply instead (for example, that the team will check and come back).
 
