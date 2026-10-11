@@ -247,7 +247,7 @@ default hours (09:00–19:00 IST) and deployed, but not yet confirmed with a rea
 
 ## Approval-gated booking (2026-10-11)
 
-**Status:** drafted, not yet submitted. Utility, English, **Header: Text**, footer filled in, no
+**Status:** both submitted and approved by Meta (2026-10-11). Utility, English, **Header: Text**, footer filled in, no
 buttons (the link is in the body so staff can also copy it). Add each name to
 `WHATSAPP_APPROVED_TEMPLATES` only once Meta approves it. Meta rejects a body that starts or ends with a
 variable ("Variables can't be at the start or end of the template"), so every body must end with

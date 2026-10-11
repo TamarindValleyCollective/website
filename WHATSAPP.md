@@ -43,10 +43,10 @@ a real enquiry (it goes to `WHATSAPP_STAFF_ALERT_NUMBERS`, not the test number).
 
 **Approval-gated bookings (2026-10-11).** Two more templates, `tvc_booking_approval_request`
 (staff: a guest wants a spot, with the approve link) and `tvc_booking_payment_link` (guest: the
-payment link, after Linger approve). Submission text in `docs/whatsapp-templates.md`. **Status:
-drafted, not yet submitted to Meta**, so neither sends yet; the approver alert and the payment
-link still go out by email in the meantime. Set `WHATSAPP_BOOKING_APPROVER_NUMBERS` (comma-separated)
-and add both names to `WHATSAPP_APPROVED_TEMPLATES` once approved. The payment-link message respects the booking's
+payment link, after Linger approve). Submission text in `docs/whatsapp-templates.md`. **Status
+(2026-10-11): both submitted to Meta and APPROVED.** They send once both names are in
+`WHATSAPP_APPROVED_TEMPLATES` and `WHATSAPP_BOOKING_APPROVER_NUMBERS` (comma-separated) is set;
+until then the approver alert and the payment link go out by email only. The payment-link message respects the booking's
 WhatsApp consent box. See `RAZORPAY.md`.
 
 **Booking confirmation, reminders, referral attribution, auto-reply (2026-10-10).** Built, dormant
