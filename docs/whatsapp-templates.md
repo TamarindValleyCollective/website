@@ -244,3 +244,48 @@ tries to answer the question. At most one per conversation per 12 hours (`whatsa
 claimed atomically), never for reactions or for old messages replayed by a webhook retry, and recorded
 in the thread as "[Auto-reply] …". Off unless the flag is set; **switched on 2026-10-10** with the
 default hours (09:00–19:00 IST) and deployed, but not yet confirmed with a real out-of-hours message.
+
+## Approval-gated booking (2026-10-11)
+
+**Status:** both submitted and approved by Meta (2026-10-11). Utility, English, **Header: Text**, footer filled in, no
+buttons (the link is in the body so staff can also copy it). Add each name to
+`WHATSAPP_APPROVED_TEMPLATES` only once Meta approves it. Meta rejects a body that starts or ends with a
+variable ("Variables can't be at the start or end of the template"), so every body must end with
+plain text; `tvc_booking_approval_request` ends with a closing sentence for that reason.
+
+| Name | Variables | Sent when |
+|---|---|---|
+| `tvc_booking_approval_request` | 1 event · 2 guest · 3 people · 4 phone · 5 approve link | a guest submits the booking form (`event-booking.mts`); to `WHATSAPP_BOOKING_APPROVER_NUMBERS` |
+| `tvc_booking_payment_link` | 1 first name · 2 event · 3 date · 4 people · 5 total · 6 payment link | Linger approve a request (`event-booking-approval.mts`) |
+
+### `tvc_booking_approval_request`
+Header: `New booking request` · Footer: `TVC website · internal alert`
+```
+🎟️ New booking request for *{{1}}*.
+
+👤 *Guest:* {{2}}
+👥 *People:* {{3}}
+📞 *Phone:* {{4}}
+
+Please speak to them first, then approve or decline here:
+{{5}}
+
+The payment link is only sent once you approve.
+```
+Samples: `Foraging Day` · `Asha Rao` · `2` · `+91 98765 43210` · `https://tvc.farm/approve-booking?token=abc123`
+
+### `tvc_booking_payment_link`
+Header: `Complete your booking` · Footer: `Tamarind Valley Collective`
+```
+Hi {{1}}, thanks for speaking with us! Your booking for *{{2}}* is approved. ✅
+
+📅 *Date:* {{3}}
+👥 *People:* {{4}}
+💰 *Total:* {{5}}
+
+Please pay within 48 hours to confirm your spot:
+{{6}}
+
+Questions? Just reply here or email core-team@tvc.farm.
+```
+Samples: `Asha` · `Foraging Day` · `Saturday, 10 October 2026` · `2` · `₹4,500` · `https://rzp.io/rzp/abc123`

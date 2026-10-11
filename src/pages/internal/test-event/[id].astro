@@ -26,7 +26,7 @@ const { event } = Astro.props;
   <PageHero eyebrow="Internal — dev only" title={event.data.title} intro="Rehearse bookings in Razorpay test mode. Nothing here exists in production." />
   <section class="section wrapper">
     <EventBookingForm
-      heading="Register (test mode)"
+      heading="Request a spot (test mode)"
       referenceId={event.data.razorpayReferenceId!}
       unitAmount={event.data.price![0].amount}
       unitLabel={event.data.price![0].label}

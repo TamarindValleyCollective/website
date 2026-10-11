@@ -41,9 +41,25 @@ for the full technical writeup and diagram).
    actually paying) — confirms the price lookup and per-booking Payment Link creation work
    before relying on it for a real event.
 
-**What happens on a booking:** `EventBookingForm` posts to `netlify/functions/event-booking.mts`,
-which reads the base link's price, multiplies by headcount, and creates a fresh one-off Payment
-Link for the total, redirecting the browser there. Once paid, Razorpay calls the
+**Approval-gated booking (2026-10-11).** Guests no longer pay straight from the site: a guest
+booked Foraging Day believing the farm was in Bengaluru and had to be refunded. Now
+`EventBookingForm` ("Request a spot", shows the price and where the farm is, says no charge until
+the team confirms) posts to `netlify/functions/event-booking.mts`, which only checks the base link
+is still open and saves a `pending` row in `event_booking_requests` (migration `0038`, **apply it to
+TVC ERP before merging**). It WhatsApps (`tvc_booking_approval_request` to
+`WHATSAPP_BOOKING_APPROVER_NUMBERS`, comma-separated) and emails Linger (+ core-team) a tokenised
+link to `/approve-booking`, and emails the guest "someone will confirm with you first". Linger speak to the
+guest, then tap Approve on that page (the page only reads on load; the buttons POST, so link
+previews can't approve anything). `netlify/functions/event-booking-approval.mts` claims the
+decision atomically (one link even if two people tap), reads the base link's price, multiplies by
+headcount, creates the one-off Payment Link (valid 48 hours, never past the base link's own
+expiry), and sends it to the guest by WhatsApp (`tvc_booking_payment_link`, only if they ticked the
+consent box) and email. Decline emails the guest politely and charges nothing. The token is only
+stored as a hash. The payment, receipt, cancellation and refund steps below are unchanged. Not yet
+built: a pending-requests view and Linger staff accounts (the link is the credential), and an
+auto-approve for trusted guests.
+
+**What happens once a link is paid:** the per-booking Payment Link is created as described above. Once paid, Razorpay calls the
 `payment_link.paid` webhook (`netlify/functions/razorpay-webhook.mts`), which verifies the
 signature, records the payment in the `event_payments` table (Supabase project "TVC ERP",
 `mljavkvkxdejvpzadnrp`), and emails a branded receipt (CC'd to `core-team@tvc.farm` and

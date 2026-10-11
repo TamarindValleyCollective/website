@@ -1,0 +1,170 @@
+---
+// Where Linger staff approve or decline an online booking request, reached
+// from the link in the WhatsApp/email alert (see
+// netlify/functions/event-booking-approval.mts). Possession of the link is
+// the only credential, so the page is noindex and sitemap-excluded, and
+// loading it never decides anything: the buttons POST. English-only, internal.
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHero from '../components/PageHero.astro';
+---
+
+<BaseLayout title="Booking request" description="Review an event booking request." translated={false} noindex>
+  <PageHero eyebrow="Bookings" title="Booking request" intro="Speak to the guest first, then approve or decline." />
+
+  <section class="section wrapper prose prose--wide">
+    <p id="ab-loading">Loading the request&hellip;</p>
+
+    <p id="ab-not-found" hidden>We couldn't find this request. The link may be incomplete. Check the original WhatsApp message or email.</p>
+
+    <div id="ab-request" class="card" hidden>
+      <table role="presentation" class="ab-table">
+        <tr><th scope="row">Event</th><td id="ab-event"></td></tr>
+        <tr><th scope="row">Date</th><td id="ab-date"></td></tr>
+        <tr><th scope="row">Guest</th><td id="ab-name"></td></tr>
+        <tr><th scope="row">Phone</th><td><a id="ab-phone"></a></td></tr>
+        <tr><th scope="row">Email</th><td id="ab-email"></td></tr>
+        <tr><th scope="row">People</th><td id="ab-count"></td></tr>
+      </table>
+
+      <div id="ab-actions">
+        <p class="ab-note">Approving sends the guest a payment link (valid for 48 hours) on WhatsApp and email. Declining tells them politely and charges nothing.</p>
+        <div class="ab-buttons">
+          <button class="button" id="ab-approve" type="button">Approve &amp; send payment link</button>
+          <button class="button ab-decline" id="ab-decline" type="button">Decline</button>
+        </div>
+      </div>
+
+      <div id="ab-result" hidden>
+        <p id="ab-result-text"></p>
+        <p id="ab-link-wrap" hidden>
+          Payment link, in case you want to share it yourself:
+          <a id="ab-link" rel="noopener"></a>
+        </p>
+      </div>
+
+      <p id="ab-error" class="ab-error" role="alert" hidden></p>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .ab-table {
+    width: 100%;
+    margin-bottom: 20px;
+    border-collapse: collapse;
+  }
+
+  .ab-table th {
+    width: 7rem;
+    padding: 6px 16px 6px 0;
+    text-align: left;
+    font-weight: 400;
+    color: var(--tvc-ink-soft);
+  }
+
+  .ab-table td {
+    padding: 6px 0;
+    font-weight: 600;
+  }
+
+  .ab-note {
+    font-size: 0.9rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .ab-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .ab-error {
+    margin-top: 12px;
+    color: var(--tvc-error-text);
+  }
+</style>
+
+<script>
+  const token = new URLSearchParams(window.location.search).get('token') ?? '';
+  const $ = (id: string) => document.getElementById(id)!;
+  const approveBtn = $('ab-approve') as HTMLButtonElement;
+  const declineBtn = $('ab-decline') as HTMLButtonElement;
+
+  const STATUS_TEXT: Record<string, string> = {
+    approved: 'This request has been approved and the payment link sent.',
+    declined: 'This request was declined.',
+  };
+
+  function formatDate(iso: string | null): string {
+    if (!iso) return 'Not given';
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString('en-IN', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+    });
+  }
+
+  function render(data: any) {
+    $('ab-loading').hidden = true;
+    $('ab-request').hidden = false;
+    $('ab-event').textContent = data.eventTitle;
+    $('ab-date').textContent = formatDate(data.eventDate);
+    $('ab-name').textContent = data.name;
+    const phone = $('ab-phone') as HTMLAnchorElement;
+    phone.textContent = data.phone;
+    phone.href = `tel:${String(data.phone).replace(/[^\d+]/g, '')}`;
+    $('ab-email').textContent = data.email;
+    $('ab-count').textContent = String(data.attendeeCount);
+
+    const decided = data.status !== 'pending';
+    $('ab-actions').hidden = decided;
+    $('ab-result').hidden = !decided;
+    if (decided) {
+      let text = STATUS_TEXT[data.status] ?? '';
+      if (data.status === 'approved' && !data.paymentLinkSent) {
+        text = 'Approved, but we could not reach the guest automatically. Please send them the payment link below.';
+      }
+      $('ab-result-text').textContent = text;
+      const showLink = data.status === 'approved' && data.paymentLinkUrl;
+      $('ab-link-wrap').hidden = !showLink;
+      if (showLink) {
+        const link = $('ab-link') as HTMLAnchorElement;
+        link.href = data.paymentLinkUrl;
+        link.textContent = data.paymentLinkUrl;
+      }
+    }
+  }
+
+  async function decide(action: 'approve' | 'decline') {
+    if (action === 'decline' && !window.confirm('Decline this request? The guest will be told we can’t take the booking.')) return;
+    $('ab-error').hidden = true;
+    approveBtn.disabled = declineBtn.disabled = true;
+    try {
+      const res = await fetch('/api/booking-approval', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token, action }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Something went wrong');
+      render(data);
+    } catch (err) {
+      $('ab-error').textContent = err instanceof Error ? err.message : 'Something went wrong. Try again.';
+      $('ab-error').hidden = false;
+      approveBtn.disabled = declineBtn.disabled = false;
+    }
+  }
+
+  approveBtn.addEventListener('click', () => decide('approve'));
+  declineBtn.addEventListener('click', () => decide('decline'));
+
+  (async () => {
+    try {
+      const res = await fetch(`/api/booking-approval?token=${encodeURIComponent(token)}`);
+      if (!res.ok) throw new Error('not found');
+      render(await res.json());
+    } catch {
+      $('ab-loading').hidden = true;
+      $('ab-not-found').hidden = false;
+    }
+  })();
+</script>
