@@ -93,7 +93,7 @@ export const WHATSAPP_TEMPLATES = {
   tvc_booking_approval_request: {
     header: 'New booking request',
     footer: 'TVC website · internal alert',
-    body: '🎟️ New booking request for *{{1}}*.\n\n👤 *Guest:* {{2}}\n👥 *People:* {{3}}\n📞 *Phone:* {{4}}\n\nPlease speak to them first, then approve or decline here:\n{{5}}',
+    body: '🎟️ New booking request for *{{1}}*.\n\n👤 *Guest:* {{2}}\n👥 *People:* {{3}}\n📞 *Phone:* {{4}}\n\nPlease speak to them first, then approve or decline here:\n{{5}}\n\nThe payment link is only sent once you approve.',
     samples: ['Foraging Day', 'Asha Rao', '2', '+91 98765 43210', 'https://tvc.farm/approve-booking?token=abc123'],
   },
   tvc_booking_payment_link: {

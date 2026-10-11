@@ -249,8 +249,9 @@ default hours (09:00–19:00 IST) and deployed, but not yet confirmed with a rea
 
 **Status:** drafted, not yet submitted. Utility, English, **Header: Text**, footer filled in, no
 buttons (the link is in the body so staff can also copy it). Add each name to
-`WHATSAPP_APPROVED_TEMPLATES` only once Meta approves it. Meta may want the variable URL to sit
-inside the sentence rather than at the very end; if it rejects the layout, add a closing line.
+`WHATSAPP_APPROVED_TEMPLATES` only once Meta approves it. Meta rejects a body that starts or ends with a
+variable ("Variables can't be at the start or end of the template"), so every body must end with
+plain text; `tvc_booking_approval_request` ends with a closing sentence for that reason.
 
 | Name | Variables | Sent when |
 |---|---|---|
@@ -268,6 +269,8 @@ Header: `New booking request` · Footer: `TVC website · internal alert`
 
 Please speak to them first, then approve or decline here:
 {{5}}
+
+The payment link is only sent once you approve.
 ```
 Samples: `Foraging Day` · `Asha Rao` · `2` · `+91 98765 43210` · `https://tvc.farm/approve-booking?token=abc123`
 
