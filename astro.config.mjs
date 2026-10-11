@@ -43,7 +43,7 @@ export default defineConfig({
       // the unlinked, secret-gated photo-pool review dashboard; story-guide
       // is the unlinked member-form walkthrough, reachable only by direct
       // link (see src/pages/people/members/story-guide.astro).
-      filter: (page) => !page.includes('/404') && !page.includes('/thanks') && !page.includes('/internal/') && !page.includes('/story-guide'),
+      filter: (page) => !page.includes('/404') && !page.includes('/thanks') && !page.includes('/internal/') && !page.includes('/story-guide') && !page.includes('/approve-booking'),
       i18n: {
         defaultLocale: 'en',
         locales: { en: 'en-IN', kn: 'kn-IN', ta: 'ta-IN' },

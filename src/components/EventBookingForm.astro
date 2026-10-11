@@ -1,11 +1,13 @@
 ---
-// Reusable "pay online, for N people" booking form — any event opts in by
+// Reusable "request a spot, for N people" booking form — any event opts in by
 // setting `razorpayReferenceId` in its content file (see content.config.ts
 // and EventDetailView.astro, which renders this in place of the inquiry-
 // first BookingInquiry flow when that field is set). Submitting posts to
-// netlify/functions/event-booking.mts, which creates a fresh per-booking
-// Razorpay Payment Link for (unit price × attendee count) and returns its
-// URL; this component redirects the browser there on success.
+// netlify/functions/event-booking.mts, which saves a pending request and
+// alerts Linger; nobody is charged here. Once Linger have spoken to the guest
+// and approved, event-booking-approval.mts sends the payment link. So this
+// component shows the price and where the farm is up front, then a "request
+// received" message rather than redirecting to Razorpay.
 //
 // English-only for now (unlike BookingInquiry, which is i18n'd) — this is
 // the prototype of the flow; worth carrying over the kn/ta treatment once
@@ -40,6 +42,9 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
     <p class="form-honeypot" aria-hidden="true">
       <label>Leave this field blank <input name="botField" tabindex="-1" autocomplete="off" /></label>
     </p>
+    <p class="booking-form__location">
+      <strong>Where is the farm?</strong> Tamarind Valley Collective is in the village of Thaggatti, Tamil Nadu, in the Melagiri hills near the Karnataka border. It is <strong>not in Bengaluru</strong>, and the last stretch is a country road. Please check the <a href="/visit/how-to-reach">directions</a> before you request a spot.
+    </p>
     <p class="form-required-note">All fields are required except the WhatsApp option.</p>
 
     <div class="site-form-grid">
@@ -65,7 +70,7 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
 
     <label class="booking-form__consent" for={`${fieldId}-whatsapp`}>
       <input id={`${fieldId}-whatsapp`} type="checkbox" name="whatsappOptIn" />
-      <span>Send my booking confirmation and updates (including a reminder the day before) to this number on WhatsApp. Optional, and we'll always email you too. Reply STOP any time to opt out.</span>
+      <span>Send my payment link, booking confirmation and updates (including a reminder the day before) to this number on WhatsApp. Optional, and we'll always email you too. Reply STOP any time to opt out.</span>
     </label>
 
     <div class="field-total">
@@ -73,13 +78,20 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
       <span class="field-total__amount" id={`${fieldId}-total`}>{unitAmount}</span>
     </div>
 
-    <button class="button" type="submit">Pay &amp; register →</button>
+    <button class="button" type="submit">Request a spot →</button>
+    <p class="booking-form__next">
+      <strong>You won't be charged now.</strong> Someone from our team will contact you to answer your questions and confirm the details. Once they've confirmed with you, we'll send you a payment link to complete your booking.
+    </p>
     <p class="booking-form__error" role="alert" hidden></p>
     <div class="booking-form__duplicate-warning" role="alert" hidden>
       <p class="booking-form__duplicate-text"></p>
       <button type="button" class="button booking-form__confirm-duplicate">Yes, book again</button>
     </div>
   </form>
+  <div class="booking-form__done card" role="status" hidden>
+    <h3>Request received</h3>
+    <p>Thank you. <strong>Your spot isn't confirmed yet.</strong> Someone from our team will contact you shortly to answer your questions and confirm the details. After that, we'll send you a payment link by WhatsApp and email. A confirmation of this request is on its way to your inbox.</p>
+  </div>
 </div>
 
 <style>
@@ -133,6 +145,26 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
   .field-total__amount {
     font-weight: 700;
     font-size: 1.15rem;
+  }
+
+  .booking-form__done[hidden] {
+    display: none;
+  }
+
+  .booking-form__location {
+    margin: 0 0 16px;
+    padding: 12px 14px;
+    border-radius: var(--radius-field);
+    background: var(--tvc-green-tint);
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  .booking-form__next {
+    margin: 12px 0 0;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--tvc-ink-soft);
   }
 
   .booking-form__error {
@@ -226,15 +258,15 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
     // Two-step when the server reports this email already has a paid
     // booking for this event (see event-booking.mts's countActivePaymentsForEmail
     // check): not a hard block, since a second booking can be legitimate
-    // (e.g. paying for a separate group under the same email), but the
-    // guest gets a chance to notice before paying twice by mistake. The
+    // (e.g. a separate group under the same email), but the guest gets a
+    // chance to notice before requesting twice by mistake. The
     // confirm button re-sends the same submitted values with
     // confirmDuplicate: true, which skips the check server-side.
     async function attemptBooking(data: FormData, confirmDuplicate: boolean) {
       if (errorEl) errorEl.hidden = true;
       if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.textContent = 'Starting payment…';
+        submitBtn.textContent = 'Sending request…';
       }
 
       try {
@@ -266,18 +298,23 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
           if (confirmDuplicateBtn) confirmDuplicateBtn.onclick = () => attemptBooking(new FormData(form), true);
           if (submitBtn) {
             submitBtn.disabled = false;
-            submitBtn.textContent = 'Pay & register →';
+            submitBtn.textContent = 'Request a spot →';
           }
           return;
         }
 
-        if (!res.ok || !json.url) throw new Error(json.error || 'Something went wrong');
+        if (!res.ok || !json.requested) throw new Error(json.error || 'Something went wrong');
         saveContact({
           name: String(data.get('name') ?? ''),
           email: String(data.get('email') ?? ''),
           phone: String(data.get('phone') ?? ''),
         });
-        window.location.href = json.url;
+        form.hidden = true;
+        const doneEl = form.parentElement?.querySelector<HTMLElement>('.booking-form__done');
+        if (doneEl) {
+          doneEl.hidden = false;
+          doneEl.scrollIntoView({ block: 'nearest' });
+        }
       } catch (err) {
         if (errorEl) {
           errorEl.textContent = err instanceof Error ? err.message : 'Something went wrong — try again.';
@@ -285,7 +322,7 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
         }
         if (submitBtn) {
           submitBtn.disabled = false;
-          submitBtn.textContent = 'Pay & register →';
+          submitBtn.textContent = 'Request a spot →';
         }
       }
     }

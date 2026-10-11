@@ -87,6 +87,21 @@ export const WHATSAPP_TEMPLATES = {
       { type: 'quick_reply', text: 'I need help' },
     ],
   },
+  // Approval-gated booking (added 2026-10-11): the request goes to Linger
+  // staff, and the payment link goes to the guest only after they approve.
+  // Internal: sent to the booking approvers (WHATSAPP_BOOKING_APPROVER_NUMBERS).
+  tvc_booking_approval_request: {
+    header: 'New booking request',
+    footer: 'TVC website · internal alert',
+    body: '🎟️ New booking request for *{{1}}*.\n\n👤 *Guest:* {{2}}\n👥 *People:* {{3}}\n📞 *Phone:* {{4}}\n\nPlease speak to them first, then approve or decline here:\n{{5}}',
+    samples: ['Foraging Day', 'Asha Rao', '2', '+91 98765 43210', 'https://tvc.farm/approve-booking?token=abc123'],
+  },
+  tvc_booking_payment_link: {
+    header: 'Complete your booking',
+    footer: 'Tamarind Valley Collective',
+    body: 'Hi {{1}}, thanks for speaking with us! Your booking for *{{2}}* is approved. ✅\n\n📅 *Date:* {{3}}\n👥 *People:* {{4}}\n💰 *Total:* {{5}}\n\nPlease pay within 48 hours to confirm your spot:\n{{6}}\n\nQuestions? Just reply here or email core-team@tvc.farm.',
+    samples: ['Asha', 'Foraging Day', 'Saturday, 10 October 2026', '2', '₹4,500', 'https://rzp.io/rzp/abc123'],
+  },
 } as const;
 
 export type WhatsAppTemplateName = keyof typeof WHATSAPP_TEMPLATES;

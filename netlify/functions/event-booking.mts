@@ -1,24 +1,21 @@
 // Netlify Function (v2 API) backing EventBookingForm.astro — the reusable
-// "pay online, for N people" flow any event can opt into (see
-// content.config.ts's `razorpayReferenceId` field and EventDetailView.astro).
+// "request a spot" flow any event can opt into (see content.config.ts's
+// `razorpayReferenceId` field and EventDetailView.astro).
 //
-// An event using this flow has ONE hand-created Payment Link (e.g. via the
-// Razorpay MCP, same as every link in RAZORPAY.md's table) whose amount is
-// the trusted per-person price, and whose reference_id is what the event's
-// frontmatter points at. That link is never paid directly. This function:
-//   1. looks that base link up by reference_id to read the per-person price,
-//   2. multiplies by the attendee count the visitor submitted,
-//   3. creates a fresh, one-off Payment Link for that total, carrying enough
-//      in `notes` (baseReferenceId, event, attendeeCount) for
-//      razorpay-webhook.mts to record the payment against the right event
-//      with no per-event code of its own, and
-//   4. returns its short_url for the browser to redirect to.
-//
-// No new event needs a code change here — just its own base Payment Link
-// and a `razorpayReferenceId` in its content file pointing at it.
-import { createHash } from 'node:crypto';
-import { fetchBasePaymentLink, fetchPaymentLinksByReferenceId, createPaymentLink } from './lib/razorpay';
+// Booking is approval-gated (2026-10-11): a guest who books online without
+// understanding where the farm is, or what to expect, ended up refunded. So
+// this function no longer creates a Razorpay Payment Link. It:
+//   1. checks the event's base Payment Link is still open (and reads the
+//      price, so a closed event can't collect requests),
+//   2. saves the request as `pending` in event_booking_requests,
+//   3. pages Linger staff (WhatsApp + email) with a tokenised approve link,
+//      and emails the guest that someone will confirm with them first.
+// Linger speak to the guest, then approve — event-booking-approval.mts is
+// what mints the Payment Link and sends it to the guest.
+import { getEventPrice, RegistrationClosedError } from './lib/booking-link';
+import { notifyApprovers, sendRequestAcknowledgement } from './lib/booking-notify';
 import { countActivePaymentsForEmail } from '../../scripts/lib/event-payments-db.mjs';
+import { createBookingRequest, hasPendingRequest } from '../../scripts/lib/booking-requests-db.mjs';
 
 interface BookingPayload {
   referenceId?: string;
@@ -54,7 +51,7 @@ export default async (req: Request): Promise<Response> => {
   // Honeypot, matching enquiry.mts's convention — a real submitter never
   // sees or fills this field. Silent success rather than an error, so a bot
   // can't tell its submission was dropped.
-  if (payload.botField) return jsonResponse({ url: null });
+  if (payload.botField) return jsonResponse({ requested: true });
 
   const referenceId = (payload.referenceId ?? '').trim();
   const eventDate = (payload.eventDate ?? '').trim();
@@ -62,7 +59,7 @@ export default async (req: Request): Promise<Response> => {
   const email = (payload.email ?? '').trim();
   const phone = (payload.phone ?? '').trim();
   const attendeeCount = Math.trunc(Number(payload.attendeeCount));
-  const whatsappOptIn = payload.whatsappOptIn === true ? 'yes' : 'no';
+  const whatsappOptIn = payload.whatsappOptIn === true;
 
   if (!referenceId || !name || !email || !phone) {
     return jsonResponse({ error: 'name, email, and phone are required' }, 400);
@@ -74,36 +71,26 @@ export default async (req: Request): Promise<Response> => {
     return jsonResponse({ error: `Number of people must be between 1 and ${MAX_ATTENDEES}` }, 400);
   }
 
-  let base;
+  let eventTitle: string;
   try {
-    base = await fetchBasePaymentLink(referenceId);
+    ({ eventTitle } = await getEventPrice(referenceId));
   } catch (err) {
+    if (err instanceof RegistrationClosedError) {
+      return jsonResponse({ error: 'Online registration for this event is no longer open' }, 409);
+    }
     console.error('[event-booking] Failed to fetch base payment link', err);
-    return jsonResponse({ error: 'Could not look up this event’s price — try again shortly' }, 502);
+    return jsonResponse({ error: 'Could not look up this event — try again shortly' }, 502);
   }
-
-  if (base.status !== 'created') {
-    // Registration for this event has closed (link paid/cancelled/expired
-    // some other way) or was never actually opened for direct payment.
-    return jsonResponse({ error: 'Online registration for this event is no longer open' }, 409);
-  }
-
-  const eventTitle = base.notes?.event ?? base.description ?? referenceId;
-  const totalAmount = base.amount * attendeeCount;
 
   // Surface an already-paid booking under this exact (event, email) before
-  // money moves a second time, rather than only discoverable afterward on
-  // the admin dashboard. Not a hard block — a guest can legitimately book
-  // again (e.g. a second group under the same email) — so the browser gets
-  // one chance to say "yes, this is intentional" (confirmDuplicate) before
-  // a link is actually created.
+  // a second request goes to Linger. Not a hard block — a second group under
+  // the same email is legitimate — so the browser gets one chance to confirm.
   if (!payload.confirmDuplicate) {
     let existingCount = 0;
     try {
       existingCount = await countActivePaymentsForEmail(referenceId, email);
     } catch (err) {
-      // Non-fatal: proceed as if there's no prior booking rather than block
-      // a real registration over a lookup hiccup.
+      // Non-fatal: proceed as if there's no prior booking.
       console.error('[event-booking] Failed to check for an existing booking', err);
     }
     if (existingCount > 0) {
@@ -111,83 +98,45 @@ export default async (req: Request): Promise<Response> => {
     }
   }
 
-  // Deterministic per (event, email) — not a random suffix — so a guest who
-  // double-clicks Pay, or hits back and resubmits before finishing checkout,
-  // is handed the *same* still-open Payment Link instead of a fresh one
-  // (checked just below), rather than minting a new charge target every
-  // submit. Payment Link reference_id caps at 40 chars.
-  const emailHash = createHash('sha256').update(email.toLowerCase()).digest('hex').slice(0, 8);
-  // Razorpay refuses a second Payment Link with a reference_id that already
-  // exists — even if the first was paid or expired — so a guest booking again
-  // under the same email (the "book again" confirmation above, e.g. a second
-  // group) failed with "Could not start your booking". Booking n gets a
-  // numeric suffix; the first keeps the original id so existing links and the
-  // double-click reuse below are unchanged. Payment Link reference_id caps at
-  // 40 chars: 26 + "-" + 8 + "-" + up to 2 digits fits.
-  const bookingReferenceIdFor = (n: number) =>
-    n === 1 ? `${referenceId.slice(0, 30)}-${emailHash}` : `${referenceId.slice(0, 26)}-${emailHash}-${n}`;
-  const MAX_BOOKINGS_PER_EMAIL = 20;
-
-  let link;
-  let bookingReferenceId = bookingReferenceIdFor(1);
+  // A double-click or a resubmit while Linger haven't yet acted: one request,
+  // one page to Linger.
   try {
-    for (let n = 1; n <= MAX_BOOKINGS_PER_EMAIL; n++) {
-      const candidateId = bookingReferenceIdFor(n);
-      const candidates = await fetchPaymentLinksByReferenceId(candidateId);
-      // Reuse only a still-unpaid link for the exact same booking (attendee
-      // count, hence amount) — a double-click or back-and-resubmit gets the
-      // same open link instead of minting a new charge target each time.
-      const reusable = candidates.find((l) => l.status === 'created' && l.notes?.attendeeCount === String(attendeeCount) && l.notes?.whatsappOptIn === whatsappOptIn);
-      if (reusable) {
-        link = reusable;
-        break;
-      }
-      if (candidates.length === 0) {
-        bookingReferenceId = candidateId; // unused id — mint the new link under it
-        break;
-      }
-      // Taken by a paid/expired/different-size link — try the next number.
-    }
+    if (await hasPendingRequest(referenceId, email)) return jsonResponse({ requested: true });
   } catch (err) {
-    console.error('[event-booking] Failed to check for a pending payment link', err);
+    console.error('[event-booking] Failed to check for a pending request', err);
   }
 
-  if (!link) {
-    try {
-      link = await createPaymentLink({
-        amount: totalAmount,
-        currency: base.currency,
-        description: `${eventTitle} — ${attendeeCount} ${attendeeCount === 1 ? 'person' : 'people'}`,
-        referenceId: bookingReferenceId,
-        notes: {
-          baseReferenceId: referenceId,
-          event: eventTitle,
-          attendeeCount: String(attendeeCount),
-          primaryContactName: name,
-          primaryContactEmail: email,
-          primaryContactPhone: phone,
-          // Recorded as event_payments.whatsapp_opt_in by razorpay-webhook.mts.
-          // Part of the link-reuse check above, so changing the box never
-          // reuses a link that carries the old answer.
-          whatsappOptIn,
-          // Best-effort: a malformed/missing value (an older cached page, a
-          // tampered request) just leaves the eventual event_payments row's
-          // event_date null, same as any booking made before this field
-          // existed — never worth failing the booking over.
-          ...(DATE_RE.test(eventDate) ? { eventDate } : {}),
-        },
-        customerName: name,
-        customerEmail: email,
-        customerContact: phone,
-        expireBy: base.expire_by,
-      });
-    } catch (err) {
-      console.error('[event-booking] Failed to create per-booking payment link', err);
-      return jsonResponse({ error: 'Could not start your booking — try again shortly' }, 502);
-    }
+  let saved;
+  try {
+    saved = await createBookingRequest({
+      eventReferenceId: referenceId,
+      eventTitle,
+      eventDate: DATE_RE.test(eventDate) ? eventDate : null,
+      name,
+      email,
+      phone,
+      attendeeCount,
+      whatsappOptIn,
+    });
+  } catch (err) {
+    console.error('[event-booking] Failed to save booking request', err);
+    return jsonResponse({ error: 'Could not send your request — try again shortly' }, 502);
   }
 
-  return jsonResponse({ url: link.short_url });
+  const summary = {
+    event_title: eventTitle,
+    event_date: DATE_RE.test(eventDate) ? eventDate : null,
+    name,
+    email,
+    phone,
+    attendee_count: attendeeCount,
+    whatsapp_opt_in: whatsappOptIn,
+  };
+  // Best-effort: the request is saved, so a notification hiccup must not tell
+  // the guest their request failed. Both helpers swallow their own errors.
+  await Promise.all([notifyApprovers(summary, saved.token, saved.request.id), sendRequestAcknowledgement(summary)]);
+
+  return jsonResponse({ requested: true });
 };
 
 export const config = {

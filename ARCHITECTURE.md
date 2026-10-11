@@ -26,7 +26,9 @@ WhatsApp reply dashboard at `/internal/whatsapp`, a scheduled (cron, no HTTP pat
 `/internal/accommodation-calendar` — the public, aggregate-only availability view this admin
 tool was originally built alongside was deliberately **not** shipped to production with it
 (dropped 2026-08-30, approach TBD), and four functions backing the reusable event payment
-module — `/api/event-booking` (creates a per-booking Razorpay Payment Link), `/api/razorpay-
+module — `/api/event-booking` (saves a pending booking request and alerts Linger; since 2026-10-11 it
+no longer creates a payment link), `/api/booking-approval` (Linger staff approve or decline from a
+tokenised link; approving creates the per-booking Razorpay Payment Link and sends it to the guest), `/api/razorpay-
 webhook` (records a paid booking, emails a receipt), `/api/cancel-booking` (records a guest's
 cancellation request), and `/api/event-payments-admin` (backs the internal, unlinked per-event
 payments dashboard at `/internal/event-payments` — registrations/cancellations/money collected,
@@ -96,7 +98,8 @@ flowchart TD
         FUNC_SRC7["netlify/functions/whatsapp-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>lists conversations/messages from Supabase,<br/>sends replies via Meta's Send Message API"]
         FUNC_SRC8["netlify/functions/whatsapp-stale-alert.mts<br/>Scheduled function (cron, every 15 min) —<br/>emails core-team@tvc.farm one digest of<br/>WhatsApp conversations unread 60+ min,<br/>re-sent hourly per conversation until read"]
         FUNC_SRC9["netlify/functions/accommodation-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>full tent-booking CRUD backed by Postgres<br/>(EXCLUDE constraints make double-booking<br/>physically impossible), guest directory,<br/>full audit log, past-booking justification"]
-        FUNC_SRC11["netlify/functions/event-booking.mts<br/>Serverless function — reads an event's base<br/>Payment Link price via Razorpay's API,<br/>multiplies by attendee count, creates a<br/>fresh per-booking Payment Link, redirects"]
+        FUNC_SRC11["netlify/functions/event-booking.mts<br/>Serverless function — checks the event's base<br/>Payment Link is open, saves a pending request<br/>in Supabase, WhatsApps + emails Linger a<br/>tokenised approve link, emails the guest"]
+        FUNC_SRC18["netlify/functions/event-booking-approval.mts<br/>Serverless function, tokenised link (no login) —<br/>GET reads, POST approves or declines; approve<br/>creates the per-booking Payment Link (price x<br/>headcount, 48h) and sends it to the guest"]
         FUNC_SRC12["netlify/functions/razorpay-webhook.mts<br/>Serverless function — verifies signature, records<br/>payment_link.paid in Supabase (idempotent), emails<br/>a branded receipt; also handles refund.created/<br/>processed/failed — Razorpay's own confirmation is<br/>the only thing that marks a row actually refunded"]
         FUNC_SRC13["netlify/functions/cancel-booking.mts<br/>Serverless function — records a guest's<br/>cancellation request (not an automatic<br/>refund), notifies TVC + Linger + guest"]
         FUNC_SRC14["netlify/functions/event-payments-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>per-event registrations/cancellations/money<br/>collected from Supabase, issues real Razorpay<br/>refunds (tier-suggested, admin-confirmed)"]
@@ -125,7 +128,8 @@ flowchart TD
         APIFN7["Netlify Function: /api/whatsapp-admin<br/>Deployed and live — real conversations<br/>read/replied to via /internal/whatsapp"]
         APIFN8["Netlify Function: whatsapp-stale-alert<br/>Scheduled (cron), no HTTP path —<br/>deployed and live"]
         APIFN9["Netlify Function: /api/accommodation-admin<br/>Deployed and live — merged 2026-08-30,<br/>verified against production"]
-        APIFN11["Netlify Function: /api/event-booking<br/>Deployed and live — real live Razorpay keys,<br/>Payment Link creation verified 2026-09-24"]
+        APIFN11["Netlify Function: /api/event-booking<br/>Request-only since 2026-10-11 (approval-gated);<br/>Payment Link creation moved to APIFN19"]
+        APIFN19["Netlify Function: /api/booking-approval<br/>Linger approve/decline; needs migration 0038<br/>applied before it can work"]
         APIFN12["Netlify Function: /api/razorpay-webhook<br/>Deployed and live — live-mode webhook<br/>configured, signature verification confirmed"]
         APIFN13["Netlify Function: /api/cancel-booking<br/>Deployed and live"]
         APIFN14["Netlify Function: /api/event-payments-admin<br/>Deployed and live — backs /internal/event-payments,<br/>issues real refunds via Razorpay's API"]
@@ -155,7 +159,8 @@ flowchart TD
         CLARITY["Microsoft Clarity<br/>Loaded from BaseLayout, same consent gate<br/>as GA, skipped on localhost"]
         WEATHER["WeatherWidget (/ecosystem/geography)<br/>Fetches current conditions from<br/>Open-Meteo, no API key"]
         RAINFALL["Rainfall chart/table/monsoon stat<br/>(/ecosystem/weather)<br/>Fetches /api/rainfall client-side,<br/>1hr-cached in localStorage"]
-        BOOKINGFORM["EventBookingForm.astro<br/>(rendered on an opted-in event's page)<br/>name/email/phone/headcount, calls<br/>/api/event-booking, redirects to Razorpay.<br/>Prefills from a returning visitor's<br/>last booking via localStorage"]
+        BOOKINGFORM["EventBookingForm.astro<br/>(rendered on an opted-in event's page)<br/>name/email/phone/headcount, calls<br/>/api/event-booking, shows "request received"<br/>(no charge yet). Prefills from a returning visitor's<br/>last booking via localStorage"]
+        APPROVEPAGE["/approve-booking page<br/>Noindex, sitemap-excluded — linked from the<br/>WhatsApp/email alert to Linger; Approve /<br/>Decline buttons POST to /api/booking-approval"]
         CANCELPAGE["/cancel-booking page<br/>Linked from the receipt email —<br/>shows booking summary, confirms<br/>cancellation request via /api/cancel-booking"]
     end
 
@@ -209,7 +214,11 @@ flowchart TD
     APIFN8 -.->|"query unread 60+ min"| SUPABASE
     APIFN8 -.->|"send digest email"| RESEND
     BOOKINGFORM --> APIFN11
-    APIFN11 -.->|"fetch base link price,<br/>create per-booking link"| RAZORPAY
+    APIFN11 -.->|"fetch base link (open?)"| RAZORPAY
+    APIFN11 -.->|"insert pending request,<br/>alert emails"| SUPABASE
+    APPROVEPAGE --> APIFN19
+    APIFN19 -.->|"fetch base link price,<br/>create per-booking link"| RAZORPAY
+    APIFN19 -.->|"claim approve/decline,<br/>store link"| SUPABASE
     RAZORPAY -.->|"payment_link.paid / refund.created /<br/>refund.processed / refund.failed webhooks"| APIFN12
     APIFN12 -.->|"record payment<br/>(idempotent)"| SUPABASE
     APIFN12 -.->|"send branded receipt"| RESEND
@@ -288,8 +297,8 @@ flowchart TD
     classDef localStyle fill:#eef0f5,stroke:#6b7280,color:#374151
     classDef ciStyle fill:#eef4fb,stroke:#3b6ea5,color:#1c3f5f
 
-    class PAGES,INTERNALPAGE,INTERNALPAGE2,INTERNALPAGE3,INTERNALPAGE4,INTERNALPAGE5,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH,WHATSAPPDASH,ACCOMMODATIONDASH,EVENTPAYDASH,USAGEDASH,BOOKINGFORM,CANCELPAGE staticStyle
-    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,FUNC_SRC14,FUNC_SRC15,FUNC_SRC16,FUNC_SRC17,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,APIFN14,APIFN15,APIFN16,APIFN17,APIFN18,BLOBS,FORMS,ANTHROPIC netlifyStyle
+    class PAGES,INTERNALPAGE,INTERNALPAGE2,INTERNALPAGE3,INTERNALPAGE4,INTERNALPAGE5,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH,WHATSAPPDASH,ACCOMMODATIONDASH,EVENTPAYDASH,USAGEDASH,BOOKINGFORM,CANCELPAGE,APPROVEPAGE staticStyle
+    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,FUNC_SRC14,FUNC_SRC15,FUNC_SRC16,FUNC_SRC17,FUNC_SRC18,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,APIFN14,APIFN15,APIFN16,APIFN17,APIFN18,APIFN19,BLOBS,FORMS,ANTHROPIC netlifyStyle
     class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,SUPABASE,GEMINI,RAZORPAY,RDAP externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL,SCRIPT_GSC localStyle
