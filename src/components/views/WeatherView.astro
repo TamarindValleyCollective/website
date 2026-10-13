@@ -2,6 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import WeatherWidget from '../WeatherWidget.astro';
+import StationWeather from '../StationWeather.astro';
 import { type Locale } from '../../i18n/utils';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import { NIGHT_SKY_BRIGHTNESS_UCD_M2 } from '../../data/site-facts';
@@ -166,6 +167,7 @@ const monthAbbrJson = JSON.stringify(MONTH_ABBR[lang]);
 
     <div class="tile-row">
       <WeatherWidget lang={lang} />
+      <StationWeather lang={lang} />
 
       <div class="stat-tile">
         <p class="stat-label">{c.monsoonLabel} <span class="stat-sublabel" id="rainfall-monsoon-sublabel"></span></p>

@@ -94,6 +94,7 @@ flowchart TD
         FUNC_SRC3["netlify/functions/photo-pool.mts<br/>Serverless function, Google Sign-In gated —<br/>verifies ID token, checks the caller&#39;s<br/>role (staff_module_roles), lists Inbox (+ uploader/EXIF/GPS/<br/>description), moves photos, saves descriptions"]
         FUNC_SRC4["netlify/functions/enquiry.mts<br/>Serverless function — appends a row to a<br/>Google Sheet per membership/general enquiry,<br/>fired via sendBeacon alongside each form's<br/>own native Netlify Forms submission"]
         FUNC_SRC5["netlify/functions/rainfall.mts<br/>Serverless function — reads the community's<br/>rainfall-log Sheet (monthly + daily tabs) on<br/>every page view, computes the monsoon<br/>to-date stat, returns JSON"]
+        FUNC_STATION["netlify/functions/station-weather.mts<br/>Serverless function — reads public weather-station<br/>sensors + last 24h from the HomeAssistant Supabase<br/>project (service_role, server-side only), CDN-cached 5 min"]
         FUNC_SRC6["netlify/functions/whatsapp-webhook.mts<br/>Serverless function — verifies Meta's GET<br/>handshake and each POST's HMAC signature,<br/>persists to Supabase per incoming WhatsApp<br/>message (no inbox exists for Cloud API<br/>numbers otherwise)"]
         FUNC_SRC7["netlify/functions/whatsapp-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>lists conversations/messages from Supabase,<br/>sends replies via Meta's Send Message API"]
         FUNC_SRC8["netlify/functions/whatsapp-stale-alert.mts<br/>Scheduled function (cron, every 15 min) —<br/>emails core-team@tvc.farm one digest of<br/>WhatsApp conversations unread 60+ min,<br/>re-sent hourly per conversation until read"]
@@ -124,6 +125,7 @@ flowchart TD
         APIFN3["Netlify Function: /api/photo-pool<br/>(+/thumb, +/description)<br/>Configured — Drive service account + folder IDs<br/>set as Netlify env vars for all deploy contexts"]
         APIFN4["Netlify Function: /api/enquiry<br/>Live and verified — Sheet ids set,<br/>Sheets shared Editor-access with the<br/>service account, real appends confirmed"]
         APIFN5["Netlify Function: /api/rainfall<br/>Reads the rainfall-log Sheet (view-access<br/>only, read-only path) — RAINFALL_SHEET_ID"]
+        APIFN_STATION["Netlify Function: /api/station-weather<br/>Public sensors only, grouped by station"]
         APIFN6["Netlify Function: /api/whatsapp-webhook<br/>Deployed and live — verified end-to-end<br/>with a real WhatsApp message on 2026-08-19"]
         APIFN7["Netlify Function: /api/whatsapp-admin<br/>Deployed and live — real conversations<br/>read/replied to via /internal/whatsapp"]
         APIFN8["Netlify Function: whatsapp-stale-alert<br/>Scheduled (cron), no HTTP path —<br/>deployed and live"]
@@ -159,6 +161,7 @@ flowchart TD
         CLARITY["Microsoft Clarity<br/>Loaded from BaseLayout, same consent gate<br/>as GA, skipped on localhost"]
         WEATHER["WeatherWidget (/ecosystem/geography)<br/>Fetches current conditions from<br/>Open-Meteo, no API key"]
         RAINFALL["Rainfall chart/table/monsoon stat<br/>(/ecosystem/weather)<br/>Fetches /api/rainfall client-side,<br/>1hr-cached in localStorage"]
+        STATIONCARD["Live station card (/ecosystem/weather)<br/>StationWeather.astro fetches /api/station-weather,<br/>hidden if the station is silent for 3h"]
         BOOKINGFORM["EventBookingForm.astro<br/>(rendered on an opted-in event's page)<br/>name/email/phone/headcount, calls<br/>/api/event-booking, shows "request received"<br/>(no charge yet). Prefills from a returning visitor's<br/>last booking via localStorage"]
         APPROVEPAGE["/approve-booking page<br/>Noindex, sitemap-excluded — linked from the<br/>WhatsApp/email alert to Linger; Approve /<br/>Decline buttons POST to /api/booking-approval"]
         CANCELPAGE["/cancel-booking page<br/>Linked from the receipt email —<br/>shows booking summary, confirms<br/>cancellation request via /api/cancel-booking"]
@@ -190,6 +193,8 @@ flowchart TD
         RESEND["Resend API<br/>Transactional email — noreply@tvc.farm,<br/>domain verified 2026-08-19,<br/>called from the GitHub Action above,<br/>whatsapp-stale-alert.mts and usage-collect.mts<br/>(GET /usage quota read)"]
         WAMETA["Meta WhatsApp Cloud API<br/>Sends inbound message + template-status<br/>events to /api/whatsapp-webhook;<br/>receives replies from whatsapp-admin.mts<br/>and (once approved) guest/staff templates<br/>from lib/whatsapp-send.ts; see WHATSAPP.md for setup status"]
         SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages,<br/>event_payments, staff_users/staff_module_roles/<br/>staff_audit_log (gate all four admin Functions),<br/>staff_mfa_factors/staff_recovery_codes/<br/>staff_mfa_state (super-admin second factors),<br/>usage_daily/usage_snapshots/usage_settings/<br/>usage_alert_state (free-tier metering + alerts) —<br/>service_role key, called server-side only"]
+        SUPABASE_HA["Supabase Postgres (separate 'HomeAssistant' project/org)<br/>sensor_readings (Home Assistant pushes with the anon key,<br/>insert-only, registered sensors only), sensors registry,<br/>sensor_hourly rollup — supabase/homeassistant/"]
+        HASSIST["Home Assistant (farmassistant.tvc.farm)<br/>Automation 'Push weather sensors to Supabase'<br/>from the Meshtastic campground weather station"]
         RAZORPAY["Razorpay API<br/>Payment Links (create/fetch) +<br/>payment_link.paid webhook + refunds<br/>(admin-triggered, event-payments-admin.mts) +<br/>payment fees and settlement recon<br/>(nightly reconcile-event-payment-fees.mjs).<br/>Live keys as of 2026-09-24 —<br/>see RAZORPAY.md"]
         RDAP["Registry RDAP service (via IANA bootstrap,<br/>rdap.org fallback)<br/>Public, no key — domain expiry dates for<br/>tvc.farm and syntropic.in"]
     end
@@ -208,6 +213,10 @@ flowchart TD
     WEATHER -.-> METEO
     RAINFALL --> APIFN5
     APIFN5 -.->|"read monthly + daily tabs"| GSHEET
+    STATIONCARD --> APIFN_STATION
+    APIFN_STATION -.->|"read public sensors + hourly rollup"| SUPABASE_HA
+    HASSIST -.->|"insert readings (anon key)"| SUPABASE_HA
+    FUNC_STATION -.-> SUPABASE_HA
     WAMETA -.->|"POST webhook events"| APIFN6
     APIFN6 -.->|"send notification email"| RESEND
     APIFN6 -.->|"upsert conversation,<br/>insert inbound message"| SUPABASE
@@ -297,9 +306,9 @@ flowchart TD
     classDef localStyle fill:#eef0f5,stroke:#6b7280,color:#374151
     classDef ciStyle fill:#eef4fb,stroke:#3b6ea5,color:#1c3f5f
 
-    class PAGES,INTERNALPAGE,INTERNALPAGE2,INTERNALPAGE3,INTERNALPAGE4,INTERNALPAGE5,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,CDN,POOLDASH,WHATSAPPDASH,ACCOMMODATIONDASH,EVENTPAYDASH,USAGEDASH,BOOKINGFORM,CANCELPAGE,APPROVEPAGE staticStyle
-    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,FUNC_SRC14,FUNC_SRC15,FUNC_SRC16,FUNC_SRC17,FUNC_SRC18,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,APIFN14,APIFN15,APIFN16,APIFN17,APIFN18,APIFN19,BLOBS,FORMS,ANTHROPIC netlifyStyle
-    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,SUPABASE,GEMINI,RAZORPAY,RDAP externalStyle
+    class PAGES,INTERNALPAGE,INTERNALPAGE2,INTERNALPAGE3,INTERNALPAGE4,INTERNALPAGE5,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,STATIONCARD,CDN,POOLDASH,WHATSAPPDASH,ACCOMMODATIONDASH,EVENTPAYDASH,USAGEDASH,BOOKINGFORM,CANCELPAGE,APPROVEPAGE staticStyle
+    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_STATION,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,FUNC_SRC14,FUNC_SRC15,FUNC_SRC16,FUNC_SRC17,FUNC_SRC18,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN_STATION,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,APIFN14,APIFN15,APIFN16,APIFN17,APIFN18,APIFN19,BLOBS,FORMS,ANTHROPIC netlifyStyle
+    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,SUPABASE,SUPABASE_HA,HASSIST,GEMINI,RAZORPAY,RDAP externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL,SCRIPT_GSC localStyle
     class GHA_MEMBER,GHA_DOMAIN ciStyle
@@ -484,6 +493,21 @@ outside both the local machine and Netlify (the member-update-email workflow).
   today-marker all stop at the same date instead of the stat blanking to "—". Reuses `scripts/lib/google-drive.mjs`'s `getSheetValues()` (a small
   generalization of the existing single-column `getAllowedEmails()` reader into a full-grid one,
   used by both now).
+- **`netlify/functions/station-weather.mts`** — backs the live "Campground station" card on
+  `/ecosystem/weather` (`StationWeather.astro`). Home Assistant (`farmassistant.tvc.farm`) pushes
+  the Meshtastic weather station's readings (temperature, humidity, pressure) into a *separate*
+  "HomeAssistant" Supabase project/org — not "TVC ERP" — table `sensor_readings`, via an
+  automation using that project's anon key. The schema lives in `supabase/homeassistant/` (applied
+  by hand to that project only, not part of `supabase/migrations/`): a `sensors` registry
+  (station, kind, label, `public` flag), an anon INSERT policy restricted to *registered* sensors
+  (so a leaked anon key can't write arbitrary rows — register a new sensor before pointing Home
+  Assistant at it), grants stripped to insert-only, and an hourly `sensor_hourly` rollup view. This
+  Function (`STATION_SUPABASE_URL` / `STATION_SUPABASE_SERVICE_ROLE_KEY`, deliberately not the
+  `SUPABASE_*` pair, which is TVC ERP's) returns only `public` sensors grouped by station — latest
+  value plus the last 24 hourly averages, never the raw `attributes` — with a 5-minute Netlify CDN
+  cache so page views don't each hit the database. The card renders nothing if the fetch fails or a
+  station has been silent for 3 hours, leaving the Open-Meteo `WeatherWidget` beside it as the
+  fallback. A new station or sensor appears on the site by adding `sensors` rows, with no code change.
 - **`netlify/functions/whatsapp-webhook.mts`** — the WhatsApp Cloud API webhook endpoint (see
   `WHATSAPP.md` for the full setup checklist). Handles Meta's one-time GET verification handshake
   (`hub.mode`/`hub.verify_token`/`hub.challenge`, echoing the challenge back if the token matches
