@@ -1,0 +1,248 @@
+---
+// Live readings from the farm's own weather station(s), fetched client-side
+// from /api/station-weather (netlify/functions/station-weather.mts), which
+// reads the "HomeAssistant" Supabase project Home Assistant pushes into.
+// One card per station the API returns; renders nothing if the fetch fails or
+// every reading is stale, so the Open-Meteo WeatherWidget beside it is never
+// contradicted by a dead sensor.
+import { DEFAULT_LOCALE, type Locale } from '../i18n/utils';
+
+interface Props {
+  lang?: Locale;
+}
+
+const { lang = DEFAULT_LOCALE } = Astro.props;
+
+const strings = {
+  en: {
+    eyebrow: 'Live from the {station} station',
+    last24: 'Last 24 hours',
+    range: '{min}–{max}{unit}',
+    updated: 'Updated {time} IST',
+    kinds: { temperature: 'Temperature', humidity: 'Humidity', pressure: 'Pressure' } as Record<string, string>,
+    chartLabel: '{kind} over the last 24 hours, from {min} to {max}',
+  },
+  kn: {
+    eyebrow: '{station} ಕೇಂದ್ರದಿಂದ ನೇರ ಮಾಹಿತಿ',
+    last24: 'ಕಳೆದ 24 ಗಂಟೆಗಳು',
+    range: '{min}–{max}{unit}',
+    updated: '{time} IST ಕ್ಕೆ ನವೀಕರಿಸಲಾಗಿದೆ',
+    kinds: { temperature: 'ತಾಪಮಾನ', humidity: 'ತೇವಾಂಶ', pressure: 'ಒತ್ತಡ' } as Record<string, string>,
+    chartLabel: 'ಕಳೆದ 24 ಗಂಟೆಗಳಲ್ಲಿ {kind}, {min} ರಿಂದ {max}',
+  },
+  ta: {
+    eyebrow: '{station} நிலையத்திலிருந்து நேரடி தரவு',
+    last24: 'கடந்த 24 மணி நேரம்',
+    range: '{min}–{max}{unit}',
+    updated: '{time} IST இல் புதுப்பிக்கப்பட்டது',
+    kinds: { temperature: 'வெப்பநிலை', humidity: 'ஈரப்பதம்', pressure: 'அழுத்தம்' } as Record<string, string>,
+    chartLabel: 'கடந்த 24 மணி நேரத்தில் {kind}, {min} முதல் {max} வரை',
+  },
+}[lang];
+
+// Station names come from the registry in English; localize the known ones.
+const stationNames: Record<string, string> = lang === 'kn' ? { campground: 'ಕ್ಯಾಂಪ್‌ಗ್ರೌಂಡ್' } : lang === 'ta' ? { campground: 'முகாம் மைதானம்' } : {};
+---
+
+<div
+  class="station-weather"
+  id="station-weather"
+  hidden
+  data-lang={lang}
+  data-fmt-eyebrow={strings.eyebrow}
+  data-last24={strings.last24}
+  data-fmt-range={strings.range}
+  data-fmt-updated={strings.updated}
+  data-fmt-chart-label={strings.chartLabel}
+  data-kinds={JSON.stringify(strings.kinds)}
+  data-station-names={JSON.stringify(stationNames)}
+>
+</div>
+
+<style>
+  .station-weather {
+    display: contents;
+  }
+
+  .station-weather :global(.station-card) {
+    flex: 1 1 260px;
+    max-width: 340px;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+    padding: 16px 22px;
+  }
+
+  .station-weather :global(.station-card__eyebrow) {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--tvc-ink-soft);
+  }
+
+  .station-weather :global(.station-card__readings) {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+
+  .station-weather :global(.station-card__reading-label) {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .station-weather :global(.station-card__reading-value) {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--tvc-green-dark);
+  }
+
+  .station-weather :global(.station-card__reading-value--primary) {
+    font-size: 2rem;
+  }
+
+  .station-weather :global(.station-card__unit) {
+    margin-left: 3px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .station-weather :global(.station-card__chart) {
+    padding-top: 10px;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .station-weather :global(.station-card__chart-caption) {
+    display: flex;
+    justify-content: space-between;
+    margin: 0 0 4px;
+    font-size: 0.75rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .station-weather :global(.station-card__spark) {
+    display: block;
+    width: 100%;
+    height: 44px;
+  }
+
+  .station-weather :global(.station-card__spark path) {
+    fill: none;
+    stroke: var(--tvc-green);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .station-weather :global(.station-card__updated) {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--tvc-ink-soft);
+  }
+</style>
+
+<script>
+  type Sensor = { kind: string; label: string; unit: string | null; value: number | null; history: { t: string; v: number }[] };
+  type Station = { id: string; label: string; updatedAt: string | null; stale: boolean; sensors: Sensor[] };
+
+  const root = document.getElementById('station-weather')!;
+  const kinds: Record<string, string> = JSON.parse(root.dataset.kinds ?? '{}');
+  const names: Record<string, string> = JSON.parse(root.dataset.stationNames ?? '{}');
+  const fmt = (key: string, vars: Record<string, string>) =>
+    Object.entries(vars).reduce((s, [k, v]) => s.replace(`{${k}}`, v), root.dataset[key] ?? '');
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
+    const node = document.createElement(tag);
+    node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  // Straight-line 24h sparkline; the viewBox is stretched to the card width.
+  function sparkline(points: { v: number }[], label: string): SVGSVGElement {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'station-card__spark');
+    svg.setAttribute('viewBox', '0 0 100 40');
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', label);
+    const vs = points.map((p) => p.v);
+    const min = Math.min(...vs);
+    const span = Math.max(...vs) - min || 1;
+    const d = points
+      .map((p, i) => `${i ? 'L' : 'M'}${((i / (points.length - 1)) * 100).toFixed(2)} ${(36 - ((p.v - min) / span) * 32).toFixed(2)}`)
+      .join(' ');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', d);
+    svg.appendChild(path);
+    return svg;
+  }
+
+  function card(st: Station): HTMLElement | null {
+    const withValue = st.sensors.filter((s) => s.value !== null);
+    if (st.stale || withValue.length === 0) return null;
+
+    const wrap = el('div', 'station-card');
+    wrap.appendChild(el('p', 'station-card__eyebrow', fmt('fmtEyebrow', { station: names[st.id] ?? st.label })));
+
+    const readings = el('div', 'station-card__readings');
+    for (const s of withValue) {
+      const box = document.createElement('div');
+      box.appendChild(el('p', 'station-card__reading-label', kinds[s.kind] ?? s.label));
+      const v = el('p', s.kind === 'temperature' ? 'station-card__reading-value station-card__reading-value--primary' : 'station-card__reading-value', String(s.value));
+      if (s.unit) v.appendChild(el('span', 'station-card__unit', s.unit));
+      box.appendChild(v);
+      readings.appendChild(box);
+    }
+    wrap.appendChild(readings);
+
+    const temp = withValue.find((s) => s.kind === 'temperature');
+    if (temp && temp.history.length >= 2) {
+      const vs = temp.history.map((p) => p.v);
+      const min = String(Math.min(...vs));
+      const max = String(Math.max(...vs));
+      const chart = el('div', 'station-card__chart');
+      const cap = el('p', 'station-card__chart-caption');
+      cap.appendChild(el('span', '', root.dataset.last24 ?? ''));
+      cap.appendChild(el('span', '', fmt('fmtRange', { min, max, unit: temp.unit ?? '' })));
+      chart.appendChild(cap);
+      chart.appendChild(sparkline(temp.history, fmt('fmtChartLabel', { kind: kinds.temperature ?? temp.label, min, max })));
+      wrap.appendChild(chart);
+    }
+
+    if (st.updatedAt) {
+      const time = new Intl.DateTimeFormat(root.dataset.lang === 'en' ? 'en-IN' : root.dataset.lang, {
+        timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit',
+      }).format(new Date(st.updatedAt)).replace(/\b(am|pm)\b/, (m) => m.toUpperCase());
+      wrap.appendChild(el('p', 'station-card__updated', fmt('fmtUpdated', { time })));
+    }
+    return wrap;
+  }
+
+  (async () => {
+    try {
+      const res = await fetch('/api/station-weather');
+      if (!res.ok) throw new Error(`station-weather ${res.status}`);
+      const data: { stations: Station[] } = await res.json();
+      const cards = data.stations.map(card).filter((c): c is HTMLElement => c !== null);
+      if (cards.length === 0) return;
+      cards.forEach((c) => root.appendChild(c));
+      root.hidden = false;
+    } catch (err) {
+      console.warn('Could not load station weather', err);
+    }
+  })();
+</script>
