@@ -78,6 +78,7 @@ Join key is the unit number `F-xx` from Member Master (it matches the vault). Th
 ## v1 build order
 
 1. Schema + import + admin review screen (no member login yet). **Built 2026-10-18** (migration 0040, `scripts/import-members.mjs`, `/internal/members`); maintenance tables and history import moved to step 3 because the maintenance tabs have no unit number to join on.
+1b. **Staff editing built 2026-10-18**: `edit` / `manage` capabilities on the `members` module and edit forms in the household dialog (names, write-only email and phone, membership, house/cluster, patta records), audited before each change. This is how data gaps are fixed before members are invited.
 2. Member sign-in, allow-list, own profile and plot, contact edit, change requests, privacy notice.
 3. Maintenance status (all members) + UPI QR + manual mark-paid.
 4. Own-stay booking + notifications + event-clash flag + guest pricing.
