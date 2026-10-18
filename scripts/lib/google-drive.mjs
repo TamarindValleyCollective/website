@@ -178,6 +178,31 @@ export async function getSheetValues(spreadsheetId, range) {
   return data.values ?? [];
 }
 
+// Like getSheetValues, but also returns what Google "smart chips" in a cell
+// hold. A person chip (the @-mention of a contact) displays as a name while
+// the cell actually carries the person's email; values.get only returns the
+// name, so the grid endpoint is needed. Returns rows of cells, each
+// `{ text, emails }` (emails is empty for an ordinary cell). Used by
+// scripts/export-member-sheet.mjs.
+export async function getSheetCells(spreadsheetId, range) {
+  const token = await getAccessToken();
+  const params = new URLSearchParams({
+    ranges: range,
+    includeGridData: 'true',
+    fields: 'sheets.data.rowData.values(formattedValue,chipRuns)',
+  });
+  const res = await fetch(`${SHEETS_API}/${spreadsheetId}?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`Sheets spreadsheets.get failed: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  const rows = data.sheets?.[0]?.data?.[0]?.rowData ?? [];
+  return rows.map((row) =>
+    (row.values ?? []).map((cell) => ({
+      text: cell.formattedValue ?? '',
+      emails: (cell.chipRuns ?? []).map((run) => run.chip?.personProperties?.email).filter(Boolean),
+    })),
+  );
+}
+
 // Curator allow-list for the photo-pool dashboard: a one-column Sheet
 // (email per row, row 1 a header) instead of a static env var, so adding a
 // curator is just adding a row — no redeploy. A real Google Group isn't an

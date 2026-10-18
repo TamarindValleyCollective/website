@@ -1386,6 +1386,25 @@ never touches Netlify either.
   ability to trigger the cancellation refund itself from the same page — see `RAZORPAY.md`'s
   "Internal admin page" note and `event-payments-admin.mts` above for how the refund actually
   reaches Razorpay.
+- **Member register** (`/internal/members`, 2026-10-18) — step 1 of the planned member portal
+  (`members.tvc.farm`; design in `docs/plans/member-portal.md`, nothing member-facing built yet).
+  A read-only staff review of the register that replaces the "TVC Spend Summary" workbook's
+  Member Master / Farm Patta / House Patta tabs: one household per farm unit (`F-01`..`F-53`),
+  its people, farm and house pattas, and a list of data gaps to fix. Same shape as the tools above
+  (unlinked, `noindex`, Google Sign-In, `requireStaff` against the new `members` module in
+  `staff-registry.ts`). `netlify/functions/members-admin.mts` reads the `member_*` tables
+  (`supabase/migrations/0040_member_portal_schema.sql`, TVC ERP project, RLS on with no policies,
+  service-role only) and masks server-side: email and phone values are never returned, only
+  whether one is on file, and names are masked for `read_only`. Data arrives through a one-time,
+  re-runnable import (`scripts/export-member-sheet.mjs` reads the workbook, including the emails
+  held in Member Master's Google people chips; `scripts/import-members.mjs` +
+  `scripts/lib/member-import.mjs` load it, dry-run by default, keyed on `farm_unit` /
+  `import_key`). The source sheets number farm units differently
+  (patta tabs vs Member Master) and households can swap houses (two did), so each patta row is
+  scored against every household by how many name words agree, with the sheet's farm number, then
+  house number, as tie-breakers. Farm patta follows the farm plot and house patta follows the
+  house; weak matches are reported rather than trusted. Migration 0040 must be applied to TVC
+  ERP by hand before the page works.
 
 ## Current Production Status
 
