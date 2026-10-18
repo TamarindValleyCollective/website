@@ -29,6 +29,88 @@
   targetPort = 4321
   command = "tail -f /dev/null"
 
+# members.tvc.farm is the member portal. It is a domain alias on this same Netlify project
+# (DNS: a proxied CNAME in Cloudflare), so without these rules it would mirror the whole public
+# site, and the staff pages, under a second hostname. They only match that host. Netlify takes
+# the first rule that matches, so: the root shows the portal; the paths the portal needs are each
+# listed (a rewrite to itself) so the catch-all below never sees them; staff pages go to the main
+# host; and anything else is sent back to the portal's home. See DOMAINS.md.
+[[redirects]]
+  from = "https://members.tvc.farm/"
+  to = "/members/"
+  status = 200
+  force = true
+
+# the portal page itself
+[[redirects]]
+  from = "https://members.tvc.farm/members/*"
+  to = "/members/:splat"
+  status = 200
+  force = true
+
+# its bundled scripts and styles
+[[redirects]]
+  from = "https://members.tvc.farm/_astro/*"
+  to = "/_astro/:splat"
+  status = 200
+  force = true
+
+# fonts
+[[redirects]]
+  from = "https://members.tvc.farm/fonts/*"
+  to = "/fonts/:splat"
+  status = 200
+  force = true
+
+# the logo
+[[redirects]]
+  from = "https://members.tvc.farm/images/brand/*"
+  to = "/images/brand/:splat"
+  status = 200
+  force = true
+
+# the member data function (netlify/functions/members-me.mts)
+[[redirects]]
+  from = "https://members.tvc.farm/api/members-me/*"
+  to = "/api/members-me/:splat"
+  status = 200
+  force = true
+
+# tab icons
+[[redirects]]
+  from = "https://members.tvc.farm/favicon-16.png"
+  to = "/favicon-16.png"
+  status = 200
+  force = true
+
+# tab icons
+[[redirects]]
+  from = "https://members.tvc.farm/favicon-32.png"
+  to = "/favicon-32.png"
+  status = 200
+  force = true
+
+# tab icons
+[[redirects]]
+  from = "https://members.tvc.farm/apple-touch-icon.png"
+  to = "/apple-touch-icon.png"
+  status = 200
+  force = true
+
+# staff pages belong on the main host
+[[redirects]]
+  from = "https://members.tvc.farm/internal/*"
+  to = "https://tvc.farm/internal/:splat"
+  status = 302
+  force = true
+
+# everything else on this host goes to the portal
+[[redirects]]
+  from = "https://members.tvc.farm/*"
+  to = "https://members.tvc.farm/"
+  status = 302
+  force = true
+
 # Individual partner pages (/ecosystem/partners/<slug> and, briefly,
 # /people/partners/<slug>) were removed years ago - each partner's full
 # write-up now lives on the single /people/partners listing page instead

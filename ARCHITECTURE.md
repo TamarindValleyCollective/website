@@ -1430,8 +1430,12 @@ never touches Netlify either.
   only their mobile number and directory listing (`scripts/lib/member-profile.mjs`); anything else
   goes through the core team. Each self-service change is written to `member_audit_log`
   (migration 0041, append-only, never holds a name, email or phone) BEFORE it is applied, and refused
-  if that write fails. Revoking `can_login` takes effect on the next request. Apple sign-in, the
-  invitation email, and the `members.tvc.farm` host routing are not built yet.
+  if that write fails. Revoking `can_login` takes effect on the next request. **`members.tvc.farm`**
+  is a domain alias on the same Netlify project (DNS: a proxied Cloudflare CNAME to
+  `tvc-farm.netlify.app`); `netlify.toml` rules that match only that host show the portal at `/`,
+  let through just the portal's own paths, send `/internal/*` to `tvc.farm` and everything else back
+  to the portal's home (see `DOMAINS.md`, which also records the Netlify certificate incident).
+  Apple sign-in and the invitation email are not built yet.
 
 ## Current Production Status
 

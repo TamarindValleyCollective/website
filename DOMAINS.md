@@ -35,10 +35,16 @@ either domain — it's (or, for `tvc.farm`, was) registrar-only.
   Squarespace isn't the authoritative host for either domain's DNS. Confirmed: `tvc.farm`'s
   live mail actually flows through Google Workspace (`dig MX tvc.farm` → `aspmx.l.google.com`
   and friends) via Cloudflare's real DNS zone, not that dormant Mailgun preset.
-- **Netlify's dashboard may still list a DNS zone for either domain** (Team → DNS). Neither is
-  authoritative — both domains' real nameservers are Cloudflare's, confirmed via `dig NS`. Don't
-  assume a record added in Netlify's DNS UI for either domain will ever go live; it won't unless
-  the domain's nameservers are switched to Netlify's, which they aren't and aren't planned to be.
+- **Netlify has no DNS zone for either domain any more** (both deleted 2026-10-18; Team → DNS).
+  They were never authoritative — both domains' real nameservers are Cloudflare's, confirmed via
+  `dig NS` — but their mere existence made Netlify assume it ran their DNS, so when it renewed the
+  project's Let's Encrypt certificate it asked for wildcard names (`*.syntropic.in`, then
+  `*.tvc.farm`) that it can only prove through DNS records in its own zone. Let's Encrypt asks
+  Cloudflare, finds nothing, and the whole renewal fails (see "Netlify certificate" below). **Don't
+  re-add either domain to Netlify DNS**, and don't use "Set up Netlify DNS": a record added there
+  never goes live unless the domain's nameservers are switched to Netlify's, which they aren't and
+  aren't planned to be. (The deleted `tvc.farm` zone's mail and verification records all also
+  exist in the Cloudflare zone, which is what actually serves them.)
 - **Both domains' DNS zones live in Cloudflare now** (same Cloudflare account, "TVC"). Records
   added there go live immediately; propagation in practice has been near-instant.
 - **To change DNS for either domain, go to Cloudflare — never Netlify's DNS UI, never
@@ -57,6 +63,49 @@ either domain — it's (or, for `tvc.farm`, was) registrar-only.
 - **Cloudflare R2** (`media.tvc.farm`, the curated photo store) is a separate product under the
   same Cloudflare account used for `tvc.farm`'s DNS — see `ARCHITECTURE.md`'s "Cloudflare R2"
   section. It has nothing to do with `syntropic.in`.
+
+## Netlify certificate
+
+Netlify keeps one Let's Encrypt certificate for the project's custom domains (it is what Cloudflare
+reaches at the origin). Facts worth knowing:
+
+- **How to read it**: `echo | openssl s_client -connect tvc-farm.netlify.app:443 -servername tvc.farm 2>/dev/null | openssl x509 -noout -dates -ext subjectAltName`, or
+  `netlify api showSiteTLSCertificate --data '{"site_id":"tvc-farm.netlify.app"}'` (state, domains, `expires_at`).
+- **Cloudflare is not in strict mode**: `members.tvc.farm` answered 200 while the origin certificate
+  didn't list it, so an expired or non-matching origin certificate wouldn't have taken the site
+  down by itself. Don't switch Cloudflare's SSL mode to strict before confirming the certificate is
+  current and lists every host.
+- **2026-10-18 incident**: renewal had been failing (the certificate then listed `*.syntropic.in`,
+  `syntropic.in`, `tvc.farm`, `www.tvc.farm` and was due to expire 2026-10-25) because of the stale
+  Netlify DNS zones above. Both zones were deleted. Retrying then hit Netlify's own limit, "SSL
+  Provisioning is temporarily disabled because too many recent CertOrder creation with the site":
+  adding, re-saving and removing aliases and calling `provisionSiteTLSCertificate` (which answers
+  422 with no reason) each create a certificate order, so **don't retry repeatedly**; wait, then
+  re-read the certificate. The dashboard has no "Renew certificate" button.
+- **If a stuck renewal comes back**: the fallback is to remove the `syntropic.in` aliases and send
+  that domain to `tvc.farm` with a Cloudflare redirect rule instead, so Netlify no longer has to
+  prove it.
+
+## `members.tvc.farm` (the member portal)
+
+- **What it is**: the member portal (`/members/`, `ARCHITECTURE.md`'s "Member portal"), reachable
+  on its own subdomain. It is not a separate site: it is a **domain alias on the same Netlify
+  project**, like `syntropic.in`, so one deploy serves both.
+- **DNS** (Cloudflare, zone `tvc.farm`): a **CNAME `members` -> `tvc-farm.netlify.app`, proxied** (orange
+  cloud). Added 2026-10-18. The target is the project's own name (`tvc-farm.netlify.app`, see the
+  note on `tvc.netlify.app` under `tvc.farm` above), not `tvc.netlify.app` as the older records use.
+- **Netlify**: `members.tvc.farm` is a domain alias on the project (project slug `tvc-farm`, Team
+  "TVC team"; added 2026-10-18). Until a domain is an alias, its host answers a plain 404 from
+  Netlify. The browser UI for this is app.netlify.com/projects/tvc-farm/domain-management.
+- **Routing** (`netlify.toml`, rules for `https://members.tvc.farm/...` only): `/` shows the portal;
+  the portal's own paths (`/members/*`, `/_astro/*`, `/fonts/*`, `/images/brand/*`,
+  `/api/members-me/*`, the tab icons) pass through; `/internal/*` redirects to `tvc.farm`; anything
+  else redirects to the portal's home. This keeps the public site and the staff tools off the
+  member host.
+- **Google sign-in**: `https://members.tvc.farm` must be listed under Authorized JavaScript origins
+  of the OAuth web client, or the Google button fails there with "origin not allowed".
+- If the portal gains a new asset path or API, add it to the allow-list in `netlify.toml`, or the
+  catch-all will send it back to the portal's home.
 
 ## Renewal monitoring
 
