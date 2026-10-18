@@ -586,6 +586,33 @@ import '../../styles/global.css';
     font-weight: 700;
   }
 
+  .unit-cols {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+    align-items: start;
+  }
+
+  .pill {
+    margin: -4px 0 -4px auto; /* don't make the row taller than its heading */
+    padding: 2px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 999px;
+    background: var(--tvc-white);
+    color: var(--tvc-green-dark);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+    white-space: nowrap;
+  }
+
+  .unit-cols .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 12px 0 16px;
+  }
+
   .toolbar {
     display: flex;
     flex-wrap: wrap;
@@ -693,10 +720,27 @@ import '../../styles/global.css';
   }
 
   .tile .k {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     font-size: 0.7rem;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--tvc-ink-soft);
+  }
+
+  .glyph {
+    display: inline-flex;
+  }
+
+  .glyph svg {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: var(--tvc-green-dark);
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
   .tile .v {
@@ -907,7 +951,8 @@ import '../../styles/global.css';
     }
 
     .widgets,
-    .split {
+    .split,
+    .unit-cols {
       grid-template-columns: 1fr;
     }
 
@@ -963,6 +1008,16 @@ import '../../styles/global.css';
     book: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/>',
     cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
     help: '<path d="M4 5h16v11H9l-5 4z"/>',
+    farm: '<path d="M5 19c0-8 5-13 14-14 0 9-5 14-13 14z"/><path d="M5 19l8-8"/>',
+    house: '<path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/><path d="M10 20v-6h4v6"/>',
+  };
+  // A small picture standing in for a label; the name stays available to screen readers and on hover.
+  const glyph = (paths: string, name: string) => {
+    const g = h('span', 'glyph', undefined, icon(paths));
+    g.setAttribute('role', 'img');
+    g.setAttribute('aria-label', name);
+    g.title = name;
+    return g;
   };
 
   type NavItem = { id: string; label: string; icon: string; soon?: boolean };
@@ -1198,7 +1253,7 @@ import '../../styles/global.css';
     const hh = hhNow();
     const person = meIn(hh);
     const root = h('div');
-    root.append(h('h1', 'page-title', `Hello, ${first(me!.name)}`, h('small', '', `${hh.farmUnit}${hh.houseNo ? ` · ${hh.houseNo}` : ''}${hh.cluster ? ` · Cluster ${hh.cluster}` : ''}`)), h('p', 'lede', 'Everything about your membership in one place.'));
+    root.append(h('h1', 'page-title', `Hello, ${first(me!.name)}`), h('p', 'lede', 'Everything about your membership in one place.'));
     const grid = h('div', 'widgets');
 
     const prompts = h('div');
@@ -1209,8 +1264,8 @@ import '../../styles/global.css';
     grid.append(
       widget('My unit', { more: ['View unit', 'unit'] },
         h('div', 'tiles', undefined,
-          h('div', 'tile', undefined, h('div', 'k', 'Farm land'), h('div', 'v', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), h('div', 's', hh.plots.length ? `${hh.plots.length} plot${hh.plots.length === 1 ? '' : 's'} · ${hh.farmUnit}` : 'Not available yet')),
-          h('div', 'tile', undefined, h('div', 'k', 'House'), h('div', 'v', hh.houseNo ? (hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : hh.houseNo) : '—'), h('div', 's', hh.houseNo ?? 'No house allocated yet')),
+          h('div', 'tile', undefined, h('div', 'k', undefined, glyph(IC.farm, 'Farm land')), h('div', 'v', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), h('div', 's', hh.plots.length ? `${hh.plots.length} plot${hh.plots.length === 1 ? '' : 's'}` : 'Not available yet')),
+          h('div', 'tile', undefined, h('div', 'k', undefined, glyph(IC.house, 'House'), hh.houseNo && hh.cluster ? h('span', 'pill', `Cluster ${hh.cluster}`) : null), h('div', 'v', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), h('div', 's', !hh.houseNo ? 'No house allocated yet' : hh.housePattas.length ? `${hh.housePattas.length} plot${hh.housePattas.length === 1 ? '' : 's'}` : 'Area not on record')),
         ),
         prompts,
       ),
@@ -1228,21 +1283,23 @@ import '../../styles/global.css';
     const hh = hhNow();
     const person = meIn(hh);
     const root = h('div');
-    root.append(crumbs('Home', 'My unit'), h('h1', 'page-title', 'My unit', h('small', '', `${hh.farmUnit}${hh.houseNo ? ` · ${hh.houseNo}` : ''}`)));
-    root.append(h('p', 'lede', [hh.cluster ? `Cluster ${hh.cluster}` : null, hh.unitType ? `Unit type ${hh.unitType}` : null, `You are listed as ${ROLE[person.role] ?? person.role}`].filter(Boolean).join(' · ')));
-    root.append(h('div', 'kpis', undefined,
-      kpi('Farm land', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'),
-      kpi('Farm plots', String(hh.plots.length)),
-      kpi('House', hh.houseNo ?? '—'),
-      kpi('House area', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'),
-    ));
+    root.append(crumbs('Home', 'My unit'), h('h1', 'page-title', 'My unit'));
+    root.append(h('p', 'lede', [hh.unitType ? `Unit type ${hh.unitType}` : null, `You are listed as ${ROLE[person.role] ?? person.role}`].filter(Boolean).join(' · ')));
     const panel = (title: string, ...kids: Kid[]) => {
       const p = h('section', 'panel', undefined, h('h2', '', title), ...kids);
       p.style.marginTop = '16px';
       return p;
     };
-    root.append(panel('Farm patta', hh.plots.length ? tableOf(['Patta no.', 'Reference', 'Survey no.', 'Hectares', 'Acres'], hh.plots.map((p) => [p.pattaNo, p.referenceNo, p.surveyNo, p.areaHectares, p.areaAcres]), 3) : h('p', 'lede', 'Not available yet')));
-    root.append(panel('House patta', hh.housePattas.length ? tableOf(['Patta no.', 'Survey no.', 'Sq ft'], hh.housePattas.map((p) => [p.pattaNo, p.surveyNo, p.areaSqFt]), 2) : h('p', 'lede', hh.houseNo ? 'Not available yet' : 'No house allocated yet')));
+    const cols = h('div', 'unit-cols');
+    cols.append(
+      h('section', 'panel', undefined, h('h2', '', 'Farm'),
+        h('div', 'kpis', undefined, kpi('Farm land', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), kpi('Farm plots', String(hh.plots.length))),
+        hh.plots.length ? tableOf(['Patta no.', 'Reference', 'Survey no.', 'Hectares', 'Acres'], hh.plots.map((p) => [p.pattaNo, p.referenceNo, p.surveyNo, p.areaHectares, p.areaAcres]), 3) : h('p', 'lede', 'Patta details not available yet')),
+      h('section', 'panel', undefined, h('h2', '', 'House', hh.houseNo && hh.cluster ? h('span', 'pill', `Cluster ${hh.cluster}`) : null),
+        h('div', 'kpis', undefined, kpi('House area', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), kpi('House plots', String(hh.housePattas.length))),
+        hh.housePattas.length ? tableOf(['Patta no.', 'Survey no.', 'Sq ft'], hh.housePattas.map((p) => [p.pattaNo, p.surveyNo, p.areaSqFt]), 2) : h('p', 'lede', hh.houseNo ? 'Patta details not available yet' : 'No house allocated yet')),
+    );
+    root.append(cols);
     root.append(panel('People in this unit', tableOf(['Name', 'Role', 'Email', 'Mobile'], hh.people.map((p) => [`${p.name}${p.id === person.id ? ' (you)' : ''}`, ROLE[p.role] ?? p.role, p.hasEmail ? 'On file' : 'Missing', p.hasPhone ? 'On file' : 'Missing']))));
 
     const edit = h('button', 'btn btn--solid', 'Update my details');
