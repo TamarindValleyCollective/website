@@ -115,6 +115,8 @@ function failure(result: Db, taken: string): EditError {
   if (result.code === '23505') return new EditError(taken, 409);
   if (result.code === '23503') return new EditError("That record or household doesn't exist any more. Reload the page.", 409);
   if (result.code === '23514') return new EditError("One of those values isn't allowed.", 400);
+  // The database refuses a third person who can sign in (trigger on member_household_members).
+  if (result.code === 'P0001') return new EditError('A household can have at most two people who can sign in. Remove sign-in from someone else first.', 409);
   console.error('[members-admin] write failed', result.status, result.code);
   return new EditError('Server error', 500);
 }
@@ -175,6 +177,19 @@ async function applyEdit(edit: any): Promise<void> {
       const added = await db('POST', 'member_household_members', { household_id: edit.toHouseholdId, person_id: edit.personId, role: current[0].role });
       if (!added.ok) throw failure(added, 'That person is already in that household.');
       must(await db('DELETE', `member_household_members?${eq('household_id', edit.fromHouseholdId)}&${eq('person_id', edit.personId)}`));
+      return;
+    }
+
+    case 'membership.invite': {
+      if (edit.canLogin) {
+        // Sign-in is by email, so a person with none on file can't be invited.
+        const rows = await select('member_people', 'email,active', `&${eq('id', edit.personId)}`);
+        if (rows.length === 0) throw new EditError("That person doesn't exist any more. Reload the page.", 404);
+        if (!rows[0].email) throw new EditError('Add an email address for this person first: it is how they sign in.', 400);
+        if (rows[0].active === false) throw new EditError('This person is inactive. Add them to a household again first.', 400);
+      }
+      const r = must(await db('PATCH', `member_household_members?${eq('household_id', edit.householdId)}&${eq('person_id', edit.personId)}`, { can_login: edit.canLogin }));
+      if (r.rows.length === 0) throw new EditError("That person isn't in that household any more. Reload the page.", 404);
       return;
     }
 

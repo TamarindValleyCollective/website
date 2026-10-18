@@ -1003,6 +1003,17 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
         { class: 'rowbtns' },
         can.edit ? rowButton('Edit', () => peopleSlot.replaceChildren(personForm(hh, p, peopleSlot))) : null,
         can.manage ? rowButton('Move', () => peopleSlot.replaceChildren(moveForm(hh, p, peopleSlot))) : null,
+        // Lets this person sign in to the member portal (needs an email on file; at most two per household).
+        can.manage
+          ? rowButton(p.canLogin ? 'Remove sign-in' : 'Allow sign-in', async () => {
+              try {
+                await send({ action: 'membership.invite', householdId: hh.id, personId: p.id, canLogin: !p.canLogin });
+                await refreshAfterEdit(p.canLogin ? 'Sign-in removed.' : 'They can now sign in to the member portal.');
+              } catch (err) {
+                reportPeople(err instanceof Error ? err.message : 'Something went wrong.');
+              }
+            })
+          : null,
         can.manage
           ? confirmButton('Remove', 'Click again to remove', async () => {
               await send({ action: 'membership.remove', householdId: hh.id, personId: p.id });

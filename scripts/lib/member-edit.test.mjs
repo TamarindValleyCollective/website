@@ -76,6 +76,15 @@ test('membership actions validate ids and roles; a move needs a different househ
   assert.deepEqual(good({ action: 'membership.remove', householdId: A, personId: B }), { action: 'membership.remove', householdId: A, personId: B });
 });
 
+test('membership.invite takes a household, a person and a true/false', () => {
+  assert.deepEqual(good({ action: 'membership.invite', householdId: A, personId: B, canLogin: true }), { action: 'membership.invite', householdId: A, personId: B, canLogin: true });
+  assert.equal(good({ action: 'membership.invite', householdId: A, personId: B, canLogin: false }).canLogin, false);
+  assert.match(bad({ action: 'membership.invite', householdId: A, personId: B }), /whether this person can sign in/);
+  assert.match(bad({ action: 'membership.invite', householdId: A, personId: B, canLogin: 'yes' }), /whether this person can sign in/);
+  assert.equal(ACTION_CAPABILITY['membership.invite'], 'manage');
+  assert.deepEqual(auditDetail(good({ action: 'membership.invite', householdId: A, personId: B, canLogin: true })).values, { canLogin: true });
+});
+
 test('household.update: house like H-07, cluster from the list, null clears', () => {
   assert.equal(good({ action: 'household.update', householdId: A, houseNo: 'h-07' }).houseNo, 'H-07');
   assert.equal(good({ action: 'household.update', householdId: A, houseNo: null }).houseNo, null);

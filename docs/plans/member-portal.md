@@ -80,6 +80,7 @@ Join key is the unit number `F-xx` from Member Master (it matches the vault). Th
 1. Schema + import + admin review screen (no member login yet). **Built 2026-10-18** (migration 0040, `scripts/import-members.mjs`, `/internal/members`); maintenance tables and history import moved to step 3 because the maintenance tabs have no unit number to join on.
 1b. **Staff editing built 2026-10-18**: `edit` / `manage` capabilities on the `members` module and edit forms in the household dialog (names, write-only email and phone, membership, house/cluster, patta records), audited before each change. This is how data gaps are fixed before members are invited.
 2. Member sign-in, allow-list, own profile and plot, contact edit, change requests, privacy notice.
+   **First slice built 2026-10-18** (`/members/`, `members-me.mts`, migration 0041): Google sign-in for invited members only, the web-portal shell (left menu, unit chip, widget dashboard), My unit and household, and editing their own mobile number and directory listing; staff invite switch in the register. **Still to do in step 2:** Apple sign-in, the invitation email, `members.tvc.farm` host routing, the first-login privacy notice, change requests for protected fields, and a way to change a sign-in email safely.
 3. Maintenance status (all members) + UPI QR + manual mark-paid.
 4. Own-stay booking + notifications + event-clash flag + guest pricing.
 5. Pilot with 5-6 members, then everyone.

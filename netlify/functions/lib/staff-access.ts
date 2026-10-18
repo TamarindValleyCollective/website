@@ -115,7 +115,7 @@ type TokenResult =
 // Verifies the caller's Google ID token — signature, audience, expiry, and,
 // for our own Workspace domains, the `hd` claim. Says nothing about what the
 // person may do; requireStaff / requireSuperAdmin decide that.
-async function verifyStaffToken(req: Request): Promise<TokenResult> {
+export async function verifyStaffToken(req: Request): Promise<TokenResult> {
   const authHeader = req.headers.get('authorization') ?? '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
   if (!token) return { ok: false, status: 401, error: 'Sign-in required' };
