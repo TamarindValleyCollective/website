@@ -28,11 +28,13 @@ export function buildHouseholdReview({ households, people, memberships, plots, h
       .map((m) => ({ m, person: personById.get(m.person_id) }))
       .filter((x) => x.person);
     const household = {
+      id: h.id,
       farmUnit: h.farm_unit,
       houseNo: h.house_no,
       cluster: h.cluster,
       unitType: h.unit_type,
       people: members.map(({ m, person }) => ({
+        id: person.id,
         name: person.full_name,
         role: m.role,
         canLogin: m.can_login,
@@ -40,6 +42,7 @@ export function buildHouseholdReview({ households, people, memberships, plots, h
         hasPhone: Boolean(person.phone),
       })),
       plots: (plotsByHousehold.get(h.id) ?? []).map((p) => ({
+        id: p.id,
         pattaNo: p.patta_no,
         referenceNo: p.reference_no,
         surveyNo: p.survey_no,
@@ -48,6 +51,7 @@ export function buildHouseholdReview({ households, people, memberships, plots, h
         settlement: p.settlement,
       })),
       housePattas: (housePattasByHousehold.get(h.id) ?? []).map((p) => ({
+        id: p.id,
         pattaNo: p.patta_no,
         referenceNo: p.reference_no,
         surveyNo: p.survey_no,

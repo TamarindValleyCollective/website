@@ -387,6 +387,109 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     gap: 18px;
   }
 
+  .members .factsrow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+  }
+
+  .members .factsrow p {
+    margin: 0;
+  }
+
+  /* Small text-style buttons for the actions on a row. */
+  .members .rowbtns {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
+
+  .members .rowbtn {
+    font: inherit;
+    font-size: 0.85rem;
+    background: none;
+    border: none;
+    padding: 4px 0;
+    color: var(--tvc-green-dark);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .members .rowbtn--danger {
+    color: var(--tvc-error-text);
+  }
+
+  .members .editform {
+    margin: 10px 0 4px;
+    padding: 14px 16px;
+    background: var(--tvc-cream);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-sm);
+  }
+
+  .members .editform h4 {
+    margin: 0 0 10px;
+    font-size: 0.95rem;
+  }
+
+  .members .editfields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 10px 14px;
+  }
+
+  .members .editfields label {
+    display: grid;
+    gap: 4px;
+    font-size: 0.85rem;
+  }
+
+  .members .editfields label.check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .members .editfields input:not([type='checkbox']),
+  .members .editfields select {
+    padding: 8px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    font: inherit;
+  }
+
+  .members .editfields small {
+    color: var(--tvc-ink-soft);
+  }
+
+  .members .editactions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    margin-top: 12px;
+  }
+
+  .members .form-msg {
+    min-height: 1.2em;
+    margin: 8px 0 0;
+    color: var(--tvc-error-text);
+    font-size: 0.85rem;
+  }
+
+  .members .form-ok {
+    margin: 0;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+    font-size: 0.88rem;
+    font-weight: 600;
+  }
+
   .members .body h3 {
     font-size: 0.85rem;
     margin: 0 0 6px;
@@ -472,10 +575,10 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   }
 
   type Flag = { kind: string; severity: 'error' | 'warn' | 'info'; text: string };
-  type Person = { name: string; role: string; canLogin: boolean; hasEmail: boolean; hasPhone: boolean };
-  type Plot = { pattaNo: string | null; referenceNo: string | null; surveyNo: string | null; areaHectares: number | null; areaAcres: number | null; settlement: string | null };
-  type HousePatta = { pattaNo: string | null; referenceNo: string | null; surveyNo: string | null; areaSqFt: number | null; settlement: string | null };
-  type Household = { farmUnit: string; houseNo: string | null; cluster: string | null; unitType: string | null; people: Person[]; plots: Plot[]; housePattas: HousePatta[]; flags: Flag[]; farmAcres: number; farmHectares: number; houseSqFt: number; plotsMissingArea: number; housePattasMissingArea: number };
+  type Person = { id: string; name: string; role: string; canLogin: boolean; hasEmail: boolean; hasPhone: boolean };
+  type Plot = { id: string; pattaNo: string | null; referenceNo: string | null; surveyNo: string | null; areaHectares: number | null; areaAcres: number | null; settlement: string | null };
+  type HousePatta = { id: string; pattaNo: string | null; referenceNo: string | null; surveyNo: string | null; areaSqFt: number | null; settlement: string | null };
+  type Household = { id: string; farmUnit: string; houseNo: string | null; cluster: string | null; unitType: string | null; people: Person[]; plots: Plot[]; housePattas: HousePatta[]; flags: Flag[]; farmAcres: number; farmHectares: number; houseSqFt: number; plotsMissingArea: number; housePattasMissingArea: number };
   type Totals = { households: number; people: number; peopleWithEmail: number; farmPlots: number; householdsNeedingAttention: number; farmAcres: number; farmHectares: number; houseSqFt: number };
 
   const SEVERITY_WORD = { error: 'Fix', warn: 'Check', info: 'Note' } as const;
@@ -500,12 +603,12 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     return h('span', { class: `flag flag--${f.severity}`, text: `${SEVERITY_WORD[f.severity]}: ${f.text}` });
   }
 
-  function table(headers: string[], rows: (string | number | null)[][]): HTMLElement {
+  function table(headers: string[], rows: (string | number | null | HTMLElement)[][]): HTMLElement {
     return h(
       'table',
       {},
       h('thead', {}, h('tr', {}, ...headers.map((t) => h('th', { text: t })))),
-      h('tbody', {}, ...rows.map((r) => h('tr', {}, ...r.map((c) => h('td', { text: dash(c) }))))),
+      h('tbody', {}, ...rows.map((r) => h('tr', {}, ...r.map((c) => (c instanceof HTMLElement ? h('td', {}, c) : h('td', { text: dash(c) })))))),
     );
   }
 
@@ -581,54 +684,380 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   }
 
   const detail = $<HTMLDialogElement>('detail');
+  let can = { edit: false, manage: false };
+  let openId: string | null = null;
+
+  // ---- editing -------------------------------------------------------------------
+  // What the server enforces is in netlify/functions/members-admin.mts; the page
+  // only offers what the signed-in role can do. Emails and phones are write-only:
+  // a field can replace or clear one, but the current value is never shown.
+  type Field = {
+    name: string;
+    label: string;
+    type?: 'text' | 'number' | 'email' | 'tel' | 'select' | 'checkbox';
+    value?: string;
+    options?: { value: string; label: string }[];
+    placeholder?: string;
+    hint?: string;
+  };
+
+  async function send(body: Record<string, unknown>): Promise<void> {
+    try {
+      const { status, data } = await staffFetch('/api/members-admin/edit', { method: 'POST', body });
+      if (status !== 200) throw new Error(data.error || 'Something went wrong. Try again.');
+    } catch (err) {
+      if (err instanceof StaffAuthError) throw new Error(err.kind === 'unauthorized' ? 'Your session expired. Sign in again.' : "You don't have permission to do that.");
+      throw err;
+    }
+  }
+
+  // Reload the register after a change and show the same household again.
+  async function refreshAfterEdit(message: string) {
+    await loadData();
+    const hh = households.find((x) => x.id === openId);
+    if (hh) openDetail(hh, message);
+    else detail.close();
+  }
+
+  function formEl(title: string, fields: Field[], submitLabel: string, onSubmit: (values: Record<string, string>) => Promise<void>, onCancel: () => void, extra?: HTMLElement | null): HTMLFormElement {
+    const msg = h('p', { class: 'form-msg', attrs: { role: 'alert' } });
+    const inputs = new Map<string, HTMLInputElement | HTMLSelectElement>();
+    const labels = fields.map((f) => {
+      let control: HTMLInputElement | HTMLSelectElement;
+      if (f.type === 'select') {
+        const sel = document.createElement('select');
+        for (const o of f.options ?? []) {
+          const opt = document.createElement('option');
+          opt.value = o.value;
+          opt.textContent = o.label;
+          sel.append(opt);
+        }
+        sel.value = f.value ?? '';
+        control = sel;
+      } else {
+        const inp = document.createElement('input');
+        inp.type = f.type ?? 'text';
+        if (f.type === 'number') {
+          inp.step = 'any';
+          inp.min = '0';
+          inp.inputMode = 'decimal';
+        }
+        if (f.type === 'checkbox') inp.checked = f.value === 'on';
+        else inp.value = f.value ?? '';
+        if (f.placeholder) inp.placeholder = f.placeholder;
+        inp.autocomplete = 'off';
+        control = inp;
+      }
+      control.name = f.name;
+      inputs.set(f.name, control);
+      const isCheck = f.type === 'checkbox';
+      return h('label', { class: isCheck ? 'check' : '' }, isCheck ? control : null, h('span', { text: f.label }), isCheck ? null : control, f.hint ? h('small', { text: f.hint }) : null);
+    });
+    const save = h('button', { class: 'button', text: submitLabel, attrs: { type: 'submit' } }) as HTMLButtonElement;
+    const cancel = h('button', { class: 'button button--outline', text: 'Cancel', attrs: { type: 'button' } });
+    cancel.addEventListener('click', onCancel);
+    const form = h('form', { class: 'editform', attrs: { novalidate: '' } }, h('h4', { text: title }), h('div', { class: 'editfields' }, ...labels), msg, h('div', { class: 'editactions' }, save, cancel, extra)) as HTMLFormElement;
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const values: Record<string, string> = {};
+      for (const [name, control] of inputs) values[name] = control instanceof HTMLInputElement && control.type === 'checkbox' ? (control.checked ? 'on' : '') : control.value;
+      msg.textContent = '';
+      save.disabled = true;
+      try {
+        await onSubmit(values);
+      } catch (err) {
+        msg.textContent = err instanceof Error ? err.message : 'Something went wrong.';
+        save.disabled = false;
+      }
+    });
+    return form;
+  }
+
+  // A button that needs a second click, for removing things.
+  function confirmButton(label: string, confirmLabel: string, action: () => Promise<void>, report: (m: string) => void): HTMLElement {
+    const b = h('button', { class: 'rowbtn rowbtn--danger', text: label, attrs: { type: 'button' } });
+    let armed = false;
+    b.addEventListener('click', async () => {
+      if (!armed) {
+        armed = true;
+        b.textContent = confirmLabel;
+        setTimeout(() => {
+          armed = false;
+          b.textContent = label;
+        }, 5000);
+        return;
+      }
+      try {
+        await action();
+      } catch (err) {
+        armed = false;
+        b.textContent = label;
+        report(err instanceof Error ? err.message : 'Something went wrong.');
+      }
+    });
+    return b;
+  }
+
+  const rowButton = (text: string, onClick: () => void): HTMLElement => {
+    const b = h('button', { class: 'rowbtn', text, attrs: { type: 'button' } });
+    b.addEventListener('click', onClick);
+    return b;
+  };
+
+  const householdOptions = (exceptId?: string) =>
+    households
+      .filter((x) => x.id !== exceptId)
+      .sort((a, b) => a.farmUnit.localeCompare(b.farmUnit))
+      .map((x) => ({ value: x.id, label: `${x.farmUnit}${x.houseNo ? ` · ${x.houseNo}` : ''} — ${x.people.map((p) => firstName(p.name)).join(' & ') || 'no people yet'}` }));
+
+  const ROLE_OPTIONS = [
+    { value: 'owner', label: 'Owner' },
+    { value: 'family', label: 'Family' },
+    { value: 'non_owner', label: 'Not an owner' },
+  ];
+
+  function personForm(hh: Household, p: Person, slot: HTMLElement): HTMLFormElement {
+    const fields: Field[] = [
+      { name: 'fullName', label: 'Name', value: p.name },
+      { name: 'email', label: 'Email', type: 'email', placeholder: p.hasEmail ? 'On file. Type a new address to replace it' : 'Not on file. Type an address to add one', hint: 'Emails are never shown, only replaced.' },
+      ...(p.hasEmail ? [{ name: 'clearEmail', label: 'Remove the email on file', type: 'checkbox' } as Field] : []),
+      { name: 'phone', label: 'Mobile number', type: 'tel', placeholder: p.hasPhone ? 'On file. Type a new number to replace it' : 'Not on file. Type a number to add one' },
+      ...(p.hasPhone ? [{ name: 'clearPhone', label: 'Remove the number on file', type: 'checkbox' } as Field] : []),
+      ...(can.manage ? [{ name: 'role', label: 'Role in this household', type: 'select', options: ROLE_OPTIONS, value: p.role } as Field] : []),
+    ];
+    return formEl(
+      `Edit ${firstName(p.name)}`,
+      fields,
+      'Save',
+      async (v) => {
+        const body: Record<string, unknown> = { action: 'person.update', personId: p.id };
+        if (v.fullName.trim() && v.fullName.trim() !== p.name) body.fullName = v.fullName;
+        if (v.email.trim()) body.email = v.email;
+        else if (v.clearEmail) body.email = null;
+        if (v.phone.trim()) body.phone = v.phone;
+        else if (v.clearPhone) body.phone = null;
+        const personChanged = Object.keys(body).length > 2;
+        const roleChanged = can.manage && v.role !== p.role;
+        if (!personChanged && !roleChanged) throw new Error('Nothing to change.');
+        if (personChanged) await send(body);
+        if (roleChanged) await send({ action: 'membership.update', householdId: hh.id, personId: p.id, role: v.role });
+        await refreshAfterEdit('Saved.');
+      },
+      () => slot.replaceChildren(),
+    );
+  }
+
+  function addPersonForm(hh: Household, slot: HTMLElement): HTMLFormElement {
+    return formEl(
+      'Add a person to this household',
+      [
+        { name: 'fullName', label: 'Name' },
+        { name: 'role', label: 'Role in this household', type: 'select', options: ROLE_OPTIONS, value: 'owner' },
+        { name: 'email', label: 'Email (optional)', type: 'email' },
+        { name: 'phone', label: 'Mobile number (optional)', type: 'tel' },
+      ],
+      'Add person',
+      async (v) => {
+        const body: Record<string, unknown> = { action: 'person.add', householdId: hh.id, fullName: v.fullName, role: v.role };
+        if (v.email.trim()) body.email = v.email;
+        if (v.phone.trim()) body.phone = v.phone;
+        await send(body);
+        await refreshAfterEdit('Person added.');
+      },
+      () => slot.replaceChildren(),
+    );
+  }
+
+  function moveForm(hh: Household, p: Person, slot: HTMLElement): HTMLFormElement {
+    return formEl(
+      `Move ${firstName(p.name)} to another household`,
+      [{ name: 'to', label: 'Move to', type: 'select', options: householdOptions(hh.id) }],
+      'Move',
+      async (v) => {
+        await send({ action: 'membership.move', fromHouseholdId: hh.id, toHouseholdId: v.to, personId: p.id });
+        await refreshAfterEdit('Moved.');
+      },
+      () => slot.replaceChildren(),
+    );
+  }
+
+  function householdForm(hh: Household, slot: HTMLElement): HTMLFormElement {
+    return formEl(
+      'Edit house, cluster and unit type',
+      [
+        { name: 'houseNo', label: 'House number', value: hh.houseNo ?? '', placeholder: 'H-07', hint: 'Leave empty if no house has been allocated yet.' },
+        { name: 'cluster', label: 'Cluster', type: 'select', value: hh.cluster ?? '', options: [{ value: '', label: 'No cluster yet' }, ...['H1-A', 'H1-B', 'H2'].map((c) => ({ value: c, label: c }))] },
+        { name: 'unitType', label: 'Unit type', value: hh.unitType ?? '', placeholder: 'e.g. DF1-V2' },
+      ],
+      'Save',
+      async (v) => {
+        const body: Record<string, unknown> = { action: 'household.update', householdId: hh.id };
+        if (v.houseNo.trim().toUpperCase() !== (hh.houseNo ?? '')) body.houseNo = v.houseNo.trim() === '' ? null : v.houseNo;
+        if (v.cluster !== (hh.cluster ?? '')) body.cluster = v.cluster === '' ? null : v.cluster;
+        if (v.unitType.trim() !== (hh.unitType ?? '')) body.unitType = v.unitType.trim() === '' ? null : v.unitType;
+        if (Object.keys(body).length === 2) throw new Error('Nothing to change.');
+        await send(body);
+        await refreshAfterEdit('Saved.');
+      },
+      () => slot.replaceChildren(),
+    );
+  }
+
+  // Farm patta and house patta records share one form; the fields differ.
+  const LAND = {
+    plot: {
+      noun: 'farm patta record',
+      create: 'plot.create',
+      update: 'plot.update',
+      remove: 'plot.delete',
+      idKey: 'plotId',
+      fields: [
+        { name: 'pattaNo', label: 'Patta number' },
+        { name: 'referenceNo', label: 'Reference number' },
+        { name: 'surveyNo', label: 'Survey number' },
+        { name: 'areaHectares', label: 'Hectares', type: 'number' },
+        { name: 'areaAcres', label: 'Acres', type: 'number' },
+        { name: 'settlement', label: 'Settlement' },
+      ] as Field[],
+    },
+    housepatta: {
+      noun: 'house patta record',
+      create: 'housepatta.create',
+      update: 'housepatta.update',
+      remove: 'housepatta.delete',
+      idKey: 'housePattaId',
+      fields: [
+        { name: 'pattaNo', label: 'Patta number' },
+        { name: 'referenceNo', label: 'Reference number' },
+        { name: 'surveyNo', label: 'Survey number' },
+        { name: 'areaSqFt', label: 'Square feet', type: 'number' },
+        { name: 'settlement', label: 'Settlement' },
+      ] as Field[],
+    },
+  } as const;
+
+  function landForm(kind: 'plot' | 'housepatta', hh: Household, rec: (Plot | HousePatta) | null, slot: HTMLElement): HTMLFormElement {
+    const cfg = LAND[kind];
+    const current = (rec ?? {}) as Record<string, string | number | null>;
+    const fields: Field[] = cfg.fields.map((f) => ({ ...f, value: current[f.name] == null ? '' : String(current[f.name]) }));
+    if (rec) fields.push({ name: 'householdId', label: 'Belongs to household', type: 'select', value: hh.id, options: householdOptions(), hint: 'Change this to move the record to another household.' });
+    const report = (m: string) => {
+      const note = slot.querySelector('.form-msg');
+      if (note) note.textContent = m;
+    };
+    const del = rec ? confirmButton('Delete this record', 'Click again to delete', async () => {
+      await send({ action: cfg.remove, [cfg.idKey]: (rec as { id: string }).id });
+      await refreshAfterEdit('Record deleted.');
+    }, report) : null;
+    return formEl(
+      rec ? `Edit ${cfg.noun}` : `Add a ${cfg.noun}`,
+      fields,
+      rec ? 'Save' : 'Add record',
+      async (v) => {
+        const body: Record<string, unknown> = { action: rec ? cfg.update : cfg.create };
+        if (rec) body[cfg.idKey] = (rec as { id: string }).id;
+        else body.householdId = hh.id;
+        for (const f of cfg.fields) {
+          const now = (v[f.name] ?? '').trim();
+          const was = current[f.name] == null ? '' : String(current[f.name]);
+          if (rec ? now !== was : now !== '') body[f.name] = now === '' ? null : now;
+        }
+        if (rec && v.householdId !== hh.id) body.householdId = v.householdId;
+        if (Object.keys(body).length <= 2) throw new Error(rec ? 'Nothing to change.' : 'Enter at least one detail.');
+        await send(body);
+        await refreshAfterEdit(rec ? 'Saved.' : 'Record added.');
+      },
+      () => slot.replaceChildren(),
+      del,
+    );
+  }
 
   // Everything we hold about one household, in a dialog.
-  function openDetail(hh: Household) {
+  function openDetail(hh: Household, message?: string) {
+    openId = hh.id;
     $('detail-title').textContent = [`Farm plot ${hh.farmUnit}`, hh.houseNo ?? 'No house'].join(' · ');
     const body = $('detail-body');
     const facts = [hh.cluster ? `Cluster ${hh.cluster}` : null, hh.unitType ? `Unit type ${hh.unitType}` : null].filter(Boolean).join(' · ');
     body.replaceChildren();
-    if (facts) body.append(h('p', { class: 'meta', text: facts }));
+    if (message) body.append(h('p', { class: 'form-ok', text: message, attrs: { role: 'status' } }));
+
+    const hhSlot = h('div');
+    body.append(h('div', { class: 'factsrow' }, h('p', { class: 'meta', text: facts || 'No cluster or unit type yet' }), can.manage ? rowButton('Edit house, cluster and unit type', () => hhSlot.replaceChildren(householdForm(hh, hhSlot))) : null), hhSlot);
+
     if (hh.flags.length) {
       body.append(h('div', {}, h('h3', { text: 'Data gaps' }), h('ul', { class: 'flags' }, ...hh.flags.map((f) => h('li', {}, flagChip(f))))));
     }
-    const section = (title: string, content: HTMLElement) => body.append(h('div', {}, h('h3', { text: title }), content));
+    const section = (title: string, ...nodes: Kid[]) => body.append(h('div', {}, h('h3', { text: title }), ...nodes));
+    const editable = can.edit || can.manage;
+
+    // People
+    const peopleSlot = h('div');
+    const reportPeople = (m: string) => {
+      const note = peopleSlot.querySelector('.form-msg') ?? body.querySelector('.form-ok');
+      if (note) note.textContent = m;
+      else peopleSlot.append(h('p', { class: 'form-msg', text: m, attrs: { role: 'alert' } }));
+    };
+    const personActions = (p: Person): HTMLElement =>
+      h(
+        'span',
+        { class: 'rowbtns' },
+        can.edit ? rowButton('Edit', () => peopleSlot.replaceChildren(personForm(hh, p, peopleSlot))) : null,
+        can.manage ? rowButton('Move', () => peopleSlot.replaceChildren(moveForm(hh, p, peopleSlot))) : null,
+        can.manage
+          ? confirmButton('Remove', 'Click again to remove', async () => {
+              await send({ action: 'membership.remove', householdId: hh.id, personId: p.id });
+              await refreshAfterEdit('Removed from this household.');
+            }, reportPeople)
+          : null,
+      );
     section(
       'People',
       h(
         'div',
         { class: 'table-wrap' },
         table(
-          ['Name', 'Role', 'Email on file', 'Phone on file', 'Can sign in'],
-          hh.people.map((p) => [p.name, p.role, p.hasEmail ? 'Yes' : 'No', p.hasPhone ? 'Yes' : 'No', p.canLogin ? 'Yes' : 'Not invited']),
+          ['Name', 'Role', 'Email on file', 'Phone on file', 'Can sign in', ...(editable ? [''] : [])],
+          hh.people.map((p) => [p.name, p.role, p.hasEmail ? 'Yes' : 'No', p.hasPhone ? 'Yes' : 'No', p.canLogin ? 'Yes' : 'Not invited', ...(editable ? [personActions(p)] : [])]),
         ),
       ),
+      peopleSlot,
+      can.manage ? rowButton('Add a person', () => peopleSlot.replaceChildren(addPersonForm(hh, peopleSlot))) : null,
     );
+
+    // Farm patta
+    const plotSlot = h('div');
     section(
       'Farm patta',
       hh.plots.length
         ? pivot(
             `${plural(hh.plots.length, 'plot')} · ${acres(hh.farmAcres)} (${acresFmt.format(hh.farmHectares)} ha)${hh.plotsMissingArea ? ` · ${plural(hh.plotsMissingArea, 'plot')} without an area yet` : ''}`,
             table(
-              ['Patta no.', 'Reference', 'Survey no.', 'Hectares', 'Acres', 'Settlement'],
-              hh.plots.map((p) => [p.pattaNo, p.referenceNo, p.surveyNo, p.areaHectares, p.areaAcres, p.settlement]),
+              ['Patta no.', 'Reference', 'Survey no.', 'Hectares', 'Acres', 'Settlement', ...(can.manage ? [''] : [])],
+              hh.plots.map((p) => [p.pattaNo, p.referenceNo, p.surveyNo, p.areaHectares, p.areaAcres, p.settlement, ...(can.manage ? [rowButton('Edit', () => plotSlot.replaceChildren(landForm('plot', hh, p, plotSlot)))] : [])]),
             ),
           )
         : h('p', { class: 'muted', text: 'Not available yet' }),
+      plotSlot,
+      can.manage ? rowButton('Add a farm patta record', () => plotSlot.replaceChildren(landForm('plot', hh, null, plotSlot))) : null,
     );
+
+    // House patta
+    const houseSlot = h('div');
     section(
       'House patta',
       hh.housePattas.length
         ? pivot(
             `${plural(hh.housePattas.length, 'record')} · ${sqft(hh.houseSqFt)} (${acres(sqftAsAcres(hh.houseSqFt))})${hh.housePattasMissingArea ? ` · ${plural(hh.housePattasMissingArea, 'record')} without an area yet` : ''}`,
             table(
-              ['Patta no.', 'Reference', 'Survey no.', 'Sq ft', 'Settlement'],
-              hh.housePattas.map((p) => [p.pattaNo, p.referenceNo, p.surveyNo, p.areaSqFt, p.settlement]),
+              ['Patta no.', 'Reference', 'Survey no.', 'Sq ft', 'Settlement', ...(can.manage ? [''] : [])],
+              hh.housePattas.map((p) => [p.pattaNo, p.referenceNo, p.surveyNo, p.areaSqFt, p.settlement, ...(can.manage ? [rowButton('Edit', () => houseSlot.replaceChildren(landForm('housepatta', hh, p, houseSlot)))] : [])]),
             ),
           )
         : h('p', { class: 'muted', text: hh.houseNo ? 'Not available yet' : 'No house' }),
+      houseSlot,
+      can.manage ? rowButton('Add a house patta record', () => houseSlot.replaceChildren(landForm('housepatta', hh, null, houseSlot))) : null,
     );
-    detail.showModal();
+    if (!detail.open) detail.showModal();
   }
   $('detail-close').addEventListener('click', () => detail.close());
   // Clicking the dimmed area outside the dialog closes it.
@@ -709,20 +1138,28 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     $('forbidden-email').textContent = decodeTokenEmail(getToken() ?? '');
   }
 
+  // Fetches the register and redraws the page; callers handle errors.
+  async function loadData() {
+    const { status, data } = await staffFetch('/api/members-admin/overview');
+    if (status !== 200) throw new Error('load failed');
+    households = data.households;
+    can = data.can ?? { edit: false, manage: false };
+    $('masked-note').hidden = !data.namesMasked;
+    renderTotals(data.totals);
+    renderList();
+  }
+
   async function load() {
     gate.hidden = true;
     forbidden.hidden = true;
     statusEl.hidden = false;
     statusEl.textContent = 'Loading…';
     try {
-      const { status, data } = await staffFetch('/api/members-admin/overview');
-      if (status !== 200) throw new Error('load failed');
+      await loadData();
       statusEl.hidden = true;
-      intro.textContent = 'The imported register of households, people and patta details. Emails and phone numbers are never shown here, only whether one is on file.';
-      households = data.households;
-      $('masked-note').hidden = !data.namesMasked;
-      renderTotals(data.totals);
-      renderList();
+      intro.textContent = can.edit
+        ? 'The register of households, people and patta details. Emails and phone numbers are never shown here, only whether one is on file; you can replace or remove them.'
+        : 'The register of households, people and patta details. Emails and phone numbers are never shown here, only whether one is on file.';
       content.hidden = false;
     } catch (err) {
       if (err instanceof StaffAuthError) {

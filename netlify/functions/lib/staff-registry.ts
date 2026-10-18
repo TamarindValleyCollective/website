@@ -41,9 +41,13 @@ export const MODULES = {
     admin: ADMIN_ONLY,
   },
   members: {
-    // Step 1 of the member portal: a read-only review of the imported register.
-    // Editing and invitations arrive with the next steps (docs/plans/member-portal.md).
     view: ALL,
+    // Fix a person's name, email and phone (email and phone are write-only: they
+    // can be replaced or cleared but never read back).
+    edit: WRITERS,
+    // Change who belongs to a household, which house and cluster it has, and its
+    // patta records: the things members may only change through an admin.
+    manage: ADMIN_ONLY,
   },
   usage: {
     view: ALL,
@@ -108,6 +112,8 @@ export const MODULE_INFO: Record<ModuleId, { label: string; path: string; capabi
     path: '/internal/members/',
     capabilities: {
       view: 'Review households, people and patta details, and the data gaps to fix',
+      edit: "Correct a person's name, email and phone (the email and phone are write-only: they can be replaced, never read)",
+      manage: 'Change household membership, house and cluster, and add, correct, move or remove patta records',
     },
   },
   usage: {

@@ -1395,7 +1395,15 @@ never touches Netlify either.
   `staff-registry.ts`). `netlify/functions/members-admin.mts` reads the `member_*` tables
   (`supabase/migrations/0040_member_portal_schema.sql`, TVC ERP project, RLS on with no policies,
   service-role only) and masks server-side: email and phone values are never returned, only
-  whether one is on file, and names are masked for `read_only`. Data arrives through a one-time,
+  whether one is on file, and names are masked for `read_only`. **Staff editing** (same page, same
+  function, `POST /api/members-admin/edit`): `edit` (user, admin) corrects a person's name and
+  replaces or clears their email and phone (write-only: the current value is never shown);
+  `manage` (admin only) changes household membership and roles, a household's house, cluster and
+  unit type, and adds, corrects, moves or deletes farm and house patta records. Every edit is
+  validated (`scripts/lib/member-edit.mjs`), written to `staff_audit_log` BEFORE it is applied
+  (refused if the log write fails), and the log records which records and fields were touched but
+  never a name, email, phone or land number. A person left with no household is made inactive, not
+  deleted. Data arrives through a one-time,
   re-runnable import (`scripts/export-member-sheet.mjs` reads the workbook, including the emails
   held in Member Master's Google people chips; `scripts/import-members.mjs` +
   `scripts/lib/member-import.mjs` load it, dry-run by default, keyed on `farm_unit` /
