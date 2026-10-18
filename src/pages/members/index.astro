@@ -17,10 +17,13 @@ import '../../styles/global.css';
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
     <title>Member portal · Tamarind Valley Collective</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   </head>
   <body>
     <div id="gate" class="gate" hidden>
-      <span class="mark" aria-hidden="true">TVC</span>
+      <img class="mark" src="/images/brand/tvc-logo-mark.svg" width="56" height="56" alt="Tamarind Valley Collective" />
       <h1>Member portal</h1>
       <p>Sign in with the Google account you gave the core team. If you have not been invited yet, please contact the core team.</p>
       <div id="g_id_signin"></div>
@@ -30,8 +33,7 @@ import '../../styles/global.css';
     <div class="shell" id="shell" hidden>
       <aside class="side" id="side" aria-label="Modules">
         <div class="side-head">
-          <span class="mark" aria-hidden="true">TVC</span>
-          <span class="side-name">Tamarind Valley Collective</span>
+          <img class="mark" src="/images/brand/tvc-logo-mark.svg" width="38" height="38" alt="Tamarind Valley Collective" />
           <button type="button" class="collapse" id="collapse" aria-label="Collapse the menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
         </div>
         <nav id="nav"></nav>
@@ -109,25 +111,11 @@ import '../../styles/global.css';
   }
 
   .mark {
-    display: grid;
-    place-items: center;
+    display: block;
     flex: none;
     width: 38px;
     height: 38px;
-    border-radius: var(--radius-field);
-    background: var(--tvc-green-dark);
-    color: var(--tvc-white);
-    font-family: var(--font-wordmark);
-    font-weight: 700;
-    font-size: 0.8rem;
-  }
-
-  .side-name {
-    font-family: var(--font-wordmark);
-    font-weight: 700;
-    font-size: 0.92rem;
-    line-height: 1.15;
-    color: var(--tvc-green-dark);
+    object-fit: contain;
   }
 
   .collapse {
@@ -162,7 +150,6 @@ import '../../styles/global.css';
     stroke-linejoin: round;
   }
 
-  .shell.collapsed .side-name,
   .shell.collapsed .nav-label,
   .shell.collapsed .nav-group,
   .shell.collapsed .nav-soon {
@@ -751,6 +738,8 @@ import '../../styles/global.css';
   }
 
   .gate .mark {
+    width: 56px;
+    height: 56px;
     margin: 0 auto 12px;
   }
 

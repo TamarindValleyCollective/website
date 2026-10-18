@@ -58,6 +58,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     <div id="forbidden" class="gate card" hidden>
       <p class="gate-copy">Signed in as <strong id="forbidden-email"></strong>, but this Google account isn't authorized to manage the accommodation calendar.</p>
       <p class="hint" style="margin: 4px 0 12px;">Ask an admin to add it to the allow-list.</p>
+      <p class="gate-copy">Are you a member? Your member dashboard is at <a href="/members/">tvc.farm/members</a>.</p>
       <button type="button" id="use-different-account" class="button">Use a different account</button>
     </div>
 
