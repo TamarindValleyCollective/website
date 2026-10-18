@@ -22,6 +22,8 @@ export type MemberSession = {
   name: string;
   // Households this person may sign in for (can_login = true), in a stable order.
   householdIds: string[];
+  // The privacy notice version they last acknowledged (null = never); see member-privacy.mjs.
+  privacyVersion: number | null;
 };
 
 export type MemberAuthResult =
@@ -43,12 +45,12 @@ export async function requireMember(req: Request): Promise<MemberAuthResult> {
   if (!verified.ok) return verified;
 
   try {
-    const people = await select('member_people', `email=eq.${encodeURIComponent(verified.email)}&active=eq.true&select=id,full_name&limit=2`);
+    const people = await select('member_people', `email=eq.${encodeURIComponent(verified.email)}&active=eq.true&select=id,full_name,privacy_notice_version&limit=2`);
     if (people.length !== 1) return { ok: false, status: 403, error: NOT_INVITED }; // none, or (never expected) ambiguous
     const person = people[0];
     const links = await select('member_household_members', `person_id=eq.${person.id}&can_login=eq.true&select=household_id&order=household_id`);
     if (links.length === 0) return { ok: false, status: 403, error: NOT_INVITED };
-    return { ok: true, member: { personId: person.id, name: person.full_name, householdIds: links.map((l: any) => l.household_id) } };
+    return { ok: true, member: { personId: person.id, name: person.full_name, householdIds: links.map((l: any) => l.household_id), privacyVersion: person.privacy_notice_version ?? null } };
   } catch (err) {
     console.error('[member-access] lookup failed', err);
     return { ok: false, status: 500, error: 'Server error' };

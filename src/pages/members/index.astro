@@ -786,6 +786,21 @@ import '../../styles/global.css';
     color: var(--tvc-ink);
   }
 
+  dialog.modal.notice {
+    width: min(560px, calc(100vw - 24px));
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+  }
+
+  dialog.modal.notice h4 {
+    margin: 14px 0 2px;
+    font-size: 0.9rem;
+  }
+
+  dialog.modal.notice h4 + p {
+    margin-bottom: 0;
+  }
+
   dialog.modal::backdrop {
     background: rgb(0 0 0 / 0.4);
   }
@@ -904,6 +919,7 @@ import '../../styles/global.css';
 
 <script>
   import { clearMemberToken, getMemberToken, memberFetch, MemberAuthError, setMemberToken } from '../../../scripts/lib/member-client.mjs';
+  import { NOTICE_INTRO, NOTICE_TITLE, PRIVACY_NOTICE_VERSION, SECTIONS } from '../../../scripts/lib/member-privacy.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -1043,9 +1059,15 @@ import '../../styles/global.css';
         menu.append(b);
       });
     }
+    const notice = h('button', '', 'Privacy notice');
+    notice.addEventListener('click', () => {
+      menu.hidden = true;
+      $('who').setAttribute('aria-expanded', 'false');
+      noticeDialog(false);
+    });
     const out = h('button', '', 'Sign out');
     out.addEventListener('click', signOut);
-    menu.append(out);
+    menu.append(notice, out);
   }
 
   // ---- building blocks ----
@@ -1117,6 +1139,56 @@ import '../../styles/global.css';
       h('div', 'modal-actions', undefined, cancel, save),
     );
     dlg.addEventListener('close', () => dlg.remove());
+    document.body.append(dlg);
+    dlg.showModal();
+  }
+
+  // ---- the privacy notice ----
+  // Shown before anything else on a member's first sign-in (and again if the notice
+  // changes): the server releases no household data until it is acknowledged.
+  // `required` = that blocking first-time case; otherwise it is a plain read-only view.
+  function noticeDialog(required: boolean) {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'modal notice';
+    const msg = h('p', 'form-msg');
+    msg.setAttribute('role', 'alert');
+    const actions = h('div', 'modal-actions');
+    if (required) {
+      dlg.addEventListener('cancel', (e) => e.preventDefault()); // Esc must not skip it
+      const out = h('button', 'btn', 'Sign out');
+      out.addEventListener('click', () => {
+        dlg.remove();
+        signOut();
+      });
+      const ok = h('button', 'btn btn--solid', 'I have read this') as HTMLButtonElement;
+      ok.addEventListener('click', async () => {
+        ok.disabled = true;
+        msg.textContent = '';
+        try {
+          const { status, data } = await memberFetch('/api/members-me/privacy', { method: 'POST', body: { version: PRIVACY_NOTICE_VERSION } });
+          if (status !== 200) throw new Error(data.error || 'Something went wrong. Try again.');
+          dlg.remove();
+          await load();
+        } catch (err) {
+          ok.disabled = false;
+          msg.textContent = err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : err instanceof Error ? err.message : 'Something went wrong.';
+        }
+      });
+      actions.append(out, ok);
+      queueMicrotask(() => ok.focus()); // not "Sign out", which showModal() would focus first
+    } else {
+      const close = h('button', 'btn btn--solid', 'Close');
+      close.addEventListener('click', () => dlg.close());
+      actions.append(close);
+      dlg.addEventListener('close', () => dlg.remove());
+    }
+    dlg.append(
+      h('h3', '', NOTICE_TITLE),
+      h('p', '', NOTICE_INTRO),
+      ...SECTIONS.flatMap((s: { heading: string; body: string }) => [h('h4', '', s.heading), h('p', '', s.body)]),
+      msg,
+      actions,
+    );
     document.body.append(dlg);
     dlg.showModal();
   }
@@ -1224,6 +1296,14 @@ import '../../styles/global.css';
       const { status, data } = await memberFetch('/api/members-me/home');
       if (status === 403) return showGate(data.error || 'This account has not been invited to the member portal yet.');
       if (status !== 200) return showGate('Something went wrong. Please try again in a moment.');
+      if (data.privacyNoticeRequired) {
+        // First sign-in (or a changed notice): read it before anything else is shown.
+        me = null;
+        $('gate').hidden = true;
+        $('shell').hidden = true;
+        noticeDialog(true);
+        return;
+      }
       me = data.me;
       all = data.households;
       current = Math.min(current, all.length - 1);

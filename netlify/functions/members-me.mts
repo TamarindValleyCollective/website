@@ -3,6 +3,7 @@
 //
 //   GET  /api/members-me/home     their household(s) and their own details
 //   POST /api/members-me/profile  change their mobile number / directory listing
+//   POST /api/members-me/privacy  acknowledge the first-login privacy notice
 //
 // The privacy boundary is requireMember (lib/member-access.ts): a member is only
 // ever mapped to the households they are invited to, and every query below is
@@ -13,12 +14,15 @@
 // for everyone else in their household only whether an email / mobile is on file
 // (buildHouseholdReview never returns the values). Land records are their own
 // household's. Members can edit very little (member-profile.mjs); everything else
-// goes through the core team. Every self-service change is written to
+// goes through the core team. Until a member has acknowledged the current privacy
+// notice (scripts/lib/member-privacy.mjs), /home returns only their name and the
+// notice version: no household data is released, and /profile refuses. Every self-service change is written to
 // member_audit_log BEFORE it is applied, and refused if that write fails.
 import { requireMember } from './lib/member-access';
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { buildHouseholdReview } from '../../scripts/lib/member-review.mjs';
 import { validateProfileEdit, profileAuditDetail } from '../../scripts/lib/member-profile.mjs';
+import { PRIVACY_NOTICE_VERSION, privacyNoticeRequired, validateAcceptance } from '../../scripts/lib/member-privacy.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store, private' } });
@@ -44,6 +48,11 @@ async function handleHome(req: Request): Promise<Response> {
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
   const { member } = auth;
 
+  // Nothing about the household until the current notice has been acknowledged.
+  if (privacyNoticeRequired(member.privacyVersion)) {
+    return jsonResponse({ privacyNoticeRequired: true, privacyNoticeVersion: PRIVACY_NOTICE_VERSION, me: { name: member.name } });
+  }
+
   let data;
   try {
     const hh = inList(member.householdIds);
@@ -65,6 +74,7 @@ async function handleHome(req: Request): Promise<Response> {
   const own = data.people.find((p: any) => p.id === member.personId);
   const reviewed = buildHouseholdReview(data);
   return jsonResponse({
+    privacyNoticeVersion: PRIVACY_NOTICE_VERSION,
     me: {
       personId: member.personId,
       name: member.name,
@@ -81,6 +91,7 @@ async function handleProfile(req: Request): Promise<Response> {
   const auth = await requireMember(req);
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
   const { member } = auth;
+  if (privacyNoticeRequired(member.privacyVersion)) return jsonResponse({ error: 'Please read the privacy notice first.' }, 403);
 
   let body: unknown;
   try {
@@ -118,11 +129,49 @@ async function handleProfile(req: Request): Promise<Response> {
   return jsonResponse({ ok: true });
 }
 
+async function handlePrivacy(req: Request): Promise<Response> {
+  const auth = await requireMember(req);
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  const { member } = auth;
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return jsonResponse({ error: 'Nothing to do.' }, 400);
+  }
+  const checked = validateAcceptance(body);
+  if (!checked.ok) return jsonResponse({ error: checked.error }, 409);
+
+  // Same rule as every self-service change: recorded first, refused if it can't be.
+  const log = await fetch(`${supabaseUrl()}/rest/v1/member_audit_log`, {
+    method: 'POST',
+    headers: restHeaders({ Prefer: 'return=minimal' }),
+    body: JSON.stringify({ actor_person_id: member.personId, action: 'member.privacy.accept', detail: { version: checked.version } }),
+  }).catch(() => null);
+  if (!log || !log.ok) {
+    console.error('[members-me] audit log write failed; acknowledgement refused', log?.status);
+    return jsonResponse({ error: 'Could not record this. Try again.' }, 500);
+  }
+
+  const res = await fetch(`${supabaseUrl()}/rest/v1/member_people?id=eq.${member.personId}`, {
+    method: 'PATCH',
+    headers: restHeaders({ Prefer: 'return=minimal' }),
+    body: JSON.stringify({ privacy_notice_version: checked.version, privacy_notice_accepted_at: new Date().toISOString() }),
+  });
+  if (!res.ok) {
+    console.error('[members-me] privacy acknowledgement failed', res.status);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+  return jsonResponse({ ok: true });
+}
+
 export default async (req: Request): Promise<Response> => {
   const { pathname } = new URL(req.url);
   if (pathname === '/api/members-me/home' && req.method === 'GET') return handleHome(req);
   if (pathname === '/api/members-me/profile' && req.method === 'POST') return handleProfile(req);
+  if (pathname === '/api/members-me/privacy' && req.method === 'POST') return handlePrivacy(req);
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-me/home', '/api/members-me/profile'] };
+export const config = { path: ['/api/members-me/home', '/api/members-me/profile', '/api/members-me/privacy'] };

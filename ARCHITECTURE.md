@@ -1435,6 +1435,11 @@ never touches Netlify either.
   `tvc-farm.netlify.app`); `netlify.toml` rules that match only that host show the portal at `/`,
   let through just the portal's own paths, send `/internal/*` to `tvc.farm` and everything else back
   to the portal's home (see `DOMAINS.md`, which also records the Netlify certificate incident).
+  **First-login privacy notice**: until a member has acknowledged the current notice
+  (`scripts/lib/member-privacy.mjs`, version stored in `member_people.privacy_notice_version`,
+  migration 0042), `GET /api/members-me/home` returns only their name and the notice version, no
+  household data, and `/profile` refuses; `POST /api/members-me/privacy` records the version and time
+  (audit-logged first, `member.privacy.accept`). Raising `PRIVACY_NOTICE_VERSION` asks everyone again.
   Apple sign-in and the invitation email are not built yet.
 
 ## Current Production Status
