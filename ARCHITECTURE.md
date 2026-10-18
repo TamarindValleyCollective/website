@@ -1412,7 +1412,26 @@ never touches Netlify either.
   scored against every household by how many name words agree, with the sheet's farm number, then
   house number, as tie-breakers. Farm patta follows the farm plot and house patta follows the
   house; weak matches are reported rather than trusted. Migration 0040 must be applied to TVC
-  ERP by hand before the page works.
+  ERP by hand before the page works. A staff `manage` role can also let a person sign in to the
+  member portal (`membership.invite`, needs an email on file; a database trigger caps it at two per
+  household).
+- **Member portal** (`/members/`, planned home `members.tvc.farm`; 2026-10-18) — where a signed-in
+  member sees their own unit. Shaped like a society-management web portal (left menu of modules,
+  module search, the member's unit always in the top bar, widget dashboard); modules not built yet
+  say "Soon" and nothing shows made-up figures. Its own minimal shell: no public header, footer,
+  cookie banner, chat widget or analytics. **Sign-in** is Google (the same token verification as
+  staff, `verifyStaffToken`), but Google only proves who someone is: `lib/member-access.ts` then
+  requires the verified email to belong to an active `member_people` row that has `can_login` on at
+  least one household, otherwise the same neutral 403 whether the person is unknown, inactive or just
+  not invited yet. The session is kept apart from staff's (`scripts/lib/member-client.mjs`).
+  **Data**: `members-me.mts` (`GET /api/members-me/home`, `POST /api/members-me/profile`) reads only
+  the households the member can sign in for, never the register. A member gets their own email and
+  mobile back; for everyone else in the household only whether one is on file. Members can change
+  only their mobile number and directory listing (`scripts/lib/member-profile.mjs`); anything else
+  goes through the core team. Each self-service change is written to `member_audit_log`
+  (migration 0041, append-only, never holds a name, email or phone) BEFORE it is applied, and refused
+  if that write fails. Revoking `can_login` takes effect on the next request. Apple sign-in, the
+  invitation email, and the `members.tvc.farm` host routing are not built yet.
 
 ## Current Production Status
 

@@ -18,6 +18,7 @@ export const ACTION_CAPABILITY = {
   'membership.update': 'manage',
   'membership.move': 'manage',
   'membership.remove': 'manage',
+  'membership.invite': 'manage',
   'household.update': 'manage',
   'plot.create': 'manage',
   'plot.update': 'manage',
@@ -154,6 +155,15 @@ export function validateEdit(body) {
       return ok({ action, fromHouseholdId: from.value, toHouseholdId: to.value, personId: personId.value });
     }
 
+    case 'membership.invite': {
+      // Lets a person sign in to the member portal (canLogin true) or stops them (false).
+      const householdId = id(body, 'householdId');
+      const personId = id(body, 'personId');
+      if (householdId.error || personId.error) return fail(householdId.error ?? personId.error);
+      if (typeof body.canLogin !== 'boolean') return fail('Choose whether this person can sign in.');
+      return ok({ action, householdId: householdId.value, personId: personId.value, canLogin: body.canLogin });
+    }
+
     case 'membership.remove': {
       const householdId = id(body, 'householdId');
       const personId = id(body, 'personId');
@@ -243,7 +253,7 @@ export function auditDetail(edit) {
   const { action, ...rest } = edit;
   // Land identifiers (patta, reference, survey numbers) tie a person to a plot, so
   // only the field names are logged for those, like names and contact details.
-  const SAFE_VALUES = new Set(['role', 'houseNo', 'cluster', 'unitType', 'areaHectares', 'areaAcres', 'areaSqFt']);
+  const SAFE_VALUES = new Set(['role', 'canLogin', 'houseNo', 'cluster', 'unitType', 'areaHectares', 'areaAcres', 'areaSqFt']);
   const ids = {};
   const fields = [];
   const values = {};
