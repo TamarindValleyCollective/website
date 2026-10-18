@@ -40,6 +40,11 @@ export const MODULES = {
     edit: WRITERS,
     admin: ADMIN_ONLY,
   },
+  members: {
+    // Step 1 of the member portal: a read-only review of the imported register.
+    // Editing and invitations arrive with the next steps (docs/plans/member-portal.md).
+    view: ALL,
+  },
   usage: {
     view: ALL,
     // Type in readings from provider dashboards, and set the prices/limits the
@@ -96,6 +101,13 @@ export const MODULE_INFO: Record<ModuleId, { label: string; path: string; capabi
       view: 'See the calendar and guests',
       edit: 'Create, change and cancel bookings (a User can be limited to chosen booking types)',
       admin: 'Everything in the calendar, with no booking-type limit',
+    },
+  },
+  members: {
+    label: 'Member register',
+    path: '/internal/members/',
+    capabilities: {
+      view: 'Review households, people and patta details, and the data gaps to fix',
     },
   },
   usage: {

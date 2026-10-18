@@ -1,0 +1,762 @@
+---
+// Member register (internal): step 1 of the member portal. A read-only review
+// of the households, people and patta details imported from the workbook, with
+// the data gaps an admin should fix before members are invited. Backed by
+// netlify/functions/members-admin.mts; see docs/plans/member-portal.md.
+//
+// Same shell as the other internal tools: Google Sign-In gated, one sign-in per
+// tab (scripts/lib/staff-client.mjs), unlinked, noindex. Everything the server
+// returns is placed with textContent only, never as HTML. The server never
+// sends an email or phone number, only whether one is on file; names are masked
+// there for the read-only role.
+import StaffLayout from '../../layouts/StaffLayout.astro';
+---
+
+<StaffLayout title="Member register" description="Households, people and patta details." current="members">
+  <section class="members section wrapper">
+    <h1>Member register</h1>
+    <p id="intro" class="hint">Sign in to review the member register.</p>
+
+    <div id="gate" class="gate card">
+      <p class="gate-copy">Sign in with your Google account.</p>
+      <div id="g_id_signin"></div>
+      <p id="gate-error" class="error" hidden></p>
+    </div>
+
+    <div id="forbidden" class="gate card" hidden>
+      <p class="gate-copy">Signed in as <strong id="forbidden-email"></strong>, but this account doesn't have access to the Member register.</p>
+      <p class="gate-copy">Ask a super admin to give you a role for it, then sign in again.</p>
+      <button type="button" id="use-different-account" class="button button--outline">Use a different account</button>
+    </div>
+
+    <p id="status" class="hint" hidden></p>
+
+    <div id="content" hidden>
+      <dl id="totals" class="totals"></dl>
+
+      <div class="toolbar">
+        <label>Search <input type="search" id="search" placeholder="Unit, house or name" autocomplete="off" /></label>
+        <label class="check"><input type="checkbox" id="only-flagged" /> Only households needing attention</label>
+      </div>
+
+      <p id="masked-note" class="note" hidden>Names are masked for the read-only role.</p>
+      <p id="count" class="note" role="status"></p>
+      <div id="list"></div>
+
+      <dialog id="detail" class="detail" aria-labelledby="detail-title">
+        <div class="detail-head">
+          <h2 id="detail-title"></h2>
+          <button type="button" id="detail-close" class="detail-close">Close</button>
+        </div>
+        <div id="detail-body" class="body"></div>
+      </dialog>
+
+      <p id="signed-in" class="note"><button type="button" id="sign-out" class="link-button">Sign out</button></p>
+    </div>
+  </section>
+</StaffLayout>
+
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style is:global>
+  .members [hidden] {
+    display: none !important;
+  }
+
+  .members.section.wrapper {
+    padding-top: 32px;
+    padding-bottom: 48px;
+  }
+
+  .members .hint,
+  .members .muted {
+    color: var(--tvc-ink-soft);
+  }
+
+  .members .hint {
+    margin: -8px 0 24px;
+  }
+
+  .members .card {
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .members .gate {
+    max-width: 420px;
+    margin-bottom: 24px;
+    padding: 18px 20px;
+  }
+
+  .members .gate-copy {
+    font-size: 0.9rem;
+    color: var(--tvc-ink-soft);
+    margin: 0 0 14px;
+  }
+
+  .members .error {
+    color: var(--tvc-error-text);
+    font-size: 0.85rem;
+    margin: 10px 0 0;
+  }
+
+  .members .note {
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .members .link-button {
+    font: inherit;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--tvc-ink-soft);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .members .totals {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px;
+    margin: 0 0 24px;
+  }
+
+  .members .totals > div {
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+  }
+
+  .members .totals dt {
+    font-size: 0.8rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .members .totals dd {
+    margin: 2px 0 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+  }
+
+  .members .totals dd.sub {
+    margin-top: 4px;
+    font-size: 0.78rem;
+    font-weight: 400;
+    color: var(--tvc-ink-soft);
+  }
+
+  /* Collapsible land total: the summary line is the total, the table is the detail. */
+  .members details.pivot > summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    font-weight: 600;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .members details.pivot > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .members details.pivot > summary::before {
+    content: '';
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-right: 2px solid var(--tvc-ink-soft);
+    border-bottom: 2px solid var(--tvc-ink-soft);
+    transform: rotate(-45deg);
+    transition: transform 0.15s;
+  }
+
+  .members details.pivot[open] > summary::before {
+    transform: rotate(45deg);
+  }
+
+  .members .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 24px;
+    align-items: end;
+    margin-bottom: 12px;
+  }
+
+  .members .toolbar label {
+    display: grid;
+    gap: 4px;
+    font-size: 0.85rem;
+  }
+
+  .members .toolbar label.check {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .members .toolbar input[type='search'] {
+    min-width: 240px;
+    padding: 8px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-field);
+    font: inherit;
+  }
+
+  .members .group {
+    margin-bottom: 32px;
+  }
+
+  .members .group h2 {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--tvc-line);
+    font-size: 1.2rem;
+  }
+
+  .members .group h2 small {
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    font-weight: 400;
+    color: var(--tvc-ink-soft);
+  }
+
+  .members .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 14px;
+  }
+
+  /* One household: farm plot, house, and who lives there. A button, so the whole card is the target. */
+  .members .hcard {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+    min-height: 150px;
+    padding: 16px 18px;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+
+  .members .hcard:hover {
+    border-color: var(--tvc-orange);
+    transform: translateY(-1px);
+  }
+
+  .members .hcard:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .members .hcard-ids {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .members .id {
+    display: grid;
+    gap: 6px;
+    justify-items: start;
+  }
+
+  .members .id--end {
+    justify-items: end;
+    text-align: right;
+  }
+
+  /* Visually hidden, still read by screen readers. */
+  .members .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .members .id-value {
+    font-family: var(--font-display);
+    font-size: 1.6rem;
+    line-height: 1.1;
+    color: var(--tvc-green-dark);
+  }
+
+  .members .id-value--none {
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .members .hcard-people {
+    display: block;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .members .hcard-foot {
+    display: grid;
+    justify-items: start;
+    gap: 6px;
+    margin-top: auto;
+    min-height: 1.4em;
+  }
+
+  .members .land-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+    white-space: nowrap;
+  }
+
+
+
+  .members .meta {
+    color: var(--tvc-ink-soft);
+    font-size: 0.85rem;
+  }
+
+  /* Detail dialog: everything about one household. */
+  .members dialog.detail {
+    width: min(760px, calc(100vw - 24px));
+    max-height: calc(100vh - 48px);
+    padding: 0;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+    color: inherit;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .members dialog.detail::backdrop {
+    background: rgb(0 0 0 / 0.4);
+  }
+
+  .members .detail-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 22px 14px;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .members .detail-head h2 {
+    margin: 0;
+    font-size: 1.4rem;
+  }
+
+  .members .detail-close {
+    flex: none;
+    font: inherit;
+    padding: 6px 12px;
+    background: none;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+
+  .members .body {
+    padding: 16px 22px 22px;
+    display: grid;
+    gap: 18px;
+  }
+
+  .members .body h3 {
+    font-size: 0.85rem;
+    margin: 0 0 6px;
+    color: var(--tvc-ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .members .table-wrap {
+    overflow-x: auto;
+  }
+
+  .members table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+  }
+
+  .members th,
+  .members td {
+    text-align: left;
+    padding: 6px 10px 6px 0;
+    border-bottom: 1px solid var(--tvc-line);
+    vertical-align: top;
+  }
+
+  .members th {
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+    font-size: 0.78rem;
+  }
+
+  .members .flags {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+  }
+
+  .members .flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px 3px 8px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .members .flag--error {
+    background: var(--tvc-error-bg);
+    color: var(--tvc-error-text);
+  }
+
+  .members .flag--warn {
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+  }
+
+  .members .flag--info {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+  }
+</style>
+
+<script>
+  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch } from '../../../scripts/lib/staff-client.mjs';
+
+  declare const google: any;
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+
+  type Kid = Node | string | null | undefined | false;
+  function h(tag: string, props: { class?: string; text?: string; attrs?: Record<string, string> } = {}, ...kids: Kid[]): HTMLElement {
+    const el = document.createElement(tag);
+    if (props.class) el.className = props.class;
+    if (props.text !== undefined) el.textContent = props.text;
+    for (const [k, v] of Object.entries(props.attrs ?? {})) el.setAttribute(k, v);
+    for (const kid of kids) if (kid) el.append(kid);
+    return el;
+  }
+
+  type Flag = { kind: string; severity: 'error' | 'warn' | 'info'; text: string };
+  type Person = { name: string; role: string; canLogin: boolean; hasEmail: boolean; hasPhone: boolean };
+  type Plot = { pattaNo: string | null; referenceNo: string | null; surveyNo: string | null; areaHectares: number | null; areaAcres: number | null; settlement: string | null };
+  type HousePatta = { pattaNo: string | null; referenceNo: string | null; surveyNo: string | null; areaSqFt: number | null; settlement: string | null };
+  type Household = { farmUnit: string; houseNo: string | null; cluster: string | null; unitType: string | null; people: Person[]; plots: Plot[]; housePattas: HousePatta[]; flags: Flag[]; farmAcres: number; farmHectares: number; houseSqFt: number; plotsMissingArea: number; housePattasMissingArea: number };
+  type Totals = { households: number; people: number; peopleWithEmail: number; farmPlots: number; householdsNeedingAttention: number; farmAcres: number; farmHectares: number; houseSqFt: number };
+
+  const SEVERITY_WORD = { error: 'Fix', warn: 'Check', info: 'Note' } as const;
+  const dash = (v: string | number | null) => (v == null || v === '' ? 'Not available yet' : String(v));
+  // Land is shown as an Excel-style pivot: a total when collapsed, the rows when expanded.
+  const acresFmt = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const sqftFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
+  const acres = (n: number) => `${acresFmt.format(n)} acres`;
+  const sqft = (n: number) => `${sqftFmt.format(n)} sq ft`;
+  const SQFT_PER_ACRE = 43560;
+  const sqftAsAcres = (n: number) => n / SQFT_PER_ACRE;
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const sumOf = (list: Household[], pick: (hh: Household) => number) => list.reduce((n, hh) => n + pick(hh), 0);
+
+  const needsAttention = (hh: Household) => hh.flags.some((f) => f.severity !== 'info');
+
+  const CLUSTERS: (string | null)[] = ['H1-A', 'H1-B', 'H2', null];
+
+  let households: Household[] = [];
+
+  function flagChip(f: Flag): HTMLElement {
+    return h('span', { class: `flag flag--${f.severity}`, text: `${SEVERITY_WORD[f.severity]}: ${f.text}` });
+  }
+
+  function table(headers: string[], rows: (string | number | null)[][]): HTMLElement {
+    return h(
+      'table',
+      {},
+      h('thead', {}, h('tr', {}, ...headers.map((t) => h('th', { text: t })))),
+      h('tbody', {}, ...rows.map((r) => h('tr', {}, ...r.map((c) => h('td', { text: dash(c) }))))),
+    );
+  }
+
+  // A plot number with its size pill underneath. The position says which plot it
+  // is (farm plot on the left, house on the right), so there is no visible label;
+  // screen readers still get one.
+  // The first name for a tile: the first word that isn't just an initial, so
+  // "A B Kumar" shows as "Kumar". (Masked names for the read-only role arrive
+  // already masked, like "A•••• M••••", and are shortened the same way.)
+  const firstName = (full: string): string => {
+    const words = full.trim().split(/\s+/);
+    return words.find((w) => [...w.replace(/[.\u2022]/g, '')].length > 1) ?? words[0] ?? '';
+  };
+
+  const idBlock = (label: string, value: string | null, none: string, pill: HTMLElement | null, align: 'start' | 'end'): HTMLElement =>
+    h(
+      'span',
+      { class: `id id--${align}` },
+      h('span', { class: 'sr', text: label }),
+      h('span', { class: `id-value${value ? '' : ' id-value--none'}`, text: value ?? none }),
+      pill,
+    );
+
+  // A small pill with a land size, e.g. "1.28 ac". The title spells it out.
+  const landPill = (value: string, title: string): HTMLElement => h('span', { class: 'land-pill', text: value, attrs: { title } });
+
+  // The card shows only what you scan for: farm plot, house, and who is on it.
+  // A native <details>: the summary line is the total, the table is the detail.
+  function pivot(summary: string, content: HTMLElement): HTMLElement {
+    return h('details', { class: 'pivot' }, h('summary', { text: summary }), h('div', { class: 'table-wrap' }, content));
+  }
+
+  function renderHousehold(hh: Household): HTMLElement {
+    const attention = hh.flags.filter((f) => f.severity !== 'info').length;
+    const shown = hh.people.slice(0, 2);
+    const extra = hh.people.length - shown.length;
+    // First names only, on one line: "Asha & Ravi", "+ 1" if there are more.
+    const peopleLine = shown.length ? shown.map((p) => firstName(p.name)).join(' & ') + (extra > 0 ? ` + ${extra}` : '') : 'No people yet';
+    const card = h(
+      'button',
+      { class: 'hcard', attrs: { type: 'button', 'aria-haspopup': 'dialog', 'aria-label': `Farm plot ${hh.farmUnit}, ${hh.houseNo ?? 'no house'}. Open details.` } },
+      h(
+        'span',
+        { class: 'hcard-ids' },
+        idBlock(
+          'Farm plot',
+          hh.farmUnit,
+          '',
+          hh.plots.length
+            ? hh.farmAcres > 0
+              ? landPill(acres(hh.farmAcres).replace(' acres', ' ac'), `Farm land: ${acres(hh.farmAcres)}`)
+              : landPill('no area', 'Farm patta on file, but no area recorded yet')
+            : null,
+          'start',
+        ),
+        idBlock(
+          'House',
+          hh.houseNo,
+          'No house',
+          hh.housePattas.length
+            ? hh.houseSqFt > 0
+              ? landPill(sqft(hh.houseSqFt), `House land: ${sqft(hh.houseSqFt)} (${acres(sqftAsAcres(hh.houseSqFt))})`)
+              : landPill('no area', 'House patta on file, but no area recorded yet')
+            : null,
+          'end',
+        ),
+      ),
+      h('span', { class: `hcard-people${shown.length ? '' : ' meta'}`, attrs: { title: hh.people.map((p) => p.name).join(', ') }, text: peopleLine }),
+      h('span', { class: 'hcard-foot' }, attention ? h('span', { class: 'flag flag--warn', text: `${attention} to check` }) : null),
+    );
+    card.addEventListener('click', () => openDetail(hh));
+    return card;
+  }
+
+  const detail = $<HTMLDialogElement>('detail');
+
+  // Everything we hold about one household, in a dialog.
+  function openDetail(hh: Household) {
+    $('detail-title').textContent = [`Farm plot ${hh.farmUnit}`, hh.houseNo ?? 'No house'].join(' · ');
+    const body = $('detail-body');
+    const facts = [hh.cluster ? `Cluster ${hh.cluster}` : null, hh.unitType ? `Unit type ${hh.unitType}` : null].filter(Boolean).join(' · ');
+    body.replaceChildren();
+    if (facts) body.append(h('p', { class: 'meta', text: facts }));
+    if (hh.flags.length) {
+      body.append(h('div', {}, h('h3', { text: 'Data gaps' }), h('ul', { class: 'flags' }, ...hh.flags.map((f) => h('li', {}, flagChip(f))))));
+    }
+    const section = (title: string, content: HTMLElement) => body.append(h('div', {}, h('h3', { text: title }), content));
+    section(
+      'People',
+      h(
+        'div',
+        { class: 'table-wrap' },
+        table(
+          ['Name', 'Role', 'Email on file', 'Phone on file', 'Can sign in'],
+          hh.people.map((p) => [p.name, p.role, p.hasEmail ? 'Yes' : 'No', p.hasPhone ? 'Yes' : 'No', p.canLogin ? 'Yes' : 'Not invited']),
+        ),
+      ),
+    );
+    section(
+      'Farm patta',
+      hh.plots.length
+        ? pivot(
+            `${plural(hh.plots.length, 'plot')} · ${acres(hh.farmAcres)} (${acresFmt.format(hh.farmHectares)} ha)${hh.plotsMissingArea ? ` · ${plural(hh.plotsMissingArea, 'plot')} without an area yet` : ''}`,
+            table(
+              ['Patta no.', 'Reference', 'Survey no.', 'Hectares', 'Acres', 'Settlement'],
+              hh.plots.map((p) => [p.pattaNo, p.referenceNo, p.surveyNo, p.areaHectares, p.areaAcres, p.settlement]),
+            ),
+          )
+        : h('p', { class: 'muted', text: 'Not available yet' }),
+    );
+    section(
+      'House patta',
+      hh.housePattas.length
+        ? pivot(
+            `${plural(hh.housePattas.length, 'record')} · ${sqft(hh.houseSqFt)} (${acres(sqftAsAcres(hh.houseSqFt))})${hh.housePattasMissingArea ? ` · ${plural(hh.housePattasMissingArea, 'record')} without an area yet` : ''}`,
+            table(
+              ['Patta no.', 'Reference', 'Survey no.', 'Sq ft', 'Settlement'],
+              hh.housePattas.map((p) => [p.pattaNo, p.referenceNo, p.surveyNo, p.areaSqFt, p.settlement]),
+            ),
+          )
+        : h('p', { class: 'muted', text: hh.houseNo ? 'Not available yet' : 'No house' }),
+    );
+    detail.showModal();
+  }
+  $('detail-close').addEventListener('click', () => detail.close());
+  // Clicking the dimmed area outside the dialog closes it.
+  detail.addEventListener('click', (e) => {
+    if (e.target === detail) detail.close();
+  });
+
+  function renderList() {
+    const q = ($<HTMLInputElement>('search').value || '').trim().toLowerCase();
+    const only = $<HTMLInputElement>('only-flagged').checked;
+    const shown = households.filter((hh) => {
+      if (only && !needsAttention(hh)) return false;
+      if (!q) return true;
+      const hay = [hh.farmUnit, hh.houseNo ?? '', hh.cluster ?? '', ...hh.people.map((p) => p.name)].join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+    $('count').textContent = `${shown.length} of ${households.length} households`;
+    // Grouped by housing cluster, in a fixed order; households with no cluster
+    // (no house built yet) come last.
+    // Within a cluster, cards run in house-number order (H-01, H-02, ...); a
+    // household with no house yet sorts last, by farm plot.
+    const houseNumber = (hh: Household) => (hh.houseNo ? parseInt(hh.houseNo.slice(2), 10) : Infinity);
+    const byHouse = (a: Household, b: Household) => houseNumber(a) - houseNumber(b) || a.farmUnit.localeCompare(b.farmUnit);
+    const groups = CLUSTERS.map((c) => ({
+      title: c ? `Cluster ${c}` : 'No cluster yet',
+      items: shown.filter((hh) => (hh.cluster ?? null) === c).sort(byHouse),
+    })).filter((g) => g.items.length);
+    $('list').replaceChildren(
+      ...groups.map((g) =>
+        h(
+          'section',
+          { class: 'group' },
+          h('h2', {}, g.title, h('small', { text: `${plural(g.items.length, 'household')} · ${acres(sumOf(g.items, (x) => x.farmAcres))} farm · ${acres(sqftAsAcres(sumOf(g.items, (x) => x.houseSqFt)))} house` })),
+          h('div', { class: 'grid' }, ...g.items.map(renderHousehold)),
+        ),
+      ),
+    );
+  }
+
+  function renderTotals(t: Totals) {
+    const stat = (label: string, value: string, sub?: string) => h('div', {}, h('dt', { text: label }), h('dd', { text: value }), sub ? h('dd', { class: 'sub', text: sub }) : null);
+    const withFarm = households.filter((hh) => hh.plots.length).length;
+    const withHouse = households.filter((hh) => hh.housePattas.length).length;
+    $('totals').replaceChildren(
+      stat('Households', String(t.households)),
+      stat('People', String(t.people)),
+      stat('With an email on file', `${t.peopleWithEmail} of ${t.people}`),
+      stat('Farm land', acres(t.farmAcres), `${acresFmt.format(t.farmHectares)} ha · ${plural(t.farmPlots, 'plot')} · ${withFarm} of ${t.households} households have data`),
+      stat('House land', acres(sqftAsAcres(t.houseSqFt)), `${sqft(t.houseSqFt)} · ${withHouse} of ${t.households} households have data`),
+      stat('Households to check', String(t.householdsNeedingAttention)),
+    );
+  }
+
+  // ---- load & sign-in ----------------------------------------------------------
+  const gate = $('gate');
+  const gateError = $('gate-error');
+  const forbidden = $('forbidden');
+  const statusEl = $('status');
+  const content = $('content');
+  const intro = $('intro');
+
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    content.hidden = true;
+    statusEl.hidden = true;
+    intro.textContent = 'Sign in to review the member register.';
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+
+  function showForbidden() {
+    gate.hidden = true;
+    content.hidden = true;
+    statusEl.hidden = true;
+    forbidden.hidden = false;
+    $('forbidden-email').textContent = decodeTokenEmail(getToken() ?? '');
+  }
+
+  async function load() {
+    gate.hidden = true;
+    forbidden.hidden = true;
+    statusEl.hidden = false;
+    statusEl.textContent = 'Loading…';
+    try {
+      const { status, data } = await staffFetch('/api/members-admin/overview');
+      if (status !== 200) throw new Error('load failed');
+      statusEl.hidden = true;
+      intro.textContent = 'The imported register of households, people and patta details. Emails and phone numbers are never shown here, only whether one is on file.';
+      households = data.households;
+      $('masked-note').hidden = !data.namesMasked;
+      renderTotals(data.totals);
+      renderList();
+      content.hidden = false;
+    } catch (err) {
+      if (err instanceof StaffAuthError) {
+        if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+        else showForbidden();
+      } else {
+        statusEl.hidden = false;
+        statusEl.textContent = 'Failed to load. Try refreshing.';
+      }
+    }
+  }
+
+  function handleCredentialResponse(response: { credential: string }) {
+    setToken(response.credential);
+    load();
+  }
+
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: 'outline', size: 'large' });
+  }
+
+  function signOut() {
+    clearToken();
+    clearStepUp();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  }
+  $('use-different-account').addEventListener('click', signOut);
+  $('sign-out').addEventListener('click', signOut);
+  $('search').addEventListener('input', renderList);
+  $('only-flagged').addEventListener('change', renderList);
+
+  if (getToken()) load();
+  else showGate();
+</script>
