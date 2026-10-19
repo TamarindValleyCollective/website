@@ -1330,7 +1330,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
             if (i.decision || ['verified'].includes(i.outcome)) return [];
             const bits = [
               i.outcome === 'conflict' ? 'This survey number is already on another household’s record; nothing was added.' : null,
-              i.outcome === 'check' ? 'A photo or scan can’t verify a record on its own.' : null,
+              i.outcome === 'check' ? 'Needs your check: a photo or scan, or a record the member added that is still waiting, can’t be verified by a document alone.' : null,
               ...i.differences.filter((x) => x.field !== 'owners').map((x) => `register says ${x.recorded}, document says ${x.document}`),
               i.ownerMatch === false ? 'owners on the document don’t match anyone here' : null,
               i.ownerMatch === null && i.outcome === 'pending' ? 'owner names couldn’t be read; check them in the file' : null,

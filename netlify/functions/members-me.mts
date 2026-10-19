@@ -22,13 +22,13 @@
 // member_audit_log BEFORE it is applied, and refused if that write fails.
 import { requireMember } from './lib/member-access';
 import { backfillLandShapes } from './lib/land-shape-backfill';
-import { deleteLandDocument, loadLandShapes, putLandDocument, signedLandDocumentUrl } from './lib/land-doc-storage';
+import { deleteLandDocument, landShapeKey, loadLandShapes, putLandDocument, signedLandDocumentUrl } from './lib/land-doc-storage';
 import { readLandPdf } from './lib/land-doc-read';
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { buildHouseholdReview } from '../../scripts/lib/member-review.mjs';
 import { validateProfileEdit, profileAuditDetail } from '../../scripts/lib/member-profile.mjs';
 import { PRIVACY_NOTICE_VERSION, privacyNoticeRequired, validateAcceptance } from '../../scripts/lib/member-privacy.mjs';
-import { ALLOWED_MIME, LAND_TYPES, MAX_HOUSEHOLD_BYTES, MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_UPLOADS_PER_DAY, NOT_A_LAND_PDF, memberSummary } from '../../scripts/lib/member-land-docs.mjs';
+import { ALLOWED_MIME, LAND_TYPES, MAX_HOUSEHOLD_BYTES, MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_UPLOADS_PER_DAY, NOT_A_LAND_PDF, documentsReplacedBy, memberSummary, normalizeExtraction, surveyKey } from '../../scripts/lib/member-land-docs.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store, private' } });
@@ -241,20 +241,22 @@ async function handleLandDocuments(req: Request): Promise<Response> {
   // A PDF must match one of the two e-Services layouts. The reader is local and takes milliseconds,
   // so anything else is refused here and never stored. Photos and scans can't be read; they are kept
   // for the core team.
-  if (mime === 'application/pdf' && !(await readLandPdf(bytes))) return jsonResponse({ error: NOT_A_LAND_PDF }, 422);
+  const read = mime === 'application/pdf' ? await readLandPdf(bytes) : null;
+  if (mime === 'application/pdf' && !read) return jsonResponse({ error: NOT_A_LAND_PDF }, 422);
+  // The survey numbers it covers, to recognise an earlier upload of the same document.
+  const checked: { ok: boolean; extraction?: any } = normalizeExtraction(read);
+  const key = checked.ok ? surveyKey(checked.extraction) : null;
   const sha256 = hex(await crypto.subtle.digest('SHA-256', bytes));
 
   try {
-    const all = await select('member_land_documents', 'id,sha256,status,created_at,size_bytes,items', `household_id=eq.${householdId}`);
-    const recent = all.filter((d: any) => Date.parse(d.created_at) > Date.now() - 24 * 3600 * 1000);
-    const storedBytes = all.filter((d: any) => d.status !== 'failed').reduce((n: number, d: any) => n + (d.size_bytes ?? 0), 0);
+    const all = await select('member_land_documents', 'id,sha256,status,created_at,size_bytes,land_type,storage_path,extracted', `household_id=eq.${householdId}`);
+    // An upload is always a new upload. Earlier documents it duplicates are replaced once it is in.
+    const replaced = documentsReplacedBy({ sha256, landType, key, existing: all, staleMs: STALE_PROCESSING_MS });
+    const replacedIds = new Set(replaced.map((d: any) => d.id));
+    const recent = all.filter((d: any) => Date.parse(d.created_at) > Date.now() - 24 * 3600 * 1000 && !replacedIds.has(d.id));
+    const storedBytes = all.filter((d: any) => d.status !== 'failed' && !replacedIds.has(d.id)).reduce((n: number, d: any) => n + (d.size_bytes ?? 0), 0);
     if (storedBytes + file.size > MAX_HOUSEHOLD_BYTES) return jsonResponse({ error: 'Your unit has reached its document storage limit. Please ask the core team.' }, 413);
     if (recent.length >= MAX_UPLOADS_PER_DAY) return jsonResponse({ error: 'You have uploaded a lot of documents today. Please try again tomorrow, or ask the core team.' }, 429);
-    // A file the core team rejected every record of (e.g. uploaded as the wrong land type) must be
-    // uploadable again, so it isn't a duplicate.
-    const wasRejected = (d: any) => Array.isArray(d.items) && d.items.length > 0 && d.items.every((i: any) => i.decision === 'rejected');
-    const same = recent.find((d: any) => d.sha256 === sha256 && d.status !== 'failed' && !wasRejected(d) && !(d.status === 'processing' && Date.now() - Date.parse(d.created_at) > STALE_PROCESSING_MS));
-    if (same) return jsonResponse({ ok: true, duplicate: true, documentId: same.id });
 
     const documentId = crypto.randomUUID();
     const storagePath = `${householdId}/${documentId}.${mime === 'application/pdf' ? 'pdf' : mime === 'image/png' ? 'png' : 'jpg'}`;
@@ -263,7 +265,7 @@ async function handleLandDocuments(req: Request): Promise<Response> {
     const log = await fetch(`${supabaseUrl()}/rest/v1/member_audit_log`, {
       method: 'POST',
       headers: restHeaders({ Prefer: 'return=minimal' }),
-      body: JSON.stringify({ actor_person_id: member.personId, action: 'member.land.upload', detail: { documentId, landType, mime } }),
+      body: JSON.stringify({ actor_person_id: member.personId, action: 'member.land.upload', detail: { documentId, landType, mime, replaced: replaced.length } }),
     }).catch(() => null);
     if (!log || !log.ok) {
       console.error('[members-me] audit log write failed; upload refused', log?.status);
@@ -306,7 +308,14 @@ async function handleLandDocuments(req: Request): Promise<Response> {
       body: JSON.stringify({ documentId }),
     }).catch((err) => console.error('[members-me] could not start the land document reader', err));
 
-    return jsonResponse({ ok: true, documentId });
+    // Now that the new upload is in and being read, remove what it replaces: the files (and
+    // outline) and the rows. Records that pointed at an old row are repointed by the reader.
+    if (replaced.length) {
+      await Promise.all(replaced.flatMap((d: any) => [deleteLandDocument(d.storage_path), deleteLandDocument(landShapeKey(d.storage_path))]).map((p: Promise<unknown>) => p.catch(() => null)));
+      await fetch(`${supabaseUrl()}/rest/v1/member_land_documents?id=in.${inList(replaced.map((d: any) => d.id))}`, { method: 'DELETE', headers: restHeaders({ Prefer: 'return=minimal' }) }).catch((err) => console.error('[members-me] could not remove replaced documents', err));
+    }
+
+    return jsonResponse({ ok: true, documentId, replaced: replaced.length });
   } catch (err) {
     console.error('[members-me] land document upload failed', err);
     return jsonResponse({ error: 'Server error' }, 500);
