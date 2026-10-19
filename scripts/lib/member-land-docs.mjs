@@ -59,12 +59,15 @@ export function parseLandPdfText(pages) {
     return { document_type: 'land_record', records, owners: [] };
   }
 
-  // Chitta ("நில உரிமை விபரங்கள்"): patta number in the heading, owners (English, when the
-  // registry typed them in English) before the land table, one row per survey number whose
-  // area columns (dry / wet / other) are summed. The land reference is printed in the footer.
-  if (/eservices\.tn\.gov\.in/i.test(text) && /பட்டா/.test(text)) {
-    const patta = text.match(/பட்டா எண்\s*:\s*(\d+)/)?.[1] ?? null;
-    const reference = text.match(/\b(?:[A-Z]\/)?\d{1,2}\/\d{1,2}\/\d{3}\/\d{4,6}\/\d{4,6}\b/)?.[0] ?? null;
+  // Chitta ("நில உரிமை விபரங்கள்"): the land reference in the footer, owners (English, when the
+  // registry typed them in English) before the land table, one row per survey number whose area
+  // columns (dry / wet / other) are summed. Detected by the e-Services address and that reference,
+  // NOT by Tamil words: a PDF saved from Safari or a phone scrambles the Tamil glyphs, but the
+  // digits, English words and punctuation come through unchanged.
+  const reference = text.match(/\b(?:[A-Z]\/)?\d{1,2}\/\d{1,2}\/\d{3}\/\d{4,6}\/\d{4,6}\b/)?.[0] ?? null;
+  if (/eservices\.tn\.gov\.in/i.test(text) && reference) {
+    // The patta number is the second-from-last part of the reference (".../01954/80169" = 1954).
+    const patta = pattaFromReference(reference);
     const owners = [...text.matchAll(/^\s*\d+\.\s+([A-Za-z][A-Za-z .]*?)\s+[^\u0000-\u007f]/gm)].map((m) => m[1].trim());
     const records = [];
     for (const m of text.matchAll(/^(\d+)\s+(\d+[A-Za-z]*)\s+(.+)$/gm)) {
@@ -75,6 +78,13 @@ export function parseLandPdfText(pages) {
       records.push({ survey_no: `${m[1]}/${m[2]}`, patta_no: patta, area_hectares: ha, area_ares: ares, reference_no: reference });
     }
     if (records.length === 0 || !patta) return null;
+    // The table ends with a totals row ("0 - 51.81 1.21"). If the rows read don't add up to it,
+    // something was misread: don't trust the reading, let a person look.
+    const total = text.match(/^\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s+\d+(?:\.\d+)?\s*$/m);
+    if (total) {
+      const sum = records.reduce((n, r) => n + r.area_hectares * 100 + r.area_ares, 0);
+      if (Math.abs(sum - (Number(total[1]) * 100 + Number(total[2]))) > 0.015) return null;
+    }
     return { document_type: 'land_record', records, owners };
   }
   return null;

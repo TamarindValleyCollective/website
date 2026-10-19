@@ -167,7 +167,7 @@ test('reads a chitta: patta, English owners, summed area, land reference', () =>
 });
 
 test('a chitta with dry, wet and other land adds the columns up', () => {
-  const t = chitta[0].replace('55 7 0 - 2.88 0.06 -- -- -- --', '55 7 0 - 1.00 0.05 0 - 2.00 0.07 -- --');
+  const t = chitta[0].replace('55 7 0 - 2.88 0.06 -- -- -- --', '55 7 0 - 1.00 0.05 0 - 2.00 0.07 -- --').replace('0 - 2.88 0.06\n', '0 - 3.00 0.12\n');
   assert.equal(parseLandPdfText([t, '']).records[0].area_ares, 3);
 });
 
@@ -190,4 +190,23 @@ test('unknown owners never block verifying a record the register already holds',
 
 test('an unread file is summarised for the member', () => {
   assert.match(memberSummary('needs_review', []), /core team will check/);
+});
+
+// A chitta saved from a phone: the Tamil glyphs are scrambled, the numbers are not. Made-up values.
+const phoneChitta = [
+  'த"#நா& அர)\nவ+வா, Gராம0 : தNகFM பFடா எ7 : 4321\n1. அெல$ஸா\'ட) வ)+, மக/ 0பா அெல$,\n-\n' +
+  '450 3C 0 - 10.50 0.76 -- -- -- --\n2019/0105/31/178893-\nDigitally\nsigned:Someone\n29/11/2019\n' +
+  '450 5B 0 - 0.40 0.10 -- -- -- --\n2019/0105/31/162333-\n30/11/2019\n' +
+  '471 2A 0 - 16.19 0.35 -- -- -- --\n2018/0105/31/106017-\n29/11/2019\n0 - 27.09 1.21\n' +
+  'https://eservices.tn.gov.in எ9ற P/31/12/081/04321/80169 எ9ற',
+];
+
+test('reads a chitta with scrambled Tamil: patta from the reference, three rows, total checked', () => {
+  const raw = parseLandPdfText(phoneChitta);
+  assert.deepEqual(raw.records.map((r) => [r.survey_no, r.patta_no, r.area_ares]), [['450/3C', '4321', 10.5], ['450/5B', '4321', 0.4], ['471/2A', '4321', 16.19]]);
+  assert.deepEqual(raw.owners, []);
+});
+
+test('a chitta whose rows do not add up to its printed total is not trusted', () => {
+  assert.equal(parseLandPdfText([phoneChitta[0].replace('0 - 27.09 1.21', '0 - 99.99 1.21')]), null);
 });
