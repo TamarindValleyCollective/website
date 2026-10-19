@@ -26,6 +26,7 @@
 // audit entry names the records and fields touched, never a name, email, phone
 // or land number.
 import { requireStaff, logStaffAction } from './lib/staff-access';
+import { backfillLandShapes } from './lib/land-shape-backfill';
 import { canSeeNames, maskName } from './lib/staff-masking';
 import { roleHasCapability } from './lib/staff-registry';
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
@@ -322,7 +323,8 @@ async function handleLandShapes(req: Request): Promise<Response> {
   const householdId = new URL(req.url).searchParams.get('householdId') ?? '';
   if (!UUID.test(householdId)) return jsonResponse({ error: 'householdId is missing or not valid.' }, 400);
   try {
-    const docs = await select('member_land_documents', 'id,storage_path,extracted', `&household_id=eq.${householdId}`);
+    const docs = await select('member_land_documents', 'id,storage_path,mime_type,extracted', `&household_id=eq.${householdId}`);
+    await backfillLandShapes(docs);
     return jsonResponse({ shapes: await loadLandShapes(docs) });
   } catch (err) {
     console.error('[members-admin] land shapes load failed', err);

@@ -21,6 +21,7 @@
 // notice version: no household data is released, and /profile refuses. Every self-service change is written to
 // member_audit_log BEFORE it is applied, and refused if that write fails.
 import { requireMember } from './lib/member-access';
+import { backfillLandShapes } from './lib/land-shape-backfill';
 import { deleteLandDocument, loadLandShapes, putLandDocument, signedLandDocumentUrl } from './lib/land-doc-storage';
 import { readLandPdf } from './lib/land-doc-read';
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
@@ -350,7 +351,8 @@ async function handleLandShapes(req: Request): Promise<Response> {
   const { member } = auth;
   if (privacyNoticeRequired(member.privacyVersion)) return jsonResponse({ error: 'Please read the privacy notice first.' }, 403);
   try {
-    const docs = await select('member_land_documents', 'id,storage_path,extracted', `household_id=in.${inList(member.householdIds)}`);
+    const docs = await select('member_land_documents', 'id,storage_path,mime_type,extracted', `household_id=in.${inList(member.householdIds)}`);
+    await backfillLandShapes(docs);
     return jsonResponse({ shapes: await loadLandShapes(docs) });
   } catch (err) {
     console.error('[members-me] land shapes load failed', err);

@@ -1477,6 +1477,10 @@ never touches Netlify either.
   the neighbours' survey numbers and the red/blue labels, as a transparent label-free PNG stored
   beside the file in R2 (`<document>-shape.png`, flagged by `extracted.hasShape`). It is served as
   data URLs by `GET /api/members-me/land-shapes` and `GET /api/members-admin/land-shapes`.
+  Documents uploaded before outlines existed are caught up lazily: those two endpoints first run
+  `lib/land-shape-backfill.ts` on up to three single-survey PDFs with no `hasShape` / `shapeChecked`
+  flag yet (read the file, store the outline if there is one, set the flag), so the first load of
+  a household's page after deploy fills them in, with no script or credentials.
 
 ## Current Production Status
 
