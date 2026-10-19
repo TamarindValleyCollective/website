@@ -270,20 +270,30 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   .members .hcard-ids {
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 16px;
-  }
-
-  .members .id {
-    display: grid;
+    flex-wrap: wrap;
     gap: 6px;
-    justify-items: start;
   }
 
-  .members .id--end {
-    justify-items: end;
-    text-align: right;
+  .members .unit-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+    white-space: nowrap;
+  }
+
+  .members .unit-pill--none {
+    background: var(--tvc-stone);
+    color: var(--tvc-ink-soft);
+    font-weight: 600;
+  }
+
+  .members .hcard-area {
+    margin: -6px 0 0;
   }
 
   /* Visually hidden, still read by screen readers. */
@@ -296,25 +306,15 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     white-space: nowrap;
   }
 
-  .members .id-value {
-    font-family: var(--font-display);
-    font-size: 1.6rem;
-    line-height: 1.1;
-    color: var(--tvc-green-dark);
-  }
-
-  .members .id-value--none {
-    font-family: var(--font-body);
-    font-size: 0.95rem;
-    color: var(--tvc-ink-soft);
-  }
-
   .members .hcard-people {
-    display: block;
-    font-size: 0.95rem;
-    white-space: nowrap;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    line-height: 1.2;
+    color: var(--tvc-green-dark);
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .members .hcard-foot {
@@ -324,21 +324,6 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     margin-top: auto;
     min-height: 1.4em;
   }
-
-  .members .land-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 8px;
-    border-radius: 999px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    background: var(--tvc-green-tint);
-    color: var(--tvc-green-dark);
-    white-space: nowrap;
-  }
-
-
 
   .members .meta {
     color: var(--tvc-ink-soft);
@@ -452,6 +437,61 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     align-items: center;
     gap: 6px 10px;
     margin-bottom: 6px;
+  }
+
+  /* Verified / awaiting / not verified as an icon; the words stay for screen readers and on hover. */
+  .members .vmark {
+    display: inline-flex;
+    vertical-align: middle;
+  }
+
+  .members .vmark svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .members .vmark--verified {
+    color: var(--tvc-green);
+  }
+
+  .members .vmark--pending_review {
+    color: var(--tvc-orange-text);
+  }
+
+  .members .vmark--unverified {
+    color: var(--tvc-ink-soft);
+  }
+
+  .members .survey-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .members .parcel-shape {
+    display: block;
+    width: auto;
+    height: 28px;
+    flex: none;
+  }
+
+  .members .merged-cell {
+    vertical-align: top;
+  }
+
+  .members .doc-link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--tvc-green-dark);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
   }
 
   .members .landdoc-head strong {
@@ -637,8 +677,8 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   type Flag = { kind: string; severity: 'error' | 'warn' | 'info'; text: string };
   type Person = { id: string; name: string; role: string; canLogin: boolean; hasEmail: boolean; hasPhone: boolean };
-  type Plot = { id: string; pattaNo: string | null; referenceNo: string | null; surveyNo: string | null; areaHectares: number | null; areaAcres: number | null; settlement: string | null; verification: string };
-  type HousePatta = { id: string; pattaNo: string | null; referenceNo: string | null; surveyNo: string | null; areaSqFt: number | null; settlement: string | null; verification: string };
+  type Plot = { id: string; pattaNo: string | null; referenceNo: string | null; surveyNo: string | null; areaHectares: number | null; areaAcres: number | null; settlement: string | null; verification: string; sourceDocumentId: string | null };
+  type HousePatta = { id: string; pattaNo: string | null; referenceNo: string | null; surveyNo: string | null; areaSqFt: number | null; settlement: string | null; verification: string; sourceDocumentId: string | null };
   type Household = { id: string; farmUnit: string; houseNo: string | null; cluster: string | null; unitType: string | null; people: Person[]; plots: Plot[]; housePattas: HousePatta[]; flags: Flag[]; farmAcres: number; farmHectares: number; houseSqFt: number; plotsMissingArea: number; housePattasMissingArea: number };
   type Totals = { households: number; people: number; peopleWithEmail: number; farmPlots: number; householdsNeedingAttention: number; farmAcres: number; farmHectares: number; houseSqFt: number };
 
@@ -646,6 +686,9 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   const dash = (v: string | number | null) => (v == null || v === '' ? 'Not available yet' : String(v));
   // Land is shown as an Excel-style pivot: a total when collapsed, the rows when expanded.
   const acresFmt = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Hectares are always shown to four decimal places (0.1619, 0.0040).
+  const haFmt = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+  const ha = (v: number | null) => (v == null ? null : haFmt.format(v));
   const sqftFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
   const acres = (n: number) => `${acresFmt.format(n)} acres`;
   const sqft = (n: number) => `${sqftFmt.format(n)} sq ft`;
@@ -684,17 +727,10 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     return words.find((w) => [...w.replace(/[.\u2022]/g, '')].length > 1) ?? words[0] ?? '';
   };
 
-  const idBlock = (label: string, value: string | null, none: string, pill: HTMLElement | null, align: 'start' | 'end'): HTMLElement =>
-    h(
-      'span',
-      { class: `id id--${align}` },
-      h('span', { class: 'sr', text: label }),
-      h('span', { class: `id-value${value ? '' : ' id-value--none'}`, text: value ?? none }),
-      pill,
-    );
-
-  // A small pill with a land size, e.g. "1.28 ac". The title spells it out.
-  const landPill = (value: string, title: string): HTMLElement => h('span', { class: 'land-pill', text: value, attrs: { title } });
+  // A farm plot or house number as a pill. The label is read by screen readers only: the F-/H-
+  // prefix already says which is which.
+  const unitPill = (label: string, value: string | null, none: string): HTMLElement =>
+    h('span', { class: `unit-pill${value ? '' : ' unit-pill--none'}` }, h('span', { class: 'sr', text: `${label}: ` }), value ?? none);
 
   // The card shows only what you scan for: farm plot, house, and who is on it.
   // A native <details>: the summary line is the total, the table is the detail.
@@ -704,40 +740,29 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   function renderHousehold(hh: Household): HTMLElement {
     const attention = hh.flags.filter((f) => f.severity !== 'info').length;
-    const shown = hh.people.slice(0, 2);
-    const extra = hh.people.length - shown.length;
-    // First names only, on one line: "Asha & Ravi", "+ 1" if there are more.
-    const peopleLine = shown.length ? shown.map((p) => firstName(p.name)).join(' & ') + (extra > 0 ? ` + ${extra}` : '') : 'No people yet';
+    // The owners (the primary members) by full name: "Asha Rao & Ravi Rao", "+ 1" if there are more.
+    // A household with no owner on record falls back to everyone in it.
+    const owners = hh.people.filter((p) => p.role === 'owner');
+    const named = owners.length ? owners : hh.people;
+    const shown = named.slice(0, 2);
+    const extra = named.length - shown.length;
+    const peopleLine = shown.length ? shown.map((p) => p.name).join(' & ') + (extra > 0 ? ` + ${extra}` : '') : 'No people yet';
+    // "0.40 ac farm · 3,100 sq ft house": what the land pills used to carry, now a quiet line.
+    const areaLine = [
+      hh.plots.length ? (hh.farmAcres > 0 ? `${acres(hh.farmAcres).replace(' acres', ' ac')} farm` : 'farm: no area yet') : null,
+      hh.housePattas.length ? (hh.houseSqFt > 0 ? `${sqft(hh.houseSqFt)} house` : 'house: no area yet') : null,
+    ].filter(Boolean).join(' · ');
     const card = h(
       'button',
       { class: 'hcard', attrs: { type: 'button', 'aria-haspopup': 'dialog', 'aria-label': `Farm plot ${hh.farmUnit}, ${hh.houseNo ?? 'no house'}. Open details.` } },
+      h('span', { class: `hcard-people${shown.length ? '' : ' meta'}`, attrs: { title: named.map((p) => p.name).join(', ') }, text: peopleLine }),
       h(
         'span',
         { class: 'hcard-ids' },
-        idBlock(
-          'Farm plot',
-          hh.farmUnit,
-          '',
-          hh.plots.length
-            ? hh.farmAcres > 0
-              ? landPill(acres(hh.farmAcres).replace(' acres', ' ac'), `Farm land: ${acres(hh.farmAcres)}`)
-              : landPill('no area', 'Farm patta on file, but no area recorded yet')
-            : null,
-          'start',
-        ),
-        idBlock(
-          'House',
-          hh.houseNo,
-          'No house',
-          hh.housePattas.length
-            ? hh.houseSqFt > 0
-              ? landPill(sqft(hh.houseSqFt), `House land: ${sqft(hh.houseSqFt)} (${acres(sqftAsAcres(hh.houseSqFt))})`)
-              : landPill('no area', 'House patta on file, but no area recorded yet')
-            : null,
-          'end',
-        ),
+        unitPill('Farm plot', hh.farmUnit, 'No farm plot'),
+        unitPill('House', hh.houseNo, 'No house'),
       ),
-      h('span', { class: `hcard-people${shown.length ? '' : ' meta'}`, attrs: { title: hh.people.map((p) => p.name).join(', ') }, text: peopleLine }),
+      areaLine ? h('span', { class: 'hcard-area meta', text: areaLine }) : null,
       h('span', { class: 'hcard-foot' }, attention ? h('span', { class: 'flag flag--warn', text: `${attention} to check` }) : null),
     );
     card.addEventListener('click', () => openDetail(hh));
@@ -860,6 +885,97 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       }
     });
     return b;
+  }
+
+  const VMARK: Record<string, string> = {
+    verified: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/>',
+    pending_review: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/>',
+    unverified: '<circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/>',
+  };
+  function verifiedMark(v: string): HTMLElement {
+    const key = VERIFY[v] ? v : 'unverified';
+    const el = h('span', { class: `vmark vmark--${key}`, attrs: { title: VERIFY[key] } }, h('span', { class: 'sr', text: VERIFY[key] }));
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.innerHTML = VMARK[key]; // fixed constants only
+    el.prepend(svg);
+    return el;
+  }
+  // Opens an uploaded land document (a one-minute signed link, logged). The tab is opened in
+  // the click so the browser doesn't block it as a pop-up. Needs the manage capability.
+  async function openLandFile(documentId: string, onError: (m: string) => void) {
+    const tab = window.open('', '_blank');
+    try {
+      const res = await staffFetch('/api/members-admin/land-document-link', { method: 'POST', body: { documentId } });
+      if (res.status !== 200) throw new Error(res.data.error || 'Could not open the file.');
+      if (tab) {
+        tab.opener = null;
+        tab.location.href = res.data.url;
+      } else window.location.href = res.data.url;
+    } catch (err) {
+      tab?.close();
+      onError(err instanceof Error ? err.message : 'Something went wrong.');
+    }
+  }
+  // Rows are sorted by patta number, so records sharing a patta sit together: show the patta
+  // number once, spanning its survey numbers, instead of repeating it on every row.
+  function mergePattaRuns(root: HTMLElement): HTMLElement {
+    const rows = [...root.querySelectorAll('tbody tr')];
+    const key = (tr: Element) => {
+      const t = tr.firstElementChild?.textContent?.trim() ?? '';
+      return t === '—' || t === 'Not available yet' ? '' : t;
+    };
+    for (let i = 0; i < rows.length; ) {
+      let j = i + 1;
+      while (key(rows[i]) && j < rows.length && key(rows[j]) === key(rows[i])) j++;
+      if (j - i > 1) {
+        const first = rows[i].firstElementChild as HTMLTableCellElement;
+        first.rowSpan = j - i;
+        first.classList.add('merged-cell');
+        for (let k = i + 1; k < j; k++) rows[k].firstElementChild?.remove();
+      }
+      i = j;
+    }
+    return root;
+  }
+  const byPatta = <T extends { pattaNo: string | null; surveyNo: string | null }>(a: T, b: T) =>
+    (a.pattaNo == null ? 1 : 0) - (b.pattaNo == null ? 1 : 0) || String(a.pattaNo).localeCompare(String(b.pattaNo), undefined, { numeric: true }) || String(a.surveyNo).localeCompare(String(b.surveyNo), undefined, { numeric: true });
+
+  // The parcel outlines of the open household's documents, one request per household opened.
+  const shapesByHousehold = new Map<string, Promise<Record<string, string>>>();
+  const loadShapes = (householdId: string) => {
+    let p = shapesByHousehold.get(householdId);
+    if (!p) {
+      p = staffFetch(`/api/members-admin/land-shapes?householdId=${encodeURIComponent(householdId)}`).then(({ status, data }) => (status === 200 ? (data.shapes as Record<string, string>) : {})).catch((): Record<string, string> => ({}));
+      shapesByHousehold.set(householdId, p);
+    }
+    return p;
+  };
+  // The survey number, linked to the document it was read from when there is one.
+  function surveyLink(hh: Household, surveyNo: string | null, documentId: string | null): string | null | HTMLElement {
+    if (!surveyNo || !documentId) return surveyNo;
+    const cell = h('div', { class: 'survey-cell' });
+    if (can.manage) {
+      const b = h('button', { class: 'doc-link', text: surveyNo, attrs: { type: 'button', title: 'Open the uploaded document' } });
+      b.addEventListener('click', () =>
+        void openLandFile(documentId, (m) => {
+          cell.querySelector('.form-msg')?.remove();
+          cell.append(h('p', { class: 'form-msg', text: m, attrs: { role: 'alert' } }));
+        }),
+      );
+      cell.append(b);
+    } else cell.append(document.createTextNode(surveyNo));
+    void loadShapes(hh.id).then((shapes) => {
+      const src = shapes[documentId];
+      if (!src) return;
+      const img = document.createElement('img');
+      img.className = 'parcel-shape';
+      img.src = src;
+      img.alt = `Outline of survey number ${surveyNo}`;
+      cell.append(img);
+    });
+    return cell;
   }
 
   const rowButton = (text: string, onClick: () => void): HTMLElement => {
@@ -1110,11 +1226,11 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       'Farm patta',
       hh.plots.length
         ? pivot(
-            `${plural(hh.plots.length, 'plot')} · ${acres(hh.farmAcres)} (${acresFmt.format(hh.farmHectares)} ha)${hh.plotsMissingArea ? ` · ${plural(hh.plotsMissingArea, 'plot')} without an area yet` : ''}`,
-            table(
-              ['Patta no.', 'Reference', 'Survey no.', 'Hectares', 'Acres', 'Settlement', 'Status', ...(can.manage ? [''] : [])],
-              hh.plots.map((p) => [p.pattaNo, p.referenceNo, p.surveyNo, p.areaHectares, p.areaAcres, p.settlement, VERIFY[p.verification] ?? p.verification, ...(can.manage ? [rowButton('Edit', () => plotSlot.replaceChildren(landForm('plot', hh, p, plotSlot)))] : [])]),
-            ),
+            `${plural(hh.plots.length, 'plot')} · ${acres(hh.farmAcres)} (${haFmt.format(hh.farmHectares)} ha)${hh.plotsMissingArea ? ` · ${plural(hh.plotsMissingArea, 'plot')} without an area yet` : ''}`,
+            mergePattaRuns(table(
+              ['Patta no.', 'Survey no.', 'Hectares', 'Acres', 'Settlement', 'Status', ...(can.manage ? [''] : [])],
+              [...hh.plots].sort(byPatta).map((p) => [p.pattaNo, surveyLink(hh, p.surveyNo, p.sourceDocumentId), ha(p.areaHectares), p.areaAcres, p.settlement, verifiedMark(p.verification), ...(can.manage ? [rowButton('Edit', () => plotSlot.replaceChildren(landForm('plot', hh, p, plotSlot)))] : [])]),
+            )),
           )
         : h('p', { class: 'muted', text: 'Not available yet' }),
       plotSlot,
@@ -1128,10 +1244,10 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       hh.housePattas.length
         ? pivot(
             `${plural(hh.housePattas.length, 'record')} · ${sqft(hh.houseSqFt)} (${acres(sqftAsAcres(hh.houseSqFt))})${hh.housePattasMissingArea ? ` · ${plural(hh.housePattasMissingArea, 'record')} without an area yet` : ''}`,
-            table(
+            mergePattaRuns(table(
               ['Patta no.', 'Reference', 'Survey no.', 'Sq ft', 'Settlement', 'Status', ...(can.manage ? [''] : [])],
-              hh.housePattas.map((p) => [p.pattaNo, p.referenceNo, p.surveyNo, p.areaSqFt, p.settlement, VERIFY[p.verification] ?? p.verification, ...(can.manage ? [rowButton('Edit', () => houseSlot.replaceChildren(landForm('housepatta', hh, p, houseSlot)))] : [])]),
-            ),
+              [...hh.housePattas].sort(byPatta).map((p) => [p.pattaNo, p.referenceNo, surveyLink(hh, p.surveyNo, p.sourceDocumentId), p.areaSqFt, p.settlement, verifiedMark(p.verification), ...(can.manage ? [rowButton('Edit', () => houseSlot.replaceChildren(landForm('housepatta', hh, p, houseSlot)))] : [])]),
+            )),
           )
         : h('p', { class: 'muted', text: hh.houseNo ? 'Not available yet' : 'No house' }),
       houseSlot,
@@ -1181,15 +1297,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
         ...docs.map((d) => {
           const waiting = d.items.some((i) => ['pending', 'mismatch', 'check', 'conflict'].includes(i.outcome) && !i.decision);
           const view = can.manage
-            ? rowButton('View file', async () => {
-                try {
-                  const res = await staffFetch('/api/members-admin/land-document-link', { method: 'POST', body: { documentId: d.id } });
-                  if (res.status !== 200) throw new Error(res.data.error || 'Could not open the file.');
-                  window.open(res.data.url, '_blank', 'noopener');
-                } catch (err) {
-                  report(err instanceof Error ? err.message : 'Something went wrong.');
-                }
-              })
+            ? rowButton('View file', () => void openLandFile(d.id, report))
             : null;
           const decide = (action: 'landdoc.approve' | 'landdoc.reject', itemIndex: number) => async () => {
             try {
@@ -1299,7 +1407,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       stat('Households', String(t.households)),
       stat('People', String(t.people)),
       stat('With an email on file', `${t.peopleWithEmail} of ${t.people}`),
-      stat('Farm land', acres(t.farmAcres), `${acresFmt.format(t.farmHectares)} ha · ${plural(t.farmPlots, 'plot')} · ${withFarm} of ${t.households} households have data`),
+      stat('Farm land', acres(t.farmAcres), `${haFmt.format(t.farmHectares)} ha · ${plural(t.farmPlots, 'plot')} · ${withFarm} of ${t.households} households have data`),
       stat('House land', acres(sqftAsAcres(t.houseSqFt)), `${sqft(t.houseSqFt)} · ${withHouse} of ${t.households} households have data`),
       stat('Households to check', String(t.householdsNeedingAttention)),
     );

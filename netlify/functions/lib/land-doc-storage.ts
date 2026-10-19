@@ -18,7 +18,7 @@ function config() {
 
 // Keys are `<household uuid>/<document uuid>.<ext>`; refuse anything else so a bad value can
 // never address another path in the bucket.
-const KEY = /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.(pdf|jpg|png)$/;
+const KEY = /^[0-9a-f-]{36}\/[0-9a-f-]{36}(-shape)?\.(pdf|jpg|png)$/;
 const urlFor = (base: string, key: string) => {
   if (!KEY.test(key)) throw new Error('Invalid storage key');
   return `${base}/${key}`;
@@ -51,4 +51,27 @@ export async function signedLandDocumentUrl(key: string, seconds = 60): Promise<
   url.searchParams.set('X-Amz-Expires', String(seconds));
   const signed = await client.sign(url.toString(), { method: 'GET', aws: { signQuery: true } });
   return signed.url;
+}
+
+// The parcel outline taken from a single-survey document's field sketch sits beside the file:
+// "<household>/<document>.pdf" -> "<household>/<document>-shape.png".
+export const landShapeKey = (storagePath: string): string => storagePath.replace(/\.pdf$/, '-shape.png');
+
+// The outlines of these documents as data URLs, for the ones that have one. `extracted.hasShape`
+// is set by the background reader when it stored one. A missing or unreadable file is skipped.
+export async function loadLandShapes(docs: { id: string; storage_path: string; extracted: any }[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  await Promise.all(
+    docs
+      .filter((d) => d.extracted?.hasShape === true)
+      .map(async (d) => {
+        try {
+          const bytes = await getLandDocument(landShapeKey(d.storage_path));
+          if (bytes) out[d.id] = `data:image/png;base64,${Buffer.from(bytes).toString('base64')}`;
+        } catch (err) {
+          console.error('[land-doc-storage] could not load a shape', err);
+        }
+      }),
+  );
+  return out;
 }

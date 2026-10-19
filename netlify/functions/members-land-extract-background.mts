@@ -19,8 +19,8 @@
 // touched, and the document is marked failed if that write fails. The audit detail holds
 // counts only, never names or land numbers.
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
-import { readLandPdf } from './lib/land-doc-read';
-import { getLandDocument } from './lib/land-doc-storage';
+import { readLandPdf, readLandShape } from './lib/land-doc-read';
+import { getLandDocument, landShapeKey, putLandDocument } from './lib/land-doc-storage';
 import { documentStatus, newRecordColumns, normalizeExtraction, reconcile } from '../../scripts/lib/member-land-docs.mjs';
 
 const TABLES = { farm: 'member_plots', house: 'member_house_pattas' } as const;
@@ -138,7 +138,22 @@ export default async (req: Request): Promise<Response> => {
       }
     }
 
-    await patch('member_land_documents', `id=eq.${documentId}`, { status, extracted: extraction, items, processed_at: now, error: null });
+    // Only a single-survey document has a field sketch (a patta with several survey numbers has
+    // none). The outline is kept beside the file; a failure here never affects the document.
+    let hasShape = false;
+    if (doc.mime_type === 'application/pdf' && extraction.records.length === 1) {
+      try {
+        const shape = await readLandShape(bytes);
+        if (shape) {
+          await putLandDocument(landShapeKey(doc.storage_path), shape, 'image/png');
+          hasShape = true;
+        }
+      } catch (err) {
+        console.error('[land-extract] could not store the shape', err);
+      }
+    }
+
+    await patch('member_land_documents', `id=eq.${documentId}`, { status, extracted: hasShape ? { ...extraction, hasShape } : extraction, items, processed_at: now, error: null });
     return new Response('ok');
   } catch (err) {
     console.error('[land-extract] failed', err);

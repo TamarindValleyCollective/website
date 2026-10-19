@@ -1467,6 +1467,17 @@ never touches Netlify either.
   on survey/patta/area alone and "owners unknown" never auto-creates anything. Files are not deleted
   when a row is; there is no retention job yet.
 
+  **Document links and parcel outlines** (no migration): members open their own household's files
+  through `POST /api/members-me/land-document-link` (their households only, audit-first as
+  `member.land.view`, 60-second link); a record's `sourceDocumentId` ties its survey number to the
+  document it came from, in both the member portal and the staff register. A single-survey
+  Integrated Land Record carries a field sketch ("புலப்படம்") on page 2 as a small bitmap (a
+  multi-survey patta has none). The background reader pulls it out (`readLandShape`, `unpdf`
+  `extractImages`) and `scripts/lib/land-shape.mjs` keeps only the long thin black strokes, dropping
+  the neighbours' survey numbers and the red/blue labels, as a transparent label-free PNG stored
+  beside the file in R2 (`<document>-shape.png`, flagged by `extracted.hasShape`). It is served as
+  data URLs by `GET /api/members-me/land-shapes` and `GET /api/members-admin/land-shapes`.
+
 ## Current Production Status
 
 **tvc.farm is live on this codebase**, verified directly against the production site:
