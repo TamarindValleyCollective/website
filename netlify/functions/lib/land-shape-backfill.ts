@@ -1,0 +1,44 @@
+// Gives documents uploaded before parcel outlines existed their outline, the first time their
+// household's outlines are asked for. Same work as the background reader does for a new upload
+// (readLandShape), done lazily so it needs no script and no credentials outside the function.
+//
+// Only a single-survey PDF can have a sketch. A document checked and found without one is marked
+// `shapeChecked` so it is never opened again. A few documents per request keep it quick; the
+// rest are done the next time the page is opened.
+import { restHeaders } from '../../../scripts/lib/supabase.mjs';
+import { readLandShape } from './land-doc-read';
+import { getLandDocument, landShapeKey, putLandDocument } from './land-doc-storage';
+
+const MAX_PER_REQUEST = 3;
+
+type Doc = { id: string; storage_path: string; mime_type: string; extracted: any };
+
+export const needsShapeCheck = (d: Doc): boolean =>
+  d.mime_type === 'application/pdf' &&
+  Array.isArray(d.extracted?.records) &&
+  d.extracted.records.length === 1 &&
+  d.extracted.hasShape === undefined &&
+  d.extracted.shapeChecked !== true;
+
+// Updates `extracted` on the passed documents in place, so the caller can go on to load the shapes.
+export async function backfillLandShapes(docs: Doc[]): Promise<void> {
+  const base = process.env.SUPABASE_URL;
+  if (!base) return;
+  for (const d of docs.filter(needsShapeCheck).slice(0, MAX_PER_REQUEST)) {
+    try {
+      const bytes = await getLandDocument(d.storage_path);
+      if (!bytes) continue;
+      const shape = await readLandShape(bytes);
+      if (shape) await putLandDocument(landShapeKey(d.storage_path), shape, 'image/png');
+      const extracted = shape ? { ...d.extracted, hasShape: true } : { ...d.extracted, shapeChecked: true };
+      const res = await fetch(`${base}/rest/v1/member_land_documents?id=eq.${d.id}`, {
+        method: 'PATCH',
+        headers: restHeaders({ Prefer: 'return=minimal' }),
+        body: JSON.stringify({ extracted }),
+      });
+      if (res.ok) d.extracted = extracted;
+    } catch (err) {
+      console.error('[land-shape-backfill] could not check a document', err);
+    }
+  }
+}
