@@ -10,7 +10,9 @@ import { parseLandPdfText } from '../../../scripts/lib/member-land-docs.mjs';
 
 export async function readLandPdf(bytes: Uint8Array): Promise<unknown | null> {
   try {
-    const pdf = await getDocumentProxy(bytes);
+    // pdf.js takes ownership of the buffer it is given (it is emptied afterwards), and the caller
+    // still has to store these bytes, so hand it a copy.
+    const pdf = await getDocumentProxy(bytes.slice());
     if (pdf.numPages > 10) return null; // these extracts are two pages; a long file is something else
     const { text } = await extractText(pdf, { mergePages: false });
     return parseLandPdfText(Array.isArray(text) ? text : [text]);
