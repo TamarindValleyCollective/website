@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { inflateSync } from 'node:zlib';
-import { pickSketch, shapeFromSketch } from './land-shape.mjs';
+import { SHAPE_VERSION, pickSketch, shapeFromSketch, shapeNeedsRefresh, withShapeResult } from './land-shape.mjs';
 
 // A white RGB image with drawing helpers.
 function canvas(width, height) {
@@ -123,4 +123,26 @@ test('picks the sketch, not the emblem or the QR code', () => {
   assert.equal(pickSketch(images).width, 450);
   assert.equal(pickSketch([{ width: 100, height: 100 }]), null);
   assert.equal(pickSketch(undefined), null);
+});
+
+// What was stored by earlier readers must be redone once; what the current reader stored must not.
+test('outlines and "no outline" verdicts from an older reader are refreshed once', () => {
+  const one = (over) => ({ records: [{ surveyNo: '450/3C' }], ...over });
+  assert.equal(shapeNeedsRefresh(one({})), true, 'never checked');
+  assert.equal(shapeNeedsRefresh(one({ shapeChecked: true })), true, 'gave up under the first reader');
+  assert.equal(shapeNeedsRefresh(one({ shapeChecked: SHAPE_VERSION - 1 })), true, 'gave up under an earlier version');
+  assert.equal(shapeNeedsRefresh(one({ hasShape: true })), true, 'outline made before versions existed');
+  assert.equal(shapeNeedsRefresh(one({ hasShape: true, shapeVersion: SHAPE_VERSION - 1 })), true, 'outline from an earlier version');
+  assert.equal(shapeNeedsRefresh(one({ hasShape: true, shapeVersion: SHAPE_VERSION })), false, 'current outline');
+  assert.equal(shapeNeedsRefresh(one({ shapeChecked: SHAPE_VERSION })), false, 'current "no outline"');
+  assert.equal(shapeNeedsRefresh({ records: [{}, {}] }), false, 'a multi-survey patta has no sketch');
+  assert.equal(shapeNeedsRefresh(null), false);
+});
+
+test('the stored flags always say which reader made them, and replace older ones', () => {
+  const old = { records: [1], hasShape: true, shapeChecked: true };
+  assert.deepEqual(withShapeResult(old, true), { records: [1], hasShape: true, shapeVersion: SHAPE_VERSION });
+  assert.deepEqual(withShapeResult(old, false), { records: [1], shapeChecked: SHAPE_VERSION });
+  assert.equal(shapeNeedsRefresh(withShapeResult(old, true)), false);
+  assert.equal(shapeNeedsRefresh(withShapeResult(old, false)), false);
 });

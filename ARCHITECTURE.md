@@ -1487,10 +1487,13 @@ never touches Netlify either.
   runs past a corner or isn't part of a closed loop, and redraws what is left as a transparent,
   label-free PNG, stored beside the file in R2 (`<document>-shape.png`, flagged by `extracted.hasShape`). It is served as
   data URLs by `GET /api/members-me/land-shapes` and `GET /api/members-admin/land-shapes`.
-  Documents uploaded before outlines existed are caught up lazily: those two endpoints first run
-  `lib/land-shape-backfill.ts` on up to three single-survey PDFs with no `hasShape` / `shapeChecked`
-  flag yet (read the file, store the outline if there is one, set the flag), so the first load of
-  a household's page after deploy fills them in, with no script or credentials.
+  Documents uploaded before outlines existed, or whose outline an older reader made (or gave up
+  on), are caught up lazily: those two endpoints first run `lib/land-shape-backfill.ts` on up to three
+  single-survey PDFs whose stored reading doesn't carry the current `SHAPE_VERSION`
+  (`scripts/lib/land-shape.mjs`: `hasShape` + `shapeVersion` when an outline was stored,
+  `shapeChecked` = the version when none was found). Raising `SHAPE_VERSION` when the reader improves
+  redoes everything once, so the first load of a household's page after deploy fills them in, with no
+  script or credentials.
 
 ## Current Production Status
 

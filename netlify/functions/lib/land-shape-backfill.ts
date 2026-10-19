@@ -6,6 +6,7 @@
 // `shapeChecked` so it is never opened again. A few documents per request keep it quick; the
 // rest are done the next time the page is opened.
 import { restHeaders } from '../../../scripts/lib/supabase.mjs';
+import { shapeNeedsRefresh, withShapeResult } from '../../../scripts/lib/land-shape.mjs';
 import { readLandShape } from './land-doc-read';
 import { getLandDocument, landShapeKey, putLandDocument } from './land-doc-storage';
 
@@ -13,12 +14,7 @@ const MAX_PER_REQUEST = 3;
 
 type Doc = { id: string; storage_path: string; mime_type: string; extracted: any };
 
-export const needsShapeCheck = (d: Doc): boolean =>
-  d.mime_type === 'application/pdf' &&
-  Array.isArray(d.extracted?.records) &&
-  d.extracted.records.length === 1 &&
-  d.extracted.hasShape === undefined &&
-  d.extracted.shapeChecked !== true;
+export const needsShapeCheck = (d: Doc): boolean => d.mime_type === 'application/pdf' && shapeNeedsRefresh(d.extracted);
 
 // Updates `extracted` on the passed documents in place, so the caller can go on to load the shapes.
 export async function backfillLandShapes(docs: Doc[]): Promise<void> {
@@ -30,7 +26,7 @@ export async function backfillLandShapes(docs: Doc[]): Promise<void> {
       if (!bytes) continue;
       const shape = await readLandShape(bytes);
       if (shape) await putLandDocument(landShapeKey(d.storage_path), shape, 'image/png');
-      const extracted = shape ? { ...d.extracted, hasShape: true } : { ...d.extracted, shapeChecked: true };
+      const extracted = withShapeResult(d.extracted, Boolean(shape));
       const res = await fetch(`${base}/rest/v1/member_land_documents?id=eq.${d.id}`, {
         method: 'PATCH',
         headers: restHeaders({ Prefer: 'return=minimal' }),
