@@ -244,12 +244,15 @@ async function handleLandDocuments(req: Request): Promise<Response> {
   const sha256 = hex(await crypto.subtle.digest('SHA-256', bytes));
 
   try {
-    const all = await select('member_land_documents', 'id,sha256,status,created_at,size_bytes', `household_id=eq.${householdId}`);
+    const all = await select('member_land_documents', 'id,sha256,status,created_at,size_bytes,items', `household_id=eq.${householdId}`);
     const recent = all.filter((d: any) => Date.parse(d.created_at) > Date.now() - 24 * 3600 * 1000);
     const storedBytes = all.filter((d: any) => d.status !== 'failed').reduce((n: number, d: any) => n + (d.size_bytes ?? 0), 0);
     if (storedBytes + file.size > MAX_HOUSEHOLD_BYTES) return jsonResponse({ error: 'Your unit has reached its document storage limit. Please ask the core team.' }, 413);
     if (recent.length >= MAX_UPLOADS_PER_DAY) return jsonResponse({ error: 'You have uploaded a lot of documents today. Please try again tomorrow, or ask the core team.' }, 429);
-    const same = recent.find((d: any) => d.sha256 === sha256 && d.status !== 'failed' && !(d.status === 'processing' && Date.now() - Date.parse(d.created_at) > STALE_PROCESSING_MS));
+    // A file the core team rejected every record of (e.g. uploaded as the wrong land type) must be
+    // uploadable again, so it isn't a duplicate.
+    const wasRejected = (d: any) => Array.isArray(d.items) && d.items.length > 0 && d.items.every((i: any) => i.decision === 'rejected');
+    const same = recent.find((d: any) => d.sha256 === sha256 && d.status !== 'failed' && !wasRejected(d) && !(d.status === 'processing' && Date.now() - Date.parse(d.created_at) > STALE_PROCESSING_MS));
     if (same) return jsonResponse({ ok: true, duplicate: true, documentId: same.id });
 
     const documentId = crypto.randomUUID();

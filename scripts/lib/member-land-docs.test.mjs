@@ -139,6 +139,8 @@ test('member summaries name no one', () => {
   const items = [{ outcome: 'verified' }, { outcome: 'pending' }, { outcome: 'mismatch' }];
   assert.equal(memberSummary('needs_review', items), '1 record verified; 1 new record added, waiting for the core team to confirm; 1 sent to the core team to check');
   assert.equal(memberSummary('failed', [], 'Nope'), 'Nope');
+  assert.match(memberSummary('applied', [{ outcome: 'pending', decision: 'rejected' }]), /1 record was not accepted by the core team/);
+  assert.equal(memberSummary('applied', [{ outcome: 'check', decision: 'approved' }]), '1 record verified');
 });
 
 // Text shaped like what the PDFs really give (control characters and lost Tamil signs included),
