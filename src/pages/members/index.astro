@@ -1304,8 +1304,8 @@ import '../../styles/global.css';
         msg.textContent = 'Choose a file first.';
         return;
       }
-      if (chosen.size > 4_500_000) {
-        msg.textContent = 'That file is larger than 4.5 MB.';
+      if (chosen.size > (chosen.type === 'application/pdf' ? 1_000_000 : 3_000_000)) {
+        msg.textContent = chosen.type === 'application/pdf' ? 'A patta PDF is under 1 MB; that file is too large to be one.' : 'That photo is larger than 3 MB.';
         return;
       }
       send.disabled = true;
@@ -1327,7 +1327,7 @@ import '../../styles/global.css';
     });
     dlg.append(
       h('h3', '', 'Upload a land document'),
-      h('p', '', 'Use the PDF downloaded from eservices.tn.gov.in; it can be read automatically. A photo or scan is checked by the core team instead. Maximum 4.5 MB.'),
+      h('p', '', 'Use the PDF downloaded from eservices.tn.gov.in; it can be read automatically. A photo or scan is checked by the core team instead. Limits: PDF 1 MB, photo 3 MB.'),
       h('label', '', 'This document is for', type),
       h('label', '', 'File', file),
       msg,

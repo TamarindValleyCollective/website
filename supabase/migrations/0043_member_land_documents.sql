@@ -8,10 +8,11 @@
 -- NOT auto-applied: apply to the "TVC ERP" project before deploying anything that
 -- reads these columns (the portal's home query selects them and would fail).
 --
--- Privacy: land records are PII. The files live in a PRIVATE storage bucket and, like
+-- Privacy: land records are PII. The files live in a PRIVATE Cloudflare R2 bucket (not in Supabase;
+-- see netlify/functions/lib/land-doc-storage.ts) and, like
 -- every member_* table, are reachable only from Netlify Functions with the service_role
--- key (RLS on, no policies, anon/authenticated revoked). Nothing is ever returned as a
--- public URL; staff and the owning member get a short-lived signed link from a function.
+-- key (RLS on, no policies, anon/authenticated revoked). `storage_path` is the R2 object key.
+-- Nothing is ever returned as a public URL; staff get a 60-second signed link from a function.
 
 create table member_land_documents (
   id uuid primary key default gen_random_uuid(),
@@ -58,9 +59,3 @@ alter table member_house_pattas
 
 alter table member_land_documents enable row level security;
 revoke all on member_land_documents from anon, authenticated;
-
--- Private bucket for the files. 5 MB cap and PDF/JPEG/PNG only, enforced by storage itself
--- as well as by the upload function.
-insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('member-land-documents', 'member-land-documents', false, 5242880, array['application/pdf', 'image/jpeg', 'image/png'])
-on conflict (id) do nothing;

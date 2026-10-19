@@ -100,6 +100,12 @@ already in the register or create a pending one for the core team. Decisions:
   staff can open any document and the audit log records what was applied.
 - **A-Register owner names are not readable** (damaged Tamil text), so a farm record verifies on
   survey/patta/area. A new entry is always held for the core team regardless.
+- **Files live in a private Cloudflare R2 bucket**, not Supabase: they are rarely opened, R2 has 10 GB
+  free and no download fees, and it keeps them off the Supabase free-tier quota. All access is through
+  `land-doc-storage.ts`, so the store can change. The privacy notice (version 2) names Cloudflare.
+- **Limits:** PDF 1 MB, photo 3 MB, 20 MB per household, 10 uploads a day. A PDF that isn't one of the
+  two e-Services layouts is refused at upload and never stored, so unrelated large or junk files
+  can't accumulate or reach the staff queue; only photos/scans (which can't be read) do.
 - Verified rows carry `verification`, `verification_source` and the source document; a core team
   approval of a mismatch replaces the register's values with the document's.
 

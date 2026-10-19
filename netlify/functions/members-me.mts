@@ -21,11 +21,13 @@
 // notice version: no household data is released, and /profile refuses. Every self-service change is written to
 // member_audit_log BEFORE it is applied, and refused if that write fails.
 import { requireMember } from './lib/member-access';
+import { deleteLandDocument, putLandDocument } from './lib/land-doc-storage';
+import { readLandPdf } from './lib/land-doc-read';
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { buildHouseholdReview } from '../../scripts/lib/member-review.mjs';
 import { validateProfileEdit, profileAuditDetail } from '../../scripts/lib/member-profile.mjs';
 import { PRIVACY_NOTICE_VERSION, privacyNoticeRequired, validateAcceptance } from '../../scripts/lib/member-privacy.mjs';
-import { ALLOWED_MIME, LAND_TYPES, MAX_FILE_BYTES, MAX_UPLOADS_PER_DAY, memberSummary } from '../../scripts/lib/member-land-docs.mjs';
+import { ALLOWED_MIME, LAND_TYPES, MAX_HOUSEHOLD_BYTES, MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_UPLOADS_PER_DAY, NOT_A_LAND_PDF, memberSummary } from '../../scripts/lib/member-land-docs.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store, private' } });
@@ -171,7 +173,6 @@ async function handlePrivacy(req: Request): Promise<Response> {
 
 // ---- land documents ---------------------------------------------------------
 
-const BUCKET = 'member-land-documents';
 // A document still 'processing' after this long is shown as failed and no longer blocks a re-upload.
 const STALE_PROCESSING_MS = 20 * 60 * 1000;
 
@@ -229,15 +230,24 @@ async function handleLandDocuments(req: Request): Promise<Response> {
   if (!LAND_TYPES.includes(landType)) return jsonResponse({ error: 'Say whether this is for your farm land or your house plot.' }, 400);
   // Only their own households: the id came from the request, so it is checked against the session.
   if (!member.householdIds.includes(householdId)) return jsonResponse({ error: 'Choose which unit this is for.' }, 400);
-  if (file.size > MAX_FILE_BYTES) return jsonResponse({ error: `That file is too large. The limit is ${Math.floor(MAX_FILE_BYTES / 1_000_000 * 10) / 10} MB.` }, 413);
+  // Refuse the biggest files before reading them. Anything over the larger limit can't be a land document.
+  if (file.size > MAX_IMAGE_BYTES) return jsonResponse({ error: 'That file is too large. A patta PDF is under 1 MB and a photo under 3 MB.' }, 413);
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   const mime = sniffMime(bytes);
   if (!mime || !ALLOWED_MIME.includes(mime)) return jsonResponse({ error: 'Upload a PDF (best), or a JPEG or PNG photo.' }, 415);
+  if (mime === 'application/pdf' && file.size > MAX_PDF_BYTES) return jsonResponse({ error: NOT_A_LAND_PDF }, 413);
+  // A PDF must match one of the two e-Services layouts. The reader is local and takes milliseconds,
+  // so anything else is refused here and never stored. Photos and scans can't be read; they are kept
+  // for the core team.
+  if (mime === 'application/pdf' && !(await readLandPdf(bytes))) return jsonResponse({ error: NOT_A_LAND_PDF }, 422);
   const sha256 = hex(await crypto.subtle.digest('SHA-256', bytes));
 
   try {
-    const recent = await select('member_land_documents', 'id,sha256,status,created_at', `household_id=eq.${householdId}&created_at=gte.${encodeURIComponent(new Date(Date.now() - 24 * 3600 * 1000).toISOString())}`);
+    const all = await select('member_land_documents', 'id,sha256,status,created_at,size_bytes', `household_id=eq.${householdId}`);
+    const recent = all.filter((d: any) => Date.parse(d.created_at) > Date.now() - 24 * 3600 * 1000);
+    const storedBytes = all.filter((d: any) => d.status !== 'failed').reduce((n: number, d: any) => n + (d.size_bytes ?? 0), 0);
+    if (storedBytes + file.size > MAX_HOUSEHOLD_BYTES) return jsonResponse({ error: 'Your unit has reached its document storage limit. Please ask the core team.' }, 413);
     if (recent.length >= MAX_UPLOADS_PER_DAY) return jsonResponse({ error: 'You have uploaded a lot of documents today. Please try again tomorrow, or ask the core team.' }, 429);
     const same = recent.find((d: any) => d.sha256 === sha256 && d.status !== 'failed' && !(d.status === 'processing' && Date.now() - Date.parse(d.created_at) > STALE_PROCESSING_MS));
     if (same) return jsonResponse({ ok: true, duplicate: true, documentId: same.id });
@@ -256,13 +266,10 @@ async function handleLandDocuments(req: Request): Promise<Response> {
       return jsonResponse({ error: 'Could not record the upload, so nothing was saved. Try again.' }, 500);
     }
 
-    const stored = await fetch(`${supabaseUrl()}/storage/v1/object/${BUCKET}/${storagePath}`, {
-      method: 'POST',
-      headers: restHeaders({ 'content-type': mime, 'x-upsert': 'false' }),
-      body: bytes,
-    });
-    if (!stored.ok) {
-      console.error('[members-me] storage upload failed', stored.status);
+    try {
+      await putLandDocument(storagePath, bytes, mime);
+    } catch (err) {
+      console.error('[members-me] storage upload failed', err);
       return jsonResponse({ error: 'Server error' }, 500);
     }
     const inserted = await fetch(`${supabaseUrl()}/rest/v1/member_land_documents`, {
@@ -282,6 +289,7 @@ async function handleLandDocuments(req: Request): Promise<Response> {
     });
     if (!inserted.ok) {
       console.error('[members-me] land document insert failed', inserted.status);
+      await deleteLandDocument(storagePath).catch(() => null); // don't leave a file with no record
       return jsonResponse({ error: 'Server error' }, 500);
     }
 

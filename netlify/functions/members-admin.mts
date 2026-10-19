@@ -31,6 +31,7 @@ import { roleHasCapability } from './lib/staff-registry';
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { buildHouseholdReview, reviewTotals } from '../../scripts/lib/member-review.mjs';
 import { ACTION_CAPABILITY, auditDetail, validateEdit } from '../../scripts/lib/member-edit.mjs';
+import { signedLandDocumentUrl } from './lib/land-doc-storage';
 import { approvalColumns, documentStatus } from '../../scripts/lib/member-land-docs.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -307,14 +308,7 @@ async function handleLandDocumentLink(req: Request): Promise<Response> {
     const [doc] = await select('member_land_documents', 'storage_path', `&${eq('id', documentId)}`);
     if (!doc) return jsonResponse({ error: "That document doesn't exist any more." }, 404);
     await logStaffAction({ actorId: auth.staff.id, action: 'members.landdoc.view', module: 'members', detail: { ids: { documentId } } });
-    const res = await fetch(`${supabaseUrl()}/storage/v1/object/sign/member-land-documents/${doc.storage_path}`, {
-      method: 'POST',
-      headers: restHeaders(),
-      body: JSON.stringify({ expiresIn: 60 }),
-    });
-    if (!res.ok) throw new Error(`sign failed: ${res.status}`);
-    const { signedURL } = await res.json();
-    return jsonResponse({ url: `${supabaseUrl()}/storage/v1${signedURL}` });
+    return jsonResponse({ url: await signedLandDocumentUrl(doc.storage_path, 60) });
   } catch (err) {
     console.error('[members-admin] land document link failed', err);
     return jsonResponse({ error: 'Server error' }, 500);

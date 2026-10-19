@@ -23,7 +23,13 @@
 // "தீர்வை" (assessment, in rupees) column. 0.0288 ha = 3,100 sq ft, which is the usual
 // TVC house plot.
 
-export const MAX_FILE_BYTES = 4_500_000; // Netlify's request limit is 6 MB; leave room for the form
+// A real patta / chitta PDF is 50-130 KB, so a PDF over 1 MB is not one. Photos and scans are
+// larger, and are only ever read by a person.
+export const MAX_PDF_BYTES = 1_000_000;
+export const MAX_IMAGE_BYTES = 3_000_000;
+// Everything a household has stored (replaced or removed files don't count).
+export const MAX_HOUSEHOLD_BYTES = 20_000_000;
+export const NOT_A_LAND_PDF = "That PDF doesn't look like a patta or chitta from eservices.tn.gov.in, so we haven't kept it. Download the original from eservices.tn.gov.in and upload that. If you only have a paper copy, upload a clear photo of it instead.";
 export const ALLOWED_MIME = ['application/pdf', 'image/jpeg', 'image/png'];
 export const LAND_TYPES = ['farm', 'house'];
 export const MAX_UPLOADS_PER_DAY = 10; // per household, to bound the cost of reading files

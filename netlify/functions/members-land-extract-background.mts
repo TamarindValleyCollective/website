@@ -20,9 +20,9 @@
 // counts only, never names or land numbers.
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { readLandPdf } from './lib/land-doc-read';
+import { getLandDocument } from './lib/land-doc-storage';
 import { documentStatus, newRecordColumns, normalizeExtraction, reconcile } from '../../scripts/lib/member-land-docs.mjs';
 
-const BUCKET = 'member-land-documents';
 const TABLES = { farm: 'member_plots', house: 'member_house_pattas' } as const;
 
 const supabaseUrl = () => {
@@ -76,13 +76,14 @@ export default async (req: Request): Promise<Response> => {
     const landType: 'farm' | 'house' = doc.land_type;
     const table = TABLES[landType];
 
-    const file = await fetch(`${supabaseUrl()}/storage/v1/object/${BUCKET}/${doc.storage_path}`, { headers: restHeaders() });
-    if (!file.ok) {
-      console.error('[land-extract] could not fetch the stored file', file.status);
+    const bytes = await getLandDocument(doc.storage_path).catch((err) => {
+      console.error('[land-extract] could not fetch the stored file', err);
+      return null;
+    });
+    if (!bytes) {
       await fail(documentId, "We couldn't open the file you uploaded. Please upload it again.");
       return new Response('ok');
     }
-    const bytes = new Uint8Array(await file.arrayBuffer());
 
     // Only a PDF can be read by the template. Anything else, or a PDF that matches no template,
     // is handed to the core team with the file attached (no items, status needs_review).
