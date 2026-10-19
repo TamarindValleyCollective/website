@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseLandPdfText, areaFromHaAres, normalizeExtraction, normalizeSurveyNo, namesMatch, reconcile, documentStatus,
-  newRecordColumns, approvalColumns, memberSummary,
+  newRecordColumns, approvalColumns, memberSummary, documentsReplacedBy, surveyKey,
 } from './member-land-docs.mjs';
 
 const raw = (over = {}) => ({
@@ -211,4 +211,39 @@ test('reads a chitta with scrambled Tamil: patta from the reference, three rows,
 
 test('a chitta whose rows do not add up to its printed total is not trusted', () => {
   assert.equal(parseLandPdfText([phoneChitta[0].replace('0 - 27.09 1.21', '0 - 99.99 1.21')]), null);
+});
+
+// ---- replacing an earlier upload ----
+const doc = (over) => ({ id: 'd', sha256: 'aaa', land_type: 'farm', status: 'applied', created_at: new Date().toISOString(), extracted: { records: [{ surveyNo: '450/5B' }] }, ...over });
+
+test('surveyKey is the same for the same survey numbers in any order, and null for none', () => {
+  assert.equal(surveyKey({ records: [{ surveyNo: '450/5B' }, { surveyNo: '450/3C' }] }), surveyKey({ records: [{ surveyNo: '450/3C' }, { surveyNo: '450/5B' }] }));
+  assert.equal(surveyKey({ records: [{ surveyNo: '450/5B' }] }), '450/5B');
+  assert.equal(surveyKey({ records: [] }), null);
+  assert.equal(surveyKey(null), null);
+});
+
+test('an upload replaces the same file, or the same survey numbers for the same kind of land', () => {
+  const ids = (existing, over = {}) => documentsReplacedBy({ sha256: 'bbb', landType: 'farm', key: '450/5B', existing, ...over }).map((d) => d.id);
+  assert.deepEqual(ids([doc({ id: 'again' })]), ['again'], 'a fresh download of the same extract has a different hash but the same survey numbers');
+  assert.deepEqual(ids([doc({ id: 'same-file', sha256: 'bbb', extracted: null })]), ['same-file'], 'the identical file, even if it was never read');
+  assert.deepEqual(ids([doc({ id: 'same-file-other-type', sha256: 'bbb', land_type: 'house' })]), ['same-file-other-type'], 'uploaded again under the other land type: the first was a mistake');
+  assert.deepEqual(ids([doc({ id: 'other-survey', extracted: { records: [{ surveyNo: '471/2A' }] } })]), [], 'a different survey number is a different document');
+  assert.deepEqual(ids([doc({ id: 'other-type', land_type: 'house' })]), [], 'same survey numbers but another kind of land is not replaced');
+  assert.deepEqual(ids([doc({ id: 'multi', extracted: { records: [{ surveyNo: '450/5B' }, { surveyNo: '450/3C' }] } })]), [], 'a multi-survey patta is not the single-survey one');
+});
+
+test('a document still being read is left alone, unless it is stale; a photo with no reading matches by file only', () => {
+  const fresh = doc({ id: 'busy', status: 'processing', created_at: new Date().toISOString() });
+  const stale = doc({ id: 'stuck', status: 'processing', created_at: new Date(Date.now() - 3600_000).toISOString() });
+  assert.deepEqual(documentsReplacedBy({ sha256: 'bbb', landType: 'farm', key: '450/5B', existing: [fresh, stale] }).map((d) => d.id), ['stuck']);
+  assert.deepEqual(documentsReplacedBy({ sha256: 'bbb', landType: 'farm', key: null, existing: [doc({ id: 'x' })] }), [], 'no survey numbers to compare');
+});
+
+test('uploading the same document again does not verify a record still waiting for the core team', () => {
+  const extraction = { owners: [], records: [{ surveyNo: '450/5B', pattaNo: '1954', areaHectares: 0.004, areaAcres: 0.01, areaSqFt: null, referenceNo: null }], village: null };
+  const base = { extraction, landType: 'farm', household: { peopleNames: [] }, heldElsewhere: new Set(), autoVerify: true };
+  const row = (verification) => ({ id: 'r', survey_no: '450/5B', patta_no: '1954', area_hectares: 0.004, area_acres: 0.01, verification });
+  assert.equal(reconcile({ ...base, existing: [row('unverified')] })[0].outcome, 'verified');
+  assert.equal(reconcile({ ...base, existing: [row('pending_review')] })[0].outcome, 'check');
 });

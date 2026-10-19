@@ -168,6 +168,29 @@ export function normalizeExtraction(raw) {
   };
 }
 
+// ---- replacing an earlier upload --------------------------------------------
+
+// The survey numbers a reading covers, as one comparable string ("450/5B" or "450/3C|450/5B").
+// extraction: normalizeExtraction().extraction, or a document's stored `extracted`.
+export function surveyKey(extraction) {
+  const nos = (extraction?.records ?? []).map((r) => r?.surveyNo).filter(Boolean);
+  return nos.length ? [...new Set(nos)].sort().join('|') : null;
+}
+
+// A new upload replaces the household's earlier documents that it duplicates: the very same file,
+// or one for the same survey numbers and the same kind of land (a fresh download of the same
+// extract is a different file, since e-Services prints the time on it). The old file, its outline
+// and its row are removed, and the new one is read as if it were a first upload. A document
+// still being read is left alone (the reader is working on it).
+//   existing: this household's rows { id, sha256, land_type, status, created_at, extracted }
+export function documentsReplacedBy({ sha256, landType, key, existing, now = Date.now(), staleMs = 10 * 60 * 1000 }) {
+  return existing.filter((d) => {
+    if (d.status === 'processing' && now - Date.parse(d.created_at) <= staleMs) return false;
+    if (d.sha256 === sha256) return true;
+    return Boolean(key) && d.land_type === landType && surveyKey(d.extracted) === key;
+  });
+}
+
 // ---- names -------------------------------------------------------------------
 
 const nameTokens = (name) => clean(name).toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter((t) => t.length > 1);
@@ -270,7 +293,9 @@ export function reconcile({ extraction, landType, household, existing, heldElsew
 
     return {
       ...base,
-      outcome: differences.length > 0 ? 'mismatch' : autoVerify ? 'verified' : 'check',
+      // A record the member added from a document is waiting for the core team: uploading the
+      // same document again must not be a way to verify it.
+      outcome: differences.length > 0 ? 'mismatch' : autoVerify && match.verification !== 'pending_review' ? 'verified' : 'check',
       recordId: match.id,
       differences,
       fill,
