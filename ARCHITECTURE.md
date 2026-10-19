@@ -1473,9 +1473,11 @@ never touches Netlify either.
   document it came from, in both the member portal and the staff register. A single-survey
   Integrated Land Record carries a field sketch ("புலப்படம்") on page 2 as a small bitmap (a
   multi-survey patta has none). The background reader pulls it out (`readLandShape`, `unpdf`
-  `extractImages`) and `scripts/lib/land-shape.mjs` keeps only the long thin black strokes, dropping
-  the neighbours' survey numbers and the red/blue labels, as a transparent label-free PNG stored
-  beside the file in R2 (`<document>-shape.png`, flagged by `extracted.hasShape`). It is served as
+  `extractImages`) and `scripts/lib/land-shape.mjs` rebuilds the parcel as a closed polygon: it finds the long
+  solid straight black lines (a Hough transform, so labels touching the outline don't hide it; red/blue
+  labels and dimensions are ignored by colour), works out where they cross, drops every stretch that
+  runs past a corner or isn't part of a closed loop, and redraws what is left as a transparent,
+  label-free PNG, stored beside the file in R2 (`<document>-shape.png`, flagged by `extracted.hasShape`). It is served as
   data URLs by `GET /api/members-me/land-shapes` and `GET /api/members-admin/land-shapes`.
   Documents uploaded before outlines existed are caught up lazily: those two endpoints first run
   `lib/land-shape-backfill.ts` on up to three single-survey PDFs with no `hasShape` / `shapeChecked`
