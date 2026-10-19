@@ -577,8 +577,8 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   type Flag = { kind: string; severity: 'error' | 'warn' | 'info'; text: string };
   type Person = { id: string; name: string; role: string; canLogin: boolean; hasEmail: boolean; hasPhone: boolean };
-  type Plot = { id: string; pattaNo: string | null; referenceNo: string | null; surveyNo: string | null; areaHectares: number | null; areaAcres: number | null; settlement: string | null };
-  type HousePatta = { id: string; pattaNo: string | null; referenceNo: string | null; surveyNo: string | null; areaSqFt: number | null; settlement: string | null };
+  type Plot = { id: string; pattaNo: string | null; referenceNo: string | null; surveyNo: string | null; areaHectares: number | null; areaAcres: number | null; settlement: string | null; verification: string };
+  type HousePatta = { id: string; pattaNo: string | null; referenceNo: string | null; surveyNo: string | null; areaSqFt: number | null; settlement: string | null; verification: string };
   type Household = { id: string; farmUnit: string; houseNo: string | null; cluster: string | null; unitType: string | null; people: Person[]; plots: Plot[]; housePattas: HousePatta[]; flags: Flag[]; farmAcres: number; farmHectares: number; houseSqFt: number; plotsMissingArea: number; housePattasMissingArea: number };
   type Totals = { households: number; people: number; peopleWithEmail: number; farmPlots: number; householdsNeedingAttention: number; farmAcres: number; farmHectares: number; houseSqFt: number };
 
@@ -701,6 +701,8 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     placeholder?: string;
     hint?: string;
   };
+
+  const VERIFY: Record<string, string> = { verified: 'Verified', pending_review: 'Awaiting review', unverified: 'Not verified' };
 
   async function send(body: Record<string, unknown>): Promise<void> {
     try {
@@ -1044,8 +1046,8 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
         ? pivot(
             `${plural(hh.plots.length, 'plot')} · ${acres(hh.farmAcres)} (${acresFmt.format(hh.farmHectares)} ha)${hh.plotsMissingArea ? ` · ${plural(hh.plotsMissingArea, 'plot')} without an area yet` : ''}`,
             table(
-              ['Patta no.', 'Reference', 'Survey no.', 'Hectares', 'Acres', 'Settlement', ...(can.manage ? [''] : [])],
-              hh.plots.map((p) => [p.pattaNo, p.referenceNo, p.surveyNo, p.areaHectares, p.areaAcres, p.settlement, ...(can.manage ? [rowButton('Edit', () => plotSlot.replaceChildren(landForm('plot', hh, p, plotSlot)))] : [])]),
+              ['Patta no.', 'Reference', 'Survey no.', 'Hectares', 'Acres', 'Settlement', 'Status', ...(can.manage ? [''] : [])],
+              hh.plots.map((p) => [p.pattaNo, p.referenceNo, p.surveyNo, p.areaHectares, p.areaAcres, p.settlement, VERIFY[p.verification] ?? p.verification, ...(can.manage ? [rowButton('Edit', () => plotSlot.replaceChildren(landForm('plot', hh, p, plotSlot)))] : [])]),
             ),
           )
         : h('p', { class: 'muted', text: 'Not available yet' }),
@@ -1061,15 +1063,95 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
         ? pivot(
             `${plural(hh.housePattas.length, 'record')} · ${sqft(hh.houseSqFt)} (${acres(sqftAsAcres(hh.houseSqFt))})${hh.housePattasMissingArea ? ` · ${plural(hh.housePattasMissingArea, 'record')} without an area yet` : ''}`,
             table(
-              ['Patta no.', 'Reference', 'Survey no.', 'Sq ft', 'Settlement', ...(can.manage ? [''] : [])],
-              hh.housePattas.map((p) => [p.pattaNo, p.referenceNo, p.surveyNo, p.areaSqFt, p.settlement, ...(can.manage ? [rowButton('Edit', () => houseSlot.replaceChildren(landForm('housepatta', hh, p, houseSlot)))] : [])]),
+              ['Patta no.', 'Reference', 'Survey no.', 'Sq ft', 'Settlement', 'Status', ...(can.manage ? [''] : [])],
+              hh.housePattas.map((p) => [p.pattaNo, p.referenceNo, p.surveyNo, p.areaSqFt, p.settlement, VERIFY[p.verification] ?? p.verification, ...(can.manage ? [rowButton('Edit', () => houseSlot.replaceChildren(landForm('housepatta', hh, p, houseSlot)))] : [])]),
             ),
           )
         : h('p', { class: 'muted', text: hh.houseNo ? 'Not available yet' : 'No house' }),
       houseSlot,
       can.manage ? rowButton('Add a house patta record', () => houseSlot.replaceChildren(landForm('housepatta', hh, null, houseSlot))) : null,
     );
+    // Land documents uploaded by the household's members (read in the background; see
+    // members-land-extract-background.mts). New records and disagreements wait here.
+    const docsSlot = h('div', {}, h('p', { class: 'muted', text: 'Loading…' }));
+    section('Land documents', docsSlot);
+    void loadLandDocuments(hh, docsSlot);
     if (!detail.open) detail.showModal();
+  }
+
+  type LandItem = { surveyNo: string; pattaNo: string | null; outcome: string; differences: { field: string; recorded: string; document: string }[]; ownerMatch: boolean | null; decision?: string };
+  type LandDocument = { id: string; landType: string; fileName: string | null; mimeType: string; status: string; error: string | null; uploadedAt: string; items: LandItem[] };
+  const OUTCOME: Record<string, string> = {
+    verified: 'Matched the register and was verified automatically.',
+    pending: 'Not in the register: added as a pending record.',
+    check: 'Matches the register, but a photo or scan cannot verify it on its own.',
+    mismatch: 'Disagrees with the register.',
+    conflict: 'This survey number is already on another household’s record; nothing was added.',
+  };
+
+  async function loadLandDocuments(hh: Household, slot: HTMLElement) {
+    try {
+      const { status, data } = await staffFetch(`/api/members-admin/land-documents?householdId=${encodeURIComponent(hh.id)}`);
+      if (status !== 200) throw new Error(data.error || 'Could not load.');
+      const docs: LandDocument[] = data.documents;
+      if (docs.length === 0) return slot.replaceChildren(h('p', { class: 'muted', text: 'Nothing uploaded.' }));
+      const report = (m: string) => {
+        slot.querySelector('.form-msg')?.remove();
+        slot.prepend(h('p', { class: 'form-msg', text: m, attrs: { role: 'alert' } }));
+      };
+      slot.replaceChildren(
+        ...docs.map((d) => {
+          const waiting = d.items.some((i) => ['pending', 'mismatch', 'check', 'conflict'].includes(i.outcome) && !i.decision);
+          const view = can.manage
+            ? rowButton('View file', async () => {
+                try {
+                  const res = await staffFetch('/api/members-admin/land-document-link', { method: 'POST', body: { documentId: d.id } });
+                  if (res.status !== 200) throw new Error(res.data.error || 'Could not open the file.');
+                  window.open(res.data.url, '_blank', 'noopener');
+                } catch (err) {
+                  report(err instanceof Error ? err.message : 'Something went wrong.');
+                }
+              })
+            : null;
+          const decide = (action: 'landdoc.approve' | 'landdoc.reject', itemIndex: number) => async () => {
+            try {
+              await send({ action, documentId: d.id, itemIndex });
+              await refreshAfterEdit(action === 'landdoc.approve' ? 'Approved and verified.' : 'Rejected.');
+            } catch (err) {
+              report(err instanceof Error ? err.message : 'Something went wrong.');
+            }
+          };
+          return h(
+            'div',
+            { class: 'landdoc' },
+            h('p', { class: 'meta', text: `${d.landType === 'house' ? 'House plot' : 'Farm land'} · ${new Date(d.uploadedAt).toLocaleDateString('en-IN')} · ${d.mimeType === 'application/pdf' ? 'PDF' : 'photo'} · ${waiting ? 'waiting for review' : d.status}` }, view),
+            d.status === 'failed' ? h('p', { class: 'muted', text: d.error ?? 'Could not be used.' }) : null,
+            d.status === 'processing' ? h('p', { class: 'muted', text: 'Still being read.' }) : null,
+            d.status === 'needs_review' && d.items.length === 0
+              ? h('p', { class: 'muted', text: 'Could not be read automatically (not a PDF from eservices.tn.gov.in, or a layout we do not recognise). Check the file and add the record above by hand.' })
+              : null,
+            ...d.items.map((i, idx) =>
+              h(
+                'p',
+                { class: 'landitem' },
+                h('strong', { text: `Survey ${i.surveyNo}${i.pattaNo ? ` · patta ${i.pattaNo}` : ''}` }),
+                ` — ${i.decision ? `${i.decision} by the core team` : OUTCOME[i.outcome] ?? i.outcome}`,
+                i.ownerMatch === false ? ' Owners named on the document do not match anyone in this household.' : null,
+                i.ownerMatch === null && i.outcome === 'pending' ? ' Owner names could not be read: check them in the file.' : null,
+                ...i.differences.filter((x) => x.field !== 'owners').map((x) => h('span', { class: 'muted', text: ` Register: ${x.recorded}; document: ${x.document}.` })),
+                can.manage && !i.decision && ['pending', 'mismatch', 'check'].includes(i.outcome)
+                  ? h('span', { class: 'rowbtns' }, rowButton(i.outcome === 'mismatch' ? 'Use document values and verify' : 'Approve', decide('landdoc.approve', idx)), rowButton(i.outcome === 'pending' ? 'Reject and remove' : 'Reject', decide('landdoc.reject', idx)))
+                  : can.manage && !i.decision && i.outcome === 'conflict'
+                    ? h('span', { class: 'rowbtns' }, rowButton('Dismiss', decide('landdoc.reject', idx)))
+                    : null,
+              ),
+            ),
+          );
+        }),
+      );
+    } catch (err) {
+      slot.replaceChildren(h('p', { class: 'form-msg', text: err instanceof Error ? err.message : 'Could not load documents.' }));
+    }
   }
   $('detail-close').addEventListener('click', () => detail.close());
   // Clicking the dimmed area outside the dialog closes it.

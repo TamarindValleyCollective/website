@@ -85,6 +85,24 @@ Join key is the unit number `F-xx` from Member Master (it matches the vault). Th
 4. Own-stay booking + notifications + event-clash flag + guest pricing.
 5. Pilot with 5-6 members, then everyone.
 
+### Land documents (built 2026-10-19, ahead of step 2's change requests)
+
+Members upload their patta / land survey PDF; the details are read and either verify the record
+already in the register or create a pending one for the core team. Decisions:
+
+- **Template, not AI.** The two e-Services layouts (Integrated Land Record, chitta) are
+  machine-generated and parse deterministically with `unpdf`; nothing is sent to a third party and the
+  privacy notice needed no change. Anything unrecognised (scans, photos, sale deeds, encumbrance
+  certificates) goes to the core team untouched.
+- **What "verified" means:** the register's survey no. (and patta no. / area / owners where the
+  document gives them) agree with a government extract the member uploaded. It is *not* checked
+  against the e-Services server (the reference number on the page can be verified there by hand), so
+  staff can open any document and the audit log records what was applied.
+- **A-Register owner names are not readable** (damaged Tamil text), so a farm record verifies on
+  survey/patta/area. A new entry is always held for the core team regardless.
+- Verified rows carry `verification`, `verification_source` and the source document; a core team
+  approval of a mismatch replaces the register's values with the document's.
+
 Out of scope for v1: announcements, documents library, maintenance requests, polls, children as users, payment auto-matching, other languages.
 
 ## Open items

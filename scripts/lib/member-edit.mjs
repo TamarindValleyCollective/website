@@ -26,6 +26,8 @@ export const ACTION_CAPABILITY = {
   'housepatta.create': 'manage',
   'housepatta.update': 'manage',
   'housepatta.delete': 'manage',
+  'landdoc.approve': 'manage',
+  'landdoc.reject': 'manage',
 };
 
 export const CLUSTERS = ['H1-A', 'H1-B', 'H2'];
@@ -230,6 +232,16 @@ export function validateEdit(body) {
       if (c.error) return fail(c.error);
       if (Object.keys(c.values).length === 0) return fail(create ? 'Enter at least one detail.' : 'Nothing to change.');
       return ok({ action, [key]: target.value, ...c.values });
+    }
+
+    // The core team's decision on one record read from an uploaded land document.
+    case 'landdoc.approve':
+    case 'landdoc.reject': {
+      const documentId = id(body, 'documentId');
+      if (documentId.error) return fail(documentId.error);
+      const itemIndex = body.itemIndex;
+      if (!Number.isInteger(itemIndex) || itemIndex < 0 || itemIndex > 11) return fail('itemIndex is missing or not valid.');
+      return ok({ action, documentId: documentId.value, itemIndex });
     }
 
     case 'plot.delete': {

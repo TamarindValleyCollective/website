@@ -49,6 +49,7 @@ export function buildHouseholdReview({ households, people, memberships, plots, h
         areaHectares: num(p.area_hectares),
         areaAcres: num(p.area_acres),
         settlement: p.settlement,
+        verification: p.verification ?? 'unverified',
       })),
       housePattas: (housePattasByHousehold.get(h.id) ?? []).map((p) => ({
         id: p.id,
@@ -57,6 +58,7 @@ export function buildHouseholdReview({ households, people, memberships, plots, h
         surveyNo: p.survey_no,
         areaSqFt: num(p.area_sq_ft),
         settlement: p.settlement,
+        verification: p.verification ?? 'unverified',
       })),
       flags: [],
     };

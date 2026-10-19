@@ -1442,6 +1442,27 @@ never touches Netlify either.
   (audit-logged first, `member.privacy.accept`). Raising `PRIVACY_NOTICE_VERSION` asks everyone again.
   Apple sign-in and the invitation email are not built yet.
 
+  **Land documents** (migration 0043, not auto-applied): a member uploads the patta / land survey
+  PDF they downloaded from eservices.tn.gov.in (`POST /api/members-me/land-documents`, multipart,
+  4.5 MB, PDF/JPEG/PNG sniffed from the bytes, 10 per household per day). `members-me.mts` writes
+  the audit row first, stores the file in the **private** Supabase Storage bucket
+  `member-land-documents` and a `member_land_documents` row, then calls the background function
+  `members-land-extract-background.mts`. That reads the PDF with a **fixed template**
+  (`netlify/functions/lib/land-doc-read.ts`, `unpdf` + `parseLandPdfText` in
+  `scripts/lib/member-land-docs.mjs`) for the two e-Services layouts, the Integrated Land Record
+  (A-Register) and the chitta. No AI service is involved and the file never leaves Supabase and
+  Netlify; photos, scans and unrecognised layouts are not guessed at and go to the core team with
+  the file attached. Fixed rules then reconcile it with the register: a record the register
+  already holds whose survey number agrees (and patta number / area / owners where readable) is
+  marked `verified` (blanks filled, nothing overwritten); a survey number with no entry becomes a
+  `pending_review` record; a disagreement, a photo/scan, or a survey number held by another
+  household changes nothing and waits. Staff see waiting documents as a flag on the household in
+  `/internal/members`, open the file through a 60-second signed link
+  (`POST /api/members-admin/land-document-link`, `manage` role, logged), and approve or reject each
+  record (`landdoc.approve` / `landdoc.reject` through `/api/members-admin/edit`, audit-first).
+  Owner names are readable only on a chitta; on an A-Register they are damaged Tamil text, so
+  those verify on survey/patta/area alone and "owners unknown" never auto-creates anything.
+
 ## Current Production Status
 
 **tvc.farm is live on this codebase**, verified directly against the production site:

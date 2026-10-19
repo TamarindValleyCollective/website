@@ -4,6 +4,8 @@
 //   GET  /api/members-me/home     their household(s) and their own details
 //   POST /api/members-me/profile  change their mobile number / directory listing
 //   POST /api/members-me/privacy  acknowledge the first-login privacy notice
+//   GET  /api/members-me/land-documents  their uploaded patta / survey documents and what became of them
+//   POST /api/members-me/land-documents  upload one (multipart: file, landType, householdId); read in the background
 //
 // The privacy boundary is requireMember (lib/member-access.ts): a member is only
 // ever mapped to the households they are invited to, and every query below is
@@ -23,6 +25,7 @@ import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { buildHouseholdReview } from '../../scripts/lib/member-review.mjs';
 import { validateProfileEdit, profileAuditDetail } from '../../scripts/lib/member-profile.mjs';
 import { PRIVACY_NOTICE_VERSION, privacyNoticeRequired, validateAcceptance } from '../../scripts/lib/member-privacy.mjs';
+import { ALLOWED_MIME, LAND_TYPES, MAX_FILE_BYTES, MAX_UPLOADS_PER_DAY, memberSummary } from '../../scripts/lib/member-land-docs.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store, private' } });
@@ -59,8 +62,8 @@ async function handleHome(req: Request): Promise<Response> {
     const [households, memberships, plots, housePattas, notes] = await Promise.all([
       select('member_households', 'id,farm_unit,house_no,cluster,unit_type', `id=in.${hh}`),
       select('member_household_members', 'household_id,person_id,role,can_login', `household_id=in.${hh}`),
-      select('member_plots', 'id,household_id,patta_no,reference_no,survey_no,area_hectares,area_acres,settlement', `household_id=in.${hh}`),
-      select('member_house_pattas', 'id,household_id,patta_no,reference_no,survey_no,area_sq_ft,settlement', `household_id=in.${hh}`),
+      select('member_plots', 'id,household_id,patta_no,reference_no,survey_no,area_hectares,area_acres,settlement,verification', `household_id=in.${hh}`),
+      select('member_house_pattas', 'id,household_id,patta_no,reference_no,survey_no,area_sq_ft,settlement,verification', `household_id=in.${hh}`),
       select('member_household_notes', 'household_id,kind', `household_id=in.${hh}`),
     ]);
     const personIds = [...new Set(memberships.map((m: any) => m.person_id))];
@@ -166,12 +169,145 @@ async function handlePrivacy(req: Request): Promise<Response> {
   return jsonResponse({ ok: true });
 }
 
+// ---- land documents ---------------------------------------------------------
+
+const BUCKET = 'member-land-documents';
+// A document still 'processing' after this long is shown as failed and no longer blocks a re-upload.
+const STALE_PROCESSING_MS = 20 * 60 * 1000;
+
+// What the file really is, from its first bytes, never from the name or the browser's claim.
+function sniffMime(b: Uint8Array): string | null {
+  if (b.length > 5 && b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46 && b[4] === 0x2d) return 'application/pdf';
+  if (b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
+  if (b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png';
+  return null;
+}
+
+const hex = (buf: ArrayBuffer) => [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, '0')).join('');
+
+function documentView(d: any) {
+  const stale = d.status === 'processing' && Date.now() - Date.parse(d.created_at) > STALE_PROCESSING_MS;
+  const status = stale ? 'failed' : d.status;
+  const error = stale ? 'This is taking longer than expected. Please upload it again, or ask the core team.' : d.error;
+  return {
+    id: d.id,
+    householdId: d.household_id,
+    landType: d.land_type,
+    fileName: d.original_filename,
+    uploadedAt: d.created_at,
+    status,
+    summary: memberSummary(status, Array.isArray(d.items) ? d.items : [], error),
+  };
+}
+
+async function handleLandDocuments(req: Request): Promise<Response> {
+  const auth = await requireMember(req);
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  const { member } = auth;
+  if (privacyNoticeRequired(member.privacyVersion)) return jsonResponse({ error: 'Please read the privacy notice first.' }, 403);
+
+  if (req.method === 'GET') {
+    try {
+      const docs = await select('member_land_documents', 'id,household_id,land_type,original_filename,status,error,items,created_at', `household_id=in.${inList(member.householdIds)}&order=created_at.desc`);
+      return jsonResponse({ documents: docs.slice(0, 50).map(documentView) });
+    } catch (err) {
+      console.error('[members-me] land documents load failed', err);
+      return jsonResponse({ error: 'Server error' }, 500);
+    }
+  }
+
+  let form: FormData;
+  try {
+    form = await req.formData();
+  } catch {
+    return jsonResponse({ error: 'Nothing to do.' }, 400);
+  }
+  const file = form.get('file');
+  const landType = String(form.get('landType') ?? '');
+  const householdId = String(form.get('householdId') ?? '') || (member.householdIds.length === 1 ? member.householdIds[0] : '');
+  if (!(file instanceof File) || file.size === 0) return jsonResponse({ error: 'Choose a file to upload.' }, 400);
+  if (!LAND_TYPES.includes(landType)) return jsonResponse({ error: 'Say whether this is for your farm land or your house plot.' }, 400);
+  // Only their own households: the id came from the request, so it is checked against the session.
+  if (!member.householdIds.includes(householdId)) return jsonResponse({ error: 'Choose which unit this is for.' }, 400);
+  if (file.size > MAX_FILE_BYTES) return jsonResponse({ error: `That file is too large. The limit is ${Math.floor(MAX_FILE_BYTES / 1_000_000 * 10) / 10} MB.` }, 413);
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const mime = sniffMime(bytes);
+  if (!mime || !ALLOWED_MIME.includes(mime)) return jsonResponse({ error: 'Upload a PDF (best), or a JPEG or PNG photo.' }, 415);
+  const sha256 = hex(await crypto.subtle.digest('SHA-256', bytes));
+
+  try {
+    const recent = await select('member_land_documents', 'id,sha256,status,created_at', `household_id=eq.${householdId}&created_at=gte.${encodeURIComponent(new Date(Date.now() - 24 * 3600 * 1000).toISOString())}`);
+    if (recent.length >= MAX_UPLOADS_PER_DAY) return jsonResponse({ error: 'You have uploaded a lot of documents today. Please try again tomorrow, or ask the core team.' }, 429);
+    const same = recent.find((d: any) => d.sha256 === sha256 && d.status !== 'failed' && !(d.status === 'processing' && Date.now() - Date.parse(d.created_at) > STALE_PROCESSING_MS));
+    if (same) return jsonResponse({ ok: true, duplicate: true, documentId: same.id });
+
+    const documentId = crypto.randomUUID();
+    const storagePath = `${householdId}/${documentId}.${mime === 'application/pdf' ? 'pdf' : mime === 'image/png' ? 'png' : 'jpg'}`;
+
+    // Recorded first, refused if it can't be (same rule as every self-service change).
+    const log = await fetch(`${supabaseUrl()}/rest/v1/member_audit_log`, {
+      method: 'POST',
+      headers: restHeaders({ Prefer: 'return=minimal' }),
+      body: JSON.stringify({ actor_person_id: member.personId, action: 'member.land.upload', detail: { documentId, landType, mime } }),
+    }).catch(() => null);
+    if (!log || !log.ok) {
+      console.error('[members-me] audit log write failed; upload refused', log?.status);
+      return jsonResponse({ error: 'Could not record the upload, so nothing was saved. Try again.' }, 500);
+    }
+
+    const stored = await fetch(`${supabaseUrl()}/storage/v1/object/${BUCKET}/${storagePath}`, {
+      method: 'POST',
+      headers: restHeaders({ 'content-type': mime, 'x-upsert': 'false' }),
+      body: bytes,
+    });
+    if (!stored.ok) {
+      console.error('[members-me] storage upload failed', stored.status);
+      return jsonResponse({ error: 'Server error' }, 500);
+    }
+    const inserted = await fetch(`${supabaseUrl()}/rest/v1/member_land_documents`, {
+      method: 'POST',
+      headers: restHeaders({ Prefer: 'return=minimal' }),
+      body: JSON.stringify({
+        id: documentId,
+        household_id: householdId,
+        uploaded_by_person_id: member.personId,
+        land_type: landType,
+        storage_path: storagePath,
+        original_filename: file.name.slice(0, 200) || null,
+        mime_type: mime,
+        size_bytes: file.size,
+        sha256,
+      }),
+    });
+    if (!inserted.ok) {
+      console.error('[members-me] land document insert failed', inserted.status);
+      return jsonResponse({ error: 'Server error' }, 500);
+    }
+
+    // Hand over to the background reader. It answers 202 straight away. If this call is lost the
+    // row just stays 'processing' and shows as failed after STALE_PROCESSING_MS.
+    const base = process.env.URL ?? new URL(req.url).origin;
+    await fetch(`${base}/.netlify/functions/members-land-extract-background`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ documentId }),
+    }).catch((err) => console.error('[members-me] could not start the land document reader', err));
+
+    return jsonResponse({ ok: true, documentId });
+  } catch (err) {
+    console.error('[members-me] land document upload failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
 export default async (req: Request): Promise<Response> => {
   const { pathname } = new URL(req.url);
   if (pathname === '/api/members-me/home' && req.method === 'GET') return handleHome(req);
   if (pathname === '/api/members-me/profile' && req.method === 'POST') return handleProfile(req);
   if (pathname === '/api/members-me/privacy' && req.method === 'POST') return handlePrivacy(req);
+  if (pathname === '/api/members-me/land-documents' && (req.method === 'GET' || req.method === 'POST')) return handleLandDocuments(req);
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-me/home', '/api/members-me/profile', '/api/members-me/privacy'] };
+export const config = { path: ['/api/members-me/home', '/api/members-me/profile', '/api/members-me/privacy', '/api/members-me/land-documents'] };
