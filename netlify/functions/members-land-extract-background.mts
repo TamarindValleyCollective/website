@@ -22,6 +22,7 @@ import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { readLandPdf, readLandShape } from './lib/land-doc-read';
 import { getLandDocument, landShapeKey, putLandDocument } from './lib/land-doc-storage';
 import { documentStatus, newRecordColumns, normalizeExtraction, reconcile } from '../../scripts/lib/member-land-docs.mjs';
+import { withShapeResult } from '../../scripts/lib/land-shape.mjs';
 
 const TABLES = { farm: 'member_plots', house: 'member_house_pattas' } as const;
 
@@ -153,7 +154,7 @@ export default async (req: Request): Promise<Response> => {
       }
     }
 
-    await patch('member_land_documents', `id=eq.${documentId}`, { status, extracted: hasShape ? { ...extraction, hasShape } : extraction, items, processed_at: now, error: null });
+    await patch('member_land_documents', `id=eq.${documentId}`, { status, extracted: withShapeResult(extraction, hasShape), items, processed_at: now, error: null });
     return new Response('ok');
   } catch (err) {
     console.error('[land-extract] failed', err);
