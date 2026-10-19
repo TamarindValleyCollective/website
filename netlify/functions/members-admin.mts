@@ -15,6 +15,12 @@
 // Personal names go out in full to `admin`/`user` and masked for `read_only`
 // (staff-masking.ts). Plots are land records and go to every role that can view.
 //
+// Land documents: members upload a patta / survey extract and it is read in the background
+// (members-land-extract-background.mts). New records and anything that disagrees with the
+// register wait here: GET land-documents lists them for a household, POST land-document-link
+// returns a one-minute signed link to the file (logged), and landdoc.approve / landdoc.reject
+// (in /edit) record the core team's decision on each record.
+//
 // Edits: every change is validated (scripts/lib/member-edit.mjs), written to
 // the audit log FIRST (and refused if the log write fails), then applied. The
 // audit entry names the records and fields touched, never a name, email, phone
@@ -25,6 +31,8 @@ import { roleHasCapability } from './lib/staff-registry';
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { buildHouseholdReview, reviewTotals } from '../../scripts/lib/member-review.mjs';
 import { ACTION_CAPABILITY, auditDetail, validateEdit } from '../../scripts/lib/member-edit.mjs';
+import { signedLandDocumentUrl } from './lib/land-doc-storage';
+import { approvalColumns, documentStatus } from '../../scripts/lib/member-land-docs.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -51,22 +59,29 @@ async function handleOverview(req: Request): Promise<Response> {
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
 
   let data;
+  let waiting: any[] = [];
   try {
-    const [households, people, memberships, plots, housePattas, notes] = await Promise.all([
+    const [households, people, memberships, plots, housePattas, notes, waitingDocs] = await Promise.all([
       select('member_households', 'id,farm_unit,house_no,cluster,unit_type'),
       select('member_people', 'id,full_name,email,phone'),
       select('member_household_members', 'household_id,person_id,role,can_login'),
-      select('member_plots', 'id,household_id,patta_no,reference_no,survey_no,area_hectares,area_acres,settlement'),
-      select('member_house_pattas', 'id,household_id,patta_no,reference_no,survey_no,area_sq_ft,settlement'),
+      select('member_plots', 'id,household_id,patta_no,reference_no,survey_no,area_hectares,area_acres,settlement,verification'),
+      select('member_house_pattas', 'id,household_id,patta_no,reference_no,survey_no,area_sq_ft,settlement,verification'),
       select('member_household_notes', 'household_id,kind'),
+      select('member_land_documents', 'household_id', '&status=eq.needs_review'),
     ]);
     data = { households, people, memberships, plots, housePattas, notes };
+    waiting = waitingDocs;
   } catch (err) {
     console.error('[members-admin] failed to load the register', err);
     return jsonResponse({ error: 'Server error' }, 500);
   }
 
   const reviewed = buildHouseholdReview(data);
+  for (const h of reviewed) {
+    const n = waiting.filter((d) => d.household_id === h.id).length;
+    if (n > 0) h.flags.unshift({ kind: 'land_review', severity: 'warn', text: `${n} land document${n === 1 ? '' : 's'} waiting for review.` });
+  }
   const role = auth.staff.role;
   const showNames = canSeeNames(role);
   const households = reviewed.map((h: any) => ({
@@ -145,6 +160,10 @@ const HOUSEHOLD_COLUMNS = { houseNo: 'house_no', cluster: 'cluster', unitType: '
 
 async function applyEdit(edit: any): Promise<void> {
   switch (edit.action) {
+    case 'landdoc.approve':
+    case 'landdoc.reject':
+      return decideLandItem(edit);
+
     case 'person.update': {
       const r = must(await db('PATCH', `member_people?${eq('id', edit.personId)}`, columns(edit, PERSON_COLUMNS)), EMAIL_TAKEN);
       if (r.rows.length === 0) throw new EditError("That person doesn't exist any more. Reload the page.", 404);
@@ -243,6 +262,88 @@ async function deactivateIfOrphaned(personId: string): Promise<void> {
   if (left.length === 0) await db('PATCH', `member_people?${eq('id', personId)}`, { active: false });
 }
 
+// ---- land documents ---------------------------------------------------------
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const LAND_TABLES = { farm: { table: 'member_plots' }, house: { table: 'member_house_pattas' } } as const;
+
+async function handleLandDocuments(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'members', 'view');
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  const householdId = new URL(req.url).searchParams.get('householdId') ?? '';
+  if (!UUID.test(householdId)) return jsonResponse({ error: 'householdId is missing or not valid.' }, 400);
+  try {
+    const docs = await select('member_land_documents', 'id,land_type,original_filename,mime_type,status,error,items,created_at,processed_at', `&household_id=eq.${householdId}&order=created_at.desc`);
+    return jsonResponse({
+      documents: docs.slice(0, 50).map((d) => ({
+        id: d.id,
+        landType: d.land_type,
+        fileName: d.original_filename,
+        mimeType: d.mime_type,
+        status: d.status,
+        error: d.error,
+        uploadedAt: d.created_at,
+        items: Array.isArray(d.items) ? d.items : [],
+      })),
+    });
+  } catch (err) {
+    console.error('[members-admin] land documents load failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
+// A one-minute signed link to the stored file. Members' land documents are private, so
+// this needs `manage` and every link handed out is logged.
+async function handleLandDocumentLink(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'members', 'manage');
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  let documentId = '';
+  try {
+    documentId = String((await req.json())?.documentId ?? '');
+  } catch {
+    // fall through
+  }
+  if (!UUID.test(documentId)) return jsonResponse({ error: 'documentId is missing or not valid.' }, 400);
+  try {
+    const [doc] = await select('member_land_documents', 'storage_path', `&${eq('id', documentId)}`);
+    if (!doc) return jsonResponse({ error: "That document doesn't exist any more." }, 404);
+    await logStaffAction({ actorId: auth.staff.id, action: 'members.landdoc.view', module: 'members', detail: { ids: { documentId } } });
+    return jsonResponse({ url: await signedLandDocumentUrl(doc.storage_path, 60) });
+  } catch (err) {
+    console.error('[members-admin] land document link failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
+// The core team's decision on one record read from a land document.
+//   approve: the record behind the item takes the document's values and is marked verified
+//   reject:  the register is left as it is; a record the member added from the document is removed
+async function decideLandItem(edit: any): Promise<void> {
+  const [doc] = await select('member_land_documents', 'id,land_type,items', `&${eq('id', edit.documentId)}`);
+  if (!doc) throw new EditError("That document doesn't exist any more. Reload the page.", 404);
+  const items: any[] = Array.isArray(doc.items) ? doc.items : [];
+  const item = items[edit.itemIndex];
+  if (!item || item.decision || !['pending', 'mismatch', 'check', 'conflict'].includes(item.outcome)) {
+    throw new EditError('That record has already been dealt with. Reload the page.', 409);
+  }
+  const table = LAND_TABLES[doc.land_type as 'farm' | 'house'].table;
+  const now = new Date().toISOString();
+
+  if (edit.action === 'landdoc.approve') {
+    if (item.outcome === 'conflict' || !item.recordId) {
+      throw new EditError('Another household already holds this survey number, so it cannot be approved here. Sort that out in the register first, then reject this one.', 409);
+    }
+    const r = must(await db('PATCH', `${table}?${eq('id', item.recordId)}`, approvalColumns(item, doc.land_type, doc.id, now)));
+    if (r.rows.length === 0) throw new EditError("The record behind this no longer exists. Reload the page.", 404);
+  } else if (item.outcome === 'pending' && item.recordId) {
+    // Only a record still waiting is removed; one staff already edited and verified is left alone.
+    must(await db('DELETE', `${table}?${eq('id', item.recordId)}&verification=eq.pending_review`));
+  }
+
+  items[edit.itemIndex] = { ...item, decision: edit.action === 'landdoc.approve' ? 'approved' : 'rejected', decidedAt: now };
+  must(await db('PATCH', `member_land_documents?${eq('id', doc.id)}`, { items, status: documentStatus(items) }));
+}
+
 async function handleEdit(req: Request): Promise<Response> {
   const auth = await requireStaff(req, 'members', 'view');
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
@@ -283,7 +384,9 @@ export default async (req: Request): Promise<Response> => {
   const { pathname } = new URL(req.url);
   if (pathname === '/api/members-admin/overview' && req.method === 'GET') return handleOverview(req);
   if (pathname === '/api/members-admin/edit' && req.method === 'POST') return handleEdit(req);
+  if (pathname === '/api/members-admin/land-documents' && req.method === 'GET') return handleLandDocuments(req);
+  if (pathname === '/api/members-admin/land-document-link' && req.method === 'POST') return handleLandDocumentLink(req);
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-admin/overview', '/api/members-admin/edit'] };
+export const config = { path: ['/api/members-admin/overview', '/api/members-admin/edit', '/api/members-admin/land-documents', '/api/members-admin/land-document-link'] };

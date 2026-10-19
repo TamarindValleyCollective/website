@@ -41,9 +41,10 @@ export async function memberFetch(path, { method = 'GET', body } = {}) {
     method,
     headers: {
       authorization: `Bearer ${getMemberToken() ?? ''}`,
-      ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+      // FormData (a file upload) sets its own multipart content-type, with the boundary.
+      ...(body !== undefined && !(body instanceof FormData) ? { 'content-type': 'application/json' } : {}),
     },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401) {

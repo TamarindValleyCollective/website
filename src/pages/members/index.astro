@@ -608,6 +608,28 @@ import '../../styles/global.css';
     white-space: nowrap;
   }
 
+  .docs-list {
+    margin: 0 0 12px;
+  }
+
+  .doc-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    margin: 0 0 8px;
+    font-size: 0.9rem;
+  }
+
+  .doc-row .pill {
+    margin: 0;
+  }
+
+  .doc-sum {
+    flex-basis: 100%;
+    color: var(--tvc-ink-soft);
+  }
+
   .unit-cols .kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     margin: 12px 0 16px;
@@ -866,7 +888,8 @@ import '../../styles/global.css';
     font-size: 0.85rem;
   }
 
-  dialog.modal input {
+  dialog.modal input,
+  dialog.modal select {
     padding: 8px 10px;
     border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
@@ -971,8 +994,9 @@ import '../../styles/global.css';
 
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   type Person = { id: string; name: string; role: string; canLogin: boolean; hasEmail: boolean; hasPhone: boolean };
-  type Plot = { pattaNo: string | null; surveyNo: string | null; areaAcres: number | null; areaHectares: number | null; referenceNo: string | null };
-  type House = { pattaNo: string | null; surveyNo: string | null; areaSqFt: number | null };
+  type Plot = { pattaNo: string | null; surveyNo: string | null; areaAcres: number | null; areaHectares: number | null; referenceNo: string | null; verification: string };
+  type House = { pattaNo: string | null; surveyNo: string | null; areaSqFt: number | null; verification: string };
+  type LandDoc = { id: string; householdId: string; landType: string; fileName: string | null; uploadedAt: string; status: string; summary: string };
   type Hh = { id: string; farmUnit: string; houseNo: string | null; cluster: string | null; unitType: string | null; people: Person[]; plots: Plot[]; housePattas: House[]; farmAcres: number; farmHectares: number; houseSqFt: number; flags: { severity: string; text: string }[] };
   type Me = { personId: string; name: string; email: string | null; phone: string | null; directoryVisible: boolean };
 
@@ -995,6 +1019,7 @@ import '../../styles/global.css';
   const first = (full: string) => full.trim().split(/\s+/).find((w) => w.length > 1) ?? full;
   const acresFmt = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const sqftFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
+  const VERIFICATION: Record<string, string> = { verified: 'Verified', pending_review: 'Awaiting core team', unverified: 'Not yet verified' };
   const ROLE: Record<string, string> = { owner: 'Owner', family: 'Family', non_owner: 'Not an owner' };
 
   const IC = {
@@ -1198,6 +1223,121 @@ import '../../styles/global.css';
     dlg.showModal();
   }
 
+  // ---- land documents ----
+  // Members upload the patta / survey extract they downloaded from eservices.tn.gov.in. The
+  // server reads it in the background (members-land-extract-background.mts): a record the
+  // register already holds is marked verified, a new one is added for the core team to confirm.
+  const DOC_STATUS: Record<string, string> = { processing: 'Reading…', applied: 'Done', needs_review: 'With the core team', failed: 'Not used' };
+  const dateFmt = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  let pollTimer: number | undefined;
+
+  function landDocsPanel(hh: Hh): HTMLElement {
+    const list = h('div', 'docs-list');
+    const upload = h('button', 'btn btn--solid', 'Upload a document');
+    upload.addEventListener('click', () => uploadDialog(hh, refresh));
+    const panelEl = h('section', 'panel', undefined,
+      h('h2', '', 'Land documents'),
+      h('p', 'lede', 'Upload your patta or land survey extract (the PDF from eservices.tn.gov.in). We read it, mark matching records as verified, and add any that are missing for the core team to confirm.'),
+      list,
+      upload,
+    );
+    panelEl.style.marginTop = '16px';
+
+    async function refresh() {
+      window.clearTimeout(pollTimer);
+      try {
+        const { status, data } = await memberFetch('/api/members-me/land-documents');
+        if (status !== 200) throw new Error();
+        const docs: LandDoc[] = (data.documents as LandDoc[]).filter((d) => d.householdId === hh.id);
+        list.replaceChildren(...(docs.length
+          ? docs.slice(0, 8).map((d) => h('p', 'doc-row', undefined,
+              h('strong', '', `${d.landType === 'house' ? 'House plot' : 'Farm land'} · ${dateFmt.format(new Date(d.uploadedAt))}`),
+              h('span', 'pill', DOC_STATUS[d.status] ?? d.status),
+              h('span', 'doc-sum', d.summary)))
+          : [h('p', 'lede', 'Nothing uploaded yet.')]));
+        if (docs.some((d) => d.status === 'processing') && panelEl.isConnected) pollTimer = window.setTimeout(refresh, 4000);
+        else if (docs.length && !docs.some((d) => d.status === 'processing')) loadQuietly();
+      } catch {
+        list.replaceChildren(h('p', 'lede', 'Could not load your documents just now.'));
+      }
+    }
+    refresh();
+    return panelEl;
+  }
+
+  // Re-reads the household once documents finish, so verified badges appear without a reload.
+  let lastRefreshKey = '';
+  function loadQuietly() {
+    const key = String(Date.now() / 60000 | 0);
+    if (key === lastRefreshKey) return;
+    lastRefreshKey = key;
+    window.setTimeout(async () => {
+      try {
+        const { status, data } = await memberFetch('/api/members-me/home');
+        if (status === 200 && data.households) {
+          const before = JSON.stringify(all);
+          all = data.households;
+          if (JSON.stringify(all) !== before) onRoute();
+        }
+      } catch {
+        // the next navigation reloads anyway
+      }
+    }, 0);
+  }
+
+  function uploadDialog(hh: Hh, done: () => void) {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'modal';
+    const type = document.createElement('select');
+    type.append(new Option('Farm land (patta / A-Register)', 'farm'), new Option('House plot (patta / chitta)', 'house'));
+    const file = document.createElement('input');
+    file.type = 'file';
+    file.accept = 'application/pdf,image/jpeg,image/png';
+    const msg = h('p', 'form-msg');
+    msg.setAttribute('role', 'alert');
+    const cancel = h('button', 'btn', 'Cancel');
+    cancel.addEventListener('click', () => dlg.close());
+    const send = h('button', 'btn btn--solid', 'Upload') as HTMLButtonElement;
+    send.addEventListener('click', async () => {
+      const chosen = file.files?.[0];
+      if (!chosen) {
+        msg.textContent = 'Choose a file first.';
+        return;
+      }
+      if (chosen.size > (chosen.type === 'application/pdf' ? 1_000_000 : 3_000_000)) {
+        msg.textContent = chosen.type === 'application/pdf' ? 'A patta PDF is under 1 MB; that file is too large to be one.' : 'That photo is larger than 3 MB.';
+        return;
+      }
+      send.disabled = true;
+      msg.textContent = '';
+      try {
+        const body = new FormData();
+        body.append('file', chosen);
+        body.append('landType', type.value);
+        body.append('householdId', hh.id);
+        const { status, data } = await memberFetch('/api/members-me/land-documents', { method: 'POST', body });
+        if (status !== 200) throw new Error(data.error || 'Something went wrong. Try again.');
+        dlg.close();
+        done();
+        toast(data.duplicate ? 'You already uploaded that file' : 'Uploaded. We are reading it now');
+      } catch (err) {
+        send.disabled = false;
+        msg.textContent = err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : err instanceof Error ? err.message : 'Something went wrong.';
+      }
+    });
+    dlg.append(
+      h('h3', '', 'Upload a land document'),
+      h('p', '', 'Use the PDF downloaded from eservices.tn.gov.in; it can be read automatically. A photo or scan is checked by the core team instead. Limits: PDF 1 MB, photo 3 MB.'),
+      h('label', '', 'This document is for', type),
+      h('label', '', 'File', file),
+      msg,
+      h('div', 'modal-actions', undefined, cancel, send),
+    );
+    dlg.addEventListener('close', () => dlg.remove());
+    document.body.append(dlg);
+    dlg.showModal();
+  }
+
   // ---- the privacy notice ----
   // Shown before anything else on a member's first sign-in (and again if the notice
   // changes): the server releases no household data until it is acknowledged.
@@ -1294,12 +1434,13 @@ import '../../styles/global.css';
     cols.append(
       h('section', 'panel', undefined, h('h2', '', 'Farm'),
         h('div', 'kpis', undefined, kpi('Farm land', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), kpi('Farm plots', String(hh.plots.length))),
-        hh.plots.length ? tableOf(['Patta no.', 'Reference', 'Survey no.', 'Hectares', 'Acres'], hh.plots.map((p) => [p.pattaNo, p.referenceNo, p.surveyNo, p.areaHectares, p.areaAcres]), 3) : h('p', 'lede', 'Patta details not available yet')),
+        hh.plots.length ? tableOf(['Patta no.', 'Reference', 'Survey no.', 'Hectares', 'Acres', 'Status'], hh.plots.map((p) => [p.pattaNo, p.referenceNo, p.surveyNo, p.areaHectares, p.areaAcres, VERIFICATION[p.verification] ?? VERIFICATION.unverified]), 3) : h('p', 'lede', 'Patta details not available yet')),
       h('section', 'panel', undefined, h('h2', '', 'House', hh.houseNo && hh.cluster ? h('span', 'pill', `Cluster ${hh.cluster}`) : null),
         h('div', 'kpis', undefined, kpi('House area', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), kpi('House plots', String(hh.housePattas.length))),
-        hh.housePattas.length ? tableOf(['Patta no.', 'Survey no.', 'Sq ft'], hh.housePattas.map((p) => [p.pattaNo, p.surveyNo, p.areaSqFt]), 2) : h('p', 'lede', hh.houseNo ? 'Patta details not available yet' : 'No house allocated yet')),
+        hh.housePattas.length ? tableOf(['Patta no.', 'Survey no.', 'Sq ft', 'Status'], hh.housePattas.map((p) => [p.pattaNo, p.surveyNo, p.areaSqFt, VERIFICATION[p.verification] ?? VERIFICATION.unverified]), 2) : h('p', 'lede', hh.houseNo ? 'Patta details not available yet' : 'No house allocated yet')),
     );
     root.append(cols);
+    root.append(landDocsPanel(hh));
     root.append(panel('People in this unit', tableOf(['Name', 'Role', 'Email', 'Mobile'], hh.people.map((p) => [`${p.name}${p.id === person.id ? ' (you)' : ''}`, ROLE[p.role] ?? p.role, p.hasEmail ? 'On file' : 'Missing', p.hasPhone ? 'On file' : 'Missing']))));
 
     const edit = h('button', 'btn btn--solid', 'Update my details');
