@@ -651,7 +651,41 @@ import '../../styles/global.css';
     cursor: pointer;
   }
 
-  dialog.docs-modal {
+  dialog.modal.upload-modal {
+    width: min(560px, calc(100vw - 32px));
+  }
+
+  .upload-help {
+    margin: 0 0 12px;
+    padding: 12px 14px;
+    background: var(--tvc-green-tint);
+    border-radius: var(--radius-sm);
+    font-size: 0.88rem;
+  }
+
+  .upload-help p,
+  .upload-help ul {
+    margin: 0 0 8px;
+  }
+
+  .upload-help ul {
+    padding-left: 20px;
+  }
+
+  .upload-help li {
+    margin-bottom: 4px;
+  }
+
+  .upload-help > :last-child {
+    margin-bottom: 0;
+  }
+
+  .upload-help a {
+    color: var(--tvc-green-dark);
+    font-weight: 600;
+  }
+
+  dialog.modal.docs-modal {
     width: min(560px, calc(100vw - 32px));
   }
 
@@ -1509,9 +1543,29 @@ import '../../styles/global.css';
     }, 0);
   }
 
+  // What to download and where from, for a member who has never used the e-Services site.
+  function uploadHelp(): HTMLElement {
+    const link = h('a', '', 'eservices.tn.gov.in');
+    link.setAttribute('href', 'https://eservices.tn.gov.in/eservicesnew/index.html');
+    link.setAttribute('target', '_blank');
+    link.setAttribute('rel', 'noopener noreferrer');
+    return h('div', 'upload-help', undefined,
+      h('p', '', 'There are two kinds of document you can upload. Both come from the Tamil Nadu e-Services website, and you can upload both:'),
+      h('ul', '', undefined,
+        h('li', '', undefined, h('strong', '', 'Patta / chitta'), ' (choose "Patta Number"). It covers your patta number and lists every survey number under it.'),
+        h('li', '', undefined, h('strong', '', 'Survey number document'), ' (choose "Survey Number"). It is for one survey number and comes with its FMB sketch. If your document has the sketch, the shape of the land appears next to that survey number on your card.')),
+      h('p', '', undefined, 'To get them, open ', link, ' and go to ', h('strong', '', 'View Patta / Chitta'), '. Then choose:'),
+      h('ul', '', undefined,
+        h('li', '', undefined, 'District: ', h('strong', '', 'Krishnagiri')),
+        h('li', '', undefined, 'Taluk: ', h('strong', '', 'Anchetty')),
+        h('li', '', undefined, 'Village: ', h('strong', '', 'Taggati'))),
+      h('p', '', 'Pick Patta Number or Survey Number, enter your mobile number, and use the OTP you receive to download the PDF. Upload that PDF here. A photo or scan is checked by the core team instead. Limits: PDF 1 MB, photo 3 MB.'),
+    );
+  }
+
   function uploadDialog(hh: Hh, landType: 'farm' | 'house', done: () => void) {
     const dlg = document.createElement('dialog');
-    dlg.className = 'modal';
+    dlg.className = 'modal upload-modal';
     const file = document.createElement('input');
     file.type = 'file';
     file.accept = 'application/pdf,image/jpeg,image/png';
@@ -1549,7 +1603,7 @@ import '../../styles/global.css';
     });
     dlg.append(
       h('h3', '', `Upload a ${landType === 'house' ? 'house plot' : 'farm land'} document`),
-      h('p', '', 'Use the PDF downloaded from eservices.tn.gov.in; it can be read automatically. A photo or scan is checked by the core team instead. Limits: PDF 1 MB, photo 3 MB.'),
+      uploadHelp(),
       h('label', '', 'File', file),
       msg,
       h('div', 'modal-actions', undefined, cancel, send),
