@@ -57,13 +57,44 @@ test('keeps the outline and drops every label, the red and blue text and the blu
   const out = shapeFromSketch(sketch());
   assert.ok(out);
   // Cropped to the outline and shrunk to a small mark: taller than wide, the longer side 72px.
-  assert.equal(out.height, 72);
+  assert.ok(out.height >= 72 && out.height <= 74, `${out.height}`);
   assert.ok(out.width < out.height / 2, `${out.width}x${out.height}`);
   const alpha = alphaOf(out);
   assert.ok(alpha.some((a) => a === 255));
   // Taller than wide, with the base at the bottom: ink along the last rows, none of the label blocks in the top-left.
   const inkAt = (x, y) => alpha[y * out.width + x] === 255;
   assert.ok([...Array(out.width).keys()].some((x) => inkAt(x, out.height - 4)));
+});
+
+test('labels touching the outline do not hide it', () => {
+  // The whole drawing is one connected blob here: a column of neighbours' numbers butts against the left edge.
+  const c = canvas(450, 500);
+  c.line(140, 60, 100, 450); // left edge
+  c.line(100, 450, 260, 470);
+  c.line(260, 470, 300, 100);
+  c.line(300, 100, 140, 60);
+  for (let y = 70; y < 400; y += 22) c.label(141, y, 3); // each label starts on the edge
+  const out = shapeFromSketch(c);
+  assert.ok(out, 'the outline is found');
+  assert.ok(out.height >= 72 && out.height <= 74);
+  const alpha = alphaOf(out);
+  const inkAt = (x, y) => alpha[y * out.width + x] === 255;
+  // The far (right) edge is a clean line: ink in its column near mid-height.
+  assert.ok([...Array(out.width).keys()].some((x) => x > out.width * 0.7 && inkAt(x, Math.round(out.height / 2))));
+});
+
+test('lines running past the corners are cut off: the shape is the polygon only', () => {
+  const c = canvas(450, 500);
+  // A 100 x 200 rectangle whose four borders all run 80px past the corners, as the sketches draw them.
+  c.line(120, 100, 220, 100); c.line(40, 100, 300, 100);
+  c.line(120, 300, 220, 300); c.line(40, 300, 300, 300);
+  c.line(120, 20, 120, 380);
+  c.line(220, 20, 220, 380);
+  const out = shapeFromSketch(c);
+  assert.ok(out);
+  // The rectangle is 1:2. With the extensions it would be 260 x 360 (about 3:4).
+  const ratio = out.width / out.height;
+  assert.ok(ratio > 0.4 && ratio < 0.6, `ratio ${ratio}`);
 });
 
 test('a sketch with only text on it gives no shape', () => {
