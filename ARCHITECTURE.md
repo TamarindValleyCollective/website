@@ -1467,6 +1467,14 @@ never touches Netlify either.
   on survey/patta/area alone and "owners unknown" never auto-creates anything. Files are not deleted
   when a row is; there is no retention job yet.
 
+  **Replacing an earlier upload** (no migration): every upload is processed as a new one. Once it is
+  stored and handed to the reader, the household's earlier documents it duplicates are removed (file,
+  outline and row; records that pointed at them are repointed by the reader): the identical file
+  (SHA-256), or one covering the same survey numbers for the same land type
+  (`documentsReplacedBy` in `scripts/lib/member-land-docs.mjs`; a fresh e-Services download is a
+  different file because it prints the time). A document still being read is left alone. A second
+  upload never auto-verifies a record still waiting for the core team (`reconcile` returns `check`).
+
   **Document links and parcel outlines** (no migration): members open their own household's files
   through `POST /api/members-me/land-document-link` (their households only, audit-first as
   `member.land.view`, 60-second link); a record's `sourceDocumentId` ties its survey number to the

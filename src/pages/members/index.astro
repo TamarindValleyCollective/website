@@ -1595,7 +1595,7 @@ import '../../styles/global.css';
         if (status !== 200) throw new Error(data.error || 'Something went wrong. Try again.');
         dlg.close();
         done();
-        toast(data.duplicate ? 'You already uploaded that file' : 'Uploaded. We are reading it now');
+        toast(data.replaced ? 'Uploaded. It replaces your earlier upload, and we are reading it now' : 'Uploaded. We are reading it now');
       } catch (err) {
         send.disabled = false;
         msg.textContent = err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : err instanceof Error ? err.message : 'Something went wrong.';
