@@ -414,8 +414,80 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     border: none;
     padding: 4px 0;
     color: var(--tvc-green-dark);
-    text-decoration: underline;
+    text-decoration: none;
     cursor: pointer;
+  }
+
+  .members .rowbtn:hover,
+  .members .rowbtn:focus-visible {
+    text-decoration: underline;
+  }
+
+  /* The decision buttons on a land document record: real buttons, not text links. */
+  .members .rowbtn--act {
+    padding: 3px 12px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--tvc-white);
+    text-decoration: none;
+  }
+
+  .members .rowbtn--act:hover {
+    background: var(--tvc-stone);
+    text-decoration: none;
+  }
+
+  .members .rowbtn--yes {
+    border-color: var(--tvc-green-dark);
+    background: var(--tvc-green-dark);
+    color: var(--tvc-white);
+  }
+
+  .members .rowbtn--yes:hover {
+    background: var(--tvc-green);
+  }
+
+  /* One uploaded land document: a quiet card with its records as a small table. */
+  .members .landdoc {
+    padding: 10px 14px 12px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-sm);
+  }
+
+  .members .landdoc + .landdoc {
+    margin-top: 10px;
+  }
+
+  .members .landdoc-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    margin-bottom: 6px;
+  }
+
+  .members .landdoc-head strong {
+    margin-right: auto;
+    font-size: 0.9rem;
+  }
+
+  .members .landdoc-head .meta {
+    margin: 0;
+  }
+
+  .members .landdoc table td:last-child {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .members .landdoc tr:last-child td {
+    border-bottom: none;
+  }
+
+  .members .landnote {
+    margin: 4px 0 0;
+    font-size: 0.82rem;
+    color: var(--tvc-ink-soft);
   }
 
   .members .rowbtn--danger {
@@ -1081,12 +1153,14 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   type LandItem = { surveyNo: string; pattaNo: string | null; outcome: string; differences: { field: string; recorded: string; document: string }[]; ownerMatch: boolean | null; decision?: string };
   type LandDocument = { id: string; landType: string; fileName: string | null; mimeType: string; status: string; error: string | null; uploadedAt: string; items: LandItem[] };
-  const OUTCOME: Record<string, string> = {
-    verified: 'Matched the register and was verified automatically.',
-    pending: 'Not in the register: added as a pending record.',
-    check: 'Matches the register, but a photo or scan cannot verify it on its own.',
-    mismatch: 'Disagrees with the register.',
-    conflict: 'This survey number is already on another household’s record; nothing was added.',
+  const chip = (severity: 'info' | 'warn' | 'error', text: string) => h('span', { class: `flag flag--${severity}`, text });
+  // [label, severity] for each outcome of a record read from a document.
+  const RESULT: Record<string, [string, 'info' | 'warn' | 'error']> = {
+    verified: ['Verified', 'info'],
+    pending: ['New, needs review', 'warn'],
+    mismatch: ['Differs', 'warn'],
+    check: ['Needs a check', 'warn'],
+    conflict: ['Conflict', 'error'],
   };
 
   async function loadLandDocuments(hh: Household, slot: HTMLElement) {
@@ -1121,31 +1195,46 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
               report(err instanceof Error ? err.message : 'Something went wrong.');
             }
           };
+          const act = (label: string, run: () => void, yes = false) => {
+            const b = rowButton(label, run);
+            b.classList.add('rowbtn--act');
+            if (yes) b.classList.add('rowbtn--yes');
+            return b;
+          };
+          const status = d.status === 'processing' ? chip('info', 'Reading…') : d.status === 'failed' ? chip('error', 'Not used') : waiting || (d.status === 'needs_review' && d.items.length === 0) ? chip('warn', 'Needs review') : chip('info', 'Done');
+          const result = (i: LandItem) =>
+            i.decision
+              ? h('span', { class: 'muted', text: i.decision === 'approved' ? 'Approved' : 'Rejected' })
+              : chip(RESULT[i.outcome]?.[1] ?? 'info', RESULT[i.outcome]?.[0] ?? i.outcome);
+          const actions = (i: LandItem, idx: number): HTMLElement => {
+            // An empty element, not '': the table prints "Not available yet" for an empty value.
+            if (!can.manage || i.decision) return h('span');
+            if (i.outcome === 'conflict') return h('span', { class: 'rowbtns' }, act('Dismiss', decide('landdoc.reject', idx)));
+            if (!['pending', 'mismatch', 'check'].includes(i.outcome)) return h('span');
+            return h('span', { class: 'rowbtns' }, act(i.outcome === 'mismatch' ? 'Use document' : 'Approve', decide('landdoc.approve', idx), true), act('Reject', decide('landdoc.reject', idx)));
+          };
+          // One line of detail per record that needs a decision, never one per verified record.
+          const notes = d.items.flatMap((i) => {
+            if (i.decision || ['verified'].includes(i.outcome)) return [];
+            const bits = [
+              i.outcome === 'conflict' ? 'This survey number is already on another household’s record; nothing was added.' : null,
+              i.outcome === 'check' ? 'A photo or scan can’t verify a record on its own.' : null,
+              ...i.differences.filter((x) => x.field !== 'owners').map((x) => `register says ${x.recorded}, document says ${x.document}`),
+              i.ownerMatch === false ? 'owners on the document don’t match anyone here' : null,
+              i.ownerMatch === null && i.outcome === 'pending' ? 'owner names couldn’t be read; check them in the file' : null,
+            ].filter(Boolean);
+            return bits.length ? [h('p', { class: 'landnote', text: `${i.surveyNo}: ${bits.join('; ')}.` })] : [];
+          });
           return h(
             'div',
             { class: 'landdoc' },
-            h('p', { class: 'meta', text: `${d.landType === 'house' ? 'House plot' : 'Farm land'} · ${new Date(d.uploadedAt).toLocaleDateString('en-IN')} · ${d.mimeType === 'application/pdf' ? 'PDF' : 'photo'} · ${waiting ? 'waiting for review' : d.status}` }, view),
-            d.status === 'failed' ? h('p', { class: 'muted', text: d.error ?? 'Could not be used.' }) : null,
-            d.status === 'processing' ? h('p', { class: 'muted', text: 'Still being read.' }) : null,
+            h('div', { class: 'landdoc-head' }, h('strong', { text: `${d.landType === 'house' ? 'House plot' : 'Farm land'} · ${new Date(d.uploadedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` }), h('span', { class: 'meta', text: d.mimeType === 'application/pdf' ? 'PDF' : 'Photo' }), status, view),
+            d.status === 'failed' ? h('p', { class: 'landnote', text: d.error ?? 'Could not be used.' }) : null,
             d.status === 'needs_review' && d.items.length === 0
-              ? h('p', { class: 'muted', text: 'Could not be read automatically (not a PDF from eservices.tn.gov.in, or a layout we do not recognise). Check the file and add the record above by hand.' })
+              ? h('p', { class: 'landnote', text: 'Could not be read automatically. Open the file and add the record above by hand.' })
               : null,
-            ...d.items.map((i, idx) =>
-              h(
-                'p',
-                { class: 'landitem' },
-                h('strong', { text: `Survey ${i.surveyNo}${i.pattaNo ? ` · patta ${i.pattaNo}` : ''}` }),
-                ` — ${i.decision ? `${i.decision} by the core team` : OUTCOME[i.outcome] ?? i.outcome}`,
-                i.ownerMatch === false ? ' Owners named on the document do not match anyone in this household.' : null,
-                i.ownerMatch === null && i.outcome === 'pending' ? ' Owner names could not be read: check them in the file.' : null,
-                ...i.differences.filter((x) => x.field !== 'owners').map((x) => h('span', { class: 'muted', text: ` Register: ${x.recorded}; document: ${x.document}.` })),
-                can.manage && !i.decision && ['pending', 'mismatch', 'check'].includes(i.outcome)
-                  ? h('span', { class: 'rowbtns' }, rowButton(i.outcome === 'mismatch' ? 'Use document values and verify' : 'Approve', decide('landdoc.approve', idx)), rowButton(i.outcome === 'pending' ? 'Reject and remove' : 'Reject', decide('landdoc.reject', idx)))
-                  : can.manage && !i.decision && i.outcome === 'conflict'
-                    ? h('span', { class: 'rowbtns' }, rowButton('Dismiss', decide('landdoc.reject', idx)))
-                    : null,
-              ),
-            ),
+            d.items.length ? table(['Survey no.', 'Patta', 'Result', ''], d.items.map((i, idx) => [i.surveyNo, i.pattaNo, result(i), actions(i, idx)])) : null,
+            ...notes,
           );
         }),
       );
