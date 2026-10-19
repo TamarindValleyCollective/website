@@ -321,12 +321,18 @@ export function memberSummary(status, items, error) {
   if (status === 'processing') return 'Reading your document…';
   if (status === 'failed') return error || "We couldn't use that file.";
   if (status === 'needs_review' && items.length === 0) return UNREADABLE;
-  const count = (o) => items.filter((i) => i.outcome === o).length;
+  // A decision from the core team replaces the outcome the reader reached.
+  const open = items.filter((i) => !i.decision);
+  const count = (o) => open.filter((i) => i.outcome === o).length;
+  const approved = items.filter((i) => i.decision === 'approved').length;
+  const rejected = items.filter((i) => i.decision === 'rejected').length;
   const parts = [];
-  if (count('verified')) parts.push(`${count('verified')} record${count('verified') === 1 ? '' : 's'} verified`);
-  const waiting = items.filter((i) => i.outcome === 'pending').length;
+  const verified = count('verified') + approved;
+  if (verified) parts.push(`${verified} record${verified === 1 ? '' : 's'} verified`);
+  const waiting = count('pending');
   if (waiting) parts.push(`${waiting} new record${waiting === 1 ? '' : 's'} added, waiting for the core team to confirm`);
-  const staff = items.filter((i) => ['mismatch', 'check', 'conflict'].includes(i.outcome)).length;
+  const staff = count('mismatch') + count('check') + count('conflict');
   if (staff) parts.push(`${staff} sent to the core team to check`);
+  if (rejected) parts.push(`${rejected} record${rejected === 1 ? ' was' : 's were'} not accepted by the core team. You can upload the right document again, or ask the core team why`);
   return parts.join('; ') || 'Done.';
 }
