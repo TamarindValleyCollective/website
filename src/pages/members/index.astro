@@ -630,6 +630,105 @@ import '../../styles/global.css';
     color: var(--tvc-ink-soft);
   }
 
+  /* Land documents fold away: the summary line is the heading and a count. */
+  .docs-panel > summary {
+    cursor: pointer;
+    font-size: 1.05rem;
+    font-weight: 700;
+    list-style: none;
+  }
+
+  .docs-panel > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .docs-panel > summary::before {
+    content: '▸';
+    display: inline-block;
+    margin-right: 8px;
+    transition: transform 0.15s;
+  }
+
+  .docs-panel[open] > summary::before {
+    transform: rotate(90deg);
+  }
+
+  .docs-panel .docs-count {
+    margin-left: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .docs-panel .docs-body {
+    margin-top: 12px;
+  }
+
+  .survey-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .parcel-shape {
+    display: block;
+    width: auto;
+    height: 28px;
+    flex: none;
+  }
+
+  .merged-cell {
+    vertical-align: top;
+  }
+
+  .doc-link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--tvc-green-dark);
+    font: inherit;
+    font-weight: 700;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  /* Verified / awaiting / not verified: an icon, with the words for screen readers and on hover. */
+  .vmark {
+    display: inline-flex;
+    vertical-align: middle;
+  }
+
+  .vmark svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .vmark--verified {
+    color: var(--tvc-green);
+  }
+
+  .vmark--pending_review {
+    color: var(--tvc-orange-text);
+  }
+
+  .vmark--unverified {
+    color: var(--tvc-ink-soft);
+  }
+
+  .vmark .vtext {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
   .unit-cols .kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     margin: 12px 0 16px;
@@ -994,8 +1093,8 @@ import '../../styles/global.css';
 
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   type Person = { id: string; name: string; role: string; canLogin: boolean; hasEmail: boolean; hasPhone: boolean };
-  type Plot = { pattaNo: string | null; surveyNo: string | null; areaAcres: number | null; areaHectares: number | null; referenceNo: string | null; verification: string };
-  type House = { pattaNo: string | null; surveyNo: string | null; areaSqFt: number | null; verification: string };
+  type Plot = { pattaNo: string | null; surveyNo: string | null; areaAcres: number | null; areaHectares: number | null; referenceNo: string | null; verification: string; sourceDocumentId: string | null };
+  type House = { pattaNo: string | null; surveyNo: string | null; areaSqFt: number | null; verification: string; sourceDocumentId: string | null };
   type LandDoc = { id: string; householdId: string; landType: string; fileName: string | null; uploadedAt: string; status: string; summary: string };
   type Hh = { id: string; farmUnit: string; houseNo: string | null; cluster: string | null; unitType: string | null; people: Person[]; plots: Plot[]; housePattas: House[]; farmAcres: number; farmHectares: number; houseSqFt: number; flags: { severity: string; text: string }[] };
   type Me = { personId: string; name: string; email: string | null; phone: string | null; directoryVisible: boolean };
@@ -1018,8 +1117,92 @@ import '../../styles/global.css';
   }
   const first = (full: string) => full.trim().split(/\s+/).find((w) => w.length > 1) ?? full;
   const acresFmt = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Hectares are always shown to four decimal places (0.1619, 0.0040).
+  const haFmt = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+  const ha = (v: number | null) => (v == null ? null : haFmt.format(v));
   const sqftFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
   const VERIFICATION: Record<string, string> = { verified: 'Verified', pending_review: 'Awaiting core team', unverified: 'Not yet verified' };
+  // Tick in a circle / clock / empty circle; the words stay for screen readers and the hover title.
+  const VMARK: Record<string, string> = {
+    verified: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/>',
+    pending_review: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/>',
+    unverified: '<circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/>',
+  };
+  function verifiedMark(v: string): HTMLElement {
+    const key = VERIFICATION[v] ? v : 'unverified';
+    const el = h('span', `vmark vmark--${key}`, undefined, icon(VMARK[key]), h('span', 'vtext', VERIFICATION[key]));
+    el.title = VERIFICATION[key];
+    return el;
+  }
+  // Opens a file this household uploaded: a signed link that lasts a minute. The tab is opened
+  // first, in the click, so the browser doesn't treat it as a pop-up.
+  async function openLandDoc(documentId: string) {
+    const tab = window.open('', '_blank');
+    try {
+      const { status, data } = await memberFetch('/api/members-me/land-document-link', { method: 'POST', body: { documentId } });
+      if (status !== 200 || !data.url) throw new Error(data.error || 'Could not open the file.');
+      if (tab) {
+        tab.opener = null;
+        tab.location.href = data.url;
+      } else window.location.href = data.url;
+    } catch (err) {
+      tab?.close();
+      toast(err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : err instanceof Error ? err.message : 'Could not open the file.');
+    }
+  }
+  // Rows are sorted by patta number, so records sharing a patta sit together: show the patta
+  // number once, spanning its survey numbers, instead of repeating it on every row.
+  function mergePattaRuns(root: HTMLElement): HTMLElement {
+    const rows = [...root.querySelectorAll('tbody tr')];
+    const key = (tr: Element) => {
+      const t = tr.firstElementChild?.textContent?.trim() ?? '';
+      return t === '—' || t === 'Not available yet' ? '' : t;
+    };
+    for (let i = 0; i < rows.length; ) {
+      let j = i + 1;
+      while (key(rows[i]) && j < rows.length && key(rows[j]) === key(rows[i])) j++;
+      if (j - i > 1) {
+        const first = rows[i].firstElementChild as HTMLTableCellElement;
+        first.rowSpan = j - i;
+        first.classList.add('merged-cell');
+        for (let k = i + 1; k < j; k++) rows[k].firstElementChild?.remove();
+      }
+      i = j;
+    }
+    return root;
+  }
+  const byPatta = <T extends { pattaNo: string | null; surveyNo: string | null }>(a: T, b: T) =>
+    (a.pattaNo == null ? 1 : 0) - (b.pattaNo == null ? 1 : 0) || String(a.pattaNo).localeCompare(String(b.pattaNo), undefined, { numeric: true }) || String(a.surveyNo).localeCompare(String(b.surveyNo), undefined, { numeric: true });
+
+  // The outline of a parcel, from the field sketch of a single-survey document. All of the
+  // household's outlines come in one request, once per page load (and again after an upload).
+  let shapesLoad: Promise<Record<string, string>> | null = null;
+  const loadShapes = () =>
+    (shapesLoad ??= memberFetch('/api/members-me/land-shapes').then(({ status, data }) => (status === 200 ? (data.shapes as Record<string, string>) : {})).catch((): Record<string, string> => ({})));
+  // The survey number as a link to its document, with the parcel's outline under it when there is one.
+  function surveyCell(surveyNo: string | null, documentId: string | null): HTMLElement | string | null {
+    const link = docLink(surveyNo ?? '', documentId);
+    if (!documentId || !surveyNo) return link || null;
+    const cell = h('div', 'survey-cell', undefined, link);
+    void loadShapes().then((shapes) => {
+      const src = shapes[documentId];
+      if (!src) return;
+      const img = document.createElement('img');
+      img.className = 'parcel-shape';
+      img.src = src;
+      img.alt = `Outline of survey number ${surveyNo}`;
+      cell.append(img);
+    });
+    return cell;
+  }
+  function docLink(text: string, documentId: string | null): HTMLElement | string {
+    if (!documentId) return text;
+    const b = h('button', 'doc-link', text);
+    b.setAttribute('type', 'button');
+    b.setAttribute('title', 'Open the uploaded document');
+    b.addEventListener('click', () => void openLandDoc(documentId));
+    return b;
+  }
   const ROLE: Record<string, string> = { owner: 'Owner', family: 'Family', non_owner: 'Not an owner' };
 
   const IC = {
@@ -1162,10 +1345,10 @@ import '../../styles/global.css';
   };
   const kpi = (k: string, v: string) => h('div', 'kpi', undefined, h('div', 'k', k), h('div', 'v', v));
   const crumbs = (...parts: string[]) => h('p', 'crumbs', parts.join(' >> '));
-  const tableOf = (headers: string[], rows: (string | number | null)[][], rightFrom = -1): HTMLElement =>
+  const tableOf = (headers: string[], rows: (string | number | null | HTMLElement)[][], rightFrom = -1): HTMLElement =>
     h('div', 'table-wrap', undefined, h('table', '', undefined,
       h('thead', '', undefined, h('tr', '', undefined, ...headers.map((t, i) => h('th', rightFrom >= 0 && i >= rightFrom ? 'r' : '', t)))),
-      h('tbody', '', undefined, ...rows.map((r) => h('tr', '', undefined, ...r.map((c, i) => h('td', rightFrom >= 0 && i >= rightFrom ? 'r' : '', c == null || c === '' ? '—' : String(c)))))),
+      h('tbody', '', undefined, ...rows.map((r) => h('tr', '', undefined, ...r.map((c, i) => (c instanceof HTMLElement ? h('td', rightFrom >= 0 && i >= rightFrom ? 'r' : '', undefined, c) : h('td', rightFrom >= 0 && i >= rightFrom ? 'r' : '', c == null || c === '' ? '—' : String(c))))))),
     ));
   const peopleList = (hh: Hh, you: Person) =>
     h('ul', 'people', undefined, ...hh.people.map((p) =>
@@ -1234,12 +1417,16 @@ import '../../styles/global.css';
   function landDocsPanel(hh: Hh): HTMLElement {
     const list = h('div', 'docs-list');
     const upload = h('button', 'btn btn--solid', 'Upload a document');
-    upload.addEventListener('click', () => uploadDialog(hh, refresh));
-    const panelEl = h('section', 'panel', undefined,
-      h('h2', '', 'Land documents'),
-      h('p', 'lede', 'Upload your patta or land survey extract (the PDF from eservices.tn.gov.in). We read it, mark matching records as verified, and add any that are missing for the core team to confirm.'),
-      list,
-      upload,
+    upload.addEventListener('click', () => uploadDialog(hh, () => { (panelEl as HTMLDetailsElement).open = true; shapesLoad = null; refresh(); }));
+    // Folded away by default: with several uploads the list gets long.
+    const count = h('span', 'docs-count');
+    const panelEl = h('details', 'panel docs-panel', undefined,
+      h('summary', '', 'Land documents', count),
+      h('div', 'docs-body', undefined,
+        h('p', 'lede', 'Upload your patta or land survey extract (the PDF from eservices.tn.gov.in). We read it, mark matching records as verified, and add any that are missing for the core team to confirm.'),
+        list,
+        upload,
+      ),
     );
     panelEl.style.marginTop = '16px';
 
@@ -1249,9 +1436,10 @@ import '../../styles/global.css';
         const { status, data } = await memberFetch('/api/members-me/land-documents');
         if (status !== 200) throw new Error();
         const docs: LandDoc[] = (data.documents as LandDoc[]).filter((d) => d.householdId === hh.id);
+        count.textContent = docs.length ? `(${docs.length})` : '';
         list.replaceChildren(...(docs.length
           ? docs.slice(0, 8).map((d) => h('p', 'doc-row', undefined,
-              h('strong', '', `${d.landType === 'house' ? 'House plot' : 'Farm land'} · ${dateFmt.format(new Date(d.uploadedAt))}`),
+              h('strong', '', undefined, docLink(`${d.landType === 'house' ? 'House plot' : 'Farm land'} · ${dateFmt.format(new Date(d.uploadedAt))}`, d.status === 'failed' ? null : d.id)),
               h('span', 'pill', DOC_STATUS[d.status] ?? d.status),
               h('span', 'doc-sum', d.summary)))
           : [h('p', 'lede', 'Nothing uploaded yet.')]));
@@ -1434,10 +1622,10 @@ import '../../styles/global.css';
     cols.append(
       h('section', 'panel', undefined, h('h2', '', 'Farm'),
         h('div', 'kpis', undefined, kpi('Farm land', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), kpi('Farm plots', String(hh.plots.length))),
-        hh.plots.length ? tableOf(['Patta no.', 'Reference', 'Survey no.', 'Hectares', 'Acres', 'Status'], hh.plots.map((p) => [p.pattaNo, p.referenceNo, p.surveyNo, p.areaHectares, p.areaAcres, VERIFICATION[p.verification] ?? VERIFICATION.unverified]), 3) : h('p', 'lede', 'Patta details not available yet')),
+        hh.plots.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Hectares', 'Acres', 'Status'], [...hh.plots].sort(byPatta).map((p) => [p.pattaNo, surveyCell(p.surveyNo, p.sourceDocumentId), ha(p.areaHectares), p.areaAcres, verifiedMark(p.verification)]), 2)) : h('p', 'lede', 'Patta details not available yet')),
       h('section', 'panel', undefined, h('h2', '', 'House', hh.houseNo && hh.cluster ? h('span', 'pill', `Cluster ${hh.cluster}`) : null),
         h('div', 'kpis', undefined, kpi('House area', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), kpi('House plots', String(hh.housePattas.length))),
-        hh.housePattas.length ? tableOf(['Patta no.', 'Survey no.', 'Sq ft', 'Status'], hh.housePattas.map((p) => [p.pattaNo, p.surveyNo, p.areaSqFt, VERIFICATION[p.verification] ?? VERIFICATION.unverified]), 2) : h('p', 'lede', hh.houseNo ? 'Patta details not available yet' : 'No house allocated yet')),
+        hh.housePattas.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Sq ft', 'Status'], [...hh.housePattas].sort(byPatta).map((p) => [p.pattaNo, surveyCell(p.surveyNo, p.sourceDocumentId), p.areaSqFt, verifiedMark(p.verification)]), 2)) : h('p', 'lede', hh.houseNo ? 'Patta details not available yet' : 'No house allocated yet')),
     );
     root.append(cols);
     root.append(landDocsPanel(hh));

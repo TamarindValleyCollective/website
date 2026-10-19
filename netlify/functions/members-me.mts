@@ -21,7 +21,7 @@
 // notice version: no household data is released, and /profile refuses. Every self-service change is written to
 // member_audit_log BEFORE it is applied, and refused if that write fails.
 import { requireMember } from './lib/member-access';
-import { deleteLandDocument, putLandDocument } from './lib/land-doc-storage';
+import { deleteLandDocument, loadLandShapes, putLandDocument, signedLandDocumentUrl } from './lib/land-doc-storage';
 import { readLandPdf } from './lib/land-doc-read';
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { buildHouseholdReview } from '../../scripts/lib/member-review.mjs';
@@ -64,8 +64,8 @@ async function handleHome(req: Request): Promise<Response> {
     const [households, memberships, plots, housePattas, notes] = await Promise.all([
       select('member_households', 'id,farm_unit,house_no,cluster,unit_type', `id=in.${hh}`),
       select('member_household_members', 'household_id,person_id,role,can_login', `household_id=in.${hh}`),
-      select('member_plots', 'id,household_id,patta_no,reference_no,survey_no,area_hectares,area_acres,settlement,verification', `household_id=in.${hh}`),
-      select('member_house_pattas', 'id,household_id,patta_no,reference_no,survey_no,area_sq_ft,settlement,verification', `household_id=in.${hh}`),
+      select('member_plots', 'id,household_id,patta_no,reference_no,survey_no,area_hectares,area_acres,settlement,verification,source_document_id', `household_id=in.${hh}`),
+      select('member_house_pattas', 'id,household_id,patta_no,reference_no,survey_no,area_sq_ft,settlement,verification,source_document_id', `household_id=in.${hh}`),
       select('member_household_notes', 'household_id,kind', `household_id=in.${hh}`),
     ]);
     const personIds = [...new Set(memberships.map((m: any) => m.person_id))];
@@ -312,13 +312,61 @@ async function handleLandDocuments(req: Request): Promise<Response> {
   }
 }
 
+// A one-minute signed link to a file the member's own household uploaded. Recorded first, and
+// refused if it can't be, like every other self-service action.
+async function handleLandDocumentLink(req: Request): Promise<Response> {
+  const auth = await requireMember(req);
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  const { member } = auth;
+  if (privacyNoticeRequired(member.privacyVersion)) return jsonResponse({ error: 'Please read the privacy notice first.' }, 403);
+  let documentId = '';
+  try {
+    documentId = String((await req.json())?.documentId ?? '');
+  } catch {
+    // fall through
+  }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(documentId)) return jsonResponse({ error: 'Choose a document.' }, 400);
+  try {
+    const [doc] = await select('member_land_documents', 'storage_path,household_id', `id=eq.${documentId}`);
+    // Only their own households' files; a missing one and someone else's look the same.
+    if (!doc || !member.householdIds.includes(doc.household_id)) return jsonResponse({ error: "That document doesn't exist any more." }, 404);
+    const log = await fetch(`${supabaseUrl()}/rest/v1/member_audit_log`, {
+      method: 'POST',
+      headers: restHeaders({ Prefer: 'return=minimal' }),
+      body: JSON.stringify({ actor_person_id: member.personId, action: 'member.land.view', detail: { documentId } }),
+    }).catch(() => null);
+    if (!log || !log.ok) return jsonResponse({ error: 'Could not record that, so the file was not opened. Try again.' }, 500);
+    return jsonResponse({ url: await signedLandDocumentUrl(doc.storage_path, 60) });
+  } catch (err) {
+    console.error('[members-me] land document link failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
+// The parcel outlines for this member's households' documents, as { documentId: data URL }.
+async function handleLandShapes(req: Request): Promise<Response> {
+  const auth = await requireMember(req);
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  const { member } = auth;
+  if (privacyNoticeRequired(member.privacyVersion)) return jsonResponse({ error: 'Please read the privacy notice first.' }, 403);
+  try {
+    const docs = await select('member_land_documents', 'id,storage_path,extracted', `household_id=in.${inList(member.householdIds)}`);
+    return jsonResponse({ shapes: await loadLandShapes(docs) });
+  } catch (err) {
+    console.error('[members-me] land shapes load failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
 export default async (req: Request): Promise<Response> => {
   const { pathname } = new URL(req.url);
   if (pathname === '/api/members-me/home' && req.method === 'GET') return handleHome(req);
   if (pathname === '/api/members-me/profile' && req.method === 'POST') return handleProfile(req);
   if (pathname === '/api/members-me/privacy' && req.method === 'POST') return handlePrivacy(req);
+  if (pathname === '/api/members-me/land-shapes' && req.method === 'GET') return handleLandShapes(req);
+  if (pathname === '/api/members-me/land-document-link' && req.method === 'POST') return handleLandDocumentLink(req);
   if (pathname === '/api/members-me/land-documents' && (req.method === 'GET' || req.method === 'POST')) return handleLandDocuments(req);
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-me/home', '/api/members-me/profile', '/api/members-me/privacy', '/api/members-me/land-documents'] };
+export const config = { path: ['/api/members-me/home', '/api/members-me/profile', '/api/members-me/privacy', '/api/members-me/land-documents', '/api/members-me/land-document-link', '/api/members-me/land-shapes'] };

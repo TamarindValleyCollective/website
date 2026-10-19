@@ -31,7 +31,7 @@ import { roleHasCapability } from './lib/staff-registry';
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { buildHouseholdReview, reviewTotals } from '../../scripts/lib/member-review.mjs';
 import { ACTION_CAPABILITY, auditDetail, validateEdit } from '../../scripts/lib/member-edit.mjs';
-import { signedLandDocumentUrl } from './lib/land-doc-storage';
+import { loadLandShapes, signedLandDocumentUrl } from './lib/land-doc-storage';
 import { approvalColumns, documentStatus } from '../../scripts/lib/member-land-docs.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -65,8 +65,8 @@ async function handleOverview(req: Request): Promise<Response> {
       select('member_households', 'id,farm_unit,house_no,cluster,unit_type'),
       select('member_people', 'id,full_name,email,phone'),
       select('member_household_members', 'household_id,person_id,role,can_login'),
-      select('member_plots', 'id,household_id,patta_no,reference_no,survey_no,area_hectares,area_acres,settlement,verification'),
-      select('member_house_pattas', 'id,household_id,patta_no,reference_no,survey_no,area_sq_ft,settlement,verification'),
+      select('member_plots', 'id,household_id,patta_no,reference_no,survey_no,area_hectares,area_acres,settlement,verification,source_document_id'),
+      select('member_house_pattas', 'id,household_id,patta_no,reference_no,survey_no,area_sq_ft,settlement,verification,source_document_id'),
       select('member_household_notes', 'household_id,kind'),
       select('member_land_documents', 'household_id', '&status=eq.needs_review'),
     ]);
@@ -315,6 +315,21 @@ async function handleLandDocumentLink(req: Request): Promise<Response> {
   }
 }
 
+// The parcel outlines of one household's documents, as { documentId: data URL }.
+async function handleLandShapes(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'members', 'view');
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  const householdId = new URL(req.url).searchParams.get('householdId') ?? '';
+  if (!UUID.test(householdId)) return jsonResponse({ error: 'householdId is missing or not valid.' }, 400);
+  try {
+    const docs = await select('member_land_documents', 'id,storage_path,extracted', `&household_id=eq.${householdId}`);
+    return jsonResponse({ shapes: await loadLandShapes(docs) });
+  } catch (err) {
+    console.error('[members-admin] land shapes load failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
 // The core team's decision on one record read from a land document.
 //   approve: the record behind the item takes the document's values and is marked verified
 //   reject:  the register is left as it is; a record the member added from the document is removed
@@ -385,8 +400,9 @@ export default async (req: Request): Promise<Response> => {
   if (pathname === '/api/members-admin/overview' && req.method === 'GET') return handleOverview(req);
   if (pathname === '/api/members-admin/edit' && req.method === 'POST') return handleEdit(req);
   if (pathname === '/api/members-admin/land-documents' && req.method === 'GET') return handleLandDocuments(req);
+  if (pathname === '/api/members-admin/land-shapes' && req.method === 'GET') return handleLandShapes(req);
   if (pathname === '/api/members-admin/land-document-link' && req.method === 'POST') return handleLandDocumentLink(req);
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-admin/overview', '/api/members-admin/edit', '/api/members-admin/land-documents', '/api/members-admin/land-document-link'] };
+export const config = { path: ['/api/members-admin/overview', '/api/members-admin/edit', '/api/members-admin/land-documents', '/api/members-admin/land-document-link', '/api/members-admin/land-shapes'] };
