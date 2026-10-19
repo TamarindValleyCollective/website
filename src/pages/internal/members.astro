@@ -33,6 +33,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     <p id="status" class="hint" hidden></p>
 
     <div id="content" hidden>
+     <div id="overview">
       <dl id="totals" class="totals"></dl>
 
       <div class="toolbar">
@@ -44,13 +45,15 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       <p id="count" class="note" role="status"></p>
       <div id="list"></div>
 
-      <dialog id="detail" class="detail" aria-labelledby="detail-title">
+     </div>
+
+      <div id="detail" class="detail-view" hidden>
         <div class="detail-head">
+          <button type="button" id="detail-close" class="link-button">&larr; All households</button>
           <h2 id="detail-title"></h2>
-          <button type="button" id="detail-close" class="detail-close">Close</button>
         </div>
         <div id="detail-body" class="body"></div>
-      </dialog>
+      </div>
 
       <p id="signed-in" class="note"><button type="button" id="sign-out" class="link-button">Sign out</button></p>
     </div>
@@ -342,50 +345,38 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     font-size: 0.85rem;
   }
 
-  /* Detail dialog: everything about one household. */
-  .members dialog.detail {
-    width: min(760px, calc(100vw - 24px));
-    max-height: calc(100vh - 48px);
-    padding: 0;
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius);
-    background: var(--tvc-white);
-    color: inherit;
-    box-shadow: var(--shadow-soft);
-  }
-
-  .members dialog.detail::backdrop {
-    background: rgb(0 0 0 / 0.4);
+  /* Household detail: a page of cards, one per topic, instead of a pop-up. */
+  .members .detail-view {
+    max-width: 960px;
   }
 
   .members .detail-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 18px 22px 14px;
-    border-bottom: 1px solid var(--tvc-line);
+    margin-bottom: 14px;
   }
 
   .members .detail-head h2 {
-    margin: 0;
-    font-size: 1.4rem;
-  }
-
-  .members .detail-close {
-    flex: none;
-    font: inherit;
-    padding: 6px 12px;
-    background: none;
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
+    margin: 6px 0 0;
+    font-size: 1.5rem;
   }
 
   .members .body {
-    padding: 16px 22px 22px;
     display: grid;
-    gap: 18px;
+    gap: 14px;
+  }
+
+  .members .dcard {
+    padding: 16px 20px 18px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+  }
+
+  .members .dcard > h3 {
+    margin: 0 0 10px;
+  }
+
+  .members .dcard .flags {
+    margin-top: 10px;
   }
 
   .members .factsrow {
@@ -447,15 +438,12 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     background: var(--tvc-green);
   }
 
-  /* One uploaded land document: a quiet card with its records as a small table. */
-  .members .landdoc {
-    padding: 10px 14px 12px;
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius-sm);
-  }
-
+  /* One uploaded land document, inside the Land documents card: a header and a small table,
+     separated from the next document by a rule rather than another box. */
   .members .landdoc + .landdoc {
-    margin-top: 10px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--tvc-line);
   }
 
   .members .landdoc-head {
@@ -756,7 +744,8 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     return card;
   }
 
-  const detail = $<HTMLDialogElement>('detail');
+  const detail = $('detail');
+  const overview = $('overview');
   let can = { edit: false, manage: false };
   let openId: string | null = null;
 
@@ -791,7 +780,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     await loadData();
     const hh = households.find((x) => x.id === openId);
     if (hh) openDetail(hh, message);
-    else detail.close();
+    else closeDetail();
   }
 
   function formEl(title: string, fields: Field[], submitLabel: string, onSubmit: (values: Record<string, string>) => Promise<void>, onCancel: () => void, extra?: HTMLElement | null): HTMLFormElement {
@@ -1047,7 +1036,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     );
   }
 
-  // Everything we hold about one household, in a dialog.
+  // Everything we hold about one household, as a page of cards.
   function openDetail(hh: Household, message?: string) {
     openId = hh.id;
     $('detail-title').textContent = [`Farm plot ${hh.farmUnit}`, hh.houseNo ?? 'No house'].join(' · ');
@@ -1056,13 +1045,18 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     body.replaceChildren();
     if (message) body.append(h('p', { class: 'form-ok', text: message, attrs: { role: 'status' } }));
 
+    // The unit card: its facts, the edit link, and anything that needs attention.
     const hhSlot = h('div');
-    body.append(h('div', { class: 'factsrow' }, h('p', { class: 'meta', text: facts || 'No cluster or unit type yet' }), can.manage ? rowButton('Edit house, cluster and unit type', () => hhSlot.replaceChildren(householdForm(hh, hhSlot))) : null), hhSlot);
-
-    if (hh.flags.length) {
-      body.append(h('div', {}, h('h3', { text: 'Data gaps' }), h('ul', { class: 'flags' }, ...hh.flags.map((f) => h('li', {}, flagChip(f))))));
-    }
-    const section = (title: string, ...nodes: Kid[]) => body.append(h('div', {}, h('h3', { text: title }), ...nodes));
+    body.append(
+      h(
+        'section',
+        { class: 'dcard' },
+        h('div', { class: 'factsrow' }, h('p', { class: 'meta', text: facts || 'No cluster or unit type yet' }), can.manage ? rowButton('Edit house, cluster and unit type', () => hhSlot.replaceChildren(householdForm(hh, hhSlot))) : null),
+        hhSlot,
+        hh.flags.length ? h('ul', { class: 'flags' }, ...hh.flags.map((f) => h('li', {}, flagChip(f)))) : null,
+      ),
+    );
+    const section = (title: string, ...nodes: Kid[]) => body.append(h('section', { class: 'dcard' }, h('h3', { text: title }), ...nodes));
     const editable = can.edit || can.manage;
 
     // People
@@ -1148,7 +1142,17 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     const docsSlot = h('div', {}, h('p', { class: 'muted', text: 'Loading…' }));
     section('Land documents', docsSlot);
     void loadLandDocuments(hh, docsSlot);
-    if (!detail.open) detail.showModal();
+    overview.hidden = true;
+    detail.hidden = false;
+    if (location.hash !== `#${hh.farmUnit}`) history.pushState(null, '', `#${hh.farmUnit}`);
+    window.scrollTo(0, 0);
+  }
+
+  function closeDetail() {
+    openId = null;
+    detail.hidden = true;
+    overview.hidden = false;
+    if (location.hash) history.pushState(null, '', location.pathname + location.search);
   }
 
   type LandItem = { surveyNo: string; pattaNo: string | null; outcome: string; differences: { field: string; recorded: string; document: string }[]; ownerMatch: boolean | null; decision?: string };
@@ -1242,10 +1246,17 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       slot.replaceChildren(h('p', { class: 'form-msg', text: err instanceof Error ? err.message : 'Could not load documents.' }));
     }
   }
-  $('detail-close').addEventListener('click', () => detail.close());
-  // Clicking the dimmed area outside the dialog closes it.
-  detail.addEventListener('click', (e) => {
-    if (e.target === detail) detail.close();
+  $('detail-close').addEventListener('click', closeDetail);
+  // The browser's Back button returns to the list, and a link to #F-27 opens that household.
+  window.addEventListener('popstate', () => {
+    const unit = location.hash.slice(1);
+    const hh = unit ? households.find((x) => x.farmUnit === unit) : null;
+    if (hh) openDetail(hh);
+    else if (!detail.hidden) {
+      detail.hidden = true;
+      overview.hidden = false;
+      openId = null;
+    }
   });
 
   function renderList() {
