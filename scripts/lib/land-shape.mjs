@@ -13,6 +13,26 @@
 // Pure: no I/O.
 import { deflateSync } from 'node:zlib';
 
+// Bumped whenever the outline reader changes, so stored outlines and "no outline" verdicts made by
+// an older reader are redone once (see shapeNeedsRefresh).
+export const SHAPE_VERSION = 3;
+
+// Whether a stored single-survey PDF's outline should be (re)made. `extracted` is the document's
+// stored reading: `hasShape` + `shapeVersion` when an outline was stored, `shapeChecked` (a
+// version) when the reader found none. Anything written by an older version, or before versions
+// existed (shapeChecked: true, no shapeVersion), is redone.
+export function shapeNeedsRefresh(extracted) {
+  if (!extracted || !Array.isArray(extracted.records) || extracted.records.length !== 1) return false;
+  if (extracted.hasShape === true) return extracted.shapeVersion !== SHAPE_VERSION;
+  return extracted.shapeChecked !== SHAPE_VERSION;
+}
+
+// The reading to store after (re)making the outline: the outline's flags replace any older ones.
+export function withShapeResult(extracted, madeShape) {
+  const { hasShape, shapeVersion, shapeChecked, ...rest } = extracted ?? {};
+  return madeShape ? { ...rest, hasShape: true, shapeVersion: SHAPE_VERSION } : { ...rest, shapeChecked: SHAPE_VERSION };
+}
+
 const INK = [0x29, 0x4a, 0x36]; // --tvc-green-dark; baked in because an <img> can't read CSS tokens
 const MIN_RUN = 24; // px: a solid straight run shorter than this is a letter or a digit
 const MIN_VOTES = 24; // pixels that must line up before a line is considered
