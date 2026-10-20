@@ -237,3 +237,25 @@ export async function passkeyStepUp(api) {
     },
   });
 }
+
+// A story photo for the reviewer: an uploaded one is fetched with the staff sign-in (and step-up, if
+// any) and shown from a blob URL; a path on the public site is used as it is.
+const staffPhotoCache = new Map();
+/** @param {string} ref @param {'square' | 'full'} [size] @returns {Promise<string>} */
+export function staffPhotoSrc(ref, size = 'square') {
+  if (typeof ref !== 'string' || !ref) return Promise.reject(new Error('no photo'));
+  if (ref.startsWith('/images/')) return Promise.resolve(ref);
+  const key = `${ref}|${size}`;
+  if (!staffPhotoCache.has(key)) {
+    const stepUp = getStepUp();
+    const loading = fetch(`/api/members-admin/story-photo?id=${encodeURIComponent(ref)}&size=${size}`, {
+      headers: { authorization: `Bearer ${getToken() ?? ''}`, ...(stepUp ? { 'x-stepup-token': stepUp } : {}) },
+    }).then(async (res) => {
+      if (!res.ok) throw new Error('photo unavailable');
+      return URL.createObjectURL(await res.blob());
+    });
+    staffPhotoCache.set(key, loading);
+    loading.catch(() => staffPhotoCache.delete(key));
+  }
+  return staffPhotoCache.get(key);
+}

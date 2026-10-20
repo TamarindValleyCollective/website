@@ -49,25 +49,33 @@ export function validateDraft(body) {
   return { ok: true, draft, showOnPublicSite: body.showOnPublicSite === true };
 }
 
+// The draft a save writes: the member's text from the request, with the photo (which only the photo
+// endpoints change) carried over from what is already stored, so autosaving text never drops it.
+export function withStoredPhoto(draft, stored) {
+  const photo = typeof stored?.photo === 'string' ? stored.photo : '';
+  return photo ? { ...draft, photo } : draft;
+}
+
 // Only the "why TVC" line is required to hand a story to the core team.
 export function validateForSubmit(draft) {
   if (!draft || typeof draft.why !== 'string' || draft.why.trim() === '') return fail('Add your one-line "why TVC" before submitting.');
   return { ok: true };
 }
 
-const same = (a, b) => FIELDS.concat('social').every((f) => (a?.[f] ?? '') === (b?.[f] ?? ''));
+const COPY_KEYS = FIELDS.concat('social', 'photo');
+const same = (a, b) => COPY_KEYS.every((f) => (a?.[f] ?? '') === (b?.[f] ?? ''));
 
 // The row as the member sees it. `hasUnsubmittedChanges` is what makes the status
 // chip honest: text in review (or live) is unaffected by edits, so the member
 // needs to know their newest wording has not been handed in yet.
 export function storyView(row) {
   if (!row) {
-    return { draft: { bio: '', family: '', why: '', social: '' }, showOnPublicSite: false, status: 'draft', submittedAt: null, approvedAt: null, hasUnsubmittedChanges: false, reviewerNote: null, hasApproved: false };
+    return { draft: { bio: '', family: '', why: '', social: '', photo: '' }, showOnPublicSite: false, status: 'draft', submittedAt: null, approvedAt: null, hasUnsubmittedChanges: false, reviewerNote: null, hasApproved: false };
   }
   const against = row.status === 'in_review' ? row.submitted : row.approved;
   const againstPublic = row.status === 'in_review' ? row.submitted_public : row.approved_public;
-  const draft = { bio: '', family: '', why: '', social: '', ...(row.draft ?? {}) };
-  const empty = FIELDS.concat('social').every((f) => !draft[f]);
+  const draft = { bio: '', family: '', why: '', social: '', photo: '', ...(row.draft ?? {}) };
+  const empty = COPY_KEYS.every((f) => !draft[f]);
   const hasUnsubmittedChanges = row.status === 'draft' || row.status === 'rejected' ? !empty : !(same(draft, against) && !!row.draft_public === !!againstPublic);
   return {
     draft,
@@ -83,7 +91,7 @@ export function storyView(row) {
 
 // For member_audit_log: which fields are in the story and the switch, never the text.
 export function storyAuditDetail(draft, showOnPublicSite) {
-  return { fields: FIELDS.concat('social').filter((f) => draft[f]), showOnPublicSite: !!showOnPublicSite };
+  return { fields: COPY_KEYS.filter((f) => draft[f]), showOnPublicSite: !!showOnPublicSite };
 }
 
 // ---- checks that need no model -------------------------------------------------

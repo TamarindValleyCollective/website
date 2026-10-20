@@ -53,3 +53,29 @@ export async function memberFetch(path, { method = 'GET', body } = {}) {
   }
   return { status: res.status, data };
 }
+
+// A story photo as something an <img> can show. A path on the public site is used as it is; an
+// uploaded photo is fetched with the member's sign-in (the portal serves nothing without it) and
+// shown from a blob URL, so it never needs a public address. Remembered per tab; a failure is not.
+const photoCache = new Map();
+/** @param {string} ref @param {'square' | 'full'} [size] @returns {Promise<string>} */
+export function memberPhotoSrc(ref, size = 'square') {
+  if (typeof ref !== 'string' || !ref) return Promise.reject(new Error('no photo'));
+  if (ref.startsWith('/images/')) return Promise.resolve(ref);
+  const key = `${ref}|${size}`;
+  if (!photoCache.has(key)) {
+    const loading = fetch(`/api/members-me/photo?id=${encodeURIComponent(ref)}&size=${size}`, {
+      headers: { authorization: `Bearer ${getMemberToken() ?? ''}` },
+    }).then(async (res) => {
+      if (res.status === 401) {
+        clearMemberToken();
+        throw new MemberAuthError('unauthorized');
+      }
+      if (!res.ok) throw new Error('photo unavailable');
+      return URL.createObjectURL(await res.blob());
+    });
+    photoCache.set(key, loading);
+    loading.catch(() => photoCache.delete(key));
+  }
+  return photoCache.get(key);
+}

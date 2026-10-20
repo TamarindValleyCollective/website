@@ -10,7 +10,7 @@
 // Keep it true: it describes what the portal does today, not what is planned.
 // Update it when the portal changes (the directory, dues, stays...).
 
-export const PRIVACY_NOTICE_VERSION = 4;
+export const PRIVACY_NOTICE_VERSION = 5;
 
 export const NOTICE_TITLE = 'How we handle your membership details';
 
@@ -28,7 +28,7 @@ export const SECTIONS = [
   },
   {
     heading: 'Your story',
-    body: 'If you write a story about yourself, your drafts are seen only by you and the core team. When you press "Check", the text of your story (and your first name) is sent to Anthropic, the AI company we use, to suggest spelling, grammar and tone fixes; nothing else about you is sent. It only suggests, you decide what to keep, and nothing is published until the core team has read and approved it. Once approved, other members can read it in the member directory; it goes on the public website only if you switch on "Show on tvc.farm" for it.',
+    body: 'If you write a story about yourself, your drafts are seen only by you and the core team. When you press "Check", the text of your story (and your first name) is sent to Anthropic, the AI company we use, to suggest spelling, grammar and tone fixes; nothing else about you is sent. It only suggests, you decide what to keep, and nothing is published until the core team has read and approved it. If you add a photo, it is kept privately (with the camera and location details removed) and checked by the core team with your story. Once approved, other members can see your story and photo in the member directory; they go on the public website only if you switch on "Show on tvc.farm" for it. Photos of children become public the same way, so please think before adding one.',
   },
   {
     heading: 'Who can see it',
@@ -44,7 +44,7 @@ export const SECTIONS = [
   },
   {
     heading: 'Where it is kept',
-    body: 'In TVC\'s own database, hosted with Supabase, and shown through this site, hosted with Netlify. The documents you upload are kept in a private store at Cloudflare that only the portal and the core team can open; nothing in them is public. None of it is sold, shared with anyone else, or part of the public website.',
+    body: 'In TVC\'s own database, hosted with Supabase, and shown through this site, hosted with Netlify. The documents you upload, and any photo you add to your story, are kept in a private store at Cloudflare that only the portal and the core team can open; nothing in them is public except a story photo you choose to publish. None of it is sold, shared with anyone else, or part of the public website.',
   },
   {
     heading: 'Questions or corrections',

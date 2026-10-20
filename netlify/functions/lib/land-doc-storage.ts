@@ -16,6 +16,8 @@ function config() {
   return { client: new AwsClient({ accessKeyId, secretAccessKey, service: 's3', region: 'auto' }), base: `https://${account}.r2.cloudflarestorage.com/${bucket}` };
 }
 
+export { config as r2Config }; // shared with member-photo-storage.ts (same private bucket, another prefix)
+
 // Keys are `<household uuid>/<document uuid>.<ext>`; refuse anything else so a bad value can
 // never address another path in the bucket.
 const KEY = /^[0-9a-f-]{36}\/[0-9a-f-]{36}(-shape)?\.(pdf|jpg|png)$/;

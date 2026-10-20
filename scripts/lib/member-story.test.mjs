@@ -1,7 +1,7 @@
 // Run with: node --test scripts/lib/member-story.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { localChecks, parseSuggestions, reviewPrompt, storyAuditDetail, storyView, validateDraft, validateForSubmit } from './member-story.mjs';
+import { localChecks, parseSuggestions, reviewPrompt, storyAuditDetail, storyView, validateDraft, validateForSubmit, withStoredPhoto } from './member-story.mjs';
 
 const good = (b) => {
   const r = validateDraft(b);
@@ -16,7 +16,7 @@ const bad = (b) => {
 
 test('a draft may be half-written; missing answers become empty strings', () => {
   const r = good({ why: ' Because of the soil. ' });
-  assert.deepEqual(r.draft, { bio: '', family: '', why: 'Because of the soil.', social: '' });
+  assert.deepEqual(r.draft, { bio: '', family: '', why: 'Because of the soil.', social: '' }); // the photo is never part of a save request
   assert.equal(r.showOnPublicSite, false);
 });
 
@@ -103,4 +103,23 @@ test('audit detail names the fields in use and never their text', () => {
   const detail = storyAuditDetail({ bio: 'secret words', family: '', why: 'more', social: '' }, true);
   assert.deepEqual(detail, { fields: ['bio', 'why'], showOnPublicSite: true });
   assert.ok(!JSON.stringify(detail).includes('secret'));
+});
+
+test('autosaving text keeps the stored photo; only the photo endpoints change it', () => {
+  const draft = { bio: 'a', family: '', why: 'w', social: '' };
+  assert.deepEqual(withStoredPhoto(draft, { photo: 'abc' }), { ...draft, photo: 'abc' });
+  assert.deepEqual(withStoredPhoto(draft, { photo: '' }), draft);
+  assert.deepEqual(withStoredPhoto(draft, undefined), draft);
+  assert.equal(validateDraft({ photo: 'x' }).ok, false); // a request cannot set it
+});
+
+test('a new photo counts as an unsubmitted change, and approved text keeps its own photo', () => {
+  const base = { bio: 'a', family: '', why: 'w', social: '', photo: 'p1' };
+  const approved = { status: 'approved', draft: base, draft_public: false, approved: base, approved_public: false };
+  assert.equal(storyView(approved).hasUnsubmittedChanges, false);
+  assert.equal(storyView({ ...approved, draft: { ...base, photo: 'p2' } }).hasUnsubmittedChanges, true);
+  assert.equal(storyView({ ...approved, draft: { ...base, photo: '' } }).hasUnsubmittedChanges, true); // removing it too
+  assert.equal(storyView({ status: 'draft', draft: { photo: 'p1' }, draft_public: false }).hasUnsubmittedChanges, true); // a photo alone
+  assert.equal(storyView(null).draft.photo, '');
+  assert.deepEqual(storyAuditDetail({ ...base, bio: '' }, false).fields, ['why', 'photo']); // names the photo, never a link to it
 });
