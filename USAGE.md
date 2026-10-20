@@ -17,7 +17,7 @@ shows how close each one is and emails the core team before it runs out.
 
 | Service | How we know | Notes |
 |---|---|---|
-| Anthropic (chat + search fallback) | **Measured**: every call the website makes adds its requests/tokens/errors to a daily total (`lib/usage-meter.ts`). | Individual accounts have no usage API, so nothing is read from Anthropic. Local scripts using the same key aren't counted. |
+| Anthropic (chat, search fallback, member story check) | **Measured**: every call the website makes adds its requests/tokens/errors to a daily total (`lib/usage-meter.ts`). | Individual accounts have no usage API, so nothing is read from Anthropic. Local scripts using the same key aren't counted. |
 | Anthropic credit balance | **Typed in** by an admin, then *estimated*: balance minus metered spend since, using admin-entered token prices. | An estimate, labelled as one. The Console's own spend limit and low-balance email stay on as the independent backstop. |
 | Google Gemini | **Measured** the same way (requests, tokens, HTTP 429 "quota ran out", fallbacks to paid Anthropic). | Google has no remaining-quota API. A daily request limit can be entered to get percentage warnings. |
 | Supabase database size and connections | **Measured** every 6 hours by `usage-collect.mts`: size against the free plan's 500 MB, and open direct connections against `max_connections` (60) through the read-only `usage_db_connections()` function (migration `0033`). | Egress (Supabase's billed data transfer) can't be read: the Management API only gives request counts, and the Metrics API's network counter is the host's raw traffic, not what Supabase bills. Check egress in the Supabase dashboard. |

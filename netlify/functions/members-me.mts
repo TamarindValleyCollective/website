@@ -6,6 +6,10 @@
 //   POST /api/members-me/privacy  acknowledge the first-login privacy notice
 //   GET  /api/members-me/land-documents  their uploaded patta / survey documents and what became of them
 //   POST /api/members-me/land-documents  upload one (multipart: file, landType, householdId); read in the background
+//   GET  /api/members-me/story         their own story: the draft, and where it stands (draft / in review / approved)
+//   POST /api/members-me/story         save their draft (autosave; not audited, it is unpublished writing only they and the core team can see)
+//   POST /api/members-me/story-review  suggestions on spelling, grammar, tone and house style (a model, plus fixed privacy checks); edits nothing
+//   POST /api/members-me/story-submit  hand the saved draft to the core team (audited first)
 //
 // The privacy boundary is requireMember (lib/member-access.ts): a member is only
 // ever mapped to the households they are invited to, and every query below is
@@ -28,6 +32,9 @@ import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { buildHouseholdReview } from '../../scripts/lib/member-review.mjs';
 import { validateProfileEdit, profileAuditDetail } from '../../scripts/lib/member-profile.mjs';
 import { PRIVACY_NOTICE_VERSION, privacyNoticeRequired, validateAcceptance } from '../../scripts/lib/member-privacy.mjs';
+import { callAnthropic } from './lib/anthropic';
+import { checkDailyCap } from './lib/rate-limit';
+import { REVIEW_SYSTEM, localChecks, parseSuggestions, reviewPrompt, storyAuditDetail, storyView, validateDraft, validateForSubmit } from '../../scripts/lib/member-story.mjs';
 import { ALLOWED_MIME, LAND_TYPES, MAX_HOUSEHOLD_BYTES, MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_UPLOADS_PER_DAY, NOT_A_LAND_PDF, documentsReplacedBy, memberSummary, normalizeExtraction, surveyKey } from '../../scripts/lib/member-land-docs.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -369,6 +376,167 @@ async function handleLandShapes(req: Request): Promise<Response> {
   }
 }
 
+// ---- stories ----------------------------------------------------------------
+
+const STORY_COLUMNS = 'person_id,draft,draft_public,status,submitted,submitted_public,submitted_at,approved,approved_public,approved_at,reviewer_note';
+const STORY_REVIEW_STORE = 'member-story-review';
+// Per member per day, and for the whole portal: each check is one paid model call.
+const STORY_REVIEW_PER_MEMBER_DAILY = 10;
+const STORY_REVIEW_GLOBAL_DAILY = 300;
+const STORY_REVIEW_TIMEOUT_MS = 20_000;
+// Same model as search-ai.mts's fallback, so the usage page's single Anthropic price entry stays right.
+const STORY_REVIEW_MODEL = process.env.STORY_REVIEW_MODEL || 'claude-sonnet-5';
+
+async function loadStory(personId: string): Promise<any | null> {
+  const rows = await select('member_stories', STORY_COLUMNS, `person_id=eq.${personId}`);
+  return rows[0] ?? null;
+}
+
+// Signed-in, invited and past the privacy notice: the same gate as /profile.
+async function requireStoryAuthor(req: Request) {
+  const auth = await requireMember(req);
+  if (!auth.ok) return { error: jsonResponse({ error: auth.error }, auth.status) } as const;
+  if (privacyNoticeRequired(auth.member.privacyVersion)) return { error: jsonResponse({ error: 'Please read the privacy notice first.' }, 403) } as const;
+  return { member: auth.member } as const;
+}
+
+async function readJson(req: Request): Promise<unknown | undefined> {
+  try {
+    return await req.json();
+  } catch {
+    return undefined;
+  }
+}
+
+async function handleStoryGet(req: Request): Promise<Response> {
+  const who = await requireStoryAuthor(req);
+  if ('error' in who) return who.error;
+  try {
+    return jsonResponse({ story: storyView(await loadStory(who.member.personId)), firstName: who.member.name.trim().split(/\s+/).find((w) => w.length > 1) ?? who.member.name });
+  } catch (err) {
+    console.error('[members-me] story load failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
+async function handleStorySave(req: Request): Promise<Response> {
+  const who = await requireStoryAuthor(req);
+  if ('error' in who) return who.error;
+  const body = await readJson(req);
+  if (body === undefined) return jsonResponse({ error: 'Nothing to do.' }, 400);
+  const checked = validateDraft(body);
+  if (!checked.ok) return jsonResponse({ error: checked.error }, 400);
+
+  // Upsert on the person: only the draft side is written, so text in review or live is untouched.
+  const res = await fetch(`${supabaseUrl()}/rest/v1/member_stories?on_conflict=person_id&select=${STORY_COLUMNS}`, {
+    method: 'POST',
+    headers: restHeaders({ Prefer: 'resolution=merge-duplicates,return=representation' }),
+    body: JSON.stringify({ person_id: who.member.personId, draft: checked.draft, draft_public: checked.showOnPublicSite, updated_at: new Date().toISOString() }),
+  });
+  if (!res.ok) {
+    console.error('[members-me] story save failed', res.status);
+    return jsonResponse({ error: 'Could not save your draft. Try again.' }, 500);
+  }
+  const rows = await res.json();
+  return jsonResponse({ story: storyView(rows[0]) });
+}
+
+async function handleStoryReview(req: Request): Promise<Response> {
+  const who = await requireStoryAuthor(req);
+  if ('error' in who) return who.error;
+  const body = await readJson(req);
+  if (body === undefined) return jsonResponse({ error: 'Nothing to do.' }, 400);
+  const checked = validateDraft(body);
+  if (!checked.ok) return jsonResponse({ error: checked.error }, 400);
+  const { draft, showOnPublicSite } = checked;
+
+  // The fixed checks (children, length) need no outside service and always run.
+  const suggestions: any[] = localChecks(draft, showOnPublicSite);
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const hasText = draft.bio || draft.family || draft.why;
+  let modelChecked = false;
+
+  if (apiKey && hasText) {
+    try {
+      const memberOk = await checkDailyCap(STORY_REVIEW_STORE, `member-${who.member.personId}`, STORY_REVIEW_PER_MEMBER_DAILY);
+      const globalOk = memberOk && (await checkDailyCap(STORY_REVIEW_STORE, 'all', STORY_REVIEW_GLOBAL_DAILY));
+      if (!memberOk) return jsonResponse({ suggestions, modelChecked: false, notice: `You have used today's ${STORY_REVIEW_PER_MEMBER_DAILY} writing checks. You can still submit; the core team reads every story.` });
+      if (globalOk) {
+        const firstName = who.member.name.trim().split(/\s+/).find((w) => w.length > 1) ?? '';
+        const reply = await Promise.race([
+          callAnthropic({
+            apiKey,
+            model: STORY_REVIEW_MODEL,
+            maxTokens: 1200,
+            system: [{ type: 'text', text: REVIEW_SYSTEM }],
+            messages: [{ role: 'user', content: reviewPrompt(draft, firstName) }],
+          }),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), STORY_REVIEW_TIMEOUT_MS)),
+        ]);
+        if (reply && reply.ok) {
+          suggestions.unshift(...parseSuggestions(reply.text, draft));
+          modelChecked = true;
+        }
+      }
+    } catch (err) {
+      console.error('[members-me] story review model call failed', err);
+    }
+  }
+  return jsonResponse({
+    suggestions,
+    modelChecked,
+    notice: modelChecked || !hasText ? null : 'The spelling and grammar check is not available right now. The fixed checks ran; you can still submit and the core team will read it.',
+  });
+}
+
+async function handleStorySubmit(req: Request): Promise<Response> {
+  const who = await requireStoryAuthor(req);
+  if ('error' in who) return who.error;
+  const { member } = who;
+
+  let row: any;
+  try {
+    row = await loadStory(member.personId);
+  } catch (err) {
+    console.error('[members-me] story load failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+  if (!row) return jsonResponse({ error: 'Save your story first.' }, 409);
+  const ok = validateForSubmit(row.draft);
+  if (!ok.ok) return jsonResponse({ error: ok.error }, 400);
+  if (!storyView(row).hasUnsubmittedChanges) return jsonResponse({ error: 'There is nothing new to submit.' }, 409);
+
+  // Logged before the change, and refused if it can't be, as for every self-service change.
+  const log = await fetch(`${supabaseUrl()}/rest/v1/member_audit_log`, {
+    method: 'POST',
+    headers: restHeaders({ Prefer: 'return=minimal' }),
+    body: JSON.stringify({ actor_person_id: member.personId, action: 'member.story.submit', detail: storyAuditDetail(row.draft, row.draft_public) }),
+  }).catch(() => null);
+  if (!log || !log.ok) {
+    console.error('[members-me] audit log write failed; story submit refused', log?.status);
+    return jsonResponse({ error: 'Could not record this, so nothing was submitted. Try again.' }, 500);
+  }
+
+  const res = await fetch(`${supabaseUrl()}/rest/v1/member_stories?person_id=eq.${member.personId}&select=${STORY_COLUMNS}`, {
+    method: 'PATCH',
+    headers: restHeaders({ Prefer: 'return=representation' }),
+    body: JSON.stringify({
+      status: 'in_review',
+      submitted: row.draft,
+      submitted_public: !!row.draft_public,
+      submitted_at: new Date().toISOString(),
+      reviewer_note: null,
+      updated_at: new Date().toISOString(),
+    }),
+  });
+  if (!res.ok) {
+    console.error('[members-me] story submit failed', res.status);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+  const rows = await res.json();
+  return jsonResponse({ story: storyView(rows[0]) });
+}
+
 export default async (req: Request): Promise<Response> => {
   const { pathname } = new URL(req.url);
   if (pathname === '/api/members-me/home' && req.method === 'GET') return handleHome(req);
@@ -377,7 +545,11 @@ export default async (req: Request): Promise<Response> => {
   if (pathname === '/api/members-me/land-shapes' && req.method === 'GET') return handleLandShapes(req);
   if (pathname === '/api/members-me/land-document-link' && req.method === 'POST') return handleLandDocumentLink(req);
   if (pathname === '/api/members-me/land-documents' && (req.method === 'GET' || req.method === 'POST')) return handleLandDocuments(req);
+  if (pathname === '/api/members-me/story' && req.method === 'GET') return handleStoryGet(req);
+  if (pathname === '/api/members-me/story' && req.method === 'POST') return handleStorySave(req);
+  if (pathname === '/api/members-me/story-review' && req.method === 'POST') return handleStoryReview(req);
+  if (pathname === '/api/members-me/story-submit' && req.method === 'POST') return handleStorySubmit(req);
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-me/home', '/api/members-me/profile', '/api/members-me/privacy', '/api/members-me/land-documents', '/api/members-me/land-document-link', '/api/members-me/land-shapes'] };
+export const config = { path: ['/api/members-me/home', '/api/members-me/profile', '/api/members-me/privacy', '/api/members-me/land-documents', '/api/members-me/land-document-link', '/api/members-me/land-shapes', '/api/members-me/story', '/api/members-me/story-review', '/api/members-me/story-submit'] };

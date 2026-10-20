@@ -179,7 +179,7 @@ flowchart TD
         INAT["iNaturalist API"]
         GMAPS["Google Maps (iframe, directions only)"]
         YT["YouTube (iframe)"]
-        ANTHROPIC["Anthropic Claude API<br/>(chat.mts server-side,<br/>search-ai.mts's fallback,<br/>and caption-photos.mjs locally)"]
+        ANTHROPIC["Anthropic Claude API<br/>(chat.mts server-side,<br/>search-ai.mts's fallback,<br/>members-me.mts's story check,<br/>and caption-photos.mjs locally)"]
         GEMINI["Google Gemini API (free tier)<br/>search-ai.mts server-side —<br/>site search's AI answer, tried first"]
         R2["Cloudflare R2<br/>media.tvc.farm — curated photo storage,<br/>served directly to the browser"]
         GTAG["Google Analytics<br/>googletagmanager.com/gtag/js"]
@@ -1494,6 +1494,23 @@ never touches Netlify either.
   `shapeChecked` = the version when none was found). Raising `SHAPE_VERSION` when the reader improves
   redoes everything once, so the first load of a household's page after deploy fills them in, with no
   script or credentials.
+
+- **Member stories (`members-me.mts`, migration 0044).** A member writes a short public-facing
+  story about themselves (what they do, family, one-line "why TVC", a profile link) on the portal's
+  "Your story" page, which replaces the "TVC Members: Your Story" Google Form. `member_stories` has
+  one row per person (FK to `member_people`) with three copies of the text: `draft` (autosaved by
+  `POST /api/members-me/story`), `submitted` (the snapshot in review, written by
+  `POST /api/members-me/story-submit`, audit-first as `member.story.submit`, never with the text) and
+  `approved` (written by the core team's approval queue, not built yet), so an edit never disturbs
+  approved text. `show_on_public_site` defaults to off. `POST /api/members-me/story-review` returns
+  suggestions on spelling, grammar, tone and house style (third person) from the Anthropic API
+  (`lib/anthropic.ts`, model `STORY_REVIEW_MODEL`, default `claude-sonnet-5`; 10 checks per member and
+  300 for the portal per day, counted in `usage-meter`), plus fixed checks that need no model (children
+  named in the family line). The model's output is kept only where it quotes the member's own text
+  (`scripts/lib/member-story.mjs`), the page shows each suggestion and the member accepts or dismisses
+  it, and nothing is applied without that. The story text and the member's first name are sent to
+  Anthropic for the check, so privacy notice v3 says so. Not built yet: the staff approval queue, the
+  member directory, photos, and the batched export to the public Members page.
 
 ## Current Production Status
 

@@ -44,6 +44,68 @@ All tables get RLS; members read only through server functions, never directly.
 
 Join key is the unit number `F-xx` from Member Master (it matches the vault). The patta tabs use a different farm numbering, and households can swap houses (two did, by mutual agreement, and Member Master still had the old numbers, so the import applies a private correction), so a patta row is scored against every household by name words, with the sheet's farm number then house number as tie-breakers. **Farm patta follows the farm plot; house patta follows the house.** A house patta still in a previous owner's name is flagged as needing a transfer. The portal must therefore record house assignment changes as an admin-approved, audited change with history (step 2's change requests), never a silent edit; stays and maintenance hang off the household, not the house.
 
+## Member stories (replaces the "TVC Members: Your Story" Google Form)
+
+Agreed 2026-10-20. One story per person, public-facing only: no separate members-only version.
+
+- **Editing:** "Your story" page, one section per login in the household card (so partners no longer
+  need hand-merging). Fields as on the form: what you do today, family, one-line "why TVC", photo,
+  social link. Only name and the why line are required. Autosave draft, live card preview (reuses the
+  `MembersView` card), status chip (Draft / In review / Live).
+- **Check before you submit (member-approved, never automatic):** a "Review my story" step runs a
+  spelling, grammar and framing pass and shows suggestions beside the member's own text. Framing
+  covers third-person voice for the bio and family (house style; the why-TVC quote stays first
+  person), tone against the rest of the site, and flagging children's names or photos of minors.
+  The member accepts or rejects each suggestion, edits freely, and only then presses Submit. The
+  model never rewrites silently and the submitted text is always what the member approved.
+  Implemented as a Netlify function calling the existing Claude/Gemini setup (see `search-ai.mts`
+  for the daily cap and fallback pattern; also log it in `USAGE.md`'s meters). Story text is sent to
+  the model provider, so the privacy notice must say so. Per-member daily limit.
+- **Review:** the core team still approves every public submission, including every edit to a live
+  story; the old text stays live until the new one is approved. This keeps the promise on the guide
+  page that nothing is published without a human. Reviewers now see a pre-checked story, so the
+  queue is mostly approve/reject, not rewriting.
+- **Publishing:** approved stories queue and go out in one batched build (Netlify credits; a
+  few hours' lag is acceptable), exported from Supabase to the static Members page. The 53 existing
+  cards are seeded as pre-approved starting stories and are claimed on first login.
+- **Member directory (inside the portal):** logged-in members can browse every other member's
+  profile, using the same card content as the public page; a household with no submitted story shows
+  its existing one-line card. This is a deliberate extension of the visibility rule above (other
+  households otherwise show farm no., area, cluster only) and is covered by the first-login privacy
+  notice and the `directory_visible` opt-out.
+- **Public website toggle (agreed 2026-10-20):** each story has a "Show on tvc.farm" switch, so a
+  member can be in the portal directory without being on the public site. Approved stories are
+  always visible to members; only those with the switch on go into the public export. Default is
+  **off**, so nothing is public unless the member turns it on. The switch is on the submit step and
+  stays editable afterwards. Turning it on, or editing the text of a story that is already public,
+  goes through review; turning it off takes effect at the next batched publish (an admin can force
+  an immediate build for removal requests). The seeded 53 cards keep their current public status.
+  The review check and reviewers' queue apply to the story text either way, so a member-only story is
+  still checked once and approved once.
+- **Editor layout (chosen 2026-10-20 from a clickable prototype):** split view. Form on the left (what
+  you do today, family, why TVC, photo, profile link), then the "Review my story" panel, then the
+  "Show on tvc.farm" switch and a single "Check & submit" button. A sticky live preview of the card
+  sits on the right (above the form on phones). "Check & submit" runs the check first if it hasn't
+  been run, and submit stays blocked until each suggestion is accepted or dismissed. Not chosen: a
+  one-question-at-a-time wizard and an edit-on-the-card layout.
+- **Retires:** the Google Form and its name dropdown, the response Sheet, `check-member-story-responses.mjs`,
+  and the member-update email Action (replaced by an admin approval queue and its own notification).
+  `story-guide.astro` is replaced by in-portal help text.
+- **Table:** `member_stories` (migration 0044), one row per person, a new table beside the register
+  tables (FK to `member_people`; the register tables are unchanged). Three copies of the text, as jsonb
+  `{ bio, family, why, social }`: `draft` (what the member is writing), `submitted` (the snapshot in
+  review) and `approved` (live), so an edit never disturbs approved text; `status` draft | in_review |
+  approved | rejected, `show_on_public_site` (default false; `draft_public`, `submitted_public`,
+  `approved_public` per copy), `reviewer_note`, `reviewed_by`. Photos are not built yet; when they are,
+  public-site photos must end up as the existing 400x400 JPEG (plus `photoFull`) beside the others, so
+  they are stored at approval time, not left in a private bucket.
+- **Built so far (2026-10-20, branch `member-stories-editor`):** the table, the "Your story" page
+  (Editor A), the writing check (Anthropic via `lib/anthropic.ts`, plus fixed privacy checks),
+  draft/save/submit endpoints in `members-me.mts`, and privacy notice v3 (names Anthropic).
+  **Still to do:** seeding the 53 existing cards (needs a private person-to-card mapping),
+  the staff approval queue in `/internal/members`, the member directory, photos, and the batched export
+  to the public Members page.
+
 ## Access and roles
 
 - Reuse `staff_users` / `staff_module_roles` / audit log for admins and super admins. Add a `member_portal` module.
@@ -83,7 +145,8 @@ Join key is the unit number `F-xx` from Member Master (it matches the vault). Th
    **First slice built 2026-10-18** (`/members/`, `members-me.mts`, migration 0041): Google sign-in for invited members only, the web-portal shell (left menu, unit chip, widget dashboard), My unit and household, and editing their own mobile number and directory listing; staff invite switch in the register. **Since built:** `members.tvc.farm` host routing (2026-10-18) and the first-login privacy notice (migration 0042; text and version in `scripts/lib/member-privacy.mjs`, shown before any data is released, re-read from the account menu). **Still to do in step 2:** Apple sign-in, the invitation email, change requests for protected fields, and a way to change a sign-in email safely.
 3. Maintenance status (all members) + UPI QR + manual mark-paid.
 4. Own-stay booking + notifications + event-clash flag + guest pricing.
-5. Pilot with 5-6 members, then everyone.
+5. Member stories: editor and writing check (built, see above), then approval queue, directory, photos and the public export. It can run alongside steps 3-4 as the first pilot feature.
+6. Pilot with 5-6 members, then everyone.
 
 ### Land documents (built 2026-10-19, ahead of step 2's change requests)
 
@@ -116,6 +179,8 @@ Out of scope for v1: announcements, documents library, maintenance requests, pol
 - The company UPI ID looks like a PhonePe-for-business handle. Test a small real payment to confirm the amount and reference carry through and that payers' apps don't cap it, and check the UPI per-transaction limit for ₹75,000 maintenance payments (the BHIM cap is a different account).
 - "Pay before end of June" is read as 30 June of the FY start year; confirm that is what members expect.
 - Host-based routing on the shared site: confirm cookie scoping so member sessions don't leak to the public site, and that the CSP and analytics stay off the portal pages.
+- Stories: should a member be able to be in the directory but not on tvc.farm? Settled: yes, the "Show on tvc.farm" switch, default off.
+- Stories: per-member and daily caps on the writing check are 10 and 300 a day; revisit once real use shows what members need.
 - Docs to update when building: `ARCHITECTURE.md`, a new `MEMBERS.md`, `CONTEXT.md` glossary (Member, Household, Unit).
 
 ## Private data
