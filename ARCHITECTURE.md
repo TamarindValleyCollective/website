@@ -1567,6 +1567,23 @@ never touches Netlify either.
   once per 10 minutes (a build takes about half an hour and costs credits); the panel shows how many approved
   public stories are waiting. The old member-update email workflow still triggers on `members.ts` but now
   finds no changed cards, since portal changes never touch that file.
+  **Risk-based publishing** (`netlify/functions/lib/story-risk.ts`, `scripts/lib/member-risk.mjs`,
+  `member-autopublish.mjs`, `members-daily-publish.mts`, migration 0046): when a member submits a story that is
+  switched on for tvc.farm it is assessed: fixed rules the model can never overrule (a first public story,
+  children or ages, a phone number or email, any new or changed link or an unusual one, a photo change, most of
+  the text rewritten; only what is NEW is scanned once a story is already public) plus the Anthropic model's
+  judgement (`STORY_RISK_MODEL`, default the story-check model; 200 a day, counted in `usage-meter`), which can
+  only raise the level. The result, low or high with reasons, is stored in `member_story_assessments` (never the
+  story text) and the person's later approve/reject is written beside it. A story not for the public site is
+  always low. A setting `story_autopublish` in `member_settings` (`{ mode: shadow | live, paused }`, changed by
+  staff `site.autopublish`, `manage`, audited) decides what happens: in SHADOW mode (the default) a person still
+  approves everything, the review queue shows what the assessment would have done, and the staff panel compares
+  it with the team's decisions; in LIVE mode a low-risk story is approved at once by the system, a high-risk one
+  stays in review and `sendStaffAlert` emails core-team with why and what changed (no email when the only reason
+  is that the model was unavailable), and the scheduled function `members-daily-publish` (07:00 IST) starts one
+  build if approved public stories are waiting. Paused keeps live mode but makes everything wait for a person.
+  Staff can take a published story off the site (`story.unpublish`, `manage`, which also starts a build). Photos
+  are never sent to the model: any public photo change is a rule-based hold. Privacy notice v6 discloses the check.
 
 ## Current Production Status
 

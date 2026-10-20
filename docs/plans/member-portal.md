@@ -213,6 +213,31 @@ are just a name and are left alone.
   letters). **Run for real on 2026-10-20:** 27 of the 40 cards matched on the first pass (52 stories); the
   other 13 needed a plot and, for some, a looser match.
 
+### Risk-based publishing
+
+Agreed 2026-10-21. Review by a person for every change is more than needed, so a story is assessed when it is
+submitted and only a high-risk one needs anyone:
+
+- **Low risk** is approved at once (the directory shows it) and goes on tvc.farm at the daily 07:00 IST build.
+  No notification. **High risk** is held, the version already published stays, and core-team is emailed with the
+  reasons and what changed. A story not for the public site is always low.
+- **Rules (always high, the model cannot lower them):** the first time a story goes on tvc.farm; children or ages;
+  a phone number, email or written-out web address; any new or changed link, or an unusual one (shortener, IP
+  address, look-alike characters, link text that shows a different address); a photo added or changed; most of
+  the text rewritten. After the first publication only the NEW sentences are scanned, so an old approved line is
+  not flagged again. **Model:** hostile or offensive wording, private details about someone else, advertising,
+  impersonation, details that help target the farm. It can only raise the level. If it is unavailable the story is
+  held, quietly (no email).
+- **Photos** are not assessed by the model (that would send photos to Anthropic); any public photo change is held.
+- **Shadow mode first, and by default:** the assessment is recorded and shown in the staff queue ("would have been
+  published" / "would have been held, and why") but a person still approves everything and nothing is automatic.
+  The staff panel counts how often a person rejected a story the assessment called low (a miss, which means the
+  rules need tightening) and how often they approved one it would have held. Switch to live only when misses are
+  zero over a meaningful number of stories. The switch is an admin button; Pause stops the automatic part without
+  leaving live mode; "Published automatically in the last 7 days" lists each story with a Hide button.
+- Privacy notice v6 says the text is sent to Anthropic for this check and that low-risk stories may be published
+  without being read first.
+
 ### Public export
 
 Approved stories with "Show on tvc.farm" on reach the public Members page, replacing hand edits to `members.ts`.

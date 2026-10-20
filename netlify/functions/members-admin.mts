@@ -50,6 +50,8 @@ import { approvalColumns, documentStatus } from '../../scripts/lib/member-land-d
 import { localChecks } from '../../scripts/lib/member-story.mjs';
 import { isLegacyPhoto, isUploadedPhoto } from '../../scripts/lib/member-photo.mjs';
 import { deleteMemberPhoto, getMemberPhoto } from './lib/member-photo-storage';
+import { lastPublishAt, loadSettings } from './lib/story-risk';
+import { SETTING_KEY, shadowStats } from '../../scripts/lib/member-autopublish.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -124,10 +126,10 @@ class EditError extends Error {
 
 type Db = { ok: boolean; status: number; rows: any[]; code?: string };
 
-async function db(method: 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<Db> {
+async function db(method: 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown, prefer = 'return=representation'): Promise<Db> {
   const res = await fetch(`${supabaseUrl()}/rest/v1/${path}`, {
     method,
-    headers: restHeaders({ Prefer: 'return=representation' }),
+    headers: restHeaders({ Prefer: prefer }),
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await res.text();
@@ -179,6 +181,12 @@ async function applyEdit(edit: any, staffId: string): Promise<void> {
   switch (edit.action) {
     case 'site.publish':
       return triggerPublish();
+
+    case 'site.autopublish':
+      return saveAutopublish(edit, staffId);
+
+    case 'story.unpublish':
+      return unpublishStory(edit);
 
     case 'story.approve':
     case 'story.reject':
@@ -408,8 +416,14 @@ async function handleStories(req: Request): Promise<Response> {
     ]);
     const hhIds = [...new Set(links.map((l) => l.household_id))];
     const households = hhIds.length ? await select('member_households', 'id,farm_unit,house_no', `&id=in.(${hhIds.join(',')})`) : [];
+    // What the risk assessment made of each submission (shadow mode shows it; live mode acted on it).
+    const assessments = await select('member_story_assessments', 'person_id,submitted_at,level,reasons,outcome,mode,assessed_by', `&person_id=in.${ids}`).catch((err) => {
+      console.error('[members-admin] assessments load failed', err);
+      return [] as any[];
+    });
     return jsonResponse({
       stories: rows.map((r) => {
+        const a = assessments.find((x) => x.person_id === r.person_id && Date.parse(x.submitted_at) === Date.parse(r.submitted_at));
         const submitted = storyText(r.submitted);
         const units = links
           .filter((l) => l.person_id === r.person_id)
@@ -426,6 +440,7 @@ async function handleStories(req: Request): Promise<Response> {
           approvedPublic: r.approved ? !!r.approved_public : null,
           // The same fixed checks the member saw (children named...), so the reviewer sees them too.
           flags: localChecks(submitted, !!r.submitted_public).map((f: any) => ({ field: f.field, kind: f.kind, note: f.note })),
+          assessment: a ? { level: a.level, outcome: a.outcome, mode: a.mode, reasons: (a.reasons ?? []).map((x: any) => ({ code: x.code, text: x.text, source: x.source })) } : null,
         };
       }),
     });
@@ -469,6 +484,8 @@ async function decideStory(edit: any, staffId: string): Promise<void> {
   // Filtered on the exact submission seen, so two reviewers, or a resubmission, can't both win.
   const r = must(await db('PATCH', `member_stories?${eq('person_id', edit.personId)}&status=eq.in_review&${eq('submitted_at', row.submitted_at)}`, patch));
   if (r.rows.length === 0) throw new EditError(stale, 409);
+  // The person's decision is kept beside the assessment, so the two can be compared (best effort: the decision stands either way).
+  await db('PATCH', `member_story_assessments?${eq('person_id', edit.personId)}&${eq('submitted_at', row.submitted_at)}`, { decision: edit.action === 'story.approve' ? 'approved' : 'rejected', decided_at: now }).catch((err) => console.error('[members-admin] assessment decision not recorded', err));
   // Approving replaces the live photo: the one it replaced goes once no copy refers to it.
   const replaced = row.approved?.photo;
   if (edit.action === 'story.approve' && isUploadedPhoto(replaced) && replaced !== row.submitted?.photo && replaced !== row.draft?.photo) {
@@ -479,11 +496,6 @@ async function decideStory(edit: any, staffId: string): Promise<void> {
 // ---- publishing -------------------------------------------------------------
 
 const PUBLISH_MIN_GAP_MS = 10 * 60 * 1000;
-
-async function lastPublishAt(): Promise<string | null> {
-  const rows = await select('staff_audit_log', 'at', '&action=eq.members.site.publish&order=at.desc');
-  return rows[0]?.at ?? null;
-}
 
 async function handlePublishStatus(req: Request): Promise<Response> {
   const auth = await requireStaff(req, 'members', 'edit');
@@ -521,6 +533,52 @@ async function triggerPublish(): Promise<void> {
   if (!res.ok) {
     console.error('[members-admin] build hook failed', res.status);
     throw new EditError('Netlify did not accept the build request. Try again in a minute.', 502);
+  }
+}
+
+// ---- risk-based publishing --------------------------------------------------
+
+// The shadow/live switch and the pause: stored in member_settings, and written after the audit entry as for every edit.
+async function saveAutopublish(edit: any, staffId: string): Promise<void> {
+  const current = await loadSettings();
+  const value = { mode: edit.mode ?? current.mode, paused: edit.paused ?? current.paused };
+  must(await db('POST', 'member_settings?on_conflict=key', { key: SETTING_KEY, value, updated_at: new Date().toISOString(), updated_by: staffId }, 'resolution=merge-duplicates,return=representation'));
+}
+
+// Takes one story off the public site: its approved copy stays for the members, but it is no longer public, so the
+// next build (started here, if it can be) leaves it out.
+async function unpublishStory(edit: any): Promise<void> {
+  const r = must(await db('PATCH', `member_stories?${eq('person_id', edit.personId)}&approved_public=eq.true`, { approved_public: false, updated_at: new Date().toISOString() }));
+  if (r.rows.length === 0) throw new EditError('That story is not on the public site.', 409);
+  if (process.env.NETLIFY_BUILD_HOOK_URL) await triggerPublish().catch((err) => console.error('[members-admin] build after unpublish not started', err));
+}
+
+const DAY = 24 * 60 * 60 * 1000;
+
+async function handleAutopublish(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'members', 'edit');
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  try {
+    const settings = await loadSettings();
+    const since = new Date(Date.now() - 30 * DAY).toISOString();
+    const rows = await select('member_story_assessments', 'person_id,submitted_at,level,reasons,decision,decided_at,is_public', `&created_at=gte.${since}&is_public=eq.true&order=created_at.desc`);
+    // Stories the system published by itself in the last week, with whether each is still public (to hide it).
+    const recent = rows.filter((r) => r.decision === 'auto_approved' && Date.now() - Date.parse(r.decided_at) < 7 * DAY);
+    let published: any[] = [];
+    if (recent.length) {
+      const ids = `(${[...new Set(recent.map((r) => r.person_id))].join(',')})`;
+      const [people, stories] = await Promise.all([select('member_people', 'id,full_name', `&id=in.${ids}`), select('member_stories', 'person_id,approved_public,approved_at', `&person_id=in.${ids}`)]);
+      published = recent.map((r) => ({
+        personId: r.person_id,
+        name: people.find((p) => p.id === r.person_id)?.full_name ?? 'Unknown',
+        at: r.decided_at,
+        stillPublic: !!stories.find((s) => s.person_id === r.person_id)?.approved_public,
+      }));
+    }
+    return jsonResponse({ mode: settings.mode, paused: settings.paused, canChange: roleHasCapability('members', auth.staff.role, 'manage'), stats: shadowStats(rows), published });
+  } catch (err) {
+    console.error('[members-admin] autopublish status failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
   }
 }
 
@@ -578,9 +636,10 @@ export default async (req: Request): Promise<Response> => {
   if (pathname === '/api/members-admin/land-shapes' && req.method === 'GET') return handleLandShapes(req);
   if (pathname === '/api/members-admin/stories' && req.method === 'GET') return handleStories(req);
   if (pathname === '/api/members-admin/publish' && req.method === 'GET') return handlePublishStatus(req);
+  if (pathname === '/api/members-admin/autopublish' && req.method === 'GET') return handleAutopublish(req);
   if (pathname === '/api/members-admin/story-photo' && req.method === 'GET') return handleStoryPhoto(req);
   if (pathname === '/api/members-admin/land-document-link' && req.method === 'POST') return handleLandDocumentLink(req);
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-admin/overview', '/api/members-admin/edit', '/api/members-admin/land-documents', '/api/members-admin/land-document-link', '/api/members-admin/land-shapes', '/api/members-admin/stories', '/api/members-admin/story-photo', '/api/members-admin/publish'] };
+export const config = { path: ['/api/members-admin/overview', '/api/members-admin/edit', '/api/members-admin/land-documents', '/api/members-admin/land-document-link', '/api/members-admin/land-shapes', '/api/members-admin/stories', '/api/members-admin/story-photo', '/api/members-admin/publish', '/api/members-admin/autopublish'] };

@@ -163,3 +163,18 @@ test('publishing the site takes no fields, needs `manage`, and the audit entry h
   assert.equal(ACTION_CAPABILITY['site.publish'], 'manage');
   assert.deepEqual(auditDetail(good({ action: 'site.publish' })), { ids: {}, fields: [] });
 });
+
+test('the automatic-publishing switch takes a mode and/or a pause, and both are logged', () => {
+  assert.deepEqual(good({ action: 'site.autopublish', mode: 'live' }), { action: 'site.autopublish', mode: 'live' });
+  assert.deepEqual(good({ action: 'site.autopublish', paused: true }), { action: 'site.autopublish', paused: true });
+  assert.equal(ACTION_CAPABILITY['site.autopublish'], 'manage');
+  assert.deepEqual(auditDetail(good({ action: 'site.autopublish', mode: 'shadow', paused: false })), { ids: {}, fields: ['mode', 'paused'], values: { mode: 'shadow', paused: false } });
+  for (const bad of [{ action: 'site.autopublish' }, { action: 'site.autopublish', mode: 'auto' }, { action: 'site.autopublish', paused: 'yes' }]) assert.equal(validateEdit(bad).ok, false);
+});
+
+test('taking a story off the public site needs a person and `manage`', () => {
+  const personId = '11111111-1111-4111-8111-111111111111';
+  assert.deepEqual(good({ action: 'story.unpublish', personId }), { action: 'story.unpublish', personId });
+  assert.equal(ACTION_CAPABILITY['story.unpublish'], 'manage');
+  assert.equal(validateEdit({ action: 'story.unpublish' }).ok, false);
+});

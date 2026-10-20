@@ -100,8 +100,8 @@ export function storyAuditDetail(draft, showOnPublicSite) {
 
 // ---- checks that need no model -------------------------------------------------
 
-const CHILD_WORDS = /\b(son|sons|daughter|daughters|kid|kids|child|children|toddler|infant|baby|grandson|granddaughter|grandchildren)\b/i;
-const AGE_PAREN = /\(\s*\d{1,2}\s*\)/;
+export const CHILD_WORDS = /\b(son|sons|daughter|daughters|kid|kids|child|children|toddler|infant|baby|grandson|granddaughter|grandchildren)\b/i;
+export const AGE_PAREN = /\(\s*\d{1,2}\s*\)/;
 
 // Always run, with or without the model: they are about privacy and length, which
 // must not depend on an outside service being up. These carry a `note`, never an edit.
