@@ -33,6 +33,9 @@ export const ACTION_CAPABILITY = {
   'story.reject': 'manage',
   // Start a site build so approved public stories reach tvc.farm (the staff "Publish to the website" button).
   'site.publish': 'manage',
+  // Risk-based publishing: the shadow/live switch and the pause, and taking one story off the public site.
+  'site.autopublish': 'manage',
+  'story.unpublish': 'manage',
 };
 
 export const CLUSTERS = ['H1-A', 'H1-B', 'H2'];
@@ -267,6 +270,25 @@ export function validateEdit(body) {
     case 'site.publish':
       return ok({ action });
 
+    // { mode?: 'shadow' | 'live', paused?: boolean }: at least one.
+    case 'site.autopublish': {
+      const out = { action };
+      if (body.mode !== undefined) {
+        if (body.mode !== 'shadow' && body.mode !== 'live') return fail('The mode must be shadow or live.');
+        out.mode = body.mode;
+      }
+      if (body.paused !== undefined) {
+        if (typeof body.paused !== 'boolean') return fail('Paused must be on or off.');
+        out.paused = body.paused;
+      }
+      return out.mode === undefined && out.paused === undefined ? fail('Nothing to change.') : ok(out);
+    }
+
+    case 'story.unpublish': {
+      const personId = id(body, 'personId');
+      return personId.error ? fail(personId.error) : ok({ action, personId: personId.value });
+    }
+
     case 'plot.delete': {
       const plotId = id(body, 'plotId');
       return plotId.error ? fail(plotId.error) : ok({ action, plotId: plotId.value });
@@ -288,7 +310,7 @@ export function auditDetail(edit) {
   const { action, ...rest } = edit;
   // Land identifiers (patta, reference, survey numbers) tie a person to a plot, so
   // only the field names are logged for those, like names and contact details.
-  const SAFE_VALUES = new Set(['role', 'canLogin', 'houseNo', 'cluster', 'unitType', 'areaHectares', 'areaAcres', 'areaSqFt']);
+  const SAFE_VALUES = new Set(['mode', 'paused', 'role', 'canLogin', 'houseNo', 'cluster', 'unitType', 'areaHectares', 'areaAcres', 'areaSqFt']);
   const ids = {};
   const fields = [];
   const values = {};

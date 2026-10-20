@@ -35,6 +35,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     <div id="content" hidden>
      <div id="overview">
       <section id="publish" class="publish card" aria-label="Publish to the website" hidden></section>
+      <section id="autopublish" class="publish card" aria-label="Automatic publishing" hidden></section>
       <section id="stories" class="stories" aria-label="Stories waiting for review" hidden></section>
       <dl id="totals" class="totals"></dl>
 
@@ -657,6 +658,37 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     background: var(--tvc-green-tint);
     color: var(--tvc-green-dark);
   }
+  .members .assess {
+    margin: 0 0 10px;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 0.88rem;
+  }
+
+  .members .assess ul {
+    margin: 4px 0 0;
+    padding-left: 18px;
+  }
+
+  .members .assess--low {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+  }
+
+  .members .assess--high {
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+  }
+
+  .members .auto-list {
+    margin: 0 0 8px;
+    padding-left: 18px;
+  }
+
+  .members .auto-list li {
+    margin: 4px 0;
+  }
+
   .members .publish {
     margin: 0 0 18px;
     padding: 14px 16px;
@@ -1578,12 +1610,94 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     box.replaceChildren(...(kids.filter(Boolean) as Node[]));
   }
 
+  // ---- automatic publishing ------------------------------------------------------
+  // Every submitted public story is assessed for risk. In SHADOW mode (the default) that is shown on the queue and nothing
+  // is done by itself, so the assessment can be compared with the team's own decisions. In LIVE mode a low-risk story is
+  // published without a person, a high-risk one is held and the team emailed, and a daily job starts the build.
+  type Autopublish = { mode: 'shadow' | 'live'; paused: boolean; canChange: boolean; stats: { assessed: number; low: number; high: number; decided: number; missed: number; overHeld: number }; published: { personId: string; name: string; at: string; stillPublic: boolean }[] };
+
+  async function loadAutopublish() {
+    const box = $('autopublish');
+    if (!can.edit) {
+      box.hidden = true;
+      return;
+    }
+    try {
+      const { status, data } = await staffFetch('/api/members-admin/autopublish');
+      if (status !== 200) throw new Error(data.error || 'Could not load.');
+      renderAutopublish(data as Autopublish);
+    } catch {
+      box.hidden = true; // the register works without it
+    }
+  }
+
+  function renderAutopublish(st: Autopublish) {
+    const box = $('autopublish');
+    box.hidden = false;
+    const when = (iso: string) => new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+    const msg = h('p', { class: 'form-msg', attrs: { role: 'alert' } });
+    const s = st.stats;
+    const mode = st.mode === 'live'
+      ? (st.paused ? 'Live, but paused: nothing is approved or published automatically until it is resumed.' : 'Live: a low-risk story is published without a person, a high-risk one is held and emailed to the core team, and approved stories go on the website every morning at 7.')
+      : 'Shadow mode: every public story is assessed and the result is shown in the review queue, but a person approves everything and nothing is published or emailed by itself.';
+    const kids: Kid[] = [
+      h('strong', { text: 'Automatic publishing' }),
+      h('p', { class: 'muted', text: mode }),
+      h('p', { class: 'muted', text: s.assessed === 0
+        ? 'No public stories have been assessed in the last 30 days.'
+        : `Last 30 days: ${s.assessed} public ${s.assessed === 1 ? 'story' : 'stories'} assessed, ${s.low} low risk and ${s.high} high. ${s.decided} decided by a person so far: ${s.missed === 0 ? 'none that it called low was rejected' : `${s.missed} that it called low ${s.missed === 1 ? 'was' : 'were'} rejected by a person, so the rules need tightening before it goes live`}${s.overHeld ? `; ${s.overHeld} that it would have held ${s.overHeld === 1 ? 'was' : 'were'} approved as they were` : ''}.` }),
+    ];
+    const armedButton = (label: string, confirm: string, run: () => Promise<void>, cls = 'rowbtn rowbtn--act') => {
+      const btn = h('button', { class: cls, text: label, attrs: { type: 'button' } });
+      let armed = false;
+      btn.addEventListener('click', async () => {
+        if (!armed) {
+          armed = true;
+          btn.textContent = confirm;
+          setTimeout(() => { armed = false; btn.textContent = label; }, 7000);
+          return;
+        }
+        btn.setAttribute('disabled', '');
+        try {
+          await run();
+        } catch (err) {
+          btn.removeAttribute('disabled');
+          armed = false;
+          btn.textContent = label;
+          msg.textContent = err instanceof Error ? err.message : 'Something went wrong.';
+        }
+      });
+      return btn;
+    };
+    if (st.canChange) {
+      const row = h('div', { class: 'rowbtns' });
+      if (st.mode === 'shadow') {
+        row.append(armedButton('Switch to live', 'Switch to live? Low-risk stories will then publish without anyone reading them. Click again to confirm', async () => { await send({ action: 'site.autopublish', mode: 'live' }); await loadAutopublish(); void loadStories(); }, 'rowbtn rowbtn--act rowbtn--yes'));
+      } else {
+        row.append(armedButton('Back to shadow mode', 'Go back to shadow mode? A person will approve everything again. Click again to confirm', async () => { await send({ action: 'site.autopublish', mode: 'shadow' }); await loadAutopublish(); void loadStories(); }));
+        row.append(armedButton(st.paused ? 'Resume' : 'Pause', st.paused ? 'Resume automatic publishing? Click again to confirm' : 'Pause? Everything waits for a person until resumed. Click again to confirm', async () => { await send({ action: 'site.autopublish', paused: !st.paused }); await loadAutopublish(); }));
+      }
+      kids.push(row);
+    } else kids.push(h('p', { class: 'muted', text: 'An admin changes this setting.' }));
+    if (st.published.length) {
+      kids.push(h('p', { class: 'muted', text: 'Published automatically in the last 7 days. Hide takes a story off the public site and starts a build:' }));
+      kids.push(h('ul', { class: 'auto-list' }, ...st.published.map((p) => {
+        const li = h('li', {}, h('span', { text: `${p.name} · ${when(p.at)} ` }));
+        if (!p.stillPublic) li.append(h('span', { class: 'muted', text: '(no longer public)' }));
+        else if (st.canChange) li.append(armedButton('Hide', 'Hide from the public site? Click again to confirm', async () => { await send({ action: 'story.unpublish', personId: p.personId }); msg.textContent = `${p.name} is off the public site once the build finishes.`; await loadAutopublish(); await loadPublish(); }));
+        return li;
+      })));
+    }
+    kids.push(msg);
+    box.replaceChildren(...(kids.filter(Boolean) as Node[]));
+  }
+
   // ---- stories waiting for review ------------------------------------------------
   // A member's submitted story (see the portal's "Your story"). Approving makes the submitted text
   // the approved copy; rejecting sends it back with a note the member sees. Both need `manage`,
   // and name the submission seen, so wording the member sent meanwhile is never approved unseen.
   type StoryText = { bio: string; family: string; why: string; social: string; photo: string };
-  type StoryItem = { personId: string; name: string; farmUnits: string[]; submittedAt: string; submitted: StoryText; submittedPublic: boolean; approved: StoryText | null; approvedPublic: boolean | null; flags: { field: string; kind: string; note: string }[] };
+  type StoryItem = { personId: string; name: string; farmUnits: string[]; submittedAt: string; submitted: StoryText; submittedPublic: boolean; approved: StoryText | null; approvedPublic: boolean | null; flags: { field: string; kind: string; note: string }[]; assessment: { level: 'low' | 'high'; outcome: 'publish' | 'hold'; mode: 'shadow' | 'live'; reasons: { code: string; text: string; source: string }[] } | null };
   const STORY_LABEL: Record<keyof StoryText, string> = { bio: 'What they do today', family: 'Family', why: 'Why TVC', social: 'Profile link', photo: 'Photo' };
 
   async function loadStories() {
@@ -1679,6 +1793,12 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
         ? h('ul', { class: 'flags' }, ...st.flags.map((f) => h('li', {}, h('span', { class: 'flag flag--warn', text: `${STORY_LABEL[f.field as keyof StoryText]}: ${f.note}` }))))
         : null;
 
+      // What the risk assessment made of this submission. In shadow mode a person still decides everything; this shows what
+      // the assessment would have done, so the two can be compared. In live mode a high-risk story is held for exactly this reason.
+      const a = st.assessment;
+      const assessEl = !a ? null : h('div', { class: `assess assess--${a.level}` },
+        h('strong', { text: a.level === 'low' ? (a.mode === 'shadow' ? 'Assessment: low risk, would have been published automatically' : 'Assessment: low risk') : (a.mode === 'shadow' ? 'Assessment: high risk, would have been held for you' : 'Assessment: high risk, held for you') }),
+        a.reasons.length ? h('ul', {}, ...a.reasons.map((r) => h('li', { text: r.text }))) : null);
       let actions: HTMLElement;
       if (!can.manage) {
         actions = h('p', { class: 'muted', text: 'An admin approves or sends back stories.' });
@@ -1700,7 +1820,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
         reject.addEventListener('click', () => { form.hidden = !form.hidden; if (!form.hidden) noteBox.focus(); });
         actions = h('div', {}, h('div', { class: 'rowbtns' }, approve, reject), form);
       }
-      return h('article', { class: 'card story-card' }, head, flags, h('dl', { class: 'story-fields' }, ...rows), msg, actions);
+      return h('article', { class: 'card story-card' }, head, assessEl, flags, h('dl', { class: 'story-fields' }, ...rows), msg, actions);
     });
     box.replaceChildren(h('details', { class: 'story-queue', attrs: { open: '' } }, h('summary', { text: `Stories waiting for review (${stories.length})` }), h('div', { class: 'story-list' }, ...cards)));
   }
@@ -1743,6 +1863,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     renderList();
     void loadStories();
     void loadPublish();
+    void loadAutopublish();
   }
 
   async function load() {

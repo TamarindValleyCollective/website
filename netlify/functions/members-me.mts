@@ -41,6 +41,7 @@ import { checkDailyCap } from './lib/rate-limit';
 import { buildDirectory } from '../../scripts/lib/member-directory.mjs';
 import { MAX_FULL_BYTES, MAX_SQUARE_BYTES, isUploadedPhoto, photoAccess, validatePhotoPair } from '../../scripts/lib/member-photo.mjs';
 import { deleteMemberPhoto, getMemberPhoto, putMemberPhoto } from './lib/member-photo-storage';
+import { assessSubmission } from './lib/story-risk';
 import { REVIEW_SYSTEM, localChecks, parseSuggestions, reviewPrompt, storyAuditDetail, storyView, validateDraft, validateForSubmit, withStoredPhoto } from '../../scripts/lib/member-story.mjs';
 import { ALLOWED_MIME, LAND_TYPES, MAX_HOUSEHOLD_BYTES, MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_UPLOADS_PER_DAY, NOT_A_LAND_PDF, documentsReplacedBy, memberSummary, normalizeExtraction, surveyKey } from '../../scripts/lib/member-land-docs.mjs';
 
@@ -550,7 +551,12 @@ async function handleStorySubmit(req: Request): Promise<Response> {
   }
   const rows = await res.json();
   await dropIfUnreferenced(member.personId, row.submitted?.photo, rows[0]); // the earlier submission's photo, if nothing else uses it
-  return jsonResponse({ story: storyView(rows[0]) });
+  // Assessed for risk (lib/story-risk.ts). In shadow mode that only records what it would have done; once switched
+  // to live a low-risk story is approved here, so the member is shown where it ended up.
+  let current = rows[0];
+  const { approved } = await assessSubmission(rows[0], member.name);
+  if (approved) current = (await loadStory(member.personId)) ?? current;
+  return jsonResponse({ story: storyView(current) });
 }
 
 // ---- story photos -----------------------------------------------------------

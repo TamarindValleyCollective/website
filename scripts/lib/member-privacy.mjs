@@ -10,7 +10,7 @@
 // Keep it true: it describes what the portal does today, not what is planned.
 // Update it when the portal changes (the directory, dues, stays...).
 
-export const PRIVACY_NOTICE_VERSION = 5;
+export const PRIVACY_NOTICE_VERSION = 6;
 
 export const NOTICE_TITLE = 'How we handle your membership details';
 
@@ -28,7 +28,7 @@ export const SECTIONS = [
   },
   {
     heading: 'Your story',
-    body: 'If you write a story about yourself, your drafts are seen only by you and the core team. When you press "Check", the text of your story (and your first name) is sent to Anthropic, the AI company we use, to suggest spelling, grammar and tone fixes; nothing else about you is sent. It only suggests, you decide what to keep, and nothing is published until the core team has read and approved it. If you add a photo, it is kept privately (with the camera and location details removed) and checked by the core team with your story. Once approved, other members can see your story and photo in the member directory; they go on the public website only if you switch on "Show on tvc.farm" for it. Photos of children become public the same way, so please think before adding one.',
+    body: 'If you write a story about yourself, your drafts are seen only by you and the core team. When you press "Check", the text of your story (and your first name) is sent to Anthropic, the AI company we use, to suggest spelling, grammar and tone fixes; nothing else about you is sent. It only suggests, you decide what to keep, and the core team is responsible for what is published. When you submit a story that you have switched on for the public website, the text you submitted (and the version already published, if any) is also sent to Anthropic for a safety check that rates how risky it would be to publish, for example contact details, children, links or hostile wording. A story the check rates high-risk is always read by the core team before it is published. As the check proves reliable, the core team may let stories it rates low-risk be published without being read first, and a story that is not for the public website is not checked this way. If you add a photo, it is kept privately (with the camera and location details removed) and checked by the core team with your story. Once approved, other members can see your story and photo in the member directory; they go on the public website only if you switch on "Show on tvc.farm" for it. Photos of children become public the same way, so please think before adding one.',
   },
   {
     heading: 'Who can see it',
