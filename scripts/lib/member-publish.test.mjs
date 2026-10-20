@@ -134,7 +134,7 @@ test('the build drops anything that is not the shape it expects', () => {
     cards: [
       { name: 'A & B', bio: 'ok', photo: UP, photos: [UP, 'https://evil.test/x.jpg', '/images/members/b.jpg'], whyTVC: ['one', '', 'two'], social: ['', 'https://x.test/b', 'javascript:alert(1)'], familyNames: ['Kid', '', 5] },
       { name: '', bio: 'nameless' },
-      { name: 'C', bio: 'x'.repeat(5000), photo: 'https://evil.test/c.jpg' },
+      { name: 'C', bio: 'x'.repeat(7000), photo: 'https://evil.test/c.jpg' },
       null,
     ],
     hidden: ['Gone', '', 7],
@@ -168,4 +168,10 @@ test('references become site paths; a photo that could not be downloaded is drop
   assert.equal(missing.photoFull, undefined);
   const legacy = resolvePhotos({ name: 'A', bio: 'x', photo: '/images/members/a.jpg' }, new Set());
   assert.equal(legacy.photo, '/images/members/a.jpg'); // already on the site: used as it is
+});
+
+test('a card whose bio carries Markdown, even two long bios joined, survives the build\'s check', () => {
+  const bio = `**Asha** works on [soil](https://example.com/s). ${'x'.repeat(2400)}`;
+  const out = sanitizePublished({ cards: [{ name: 'Asha & Ravi', bio: `${bio} ${bio}`, photo: null }], hidden: [] });
+  assert.ok(out.cards[0].bio.startsWith('**Asha** works on [soil]'));
 });

@@ -123,3 +123,20 @@ test('a new photo counts as an unsubmitted change, and approved text keeps its o
   assert.equal(storyView(null).draft.photo, '');
   assert.deepEqual(storyAuditDetail({ ...base, bio: '' }, false).fields, ['why', 'photo']); // names the photo, never a link to it
 });
+
+test('a story can carry Markdown links, up to a limit', () => {
+  const link = (n) => `[Name${n}](https://example.com/${n})`;
+  const ok = validateDraft({ bio: `${link(1)} and ${link(2)}`, family: '', why: 'Because.' });
+  assert.equal(ok.ok, true);
+  const many = validateDraft({ bio: Array.from({ length: 11 }, (_, i) => link(i)).join(' '), family: '', why: 'Because.' });
+  assert.equal(many.ok, false);
+  assert.match(many.error, /up to 10 links/);
+});
+
+test('the writing check may fix the words of a link but never touch its address', () => {
+  const draft = { bio: 'See [Asha Testname](https://example.com/asha) for detials.', family: '', why: '' };
+  const model = (before, after) => JSON.stringify({ suggestions: [{ field: 'bio', kind: 'spelling', before, after, why: 'x' }] });
+  assert.equal(parseSuggestions(model('detials', 'details'), draft).length, 1);
+  assert.equal(parseSuggestions(model('https://example.com/asha', 'https://example.com/other'), draft).length, 0);
+  assert.equal(parseSuggestions(model('[Asha Testname](https://example.com/asha)', 'Asha Testname'), draft).length, 0);
+});

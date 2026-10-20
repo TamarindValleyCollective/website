@@ -3,6 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHero from '../PageHero.astro';
 import Picture from '../Picture.astro';
 import type { Locale } from '../../i18n/utils';
+import { toPlain } from '../../../scripts/lib/member-markdown.mjs';
 import { members as membersData, memberSlug, MEMBER_FAMILY_COUNT, type Member } from '../../data/members';
 
 interface Props {
@@ -130,7 +131,7 @@ function summarize(text: string, maxLen = 90) {
 // What the card front actually shows: the curated summary if there is one,
 // otherwise the truncated bio.
 function cardText(m: Member): string {
-  return m.summary ? summarize(m.summary) : m.bio ? summarize(m.bio) : '';
+  return m.summary ? summarize(toPlain(m.summary)) : m.bio ? summarize(toPlain(m.bio)) : '';
 }
 
 // Cards only get a "More" trigger (and an entry in the detail-popup data
@@ -142,7 +143,8 @@ function cardText(m: Member): string {
 // new to show them.
 const detailed = members
   .map((m, i) => ({ i, m, summary: cardText(m) }))
-  .filter(({ m, summary }) => summary !== m.bio || m.family || whyTVCList(m).length || (m.social && m.social.length))
+  // a bio written with bold or links has more to show than its plain words, so it gets a popup too
+  .filter(({ m, summary }) => summary !== m.bio || toPlain(m.bio) !== m.bio || m.family || whyTVCList(m).length || (m.social && m.social.length))
   .map(({ i, m }) => ({
     i,
     name: m.name,
@@ -198,7 +200,7 @@ const detailedById = new Set(detailed.map((d) => d.i));
           <div id={memberSlug(m.name)} class="member-card">
             {photoBlock}
             <h2>{m.name}</h2>
-            {m.bio && <p>{m.bio}</p>}
+            {m.bio && <p>{toPlain(m.bio)}</p>}
           </div>
         );
       })}
@@ -252,6 +254,8 @@ const detailedById = new Set(detailed.map((d) => d.i));
   <script type="application/json" id="member-detail-data" set:html={JSON.stringify(detailed)} />
 
   <script>
+    import { toHtml } from '../../../scripts/lib/member-markdown.mjs';
+
     interface MemberDetail {
       i: number;
       name: string;
@@ -284,17 +288,22 @@ const detailedById = new Set(detailed.map((d) => d.i));
     // collected for them). Longest name first so "Deepa" doesn't
     // accidentally match inside a longer name that happens to contain it.
     function highlightNames(text: string, names: string[], links: MemberDetail['links']): string {
-      const escaped = escapeHtml(text);
       const linkByName = new Map(links.filter((l) => l.name).map((l) => [l.name, l.url]));
       const sorted = [...names].sort((a, b) => b.length - a.length);
-      if (!sorted.length) return escaped;
-      const pattern = new RegExp(`\\b(${sorted.map(escapeRegExp).join('|')})\\b`, 'g');
-      return escaped.replace(pattern, (match) => {
-        const url = linkByName.get(match);
-        return url
-          ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="member-name member-name--link">${match}</a>`
-          : `<span class="member-name">${match}</span>`;
-      });
+      const pattern = sorted.length ? new RegExp(`\\b(${sorted.map(escapeRegExp).join('|')})\\b`, 'g') : null;
+      // The text may carry Markdown (bold, italic, links the member wrote). Names are decorated inside
+      // the plain pieces only, and a name inside a written link stays plain so links never nest.
+      const plain = (piece: string, inLink: boolean): string => {
+        const escaped = escapeHtml(piece);
+        if (!pattern) return escaped;
+        return escaped.replace(pattern, (match) => {
+          const url = inLink ? undefined : linkByName.get(match);
+          return url
+            ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="member-name member-name--link">${match}</a>`
+            : `<span class="member-name">${match}</span>`;
+        });
+      };
+      return toHtml(text, { textHtml: plain, linkClass: 'member-name member-name--link' });
     }
 
     const QUOTE_MARK_SVG =

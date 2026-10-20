@@ -718,6 +718,12 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     white-space: pre-wrap;
   }
 
+  .members .story-links {
+    margin: 0;
+    padding-left: 18px;
+    overflow-wrap: anywhere;
+  }
+
   .members .story-photo {
     display: block;
     width: 96px;
@@ -755,6 +761,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
 <script>
   import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch, staffPhotoSrc } from '../../../scripts/lib/staff-client.mjs';
+  import { linksIn } from '../../../scripts/lib/member-markdown.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -1642,6 +1649,22 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
             h('dt', { text: STORY_LABEL[key] }, changed ? h('span', { class: 'flag flag--warn', text: now ? 'Changed' : 'Removed' }) : null),
             h('dd', { class: now ? 'story-text' : 'muted', text: now || '(removed)' }),
             changed && was ? h('details', { class: 'story-was' }, h('summary', { text: 'Currently approved wording' }), h('p', { class: 'story-text', text: was })) : null,
+          ),
+        );
+      }
+      // Where the links in the text go, so a reviewer sees the addresses and not only the words.
+      const linkList = (t: Partial<StoryText> | null | undefined) => [...linksIn(t?.bio ?? ''), ...linksIn(t?.family ?? '')];
+      const linksNow = linkList(st.submitted);
+      const linksWas = linkList(st.approved);
+      const linkKey = (ls: { label: string; href: string }[]) => ls.map((l) => `${l.label}\u0000${l.href}`).join('\n');
+      if (linksNow.length || linksWas.length) {
+        const linkChanged = !!st.approved && linkKey(linksNow) !== linkKey(linksWas);
+        const lines = (ls: { label: string; href: string }[]) => ls.map((l) => h('li', {}, h('strong', { text: l.label }), ` → ${l.href}`));
+        rows.push(
+          h('div', { class: 'story-row' },
+            h('dt', { text: 'Links in the text' }, linkChanged ? h('span', { class: 'flag flag--warn', text: 'Changed' }) : null),
+            linksNow.length ? h('dd', { class: 'story-text' }, h('ul', { class: 'story-links' }, ...lines(linksNow))) : h('dd', { class: 'muted', text: '(none)' }),
+            linkChanged && linksWas.length ? h('details', { class: 'story-was' }, h('summary', { text: 'Currently approved links' }), h('ul', { class: 'story-links' }, ...lines(linksWas))) : null,
           ),
         );
       }

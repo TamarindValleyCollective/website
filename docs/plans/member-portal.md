@@ -49,8 +49,11 @@ Join key is the unit number `F-xx` from Member Master (it matches the vault). Th
 Agreed 2026-10-20. One story per person, public-facing only: no separate members-only version.
 
 - **Editing:** "Your story" page, one section per login in the household card (so partners no longer
-  need hand-merging). Fields as on the form: what you do today, family, one-line "why TVC", photo,
-  social link. Only name and the why line are required. Autosave draft, live card preview (reuses the
+  need hand-merging). Fields as on the form: what you do today, family, one-line "why TVC", photo.
+  Only name and the why line are required. Bio and family take a little Markdown (bold, italic, links)
+  through Bold / Italic / Link buttons: select a name, press Link, paste the address (a missing
+  https:// is added); with the cursor inside a link the button becomes Edit link, with Remove. This
+  replaces the single "profile link" box, and lets a name or any few words link anywhere in the text. Autosave draft, live card preview (reuses the
   `MembersView` card), status chip (Draft / In review / Live).
 - **Check before you submit (member-approved, never automatic):** a "Review my story" step runs a
   spelling, grammar and framing pass and shows suggestions beside the member's own text. Framing

@@ -1198,6 +1198,79 @@ import '../../styles/global.css';
     outline-offset: 2px;
   }
 
+  .md-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0 0 6px;
+  }
+
+  .md-btn {
+    padding: 5px 11px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: 0.84rem;
+    cursor: pointer;
+  }
+
+  .md-btn:hover {
+    border-color: var(--tvc-green-dark);
+    color: var(--tvc-green-dark);
+  }
+
+  .md-btn:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .md-note:empty {
+    display: none;
+  }
+
+  .md-panel {
+    margin: 0 0 8px;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-green-tint);
+  }
+
+  .md-panel-title {
+    margin: 0 0 6px;
+    font-size: 0.88rem;
+  }
+
+  .md-panel-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .md-panel-row input {
+    flex: 1 1 14rem;
+    width: auto;
+    padding: 7px 10px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    font: inherit;
+  }
+
+  .md-panel .story-hint {
+    margin: 6px 0 0;
+  }
+
+  .md-panel .story-hint:empty {
+    display: none;
+  }
+
+  a.md-link {
+    color: var(--tvc-green-dark);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
   .story-save {
     min-height: 1.2em;
     margin: -6px 0 14px;
@@ -1465,14 +1538,14 @@ import '../../styles/global.css';
 
   .dir-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
     gap: 14px;
   }
 
   .dir-card {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
+    align-items: center;
+    gap: 16px;
     padding: 14px 16px;
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
@@ -1579,6 +1652,28 @@ import '../../styles/global.css';
     font-size: 1rem;
   }
 
+  .dir-photo--card,
+  .dir-initial--card {
+    width: 120px;
+    height: 120px;
+    margin: 0;
+  }
+
+  .dir-initial--card {
+    font-size: 2.4rem;
+  }
+
+  /* A couple with two different pictures: two smaller, overlapping. */
+  .dir-faces--2 .dir-photo--card,
+  .dir-faces--2 .dir-initial--card {
+    width: 92px;
+    height: 92px;
+  }
+
+  .dir-card .dir-faces--2 > * + * {
+    margin-left: -34px;
+  }
+
   .dir-photo--lg,
   .dir-initial--lg {
     width: 64px;
@@ -1636,13 +1731,22 @@ import '../../styles/global.css';
     color: var(--tvc-green-dark);
   }
 
-  .dir-name--link {
-    text-decoration: none;
+  /* Every link in a story, a first name's profile link or words the member linked, is bold green and
+     underlined, so it reads as a link beside the plain bold names. */
+  .dir-name--link,
+  .dir-modal a.md-link {
+    color: var(--tvc-green);
+    font-weight: 700;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
   }
 
   .dir-name--link:hover,
-  .dir-name--link:focus-visible {
-    text-decoration: underline;
+  .dir-name--link:focus-visible,
+  .dir-modal a.md-link:hover,
+  .dir-modal a.md-link:focus-visible {
+    color: var(--tvc-orange-text);
   }
 
   .dir-famrow {
@@ -1678,21 +1782,28 @@ import '../../styles/global.css';
     color: var(--tvc-ink-soft);
   }
 
-  .dir-card-top {
+  /* The picture is on the left and vertically centred against the text beside it. */
+  .dir-card-photo {
     display: flex;
-    flex-wrap: wrap;
+    flex: none;
     align-items: center;
-    gap: 6px 10px;
-    font-weight: 700;
   }
 
-  .dir-card-names {
-    flex: 1 1 110px;
+  .dir-card-body {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    align-self: stretch;
+    gap: 6px;
     min-width: 0;
   }
 
+  .dir-card-names {
+    font-weight: 700;
+  }
+
   /* On a card the pills are a footer at the bottom right, pinned to the bottom so they line up across a row. */
-  .dir-card > .dir-pills {
+  .dir-card-body > .dir-pills {
     margin: auto 0 0 auto;
   }
 
@@ -1769,6 +1880,7 @@ import '../../styles/global.css';
 <script>
   import { clearMemberToken, getMemberToken, memberFetch, memberPhotoSrc, MemberAuthError, setMemberToken } from '../../../scripts/lib/member-client.mjs';
   import { preparePhoto } from '../../../scripts/lib/photo-prepare.mjs';
+import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggleMark } from '../../../scripts/lib/member-markdown.mjs';
   import { NOTICE_INTRO, NOTICE_TITLE, PRIVACY_NOTICE_VERSION, SECTIONS } from '../../../scripts/lib/member-privacy.mjs';
 
   declare const google: any;
@@ -1789,6 +1901,24 @@ import '../../styles/global.css';
     if (text !== undefined) el.textContent = text;
     for (const k of kids) if (k) el.append(k);
     return el;
+  }
+  // The text a member wrote (bold, italic and links in Markdown) as DOM nodes. `plain` turns each plain piece
+  // into nodes, so a caller can still decorate names inside it; it is told when the piece is inside a link.
+  function mdNodes(src: string, plain: (s: string, inLink: boolean) => Node[] = (s) => [document.createTextNode(s)]): Node[] {
+    const blocks = renderBlocks(src, {
+      text: (s: string, inLink: boolean) => plain(s, inLink),
+      strong: (k: Node[][]) => [h('strong', '', undefined, ...k.flat())],
+      em: (k: Node[][]) => [h('em', '', undefined, ...k.flat())],
+      a: (href: string, k: Node[][]) => {
+        const a = h('a', 'md-link', undefined, ...k.flat());
+        a.setAttribute('href', href);
+        a.setAttribute('target', '_blank');
+        a.setAttribute('rel', 'noopener noreferrer nofollow');
+        return [a];
+      },
+      br: () => [document.createElement('br')],
+    }) as Node[][][];
+    return blocks.flatMap((para, i) => [...(i ? [document.createElement('br'), document.createElement('br')] : []), ...para.flat()]);
   }
   const SVG_NS = 'http://www.w3.org/2000/svg';
   function icon(paths: string): SVGElement {
@@ -2465,14 +2595,13 @@ import '../../styles/global.css';
       const bio = draft.bio.trim();
       const para = h('p', 'story-card-bio');
       if (bio) {
-        const parts = bio.split(new RegExp(`(\\b${firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b)`));
-        for (const part of parts) para.append(part === firstName ? h('strong', '', part) : part);
+        const boldFirst = (t: string) => t.split(new RegExp(`(\\b${firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b)`)).map((part) => (part === firstName ? h('strong', '', part) : document.createTextNode(part)));
+        para.append(...mdNodes(bio, (t, inLink) => (inLink ? [document.createTextNode(t)] : boldFirst(t))));
       } else para.append(h('em', 'story-empty', 'Nothing here yet'));
       nodes.push(h('div', 'story-card-top', undefined, draft.photo ? photoImg(draft.photo, 'avatar avatar--lg story-photo') : h('span', 'avatar avatar--lg', first(name).slice(0, 1).toUpperCase()), h('div', '', undefined, h('h3', '', name), h('span', `story-vis ${isPublic ? 'story-vis--public' : ''}`, isPublic ? 'Members and tvc.farm' : 'Members only'))));
       nodes.push(para);
-      if (draft.family.trim()) nodes.push(h('p', 'story-card-fam', draft.family.trim()));
+      if (draft.family.trim()) nodes.push(h('p', 'story-card-fam', undefined, ...mdNodes(draft.family.trim())));
       if (draft.why.trim()) nodes.push(h('blockquote', 'story-card-why', draft.why.trim()));
-      if (draft.social.trim()) nodes.push(h('p', 'story-card-social', draft.social.trim().replace(/^https?:\/\/(www\.)?/, '')));
       previewEl.replaceChildren(...(nodes.filter(Boolean) as Node[]));
     }
 
@@ -2619,6 +2748,139 @@ import '../../styles/global.css';
       return h('label', 'story-field', undefined, h('span', 'story-label', label), hint ? h('span', 'story-hint', hint) : null, input);
     }
 
+    // "What you do today" and "Family" take a little Markdown (bold, italic, links). The buttons write it, so
+    // nobody has to know the syntax: select words, press a button. With the cursor inside a link, Link changes
+    // or removes it. Edits go through the browser's own text insertion so Undo keeps working.
+    function putValue(ta: HTMLTextAreaElement, next: { value: string; from: number; to: number }) {
+      const old = ta.value;
+      let a = 0;
+      while (a < old.length && a < next.value.length && old[a] === next.value[a]) a++;
+      let b = 0;
+      while (b < old.length - a && b < next.value.length - a && old[old.length - 1 - b] === next.value[next.value.length - 1 - b]) b++;
+      ta.focus();
+      ta.setSelectionRange(a, old.length - b);
+      const piece = next.value.slice(a, next.value.length - b);
+      if (!document.execCommand('insertText', false, piece)) {
+        ta.setRangeText(piece, a, old.length - b, 'end');
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      ta.setSelectionRange(next.from, next.to);
+    }
+
+    function mdField(name: 'bio' | 'family', label: string, hint: string, rows: number): HTMLElement {
+      const ta = document.createElement('textarea');
+      ta.rows = rows;
+      ta.id = `story-${name}`;
+      ta.addEventListener('input', () => { draft[name] = ta.value; edited(); });
+      fields[name] = ta;
+      const lab = h('label', 'story-label', label);
+      lab.setAttribute('for', ta.id);
+
+      const note = h('p', 'story-hint md-note');
+      note.setAttribute('role', 'status');
+      const say = (m: string, warn = false) => { note.textContent = m; note.className = `story-hint md-note${warn ? ' story-hint--warn' : ''}`; };
+      const btn = (html: string, title: string, onClick: () => void) => {
+        const b = h('button', 'md-btn') as HTMLButtonElement;
+        b.type = 'button';
+        b.innerHTML = html; // fixed constants only
+        b.title = title;
+        b.addEventListener('mousedown', (e) => e.preventDefault()); // keep the selection in the box
+        b.addEventListener('click', onClick);
+        return b;
+      };
+
+      const mark = (m: string) => {
+        const from = ta.selectionStart, to = ta.selectionEnd;
+        if (from === to) { say('Select the words first, then press the button.', true); return; }
+        say('');
+        putValue(ta, toggleMark(ta.value, from, to, m));
+      };
+
+      // the link panel
+      const panel = h('div', 'md-panel');
+      panel.hidden = true;
+      const openLink = () => {
+        const from = ta.selectionStart, to = ta.selectionEnd;
+        const existing = linkAt(ta.value, from, to);
+        const selected = ta.value.slice(from, to);
+        if (!existing) {
+          if (from === to) { say('Select the words you want to turn into a link (your first name, for example), then press Link.', true); return; }
+          if (linkAt(ta.value, from, from) || linkAt(ta.value, to, to)) { say('That selection overlaps another link. Select other words, or put the cursor inside the link to change it.', true); return; }
+          if (/\n/.test(selected)) { say('Select words on one line, for example just a name.', true); return; }
+          if (selected.trim().length > 80) { say('Select fewer words: a name or a short phrase.', true); return; }
+        }
+        say('');
+        const words = existing ? existing.label : selected.trim();
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.inputMode = 'url';
+        input.autocomplete = 'off';
+        input.placeholder = 'Paste the address, e.g. linkedin.com/in/your-name';
+        input.value = existing ? existing.url : '';
+        input.setAttribute('aria-label', 'Web address');
+        const err = h('p', 'story-hint story-hint--warn');
+        err.setAttribute('role', 'alert');
+        const close = () => { panel.hidden = true; panel.replaceChildren(); ta.focus(); ta.setSelectionRange(from, to); };
+        const save = () => {
+          const u = normalizeUrl(input.value);
+          if (!u.ok) { err.textContent = u.error; input.focus(); return; }
+          panel.hidden = true; panel.replaceChildren();
+          putValue(ta, setLink(ta.value, from, to, u.url));
+        };
+        const act = (text: string, cls: string, fn: () => void) => { const b = h('button', cls, text) as HTMLButtonElement; b.type = 'button'; b.addEventListener('click', fn); return b; };
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } });
+        const row = h('div', 'md-panel-row', undefined, input, act(existing ? 'Save' : 'Add link', 'btn btn--solid', save));
+        if (existing) row.append(act('Remove link', 'btn', () => { panel.hidden = true; panel.replaceChildren(); putValue(ta, removeLink(ta.value, from, to)); }));
+        row.append(act('Cancel', 'btn', close));
+        panel.replaceChildren(h('p', 'md-panel-title', undefined, existing ? 'Change the link on ' : 'Link ', h('strong', '', `“${words.length > 40 ? `${words.slice(0, 37)}…` : words}”`), existing ? '' : ' to:'), row, err);
+        panel.hidden = false;
+        input.focus();
+        input.select();
+      };
+
+      ta.addEventListener('keydown', (e) => {
+        if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+        const k = e.key.toLowerCase();
+        if (k === 'b' || k === 'i' || k === 'k') { e.preventDefault(); if (k === 'k') openLink(); else mark(k === 'b' ? '**' : '*'); }
+      });
+      // The Link button says what it will do at the cursor.
+      const linkBtn = btn('Link', 'Link the selected words to a web address (Ctrl/Cmd+K)', openLink);
+      const syncLink = () => { linkBtn.textContent = linkAt(ta.value, ta.selectionStart, ta.selectionEnd) ? 'Edit link' : 'Link'; };
+      for (const ev of ['select', 'keyup', 'mouseup', 'input', 'focus'] as const) ta.addEventListener(ev, syncLink);
+
+      const bar = h('div', 'md-bar', undefined, btn('<strong>B</strong> Bold', 'Bold (Ctrl/Cmd+B)', () => mark('**')), btn('<em>I</em> Italic', 'Italic (Ctrl/Cmd+I)', () => mark('*')), linkBtn);
+      return h('div', 'story-field', undefined, lab, h('span', 'story-hint', hint), bar, note, panel, ta);
+    }
+
+    // Before the editor had links in the text, a story had one "profile link" that linked the person's first
+    // name. Opening such a story, that link is written into the text where the name first appears, so it
+    // can be seen, changed or removed like any other. (It is saved with the next change.) If the name is not in
+    // the text, or the address is not usable, the old link stays and is shown with a Remove button.
+    function foldProfileLink() {
+      const url = draft.social.trim();
+      if (!url) return;
+      const href = normalizeUrl(url);
+      if (!href.ok) return;
+      const re = new RegExp(`(?<![\\p{L}\\p{N}_])${firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}_])`, 'gu');
+      for (const f of ['bio', 'family'] as const) {
+        for (const m of draft[f].matchAll(re)) {
+          if (linkAt(draft[f], m.index!, m.index! + m[0].length)) continue;
+          draft[f] = `${draft[f].slice(0, m.index)}[${m[0]}](${href.url})${draft[f].slice(m.index! + m[0].length)}`;
+          draft.social = '';
+          return;
+        }
+      }
+    }
+    function legacyProfile(): HTMLElement | null {
+      if (!draft.social) return null;
+      const row = h('div', 'story-field story-legacy', undefined, h('p', 'story-hint', `You also have a profile link (${draft.social.replace(/^https?:\/\/(www\.)?/, '')}) that is not attached to any words in your story. To use it, select a name above and press Link.`));
+      const rm = h('button', 'btn', 'Remove this link') as HTMLButtonElement;
+      rm.type = 'button';
+      rm.addEventListener('click', () => { draft.social = ''; row.remove(); edited(); });
+      row.append(rm);
+      return row;
+    }
+
     // Choosing a photo makes the two JPEGs in the browser (preparePhoto), uploads them, and the draft then
     // points at the photo. The photo is submitted and reviewed with the text.
     let paintPhoto = () => {};
@@ -2686,6 +2948,7 @@ import '../../styles/global.css';
         story = data.story;
         firstName = data.firstName || firstName;
         Object.assign(draft, story!.draft);
+        foldProfileLink();
         isPublic = story!.showOnPublicSite;
       } catch (e) {
         loading.textContent = msg(e);
@@ -2694,15 +2957,15 @@ import '../../styles/global.css';
       loading.remove();
       const form = h('div', 'story-form', undefined,
         statusEl,
-        field('bio', 'What do you do today?', 'In your own words; the check can help with the house style (third person, e.g. "Asha works as…").', 5),
-        field('family', 'Family (optional)', 'First names are enough. Children\'s names and ages become public if you turn on "Show on tvc.farm".', 3),
+        mdField('bio', 'What do you do today?', 'In your own words; the check can help with the house style (third person, e.g. "Asha works as…"). To link a name or a few words to a web page, select them and press Link. A link shows in the box as [words](address); the preview on the right shows how it will look.', 5),
+        mdField('family', 'Family (optional)', 'First names are enough. Children\'s names and ages become public if you turn on "Show on tvc.farm". The same buttons work here.', 3),
         field('why', 'In one sentence, why are you part of TVC?', 'Required. Shown as a quote on your card, in your own voice.', 2),
-        field('social', 'LinkedIn or another profile (optional)', null, 1),
+        legacyProfile(),
         photoField(),
         saveEl, reviewEl, submitEl);
       const side = h('aside', 'story-side', undefined, h('p', 'story-prev-label', 'Preview, as others will see your card'), previewEl);
       root.append(h('div', 'story', undefined, form, side));
-      for (const k of ['bio', 'family', 'why', 'social'] as const) fields[k].value = draft[k];
+      for (const k of ['bio', 'family', 'why'] as const) fields[k].value = draft[k];
       renderAll();
     })();
     return root;
@@ -2743,7 +3006,7 @@ import '../../styles/global.css';
     only.type = 'checkbox';
     only.addEventListener('change', () => { onlyStories = only.checked; draw(); });
 
-    const snippet = (t: string) => (t.length > 120 ? `${t.slice(0, 117).trimEnd()}…` : t);
+    const snippet = (t: string) => { const p = toPlain(t); return p.length > 120 ? `${p.slice(0, 117).trimEnd()}…` : p; };
 
     // A round photo when the person has one, otherwise their initial. Photos are 400x400 squares.
     // size: '' (card), 'lg' or 'xl' (the popup's header).
@@ -2769,7 +3032,7 @@ import '../../styles/global.css';
       const all = distinctFaces(people);
       const shown = all.slice(0, limit).map((p) => face(p, size));
       const extra = all.length - shown.length;
-      return h('span', 'dir-faces', undefined, ...shown, extra > 0 ? h('span', 'dir-more', `+${extra}`) : null);
+      return h('span', `dir-faces dir-faces--${Math.min(shown.length, 2)}`, undefined, ...shown, extra > 0 ? h('span', 'dir-more', `+${extra}`) : null);
     }
 
     // "Bo", "Bo & Cy", "Ishan, Kavya & Leela"
@@ -2795,10 +3058,14 @@ import '../../styles/global.css';
       const withStory = primary.find((p) => p.story?.bio) ?? primary.find((p) => p.story) ?? hh.people.find((p) => p.story?.bio) ?? hh.people.find((p) => p.story);
       // First names on the card; the full names are in the popup, and search still matches them.
       const names = joinNames(primary.map((p) => (p.isYou ? `${first(p.name)} (you)` : first(p.name))));
+      // The picture sits on the left, vertically centred against the text; names, the story's first lines and the
+      // farm and house pills are in a column beside it.
       const b = h('button', `dir-card${hh.people.some((p) => p.isYou) ? ' dir-card--you' : ''}`, undefined,
-        h('span', 'dir-card-top', undefined, faces(primary), h('span', 'dir-card-names', names)),
-        h('span', 'dir-card-text', withStory?.story?.bio ? snippet(withStory.story.bio) : withStory?.story?.why ? `“${snippet(withStory.story.why)}”` : 'Has not shared a story yet'),
-        pills(hh, false),
+        h('span', 'dir-card-photo', undefined, faces(primary, 'card')),
+        h('span', 'dir-card-body', undefined,
+          h('span', 'dir-card-names', names),
+          h('span', 'dir-card-text', withStory?.story?.bio ? snippet(withStory.story.bio) : withStory?.story?.why ? `“${snippet(withStory.story.why)}”` : 'Has not shared a story yet'),
+          pills(hh, false)),
       );
       b.setAttribute('type', 'button');
       b.addEventListener('click', () => openProfile(hh));
@@ -2837,7 +3104,10 @@ import '../../styles/global.css';
         a.title = 'Open their profile';
         return a;
       };
-      const emphasise = (text: string): Node[] => (firsts.length ? text.split(bold).map((part, i) => (i % 2 ? nameNode(part) : document.createTextNode(part))) : [document.createTextNode(text)]);
+      // The text may carry the member's own bold, italic and links; names are set in bold inside the plain pieces
+      // (a name inside a written link stays plain, so links never nest).
+      const withNames = (t: string, inLink: boolean): Node[] => (firsts.length && !inLink ? t.split(bold).map((part, i) => (i % 2 ? nameNode(part) : document.createTextNode(part))) : [document.createTextNode(t)]);
+      const emphasise = (text: string): Node[] => mdNodes(text, withNames);
 
       const familyRow = (...kids: Kid[]) => h('div', 'dir-famrow', undefined, icon(FAMILY_ICON), h('div', '', undefined, ...kids));
 

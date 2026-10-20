@@ -1496,12 +1496,13 @@ never touches Netlify either.
   script or credentials.
 
 - **Member stories (`members-me.mts`, migration 0044).** A member writes a short public-facing
-  story about themselves (what they do, family, one-line "why TVC", a profile link) on the portal's
+  story about themselves (what they do, family, one-line "why TVC") on the portal's
   "Your story" page, which replaces the "TVC Members: Your Story" Google Form. `member_stories` has
   one row per person (FK to `member_people`) with three copies of the text: `draft` (autosaved by
   `POST /api/members-me/story`), `submitted` (the snapshot in review, written by
   `POST /api/members-me/story-submit`, audit-first as `member.story.submit`, never with the text) and
-  `approved` (written when the core team approves), so an edit never disturbs approved text. `show_on_public_site` defaults to off. `POST /api/members-me/story-review` returns
+  `approved` (written when the core team approves), so an edit never disturbs approved text. `show_on_public_site` defaults to off.
+  The bio and family text may carry a small Markdown subset (`**bold**`, `*italic*`, `[words](https://address)` links, blank line = paragraph; no HTML, images or headings): the editor's Bold/Italic/Link buttons write it, and one parser (`scripts/lib/member-markdown.mjs`) is shared by the editor preview, the directory popup, the staff queue (which lists each link's address), the public export and `MembersView`, so a link is only ever an explicit http(s) address. The writing check may fix words but a suggestion that would change an address is dropped. The old single "profile link" is still read (it links the first name) until the member opens their story, when it is written into the text as a normal link. `POST /api/members-me/story-review` returns
   suggestions on spelling, grammar, tone and house style (third person) from the Anthropic API
   (`lib/anthropic.ts`, model `STORY_REVIEW_MODEL`, default `claude-sonnet-5`; 10 checks per member and
   300 for the portal per day, counted in `usage-meter`), plus fixed checks that need no model (children
