@@ -110,7 +110,8 @@ Agreed 2026-10-20. One story per person, public-facing only: no separate members
   households (name, farm plot, house number, cluster) with each person's approved story; opt-out via
   `directory_visible`; no contact details, land records or documents. Privacy notice v4.
   **Seeding the 53 existing cards (branch `member-stories-seed`):** see "Seeding the cards" below.
-  **Still to do:** photos, and the batched export to the public Members page.
+  **Photos (branch `member-photos`, stacked on the seed branch):** see "Photos" below.
+  **Still to do:** the batched export to the public Members page, and notifying a member when their story is decided.
 
 ## Access and roles
 
@@ -199,12 +200,40 @@ are just a name and are left alone.
      any wrong or NOT FOUND row with an alias (or accept that a person who is not in the register gets no story).
   6. Run `seed-apply.sql`. It prints how many stories were added. Running it again adds none, so cards can
      be fixed and the apply re-run in rounds.
+  7. Run `seed-photos.sql`. It attaches each card's existing public photo to the people seeded from it (see
+     "Photos"). It never replaces a photo and adds nothing on a re-run.
 - **Checked** against a real Postgres 17 with migrations 0028, 0040 and 0044 and fake people built around
   real card names: matched, ambiguous, unmatched, inactive, partly matched, mixed first-name and full-name
   cards, two-quote cards, an existing story left alone, a re-run, overrides, and the spelling cases the real
   register showed (initials first, variant spellings, longer first names, a child sharing a parent's first
   letters). **Run for real on 2026-10-20:** 27 of the 40 cards matched on the first pass (52 stories); the
   other 13 needed a plot and, for some, a looser match.
+
+### Photos
+
+- **Where:** a story's photo is a string inside its draft / submitted / approved copy, like the text (no
+  migration), so it is reviewed with the story and an edit never changes the live photo. Either a uuid (an
+  upload, in the same private R2 bucket as the land documents, `member-photos/<person>/<photo>[-full].jpg`)
+  or a path under `/images/members/` (a photo already on the public site).
+- **Upload:** in "Your story" (Editor A). The browser makes the two JPEGs (a centre-cropped 400px square for
+  the card, an uncropped copy up to 1600px for click-to-enlarge); drawing through a canvas also strips the
+  camera's metadata, GPS included. The server never trusts that: it checks both are JPEGs, the sizes and
+  that no EXIF block remains (`scripts/lib/member-photo.mjs`). 10 uploads per member per day.
+- **Who sees it:** nothing is public. A photo is served only to its author (any copy) or, for the approved
+  photo of someone who is listed, to any signed-in member. The page fetches it with the member's sign-in
+  and shows it from a blob URL (the CSP already allows `blob:`). Staff reviewers see a submitted photo in the
+  approval queue, with the approved one beside it for comparison. A photo of a child cannot be detected, so
+  the editor warns and the reviewer is the check.
+- **Faces in the directory:** one face for a single member, overlapping faces for a couple, "+N" beyond two;
+  people who share one photo (the seeded cards use a couple's joint picture) show it once; no photo shows
+  an initial. The popup gives each shared story its own faces.
+- **Seeding:** `seed-photos.sql` (run last, after `seed-apply.sql`) attaches each card's existing public
+  photo to the people seeded from it, where they have none, and never replaces an uploaded one. The members
+  host serves `/images/members/*` for it (a redirect rule in `netlify.toml`).
+- **Privacy notice v5** names photos (kept privately, metadata removed, reviewed, visible to members once
+  approved, public only with "Show on tvc.farm").
+- **Not built:** click-to-enlarge (the uncropped copy is stored for it), HEIC photos, and moving an approved
+  public photo out of R2 for the public site (part of the public export).
 
 ### Land documents (built 2026-10-19, ahead of step 2's change requests)
 

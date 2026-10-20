@@ -1205,6 +1205,31 @@ import '../../styles/global.css';
     color: var(--tvc-ink-soft);
   }
 
+  .story-photo {
+    object-fit: cover;
+  }
+
+  .story-photo-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .story-thumb {
+    flex: none;
+  }
+
+  .story-photo-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .photo-missing {
+    visibility: hidden;
+  }
+
   .story-box {
     margin: 0 0 16px;
     padding: 14px 16px;
@@ -1579,11 +1604,63 @@ import '../../styles/global.css';
     font-weight: 700;
   }
 
-  .dir-person-head {
+  .dir-hero {
     display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-bottom: 8px;
+    justify-content: center;
+    margin: 4px 0 10px;
+  }
+
+  .dir-hero .dir-faces > * + * {
+    margin-left: -30px;
+  }
+
+  .dir-photo--xl,
+  .dir-initial--xl {
+    width: 112px;
+    height: 112px;
+    margin: 0;
+  }
+
+  .dir-initial--xl {
+    font-size: 2rem;
+  }
+
+  .dir-person > h3 {
+    margin: 0 0 8px;
+    font-size: 1.3rem;
+    text-align: center;
+  }
+
+  .dir-name {
+    font-weight: 700;
+    color: var(--tvc-green-dark);
+  }
+
+  .dir-famrow {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 4px 0 10px;
+  }
+
+  .dir-famrow > svg {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin-top: 3px;
+    fill: none;
+    stroke: var(--tvc-green);
+    stroke-width: 1.7;
+    stroke-linecap: round;
+  }
+
+  .dir-famrow p {
+    margin: 0;
+  }
+
+  .dir-household {
+    padding-top: 6px;
+    border-top: 1px solid var(--tvc-line);
   }
 
   .dir-cite {
@@ -1599,10 +1676,6 @@ import '../../styles/global.css';
   .dir-who {
     font-size: 0.85rem;
     color: var(--tvc-ink-soft);
-  }
-
-  .dir-person-head h3 {
-    margin: 0;
   }
 
   .dir-card-top {
@@ -1702,7 +1775,8 @@ import '../../styles/global.css';
 </style>
 
 <script>
-  import { clearMemberToken, getMemberToken, memberFetch, MemberAuthError, setMemberToken } from '../../../scripts/lib/member-client.mjs';
+  import { clearMemberToken, getMemberToken, memberFetch, memberPhotoSrc, MemberAuthError, setMemberToken } from '../../../scripts/lib/member-client.mjs';
+  import { preparePhoto } from '../../../scripts/lib/photo-prepare.mjs';
   import { NOTICE_INTRO, NOTICE_TITLE, PRIVACY_NOTICE_VERSION, SECTIONS } from '../../../scripts/lib/member-privacy.mjs';
 
   declare const google: any;
@@ -1731,6 +1805,17 @@ import '../../styles/global.css';
     s.setAttribute('aria-hidden', 'true');
     s.innerHTML = paths; // fixed constants only, never server data
     return s;
+  }
+  // A story photo as an <img>: a path on the public site as it is, an upload fetched with the member's
+  // sign-in (nothing is served without it). If it cannot be loaded the image just disappears.
+  function photoImg(ref: string, cls: string, size: 'square' | 'full' = 'square'): HTMLImageElement {
+    const img = document.createElement('img');
+    img.className = cls;
+    img.alt = '';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    memberPhotoSrc(ref, size).then((src) => { img.src = src; }).catch(() => img.classList.add('photo-missing'));
+    return img;
   }
   const first = (full: string) => full.trim().split(/\s+/).find((w) => w.length > 1) ?? full;
   const acresFmt = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -2323,7 +2408,7 @@ import '../../styles/global.css';
   // right. "Check & submit" runs the writing check first; the member accepts or dismisses
   // each suggestion, and only then is the story handed to the core team. Nothing the check
   // suggests is ever applied without the member pressing Accept.
-  type StoryDraft = { bio: string; family: string; why: string; social: string };
+  type StoryDraft = { bio: string; family: string; why: string; social: string; photo: string };
   type StoryView = { draft: StoryDraft; showOnPublicSite: boolean; status: string; hasUnsubmittedChanges: boolean; reviewerNote: string | null; hasApproved: boolean };
   type Suggestion = { field: 'bio' | 'family' | 'why'; kind: string; before?: string; after?: string; why?: string; note?: string; done?: boolean };
   const STORY_FIELD: Record<string, string> = { bio: 'What you do today', family: 'Family', why: 'Why TVC' };
@@ -2335,12 +2420,15 @@ import '../../styles/global.css';
       crumbs('Home', 'Your story'),
       h('h1', 'page-title', 'Your story', h('small', '', 'Your card for the collective')),
       h('p', 'lede', 'Say what you are comfortable sharing; only the one-line "why TVC" is needed. The core team reads every story before it appears anywhere. Once approved, other members can read it in the Directory; it goes on tvc.farm only if you switch on "Show on tvc.farm".'),
-      me!.directoryVisible ? null : h('p', 'lede lede--warn', 'You are not listed in the member directory, so other members cannot see your story. You can change that in your account menu, under Your details.'),
+      // (not `cond ? null : el`: append(null) writes the text "null")
+      ...(me!.directoryVisible ? [] : [h('p', 'lede lede--warn', 'You are not listed in the member directory, so other members cannot see your story. You can change that in your account menu, under Your details.')]),
     );
     const loading = h('p', 'lede', 'Loading your story…');
     root.append(loading);
 
-    const draft: StoryDraft = { bio: '', family: '', why: '', social: '' };
+    const draft: StoryDraft = { bio: '', family: '', why: '', social: '', photo: '' };
+    // Saves and checks carry the text only: the photo is changed by its own endpoints.
+    const textOf = (d: StoryDraft) => ({ bio: d.bio, family: d.family, why: d.why, social: d.social });
     let story: StoryView | null = null;
     let firstName = first(me!.name);
     let isPublic = false;
@@ -2388,7 +2476,7 @@ import '../../styles/global.css';
         const parts = bio.split(new RegExp(`(\\b${firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b)`));
         for (const part of parts) para.append(part === firstName ? h('strong', '', part) : part);
       } else para.append(h('em', 'story-empty', 'Nothing here yet'));
-      nodes.push(h('div', 'story-card-top', undefined, h('span', 'avatar avatar--lg', first(name).slice(0, 1).toUpperCase()), h('div', '', undefined, h('h3', '', name), h('span', `story-vis ${isPublic ? 'story-vis--public' : ''}`, isPublic ? 'Members and tvc.farm' : 'Members only'))));
+      nodes.push(h('div', 'story-card-top', undefined, draft.photo ? photoImg(draft.photo, 'avatar avatar--lg story-photo') : h('span', 'avatar avatar--lg', first(name).slice(0, 1).toUpperCase()), h('div', '', undefined, h('h3', '', name), h('span', `story-vis ${isPublic ? 'story-vis--public' : ''}`, isPublic ? 'Members and tvc.farm' : 'Members only'))));
       nodes.push(para);
       if (draft.family.trim()) nodes.push(h('p', 'story-card-fam', draft.family.trim()));
       if (draft.why.trim()) nodes.push(h('blockquote', 'story-card-why', draft.why.trim()));
@@ -2471,7 +2559,7 @@ import '../../styles/global.css';
         saveState = 'saving';
         renderStatus();
         try {
-          const { status, data } = await memberFetch('/api/members-me/story', { method: 'POST', body: { ...draft, showOnPublicSite: isPublic } });
+          const { status, data } = await memberFetch('/api/members-me/story', { method: 'POST', body: { ...textOf(draft), showOnPublicSite: isPublic } });
           if (status !== 200) throw new Error(data.error || 'Could not save your draft.');
           story = data.story; // the server's view of where the story stands; the text on screen is left alone
           saveState = 'saved';
@@ -2489,7 +2577,7 @@ import '../../styles/global.css';
       checking = true; message = ''; notice = null;
       renderReview(); renderSubmit();
       try {
-        const { status, data } = await memberFetch('/api/members-me/story-review', { method: 'POST', body: { ...draft, showOnPublicSite: isPublic } });
+        const { status, data } = await memberFetch('/api/members-me/story-review', { method: 'POST', body: { ...textOf(draft), showOnPublicSite: isPublic } });
         if (status !== 200) throw new Error(data.error || 'The check did not work. Try again.');
         suggestions = (data.suggestions as Suggestion[]).map((s) => ({ ...s, done: false }));
         notice = data.notice ?? null;
@@ -2539,6 +2627,66 @@ import '../../styles/global.css';
       return h('label', 'story-field', undefined, h('span', 'story-label', label), hint ? h('span', 'story-hint', hint) : null, input);
     }
 
+    // Choosing a photo makes the two JPEGs in the browser (preparePhoto), uploads them, and the draft then
+    // points at the photo. The photo is submitted and reviewed with the text.
+    let paintPhoto = () => {};
+    function photoField(): HTMLElement {
+      const thumb = h('span', 'story-thumb');
+      const note = h('p', 'story-hint', 'Shown on your card. Photos of children become public if you turn on "Show on tvc.farm". It is kept privately and checked with your story.');
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/jpeg,image/png,image/webp';
+      input.hidden = true;
+      const choose = h('button', 'btn', 'Choose a photo') as HTMLButtonElement;
+      choose.type = 'button';
+      choose.addEventListener('click', () => input.click());
+      const remove = h('button', 'btn', 'Remove photo') as HTMLButtonElement;
+      remove.type = 'button';
+      let busy = false;
+      const say = (m: string, warn = false) => { note.textContent = m; note.className = `story-hint${warn ? ' story-hint--warn' : ''}`; };
+      paintPhoto = () => {
+        thumb.replaceChildren(draft.photo ? photoImg(draft.photo, 'avatar avatar--lg story-photo') : h('span', 'avatar avatar--lg', first(me!.name).slice(0, 1).toUpperCase()));
+        choose.textContent = draft.photo ? 'Change photo' : 'Choose a photo';
+        remove.hidden = !draft.photo;
+        choose.disabled = remove.disabled = busy;
+      };
+      async function send(work: () => Promise<{ status: number; data: any }>, doing: string) {
+        busy = true; say(doing); paintPhoto();
+        try {
+          const { status, data } = await work();
+          if (status !== 200) throw new Error(data.error || 'Could not save the photo. Try again.');
+          story = data.story;
+          draft.photo = story!.draft.photo;
+          say('Saved. It goes to the core team with your story when you submit.');
+          renderStatus(); renderPreview(); renderSubmit();
+        } catch (e) {
+          say(msg(e), true);
+        } finally {
+          busy = false; paintPhoto();
+        }
+      }
+      input.addEventListener('change', async () => {
+        const file = input.files?.[0];
+        input.value = '';
+        if (!file) return;
+        busy = true; say('Preparing your photo…'); paintPhoto();
+        let prepared: { square: Blob; full: Blob };
+        try {
+          prepared = await preparePhoto(file);
+        } catch (e) {
+          busy = false; say(msg(e), true); paintPhoto();
+          return;
+        }
+        const body = new FormData();
+        body.set('square', prepared.square, 'square.jpg');
+        body.set('full', prepared.full, 'full.jpg');
+        await send(() => memberFetch('/api/members-me/story-photo', { method: 'POST', body }), 'Uploading…');
+      });
+      remove.addEventListener('click', () => void send(() => memberFetch('/api/members-me/story-photo-remove', { method: 'POST', body: {} }), 'Removing…'));
+      paintPhoto();
+      return h('div', 'story-field', undefined, h('span', 'story-label', 'Photo (optional)'), h('div', 'story-photo-row', undefined, thumb, h('div', '', undefined, h('div', 'story-photo-btns', undefined, choose, remove), note)), input);
+    }
+
     void (async () => {
       try {
         const { status, data } = await memberFetch('/api/members-me/story');
@@ -2558,7 +2706,7 @@ import '../../styles/global.css';
         field('family', 'Family (optional)', 'First names are enough. Children\'s names and ages become public if you turn on "Show on tvc.farm".', 3),
         field('why', 'In one sentence, why are you part of TVC?', 'Required. Shown as a quote on your card, in your own voice.', 2),
         field('social', 'LinkedIn or another profile (optional)', null, 1),
-        h('p', 'story-hint', 'Photo: coming soon. The photo on the Members page stays as it is for now.'),
+        photoField(),
         saveEl, reviewEl, submitEl);
       const side = h('aside', 'story-side', undefined, h('p', 'story-prev-label', 'Preview, as others will see your card'), previewEl);
       root.append(h('div', 'story', undefined, form, side));
@@ -2573,9 +2721,9 @@ import '../../styles/global.css';
   // cluster, and each person's approved story. Never contact details; the server sends none
   // (members-me.mts handleDirectory). A member who turned their listing off is not in this list.
   type DirStory = { bio: string; family: string; why: string; social: string; onPublicSite: boolean };
-  type DirPerson = { name: string; isYou: boolean; photo?: string | null; story: DirStory | null };
+  type DirPerson = { name: string; isYou: boolean; primary?: boolean; photo?: string | null; story: DirStory | null };
   type DirGroup = { people: { name: string; isYou: boolean }[]; bio: string; family: string; quotes: { name: string | null; why: string }[]; links: { name: string; url: string }[]; onPublicSite: boolean };
-  type DirHousehold = { farmUnit: string; houseNo: string | null; cluster: string | null; people: DirPerson[]; groups: DirGroup[]; withoutStory: { name: string; isYou: boolean }[]; hasStory: boolean };
+  type DirHousehold = { farmUnit: string; houseNo: string | null; cluster: string | null; people: DirPerson[]; groups: DirGroup[]; withoutStory: { name: string; isYou: boolean }[]; familyMembers: { name: string; isYou: boolean }[]; hasStory: boolean };
 
   function viewDirectory(): HTMLElement {
     const root = h('div');
@@ -2606,22 +2754,29 @@ import '../../styles/global.css';
     const snippet = (t: string) => (t.length > 120 ? `${t.slice(0, 117).trimEnd()}…` : t);
 
     // A round photo when the person has one, otherwise their initial. Photos are 400x400 squares.
-    function face(p: DirPerson, large = false): HTMLElement {
-      if (p.photo) {
-        const img = document.createElement('img');
-        img.className = `dir-photo${large ? ' dir-photo--lg' : ''}`;
-        img.src = p.photo;
-        img.alt = '';
-        img.loading = 'lazy';
-        return img;
-      }
-      return h('span', `avatar dir-initial${large ? ' dir-initial--lg' : ''}`, first(p.name).slice(0, 1).toUpperCase());
+    // size: '' (card), 'lg' or 'xl' (the popup's header).
+    function face(p: { name: string; photo?: string | null }, size = ''): HTMLElement {
+      const sz = size ? ` dir-photo--${size}` : '';
+      if (p.photo) return photoImg(p.photo, `dir-photo${sz}`);
+      return h('span', `avatar dir-initial${size ? ` dir-initial--${size}` : ''}`, first(p.name).slice(0, 1).toUpperCase());
     }
 
+    // People who share one photo (a couple's joint picture) are shown once.
+    const distinctFaces = (people: { name: string; photo?: string | null }[]) => {
+      const seen = new Set<string>();
+      return people.filter((p) => {
+        const key = p.photo || `name:${p.name}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    };
+
     // One face for a single member, two overlapping for a couple, and "+N" beyond that.
-    function faces(people: DirPerson[]): HTMLElement {
-      const shown = people.slice(0, 2).map((p) => face(p));
-      const extra = people.length - shown.length;
+    function faces(people: { name: string; photo?: string | null }[], size = '', limit = 2): HTMLElement {
+      const all = distinctFaces(people);
+      const shown = all.slice(0, limit).map((p) => face(p, size));
+      const extra = all.length - shown.length;
       return h('span', 'dir-faces', undefined, ...shown, extra > 0 ? h('span', 'dir-more', `+${extra}`) : null);
     }
 
@@ -2643,11 +2798,13 @@ import '../../styles/global.css';
     }
 
     function card(hh: DirHousehold): HTMLElement {
-      const withStory = hh.people.find((p) => p.story?.bio) ?? hh.people.find((p) => p.story);
+      // The card names and shows only the primary members (the owners); the popup has everyone.
+      const primary = hh.people.filter((p) => p.primary !== false);
+      const withStory = primary.find((p) => p.story?.bio) ?? primary.find((p) => p.story) ?? hh.people.find((p) => p.story?.bio) ?? hh.people.find((p) => p.story);
       // First names on the card; the full names are in the popup, and search still matches them.
-      const names = joinNames(hh.people.map((p) => (p.isYou ? `${first(p.name)} (you)` : first(p.name))));
+      const names = joinNames(primary.map((p) => (p.isYou ? `${first(p.name)} (you)` : first(p.name))));
       const b = h('button', `dir-card${hh.people.some((p) => p.isYou) ? ' dir-card--you' : ''}`, undefined,
-        h('span', 'dir-card-top', undefined, faces(hh.people), h('span', 'dir-card-names', names)),
+        h('span', 'dir-card-top', undefined, faces(primary), h('span', 'dir-card-names', names)),
         h('span', 'dir-card-text', withStory?.story?.bio ? snippet(withStory.story.bio) : withStory?.story?.why ? `“${snippet(withStory.story.why)}”` : 'Has not shared a story yet'),
         pills(hh, false),
       );
@@ -2656,17 +2813,26 @@ import '../../styles/global.css';
       return b;
     }
 
-    // The household's profile in a native dialog: the list underneath keeps its scroll position and
-    // search, Esc and a click outside close it, and focus returns to the card that opened it.
+    // The household's profile in a native dialog, laid out like the card on the public Members page: the
+    // photo, the primary members' names, their story (first names in bold), the family in its own section
+    // with an icon, and the quote. The list underneath keeps its scroll position and search; Esc and a
+    // click outside close it, and focus returns to the card that opened it.
+    const FAMILY_ICON = '<circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><circle cx="17" cy="9" r="2.3"/><path d="M16.2 14.4c2.8.2 4.8 2 4.8 5.1"/>';
     function openProfile(hh: DirHousehold) {
       const dlg = document.createElement('dialog');
       dlg.className = 'modal dir-modal';
-      dlg.setAttribute('aria-label', hh.people.map((p) => p.name).join(' and '));
+      dlg.setAttribute('aria-label', joinNames(hh.people.filter((p) => p.primary !== false).map((p) => p.name)));
       const close = h('button', 'dir-close', '×');
       close.setAttribute('type', 'button');
       close.setAttribute('aria-label', 'Close');
       close.addEventListener('click', () => dlg.close());
       const label = (p: { name: string; isYou: boolean }) => (p.isYou ? `${p.name} (you)` : p.name);
+
+      // The first names of everyone in the household are set in bold wherever the text mentions them.
+      const firsts = [...new Set(hh.people.map((p) => first(p.name)))].sort((a, b) => b.length - a.length);
+      const bold = new RegExp(`\\b(${firsts.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`);
+      const emphasise = (text: string): Node[] => (firsts.length ? text.split(bold).map((part, i) => (i % 2 ? h('strong', 'dir-name', part) : document.createTextNode(part))) : [document.createTextNode(text)]);
+
       const link = (url: string, who?: string) => {
         if (!/^https?:\/\//i.test(url)) return null;
         const a = h('a', 'dir-link', url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''));
@@ -2675,14 +2841,18 @@ import '../../styles/global.css';
         a.setAttribute('rel', 'noopener noreferrer nofollow');
         return h('p', 'dir-linkrow', undefined, who ? h('span', 'dir-who', `${first(who)}: `) : null, a);
       };
+      const familyRow = (...kids: Kid[]) => h('div', 'dir-famrow', undefined, icon(FAMILY_ICON), h('div', '', undefined, ...kids));
+
       // One section per shared story (identical bio and family are shown once), with each person's own
       // quote and link under it. Quotes are captioned by first name only when they differ.
       const sections = hh.groups.map((g) => {
-        const faceStack = h('span', 'dir-faces', undefined, ...g.people.slice(0, 3).map((gp) => face(hh.people.find((x) => x.name === gp.name) ?? { name: gp.name, isYou: gp.isYou, story: null }, true)));
+        const stack = h('div', 'dir-hero', undefined, faces(g.people.map((gp) => hh.people.find((x) => x.name === gp.name) ?? { name: gp.name, photo: null }), 'xl', 3));
+        const bio = g.bio ? h('p', 'dir-bio', undefined, ...emphasise(g.bio)) : null;
         return h('section', 'dir-person', undefined,
-          h('div', 'dir-person-head', undefined, faceStack, h('h3', '', joinNames(g.people.map(label)))),
-          g.bio ? h('p', '', g.bio) : null,
-          g.family ? h('p', 'dir-family', g.family) : null,
+          stack,
+          h('h3', '', joinNames(g.people.map(label))),
+          bio,
+          g.family ? familyRow(h('p', 'dir-family', undefined, ...emphasise(g.family))) : null,
           ...g.quotes.map((q) => h('blockquote', 'dir-why', q.why, q.name ? h('cite', 'dir-cite', ` — ${first(q.name)}`) : null)),
           ...g.links.map((l) => link(l.url, g.people.length > 1 ? l.name : undefined)),
           h('p', 'dir-vis', g.onPublicSite ? 'Also on the public Members page' : 'Visible to members only'));
@@ -2691,6 +2861,8 @@ import '../../styles/global.css';
         const who = hh.withoutStory.map(label);
         sections.push(h('section', 'dir-person', undefined, h('p', 'lede', `${joinNames(who)} ${who.length > 1 ? 'have' : 'has'} not shared a story yet.`)));
       }
+      // The rest of the household (children, other family) in a section of their own, not a block each.
+      if (hh.familyMembers.length) sections.push(h('section', 'dir-person dir-household', undefined, familyRow(h('p', 'dir-family', `Also in this household: ${joinNames(hh.familyMembers.map(label))}`))));
       dlg.append(close, pills(hh), ...sections);
       dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
       dlg.addEventListener('close', () => dlg.remove());

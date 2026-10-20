@@ -13,6 +13,8 @@
 // person's draft, so when they open "Your story" their existing text is there to edit. An
 // existing story is never overwritten (on conflict do nothing), so re-running is safe.
 
+import { isLegacyPhoto } from './member-photo.mjs';
+
 const TAG = 'seed';
 
 // "Sree & Prameela" -> ['sree', 'prameela']; "Amit Gupta" -> ['amit gupta'];
@@ -39,6 +41,9 @@ export function seedCards(members) {
       family: asText(m.family),
       whys: asList(m.whyTVC),
       socials: asList(m.social),
+      // The card's photos: one per respondent when they sent their own, else one shared photo. Only a
+      // path on the public site counts (that is all `photo` in a story may be besides an upload).
+      photos: (Array.isArray(m.photos) && m.photos.length ? m.photos : m.photo ? [m.photo] : []).filter(isLegacyPhoto),
     };
     if (card.tokens.length === 0) continue;
     if (card.bio || card.family || card.whys.length) out.push(card);
@@ -90,10 +95,11 @@ create temp table seed_cards (
   bio text not null,
   family text not null,
   whys text[] not null,
-  socials text[] not null
+  socials text[] not null,
+  photos text[] not null
 );
-insert into seed_cards (card_name, tokens, bio, family, whys, socials) values
-${cards.map((c) => `  (${q(c.cardName)}, ${textArray(c.tokens)}, ${q(c.bio)}, ${q(c.family)}, ${textArray(c.whys)}, ${textArray(c.socials)})`).join(',\n')};
+insert into seed_cards (card_name, tokens, bio, family, whys, socials, photos) values
+${cards.map((c) => `  (${q(c.cardName)}, ${textArray(c.tokens)}, ${q(c.bio)}, ${q(c.family)}, ${textArray(c.whys)}, ${textArray(c.socials)}, ${textArray(c.photos)})`).join(',\n')};
 
 -- A card that matched no household, or more than one, can be pinned to a farm plot here.
 create temp table seed_overrides (card_name text primary key, farm_unit text not null);
@@ -302,8 +308,37 @@ left join member_households h on h.id = r.household_id
 order by c.card_name, t.pos;
 `;
 
-// mode 'preview', 'diagnose' and 'verify' read only; mode 'apply' writes.
+const PHOTOS = `
+-- PHOTOS: gives each person seeded from a card that card's existing public photo (a path under
+-- /images/members/), where they have none yet. Run after seed-apply.sql. It writes only the "photo"
+-- key, in both the draft and the approved copy; it never replaces a photo someone uploaded, and
+-- it is safe to run again. One row goes to staff_audit_log.
+with ph as (
+  select sp.person_id, coalesce(c.photos[sp.pos], c.photos[1]) as photo
+  from seed_people sp
+  join seed_cards c on c.card_name = sp.card_name
+  where cardinality(c.photos) > 0
+), upd as (
+  update member_stories s
+  set draft = s.draft || jsonb_build_object('photo', ph.photo),
+      approved = s.approved || jsonb_build_object('photo', ph.photo),
+      updated_at = now()
+  from ph
+  where s.person_id = ph.person_id and ph.photo is not null
+    and s.status = 'approved' and s.approved is not null
+    and coalesce(s.approved->>'photo', '') = '' and coalesce(s.draft->>'photo', '') = ''
+  returning s.person_id
+), logged as (
+  insert into staff_audit_log (action, module, detail)
+  select 'members.stories.seed_photos', 'members', jsonb_build_object('attached', (select count(*) from upd))
+  returning detail
+)
+select (select count(*) from upd) as photos_attached,
+       (select count(*) from seed_people) as people_matched;
+`;
+
+// mode 'preview', 'diagnose' and 'verify' read only; 'apply' and 'photos' write.
 export function buildSeedSql(cards, { mode, overrides = {} }) {
-  if (!['preview', 'diagnose', 'verify', 'apply'].includes(mode)) throw new Error('mode must be preview, diagnose, verify or apply');
-  return setup(cards, overrides) + { preview: PREVIEW, diagnose: DIAGNOSE, verify: VERIFY, apply: APPLY }[mode];
+  if (!['preview', 'diagnose', 'verify', 'apply', 'photos'].includes(mode)) throw new Error('mode must be preview, diagnose, verify, apply or photos');
+  return setup(cards, overrides) + { preview: PREVIEW, diagnose: DIAGNOSE, verify: VERIFY, apply: APPLY, photos: PHOTOS }[mode];
 }

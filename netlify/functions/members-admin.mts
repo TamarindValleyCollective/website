@@ -42,6 +42,8 @@ import { ACTION_CAPABILITY, auditDetail, validateEdit } from '../../scripts/lib/
 import { loadLandShapes, signedLandDocumentUrl } from './lib/land-doc-storage';
 import { approvalColumns, documentStatus } from '../../scripts/lib/member-land-docs.mjs';
 import { localChecks } from '../../scripts/lib/member-story.mjs';
+import { isLegacyPhoto, isUploadedPhoto } from '../../scripts/lib/member-photo.mjs';
+import { deleteMemberPhoto, getMemberPhoto } from './lib/member-photo-storage';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -375,8 +377,13 @@ async function decideLandItem(edit: any): Promise<void> {
 
 // ---- stories ----------------------------------------------------------------
 
-type StoryText = { bio: string; family: string; why: string; social: string };
-const storyText = (t: any): StoryText => ({ bio: '', family: '', why: '', social: '', ...(t ?? {}) });
+type StoryText = { bio: string; family: string; why: string; social: string; photo: string };
+const storyText = (t: any): StoryText => {
+  const text = { bio: '', family: '', why: '', social: '', photo: '', ...(t ?? {}) };
+  // Only a uuid (an upload) or a path on the public site is ever passed on as a photo.
+  if (!isUploadedPhoto(text.photo) && !isLegacyPhoto(text.photo)) text.photo = '';
+  return text;
+};
 
 // What is waiting for review, oldest first. Plain selects (no embeds), then joined here.
 async function handleStories(req: Request): Promise<Response> {
@@ -419,8 +426,30 @@ async function handleStories(req: Request): Promise<Response> {
   }
 }
 
+// A photo in review (or an approved one), for the reviewer. Needs `edit`, like the queue. 404 for
+// anything that is not a photo of a submitted or approved story.
+async function handleStoryPhoto(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'members', 'edit');
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  const url = new URL(req.url);
+  const id = url.searchParams.get('id') ?? '';
+  const size = url.searchParams.get('size') === 'full' ? 'full' : 'square';
+  const notFound = () => new Response('Not found', { status: 404, headers: { 'cache-control': 'no-store' } });
+  if (!isUploadedPhoto(id)) return notFound();
+  try {
+    const [row] = await select('member_stories', 'person_id', `&or=(submitted->>photo.eq.${id},approved->>photo.eq.${id})`);
+    if (!row) return notFound();
+    const bytes = await getMemberPhoto(row.person_id, id, size);
+    if (!bytes) return notFound();
+    return new Response(bytes, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=600', 'x-content-type-options': 'nosniff' } });
+  } catch (err) {
+    console.error('[members-admin] story photo load failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
 async function decideStory(edit: any, staffId: string): Promise<void> {
-  const [row] = await select('member_stories', 'status,submitted,submitted_public,submitted_at', `&${eq('person_id', edit.personId)}`);
+  const [row] = await select('member_stories', 'person_id,status,draft,submitted,submitted_public,submitted_at,approved', `&${eq('person_id', edit.personId)}`);
   const stale = "This story has changed, or has already been dealt with. Reload the page.";
   if (!row || row.status !== 'in_review' || Date.parse(row.submitted_at) !== Date.parse(edit.submittedAt)) throw new EditError(stale, 409);
   const now = new Date().toISOString();
@@ -431,6 +460,11 @@ async function decideStory(edit: any, staffId: string): Promise<void> {
   // Filtered on the exact submission seen, so two reviewers, or a resubmission, can't both win.
   const r = must(await db('PATCH', `member_stories?${eq('person_id', edit.personId)}&status=eq.in_review&${eq('submitted_at', row.submitted_at)}`, patch));
   if (r.rows.length === 0) throw new EditError(stale, 409);
+  // Approving replaces the live photo: the one it replaced goes once no copy refers to it.
+  const replaced = row.approved?.photo;
+  if (edit.action === 'story.approve' && isUploadedPhoto(replaced) && replaced !== row.submitted?.photo && replaced !== row.draft?.photo) {
+    await deleteMemberPhoto(row.person_id, replaced).catch((err) => console.error('[members-admin] photo cleanup failed', err));
+  }
 }
 
 async function handleEdit(req: Request): Promise<Response> {
@@ -476,8 +510,9 @@ export default async (req: Request): Promise<Response> => {
   if (pathname === '/api/members-admin/land-documents' && req.method === 'GET') return handleLandDocuments(req);
   if (pathname === '/api/members-admin/land-shapes' && req.method === 'GET') return handleLandShapes(req);
   if (pathname === '/api/members-admin/stories' && req.method === 'GET') return handleStories(req);
+  if (pathname === '/api/members-admin/story-photo' && req.method === 'GET') return handleStoryPhoto(req);
   if (pathname === '/api/members-admin/land-document-link' && req.method === 'POST') return handleLandDocumentLink(req);
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-admin/overview', '/api/members-admin/edit', '/api/members-admin/land-documents', '/api/members-admin/land-document-link', '/api/members-admin/land-shapes', '/api/members-admin/stories'] };
+export const config = { path: ['/api/members-admin/overview', '/api/members-admin/edit', '/api/members-admin/land-documents', '/api/members-admin/land-document-link', '/api/members-admin/land-shapes', '/api/members-admin/stories', '/api/members-admin/story-photo'] };

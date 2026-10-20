@@ -69,6 +69,13 @@
   status = 200
   force = true
 
+# photos already on the public site (the member cards); the directory shows them too
+[[redirects]]
+  from = "https://members.tvc.farm/images/members/*"
+  to = "/images/members/:splat"
+  status = 200
+  force = true
+
 # the member data function (netlify/functions/members-me.mts)
 [[redirects]]
   from = "https://members.tvc.farm/api/members-me/*"

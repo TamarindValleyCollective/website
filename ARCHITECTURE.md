@@ -1530,7 +1530,22 @@ never touches Netlify either.
   SQL editor (preview, then apply). Matching cards to people happens in the database, so the file holds only
   public card text; see the plan's "Seeding the cards". The directory merges identical bio and family into one
   section (`groups`).
-  Not built yet: photos, and the batched export to the public Members page.
+  **Photos** (`scripts/lib/member-photo.mjs`, `lib/member-photo-storage.ts`, `scripts/lib/photo-prepare.mjs`):
+  a story's photo is a string inside its draft / submitted / approved copy, like the text, so a new photo
+  is reviewed with the story and the live photo never changes until approval. It is a uuid (an upload,
+  kept in the same private R2 bucket as the land documents under `member-photos/<person>/<photo>[-full].jpg`)
+  or a path under `/images/members/` (a photo already on the public site, set by the seeding). In the
+  member's browser a canvas re-encode makes a 400px square and an uncropped copy up to 1600px, which also
+  strips the camera's metadata including GPS; the server (`POST /api/members-me/story-photo`) re-checks
+  that both are real JPEGs, the sizes, the square, and that no EXIF block is left, then stores both, with
+  a cap of 10 uploads a member a day. Photos are never public: `GET /api/members-me/photo` serves one only
+  to its author (any copy) or, for the APPROVED photo of a listed member, to any signed-in member, and the
+  page fetches it with the member's sign-in and shows it from a blob URL; `members-admin.mts` serves a
+  submitted or approved photo to staff with `edit`. Replacing a photo, removing it, resubmitting or
+  approving deletes the files nothing refers to any more. `scripts/seed-member-stories.mjs` also writes
+  `seed-photos.sql`, which attaches each card's existing public photo to the people seeded from it. Privacy
+  notice v5 describes photos. Not built yet: the batched export to the public Members page (which will
+  copy an approved, public story's photo out of R2).
 
 ## Current Production Status
 

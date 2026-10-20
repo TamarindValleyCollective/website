@@ -127,3 +127,57 @@ test('the same quote on everyone is shown once, and people with different text s
   const quotesOnly = buildDirectory({ ...base, stories: [mk('a', '', 'x'), mk('b', '', 'x')] }, 'a')[0];
   assert.equal(quotesOnly.groups.length, 2);
 });
+
+test('the approved photo is passed on, alone or with a story, and anything odd is dropped', () => {
+  const UP = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const base = {
+    people: [{ id: 'a', full_name: 'A' }, { id: 'b', full_name: 'B' }, { id: 'c', full_name: 'C' }],
+    memberships: ['a', 'b', 'c'].map((person_id) => ({ household_id: 'h', person_id })),
+    households: [{ id: 'h', farm_unit: 'F-01', house_no: null, cluster: null }],
+  };
+  const d = buildDirectory({
+    ...base,
+    stories: [
+      { person_id: 'a', approved: { bio: 'x', family: '', why: '', social: '', photo: UP }, approved_public: false },
+      { person_id: 'b', approved: { bio: '', family: '', why: '', social: '', photo: '/images/members/b-and-c.jpg' }, approved_public: true }, // a photo and no text
+      { person_id: 'c', approved: { bio: 'z', family: '', why: '', social: '', photo: 'https://evil.test/x.jpg' }, approved_public: false },
+    ],
+  }, 'a')[0];
+  assert.deepEqual(d.people.map((p) => p.photo), [UP, '/images/members/b-and-c.jpg', '']);
+  assert.equal(d.people[1].story, null); // a photo alone is not a story
+  // a draft or submitted photo is never read: only `approved`
+  const draftOnly = buildDirectory({ ...base, stories: [{ person_id: 'a', approved: null, draft: { photo: UP }, submitted: { photo: UP } }] }, 'a')[0];
+  assert.equal(draftOnly.people[0].photo, '');
+});
+
+test('primary members (owners) lead and are the ones a card names; the rest are the family section', () => {
+  const data = {
+    people: ['Zed Z', 'Amy A', 'Kid K', 'Bo B'].map((full_name, i) => ({ id: `p${i}`, full_name })),
+    memberships: [
+      { household_id: 'h', person_id: 'p0', role: 'owner' },
+      { household_id: 'h', person_id: 'p1', role: 'owner' },
+      { household_id: 'h', person_id: 'p2', role: 'family' },
+      { household_id: 'h', person_id: 'p3', role: 'non_owner' },
+    ],
+    households: [{ id: 'h', farm_unit: 'F-01', house_no: null, cluster: null }],
+    stories: [{ person_id: 'p0', approved: { bio: 'Hi.', family: '', why: '', social: '' }, approved_public: true }],
+  };
+  const [hh] = buildDirectory(data, 'someone-else');
+  assert.deepEqual(hh.people.map((p) => [p.name, p.primary]), [['Amy A', true], ['Zed Z', true], ['Bo B', false], ['Kid K', false]]);
+  assert.deepEqual(hh.familyMembers.map((p) => p.name), ['Bo B', 'Kid K']);
+  assert.deepEqual(hh.withoutStory.map((p) => p.name), ['Amy A']); // only primary members "have not shared"
+  // the viewer still comes first, even if they are family
+  assert.equal(buildDirectory(data, 'p2')[0].people[0].name, 'Kid K');
+});
+
+test('a household with no listed owner treats everyone as primary, so a card is never nameless', () => {
+  const data = {
+    people: [{ id: 'a', full_name: 'A' }, { id: 'b', full_name: 'B' }],
+    memberships: [{ household_id: 'h', person_id: 'a', role: 'family' }, { household_id: 'h', person_id: 'b', role: 'non_owner' }],
+    households: [{ id: 'h', farm_unit: 'F-01', house_no: null, cluster: null }],
+    stories: [],
+  };
+  const [hh] = buildDirectory(data, 'x');
+  assert.ok(hh.people.every((p) => p.primary));
+  assert.deepEqual(hh.familyMembers, []);
+});

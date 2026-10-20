@@ -2,7 +2,7 @@
 // network), so the rule is tested on its own; netlify/functions/members-me.mts selects
 // the rows and calls this.
 //
-// What other members see: a person's name, their household's farm plot number, house
+// What other members see: a person's name (the card shows only the primary members, the popup everyone), the photo the core team approved for them, their household's farm plot number, house
 // number (if a house is built) and cluster, and the story the core team has APPROVED for them (the `approved` copy, never a
 // draft or a submission in review, and whether or not it is also on tvc.farm). Never an
 // email, mobile number, land record or document: those columns are not even passed in.
@@ -16,6 +16,8 @@
 // once, with each person's own quote and link beneath it; people with different text stay in their
 // own section. `withoutStory` lists the people who have none.
 
+import { isPhotoRef } from './member-photo.mjs';
+
 const farmNumber = (unit) => parseInt(String(unit).slice(2), 10) || 0;
 
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
@@ -25,6 +27,10 @@ const safeLink = (v) => {
   const s = text(v);
   return /^https?:\/\//i.test(s) ? s : '';
 };
+
+// The approved copy's photo (a uuid for an upload, or a path on the public site), or '' if none or
+// anything else. A person can have a photo and no text.
+const photoFor = (row) => (row?.approved && isPhotoRef(row.approved.photo) ? row.approved.photo : '');
 
 function storyFor(row) {
   if (!row || !row.approved) return null;
@@ -65,7 +71,7 @@ function groupStories(people) {
 /**
  * @param {{
  *   people: { id: string, full_name: string, active?: boolean, directory_visible?: boolean }[],
- *   memberships: { household_id: string, person_id: string }[],
+ *   memberships: { household_id: string, person_id: string, role?: string }[],
  *   households: { id: string, farm_unit: string, house_no?: string | null, cluster: string | null }[],
  *   stories: { person_id: string, approved: any, approved_public: boolean | null }[],
  * }} data
@@ -79,18 +85,30 @@ export function buildDirectory(data, viewerPersonId) {
   for (const hh of data.households) {
     const members = data.memberships
       .filter((m) => m.household_id === hh.id && listed.has(m.person_id))
-      .map((m) => listed.get(m.person_id))
-      // The viewer first within their own household, then by name.
-      .sort((a, b) => Number(b.id === viewerPersonId) - Number(a.id === viewerPersonId) || a.full_name.localeCompare(b.full_name));
+      .map((m) => ({ ...listed.get(m.person_id), role: m.role ?? 'owner' }))
+      // The viewer first, then the primary members (owners), then everyone else, each by name.
+      .sort((a, b) => Number(b.id === viewerPersonId) - Number(a.id === viewerPersonId) || Number(b.role === 'owner') - Number(a.role === 'owner') || a.full_name.localeCompare(b.full_name));
     if (members.length === 0) continue;
-    const people = members.map((p) => ({ name: p.full_name, isYou: p.id === viewerPersonId, story: storyFor(storyByPerson.get(p.id)) }));
+    // Primary members are the household's owners. If none of the listed people is one, everyone is
+    // treated as primary, so a card is never nameless.
+    const anyOwner = members.some((p) => p.role === 'owner');
+    const people = members.map((p) => ({
+      name: p.full_name,
+      isYou: p.id === viewerPersonId,
+      primary: !anyOwner || p.role === 'owner',
+      photo: photoFor(storyByPerson.get(p.id)),
+      story: storyFor(storyByPerson.get(p.id)),
+    }));
     out.push({
       farmUnit: hh.farm_unit,
       houseNo: hh.house_no ?? null,
       cluster: hh.cluster ?? null,
       people,
       groups: groupStories(people),
-      withoutStory: people.filter((p) => !p.story).map((p) => ({ name: p.name, isYou: p.isYou })),
+      // The primary members with no story, and the rest of the household (children, other family), who are
+      // named in the popup's family section rather than getting a block each.
+      withoutStory: people.filter((p) => p.primary && !p.story).map((p) => ({ name: p.name, isYou: p.isYou })),
+      familyMembers: people.filter((p) => !p.primary).map((p) => ({ name: p.name, isYou: p.isYou })),
       hasStory: people.some((p) => p.story),
     });
   }

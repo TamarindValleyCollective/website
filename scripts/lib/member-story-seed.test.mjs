@@ -33,6 +33,24 @@ test('the real cards: the ones with text are seeded, the rest are just names', (
   assert.ok(cards.every((c) => c.tokens.length >= 1));
 });
 
+test('each card keeps its own photos: one each when they sent their own, else the shared one; only public-site paths count', () => {
+  const cards = seedCards([
+    { name: 'A & B', bio: 'x', photo: '/images/members/a-and-b.jpg' },
+    { name: 'C & D', bio: 'x', photo: '/images/members/c.jpg', photos: ['/images/members/c1.jpg', '/images/members/d1.jpg'] },
+    { name: 'E', bio: 'x', photo: 'https://evil.test/e.jpg' },
+    { name: 'F', bio: 'x', photo: null },
+  ]);
+  assert.deepEqual(cards.map((c) => c.photos), [['/images/members/a-and-b.jpg'], ['/images/members/c1.jpg', '/images/members/d1.jpg'], [], []]);
+});
+
+test('the photos script only adds a photo where there is none, and only the photo key', () => {
+  const sql = buildSeedSql(seedCards([{ name: 'A & B', bio: 'x', photo: '/images/members/a-and-b.jpg' }]), { mode: 'photos' });
+  assert.match(sql, /coalesce\(s\.approved->>'photo', ''\) = ''/);
+  assert.match(sql, /s\.draft \|\| jsonb_build_object\('photo', ph\.photo\)/);
+  assert.ok(!/insert into member_stories/i.test(sql));
+  assert.match(sql, /\$seed\$\/images\/members\/a-and-b\.jpg\$seed\$/);
+});
+
 test('preview reads only and apply writes, and neither can be mixed up', () => {
   const cards = seedCards([{ name: 'A & B', bio: 'A is a baker.', whyTVC: 'Soil.' }]);
   const preview = buildSeedSql(cards, { mode: 'preview' });
