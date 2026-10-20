@@ -31,7 +31,9 @@ const asText = (v) => (typeof v === 'string' ? v.trim() : '');
 const asList = (v) => (Array.isArray(v) ? v.map(asText) : typeof v === 'string' && v.trim() ? [v.trim()] : []);
 
 // The cards that have something to say. An empty card (just a name, ~20 of them) is left alone.
-export function seedCards(members) {
+// `includeEmpty` keeps the cards that are only a name too: the card mapping needs all of them, the stories only
+// the ones with text.
+export function seedCards(members, { includeEmpty = false } = {}) {
   const out = [];
   for (const m of members) {
     const card = {
@@ -46,7 +48,7 @@ export function seedCards(members) {
       photos: (Array.isArray(m.photos) && m.photos.length ? m.photos : m.photo ? [m.photo] : []).filter(isLegacyPhoto),
     };
     if (card.tokens.length === 0) continue;
-    if (card.bio || card.family || card.whys.length) out.push(card);
+    if (includeEmpty || card.bio || card.family || card.whys.length) out.push(card);
   }
   return out;
 }
@@ -337,8 +339,33 @@ select (select count(*) from upd) as photos_attached,
        (select count(*) from seed_people) as people_matched;
 `;
 
-// mode 'preview', 'diagnose' and 'verify' read only; 'apply' and 'photos' write.
+const CARDS = `
+-- CARDS: records which household each public Members-page card is (member_cards), in the order of the
+-- names on the card, so the public export can keep the 2017 card names. Writes only member_cards; a card
+-- that matched no household is listed so it can be pinned with --overrides and this run again. Safe to run
+-- again: a card or household that already has a row is left alone. One row goes to staff_audit_log.
+with ins as (
+  insert into member_cards (household_id, card_name, person_ids)
+  select r.household_id, r.card_name, array_agg(sp.person_id order by sp.pos)
+  from seed_resolved r
+  join seed_people sp on sp.card_name = r.card_name
+  where r.household_id is not null
+  group by r.household_id, r.card_name
+  on conflict do nothing
+  returning card_name
+), logged as (
+  insert into staff_audit_log (action, module, detail)
+  select 'members.cards.seed', 'members', jsonb_build_object('mapped', (select count(*) from ins))
+  returning detail
+)
+select (select count(*) from ins) as cards_mapped,
+       (select count(*) from seed_cards) as cards_total,
+       (select count(*) from seed_resolved where household_id is null) as cards_not_matched,
+       (select string_agg(card_name, '; ' order by card_name) from seed_resolved where household_id is null) as not_matched;
+`;
+
+// mode 'preview', 'diagnose' and 'verify' read only; 'apply', 'photos' and 'cards' write.
 export function buildSeedSql(cards, { mode, overrides = {} }) {
-  if (!['preview', 'diagnose', 'verify', 'apply', 'photos'].includes(mode)) throw new Error('mode must be preview, diagnose, verify, apply or photos');
-  return setup(cards, overrides) + { preview: PREVIEW, diagnose: DIAGNOSE, verify: VERIFY, apply: APPLY, photos: PHOTOS }[mode];
+  if (!['preview', 'diagnose', 'verify', 'apply', 'photos', 'cards'].includes(mode)) throw new Error('mode must be preview, diagnose, verify, apply, photos or cards');
+  return setup(cards, overrides) + { preview: PREVIEW, diagnose: DIAGNOSE, verify: VERIFY, apply: APPLY, photos: PHOTOS, cards: CARDS }[mode];
 }

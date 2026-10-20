@@ -1544,8 +1544,28 @@ never touches Netlify either.
   submitted or approved photo to staff with `edit`. Replacing a photo, removing it, resubmitting or
   approving deletes the files nothing refers to any more. `scripts/seed-member-stories.mjs` also writes
   `seed-photos.sql`, which attaches each card's existing public photo to the people seeded from it. Privacy
-  notice v5 describes photos. Not built yet: the batched export to the public Members page (which will
-  copy an approved, public story's photo out of R2).
+  notice v5 describes photos.
+  **Public export** (`netlify/functions/members-public.mts`, `scripts/export-member-stories.mjs`,
+  `scripts/lib/member-publish.mjs`, migration 0045 `member_cards`): the public Members page is the 2017 cards
+  (`legacyMembers` in `src/data/members.ts`) merged with `src/data/members-published.json`, which `npm run
+  build` writes by calling the live `GET /api/members-published` function. The build has no database or R2
+  credentials (those secrets are Functions-only on purpose), so it asks a function that returns only what the
+  public site shows anyway: the APPROVED copy of a primary member's story whose "Show on tvc.farm" switch is on,
+  for people who are active and still listed; drafts, stories in review, private stories, family members and
+  opted-out people are never in it. `member_cards` (filled once by the seeding SQL) says which household each
+  2017 card is, in the order of the names, so a card keeps its name and its quotes and links keep pairing with
+  the names by position; a new household is named from its primary members. A published card replaces its
+  2017 card in place (keeping a hand-written `summary` or full-size photo while the text or photo is unchanged);
+  a household that switched itself off, or whose members are all unlisted, is reduced to its name; a new member
+  is added. Uploaded photos are downloaded from `GET /api/members-published-photo` (approved + public +
+  primary + listed only) into `public/images/members/up-*.jpg` (git-ignored build output) and get the usual
+  AVIF/WebP variants. If the endpoint does not exist yet the export is skipped; any other failure FAILS a
+  production build, so the live site keeps its current stories instead of quietly reverting to the 2017
+  text. Batched publishing: approvals do nothing to the site until the staff "Publish to the website" button
+  (`site.publish`, `manage`) POSTs to a Netlify build hook (`NETLIFY_BUILD_HOOK_URL`), audit-first and at most
+  once per 10 minutes (a build takes about half an hour and costs credits); the panel shows how many approved
+  public stories are waiting. The old member-update email workflow still triggers on `members.ts` but now
+  finds no changed cards, since portal changes never touch that file.
 
 ## Current Production Status
 

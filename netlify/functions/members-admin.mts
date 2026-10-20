@@ -22,6 +22,12 @@
 // earlier approved text live. The reviewer also sees which submission they looked at, so a
 // member who resubmits meanwhile can't have newer wording approved unseen.
 //
+// Publishing: approved stories with "Show on tvc.farm" on reach the public Members page at the next site build
+// (scripts/export-member-stories.mjs reads them from members-public.mts). GET publish says how many are waiting;
+// site.publish (in /edit, `manage`) starts a build through a Netlify build hook (NETLIFY_BUILD_HOOK_URL, a secret
+// with Functions scope), audit-first, and refuses a second one within 10 minutes: a build takes about half an hour
+// and costs Netlify credits, so approvals are batched rather than published one by one.
+//
 // Land documents: members upload a patta / survey extract and it is read in the background
 // (members-land-extract-background.mts). New records and anything that disagrees with the
 // register wait here: GET land-documents lists them for a household, POST land-document-link
@@ -171,6 +177,9 @@ const HOUSEHOLD_COLUMNS = { houseNo: 'house_no', cluster: 'cluster', unitType: '
 
 async function applyEdit(edit: any, staffId: string): Promise<void> {
   switch (edit.action) {
+    case 'site.publish':
+      return triggerPublish();
+
     case 'story.approve':
     case 'story.reject':
       return decideStory(edit, staffId);
@@ -467,6 +476,54 @@ async function decideStory(edit: any, staffId: string): Promise<void> {
   }
 }
 
+// ---- publishing -------------------------------------------------------------
+
+const PUBLISH_MIN_GAP_MS = 10 * 60 * 1000;
+
+async function lastPublishAt(): Promise<string | null> {
+  const rows = await select('staff_audit_log', 'at', '&action=eq.members.site.publish&order=at.desc');
+  return rows[0]?.at ?? null;
+}
+
+async function handlePublishStatus(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'members', 'edit');
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  try {
+    const last = await lastPublishAt();
+    const publicStories = await select('member_stories', 'person_id,approved_at', '&approved_public=eq.true');
+    const waiting = publicStories.filter((r) => !last || Date.parse(r.approved_at) > Date.parse(last)).length;
+    return jsonResponse({
+      configured: !!process.env.NETLIFY_BUILD_HOOK_URL,
+      canPublish: roleHasCapability('members', auth.staff.role, 'manage'),
+      lastPublishedAt: last,
+      publicStories: publicStories.length,
+      waiting,
+    });
+  } catch (err) {
+    console.error('[members-admin] publish status failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
+// Checked BEFORE the audit entry is written, so the entry that is about to be written does not count.
+async function publishPrecheck(): Promise<EditError | null> {
+  if (!process.env.NETLIFY_BUILD_HOOK_URL) return new EditError('Publishing is not set up yet: a Netlify build hook has to be added first.', 409);
+  const last = await lastPublishAt();
+  if (last && Date.now() - Date.parse(last) < PUBLISH_MIN_GAP_MS) {
+    const mins = Math.max(1, Math.round((Date.now() - Date.parse(last)) / 60000));
+    return new EditError(`A publish was started ${mins} minute${mins === 1 ? '' : 's'} ago. A build takes about half an hour, so wait for it before starting another.`, 429);
+  }
+  return null;
+}
+
+async function triggerPublish(): Promise<void> {
+  const res = await fetch(process.env.NETLIFY_BUILD_HOOK_URL as string, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+  if (!res.ok) {
+    console.error('[members-admin] build hook failed', res.status);
+    throw new EditError('Netlify did not accept the build request. Try again in a minute.', 502);
+  }
+}
+
 async function handleEdit(req: Request): Promise<Response> {
   const auth = await requireStaff(req, 'members', 'view');
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
@@ -484,6 +541,16 @@ async function handleEdit(req: Request): Promise<Response> {
 
   const capability = (ACTION_CAPABILITY as Record<string, 'edit' | 'manage'>)[edit.action];
   if (!roleHasCapability('members', auth.staff.role, capability)) return jsonResponse({ error: 'Not authorized' }, 403);
+
+  if (edit.action === 'site.publish') {
+    try {
+      const refused = await publishPrecheck();
+      if (refused) return jsonResponse({ error: refused.message }, refused.status);
+    } catch (err) {
+      console.error('[members-admin] publish precheck failed', err);
+      return jsonResponse({ error: 'Server error' }, 500);
+    }
+  }
 
   // Logged before the change, and refused if it can't be, so no edit goes unrecorded.
   try {
@@ -510,9 +577,10 @@ export default async (req: Request): Promise<Response> => {
   if (pathname === '/api/members-admin/land-documents' && req.method === 'GET') return handleLandDocuments(req);
   if (pathname === '/api/members-admin/land-shapes' && req.method === 'GET') return handleLandShapes(req);
   if (pathname === '/api/members-admin/stories' && req.method === 'GET') return handleStories(req);
+  if (pathname === '/api/members-admin/publish' && req.method === 'GET') return handlePublishStatus(req);
   if (pathname === '/api/members-admin/story-photo' && req.method === 'GET') return handleStoryPhoto(req);
   if (pathname === '/api/members-admin/land-document-link' && req.method === 'POST') return handleLandDocumentLink(req);
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-admin/overview', '/api/members-admin/edit', '/api/members-admin/land-documents', '/api/members-admin/land-document-link', '/api/members-admin/land-shapes', '/api/members-admin/stories', '/api/members-admin/story-photo'] };
+export const config = { path: ['/api/members-admin/overview', '/api/members-admin/edit', '/api/members-admin/land-documents', '/api/members-admin/land-document-link', '/api/members-admin/land-shapes', '/api/members-admin/stories', '/api/members-admin/story-photo', '/api/members-admin/publish'] };

@@ -157,3 +157,9 @@ test('the audit entry for a story decision names the fields, never the note', ()
   assert.deepEqual(d.fields.sort(), ['note', 'submittedAt']);
   assert.ok(!JSON.stringify(d).includes('child'));
 });
+
+test('publishing the site takes no fields, needs `manage`, and the audit entry has nothing in it', () => {
+  assert.deepEqual(good({ action: 'site.publish' }), { action: 'site.publish' });
+  assert.equal(ACTION_CAPABILITY['site.publish'], 'manage');
+  assert.deepEqual(auditDetail(good({ action: 'site.publish' })), { ids: {}, fields: [] });
+});

@@ -111,7 +111,8 @@ Agreed 2026-10-20. One story per person, public-facing only: no separate members
   `directory_visible`; no contact details, land records or documents. Privacy notice v4.
   **Seeding the 53 existing cards (branch `member-stories-seed`):** see "Seeding the cards" below.
   **Photos (branch `member-photos`, stacked on the seed branch):** see "Photos" below.
-  **Still to do:** the batched export to the public Members page, and notifying a member when their story is decided.
+  **Public export (branch `member-public-export`):** see "Public export" below.
+  **Still to do:** notifying a member when their story is decided, and click-to-enlarge on photos.
 
 ## Access and roles
 
@@ -208,6 +209,38 @@ are just a name and are left alone.
   register showed (initials first, variant spellings, longer first names, a child sharing a parent's first
   letters). **Run for real on 2026-10-20:** 27 of the 40 cards matched on the first pass (52 stories); the
   other 13 needed a plot and, for some, a looser match.
+
+### Public export
+
+Approved stories with "Show on tvc.farm" on reach the public Members page, replacing hand edits to `members.ts`.
+
+- **Why a function, not the build reading the database:** the site build has no database or R2 credentials
+  (those Netlify secrets are scoped to Functions, deliberately), so `npm run build` runs
+  `scripts/export-member-stories.mjs`, which calls the live `GET /api/members-published` and downloads photos
+  from `/api/members-published-photo` (`netlify/functions/members-public.mts`). The function is public and
+  needs no secret because it returns only what the site shows anyway (see `ARCHITECTURE.md`).
+- **What is published:** the APPROVED copy of each primary member's story whose switch is on, for people who
+  are active and still listed. A card is a household and keeps its 2017 name (`member_cards`); two people's
+  identical bio becomes one; different quotes and links stay one per person, paired with the names by
+  position. A household that switched off, or whose members are all unlisted, is reduced to its name (the
+  count of families does not change); a new member is added as a new card.
+- **Batched:** nothing reaches the site until the staff panel's **Publish to the website** (admin) starts a
+  build through a Netlify build hook; at most one per 10 minutes. The panel counts approved public stories
+  waiting. A story switched off or a photo removed leaves the function's answer at once but comes off the
+  site at the next publish.
+- **Safety:** a production build FAILS (so the live site is untouched) if the endpoint answers with an error
+  or garbage; a 404 (first deploy, before the function exists) is skipped; previews warn and carry on.
+- **One-time setup, in this order:**
+  1. Apply migration `0045_member_cards.sql` to TVC ERP (by hand, before merging).
+  2. In Netlify: Site settings > Build & deploy > Build hooks > Add a build hook (branch `main`), copy its URL, add it as
+     `NETLIFY_BUILD_HOOK_URL` (flagged secret, **Functions** scope only), then redeploy.
+  3. After the deploy, regenerate the seed files and run **`seed-cards.sql`** in the SQL editor (it only writes
+     `member_cards`, and lists any card it could not match so it can be pinned in the overrides file and run
+     again). Until `member_cards` has rows the function publishes nothing, so a household can never be given a
+     register-style name that duplicates a 2017 card.
+  4. Press **Publish to the website** in `/internal/members` and check `tvc.farm/people/members/`.
+- **Not built:** a story that is public but whose card name-matching failed is simply not published (it
+  shows in the seeding output); renaming a card; moving the old email workflow to "members published" emails.
 
 ### Photos
 

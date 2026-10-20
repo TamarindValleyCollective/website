@@ -34,6 +34,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
     <div id="content" hidden>
      <div id="overview">
+      <section id="publish" class="publish card" aria-label="Publish to the website" hidden></section>
       <section id="stories" class="stories" aria-label="Stories waiting for review" hidden></section>
       <dl id="totals" class="totals"></dl>
 
@@ -656,6 +657,15 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     background: var(--tvc-green-tint);
     color: var(--tvc-green-dark);
   }
+  .members .publish {
+    margin: 0 0 18px;
+    padding: 14px 16px;
+  }
+
+  .members .publish p {
+    margin: 4px 0 8px;
+  }
+
   .members .stories {
     margin: 0 0 22px;
   }
@@ -1499,6 +1509,68 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     );
   }
 
+  // ---- publish to the website ----------------------------------------------------
+  // Approved stories with "Show on tvc.farm" on reach the public Members page at the next site build. A build
+  // takes about half an hour and costs Netlify credits, so approvals are batched: this button starts one.
+  type PublishStatus = { configured: boolean; canPublish: boolean; lastPublishedAt: string | null; publicStories: number; waiting: number };
+
+  async function loadPublish() {
+    const box = $('publish');
+    if (!can.edit) {
+      box.hidden = true;
+      return;
+    }
+    try {
+      const { status, data } = await staffFetch('/api/members-admin/publish');
+      if (status !== 200) throw new Error(data.error || 'Could not load.');
+      renderPublish(data as PublishStatus);
+    } catch {
+      box.hidden = true; // the register works without it
+    }
+  }
+
+  function renderPublish(st: PublishStatus) {
+    const box = $('publish');
+    box.hidden = false;
+    const when = (iso: string) => new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+    const msg = h('p', { class: 'form-msg', attrs: { role: 'alert' } });
+    const line = st.waiting > 0
+      ? `${st.waiting} approved public ${st.waiting === 1 ? 'story' : 'stories'} waiting to go on tvc.farm`
+      : 'Nothing waiting to go on tvc.farm';
+    const kids: Kid[] = [
+      h('strong', { text: 'Website' }),
+      h('p', { class: 'muted', text: `${line}. ${st.publicStories} ${st.publicStories === 1 ? 'story is' : 'stories are'} public in all. ${st.lastPublishedAt ? `Last publish started ${when(st.lastPublishedAt)}.` : 'Nothing has been published yet.'} A story switched off, or a photo removed, comes off the site at the next publish too.` }),
+    ];
+    if (!st.configured) kids.push(h('p', { class: 'muted', text: 'Publishing is not set up yet: a Netlify build hook has to be added (see docs/plans/member-portal.md, "Public export").' }));
+    else if (!st.canPublish) kids.push(h('p', { class: 'muted', text: 'An admin starts the publish.' }));
+    else {
+      const btn = h('button', { class: 'rowbtn rowbtn--act rowbtn--yes', text: 'Publish to the website', attrs: { type: 'button' } });
+      let armed = false;
+      btn.addEventListener('click', async () => {
+        if (!armed) {
+          armed = true;
+          btn.textContent = 'Start the build? It takes about 30 minutes. Click again to confirm';
+          setTimeout(() => { armed = false; btn.textContent = 'Publish to the website'; }, 6000);
+          return;
+        }
+        btn.setAttribute('disabled', '');
+        try {
+          await send({ action: 'site.publish' });
+          msg.textContent = 'The build has started. The public Members page updates in about 30 minutes.';
+          await loadPublish();
+        } catch (err) {
+          btn.removeAttribute('disabled');
+          armed = false;
+          btn.textContent = 'Publish to the website';
+          msg.textContent = err instanceof Error ? err.message : 'Something went wrong.';
+        }
+      });
+      kids.push(h('div', { class: 'rowbtns' }, btn));
+    }
+    kids.push(msg);
+    box.replaceChildren(...(kids.filter(Boolean) as Node[]));
+  }
+
   // ---- stories waiting for review ------------------------------------------------
   // A member's submitted story (see the portal's "Your story"). Approving makes the submitted text
   // the approved copy; rejecting sends it back with a note the member sees. Both need `manage`,
@@ -1647,6 +1719,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     renderTotals(data.totals);
     renderList();
     void loadStories();
+    void loadPublish();
   }
 
   async function load() {

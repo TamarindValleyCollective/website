@@ -1636,6 +1636,15 @@ import '../../styles/global.css';
     color: var(--tvc-green-dark);
   }
 
+  .dir-name--link {
+    text-decoration: none;
+  }
+
+  .dir-name--link:hover,
+  .dir-name--link:focus-visible {
+    text-decoration: underline;
+  }
+
   .dir-famrow {
     display: flex;
     align-items: flex-start;
@@ -1665,15 +1674,6 @@ import '../../styles/global.css';
 
   .dir-cite {
     font-style: normal;
-    font-size: 0.85rem;
-    color: var(--tvc-ink-soft);
-  }
-
-  .dir-linkrow {
-    margin: 0 0 4px;
-  }
-
-  .dir-who {
     font-size: 0.85rem;
     color: var(--tvc-ink-soft);
   }
@@ -1757,14 +1757,6 @@ import '../../styles/global.css';
     border-radius: var(--radius-sm);
     background: var(--tvc-green-tint);
     font-style: italic;
-  }
-
-  .dir-link {
-    display: inline-block;
-    margin-top: 4px;
-    font-size: 0.88rem;
-    color: var(--tvc-green-dark);
-    word-break: break-all;
   }
 
   .dir-vis {
@@ -2421,7 +2413,7 @@ import '../../styles/global.css';
       h('h1', 'page-title', 'Your story', h('small', '', 'Your card for the collective')),
       h('p', 'lede', 'Say what you are comfortable sharing; only the one-line "why TVC" is needed. The core team reads every story before it appears anywhere. Once approved, other members can read it in the Directory; it goes on tvc.farm only if you switch on "Show on tvc.farm".'),
       // (not `cond ? null : el`: append(null) writes the text "null")
-      ...(me!.directoryVisible ? [] : [h('p', 'lede lede--warn', 'You are not listed in the member directory, so other members cannot see your story. You can change that in your account menu, under Your details.')]),
+      ...(me!.directoryVisible ? [] : [h('p', 'lede lede--warn', 'You are not listed in the member directory, so other members cannot see your story and it will not go on tvc.farm either. You can change that in your account menu, under Your details.')]),
     );
     const loading = h('p', 'lede', 'Loading your story…');
     root.append(loading);
@@ -2831,16 +2823,22 @@ import '../../styles/global.css';
       // The first names of everyone in the household are set in bold wherever the text mentions them.
       const firsts = [...new Set(hh.people.map((p) => first(p.name)))].sort((a, b) => b.length - a.length);
       const bold = new RegExp(`\\b(${firsts.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`);
-      const emphasise = (text: string): Node[] => (firsts.length ? text.split(bold).map((part, i) => (i % 2 ? h('strong', 'dir-name', part) : document.createTextNode(part))) : [document.createTextNode(text)]);
-
-      const link = (url: string, who?: string) => {
-        if (!/^https?:\/\//i.test(url)) return null;
-        const a = h('a', 'dir-link', url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''));
+      // A first name that has a profile link becomes that link (green and clickable, as on the public card);
+      // a name without one is just bold. There is no separate row of links.
+      const urlByFirst = new Map<string, string>();
+      for (const g of hh.groups) for (const l of g.links) if (/^https?:\/\//i.test(l.url) && !urlByFirst.has(first(l.name))) urlByFirst.set(first(l.name), l.url);
+      const nameNode = (part: string): Node => {
+        const url = urlByFirst.get(part);
+        if (!url) return h('strong', 'dir-name', part);
+        const a = h('a', 'dir-name dir-name--link', part);
         a.setAttribute('href', url);
         a.setAttribute('target', '_blank');
         a.setAttribute('rel', 'noopener noreferrer nofollow');
-        return h('p', 'dir-linkrow', undefined, who ? h('span', 'dir-who', `${first(who)}: `) : null, a);
+        a.title = 'Open their profile';
+        return a;
       };
+      const emphasise = (text: string): Node[] => (firsts.length ? text.split(bold).map((part, i) => (i % 2 ? nameNode(part) : document.createTextNode(part))) : [document.createTextNode(text)]);
+
       const familyRow = (...kids: Kid[]) => h('div', 'dir-famrow', undefined, icon(FAMILY_ICON), h('div', '', undefined, ...kids));
 
       // One section per shared story (identical bio and family are shown once), with each person's own
@@ -2854,7 +2852,6 @@ import '../../styles/global.css';
           bio,
           g.family ? familyRow(h('p', 'dir-family', undefined, ...emphasise(g.family))) : null,
           ...g.quotes.map((q) => h('blockquote', 'dir-why', q.why, q.name ? h('cite', 'dir-cite', ` — ${first(q.name)}`) : null)),
-          ...g.links.map((l) => link(l.url, g.people.length > 1 ? l.name : undefined)),
           h('p', 'dir-vis', g.onPublicSite ? 'Also on the public Members page' : 'Visible to members only'));
       });
       if (hh.withoutStory.length) {
@@ -2886,7 +2883,7 @@ import '../../styles/global.css';
 
     function draw() {
       const shown = list.filter((hh) => (!onlyStories || hh.hasStory) && (!cluster || hh.cluster === cluster) && (!query || [hh.farmUnit, hh.houseNo ?? '', hh.cluster ?? '', ...hh.people.map((p) => p.name)].join(' ').toLowerCase().includes(query)));
-      // The member's own household first (the sort is stable, so everyone else stays in farm plot order).
+      // The member's own household first (the sort is stable, so everyone else stays in house-number order).
       shown.sort((a, b) => Number(b.people.some((p) => p.isYou)) - Number(a.people.some((p) => p.isYou)));
       const bar = h('div', 'dir-bar', undefined, search, h('label', 'check', undefined, only, h('span', '', 'Only members with a story')));
       body.replaceChildren(clusterChips(), bar, h('p', 'lede', `${shown.length} of ${list.length} households`),
