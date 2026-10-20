@@ -19,6 +19,8 @@
 import { isPhotoRef } from './member-photo.mjs';
 
 const farmNumber = (unit) => parseInt(String(unit).slice(2), 10) || 0;
+// H-07 -> 7; a household with no house built yet has none and sorts after every house.
+const houseNumber = (house) => (house ? parseInt(String(house).slice(2), 10) || Infinity : Infinity);
 
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
 
@@ -112,5 +114,11 @@ export function buildDirectory(data, viewerPersonId) {
       hasStory: people.some((p) => p.story),
     });
   }
-  return out.sort((a, b) => farmNumber(a.farmUnit) - farmNumber(b.farmUnit));
+  // In house-number order (H-01, H-02...); households with no house yet come last, by farm plot.
+  return out.sort((a, b) => {
+    const ha = houseNumber(a.houseNo);
+    const hb = houseNumber(b.houseNo);
+    if (ha !== hb) return ha < hb ? -1 : 1;
+    return farmNumber(a.farmUnit) - farmNumber(b.farmUnit);
+  });
 }

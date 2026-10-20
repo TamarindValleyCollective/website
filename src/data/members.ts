@@ -17,6 +17,9 @@
 // brand names rather than conveying new meaning, for 53 short strings of
 // low individual value. Flagged as a candidate for follow-up if a native
 // reviewer wants them translated later.
+import publishedData from './members-published.json' with { type: 'json' };
+import { mergePublished } from '../../scripts/lib/member-publish.mjs';
+
 export interface Member {
   name: string;
   bio: string;
@@ -67,7 +70,9 @@ export interface Member {
   social?: string[];
 }
 
-export const members: Member[] = [
+// The 2017 cards (and the hand-edited ones since). The cards on the page are these, merged with what the
+// build fetched from the portal's approved stories: see mergedMembers below and scripts/lib/member-publish.mjs.
+export const legacyMembers: Member[] = [
   { name: 'Abhinav & Divya', summary: 'Divya is a home baker and chef; Abhinav is a product manager at VMware by Broadcom.', bio: 'Divya is a home baker and chef, focusing on healthy food. Abhinav is a product manager with VMware by Broadcom, working on software networking products.', photo: '/images/members/abhinav-and-divya.jpg', family: 'Divya and Abhinav live in south Bangalore and are married with one son, Pranav (15).', familyNames: ['Pranav'], whyTVC: 'Aligned with the concept and philosophy of TVC, and staying for the lovely people and community.', social: ['https://linkedin.com/in/abhinavmodi', 'https://www.instagram.com/divya.pics'] },
   { name: 'Akash & Toshal', bio: 'Akash runs his startup Instamojo. Toshal is a software professional.', photo: '/images/members/akash-gehani.jpg' },
   { name: 'Amit Gupta', bio: '', photo: null },
@@ -122,6 +127,12 @@ export const members: Member[] = [
   { name: 'Vishnu Kumar Agrawal', bio: '', photo: null },
   { name: 'Shilpa & Aditya', bio: "Shilpa is a development finance professional with nearly 20 years across institutions like the World Bank and the Reserve Bank Innovation Hub, and a published children's book author. Aditya has nearly 20 years in B2C e-commerce, across Myntra, Amazon, and Cleartrip.", photo: '/images/members/shilpa-and-aditya.jpg' },
 ];
+
+// What the portal says is public (approved stories with "Show on tvc.farm" on), written by
+// scripts/export-member-stories.mjs during the build. Committed as an empty default, so a checkout that has not
+// built yet shows just the 2017 cards. A card in it replaces its 2017 card in place, a household that switched
+// itself off is reduced to its name, and a new member is added.
+export const members: Member[] = mergePublished(legacyMembers, publishedData) as Member[];
 
 // The "53 families" figure quoted in prose across Home/About/People/Members/
 // Join was previously hand-typed independently in ~8 places, with nothing

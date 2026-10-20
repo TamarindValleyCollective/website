@@ -31,6 +31,8 @@ export const ACTION_CAPABILITY = {
   // The core team's decision on a member's submitted story (member_stories).
   'story.approve': 'manage',
   'story.reject': 'manage',
+  // Start a site build so approved public stories reach tvc.farm (the staff "Publish to the website" button).
+  'site.publish': 'manage',
 };
 
 export const CLUSTERS = ['H1-A', 'H1-B', 'H2'];
@@ -261,6 +263,9 @@ export function validateEdit(body) {
       if (note.error) return fail(note.error);
       return ok({ action, personId: personId.value, submittedAt, note: note.value });
     }
+
+    case 'site.publish':
+      return ok({ action });
 
     case 'plot.delete': {
       const plotId = id(body, 'plotId');

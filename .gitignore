@@ -30,3 +30,6 @@ pnpm-debug.log*
 # Deno lockfile from Netlify Dev's Edge Functions bootstrap (we don't use
 # Edge Functions, just regular ones — this is purely a local dev artifact)
 deno.lock
+
+# Member photos downloaded at build time by scripts/export-member-stories.mjs (and their generated variants)
+public/images/members/up-*

@@ -30,7 +30,7 @@ const data = {
   ],
 };
 
-test('households come out in farm-plot order with their listed people only', () => {
+test('households come out in house-number order with their listed people only', () => {
   const d = buildDirectory(data, 'p2');
   assert.deepEqual(d.map((h) => h.farmUnit), ['F-02', 'F-12']);
   assert.deepEqual(d[0].people.map((p) => p.name), ['Asha Rao']);
@@ -180,4 +180,20 @@ test('a household with no listed owner treats everyone as primary, so a card is 
   const [hh] = buildDirectory(data, 'x');
   assert.ok(hh.people.every((p) => p.primary));
   assert.deepEqual(hh.familyMembers, []);
+});
+
+test('households are in house-number order; those with no house come last, by farm plot', () => {
+  const people = ['a', 'b', 'c', 'd'].map((id) => ({ id, full_name: id.toUpperCase() }));
+  const data = {
+    people,
+    memberships: people.map((p, i) => ({ household_id: `h${i}`, person_id: p.id })),
+    households: [
+      { id: 'h0', farm_unit: 'F-01', house_no: 'H-30', cluster: null },
+      { id: 'h1', farm_unit: 'F-02', house_no: null, cluster: null },
+      { id: 'h2', farm_unit: 'F-03', house_no: 'H-04', cluster: null },
+      { id: 'h3', farm_unit: 'F-04', house_no: null, cluster: null },
+    ],
+    stories: [],
+  };
+  assert.deepEqual(buildDirectory(data, 'x').map((h) => `${h.houseNo ?? '-'}/${h.farmUnit}`), ['H-04/F-03', 'H-30/F-01', '-/F-02', '-/F-04']);
 });

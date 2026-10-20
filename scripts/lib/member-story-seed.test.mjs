@@ -120,3 +120,14 @@ test('a pinned card with one name and one primary member left over pairs them, n
   assert.match(sql, /having count\(distinct o\.pos\) = 1 and count\(distinct pp\.person_id\) = 1/);
   assert.match(sql, /where r\.pinned and r\.household_id is not null\s+and not exists \(select 1 from seed_core/);
 });
+
+test('the card mapping covers every card, even one that is only a name, and writes only member_cards', () => {
+  const members = [{ name: 'A & B', bio: 'x' }, { name: 'Only Name', bio: '' }];
+  assert.equal(seedCards(members).length, 1);
+  assert.equal(seedCards(members, { includeEmpty: true }).length, 2);
+  const sql = buildSeedSql(seedCards(members, { includeEmpty: true }), { mode: 'cards' });
+  assert.match(sql, /insert into member_cards/);
+  assert.match(sql, /array_agg\(sp\.person_id order by sp\.pos\)/); // the order of the names on the card
+  assert.match(sql, /on conflict do nothing/);
+  assert.ok(!/insert into member_stories/i.test(sql));
+});
