@@ -6,6 +6,7 @@
 //   POST /api/members-me/privacy  acknowledge the first-login privacy notice
 //   GET  /api/members-me/land-documents  their uploaded patta / survey documents and what became of them
 //   POST /api/members-me/land-documents  upload one (multipart: file, landType, householdId); read in the background
+//   GET  /api/members-me/directory     the other members: name, farm plot, cluster and their approved story (opt-out; never contact details)
 //   GET  /api/members-me/story         their own story: the draft, and where it stands (draft / in review / approved)
 //   POST /api/members-me/story         save their draft (autosave; not audited, it is unpublished writing only they and the core team can see)
 //   POST /api/members-me/story-review  suggestions on spelling, grammar, tone and house style (a model, plus fixed privacy checks); edits nothing
@@ -34,6 +35,7 @@ import { validateProfileEdit, profileAuditDetail } from '../../scripts/lib/membe
 import { PRIVACY_NOTICE_VERSION, privacyNoticeRequired, validateAcceptance } from '../../scripts/lib/member-privacy.mjs';
 import { callAnthropic } from './lib/anthropic';
 import { checkDailyCap } from './lib/rate-limit';
+import { buildDirectory } from '../../scripts/lib/member-directory.mjs';
 import { REVIEW_SYSTEM, localChecks, parseSuggestions, reviewPrompt, storyAuditDetail, storyView, validateDraft, validateForSubmit } from '../../scripts/lib/member-story.mjs';
 import { ALLOWED_MIME, LAND_TYPES, MAX_HOUSEHOLD_BYTES, MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_UPLOADS_PER_DAY, NOT_A_LAND_PDF, documentsReplacedBy, memberSummary, normalizeExtraction, surveyKey } from '../../scripts/lib/member-land-docs.mjs';
 
@@ -392,8 +394,8 @@ async function loadStory(personId: string): Promise<any | null> {
   return rows[0] ?? null;
 }
 
-// Signed-in, invited and past the privacy notice: the same gate as /profile.
-async function requireStoryAuthor(req: Request) {
+// Signed-in, invited and past the privacy notice: the same gate as /profile (also used by stories and the directory).
+async function requireAcknowledgedMember(req: Request) {
   const auth = await requireMember(req);
   if (!auth.ok) return { error: jsonResponse({ error: auth.error }, auth.status) } as const;
   if (privacyNoticeRequired(auth.member.privacyVersion)) return { error: jsonResponse({ error: 'Please read the privacy notice first.' }, 403) } as const;
@@ -409,7 +411,7 @@ async function readJson(req: Request): Promise<unknown | undefined> {
 }
 
 async function handleStoryGet(req: Request): Promise<Response> {
-  const who = await requireStoryAuthor(req);
+  const who = await requireAcknowledgedMember(req);
   if ('error' in who) return who.error;
   try {
     return jsonResponse({ story: storyView(await loadStory(who.member.personId)), firstName: who.member.name.trim().split(/\s+/).find((w) => w.length > 1) ?? who.member.name });
@@ -420,7 +422,7 @@ async function handleStoryGet(req: Request): Promise<Response> {
 }
 
 async function handleStorySave(req: Request): Promise<Response> {
-  const who = await requireStoryAuthor(req);
+  const who = await requireAcknowledgedMember(req);
   if ('error' in who) return who.error;
   const body = await readJson(req);
   if (body === undefined) return jsonResponse({ error: 'Nothing to do.' }, 400);
@@ -442,7 +444,7 @@ async function handleStorySave(req: Request): Promise<Response> {
 }
 
 async function handleStoryReview(req: Request): Promise<Response> {
-  const who = await requireStoryAuthor(req);
+  const who = await requireAcknowledgedMember(req);
   if ('error' in who) return who.error;
   const body = await readJson(req);
   if (body === undefined) return jsonResponse({ error: 'Nothing to do.' }, 400);
@@ -490,7 +492,7 @@ async function handleStoryReview(req: Request): Promise<Response> {
 }
 
 async function handleStorySubmit(req: Request): Promise<Response> {
-  const who = await requireStoryAuthor(req);
+  const who = await requireAcknowledgedMember(req);
   if ('error' in who) return who.error;
   const { member } = who;
 
@@ -537,6 +539,28 @@ async function handleStorySubmit(req: Request): Promise<Response> {
   return jsonResponse({ story: storyView(rows[0]) });
 }
 
+// ---- directory --------------------------------------------------------------
+
+// The one place a member reads about OTHER members, so it is deliberately narrow: only
+// columns the directory shows are selected (no email, mobile, land or documents), only people
+// who are active and listed, and only the core team's approved story (scripts/lib/member-directory.mjs).
+async function handleDirectory(req: Request): Promise<Response> {
+  const who = await requireAcknowledgedMember(req);
+  if ('error' in who) return who.error;
+  try {
+    const [people, memberships, households, stories] = await Promise.all([
+      select('member_people', 'id,full_name,active,directory_visible', 'active=eq.true&directory_visible=eq.true'),
+      select('member_household_members', 'household_id,person_id', 'person_id=not.is.null'),
+      select('member_households', 'id,farm_unit,house_no,cluster', 'id=not.is.null'),
+      select('member_stories', 'person_id,approved,approved_public', 'approved=not.is.null'),
+    ]);
+    return jsonResponse({ households: buildDirectory({ people, memberships, households, stories }, who.member.personId) });
+  } catch (err) {
+    console.error('[members-me] directory load failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
 export default async (req: Request): Promise<Response> => {
   const { pathname } = new URL(req.url);
   if (pathname === '/api/members-me/home' && req.method === 'GET') return handleHome(req);
@@ -545,6 +569,7 @@ export default async (req: Request): Promise<Response> => {
   if (pathname === '/api/members-me/land-shapes' && req.method === 'GET') return handleLandShapes(req);
   if (pathname === '/api/members-me/land-document-link' && req.method === 'POST') return handleLandDocumentLink(req);
   if (pathname === '/api/members-me/land-documents' && (req.method === 'GET' || req.method === 'POST')) return handleLandDocuments(req);
+  if (pathname === '/api/members-me/directory' && req.method === 'GET') return handleDirectory(req);
   if (pathname === '/api/members-me/story' && req.method === 'GET') return handleStoryGet(req);
   if (pathname === '/api/members-me/story' && req.method === 'POST') return handleStorySave(req);
   if (pathname === '/api/members-me/story-review' && req.method === 'POST') return handleStoryReview(req);
@@ -552,4 +577,4 @@ export default async (req: Request): Promise<Response> => {
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-me/home', '/api/members-me/profile', '/api/members-me/privacy', '/api/members-me/land-documents', '/api/members-me/land-document-link', '/api/members-me/land-shapes', '/api/members-me/story', '/api/members-me/story-review', '/api/members-me/story-submit'] };
+export const config = { path: ['/api/members-me/home', '/api/members-me/profile', '/api/members-me/privacy', '/api/members-me/land-documents', '/api/members-me/land-document-link', '/api/members-me/land-shapes', '/api/members-me/story', '/api/members-me/story-review', '/api/members-me/story-submit', '/api/members-me/directory'] };

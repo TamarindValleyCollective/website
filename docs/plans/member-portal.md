@@ -106,8 +106,12 @@ Agreed 2026-10-20. One story per person, public-facing only: no separate members
   review with what changed against the approved copy; admins (`manage`) approve, or send back with a
   required note the member sees. Anything that publishes must read `approved`, not `status`: a rejected
   edit leaves the earlier approved text live.
-  **Still to do:** seeding the 53 existing cards (needs a private person-to-card mapping),
-  the member directory, photos, and the batched export to the public Members page.
+  **Member directory (branch `member-directory`):** the portal's Directory lists the other members as
+  households (name, farm plot, house number, cluster) with each person's approved story; opt-out via
+  `directory_visible`; no contact details, land records or documents. Privacy notice v4.
+  **Still to do:** seeding the 53 existing cards (needs a private person-to-card mapping; until then
+  households with no approved story show only names), photos, and the batched export to the public
+  Members page.
 
 ## Access and roles
 

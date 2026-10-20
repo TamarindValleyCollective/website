@@ -1408,6 +1408,282 @@ import '../../styles/global.css';
       order: -1;
     }
   }
+  .lede--warn {
+    color: var(--tvc-orange-text);
+    font-weight: 600;
+  }
+
+  /* ---- directory ---- */
+  .dir-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 18px;
+    margin: 0 0 8px;
+  }
+
+  .dir-bar input[type='search'] {
+    min-width: 340px;
+    padding: 8px 11px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    font: inherit;
+  }
+
+  .dir-bar label.check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.88rem;
+  }
+
+  .dir-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 14px;
+  }
+
+  .dir-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 16px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+    box-shadow: var(--shadow-soft);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .dir-card:hover {
+    border-color: var(--tvc-line-strong);
+  }
+
+  .dir-card:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .dir-pill {
+    padding: 2px 10px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .dir-pill--farm {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+  }
+
+  .dir-pill--house {
+    background: var(--callout-sky-bg);
+    color: var(--tvc-sky-blue-text);
+  }
+
+  .dir-card--you {
+    border-color: var(--tvc-green);
+    background: var(--tvc-green-tint);
+  }
+
+  /* On the tinted card the pills go white with a coloured edge, so farm (green) and housing (blue) stay distinct. */
+  .dir-card--you .dir-pill--farm {
+    border-color: var(--tvc-green);
+    background: var(--tvc-white);
+  }
+
+  .dir-card--you .dir-pill--house {
+    border-color: var(--tvc-sky-blue);
+    background: var(--tvc-white);
+  }
+
+  .dir-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 12px;
+  }
+
+  .dir-chip {
+    padding: 6px 14px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: 999px;
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+
+  .dir-chip[aria-pressed='true'] {
+    border-color: var(--tvc-green-dark);
+    background: var(--tvc-green-dark);
+    color: var(--tvc-white);
+  }
+
+  .dir-chip:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .dir-faces {
+    display: flex;
+    flex: none;
+  }
+
+  .dir-faces > * + * {
+    margin-left: -14px;
+  }
+
+  .dir-photo,
+  .dir-initial {
+    width: 44px;
+    height: 44px;
+    border: 2px solid var(--tvc-white);
+    border-radius: 50%;
+    box-sizing: border-box;
+    object-fit: cover;
+  }
+
+  .dir-initial {
+    font-size: 1rem;
+  }
+
+  .dir-photo--lg,
+  .dir-initial--lg {
+    width: 64px;
+    height: 64px;
+    margin: 0;
+  }
+
+  .dir-initial--lg {
+    font-size: 1.4rem;
+  }
+
+  .dir-more {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 2px solid var(--tvc-white);
+    border-radius: 50%;
+    box-sizing: border-box;
+    background: var(--tvc-stone);
+    color: var(--tvc-ink-soft);
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+
+  .dir-person-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 8px;
+  }
+
+  .dir-person-head h3 {
+    margin: 0;
+  }
+
+  .dir-card-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    font-weight: 700;
+  }
+
+  .dir-card-names {
+    flex: 1 1 110px;
+    min-width: 0;
+  }
+
+  /* On a card the pills are a footer at the bottom right, pinned to the bottom so they line up across a row. */
+  .dir-card > .dir-pills {
+    margin: auto 0 0 auto;
+  }
+
+  .dir-card-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .dir-card-text {
+    font-size: 0.88rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  dialog.modal.dir-modal {
+    position: relative;
+    width: min(540px, calc(100vw - 24px));
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+  }
+
+  .dir-close {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    border: 0;
+    background: none;
+    color: var(--tvc-ink-soft);
+    font-size: 1.6rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .dir-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0 28px 14px 0;
+  }
+
+  .dir-person {
+    margin: 0 0 18px;
+  }
+
+  .dir-person h3 {
+    margin: 0 0 6px;
+    font-size: 1.1rem;
+  }
+
+  .dir-person p {
+    margin: 0 0 8px;
+  }
+
+  .dir-family {
+    color: var(--tvc-ink-soft);
+    font-size: 0.92rem;
+  }
+
+  .dir-why {
+    margin: 12px 0;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-green-tint);
+    font-style: italic;
+  }
+
+  .dir-link {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 0.88rem;
+    color: var(--tvc-green-dark);
+    word-break: break-all;
+  }
+
+  .dir-vis {
+    margin: 10px 0 0;
+    font-size: 0.78rem;
+    color: var(--tvc-ink-soft);
+  }
 </style>
 
 <script>
@@ -1569,7 +1845,7 @@ import '../../styles/global.css';
     { id: 'notices', label: 'Notices', icon: IC.bell, soon: true },
     { id: 'documents', label: 'Documents', icon: IC.statement, soon: true },
     { id: 'meetings', label: 'Meetings & polls', icon: IC.cal, soon: true },
-    { id: 'directory', label: 'Directory', icon: IC.book, soon: true },
+    { id: 'directory', label: 'Directory', icon: IC.book },
     { group: 'Support' },
     { id: 'help', label: 'Help desk', icon: IC.help, soon: true },
   ];
@@ -1581,7 +1857,6 @@ import '../../styles/global.css';
     notices: ['Announcements from the core team: meetings, maintenance reminders, farm and event updates'],
     documents: ['Meeting minutes, farm rules, forms and other member documents'],
     meetings: ['Upcoming meetings and agendas', 'Opinion polls on collective decisions'],
-    directory: ['Find other members and their units. You can opt out of being listed.'],
     help: ['Raise a request with the core team and follow its status'],
   };
 
@@ -2044,7 +2319,8 @@ import '../../styles/global.css';
     root.append(
       crumbs('Home', 'Your story'),
       h('h1', 'page-title', 'Your story', h('small', '', 'Your card for the collective')),
-      h('p', 'lede', 'Say what you are comfortable sharing; only the one-line "why TVC" is needed. The core team reads every story before it appears anywhere, and the member directory and public page are not connected yet, so nothing is visible to other members today.'),
+      h('p', 'lede', 'Say what you are comfortable sharing; only the one-line "why TVC" is needed. The core team reads every story before it appears anywhere. Once approved, other members can read it in the Directory; it goes on tvc.farm only if you switch on "Show on tvc.farm".'),
+      me!.directoryVisible ? null : h('p', 'lede lede--warn', 'You are not listed in the member directory, so other members cannot see your story. You can change that in your account menu, under Your details.'),
     );
     const loading = h('p', 'lede', 'Loading your story…');
     root.append(loading);
@@ -2078,7 +2354,7 @@ import '../../styles/global.css';
         text = story.hasUnsubmittedChanges ? 'With the core team. You have newer changes that are not submitted yet.' : 'With the core team. It will show here once it is approved.';
       } else if (story?.status === 'approved') {
         cls = 'live'; title = 'Approved';
-        text = story.hasUnsubmittedChanges ? 'Your approved story stays as it is until you submit these changes.' : 'Approved.';
+        text = story.hasUnsubmittedChanges ? 'Your approved story stays as it is until you submit these changes.' : 'Approved. Other members can read it in the Directory.';
       } else if (story?.status === 'rejected') {
         cls = 'review'; title = 'Changes needed';
         text = story.reviewerNote || 'The core team asked for changes. Edit and submit again.';
@@ -2277,6 +2553,166 @@ import '../../styles/global.css';
     return root;
   }
 
+  // ---- directory ----
+  // The other members, as households (like the public Members page): names, farm plot and
+  // cluster, and each person's approved story. Never contact details; the server sends none
+  // (members-me.mts handleDirectory). A member who turned their listing off is not in this list.
+  type DirStory = { bio: string; family: string; why: string; social: string; onPublicSite: boolean };
+  type DirPerson = { name: string; isYou: boolean; photo?: string | null; story: DirStory | null };
+  type DirHousehold = { farmUnit: string; houseNo: string | null; cluster: string | null; people: DirPerson[]; hasStory: boolean };
+
+  function viewDirectory(): HTMLElement {
+    const root = h('div');
+    const body = h('div');
+    root.append(
+      crumbs('Home', 'Directory'),
+      h('h1', 'page-title', 'Directory', h('small', '', 'Members of the collective')),
+      h('p', 'lede', 'Names, farm plot numbers and the story each member chose to share. Contact details are never shown. Anyone can opt out of being listed under Your details in the account menu.'),
+      body,
+    );
+    body.append(h('p', 'lede', 'Loading the directory…'));
+
+    let list: DirHousehold[] = [];
+    let query = '';
+    let onlyStories = false;
+    let cluster: string | null = null;
+
+    const search = document.createElement('input');
+    search.type = 'search';
+    search.placeholder = 'Search by name, farm plot or house';
+    search.autocomplete = 'off';
+    search.setAttribute('aria-label', 'Search the directory');
+    search.addEventListener('input', () => { query = search.value.trim().toLowerCase(); draw(); });
+    const only = document.createElement('input');
+    only.type = 'checkbox';
+    only.addEventListener('change', () => { onlyStories = only.checked; draw(); });
+
+    const snippet = (t: string) => (t.length > 120 ? `${t.slice(0, 117).trimEnd()}…` : t);
+
+    // A round photo when the person has one, otherwise their initial. Photos are 400x400 squares.
+    function face(p: DirPerson, large = false): HTMLElement {
+      if (p.photo) {
+        const img = document.createElement('img');
+        img.className = `dir-photo${large ? ' dir-photo--lg' : ''}`;
+        img.src = p.photo;
+        img.alt = '';
+        img.loading = 'lazy';
+        return img;
+      }
+      return h('span', `avatar dir-initial${large ? ' dir-initial--lg' : ''}`, first(p.name).slice(0, 1).toUpperCase());
+    }
+
+    // One face for a single member, two overlapping for a couple, and "+N" beyond that.
+    function faces(people: DirPerson[]): HTMLElement {
+      const shown = people.slice(0, 2).map((p) => face(p));
+      const extra = people.length - shown.length;
+      return h('span', 'dir-faces', undefined, ...shown, extra > 0 ? h('span', 'dir-more', `+${extra}`) : null);
+    }
+
+    // Farm plot in green; house and cluster in blue, because they belong to the housing, not the farm.
+    // The card shows farm and house only, as a footer (the cluster is a filter above, and is in the popup).
+    function pills(hh: DirHousehold, withCluster = true): HTMLElement {
+      const pill = (cls: string, text: string, title: string) => {
+        const el = h('span', `dir-pill dir-pill--${cls}`, text);
+        el.title = title;
+        return el;
+      };
+      return h('span', 'dir-pills', undefined,
+        pill('farm', hh.farmUnit, 'Farm plot'),
+        hh.houseNo ? pill('house', hh.houseNo, 'House') : null,
+        withCluster && hh.cluster ? pill('house', `Cluster ${hh.cluster}`, 'Housing cluster') : null);
+    }
+
+    function card(hh: DirHousehold): HTMLElement {
+      const withStory = hh.people.find((p) => p.story?.bio) ?? hh.people.find((p) => p.story);
+      // First names on the card; the full names are in the popup, and search still matches them.
+      const firsts = hh.people.map((p) => (p.isYou ? `${first(p.name)} (you)` : first(p.name)));
+      // "Bo", "Bo & Cy", "Ishan, Kavya & Leela"
+      const names = firsts.length > 1 ? `${firsts.slice(0, -1).join(', ')} & ${firsts[firsts.length - 1]}` : firsts[0];
+      const b = h('button', `dir-card${hh.people.some((p) => p.isYou) ? ' dir-card--you' : ''}`, undefined,
+        h('span', 'dir-card-top', undefined, faces(hh.people), h('span', 'dir-card-names', names)),
+        h('span', 'dir-card-text', withStory?.story?.bio ? snippet(withStory.story.bio) : withStory?.story?.why ? `“${snippet(withStory.story.why)}”` : 'Has not shared a story yet'),
+        pills(hh, false),
+      );
+      b.setAttribute('type', 'button');
+      b.addEventListener('click', () => openProfile(hh));
+      return b;
+    }
+
+    // The household's profile in a native dialog: the list underneath keeps its scroll position and
+    // search, Esc and a click outside close it, and focus returns to the card that opened it.
+    function openProfile(hh: DirHousehold) {
+      const dlg = document.createElement('dialog');
+      dlg.className = 'modal dir-modal';
+      dlg.setAttribute('aria-label', hh.people.map((p) => p.name).join(' and '));
+      const close = h('button', 'dir-close', '×');
+      close.setAttribute('type', 'button');
+      close.setAttribute('aria-label', 'Close');
+      close.addEventListener('click', () => dlg.close());
+      const people = hh.people.map((p) => {
+        const st = p.story;
+        const link = st?.social && /^https?:\/\//i.test(st.social) ? (() => {
+          const a = h('a', 'dir-link', st.social.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''));
+          a.setAttribute('href', st.social);
+          a.setAttribute('target', '_blank');
+          a.setAttribute('rel', 'noopener noreferrer nofollow');
+          return a;
+        })() : null;
+        return h('section', 'dir-person', undefined,
+          h('div', 'dir-person-head', undefined, face(p, true), h('h3', '', p.isYou ? `${p.name} (you)` : p.name)),
+          st ? h('div', '', undefined,
+            st.bio ? h('p', '', st.bio) : null,
+            st.family ? h('p', 'dir-family', st.family) : null,
+            st.why ? h('blockquote', 'dir-why', st.why) : null,
+            link,
+            h('p', 'dir-vis', st.onPublicSite ? 'Also on the public Members page' : 'Visible to members only'))
+            : h('p', 'lede', 'Has not shared a story yet.'));
+      });
+      dlg.append(close,
+        pills(hh),
+        ...people);
+      dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+      dlg.addEventListener('close', () => dlg.remove());
+      document.body.append(dlg);
+      dlg.showModal();
+    }
+
+    // Cluster filter: housing clusters in a fixed order, one at a time (a household with no house yet has no cluster).
+    function clusterChips(): HTMLElement {
+      const chip = (value: string | null, label: string) => {
+        const b = h('button', 'dir-chip', label);
+        b.setAttribute('type', 'button');
+        b.setAttribute('aria-pressed', String(cluster === value));
+        b.addEventListener('click', () => { cluster = value; draw(); });
+        return b;
+      };
+      return h('div', 'dir-chips', undefined,
+        chip(null, 'All'),
+        ...['H1-A', 'H1-B', 'H2'].map((c) => chip(c, `Cluster ${c} (${list.filter((x) => x.cluster === c).length})`)));
+    }
+
+    function draw() {
+      const shown = list.filter((hh) => (!onlyStories || hh.hasStory) && (!cluster || hh.cluster === cluster) && (!query || [hh.farmUnit, hh.houseNo ?? '', hh.cluster ?? '', ...hh.people.map((p) => p.name)].join(' ').toLowerCase().includes(query)));
+      // The member's own household first (the sort is stable, so everyone else stays in farm plot order).
+      shown.sort((a, b) => Number(b.people.some((p) => p.isYou)) - Number(a.people.some((p) => p.isYou)));
+      const bar = h('div', 'dir-bar', undefined, search, h('label', 'check', undefined, only, h('span', '', 'Only members with a story')));
+      body.replaceChildren(clusterChips(), bar, h('p', 'lede', `${shown.length} of ${list.length} households`),
+        shown.length ? h('div', 'dir-grid', undefined, ...shown.map(card)) : h('p', 'lede', 'No one matches.'));
+    }
+
+    void (async () => {
+      try {
+        const { status, data } = await memberFetch('/api/members-me/directory');
+        if (status !== 200) throw new Error(data.error || 'Could not load the directory.');
+        list = data.households as DirHousehold[];
+        draw();
+      } catch (e) {
+        body.replaceChildren(h('p', 'lede', e instanceof MemberAuthError ? 'Your session ended. Sign in again.' : e instanceof Error ? e.message : 'Could not load the directory.'));
+      }
+    })();
+    return root;
+  }
+
   function viewSoon(id: string): HTMLElement {
     const item = NAV.find((n): n is NavItem => 'id' in n && n.id === id)!;
     return h('div', '', undefined,
@@ -2287,7 +2723,7 @@ import '../../styles/global.css';
   }
 
   function renderView() {
-    const fn = route === 'dashboard' ? viewDashboard : route === 'unit' ? viewUnit : route === 'story' ? viewStory : () => viewSoon(route);
+    const fn = route === 'dashboard' ? viewDashboard : route === 'unit' ? viewUnit : route === 'story' ? viewStory : route === 'directory' ? viewDirectory : () => viewSoon(route);
     $('view').replaceChildren(fn());
     renderNav($<HTMLInputElement>('search').value);
     const label = (NAV.find((n) => 'id' in n && n.id === route) as NavItem | undefined)?.label ?? 'Dashboard';
