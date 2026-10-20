@@ -1501,16 +1501,23 @@ never touches Netlify either.
   one row per person (FK to `member_people`) with three copies of the text: `draft` (autosaved by
   `POST /api/members-me/story`), `submitted` (the snapshot in review, written by
   `POST /api/members-me/story-submit`, audit-first as `member.story.submit`, never with the text) and
-  `approved` (written by the core team's approval queue, not built yet), so an edit never disturbs
-  approved text. `show_on_public_site` defaults to off. `POST /api/members-me/story-review` returns
+  `approved` (written when the core team approves), so an edit never disturbs approved text. `show_on_public_site` defaults to off. `POST /api/members-me/story-review` returns
   suggestions on spelling, grammar, tone and house style (third person) from the Anthropic API
   (`lib/anthropic.ts`, model `STORY_REVIEW_MODEL`, default `claude-sonnet-5`; 10 checks per member and
   300 for the portal per day, counted in `usage-meter`), plus fixed checks that need no model (children
   named in the family line). The model's output is kept only where it quotes the member's own text
   (`scripts/lib/member-story.mjs`), the page shows each suggestion and the member accepts or dismisses
   it, and nothing is applied without that. The story text and the member's first name are sent to
-  Anthropic for the check, so privacy notice v3 says so. Not built yet: the staff approval queue, the
-  member directory, photos, and the batched export to the public Members page.
+  Anthropic for the check, so privacy notice v3 says so. **Approval queue** (`members-admin.mts`): `GET /api/members-admin/stories` (needs `edit`) lists
+  stories in review, oldest first, with the person's name and farm unit, what changed against the
+  approved copy and the fixed privacy flags; `story.approve` / `story.reject` (in `POST /edit`, need
+  `manage`) are audit-first like every register edit (the entry names the person id, never the text or
+  the note). Approving copies `submitted` to `approved`; rejecting needs a note the member sees and
+  leaves earlier approved text live (so anything that publishes must read `approved`, never `status`).
+  Both name the submission the reviewer saw (`submittedAt`) and match it in the update, so a
+  resubmission or a second reviewer can't be overridden. The panel sits above the totals on
+  `/internal/members`. Not built yet: the member directory, photos, and the batched export to the
+  public Members page.
 
 ## Current Production Status
 

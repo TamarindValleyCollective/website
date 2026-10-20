@@ -102,9 +102,12 @@ Agreed 2026-10-20. One story per person, public-facing only: no separate members
 - **Built so far (2026-10-20, branch `member-stories-editor`):** the table, the "Your story" page
   (Editor A), the writing check (Anthropic via `lib/anthropic.ts`, plus fixed privacy checks),
   draft/save/submit endpoints in `members-me.mts`, and privacy notice v3 (names Anthropic).
+  **Approval queue (branch `member-stories-queue`):** a panel on `/internal/members` listing stories in
+  review with what changed against the approved copy; admins (`manage`) approve, or send back with a
+  required note the member sees. Anything that publishes must read `approved`, not `status`: a rejected
+  edit leaves the earlier approved text live.
   **Still to do:** seeding the 53 existing cards (needs a private person-to-card mapping),
-  the staff approval queue in `/internal/members`, the member directory, photos, and the batched export
-  to the public Members page.
+  the member directory, photos, and the batched export to the public Members page.
 
 ## Access and roles
 

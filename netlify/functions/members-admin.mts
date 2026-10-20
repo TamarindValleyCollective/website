@@ -15,6 +15,13 @@
 // Personal names go out in full to `admin`/`user` and masked for `read_only`
 // (staff-masking.ts). Plots are land records and go to every role that can view.
 //
+// Stories: members write a story about themselves (member_stories) and submit it for review.
+// GET stories lists what is waiting (`edit`); story.approve / story.reject (in /edit, `manage`)
+// record the decision. Approving copies the submitted text to the approved copy, which is the
+// only copy anything may publish; rejecting needs a note the member sees and leaves any
+// earlier approved text live. The reviewer also sees which submission they looked at, so a
+// member who resubmits meanwhile can't have newer wording approved unseen.
+//
 // Land documents: members upload a patta / survey extract and it is read in the background
 // (members-land-extract-background.mts). New records and anything that disagrees with the
 // register wait here: GET land-documents lists them for a household, POST land-document-link
@@ -34,6 +41,7 @@ import { buildHouseholdReview, reviewTotals } from '../../scripts/lib/member-rev
 import { ACTION_CAPABILITY, auditDetail, validateEdit } from '../../scripts/lib/member-edit.mjs';
 import { loadLandShapes, signedLandDocumentUrl } from './lib/land-doc-storage';
 import { approvalColumns, documentStatus } from '../../scripts/lib/member-land-docs.mjs';
+import { localChecks } from '../../scripts/lib/member-story.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -159,8 +167,12 @@ const PLOT_COLUMNS = { pattaNo: 'patta_no', referenceNo: 'reference_no', surveyN
 const HOUSE_PATTA_COLUMNS = { pattaNo: 'patta_no', referenceNo: 'reference_no', surveyNo: 'survey_no', settlement: 'settlement', areaSqFt: 'area_sq_ft', householdId: 'household_id' };
 const HOUSEHOLD_COLUMNS = { houseNo: 'house_no', cluster: 'cluster', unitType: 'unit_type' };
 
-async function applyEdit(edit: any): Promise<void> {
+async function applyEdit(edit: any, staffId: string): Promise<void> {
   switch (edit.action) {
+    case 'story.approve':
+    case 'story.reject':
+      return decideStory(edit, staffId);
+
     case 'landdoc.approve':
     case 'landdoc.reject':
       return decideLandItem(edit);
@@ -361,6 +373,66 @@ async function decideLandItem(edit: any): Promise<void> {
   must(await db('PATCH', `member_land_documents?${eq('id', doc.id)}`, { items, status: documentStatus(items) }));
 }
 
+// ---- stories ----------------------------------------------------------------
+
+type StoryText = { bio: string; family: string; why: string; social: string };
+const storyText = (t: any): StoryText => ({ bio: '', family: '', why: '', social: '', ...(t ?? {}) });
+
+// What is waiting for review, oldest first. Plain selects (no embeds), then joined here.
+async function handleStories(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'members', 'edit');
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  try {
+    const rows = await select('member_stories', 'person_id,submitted,submitted_public,submitted_at,approved,approved_public', '&status=eq.in_review&order=submitted_at.asc');
+    if (rows.length === 0) return jsonResponse({ stories: [] });
+    const ids = `(${rows.map((r) => r.person_id).join(',')})`;
+    const [people, links] = await Promise.all([
+      select('member_people', 'id,full_name', `&id=in.${ids}`),
+      select('member_household_members', 'person_id,household_id', `&person_id=in.${ids}`),
+    ]);
+    const hhIds = [...new Set(links.map((l) => l.household_id))];
+    const households = hhIds.length ? await select('member_households', 'id,farm_unit,house_no', `&id=in.(${hhIds.join(',')})`) : [];
+    return jsonResponse({
+      stories: rows.map((r) => {
+        const submitted = storyText(r.submitted);
+        const units = links
+          .filter((l) => l.person_id === r.person_id)
+          .map((l) => households.find((h) => h.id === l.household_id)?.farm_unit)
+          .filter(Boolean);
+        return {
+          personId: r.person_id,
+          name: people.find((p) => p.id === r.person_id)?.full_name ?? 'Unknown',
+          farmUnits: units,
+          submittedAt: r.submitted_at,
+          submitted,
+          submittedPublic: !!r.submitted_public,
+          approved: r.approved ? storyText(r.approved) : null,
+          approvedPublic: r.approved ? !!r.approved_public : null,
+          // The same fixed checks the member saw (children named...), so the reviewer sees them too.
+          flags: localChecks(submitted, !!r.submitted_public).map((f: any) => ({ field: f.field, kind: f.kind, note: f.note })),
+        };
+      }),
+    });
+  } catch (err) {
+    console.error('[members-admin] stories load failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
+async function decideStory(edit: any, staffId: string): Promise<void> {
+  const [row] = await select('member_stories', 'status,submitted,submitted_public,submitted_at', `&${eq('person_id', edit.personId)}`);
+  const stale = "This story has changed, or has already been dealt with. Reload the page.";
+  if (!row || row.status !== 'in_review' || Date.parse(row.submitted_at) !== Date.parse(edit.submittedAt)) throw new EditError(stale, 409);
+  const now = new Date().toISOString();
+  const patch =
+    edit.action === 'story.approve'
+      ? { status: 'approved', approved: row.submitted, approved_public: row.submitted_public, approved_at: now, reviewed_by: staffId, reviewer_note: null, updated_at: now }
+      : { status: 'rejected', reviewed_by: staffId, reviewer_note: edit.note, updated_at: now };
+  // Filtered on the exact submission seen, so two reviewers, or a resubmission, can't both win.
+  const r = must(await db('PATCH', `member_stories?${eq('person_id', edit.personId)}&status=eq.in_review&${eq('submitted_at', row.submitted_at)}`, patch));
+  if (r.rows.length === 0) throw new EditError(stale, 409);
+}
+
 async function handleEdit(req: Request): Promise<Response> {
   const auth = await requireStaff(req, 'members', 'view');
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
@@ -388,7 +460,7 @@ async function handleEdit(req: Request): Promise<Response> {
   }
 
   try {
-    await applyEdit(edit);
+    await applyEdit(edit, auth.staff.id);
   } catch (err) {
     if (err instanceof EditError) return jsonResponse({ error: err.message }, err.status);
     console.error('[members-admin] edit failed', err);
@@ -403,8 +475,9 @@ export default async (req: Request): Promise<Response> => {
   if (pathname === '/api/members-admin/edit' && req.method === 'POST') return handleEdit(req);
   if (pathname === '/api/members-admin/land-documents' && req.method === 'GET') return handleLandDocuments(req);
   if (pathname === '/api/members-admin/land-shapes' && req.method === 'GET') return handleLandShapes(req);
+  if (pathname === '/api/members-admin/stories' && req.method === 'GET') return handleStories(req);
   if (pathname === '/api/members-admin/land-document-link' && req.method === 'POST') return handleLandDocumentLink(req);
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-admin/overview', '/api/members-admin/edit', '/api/members-admin/land-documents', '/api/members-admin/land-document-link', '/api/members-admin/land-shapes'] };
+export const config = { path: ['/api/members-admin/overview', '/api/members-admin/edit', '/api/members-admin/land-documents', '/api/members-admin/land-document-link', '/api/members-admin/land-shapes', '/api/members-admin/stories'] };
