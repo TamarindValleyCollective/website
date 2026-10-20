@@ -3151,13 +3151,25 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         ...['H1-A', 'H1-B', 'H2'].map((c) => chip(c, `Cluster ${c} (${list.filter((x) => x.cluster === c).length})`)));
     }
 
+    const chipsHost = h('div');
+    const bar = h('div', 'dir-bar', undefined, search, h('label', 'check', undefined, only, h('span', '', 'Only members with a story')));
+    const count = h('p', 'lede');
+    const results = h('div');
+    let built = false;
+
     function draw() {
       const shown = list.filter((hh) => (!onlyStories || hh.hasStory) && (!cluster || hh.cluster === cluster) && (!query || [hh.farmUnit, hh.houseNo ?? '', hh.cluster ?? '', ...hh.people.map((p) => p.name)].join(' ').toLowerCase().includes(query)));
       // The member's own household first (the sort is stable, so everyone else stays in house-number order).
       shown.sort((a, b) => Number(b.people.some((p) => p.isYou)) - Number(a.people.some((p) => p.isYou)));
-      const bar = h('div', 'dir-bar', undefined, search, h('label', 'check', undefined, only, h('span', '', 'Only members with a story')));
-      body.replaceChildren(clusterChips(), bar, h('p', 'lede', `${shown.length} of ${list.length} households`),
-        shown.length ? h('div', 'dir-grid', undefined, ...shown.map(card)) : h('p', 'lede', 'No one matches.'));
+      // The search box and the checkbox are built once and never re-created: replacing them on every keystroke
+      // would take the cursor out of the box after each character. Only the chips, the count and the results are redrawn.
+      if (!built) {
+        body.replaceChildren(chipsHost, bar, count, results);
+        built = true;
+      }
+      chipsHost.replaceChildren(clusterChips());
+      count.textContent = `${shown.length} of ${list.length} households`;
+      results.replaceChildren(shown.length ? h('div', 'dir-grid', undefined, ...shown.map(card)) : h('p', 'lede', 'No one matches.'));
     }
 
     void (async () => {
