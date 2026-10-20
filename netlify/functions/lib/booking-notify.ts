@@ -23,7 +23,7 @@ export function approvalUrl(token: string): string {
   return `${SITE_ORIGIN}/approve-booking?token=${encodeURIComponent(token)}`;
 }
 
-async function sendEmail(opts: { to: string[]; cc?: string[]; subject: string; html: string; replyTo?: string }): Promise<boolean> {
+export async function sendEmail(opts: { to: string[]; cc?: string[]; subject: string; html: string; replyTo?: string }): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('[booking-notify] RESEND_API_KEY is not set — cannot send email');

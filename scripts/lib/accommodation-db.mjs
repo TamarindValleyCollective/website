@@ -238,3 +238,31 @@ export async function listStaysForPerson(personId) {
     stays,
   };
 }
+
+// ---- Stay notices (see 0048_accommodation_booking_notices.sql) ----
+
+export async function listNoticesForBookings(bookingIds) {
+  if (bookingIds.length === 0) return new Map();
+  const res = await restFetch(`/accommodation_booking_notices?booking_id=in.(${bookingIds.join(',')})&select=booking_id,snapshot,notified_at`);
+  return new Map((await res.json()).map((r) => [r.booking_id, { snapshot: r.snapshot, notifiedAt: r.notified_at }]));
+}
+
+export async function getNotice(bookingId) {
+  return (await listNoticesForBookings([bookingId])).get(bookingId) ?? null;
+}
+
+export async function saveNotice(bookingId, snapshot, notifiedBy) {
+  await restFetch('/accommodation_booking_notices?on_conflict=booking_id', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ booking_id: bookingId, snapshot, notified_by: notifiedBy, notified_at: new Date().toISOString() }),
+  });
+}
+
+// Contact details for notifying people who may no longer be on the booking
+// (e.g. a guest swapped out after being told). Server-side only.
+export async function getPeopleByIds(ids) {
+  if (ids.length === 0) return new Map();
+  const res = await restFetch(`/accommodation_people?id=in.(${ids.join(',')})&select=${PERSON_FIELDS}`);
+  return new Map((await res.json()).map((p) => [p.id, { id: p.id, name: p.name, mobileNumber: p.mobile_number ?? undefined, email: p.email ?? undefined }]));
+}

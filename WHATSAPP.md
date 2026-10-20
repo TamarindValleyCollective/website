@@ -49,6 +49,15 @@ payment link, after Linger approve). Submission text in `docs/whatsapp-templates
 until then the approver alert and the payment link go out by email only. The payment-link message respects the booking's
 WhatsApp consent box. See `RAZORPAY.md`.
 
+**Accommodation stay notices (2026-10-12).** Four more templates: `tvc_stay_confirmed`,
+`tvc_stay_updated`, `tvc_stay_cancelled` (guests) and `tvc_stay_staff_alert` (staff, via
+`WHATSAPP_STAFF_ALERT_NUMBERS`). Sent only when staff press "Finalize & notify" / "Send update" on a
+member-stay booking in the accommodation calendar, never automatically. No per-guest opt-in field
+exists for calendar guests, so WhatsApp goes to any guest with a mobile on file (decided
+2026-10-12); the STOP opt-out list is still honoured. **Status: built, not yet submitted to Meta**,
+so nothing WhatsApps until the names are approved and added to `WHATSAPP_APPROVED_TEMPLATES`
+(email works regardless). Submission text in `docs/whatsapp-templates.md`.
+
 **Booking confirmation, reminders, referral attribution, auto-reply (2026-10-10).** Built, dormant
 until configured; details and Meta submission text in `docs/whatsapp-templates.md`.
 - **Two new templates with buttons**: `tvc_booking_confirmed` (sent when a payment is recorded,

@@ -637,6 +637,17 @@ outside both the local machine and Netlify (the member-update-email workflow).
   (`accommodation_booking_audit_log`, populated by table triggers, not application code, so no
   write path can bypass it) records every create/update/delete, and editing or deleting a booking
   whose stay has already happened requires and records a reason.
+  **Stay notifications (2026-10-12, member stays only).** A staff-triggered "Finalize & notify"
+  button on a member-stay booking card calls `POST /api/accommodation-admin/bookings/notify`,
+  which messages each guest on WhatsApp (if a mobile is on file) and email (if an email is on
+  file) via `lib/stay-notify.ts` (templates `tvc_stay_confirmed`/`_updated`/`_cancelled`), plus a
+  summary to core-team + Linger (email and `tvc_stay_staff_alert`). Nothing is sent when a booking
+  is merely saved. What guests were told is stored in `accommodation_booking_notices`
+  (migration `0048`); `scripts/lib/stay-notice.mjs` diffs it against the live booking so an edit
+  shows "Changed since guests were told" and "Send update" messages only the guests affected, and
+  deleting a notified booking offers a cancellation message (`notifyGuests` on `/bookings/delete`).
+  Gated by `NOTIFIABLE_BOOKING_TYPES` in `stay-notice.mjs`. Test mode (Razorpay test keys) routes
+  to the test inbox / `WHATSAPP_TEST_NUMBER`.
 - **`netlify/functions/lib/staff-access.ts` + `staff-registry.ts`** — the shared access layer
   for the internal admin tools (issue #89), meant to replace the per-function Sheet allow-lists
   above. `requireStaff(req, module, capability)` verifies the Google ID token (for tvc.farm /
