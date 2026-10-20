@@ -1516,8 +1516,16 @@ never touches Netlify either.
   leaves earlier approved text live (so anything that publishes must read `approved`, never `status`).
   Both name the submission the reviewer saw (`submittedAt`) and match it in the update, so a
   resubmission or a second reviewer can't be overridden. The panel sits above the totals on
-  `/internal/members`. Not built yet: the member directory, photos, and the batched export to the
-  public Members page.
+  `/internal/members`.
+  **Member directory** (`GET /api/members-me/directory`, `scripts/lib/member-directory.mjs`): the portal's
+  Directory lists the other members as households (farm plot, house number, cluster) with each person's **approved**
+  story, for any signed-in member who has acknowledged the privacy notice. It is the one place a member
+  reads about other members, so it is narrow by construction: the function selects only
+  the columns shown (never email, mobile, land records or documents), only people who are active and
+  listed (`directory_visible`, opt-out; an opted-out person's story is hidden too), and reads the
+  `approved` copy only, whether or not it is also on tvc.farm. Profile links go to the page only if
+  they are http(s), and open with `noopener noreferrer nofollow`. Privacy notice v4 describes it.
+  Not built yet: photos, and the batched export to the public Members page.
 
 ## Current Production Status
 

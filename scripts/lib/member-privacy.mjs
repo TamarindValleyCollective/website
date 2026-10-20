@@ -10,7 +10,7 @@
 // Keep it true: it describes what the portal does today, not what is planned.
 // Update it when the portal changes (the directory, dues, stays...).
 
-export const PRIVACY_NOTICE_VERSION = 3;
+export const PRIVACY_NOTICE_VERSION = 4;
 
 export const NOTICE_TITLE = 'How we handle your membership details';
 
@@ -28,11 +28,11 @@ export const SECTIONS = [
   },
   {
     heading: 'Your story',
-    body: 'If you write a story about yourself, your drafts are seen only by you and the core team. When you press "Check", the text of your story (and your first name) is sent to Anthropic, the AI company we use, to suggest spelling, grammar and tone fixes; nothing else about you is sent. It only suggests, you decide what to keep, and nothing is published until the core team has read and approved it.',
+    body: 'If you write a story about yourself, your drafts are seen only by you and the core team. When you press "Check", the text of your story (and your first name) is sent to Anthropic, the AI company we use, to suggest spelling, grammar and tone fixes; nothing else about you is sent. It only suggests, you decide what to keep, and nothing is published until the core team has read and approved it. Once approved, other members can read it in the member directory; it goes on the public website only if you switch on "Show on tvc.farm" for it.',
   },
   {
     heading: 'Who can see it',
-    body: 'You can see your own household. For the other people in it you see only whether an email or mobile is on file, never the numbers. Other members cannot see your record. The few core team members who run the register can see and correct it. Every change, by you or by them, is logged: which field changed, never the value.',
+    body: 'You can see your own household. For the other people in it you see only whether an email or mobile is on file, never the numbers. Other members can see your name, your farm plot number, house number and housing cluster, and your approved story in the member directory, unless you turn your listing off. They never see your email, mobile number, land records or documents. The few core team members who run the register can see and correct all of it. Every change, by you or by them, is logged: which field changed, never the value.',
   },
   {
     heading: 'Signing in',
@@ -40,7 +40,7 @@ export const SECTIONS = [
   },
   {
     heading: 'Your choices',
-    body: 'You can change your mobile number yourself. A member directory does not exist yet; turning "List me in the member directory" off now means you will not be listed when it does. To change your name, email or household, ask the core team.',
+    body: 'You can change your mobile number yourself. Turn "List me in the member directory" off and other members will not see you, or your story, in the directory. To change your name, email or household, ask the core team.',
   },
   {
     heading: 'Where it is kept',
