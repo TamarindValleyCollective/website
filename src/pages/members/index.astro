@@ -1586,6 +1586,21 @@ import '../../styles/global.css';
     margin-bottom: 8px;
   }
 
+  .dir-cite {
+    font-style: normal;
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .dir-linkrow {
+    margin: 0 0 4px;
+  }
+
+  .dir-who {
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+  }
+
   .dir-person-head h3 {
     margin: 0;
   }
@@ -2559,7 +2574,8 @@ import '../../styles/global.css';
   // (members-me.mts handleDirectory). A member who turned their listing off is not in this list.
   type DirStory = { bio: string; family: string; why: string; social: string; onPublicSite: boolean };
   type DirPerson = { name: string; isYou: boolean; photo?: string | null; story: DirStory | null };
-  type DirHousehold = { farmUnit: string; houseNo: string | null; cluster: string | null; people: DirPerson[]; hasStory: boolean };
+  type DirGroup = { people: { name: string; isYou: boolean }[]; bio: string; family: string; quotes: { name: string | null; why: string }[]; links: { name: string; url: string }[]; onPublicSite: boolean };
+  type DirHousehold = { farmUnit: string; houseNo: string | null; cluster: string | null; people: DirPerson[]; groups: DirGroup[]; withoutStory: { name: string; isYou: boolean }[]; hasStory: boolean };
 
   function viewDirectory(): HTMLElement {
     const root = h('div');
@@ -2609,6 +2625,9 @@ import '../../styles/global.css';
       return h('span', 'dir-faces', undefined, ...shown, extra > 0 ? h('span', 'dir-more', `+${extra}`) : null);
     }
 
+    // "Bo", "Bo & Cy", "Ishan, Kavya & Leela"
+    const joinNames = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}` : names[0] ?? '');
+
     // Farm plot in green; house and cluster in blue, because they belong to the housing, not the farm.
     // The card shows farm and house only, as a footer (the cluster is a filter above, and is in the popup).
     function pills(hh: DirHousehold, withCluster = true): HTMLElement {
@@ -2626,9 +2645,7 @@ import '../../styles/global.css';
     function card(hh: DirHousehold): HTMLElement {
       const withStory = hh.people.find((p) => p.story?.bio) ?? hh.people.find((p) => p.story);
       // First names on the card; the full names are in the popup, and search still matches them.
-      const firsts = hh.people.map((p) => (p.isYou ? `${first(p.name)} (you)` : first(p.name)));
-      // "Bo", "Bo & Cy", "Ishan, Kavya & Leela"
-      const names = firsts.length > 1 ? `${firsts.slice(0, -1).join(', ')} & ${firsts[firsts.length - 1]}` : firsts[0];
+      const names = joinNames(hh.people.map((p) => (p.isYou ? `${first(p.name)} (you)` : first(p.name))));
       const b = h('button', `dir-card${hh.people.some((p) => p.isYou) ? ' dir-card--you' : ''}`, undefined,
         h('span', 'dir-card-top', undefined, faces(hh.people), h('span', 'dir-card-names', names)),
         h('span', 'dir-card-text', withStory?.story?.bio ? snippet(withStory.story.bio) : withStory?.story?.why ? `“${snippet(withStory.story.why)}”` : 'Has not shared a story yet'),
@@ -2649,28 +2666,32 @@ import '../../styles/global.css';
       close.setAttribute('type', 'button');
       close.setAttribute('aria-label', 'Close');
       close.addEventListener('click', () => dlg.close());
-      const people = hh.people.map((p) => {
-        const st = p.story;
-        const link = st?.social && /^https?:\/\//i.test(st.social) ? (() => {
-          const a = h('a', 'dir-link', st.social.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''));
-          a.setAttribute('href', st.social);
-          a.setAttribute('target', '_blank');
-          a.setAttribute('rel', 'noopener noreferrer nofollow');
-          return a;
-        })() : null;
+      const label = (p: { name: string; isYou: boolean }) => (p.isYou ? `${p.name} (you)` : p.name);
+      const link = (url: string, who?: string) => {
+        if (!/^https?:\/\//i.test(url)) return null;
+        const a = h('a', 'dir-link', url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''));
+        a.setAttribute('href', url);
+        a.setAttribute('target', '_blank');
+        a.setAttribute('rel', 'noopener noreferrer nofollow');
+        return h('p', 'dir-linkrow', undefined, who ? h('span', 'dir-who', `${first(who)}: `) : null, a);
+      };
+      // One section per shared story (identical bio and family are shown once), with each person's own
+      // quote and link under it. Quotes are captioned by first name only when they differ.
+      const sections = hh.groups.map((g) => {
+        const faceStack = h('span', 'dir-faces', undefined, ...g.people.slice(0, 3).map((gp) => face(hh.people.find((x) => x.name === gp.name) ?? { name: gp.name, isYou: gp.isYou, story: null }, true)));
         return h('section', 'dir-person', undefined,
-          h('div', 'dir-person-head', undefined, face(p, true), h('h3', '', p.isYou ? `${p.name} (you)` : p.name)),
-          st ? h('div', '', undefined,
-            st.bio ? h('p', '', st.bio) : null,
-            st.family ? h('p', 'dir-family', st.family) : null,
-            st.why ? h('blockquote', 'dir-why', st.why) : null,
-            link,
-            h('p', 'dir-vis', st.onPublicSite ? 'Also on the public Members page' : 'Visible to members only'))
-            : h('p', 'lede', 'Has not shared a story yet.'));
+          h('div', 'dir-person-head', undefined, faceStack, h('h3', '', joinNames(g.people.map(label)))),
+          g.bio ? h('p', '', g.bio) : null,
+          g.family ? h('p', 'dir-family', g.family) : null,
+          ...g.quotes.map((q) => h('blockquote', 'dir-why', q.why, q.name ? h('cite', 'dir-cite', ` — ${first(q.name)}`) : null)),
+          ...g.links.map((l) => link(l.url, g.people.length > 1 ? l.name : undefined)),
+          h('p', 'dir-vis', g.onPublicSite ? 'Also on the public Members page' : 'Visible to members only'));
       });
-      dlg.append(close,
-        pills(hh),
-        ...people);
+      if (hh.withoutStory.length) {
+        const who = hh.withoutStory.map(label);
+        sections.push(h('section', 'dir-person', undefined, h('p', 'lede', `${joinNames(who)} ${who.length > 1 ? 'have' : 'has'} not shared a story yet.`)));
+      }
+      dlg.append(close, pills(hh), ...sections);
       dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
       dlg.addEventListener('close', () => dlg.remove());
       document.body.append(dlg);
