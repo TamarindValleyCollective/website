@@ -34,6 +34,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
     <div id="content" hidden>
      <div id="overview">
+      <section id="stories" class="stories" aria-label="Stories waiting for review" hidden></section>
       <dl id="totals" class="totals"></dl>
 
       <div class="toolbar">
@@ -654,6 +655,82 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   .members .flag--info {
     background: var(--tvc-green-tint);
     color: var(--tvc-green-dark);
+  }
+  .members .stories {
+    margin: 0 0 22px;
+  }
+
+  .members .story-queue > summary {
+    cursor: pointer;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+
+  .members .story-list {
+    display: grid;
+    gap: 14px;
+  }
+
+  .members .story-card {
+    padding: 14px 16px;
+  }
+
+  .members .story-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    margin-bottom: 10px;
+  }
+
+  .members .story-fields {
+    margin: 10px 0 12px;
+  }
+
+  .members .story-row {
+    margin: 0 0 10px;
+  }
+
+  .members .story-row dt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .members .story-row dd {
+    margin: 2px 0 0;
+  }
+
+  .members .story-text {
+    white-space: pre-wrap;
+  }
+
+  .members .story-was {
+    margin-top: 4px;
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .members .story-reject {
+    margin-top: 8px;
+  }
+
+  .members .story-reject[hidden] {
+    display: none;
+  }
+
+  .members .story-reject textarea {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    font: inherit;
   }
 </style>
 
@@ -1413,6 +1490,96 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     );
   }
 
+  // ---- stories waiting for review ------------------------------------------------
+  // A member's submitted story (see the portal's "Your story"). Approving makes the submitted text
+  // the approved copy; rejecting sends it back with a note the member sees. Both need `manage`,
+  // and name the submission seen, so wording the member sent meanwhile is never approved unseen.
+  type StoryText = { bio: string; family: string; why: string; social: string };
+  type StoryItem = { personId: string; name: string; farmUnits: string[]; submittedAt: string; submitted: StoryText; submittedPublic: boolean; approved: StoryText | null; approvedPublic: boolean | null; flags: { field: string; kind: string; note: string }[] };
+  const STORY_LABEL: Record<keyof StoryText, string> = { bio: 'What they do today', family: 'Family', why: 'Why TVC', social: 'Profile link' };
+
+  async function loadStories() {
+    const box = $('stories');
+    if (!can.edit) {
+      box.hidden = true;
+      return;
+    }
+    try {
+      const { status, data } = await staffFetch('/api/members-admin/stories');
+      if (status !== 200) throw new Error(data.error || 'Could not load.');
+      renderStories(data.stories as StoryItem[]);
+    } catch {
+      box.hidden = false;
+      box.replaceChildren(h('p', { class: 'muted', text: 'Could not load the stories waiting for review.' }));
+    }
+  }
+
+  async function decideStory(story: StoryItem, action: 'story.approve' | 'story.reject', note?: string) {
+    await send({ action, personId: story.personId, submittedAt: story.submittedAt, ...(note ? { note } : {}) });
+    await loadStories();
+  }
+
+  function renderStories(stories: StoryItem[]) {
+    const box = $('stories');
+    box.hidden = false;
+    if (stories.length === 0) {
+      box.replaceChildren(h('p', { class: 'muted', text: 'No stories waiting for review.' }));
+      return;
+    }
+    const when = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const cards = stories.map((st) => {
+      const msg = h('p', { class: 'form-msg', attrs: { role: 'alert' } });
+      const rows: HTMLElement[] = [];
+      for (const key of ['bio', 'family', 'why', 'social'] as const) {
+        const now = st.submitted[key];
+        const was = st.approved?.[key] ?? '';
+        if (!now && !was) continue;
+        const changed = !!st.approved && now !== was;
+        rows.push(
+          h('div', { class: 'story-row' },
+            h('dt', { text: STORY_LABEL[key] }, changed ? h('span', { class: 'flag flag--warn', text: now ? 'Changed' : 'Removed' }) : null),
+            h('dd', { class: now ? 'story-text' : 'muted', text: now || '(removed)' }),
+            changed && was ? h('details', { class: 'story-was' }, h('summary', { text: 'Currently approved wording' }), h('p', { class: 'story-text', text: was })) : null,
+          ),
+        );
+      }
+      const head = h('div', { class: 'story-head' },
+        h('strong', { text: st.name }),
+        ...st.farmUnits.map((u) => h('span', { class: 'unit-pill', text: u })),
+        h('span', { class: 'meta', text: `Submitted ${when(st.submittedAt)}` }),
+        h('span', { class: `flag flag--${st.submittedPublic ? 'warn' : 'info'}`, text: st.submittedPublic ? 'Wants to be on tvc.farm' : 'Members only' }),
+        st.approved ? h('span', { class: 'flag flag--info', text: 'Edit to an approved story' }) : null,
+      );
+      const flags = st.flags.length
+        ? h('ul', { class: 'flags' }, ...st.flags.map((f) => h('li', {}, h('span', { class: 'flag flag--warn', text: `${STORY_LABEL[f.field as keyof StoryText]}: ${f.note}` }))))
+        : null;
+
+      let actions: HTMLElement;
+      if (!can.manage) {
+        actions = h('p', { class: 'muted', text: 'An admin approves or sends back stories.' });
+      } else {
+        const noteBox = h('textarea', { attrs: { rows: '3', maxlength: '500', placeholder: 'What should they change? They will see this note.' } }) as HTMLTextAreaElement;
+        const form = h('div', { class: 'story-reject', attrs: { hidden: '' } }, noteBox);
+        const sendBack = h('button', { class: 'rowbtn rowbtn--act', text: 'Send back with this note', attrs: { type: 'button' } });
+        sendBack.addEventListener('click', async () => {
+          if (!noteBox.value.trim()) { msg.textContent = 'Write a note so the member knows what to change.'; return; }
+          try { await decideStory(st, 'story.reject', noteBox.value); } catch (err) { msg.textContent = err instanceof Error ? err.message : 'Something went wrong.'; }
+        });
+        form.append(sendBack);
+        const approve = h('button', { class: 'rowbtn rowbtn--act rowbtn--yes', text: 'Approve', attrs: { type: 'button' } });
+        approve.addEventListener('click', async () => {
+          approve.setAttribute('disabled', '');
+          try { await decideStory(st, 'story.approve'); } catch (err) { approve.removeAttribute('disabled'); msg.textContent = err instanceof Error ? err.message : 'Something went wrong.'; }
+        });
+        const reject = h('button', { class: 'rowbtn rowbtn--act', text: 'Send back…', attrs: { type: 'button' } });
+        reject.addEventListener('click', () => { form.hidden = !form.hidden; if (!form.hidden) noteBox.focus(); });
+        actions = h('div', {}, h('div', { class: 'rowbtns' }, approve, reject), form);
+      }
+      return h('article', { class: 'card story-card' }, head, flags, h('dl', { class: 'story-fields' }, ...rows), msg, actions);
+    });
+    box.replaceChildren(h('details', { class: 'story-queue', attrs: { open: '' } }, h('summary', { text: `Stories waiting for review (${stories.length})` }), h('div', { class: 'story-list' }, ...cards)));
+  }
+
   // ---- load & sign-in ----------------------------------------------------------
   const gate = $('gate');
   const gateError = $('gate-error');
@@ -1449,6 +1616,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     $('masked-note').hidden = !data.namesMasked;
     renderTotals(data.totals);
     renderList();
+    void loadStories();
   }
 
   async function load() {

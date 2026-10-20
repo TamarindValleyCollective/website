@@ -28,6 +28,9 @@ export const ACTION_CAPABILITY = {
   'housepatta.delete': 'manage',
   'landdoc.approve': 'manage',
   'landdoc.reject': 'manage',
+  // The core team's decision on a member's submitted story (member_stories).
+  'story.approve': 'manage',
+  'story.reject': 'manage',
 };
 
 export const CLUSTERS = ['H1-A', 'H1-B', 'H2'];
@@ -242,6 +245,21 @@ export function validateEdit(body) {
       const itemIndex = body.itemIndex;
       if (!Number.isInteger(itemIndex) || itemIndex < 0 || itemIndex > 11) return fail('itemIndex is missing or not valid.');
       return ok({ action, documentId: documentId.value, itemIndex });
+    }
+
+    // `submittedAt` is the timestamp of the submission the reviewer was looking at, so a member
+    // who resubmits meanwhile can't have newer wording approved unseen.
+    case 'story.approve':
+    case 'story.reject': {
+      const personId = id(body, 'personId');
+      if (personId.error) return fail(personId.error);
+      const submittedAt = body.submittedAt;
+      if (typeof submittedAt !== 'string' || submittedAt.length > 40 || Number.isNaN(Date.parse(submittedAt))) return fail('submittedAt is missing or not valid.');
+      if (action === 'story.approve') return ok({ action, personId: personId.value, submittedAt });
+      // A rejection always says what to change: the member sees this note.
+      const note = requiredText(body, 'note', 'A note for the member', 500);
+      if (note.error) return fail(note.error);
+      return ok({ action, personId: personId.value, submittedAt, note: note.value });
     }
 
     case 'plot.delete': {

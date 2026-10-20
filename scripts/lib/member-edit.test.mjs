@@ -130,3 +130,30 @@ test('the audit detail names fields but never records a name, email, phone or la
   const house = auditDetail(good({ action: 'household.update', householdId: A, houseNo: 'H-22', cluster: 'H1-A' }));
   assert.deepEqual(house.values, { houseNo: 'H-22', cluster: 'H1-A' });
 });
+
+const AT = '2026-10-20T10:15:30.123456+00:00';
+
+test('approving a story names the person and the submission seen, and needs `manage`', () => {
+  const edit = good({ action: 'story.approve', personId: A, submittedAt: AT });
+  assert.deepEqual(edit, { action: 'story.approve', personId: A, submittedAt: AT });
+  assert.equal(ACTION_CAPABILITY['story.approve'], 'manage');
+  assert.equal(ACTION_CAPABILITY['story.reject'], 'manage');
+  assert.match(bad({ action: 'story.approve', personId: A }), /submittedAt/);
+  assert.match(bad({ action: 'story.approve', personId: A, submittedAt: 'yesterday' }), /submittedAt/);
+  assert.match(bad({ action: 'story.approve', personId: 'x', submittedAt: AT }), /personId/);
+});
+
+test('rejecting a story always carries a note for the member', () => {
+  assert.match(bad({ action: 'story.reject', personId: A, submittedAt: AT }), /note/i);
+  assert.match(bad({ action: 'story.reject', personId: A, submittedAt: AT, note: '   ' }), /note/i);
+  assert.match(bad({ action: 'story.reject', personId: A, submittedAt: AT, note: 'x'.repeat(501) }), /too long/);
+  const edit = good({ action: 'story.reject', personId: A, submittedAt: AT, note: '  Please use first names only.  ' });
+  assert.equal(edit.note, 'Please use first names only.');
+});
+
+test('the audit entry for a story decision names the fields, never the note', () => {
+  const d = auditDetail(good({ action: 'story.reject', personId: A, submittedAt: AT, note: 'Remove the child’s age.' }));
+  assert.deepEqual(d.ids, { personId: A });
+  assert.deepEqual(d.fields.sort(), ['note', 'submittedAt']);
+  assert.ok(!JSON.stringify(d).includes('child'));
+});
