@@ -4,6 +4,7 @@
 // place so the keyword-retrieval scoring and the Claude response-parsing
 // quirk (see callAnthropic below) can't drift between the two call sites.
 import siteContent from '../site-content.json' with { type: 'json' };
+import { toPlain } from '../../../scripts/lib/member-markdown.mjs';
 import { members, type Member } from '../../../src/data/members';
 
 export interface SitePage {
@@ -116,8 +117,8 @@ export function formatMembers(matched: Member[]): string {
   if (!matched.length) return '';
   const blocks = matched.map((m) => {
     const lines = [`## Member: ${m.name}`];
-    if (m.bio) lines.push(`What they do: ${m.bio}`);
-    if (m.family) lines.push(`Family: ${m.family}`);
+    if (m.bio) lines.push(`What they do: ${toPlain(m.bio)}`);
+    if (m.family) lines.push(`Family: ${toPlain(m.family)}`);
     const quotes = Array.isArray(m.whyTVC) ? m.whyTVC : m.whyTVC ? [m.whyTVC] : [];
     if (quotes.length) lines.push(`Why they're part of TVC: ${quotes.join(' / ')}`);
     if (m.social?.length) lines.push(`Social: ${m.social.join(', ')}`);

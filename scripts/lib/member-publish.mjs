@@ -151,7 +151,7 @@ export function sanitizePublished(raw) {
   for (const c of raw.cards) {
     const name = str(c?.name, 120);
     if (!name) continue;
-    const card = { name, bio: str(c.bio, 4000), photo: isPhotoRef(c.photo) ? c.photo : null };
+    const card = { name, bio: str(c.bio, 6000), photo: isPhotoRef(c.photo) ? c.photo : null };
     if (Array.isArray(c.photos)) {
       const photos = c.photos.filter(isPhotoRef);
       if (photos.length > 1) card.photos = photos;
