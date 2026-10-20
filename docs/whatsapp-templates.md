@@ -289,3 +289,64 @@ Please pay within 48 hours to confirm your spot:
 Questions? Just reply here or email core-team@tvc.farm.
 ```
 Samples: `Asha` · `Foraging Day` · `Saturday, 10 October 2026` · `2` · `₹4,500` · `https://rzp.io/rzp/abc123`
+
+## Accommodation stay notices (2026-10-12)
+
+**Status:** drafted, not yet submitted. Utility, English, **Header: Text**, footer filled in. Add each
+name to `WHATSAPP_APPROVED_TEMPLATES` only once Meta approves it. Sent from the accommodation calendar
+by staff (`lib/stay-notify.ts`), member stays only for now. Each body ends in plain text.
+
+| Name | Variables | Sent when |
+|---|---|---|
+| `tvc_stay_confirmed` | 1 first name · 2 tent(s) · 3 check-in · 4 check-out | staff press "Finalize & notify" |
+| `tvc_stay_updated` | 1 first name · 2 tent(s) · 3 check-in · 4 check-out | staff press "Send update" after an edit |
+| `tvc_stay_cancelled` | 1 first name · 2 check-in | a notified booking is cancelled (staff opt in), or a guest is removed from it |
+| `tvc_stay_staff_alert` | 1 action · 2 member · 3 dates · 4 guests | with every send above; to `WHATSAPP_STAFF_ALERT_NUMBERS` |
+
+### `tvc_stay_confirmed`
+Header: `Your stay is confirmed` · Footer: `Tamarind Valley Collective`
+Button: **Visit website** → `https://tvc.farm/visit/how-to-reach`, text `Get directions`
+```
+Hi {{1}}, your stay at the farm is confirmed. ✅
+
+🏕️ *Where:* {{2}}
+📅 *Check-in:* {{3}}
+📅 *Check-out:* {{4}}
+
+Tap below for directions, or just reply here with any questions.
+```
+Samples: `Asha` · `Malabar Hut Fixed Tent (N)` · `Saturday, 1 November 2026` · `Monday, 3 November 2026`
+
+### `tvc_stay_updated`
+Header: `Your stay has changed` · Footer: `Tamarind Valley Collective`
+```
+Hi {{1}}, there's been a change to your stay at the farm. 🔄
+
+🏕️ *Where:* {{2}}
+📅 *Check-in:* {{3}}
+📅 *Check-out:* {{4}}
+
+This replaces what we told you before. Questions? Just reply here or email core-team@tvc.farm.
+```
+Samples: `Asha` · `Banyan Hut Fixed Tent` · `Saturday, 1 November 2026` · `Monday, 3 November 2026`
+
+### `tvc_stay_cancelled`
+Header: `Your stay is cancelled` · Footer: `Tamarind Valley Collective`
+```
+Hi {{1}}, your stay at the farm from *{{2}}* has been cancelled. 😔
+
+If you weren't expecting this, or you'd like to rebook, just reply here or email core-team@tvc.farm and we'll sort it out.
+```
+Samples: `Asha` · `Saturday, 1 November 2026`
+
+### `tvc_stay_staff_alert`
+Header: `Stay allocation` · Footer: `TVC website · internal alert`
+```
+🏕️ Stay allocation *{{1}}* for *{{2}}*.
+
+📅 *Dates:* {{3}}
+👥 *Guests:* {{4}}
+
+Guests with a mobile or email on file were messaged from the accommodation calendar.
+```
+Samples: `confirmed` · `Asha Rao` · `1 Nov 2026 to 3 Nov 2026` · `Asha (Malabar Hut Fixed Tent (N)), Ravi (Banyan Hut Fixed Tent) - confirmed`

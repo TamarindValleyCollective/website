@@ -1553,6 +1553,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     tents: TentAssignment[];
     note?: string;
     isPast: boolean;
+    // Guest notifications (member stays only for now): `notice` is null until
+    // staff finalize & notify; `pending` means edited since guests were told.
+    notifiable?: boolean;
+    notice?: { notifiedAt: string; pending: boolean } | null;
     createdBy: string;
     createdAt: string;
     updatedBy?: string;
@@ -3223,15 +3227,56 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         <div>
           <strong>${title}</strong>
           <div class="meta">${b.startDate} · ${b.nights} night${b.nights > 1 ? 's' : ''} · ${tentNames}${b.exclusive ? ' · exclusive' : ''}</div>
+          ${b.notifiable ? `<div class="meta">${noticeStatusLabel(b)}</div>` : ''}
         </div>
         <div class="actions">
+          ${canWrite && b.notifiable && (!b.notice || b.notice.pending) && b.tents.some((t) => t.guests.length) && !b.isPast ? `<button type="button" class="button notify-guests">${b.notice ? 'Send update' : 'Finalize &amp; notify'}</button>` : ''}
           <button type="button" class="button edit-booking">${canWrite ? 'Edit' : 'View'}</button>
           ${canWrite ? '<button type="button" class="button button--danger cancel-booking">Cancel</button>' : ''}
         </div>
       `;
       card.querySelector('.edit-booking')!.addEventListener('click', () => loadIntoForm(b));
       card.querySelector('.cancel-booking')?.addEventListener('click', () => cancelBooking(b));
+      card.querySelector('.notify-guests')?.addEventListener('click', (ev) => notifyGuests(b, ev.currentTarget as HTMLButtonElement));
       bookingList.appendChild(card);
+    }
+  }
+
+  function noticeStatusLabel(b: Booking): string {
+    if (!b.notice) return 'Guests not notified yet';
+    const when = new Date(b.notice.notifiedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    return b.notice.pending ? `Changed since guests were told (${when})` : `Guests notified ${when}`;
+  }
+
+  function describeOutcomes(outcomes: { name: string; kind: string; whatsapp: string; email: string }[]): string {
+    return outcomes
+      .map((o) => {
+        const channels = [o.whatsapp === 'sent' ? 'WhatsApp' : '', o.email === 'sent' ? 'email' : ''].filter(Boolean);
+        const failed = o.whatsapp === 'failed' || o.email === 'failed';
+        const status = channels.length ? `sent by ${channels.join(' + ')}` : o.whatsapp === 'skipped' && o.email === 'none' ? 'NOT reached - no mobile or email on file' : 'NOT reached';
+        return `${o.name}: ${o.kind}, ${status}${failed && channels.length ? ' (one channel failed)' : ''}`;
+      })
+      .join('\n');
+  }
+
+  async function notifyGuests(b: Booking, button: HTMLButtonElement) {
+    const label = b.notice ? 'Send the changes to the guests affected' : 'Tell the guests their allocation is final';
+    if (!confirm(`${label}?\n\nThey are messaged on WhatsApp and email wherever we have a mobile or email, and the TVC team and Linger get a summary.`)) return;
+    button.disabled = true;
+    try {
+      const res = await authedFetch('/api/accommodation-admin/bookings/notify', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: b.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
+      alert(data.message ?? `${describeOutcomes(data.outcomes)}${data.recorded ? '' : '\n\nNobody was reached, so this was not recorded - you can try again.'}`);
+      await loadView();
+    } catch (err) {
+      const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
+      if (!handled) alert(err instanceof Error ? `Failed to notify guests: ${err.message}` : 'Failed to notify guests - try again.');
+      button.disabled = false;
     }
   }
 
@@ -3273,11 +3318,13 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     } else if (!confirm('Cancel this booking?')) {
       return;
     }
+    // Guests who were already told about this stay: offer to tell them it's off.
+    const tellGuests = Boolean(b.notice) && !b.isPast && confirm('The guests were already told about this stay. Send them a cancellation message too?\n\nOK = cancel and notify them. Cancel = cancel without notifying.');
     try {
       const res = await authedFetch('/api/accommodation-admin/bookings/delete', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id: b.id, reason }),
+        body: JSON.stringify({ id: b.id, reason, notifyGuests: tellGuests }),
       });
       if (!res.ok) {
         // Surface the server's actual reason (e.g. "a reason is required to
@@ -3288,6 +3335,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? `Request failed (${res.status})`);
       }
+      const result = await res.json().catch(() => ({}));
+      if (result.outcomes?.length) alert(`Booking cancelled.\n\n${describeOutcomes(result.outcomes)}`);
       await loadView();
     } catch (err) {
       const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');

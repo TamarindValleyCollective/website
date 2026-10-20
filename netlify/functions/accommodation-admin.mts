@@ -31,7 +31,9 @@ import { requireStaff, type StaffGrant } from './lib/staff-access';
 import { canSeeNames, maskName } from './lib/staff-masking';
 import { BOOKING_TYPES, type BookingType, type Capability } from './lib/staff-registry';
 import { ACCOMMODATION_UNITS, normalizeMobileNumber, isValidEmail } from '../../scripts/lib/accommodation.mjs';
-import { listBookingsForAdmin, createBooking, updateBooking, deleteBooking, searchGuests, listStaysForPerson, getBookingById } from '../../scripts/lib/accommodation-db.mjs';
+import { listBookingsForAdmin, createBooking, updateBooking, deleteBooking, searchGuests, listStaysForPerson, getBookingById, listNoticesForBookings, getNotice, saveNotice } from '../../scripts/lib/accommodation-db.mjs';
+import { isNotifiableType, snapshotOf, hasPendingChanges } from '../../scripts/lib/stay-notice.mjs';
+import { sendStayNotices, sendStayCancellation } from './lib/stay-notify';
 
 
 interface Guest {
@@ -235,9 +237,22 @@ async function handleList(url: URL, staff: StaffGrant): Promise<Response> {
   if (!month || !/^\d{4}-\d{2}$/.test(month)) return jsonResponse({ error: 'month is required, as YYYY-MM' }, 400);
 
   const bookings = await listBookingsForAdmin({ month });
+  // Where each notifiable booking stands with its guests: never told, told and
+  // still current, or told but edited since ("pending"). Names no contact data.
+  const notices = await listNoticesForBookings(bookings.filter((b: any) => isNotifiableType(b.type)).map((b: any) => b.id));
   return jsonResponse({
     units: ACCOMMODATION_UNITS,
-    bookings: bookings.map((b: any) => shapeBooking(b, staff)),
+    bookings: bookings.map((b: any) => ({
+      ...shapeBooking(b, staff),
+      ...(isNotifiableType(b.type)
+        ? {
+            notifiable: true,
+            notice: notices.has(b.id)
+              ? { notifiedAt: notices.get(b.id).notifiedAt, pending: hasPendingChanges(notices.get(b.id).snapshot, snapshotOf(b)) }
+              : null,
+          }
+        : {}),
+    })),
     access: pageAccess(staff),
   });
 }
@@ -335,8 +350,38 @@ async function handleUpdate(req: Request, staff: StaffGrant): Promise<Response> 
   }
 }
 
+// "Finalize & notify" (and "Send update"): staff-triggered, never automatic.
+// Messages whoever the booking's guests-vs-last-notice diff calls for, then
+// records what was said so the next edit can be diffed against it.
+async function handleNotify(req: Request, staff: StaffGrant): Promise<Response> {
+  let payload: { id?: string };
+  try {
+    payload = await req.json();
+  } catch {
+    return jsonResponse({ error: 'Invalid request body' }, 400);
+  }
+  if (!payload.id) return jsonResponse({ error: 'id is required' }, 400);
+
+  const booking = await getBookingById(payload.id);
+  if (!booking) return jsonResponse({ error: 'Booking not found' }, 404);
+  if (!isNotifiableType(booking.type)) return jsonResponse({ error: 'Guest notifications are not enabled for this booking type' }, 400);
+  if (!canWriteType(staff, booking.type)) return jsonResponse({ error: 'You are not authorized to notify guests for this booking' }, 403);
+  if (!snapshotOf(booking).assignments.length) return jsonResponse({ error: 'Assign at least one guest to a tent before notifying' }, 400);
+
+  const previous = await getNotice(booking.id);
+  if (previous && !hasPendingChanges(previous.snapshot, snapshotOf(booking))) {
+    return jsonResponse({ outcomes: [], message: 'Guests already have the current allocation - nothing to send.' });
+  }
+  const { current, outcomes } = await sendStayNotices(booking, previous?.snapshot ?? null);
+  // Don't record a notice nobody received, so staff can simply try again.
+  const reached = outcomes.some((o) => o.whatsapp === 'sent' || o.email === 'sent');
+  const attempted = outcomes.some((o) => o.whatsapp !== 'skipped' || o.email !== 'none');
+  if (reached || !attempted) await saveNotice(booking.id, current, staff.id);
+  return jsonResponse({ outcomes, recorded: reached || !attempted });
+}
+
 async function handleDelete(req: Request, staff: StaffGrant): Promise<Response> {
-  let payload: { id?: string; reason?: string };
+  let payload: { id?: string; reason?: string; notifyGuests?: boolean };
   try {
     payload = await req.json();
   } catch {
@@ -351,9 +396,12 @@ async function handleDelete(req: Request, staff: StaffGrant): Promise<Response> 
     return jsonResponse({ error: 'You are not authorized to cancel this booking' }, 403);
   }
 
+  // Read the last notice first: it cascades away with the booking.
+  const notice = payload.notifyGuests && isNotifiableType(existing.type) ? await getNotice(payload.id) : null;
   try {
     await deleteBooking(payload.id, { deletedBy: staff.id, reason: payload.reason });
-    return jsonResponse({ ok: true });
+    const outcomes = notice ? await sendStayCancellation(existing, notice.snapshot) : [];
+    return jsonResponse({ ok: true, outcomes });
   } catch (err) {
     const status = (err as { status?: number }).status;
     if (status === 404) return jsonResponse({ error: 'Booking not found' }, 404);
@@ -398,6 +446,8 @@ export default async (req: Request): Promise<Response> => {
           ? { capability: 'edit', run: (staff) => handleUpdate(req, staff) }
           : url.pathname === '/api/accommodation-admin/bookings/delete' && req.method === 'POST'
             ? { capability: 'edit', run: (staff) => handleDelete(req, staff) }
+            : url.pathname === '/api/accommodation-admin/bookings/notify' && req.method === 'POST'
+              ? { capability: 'edit', run: (staff) => handleNotify(req, staff) }
             : url.pathname === '/api/accommodation-admin/guests/search' && req.method === 'GET'
               ? { capability: 'edit', run: (staff) => handleGuestSearch(url, staff) }
               : staysMatch && req.method === 'GET'
@@ -415,6 +465,7 @@ export const config = {
     '/api/accommodation-admin/bookings',
     '/api/accommodation-admin/bookings/update',
     '/api/accommodation-admin/bookings/delete',
+    '/api/accommodation-admin/bookings/notify',
     '/api/accommodation-admin/guests/search',
     '/api/accommodation-admin/guests/:id/stays',
   ],

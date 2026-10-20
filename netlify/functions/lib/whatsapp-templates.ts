@@ -102,6 +102,35 @@ export const WHATSAPP_TEMPLATES = {
     body: 'Hi {{1}}, thanks for speaking with us! Your booking for *{{2}}* is approved. ✅\n\n📅 *Date:* {{3}}\n👥 *People:* {{4}}\n💰 *Total:* {{5}}\n\nPlease pay within 48 hours to confirm your spot:\n{{6}}\n\nQuestions? Just reply here or email core-team@tvc.farm.',
     samples: ['Asha', 'Foraging Day', 'Saturday, 10 October 2026', '2', '₹4,500', 'https://rzp.io/rzp/abc123'],
   },
+  // Accommodation allocation notices (added 2026-10-12): sent by staff from the
+  // accommodation calendar once an allocation is finalized (stay-notify.ts).
+  // Member stays only for now. {{2}} is the tent(s) the guest is in.
+  tvc_stay_confirmed: {
+    header: 'Your stay is confirmed',
+    footer: 'Tamarind Valley Collective',
+    body: "Hi {{1}}, your stay at the farm is confirmed. ✅\n\n🏕️ *Where:* {{2}}\n📅 *Check-in:* {{3}}\n📅 *Check-out:* {{4}}\n\nTap below for directions, or just reply here with any questions.",
+    samples: ['Asha', 'Malabar Hut Fixed Tent (N)', 'Saturday, 1 November 2026', 'Monday, 3 November 2026'],
+    buttons: [{ type: 'url', text: 'Get directions', url: 'https://tvc.farm/visit/how-to-reach' }],
+  },
+  tvc_stay_updated: {
+    header: 'Your stay has changed',
+    footer: 'Tamarind Valley Collective',
+    body: "Hi {{1}}, there's been a change to your stay at the farm. 🔄\n\n🏕️ *Where:* {{2}}\n📅 *Check-in:* {{3}}\n📅 *Check-out:* {{4}}\n\nThis replaces what we told you before. Questions? Just reply here or email core-team@tvc.farm.",
+    samples: ['Asha', 'Banyan Hut Fixed Tent', 'Saturday, 1 November 2026', 'Monday, 3 November 2026'],
+  },
+  tvc_stay_cancelled: {
+    header: 'Your stay is cancelled',
+    footer: 'Tamarind Valley Collective',
+    body: "Hi {{1}}, your stay at the farm from *{{2}}* has been cancelled. 😔\n\nIf you weren't expecting this, or you'd like to rebook, just reply here or email core-team@tvc.farm and we'll sort it out.",
+    samples: ['Asha', 'Saturday, 1 November 2026'],
+  },
+  // Internal: sent to TVC staff (WHATSAPP_STAFF_ALERT_NUMBERS), not guests.
+  tvc_stay_staff_alert: {
+    header: 'Stay allocation',
+    footer: 'TVC website · internal alert',
+    body: '🏕️ Stay allocation *{{1}}* for *{{2}}*.\n\n📅 *Dates:* {{3}}\n👥 *Guests:* {{4}}\n\nGuests with a mobile or email on file were messaged from the accommodation calendar.',
+    samples: ['confirmed', 'Asha Rao', '1 Nov 2026 to 3 Nov 2026', 'Asha (Malabar Hut Fixed Tent (N)), Ravi (Banyan Hut Fixed Tent)'],
+  },
 } as const;
 
 export type WhatsAppTemplateName = keyof typeof WHATSAPP_TEMPLATES;
