@@ -4,6 +4,7 @@
 // does the reading and the role-based masking. Emails and phones never leave
 // here as values — only whether one is on file.
 import { pattaFromReference } from './member-import.mjs';
+import { safeGooglePicture } from './member-google-picture.mjs';
 
 const SEVERITY_ORDER = { error: 0, warn: 1, info: 2 };
 
@@ -40,6 +41,8 @@ export function buildHouseholdReview({ households, people, memberships, plots, h
         canLogin: m.can_login,
         hasEmail: Boolean(person.email),
         hasPhone: Boolean(person.phone),
+        // Google's picture for the account, for the staff register card (members-admin.mts drops it for roles that cannot see names).
+        picture: safeGooglePicture(person.google_picture_url),
       })),
       plots: (plotsByHousehold.get(h.id) ?? []).map((p) => ({
         id: p.id,

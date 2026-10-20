@@ -1584,6 +1584,14 @@ never touches Netlify either.
   build if approved public stories are waiting. Paused keeps live mode but makes everything wait for a person.
   Staff can take a published story off the site (`story.unpublish`, `manage`, which also starts a build). Photos
   are never sent to the model: any public photo change is a rule-based hold. Privacy notice v6 discloses the check.
+  **Register cards and Google picture** (migration 0047, `scripts/lib/member-google-picture.mjs`): the staff
+  member register's household cards name the owners by first name ("Asha & Ravi"), or by full name when a card
+  has one person, and show each one's Google profile picture (or their initial). The picture comes from the
+  `picture` claim of the Google sign-in token, which `verifyStaffToken` passes on only if it is an https address
+  on Google's image hosts; `requireMember` writes it to `member_people.google_picture_url` (audited first as
+  `member.google_picture`, best effort, never blocking sign-in) only for a member who has accepted privacy notice
+  v7, which says so, refreshes it at each sign-in and clears it if they removed it from Google. `members-admin.mts`
+  sends it only to roles that may see names (not `read_only`), and no member endpoint ever returns it.
 
 ## Current Production Status
 

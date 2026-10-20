@@ -238,6 +238,16 @@ submitted and only a high-risk one needs anyone:
 - Privacy notice v6 says the text is sent to Anthropic for this check and that low-risk stories may be published
   without being read first.
 
+### Register cards and the Google picture
+
+Agreed 2026-10-21. The staff member register's household cards (`/internal/members`) name the owners by first name
+("Asha & Ravi"); a card with one person shows the full name, since there is room. Each shown person has a round picture
+beside the names: their Google profile picture, or their initial. The picture is taken from the Google sign-in token
+and kept (`member_people.google_picture_url`, migration 0047) only after the member accepts privacy notice v7, which
+says we keep it for the core team to recognise them, show it to no one else and drop it if they remove it from Google.
+It is refreshed at each sign-in, never shown to other members, and hidden from the read-only staff role (with the names).
+Only people who have signed in to the portal have one.
+
 ### Public export
 
 Approved stories with "Show on tvc.farm" on reach the public Members page, replacing hand edits to `members.ts`.
