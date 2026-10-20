@@ -109,9 +109,8 @@ Agreed 2026-10-20. One story per person, public-facing only: no separate members
   **Member directory (branch `member-directory`):** the portal's Directory lists the other members as
   households (name, farm plot, house number, cluster) with each person's approved story; opt-out via
   `directory_visible`; no contact details, land records or documents. Privacy notice v4.
-  **Still to do:** seeding the 53 existing cards (needs a private person-to-card mapping; until then
-  households with no approved story show only names), photos, and the batched export to the public
-  Members page.
+  **Seeding the 53 existing cards (branch `member-stories-seed`):** see "Seeding the cards" below.
+  **Still to do:** photos, and the batched export to the public Members page.
 
 ## Access and roles
 
@@ -154,6 +153,58 @@ Agreed 2026-10-20. One story per person, public-facing only: no separate members
 4. Own-stay booking + notifications + event-clash flag + guest pricing.
 5. Member stories: editor and writing check (built, see above), then approval queue, directory, photos and the public export. It can run alongside steps 3-4 as the first pilot feature.
 6. Pilot with 5-6 members, then everyone.
+
+### Seeding the cards
+
+The directory is only as good as the stories in it, so the existing public cards (`src/data/members.ts`)
+are loaded as already-approved, already-published stories. 40 of the 53 cards have text; the other 13
+are just a name and are left alone.
+
+- **Who gets a story:** every person the card names. A card is about the household, so both people get the
+  same bio and family; a `whyTVC` given as two quotes goes one to each person, and a profile link goes to
+  the person at the same position in the card's name. The text is also their draft, so on first sign-in
+  "Your story" already has their words to edit. The directory shows identical bio and family once, with
+  each person's own quote and link beneath (`groups` in `scripts/lib/member-directory.mjs`).
+- **Status:** `approved`, `approved_public = true` (the cards are on tvc.farm today), `approved_at` now, no
+  reviewer. Nothing new becomes public. An existing story is never overwritten (`on conflict do nothing`),
+  and one `members.stories.seed` row goes to `staff_audit_log`.
+- **Matching is done in the database**, because the register's names are private and this repo is public:
+  `scripts/seed-member-stories.mjs` writes SQL that holds only the public card text and joins it to
+  `member_people` at run time. A name on a card matches an active person whose full name is that name or
+  starts with it ("Sree" matches "Sree Kumar"); a household fits a card if every name on the card is
+  someone in it; a card that fits exactly one household is matched. A name that is two people in the
+  household (two Pradeeps) is skipped.
+- **Procedure** (the files contain no private data, but the overrides file names households, so keep it
+  outside the repo):
+  1. `node scripts/seed-member-stories.mjs --out ~/Desktop/seed [--overrides overrides.json]` writes four
+     files: `seed-preview.sql`, `seed-diagnose.sql`, `seed-verify.sql` and `seed-apply.sql`.
+  2. Run `seed-preview.sql` in the TVC ERP SQL editor. It writes nothing. Every card should say `matched`
+     with all its people found; `NO HOUSEHOLD` and `AMBIGUOUS` need a farm plot.
+  3. For those, run `seed-diagnose.sql` (also read-only, and it shows farm plots and counts but no register
+     names, so its output can be shared). It says, for each name on an unmatched card, which plots hold an
+     exact match and which hold a looser one (the name anywhere in a full name, the same first three
+     letters), which is how a different spelling, initials-first names ("K B Pradeep") or a longer first
+     name ("Sreedhar" for "Sree") show up.
+  4. Write `overrides.json`: `{"Card Name": "F-12"}` to pin a card to a household, or
+     `{"Card Name": {"plot": "F-12", "names": {"om": "omshivaprakash"}}}` to also give the register's
+     spelling of a name. A pinned household is matched loosely (first word, any word, a word starting with
+     the name, a word containing it, the same first three letters; best kind first; then, if a card has one name
+     and the household one primary member (owner) still unmatched, they are taken to be the same person);
+     elsewhere a name must
+     match exactly, because "Ram" must not start matching "Ramesh". A name is used only if exactly one
+     person matches at the best kind, and nobody is used twice, so an ambiguous name (a parent and a child
+     both starting "Om") is left out rather than guessed.
+  5. Regenerate with `--overrides`, then run `seed-verify.sql`. It lists, for every pinned card, the register
+     name each name matched and how. **It shows register names: check it yourself and do not paste it.** Fix
+     any wrong or NOT FOUND row with an alias (or accept that a person who is not in the register gets no story).
+  6. Run `seed-apply.sql`. It prints how many stories were added. Running it again adds none, so cards can
+     be fixed and the apply re-run in rounds.
+- **Checked** against a real Postgres 17 with migrations 0028, 0040 and 0044 and fake people built around
+  real card names: matched, ambiguous, unmatched, inactive, partly matched, mixed first-name and full-name
+  cards, two-quote cards, an existing story left alone, a re-run, overrides, and the spelling cases the real
+  register showed (initials first, variant spellings, longer first names, a child sharing a parent's first
+  letters). **Run for real on 2026-10-20:** 27 of the 40 cards matched on the first pass (52 stories); the
+  other 13 needed a plot and, for some, a looser match.
 
 ### Land documents (built 2026-10-19, ahead of step 2's change requests)
 

@@ -1525,6 +1525,11 @@ never touches Netlify either.
   listed (`directory_visible`, opt-out; an opted-out person's story is hidden too), and reads the
   `approved` copy only, whether or not it is also on tvc.farm. Profile links go to the page only if
   they are http(s), and open with `noopener noreferrer nofollow`. Privacy notice v4 describes it.
+  **Seeding** (`scripts/seed-member-stories.mjs`, `scripts/lib/member-story-seed.mjs`): the public cards in
+  `src/data/members.ts` are loaded as approved, published stories by generated SQL run once in the TVC ERP
+  SQL editor (preview, then apply). Matching cards to people happens in the database, so the file holds only
+  public card text; see the plan's "Seeding the cards". The directory merges identical bio and family into one
+  section (`groups`).
   Not built yet: photos, and the batched export to the public Members page.
 
 ## Current Production Status

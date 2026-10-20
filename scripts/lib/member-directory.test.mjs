@@ -58,6 +58,12 @@ test('only an approved story is shown, with whether it is also public', () => {
   assert.equal(buildDirectory(inReviewOnly, 'p2')[0].people[0].story, null);
 });
 
+test('inside a household the viewer comes first, then people by name', () => {
+  const two = { ...data, people: [{ id: 'p1', full_name: 'Zed Z', active: true, directory_visible: true }, { id: 'p9', full_name: 'Amy A', active: true, directory_visible: true }], memberships: [{ household_id: 'h2', person_id: 'p1' }, { household_id: 'h2', person_id: 'p9' }], stories: [] };
+  assert.deepEqual(buildDirectory(two, 'p1')[0].people.map((p) => p.name), ['Zed Z', 'Amy A']);
+  assert.deepEqual(buildDirectory(two, 'someone-else')[0].people.map((p) => p.name), ['Amy A', 'Zed Z']);
+});
+
 test('the viewer is told which person is them', () => {
   assert.equal(buildDirectory(data, 'p1')[0].people[0].isYou, true);
   assert.equal(buildDirectory(data, 'p2')[0].people[0].isYou, false);
@@ -77,4 +83,47 @@ test('the output carries no contact or land fields, whatever the input rows hold
   const noisy = { ...data, people: data.people.map((p) => ({ ...p, email: 'x@example.com', phone: '+919845012345' })) };
   const json = JSON.stringify(buildDirectory(noisy, 'p1'));
   assert.ok(!json.includes('example.com') && !json.includes('9845'));
+});
+
+test('identical bio and family on both people become one section, with their own quote and link', () => {
+  const shared = { bio: 'Sree is a director. Prameela designs.', family: 'One son.' };
+  const d = buildDirectory(
+    {
+      people: [{ id: 'a', full_name: 'Prameela K' }, { id: 'b', full_name: 'Sree K' }],
+      memberships: [{ household_id: 'h', person_id: 'a' }, { household_id: 'h', person_id: 'b' }],
+      households: [{ id: 'h', farm_unit: 'F-77', house_no: null, cluster: null }],
+      stories: [
+        { person_id: 'a', approved: { ...shared, why: 'Giving back.', social: 'https://example.org/p' }, approved_public: true },
+        { person_id: 'b', approved: { ...shared, why: 'Retirement years.', social: 'https://example.org/s' }, approved_public: true },
+      ],
+    },
+    'a',
+  );
+  const [hh] = d;
+  assert.equal(hh.groups.length, 1);
+  const g = hh.groups[0];
+  assert.deepEqual(g.people.map((p) => p.name), ['Prameela K', 'Sree K']);
+  assert.equal(g.bio, shared.bio);
+  assert.deepEqual(g.quotes, [{ name: 'Prameela K', why: 'Giving back.' }, { name: 'Sree K', why: 'Retirement years.' }]);
+  assert.deepEqual(g.links.map((l) => l.name), ['Prameela K', 'Sree K']);
+  assert.deepEqual(hh.withoutStory, []);
+});
+
+test('the same quote on everyone is shown once, and people with different text stay apart', () => {
+  const mk = (id, bio, why) => ({ person_id: id, approved: { bio, family: '', why, social: '' }, approved_public: false });
+  const base = {
+    people: [{ id: 'a', full_name: 'A' }, { id: 'b', full_name: 'B' }, { id: 'c', full_name: 'C' }],
+    memberships: ['a', 'b', 'c'].map((person_id) => ({ household_id: 'h', person_id })),
+    households: [{ id: 'h', farm_unit: 'F-01', house_no: null, cluster: null }],
+  };
+  const same = buildDirectory({ ...base, stories: [mk('a', 'Same.', 'We love it.'), mk('b', 'Same.', 'We love it.')] }, 'a')[0];
+  assert.equal(same.groups.length, 1);
+  assert.deepEqual(same.groups[0].quotes, [{ name: null, why: 'We love it.' }]);
+  assert.deepEqual(same.withoutStory.map((p) => p.name), ['C']);
+
+  const apart = buildDirectory({ ...base, stories: [mk('a', 'One.', 'x'), mk('b', 'Two.', 'y')] }, 'a')[0];
+  assert.equal(apart.groups.length, 2);
+  // quote-only stories are never merged: there is no shared text to show once
+  const quotesOnly = buildDirectory({ ...base, stories: [mk('a', '', 'x'), mk('b', '', 'x')] }, 'a')[0];
+  assert.equal(quotesOnly.groups.length, 2);
 });
