@@ -69,3 +69,12 @@ test('sums farm acres, hectares and house sq ft per household and overall, and r
   assert.equal(totals.farmAcres, 2.16);
   assert.equal(totals.houseSqFt, 2000.5);
 });
+
+test('a person\'s Google picture is passed on only if it is a picture from Google\'s own image hosts', () => {
+  const data = base();
+  data.people[0].google_picture_url = 'https://lh3.googleusercontent.com/a/AbCdEf123=s96-c';
+  data.people[1].google_picture_url = 'https://evil.example/tracker.png';
+  const [h] = buildHouseholdReview(data);
+  assert.equal(h.people[0].picture, 'https://lh3.googleusercontent.com/a/AbCdEf123=s96-c');
+  assert.equal(h.people[1].picture, null);
+});

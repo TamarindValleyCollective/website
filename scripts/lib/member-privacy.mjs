@@ -10,7 +10,7 @@
 // Keep it true: it describes what the portal does today, not what is planned.
 // Update it when the portal changes (the directory, dues, stays...).
 
-export const PRIVACY_NOTICE_VERSION = 6;
+export const PRIVACY_NOTICE_VERSION = 7;
 
 export const NOTICE_TITLE = 'How we handle your membership details';
 
@@ -36,7 +36,7 @@ export const SECTIONS = [
   },
   {
     heading: 'Signing in',
-    body: 'Google confirms your email address and we use nothing else from your Google account. We do not store a password.',
+    body: 'Google confirms your email address. We also keep the profile picture Google shows for your account, and refresh it each time you sign in, so the core team can recognise you on the member register. Only the core team sees it, other members never do, and it is not sent anywhere else; if you remove the picture from your Google account, ours is removed the next time you sign in. We use nothing else from your Google account and we do not store a password.',
   },
   {
     heading: 'Your choices',

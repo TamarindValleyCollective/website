@@ -15,6 +15,7 @@
 // a module needs an ordinary role row there, which is audited.
 import { restHeaders } from '../../../scripts/lib/supabase.mjs';
 import { verifyGoogleIdToken } from '../../../scripts/lib/google-id-token.mjs';
+import { safeGooglePicture } from '../../../scripts/lib/member-google-picture.mjs';
 import { roleHasCapability, type Capability, type ModuleId, type Role } from './staff-registry';
 
 // Addresses on these domains belong to a Google Workspace we administer, so
@@ -109,7 +110,7 @@ async function fillNameIfEmpty(staffId: string, name: string): Promise<void> {
 }
 
 type TokenResult =
-  | { ok: true; email: string; googleName: string | null }
+  | { ok: true; email: string; googleName: string | null; googlePicture: string | null }
   | { ok: false; status: 401 | 403 | 500; error: string };
 
 // Verifies the caller's Google ID token — signature, audience, expiry, and,
@@ -134,7 +135,7 @@ export async function verifyStaffToken(req: Request): Promise<TokenResult> {
     if (MANAGED_DOMAINS.has(domain) && payload.hd !== domain) {
       return { ok: false, status: 403, error: 'Not authorized' };
     }
-    return { ok: true, email, googleName };
+    return { ok: true, email, googleName, googlePicture: safeGooglePicture(payload.picture) };
   } catch (err) {
     console.error('ID token verification failed', err);
     return { ok: false, status: 401, error: 'Invalid or expired session' };

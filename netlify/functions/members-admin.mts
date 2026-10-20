@@ -82,7 +82,7 @@ async function handleOverview(req: Request): Promise<Response> {
   try {
     const [households, people, memberships, plots, housePattas, notes, waitingDocs] = await Promise.all([
       select('member_households', 'id,farm_unit,house_no,cluster,unit_type'),
-      select('member_people', 'id,full_name,email,phone'),
+      select('member_people', 'id,full_name,email,phone,google_picture_url'),
       select('member_household_members', 'household_id,person_id,role,can_login'),
       select('member_plots', 'id,household_id,patta_no,reference_no,survey_no,area_hectares,area_acres,settlement,verification,source_document_id'),
       select('member_house_pattas', 'id,household_id,patta_no,reference_no,survey_no,area_sq_ft,settlement,verification,source_document_id'),
@@ -105,7 +105,7 @@ async function handleOverview(req: Request): Promise<Response> {
   const showNames = canSeeNames(role);
   const households = reviewed.map((h: any) => ({
     ...h,
-    people: h.people.map((p: any) => ({ ...p, name: showNames ? p.name : maskName(p.name) })),
+    people: h.people.map((p: any) => ({ ...p, name: showNames ? p.name : maskName(p.name), picture: showNames ? p.picture : null })),
   }));
   return jsonResponse({
     totals: reviewTotals(reviewed),

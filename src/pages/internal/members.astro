@@ -309,6 +309,35 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     white-space: nowrap;
   }
 
+  .members .hcard-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .members .faces {
+    display: flex;
+    flex: none;
+  }
+
+  .members .faces > * + * {
+    margin-left: -12px;
+  }
+
+  .members .face {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 2px solid var(--tvc-white);
+    border-radius: 50%;
+    box-sizing: border-box;
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+    font-weight: 700;
+    object-fit: cover;
+  }
+
   .members .hcard-people {
     display: -webkit-box;
     -webkit-box-orient: vertical;
@@ -793,6 +822,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
 <script>
   import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch, staffPhotoSrc } from '../../../scripts/lib/staff-client.mjs';
+  import { sizedPicture } from '../../../scripts/lib/member-google-picture.mjs';
   import { linksIn } from '../../../scripts/lib/member-markdown.mjs';
 
   declare const google: any;
@@ -811,7 +841,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   }
 
   type Flag = { kind: string; severity: 'error' | 'warn' | 'info'; text: string };
-  type Person = { id: string; name: string; role: string; canLogin: boolean; hasEmail: boolean; hasPhone: boolean };
+  type Person = { id: string; name: string; role: string; canLogin: boolean; hasEmail: boolean; hasPhone: boolean; picture: string | null };
   type Plot = { id: string; pattaNo: string | null; referenceNo: string | null; surveyNo: string | null; areaHectares: number | null; areaAcres: number | null; settlement: string | null; verification: string; sourceDocumentId: string | null };
   type HousePatta = { id: string; pattaNo: string | null; referenceNo: string | null; surveyNo: string | null; areaSqFt: number | null; settlement: string | null; verification: string; sourceDocumentId: string | null };
   type Household = { id: string; farmUnit: string; houseNo: string | null; cluster: string | null; unitType: string | null; people: Person[]; plots: Plot[]; housePattas: HousePatta[]; flags: Flag[]; farmAcres: number; farmHectares: number; houseSqFt: number; plotsMissingArea: number; housePattasMissingArea: number };
@@ -875,13 +905,30 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   function renderHousehold(hh: Household): HTMLElement {
     const attention = hh.flags.filter((f) => f.severity !== 'info').length;
-    // The owners (the primary members) by full name: "Asha Rao & Ravi Rao", "+ 1" if there are more.
-    // A household with no owner on record falls back to everyone in it.
+    // The owners (the primary members), "+ 1" if there are more than two. A card with two or more people names them
+    // by first name ("Asha & Ravi"); a card with one person has room for the whole name ("Asha Rao"). The full names are
+    // in the tooltip and the detail page. A household with no owner on record falls back to everyone in it.
     const owners = hh.people.filter((p) => p.role === 'owner');
     const named = owners.length ? owners : hh.people;
     const shown = named.slice(0, 2);
     const extra = named.length - shown.length;
-    const peopleLine = shown.length ? shown.map((p) => p.name).join(' & ') + (extra > 0 ? ` + ${extra}` : '') : 'No people yet';
+    const firstOf = (name: string) => name.trim().split(/\s+/)[0] ?? name;
+    const nameOf = (p: Person) => (named.length >= 2 ? firstOf(p.name) : p.name);
+    const peopleLine = shown.length ? shown.map(nameOf).join(' & ') + (extra > 0 ? ` + ${extra}` : '') : 'No people yet';
+    // The Google picture of each person shown, or their initial: small and overlapping, to the left of the names.
+    const face = (p: Person) => {
+      const initial = h('span', { class: 'face', text: firstOf(p.name).slice(0, 1).toUpperCase(), attrs: { 'aria-hidden': 'true' } });
+      const src = sizedPicture(p.picture, 96);
+      if (!src) return initial;
+      const img = document.createElement('img');
+      img.className = 'face';
+      img.alt = '';
+      img.loading = 'lazy';
+      img.referrerPolicy = 'no-referrer';
+      img.addEventListener('error', () => img.replaceWith(initial));
+      img.src = src;
+      return img;
+    };
     // "0.40 ac farm · 3,100 sq ft house": what the land pills used to carry, now a quiet line.
     const areaLine = [
       hh.plots.length ? (hh.farmAcres > 0 ? `${acres(hh.farmAcres).replace(' acres', ' ac')} farm` : 'farm: no area yet') : null,
@@ -890,7 +937,9 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     const card = h(
       'button',
       { class: 'hcard', attrs: { type: 'button', 'aria-haspopup': 'dialog', 'aria-label': `Farm plot ${hh.farmUnit}, ${hh.houseNo ?? 'no house'}. Open details.` } },
-      h('span', { class: `hcard-people${shown.length ? '' : ' meta'}`, attrs: { title: named.map((p) => p.name).join(', ') }, text: peopleLine }),
+      h('span', { class: 'hcard-top' },
+        shown.length ? h('span', { class: 'faces' }, ...shown.map(face)) : null,
+        h('span', { class: `hcard-people${shown.length ? '' : ' meta'}`, attrs: { title: named.map((p) => p.name).join(', ') }, text: peopleLine })),
       h(
         'span',
         { class: 'hcard-ids' },
