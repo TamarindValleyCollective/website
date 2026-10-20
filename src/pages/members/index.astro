@@ -1112,6 +1112,302 @@ import '../../styles/global.css';
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
+  /* ---- your story ---- */
+  .story {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: 28px;
+    align-items: start;
+  }
+
+  .story-side {
+    position: sticky;
+    top: 74px;
+  }
+
+  .story-prev-label {
+    margin: 0 0 8px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tvc-ink-soft);
+  }
+
+  .story-status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    margin: 0 0 18px;
+    padding: 9px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-stone);
+    font-size: 0.85rem;
+  }
+
+  .story-status--review {
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+  }
+
+  .story-status--live {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+  }
+
+  .story-field {
+    display: block;
+    margin: 0 0 18px;
+  }
+
+  .story-label {
+    display: block;
+    margin-bottom: 3px;
+    font-weight: 700;
+    font-size: 0.92rem;
+  }
+
+  .story-hint {
+    display: block;
+    margin: 0 0 6px;
+    font-size: 0.8rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .story-hint--warn {
+    color: var(--tvc-orange-text);
+    font-weight: 600;
+  }
+
+  .story-field textarea,
+  .story-field input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 9px 11px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    resize: vertical;
+  }
+
+  .story-field textarea:focus-visible,
+  .story-field input:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .story-save {
+    min-height: 1.2em;
+    margin: -6px 0 14px;
+    font-size: 0.78rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .story-box {
+    margin: 0 0 16px;
+    padding: 14px 16px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-cream);
+  }
+
+  .story-box-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .story-box h2 {
+    margin: 0;
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .story-ok {
+    margin: 10px 0 0;
+    font-weight: 600;
+    color: var(--tvc-green-dark);
+  }
+
+  .story-sug {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-sm);
+    background: var(--tvc-white);
+  }
+
+  .story-sug--done {
+    opacity: 0.55;
+  }
+
+  .story-sug-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .story-sug-field {
+    font-size: 0.76rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .story-tag {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--tvc-stone);
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .story-tag--framing {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+  }
+
+  .story-tag--privacy {
+    background: var(--tvc-error-bg);
+    color: var(--tvc-error-text);
+  }
+
+  .story-tag--tone,
+  .story-tag--note {
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+  }
+
+  .story-diff {
+    margin: 8px 0 4px;
+  }
+
+  .story-diff del {
+    padding: 0 3px;
+    border-radius: 3px;
+    background: var(--tvc-error-bg);
+    color: var(--tvc-error-text);
+  }
+
+  .story-diff ins {
+    padding: 0 3px;
+    border-radius: 3px;
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .story-sug-note {
+    margin: 8px 0;
+    font-size: 0.9rem;
+  }
+
+  .story-sug-act {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .story-toggle {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+    align-items: flex-start;
+    cursor: pointer;
+  }
+
+  .story-toggle small {
+    display: block;
+    color: var(--tvc-ink-soft);
+  }
+
+  .story-card {
+    padding: 18px 20px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .avatar--lg {
+    flex: none;
+    width: 56px;
+    height: 56px;
+    font-size: 1.3rem;
+  }
+
+  .story-card-top {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+
+  .story-card h3 {
+    margin: 0 0 4px;
+    font-size: 1.1rem;
+  }
+
+  .story-card-bio,
+  .story-card-fam {
+    margin: 0 0 10px;
+  }
+
+  .story-card-fam {
+    font-size: 0.9rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .story-card-why {
+    margin: 12px 0;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-green-tint);
+    font-style: italic;
+  }
+
+  .story-card-social {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--tvc-green-dark);
+    word-break: break-all;
+  }
+
+  .story-empty {
+    color: var(--tvc-ink-soft);
+  }
+
+  .story-vis {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: var(--tvc-stone);
+    color: var(--tvc-ink-soft);
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .story-vis--public {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+  }
+
+  @media (max-width: 900px) {
+    .story {
+      grid-template-columns: 1fr;
+    }
+
+    .story-side {
+      position: static;
+      order: -1;
+    }
+  }
 </style>
 
 <script>
@@ -1243,6 +1539,7 @@ import '../../styles/global.css';
     receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
     statement: '<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 16h5"/>',
     bell: '<path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4z"/><path d="M10 21h4"/>',
+    pen: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>',
     book: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/>',
     cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
     help: '<path d="M4 5h16v11H9l-5 4z"/>',
@@ -1262,6 +1559,7 @@ import '../../styles/global.css';
   const NAV: (NavItem | { group: string })[] = [
     { id: 'dashboard', label: 'Dashboard', icon: IC.dash },
     { id: 'unit', label: 'My unit', icon: IC.unit },
+    { id: 'story', label: 'Your story', icon: IC.pen },
     { id: 'stays', label: 'Stays', icon: IC.stay, soon: true },
     { group: 'Accounts' },
     { id: 'dues', label: 'My dues', icon: IC.rupee, soon: true },
@@ -1730,6 +2028,255 @@ import '../../styles/global.css';
     return root;
   }
 
+  // ---- your story ----
+  // Split editor: the form on the left (draft autosaved), the card as it will look on the
+  // right. "Check & submit" runs the writing check first; the member accepts or dismisses
+  // each suggestion, and only then is the story handed to the core team. Nothing the check
+  // suggests is ever applied without the member pressing Accept.
+  type StoryDraft = { bio: string; family: string; why: string; social: string };
+  type StoryView = { draft: StoryDraft; showOnPublicSite: boolean; status: string; hasUnsubmittedChanges: boolean; reviewerNote: string | null; hasApproved: boolean };
+  type Suggestion = { field: 'bio' | 'family' | 'why'; kind: string; before?: string; after?: string; why?: string; note?: string; done?: boolean };
+  const STORY_FIELD: Record<string, string> = { bio: 'What you do today', family: 'Family', why: 'Why TVC' };
+  const KIND_LABEL: Record<string, string> = { spelling: 'Spelling', grammar: 'Grammar', framing: 'House style', tone: 'Tone', privacy: 'Privacy', note: 'Note' };
+
+  function viewStory(): HTMLElement {
+    const root = h('div');
+    root.append(
+      crumbs('Home', 'Your story'),
+      h('h1', 'page-title', 'Your story', h('small', '', 'Your card for the collective')),
+      h('p', 'lede', 'Say what you are comfortable sharing; only the one-line "why TVC" is needed. The core team reads every story before it appears anywhere, and the member directory and public page are not connected yet, so nothing is visible to other members today.'),
+    );
+    const loading = h('p', 'lede', 'Loading your story…');
+    root.append(loading);
+
+    const draft: StoryDraft = { bio: '', family: '', why: '', social: '' };
+    let story: StoryView | null = null;
+    let firstName = first(me!.name);
+    let isPublic = false;
+    let suggestions: Suggestion[] = [];
+    let reviewed = false;
+    let checking = false;
+    let notice: string | null = null;
+    let message = '';
+    let saveState: 'idle' | 'saving' | 'saved' | 'error' = 'idle';
+    let timer: number | undefined;
+    let chain: Promise<void> = Promise.resolve();
+    const fields: Record<string, HTMLTextAreaElement | HTMLInputElement> = {};
+    const statusEl = h('div', 'story-status');
+    const saveEl = h('p', 'story-save');
+    const previewEl = h('article', 'story-card');
+    const reviewEl = h('section', 'story-box');
+    const submitEl = h('section', 'story-box');
+    const pending = () => suggestions.filter((s) => !s.done);
+
+    const msg = (e: unknown) => (e instanceof MemberAuthError ? 'Your session ended. Sign in again.' : e instanceof Error ? e.message : 'Something went wrong. Try again.');
+
+    function renderStatus() {
+      let cls = 'draft', title = 'Draft', text = 'Saved, but not submitted. Only you and the core team can see it.';
+      if (story?.status === 'in_review') {
+        cls = 'review'; title = 'In review';
+        text = story.hasUnsubmittedChanges ? 'With the core team. You have newer changes that are not submitted yet.' : 'With the core team. It will show here once it is approved.';
+      } else if (story?.status === 'approved') {
+        cls = 'live'; title = 'Approved';
+        text = story.hasUnsubmittedChanges ? 'Your approved story stays as it is until you submit these changes.' : 'Approved.';
+      } else if (story?.status === 'rejected') {
+        cls = 'review'; title = 'Changes needed';
+        text = story.reviewerNote || 'The core team asked for changes. Edit and submit again.';
+      }
+      statusEl.className = `story-status story-status--${cls}`;
+      statusEl.replaceChildren(h('strong', '', title), h('span', '', text));
+      saveEl.textContent = saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Draft saved' : saveState === 'error' ? 'Could not save your draft. Check your connection.' : '';
+    }
+
+    function renderPreview() {
+      const name = me!.name;
+      const nodes: Kid[] = [];
+      const bio = draft.bio.trim();
+      const para = h('p', 'story-card-bio');
+      if (bio) {
+        const parts = bio.split(new RegExp(`(\\b${firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b)`));
+        for (const part of parts) para.append(part === firstName ? h('strong', '', part) : part);
+      } else para.append(h('em', 'story-empty', 'Nothing here yet'));
+      nodes.push(h('div', 'story-card-top', undefined, h('span', 'avatar avatar--lg', first(name).slice(0, 1).toUpperCase()), h('div', '', undefined, h('h3', '', name), h('span', `story-vis ${isPublic ? 'story-vis--public' : ''}`, isPublic ? 'Members and tvc.farm' : 'Members only'))));
+      nodes.push(para);
+      if (draft.family.trim()) nodes.push(h('p', 'story-card-fam', draft.family.trim()));
+      if (draft.why.trim()) nodes.push(h('blockquote', 'story-card-why', draft.why.trim()));
+      if (draft.social.trim()) nodes.push(h('p', 'story-card-social', draft.social.trim().replace(/^https?:\/\/(www\.)?/, '')));
+      previewEl.replaceChildren(...(nodes.filter(Boolean) as Node[]));
+    }
+
+    function renderReview() {
+      const head = h('div', 'story-box-head', undefined, h('h2', '', 'Review my story'));
+      const run = h('button', 'btn', checking ? 'Checking…' : reviewed ? 'Check again' : 'Check spelling, grammar & style') as HTMLButtonElement;
+      run.type = 'button';
+      run.disabled = checking;
+      run.addEventListener('click', () => void runCheck());
+      head.append(run);
+      const kids: Kid[] = [head, h('p', 'story-hint', 'Suggestions come from an AI writing check. Nothing changes unless you press Accept; your words stay yours.')];
+      if (notice) kids.push(h('p', 'story-hint story-hint--warn', notice));
+      if (reviewed && suggestions.length === 0) kids.push(h('p', 'story-ok', 'No suggestions. Your story reads well.'));
+      for (const s of suggestions) {
+        const row = h('div', `story-sug${s.done ? ' story-sug--done' : ''}`);
+        row.append(h('div', 'story-sug-meta', undefined, h('span', `story-tag story-tag--${s.kind}`, KIND_LABEL[s.kind] ?? s.kind), h('span', 'story-sug-field', STORY_FIELD[s.field])));
+        if (s.before !== undefined && s.after !== undefined) {
+          const diff = h('p', 'story-diff', undefined, h('del', '', s.before), ' → ', h('ins', '', s.after));
+          row.append(diff);
+          if (s.why) row.append(h('p', 'story-hint', s.why));
+        } else row.append(h('p', 'story-sug-note', s.note ?? ''));
+        if (s.done) row.append(h('span', 'story-hint', 'Done'));
+        else {
+          const act = h('div', 'story-sug-act');
+          if (s.before !== undefined) {
+            const ok = h('button', 'btn btn--solid', 'Accept') as HTMLButtonElement;
+            ok.type = 'button';
+            ok.addEventListener('click', () => accept(s));
+            act.append(ok);
+          }
+          const keep = h('button', 'btn', s.before !== undefined ? 'Keep mine' : 'Got it') as HTMLButtonElement;
+          keep.type = 'button';
+          keep.addEventListener('click', () => { s.done = true; renderReview(); renderSubmit(); });
+          act.append(keep);
+          row.append(act);
+        }
+        kids.push(row);
+      }
+      if (reviewed && suggestions.length > 0 && pending().length === 0) kids.push(h('p', 'story-ok', 'All handled. You can submit.'));
+      reviewEl.replaceChildren(...(kids.filter(Boolean) as Node[]));
+    }
+
+    function renderSubmit() {
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = isPublic;
+      cb.addEventListener('change', () => { isPublic = cb.checked; edited(); renderSubmit(); });
+      const inReview = story?.status === 'in_review' && !story.hasUnsubmittedChanges;
+      const go = h('button', 'btn btn--cta', inReview ? 'Submitted' : reviewed ? 'Submit to the core team' : 'Check & submit') as HTMLButtonElement;
+      go.type = 'button';
+      go.disabled = inReview || checking;
+      go.addEventListener('click', () => void submitClick());
+      submitEl.replaceChildren(
+        h('label', 'check story-toggle', undefined, cb, h('span', '', undefined, h('strong', '', 'Show on tvc.farm'), h('small', '', isPublic ? 'On: once approved, your card will also appear on the public Members page, visible to anyone.' : 'Off: once approved, only logged-in members will see your card.'))),
+        go,
+        h('p', 'story-hint', message || (inReview ? 'The core team reads every submission. You can keep editing; your changes are only handed in when you submit again.' : 'Submitting runs the writing check first, so you see any suggestions before the core team does.')),
+      );
+    }
+
+    const renderAll = () => { renderStatus(); renderPreview(); renderReview(); renderSubmit(); };
+
+    // Any edit makes an earlier check out of date, and the draft is saved shortly after typing stops.
+    function edited() {
+      reviewed = false;
+      suggestions = [];
+      notice = null;
+      message = '';
+      clearTimeout(timer);
+      timer = window.setTimeout(() => void persist(), 1200);
+      renderStatus(); renderPreview(); renderReview();
+    }
+
+    function persist(): Promise<void> {
+      clearTimeout(timer);
+      chain = chain.then(async () => {
+        saveState = 'saving';
+        renderStatus();
+        try {
+          const { status, data } = await memberFetch('/api/members-me/story', { method: 'POST', body: { ...draft, showOnPublicSite: isPublic } });
+          if (status !== 200) throw new Error(data.error || 'Could not save your draft.');
+          story = data.story; // the server's view of where the story stands; the text on screen is left alone
+          saveState = 'saved';
+        } catch (e) {
+          saveState = 'error';
+          message = msg(e);
+        }
+        renderStatus(); renderSubmit();
+      });
+      return chain;
+    }
+
+    async function runCheck() {
+      if (!draft.bio.trim() && !draft.family.trim() && !draft.why.trim()) { message = 'Write something first, then check it.'; renderSubmit(); return; }
+      checking = true; message = ''; notice = null;
+      renderReview(); renderSubmit();
+      try {
+        const { status, data } = await memberFetch('/api/members-me/story-review', { method: 'POST', body: { ...draft, showOnPublicSite: isPublic } });
+        if (status !== 200) throw new Error(data.error || 'The check did not work. Try again.');
+        suggestions = (data.suggestions as Suggestion[]).map((s) => ({ ...s, done: false }));
+        notice = data.notice ?? null;
+        reviewed = true;
+      } catch (e) {
+        message = msg(e);
+      }
+      checking = false;
+      renderReview(); renderSubmit();
+    }
+
+    function accept(s: Suggestion) {
+      if (s.before === undefined || s.after === undefined || !draft[s.field].includes(s.before)) { s.done = true; renderReview(); return; }
+      draft[s.field] = draft[s.field].replace(s.before, () => s.after!);
+      fields[s.field].value = draft[s.field];
+      s.done = true;
+      // Other suggestions that quoted text that no longer exists have nothing left to do.
+      for (const o of suggestions) if (!o.done && o.before !== undefined && !draft[o.field].includes(o.before)) o.done = true;
+      renderPreview(); renderReview(); renderSubmit();
+      void persist();
+    }
+
+    async function submitClick() {
+      if (!reviewed) { await runCheck(); return; }
+      if (pending().length) { message = 'Accept or keep mine for each suggestion first.'; renderSubmit(); return; }
+      if (!draft.why.trim()) { message = 'Add your one-line "why TVC" before submitting.'; renderSubmit(); return; }
+      await persist();
+      if (saveState === 'error') return;
+      try {
+        const { status, data } = await memberFetch('/api/members-me/story-submit', { method: 'POST', body: {} });
+        if (status !== 200) throw new Error(data.error || 'Could not submit. Try again.');
+        story = data.story;
+        suggestions = []; reviewed = false; message = '';
+        toast('Submitted to the core team');
+      } catch (e) {
+        message = msg(e);
+      }
+      renderAll();
+    }
+
+    function field(name: keyof StoryDraft, label: string, hint: string | null, rows: number): HTMLElement {
+      const input = rows === 1 ? document.createElement('input') : document.createElement('textarea');
+      if (input instanceof HTMLTextAreaElement) input.rows = rows;
+      else input.type = 'url';
+      input.addEventListener('input', () => { draft[name] = input.value; edited(); });
+      fields[name] = input;
+      return h('label', 'story-field', undefined, h('span', 'story-label', label), hint ? h('span', 'story-hint', hint) : null, input);
+    }
+
+    void (async () => {
+      try {
+        const { status, data } = await memberFetch('/api/members-me/story');
+        if (status !== 200) throw new Error(data.error || 'Could not load your story.');
+        story = data.story;
+        firstName = data.firstName || firstName;
+        Object.assign(draft, story!.draft);
+        isPublic = story!.showOnPublicSite;
+      } catch (e) {
+        loading.textContent = msg(e);
+        return;
+      }
+      loading.remove();
+      const form = h('div', 'story-form', undefined,
+        statusEl,
+        field('bio', 'What do you do today?', 'In your own words; the check can help with the house style (third person, e.g. "Asha works as…").', 5),
+        field('family', 'Family (optional)', 'First names are enough. Children\'s names and ages become public if you turn on "Show on tvc.farm".', 3),
+        field('why', 'In one sentence, why are you part of TVC?', 'Required. Shown as a quote on your card, in your own voice.', 2),
+        field('social', 'LinkedIn or another profile (optional)', null, 1),
+        h('p', 'story-hint', 'Photo: coming soon. The photo on the Members page stays as it is for now.'),
+        saveEl, reviewEl, submitEl);
+      const side = h('aside', 'story-side', undefined, h('p', 'story-prev-label', 'Preview, as others will see your card'), previewEl);
+      root.append(h('div', 'story', undefined, form, side));
+      for (const k of ['bio', 'family', 'why', 'social'] as const) fields[k].value = draft[k];
+      renderAll();
+    })();
+    return root;
+  }
+
   function viewSoon(id: string): HTMLElement {
     const item = NAV.find((n): n is NavItem => 'id' in n && n.id === id)!;
     return h('div', '', undefined,
@@ -1740,7 +2287,7 @@ import '../../styles/global.css';
   }
 
   function renderView() {
-    const fn = route === 'dashboard' ? viewDashboard : route === 'unit' ? viewUnit : () => viewSoon(route);
+    const fn = route === 'dashboard' ? viewDashboard : route === 'unit' ? viewUnit : route === 'story' ? viewStory : () => viewSoon(route);
     $('view').replaceChildren(fn());
     renderNav($<HTMLInputElement>('search').value);
     const label = (NAV.find((n) => 'id' in n && n.id === route) as NavItem | undefined)?.label ?? 'Dashboard';

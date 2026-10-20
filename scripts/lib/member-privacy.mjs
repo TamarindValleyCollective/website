@@ -10,7 +10,7 @@
 // Keep it true: it describes what the portal does today, not what is planned.
 // Update it when the portal changes (the directory, dues, stays...).
 
-export const PRIVACY_NOTICE_VERSION = 2;
+export const PRIVACY_NOTICE_VERSION = 3;
 
 export const NOTICE_TITLE = 'How we handle your membership details';
 
@@ -25,6 +25,10 @@ export const SECTIONS = [
   {
     heading: 'What it holds',
     body: 'Your name, the email address you sign in with, your mobile number if we have it, which farm plot and house plot are yours, the land records for them (patta and survey numbers, areas), the patta or land survey documents you upload, and who else is in your household.',
+  },
+  {
+    heading: 'Your story',
+    body: 'If you write a story about yourself, your drafts are seen only by you and the core team. When you press "Check", the text of your story (and your first name) is sent to Anthropic, the AI company we use, to suggest spelling, grammar and tone fixes; nothing else about you is sent. It only suggests, you decide what to keep, and nothing is published until the core team has read and approved it.',
   },
   {
     heading: 'Who can see it',
