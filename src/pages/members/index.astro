@@ -760,6 +760,10 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   /* Under a Farm / House card: the two uploads as buttons (the main one filled), and a link to what has been uploaded (shown in a popup). */
+  .card-docs .pills {
+    margin-left: auto; /* the unit type sits at the bottom right of the House card */
+  }
+
   .card-docs {
     display: flex;
     flex-wrap: wrap;
@@ -1037,6 +1041,10 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .tile .s {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
@@ -2481,7 +2489,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     })) : null;
   };
   const farmPills = (hh: Hh) => pillsOf([['Farm unit', hh.farmUnit, true]]);
-  const housePills = (hh: Hh) => pillsOf([['Unit type', hh.unitType], ['House number', hh.houseNo, true], ['Cluster', hh.houseNo ? hh.cluster : null]]);
+  // TO1-V2 is just a variant of TO1, so only the family is shown ("TO1").
+  const unitTypeFamily = (t: string | null) => (t ? t.replace(/-V\d+$/i, '') : null);
+  const housePills = (hh: Hh) => pillsOf([['House number', hh.houseNo, true], ['Cluster', hh.houseNo ? hh.cluster : null]]);
+  const typePill = (hh: Hh) => pillsOf([['Unit type', unitTypeFamily(hh.unitType)]]);
   const peopleByRole = (people: Person[]) => ROLE_GROUPS.map(([role, label]) => ({ label, people: people.filter((p) => p.role === role) })).filter((g) => g.people.length);
   const peopleList = (hh: Hh, you: Person) =>
     h('div', '', undefined, ...peopleByRole(hh.people).flatMap((g) => [
@@ -2590,7 +2601,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const sketch = h('button', 'btn', 'Add an FMB sketch');
     sketch.setAttribute('type', 'button');
     sketch.addEventListener('click', () => sketchDialog(hh, landType, () => { shapesLoad = null; void refreshDocs(hh); }));
-    const footer = h('div', 'card-docs', undefined, upload, sketch, history);
+    const footer = h('div', 'card-docs', undefined, upload, sketch, history, landType === 'house' ? typePill(hh) : null);
     const update = () => {
       if (!footer.isConnected) {
         docsListeners.delete(update);
@@ -2870,7 +2881,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       widget('My unit', { more: ['View unit', 'unit'], icon: IC.unit },
         h('div', 'tiles', undefined,
           h('div', 'tile', undefined, h('div', 'k', undefined, glyph(IC.farm, 'Farm land'), farmPills(hh)), h('div', 'v', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), h('div', 's', hh.plots.length ? `${hh.plots.length} plot${hh.plots.length === 1 ? '' : 's'}` : 'Not available yet')),
-          h('div', 'tile', undefined, h('div', 'k', undefined, glyph(IC.house, 'House'), housePills(hh)), h('div', 'v', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), h('div', 's', !hh.houseNo ? 'No house allocated yet' : hh.housePattas.length ? `${hh.housePattas.length} plot${hh.housePattas.length === 1 ? '' : 's'}` : 'Area not on record')),
+          h('div', 'tile', undefined, h('div', 'k', undefined, glyph(IC.house, 'House'), housePills(hh)), h('div', 'v', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), h('div', 's', undefined, h('span', '', !hh.houseNo ? 'No house allocated yet' : hh.housePattas.length ? `${hh.housePattas.length} plot${hh.housePattas.length === 1 ? '' : 's'}` : 'Area not on record'), typePill(hh))),
         ),
         prompts,
       ),
