@@ -234,10 +234,15 @@ test('a unit with no row yet starts from an empty draft at version 0', () => {
   assert.deepEqual(draftState(null), { version: 0, fields: { bio: '', family: '', photos: [], quotes: {}, links: {}, public: false }, changed: {} });
 });
 
-test('only the person submitting needs their own "why TVC" quote', () => {
-  const draft = draftState(unitRow()).fields;
-  assert.deepEqual(validateUnitSubmit({ fields: draft, personId: A }), { ok: true });
-  assert.deepEqual(validateUnitSubmit({ fields: draft, personId: C }), { ok: false, error: 'Add your one-line "why TVC" before submitting.' });
+test('a unit story needs at least one "why TVC" quote, from anyone in the unit, not one from each person or from the one submitting', () => {
+  const draft = draftState(unitRow()).fields; // A and B each have one
+  assert.deepEqual(validateUnitSubmit({ fields: draft }), { ok: true });
+  // a joint quote written by one person is enough for the whole unit, so a housemate with none of their own can submit
+  assert.deepEqual(validateUnitSubmit({ fields: { ...draft, quotes: { [B]: 'The only quote.' } } }), { ok: true });
+  const needsOne = { ok: false, error: 'Your unit\'s story needs at least one "why TVC" line before it can be submitted.' };
+  assert.deepEqual(validateUnitSubmit({ fields: { ...draft, quotes: {} } }), needsOne);
+  assert.deepEqual(validateUnitSubmit({ fields: { ...draft, quotes: { [A]: '   ', [B]: '' } } }), needsOne); // blanks are not quotes
+  assert.deepEqual(validateUnitSubmit({ fields: { ...draft, quotes: undefined } }), needsOne);
 });
 
 test('the page shows the editor their own quote and link to edit and their housemates\' beside the story, read-only', () => {

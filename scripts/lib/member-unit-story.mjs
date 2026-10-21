@@ -179,10 +179,12 @@ export function draftColumns({ fields, version, changed }) {
   return { draft: copy, draft_public: !!isPublic, draft_version: version, draft_changed: changed };
 }
 
-// Handing the story in needs the person submitting to have written their own "why TVC" line.
+// Handing the story in needs at least one "why TVC" line, from anyone in the unit. A couple's story often carries one joint
+// quote that one of them wrote, so it cannot be asked of each person, or of whoever happens to be submitting.
 /** @returns {{ ok: true } | { ok: false, error: string }} */
-export function validateUnitSubmit({ fields, personId }) {
-  return text(fields.quotes?.[personId]) ? { ok: true } : fail('Add your one-line "why TVC" before submitting.');
+export function validateUnitSubmit({ fields }) {
+  const hasQuote = Object.values(fields.quotes ?? {}).some((q) => text(q));
+  return hasQuote ? { ok: true } : fail('Your unit\'s story needs at least one "why TVC" line before it can be submitted.');
 }
 
 const copyOf = (c) => ({ bio: text(c?.bio), family: text(c?.family), photos: c?.photos ?? [], quotes: c?.quotes ?? {}, links: c?.links ?? {} });
