@@ -9,6 +9,7 @@
 // photo-pool.astro/whatsapp.astro (own Sheet/env var - see
 // accommodation-admin.mts's header comment for why it isn't shared).
 import StaffLayout from '../../layouts/StaffLayout.astro';
+import SignInGate from '../../components/SignInGate.astro';
 import { getCollection } from 'astro:content';
 import { ACCOMMODATION_UNITS } from '../../../scripts/lib/accommodation.mjs';
 import { durationDays } from '../../utils/events';
@@ -49,18 +50,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     <h1>Accommodation Allocation</h1>
     <p class="hint">Record who's in which tent, for how long. The public site only ever shows aggregate availability derived from this.</p>
 
-    <div id="gate" class="gate card">
-      <p class="gate-copy">Sign in with the Google account you manage bookings with.</p>
-      <div id="g_id_signin"></div>
-      <p id="gate-error" class="error" hidden></p>
-    </div>
-
-    <div id="forbidden" class="gate card" hidden>
-      <p class="gate-copy">Signed in as <strong id="forbidden-email"></strong>, but this Google account isn't authorized to manage the accommodation calendar.</p>
-      <p class="hint" style="margin: 4px 0 12px;">Ask an admin to add it to the allow-list.</p>
-      <p class="gate-copy">Are you a member? Your member dashboard is at <a href="/members/">tvc.farm/members</a>.</p>
-      <button type="button" id="use-different-account" class="button">Use a different account</button>
-    </div>
+    <SignInGate forbiddenWhat="the Accommodation calendar" />
 
     <div id="app" hidden>
       <div class="month-nav">
@@ -218,18 +208,6 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
-  }
-
-  .gate {
-    max-width: 420px;
-    padding: 20px 24px;
-    margin-bottom: 24px;
-  }
-
-  .gate-copy {
-    font-size: 0.9rem;
-    color: var(--tvc-ink-soft);
-    margin: 0 0 14px;
   }
 
   .error {

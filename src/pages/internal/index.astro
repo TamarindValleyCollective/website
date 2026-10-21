@@ -10,6 +10,7 @@
 // including the four tools, so opening a tool from here doesn't ask again.
 // Deliberately unlinked from the site nav and noindex.
 import StaffLayout from '../../layouts/StaffLayout.astro';
+import SignInGate from '../../components/SignInGate.astro';
 ---
 
 <StaffLayout title="Internal tools" description="Your internal tools." current="home">
@@ -17,18 +18,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     <h1>Internal tools</h1>
     <p id="welcome" class="hint">Sign in to see the tools you can use.</p>
 
-    <div id="gate" class="gate card">
-      <p class="gate-copy">Sign in with your Google account.</p>
-      <div id="g_id_signin"></div>
-      <p id="gate-error" class="error" hidden></p>
-    </div>
-
-    <div id="forbidden" class="gate card" hidden>
-      <p class="gate-copy">Signed in as <strong id="forbidden-email"></strong>, but this Google account isn't set up for the internal tools.</p>
-      <p class="gate-copy">Ask a super admin to add you, then sign in again.</p>
-      <p class="gate-copy">Are you a member? Your member dashboard is at <a href="/members/">tvc.farm/members</a>.</p>
-      <button type="button" id="use-different-account" class="button button--outline">Use a different account</button>
-    </div>
+    <SignInGate forbiddenWhat="the internal tools" />
 
     <p id="status" class="hint" hidden></p>
 
@@ -78,18 +68,6 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
-  }
-
-  .gate {
-    max-width: 420px;
-    padding: 20px 24px;
-    margin-bottom: 24px;
-  }
-
-  .gate-copy {
-    font-size: 0.9rem;
-    color: var(--tvc-ink-soft);
-    margin: 0 0 14px;
   }
 
   .note {

@@ -13,6 +13,7 @@
 // dashboard by an admin, because we deliberately hold no credentials for those
 // services). Status is always a word plus an icon, never colour alone.
 import StaffLayout from '../../layouts/StaffLayout.astro';
+import SignInGate from '../../components/SignInGate.astro';
 ---
 
 <StaffLayout title="Usage & limits" description="Free-tier and credit usage." current="usage">
@@ -20,18 +21,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     <h1>Usage &amp; limits</h1>
     <p id="intro" class="hint">Sign in to see how much of our free tiers and credits we are using.</p>
 
-    <div id="gate" class="gate card">
-      <p class="gate-copy">Sign in with your Google account.</p>
-      <div id="g_id_signin"></div>
-      <p id="gate-error" class="error" hidden></p>
-    </div>
-
-    <div id="forbidden" class="gate card" hidden>
-      <p class="gate-copy">Signed in as <strong id="forbidden-email"></strong>, but this account doesn't have access to Usage &amp; limits.</p>
-      <p class="gate-copy">Ask a super admin to give you a role for it, then sign in again.</p>
-      <p class="gate-copy">Are you a member? Your member dashboard is at <a href="/members/">tvc.farm/members</a>.</p>
-      <button type="button" id="use-different-account" class="button button--outline">Use a different account</button>
-    </div>
+    <SignInGate forbiddenWhat="Usage & limits" />
 
     <p id="status" class="hint" hidden></p>
 
@@ -125,20 +115,6 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   }
 
   .usage .card.pad,
-  .usage .gate {
-    padding: 18px 20px;
-  }
-
-  .usage .gate {
-    max-width: 420px;
-    margin-bottom: 24px;
-  }
-
-  .usage .gate-copy {
-    font-size: 0.9rem;
-    color: var(--tvc-ink-soft);
-    margin: 0 0 14px;
-  }
 
   .usage .error {
     color: var(--tvc-error-text);

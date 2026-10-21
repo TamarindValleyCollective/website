@@ -15,6 +15,7 @@
 // can use what" is the same data grouped by tool.
 // Deliberately unlinked from the site nav and noindex.
 import StaffLayout from '../../layouts/StaffLayout.astro';
+import SignInGate from '../../components/SignInGate.astro';
 ---
 
 <StaffLayout title="Access" description="Who can do what in the internal tools." current="access">
@@ -22,17 +23,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     <h1>Access</h1>
     <p class="hint">Who can use which internal tool, and what they can do in it. Only super admins can open this page.</p>
 
-    <div id="gate" class="gate card">
-      <p class="gate-copy">Sign in with your super-admin Google account.</p>
-      <div id="g_id_signin"></div>
-      <p id="gate-error" class="error" hidden></p>
-    </div>
-
-    <div id="forbidden" class="gate card" hidden>
-      <p class="gate-copy">Signed in as <strong id="forbidden-email"></strong>, but this Google account isn't a super admin.</p>
-      <p class="gate-copy">Are you a member? Your member dashboard is at <a href="/members/">tvc.farm/members</a>.</p>
-      <button type="button" id="use-different-account" class="button button--outline">Use a different account</button>
-    </div>
+    <SignInGate forbiddenWhat="this page" forbiddenHint="This page is for super admins only." copy="Sign in with your super-admin Google account." />
 
     <p id="status" class="hint" hidden></p>
 
@@ -134,18 +125,6 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
-  }
-
-  .gate {
-    max-width: 420px;
-    padding: 20px 24px;
-    margin-bottom: 24px;
-  }
-
-  .gate-copy {
-    font-size: 0.9rem;
-    color: var(--tvc-ink-soft);
-    margin: 0 0 14px;
   }
 
   .block {
