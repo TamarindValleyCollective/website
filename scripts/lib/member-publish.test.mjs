@@ -1,7 +1,7 @@
 // Run with: node --test scripts/lib/member-publish.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPublished, cardNameFor, joinNames, mergePublished, photoFileFor, resolvePhotos, sanitizePublished, uploadedPhotos } from './member-publish.mjs';
+import { buildPublished, buildPublishedUnits, publishedUnitPhotoHolder, cardNameFor, joinNames, mergePublished, photoFileFor, resolvePhotos, sanitizePublished, uploadedPhotos } from './member-publish.mjs';
 
 const UP = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const story = (bio, why = '', extra = {}) => ({ approved: { bio, family: '', why, social: '', photo: '', ...extra }, approved_public: true });
@@ -174,4 +174,75 @@ test('a card whose bio carries Markdown, even two long bios joined, survives the
   const bio = `**Asha** works on [soil](https://example.com/s). ${'x'.repeat(2400)}`;
   const out = sanitizePublished({ cards: [{ name: 'Asha & Ravi', bio: `${bio} ${bio}`, photo: null }], hidden: [] });
   assert.ok(out.cards[0].bio.startsWith('**Asha** works on [soil]'));
+});
+
+// ---- one story per UNIT ----
+
+const unit = (over = {}) => ({
+  household_id: 'h1', approved_public: true,
+  approved: { bio: 'Sree and Pram run a farm.', family: 'One son.', photos: [], quotes: { a: 'Retirement.', b: 'Giving back.' }, links: {} },
+  ...over,
+});
+
+test('a unit story is published under the 2017 card name: one bio, each person\'s quote and link by position, only when public', () => {
+  const d = { ...base(), unitStories: [unit({ approved: { bio: 'Sree and Pram run a farm.', family: 'One son.', photos: [], quotes: { a: 'Retirement.', b: 'Giving back.' }, links: { b: 'https://x.test/b' } } })] };
+  const { cards, hidden } = buildPublishedUnits(d);
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].name, 'Sree & Prameela');
+  assert.equal(cards[0].bio, 'Sree and Pram run a farm.');
+  assert.equal(cards[0].family, 'One son.');
+  assert.deepEqual(cards[0].whyTVC, ['Retirement.', 'Giving back.']); // different quotes: one each, in the order of the names
+  assert.deepEqual(cards[0].social, ['', 'https://x.test/b']); // Pram's link stays with Pram though Sree has none
+  assert.deepEqual(hidden, []);
+});
+
+test('a quote the whole unit shares is one quote; a unit with no public story hides its 2017 card; a draft or one in review is never read', () => {
+  const same = { ...base(), unitStories: [unit({ approved: { bio: 'B.', family: '', photos: [], quotes: { a: 'Same.', b: 'Same.' }, links: {} } })] };
+  assert.equal(buildPublishedUnits(same).cards[0].whyTVC, 'Same.');
+  const off = { ...base(), unitStories: [unit({ approved_public: false })] };
+  assert.deepEqual(buildPublishedUnits(off), { mappingReady: true, cards: [], hidden: ['Sree & Prameela'] });
+  const draftOnly = { ...base(), unitStories: [{ household_id: 'h1', approved: null, approved_public: null, draft: { bio: 'secret' }, submitted: { bio: 'secret' } }] };
+  assert.deepEqual(buildPublishedUnits(draftOnly).cards, []);
+});
+
+test('only the unit\'s first photo goes on the public card, and the quote and link of someone unlisted stay out', () => {
+  const photos = [{ ref: UP, personId: 'a' }, { ref: '/images/members/p.jpg', personId: 'b' }];
+  const d = { ...base(), unitStories: [unit({ approved: { bio: 'B.', family: '', photos, quotes: { a: 'Mine.', b: 'Hers.' }, links: { a: 'https://x.test/a', b: 'https://x.test/b' } } })] };
+  d.people = d.people.map((p) => (p.id === 'b' ? { ...p, directory_visible: false } : p));
+  const [card] = buildPublishedUnits(d).cards;
+  assert.equal(card.photo, UP);
+  assert.equal(card.photos, undefined);
+  assert.equal(card.whyTVC, 'Mine.');
+  assert.deepEqual(card.social, ['https://x.test/a']);
+});
+
+test('a unit whose people are all unlisted hides its card; with no card name it is named from its owners, once the mapping exists', () => {
+  const none = { ...base(), unitStories: [unit()] };
+  none.people = none.people.map((p) => ({ ...p, active: false }));
+  assert.deepEqual(buildPublishedUnits(none).hidden, ['Sree & Prameela']);
+  const noMap = { ...base(), cards: [], unitStories: [unit()] };
+  assert.deepEqual(buildPublishedUnits(noMap), { mappingReady: false, cards: [], hidden: [] });
+  const named = { ...base(), cards: [{ household_id: 'other', card_name: 'Other', person_ids: [] }], unitStories: [unit()] };
+  assert.equal(buildPublishedUnits(named).cards[0].name, 'Prameela & Sreedhar'); // no card means no name order: by name, as for a person's
+});
+
+test('the family members of a unit are named, not given a block each', () => {
+  const [card] = buildPublishedUnits({ ...base(), unitStories: [unit()] }).cards;
+  assert.deepEqual(card.familyNames, ['Kid']);
+});
+
+// ---- a unit's public photo ----
+
+test('a public unit photo comes from the uploader\'s files, only if it is in the approved, public copy and the uploader is a listed owner of the unit', () => {
+  const d = base();
+  const row = unit({ approved: { bio: 'B.', family: '', photos: [{ ref: UP, personId: 'a' }], quotes: {}, links: {} } });
+  const ask = (over = {}) => publishedUnitPhotoHolder({ row: over.row ?? row, photoId: over.photoId ?? UP, people: over.people ?? d.people, memberships: over.memberships ?? d.memberships });
+  assert.equal(ask(), 'a');
+  assert.equal(ask({ photoId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }), null); // not one of the unit's photos
+  assert.equal(ask({ row: { ...row, approved_public: false } }), null); // the switch is off
+  assert.equal(ask({ row: { ...row, approved: null, draft: row.approved, submitted: row.approved } }), null); // a draft or a submission is never public
+  assert.equal(ask({ people: d.people.map((p) => (p.id === 'a' ? { ...p, directory_visible: false } : p)) }), null); // opted out
+  assert.equal(ask({ people: d.people.map((p) => (p.id === 'a' ? { ...p, active: false } : p)) }), null);
+  assert.equal(ask({ memberships: d.memberships.map((m) => (m.person_id === 'a' ? { ...m, role: 'family' } : m)) }), null); // not an owner
+  assert.equal(ask({ memberships: d.memberships.map((m) => (m.person_id === 'a' ? { ...m, household_id: 'h9' } : m)) }), null); // of another unit
 });

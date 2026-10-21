@@ -50,7 +50,7 @@ import { approvalColumns, documentStatus } from '../../scripts/lib/member-land-d
 import { localChecks } from '../../scripts/lib/member-story.mjs';
 import { isLegacyPhoto, isUploadedPhoto } from '../../scripts/lib/member-photo.mjs';
 import { deleteMemberPhoto, getMemberPhoto } from './lib/member-photo-storage';
-import { lastPublishAt, loadSettings } from './lib/story-risk';
+import { lastPublishAt, loadSettings, unitStoriesLive } from './lib/story-risk';
 import { decisionApplies, decisionColumns, queueItem, replacedPhotos, riskCopy } from '../../scripts/lib/member-unit-story.mjs';
 import { SETTING_KEY, shadowStats } from '../../scripts/lib/member-autopublish.mjs';
 
@@ -584,7 +584,8 @@ async function handlePublishStatus(req: Request): Promise<Response> {
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
   try {
     const last = await lastPublishAt();
-    const publicStories = await select('member_stories', 'person_id,approved_at', '&approved_public=eq.true');
+    // The count is of the table the site is built from, which follows the cutover switch.
+    const publicStories = (await unitStoriesLive()) ? await select('member_unit_stories', 'household_id,approved_at', '&approved_public=eq.true') : await select('member_stories', 'person_id,approved_at', '&approved_public=eq.true');
     const waiting = publicStories.filter((r) => !last || Date.parse(r.approved_at) > Date.parse(last)).length;
     return jsonResponse({
       configured: !!process.env.NETLIFY_BUILD_HOOK_URL,

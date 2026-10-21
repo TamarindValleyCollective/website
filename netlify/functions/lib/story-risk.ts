@@ -16,7 +16,7 @@ import { deleteMemberPhoto } from './member-photo-storage';
 import { isUploadedPhoto } from '../../../scripts/lib/member-photo.mjs';
 import { RISK_SYSTEM, assessRules, combine, describeChange, outcomeFor, parseModelRisk, riskPrompt } from '../../../scripts/lib/member-risk.mjs';
 import { SETTING_KEY, actsAutomatically, parseSettings } from '../../../scripts/lib/member-autopublish.mjs';
-import { decisionColumns, replacedPhotos, unitRiskRow } from '../../../scripts/lib/member-unit-story.mjs';
+import { UNIT_STORIES_KEY, decisionColumns, replacedPhotos, unitRiskRow, unitSwitchLive } from '../../../scripts/lib/member-unit-story.mjs';
 
 const RISK_MODEL = process.env.STORY_RISK_MODEL || process.env.STORY_REVIEW_MODEL || 'claude-sonnet-5';
 const RISK_STORE = 'member-story-risk';
@@ -44,6 +44,13 @@ export async function loadSettings() {
   const r = await sb(`member_settings?select=value&key=eq.${SETTING_KEY}`);
   if (!r.ok) throw new Error(`settings load failed: ${r.status}`);
   return parseSettings(r.rows[0]);
+}
+
+// Whether the live system reads and writes stories per UNIT (member_settings key `unit_stories`, off until the cutover).
+export async function unitStoriesLive(): Promise<boolean> {
+  const r = await sb(`member_settings?select=value&key=eq.${UNIT_STORIES_KEY}`);
+  if (!r.ok) throw new Error(`unit switch load failed: ${r.status}`);
+  return unitSwitchLive(r.rows[0]);
 }
 
 export type StoryRow = { person_id: string; draft?: any; submitted: any; submitted_public: boolean; submitted_at: string; approved: any; approved_public: boolean | null };
@@ -202,6 +209,8 @@ export async function recordAutoPublish(at: string): Promise<void> {
 // Public stories approved since the last publish.
 export async function waitingPublicStories(): Promise<number> {
   const last = await lastPublishAt();
-  const r = await sb('member_stories?select=person_id,approved_at&approved_public=eq.true&limit=2000');
+  const r = (await unitStoriesLive())
+    ? await sb('member_unit_stories?select=household_id,approved_at&approved_public=eq.true&limit=2000')
+    : await sb('member_stories?select=person_id,approved_at&approved_public=eq.true&limit=2000');
   return r.rows.filter((x) => !last || Date.parse(x.approved_at) > Date.parse(last)).length;
 }
