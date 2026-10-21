@@ -1,11 +1,11 @@
 ---
 // The member portal (members.tvc.farm, served at /members/): where a signed-in member sees
 // their own unit and everything about their membership. Shaped like a society-management web
-// portal: a left menu of modules, a module search, the member's unit always in the top bar, and a
-// dashboard of widgets. Sign-in is Google; only members who have been invited get in
+// portal: a left menu, the member's unit always in the top bar, and a Home page that leads with one
+// next step. Sign-in is Google; only members who have been invited get in
 // (netlify/functions/lib/member-access.ts), and the data comes from /api/members-me/*, which
-// only ever returns the member's own household. Modules that are not built yet say so ("Soon");
-// nothing here shows made-up figures.
+// only ever returns the member's own household. Modules that are not built yet are not in the menu;
+// Home lists them once under "On the way". Nothing here shows made-up figures.
 // This page deliberately has its own minimal shell: no public header, footer, cookie banner,
 // chat widget or analytics, none of which belong on a page of personal data.
 import '../../styles/global.css';
@@ -27,28 +27,33 @@ import SignInGate from '../../components/SignInGate.astro';
       level="h1"
       startHidden
       title="Member portal"
-      copy="Sign in with the Google account you gave the core team. If you have not been invited yet, please contact the core team."
+      copy="Sign in with the Google account whose email you gave the core team. If you have not been invited yet, write to core-team@tvc.farm."
     />
 
+    <div class="boot" id="boot" role="status" hidden>
+      <p id="boot-msg">Opening the member portal…</p>
+      <button type="button" class="btn btn--solid" id="boot-retry" hidden>Try again</button>
+    </div>
+
     <div class="shell" id="shell" hidden>
-      <aside class="side" id="side" aria-label="Modules">
+      <aside class="side" id="side" aria-label="Member portal menu">
         <div class="side-head">
           <img class="mark" src="/images/brand/tvc-logo-mark.svg" width="38" height="38" alt="Tamarind Valley Collective" />
           <button type="button" class="collapse" id="collapse" aria-label="Collapse the menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
         </div>
-        <nav id="nav"></nav>
+        <nav id="nav" aria-label="Member portal"></nav>
+        <div class="side-foot">
+          <a class="nav-item" href="mailto:core-team@tvc.farm"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg><span class="nav-label">Write to the core team</span></a>
+          <button type="button" class="nav-item" id="signout-side"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5v16h5M15 8l4 4-4 4M19 12H9"/></svg><span class="nav-label">Sign out</span></button>
+        </div>
       </aside>
+      <div class="scrim" id="scrim"></div>
 
       <div class="col">
         <header class="topbar">
-          <button type="button" class="menu-btn" id="menu" aria-label="Open the menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-          <label class="search">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/></svg>
-            <input id="search" type="search" placeholder="Search modules" autocomplete="off" />
-            <kbd>⌘K</kbd>
-          </label>
+          <button type="button" class="menu-btn" id="menu" aria-label="Open the menu" aria-controls="side" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
           <div class="who-wrap">
-            <button type="button" class="who" id="who" aria-haspopup="true" aria-expanded="false">
+            <button type="button" class="who" id="who" aria-haspopup="true" aria-expanded="false" aria-controls="who-menu">
               <span class="unit-chip" id="unit-chip"></span>
               <span class="avatar" id="avatar" aria-hidden="true"></span>
               <span class="who-text"><strong id="who-name"></strong><small id="who-role"></small></span>
@@ -95,6 +100,7 @@ import SignInGate from '../../components/SignInGate.astro';
     top: 0;
     align-self: start;
     height: 100vh;
+    overflow-x: hidden; /* the collapse button hangs half off the edge; without this the menu grows a sideways scrollbar */
     overflow-y: auto;
     padding: 14px 10px;
     background: var(--tvc-white);
@@ -138,7 +144,6 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .collapse svg,
   .menu-btn svg,
-  .search svg,
   .caret {
     width: 18px;
     height: 18px;
@@ -149,18 +154,29 @@ import SignInGate from '../../components/SignInGate.astro';
     stroke-linejoin: round;
   }
 
-  .shell.collapsed .nav-label,
-  .shell.collapsed .nav-group,
-  .shell.collapsed .nav-soon {
-    display: none;
+  /* Hidden to the eye but still the link's name: display:none would leave the collapsed menu as unlabelled icons for a screen reader. */
+  .shell.collapsed .nav-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
-  .nav-group {
-    margin: 14px 8px 4px;
-    font-size: 0.68rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--tvc-ink-soft);
+  .side {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .side-foot {
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .scrim {
+    display: none;
   }
 
   .nav-item {
@@ -168,13 +184,14 @@ import SignInGate from '../../components/SignInGate.astro';
     align-items: center;
     gap: 12px;
     width: 100%;
+    min-height: 44px;
     padding: 9px 10px;
     border: none;
     border-radius: var(--radius-sm);
     background: none;
     color: var(--tvc-ink);
     font: inherit;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     text-align: left;
     text-decoration: none;
     cursor: pointer;
@@ -209,13 +226,17 @@ import SignInGate from '../../components/SignInGate.astro';
     flex: 1;
   }
 
-  .nav-soon {
-    padding: 1px 7px;
-    border-radius: 999px;
-    background: var(--tvc-stone);
-    color: var(--tvc-ink-soft);
-    font-size: 0.65rem;
-    font-weight: 600;
+  /* One keyboard focus ring for everything in the portal, in the same orange the story and directory controls already use. */
+  .shell :is(a, button, input, select, textarea, summary):focus-visible,
+  .signin :is(a, button):focus-visible,
+  .boot button:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  #view h1:focus,
+  #view:focus {
+    outline: none;
   }
 
   /* ---- top bar ---- */
@@ -237,42 +258,32 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .menu-btn {
     display: none;
-    padding: 6px;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin-left: -8px;
+    padding: 0;
     border: none;
+    border-radius: var(--radius-sm);
     background: none;
     cursor: pointer;
   }
 
-  .search {
-    display: flex;
-    flex: 1;
-    min-width: 0; /* an input can't shrink below its default width unless its wrapper may, which pushed the bar past a phone's width */
-    align-items: center;
-    gap: 10px;
-    max-width: 520px;
-    padding: 8px 14px;
-    border: 1px solid var(--tvc-line);
-    border-radius: 999px;
-    background: var(--tvc-cream);
-  }
-
-  .search input {
-    flex: 1;
-    min-width: 0;
-    border: none;
-    background: none;
-    font: inherit;
-    font-size: 0.9rem;
-    outline: none;
-  }
-
-  .search kbd {
-    padding: 1px 8px;
-    border-radius: 6px;
-    background: var(--tvc-stone);
+  .boot {
+    display: grid;
+    justify-items: center;
+    gap: 14px;
+    padding: 96px 24px;
+    text-align: center;
     color: var(--tvc-ink-soft);
-    font: inherit;
-    font-size: 0.75rem;
+  }
+
+  .boot[hidden] {
+    display: none;
+  }
+
+  .boot p {
+    margin: 0;
   }
 
   .who-wrap {
@@ -285,7 +296,8 @@ import SignInGate from '../../components/SignInGate.astro';
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 6px 12px 6px 8px;
+    min-height: 44px;
+    padding: 4px 12px 4px 8px;
     border: 1px solid var(--tvc-line);
     border-radius: 999px;
     background: var(--tvc-white);
@@ -327,7 +339,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .who-text small {
-    font-size: 0.72rem;
+    font-size: 0.8rem;
     color: var(--tvc-ink-soft);
   }
 
@@ -345,37 +357,36 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .who-menu p {
     margin: 4px 8px 6px;
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--tvc-ink-soft);
   }
 
-  .who-menu button {
+  .who-menu button,
+  .who-menu a {
     display: flex;
+    align-items: center;
     justify-content: space-between;
+    box-sizing: border-box;
     width: 100%;
+    min-height: 44px;
     padding: 8px;
     border: none;
     border-radius: var(--radius-sm);
     background: none;
+    color: inherit;
     font: inherit;
-    font-size: 0.88rem;
+    font-size: 0.92rem;
     text-align: left;
+    text-decoration: none;
     cursor: pointer;
   }
 
+  .who-menu a:hover,
   .who-menu button:hover,
   .who-menu button[aria-pressed='true'] {
     background: var(--tvc-green-tint);
-  }
-
-  .ribbon {
-    margin: 0;
-    padding: 5px 24px;
-    background: var(--tvc-orange-tint);
-    color: var(--tvc-orange-text);
-    font-size: 0.75rem;
   }
 
   /* ---- views ---- */
@@ -446,12 +457,14 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .widget h2 .more {
     margin-left: auto;
-    padding: 0;
+    min-height: 44px;
+    margin-block: -14px;
+    padding: 0 4px;
     border: none;
     background: none;
     color: var(--tvc-green-dark);
     font: inherit;
-    font-size: 0.8rem;
+    font-size: 0.88rem;
     font-weight: 600;
     letter-spacing: 0;
     text-transform: none;
@@ -459,15 +472,44 @@ import SignInGate from '../../components/SignInGate.astro';
     cursor: pointer;
   }
 
-  .sample {
-    padding: 1px 8px;
-    border-radius: 999px;
-    background: var(--tvc-orange-tint);
-    color: var(--tvc-orange-text);
-    font-size: 0.65rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: none;
+  /* The one thing to do next: the dashboard's first card, and the only one that asks for something. */
+  .next {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px 24px;
+    margin: 0 0 16px;
+    padding: 18px 20px;
+    background: var(--tvc-green-tint);
+    border-radius: var(--radius);
+  }
+
+  .next-text {
+    flex: 1 1 280px;
+  }
+
+  .next h2 {
+    margin: 0 0 4px;
+    font-size: 1.15rem;
+  }
+
+  .next p {
+    margin: 0;
+    font-size: 0.92rem;
+  }
+
+  .next-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .ahead {
+    margin-top: 16px;
+  }
+
+  .ahead h2 {
+    margin-bottom: 8px;
   }
 
   .split {
@@ -539,13 +581,14 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .btn {
-    padding: 9px 16px;
+    min-height: 44px;
+    padding: 9px 18px;
     border: 1px solid var(--tvc-green-dark);
     border-radius: var(--radius-sm);
     background: var(--tvc-white);
     color: var(--tvc-green-dark);
     font: inherit;
-    font-size: 0.88rem;
+    font-size: 0.92rem;
     font-weight: 600;
     cursor: pointer;
   }
@@ -1033,14 +1076,26 @@ import SignInGate from '../../components/SignInGate.astro';
       z-index: 10;
       left: 0;
       top: 0;
-      width: 260px;
+      width: 280px;
+      max-width: 86vw;
       transform: translateX(-105%);
-      transition: transform 0.2s;
+      visibility: hidden;
+      transition: transform 0.2s, visibility 0s 0.2s;
     }
 
     .shell.open .side {
       transform: none;
+      visibility: visible;
+      transition: transform 0.2s;
       box-shadow: var(--shadow-soft);
+    }
+
+    .shell.open .scrim {
+      display: block;
+      position: fixed;
+      inset: 0;
+      z-index: 9;
+      background: color-mix(in srgb, var(--tvc-ink) 40%, transparent);
     }
 
     .collapse {
@@ -1048,12 +1103,7 @@ import SignInGate from '../../components/SignInGate.astro';
     }
 
     .menu-btn {
-      display: block;
-    }
-
-    .search kbd,
-    .who-text {
-      display: none;
+      display: grid;
     }
 
     .topbar {
@@ -1073,6 +1123,18 @@ import SignInGate from '../../components/SignInGate.astro';
 
     .kpis {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 560px) {
+    .who-text {
+      display: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .side {
+      transition: none !important;
     }
   }
   /* ---- your story ---- */
@@ -1571,7 +1633,9 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .dir-bar input[type='search'] {
-    min-width: 340px;
+    flex: 1 1 260px;
+    min-width: 0;
+    max-width: 420px;
     padding: 8px 11px;
     border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
@@ -1588,7 +1652,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .dir-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
     gap: 14px;
   }
 
@@ -2115,32 +2179,31 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   };
 
   type NavItem = { id: string; label: string; icon: string; soon?: boolean };
-  const NAV: (NavItem | { group: string })[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: IC.dash },
+  const NAV: NavItem[] = [
+    { id: 'dashboard', label: 'Home', icon: IC.dash },
     { id: 'unit', label: 'My unit', icon: IC.unit },
     { id: 'story', label: 'Your story', icon: IC.pen },
+    { id: 'directory', label: 'Our members', icon: IC.book },
+    // Not built yet: kept out of the menu (they would only lead to a "coming soon" page) and listed
+    // once, quietly, at the foot of the Home page. The routes stay so an old bookmark still lands somewhere.
     { id: 'stays', label: 'Stays', icon: IC.stay, soon: true },
-    { group: 'Accounts' },
     { id: 'dues', label: 'My dues', icon: IC.rupee, soon: true },
     { id: 'receipts', label: 'Receipts', icon: IC.receipt, soon: true },
     { id: 'statements', label: 'Statements', icon: IC.statement, soon: true },
-    { group: 'Community' },
     { id: 'notices', label: 'Notices', icon: IC.bell, soon: true },
-    { id: 'documents', label: 'Documents', icon: IC.statement, soon: true },
+    { id: 'documents', label: 'Documents', icon: IC.book, soon: true },
     { id: 'meetings', label: 'Meetings & polls', icon: IC.cal, soon: true },
-    { id: 'directory', label: 'Directory', icon: IC.book },
-    { group: 'Support' },
-    { id: 'help', label: 'Help desk', icon: IC.help, soon: true },
+    { id: 'help', label: 'Ask the core team', icon: IC.help, soon: true },
   ];
   const PLANNED: Record<string, string[]> = {
     stays: ['Book overnight stays for yourself and your family (free)', 'Add guests at a discounted rate and pay by UPI', 'See, change and cancel your bookings; event dates take priority'],
-    dues: ['Your annual maintenance for each financial year, what is paid and what is due', 'Pay by UPI QR, and tell us when you have paid'],
+    dues: ['Your annual maintenance for each financial year, what is paid and what is due, and a UPI QR to pay', 'Pay by UPI QR, and tell us when you have paid'],
     receipts: ['Download a receipt for every payment you have made'],
     statements: ['Your account statement for each financial year'],
     notices: ['Announcements from the core team: meetings, maintenance reminders, farm and event updates'],
     documents: ['Meeting minutes, farm rules, forms and other member documents'],
     meetings: ['Upcoming meetings and agendas', 'Opinion polls on collective decisions'],
-    help: ['Raise a request with the core team and follow its status'],
+    help: ['Raise a request and follow its status'],
   };
 
   let me: Me | null = null;
@@ -2149,37 +2212,28 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   let route = 'dashboard';
   let toastTimer: number | undefined;
 
+  // Long enough to read a whole sentence once, not a flash.
   function toast(msg: string) {
     const t = $('toast');
     t.textContent = msg;
     t.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = window.setTimeout(() => (t.hidden = true), 2600);
+    toastTimer = window.setTimeout(() => (t.hidden = true), Math.max(4000, msg.length * 70));
   }
 
   const hhNow = (): Hh => all[Math.min(current, all.length - 1)];
   const meIn = (hh: Hh): Person => hh.people.find((p) => p.id === me?.personId) ?? hh.people[0];
 
   // ---- shell ----
-  function renderNav(filter = '') {
-    const q = filter.trim().toLowerCase();
+  function renderNav() {
     const nav = $('nav');
     nav.replaceChildren();
-    let pendingGroup: HTMLElement | null = null;
     for (const item of NAV) {
-      if ('group' in item) {
-        pendingGroup = h('div', 'nav-group', item.group);
-        continue;
-      }
-      if (q && !item.label.toLowerCase().includes(q)) continue;
-      if (pendingGroup) {
-        nav.append(pendingGroup);
-        pendingGroup = null;
-      }
-      const a = h('a', 'nav-item', undefined, icon(item.icon), h('span', 'nav-label', item.label), item.soon ? h('span', 'nav-soon', 'Soon') : null);
+      if (item.soon) continue;
+      const a = h('a', 'nav-item', undefined, icon(item.icon), h('span', 'nav-label', item.label));
       a.setAttribute('href', `#/${item.id}`);
       if (item.id === route) a.setAttribute('aria-current', 'page');
-      a.title = item.label;
+      a.title = item.label; // what the icon is, when the menu is collapsed to icons
       nav.append(a);
     }
   }
@@ -2193,6 +2247,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     $('who-role').textContent = ROLE[person.role] ?? person.role;
     const menu = $('who-menu');
     menu.replaceChildren();
+    menu.append(h('p', '', `Signed in as ${me!.email ?? me!.name}`));
     if (all.length > 1) {
       menu.append(h('p', '', 'Switch unit'));
       all.forEach((o, i) => {
@@ -2214,14 +2269,16 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       $('who').setAttribute('aria-expanded', 'false');
       noticeDialog(false);
     });
+    const contact = h('a', '', 'Write to the core team');
+    contact.setAttribute('href', 'mailto:core-team@tvc.farm');
     const out = h('button', '', 'Sign out');
     out.addEventListener('click', signOut);
-    menu.append(notice, out);
+    menu.append(notice, contact, out);
   }
 
   // ---- building blocks ----
-  const widget = (title: string, opts: { soon?: boolean; wide?: boolean; more?: [string, string] } = {}, ...kids: Kid[]) => {
-    const head = h('h2', '', title, opts.soon ? h('span', 'sample', 'Coming soon') : null);
+  const widget = (title: string, opts: { wide?: boolean; more?: [string, string] } = {}, ...kids: Kid[]) => {
+    const head = h('h2', '', title);
     if (opts.more) {
       const m = h('button', 'more', opts.more[0]);
       m.addEventListener('click', () => (location.hash = `#/${opts.more![1]}`));
@@ -2230,7 +2287,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     return h('section', `widget${opts.wide ? ' widget--wide' : ''}`, undefined, head, ...kids);
   };
   const kpi = (k: string, v: string) => h('div', 'kpi', undefined, h('div', 'k', k), h('div', 'v', v));
-  const crumbs = (...parts: string[]) => h('p', 'crumbs', parts.join(' >> '));
+  const crumbs = (...parts: string[]) => h('p', 'crumbs', parts.join(' / '));
   const tableOf = (headers: string[], rows: (string | number | null | HTMLElement)[][], rightFrom = -1): HTMLElement =>
     h('div', 'table-wrap', undefined, h('table', '', undefined,
       h('thead', '', undefined, h('tr', '', undefined, ...headers.map((t, i) => h('th', rightFrom >= 0 && i >= rightFrom ? 'r' : '', t)))),
@@ -2597,11 +2654,22 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const hh = hhNow();
     const person = meIn(hh);
     const root = h('div');
-    root.append(h('h1', 'page-title', `Hello, ${first(me!.name)}`), h('p', 'lede', 'Everything about your membership in one place.'));
-    const grid = h('div', 'widgets');
+    root.append(h('h1', 'page-title', `Hello, ${first(me!.name)}`), h('p', 'lede', 'Your unit, your story and your neighbours in the valley.'));
 
+    // One thing to do next. Until a mobile number is on file that is the thing; after that, the story.
+    const go = (label: string, to: string, solid = false) => {
+      const b = h('button', solid ? 'btn btn--solid' : 'btn', label);
+      b.setAttribute('type', 'button');
+      b.addEventListener('click', () => (location.hash = `#/${to}`));
+      return b;
+    };
+    const next = !me!.phone
+      ? { title: 'Add your mobile number', text: 'So the core team can reach you about stays and farm updates.', actions: [(() => { const b = h('button', 'btn btn--solid', 'Add my number'); b.setAttribute('type', 'button'); b.addEventListener('click', detailsDialog); return b; })()] }
+      : { title: 'Your story', text: 'Add to it or change it whenever you like, and read what your neighbours have shared.', actions: [go('Open your story', 'story', true), go('See our members', 'directory')] };
+    root.append(h('section', 'next', undefined, h('div', 'next-text', undefined, h('h2', '', next.title), h('p', '', next.text)), h('div', 'next-actions', undefined, ...next.actions)));
+
+    const grid = h('div', 'widgets');
     const prompts = h('div');
-    if (!me!.phone) prompts.append(h('p', 'prompt', 'Add your mobile number so we can reach you about stays and farm updates.'));
     const checks = hh.flags.filter((f) => f.severity !== 'info').length;
     if (checks) prompts.append(h('p', 'prompt', `${checks} detail${checks === 1 ? '' : 's'} in your unit's records look incomplete. The core team is working through them.`));
 
@@ -2613,13 +2681,14 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         ),
         prompts,
       ),
-      widget('People in my unit', { more: ['Details', 'unit'] }, peopleList(hh, person)),
-      widget('Stays', { soon: true }, h('p', 'lede', 'Book overnight stays for you and your family. Free for family; guests at a discounted rate.')),
-      widget('Maintenance', { soon: true }, h('p', 'lede', 'Your annual maintenance, what is paid and what is due, with a UPI QR to pay.')),
-      widget('Notices', { soon: true }, h('p', 'lede', 'Announcements from the core team.')),
-      widget('Help desk', { soon: true }, h('p', 'lede', 'Raise a request with the core team and follow its status.')),
+      widget('People in my unit', {}, peopleList(hh, person)),
     );
     root.append(grid);
+
+    const ahead = NAV.filter((n) => n.soon && n.id !== 'receipts' && n.id !== 'statements' && n.id !== 'documents' && n.id !== 'meetings');
+    root.append(h('section', 'panel ahead', undefined,
+      h('h2', '', 'On the way'),
+      h('ul', 'soon-list', undefined, ...ahead.map((n) => h('li', '', `${n.label}: ${PLANNED[n.id][0]}`)))));
     return root;
   }
 
@@ -2628,7 +2697,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const person = meIn(hh);
     const root = h('div');
     root.append(crumbs('Home', 'My unit'), h('h1', 'page-title', 'My unit'));
-    root.append(h('p', 'lede', [hh.unitType ? `Unit type ${hh.unitType}` : null, `You are listed as ${ROLE[person.role] ?? person.role}`].filter(Boolean).join(' · ')));
+    root.append(h('p', 'lede', [hh.unitType ? `Unit type ${hh.unitType}` : null, `You are listed as ${ROLE[person.role] ?? person.role}`].filter(Boolean).join(' · ')), h('p', 'lede', 'Your unit is your farm land and, if you have one, your house plot. Cluster is the group of houses yours belongs to.'));
     const panel = (title: string, ...kids: Kid[]) => {
       const p = h('section', 'panel', undefined, h('h2', '', title), ...kids);
       p.style.marginTop = '16px';
@@ -2781,7 +2850,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     root.append(
       crumbs('Home', 'Your story'),
       h('h1', 'page-title', 'Your story', h('small', '', 'Your card for the collective')),
-      h('p', 'lede', 'Your unit has one story, shared by everyone in it: either of you can edit what you do, your family and the photos. Your "why TVC" line is your own, and to link your name to a page of yours, select it in the text and press Link. The story needs at least one "why TVC" line from your unit before it can be submitted. The core team reads every story before it appears anywhere. Once approved, other members can read it in the Directory; it goes on tvc.farm only if you switch on "Show on tvc.farm".'),
+      h('p', 'lede', 'Your unit has one story, shared by everyone in it: either of you can edit what you do, your family and the photos. Your "why TVC" line is your own, and to link your name to a page of yours, select it in the text and press Link. The story needs at least one "why TVC" line from your unit before it can be submitted. The core team reads every story before it appears anywhere. Once approved, other members can read it under Our members; it goes on tvc.farm only if you switch on "Show on tvc.farm".'),
       // (not `cond ? null : el`: append(null) writes the text "null")
       ...(me!.directoryVisible ? [] : [h('p', 'lede lede--warn', 'You are not listed in the member directory, so other members cannot see your story and it will not go on tvc.farm either. You can change that in your account menu, under Your details.')]),
     );
@@ -2837,7 +2906,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         text = story.hasUnsubmittedChanges ? 'With the core team. You have newer changes that are not submitted yet.' : 'With the core team. It will show here once it is approved.';
       } else if (story?.status === 'approved') {
         cls = 'live'; title = 'Approved';
-        text = story.hasUnsubmittedChanges ? 'Your approved story stays as it is until you submit these changes.' : 'Approved. Other members can read it in the Directory.';
+        text = story.hasUnsubmittedChanges ? 'Your approved story stays as it is until you submit these changes.' : 'Approved. Other members can read it under Our members.';
       } else if (story?.status === 'rejected') {
         cls = 'review'; title = 'Changes needed';
         text = story.reviewerNote || 'The core team asked for changes. Edit and submit again.';
@@ -3290,8 +3359,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const root = h('div');
     const body = h('div');
     root.append(
-      crumbs('Home', 'Directory'),
-      h('h1', 'page-title', 'Directory', h('small', '', 'Members of the collective')),
+      crumbs('Home', 'Our members'),
+      h('h1', 'page-title', 'Our members', h('small', '', 'The collective')),
       h('p', 'lede', 'Names, farm plot numbers and the story each member chose to share. Contact details are never shown. Anyone can opt out of being listed under Your details in the account menu.'),
       body,
     );
@@ -3501,14 +3570,17 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         list = data.households as DirHousehold[];
         draw();
       } catch (e) {
-        body.replaceChildren(h('p', 'lede', e instanceof MemberAuthError ? 'Your session ended. Sign in again.' : e instanceof Error ? e.message : 'Could not load the directory.'));
+        const retry = h('button', 'btn', 'Try again');
+        retry.setAttribute('type', 'button');
+        retry.addEventListener('click', renderView);
+        body.replaceChildren(h('p', 'lede', e instanceof MemberAuthError ? 'Your session ended. Sign in again.' : e instanceof Error ? e.message : 'Could not load the directory.'), ...(e instanceof MemberAuthError ? [] : [retry]));
       }
     })();
     return root;
   }
 
   function viewSoon(id: string): HTMLElement {
-    const item = NAV.find((n): n is NavItem => 'id' in n && n.id === id)!;
+    const item = NAV.find((n) => n.id === id)!;
     return h('div', '', undefined,
       crumbs('Home', item.label),
       h('h1', 'page-title', item.label, h('small', '', 'Coming soon')),
@@ -3519,15 +3591,24 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   function renderView() {
     const fn = route === 'dashboard' ? viewDashboard : route === 'unit' ? viewUnit : route === 'story' ? viewStory : route === 'directory' ? viewDirectory : () => viewSoon(route);
     $('view').replaceChildren(fn());
-    renderNav($<HTMLInputElement>('search').value);
-    const label = (NAV.find((n) => 'id' in n && n.id === route) as NavItem | undefined)?.label ?? 'Dashboard';
+    renderNav();
+    const label = NAV.find((n) => n.id === route)?.label ?? 'Home';
     document.title = `${label} · Member portal · Tamarind Valley Collective`;
-    $('shell').classList.remove('open');
+    setMenu(false);
+  }
+
+  // After the member moves to another page, put keyboard and screen-reader focus on its heading so the
+  // new page is announced, instead of leaving focus on a link that has just been replaced.
+  function focusView() {
+    const heading = $('view').querySelector('h1');
+    if (!(heading instanceof HTMLElement)) return;
+    heading.tabIndex = -1;
+    heading.focus({ preventScroll: true });
   }
 
   function onRoute() {
     const id = location.hash.replace(/^#\//, '') || 'dashboard';
-    route = NAV.some((n) => 'id' in n && n.id === id) ? id : 'dashboard';
+    route = NAV.some((n) => n.id === id) ? id : 'dashboard';
     if (me) renderView();
   }
 
@@ -3542,11 +3623,28 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     renderSignInButton();
   }
 
+  // The page is blank until /home answers, so say so; and if it cannot be reached, say that (with a
+  // way to try again) rather than sending a signed-in member back to the sign-in card as if logged out.
+  function showBoot(message: string, retry = false) {
+    $('gate').hidden = true;
+    $('shell').hidden = true;
+    $('boot').hidden = false;
+    $('boot-msg').textContent = message;
+    $('boot-retry').hidden = !retry;
+  }
+
+  function loadFailed() {
+    if (me) return toast('Could not refresh just now. Check your connection and try again.');
+    showBoot('We could not reach the member portal. Check your connection, then try again.', true);
+  }
+
   async function load(quiet = false) {
+    if (!me) showBoot('Opening the member portal…');
     try {
       const { status, data } = await memberFetch('/api/members-me/home');
+      $('boot').hidden = true;
       if (status === 403) return showGate(data.error || 'This account has not been invited to the member portal yet.');
-      if (status !== 200) return showGate('Something went wrong. Please try again in a moment.');
+      if (status !== 200) return loadFailed();
       if (data.privacyNoticeRequired) {
         // First sign-in (or a changed notice): read it before anything else is shown.
         me = null;
@@ -3563,8 +3661,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       renderWho();
       onRoute();
     } catch (err) {
+      $('boot').hidden = true;
       if (err instanceof MemberAuthError) return showGate(quiet ? 'Your session ended. Sign in again.' : undefined);
-      showGate('Something went wrong. Please try again in a moment.');
+      loadFailed();
     }
   }
 
@@ -3583,27 +3682,55 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     clearMemberToken();
     if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
     $('who-menu').hidden = true;
+    setMenu(false);
     showGate();
   }
 
   // ---- wiring ----
-  $('collapse').addEventListener('click', () => $('shell').classList.toggle('collapsed'));
-  $('menu').addEventListener('click', () => $('shell').classList.toggle('open'));
-  $('search').addEventListener('input', () => renderNav($<HTMLInputElement>('search').value));
+  const phoneWidth = window.matchMedia('(max-width: 900px)');
+  const shell = $('shell');
+
+  // On a phone the menu is a drawer. Closed, it must also be out of the tab order (inert), and it
+  // closes on Escape, on a tap outside it, and after choosing a page.
+  function setMenu(open: boolean, returnFocus = false) {
+    const opening = open && phoneWidth.matches;
+    shell.classList.toggle('open', opening);
+    $('menu').setAttribute('aria-expanded', String(opening));
+    ($('side') as HTMLElement).inert = phoneWidth.matches && !opening;
+    if (opening) $('nav').querySelector<HTMLElement>('a')?.focus();
+    else if (returnFocus) $('menu').focus();
+  }
+  phoneWidth.addEventListener('change', () => setMenu(false));
+  setMenu(false);
+
+  function setWhoMenu(open: boolean, returnFocus = false) {
+    $('who-menu').hidden = !open;
+    $('who').setAttribute('aria-expanded', String(open));
+    if (open) $('who-menu').querySelector<HTMLElement>('button, a')?.focus();
+    else if (returnFocus) $('who').focus();
+  }
+
+  $('collapse').addEventListener('click', () => shell.classList.toggle('collapsed'));
+  $('menu').addEventListener('click', () => setMenu(!shell.classList.contains('open')));
+  $('scrim').addEventListener('click', () => setMenu(false, true));
+  $('signout-side').addEventListener('click', signOut);
+  $('boot-retry').addEventListener('click', () => void load());
   document.addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-      e.preventDefault();
-      $('search').focus();
-    }
+    if (e.key !== 'Escape') return;
+    if (!$('who-menu').hidden) setWhoMenu(false, true);
+    else if (shell.classList.contains('open')) setMenu(false, true);
   });
-  $('who').addEventListener('click', () => {
-    const m = $('who-menu');
-    m.hidden = !m.hidden;
-    $('who').setAttribute('aria-expanded', String(!m.hidden));
+  document.addEventListener('click', (e) => {
+    if (!$('who-menu').hidden && !(e.target as Element).closest('.who-wrap')) setWhoMenu(false);
   });
-  window.addEventListener('hashchange', onRoute);
+  $('who').addEventListener('click', () => setWhoMenu(!!$('who-menu').hidden));
+  window.addEventListener('hashchange', () => {
+    onRoute();
+    if (me) focusView();
+  });
+  window.addEventListener('offline', () => toast('You are offline. Anything you save will not go through until you are back online.'));
 
   renderNav();
-  if (getMemberToken()) load();
+  if (getMemberToken()) void load();
   else showGate();
 </script>
