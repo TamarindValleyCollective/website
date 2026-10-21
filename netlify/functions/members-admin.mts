@@ -379,7 +379,7 @@ async function decideLandItem(edit: any): Promise<void> {
 
   if (edit.action === 'landdoc.approve') {
     if (item.outcome === 'conflict' || !item.recordId) {
-      throw new EditError('Another household already holds this survey number, so it cannot be approved here. Sort that out in the register first, then reject this one.', 409);
+      throw new EditError('Another unit already holds this survey number, so it cannot be approved here. Sort that out in the register first, then reject this one.', 409);
     }
     const r = must(await db('PATCH', `${table}?${eq('id', item.recordId)}`, approvalColumns(item, doc.land_type, doc.id, now)));
     if (r.rows.length === 0) throw new EditError("The record behind this no longer exists. Reload the page.", 404);
