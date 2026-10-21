@@ -1301,6 +1301,35 @@ import '../../styles/global.css';
     margin-bottom: 6px;
   }
 
+  /* A unit's photos (at most two): each with its own Remove, then one Add button and the note. */
+  .story-photos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 10px;
+  }
+
+  .story-photo-item {
+    display: grid;
+    justify-items: start;
+    gap: 6px;
+  }
+
+  .story-others {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-sm);
+    background: var(--tvc-stone);
+  }
+
+  .story-others p {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
   .photo-missing {
     visibility: hidden;
   }
@@ -1881,6 +1910,7 @@ import '../../styles/global.css';
 
 <script>
   import { clearMemberToken, getMemberToken, memberFetch, memberPhotoSrc, MemberAuthError, setMemberToken } from '../../../scripts/lib/member-client.mjs';
+  import { MAX_PHOTOS, conflictedDraftKeys, saveChanges } from '../../../scripts/lib/member-unit-story.mjs';
   import { preparePhoto } from '../../../scripts/lib/photo-prepare.mjs';
 import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggleMark } from '../../../scripts/lib/member-markdown.mjs';
   import { NOTICE_INTRO, NOTICE_TITLE, PRIVACY_NOTICE_VERSION, SECTIONS } from '../../../scripts/lib/member-privacy.mjs';
@@ -2532,6 +2562,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   // right. "Check & submit" runs the writing check first; the member accepts or dismisses
   // each suggestion, and only then is the story handed to the core team. Nothing the check
   // suggests is ever applied without the member pressing Accept.
+  // True once the cutover to unit stories is done (the home response says so): the editor then writes the unit's shared
+  // story, with each person's own quote and link, instead of the person's own story.
+  let unitStories = false;
   type StoryDraft = { bio: string; family: string; why: string; social: string; photo: string };
   type StoryView = { draft: StoryDraft; showOnPublicSite: boolean; status: string; hasUnsubmittedChanges: boolean; reviewerNote: string | null; hasApproved: boolean };
   type Suggestion = { field: 'bio' | 'family' | 'why'; kind: string; before?: string; after?: string; why?: string; note?: string; done?: boolean };
@@ -2543,7 +2576,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     root.append(
       crumbs('Home', 'Your story'),
       h('h1', 'page-title', 'Your story', h('small', '', 'Your card for the collective')),
-      h('p', 'lede', 'Say what you are comfortable sharing; only the one-line "why TVC" is needed. The core team reads every story before it appears anywhere. Once approved, other members can read it in the Directory; it goes on tvc.farm only if you switch on "Show on tvc.farm".'),
+      h('p', 'lede', unitStories
+        ? 'Your unit has one story, shared by everyone in it: either of you can edit what you do, your family and the photos. Your "why TVC" line and your profile link are your own. Only the "why TVC" line is needed. The core team reads every story before it appears anywhere. Once approved, other members can read it in the Directory; it goes on tvc.farm only if you switch on "Show on tvc.farm".'
+        : 'Say what you are comfortable sharing; only the one-line "why TVC" is needed. The core team reads every story before it appears anywhere. Once approved, other members can read it in the Directory; it goes on tvc.farm only if you switch on "Show on tvc.farm".'),
       // (not `cond ? null : el`: append(null) writes the text "null")
       ...(me!.directoryVisible ? [] : [h('p', 'lede lede--warn', 'You are not listed in the member directory, so other members cannot see your story and it will not go on tvc.farm either. You can change that in your account menu, under Your details.')]),
     );
@@ -2554,6 +2589,22 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     // Saves and checks carry the text only: the photo is changed by its own endpoints.
     const textOf = (d: StoryDraft) => ({ bio: d.bio, family: d.family, why: d.why, social: d.social });
     let story: StoryView | null = null;
+    // Unit mode: the unit's shared draft has a version, so two owners saving at once only collide on the same field.
+    // `savedFields` is what the server last accepted, so a save can send only what changed since.
+    let version = 0;
+    type EditKey = 'bio' | 'family' | 'why' | 'social';
+    const EDIT_KEYS: EditKey[] = ['bio', 'family', 'why', 'social'];
+    const savedFields = { bio: '', family: '', why: '', social: '', isPublic: false };
+    let photos: { ref: string; personId: string }[] = [];
+    let others: { firstName: string; quote: string; link: string }[] = [];
+    const unitText = () => ({ bio: draft.bio, family: draft.family, why: draft.why, social: draft.social, isPublic });
+    // The server's view of the unit's story, as the same StoryView the person's story uses.
+    function applyUnitView(v: any) {
+      story = { draft: { bio: v.draft.bio, family: v.draft.family, why: v.draft.quote, social: v.draft.link, photo: '' }, showOnPublicSite: v.showOnPublicSite, status: v.status, hasUnsubmittedChanges: v.hasUnsubmittedChanges, reviewerNote: v.reviewerNote, hasApproved: v.hasApproved };
+      version = v.version;
+      photos = v.draft.photos;
+      others = v.others;
+    }
     let firstName = first(me!.name);
     let isPublic = false;
     let suggestions: Suggestion[] = [];
@@ -2575,7 +2626,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const msg = (e: unknown) => (e instanceof MemberAuthError ? 'Your session ended. Sign in again.' : e instanceof Error ? e.message : 'Something went wrong. Try again.');
 
     function renderStatus() {
-      let cls = 'draft', title = 'Draft', text = 'Saved, but not submitted. Only you and the core team can see it.';
+      let cls = 'draft', title = 'Draft', text = unitStories ? 'Saved, but not submitted. Only the people in your unit and the core team can see it.' : 'Saved, but not submitted. Only you and the core team can see it.';
       if (story?.status === 'in_review') {
         cls = 'review'; title = 'In review';
         text = story.hasUnsubmittedChanges ? 'With the core team. You have newer changes that are not submitted yet.' : 'With the core team. It will show here once it is approved.';
@@ -2600,10 +2651,13 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         const boldFirst = (t: string) => t.split(new RegExp(`(\\b${firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b)`)).map((part) => (part === firstName ? h('strong', '', part) : document.createTextNode(part)));
         para.append(...mdNodes(bio, (t, inLink) => (inLink ? [document.createTextNode(t)] : boldFirst(t))));
       } else para.append(h('em', 'story-empty', 'Nothing here yet'));
-      nodes.push(h('div', 'story-card-top', undefined, draft.photo ? photoImg(draft.photo, 'avatar avatar--lg story-photo') : h('span', 'avatar avatar--lg', first(name).slice(0, 1).toUpperCase()), h('div', '', undefined, h('h3', '', name), h('span', `story-vis ${isPublic ? 'story-vis--public' : ''}`, isPublic ? 'Members and tvc.farm' : 'Members only'))));
+      const shownPhoto = unitStories ? photos[0]?.ref : draft.photo;
+      const title = unitStories && others.length ? `${first(name)} & ${others.map((o) => o.firstName).join(' & ')}` : name;
+      nodes.push(h('div', 'story-card-top', undefined, shownPhoto ? photoImg(shownPhoto, 'avatar avatar--lg story-photo', 'square', unitStories) : h('span', 'avatar avatar--lg', first(name).slice(0, 1).toUpperCase()), h('div', '', undefined, h('h3', '', title), h('span', `story-vis ${isPublic ? 'story-vis--public' : ''}`, isPublic ? 'Members and tvc.farm' : 'Members only'))));
       nodes.push(para);
       if (draft.family.trim()) nodes.push(h('p', 'story-card-fam', undefined, ...mdNodes(draft.family.trim())));
       if (draft.why.trim()) nodes.push(h('blockquote', 'story-card-why', draft.why.trim()));
+      for (const o of unitStories ? others : []) if (o.quote) nodes.push(h('blockquote', 'story-card-why', o.quote, h('cite', '', ` — ${o.firstName}`)));
       previewEl.replaceChildren(...(nodes.filter(Boolean) as Node[]));
     }
 
@@ -2682,9 +2736,12 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         saveState = 'saving';
         renderStatus();
         try {
-          const { status, data } = await memberFetch('/api/members-me/story', { method: 'POST', body: { ...textOf(draft), showOnPublicSite: isPublic } });
-          if (status !== 200) throw new Error(data.error || 'Could not save your draft.');
-          story = data.story; // the server's view of where the story stands; the text on screen is left alone
+          if (unitStories) await persistUnit();
+          else {
+            const { status, data } = await memberFetch('/api/members-me/story', { method: 'POST', body: { ...textOf(draft), showOnPublicSite: isPublic } });
+            if (status !== 200) throw new Error(data.error || 'Could not save your draft.');
+            story = data.story; // the server's view of where the story stands; the text on screen is left alone
+          }
           saveState = 'saved';
         } catch (e) {
           saveState = 'error';
@@ -2693,6 +2750,44 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         renderStatus(); renderSubmit();
       });
       return chain;
+    }
+
+    // Saves only what changed since the last save. If the other owner changed one of those fields meanwhile, the save
+    // is refused: their version of just that field is shown, your other changes are kept and saved, and you are told.
+    async function persistUnit(): Promise<void> {
+      const sent = unitText();
+      const changes = saveChanges(savedFields, sent);
+      if (Object.keys(changes).length === 0) return;
+      const { status, data } = await memberFetch('/api/members-me/unit-story', { method: 'POST', body: { baseVersion: version, ...changes } });
+      if (status === 200) {
+        applyUnitView(data.story);
+        Object.assign(savedFields, sent);
+        return;
+      }
+      if (status !== 409) throw new Error(data.error || 'Could not save your draft.');
+      // Someone else in the unit got there first: take their version of the clashing fields only.
+      const latest = await memberFetch('/api/members-me/unit-story');
+      if (latest.status !== 200) throw new Error(data.error || 'Could not save your draft.');
+      const v = latest.data.story;
+      const theirs: Record<EditKey, string> = { bio: v.draft.bio, family: v.draft.family, why: v.draft.quote, social: v.draft.link };
+      const clashed: string[] = conflictedDraftKeys(data.fields);
+      for (const k of EDIT_KEYS) {
+        // A field I did not touch simply follows them; one that clashed takes their version; one I changed that did not clash is mine, and is sent again below.
+        if (clashed.includes(k) || draft[k] === savedFields[k]) {
+          draft[k] = theirs[k];
+          fields[k].value = theirs[k];
+          savedFields[k] = theirs[k];
+        }
+      }
+      if (clashed.includes('isPublic') || isPublic === savedFields.isPublic) {
+        isPublic = v.showOnPublicSite;
+        savedFields.isPublic = v.showOnPublicSite;
+      }
+      applyUnitView(v);
+      const who = others[0]?.firstName ?? 'Someone in your unit';
+      message = `${who} changed ${clashed.length ? 'the same part' : 'this'} while you were editing, so their version is shown${clashed.length ? ' for that part' : ''}. Your other changes are kept.`;
+      renderPreview();
+      await persistUnit(); // my other changes, on top of theirs
     }
 
     async function runCheck() {
@@ -2730,9 +2825,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       await persist();
       if (saveState === 'error') return;
       try {
-        const { status, data } = await memberFetch('/api/members-me/story-submit', { method: 'POST', body: {} });
+        const { status, data } = await memberFetch(unitStories ? '/api/members-me/unit-story-submit' : '/api/members-me/story-submit', { method: 'POST', body: {} });
         if (status !== 200) throw new Error(data.error || 'Could not submit. Try again.');
-        story = data.story;
+        if (unitStories) applyUnitView(data.story);
+        else story = data.story;
         suggestions = []; reviewed = false; message = '';
         toast('Submitted to the core team');
       } catch (e) {
@@ -2943,15 +3039,91 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       return h('div', 'story-field', undefined, h('span', 'story-label', 'Photo (optional)'), h('div', 'story-photo-row', undefined, thumb, h('div', '', undefined, h('div', 'story-photo-btns', undefined, choose, remove), note)), input);
     }
 
+    // What the others in the unit have written for themselves, to read beside the shared story (only they edit it).
+    function unitOthers(): HTMLElement {
+      const withLines = others.filter((o) => o.quote || o.link);
+      if (!withLines.length) return h('span');
+      return h('div', 'story-field', undefined, h('span', 'story-label', 'What others in your unit have written'),
+        h('div', 'story-others', undefined, ...withLines.map((o) => h('p', '', undefined, h('strong', '', `${o.firstName}: `), o.quote ? `“${o.quote}”` : '', o.link ? ` ${o.link.replace(/^https?:\/\/(www\.)?/, '')}` : ''))));
+    }
+
+    // A unit has up to MAX_PHOTOS photos, shared by everyone in it. Each is prepared in the browser as two JPEGs (preparePhoto),
+    // uploaded, and then belongs to the shared draft; they are submitted and reviewed with the text.
+    function unitPhotosField(): HTMLElement {
+      const list = h('div', 'story-photos');
+      const note = h('p', 'story-hint', `Your unit can have up to ${MAX_PHOTOS} photos, shown on your card. Photos of children become public if you turn on "Show on tvc.farm". They are kept privately and checked with your story.`);
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/jpeg,image/png,image/webp';
+      input.hidden = true;
+      const choose = h('button', 'btn', 'Add a photo') as HTMLButtonElement;
+      choose.type = 'button';
+      choose.addEventListener('click', () => input.click());
+      let busy = false;
+      const say = (m: string, warn = false) => { note.textContent = m; note.className = `story-hint${warn ? ' story-hint--warn' : ''}`; };
+      async function send(work: () => Promise<{ status: number; data: any }>, doing: string) {
+        busy = true; say(doing); paintPhoto();
+        try {
+          const { status, data } = await work();
+          if (status !== 200) throw new Error(data.error || 'Could not save the photo. Try again.');
+          applyUnitView(data.story);
+          say('Saved. It goes to the core team with your story when you submit.');
+          renderStatus(); renderPreview(); renderSubmit();
+        } catch (e) {
+          say(msg(e), true);
+        } finally {
+          busy = false; paintPhoto();
+        }
+      }
+      paintPhoto = () => {
+        list.replaceChildren(...photos.map((p) => {
+          const rm = h('button', 'btn', 'Remove') as HTMLButtonElement;
+          rm.type = 'button';
+          rm.disabled = busy;
+          rm.addEventListener('click', () => void send(() => memberFetch('/api/members-me/unit-story-photo-remove', { method: 'POST', body: { ref: p.ref } }), 'Removing…'));
+          return h('div', 'story-photo-item', undefined, photoImg(p.ref, 'avatar avatar--lg story-photo', 'square', true), rm);
+        }));
+        choose.disabled = busy || photos.length >= MAX_PHOTOS;
+        choose.textContent = photos.length >= MAX_PHOTOS ? `${MAX_PHOTOS} photos added` : photos.length ? 'Add another photo' : 'Add a photo';
+      };
+      input.addEventListener('change', async () => {
+        const file = input.files?.[0];
+        input.value = '';
+        if (!file) return;
+        busy = true; say('Preparing your photo…'); paintPhoto();
+        let prepared: { square: Blob; full: Blob };
+        try {
+          prepared = await preparePhoto(file);
+        } catch (e) {
+          busy = false; say(msg(e), true); paintPhoto();
+          return;
+        }
+        const body = new FormData();
+        body.set('square', prepared.square, 'square.jpg');
+        body.set('full', prepared.full, 'full.jpg');
+        await send(() => memberFetch('/api/members-me/unit-story-photo', { method: 'POST', body }), 'Uploading…');
+      });
+      paintPhoto();
+      return h('div', 'story-field', undefined, h('span', 'story-label', 'Photos (optional)'), list, choose, note, input);
+    }
+
     void (async () => {
       try {
-        const { status, data } = await memberFetch('/api/members-me/story');
+        const { status, data } = await memberFetch(unitStories ? '/api/members-me/unit-story' : '/api/members-me/story');
         if (status !== 200) throw new Error(data.error || 'Could not load your story.');
-        story = data.story;
-        firstName = data.firstName || firstName;
-        Object.assign(draft, story!.draft);
-        foldProfileLink();
-        isPublic = story!.showOnPublicSite;
+        if (unitStories) {
+          applyUnitView(data.story);
+          firstName = data.firstName || firstName;
+          Object.assign(draft, story!.draft);
+          isPublic = story!.showOnPublicSite;
+          Object.assign(savedFields, unitText()); // what the server holds, so the first save sends only what is changed
+        } else {
+          story = data.story;
+          firstName = data.firstName || firstName;
+          Object.assign(draft, story!.draft);
+          foldProfileLink();
+          isPublic = story!.showOnPublicSite;
+        }
       } catch (e) {
         loading.textContent = msg(e);
         return;
@@ -2961,13 +3133,13 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         statusEl,
         mdField('bio', 'What do you do today?', 'In your own words; the check can help with the house style (third person, e.g. "Asha works as…"). To link a name or a few words to a web page, select them and press Link. A link shows in the box as [words](address); the preview on the right shows how it will look.', 5),
         mdField('family', 'Family (optional)', 'First names are enough. Children\'s names and ages become public if you turn on "Show on tvc.farm". The same buttons work here.', 3),
-        field('why', 'In one sentence, why are you part of TVC?', 'Required. Shown as a quote on your card, in your own voice.', 2),
-        legacyProfile(),
-        photoField(),
+        field('why', 'In one sentence, why are you part of TVC?', unitStories ? 'Required. Shown as a quote on your unit\'s card, in your own voice. Everyone in the unit writes their own.' : 'Required. Shown as a quote on your card, in your own voice.', 2),
+        ...(unitStories ? [field('social', 'Your profile link (optional)', 'Your first name in the story links here, for example your LinkedIn page. Each person has their own.', 1), unitOthers()] : [legacyProfile()]),
+        unitStories ? unitPhotosField() : photoField(),
         saveEl, reviewEl, submitEl);
       const side = h('aside', 'story-side', undefined, h('p', 'story-prev-label', 'Preview, as others will see your card'), previewEl);
       root.append(h('div', 'story', undefined, form, side));
-      for (const k of ['bio', 'family', 'why'] as const) fields[k].value = draft[k];
+      for (const k of (unitStories ? EDIT_KEYS : (['bio', 'family', 'why'] as const))) fields[k].value = draft[k];
       renderAll();
     })();
     return root;
@@ -3242,6 +3414,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       }
       me = data.me;
       all = data.households;
+      unitStories = data.unitStories === true;
       current = Math.min(current, all.length - 1);
       $('gate').hidden = true;
       $('shell').hidden = false;
