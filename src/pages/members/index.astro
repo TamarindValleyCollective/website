@@ -694,46 +694,23 @@ import SignInGate from '../../components/SignInGate.astro';
     font-weight: 700;
   }
 
-  .unit-head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px 24px;
-  }
-
-  .unit-head > div:first-child {
-    flex: 1 1 320px;
-    min-width: 0;
-  }
-
-  .unit-type {
-    display: grid;
-    gap: 2px;
-    padding: 10px 18px;
-    background: var(--tvc-white);
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-soft);
-  }
-
-  .unit-type-label {
-    font-size: 0.8rem;
-    color: var(--tvc-ink-soft);
-  }
-
-  .unit-type strong {
-    font-family: var(--font-display);
-    font-size: 1.4rem;
-    line-height: 1.15;
-  }
-
   .unit-cols {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
     margin-top: 16px;
     align-items: start;
+  }
+
+  /* The cluster and unit-type pills of a House card, together at the right of its heading. */
+  .pills {
+    display: flex;
+    gap: 6px;
+    margin: -4px 0 -4px auto; /* don't make the row taller than its heading */
+  }
+
+  .pills .pill {
+    margin: 0;
   }
 
   .pill {
@@ -2519,6 +2496,11 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     ));
   // The household split by role, owners first, so owners and family are not mixed in one list.
   const ROLE_GROUPS: [string, string][] = [['owner', 'Owners'], ['family', 'Family'], ['non_owner', 'Not owners']];
+  // What kind of house it is: the cluster it is in and its unit type, as pills for the House heading.
+  const housePills = (hh: Hh): HTMLElement | null => {
+    const pills = [hh.houseNo && hh.cluster ? `Cluster ${hh.cluster}` : null, hh.unitType ? `Type ${hh.unitType}` : null].filter((t): t is string => !!t);
+    return pills.length ? h('span', 'pills', undefined, ...pills.map((t) => h('span', 'pill', t))) : null;
+  };
   const peopleByRole = (people: Person[]) => ROLE_GROUPS.map(([role, label]) => ({ label, people: people.filter((p) => p.role === role) })).filter((g) => g.people.length);
   const peopleList = (hh: Hh, you: Person) =>
     h('div', '', undefined, ...peopleByRole(hh.people).flatMap((g) => [
@@ -2907,7 +2889,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       widget('My unit', { more: ['View unit', 'unit'], icon: IC.unit },
         h('div', 'tiles', undefined,
           h('div', 'tile', undefined, h('div', 'k', undefined, glyph(IC.farm, 'Farm land')), h('div', 'v', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), h('div', 's', hh.plots.length ? `${hh.plots.length} plot${hh.plots.length === 1 ? '' : 's'}` : 'Not available yet')),
-          h('div', 'tile', undefined, h('div', 'k', undefined, glyph(IC.house, 'House'), hh.houseNo && hh.cluster ? h('span', 'pill', `Cluster ${hh.cluster}`) : null), h('div', 'v', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), h('div', 's', !hh.houseNo ? 'No house allocated yet' : hh.housePattas.length ? `${hh.housePattas.length} plot${hh.housePattas.length === 1 ? '' : 's'}` : 'Area not on record')),
+          h('div', 'tile', undefined, h('div', 'k', undefined, glyph(IC.house, 'House'), housePills(hh)), h('div', 'v', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), h('div', 's', !hh.houseNo ? 'No house allocated yet' : hh.housePattas.length ? `${hh.housePattas.length} plot${hh.housePattas.length === 1 ? '' : 's'}` : 'Area not on record')),
         ),
         prompts,
       ),
@@ -2926,13 +2908,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const hh = hhNow();
     const person = meIn(hh);
     const root = h('div');
-    // The unit type sits at the right of the heading (room for a picture beside it later); the member's own role
-    // is already in the account menu and the people list, so it is not repeated here.
-    root.append(h('div', 'unit-head', undefined,
-      h('div', '', undefined,
-        h('h1', 'page-title', 'My unit'),
-        h('p', 'lede', 'Your unit is your farm land and, if you have one, your house plot. Cluster is the group of houses yours belongs to.')),
-      hh.unitType ? h('div', 'unit-type', undefined, h('span', 'unit-type-label', 'Unit type'), h('strong', '', hh.unitType)) : null));
+    root.append(
+      h('h1', 'page-title', 'My unit'),
+      h('p', 'lede', 'Your unit is your farm land and, if you have one, your house plot. Cluster is the group of houses yours belongs to.'));
     const panel = (title: string, body: Kid, iconPaths?: string) => {
       const p = h('section', 'panel', undefined, h('h2', '', undefined, iconPaths ? h('span', 'glyph', undefined, icon(iconPaths)) : null, title), body);
       p.style.marginTop = '16px';
@@ -2944,7 +2922,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         h('div', 'kpis', undefined, kpi('Farm land', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), kpi('Farm plots', String(hh.plots.length))),
         hh.plots.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Acres', 'Status'], [...hh.plots].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaAcres, acresFmt), verifiedMark(p.verification)]), 2)) : h('p', 'lede', 'Patta details not available yet'),
         landCardFooter(hh, 'farm')),
-      h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.house)), 'House', hh.houseNo && hh.cluster ? h('span', 'pill', `Cluster ${hh.cluster}`) : null),
+      h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.house)), 'House', housePills(hh)),
         h('div', 'kpis', undefined, kpi('House area', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), kpi('House plots', String(hh.housePattas.length))),
         hh.housePattas.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Sq ft', 'Status'], [...hh.housePattas].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaSqFt, sqftFmt), verifiedMark(p.verification)]), 2)) : h('p', 'lede', hh.houseNo ? 'Patta details not available yet' : 'No house allocated yet'),
         hh.houseNo ? landCardFooter(hh, 'house') : null),
