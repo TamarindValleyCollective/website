@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseLandPdfText, areaFromHaAres, normalizeExtraction, normalizeSurveyNo, namesMatch, reconcile, documentStatus,
-  newRecordColumns, approvalColumns, memberSummary, documentsReplacedBy, surveyKey,
+  newRecordColumns, approvalColumns, memberSummary, documentsReplacedBy, surveyKey, landTypeMismatch,
 } from './member-land-docs.mjs';
 
 const raw = (over = {}) => ({
@@ -246,4 +246,43 @@ test('uploading the same document again does not verify a record still waiting f
   const row = (verification) => ({ id: 'r', survey_no: '450/5B', patta_no: '1954', area_hectares: 0.004, area_acres: 0.01, verification });
   assert.equal(reconcile({ ...base, existing: [row('unverified')] })[0].outcome, 'verified');
   assert.equal(reconcile({ ...base, existing: [row('pending_review')] })[0].outcome, 'check');
+});
+
+test('a farm document uploaded on the House card is recognised: its survey numbers are only in the farm register', () => {
+  const doc = extraction(); // 123/4A
+  assert.deepEqual(landTypeMismatch({ landType: 'house', extraction: doc, farmRows: [plot()], houseRows: [] }), { actual: 'farm' });
+});
+
+test('a house document uploaded on the Farm card is recognised too', () => {
+  assert.deepEqual(landTypeMismatch({ landType: 'farm', extraction: extraction(), farmRows: [], houseRows: [plot()] }), { actual: 'house' });
+});
+
+test('a document whose survey numbers are in the register of the card used is fine', () => {
+  assert.equal(landTypeMismatch({ landType: 'farm', extraction: extraction(), farmRows: [plot()], houseRows: [] }), null);
+  assert.equal(landTypeMismatch({ landType: 'house', extraction: extraction(), farmRows: [], houseRows: [plot()] }), null);
+});
+
+test('a document for land the household has no record of yet is fine on either card (a new parcel)', () => {
+  const rows = [plot({ survey_no: '999/1' })];
+  assert.equal(landTypeMismatch({ landType: 'house', extraction: extraction(), farmRows: rows, houseRows: rows }), null);
+  assert.equal(landTypeMismatch({ landType: 'farm', extraction: extraction(), farmRows: [], houseRows: [] }), null);
+});
+
+test('a survey number held in both registers is not a mismatch', () => {
+  assert.equal(landTypeMismatch({ landType: 'house', extraction: extraction(), farmRows: [plot()], houseRows: [plot()] }), null);
+});
+
+test('a register entry holding several survey numbers is matched number by number', () => {
+  const rows = [plot({ survey_no: '123/3C, 123/4A' })];
+  assert.deepEqual(landTypeMismatch({ landType: 'house', extraction: extraction(), farmRows: rows, houseRows: [] }), { actual: 'farm' });
+});
+
+test('survey numbers match whatever the spacing or case of the register entry', () => {
+  assert.deepEqual(landTypeMismatch({ landType: 'house', extraction: extraction(), farmRows: [plot({ survey_no: ' 123 / 4a ' })], houseRows: [] }), { actual: 'farm' });
+});
+
+test('a document with several records: any one in the card used makes it fine; one in the other register and none in the card used does not', () => {
+  const two = extraction({ records: [{ survey_no: '123/4A', patta_no: '0777', area_hectares: 0, area_ares: 35.22 }, { survey_no: '200/1', patta_no: '0777', area_hectares: 0, area_ares: 10 }] });
+  assert.equal(landTypeMismatch({ landType: 'house', extraction: two, farmRows: [plot()], houseRows: [plot({ survey_no: '200/1' })] }), null);
+  assert.deepEqual(landTypeMismatch({ landType: 'house', extraction: two, farmRows: [plot()], houseRows: [] }), { actual: 'farm' });
 });
