@@ -1,15 +1,16 @@
 // A unit's story: one record per unit, not one per person. Pure (no network), so the rules are
 // tested on their own. See docs/plans/member-portal.md ("Member stories").
 //
-// Shared by everyone in the unit: bio, family, profile link, up to MAX_PHOTOS photos and whether it
-// shows on tvc.farm. Personal: each person's own quote, kept under their id in `quotes`.
+// Shared by everyone in the unit: bio, family, up to MAX_PHOTOS photos and whether it shows on
+// tvc.farm. Personal: each person's own quote and profile link (the directory turns a first name in
+// the story into that person's link), kept under their id in `quotes` and `links`.
 
 export const MAX_PHOTOS = 2;
 
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
 
-// One per-person copy ({ bio, family, why, social, photo }) as the unit's copy fields.
-const sharedOf = (c) => ({ bio: text(c?.bio), family: text(c?.family), social: text(c?.social) });
+// The shared text of one per-person copy ({ bio, family, why, social, photo }).
+const sharedOf = (c) => ({ bio: text(c?.bio), family: text(c?.family) });
 
 // Merges one kind of copy (draft / submitted / approved) across the unit's people. The shared
 // fields come from the copy with the latest timestamp (a person who edited beats the seed that every
@@ -22,15 +23,19 @@ function mergeCopy(rows, { field, at, only = () => true }) {
   if (copies.length === 0) return null;
   const newest = [...copies].sort((a, b) => String(b[at] ?? '').localeCompare(String(a[at] ?? '')))[0];
   const quotes = {};
-  for (const r of copies) if (text(r[field].why)) quotes[r.person_id] = text(r[field].why);
+  const links = {};
+  for (const r of copies) {
+    if (text(r[field].why)) quotes[r.person_id] = text(r[field].why);
+    if (text(r[field].social)) links[r.person_id] = text(r[field].social);
+  }
   // Newest first, each photo once, remembering who holds it (uploaded photos are stored under their id).
   const photos = [];
   for (const r of [...copies].sort((a, b) => String(b[at] ?? '').localeCompare(String(a[at] ?? '')))) {
     const ref = text(r[field].photo);
     if (ref && !photos.some((p) => p.ref === ref)) photos.push({ ref, personId: r.person_id });
   }
-  const key = (r) => JSON.stringify([sharedOf(r[field]).bio, sharedOf(r[field]).family, sharedOf(r[field]).social]);
-  return { copy: { ...sharedOf(newest[field]), photos: photos.slice(0, MAX_PHOTOS), quotes }, winner: newest, diverged: new Set(copies.map(key)).size > 1 };
+  const key = (r) => JSON.stringify([sharedOf(r[field]).bio, sharedOf(r[field]).family]);
+  return { copy: { ...sharedOf(newest[field]), photos: photos.slice(0, MAX_PHOTOS), quotes, links }, winner: newest, diverged: new Set(copies.map(key)).size > 1 };
 }
 
 /**
@@ -73,37 +78,39 @@ export function addPhoto(photos, photo) {
 
 // Applies one owner's save to the unit's shared draft, field by field, so two owners editing at once
 // only collide when they touch the same field.
-//   current:     { version, fields: { bio, family, social, photos, quotes, public }, changed: { field: version } }
+//   current:     { version, fields: { bio, family, photos, quotes, links, public }, changed: { field: version } }
 //   changes:     only the fields this save touches
 //   baseVersion: the version the editor was looking at when they started
 // Returns { ok: true, fields, changed, version } or { ok: false, error, fields: [...] }.
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-const SHARED_FIELDS = ['bio', 'family', 'social', 'photos', 'public'];
+const SHARED_FIELDS = ['bio', 'family', 'photos', 'public'];
+// Personal fields: a save names one, and it always means the editor's own entry in the map.
+const OWN = { quote: 'quotes', link: 'links' };
 
 export function mergeDraftEdit({ current, changes, baseVersion, personId }) {
-  // A save can only name story fields, and "quote" always means the editor's own: there is no way to
-  // address another person's quote.
-  const unknown = Object.keys(changes).filter((name) => !SHARED_FIELDS.includes(name) && name !== 'quote');
+  // A save can only name story fields, and "quote" / "link" always mean the editor's own: there is no
+  // way to address another person's.
+  const unknown = Object.keys(changes).filter((name) => !SHARED_FIELDS.includes(name) && !(name in OWN));
   if (unknown.length) return { ok: false, error: 'unknown', fields: unknown };
   if (changes.photos && (changes.photos.length > MAX_PHOTOS || new Set(changes.photos.map((p) => p.ref)).size !== changes.photos.length)) {
     return { ok: false, error: 'invalid', fields: ['photos'] };
   }
-  const fields = { ...current.fields, quotes: { ...current.fields.quotes } };
+  const fields = { ...current.fields, quotes: { ...current.fields.quotes }, links: { ...current.fields.links } };
   const changed = { ...current.changed };
   const touched = [];
   const conflicts = [];
   for (const [name, value] of Object.entries(changes)) {
-    const own = name === 'quote';
-    if (same(value, own ? fields.quotes[personId] : fields[name])) continue;
-    if ((current.changed[own ? `quote:${personId}` : name] ?? 0) > baseVersion) conflicts.push(name);
+    const key = name in OWN ? `${name}:${personId}` : name;
+    if (same(value, name in OWN ? fields[OWN[name]][personId] : fields[name])) continue;
+    if ((current.changed[key] ?? 0) > baseVersion) conflicts.push(name);
     touched.push(name);
   }
   if (conflicts.length) return { ok: false, error: 'conflict', fields: conflicts };
   for (const name of touched) {
-    if (name === 'quote') fields.quotes[personId] = changes.quote;
+    if (name in OWN) fields[OWN[name]][personId] = changes[name];
     else fields[name] = changes[name];
   }
   const version = touched.length ? current.version + 1 : current.version;
-  for (const name of touched) changed[name === 'quote' ? `quote:${personId}` : name] = version;
+  for (const name of touched) changed[name in OWN ? `${name}:${personId}` : name] = version;
   return { ok: true, fields, changed, version };
 }

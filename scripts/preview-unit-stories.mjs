@@ -49,10 +49,21 @@ for (const u of units) {
   const block = [`${u.farm_unit}`];
   for (const k of KINDS) {
     const copies = u.rows.filter((r) => (k.only ?? (() => true))(r) && filled(r[k.copy]));
-    const texts = new Set(copies.map((r) => JSON.stringify([t(r[k.copy].bio), t(r[k.copy].family), t(r[k.copy].social)])));
+    const texts = new Set(copies.map((r) => JSON.stringify([t(r[k.copy].bio), t(r[k.copy].family)])));
     if (texts.size < 2) continue;
-    block.push(`  ${k.label}: ${label(result.winners[k.copy])}'s copy wins (the newest: ${copies.find((r) => r.person_id === result.winners[k.copy])[k.at]})`);
-    for (const r of copies) block.push(`    ${r.label}: ${snippet(t(r[k.copy].bio))}`);
+    const winner = copies.find((r) => r.person_id === result.winners[k.copy]);
+    // Equal timestamps on copies that differ: "newest wins" is then arbitrary, so say so.
+    const tie = copies.some((r) => r !== winner && r[k.at] === winner[k.at] && JSON.stringify([t(r[k.copy].bio), t(r[k.copy].family)]) !== JSON.stringify([t(winner[k.copy].bio), t(winner[k.copy].family)]));
+    block.push(`  ${k.label}: ${label(result.winners[k.copy])}'s copy wins (${winner[k.at]})${tie ? '  ** TIE: same timestamp, pick by hand **' : ''}`);
+    for (const f of ['bio', 'family']) {
+      const values = copies.map((r) => t(r[k.copy][f]));
+      if (new Set(values).size < 2) continue;
+      // Show each person's text from just before the first place the copies differ.
+      let i = 0;
+      while (values.every((v) => v[i] === values[0][i])) i += 1;
+      block.push(`    ${f} differs (first difference at character ${i}):`);
+      for (const r of copies) block.push(`      ${r.label}: …${snippet(t(r[k.copy][f]).slice(Math.max(0, i - 30)), 140)}`);
+    }
   }
   divergedBlocks.push(block.join('\n'));
 }
