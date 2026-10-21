@@ -54,7 +54,6 @@ import SignInGate from '../../components/SignInGate.astro';
           <button type="button" class="menu-btn" id="menu" aria-label="Open the menu" aria-controls="side" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
           <div class="who-wrap">
             <button type="button" class="who" id="who" aria-haspopup="true" aria-expanded="false" aria-controls="who-menu">
-              <span class="unit-chip" id="unit-chip"></span>
               <span class="avatar" id="avatar" aria-hidden="true"></span>
               <span class="who-text"><strong id="who-name"></strong><small id="who-role"></small></span>
               <svg class="caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>
@@ -328,16 +327,6 @@ import SignInGate from '../../components/SignInGate.astro';
     background: var(--tvc-white);
     font: inherit;
     cursor: pointer;
-  }
-
-  .unit-chip {
-    padding: 4px 12px;
-    border-radius: 999px;
-    background: var(--tvc-green-dark);
-    color: var(--tvc-white);
-    font-size: var(--text-sm);
-    font-weight: 600;
-    white-space: nowrap;
   }
 
   .avatar {
@@ -2396,7 +2385,6 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   function renderWho() {
     const hh = hhNow();
     const person = meIn(hh);
-    $('unit-chip').textContent = `${hh.farmUnit}${hh.houseNo ? ` · ${hh.houseNo}` : ''}`;
     $('avatar').textContent = first(me!.name).slice(0, 1).toUpperCase();
     $('who-name').textContent = me!.name;
     $('who-role').textContent = ROLE[person.role] ?? person.role;
@@ -2455,11 +2443,19 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     ));
   // The household split by role, owners first, so owners and family are not mixed in one list.
   const ROLE_GROUPS: [string, string][] = [['owner', 'Owners'], ['family', 'Family'], ['non_owner', 'Not owners']];
-  // What kind of house it is: the cluster it is in and its unit type, as pills for the House heading.
-  const housePills = (hh: Hh): HTMLElement | null => {
-    const pills = [hh.houseNo && hh.cluster ? `Cluster ${hh.cluster}` : null, hh.unitType ? `Type ${hh.unitType}` : null].filter((t): t is string => !!t);
-    return pills.length ? h('span', 'pills', undefined, ...pills.map((t) => h('span', 'pill', t))) : null;
+  // The codes that name a card, as pills in its heading: the farm unit on Farm; unit type, house number and cluster on House.
+  // No "Cluster"/"Type" words (the codes say it); the name is in the tooltip and the accessible name.
+  const pillsOf = (items: [string, string | null | undefined][]): HTMLElement | null => {
+    const shown = items.filter((i): i is [string, string] => !!i[1]);
+    return shown.length ? h('span', 'pills', undefined, ...shown.map(([label, value]) => {
+      const pill = h('span', 'pill', value);
+      pill.title = label;
+      pill.setAttribute('aria-label', `${label} ${value}`);
+      return pill;
+    })) : null;
   };
+  const farmPills = (hh: Hh) => pillsOf([['Farm unit', hh.farmUnit]]);
+  const housePills = (hh: Hh) => pillsOf([['Unit type', hh.unitType], ['House number', hh.houseNo], ['Cluster', hh.houseNo ? hh.cluster : null]]);
   const peopleByRole = (people: Person[]) => ROLE_GROUPS.map(([role, label]) => ({ label, people: people.filter((p) => p.role === role) })).filter((g) => g.people.length);
   const peopleList = (hh: Hh, you: Person) =>
     h('div', '', undefined, ...peopleByRole(hh.people).flatMap((g) => [
@@ -2847,7 +2843,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     grid.append(
       widget('My unit', { more: ['View unit', 'unit'], icon: IC.unit },
         h('div', 'tiles', undefined,
-          h('div', 'tile', undefined, h('div', 'k', undefined, glyph(IC.farm, 'Farm land')), h('div', 'v', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), h('div', 's', hh.plots.length ? `${hh.plots.length} plot${hh.plots.length === 1 ? '' : 's'}` : 'Not available yet')),
+          h('div', 'tile', undefined, h('div', 'k', undefined, glyph(IC.farm, 'Farm land'), farmPills(hh)), h('div', 'v', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), h('div', 's', hh.plots.length ? `${hh.plots.length} plot${hh.plots.length === 1 ? '' : 's'}` : 'Not available yet')),
           h('div', 'tile', undefined, h('div', 'k', undefined, glyph(IC.house, 'House'), housePills(hh)), h('div', 'v', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), h('div', 's', !hh.houseNo ? 'No house allocated yet' : hh.housePattas.length ? `${hh.housePattas.length} plot${hh.housePattas.length === 1 ? '' : 's'}` : 'Area not on record')),
         ),
         prompts,
@@ -2869,7 +2865,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const root = h('div');
     root.append(
       h('h1', 'page-title', 'My unit'),
-      h('p', 'lede', 'Your unit is your farm land and, if you have one, your house plot. Cluster is the group of houses yours belongs to.'));
+      h('p', 'lede', 'Your unit is your farm land and, if you have one, your house plot. The codes on each card are its farm unit, and the unit type, house number and cluster of the house (hover one to see which).'));
     const panel = (title: string, body: Kid, iconPaths?: string) => {
       const p = h('section', 'panel', undefined, h('h2', '', undefined, iconPaths ? h('span', 'glyph', undefined, icon(iconPaths)) : null, title), body);
       p.style.marginTop = '16px';
@@ -2877,7 +2873,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     };
     const cols = h('div', 'unit-cols');
     cols.append(
-      h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.farm)), 'Farm'),
+      h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.farm)), 'Farm', farmPills(hh)),
         h('div', 'kpis', undefined, kpi('Farm land', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), kpi('Farm plots', String(hh.plots.length))),
         hh.plots.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Acres', 'Status'], [...hh.plots].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaAcres, acresFmt), verifiedMark(p.verification)]), 2)) : h('p', 'lede', 'Patta details not available yet'),
         landCardFooter(hh, 'farm')),
