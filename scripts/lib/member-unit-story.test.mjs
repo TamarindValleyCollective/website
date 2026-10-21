@@ -256,6 +256,20 @@ test('the page shows the editor their own quote and link to edit and their house
   assert.equal(view.hasApproved, false);
 });
 
+test('everyone else in the unit is named on the card, whether or not they have written a line of their own', () => {
+  // Ravi has a quote; a third person in the unit has written nothing. The card title still names both housemates.
+  const view = unitStoryView(unitRow(), { personId: A, people: [...names, { id: C, firstName: 'Cy' }] });
+  assert.deepEqual(view.housemates, ['Ravi', 'Cy']);
+  assert.deepEqual(view.others.map((o) => o.firstName), ['Ravi']); // only those with something to read are listed with their lines
+  assert.deepEqual(unitStoryView(null, { personId: A, people: names }).housemates, ['Ravi']); // and before any story exists
+  assert.deepEqual(unitStoryView(unitRow(), { personId: A, people: [{ id: A, firstName: 'Asha' }] }).housemates, []); // alone in the unit
+});
+
+test('the card names the unit\'s owners, not its children or other family', () => {
+  const people = [{ id: A, firstName: 'Asha', primary: true }, { id: B, firstName: 'Ravi', primary: true }, { id: C, firstName: 'Kid', primary: false }];
+  assert.deepEqual(unitStoryView(unitRow(), { personId: A, people }).housemates, ['Ravi']);
+});
+
 test('no row yet: an empty story, nothing to submit', () => {
   const view = unitStoryView(null, { personId: A, people: names });
   assert.deepEqual(view.draft, { bio: '', family: '', quote: '', link: '', photos: [] });
