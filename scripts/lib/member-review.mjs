@@ -76,7 +76,7 @@ export function buildHouseholdReview({ households, people, memberships, plots, h
     household.housePattasMissingArea = household.housePattas.filter((p) => !p.areaSqFt).length;
 
     const flag = (kind, severity, text) => household.flags.push({ kind, severity, text });
-    if (household.people.length === 0) flag('no_people', 'error', 'No people on this household.');
+    if (household.people.length === 0) flag('no_people', 'error', 'No people on this unit.');
     if (household.people.length > 2) flag('over_two_people', 'warn', `${household.people.length} people listed; only 2 can sign in.`);
     if (!h.house_no) flag('no_house', 'info', 'No house number (probably not built yet).');
     if (h.house_no && !h.cluster) flag('no_cluster', 'warn', 'House has no cluster.');
