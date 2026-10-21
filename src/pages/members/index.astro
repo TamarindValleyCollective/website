@@ -626,6 +626,115 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-white);
   }
 
+  /* Stays */
+  .stay-when {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .stay-when label {
+    display: grid;
+    gap: 4px;
+    font-size: var(--text-sm);
+  }
+
+  .stay-when input,
+  .stay-person input:not([type='checkbox']),
+  .stay-person select {
+    min-height: 44px;
+    padding: 8px 10px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    font: inherit;
+  }
+
+  .stay-summary {
+    margin: 0 0 4px;
+    font-weight: 600;
+  }
+
+  .stay-group {
+    margin: 14px 0 6px;
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    font-weight: 600;
+  }
+
+  .stay-units {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .stay-unit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+
+  .stay-unit--taken {
+    color: var(--tvc-ink-soft);
+    background: var(--tvc-cream);
+    cursor: not-allowed;
+  }
+
+  .stay-taken {
+    font-weight: 600;
+  }
+
+  .stay-tent {
+    margin: 16px 0 0;
+    padding: 12px 14px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-sm);
+  }
+
+  .stay-tent legend {
+    padding: 0 6px;
+    font-weight: 600;
+  }
+
+  .stay-person {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .stay-person input:not([type='checkbox']) {
+    flex: 1 1 160px;
+    min-width: 0;
+  }
+
+  .stay-card {
+    padding: 12px 0;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .stay-card:first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .stay-card--past {
+    color: var(--tvc-ink-soft);
+  }
+
+  .stay-line {
+    margin: 0 0 4px;
+    font-size: var(--text-sm);
+  }
+
   .btn--cta {
     border-color: var(--tvc-orange-cta);
     background: var(--tvc-orange-cta);
@@ -2358,7 +2467,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     { id: 'directory', label: 'Our members', icon: IC.book },
     // Not built yet: kept out of the menu (they would only lead to a "coming soon" page) and listed
     // once, quietly, at the foot of the Home page. The routes stay so an old bookmark still lands somewhere.
-    { id: 'stays', label: 'Stays', icon: IC.stay, soon: true },
+    { id: 'stays', label: 'Stays', icon: IC.stay },
     { id: 'dues', label: 'My dues', icon: IC.rupee, soon: true },
     { id: 'receipts', label: 'Receipts', icon: IC.receipt, soon: true },
     { id: 'statements', label: 'Statements', icon: IC.statement, soon: true },
@@ -2368,7 +2477,6 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     { id: 'help', label: 'Ask the core team', icon: IC.help, soon: true },
   ];
   const PLANNED: Record<string, string[]> = {
-    stays: ['Book overnight stays for yourself and your family (free)', 'Add guests at a discounted rate and pay by UPI', 'See, change and cancel your bookings; event dates take priority'],
     dues: ['Your annual maintenance for each financial year, what is paid and what is due, and a UPI QR to pay', 'Pay by UPI QR, and tell us when you have paid'],
     receipts: ['Download a receipt for every payment you have made'],
     statements: ['Your account statement for each financial year'],
@@ -3022,7 +3130,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const use = h('button', 'btn btn--solid', 'Use this photo') as HTMLButtonElement;
       use.type = 'button';
       const cancel = h('button', 'btn', 'Cancel') as HTMLButtonElement;
-      cancel.type = 'button';
+      cancel.setAttribute('type', 'button');
       const note = h('p', 'story-hint', 'The circle is how your photo will look on your card. Drag to move it, zoom to fit.');
       use.addEventListener('click', async () => {
         use.disabled = cancel.disabled = true;
@@ -3174,7 +3282,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
             act.append(ok);
           }
           const keep = h('button', 'btn', s.before !== undefined ? 'Keep mine' : 'Got it') as HTMLButtonElement;
-          keep.type = 'button';
+          keep.setAttribute('type', 'button');
           keep.addEventListener('click', () => { s.done = true; renderReview(); renderSubmit(); });
           act.append(keep);
           row.append(act);
@@ -3192,7 +3300,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       cb.addEventListener('change', () => { isPublic = cb.checked; edited(); renderSubmit(); });
       const inReview = story?.status === 'in_review' && !story.hasUnsubmittedChanges;
       const go = h('button', 'btn btn--cta', inReview ? 'Submitted' : reviewed ? 'Submit to the core team' : 'Check & submit') as HTMLButtonElement;
-      go.type = 'button';
+      go.setAttribute('type', 'button');
       go.disabled = inReview || checking;
       go.addEventListener('click', () => void submitClick());
       submitEl.replaceChildren(
@@ -3441,7 +3549,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       if (!draft.social) return null;
       const row = h('div', 'story-field story-legacy', undefined, h('p', 'story-hint', `You also have a profile link (${draft.social.replace(/^https?:\/\/(www\.)?/, '')}) that is not attached to any words in your story. To use it, select a name above and press Link.`));
       const rm = h('button', 'btn', 'Remove this link') as HTMLButtonElement;
-      rm.type = 'button';
+      rm.setAttribute('type', 'button');
       rm.addEventListener('click', () => { draft.social = ''; row.remove(); edited(); });
       row.append(rm);
       return row;
@@ -3488,7 +3596,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       paintPhoto = () => {
         list.replaceChildren(...photos.map((p) => {
           const rm = h('button', 'btn', 'Remove') as HTMLButtonElement;
-          rm.type = 'button';
+          rm.setAttribute('type', 'button');
           rm.disabled = busy;
           rm.addEventListener('click', () => void send(() => memberFetch('/api/members-me/unit-story-photo-remove', { method: 'POST', body: { ref: p.ref } }), 'Removing…'));
           return h('div', 'story-photo-item', undefined, photoImg(p.ref, 'avatar avatar--lg story-photo', 'square'), rm);
@@ -3786,6 +3894,266 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     return root;
   }
 
+  // ---- stays ----
+  // Pick check-in and nights, see which tents are free (type and how many it sleeps), choose, say who is
+  // staying in each, and book. Own family is free; people marked "paying guest" are charged at the guest rate
+  // (a discount set by the core team), which the core team confirms with the member after booking.
+  type StayPerson = { name: string; ageGroup: string; gender: string; mobile: string; guest: boolean };
+  type StayUnit = { id: string; label: string; shortLabel: string; capacity: number; kind: string; free: boolean };
+  type StayGroup = { group: string; byot: boolean; units: StayUnit[] };
+  type StayAvail = { startDate: string; nights: number; checkOut: string; tentsFree: number; bedsFree: number; pitchesFree: number; wholeFarmBlocked: boolean; groups: StayGroup[] };
+  type StayRow = { id: string; householdId: string; startDate: string; nights: number; checkOut: string; guestCount: number; canCancel: boolean; tents: { tentId: string; label: string; guests: string[] }[] };
+  const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+  const stayDate = (iso: string) => dateFmt.format(new Date(`${iso}T00:00:00`));
+
+  function viewStays(): HTMLElement {
+    const hh = hhNow();
+    const root = h('div');
+    const discount = h('span', '', '20%');
+    root.append(
+      h('h1', 'page-title', 'Stays'),
+      h('p', 'lede', undefined, 'Book nights at the farm for your family. Your own family stays free. Anyone you mark as a paying guest gets ', discount, ' off the guest rate, and the core team will confirm the charge with you.'));
+
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const date = document.createElement('input');
+    date.type = 'date';
+    date.min = today;
+    date.required = true;
+    const nights = document.createElement('input');
+    nights.type = 'number';
+    nights.min = '1';
+    nights.max = '30';
+    nights.value = '1';
+    nights.inputMode = 'numeric';
+    const msg = h('p', 'form-msg');
+    msg.setAttribute('role', 'alert');
+    const availBox = h('div', 'stay-avail');
+    availBox.setAttribute('aria-live', 'polite');
+    const peopleBox = h('div');
+    const book = h('button', 'btn btn--solid', 'Book this stay') as HTMLButtonElement;
+    book.setAttribute('type', 'button');
+    book.hidden = true;
+
+    let avail: StayAvail | null = null;
+    const chosen = new Map<string, StayPerson[]>(); // tent id -> the people in it, in the order picked
+    const blankPerson = (name = ''): StayPerson => ({ name, ageGroup: 'Adult', gender: 'NA', mobile: '', guest: false });
+
+    function sync() {
+      book.hidden = chosen.size === 0;
+      renderPeople();
+    }
+
+    function renderAvail() {
+      if (!avail) return availBox.replaceChildren();
+      const a = avail;
+      const summary = a.wholeFarmBlocked
+        ? 'The farm is not available on those dates.'
+        : a.tentsFree === 0 && a.pitchesFree === 0
+          ? 'Nothing is free on those dates. Try other dates.'
+          : `${plural(a.tentsFree, 'tent')} free, sleeping ${plural(a.bedsFree, 'person', 'people')}${a.pitchesFree ? `, and ${plural(a.pitchesFree, 'pitch', 'pitches')} for your own tent` : ''}.`;
+      availBox.replaceChildren(h('p', 'stay-summary', `${stayDate(a.startDate)} to ${stayDate(a.checkOut)} · ${plural(a.nights, 'night')}`), h('p', 'lede', summary));
+      for (const g of a.groups) {
+        const list = h('div', 'stay-units');
+        for (const u of g.units) {
+          const box = document.createElement('input');
+          box.type = 'checkbox';
+          box.disabled = !u.free;
+          box.checked = chosen.has(u.id);
+          box.addEventListener('change', () => {
+            if (box.checked) chosen.set(u.id, [blankPerson(chosen.size === 0 ? me?.name ?? '' : '')]);
+            else chosen.delete(u.id);
+            sync();
+          });
+          const text = g.byot ? `${u.shortLabel} · your own tent` : `${u.shortLabel} · sleeps ${u.capacity}`;
+          list.append(h('label', `stay-unit${u.free ? '' : ' stay-unit--taken'}`, undefined, box, h('span', '', text), u.free ? null : h('span', 'stay-taken', 'Booked')));
+        }
+        availBox.append(h('h3', 'stay-group', g.group), list);
+      }
+    }
+
+    function renderPeople() {
+      peopleBox.replaceChildren();
+      const order = avail?.groups.flatMap((g) => g.units).filter((u) => chosen.has(u.id)) ?? [];
+      for (const u of order) {
+        const rows = chosen.get(u.id)!;
+        const set = h('fieldset', 'stay-tent', undefined, h('legend', '', `${u.label} · ${u.kind === 'byot' ? `up to ${u.capacity}` : `sleeps ${u.capacity}`}`));
+        rows.forEach((p, i) => {
+          const name = document.createElement('input');
+          name.placeholder = 'Full name';
+          name.value = p.name;
+          name.autocomplete = 'off';
+          name.setAttribute('aria-label', 'Full name');
+          name.addEventListener('input', () => { p.name = name.value; });
+          const age = document.createElement('select');
+          age.setAttribute('aria-label', 'Adult or child');
+          for (const v of ['Adult', 'Child']) age.append(new Option(v, v));
+          age.value = p.ageGroup;
+          age.addEventListener('change', () => { p.ageGroup = age.value; });
+          const gender = document.createElement('select');
+          gender.setAttribute('aria-label', 'Gender');
+          for (const [v, t] of [['Male', 'Male'], ['Female', 'Female'], ['NA', 'Prefer not to say']]) gender.append(new Option(t, v));
+          gender.value = p.gender;
+          gender.addEventListener('change', () => { p.gender = gender.value; });
+          const mobile = document.createElement('input');
+          mobile.type = 'tel';
+          mobile.placeholder = 'Mobile (optional)';
+          mobile.autocomplete = 'off';
+          mobile.setAttribute('aria-label', 'Mobile number, optional');
+          mobile.value = p.mobile;
+          mobile.addEventListener('input', () => { p.mobile = mobile.value; });
+          const paying = document.createElement('input');
+          paying.type = 'checkbox';
+          paying.checked = p.guest;
+          paying.addEventListener('change', () => { p.guest = paying.checked; });
+          const row = h('div', 'stay-person', undefined, name, age, gender, mobile, h('label', 'check', undefined, paying, h('span', '', 'Paying guest (not family)')));
+          if (rows.length > 1) {
+            const rm = h('button', 'btn stay-remove', 'Remove');
+            rm.setAttribute('type', 'button');
+            rm.addEventListener('click', () => { rows.splice(i, 1); renderPeople(); });
+            row.append(rm);
+          }
+          set.append(row);
+        });
+        if (rows.length < u.capacity) {
+          const add = h('button', 'btn', 'Add a person');
+          add.setAttribute('type', 'button');
+          add.addEventListener('click', () => { rows.push(blankPerson()); renderPeople(); });
+          set.append(add);
+        }
+        peopleBox.append(set);
+      }
+    }
+
+    let checking = 0;
+    async function check() {
+      msg.textContent = '';
+      const n = Number(nights.value);
+      if (!date.value || !Number.isInteger(n) || n < 1) {
+        avail = null;
+        chosen.clear();
+        renderAvail();
+        return sync();
+      }
+      const mine = ++checking;
+      availBox.replaceChildren(h('p', 'lede', 'Checking the farm…'));
+      try {
+        const { status, data } = await memberFetch(`/api/members-me/stays-availability?start=${encodeURIComponent(date.value)}&nights=${n}`);
+        if (mine !== checking) return; // a newer date was typed
+        if (status !== 200) throw new Error(data.error || 'Could not check availability.');
+        avail = data as StayAvail;
+        // Keep what was chosen only while it is still free for the new dates.
+        const stillFree = new Set(avail.groups.flatMap((g) => g.units).filter((u) => u.free).map((u) => u.id));
+        for (const id of [...chosen.keys()]) if (!stillFree.has(id)) chosen.delete(id);
+        renderAvail();
+        sync();
+      } catch (e) {
+        if (mine !== checking) return;
+        avail = null;
+        availBox.replaceChildren();
+        msg.textContent = e instanceof MemberAuthError ? 'Your session ended. Sign in again.' : e instanceof Error ? e.message : 'Could not check availability.';
+      }
+    }
+    date.addEventListener('change', check);
+    nights.addEventListener('change', check);
+
+    book.addEventListener('click', async () => {
+      if (!avail) return;
+      msg.textContent = '';
+      book.disabled = true;
+      try {
+        const tents = [...chosen.entries()].map(([tentId, rows]) => ({ tentId, guests: rows.map((p) => ({ name: p.name, ageGroup: p.ageGroup, gender: p.gender, mobileNumber: p.mobile, guest: p.guest })) }));
+        const { status, data } = await memberFetch('/api/members-me/stays', { method: 'POST', body: { householdId: hh.id, startDate: avail.startDate, nights: avail.nights, tents } });
+        if (status !== 200) {
+          msg.textContent = data.error || 'Could not book. Try again.';
+          if (status === 409) void check(); // someone else got there first: show what is free now
+          return;
+        }
+        chosen.clear();
+        date.value = '';
+        nights.value = '1';
+        avail = null;
+        renderAvail();
+        sync();
+        toast('Your stay is booked. We have emailed you the details.');
+        void loadStays();
+      } catch (e) {
+        msg.textContent = e instanceof MemberAuthError ? 'Your session ended. Sign in again.' : e instanceof Error ? e.message : 'Could not book. Try again.';
+      } finally {
+        book.disabled = false;
+      }
+    });
+
+    const form = h('section', 'panel', undefined,
+      h('h2', '', 'Book a stay'),
+      h('div', 'stay-when', undefined, h('label', '', 'Check-in', date), h('label', '', 'Nights', nights)),
+      availBox, peopleBox, msg, book);
+    form.style.marginTop = '16px';
+
+    const mineBox = h('div');
+    const mine = h('section', 'panel', undefined, h('h2', '', 'Your stays'), mineBox);
+    mine.style.marginTop = '16px';
+
+    function cancelDialog(s: StayRow) {
+      const dlg = document.createElement('dialog');
+      dlg.className = 'modal';
+      const err = h('p', 'form-msg');
+      err.setAttribute('role', 'alert');
+      const keep = h('button', 'btn', 'Keep it');
+      keep.setAttribute('type', 'button');
+      keep.addEventListener('click', () => dlg.close());
+      const go = h('button', 'btn btn--solid', 'Cancel the stay') as HTMLButtonElement;
+      go.setAttribute('type', 'button');
+      go.addEventListener('click', async () => {
+        go.disabled = true;
+        try {
+          const { status, data } = await memberFetch('/api/members-me/stays-cancel', { method: 'POST', body: { bookingId: s.id } });
+          if (status !== 200) throw new Error(data.error || 'Could not cancel. Try again.');
+          dlg.close();
+          toast('Your stay is cancelled');
+          void loadStays();
+          if (avail) void check();
+        } catch (e) {
+          go.disabled = false;
+          err.textContent = e instanceof MemberAuthError ? 'Your session ended. Sign in again.' : e instanceof Error ? e.message : 'Could not cancel.';
+        }
+      });
+      dlg.append(h('h3', '', 'Cancel this stay?'), h('p', '', `${stayDate(s.startDate)} to ${stayDate(s.checkOut)}. The tents go back to being free for others, and the core team and Madhavan are told.`), err, h('div', 'modal-actions', undefined, keep, go));
+      dlg.addEventListener('close', () => dlg.remove());
+      document.body.append(dlg);
+      dlg.showModal();
+    }
+
+    async function loadStays() {
+      try {
+        const { status, data } = await memberFetch('/api/members-me/stays');
+        if (status !== 200) throw new Error(data.error || 'Could not load your stays.');
+        discount.textContent = `${data.guestDiscountPercent}%`;
+        const list = (data.stays as StayRow[]).filter((s) => s.householdId === hh.id || all.length === 1);
+        if (!list.length) return mineBox.replaceChildren(h('p', 'lede', 'You have no stays booked yet.'));
+        mineBox.replaceChildren(...list.map((s) => {
+          const past = !s.canCancel && s.checkOut < today;
+          const card = h('div', `stay-card${past ? ' stay-card--past' : ''}`, undefined,
+            h('p', 'stay-summary', `${stayDate(s.startDate)} to ${stayDate(s.checkOut)} · ${plural(s.nights, 'night')}`),
+            ...s.tents.map((t) => h('p', 'stay-line', `${t.label}: ${t.guests.join(', ')}`)),
+            s.guestCount ? h('p', 'stay-line', `${plural(s.guestCount, 'paying guest')}: the core team will confirm the charge.`) : null);
+          if (s.canCancel) {
+            const cancel = h('button', 'btn', 'Cancel stay');
+            cancel.setAttribute('type', 'button');
+            cancel.addEventListener('click', () => cancelDialog(s));
+            card.append(cancel);
+          }
+          return card;
+        }));
+      } catch (e) {
+        mineBox.replaceChildren(h('p', 'lede', e instanceof MemberAuthError ? 'Your session ended. Sign in again.' : e instanceof Error ? e.message : 'Could not load your stays.'));
+      }
+    }
+    void loadStays();
+
+    root.append(form, mine);
+    return root;
+  }
+
   function viewSoon(id: string): HTMLElement {
     const item = NAV.find((n) => n.id === id)!;
     return h('div', '', undefined,
@@ -3796,7 +4164,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
   function renderView() {
     const prevNext = $('view').querySelector('.next h2')?.textContent;
-    const fn = route === 'dashboard' ? viewDashboard : route === 'unit' ? viewUnit : route === 'story' ? viewStory : route === 'directory' ? viewDirectory : () => viewSoon(route);
+    const fn = route === 'dashboard' ? viewDashboard : route === 'unit' ? viewUnit : route === 'story' ? viewStory : route === 'directory' ? viewDirectory : route === 'stays' ? viewStays : () => viewSoon(route);
     $('view').replaceChildren(fn());
     // Same page, new next step (the member just added their number): cross-fade instead of swapping.
     const card = $('view').querySelector('.next');
