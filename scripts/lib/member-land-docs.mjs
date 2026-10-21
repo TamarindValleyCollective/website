@@ -74,7 +74,9 @@ export function parseLandPdfText(pages) {
     const patta = pattaFromReference(reference);
     const owners = [...text.matchAll(/^\s*\d+\.\s+([A-Za-z][A-Za-z .]*?)\s+[^\u0000-\u007f]/gm)].map((m) => m[1].trim());
     const records = [];
-    for (const m of text.matchAll(/^(\d+)\s+(\d+[A-Za-z]*)\s+(.+)$/gm)) {
+    // A sub-division is digits then letters then, often, a digit again (3B, 3B2, 3C2): without the trailing digit a row such
+    // as "478 3B2 0 - 1.59 ..." matched nothing and the whole file was refused.
+    for (const m of text.matchAll(/^(\d+)\s+(\d+[A-Za-z0-9]*)\s+(.+)$/gm)) {
       const pairs = [...m[3].matchAll(AREA_PAIR)];
       if (pairs.length === 0) continue; // not a land row (a date, a page number)
       const ha = pairs.reduce((n, p) => n + Number(p[1]), 0);
