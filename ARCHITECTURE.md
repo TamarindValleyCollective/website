@@ -1542,7 +1542,12 @@ never touches Netlify either.
   `waitingPublicStories` for the daily build) count the table the site is built from. To flip it, refresh the backfill first
   (`scripts/backfill-unit-stories.mjs --refresh`, only while the switch is off) and then
   `insert into member_settings (key, value) values ('unit_stories', '{"live": true}') on conflict (key) do update set value = excluded.value;`.
-  The directory still reads `member_stories` until it moves over; backfill with
+  The **directory** (`GET /api/members-me/directory`) follows the same switch: off, `buildDirectory` from `member_stories`
+  as before; on, `buildUnitDirectory` hands `buildDirectory` one story per owner built from the unit's approved copy (the shared bio and family,
+  that person's quote and link), so a couple is one section because it is one story and one owner's edit can never split it. The unit's
+  photos (at most two, not tied to a person) are dealt to its owners in order, the viewer first; the response says `unitPhotos: true` so
+  the page fetches them from `GET /api/members-me/unit-photo` instead of `/photo`. The portal's story editor still writes `member_stories`
+  until it moves over; backfill with
   `scripts/preview-unit-stories.mjs` then `scripts/backfill-unit-stories.mjs` (applied to TVC ERP 2026-10-21, 40 units).
 - **Member stories (`members-me.mts`, migration 0044).** A member writes a short public-facing
   story about themselves (what they do, family, one-line "why TVC") on the portal's
