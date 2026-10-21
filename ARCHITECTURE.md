@@ -1498,12 +1498,17 @@ never touches Netlify either.
   through `POST /api/members-me/land-document-link` (their households only, audit-first as
   `member.land.view`, 60-second link); a record's `sourceDocumentId` ties its survey number to the
   document it came from, in both the member portal and the admin register. A single-survey
-  Integrated Land Record carries a field sketch ("புலப்படம்") on page 2 as a small bitmap (a
-  multi-survey patta has none). The background reader pulls it out (`readLandShape`, `unpdf`
-  `extractImages`) and `scripts/lib/land-shape.mjs` rebuilds the parcel as a closed polygon: it finds the long
-  solid straight black lines (a Hough transform, so labels touching the outline don't hide it; red/blue
-  labels and dimensions are ignored by colour), works out where they cross, drops every stretch that
-  runs past a corner or isn't part of a closed loop, and redraws what is left as a transparent,
+  Integrated Land Record carries a field sketch ("புலப்படம்", the FMB sketch) on page 2 (a
+  multi-survey patta has none). Older e-Services files draw it as a small bitmap, current ones as vector
+  lines (the sketch's labels are glyph shapes, so the page has no text). The background reader
+  (`readLandShape`, `unpdf`) tries both and `scripts/lib/land-shape.mjs` turns either into a closed
+  polygon. A bitmap is searched for the long solid straight black lines (a Hough transform, so labels
+  touching the outline don't hide it; red/blue labels and dimensions are ignored by colour). Vector
+  lines come straight from pdf.js's operator list (`strokedLinesFromOps`, tracking the page's
+  scale/shift and stroke colour; only black strokes count, and the ruled frame is dropped by length);
+  `shapeFromLines` snaps the ends into corners, splits lines where they cross or meet, and keeps only
+  what is on a closed loop. Either way a corner search drops every stretch that runs past a corner,
+  and what is left is redrawn as a transparent,
   label-free PNG, stored beside the file in R2 (`<document>-shape.png`, flagged by `extracted.hasShape`). It is served as
   data URLs by `GET /api/members-me/land-shapes` and `GET /api/members-admin/land-shapes`.
   Documents uploaded before outlines existed, or whose outline an older reader made (or gave up
@@ -1513,6 +1518,18 @@ never touches Netlify either.
   `shapeChecked` = the version when none was found). Raising `SHAPE_VERSION` when the reader improves
   redoes everything once, so the first load of a household's page after deploy fills them in, with no
   script or credentials.
+  **Stand-alone FMB sketch** (no migration): e-Services' "Survey Number" download can also be had as the
+  sketch page alone. It has no text to read (not even the survey number), so the member picks the survey
+  number on the card ("Add an FMB sketch", `sketchFor` on `POST /api/members-me/land-documents`,
+  `handleSketchUpload`). It is checked (the survey number is on that card's register, it isn't a patta, an
+  outline can be drawn from it with `readLandShape(bytes, { standalone: true })`), stored in R2 with its outline, and
+  kept as a `member_land_documents` row with `status: 'applied'`, no items and `extracted = { kind:
+  'fmb_sketch', surveyNo, hasShape, shapeVersion }`; audit action `member.land.sketch`; a newer sketch for the
+  same survey number replaces it. It creates and verifies no record. Its outline is returned by the shapes
+  endpoints under `survey:<normalised survey no>` as well as its document id, and both the member
+  portal and the admin register show a record's outline with `shapeForRecord` (the record's own patta
+  first, else a sketch for its survey number). `SHAPE_VERSION` 4 = this vector reader, so single-survey
+  pattas whose outline the bitmap reader missed are redone on the next page load.
 
 - **Unit stories (`members-me.mts`, migration 0049; in progress, not used by the portal yet).** Stories are
   moving from one record per person to one per unit, because bio and family describe the unit. `member_unit_stories`

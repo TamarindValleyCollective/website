@@ -313,7 +313,7 @@ async function handleLandDocuments(req: Request): Promise<Response> {
   const householdId = new URL(req.url).searchParams.get('householdId') ?? '';
   if (!UUID.test(householdId)) return jsonResponse({ error: 'householdId is missing or not valid.' }, 400);
   try {
-    const docs = await select('member_land_documents', 'id,land_type,original_filename,mime_type,status,error,items,created_at,processed_at', `&household_id=eq.${householdId}&order=created_at.desc`);
+    const docs = await select('member_land_documents', 'id,land_type,original_filename,mime_type,status,error,items,extracted,created_at,processed_at', `&household_id=eq.${householdId}&order=created_at.desc`);
     return jsonResponse({
       documents: docs.slice(0, 50).map((d) => ({
         id: d.id,
@@ -323,6 +323,8 @@ async function handleLandDocuments(req: Request): Promise<Response> {
         status: d.status,
         error: d.error,
         uploadedAt: d.created_at,
+        // The survey number, for a stand-alone FMB sketch (it has no records of its own).
+        sketchFor: d.extracted?.kind === 'fmb_sketch' ? (d.extracted.surveyNo ?? null) : null,
         items: Array.isArray(d.items) ? d.items : [],
       })),
     });
