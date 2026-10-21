@@ -1546,7 +1546,7 @@ never touches Netlify either.
   as before; on, `buildUnitDirectory` hands `buildDirectory` one story per owner built from the unit's approved copy (the shared bio and family,
   that person's quote and link), so a couple is one section because it is one story and one owner's edit can never split it. The unit's
   photos (at most two, not tied to a person) are dealt to its owners in order, the viewer first; the response says `unitPhotos: true` so
-  the page fetches them from `GET /api/members-me/unit-photo` instead of `/photo`. The portal's **story editor** follows the switch too: `GET /api/members-me/home` returns `unitStories`, and when on
+  the page fetches them from `GET /api/members-me/unit-photo` instead of `/photo`. A card or popup header shows only the people who have a photo when anyone does (`facesToShow`), so one photo uploaded for two owners is one picture, not a picture and a stray initial. The portal's **story editor** follows the switch too: `GET /api/members-me/home` returns `unitStories`, and when on
   the "Your story" page edits the unit's shared story instead of the person's. Bio, family and up to two photos are shared; the person's
   own "why TVC" and profile link are theirs, and the housemates' lines are shown read-only. A save sends only what changed since the last
   save (`saveChanges`) plus the version it started from, so two owners editing at once only collide on the same field; if they do, the

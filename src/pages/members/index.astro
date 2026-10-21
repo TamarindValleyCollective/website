@@ -1911,6 +1911,7 @@ import '../../styles/global.css';
 <script>
   import { clearMemberToken, getMemberToken, memberFetch, memberPhotoSrc, MemberAuthError, setMemberToken } from '../../../scripts/lib/member-client.mjs';
   import { MAX_PHOTOS, conflictedDraftKeys, saveChanges } from '../../../scripts/lib/member-unit-story.mjs';
+  import { facesToShow } from '../../../scripts/lib/member-directory.mjs';
   import { preparePhoto } from '../../../scripts/lib/photo-prepare.mjs';
 import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggleMark } from '../../../scripts/lib/member-markdown.mjs';
   import { NOTICE_INTRO, NOTICE_TITLE, PRIVACY_NOTICE_VERSION, SECTIONS } from '../../../scripts/lib/member-privacy.mjs';
@@ -3207,7 +3208,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
     // One face for a single member, two overlapping for a couple, and "+N" beyond that.
     function faces(people: { name: string; photo?: string | null }[], size = '', limit = 2): HTMLElement {
-      const all = distinctFaces(people);
+      // In a unit the photos belong to the unit: one photo for two owners shows one picture, not a picture and a stray initial.
+      const all = distinctFaces(facesToShow(people, unitPhotos));
       const shown = all.slice(0, limit).map((p) => face(p, size));
       const extra = all.length - shown.length;
       return h('span', `dir-faces dir-faces--${Math.min(shown.length, 2)}`, undefined, ...shown, extra > 0 ? h('span', 'dir-more', `+${extra}`) : null);
