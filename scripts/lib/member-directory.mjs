@@ -74,7 +74,7 @@ function groupStories(people) {
  * @param {{
  *   people: { id: string, full_name: string, active?: boolean, directory_visible?: boolean }[],
  *   memberships: { household_id: string, person_id: string, role?: string }[],
- *   households: { id: string, farm_unit: string, house_no?: string | null, cluster: string | null }[],
+ *   households: { id: string, farm_unit: string, house_no?: string | null, cluster: string | null, unit_type?: string | null }[],
  *   stories: { person_id: string, approved: any, approved_public: boolean | null }[],
  * }} data
  * @param {string} viewerPersonId
@@ -105,6 +105,7 @@ export function buildDirectory(data, viewerPersonId) {
       farmUnit: hh.farm_unit,
       houseNo: hh.house_no ?? null,
       cluster: hh.cluster ?? null,
+      unitType: hh.unit_type ?? null,
       people,
       groups: groupStories(people),
       // The primary members with no story, and the rest of the household (children, other family), who are

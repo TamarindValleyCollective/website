@@ -814,7 +814,7 @@ async function handleDirectory(req: Request): Promise<Response> {
     const [people, memberships, households, unitStories] = await Promise.all([
       select('member_people', 'id,full_name,active,directory_visible', 'active=eq.true&directory_visible=eq.true'),
       select('member_household_members', 'household_id,person_id,role', 'person_id=not.is.null'),
-      select('member_households', 'id,farm_unit,house_no,cluster', 'id=not.is.null'),
+      select('member_households', 'id,farm_unit,house_no,cluster,unit_type', 'id=not.is.null'),
       select('member_unit_stories', 'household_id,approved,approved_public', 'approved=not.is.null'),
     ]);
     return jsonResponse({ unitPhotos: true, households: buildUnitDirectory({ people, memberships, households, unitStories }, who.member.personId) });
