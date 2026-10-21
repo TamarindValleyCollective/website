@@ -5,6 +5,9 @@
 // tvc.farm. Personal: each person's own quote and profile link (the directory turns a first name in
 // the story into that person's link), kept under their id in `quotes` and `links`.
 
+import { MAX_LINKS, linksIn } from './member-markdown.mjs';
+import { LIMITS } from './member-story.mjs';
+
 export const MAX_PHOTOS = 2;
 
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
@@ -70,6 +73,7 @@ export function buildUnitStory(rows) {
 
 // Adds one photo to the unit's photos if there is room and it isn't already there.
 // photo: { ref, personId } (the uploader's id is part of its storage path).
+/** @returns {{ ok: true, photos: any[] } | { ok: false, error: string }} */
 export function addPhoto(photos, photo) {
   if (photos.some((p) => p.ref === photo.ref)) return { ok: false, error: 'duplicate' };
   if (photos.length >= MAX_PHOTOS) return { ok: false, error: 'full' };
@@ -87,6 +91,7 @@ const SHARED_FIELDS = ['bio', 'family', 'photos', 'public'];
 // Personal fields: a save names one, and it always means the editor's own entry in the map.
 const OWN = { quote: 'quotes', link: 'links' };
 
+/** @returns {{ ok: true, fields: any, changed: Record<string, number>, version: number } | { ok: false, error: string, fields: string[] }} */
 export function mergeDraftEdit({ current, changes, baseVersion, personId }) {
   // A save can only name story fields, and "quote" / "link" always mean the editor's own: there is no
   // way to address another person's.
@@ -113,4 +118,122 @@ export function mergeDraftEdit({ current, changes, baseVersion, personId }) {
   const version = touched.length ? current.version + 1 : current.version;
   for (const name of touched) changed[name in OWN ? `${name}:${personId}` : name] = version;
   return { ok: true, fields, changed, version };
+}
+
+// ---- what an owner may send when saving ----
+
+const fail = (error) => ({ ok: false, error });
+const clean = (v) => v.replace(/\r\n?/g, '\n').trim();
+const SAVE_TEXT = { bio: 'bio', family: 'family', quote: 'why', link: 'social' }; // field -> the existing limit it follows
+
+// body: { baseVersion, bio?, family?, quote?, link?, showOnPublicSite? }. Only what changed is sent, so
+// two owners saving different fields never overwrite each other (mergeDraftEdit). The photos change
+// through their own endpoints, never here.
+/** @returns {{ ok: true, baseVersion: number, changes: Record<string, any> } | { ok: false, error: string }} */
+export function validateUnitSave(body) {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return fail('Nothing to do.');
+  if (!Number.isInteger(body.baseVersion) || body.baseVersion < 0) return fail('Reload the page and try again.');
+  const known = ['baseVersion', ...Object.keys(SAVE_TEXT), 'showOnPublicSite'];
+  if (Object.keys(body).some((k) => !known.includes(k))) return fail('Unknown field.');
+
+  const changes = {};
+  for (const [field, limitKey] of Object.entries(SAVE_TEXT)) {
+    const v = body[field];
+    if (v === undefined) continue;
+    if (typeof v !== 'string') return fail('Each answer must be text.');
+    const value = clean(v);
+    if (value.length > LIMITS[limitKey]) return fail(`That answer is too long (the limit is ${LIMITS[limitKey]} characters).`);
+    changes[field] = value;
+  }
+  if (changes.link) {
+    let url;
+    try {
+      url = new URL(changes.link);
+    } catch {
+      return fail('The profile link should be a full web address starting with https://');
+    }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return fail('The profile link should be a web address starting with https://');
+  }
+  if (linksIn(changes.bio ?? '').length + linksIn(changes.family ?? '').length > MAX_LINKS) return fail(`A story can have up to ${MAX_LINKS} links.`);
+  if (body.showOnPublicSite !== undefined) {
+    if (typeof body.showOnPublicSite !== 'boolean') return fail('"Show on tvc.farm" must be on or off.');
+    changes.public = body.showOnPublicSite;
+  }
+  if (Object.keys(changes).length === 0) return fail('Nothing to do.');
+  return { ok: true, baseVersion: body.baseVersion, changes };
+}
+
+// ---- the shared draft in the database, and what the page shows ----
+
+const EMPTY_FIELDS = () => ({ bio: '', family: '', photos: [], quotes: {}, links: {}, public: false });
+
+// A member_unit_stories row (or null, for a unit with none yet) as the state mergeDraftEdit works on.
+export function draftState(row) {
+  if (!row) return { version: 0, fields: EMPTY_FIELDS(), changed: {} };
+  return { version: row.draft_version ?? 0, fields: { ...EMPTY_FIELDS(), ...(row.draft ?? {}), public: !!row.draft_public }, changed: row.draft_changed ?? {} };
+}
+
+// The columns a saved draft writes: the public switch is its own column, the rest is the draft copy.
+export function draftColumns({ fields, version, changed }) {
+  const { public: isPublic, ...copy } = fields;
+  return { draft: copy, draft_public: !!isPublic, draft_version: version, draft_changed: changed };
+}
+
+// Handing the story in needs the person submitting to have written their own "why TVC" line.
+/** @returns {{ ok: true } | { ok: false, error: string }} */
+export function validateUnitSubmit({ fields, personId }) {
+  return text(fields.quotes?.[personId]) ? { ok: true } : fail('Add your one-line "why TVC" before submitting.');
+}
+
+const copyOf = (c) => ({ bio: text(c?.bio), family: text(c?.family), photos: c?.photos ?? [], quotes: c?.quotes ?? {}, links: c?.links ?? {} });
+const sameCopy = (a, b) => same(copyOf(a), copyOf(b));
+const emptyCopy = (c) => !text(c?.bio) && !text(c?.family) && !(c?.photos ?? []).length && !Object.keys(c?.quotes ?? {}).length && !Object.keys(c?.links ?? {}).length;
+
+/**
+ * What the page shows one owner: the shared story, their own quote and link to edit, and their
+ * housemates' beside it (read-only). `hasUnsubmittedChanges` keeps the status chip honest: text in
+ * review or live is unaffected by edits, so they need to know their newest wording isn't handed in yet.
+ * @param row a member_unit_stories row, or null
+ * @param {{ personId: string, people: { id: string, firstName: string }[] }} viewer
+ */
+export function unitStoryView(row, { personId, people }) {
+  const state = draftState(row);
+  const f = state.fields;
+  const status = row?.status ?? 'draft';
+  const against = status === 'in_review' ? row?.submitted : row?.approved;
+  const againstPublic = status === 'in_review' ? row?.submitted_public : row?.approved_public;
+  const hasUnsubmittedChanges = !row ? false : status === 'draft' || status === 'rejected' ? !emptyCopy(row.draft) : !(sameCopy(row.draft, against) && !!row.draft_public === !!againstPublic);
+  return {
+    version: state.version,
+    draft: { bio: f.bio, family: f.family, quote: f.quotes[personId] ?? '', link: f.links[personId] ?? '', photos: f.photos },
+    others: people
+      .filter((p) => p.id !== personId && (f.quotes[p.id] || f.links[p.id]))
+      .map((p) => ({ firstName: p.firstName, quote: f.quotes[p.id] ?? '', link: f.links[p.id] ?? '' })),
+    showOnPublicSite: f.public,
+    status,
+    submittedAt: row?.submitted_at ?? null,
+    approvedAt: row?.approved_at ?? null,
+    hasUnsubmittedChanges,
+    reviewerNote: status === 'rejected' ? (row?.reviewer_note ?? null) : null,
+    hasApproved: !!row?.approved,
+  };
+}
+
+// ---- who may see a unit's photo ----
+
+// The photo entry ({ ref, personId }) in whichever copy holds it, or null.
+export function unitPhotoHolder(row, photoId) {
+  for (const copy of [row?.draft, row?.submitted, row?.approved]) {
+    const found = (copy?.photos ?? []).find((p) => p.ref === photoId);
+    if (found) return found;
+  }
+  return null;
+}
+
+// The unit's own people see a photo in any copy (a draft or one in review included); everyone else only
+// sees one in the approved copy, and only if the member who uploaded it is listed in the directory.
+export function unitPhotoAccess({ viewerHouseholdIds, row, photoId, listed }) {
+  if (!unitPhotoHolder(row, photoId)) return false;
+  if (viewerHouseholdIds.includes(row.household_id)) return true;
+  return !!listed && (row.approved?.photos ?? []).some((p) => p.ref === photoId);
 }
