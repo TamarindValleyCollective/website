@@ -1,6 +1,6 @@
 // Netlify Function (v2 API) behind the /internal landing page (issue #89):
 // "who am I, and which internal tools can I open?". Any signed-in, active
-// staff member may ask; it answers only about the caller, and only with what
+// admin may ask; it answers only about the caller, and only with what
 // the landing page needs — a display name and the tools they hold a role in.
 // A tool is listed because the caller has a role in its module; the tool's own
 // page and API still check the capability they need on every request, so this

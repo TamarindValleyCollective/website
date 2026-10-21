@@ -3,7 +3,7 @@
 // persisted by whatsapp-webhook.mts and sends replies via Meta's Send
 // Message API. See WHATSAPP.md for the full setup context.
 //
-// Gated by Google Sign-In plus the shared staff access model (issue #89):
+// Gated by Google Sign-In plus the shared admin access model (issue #89):
 // requireStaff (lib/staff-access.ts) verifies the ID token and checks the
 // caller's role in the "whatsapp" module — `view` to read, `reply` to send,
 // `manage` to block/unblock. This replaced the shared "Photo Pool Curators"
@@ -74,7 +74,7 @@ async function handleConversations(url: URL, staff: StaffGrant): Promise<Respons
       ? await searchConversations(search, { ...(limit ? { limit } : {}), matchNames: namesVisible })
       : await listConversations(limit ? { limit } : {});
     // Which of these numbers asked us to stop WhatsApp messages (STOP reply, or
-    // a staff opt-out below). Best-effort: if the list can't be read the inbox
+    // an admin opt-out below). Best-effort: if the list can't be read the inbox
     // still loads, it just can't show the state.
     let optedOut = new Set<string>();
     try {
@@ -132,7 +132,7 @@ async function handleMessages(url: URL): Promise<Response> {
 
   try {
     const messages = await listMessages(conversationId);
-    // Best-effort: opening a thread marks it read for every staff member,
+    // Best-effort: opening a thread marks it read for every admin,
     // but a failure here shouldn't block the messages the caller asked for.
     markConversationRead(conversationId).catch((err) => console.error('Failed to mark conversation read', err));
     return jsonResponse({
@@ -166,12 +166,12 @@ async function handleReply(req: Request, staff: StaffGrant): Promise<Response> {
     return jsonResponse({ error: 'conversationId and body are required' }, 400);
   }
 
-  // Multiple staff share one WhatsApp inbox — often signed into a single
+  // Multiple admins share one WhatsApp inbox — often signed into a single
   // shared Google account rather than each person's own, so the ID token's
   // name claim can't tell them apart. The page asks each person to type
   // their own name once (kept in localStorage), sent here as responderName.
   // The fallbacks below only apply if that's somehow missing (an old cached
-  // page from before this existed, say): the name registered for the staff
+  // page from before this existed, say): the name registered for the admin
   // member, then the name on their Google account, then a masked form of
   // their address — never the full email. The signature is part of the actual
   // text sent to the customer, not just internal metadata, so it's included
@@ -361,7 +361,7 @@ async function handleGuest(req: Request, url: URL): Promise<Response> {
   return jsonResponse({ since: conversation.created_at ?? null, ...context });
 }
 
-// Streams a guest's photo / voice note / video / document to a signed-in staff
+// Streams a guest's photo / voice note / video / document to a signed-in admin
 // member. The file lives at Meta (kept ~30 days): look up its media id from our
 // own message row (never from the request), ask Graph for a short-lived URL,
 // then fetch that URL with the access token and pass the bytes through. Capped
@@ -422,7 +422,7 @@ async function handleMedia(url: URL): Promise<Response> {
   }
 }
 
-// Staff opt a number out of (or back into) guest WhatsApp template messages —
+// Admins opt a number out of (or back into) guest WhatsApp template messages —
 // the same whatsapp_opt_outs list a STOP reply writes to, which
 // lib/whatsapp-send.ts checks before every template send. For a guest who
 // asked another way (email, in person), or to undo a mistake. Nothing is sent
@@ -478,7 +478,7 @@ async function handleOptOut(req: Request, staff: StaffGrant): Promise<Response> 
 // a reply is sent. Both are one Cloud API call against that message's id.
 // Best-effort by design: the inbox page calls this opportunistically, and a
 // failure (no inbound message, outside the 24h window, Meta hiccup) must never
-// surface as an error to staff, so it always answers 200 with `ok`.
+// surface as an error to admins, so it always answers 200 with `ok`.
 async function handleSeen(req: Request): Promise<Response> {
   let payload: { conversationId?: string; typing?: boolean };
   try {

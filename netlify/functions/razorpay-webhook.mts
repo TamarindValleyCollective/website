@@ -413,7 +413,7 @@ export default async (req: Request): Promise<Response> => {
   // A guest who was already mid-checkout when registration closed (the
   // event was cancelled, or registration shut some other way) can still
   // pay their personal link. The payment is recorded and receipted like any
-  // other — this just tells staff, who decide whether to refund. Only
+  // other — this just tells admins, who decide whether to refund. Only
   // checked for bookings made through event-booking.mts (which set
   // baseReferenceId); best-effort, never affects the webhook response.
   if (notes.baseReferenceId && mode === keyMode) {

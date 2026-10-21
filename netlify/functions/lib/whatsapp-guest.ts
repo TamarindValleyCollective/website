@@ -40,7 +40,7 @@ export interface BookingRow {
   created_at: string;
 }
 
-// What state the booking is in, in the words staff use on the Event Payments page.
+// What state the booking is in, in the words admins use on the Event Payments page.
 export function bookingStatus(row: BookingRow): string {
   if (row.refunded_at) return 'Refunded';
   if (row.refund_initiated_at) return row.refund_status === 'failed' ? 'Refund failed' : 'Refund started';

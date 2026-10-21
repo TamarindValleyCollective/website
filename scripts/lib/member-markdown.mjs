@@ -2,7 +2,7 @@
 // *italic*, [words](https://address) links, and line breaks (a blank line starts a new paragraph).
 // Nothing else is Markdown here: no headings, lists, images or HTML, so "<" is just a character.
 //
-// Pure, so the editor, the directory, the staff queue, the public export and the public Members page
+// Pure, so the editor, the directory, the admin queue, the public export and the public Members page
 // all read a story the same way. The parser makes a small tree; callers turn it into DOM nodes or HTML
 // themselves (renderBlocks), so there is one place that decides what a link is.
 
@@ -134,7 +134,7 @@ export function toPlain(src) {
   return parseMarkdown(src).map(flat).join(' ').replace(/\s+/g, ' ').trim();
 }
 
-// Every link in the text, as { label, href }, for the staff queue and for counting.
+// Every link in the text, as { label, href }, for the admin queue and for counting.
 export function linksIn(src) {
   const out = [];
   const walk = (nodes) => nodes.forEach((n) => {

@@ -1,6 +1,6 @@
 // Netlify Function (v2 API) behind the WhatsApp inbox's "Suggest reply" button
 // (src/pages/internal/whatsapp.astro). Given a conversation, drafts a reply for a
-// staff member to read, edit and send. It never sends anything itself.
+// admin to read, edit and send. It never sends anything itself.
 //
 // Grounded the same way as the site's chat widget: the draft may only use the
 // site's own pages (lib/site-retrieval.ts), so it can't invent prices, dates or
@@ -8,7 +8,7 @@
 // refund, comes back flagged "needs staff" with a plain-language reason.
 //
 // Privacy: the model sees only the text of the recent conversation labelled "Guest"
-// and "TVC": no names, no phone numbers, no staff signatures (lib/whatsapp-suggest.ts).
+// and "TVC": no names, no phone numbers, no admin signatures (lib/whatsapp-suggest.ts).
 // Which AI service reads it is WHATSAPP_SUGGEST_PROVIDER: "anthropic" (default) or
 // "gemini" (Google first, Anthropic if Google fails, as search-ai.mts does).
 // Google's FREE tier lets Google use submitted content to improve its products and
@@ -27,7 +27,7 @@ import { SUGGEST_INSTRUCTIONS, buildTranscript, parseSuggestion, sanitizeDraft, 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 const MAX_OUTPUT_TOKENS = 600;
 
-// A staff tool, so limits are about runaway spend rather than abuse: one person
+// An admin tool, so limits are about runaway spend rather than abuse: one person
 // can't loop it, and a daily ceiling bounds the worst case. A request costs about
 // as much as a chat message (the retrieved site pages are most of the prompt).
 const RATE_LIMIT_STORE = 'whatsapp-suggest-rate-limit';
@@ -39,7 +39,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 }
 
-// A Blobs outage shouldn't lock staff out of a drafting aid: fail open and log.
+// A Blobs outage shouldn't lock admins out of a drafting aid: fail open and log.
 async function allowed(check: () => Promise<boolean>): Promise<boolean> {
   try {
     return await check();
@@ -138,7 +138,7 @@ export default async (req: Request): Promise<Response> => {
   const { draft, removedLink } = sanitizeDraft(suggestion.draft);
   if (!draft) return jsonResponse({ error: "Couldn't come up with a draft for this one. Please reply by hand." }, 502);
 
-  // Sources the staff member can check the draft against: only pages that were
+  // Sources the admin can check the draft against: only pages that were
   // actually given to the model (a made-up path is dropped).
   const given = new Map<string, SitePage>(pages.map((p) => [p.url, p]));
   const sources = suggestion.pages

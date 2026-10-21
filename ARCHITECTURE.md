@@ -167,7 +167,7 @@ flowchart TD
         CANCELPAGE["/cancel-booking page<br/>Linked from the receipt email —<br/>shows booking summary, confirms<br/>cancellation request via /api/cancel-booking"]
     end
 
-    subgraph INTERNAL5["5 · Internal tool — staff-only, not part of the public site flow"]
+    subgraph INTERNAL5["5 · Internal tool — admin-only, not part of the public site flow"]
         POOLDASH["Photo Pool dashboard (/internal/photo-pool)<br/>Google Sign-In gated client-side shell — shows uploader,<br/>EXIF/GPS, editable description; unlinked, noindex,<br/>sitemap-excluded"]
         WHATSAPPDASH["WhatsApp dashboard (/internal/whatsapp)<br/>Google Sign-In gated two-pane chat UI — conversation<br/>list + thread + reply box; unlinked, noindex,<br/>sitemap-excluded"]
         ACCOMMODATIONDASH["Accommodation Allocation (/internal/accommodation-calendar)<br/>Google Sign-In gated tent-booking dashboard —<br/>day/week/month views, guest directory + typeahead,<br/>audit log; unlinked, noindex, sitemap-excluded"]
@@ -257,26 +257,26 @@ flowchart TD
     CF --> INTERNAL5
     POOLDASH --> APIFN3
     APIFN3 -.->|"list Inbox, proxy thumbnails,<br/>move on approve/reject"| GDRIVE
-    APIFN3 -.->|"check staff role"| SUPABASE
+    APIFN3 -.->|"check admin role"| SUPABASE
     APIFN3 -.->|"verify curator's ID token"| GIDTOKEN
     POOLDASH -.->|"Sign in with Google"| GIDTOKEN
     WHATSAPPDASH --> APIFN7
     APIFN7 -.->|"list/read conversations + messages"| SUPABASE
     APIFN7 -.->|"send reply"| WAMETA
-    APIFN7 -.->|"check staff role"| SUPABASE
-    APIFN7 -.->|"verify staff ID token"| GIDTOKEN
+    APIFN7 -.->|"check admin role"| SUPABASE
+    APIFN7 -.->|"verify admin ID token"| GIDTOKEN
     WHATSAPPDASH -.->|"Sign in with Google"| GIDTOKEN
     ACCOMMODATIONDASH --> APIFN9
     APIFN9 -.->|"read/write bookings, guests,<br/>audit log"| SUPABASE
-    APIFN9 -.->|"check staff role"| SUPABASE
-    APIFN9 -.->|"verify staff ID token"| GIDTOKEN
+    APIFN9 -.->|"check admin role"| SUPABASE
+    APIFN9 -.->|"verify admin ID token"| GIDTOKEN
     ACCOMMODATIONDASH -.->|"Sign in with Google"| GIDTOKEN
     EVENTPAYDASH --> APIFN14
     APIFN14 -.->|"read/write bookings,<br/>record refunds"| SUPABASE
     APIFN14 -.->|"issue refund"| RAZORPAY
     APIFN14 -.->|"send refund<br/>confirmation email"| RESEND
-    APIFN14 -.->|"check staff role,<br/>audit refunds"| SUPABASE
-    APIFN14 -.->|"verify staff ID token"| GIDTOKEN
+    APIFN14 -.->|"check admin role,<br/>audit refunds"| SUPABASE
+    APIFN14 -.->|"verify admin ID token"| GIDTOKEN
     EVENTPAYDASH -.->|"Sign in with Google"| GIDTOKEN
 
     GHA_DOMAIN -.->|"look up expiry dates"| RDAP
@@ -291,8 +291,8 @@ flowchart TD
     USAGEDASH --> APIFN16
     APIFN16 -.->|"read usage_daily/usage_snapshots/settings,<br/>write readings + settings"| SUPABASE
     APIFN16 -.->|"live domain expiry"| RDAP
-    APIFN16 -.->|"check staff role"| SUPABASE
-    APIFN16 -.->|"verify staff ID token"| GIDTOKEN
+    APIFN16 -.->|"check admin role"| SUPABASE
+    APIFN16 -.->|"verify admin ID token"| GIDTOKEN
     USAGEDASH -.->|"Sign in with Google"| GIDTOKEN
     APIFN17 -.->|"read usage data, remember<br/>alerts already sent"| SUPABASE
     APIFN17 -.->|"send alert digest"| RESEND
@@ -407,12 +407,12 @@ outside both the local machine and Netlify (the member-update-email workflow).
   pauses the site over exhausted credits a Netlify-hosted monitor would go silent too — and it holds
   no database credentials, only the `RESEND_API_KEY` already used by `member-update-email.yml`.
 - **`netlify/functions/usage-admin.mts` + `usage-alerts.mts` + `/internal/usage` +
-  `scripts/lib/usage-rules.mjs`** — the usage & limits module (see `USAGE.md`). A new `usage` staff
+  `scripts/lib/usage-rules.mjs`** — the usage & limits module (see `USAGE.md`). A new `usage` admin
   module (`view` for any role, `configure` admin-only). `usage-admin.mts` serves the page: the
   overview (Anthropic and Gemini counts, Supabase size, typed-in readings, active warnings), a
   separate `/domains` route (live RDAP lookups with a 4s timeout, cached an hour, so a slow registry
   can't hold up the page), and the two admin writes — a typed-in reading from a provider's own
-  dashboard and the price/limit settings — each audit-logged by staff id before it is written and
+  dashboard and the price/limit settings — each audit-logged by admin id before it is written and
   refused if the log can't be written. Nothing it returns contains an email or message text.
   `usage-alerts.mts` (hourly) evaluates the same rules and emails `core-team@tvc.farm` one digest,
   mailing a condition once and again only if it gets worse; `usage_alert_state` remembers what has
@@ -531,7 +531,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   conversation id, responses carry only a `label` (the contact's name, masked for `read_only`
   roles, or an opaque "Contact XXXX" when they have none), and search never matches on it. The
   reply signature is the name typed on the page; only if that is missing does it fall back to the
-  staff member's registered name, then the name on their Google account (the ID token's `name`
+  admin's registered name, then the name on their Google account (the ID token's `name`
   claim), then a masked address like `a••••@gmail.com` (`maskEmail`) — never the full email, which
   used to be printed into the customer's chat. Blocking is audit-logged before it happens and refused if the log write fails.
   Four routes: list conversations (optionally filtered by a `search` query param — matches contact
@@ -623,7 +623,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   (hidden)" with a Replace button, and a save that omits them keeps the stored values because
   `accommodation_resolve_person` coalesces missing values. Guest names and preferences/allergies
   are withheld/masked for `read_only`, and `created_by`/`updated_by`/the booking audit log now hold
-  the staff id, not an email. Full booking CRUD plus guest search/history,
+  the admin id, not an email. Full booking CRUD plus guest search/history,
   all against the `accommodation_*` tables in the "TVC ERP" Supabase project via
   `scripts/lib/accommodation-db.mjs`. The core guarantee this whole feature was built around:
   double-booking a tent is *physically impossible*, not just checked for in application code — an
@@ -637,7 +637,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   (`accommodation_booking_audit_log`, populated by table triggers, not application code, so no
   write path can bypass it) records every create/update/delete, and editing or deleting a booking
   whose stay has already happened requires and records a reason.
-  **Stay notifications (2026-10-12, member stays only).** A staff-triggered "Finalize & notify"
+  **Stay notifications (2026-10-12, member stays only).** An admin-triggered "Finalize & notify"
   button on a member-stay booking card calls `POST /api/accommodation-admin/bookings/notify`,
   which messages each guest on WhatsApp (if a mobile is on file) and email (if an email is on
   file) via `lib/stay-notify.ts` (templates `tvc_stay_confirmed`/`_updated`/`_cancelled`), plus a
@@ -661,9 +661,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `staff-registry.ts`, not the database. Every denial returns the same 403 so responses don't
   reveal who exists; lookup errors fail closed; a 30-second cache means a revoked role takes
   effect within seconds. `logStaffAction` appends to the append-only `staff_audit_log`, which
-  stores staff ids, never emails. **Status:** tables, the helper, and role rows for everyone on the
-  two Sheet allow-lists (9 staff, 21 grants, backfilled 2026-10-04 and applied as data, not a
-  migration, so staff emails stay out of version control) exist. `photo-pool.mts` and
+  stores admin ids, never emails. **Status:** tables, the helper, and role rows for everyone on the
+  two Sheet allow-lists (9 admins, 21 grants, backfilled 2026-10-04 and applied as data, not a
+  migration, so admin emails stay out of version control) exist. `photo-pool.mts` and
   `whatsapp-admin.mts`, `event-payments-admin.mts` and `accommodation-admin.mts` now all gate on
   `requireStaff` (2026-10), so the Google Sheet allow-lists are no longer read by anything (the
   Sheets and their `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID` / `ACCOMMODATION_ALLOWED_EMAILS_SHEET_ID`
@@ -757,9 +757,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   never authorisation. The collapsed/expanded choice is kept in `localStorage`
   (`tvc-staff-nav-collapsed`); WhatsApp and the accommodation calendar start collapsed to give
   their wide layouts room. The shell owns the page title style (one `h1` size for every tool), the only Sign-out
-  control, and a compact **staff button** style (the public site's large orange `.button` becomes a
+  control, and a compact **admin button** style (the public site's large orange `.button` becomes a
   36px dark-green control with a quiet outlined secondary, via low-specificity `main .button` rules in
-  `StaffLayout.astro` so a page's own `--danger`/`--primary` modifiers still win; 44px on touch screens); staff screens use a four-step type scale (0.8 / 0.9 / 1 / 1.125 rem) and
+  `StaffLayout.astro` so a page's own `--danger`/`--primary` modifiers still win; 44px on touch screens); admin screens use a four-step type scale (0.8 / 0.9 / 1 / 1.125 rem) and
   `--tvc-line-strong` for control borders (3:1 on white; `--tvc-line` stays for dividers). Each link is still a full page load (in-page navigation, per-tool
   sub-menus and tabs are later steps); `components/StaffNav.astro` was removed. Where each tool
   lives is `MODULE_INFO[...].path` in `staff-registry.ts`.
@@ -839,9 +839,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   Razorpay Payment Link so no new bookings arrive. `refund.processed` also emails the payer "Refund processed". The same `lib/refund-alert.ts` `sendStaffAlert()` (to
   `core-team@tvc.farm`, cc `stay@linger.in`) also fires on a guest cancellation request (`cancel-booking.mts`, "Action
   needed") and when a payment lands after registration closed (`razorpay-webhook.mts`). The bulk cancel writes an
-  `event-payments.event_cancelled` staff audit entry. Alongside those emails, `lib/whatsapp-send.ts` can send approved
+  `event-payments.event_cancelled` admin audit entry. Alongside those emails, `lib/whatsapp-send.ts` can send approved
   WhatsApp templates via Meta's Send Message API (event cancelled / refund initiated / processed / request declined
-  to the guest, and a staff alert from `enquiry.mts`) — dormant until each template is approved and listed in
+  to the guest, and an admin alert from `enquiry.mts`) — dormant until each template is approved and listed in
   `WHATSAPP_APPROVED_TEMPLATES`; delivery is tracked in `whatsapp_template_sends` (migration `0032`), updated by
   `whatsapp-webhook.mts` from Meta's delivery `statuses` and shown per booking on the Event Payments dashboard; see `docs/whatsapp-templates.md` and `WHATSAPP.md`. Emails about test-mode bookings are rerouted to `contact@tvc.farm` only (`lib/email-routing.ts`). `POST /api/event-payments-admin/decline` lets an admin decline a
   guest's cancellation request (`declineCancellationRequest()`, migration `0029`): audit-logged, guest emailed, booking stays live. All three guard on `razorpay_refund_id` (and
@@ -863,7 +863,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   allow-list). Payer **email and phone never leave this Function**: each booking carries a
   `payerLabel` (the name, masked for `read_only` roles, or an opaque "Payer XXXX") and
   `hasEmail`/`hasPhone` flags; the duplicate-booking flag is still computed server-side from the
-  email, and the refund email is sent to the stored address server-side. The staff member is
+  email, and the refund email is sent to the stored address server-side. The admin is
   recorded by id (not email) in `refunded_by` and in the notes stored by Razorpay, and every
   refund is audit-logged **before** any money moves (refused if the log write fails).
   `GET ?eventReferenceId=` returns every booking
@@ -1313,7 +1313,7 @@ never touches Netlify either.
 
 ### 5. Internal tools
 
-- **Photo Pool dashboard** (`/internal/photo-pool`) — staff-only, not part of the public site:
+- **Photo Pool dashboard** (`/internal/photo-pool`) — admin-only, not part of the public site:
   unlinked from nav, `noindex`, excluded from the sitemap. A curator signs in with their own
   Google account (Google Identity Services, an explicit "Sign in with Google" button, not the
   silent One Tap prompt) to see photos sitting in a shared Google Drive "Inbox" folder — anyone
@@ -1354,7 +1354,7 @@ never touches Netlify either.
   fetch returns a valid JPEG; a browser-native `<img blob:...>` load, even of a locally-generated
   synthetic blob, fails; the same bytes decode fine as a `data:` URL or with no CSP present).
   `img-src` now includes `blob:`.
-- **WhatsApp dashboard** (`/internal/whatsapp`, 2026-08-20) — staff-only, same shape as Photo Pool
+- **WhatsApp dashboard** (`/internal/whatsapp`, 2026-08-20) — admin-only, same shape as Photo Pool
   above: unlinked, `noindex`, Google Sign-In gated, reusing the exact same curator allow-list
   Sheet. Shows every conversation persisted by `whatsapp-webhook.mts` in the "TVC ERP" Supabase
   project, oldest-inbound-message-first within a thread; sending a reply calls Meta's Send Message
@@ -1366,7 +1366,7 @@ never touches Netlify either.
   awaiting `SUPABASE_SERVICE_ROLE_KEY`**: `SUPABASE_URL` and `WHATSAPP_PHONE_NUMBER_ID` are set on
   Netlify (all deploy contexts); the Supabase service-role key still needs pasting into Netlify's
   UI by hand (same secret-handling rule as `WHATSAPP_ACCESS_TOKEN`) before this can go live.
-- **Accommodation Allocation** (`/internal/accommodation-calendar`) — staff-only (Madhavan, the
+- **Accommodation Allocation** (`/internal/accommodation-calendar`) — admin-only (Madhavan, the
   farm manager, plus role-scoped external contacts like Linger), same shape as Photo Pool/WhatsApp
   above: unlinked, `noindex`, Google Sign-In gated. Briefly reused
   `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID`'s own Sheet at launch, then split into its own dedicated
@@ -1392,21 +1392,21 @@ never touches Netlify either.
 - **Event Payments** (`/internal/event-payments`) — same shape as the three tools above: unlinked,
   `noindex`, Google Sign-In gated, reusing `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID`'s "core team"
   allow-list rather than a fourth dedicated Sheet (real money movement is at least as sensitive as
-  WhatsApp/photo access, same staff bracket). Built 2026-09-24, the same day the event payment
+  WhatsApp/photo access, same admin bracket). Built 2026-09-24, the same day the event payment
   module itself went live, once Sharath asked not just for a read-only dashboard but for the
   ability to trigger the cancellation refund itself from the same page — see `RAZORPAY.md`'s
   "Internal admin page" note and `event-payments-admin.mts` above for how the refund actually
   reaches Razorpay.
 - **Member register** (`/internal/members`, 2026-10-18) — step 1 of the planned member portal
   (`members.tvc.farm`; design in `docs/plans/member-portal.md`, nothing member-facing built yet).
-  A read-only staff review of the register that replaces the "TVC Spend Summary" workbook's
+  A read-only admin review of the register that replaces the "TVC Spend Summary" workbook's
   Member Master / Farm Patta / House Patta tabs: one household per farm unit (`F-01`..`F-53`),
   its people, farm and house pattas, and a list of data gaps to fix. Same shape as the tools above
   (unlinked, `noindex`, Google Sign-In, `requireStaff` against the new `members` module in
   `staff-registry.ts`). `netlify/functions/members-admin.mts` reads the `member_*` tables
   (`supabase/migrations/0040_member_portal_schema.sql`, TVC ERP project, RLS on with no policies,
   service-role only) and masks server-side: email and phone values are never returned, only
-  whether one is on file, and names are masked for `read_only`. **Staff editing** (same page, same
+  whether one is on file, and names are masked for `read_only`. **Admin editing** (same page, same
   function, `POST /api/members-admin/edit`): `edit` (user, admin) corrects a person's name and
   replaces or clears their email and phone (write-only: the current value is never shown);
   `manage` (admin only) changes household membership and roles, a household's house, cluster and
@@ -1423,7 +1423,7 @@ never touches Netlify either.
   scored against every household by how many name words agree, with the sheet's farm number, then
   house number, as tie-breakers. Farm patta follows the farm plot and house patta follows the
   house; weak matches are reported rather than trusted. Migration 0040 must be applied to TVC
-  ERP by hand before the page works. A staff `manage` role can also let a person sign in to the
+  ERP by hand before the page works. An admin `manage` role can also let a person sign in to the
   member portal (`membership.invite`, needs an email on file; a database trigger caps it at two per
   household).
 - **Member portal** (`/members/`, planned home `members.tvc.farm`; 2026-10-18) — where a signed-in
@@ -1431,10 +1431,10 @@ never touches Netlify either.
   module search, the member's unit always in the top bar, widget dashboard); modules not built yet
   say "Soon" and nothing shows made-up figures. Its own minimal shell: no public header, footer,
   cookie banner, chat widget or analytics. **Sign-in** is Google (the same token verification as
-  staff, `verifyStaffToken`), but Google only proves who someone is: `lib/member-access.ts` then
+  admins, `verifyStaffToken`), but Google only proves who someone is: `lib/member-access.ts` then
   requires the verified email to belong to an active `member_people` row that has `can_login` on at
   least one household, otherwise the same neutral 403 whether the person is unknown, inactive or just
-  not invited yet. The session is kept apart from staff's (`scripts/lib/member-client.mjs`).
+  not invited yet. The session is kept apart from admins' (`scripts/lib/member-client.mjs`).
   **Data**: `members-me.mts` (`GET /api/members-me/home`, `POST /api/members-me/profile`) reads only
   the households the member can sign in for, never the register. A member gets their own email and
   mobile back; for everyone else in the household only whether one is on file. Members can change
@@ -1470,7 +1470,7 @@ never touches Netlify either.
   register: a record the register already holds whose survey number agrees (and patta number / area
   / owners where readable) is marked `verified` (blanks filled, nothing overwritten); a survey number
   with no entry becomes a `pending_review` record; a disagreement, a photo, or a survey number held
-  by another household changes nothing and waits. Staff see waiting documents as a flag on the
+  by another household changes nothing and waits. Admins see waiting documents as a flag on the
   household in `/internal/members`, open the file through a 60-second presigned R2 link
   (`POST /api/members-admin/land-document-link`, `manage` role, logged), and approve or reject each
   record (`landdoc.approve` / `landdoc.reject` through `/api/members-admin/edit`, audit-first). Owner
@@ -1489,7 +1489,7 @@ never touches Netlify either.
   **Document links and parcel outlines** (no migration): members open their own household's files
   through `POST /api/members-me/land-document-link` (their households only, audit-first as
   `member.land.view`, 60-second link); a record's `sourceDocumentId` ties its survey number to the
-  document it came from, in both the member portal and the staff register. A single-survey
+  document it came from, in both the member portal and the admin register. A single-survey
   Integrated Land Record carries a field sketch ("புலப்படம்") on page 2 as a small bitmap (a
   multi-survey patta has none). The background reader pulls it out (`readLandShape`, `unpdf`
   `extractImages`) and `scripts/lib/land-shape.mjs` rebuilds the parcel as a closed polygon: it finds the long
@@ -1561,7 +1561,7 @@ never touches Netlify either.
   `POST /api/members-me/story`), `submitted` (the snapshot in review, written by
   `POST /api/members-me/story-submit`, audit-first as `member.story.submit`, never with the text) and
   `approved` (written when the core team approves), so an edit never disturbs approved text. `show_on_public_site` defaults to off.
-  The bio and family text may carry a small Markdown subset (`**bold**`, `*italic*`, `[words](https://address)` links, blank line = paragraph; no HTML, images or headings): the editor's Bold/Italic/Link buttons write it, and one parser (`scripts/lib/member-markdown.mjs`) is shared by the editor preview, the directory popup, the staff queue (which lists each link's address), the public export and `MembersView`, so a link is only ever an explicit http(s) address. The writing check may fix words but a suggestion that would change an address is dropped. The old single "profile link" is still read (it links the first name) until the member opens their story, when it is written into the text as a normal link. `POST /api/members-me/story-review` returns
+  The bio and family text may carry a small Markdown subset (`**bold**`, `*italic*`, `[words](https://address)` links, blank line = paragraph; no HTML, images or headings): the editor's Bold/Italic/Link buttons write it, and one parser (`scripts/lib/member-markdown.mjs`) is shared by the editor preview, the directory popup, the admin queue (which lists each link's address), the public export and `MembersView`, so a link is only ever an explicit http(s) address. The writing check may fix words but a suggestion that would change an address is dropped. The old single "profile link" is still read (it links the first name) until the member opens their story, when it is written into the text as a normal link. `POST /api/members-me/story-review` returns
   suggestions on spelling, grammar, tone and house style (third person) from the Anthropic API
   (`lib/anthropic.ts`, model `STORY_REVIEW_MODEL`, default `claude-sonnet-5`; 10 checks per member and
   300 for the portal per day, counted in `usage-meter`), plus fixed checks that need no model (children
@@ -1601,7 +1601,7 @@ never touches Netlify either.
   a cap of 10 uploads a member a day. Photos are never public: `GET /api/members-me/photo` serves one only
   to its author (any copy) or, for the APPROVED photo of a listed member, to any signed-in member, and the
   page fetches it with the member's sign-in and shows it from a blob URL; `members-admin.mts` serves a
-  submitted or approved photo to staff with `edit`. Replacing a photo, removing it, resubmitting or
+  submitted or approved photo to admins with `edit`. Replacing a photo, removing it, resubmitting or
   approving deletes the files nothing refers to any more. `scripts/seed-member-stories.mjs` also writes
   `seed-photos.sql`, which attaches each card's existing public photo to the people seeded from it. Privacy
   notice v5 describes photos.
@@ -1621,7 +1621,7 @@ never touches Netlify either.
   primary + listed only) into `public/images/members/up-*.jpg` (git-ignored build output) and get the usual
   AVIF/WebP variants. If the endpoint does not exist yet the export is skipped; any other failure FAILS a
   production build, so the live site keeps its current stories instead of quietly reverting to the 2017
-  text. Batched publishing: approvals do nothing to the site until the staff "Publish to the website" button
+  text. Batched publishing: approvals do nothing to the site until the admin "Publish to the website" button
   (`site.publish`, `manage`) POSTs to a Netlify build hook (`NETLIFY_BUILD_HOOK_URL`), audit-first and at most
   once per 10 minutes (a build takes about half an hour and costs credits); the panel shows how many approved
   public stories are waiting. The old member-update email workflow still triggers on `members.ts` but now
@@ -1635,15 +1635,15 @@ never touches Netlify either.
   only raise the level. The result, low or high with reasons, is stored in `member_story_assessments` (never the
   story text) and the person's later approve/reject is written beside it. A story not for the public site is
   always low. A setting `story_autopublish` in `member_settings` (`{ mode: shadow | live, paused }`, changed by
-  staff `site.autopublish`, `manage`, audited) decides what happens: in SHADOW mode (the default) a person still
-  approves everything, the review queue shows what the assessment would have done, and the staff panel compares
+  admin `site.autopublish`, `manage`, audited) decides what happens: in SHADOW mode (the default) a person still
+  approves everything, the review queue shows what the assessment would have done, and the admin panel compares
   it with the team's decisions; in LIVE mode a low-risk story is approved at once by the system, a high-risk one
   stays in review and `sendStaffAlert` emails core-team with why and what changed (no email when the only reason
   is that the model was unavailable), and the scheduled function `members-daily-publish` (07:00 IST) starts one
   build if approved public stories are waiting. Paused keeps live mode but makes everything wait for a person.
-  Staff can take a published story off the site (`story.unpublish`, `manage`, which also starts a build). Photos
+  Admins can take a published story off the site (`story.unpublish`, `manage`, which also starts a build). Photos
   are never sent to the model: any public photo change is a rule-based hold. Privacy notice v6 discloses the check.
-  **Register cards and Google picture** (migration 0047, `scripts/lib/member-google-picture.mjs`): the staff
+  **Register cards and Google picture** (migration 0047, `scripts/lib/member-google-picture.mjs`): the admin
   member register's household cards name the owners by first name ("Asha & Ravi"), or by full name when a card
   has one person, and show each one's Google profile picture (or their initial). The picture comes from the
   `picture` claim of the Google sign-in token, which `verifyStaffToken` passes on only if it is an https address
@@ -1674,7 +1674,7 @@ never touches Netlify either.
 | Live weather widget (`/ecosystem/geography`) | ✅ Live — Open-Meteo, no API key, 15-minute `localStorage` cache |
 | Live rainfall chart/table/monsoon stat (`/ecosystem/weather`, `/api/rainfall`) | ✅ Live — reads the community's rainfall-log Sheet live, `RAINFALL_SHEET_ID` set on Netlify (all deploy contexts); multi-year line chart with year-filter checkboxes; verified against `tvc.farm/ecosystem/weather` and `tvc.farm/api/rainfall` directly |
 | Site search (nav icon / `/` key), AI-only via `/api/search-ai` | ✅ Live — deployed 2026-09-21, verified directly against `tvc.farm/api/search-ai` returning a real, grounded answer with source links from the Gemini free tier. Submit-triggered UI behavior (Enter, mobile keyboard action, tap) confirmed in a real browser pre-deploy. Pagefind (the prior client-side keyword index) was removed the same day in favor of this AI-only search |
-| Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | ✅ Live — Drive folders, service account, Google Sign-In OAuth client, staff roles (Supabase `staff_module_roles`, formerly a curator Sheet), all Netlify env vars configured; verified against production directly (`/internal/photo-pool` returns 200, `/api/photo-pool` returns 401 unauthenticated as expected for the Google Sign-In-gated function) |
+| Photo Pool dashboard (`/internal/photo-pool`, `/api/photo-pool`) | ✅ Live — Drive folders, service account, Google Sign-In OAuth client, admin roles (Supabase `staff_module_roles`, formerly a curator Sheet), all Netlify env vars configured; verified against production directly (`/internal/photo-pool` returns 200, `/api/photo-pool` returns 401 unauthenticated as expected for the Google Sign-In-gated function) |
 | WhatsApp webhook (`/api/whatsapp-webhook`) | ✅ Live — verified end-to-end with a real WhatsApp message to `+91 80 4110 9754` on 2026-08-19. Two real bugs found and fixed along the way: the number wasn't actually registered for Cloud API messaging (blocked by a stuck migration from the old AiSensy WABA, which still held the number), and the WABA was never subscribed to the app's webhook (`POST /{waba-id}/subscribed_apps` — a separate step from the App Dashboard's webhook config). Persists every inbound message to Supabase (2026-08-20); no longer emails per-message (see the stale-alert row below). See `WHATSAPP.md` |
 | WhatsApp reply dashboard (`/internal/whatsapp`, `/api/whatsapp-admin`) | ✅ Live — verified end-to-end with real WhatsApp messages and real replies sent from production. Unread indicators, real pagination, message previews, per-reply responder names, WhatsApp/iMessage-style avatars, and a full visual pass added 2026-08-20 after real usage surfaced gaps |
 | WhatsApp event reminders (`whatsapp-event-reminders.mts`, scheduled) | 🟡 Deployed 2026-10-10 with migration `0033` applied; both templates approved; sends only to opted-in guests |

@@ -1,5 +1,5 @@
 ---
-// The shell around every internal staff page (issue #89): a left menu listing
+// The shell around every internal admin page (issue #89): a left menu listing
 // the tools the signed-in person holds a role in, with their name and Sign out
 // at the bottom. It replaces the public website's header, footer, cookie banner,
 // chat widget and analytics on these pages, none of which belong on a tool that
@@ -196,7 +196,7 @@ const adminItems = [
     margin: 0 0 8px;
   }
 
-  /* Staff buttons. The shared .button is the public site's large orange pill; inside the
+  /* Admin buttons. The shared .button is the public site's large orange pill; inside the
      staff shell it becomes a compact, quiet control (36px, small radius). These rules are
      deliberately low specificity (main .button) so a page's own modifier classes
      (--danger, --primary, --icon...) still win, and global.css is untouched. */

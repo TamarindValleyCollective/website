@@ -92,7 +92,7 @@ export async function claimDecision(id, status, note) {
 }
 
 // Puts a claimed request back to pending when the payment link couldn't be
-// created, so staff can tap Approve again instead of the request being stuck.
+// created, so admins can tap Approve again instead of the request being stuck.
 export async function releaseDecision(id) {
   const res = await fetch(`${supabaseUrl()}/rest/v1/event_booking_requests?id=eq.${id}`, {
     method: 'PATCH',

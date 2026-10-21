@@ -1,8 +1,8 @@
-// The profile picture Google shows for a member's account, shown on their card in the staff member register.
+// The profile picture Google shows for a member's account, shown on their card in the admin register.
 //
 // It arrives in the Google sign-in token (`picture`) and is kept on member_people.google_picture_url, refreshed
 // each time the member signs in (so removing it from their Google account removes it here too). It is only ever
-// kept for someone who has accepted a privacy notice that says so, and only ever sent to core-team staff who may
+// kept for someone who has accepted a privacy notice that says so, and only ever sent to core-team admins who may
 // see names (never to other members, and not at all to a read-only role). Pure: the Functions call these.
 
 const HOSTS = [/\.googleusercontent\.com$/i, /\.ggpht\.com$/i];

@@ -149,7 +149,7 @@ export async function sendWhatsAppTemplate(opts: {
   }
 }
 
-// Staff alerts go to every number in WHATSAPP_STAFF_ALERT_NUMBERS
+// Admin alerts go to every number in WHATSAPP_STAFF_ALERT_NUMBERS
 // (comma-separated); nothing is sent when it isn't set.
 export async function sendStaffWhatsAppAlert(template: WhatsAppTemplateName, params: string[]): Promise<void> {
   const numbers = (process.env.WHATSAPP_STAFF_ALERT_NUMBERS ?? '').split(',').map((s) => s.trim()).filter(Boolean);

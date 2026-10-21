@@ -1,6 +1,6 @@
 // Netlify Function (v2 API) backing the internal member register
 // (src/pages/internal/members.astro): the households, people and patta details
-// imported from the workbook (step 1), and staff edits to them. See
+// imported from the workbook (step 1), and admin edits to them. See
 // docs/plans/member-portal.md.
 //
 // Auth: Google Sign-In client-side; requireStaff (lib/staff-access.ts) checks
@@ -392,7 +392,7 @@ async function decideLandItem(edit: any): Promise<void> {
     const r = must(await db('PATCH', `${table}?${eq('id', item.recordId)}`, approvalColumns(item, doc.land_type, doc.id, now)));
     if (r.rows.length === 0) throw new EditError("The record behind this no longer exists. Reload the page.", 404);
   } else if (item.outcome === 'pending' && item.recordId) {
-    // Only a record still waiting is removed; one staff already edited and verified is left alone.
+    // Only a record still waiting is removed; one admin already edited and verified is left alone.
     must(await db('DELETE', `${table}?${eq('id', item.recordId)}&verification=eq.pending_review`));
   }
 

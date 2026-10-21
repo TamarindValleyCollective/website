@@ -1,6 +1,6 @@
 // What a member may change about THEMSELVES through the portal. Deliberately
 // small: contact details freely, everything that defines membership (name,
-// household, house, plots) only through the core team (staff editing, or later a
+// household, house, plots) only through the core team (admin editing, or later a
 // reviewed change request). Email is the sign-in identity, so changing it needs
 // a re-verification step that isn't built yet and is not accepted here.
 //

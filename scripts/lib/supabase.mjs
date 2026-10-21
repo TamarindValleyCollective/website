@@ -407,7 +407,7 @@ export async function getLatestInboundWaMessageId(conversationId) {
 }
 
 // One message row by its own id (not Meta's) — used to look up the media a
-// message carries before fetching it from Meta for a staff member.
+// message carries before fetching it from Meta for an admin.
 /** @param {string} messageId */
 export async function getMessage(messageId) {
   const res = await restFetch(`/whatsapp_messages?id=eq.${encodeURIComponent(messageId)}&select=id,media_id,media_kind,media_mime,media_filename&limit=1`);

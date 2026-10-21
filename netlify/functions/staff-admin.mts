@@ -14,7 +14,7 @@
 //   * show anyone's email. An address is typed once to add a person and is
 //     never read back: no response from this Function contains one.
 // Each change is written to staff_audit_log *before* it is made and refused if
-// the log can't be written, so nothing happens unrecorded. Staff are recorded
+// the log can't be written, so nothing happens unrecorded. Admins are recorded
 // by id; the log holds ids, module names, roles and booking types only.
 import { requireSuperAdmin, logStaffAction, type SuperAdmin } from './lib/staff-access';
 import { maskEmail } from './lib/staff-masking';

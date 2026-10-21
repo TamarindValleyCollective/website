@@ -52,7 +52,7 @@ export async function sendRefundFailureAlert(failures: RefundFailure[], context:
 }
 
 // Internal alert to TVC's shared inbox + Linger — never the guest. `bodyHtml`
-// is just the inner content; it's wrapped in the branded staff shell here. Also used
+// is just the inner content; it's wrapped in the branded admin shell here. Also used
 // for non-refund "someone needs to act" alerts (guest cancellation requests,
 // a payment that landed after an event was cancelled).
 export async function sendStaffAlert(subject: string, bodyHtml: string, isTest = false): Promise<void> {

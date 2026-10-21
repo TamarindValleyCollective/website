@@ -24,7 +24,7 @@ admin dashboard; localizing the form (still English-only, as today).
    eventDate) and returns `short_url`. A duplicate-email warning and a reuse-the-open-link guard
    sit in front of that.
 3. `razorpay-webhook.mts` handles `payment_link.paid`, records the row in `event_payments`
-   (idempotent on `razorpay_payment_id`), sends the receipt, and alerts staff if the base link
+   (idempotent on `razorpay_payment_id`), sends the receipt, and alerts admins if the base link
    was already closed. Refund webhooks and everything after are keyed on the payment id.
 
 ## Target design

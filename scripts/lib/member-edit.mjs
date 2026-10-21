@@ -1,4 +1,4 @@
-// Validation for the staff edits on the member register (/internal/members).
+// Validation for the admin edits on the member register (/internal/members).
 // Pure functions: netlify/functions/members-admin.mts calls these, then writes.
 //
 // Every edit is one JSON object { action, ...fields }. `validateEdit` returns
@@ -31,7 +31,7 @@ export const ACTION_CAPABILITY = {
   // The core team's decision on a member's submitted story (member_stories).
   'story.approve': 'manage',
   'story.reject': 'manage',
-  // Start a site build so approved public stories reach tvc.farm (the staff "Publish to the website" button).
+  // Start a site build so approved public stories reach tvc.farm (the admin "Publish to the website" button).
   'site.publish': 'manage',
   // Risk-based publishing: the shadow/live switch and the pause, and taking one story off the public site.
   'site.autopublish': 'manage',

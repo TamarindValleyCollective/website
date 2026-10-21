@@ -1,7 +1,7 @@
 // Browser-side session for the member portal (src/pages/members/index.astro).
 // Kept apart from staff-client.mjs on purpose: a member's Google sign-in is
 // stored under its own key, so signing in or out of the portal never touches a
-// staff session on the same browser, and the member pages never send a staff
+// admin session on the same browser, and the member pages never send an admin
 // step-up token.
 //
 // Nothing here is a security boundary: the server (lib/member-access.ts)

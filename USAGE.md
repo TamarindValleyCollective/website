@@ -7,7 +7,7 @@
 TVC runs on several free tiers and prepaid credits that fail *suddenly* when used up. This module
 shows how close each one is and emails the core team before it runs out.
 
-- Page: `/internal/usage` (Google sign-in, staff role in the **Usage & limits** module).
+- Page: `/internal/usage` (Google sign-in, admin role in the **Usage & limits** module).
 - API: `netlify/functions/usage-admin.mts`. Alert emails: `netlify/functions/usage-alerts.mts`
   (hourly) to `core-team@tvc.farm`. Rules: `scripts/lib/usage-rules.mjs` (unit-tested).
 - Data: Supabase tables from migrations `0030_usage_metering.sql` and `0031_usage_dashboard.sql`.
@@ -70,7 +70,7 @@ webhook fields are subscribed (App Dashboard → WhatsApp → Configuration → 
 ## Setup checklist
 
 1. Apply migrations `0030` and `0031` to the TVC ERP Supabase project.
-2. A super admin grants staff a role in **Usage & limits** on `/internal/access` (`read_only` or
+2. A super admin grants admins a role in **Usage & limits** on `/internal/access` (`read_only` or
    `user` can view; `admin` can type in readings and change settings).
 3. An admin opens the page and enters: the Anthropic credit balance (and total, and expiry if any),
    the Anthropic input/output token prices (USD per million tokens, from Anthropic's pricing page),
@@ -102,4 +102,4 @@ the card and form from it, and `used`-kind meters alert at 70%/90% automatically
 - The credit estimate counts the whole day of the last reading, so it errs toward warning early.
 - The alert function runs on Netlify, so it cannot warn about Netlify itself being paused. The
   Netlify credits reading is a typed-in one and is mailed when it is *near* the limit.
-- No emails, IPs or message text are stored: only counts, sizes, dates and staff ids.
+- No emails, IPs or message text are stored: only counts, sizes, dates and admin ids.

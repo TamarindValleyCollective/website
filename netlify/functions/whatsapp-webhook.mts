@@ -25,7 +25,7 @@
 // This used to also email core-team@tvc.farm on every single message —
 // removed 2026-08-20 in favor of whatsapp-stale-alert.mts's 60-minute
 // unanswered-message digest, once per-message emails turned out to be more
-// clutter than signal for a shared inbox multiple staff check.
+// clutter than signal for a shared inbox multiple admins check.
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { upsertConversation, insertMessage, updateTemplateSendStatus, templateSendExists, claimAutoAck, addOptOut, removeOptOut, recordHealthEvent } from '../../scripts/lib/supabase.mjs';
 import { getPaymentById } from '../../scripts/lib/event-payments-db.mjs';
@@ -126,7 +126,7 @@ function describeMessage(message: WhatsAppMessage): string {
       return `[Shared a location] ${[message.location?.name, message.location?.address].filter(Boolean).join(', ')}`.trim();
     default:
       // Photos, voice notes, video, documents and stickers read as their kind
-      // (the file itself is fetched from Meta when staff open it).
+      // (the file itself is fetched from Meta when admins open it).
       return describeMedia(message) ?? `[${message.type} message — not shown here]`;
   }
 }
@@ -197,7 +197,7 @@ async function maybeAutoAck(message: WhatsAppMessage, conversation: { id: string
 
 // A delivery receipt for a template message. Records the new status; when it
 // is a FAILURE for a guest-facing template (typically: the number isn't on
-// WhatsApp), emails staff — the guest then only has the email, and nothing
+// WhatsApp), emails admins — the guest then only has the email, and nothing
 // else would tell anyone. The alert for a test-mode booking goes to the test
 // inbox only, like every other test-booking email.
 async function handleDeliveryStatus(status: any): Promise<void> {

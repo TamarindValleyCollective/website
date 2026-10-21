@@ -40,6 +40,16 @@ emails — what is measured vs typed in, the thresholds, the setup steps, and ho
 **Update it in the same change** whenever that changes — a new service tracked, a changed
 threshold, a new typed-in meter, a new alert rule.
 
+## Terminology: admin and staff
+
+"Admin" is anyone who runs the internal tools under `/internal`: the core team (community members), plus
+Madhavan's admin functions. "Staff" means the people TVC employs on the farm ("local staff", "farm staff"),
+and "Linger staff" at the stay partner. Never call a tool user, queue or screen "staff": it is the admin queue,
+admin register, admin shell, admin alert. Existing identifiers keep their names (`StaffLayout`, `requireStaff`,
+`staff_users`, `staff_audit_log`, `/api/staff-*`, `staff.*` audit actions, `WHATSAPP_STAFF_ALERT_NUMBERS`, the
+`tvc_*staff*` Meta template names, `needsStaff`); renaming those needs a migration and a real reason, not a
+wording pass. Migration comments and the change log are history and are left as written.
+
 ## Design language
 
 `src/styles/global.css` is the single source of truth for TVC's design tokens (colors, type,
@@ -51,7 +61,7 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
 - Orange has three jobs: `--tvc-orange-cta` fills the primary `.button` only; `--tvc-orange` is for
   non-text marks (focus rings, underlines, hover); small orange text uses `--tvc-orange-text`, and
   orange on dark green uses `--tvc-orange-light`. Never white text on `--tvc-orange-cta`.
-- Inside the staff shell (`StaffLayout.astro`) `.button` is a compact 36px dark-green control, not the
+- Inside the admin shell (`StaffLayout.astro`) `.button` is a compact 36px dark-green control, not the
   public orange pill; don't restyle buttons per page, add a modifier class only when a page needs a
   different colour.
 - Use `--radius` (14px, cards), `--radius-sm` (8px), `--radius-field` (10px) and `--shadow-soft`

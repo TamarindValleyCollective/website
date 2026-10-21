@@ -326,7 +326,7 @@ export function reconcile({ extraction, landType, household, existing, heldElsew
 const num = (v) => (v == null ? null : Number(v));
 
 // The status of the whole document, from its items: 'needs_review' while any item still waits
-// for the core team (a new record is always one of them; a decision from staff clears it),
+// for the core team (a new record is always one of them; a decision from admins clears it),
 // otherwise 'applied'.
 export function documentStatus(items) {
   const waiting = items.some((i) => ['pending', 'mismatch', 'check', 'conflict'].includes(i.outcome) && !i.decision);

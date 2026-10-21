@@ -11,4 +11,4 @@ price:
     label: "per person"
 ---
 
-Internal test fixture — see RAZORPAY.md ("Rehearsing bookings with the fake event"). `draft: true` keeps it off every public page, listing, and route; the only places it appears are the staff Event Payments dashboard dropdown (marked "(draft)") and, in `astro dev` only, `/internal/test-event/fake-test-event`.
+Internal test fixture — see RAZORPAY.md ("Rehearsing bookings with the fake event"). `draft: true` keeps it off every public page, listing, and route; the only places it appears are the admin Event Payments dashboard dropdown (marked "(draft)") and, in `astro dev` only, `/internal/test-event/fake-test-event`.

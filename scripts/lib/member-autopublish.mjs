@@ -1,4 +1,4 @@
-// The switch for risk-based publishing, and what the staff panel shows about how the assessment has done.
+// The switch for risk-based publishing, and what the admin panel shows about how the assessment has done.
 // Pure: netlify/functions/members-admin.mts and the daily job read and write the rows with these.
 //
 // mode "shadow": every story is assessed and shown to the core team with what the assessment would

@@ -4,7 +4,7 @@
 //
 // Only an exact keyword counts (after trimming, lower-casing and dropping
 // punctuation): "please stop calling me on this number" or "cancel my booking"
-// are normal messages for staff, not opt-outs. "cancel" is deliberately NOT a
+// are normal messages for admins, not opt-outs. "cancel" is deliberately NOT a
 // keyword, since guests use it about their booking.
 
 const STOP_WORDS = new Set(['stop', 'stop all', 'stop whatsapp', 'unsubscribe', 'opt out', 'optout', 'stop messages', 'stop messaging']);

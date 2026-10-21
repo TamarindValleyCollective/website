@@ -1,4 +1,4 @@
-// Browser-side helpers shared by every internal staff page: /internal
+// Browser-side helpers shared by every internal admin page: /internal
 // (landing), /internal/access, /internal/security, and the four tools (photo
 // pool, WhatsApp, event payments, accommodation calendar), which import
 // TOKEN_KEY from here. One Google sign-in is kept in sessionStorage under a
@@ -238,7 +238,7 @@ export async function passkeyStepUp(api) {
   });
 }
 
-// A story photo for the reviewer: an uploaded one is fetched with the staff sign-in (and step-up, if
+// A story photo for the reviewer: an uploaded one is fetched with the admin sign-in (and step-up, if
 // any) and shown from a blob URL; a path on the public site is used as it is.
 const staffPhotoCache = new Map();
 /** @param {string} ref @param {'square' | 'full'} [size] @returns {Promise<string>} */

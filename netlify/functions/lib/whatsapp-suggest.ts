@@ -2,7 +2,7 @@
 // a guest conversation becomes a transcript, how the model's answer is parsed and
 // made safe, and the Gemini call. The Anthropic call is the shared callAnthropic in
 // site-retrieval.ts. Nothing here sends anything to a guest: a suggestion is only
-// ever a draft that a staff member reads, edits and sends.
+// ever a draft that an admin reads, edits and sends.
 import { recordUsage } from './usage-meter';
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -32,7 +32,7 @@ const MAX_TRANSCRIPT_MESSAGES = 12;
 const MAX_MESSAGE_CHARS = 600;
 
 // The conversation as the model sees it. Names and numbers never go in: only who
-// spoke ("Guest" or "TVC") and what they wrote. Staff signatures ("- Name") and the
+// spoke ("Guest" or "TVC") and what they wrote. Admin signatures ("- Name") and the
 // "[Auto-reply]" marker are stripped so the model sees plain text and the team's
 // names aren't passed along.
 export function buildTranscript(messages: TranscriptMessage[]): string {
@@ -85,7 +85,7 @@ const URL_RE = /\bhttps?:\/\/[^\s<>"')\]]+/gi;
 const MAX_DRAFT_CHARS = 1200;
 
 // A guest's message could try to talk the model into putting a link or a request for
-// money in the draft, which a rushed staff member might then send. Links to anything
+// money in the draft, which a rushed admin might then send. Links to anything
 // other than tvc.farm are removed (and the draft flagged), the text is capped, and
 // stray formatting is tidied. This is a safety net, not a replacement for reading it.
 export function sanitizeDraft(draft: string): { draft: string; removedLink: boolean } {

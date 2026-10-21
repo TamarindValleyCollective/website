@@ -5,7 +5,7 @@
 //
 // We never store the file itself: Meta keeps media for about 30 days and hands
 // out a short-lived download URL, so the inbox fetches it through the admin
-// function when a staff member looks. That keeps guests' photos out of our
+// function when an admin looks. That keeps guests' photos out of our
 // database and means they stop being viewable once Meta drops them.
 
 export type MediaKind = 'image' | 'audio' | 'video' | 'document' | 'sticker';
@@ -52,7 +52,7 @@ export function describeMedia(message: any): string | null {
 
 // Types a browser can safely render inline from our origin. Everything else
 // (documents, SVG, HTML, unknown) is only ever offered as a download, so a guest
-// can't get a script to run in the staff inbox's origin by sending a crafted file.
+// can't get a script to run in the admin inbox's origin by sending a crafted file.
 const INLINE_MIME = new Set([
   'image/jpeg',
   'image/png',
@@ -78,7 +78,7 @@ function safeFilename(name: string | null | undefined): string {
   return cleaned.slice(0, 80) || 'file';
 }
 
-// Response headers for serving a guest's file to a staff member.
+// Response headers for serving a guest's file to an admin.
 export function mediaResponseHeaders(mime: string | null | undefined, filename: string | null | undefined): Record<string, string> {
   const base = baseMime(mime);
   const inline = INLINE_MIME.has(base);

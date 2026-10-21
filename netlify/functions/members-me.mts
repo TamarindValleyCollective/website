@@ -675,7 +675,7 @@ async function handlePhoto(req: Request): Promise<Response> {
 // ---- unit stories ------------------------------------------------------------
 // One story per UNIT (member_unit_stories, migration 0049): bio, family, photos and the public switch are
 // shared by the unit's owners; each person keeps their own quote and profile link. The rules are in
-// scripts/lib/member-unit-story.mjs. Nothing in the portal calls these yet: the staff queue, risk
+// scripts/lib/member-unit-story.mjs. Nothing in the portal calls these yet: the admin queue, risk
 // assessment, public export and directory still read member_stories until they move over.
 
 const UNIT_STORY_COLUMNS = 'household_id,draft,draft_public,draft_version,draft_changed,status,submitted,submitted_public,submitted_at,submitted_by,approved,approved_public,approved_at,reviewer_note';

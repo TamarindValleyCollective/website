@@ -41,7 +41,7 @@ export function buildHouseholdReview({ households, people, memberships, plots, h
         canLogin: m.can_login,
         hasEmail: Boolean(person.email),
         hasPhone: Boolean(person.phone),
-        // Google's picture for the account, for the staff register card (members-admin.mts drops it for roles that cannot see names).
+        // Google's picture for the account, for the admin register card (members-admin.mts drops it for roles that cannot see names).
         picture: safeGooglePicture(person.google_picture_url),
       })),
       plots: (plotsByHousehold.get(h.id) ?? []).map((p) => ({

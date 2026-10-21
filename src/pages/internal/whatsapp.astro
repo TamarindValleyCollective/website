@@ -1,7 +1,7 @@
 ---
 // Internal reply dashboard for the WhatsApp Cloud API integration: shows
 // conversations persisted by netlify/functions/whatsapp-webhook.mts and
-// lets staff reply, via netlify/functions/whatsapp-admin.mts. Deliberately
+// lets admins reply, via netlify/functions/whatsapp-admin.mts. Deliberately
 // unlinked from nav; gated by Google Sign-In plus the same curator allow-list
 // photo-pool.astro uses, not a shared password. See WHATSAPP.md.
 import StaffLayout from '../../layouts/StaffLayout.astro';
@@ -33,7 +33,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
     <div id="forbidden" class="gate card" hidden>
       <p class="gate-copy">Signed in as <strong id="forbidden-email"></strong>, but this Google account isn't authorized to use the WhatsApp inbox.</p>
-      <p class="hint" style="margin: 4px 0 12px;">Ask an admin to add it to the staff list.</p>
+      <p class="hint" style="margin: 4px 0 12px;">Ask an admin to add it to the admin list.</p>
       <p class="gate-copy">Are you a member? Your member dashboard is at <a href="/members/">tvc.farm/members</a>.</p>
       <button type="button" id="use-different-account" class="button">Use a different account</button>
     </div>
@@ -649,7 +649,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     }
   }
 
-  /* Page-local modifiers on the shared staff .button, same convention as the other
+  /* Page-local modifiers on the shared admin .button, same convention as the other
      staff pages (written .button.x because the shell's `main .button` would otherwise win):
      --icon for a square icon-only control, --danger-outline for a control whose
      current state is a restriction. */
@@ -1162,7 +1162,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   // still checks its own role on the server for every request.
   import { TOKEN_KEY as STORAGE_KEY } from '../../../scripts/lib/staff-client.mjs';
   // This inbox is signed into from one shared Google account used by several
-  // staff, so the ID token's own name claim can't tell them apart — each
+  // admins, so the ID token's own name claim can't tell them apart — each
   // person types their own name once, remembered on that browser (localStorage,
   // not sessionStorage, so it survives across tabs/sessions on the same
   // device) rather than re-typed every reply.
@@ -1603,7 +1603,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
       // Inbound avatars match the customer's avatar everywhere else (list,
       // header) — keyed by their conversation id. Outbound avatars are keyed by
-      // whichever staff name is in the signature, so different repliers
+      // whichever admin name is in the signature, so different repliers
       // in the same thread get visibly different avatars, same as the
       // customer would see distinct people in a group chat.
       const avatar =
@@ -1695,7 +1695,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     }
   }
 
-  // Read receipts: when a staff member who can reply has the thread open and the
+  // Read receipts: when an admin who can reply has the thread open and the
   // guest's latest message is one we haven't acknowledged in this browser yet,
   // tell WhatsApp it was read (blue ticks on the guest's phone). Fire-and-
   // forget — the server answers 200 even when Meta refuses (no inbound message,
@@ -1715,7 +1715,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     }).catch(() => {});
   }
 
-  // "typing…" on the guest's phone while staff write a reply. WhatsApp shows it
+  // "typing…" on the guest's phone while admins write a reply. WhatsApp shows it
   // for about 25 seconds, so re-send at most every 20 while they keep typing.
   let lastTypingSentAt = 0;
   replyInput.addEventListener('input', () => {
@@ -1732,7 +1732,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   // ---- Suggested reply --------------------------------------------------------
   // "Suggest reply" asks the server to draft an answer from the site's own pages
   // (see netlify/functions/whatsapp-suggest.mts). It only ever fills this card: a
-  // staff member chooses "Use this reply" (it lands in the reply box to edit) and
+  // admin chooses "Use this reply" (it lands in the reply box to edit) and
   // sends it themselves. A draft that touches a booking, refund or anything the site
   // doesn't cover comes back flagged for a human check.
   const suggestBtn = document.getElementById('suggest-btn') as HTMLButtonElement;
@@ -1823,7 +1823,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   // A few pinned replies are pills; the whole library lives in a searchable panel
   // ("More replies", or typing "/" in the reply box), so it can grow without
   // crowding the screen. Choosing one drops its text into the reply box for the
-  // staff member to edit and send; nothing is sent automatically.
+  // admin to edit and send; nothing is sent automatically.
   const pickerToggle = document.getElementById('picker-toggle') as HTMLButtonElement;
   const picker = document.getElementById('reply-picker') as HTMLElement;
   const pickerSearch = document.getElementById('picker-search') as HTMLInputElement;
@@ -2166,7 +2166,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     guestUpdates.textContent = optedOut ? 'Stopped (we will not send booking messages)' : 'Allowed';
   }
 
-  // Staff opt a number out of (or back into) the booking confirmations, reminders
+  // Admins opt a number out of (or back into) the booking confirmations, reminders
   // and refund notices we send by WhatsApp — the same list a STOP reply writes
   // to. Nothing is sent to the guest. Resuming asks first: it is only right when
   // the guest themselves asked for the messages back.

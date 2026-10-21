@@ -22,10 +22,10 @@
 //
 // Privacy: a guest's mobile number and email are write-only — they never
 // leave this Function. Responses carry hasMobile/hasEmail flags instead; the
-// page shows "On file (hidden)" and lets staff replace a value, and a save
+// page shows "On file (hidden)" and lets admins replace a value, and a save
 // that omits them keeps the stored ones (accommodation_resolve_person
 // coalesces). Names and preferences/allergies are sent in full to roles that
-// operate the calendar and withheld/masked for read_only. Staff are recorded
+// operate the calendar and withheld/masked for read_only. Admins are recorded
 // by id, not email, in created_by/updated_by and the booking audit log.
 import { requireStaff, type StaffGrant } from './lib/staff-access';
 import { canSeeNames, maskName } from './lib/staff-masking';
@@ -216,7 +216,7 @@ function shapePerson(p: any, staff: StaffGrant) {
 // Strips a raw booking (from accommodation-db.mjs, which still carries the
 // real mobile/email so the data layer stays honest) down to what the browser
 // may see. createdBy/updatedBy are dropped too: the page never displayed them
-// and they held staff emails.
+// and they held admin emails.
 function shapeBooking(b: any, staff: StaffGrant) {
   const { createdBy: _createdBy, updatedBy: _updatedBy, ...rest } = b;
   return {
@@ -350,7 +350,7 @@ async function handleUpdate(req: Request, staff: StaffGrant): Promise<Response> 
   }
 }
 
-// "Finalize & notify" (and "Send update"): staff-triggered, never automatic.
+// "Finalize & notify" (and "Send update"): admin-triggered, never automatic.
 // Messages whoever the booking's guests-vs-last-notice diff calls for, then
 // records what was said so the next edit can be diffed against it.
 async function handleNotify(req: Request, staff: StaffGrant): Promise<Response> {
@@ -373,7 +373,7 @@ async function handleNotify(req: Request, staff: StaffGrant): Promise<Response> 
     return jsonResponse({ outcomes: [], message: 'Guests already have the current allocation - nothing to send.' });
   }
   const { current, outcomes } = await sendStayNotices(booking, previous?.snapshot ?? null);
-  // Don't record a notice nobody received, so staff can simply try again.
+  // Don't record a notice nobody received, so admins can simply try again.
   const reached = outcomes.some((o) => o.whatsapp === 'sent' || o.email === 'sent');
   const attempted = outcomes.some((o) => o.whatsapp !== 'skipped' || o.email !== 'none');
   if (reached || !attempted) await saveNotice(booking.id, current, staff.id);

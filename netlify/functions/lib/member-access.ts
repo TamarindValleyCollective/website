@@ -1,12 +1,12 @@
 // Who may use the member portal (members.tvc.farm), and which households they
-// can see. Sign-in is Google, verified exactly as for staff (signature,
+// can see. Sign-in is Google, verified exactly as for admins (signature,
 // audience, expiry, verified email; tvc.farm / syntropic.in addresses must also
 // come from our Workspace): verifyStaffToken in staff-access.ts. Google proves
 // WHO someone is; the register decides whether they are INVITED:
 //
 //   * the verified email must belong to an active member_people row, and
 //   * that person must have `can_login` on at least one household. Nobody has
-//     it until a staff admin invites them (a database trigger caps it at two
+//     it until an admin invites them (a database trigger caps it at two
 //     people per household).
 //
 // Everyone else gets the same 403, whether the email is unknown, inactive or
@@ -42,7 +42,7 @@ async function select(table: string, query: string): Promise<any[]> {
   return res.json();
 }
 
-// The profile picture Google shows for the member is kept so the core team can recognise them on the staff register.
+// The profile picture Google shows for the member is kept so the core team can recognise them on the admin register.
 // Written only once they have accepted a privacy notice that says so (a refresh, or a clearing if they removed it
 // from Google), and only after the change is logged, as for every change to a member's record. A failure here never
 // stops sign-in: the picture just stays as it was.

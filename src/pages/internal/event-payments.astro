@@ -5,7 +5,7 @@
 // trigger an actual Razorpay refund for a booking. See
 // netlify/functions/event-payments-admin.mts for the API this talks to.
 // Deliberately unlinked from nav; gated by Google Sign-In plus per-module
-// staff roles (`view` to read, admin-only `refund` to move money) — see
+// admin roles (`view` to read, admin-only `refund` to move money) — see
 // event-payments-admin.mts's header comment. Payer email and phone are never
 // sent to this page, only whether each is on file.
 import StaffLayout from '../../layouts/StaffLayout.astro';

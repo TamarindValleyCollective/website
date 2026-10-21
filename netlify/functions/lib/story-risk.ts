@@ -3,7 +3,7 @@
 // the model's judgement) and the assessment is recorded in member_story_assessments.
 //
 // In SHADOW mode (the default, member_settings key story_autopublish) that is all that happens: a person
-// still approves everything and the staff queue shows what the assessment would have done, so it can be
+// still approves everything and the admin queue shows what the assessment would have done, so it can be
 // compared with the core team's own decisions before it is trusted.
 // In LIVE mode, and not paused, a low-risk story is approved here at once and a high-risk one is held
 // and the core team is emailed with a summary. A story that is not going on the public site is always low.
@@ -195,7 +195,7 @@ export async function assessUnitSubmission(unitRow: any, label: string): Promise
 
 const LAST_AUTO_KEY = 'last_auto_publish';
 
-// When the public site was last rebuilt for stories: a person pressing the button (staff audit log) or the daily job.
+// When the public site was last rebuilt for stories: a person pressing the button (admin audit log) or the daily job.
 export async function lastPublishAt(): Promise<string | null> {
   const [manual, auto] = await Promise.all([sb('staff_audit_log?select=at&action=eq.members.site.publish&order=at.desc&limit=1'), sb(`member_settings?select=value&key=eq.${LAST_AUTO_KEY}`)]);
   const times = [manual.rows[0]?.at, auto.rows[0]?.value?.at].filter(Boolean) as string[];
