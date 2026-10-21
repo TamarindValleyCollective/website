@@ -616,7 +616,8 @@ async function handleStoryPhoto(req: Request): Promise<Response> {
   if (square.size > MAX_SQUARE_BYTES || full.size > MAX_FULL_BYTES) return jsonResponse({ error: 'That photo is too large. Try a smaller one.' }, 413);
   const squareBytes = new Uint8Array(await square.arrayBuffer());
   const fullBytes = new Uint8Array(await full.arrayBuffer());
-  const checked: { ok: boolean; error?: string } = validatePhotoPair(squareBytes, fullBytes);
+  // What is stored is what comes back from the check, with every metadata block removed (not the bytes that were uploaded).
+  const checked: { ok: boolean; error?: string; square?: Uint8Array; full?: Uint8Array } = validatePhotoPair(squareBytes, fullBytes);
   if (!checked.ok) return jsonResponse({ error: checked.error }, 415);
 
   try {
@@ -624,7 +625,7 @@ async function handleStoryPhoto(req: Request): Promise<Response> {
       return jsonResponse({ error: 'You have uploaded a lot of photos today. Please try again tomorrow.' }, 429);
     }
     const photoId = crypto.randomUUID();
-    await putMemberPhoto(member.personId, photoId, squareBytes, fullBytes); // the files first, so the draft never points at nothing
+    await putMemberPhoto(member.personId, photoId, checked.square!, checked.full!); // the files first, so the draft never points at nothing
     const { before, after } = await writeDraftPhoto(member.personId, photoId);
     await dropIfUnreferenced(member.personId, before?.draft?.photo, after); // the draft's earlier photo, if nothing else uses it
     return jsonResponse({ story: storyView(after) });
@@ -829,7 +830,8 @@ async function handleUnitStoryPhoto(req: Request): Promise<Response> {
   if (square.size > MAX_SQUARE_BYTES || full.size > MAX_FULL_BYTES) return jsonResponse({ error: 'That photo is too large. Try a smaller one.' }, 413);
   const squareBytes = new Uint8Array(await square.arrayBuffer());
   const fullBytes = new Uint8Array(await full.arrayBuffer());
-  const checked: { ok: boolean; error?: string } = validatePhotoPair(squareBytes, fullBytes);
+  // What is stored is what comes back from the check, with every metadata block removed (not the bytes that were uploaded).
+  const checked: { ok: boolean; error?: string; square?: Uint8Array; full?: Uint8Array } = validatePhotoPair(squareBytes, fullBytes);
   if (!checked.ok) return jsonResponse({ error: checked.error }, 415);
 
   try {
@@ -843,7 +845,7 @@ async function handleUnitStoryPhoto(req: Request): Promise<Response> {
       return jsonResponse({ error: 'You have uploaded a lot of photos today. Please try again tomorrow.' }, 429);
     }
     const photoId = crypto.randomUUID();
-    await putMemberPhoto(member.personId, photoId, squareBytes, fullBytes); // the files first, so the draft never points at nothing
+    await putMemberPhoto(member.personId, photoId, checked.square!, checked.full!); // the files first, so the draft never points at nothing
     const added = addPhoto(state.fields.photos, { ref: photoId, personId: member.personId });
     if (!added.ok) return jsonResponse({ error: `Your unit can have up to ${MAX_PHOTOS} photos. Remove one first.` }, 409);
     const merged = mergeDraftEdit({ current: state, changes: { photos: added.photos }, baseVersion: state.version, personId: member.personId });

@@ -1,10 +1,13 @@
 // Member photos: what may be stored, where, and who may see it. Pure (no network), so the
 // rules are tested on their own; netlify/functions/members-me.mts and members-admin.mts call these.
 //
-// A photo is two JPEGs made in the member's browser (a canvas re-encode, which also drops the
+// A photo is two JPEGs made in the member's browser (a canvas re-encode, which is meant to drop the
 // camera's location and other metadata): a 400x400 square for the card, and an uncropped copy
 // up to 1600px for click-to-enlarge. The server never trusts that: it checks the bytes really are
-// JPEGs, the sizes, and that no EXIF block (where GPS lives) was left in.
+// JPEGs and the sizes, and it REMOVES every metadata block itself (stripJpegMetadata) and stores only
+// the cleaned bytes. It used to refuse a file that still had an EXIF block, but Safari's canvas export
+// writes a small one of its own (colour space, pixel size), so an iPhone upload was refused for a header
+// with nothing private in it. Removing it keeps the guarantee, whatever the browser did.
 //
 // A story's photo is a string inside its draft / submitted / approved copy, like the text:
 //   - a uuid: an uploaded photo, kept in the private R2 bucket under member-photos/<person>/<uuid>
@@ -73,7 +76,40 @@ export function jpegInfo(bytes) {
 
 const fail = (error) => ({ ok: false, error });
 
-// The two files of one upload. Anything the page's own resizing would never produce is refused.
+// Removes every metadata segment from a JPEG that jpegInfo has accepted, copying everything else byte for
+// byte: EXIF (where the position and the camera's make live), XMP, IPTC, comments, multi-picture offsets and
+// every other application block. Kept: the JFIF header, the ICC colour profile (without it a Display P3 photo
+// looks washed out) and Adobe's colour-transform marker. Anything after the end of the image is dropped.
+const ICC = [0x49, 0x43, 0x43, 0x5f, 0x50, 0x52, 0x4f, 0x46, 0x49, 0x4c, 0x45, 0x00]; // "ICC_PROFILE\0"
+export function stripJpegMetadata(bytes) {
+  const out = [bytes.subarray(0, 2)];
+  let i = 2;
+  while (i + 4 <= bytes.length && bytes[i] === 0xff) {
+    const marker = bytes[i + 1];
+    if (marker === 0xff) { i += 1; continue; } // padding
+    if (marker === 0xda) break; // the pixel data starts here
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd8)) { out.push(bytes.subarray(i, i + 2)); i += 2; continue; }
+    const end = i + 2 + ((bytes[i + 2] << 8) | bytes[i + 3]);
+    const colourProfile = marker === 0xe2 && ICC.every((c, k) => bytes[i + 4 + k] === c);
+    const metadata = (marker >= 0xe1 && marker <= 0xef && !colourProfile && marker !== 0xee) || marker === 0xfe;
+    if (!metadata) out.push(bytes.subarray(i, end));
+    i = end;
+  }
+  // From the start of the scan to the first end-of-image marker (inside the data a 0xff is followed by 0x00 or a restart
+  // marker, never 0xd9), exactly as it was.
+  let eoi = bytes.length;
+  for (let j = i; j + 1 < bytes.length; j++) {
+    if (bytes[j] === 0xff && bytes[j + 1] === 0xd9) { eoi = j + 2; break; }
+  }
+  out.push(bytes.subarray(i, eoi));
+  const cleaned = new Uint8Array(out.reduce((n, part) => n + part.length, 0));
+  let at = 0;
+  for (const part of out) { cleaned.set(part, at); at += part.length; }
+  return cleaned;
+}
+
+// The two files of one upload. Anything the page's own resizing would never produce is refused; what is accepted comes
+// back with its metadata removed, and THAT is what must be stored: { ok: true, square, full }.
 export function validatePhotoPair(square, full) {
   if (!(square instanceof Uint8Array) || !(full instanceof Uint8Array)) return fail('Choose a photo.');
   if (square.length > MAX_SQUARE_BYTES || full.length > MAX_FULL_BYTES) return fail('That photo is too large. Try a smaller one.');
@@ -81,10 +117,9 @@ export function validatePhotoPair(square, full) {
   if (!s.ok) return fail(s.error);
   const f = jpegInfo(full);
   if (!f.ok) return fail(f.error);
-  if (s.hasExif || f.hasExif) return fail('That photo still carries camera or location details. Reload the page and try again.');
   if (s.width !== s.height || s.width < SQUARE_PX_MIN || s.width > SQUARE_PX_MAX) return fail('The photo was not prepared correctly. Reload the page and try again.');
   if (Math.max(f.width, f.height) > FULL_PX_MAX || Math.min(f.width, f.height) < SQUARE_PX_MIN) return fail('The photo was not prepared correctly. Reload the page and try again.');
-  return { ok: true };
+  return { ok: true, square: stripJpegMetadata(square), full: stripJpegMetadata(full) };
 }
 
 // Who may be sent an uploaded photo. `row` is the member_stories row that holds the photo id in one
