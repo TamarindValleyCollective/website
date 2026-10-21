@@ -528,13 +528,19 @@ async function handleUnitStories(req: Request): Promise<Response> {
     // Names are for the unit's own people, plus whoever submitted or wrote a quote who has since left it.
     const extra = [...new Set(rows.flatMap((r) => [r.submitted_by, ...Object.keys(r.submitted?.quotes ?? {}), ...Object.keys(r.submitted?.links ?? {})]).filter(Boolean))].filter((id) => !people.some((p) => p.id === id));
     const gone = extra.length ? await select('member_people', 'id,full_name', `&id=in.(${extra.join(',')})`) : [];
+    // What the risk assessment made of each submission (shadow mode shows it; live mode acted on it).
+    const assessments = await select('member_unit_story_assessments', 'household_id,submitted_at,level,reasons,outcome,mode,assessed_by', `&household_id=in.${ids}`).catch((err) => {
+      console.error('[members-admin] unit assessments load failed', err);
+      return [] as any[];
+    });
     return jsonResponse({
       stories: rows.map((r) => {
+        const a = assessments.find((x) => x.household_id === r.household_id && Date.parse(x.submitted_at) === Date.parse(r.submitted_at));
         const members = firstNames([...people.filter((p) => links.some((l) => l.household_id === r.household_id && l.person_id === p.id)), ...gone]);
         const item = queueItem(r, { people: members, farmUnit: households.find((h) => h.id === r.household_id)?.farm_unit ?? '' });
         // The same fixed checks the members saw (children named...), so the reviewer sees them too.
         const flags = localChecks(riskCopy(r.submitted), !!r.submitted_public).map((f: any) => ({ field: f.field, kind: f.kind, note: f.note }));
-        return { ...item, flags, assessment: null };
+        return { ...item, flags, assessment: a ? { level: a.level, outcome: a.outcome, mode: a.mode, reasons: (a.reasons ?? []).map((x: any) => ({ code: x.code, text: x.text, source: x.source })) } : null };
       }),
     });
   } catch (err) {
@@ -552,6 +558,8 @@ async function decideUnitStory(edit: any, staffId: string): Promise<void> {
   // Filtered on the exact submission seen, so two reviewers, or a resubmission, can't both win.
   const r = must(await db('PATCH', `member_unit_stories?${eq('household_id', edit.householdId)}&status=eq.in_review&${eq('submitted_at', row.submitted_at)}`, decision.columns));
   if (r.rows.length === 0) throw new EditError(stale, 409);
+  // The person's decision is kept beside the assessment, so the two can be compared (best effort: the decision stands either way).
+  await db('PATCH', `member_unit_story_assessments?${eq('household_id', edit.householdId)}&${eq('submitted_at', row.submitted_at)}`, { decision: edit.action === 'unitstory.approve' ? 'approved' : 'rejected', decided_at: decision.columns.updated_at }).catch((err) => console.error('[members-admin] unit assessment decision not recorded', err));
   // Approving replaces the live photos: the ones it replaced go once no copy refers to them.
   if (edit.action === 'unitstory.approve') {
     for (const p of replacedPhotos(row)) {
@@ -635,19 +643,36 @@ async function handleAutopublish(req: Request): Promise<Response> {
   try {
     const settings = await loadSettings();
     const since = new Date(Date.now() - 30 * DAY).toISOString();
-    const rows = await select('member_story_assessments', 'person_id,submitted_at,level,reasons,decision,decided_at,is_public', `&created_at=gte.${since}&is_public=eq.true&order=created_at.desc`);
+    const cols = 'submitted_at,level,reasons,decision,decided_at,is_public';
+    const [personRows, unitRows] = await Promise.all([
+      select('member_story_assessments', `person_id,${cols}`, `&created_at=gte.${since}&is_public=eq.true&order=created_at.desc`),
+      select('member_unit_story_assessments', `household_id,${cols}`, `&created_at=gte.${since}&is_public=eq.true&order=created_at.desc`),
+    ]);
+    const rows = [...personRows, ...unitRows];
     // Stories the system published by itself in the last week, with whether each is still public (to hide it).
-    const recent = rows.filter((r) => r.decision === 'auto_approved' && Date.now() - Date.parse(r.decided_at) < 7 * DAY);
+    const autoPublished = (r: any) => r.decision === 'auto_approved' && Date.now() - Date.parse(r.decided_at) < 7 * DAY;
+    const recent = personRows.filter(autoPublished);
+    const recentUnits = unitRows.filter(autoPublished);
     let published: any[] = [];
+    if (recentUnits.length) {
+      const ids = `(${[...new Set(recentUnits.map((r) => r.household_id))].join(',')})`;
+      const [households, stories] = await Promise.all([select('member_households', 'id,farm_unit', `&id=in.${ids}`), select('member_unit_stories', 'household_id,approved_public', `&household_id=in.${ids}`)]);
+      published.push(...recentUnits.map((r) => ({
+        householdId: r.household_id,
+        name: `Unit ${households.find((h) => h.id === r.household_id)?.farm_unit ?? ''}`.trim(),
+        at: r.decided_at,
+        stillPublic: !!stories.find((s) => s.household_id === r.household_id)?.approved_public,
+      })));
+    }
     if (recent.length) {
       const ids = `(${[...new Set(recent.map((r) => r.person_id))].join(',')})`;
       const [people, stories] = await Promise.all([select('member_people', 'id,full_name', `&id=in.${ids}`), select('member_stories', 'person_id,approved_public,approved_at', `&person_id=in.${ids}`)]);
-      published = recent.map((r) => ({
+      published.push(...recent.map((r) => ({
         personId: r.person_id,
         name: people.find((p) => p.id === r.person_id)?.full_name ?? 'Unknown',
         at: r.decided_at,
         stillPublic: !!stories.find((s) => s.person_id === r.person_id)?.approved_public,
-      }));
+      })));
     }
     return jsonResponse({ mode: settings.mode, paused: settings.paused, canChange: roleHasCapability('members', auth.staff.role, 'manage'), stats: shadowStats(rows), published });
   } catch (err) {

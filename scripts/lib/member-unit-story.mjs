@@ -328,3 +328,20 @@ export function queueItem(row, { people, farmUnit }) {
     changes,
   };
 }
+
+// ---- risk assessment ----
+
+// A unit submission as the risk code (netlify/functions/lib/story-risk.ts) reads one: a row with
+// submitted / approved / draft copies in the per-person shape, named by the id it records the
+// assessment under. The risk code calls that field person_id; for a unit it holds the unit's id.
+export function unitRiskRow(row) {
+  return {
+    person_id: row.household_id,
+    submitted_at: row.submitted_at,
+    submitted: riskCopy(row.submitted),
+    submitted_public: !!row.submitted_public,
+    approved: riskCopy(row.approved),
+    approved_public: row.approved ? !!row.approved_public : null,
+    draft: riskCopy(row.draft),
+  };
+}

@@ -1526,8 +1526,14 @@ never touches Netlify either.
   uploader's id). The reviewer's photo view (`/api/members-admin/story-photo`) also serves unit photos. The queue's screen is
   a second panel under the person queue on `/internal/members` ("Unit stories waiting for review"; hidden while empty): each unit is a
   card showing what changed first (chips, then the changed parts with a "Currently approved" fold, the unchanged parts folded into one
-  line), with Approve and Send back (a note is required). Risk assessment, the public export and the directory still read
-  `member_stories` until they move over; backfill with
+  line), with Approve and Send back (a note is required). **Risk assessment** for a unit's story (migration 0050,
+  `member_unit_story_assessments`, one row per submission): `POST unit-story-submit` calls `assessUnitSubmission` in `lib/story-risk.ts`,
+  which shows the existing risk rules the unit's copies through `unitRiskRow` / `riskCopy`, records the assessment, and, in live mode and
+  not paused, approves a low-risk story at once (the same change an admin's approval makes, replaced photos deleted) or holds a high-risk one
+  and emails the core team ("Unit stories waiting for review"). With no usable model answer a public story is held without an email, as for
+  a person's. The queue card shows the assessment, an admin's decision is written onto it, and the auto-publish panel's shadow stats and
+  "published automatically, hide" list count units too (a unit entry hides through `unitstory.unpublish`). The public export and the directory
+  still read `member_stories` until they move over; backfill with
   `scripts/preview-unit-stories.mjs` then `scripts/backfill-unit-stories.mjs` (applied to TVC ERP 2026-10-21, 40 units).
 - **Member stories (`members-me.mts`, migration 0044).** A member writes a short public-facing
   story about themselves (what they do, family, one-line "why TVC") on the portal's
