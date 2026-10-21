@@ -2,7 +2,7 @@
 // Made-up people and text only: this repo is public.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildUnitStory, addPhoto, mergeDraftEdit, MAX_PHOTOS } from './member-unit-story.mjs';
+import { buildUnitStory, addPhoto, mergeDraftEdit, validateUnitSave, validateUnitSubmit, draftState, draftColumns, unitStoryView, unitPhotoHolder, unitPhotoAccess, MAX_PHOTOS } from './member-unit-story.mjs';
 
 const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
@@ -175,4 +175,122 @@ test('"link" is the editor\'s own profile link, like their quote; "social" is no
   const clash = mergeDraftEdit({ current: draftAt({ changed: { [`link:${A}`]: 5 } }), changes: { link: 'https://example.org/other' }, baseVersion: 3, personId: A });
   assert.deepEqual(clash, { ok: false, error: 'conflict', fields: ['link'] });
   assert.deepEqual(mergeDraftEdit({ current: draftAt(), changes: { social: 'https://example.org/x' }, baseVersion: 5, personId: A }), { ok: false, error: 'unknown', fields: ['social'] });
+});
+
+// ---- what an owner may send when saving ----
+
+test('a save names the version it started from and only the fields it changes; the public switch is "public"', () => {
+  assert.deepEqual(validateUnitSave({ baseVersion: 4, bio: ' New bio. ', quote: 'Mine.', showOnPublicSite: true }), {
+    ok: true, baseVersion: 4, changes: { bio: 'New bio.', quote: 'Mine.', public: true },
+  });
+  assert.deepEqual(validateUnitSave({ baseVersion: 0, link: '' }), { ok: true, baseVersion: 0, changes: { link: '' } });
+});
+
+test('a save without a version, with nothing to change, or with an unknown or photo field is refused', () => {
+  assert.deepEqual(validateUnitSave({ bio: 'x' }), { ok: false, error: 'Reload the page and try again.' });
+  assert.deepEqual(validateUnitSave({ baseVersion: -1, bio: 'x' }), { ok: false, error: 'Reload the page and try again.' });
+  assert.deepEqual(validateUnitSave({ baseVersion: 1 }), { ok: false, error: 'Nothing to do.' });
+  assert.deepEqual(validateUnitSave({ baseVersion: 1, bio: 'x', photos: [] }), { ok: false, error: 'Unknown field.' });
+  assert.deepEqual(validateUnitSave(null), { ok: false, error: 'Nothing to do.' });
+});
+
+test('save keeps the existing limits: lengths, link addresses, at most ten links in the text', () => {
+  assert.match(validateUnitSave({ baseVersion: 1, bio: 'x'.repeat(2501) }).error, /too long/);
+  assert.match(validateUnitSave({ baseVersion: 1, quote: 'x'.repeat(401) }).error, /too long/);
+  assert.match(validateUnitSave({ baseVersion: 1, link: 'not a web address' }).error, /https/);
+  assert.match(validateUnitSave({ baseVersion: 1, link: 'ftp://example.org/x' }).error, /https/);
+  assert.equal(validateUnitSave({ baseVersion: 1, link: 'https://example.org/me' }).ok, true);
+  const many = Array.from({ length: 11 }, (_, i) => `[a${i}](https://example.org/${i})`).join(' ');
+  assert.match(validateUnitSave({ baseVersion: 1, bio: many }).error, /up to 10 links/);
+  assert.match(validateUnitSave({ baseVersion: 1, bio: 5 }).error, /text/);
+  assert.match(validateUnitSave({ baseVersion: 1, showOnPublicSite: 'yes' }).error, /on or off/);
+});
+
+// ---- the shared draft in the database, and what the page shows ----
+
+const unitRow = (over = {}) => ({
+  household_id: 'h1', status: 'draft', draft_version: 5, draft_public: false,
+  draft_changed: { bio: 2, family: 5 },
+  draft: { bio: 'Our bio.', family: 'Our family.', photos: [{ ref: P1, personId: A }], quotes: { [A]: 'A quote.', [B]: 'B quote.' }, links: { [B]: 'https://example.org/b' } },
+  submitted: null, submitted_public: null, submitted_at: null, submitted_by: null,
+  approved: null, approved_public: null, approved_at: null, reviewer_note: null, ...over,
+});
+const names = [{ id: A, firstName: 'Asha' }, { id: B, firstName: 'Ravi' }];
+
+test('a row becomes the draft state mergeDraftEdit works on, and back again, losing nothing', () => {
+  const state = draftState(unitRow());
+  assert.equal(state.version, 5);
+  assert.deepEqual(state.changed, { bio: 2, family: 5 });
+  assert.equal(state.fields.public, false);
+  assert.deepEqual(state.fields.photos, [{ ref: P1, personId: A }]);
+  const saved = mergeDraftEdit({ current: state, changes: { bio: 'Edited.', public: true }, baseVersion: 5, personId: A });
+  assert.deepEqual(draftColumns(saved), {
+    draft: { bio: 'Edited.', family: 'Our family.', photos: [{ ref: P1, personId: A }], quotes: { [A]: 'A quote.', [B]: 'B quote.' }, links: { [B]: 'https://example.org/b' } },
+    draft_public: true, draft_version: 6, draft_changed: { bio: 6, family: 5, public: 6 },
+  });
+});
+
+test('a unit with no row yet starts from an empty draft at version 0', () => {
+  assert.deepEqual(draftState(null), { version: 0, fields: { bio: '', family: '', photos: [], quotes: {}, links: {}, public: false }, changed: {} });
+});
+
+test('only the person submitting needs their own "why TVC" quote', () => {
+  const draft = draftState(unitRow()).fields;
+  assert.deepEqual(validateUnitSubmit({ fields: draft, personId: A }), { ok: true });
+  assert.deepEqual(validateUnitSubmit({ fields: draft, personId: C }), { ok: false, error: 'Add your one-line "why TVC" before submitting.' });
+});
+
+test('the page shows the editor their own quote and link to edit and their housemates\' beside the story, read-only', () => {
+  const view = unitStoryView(unitRow(), { personId: A, people: names });
+  assert.equal(view.version, 5);
+  assert.deepEqual(view.draft, { bio: 'Our bio.', family: 'Our family.', quote: 'A quote.', link: '', photos: [{ ref: P1, personId: A }] });
+  assert.deepEqual(view.others, [{ firstName: 'Ravi', quote: 'B quote.', link: 'https://example.org/b' }]);
+  assert.equal(view.showOnPublicSite, false);
+  assert.equal(view.status, 'draft');
+  assert.equal(view.hasUnsubmittedChanges, true);
+  assert.equal(view.hasApproved, false);
+});
+
+test('no row yet: an empty story, nothing to submit', () => {
+  const view = unitStoryView(null, { personId: A, people: names });
+  assert.deepEqual(view.draft, { bio: '', family: '', quote: '', link: '', photos: [] });
+  assert.deepEqual([view.version, view.status, view.hasUnsubmittedChanges, view.hasApproved], [0, 'draft', false, false]);
+});
+
+test('an unchanged draft over live text has no unsubmitted changes; an edit does; a sent-back story shows its note', () => {
+  const live = { bio: 'Our bio.', family: 'Our family.', photos: [], quotes: { [A]: 'A quote.' }, links: {} };
+  const same = unitRow({ status: 'approved', approved: live, approved_public: true, draft_public: true, draft: live });
+  assert.equal(unitStoryView(same, { personId: A, people: names }).hasUnsubmittedChanges, false);
+  const edited = unitRow({ ...same, draft: { ...live, bio: 'Changed.' } });
+  assert.equal(unitStoryView(edited, { personId: A, people: names }).hasUnsubmittedChanges, true);
+  const sentBack = unitRow({ status: 'rejected', reviewer_note: 'Please remove the phone number.' });
+  assert.equal(unitStoryView(sentBack, { personId: A, people: names }).reviewerNote, 'Please remove the phone number.');
+  assert.equal(unitStoryView(edited, { personId: A, people: names }).reviewerNote, null);
+});
+
+// ---- who may see a unit's photo ----
+
+const photoRow = () => unitRow({
+  household_id: 'h1',
+  draft: { photos: [{ ref: P1, personId: A }, { ref: P2, personId: B }] },
+  submitted: { photos: [{ ref: P1, personId: A }] },
+  approved: { photos: [{ ref: P3, personId: B }] },
+});
+
+test('a unit photo is found in whichever copy holds it, with the person it is stored under', () => {
+  assert.deepEqual(unitPhotoHolder(photoRow(), P2), { ref: P2, personId: B });
+  assert.deepEqual(unitPhotoHolder(photoRow(), P3), { ref: P3, personId: B });
+  assert.equal(unitPhotoHolder(photoRow(), 'nope'), null);
+});
+
+test('housemates see any copy; everyone else only an approved photo of a listed member', () => {
+  const row = photoRow();
+  const ask = (photoId, viewerHouseholdIds, listed = true) => unitPhotoAccess({ viewerHouseholdIds, row, photoId, listed });
+  assert.equal(ask(P2, ['h1']), true); // a draft photo, to the unit's own people
+  assert.equal(ask(P2, ['h9']), false); // not another unit's draft
+  assert.equal(ask(P1, ['h9']), false); // nor one in review
+  assert.equal(ask(P3, ['h9']), true); // approved: the directory
+  assert.equal(ask(P3, ['h9'], false), false); // unless they opted out of the directory
+  assert.equal(ask(P3, ['h1'], false), true); // the unit itself always sees its own
+  assert.equal(ask('nope', ['h1']), false);
 });

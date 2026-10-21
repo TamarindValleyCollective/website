@@ -43,6 +43,7 @@ import { MAX_FULL_BYTES, MAX_SQUARE_BYTES, isUploadedPhoto, photoAccess, validat
 import { deleteMemberPhoto, getMemberPhoto, putMemberPhoto } from './lib/member-photo-storage';
 import { assessSubmission } from './lib/story-risk';
 import { REVIEW_SYSTEM, localChecks, parseSuggestions, reviewPrompt, storyAuditDetail, storyView, validateDraft, validateForSubmit, withStoredPhoto } from '../../scripts/lib/member-story.mjs';
+import { MAX_PHOTOS, addPhoto, draftColumns, draftState, mergeDraftEdit, unitPhotoAccess, unitStoryView, validateUnitSave, validateUnitSubmit } from '../../scripts/lib/member-unit-story.mjs';
 import { ALLOWED_MIME, LAND_TYPES, MAX_HOUSEHOLD_BYTES, MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_UPLOADS_PER_DAY, NOT_A_LAND_PDF, WRONG_CARD, documentsReplacedBy, landTypeMismatch, memberSummary, normalizeExtraction, surveyKey } from '../../scripts/lib/member-land-docs.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -668,6 +669,238 @@ async function handlePhoto(req: Request): Promise<Response> {
   }
 }
 
+// ---- unit stories ------------------------------------------------------------
+// One story per UNIT (member_unit_stories, migration 0049): bio, family, photos and the public switch are
+// shared by the unit's owners; each person keeps their own quote and profile link. The rules are in
+// scripts/lib/member-unit-story.mjs. Nothing in the portal calls these yet: the staff queue, risk
+// assessment, public export and directory still read member_stories until they move over.
+
+const UNIT_STORY_COLUMNS = 'household_id,draft,draft_public,draft_version,draft_changed,status,submitted,submitted_public,submitted_at,submitted_by,approved,approved_public,approved_at,reviewer_note';
+const firstNameOf = (full: string) => full.trim().split(/\s+/).find((w) => w.length > 1) ?? full;
+
+async function loadUnitStory(householdId: string): Promise<any | null> {
+  const rows = await select('member_unit_stories', UNIT_STORY_COLUMNS, `household_id=eq.${householdId}`);
+  return rows[0] ?? null;
+}
+
+// The unit this member writes for, and who else is in it (first names only).
+async function unitOf(member: { personId: string; householdIds: string[] }) {
+  const householdId = member.householdIds[0];
+  if (!householdId) return null;
+  const links = await select('member_household_members', 'person_id', `household_id=eq.${householdId}`);
+  const ids = links.map((l: any) => l.person_id);
+  const people = ids.length ? await select('member_people', 'id,full_name', `id=in.(${ids.join(',')})`) : [];
+  return { householdId, people: people.map((p: any) => ({ id: p.id, firstName: firstNameOf(p.full_name) })) };
+}
+
+// Writes the new draft only if nobody saved since it was read (the version is the guard), so two owners
+// saving at once can't overwrite each other. Returns the row, or null when someone got there first.
+async function writeUnitDraft(householdId: string, existing: any | null, columns: Record<string, unknown>): Promise<any | null> {
+  const stamp = { updated_at: new Date().toISOString() };
+  const res = existing
+    ? await fetch(`${supabaseUrl()}/rest/v1/member_unit_stories?household_id=eq.${householdId}&draft_version=eq.${existing.draft_version}&select=${UNIT_STORY_COLUMNS}`, {
+        method: 'PATCH',
+        headers: restHeaders({ Prefer: 'return=representation' }),
+        body: JSON.stringify({ ...columns, ...stamp }),
+      })
+    : await fetch(`${supabaseUrl()}/rest/v1/member_unit_stories?select=${UNIT_STORY_COLUMNS}`, {
+        method: 'POST',
+        headers: restHeaders({ Prefer: 'return=representation' }),
+        body: JSON.stringify({ household_id: householdId, ...columns, ...stamp }),
+      });
+  if (res.status === 409) return null; // the first save of the unit raced another owner's
+  if (!res.ok) throw new Error(`unit story write failed: ${res.status}`);
+  return (await res.json())[0] ?? null;
+}
+
+const conflictResponse = (fields: string[]) => jsonResponse({ error: 'Someone else in your unit changed this while you were editing. Reload to see their version.', fields }, 409);
+
+// Delete an uploaded photo's files once no copy of the unit's story refers to it any more.
+async function dropUnitPhotoIfUnreferenced(entry: { ref: string; personId: string } | undefined, row: any): Promise<void> {
+  if (!entry || !isUploadedPhoto(entry.ref)) return;
+  const stillUsed = [row?.draft, row?.submitted, row?.approved].some((copy) => (copy?.photos ?? []).some((p: any) => p.ref === entry.ref));
+  if (!stillUsed) await deleteMemberPhoto(entry.personId, entry.ref).catch((err) => console.error('[members-me] unit photo cleanup failed', err));
+}
+
+async function handleUnitStoryGet(req: Request): Promise<Response> {
+  const who = await requireAcknowledgedMember(req);
+  if ('error' in who) return who.error;
+  try {
+    const unit = await unitOf(who.member);
+    if (!unit) return jsonResponse({ error: 'You are not part of a unit yet. Ask the core team.' }, 409);
+    return jsonResponse({ story: unitStoryView(await loadUnitStory(unit.householdId), { personId: who.member.personId, people: unit.people }), firstName: firstNameOf(who.member.name) });
+  } catch (err) {
+    console.error('[members-me] unit story load failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
+async function handleUnitStorySave(req: Request): Promise<Response> {
+  const who = await requireAcknowledgedMember(req);
+  if ('error' in who) return who.error;
+  const body = await readJson(req);
+  if (body === undefined) return jsonResponse({ error: 'Nothing to do.' }, 400);
+  const checked = validateUnitSave(body);
+  if (!checked.ok) return jsonResponse({ error: checked.error }, 400);
+  try {
+    const unit = await unitOf(who.member);
+    if (!unit) return jsonResponse({ error: 'You are not part of a unit yet. Ask the core team.' }, 409);
+    const existing = await loadUnitStory(unit.householdId);
+    const merged = mergeDraftEdit({ current: draftState(existing), changes: checked.changes, baseVersion: checked.baseVersion, personId: who.member.personId });
+    if (!merged.ok) return merged.error === 'conflict' ? conflictResponse(merged.fields) : jsonResponse({ error: 'Could not save that.' }, 400);
+    // Nothing changed (the same text saved again): no write, and no new version.
+    if (merged.version === (existing?.draft_version ?? 0) && existing) return jsonResponse({ story: unitStoryView(existing, { personId: who.member.personId, people: unit.people }) });
+    const row = await writeUnitDraft(unit.householdId, existing, draftColumns(merged));
+    if (!row) return conflictResponse([]);
+    return jsonResponse({ story: unitStoryView(row, { personId: who.member.personId, people: unit.people }) });
+  } catch (err) {
+    console.error('[members-me] unit story save failed', err);
+    return jsonResponse({ error: 'Could not save your draft. Try again.' }, 500);
+  }
+}
+
+async function handleUnitStorySubmit(req: Request): Promise<Response> {
+  const who = await requireAcknowledgedMember(req);
+  if ('error' in who) return who.error;
+  const { member } = who;
+  try {
+    const unit = await unitOf(member);
+    if (!unit) return jsonResponse({ error: 'You are not part of a unit yet. Ask the core team.' }, 409);
+    const row = await loadUnitStory(unit.householdId);
+    if (!row) return jsonResponse({ error: 'Save your story first.' }, 409);
+    const ok = validateUnitSubmit({ fields: draftState(row).fields, personId: member.personId });
+    if (!ok.ok) return jsonResponse({ error: ok.error }, 400);
+    const view = unitStoryView(row, { personId: member.personId, people: unit.people });
+    if (!view.hasUnsubmittedChanges) return jsonResponse({ error: 'There is nothing new to submit.' }, 409);
+
+    // Logged before the change, and refused if it can't be, as for every self-service change. Which parts the
+    // story has, never its text.
+    const log = await fetch(`${supabaseUrl()}/rest/v1/member_audit_log`, {
+      method: 'POST',
+      headers: restHeaders({ Prefer: 'return=minimal' }),
+      body: JSON.stringify({ actor_person_id: member.personId, action: 'member.unit_story.submit', detail: { unit: true, showOnPublicSite: !!row.draft_public, photos: (row.draft?.photos ?? []).length } }),
+    }).catch(() => null);
+    if (!log || !log.ok) {
+      console.error('[members-me] audit log write failed; unit story submit refused', log?.status);
+      return jsonResponse({ error: 'Could not record this, so nothing was submitted. Try again.' }, 500);
+    }
+    // A second owner submitting while one is in review replaces that submission.
+    const now = new Date().toISOString();
+    const res = await fetch(`${supabaseUrl()}/rest/v1/member_unit_stories?household_id=eq.${unit.householdId}&select=${UNIT_STORY_COLUMNS}`, {
+      method: 'PATCH',
+      headers: restHeaders({ Prefer: 'return=representation' }),
+      body: JSON.stringify({ status: 'in_review', submitted: row.draft, submitted_public: !!row.draft_public, submitted_at: now, submitted_by: member.personId, reviewer_note: null, updated_at: now }),
+    });
+    if (!res.ok) {
+      console.error('[members-me] unit story submit failed', res.status);
+      return jsonResponse({ error: 'Server error' }, 500);
+    }
+    const updated = (await res.json())[0];
+    for (const old of row.submitted?.photos ?? []) await dropUnitPhotoIfUnreferenced(old, updated);
+    return jsonResponse({ story: unitStoryView(updated, { personId: member.personId, people: unit.people }) });
+  } catch (err) {
+    console.error('[members-me] unit story submit failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
+async function handleUnitStoryPhoto(req: Request): Promise<Response> {
+  const who = await requireAcknowledgedMember(req);
+  if ('error' in who) return who.error;
+  const { member } = who;
+  let form: FormData;
+  try {
+    form = await req.formData();
+  } catch {
+    return jsonResponse({ error: 'Nothing to do.' }, 400);
+  }
+  const square = form.get('square');
+  const full = form.get('full');
+  if (!(square instanceof File) || !(full instanceof File) || square.size === 0 || full.size === 0) return jsonResponse({ error: 'Choose a photo.' }, 400);
+  if (square.size > MAX_SQUARE_BYTES || full.size > MAX_FULL_BYTES) return jsonResponse({ error: 'That photo is too large. Try a smaller one.' }, 413);
+  const squareBytes = new Uint8Array(await square.arrayBuffer());
+  const fullBytes = new Uint8Array(await full.arrayBuffer());
+  const checked: { ok: boolean; error?: string } = validatePhotoPair(squareBytes, fullBytes);
+  if (!checked.ok) return jsonResponse({ error: checked.error }, 415);
+
+  try {
+    const unit = await unitOf(member);
+    if (!unit) return jsonResponse({ error: 'You are not part of a unit yet. Ask the core team.' }, 409);
+    const existing = await loadUnitStory(unit.householdId);
+    const state = draftState(existing);
+    // Checked before anything is stored: a unit holds at most MAX_PHOTOS, so a full unit never uploads a file.
+    if (state.fields.photos.length >= MAX_PHOTOS) return jsonResponse({ error: `Your unit can have up to ${MAX_PHOTOS} photos. Remove one first.` }, 409);
+    if (!(await checkDailyCap(PHOTO_STORE, `member-${member.personId}`, PHOTO_UPLOADS_PER_DAY))) {
+      return jsonResponse({ error: 'You have uploaded a lot of photos today. Please try again tomorrow.' }, 429);
+    }
+    const photoId = crypto.randomUUID();
+    await putMemberPhoto(member.personId, photoId, squareBytes, fullBytes); // the files first, so the draft never points at nothing
+    const added = addPhoto(state.fields.photos, { ref: photoId, personId: member.personId });
+    if (!added.ok) return jsonResponse({ error: `Your unit can have up to ${MAX_PHOTOS} photos. Remove one first.` }, 409);
+    const merged = mergeDraftEdit({ current: state, changes: { photos: added.photos }, baseVersion: state.version, personId: member.personId });
+    if (!merged.ok) return conflictResponse(merged.fields ?? []);
+    const row = await writeUnitDraft(unit.householdId, existing, draftColumns(merged));
+    if (!row) {
+      await deleteMemberPhoto(member.personId, photoId).catch(() => null); // lost the race: don't leave a file nothing points at
+      return conflictResponse([]);
+    }
+    return jsonResponse({ story: unitStoryView(row, { personId: member.personId, people: unit.people }) });
+  } catch (err) {
+    console.error('[members-me] unit story photo upload failed', err);
+    return jsonResponse({ error: 'Could not save your photo. Try again.' }, 500);
+  }
+}
+
+async function handleUnitStoryPhotoRemove(req: Request): Promise<Response> {
+  const who = await requireAcknowledgedMember(req);
+  if ('error' in who) return who.error;
+  const body = (await readJson(req)) as { ref?: unknown } | undefined;
+  const ref = typeof body?.ref === 'string' ? body.ref : '';
+  try {
+    const unit = await unitOf(who.member);
+    if (!unit) return jsonResponse({ error: 'You are not part of a unit yet. Ask the core team.' }, 409);
+    const existing = await loadUnitStory(unit.householdId);
+    const state = draftState(existing);
+    const gone = state.fields.photos.find((p: any) => p.ref === ref);
+    if (!gone) return jsonResponse({ error: 'That photo is not in your story.' }, 404);
+    const merged = mergeDraftEdit({ current: state, changes: { photos: state.fields.photos.filter((p: any) => p.ref !== ref) }, baseVersion: state.version, personId: who.member.personId });
+    if (!merged.ok) return conflictResponse(merged.fields ?? []);
+    const row = await writeUnitDraft(unit.householdId, existing, draftColumns(merged));
+    if (!row) return conflictResponse([]);
+    await dropUnitPhotoIfUnreferenced(gone, row);
+    return jsonResponse({ story: unitStoryView(row, { personId: who.member.personId, people: unit.people }) });
+  } catch (err) {
+    console.error('[members-me] unit story photo remove failed', err);
+    return jsonResponse({ error: 'Could not remove your photo. Try again.' }, 500);
+  }
+}
+
+// One unit photo. 404 for everything not allowed, so the response never says whether a photo exists.
+async function handleUnitPhoto(req: Request): Promise<Response> {
+  const who = await requireAcknowledgedMember(req);
+  if ('error' in who) return who.error;
+  const url = new URL(req.url);
+  const id = url.searchParams.get('id') ?? '';
+  const size = url.searchParams.get('size') === 'full' ? 'full' : 'square';
+  const notFound = () => new Response('Not found', { status: 404, headers: { 'cache-control': 'no-store' } });
+  if (!isUploadedPhoto(id)) return notFound();
+  try {
+    const rows = await select('member_unit_stories', 'household_id,draft,submitted,approved', `or=(draft->photos.cs.[{"ref":"${id}"}],submitted->photos.cs.[{"ref":"${id}"}],approved->photos.cs.[{"ref":"${id}"}])`);
+    const row = rows[0];
+    if (!row) return notFound();
+    const holder = [row.draft, row.submitted, row.approved].flatMap((c) => c?.photos ?? []).find((p: any) => p.ref === id);
+    const [person] = holder ? await select('member_people', 'id,active,directory_visible', `id=eq.${holder.personId}`) : [];
+    const listed = !!person && person.active !== false && person.directory_visible !== false;
+    if (!unitPhotoAccess({ viewerHouseholdIds: who.member.householdIds, row, photoId: id, listed })) return notFound();
+    const bytes = await getMemberPhoto(holder.personId, id, size);
+    if (!bytes) return notFound();
+    return new Response(bytes, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=3600', 'x-content-type-options': 'nosniff' } });
+  } catch (err) {
+    console.error('[members-me] unit photo load failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
 // ---- directory --------------------------------------------------------------
 
 // The one place a member reads about OTHER members, so it is deliberately narrow: only
@@ -706,7 +939,13 @@ export default async (req: Request): Promise<Response> => {
   if (pathname === '/api/members-me/story' && req.method === 'POST') return handleStorySave(req);
   if (pathname === '/api/members-me/story-review' && req.method === 'POST') return handleStoryReview(req);
   if (pathname === '/api/members-me/story-submit' && req.method === 'POST') return handleStorySubmit(req);
+  if (pathname === '/api/members-me/unit-story' && req.method === 'GET') return handleUnitStoryGet(req);
+  if (pathname === '/api/members-me/unit-story' && req.method === 'POST') return handleUnitStorySave(req);
+  if (pathname === '/api/members-me/unit-story-submit' && req.method === 'POST') return handleUnitStorySubmit(req);
+  if (pathname === '/api/members-me/unit-story-photo' && req.method === 'POST') return handleUnitStoryPhoto(req);
+  if (pathname === '/api/members-me/unit-story-photo-remove' && req.method === 'POST') return handleUnitStoryPhotoRemove(req);
+  if (pathname === '/api/members-me/unit-photo' && req.method === 'GET') return handleUnitPhoto(req);
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-me/home', '/api/members-me/profile', '/api/members-me/privacy', '/api/members-me/land-documents', '/api/members-me/land-document-link', '/api/members-me/land-shapes', '/api/members-me/story', '/api/members-me/story-review', '/api/members-me/story-submit', '/api/members-me/directory', '/api/members-me/photo', '/api/members-me/story-photo', '/api/members-me/story-photo-remove'] };
+export const config = { path: ['/api/members-me/home', '/api/members-me/profile', '/api/members-me/privacy', '/api/members-me/land-documents', '/api/members-me/land-document-link', '/api/members-me/land-shapes', '/api/members-me/story', '/api/members-me/story-review', '/api/members-me/story-submit', '/api/members-me/directory', '/api/members-me/photo', '/api/members-me/story-photo', '/api/members-me/story-photo-remove', '/api/members-me/unit-story', '/api/members-me/unit-story-submit', '/api/members-me/unit-story-photo', '/api/members-me/unit-story-photo-remove', '/api/members-me/unit-photo'] };

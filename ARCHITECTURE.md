@@ -1506,6 +1506,20 @@ never touches Netlify either.
   redoes everything once, so the first load of a household's page after deploy fills them in, with no
   script or credentials.
 
+- **Unit stories (`members-me.mts`, migration 0049; in progress, not used by the portal yet).** Stories are
+  moving from one record per person to one per unit, because bio and family describe the unit. `member_unit_stories`
+  (one row per household, same draft / submitted / approved copies, RLS on, anon revoked) holds the shared text, up to two
+  photos and the public switch; each person's own quote and profile link sit under their id inside the copy. Rules are in
+  `scripts/lib/member-unit-story.mjs` (tested). Two owners edit one shared draft: a save sends the version it started from
+  and only the fields it changed, and conflicts only if the other owner changed one of the same fields (`draft_version` +
+  `draft_changed`; the write is guarded on the version so a race loses cleanly). Endpoints, all behind the same
+  signed-in-and-acknowledged gate as the person story: `GET`/`POST /api/members-me/unit-story` (view; save a draft),
+  `POST /api/members-me/unit-story-submit` (audit-first as `member.unit_story.submit`, never with the text; a second
+  owner's submit replaces one in review), `POST /api/members-me/unit-story-photo` and `unit-story-photo-remove` (at most two
+  photos, checked before any file is stored), and `GET /api/members-me/unit-photo` (the unit's people see any copy; other
+  members only an approved photo of a listed member). The writing check still goes through `POST /api/members-me/story-review`.
+  The staff queue, risk assessment, public export and directory still read `member_stories` until they move over; backfill with
+  `scripts/preview-unit-stories.mjs` then `scripts/backfill-unit-stories.mjs` (applied to TVC ERP 2026-10-21, 40 units).
 - **Member stories (`members-me.mts`, migration 0044).** A member writes a short public-facing
   story about themselves (what they do, family, one-line "why TVC") on the portal's
   "Your story" page, which replaces the "TVC Members: Your Story" Google Form. `member_stories` has
