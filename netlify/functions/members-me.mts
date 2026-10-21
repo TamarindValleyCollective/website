@@ -35,7 +35,7 @@ import { PRIVACY_NOTICE_VERSION, privacyNoticeRequired, validateAcceptance } fro
 import { callAnthropic } from './lib/anthropic';
 import { ACCOMMODATION_UNITS } from '../../scripts/lib/accommodation.mjs';
 import { availabilityFor, canCancelStay, checkOut, partyNote, validateStayDates, validateStayRequest, waitingBeds } from '../../scripts/lib/member-stay.mjs';
-import { createBooking, deleteBooking, getBookingById, getNotice, saveGuestContact } from '../../scripts/lib/accommodation-db.mjs';
+import { createBooking, deleteBooking, getBookingById, getNotice, saveGuestContact, setBookingParty } from '../../scripts/lib/accommodation-db.mjs';
 import { sendStayCancellation } from './lib/stay-notify';
 import { sendMemberStayBooked, sendMemberStayCancelled } from './lib/member-stay-notify';
 import { checkDailyCap } from './lib/rate-limit';
@@ -999,13 +999,27 @@ async function handleStaysBook(req: Request): Promise<Response> {
     const logged = await auditStay(member.personId, 'member.stay.create', { householdId, startDate: checked.startDate, nights: checked.nights, partySize: checked.party.length, guestCount: checked.guestCount });
     if (!logged) return jsonResponse({ error: 'Could not record the booking, so nothing was booked. Try again.' }, 500);
 
-    // Everyone is saved in the guest directory with how to reach them, so Madhavan finds them by name when he
-    // allocates tents and "Finalize & notify" reaches them. A failure here is logged and does not stop the booking.
+    // Everyone is saved in the SAME guest directory tent allocation uses (accommodation_people), with how to reach
+    // them, gender and any allergies or preferences, so one person has one record whether they are booked here
+    // or allocated in the calendar, and their past stays and details travel with them. Found again by mobile +
+    // name, or email + name, never by name alone.
+    // How each person comes on this stay: an owner on the register is a member, anyone else on it is member family,
+    // and anyone not on it is a guest of the member who booked. Kept on the booking, not on the person.
+    const roles = askedIds.length ? await select('member_household_members', 'person_id,role', `person_id=in.${inList(askedIds)}`) : [];
+    const capacityFor = (memberId: string | undefined) => (!memberId ? 'member_guest' : roles.some((r: any) => r.person_id === memberId && (r.role ?? 'owner') === 'owner') ? 'member' : 'member_family');
+    const resolved: { personId: string; ageGroup: string; capacity: string }[] = [];
     for (const p of checked.party) {
-      if (!p.mobileNumber && !p.email) continue;
-      await saveGuestContact({ name: p.name, mobileNumber: p.mobileNumber, email: p.email, gender: undefined }).catch((err: unknown) => console.error('[members-me] could not save guest contact', err));
+      const personId = await saveGuestContact({ name: p.name, mobileNumber: p.mobileNumber, email: p.email, gender: p.gender, preferences: p.preferences, memberPersonId: p.memberId });
+      resolved.push({ personId, ageGroup: p.ageGroup, capacity: capacityFor(p.memberId) });
     }
     const booking: any = await createBooking({ type: 'member-stay', label: `${farmUnit} · ${member.name}`, startDate: checked.startDate, nights: checked.nights, tents: [], note: partyNote(checked.party, checked.note), createdBy: `member:${member.personId}` } as any);
+    try {
+      // The people are on the booking now, before any tent: the calendar prefills them when Madhavan allocates.
+      await setBookingParty(booking.id, resolved);
+    } catch (err) {
+      await deleteBooking(booking.id, { deletedBy: `member:${member.personId}`, reason: 'Could not record the party' }).catch(() => {});
+      throw err;
+    }
     const row = { booking_id: booking.id, household_id: householdId, requested_by: member.personId, party_size: checked.party.length, party: checked.party.map((p: any) => ({ name: p.name, ageGroup: p.ageGroup, guest: p.guest })), guest_count: checked.guestCount };
     const link = await fetch(`${supabaseUrl()}/rest/v1/member_stays`, { method: 'POST', headers: restHeaders({ Prefer: 'return=minimal' }), body: JSON.stringify(row) }).catch(() => null);
     if (!link || !link.ok) {

@@ -82,6 +82,15 @@ test('a request is refused for each way it can be wrong', () => {
   assert.match(bad([person('A')], { nights: 0 }), /nights/);
 });
 
+test('a typed guest carries gender and allergies or preferences into the directory; a member carries neither', () => {
+  const r = validateStayRequest(req([{ memberId: 'm1' }, person('Meera Iyer', { gender: 'Female', preferences: '  vegetarian,   nut allergy ' }), person('Kiran', { gender: 'robot' })]), TODAY, family);
+  assert.equal(r.error, undefined);
+  assert.equal(r.party[0].gender, undefined);
+  assert.deepEqual([r.party[1].gender, r.party[1].preferences], ['Female', 'vegetarian, nut allergy']);
+  assert.deepEqual([r.party[2].gender, r.party[2].preferences], ['NA', undefined]);
+  assert.equal(validateStayRequest(req([person('Long', { preferences: 'x'.repeat(500) })]), TODAY, family).party[0].preferences.length, 300);
+});
+
 test('an adult needs a way to be reached (an email is enough); a child does not', () => {
   const ok = (p) => validateStayRequest(req([p]), TODAY, family).error;
   assert.equal(ok(person('A', { mobileNumber: '', email: 'a@example.com' })), undefined);

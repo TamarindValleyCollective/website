@@ -97,7 +97,8 @@ function isPastBooking(startDate, nights) {
 
 const ADMIN_SELECT =
   'select=id,type,event_slug,event_title,label,exclusive,start_date,nights,note,created_by,created_at,updated_by,updated_at,' +
-  'accommodation_tent_assignments(tent_id,solo,accommodation_guests(seq,age_group,person_id,accommodation_people(name,mobile_number,gender,preferences,email)))';
+  'accommodation_tent_assignments(tent_id,solo,accommodation_guests(seq,age_group,person_id,accommodation_people(name,mobile_number,gender,preferences,email))),' +
+  'accommodation_booking_party(seq,age_group,capacity,person_id,accommodation_people(name,mobile_number,gender,preferences,email))';
 
 // Turns a PostgREST row (snake_case, SQL null for absent optional fields)
 // back into the exact JSON shape the client already gets today (camelCase,
@@ -126,6 +127,22 @@ function rowToBooking(row) {
         })),
     })),
   };
+  // The people a member named when booking, before any tent: the same directory people as the guests above, so
+  // the calendar can prefill them when tents are allocated. Raw, like guests: the admin function shapes it.
+  const party = (row.accommodation_booking_party ?? [])
+    .slice()
+    .sort((a, b) => a.seq - b.seq)
+    .map((p) => ({
+      personId: p.person_id,
+      name: p.accommodation_people.name,
+      mobileNumber: p.accommodation_people.mobile_number ?? undefined,
+      gender: p.accommodation_people.gender ?? undefined,
+      preferences: p.accommodation_people.preferences ?? undefined,
+      email: p.accommodation_people.email ?? undefined,
+      ageGroup: p.age_group,
+      capacity: p.capacity,
+    }));
+  if (party.length) booking.party = party;
   if (row.event_slug != null) booking.eventSlug = row.event_slug;
   if (row.event_title != null) booking.eventTitle = row.event_title;
   if (row.label != null) booking.label = row.label;
@@ -183,17 +200,29 @@ export async function updateBooking({ id, type, eventSlug, eventTitle, label, ex
   return getBookingById(id);
 }
 
-// Saves a person in the guest directory with how to reach them (matched on mobile number + name, never on
-// name alone), so Madhavan can pick them by name when allocating tents and their stay notices reach them.
+// Saves a person in the guest directory with how to reach them. A member (memberPersonId) is the one directory
+// person linked to them, found or adopted from an earlier stay as a guest, so a guest who later joins is the
+// same person; anyone else is matched on mobile number + name (or email + name), never on name alone, so Madhavan can pick them by name when allocating tents and their stay notices reach them.
 // Used by a member booking in the portal, where the guests are known before any tent is.
-export async function saveGuestContact({ name, mobileNumber, email, gender }) {
-  return callRpc('accommodation_resolve_person', {
-    p_person_id: null,
+export async function saveGuestContact({ name, mobileNumber, email, gender, preferences, memberPersonId }) {
+  return callRpc('accommodation_resolve_booking_person', {
+    p_member_person_id: memberPersonId ?? null,
     p_name: name,
     p_mobile_number: mobileNumber ?? null,
-    p_gender: gender ?? null,
-    p_preferences: null,
     p_email: email ?? null,
+    p_gender: gender ?? null,
+    p_preferences: preferences ?? null,
+  });
+}
+
+// Records who is on a booking before it has tents (0052): one row per directory person. Replaces any earlier set.
+export async function setBookingParty(bookingId, people) {
+  await restFetch(`/accommodation_booking_party?booking_id=eq.${bookingId}`, { method: 'DELETE' });
+  if (people.length === 0) return;
+  await restFetch('/accommodation_booking_party', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify(people.map((p, seq) => ({ booking_id: bookingId, person_id: p.personId, seq, age_group: p.ageGroup, capacity: p.capacity }))),
   });
 }
 
@@ -230,6 +259,26 @@ export async function listStaysForPerson(personId) {
       'accommodation_tent_assignments(tent_id,accommodation_bookings(id,start_date,nights,type,label,event_title))',
   );
   const rows = await staysRes.json();
+  // A stay still waiting for tents: on the booking's party, not yet a guest on any tent. The party row also says
+  // how they came on a member's booking (a member, member family, or a guest of a member), attached to the stay
+  // whether or not tents have been allocated since.
+  const partyRes = await restFetch(`/accommodation_booking_party?person_id=eq.${personId}&select=age_group,capacity,accommodation_bookings(id,start_date,nights,type,label,event_title)`);
+  const partyRows = await partyRes.json();
+  const capacityOf = new Map(partyRows.map((p) => [p.accommodation_bookings.id, p.capacity]));
+  const placed = new Set(rows.map((g) => g.accommodation_tent_assignments.accommodation_bookings.id));
+  const waiting = partyRows
+    .filter((p) => !placed.has(p.accommodation_bookings.id))
+    .map((p) => ({
+      bookingId: p.accommodation_bookings.id,
+      startDate: p.accommodation_bookings.start_date,
+      nights: p.accommodation_bookings.nights,
+      tentId: null,
+      type: p.accommodation_bookings.type,
+      label: p.accommodation_bookings.label ?? undefined,
+      eventTitle: p.accommodation_bookings.event_title ?? undefined,
+      ageGroupAtStay: p.age_group,
+      capacity: p.capacity,
+    }));
   const stays = rows
     .map((g) => {
       const ta = g.accommodation_tent_assignments;
@@ -243,8 +292,10 @@ export async function listStaysForPerson(personId) {
         label: b.label ?? undefined,
         eventTitle: b.event_title ?? undefined,
         ageGroupAtStay: g.age_group,
+        ...(capacityOf.has(b.id) ? { capacity: capacityOf.get(b.id) } : {}),
       };
     })
+    .concat(waiting)
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
 
   return {

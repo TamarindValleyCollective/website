@@ -11,6 +11,7 @@ export const MAX_NIGHTS = 30;
 export const MAX_AHEAD_DAYS = 400;
 export const MAX_PARTY = 22;
 const AGE_GROUPS = ['Adult', 'Child'];
+const GENDERS = ['Male', 'Female', 'NA'];
 const DAY_MS = 86_400_000;
 
 const ymd = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s)) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`)) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s;
@@ -92,6 +93,11 @@ export function validateStayRequest(body, today, family = new Map(), available =
       if (!name || name.length > 80) return { error: 'Each person needs a name.' };
       if (!AGE_GROUPS.includes(p.ageGroup)) return { error: `Say whether ${name} is an adult or a child.` };
       entry = { name, ageGroup: p.ageGroup, guest: true }; // not on the register: a paying guest, always
+      // The same details tent allocation records in the guest directory: gender (optional here) and any
+      // allergies or preferences, so the farm is ready for them.
+      entry.gender = GENDERS.includes(p.gender) ? p.gender : 'NA';
+      const prefs = typeof p.preferences === 'string' ? p.preferences.trim().replace(/\s+/g, ' ').slice(0, 300) : '';
+      if (prefs) entry.preferences = prefs;
       // How to reach them with their stay notices. Optional for a child (a parent's details cover them),
       // but an adult needs at least a mobile number or an email.
       const mobile = typeof p.mobileNumber === 'string' ? p.mobileNumber.trim() : '';

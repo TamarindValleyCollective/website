@@ -144,6 +144,18 @@ async function db(method: 'POST' | 'PATCH' | 'DELETE', path: string, body?: unkn
   return { ok: false, status: res.status, rows: [], code: parsed?.code };
 }
 
+// A member who once stayed as a guest is the same person in the guest directory (accommodation_people), so
+// adding or editing a member links them to that record (matched on mobile + name or email + name, never name
+// alone). Best-effort: an edit that has already been saved is not undone because the link could not be made, and
+// the same link is made the next time they book.
+async function linkToGuestDirectory(personId: string): Promise<void> {
+  try {
+    await db('POST', 'rpc/accommodation_link_member', { p_member_person_id: personId });
+  } catch (err) {
+    console.error('[members-admin] could not link the member to the guest directory', err);
+  }
+}
+
 // Turns a failed write into a message that is safe to show. It never says who
 // else holds an email or a house, only that it is taken.
 function failure(result: Db, taken: string): EditError {
@@ -200,6 +212,7 @@ async function applyEdit(edit: any, staffId: string): Promise<void> {
     case 'person.update': {
       const r = must(await db('PATCH', `member_people?${eq('id', edit.personId)}`, columns(edit, PERSON_COLUMNS)), EMAIL_TAKEN);
       if (r.rows.length === 0) throw new EditError("That person doesn't exist any more. Reload the page.", 404);
+      await linkToGuestDirectory(edit.personId);
       return;
     }
 
@@ -212,6 +225,7 @@ async function applyEdit(edit: any, staffId: string): Promise<void> {
         await db('DELETE', `member_people?${eq('id', personId)}`); // don't leave a person with no household
         throw failure(link, 'That person is already in that household.');
       }
+      await linkToGuestDirectory(personId);
       return;
     }
 

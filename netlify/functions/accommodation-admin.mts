@@ -221,6 +221,8 @@ function shapeBooking(b: any, staff: StaffGrant) {
   const { createdBy: _createdBy, updatedBy: _updatedBy, ...rest } = b;
   return {
     ...rest,
+    // The people named on a member's booking, shaped like a tent's guests (contact reduced to on-file flags).
+    ...(b.party ? { party: b.party.map((g: any) => ({ personId: g.personId, ageGroup: g.ageGroup, capacity: g.capacity, ...shapePerson(g, staff) })) } : {}),
     tents: (b.tents ?? []).map((t: any) => ({
       ...t,
       guests: (t.guests ?? []).map((g: any) => ({

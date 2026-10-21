@@ -1482,15 +1482,21 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     preferences?: string;
   }
 
+  const CAPACITY_LABELS = { member: 'as a member', member_family: 'as member family', member_guest: 'as a guest of a member' } as const;
+
   interface PastStay {
     bookingId: string;
     startDate: string;
     nights: number;
-    tentId: string;
+    // null: booked by a member in the portal and still waiting for tents.
+    tentId: string | null;
     type: string;
     label?: string;
     eventTitle?: string;
     ageGroupAtStay: string;
+    // How they came on a member's booking: a member, member family, or a guest of a member. Absent for
+    // events, Linger and other stays. The same person can hold different capacities over the years.
+    capacity?: 'member' | 'member_family' | 'member_guest';
   }
 
   interface TentAssignment {
@@ -1529,6 +1535,9 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     startDate: string;
     nights: number;
     tents: TentAssignment[];
+    // The people a member named in the portal, before any tent: the same directory people as a tent's guests.
+    // Prefilled into tents as Madhavan allocates them (see nextWaitingGuest).
+    party?: Guest[];
     note?: string;
     isPast: boolean;
     // Guest notifications (member stays only for now): `notice` is null until
@@ -2245,9 +2254,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       } else {
         const items = result.stays
           .map((s) => {
-            const tentLabel = UNITS.find((u) => u.id === s.tentId)?.label ?? s.tentId;
+            const tentLabel = s.tentId ? (UNITS.find((u) => u.id === s.tentId)?.label ?? s.tentId) : 'waiting for tents';
             const what = s.eventTitle ?? s.label ?? typeDisplayLabel(s.type);
-            return `<li>${s.startDate} · ${tentLabel} · ${what}</li>`;
+            const as = s.capacity ? ` · ${CAPACITY_LABELS[s.capacity]}` : '';
+            return `<li>${s.startDate} · ${tentLabel} · ${what}${as}</li>`;
           })
           .join('');
         panel.innerHTML = `Past stays:<ul>${items}</ul>`;
@@ -2464,8 +2474,18 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       return;
     }
     checkbox.checked = true;
-    addGuestRow(guestsEl, {}, () => onGuestRemoved(option, unit));
+    addGuestRow(guestsEl, nextWaitingGuest() ?? {}, () => onGuestRemoved(option, unit));
     setActiveTent(unit.id);
+  }
+
+  // A member's booking arrives with its people named but no tents. Each time a guest row is added, the next
+  // person not yet placed in a tent fills it (their directory record, so contact flags, gender and any
+  // allergies come with them, and past stays are one click away). Empty once everyone is placed, or for a
+  // booking that was not made by a member: rows then start blank as before.
+  let waitingParty: Guest[] = [];
+  function nextWaitingGuest(): Guest | null {
+    const placed = new Set(Array.from(tentsContainer.querySelectorAll<HTMLElement>('.guest-row')).map((r) => r.dataset.personId).filter(Boolean));
+    return waitingParty.find((g) => g.personId && !placed.has(g.personId)) ?? null;
   }
 
   // A tent with zero guests left isn't part of the booking anymore - uncheck
@@ -3436,6 +3456,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     syncStartDateEmptyState();
     nightsInput.value = String(b.nights);
     noteInput.value = b.note ?? '';
+    waitingParty = b.party ?? []; // a member's booking: its people fill the guest rows as tents are ticked
     setTents(b.tents);
     // The grid/day-view cell actually clicked may name a specific tent
     // within this booking (see activateCell) - setTents above always
@@ -3455,6 +3476,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   function resetForm() {
     editingId = null;
     groupOverride.clear(); // fresh session - see loadIntoForm's same reset
+    waitingParty = [];
     formHeading.textContent = 'New booking';
     cancelEditBtn.hidden = true;
     cancelEditBtn.textContent = 'Cancel edit';

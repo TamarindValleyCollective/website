@@ -1559,11 +1559,26 @@ never touches Netlify either.
   the register (`memberId`: the unit's own people, or another member listed in the directory, never one who
   opted out; free) or typed in (name, adult or child, and a mobile number and/or email for their stay notices; an adult
   needs at least one, a child may use a parent's; **always a paying guest**, so a family member who should
-  stay free has to be on the register). Every named person's contact (the register's own for a member, what
-  was typed for a guest) is saved in the guest directory (`accommodation_people`, via
-  `accommodation_resolve_person`, matched on mobile number + name) before the booking is made, so Madhavan
-  finds them by name when he allocates tents and "Finalize & notify" reaches them; the contacts are never in
-  `member_stays`, the calendar note or any response to the browser. `GET /api/members-me/stays?household=` returns the member's
+  stay free has to be on the register). **One directory, one person.** Everyone who stays, whatever the channel (an event participant, a Linger
+  guest, a guest of a member, a member, member family), is one row in the guest directory
+  (`accommodation_people`: name, mobile, email, gender, allergies and preferences), and a person's past stays
+  (`listStaysForPerson`) are every booking they were on, in any capacity. A role is never stored on the person:
+  how they came belongs to each stay (the booking's own type, plus `accommodation_booking_party.capacity` on a
+  member's booking: `member` for an owner on the register, `member_family` for family or a non-owner,
+  `member_guest` for anyone not on it; the past-stays list shows it, e.g. "as a guest of a member"). A directory
+  person may be linked to a member record (`accommodation_people.member_person_id`, migration 0052), so a guest
+  who later joins is the same person: `accommodation_link_member` adopts the existing directory row, matching on
+  mobile + name or email + name (phones compared by last ten digits), **never on name alone**. It runs when a
+  member books in the portal (`accommodation_resolve_booking_person`: a member is always the one linked row,
+  found, adopted or created), when an admin adds or edits a member (`members-admin.mts`), and once for every
+  existing member in the migration; it never makes a row for someone who has not stayed. A guest resolves on
+  mobile + name exactly as tent allocation does, or email + name, so the same person booked by an event, Linger
+  or a member lands on the same row; with no contact a new row is made (the directory never merges on a name).
+  Each booking's people are saved in the directory, with contact, gender and preferences, and recorded on the
+  booking (`accommodation_booking_party`) before any tent exists: the calendar then shows them on the booking
+  (`party`, contact reduced to on-file flags) and prefills them as guests when Madhavan ticks a tent, so
+  "Finalize & notify" reaches them. The contacts are never in `member_stays`, the calendar note or any response
+  to the browser. `GET /api/members-me/stays?household=` returns the member's
   stays, whether tents are allocated yet, and the people they may name. `POST /api/members-me/stays-cancel` is
   allowed only before check-in, only for the member's own households (404 otherwise), audit-first as
   `member.stay.cancel`; if the guests had been told by an admin ("Finalize & notify") they get the existing
