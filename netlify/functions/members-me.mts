@@ -40,7 +40,7 @@ import { deleteMemberPhoto, getMemberPhoto, putMemberPhoto } from './lib/member-
 import { assessUnitSubmission } from './lib/story-risk';
 import { REVIEW_SYSTEM, localChecks, parseSuggestions, reviewPrompt, validateDraft } from '../../scripts/lib/member-story.mjs';
 import { MAX_PHOTOS, addPhoto, draftColumns, draftState, mergeDraftEdit, unitPhotoAccess, unitStoryView, validateUnitSave, validateUnitSubmit } from '../../scripts/lib/member-unit-story.mjs';
-import { ALLOWED_MIME, LAND_TYPES, MAX_HOUSEHOLD_BYTES, MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_UPLOADS_PER_DAY, NOT_A_LAND_PDF, NOT_A_SKETCH, SKETCH_IS_A_PATTA, SKETCH_NOT_YOURS, WRONG_CARD, documentsReplacedBy, landTypeMismatch, memberSummary, normalizeExtraction, normalizeSurveyNo, surveyKey, surveyOnRegister } from '../../scripts/lib/member-land-docs.mjs';
+import { ALLOWED_MIME, LAND_TYPES, MAX_HOUSEHOLD_BYTES, MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_UPLOADS_PER_DAY, NOT_A_LAND_PDF, NOT_A_SKETCH, SKETCH_IS_A_PATTA, SKETCH_NOT_YOURS, WRONG_CARD, documentsReplacedBy, landDocumentLinks, landTypeMismatch, memberSummary, normalizeExtraction, normalizeSurveyNo, surveyKey, surveyOnRegister } from '../../scripts/lib/member-land-docs.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store, private' } });
@@ -72,18 +72,21 @@ async function handleHome(req: Request): Promise<Response> {
   }
 
   let data;
+  let landDocs: any[] = [];
   try {
     const hh = inList(member.householdIds);
-    const [households, memberships, plots, housePattas, notes] = await Promise.all([
+    const [households, memberships, plots, housePattas, notes, docRows] = await Promise.all([
       select('member_households', 'id,farm_unit,house_no,cluster,unit_type', `id=in.${hh}`),
       select('member_household_members', 'household_id,person_id,role,can_login', `household_id=in.${hh}`),
       select('member_plots', 'id,household_id,patta_no,reference_no,survey_no,area_hectares,area_acres,settlement,verification,source_document_id', `household_id=in.${hh}`),
       select('member_house_pattas', 'id,household_id,patta_no,reference_no,survey_no,area_sq_ft,settlement,verification,source_document_id', `household_id=in.${hh}`),
       select('member_household_notes', 'household_id,kind', `household_id=in.${hh}`),
+      select('member_land_documents', 'id,household_id,land_type,status,extracted,created_at', `household_id=in.${hh}`),
     ]);
     const personIds = [...new Set(memberships.map((m: any) => m.person_id))];
     const people = personIds.length ? await select('member_people', 'id,full_name,email,phone,active,directory_visible', `id=in.${inList(personIds)}`) : [];
     data = { households, memberships, plots, housePattas, notes, people };
+    landDocs = docRows;
   } catch (err) {
     console.error('[members-me] failed to load', err);
     return jsonResponse({ error: 'Server error' }, 500);
@@ -91,6 +94,13 @@ async function handleHome(req: Request): Promise<Response> {
 
   const own = data.people.find((p: any) => p.id === member.personId);
   const reviewed = buildHouseholdReview(data);
+  // Each land record also says which uploaded file its patta number and its survey number open.
+  for (const h of reviewed) {
+    const docs = landDocs.filter((d: any) => d.household_id === h.id);
+    for (const [landType, rows] of [['farm', h.plots], ['house', h.housePattas]] as const) {
+      for (const row of rows as any[]) Object.assign(row, landDocumentLinks(docs, { landType, pattaNo: row.pattaNo, surveyNo: row.surveyNo }));
+    }
+  }
   return jsonResponse({
     privacyNoticeVersion: PRIVACY_NOTICE_VERSION,
     me: {

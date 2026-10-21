@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseLandPdfText, areaFromHaAres, normalizeExtraction, normalizeSurveyNo, namesMatch, reconcile, documentStatus,
-  newRecordColumns, approvalColumns, memberSummary, documentsReplacedBy, surveyKey, landTypeMismatch,
+  newRecordColumns, approvalColumns, memberSummary, documentsReplacedBy, surveyKey, landTypeMismatch, landDocumentKind, landDocumentLinks,
 } from './member-land-docs.mjs';
 
 const raw = (over = {}) => ({
@@ -357,4 +357,49 @@ test('a document with several records: any one in the card used makes it fine; o
   const two = extraction({ records: [{ survey_no: '123/4A', patta_no: '0777', area_hectares: 0, area_ares: 35.22 }, { survey_no: '200/1', patta_no: '0777', area_hectares: 0, area_ares: 10 }] });
   assert.equal(landTypeMismatch({ landType: 'house', extraction: two, farmRows: [plot()], houseRows: [plot({ survey_no: '200/1' })] }), null);
   assert.deepEqual(landTypeMismatch({ landType: 'house', extraction: two, farmRows: [plot()], houseRows: [] }), { actual: 'farm' });
+});
+
+// ---- links from the land tables to the uploaded files ----
+const rec = (surveyNo, pattaNo) => ({ surveyNo, pattaNo });
+const linkDoc = (id, extracted, over = {}) => ({ id, land_type: 'farm', status: 'applied', created_at: '2026-01-01T00:00:00Z', extracted, ...over });
+const pattaDoc = (id, over) => linkDoc(id, { records: [rec('123/4A', '777'), rec('123/5B', '777')] }, over);
+const surveyDoc = (id, surveyNo, over) => linkDoc(id, { records: [rec(surveyNo, '777')], hasShape: true }, over);
+const sketchDoc = (id, surveyNo, over) => linkDoc(id, { kind: 'fmb_sketch', surveyNo, hasShape: true }, over);
+const at = { landType: 'farm', pattaNo: '0777', surveyNo: '123/4a' };
+
+test('files are told apart by what was read from them', () => {
+  assert.equal(landDocumentKind(pattaDoc('p')), 'patta');
+  assert.equal(landDocumentKind(surveyDoc('s', '123/4A')), 'survey');
+  assert.equal(landDocumentKind(sketchDoc('k', '123/4A')), 'sketch');
+  // one survey number with no sketch found is still just a patta
+  assert.equal(landDocumentKind(linkDoc('x', { records: [rec('123/4A', '777')] })), 'patta');
+  assert.equal(landDocumentKind(linkDoc('y', null)), null);
+});
+
+test('a patta document links to the patta number, a survey document or sketch to the survey number', () => {
+  assert.deepEqual(landDocumentLinks([pattaDoc('p'), surveyDoc('s', '123/4A')], at), { pattaDocumentId: 'p', surveyDocumentId: 's' });
+  assert.deepEqual(landDocumentLinks([pattaDoc('p'), sketchDoc('k', '123/4A')], at), { pattaDocumentId: 'p', surveyDocumentId: 'k' });
+});
+
+test('a patta alone gives the survey number no link, and a survey document alone gives the patta number none', () => {
+  assert.deepEqual(landDocumentLinks([pattaDoc('p')], at), { pattaDocumentId: 'p', surveyDocumentId: null });
+  assert.deepEqual(landDocumentLinks([surveyDoc('s', '123/4A')], at), { pattaDocumentId: null, surveyDocumentId: 's' });
+});
+
+test('a sketch is preferred to a survey document, and the newest of a kind wins', () => {
+  const old = surveyDoc('s-old', '123/4A', { created_at: '2025-01-01T00:00:00Z' });
+  assert.equal(landDocumentLinks([old, sketchDoc('k', '123/4A')], at).surveyDocumentId, 'k');
+  assert.equal(landDocumentLinks([old, surveyDoc('s-new', '123/4A')], at).surveyDocumentId, 's-new');
+});
+
+test('only files for this survey number, patta number and card are linked; failed files never', () => {
+  assert.equal(landDocumentLinks([sketchDoc('k', '999/1')], at).surveyDocumentId, null);
+  assert.equal(landDocumentLinks([pattaDoc('p')], { ...at, pattaNo: '12' }).pattaDocumentId, null);
+  assert.equal(landDocumentLinks([pattaDoc('p', { land_type: 'house' })], at).pattaDocumentId, null);
+  assert.equal(landDocumentLinks([pattaDoc('p', { status: 'failed' })], at).pattaDocumentId, null);
+  assert.deepEqual(landDocumentLinks([pattaDoc('p')], { landType: 'farm', pattaNo: null, surveyNo: null }), { pattaDocumentId: null, surveyDocumentId: null });
+});
+
+test('a record holding several survey numbers links to a document for any of them', () => {
+  assert.equal(landDocumentLinks([sketchDoc('k', '123/5B')], { ...at, surveyNo: '123/4A, 123/5B' }).surveyDocumentId, 'k');
 });

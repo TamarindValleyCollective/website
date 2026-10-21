@@ -1501,8 +1501,14 @@ never touches Netlify either.
 
   **Document links and parcel outlines** (no migration): members open their own household's files
   through `POST /api/members-me/land-document-link` (their households only, audit-first as
-  `member.land.view`, 60-second link); a record's `sourceDocumentId` ties its survey number to the
-  document it came from, in both the member portal and the admin register. A single-survey
+  `member.land.view`, 60-second link); a record's `sourceDocumentId` ties it to the document it came
+  from (the admin register links its survey number to that, and the portal uses it to find the parcel's
+  outline). In the member portal's land tables each record also carries `pattaDocumentId` and
+  `surveyDocumentId`, worked out in `GET /api/members-me/home` by `landDocumentLinks`: the **patta number**
+  opens the newest patta document that lists it, and the **survey number** opens the newest FMB sketch
+  for it, else the newest survey-number document (`landDocumentKind` tells the three apart: a stand-alone
+  sketch, a one-survey file whose sketch was found, anything else is a patta). Files that failed to read
+  are never linked. A single-survey
   Integrated Land Record carries a field sketch ("புலப்படம்", the FMB sketch) on page 2 (a
   multi-survey patta has none). Older e-Services files draw it as a small bitmap, current ones as vector
   lines (the sketch's labels are glyph shapes, so the page has no text). The background reader
