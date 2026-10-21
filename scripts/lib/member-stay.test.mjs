@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { availabilityFor, canCancelStay, checkOut, partyNote, validateStayDates, validateStayRequest, waitingBeds } from './member-stay.mjs';
 
 const TODAY = '2026-10-21';
-const person = (name, over = {}) => ({ name, ageGroup: 'Adult', ...over });
+const person = (name, over = {}) => ({ name, ageGroup: 'Adult', mobileNumber: '98450 12345', ...over });
 const req = (people, over = {}) => ({ startDate: '2026-11-01', nights: 2, people, ...over });
-const family = new Map([['m1', { name: 'Asha Rao' }], ['m2', { name: 'Ravi Rao' }]]);
+const family = new Map([['m1', { name: 'Asha Rao', phone: '98450 54321', email: 'asha@example.com' }], ['m2', { name: 'Ravi Rao', phone: null, email: null }]]);
 
 test('dates: past, missing and too-long are refused; today is fine', () => {
   assert.equal(validateStayDates({ startDate: '2026-10-21', nights: 1 }, TODAY), null);
@@ -54,12 +54,16 @@ test('waiting beds are the busiest night of the stay', () => {
 });
 
 test('a valid request keeps the party, counts paying guests, and never asks for tents', () => {
-  const r = validateStayRequest(req([{ memberId: 'm1', guest: true }, { memberId: 'm2' }, person('Dev Rao', { ageGroup: 'Child' }), person('Meera Iyer', { guest: false })], { note: ' near the stream ' }), TODAY, family);
+  const r = validateStayRequest(req([{ memberId: 'm1', guest: true }, { memberId: 'm2' }, person('Dev Rao', { ageGroup: 'Child', mobileNumber: undefined }), person('Meera Iyer', { guest: false, email: 'meera@example.com' })], { note: ' near the stream ' }), TODAY, family);
   assert.equal(r.error, undefined);
   assert.deepEqual(r.party.map((p) => [p.name, p.ageGroup, p.guest]), [['Asha Rao', 'Adult', false], ['Ravi Rao', 'Adult', false], ['Dev Rao', 'Child', true], ['Meera Iyer', 'Adult', true]]);
   assert.equal(r.guestCount, 2); // anyone typed is a paying guest, whatever the request says; the register's people never are
   assert.equal(r.note, 'near the stream');
   assert.equal('tents' in r, false);
+  // contact: the register's own for members, what was typed for guests
+  assert.deepEqual([r.party[0].mobileNumber, r.party[0].email], ['+919845054321', 'asha@example.com']);
+  assert.equal(r.party[1].mobileNumber, undefined);
+  assert.deepEqual([r.party[3].mobileNumber, r.party[3].email], ['+919845012345', 'meera@example.com']);
 });
 
 test('a request is refused for each way it can be wrong', () => {
@@ -70,14 +74,27 @@ test('a request is refused for each way it can be wrong', () => {
   assert.match(bad([{ memberId: 'm1' }, person('asha rao')]), /listed twice/);
   assert.match(bad([person('A', { ageGroup: 'Teen' })]), /adult or a child/);
   assert.match(bad([person(' ')]), /needs a name/);
+  assert.match(bad([person('A', { mobileNumber: '123' })]), /valid mobile/);
+  assert.match(bad([person('A', { email: 'nope' })]), /valid email/);
+  assert.match(bad([person('A', { mobileNumber: '' })]), /Add a mobile number or an email for A/);
   assert.match(bad([person('A'), person('B'), person('C')], {}, 2), /Only 2 places are free/);
   assert.match(bad([person('A')], {}, 0), /no room/);
   assert.match(bad([person('A')], { nights: 0 }), /nights/);
 });
 
+test('an adult needs a way to be reached (an email is enough); a child does not', () => {
+  const ok = (p) => validateStayRequest(req([p]), TODAY, family).error;
+  assert.equal(ok(person('A', { mobileNumber: '', email: 'a@example.com' })), undefined);
+  assert.equal(ok(person('B', { mobileNumber: '', ageGroup: 'Child' })), undefined);
+  assert.match(ok(person('C', { mobileNumber: '' })), /mobile number or an email/);
+});
+
 test('the note for Madhavan names everyone and carries no contact details', () => {
   const party = [{ name: 'Asha Rao', ageGroup: 'Adult', guest: false }, { name: 'Dev Rao', ageGroup: 'Child', guest: false }, { name: 'Meera Iyer', ageGroup: 'Adult', guest: true }];
   assert.equal(partyNote(party, ''), 'Needs tents. Party of 3: Asha Rao, Dev Rao (child), Meera Iyer (paying guest).');
+  const reachable = partyNote([{ ...party[0], mobileNumber: '+919845012345' }], '');
+  assert.match(reachable, /guest directory: search by name/);
+  assert.equal(reachable.includes('9845'), false);
   assert.match(partyNote(party, 'late arrival'), /Note: late arrival$/);
 });
 

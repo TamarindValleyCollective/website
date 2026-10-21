@@ -5,7 +5,7 @@
 // coming. They do NOT choose tents: the booking goes onto the accommodation calendar as a `member-stay`
 // with no tents, and Madhavan allocates them there. Until he does, the people are waiting for a place, and
 // those waiting beds are taken off what the next member is told is free.
-import { ACCOMMODATION_UNITS } from './accommodation.mjs';
+import { ACCOMMODATION_UNITS, isValidEmail, normalizeMobileNumber } from './accommodation.mjs';
 
 export const MAX_NIGHTS = 30;
 export const MAX_AHEAD_DAYS = 400;
@@ -83,11 +83,29 @@ export function validateStayRequest(body, today, family = new Map(), available =
       if (usedMembers.has(p.memberId)) return { error: `${known.name} is listed twice.` };
       usedMembers.add(p.memberId);
       entry = { name: known.name.trim(), ageGroup: 'Adult', guest: false, memberId: p.memberId };
+      // The register's own number and email, so notices reach them without anyone typing them again.
+      const phone = known.phone ? normalizeMobileNumber(known.phone) : null;
+      if (phone) entry.mobileNumber = phone;
+      if (known.email && isValidEmail(known.email)) entry.email = known.email.trim();
     } else {
       const name = typeof p?.name === 'string' ? p.name.trim().replace(/\s+/g, ' ') : '';
       if (!name || name.length > 80) return { error: 'Each person needs a name.' };
       if (!AGE_GROUPS.includes(p.ageGroup)) return { error: `Say whether ${name} is an adult or a child.` };
       entry = { name, ageGroup: p.ageGroup, guest: true }; // not on the register: a paying guest, always
+      // How to reach them with their stay notices. Optional for a child (a parent's details cover them),
+      // but an adult needs at least a mobile number or an email.
+      const mobile = typeof p.mobileNumber === 'string' ? p.mobileNumber.trim() : '';
+      if (mobile) {
+        const normalized = normalizeMobileNumber(mobile);
+        if (!normalized) return { error: `"${mobile}" is not a valid mobile number. Use 10 digits, or include a country code.` };
+        entry.mobileNumber = normalized;
+      }
+      const email = typeof p.email === 'string' ? p.email.trim() : '';
+      if (email) {
+        if (!isValidEmail(email)) return { error: `"${email}" is not a valid email address.` };
+        entry.email = email;
+      }
+      if (entry.ageGroup === 'Adult' && !entry.mobileNumber && !entry.email) return { error: `Add a mobile number or an email for ${name}, so we can send them their stay details.` };
     }
     const key = entry.name.toLowerCase();
     if (names.has(key)) return { error: `${entry.name} is listed twice. Add a surname or initial to tell two people apart.` };
@@ -102,10 +120,11 @@ export function validateStayRequest(body, today, family = new Map(), available =
 }
 
 // The line Madhavan reads on the calendar card: who is coming, children and paying guests marked, and the
-// member's own note. No phone numbers or emails: those stay on the register.
+// member's own note. No phone numbers or emails in the text itself: they are saved in the guest directory.
 export function partyNote(party, note) {
+  const reachable = party.some((p) => p.mobileNumber || p.email);
   const who = party.map((p) => `${p.name}${p.ageGroup === 'Child' ? ' (child)' : ''}${p.guest ? ' (paying guest)' : ''}`).join(', ');
-  return `Needs tents. Party of ${party.length}: ${who}.${note ? ` Note: ${note}` : ''}`;
+  return `Needs tents. Party of ${party.length}: ${who}.${reachable ? ' Their mobile numbers and emails are in the guest directory: search by name when you add them to a tent.' : ''}${note ? ` Note: ${note}` : ''}`;
 }
 
 // Can this stay still be cancelled by the member? Only before check-in; after that the core team handles it.

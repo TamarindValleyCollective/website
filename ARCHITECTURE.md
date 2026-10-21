@@ -1557,8 +1557,13 @@ never touches Netlify either.
   (party, children and paying guests marked, the member's own note, no contact details), and records the
   household and party in `member_stays` (if that fails the booking is removed again). Each person is either on
   the register (`memberId`: the unit's own people, or another member listed in the directory, never one who
-  opted out; free) or typed in (name and adult or child; **always a paying guest**, so a family member who
-  should stay free has to be on the register). `GET /api/members-me/stays?household=` returns the member's
+  opted out; free) or typed in (name, adult or child, and a mobile number and/or email for their stay notices; an adult
+  needs at least one, a child may use a parent's; **always a paying guest**, so a family member who should
+  stay free has to be on the register). Every named person's contact (the register's own for a member, what
+  was typed for a guest) is saved in the guest directory (`accommodation_people`, via
+  `accommodation_resolve_person`, matched on mobile number + name) before the booking is made, so Madhavan
+  finds them by name when he allocates tents and "Finalize & notify" reaches them; the contacts are never in
+  `member_stays`, the calendar note or any response to the browser. `GET /api/members-me/stays?household=` returns the member's
   stays, whether tents are allocated yet, and the people they may name. `POST /api/members-me/stays-cancel` is
   allowed only before check-in, only for the member's own households (404 otherwise), audit-first as
   `member.stay.cancel`; if the guests had been told by an admin ("Finalize & notify") they get the existing

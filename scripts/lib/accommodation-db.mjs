@@ -183,6 +183,20 @@ export async function updateBooking({ id, type, eventSlug, eventTitle, label, ex
   return getBookingById(id);
 }
 
+// Saves a person in the guest directory with how to reach them (matched on mobile number + name, never on
+// name alone), so Madhavan can pick them by name when allocating tents and their stay notices reach them.
+// Used by a member booking in the portal, where the guests are known before any tent is.
+export async function saveGuestContact({ name, mobileNumber, email, gender }) {
+  return callRpc('accommodation_resolve_person', {
+    p_person_id: null,
+    p_name: name,
+    p_mobile_number: mobileNumber ?? null,
+    p_gender: gender ?? null,
+    p_preferences: null,
+    p_email: email ?? null,
+  });
+}
+
 export async function deleteBooking(id, { deletedBy, reason }) {
   await callRpc('accommodation_delete_booking', { p_id: id, p_deleted_by: deletedBy, p_reason: reason || null });
 }

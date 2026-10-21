@@ -35,7 +35,7 @@ import { PRIVACY_NOTICE_VERSION, privacyNoticeRequired, validateAcceptance } fro
 import { callAnthropic } from './lib/anthropic';
 import { ACCOMMODATION_UNITS } from '../../scripts/lib/accommodation.mjs';
 import { availabilityFor, canCancelStay, checkOut, partyNote, validateStayDates, validateStayRequest, waitingBeds } from '../../scripts/lib/member-stay.mjs';
-import { createBooking, deleteBooking, getBookingById, getNotice } from '../../scripts/lib/accommodation-db.mjs';
+import { createBooking, deleteBooking, getBookingById, getNotice, saveGuestContact } from '../../scripts/lib/accommodation-db.mjs';
 import { sendStayCancellation } from './lib/stay-notify';
 import { sendMemberStayBooked, sendMemberStayCancelled } from './lib/member-stay-notify';
 import { checkDailyCap } from './lib/rate-limit';
@@ -978,7 +978,12 @@ async function handleStaysBook(req: Request): Promise<Response> {
   try {
     // The registered people who may be named, read here so the member never types a name we already hold.
     const named = await stayPeople(householdId);
-    const family = new Map<string, { name: string }>([...named.own, ...named.others].map((p) => [p.id, { name: p.name }]));
+    const askedIds = Array.isArray(body.people) ? body.people.map((p: any) => p?.memberId).filter((id: unknown): id is string => typeof id === 'string') : [];
+    const nameOf = new Map<string, string>([...named.own, ...named.others].map((p) => [p.id, p.name]));
+    // Their number and email come from the register, read here and never sent to the browser.
+    const contacts = askedIds.length && askedIds.every((id: string) => nameOf.has(id)) ? await select('member_people', 'id,phone,email', `id=in.${inList(askedIds)}`) : [];
+    const contactOf = new Map<string, { phone: string | null; email: string | null }>(contacts.map((c: any) => [c.id, { phone: c.phone ?? null, email: c.email ?? null }]));
+    const family = new Map<string, { name: string; phone: string | null; email: string | null }>([...nameOf].map(([id, name]) => [id, { name, phone: contactOf.get(id)?.phone ?? null, email: contactOf.get(id)?.email ?? null }]));
 
     // Booking is allowed only where there is room. Two members booking at the same moment can both pass this;
     // the calendar then shows more people than beds and the core team sorts it out, as for any other booking.
@@ -994,6 +999,12 @@ async function handleStaysBook(req: Request): Promise<Response> {
     const logged = await auditStay(member.personId, 'member.stay.create', { householdId, startDate: checked.startDate, nights: checked.nights, partySize: checked.party.length, guestCount: checked.guestCount });
     if (!logged) return jsonResponse({ error: 'Could not record the booking, so nothing was booked. Try again.' }, 500);
 
+    // Everyone is saved in the guest directory with how to reach them, so Madhavan finds them by name when he
+    // allocates tents and "Finalize & notify" reaches them. A failure here is logged and does not stop the booking.
+    for (const p of checked.party) {
+      if (!p.mobileNumber && !p.email) continue;
+      await saveGuestContact({ name: p.name, mobileNumber: p.mobileNumber, email: p.email, gender: undefined }).catch((err: unknown) => console.error('[members-me] could not save guest contact', err));
+    }
     const booking: any = await createBooking({ type: 'member-stay', label: `${farmUnit} · ${member.name}`, startDate: checked.startDate, nights: checked.nights, tents: [], note: partyNote(checked.party, checked.note), createdBy: `member:${member.personId}` } as any);
     const row = { booking_id: booking.id, household_id: householdId, requested_by: member.personId, party_size: checked.party.length, party: checked.party.map((p: any) => ({ name: p.name, ageGroup: p.ageGroup, guest: p.guest })), guest_count: checked.guestCount };
     const link = await fetch(`${supabaseUrl()}/rest/v1/member_stays`, { method: 'POST', headers: restHeaders({ Prefer: 'return=minimal' }), body: JSON.stringify(row) }).catch(() => null);
