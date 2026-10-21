@@ -237,3 +237,94 @@ export function unitPhotoAccess({ viewerHouseholdIds, row, photoId, listed }) {
   if (viewerHouseholdIds.includes(row.household_id)) return true;
   return !!listed && (row.approved?.photos ?? []).some((p) => p.ref === photoId);
 }
+
+// ---- the admin queue ----
+
+// A unit copy in the shape the risk rules (member-risk.mjs) already read: the quotes and links of
+// everyone, and the photos, each joined in a fixed order so that reordering is never read as an edit.
+export function riskCopy(copy) {
+  if (!copy) return null;
+  const sorted = (map) => Object.entries(map ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v).filter(Boolean);
+  return {
+    bio: text(copy.bio),
+    family: text(copy.family),
+    why: sorted(copy.quotes).join('\n\n'),
+    social: sorted(copy.links).join('\n'),
+    photo: (copy.photos ?? []).map((p) => p.ref).sort().join(','),
+  };
+}
+
+// The columns an admin's decision on the submission in review writes. Approving makes the submitted
+// copy live; sending it back needs a note the members see, and the live copy is never touched.
+/** @returns {{ ok: true, columns: Record<string, any> } | { ok: false, error: string }} */
+export function decisionColumns({ action, row, staffId, now, note }) {
+  if (action === 'approve') {
+    return { ok: true, columns: { status: 'approved', approved: row.submitted, approved_public: row.submitted_public, approved_at: now, reviewed_by: staffId, reviewer_note: null, updated_at: now } };
+  }
+  if (action === 'reject') {
+    const reason = text(note);
+    if (!reason) return fail('A note for the members is needed when sending a story back.');
+    return { ok: true, columns: { status: 'rejected', reviewed_by: staffId, reviewer_note: reason, updated_at: now } };
+  }
+  return fail('Unknown decision.');
+}
+
+// A decision is for the exact submission the reviewer was looking at (compared as instants, since the
+// database and the page print them at different precision), and only while it is still in review.
+export function decisionApplies(row, submittedAt) {
+  return !!row && row.status === 'in_review' && Date.parse(row.submitted_at) === Date.parse(submittedAt);
+}
+
+// Approving swaps the live copy, so photos only the old live copy held (and neither the draft nor the
+// new submission uses) are no longer needed.
+export function replacedPhotos(row) {
+  const used = new Set([...(row.submitted?.photos ?? []), ...(row.draft?.photos ?? [])].map((p) => p.ref));
+  return (row.approved?.photos ?? []).filter((p) => !used.has(p.ref));
+}
+
+/**
+ * What the admin queue shows for a unit in review: whose submission it is, the submitted and live copies
+ * with each quote and link under the person who wrote it, and exactly what changed.
+ * @param row a member_unit_stories row in review
+ * @param {{ people: { id: string, name: string }[], farmUnit: string }} context names as the reviewer may see them
+ */
+export function queueItem(row, { people, farmUnit }) {
+  const nameOf = (id) => people.find((p) => p.id === id)?.name ?? 'Unknown';
+  // Everyone in the unit's order first, then anyone no longer in it.
+  const order = (map) => [...people.map((p) => p.id).filter((id) => map?.[id]), ...Object.keys(map ?? {}).filter((id) => map[id] && !people.some((p) => p.id === id))];
+  const view = (c) => ({
+    bio: text(c.bio),
+    family: text(c.family),
+    photos: c.photos ?? [],
+    quotes: order(c.quotes).map((id) => ({ name: nameOf(id), text: c.quotes[id] })),
+    links: order(c.links).map((id) => ({ name: nameOf(id), url: c.links[id] })),
+  });
+  const submitted = view(row.submitted ?? {});
+  const approved = row.approved ? view(row.approved) : null;
+  const changes = [];
+  if (!approved) changes.push({ kind: 'new' });
+  else {
+    if (submitted.bio !== approved.bio) changes.push({ kind: 'bio' });
+    if (submitted.family !== approved.family) changes.push({ kind: 'family' });
+    if (!same(submitted.photos.map((p) => p.ref).sort(), approved.photos.map((p) => p.ref).sort())) changes.push({ kind: 'photos' });
+    for (const kind of ['quote', 'link']) {
+      const key = kind === 'quote' ? 'quotes' : 'links';
+      const ids = new Set([...Object.keys(row.submitted?.[key] ?? {}), ...Object.keys(row.approved?.[key] ?? {})]);
+      for (const id of order(Object.fromEntries([...ids].map((i) => [i, 1])))) {
+        if ((row.submitted?.[key]?.[id] ?? '') !== (row.approved?.[key]?.[id] ?? '')) changes.push({ kind, name: nameOf(id) });
+      }
+    }
+    if (!!row.submitted_public !== !!row.approved_public) changes.push({ kind: 'public' });
+  }
+  return {
+    householdId: row.household_id,
+    farmUnit,
+    submittedAt: row.submitted_at,
+    submittedBy: row.submitted_by ? nameOf(row.submitted_by) : null,
+    submitted,
+    submittedPublic: !!row.submitted_public,
+    approved,
+    approvedPublic: row.approved ? !!row.approved_public : null,
+    changes,
+  };
+}

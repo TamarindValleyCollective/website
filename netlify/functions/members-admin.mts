@@ -51,6 +51,7 @@ import { localChecks } from '../../scripts/lib/member-story.mjs';
 import { isLegacyPhoto, isUploadedPhoto } from '../../scripts/lib/member-photo.mjs';
 import { deleteMemberPhoto, getMemberPhoto } from './lib/member-photo-storage';
 import { lastPublishAt, loadSettings } from './lib/story-risk';
+import { decisionApplies, decisionColumns, queueItem, replacedPhotos, riskCopy } from '../../scripts/lib/member-unit-story.mjs';
 import { SETTING_KEY, shadowStats } from '../../scripts/lib/member-autopublish.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -191,6 +192,13 @@ async function applyEdit(edit: any, staffId: string): Promise<void> {
     case 'story.approve':
     case 'story.reject':
       return decideStory(edit, staffId);
+
+    case 'unitstory.unpublish':
+      return unpublishUnitStory(edit);
+
+    case 'unitstory.approve':
+    case 'unitstory.reject':
+      return decideUnitStory(edit, staffId);
 
     case 'landdoc.approve':
     case 'landdoc.reject':
@@ -462,8 +470,12 @@ async function handleStoryPhoto(req: Request): Promise<Response> {
   if (!isUploadedPhoto(id)) return notFound();
   try {
     const [row] = await select('member_stories', 'person_id', `&or=(submitted->>photo.eq.${id},approved->>photo.eq.${id})`);
-    if (!row) return notFound();
-    const bytes = await getMemberPhoto(row.person_id, id, size);
+    // A unit story keeps who uploaded each photo beside it, because the files sit under that person's id.
+    const [unit] = row ? [] : await select('member_unit_stories', 'submitted,approved', `&or=(submitted->photos.cs.[{"ref":"${id}"}],approved->photos.cs.[{"ref":"${id}"}])`);
+    const holder = unit ? [unit.submitted, unit.approved].flatMap((c: any) => c?.photos ?? []).find((p: any) => p.ref === id) : null;
+    const owner = row?.person_id ?? holder?.personId;
+    if (!owner) return notFound();
+    const bytes = await getMemberPhoto(owner, id, size);
     if (!bytes) return notFound();
     return new Response(bytes, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=600', 'x-content-type-options': 'nosniff' } });
   } catch (err) {
@@ -491,6 +503,68 @@ async function decideStory(edit: any, staffId: string): Promise<void> {
   if (edit.action === 'story.approve' && isUploadedPhoto(replaced) && replaced !== row.submitted?.photo && replaced !== row.draft?.photo) {
     await deleteMemberPhoto(row.person_id, replaced).catch((err) => console.error('[members-admin] photo cleanup failed', err));
   }
+}
+
+// ---- unit stories ------------------------------------------------------------
+// The admin queue for stories that belong to a whole unit (member_unit_stories, migration 0049). Same
+// rules as a person's story: the live text stays live until an admin approves, a decision is for the exact
+// submission seen, and sending one back needs a note. Rules in scripts/lib/member-unit-story.mjs.
+
+const firstNames = (people: any[]) => people.map((p) => ({ id: p.id, name: p.full_name }));
+
+// What is waiting for review, oldest first. Plain selects (no embeds), then joined here.
+async function handleUnitStories(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'members', 'edit');
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  try {
+    const rows = await select('member_unit_stories', 'household_id,submitted,submitted_public,submitted_at,submitted_by,approved,approved_public,draft', '&status=eq.in_review&order=submitted_at.asc');
+    if (rows.length === 0) return jsonResponse({ stories: [] });
+    const ids = `(${rows.map((r) => r.household_id).join(',')})`;
+    const [households, links] = await Promise.all([
+      select('member_households', 'id,farm_unit', `&id=in.${ids}`),
+      select('member_household_members', 'household_id,person_id', `&household_id=in.${ids}`),
+    ]);
+    const people = links.length ? await select('member_people', 'id,full_name', `&id=in.(${[...new Set(links.map((l) => l.person_id))].join(',')})`) : [];
+    // Names are for the unit's own people, plus whoever submitted or wrote a quote who has since left it.
+    const extra = [...new Set(rows.flatMap((r) => [r.submitted_by, ...Object.keys(r.submitted?.quotes ?? {}), ...Object.keys(r.submitted?.links ?? {})]).filter(Boolean))].filter((id) => !people.some((p) => p.id === id));
+    const gone = extra.length ? await select('member_people', 'id,full_name', `&id=in.(${extra.join(',')})`) : [];
+    return jsonResponse({
+      stories: rows.map((r) => {
+        const members = firstNames([...people.filter((p) => links.some((l) => l.household_id === r.household_id && l.person_id === p.id)), ...gone]);
+        const item = queueItem(r, { people: members, farmUnit: households.find((h) => h.id === r.household_id)?.farm_unit ?? '' });
+        // The same fixed checks the members saw (children named...), so the reviewer sees them too.
+        const flags = localChecks(riskCopy(r.submitted), !!r.submitted_public).map((f: any) => ({ field: f.field, kind: f.kind, note: f.note }));
+        return { ...item, flags, assessment: null };
+      }),
+    });
+  } catch (err) {
+    console.error('[members-admin] unit stories load failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
+async function decideUnitStory(edit: any, staffId: string): Promise<void> {
+  const [row] = await select('member_unit_stories', 'household_id,status,draft,submitted,submitted_public,submitted_at,approved', `&${eq('household_id', edit.householdId)}`);
+  const stale = 'This story has changed, or has already been dealt with. Reload the page.';
+  if (!decisionApplies(row, edit.submittedAt)) throw new EditError(stale, 409);
+  const decision = decisionColumns({ action: edit.action === 'unitstory.approve' ? 'approve' : 'reject', row, staffId, now: new Date().toISOString(), note: edit.note });
+  if (!decision.ok) throw new EditError(decision.error, 400);
+  // Filtered on the exact submission seen, so two reviewers, or a resubmission, can't both win.
+  const r = must(await db('PATCH', `member_unit_stories?${eq('household_id', edit.householdId)}&status=eq.in_review&${eq('submitted_at', row.submitted_at)}`, decision.columns));
+  if (r.rows.length === 0) throw new EditError(stale, 409);
+  // Approving replaces the live photos: the ones it replaced go once no copy refers to them.
+  if (edit.action === 'unitstory.approve') {
+    for (const p of replacedPhotos(row)) {
+      if (isUploadedPhoto(p.ref)) await deleteMemberPhoto(p.personId, p.ref).catch((err) => console.error('[members-admin] unit photo cleanup failed', err));
+    }
+  }
+}
+
+// Takes one unit's story off the public site; its approved copy stays for the members.
+async function unpublishUnitStory(edit: any): Promise<void> {
+  const r = must(await db('PATCH', `member_unit_stories?${eq('household_id', edit.householdId)}&approved_public=eq.true`, { approved_public: false, updated_at: new Date().toISOString() }));
+  if (r.rows.length === 0) throw new EditError('That story is not on the public site.', 409);
+  if (process.env.NETLIFY_BUILD_HOOK_URL) await triggerPublish().catch((err) => console.error('[members-admin] build after unpublish not started', err));
 }
 
 // ---- publishing -------------------------------------------------------------
@@ -635,6 +709,7 @@ export default async (req: Request): Promise<Response> => {
   if (pathname === '/api/members-admin/land-documents' && req.method === 'GET') return handleLandDocuments(req);
   if (pathname === '/api/members-admin/land-shapes' && req.method === 'GET') return handleLandShapes(req);
   if (pathname === '/api/members-admin/stories' && req.method === 'GET') return handleStories(req);
+  if (pathname === '/api/members-admin/unit-stories' && req.method === 'GET') return handleUnitStories(req);
   if (pathname === '/api/members-admin/publish' && req.method === 'GET') return handlePublishStatus(req);
   if (pathname === '/api/members-admin/autopublish' && req.method === 'GET') return handleAutopublish(req);
   if (pathname === '/api/members-admin/story-photo' && req.method === 'GET') return handleStoryPhoto(req);
@@ -642,4 +717,4 @@ export default async (req: Request): Promise<Response> => {
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-admin/overview', '/api/members-admin/edit', '/api/members-admin/land-documents', '/api/members-admin/land-document-link', '/api/members-admin/land-shapes', '/api/members-admin/stories', '/api/members-admin/story-photo', '/api/members-admin/publish', '/api/members-admin/autopublish'] };
+export const config = { path: ['/api/members-admin/overview', '/api/members-admin/edit', '/api/members-admin/land-documents', '/api/members-admin/land-document-link', '/api/members-admin/land-shapes', '/api/members-admin/stories', '/api/members-admin/unit-stories', '/api/members-admin/story-photo', '/api/members-admin/publish', '/api/members-admin/autopublish'] };

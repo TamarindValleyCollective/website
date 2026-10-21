@@ -178,3 +178,21 @@ test('taking a story off the public site needs a person and `manage`', () => {
   assert.equal(ACTION_CAPABILITY['story.unpublish'], 'manage');
   assert.equal(validateEdit({ action: 'story.unpublish' }).ok, false);
 });
+
+test('deciding a UNIT story names the unit and the submission seen, needs `manage`, and sending it back needs a note', () => {
+  assert.deepEqual(good({ action: 'unitstory.approve', householdId: A, submittedAt: AT }), { action: 'unitstory.approve', householdId: A, submittedAt: AT });
+  assert.equal(ACTION_CAPABILITY['unitstory.approve'], 'manage');
+  assert.equal(ACTION_CAPABILITY['unitstory.reject'], 'manage');
+  assert.equal(ACTION_CAPABILITY['unitstory.unpublish'], 'manage');
+  assert.match(bad({ action: 'unitstory.approve', householdId: A }), /submittedAt/);
+  assert.match(bad({ action: 'unitstory.approve', householdId: 'x', submittedAt: AT }), /householdId/);
+  assert.match(bad({ action: 'unitstory.reject', householdId: A, submittedAt: AT }), /note/i);
+  assert.match(bad({ action: 'unitstory.reject', householdId: A, submittedAt: AT, note: 'x'.repeat(501) }), /too long/);
+  assert.equal(good({ action: 'unitstory.reject', householdId: A, submittedAt: AT, note: '  Remove the phone number.  ' }).note, 'Remove the phone number.');
+  assert.deepEqual(good({ action: 'unitstory.unpublish', householdId: A }), { action: 'unitstory.unpublish', householdId: A });
+  assert.equal(validateEdit({ action: 'unitstory.unpublish' }).ok, false);
+  // the audit entry names the unit and the fields, never the note
+  const d = auditDetail(good({ action: 'unitstory.reject', householdId: A, submittedAt: AT, note: 'Remove the child’s age.' }));
+  assert.deepEqual(d.ids, { householdId: A });
+  assert.ok(!JSON.stringify(d).includes('child'));
+});

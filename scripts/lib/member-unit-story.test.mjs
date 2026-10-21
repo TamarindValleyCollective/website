@@ -2,7 +2,7 @@
 // Made-up people and text only: this repo is public.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildUnitStory, addPhoto, mergeDraftEdit, validateUnitSave, validateUnitSubmit, draftState, draftColumns, unitStoryView, unitPhotoHolder, unitPhotoAccess, MAX_PHOTOS } from './member-unit-story.mjs';
+import { buildUnitStory, addPhoto, mergeDraftEdit, validateUnitSave, validateUnitSubmit, draftState, draftColumns, unitStoryView, unitPhotoHolder, unitPhotoAccess, riskCopy, decisionApplies, decisionColumns, replacedPhotos, queueItem, MAX_PHOTOS } from './member-unit-story.mjs';
 
 const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
@@ -293,4 +293,92 @@ test('housemates see any copy; everyone else only an approved photo of a listed 
   assert.equal(ask(P3, ['h9'], false), false); // unless they opted out of the directory
   assert.equal(ask(P3, ['h1'], false), true); // the unit itself always sees its own
   assert.equal(ask('nope', ['h1']), false);
+});
+
+// ---- the admin queue ----
+
+test('a unit copy is shown to the risk rules in the per-person shape they already read, deterministically', () => {
+  const copy = { bio: 'Our bio.', family: 'Our family.', photos: [{ ref: P2, personId: B }, { ref: P1, personId: A }], quotes: { [B]: 'B quote.', [A]: 'A quote.' }, links: { [A]: 'https://example.org/a', [B]: 'https://example.org/b' } };
+  const a = riskCopy(copy);
+  assert.deepEqual(a, { bio: 'Our bio.', family: 'Our family.', why: 'A quote.\n\nB quote.', social: 'https://example.org/a\nhttps://example.org/b', photo: `${P1},${P2}` });
+  // the same content in another order is the same copy, so reordering is never read as a change
+  assert.deepEqual(riskCopy({ ...copy, photos: [...copy.photos].reverse(), quotes: { [A]: 'A quote.', [B]: 'B quote.' } }), a);
+  assert.equal(riskCopy(null), null);
+  assert.deepEqual(riskCopy({ bio: '', family: '', photos: [], quotes: {}, links: {} }), { bio: '', family: '', why: '', social: '', photo: '' });
+});
+
+const inReview = (over = {}) => unitRow({
+  status: 'in_review', submitted_at: '2026-10-20T10:00:00.123456Z', submitted_public: true, submitted_by: A,
+  submitted: { bio: 'New bio.', family: 'Our family.', photos: [{ ref: P2, personId: B }], quotes: { [A]: 'A quote.' }, links: {} },
+  approved: { bio: 'Old bio.', family: 'Our family.', photos: [{ ref: P1, personId: A }], quotes: { [A]: 'Old quote.' }, links: {} }, approved_public: false,
+  draft: { bio: 'New bio.', family: 'Our family.', photos: [{ ref: P2, personId: B }], quotes: { [A]: 'A quote.' }, links: {} },
+  ...over,
+});
+const NOW = '2026-10-21T08:00:00.000Z';
+
+test('approving makes the submitted copy the live one and clears any earlier note; the live text is otherwise never touched', () => {
+  assert.deepEqual(decisionColumns({ action: 'approve', row: inReview(), staffId: 's1', now: NOW }), {
+    ok: true,
+    columns: { status: 'approved', approved: inReview().submitted, approved_public: true, approved_at: NOW, reviewed_by: 's1', reviewer_note: null, updated_at: NOW },
+  });
+});
+
+test('sending a story back needs a note for the members and leaves the live copy alone', () => {
+  assert.deepEqual(decisionColumns({ action: 'reject', row: inReview(), staffId: 's1', now: NOW, note: '  Please remove the phone number. ' }), {
+    ok: true, columns: { status: 'rejected', reviewed_by: 's1', reviewer_note: 'Please remove the phone number.', updated_at: NOW },
+  });
+  assert.deepEqual(decisionColumns({ action: 'reject', row: inReview(), staffId: 's1', now: NOW, note: '   ' }), { ok: false, error: 'A note for the members is needed when sending a story back.' });
+  assert.equal(decisionColumns({ action: 'maybe', row: inReview(), staffId: 's1', now: NOW }).ok, false);
+});
+
+test('a decision applies only to the submission the reviewer saw, and only while it is in review', () => {
+  assert.equal(decisionApplies(inReview(), '2026-10-20T10:00:00.123456Z'), true);
+  assert.equal(decisionApplies(inReview(), '2026-10-20T10:00:00.123Z'), true); // the same instant at another precision
+  assert.equal(decisionApplies(inReview(), '2026-10-20T11:00:00Z'), false); // resubmitted since
+  assert.equal(decisionApplies(inReview({ status: 'approved' }), '2026-10-20T10:00:00.123456Z'), false); // already decided
+  assert.equal(decisionApplies(null, '2026-10-20T10:00:00Z'), false);
+});
+
+test('approving replaces the live photos: those only the old live copy held are due for deletion', () => {
+  assert.deepEqual(replacedPhotos(inReview()), [{ ref: P1, personId: A }]);
+  const kept = inReview({ draft: { ...inReview().draft, photos: [{ ref: P1, personId: A }, { ref: P2, personId: B }] } }); // the draft still uses P1
+  assert.deepEqual(replacedPhotos(kept), []);
+  assert.deepEqual(replacedPhotos(inReview({ approved: null })), []);
+});
+
+const who = [{ id: A, name: 'Asha Example' }, { id: B, name: 'Ravi Example' }];
+
+test('the queue shows a unit with whose submission it is and every quote and link under the person who wrote it', () => {
+  const item = queueItem(inReview({
+    submitted: { bio: 'Bio.', family: 'Fam.', photos: [{ ref: P2, personId: B }], quotes: { [B]: 'B quote.', [A]: 'A quote.' }, links: { [B]: 'https://example.org/b' } },
+  }), { people: who, farmUnit: 'F-12' });
+  assert.equal(item.householdId, 'h1');
+  assert.equal(item.farmUnit, 'F-12');
+  assert.equal(item.submittedAt, '2026-10-20T10:00:00.123456Z');
+  assert.equal(item.submittedBy, 'Asha Example');
+  assert.equal(item.submittedPublic, true);
+  assert.deepEqual(item.submitted.quotes, [{ name: 'Asha Example', text: 'A quote.' }, { name: 'Ravi Example', text: 'B quote.' }]); // in the unit's order, not the object's
+  assert.deepEqual(item.submitted.links, [{ name: 'Ravi Example', url: 'https://example.org/b' }]);
+  assert.deepEqual(item.submitted.photos, [{ ref: P2, personId: B }]);
+});
+
+test('a first story is "new"; an edit lists exactly what changed against the live copy', () => {
+  assert.deepEqual(queueItem(inReview({ approved: null }), { people: who, farmUnit: 'F-12' }).changes, [{ kind: 'new' }]);
+  const edited = queueItem(inReview(), { people: who, farmUnit: 'F-12' }); // bio, photo and Asha's quote differ; public false -> true
+  assert.deepEqual(edited.changes, [{ kind: 'bio' }, { kind: 'photos' }, { kind: 'quote', name: 'Asha Example' }, { kind: 'public' }]);
+  assert.equal(edited.approved.bio, 'Old bio.');
+  assert.equal(edited.approvedPublic, false);
+  const same = inReview({ approved: inReview().submitted, approved_public: true });
+  assert.deepEqual(queueItem(same, { people: who, farmUnit: 'F-12' }).changes, []);
+});
+
+test('a link change and an unknown person are shown, not dropped', () => {
+  const row = inReview({
+    approved: { bio: 'Old bio.', family: 'Our family.', photos: [], quotes: {}, links: { [A]: 'https://example.org/old' } },
+    submitted: { bio: 'Old bio.', family: 'Our family.', photos: [], quotes: { [C]: 'Someone gone.' }, links: { [A]: 'https://example.org/new' } },
+    submitted_public: false,
+  });
+  const item = queueItem(row, { people: who, farmUnit: 'F-12' });
+  assert.deepEqual(item.changes, [{ kind: 'quote', name: 'Unknown' }, { kind: 'link', name: 'Asha Example' }]);
+  assert.equal(item.submitted.quotes[0].name, 'Unknown');
 });
