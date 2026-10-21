@@ -61,15 +61,14 @@ const photoCache = new Map();
 /**
  * @param {string} ref
  * @param {'square' | 'full'} [size]
- * @param {boolean} [unit] a photo of a unit's story (the unit-photo endpoint) rather than of a person's
  * @returns {Promise<string>}
  */
-export function memberPhotoSrc(ref, size = 'square', unit = false) {
+export function memberPhotoSrc(ref, size = 'square') {
   if (typeof ref !== 'string' || !ref) return Promise.reject(new Error('no photo'));
   if (ref.startsWith('/images/')) return Promise.resolve(ref);
-  const key = `${unit ? 'unit' : 'person'}|${ref}|${size}`;
+  const key = `${ref}|${size}`;
   if (!photoCache.has(key)) {
-    const loading = fetch(`/api/members-me/${unit ? 'unit-photo' : 'photo'}?id=${encodeURIComponent(ref)}&size=${size}`, {
+    const loading = fetch(`/api/members-me/unit-photo?id=${encodeURIComponent(ref)}&size=${size}`, {
       headers: { authorization: `Bearer ${getMemberToken() ?? ''}` },
     }).then(async (res) => {
       if (res.status === 401) {

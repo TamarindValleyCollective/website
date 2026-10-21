@@ -122,15 +122,3 @@ export function validatePhotoPair(square, full) {
   return { ok: true, square: stripJpegMetadata(square), full: stripJpegMetadata(full) };
 }
 
-// Who may be sent an uploaded photo. `row` is the member_stories row that holds the photo id in one
-// of its copies; `listed` says whether that person is active and in the directory.
-//   own       the author, for the draft, the submitted or the approved photo
-//   approved  any signed-in member, for the APPROVED photo of someone who is listed
-//   review    admins, for a photo in review or an approved one (decided by the caller's role)
-export function photoAccess({ viewerPersonId, row, photoId, listed }) {
-  if (!row || !isUploadedPhoto(photoId)) return null;
-  const inCopy = (copy) => !!copy && copy.photo === photoId;
-  if (row.person_id === viewerPersonId && (inCopy(row.draft) || inCopy(row.submitted) || inCopy(row.approved))) return 'own';
-  if (inCopy(row.approved) && listed) return 'approved';
-  return null;
-}

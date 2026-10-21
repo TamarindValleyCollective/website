@@ -15,8 +15,8 @@
 // Personal names go out in full to `admin`/`user` and masked for `read_only`
 // (staff-masking.ts). Plots are land records and go to every role that can view.
 //
-// Stories: members write a story about themselves (member_stories) and submit it for review.
-// GET stories lists what is waiting (`edit`); story.approve / story.reject (in /edit, `manage`)
+// Stories: each unit writes one story (member_unit_stories) and submits it for review.
+// GET unit-stories lists what is waiting (`edit`); unitstory.approve / unitstory.reject (in /edit, `manage`)
 // record the decision. Approving copies the submitted text to the approved copy, which is the
 // only copy anything may publish; rejecting needs a note the member sees and leaves any
 // earlier approved text live. The reviewer also sees which submission they looked at, so a
@@ -48,9 +48,9 @@ import { ACTION_CAPABILITY, auditDetail, validateEdit } from '../../scripts/lib/
 import { loadLandShapes, signedLandDocumentUrl } from './lib/land-doc-storage';
 import { approvalColumns, documentStatus } from '../../scripts/lib/member-land-docs.mjs';
 import { localChecks } from '../../scripts/lib/member-story.mjs';
-import { isLegacyPhoto, isUploadedPhoto } from '../../scripts/lib/member-photo.mjs';
+import { isUploadedPhoto } from '../../scripts/lib/member-photo.mjs';
 import { deleteMemberPhoto, getMemberPhoto } from './lib/member-photo-storage';
-import { lastPublishAt, loadSettings, unitStoriesLive } from './lib/story-risk';
+import { lastPublishAt, loadSettings } from './lib/story-risk';
 import { decisionApplies, decisionColumns, queueItem, replacedPhotos, riskCopy } from '../../scripts/lib/member-unit-story.mjs';
 import { SETTING_KEY, shadowStats } from '../../scripts/lib/member-autopublish.mjs';
 
@@ -185,13 +185,6 @@ async function applyEdit(edit: any, staffId: string): Promise<void> {
 
     case 'site.autopublish':
       return saveAutopublish(edit, staffId);
-
-    case 'story.unpublish':
-      return unpublishStory(edit);
-
-    case 'story.approve':
-    case 'story.reject':
-      return decideStory(edit, staffId);
 
     case 'unitstory.unpublish':
       return unpublishUnitStory(edit);
@@ -402,64 +395,8 @@ async function decideLandItem(edit: any): Promise<void> {
 
 // ---- stories ----------------------------------------------------------------
 
-type StoryText = { bio: string; family: string; why: string; social: string; photo: string };
-const storyText = (t: any): StoryText => {
-  const text = { bio: '', family: '', why: '', social: '', photo: '', ...(t ?? {}) };
-  // Only a uuid (an upload) or a path on the public site is ever passed on as a photo.
-  if (!isUploadedPhoto(text.photo) && !isLegacyPhoto(text.photo)) text.photo = '';
-  return text;
-};
-
-// What is waiting for review, oldest first. Plain selects (no embeds), then joined here.
-async function handleStories(req: Request): Promise<Response> {
-  const auth = await requireStaff(req, 'members', 'edit');
-  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
-  try {
-    const rows = await select('member_stories', 'person_id,submitted,submitted_public,submitted_at,approved,approved_public', '&status=eq.in_review&order=submitted_at.asc');
-    if (rows.length === 0) return jsonResponse({ stories: [] });
-    const ids = `(${rows.map((r) => r.person_id).join(',')})`;
-    const [people, links] = await Promise.all([
-      select('member_people', 'id,full_name', `&id=in.${ids}`),
-      select('member_household_members', 'person_id,household_id', `&person_id=in.${ids}`),
-    ]);
-    const hhIds = [...new Set(links.map((l) => l.household_id))];
-    const households = hhIds.length ? await select('member_households', 'id,farm_unit,house_no', `&id=in.(${hhIds.join(',')})`) : [];
-    // What the risk assessment made of each submission (shadow mode shows it; live mode acted on it).
-    const assessments = await select('member_story_assessments', 'person_id,submitted_at,level,reasons,outcome,mode,assessed_by', `&person_id=in.${ids}`).catch((err) => {
-      console.error('[members-admin] assessments load failed', err);
-      return [] as any[];
-    });
-    return jsonResponse({
-      stories: rows.map((r) => {
-        const a = assessments.find((x) => x.person_id === r.person_id && Date.parse(x.submitted_at) === Date.parse(r.submitted_at));
-        const submitted = storyText(r.submitted);
-        const units = links
-          .filter((l) => l.person_id === r.person_id)
-          .map((l) => households.find((h) => h.id === l.household_id)?.farm_unit)
-          .filter(Boolean);
-        return {
-          personId: r.person_id,
-          name: people.find((p) => p.id === r.person_id)?.full_name ?? 'Unknown',
-          farmUnits: units,
-          submittedAt: r.submitted_at,
-          submitted,
-          submittedPublic: !!r.submitted_public,
-          approved: r.approved ? storyText(r.approved) : null,
-          approvedPublic: r.approved ? !!r.approved_public : null,
-          // The same fixed checks the member saw (children named...), so the reviewer sees them too.
-          flags: localChecks(submitted, !!r.submitted_public).map((f: any) => ({ field: f.field, kind: f.kind, note: f.note })),
-          assessment: a ? { level: a.level, outcome: a.outcome, mode: a.mode, reasons: (a.reasons ?? []).map((x: any) => ({ code: x.code, text: x.text, source: x.source })) } : null,
-        };
-      }),
-    });
-  } catch (err) {
-    console.error('[members-admin] stories load failed', err);
-    return jsonResponse({ error: 'Server error' }, 500);
-  }
-}
-
 // A photo in review (or an approved one), for the reviewer. Needs `edit`, like the queue. 404 for
-// anything that is not a photo of a submitted or approved story.
+// anything that is not a photo of a submitted or approved unit story.
 async function handleStoryPhoto(req: Request): Promise<Response> {
   const auth = await requireStaff(req, 'members', 'edit');
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
@@ -469,13 +406,11 @@ async function handleStoryPhoto(req: Request): Promise<Response> {
   const notFound = () => new Response('Not found', { status: 404, headers: { 'cache-control': 'no-store' } });
   if (!isUploadedPhoto(id)) return notFound();
   try {
-    const [row] = await select('member_stories', 'person_id', `&or=(submitted->>photo.eq.${id},approved->>photo.eq.${id})`);
     // A unit story keeps who uploaded each photo beside it, because the files sit under that person's id.
-    const [unit] = row ? [] : await select('member_unit_stories', 'submitted,approved', `&or=(submitted->photos.cs.[{"ref":"${id}"}],approved->photos.cs.[{"ref":"${id}"}])`);
+    const [unit] = await select('member_unit_stories', 'submitted,approved', `&or=(submitted->photos.cs.[{"ref":"${id}"}],approved->photos.cs.[{"ref":"${id}"}])`);
     const holder = unit ? [unit.submitted, unit.approved].flatMap((c: any) => c?.photos ?? []).find((p: any) => p.ref === id) : null;
-    const owner = row?.person_id ?? holder?.personId;
-    if (!owner) return notFound();
-    const bytes = await getMemberPhoto(owner, id, size);
+    if (!holder?.personId) return notFound();
+    const bytes = await getMemberPhoto(holder.personId, id, size);
     if (!bytes) return notFound();
     return new Response(bytes, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=600', 'x-content-type-options': 'nosniff' } });
   } catch (err) {
@@ -484,30 +419,9 @@ async function handleStoryPhoto(req: Request): Promise<Response> {
   }
 }
 
-async function decideStory(edit: any, staffId: string): Promise<void> {
-  const [row] = await select('member_stories', 'person_id,status,draft,submitted,submitted_public,submitted_at,approved', `&${eq('person_id', edit.personId)}`);
-  const stale = "This story has changed, or has already been dealt with. Reload the page.";
-  if (!row || row.status !== 'in_review' || Date.parse(row.submitted_at) !== Date.parse(edit.submittedAt)) throw new EditError(stale, 409);
-  const now = new Date().toISOString();
-  const patch =
-    edit.action === 'story.approve'
-      ? { status: 'approved', approved: row.submitted, approved_public: row.submitted_public, approved_at: now, reviewed_by: staffId, reviewer_note: null, updated_at: now }
-      : { status: 'rejected', reviewed_by: staffId, reviewer_note: edit.note, updated_at: now };
-  // Filtered on the exact submission seen, so two reviewers, or a resubmission, can't both win.
-  const r = must(await db('PATCH', `member_stories?${eq('person_id', edit.personId)}&status=eq.in_review&${eq('submitted_at', row.submitted_at)}`, patch));
-  if (r.rows.length === 0) throw new EditError(stale, 409);
-  // The person's decision is kept beside the assessment, so the two can be compared (best effort: the decision stands either way).
-  await db('PATCH', `member_story_assessments?${eq('person_id', edit.personId)}&${eq('submitted_at', row.submitted_at)}`, { decision: edit.action === 'story.approve' ? 'approved' : 'rejected', decided_at: now }).catch((err) => console.error('[members-admin] assessment decision not recorded', err));
-  // Approving replaces the live photo: the one it replaced goes once no copy refers to it.
-  const replaced = row.approved?.photo;
-  if (edit.action === 'story.approve' && isUploadedPhoto(replaced) && replaced !== row.submitted?.photo && replaced !== row.draft?.photo) {
-    await deleteMemberPhoto(row.person_id, replaced).catch((err) => console.error('[members-admin] photo cleanup failed', err));
-  }
-}
-
 // ---- unit stories ------------------------------------------------------------
-// The admin queue for stories that belong to a whole unit (member_unit_stories, migration 0049). Same
-// rules as a person's story: the live text stays live until an admin approves, a decision is for the exact
+// The admin queue for stories that belong to a whole unit (member_unit_stories, migration 0049). The
+// rules: the live text stays live until an admin approves, a decision is for the exact
 // submission seen, and sending one back needs a note. Rules in scripts/lib/member-unit-story.mjs.
 
 const firstNames = (people: any[]) => people.map((p) => ({ id: p.id, name: p.full_name }));
@@ -584,8 +498,7 @@ async function handlePublishStatus(req: Request): Promise<Response> {
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
   try {
     const last = await lastPublishAt();
-    // The count is of the table the site is built from, which follows the cutover switch.
-    const publicStories = (await unitStoriesLive()) ? await select('member_unit_stories', 'household_id,approved_at', '&approved_public=eq.true') : await select('member_stories', 'person_id,approved_at', '&approved_public=eq.true');
+    const publicStories = await select('member_unit_stories', 'household_id,approved_at', '&approved_public=eq.true');
     const waiting = publicStories.filter((r) => !last || Date.parse(r.approved_at) > Date.parse(last)).length;
     return jsonResponse({
       configured: !!process.env.NETLIFY_BUILD_HOOK_URL,
@@ -628,14 +541,6 @@ async function saveAutopublish(edit: any, staffId: string): Promise<void> {
   must(await db('POST', 'member_settings?on_conflict=key', { key: SETTING_KEY, value, updated_at: new Date().toISOString(), updated_by: staffId }, 'resolution=merge-duplicates,return=representation'));
 }
 
-// Takes one story off the public site: its approved copy stays for the members, but it is no longer public, so the
-// next build (started here, if it can be) leaves it out.
-async function unpublishStory(edit: any): Promise<void> {
-  const r = must(await db('PATCH', `member_stories?${eq('person_id', edit.personId)}&approved_public=eq.true`, { approved_public: false, updated_at: new Date().toISOString() }));
-  if (r.rows.length === 0) throw new EditError('That story is not on the public site.', 409);
-  if (process.env.NETLIFY_BUILD_HOOK_URL) await triggerPublish().catch((err) => console.error('[members-admin] build after unpublish not started', err));
-}
-
 const DAY = 24 * 60 * 60 * 1000;
 
 async function handleAutopublish(req: Request): Promise<Response> {
@@ -645,16 +550,11 @@ async function handleAutopublish(req: Request): Promise<Response> {
     const settings = await loadSettings();
     const since = new Date(Date.now() - 30 * DAY).toISOString();
     const cols = 'submitted_at,level,reasons,decision,decided_at,is_public';
-    const [personRows, unitRows] = await Promise.all([
-      select('member_story_assessments', `person_id,${cols}`, `&created_at=gte.${since}&is_public=eq.true&order=created_at.desc`),
-      select('member_unit_story_assessments', `household_id,${cols}`, `&created_at=gte.${since}&is_public=eq.true&order=created_at.desc`),
-    ]);
-    const rows = [...personRows, ...unitRows];
+    const rows = await select('member_unit_story_assessments', `household_id,${cols}`, `&created_at=gte.${since}&is_public=eq.true&order=created_at.desc`);
     // Stories the system published by itself in the last week, with whether each is still public (to hide it).
     const autoPublished = (r: any) => r.decision === 'auto_approved' && Date.now() - Date.parse(r.decided_at) < 7 * DAY;
-    const recent = personRows.filter(autoPublished);
-    const recentUnits = unitRows.filter(autoPublished);
-    let published: any[] = [];
+    const recentUnits = rows.filter(autoPublished);
+    const published: any[] = [];
     if (recentUnits.length) {
       const ids = `(${[...new Set(recentUnits.map((r) => r.household_id))].join(',')})`;
       const [households, stories] = await Promise.all([select('member_households', 'id,farm_unit', `&id=in.${ids}`), select('member_unit_stories', 'household_id,approved_public', `&household_id=in.${ids}`)]);
@@ -663,16 +563,6 @@ async function handleAutopublish(req: Request): Promise<Response> {
         name: `Unit ${households.find((h) => h.id === r.household_id)?.farm_unit ?? ''}`.trim(),
         at: r.decided_at,
         stillPublic: !!stories.find((s) => s.household_id === r.household_id)?.approved_public,
-      })));
-    }
-    if (recent.length) {
-      const ids = `(${[...new Set(recent.map((r) => r.person_id))].join(',')})`;
-      const [people, stories] = await Promise.all([select('member_people', 'id,full_name', `&id=in.${ids}`), select('member_stories', 'person_id,approved_public,approved_at', `&person_id=in.${ids}`)]);
-      published.push(...recent.map((r) => ({
-        personId: r.person_id,
-        name: people.find((p) => p.id === r.person_id)?.full_name ?? 'Unknown',
-        at: r.decided_at,
-        stillPublic: !!stories.find((s) => s.person_id === r.person_id)?.approved_public,
       })));
     }
     return jsonResponse({ mode: settings.mode, paused: settings.paused, canChange: roleHasCapability('members', auth.staff.role, 'manage'), stats: shadowStats(rows), published });
@@ -734,7 +624,6 @@ export default async (req: Request): Promise<Response> => {
   if (pathname === '/api/members-admin/edit' && req.method === 'POST') return handleEdit(req);
   if (pathname === '/api/members-admin/land-documents' && req.method === 'GET') return handleLandDocuments(req);
   if (pathname === '/api/members-admin/land-shapes' && req.method === 'GET') return handleLandShapes(req);
-  if (pathname === '/api/members-admin/stories' && req.method === 'GET') return handleStories(req);
   if (pathname === '/api/members-admin/unit-stories' && req.method === 'GET') return handleUnitStories(req);
   if (pathname === '/api/members-admin/publish' && req.method === 'GET') return handlePublishStatus(req);
   if (pathname === '/api/members-admin/autopublish' && req.method === 'GET') return handleAutopublish(req);
@@ -743,4 +632,4 @@ export default async (req: Request): Promise<Response> => {
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-admin/overview', '/api/members-admin/edit', '/api/members-admin/land-documents', '/api/members-admin/land-document-link', '/api/members-admin/land-shapes', '/api/members-admin/stories', '/api/members-admin/unit-stories', '/api/members-admin/story-photo', '/api/members-admin/publish', '/api/members-admin/autopublish'] };
+export const config = { path: ['/api/members-admin/overview', '/api/members-admin/edit', '/api/members-admin/land-documents', '/api/members-admin/land-document-link', '/api/members-admin/land-shapes', '/api/members-admin/unit-stories', '/api/members-admin/story-photo', '/api/members-admin/publish', '/api/members-admin/autopublish'] };

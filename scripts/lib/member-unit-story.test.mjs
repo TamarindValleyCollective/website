@@ -2,90 +2,14 @@
 // Made-up people and text only: this repo is public.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildUnitStory, addPhoto, mergeDraftEdit, validateUnitSave, validateUnitSubmit, draftState, draftColumns, unitStoryView, unitPhotoHolder, unitPhotoAccess, riskCopy, decisionApplies, decisionColumns, replacedPhotos, queueItem, unitRiskRow, unitSwitchLive, saveChanges, conflictedDraftKeys, MAX_PHOTOS } from './member-unit-story.mjs';
+import { addPhoto, mergeDraftEdit, validateUnitSave, validateUnitSubmit, draftState, draftColumns, unitStoryView, unitPhotoHolder, unitPhotoAccess, riskCopy, decisionApplies, decisionColumns, replacedPhotos, queueItem, unitRiskRow, saveChanges, conflictedDraftKeys, MAX_PHOTOS } from './member-unit-story.mjs';
 
 const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
-const copy = (over = {}) => ({ bio: 'We grow millets.', family: 'Two children.', why: 'Quiet land.', social: '', photo: '', ...over });
-const row = (person_id, over = {}) => ({
-  person_id, draft: {}, draft_public: false, status: 'approved', submitted: null, submitted_public: null, submitted_at: null,
-  approved: copy(), approved_public: true, approved_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z', ...over,
-});
-
-test('a unit with one person keeps their approved story, their quote under their id', () => {
-  const { story, diverged } = buildUnitStory([row(A)]);
-  assert.deepEqual(story.approved, { bio: 'We grow millets.', family: 'Two children.', photos: [], quotes: { [A]: 'Quiet land.' }, links: {} });
-  assert.equal(story.approvedPublic, true);
-  assert.equal(story.status, 'approved');
-  assert.equal(diverged, false);
-});
-
-test('a couple with identical text becomes one story with both quotes, and is not diverged', () => {
-  const { story, diverged } = buildUnitStory([row(A), row(B, { approved: copy({ why: 'Shade and birds.' }) })]);
-  assert.equal(story.approved.bio, 'We grow millets.');
-  assert.deepEqual(story.approved.quotes, { [A]: 'Quiet land.', [B]: 'Shade and birds.' });
-  assert.equal(diverged, false);
-});
-
-test('when the text differs, the most recently approved copy wins, whichever person it is, and the unit is flagged diverged', () => {
-  const old = row(A); // the seed
-  const edited = row(B, { approved: copy({ bio: 'We now run a seed bank.', why: 'Seeds.' }), approved_at: '2026-10-20T00:00:00Z' });
-  for (const rows of [[old, edited], [edited, old]]) {
-    const { story, diverged } = buildUnitStory(rows);
-    assert.equal(story.approved.bio, 'We now run a seed bank.');
-    assert.deepEqual(story.approved.quotes, { [A]: 'Quiet land.', [B]: 'Seeds.' }); // each person's own quote is kept
-    assert.equal(diverged, true);
-  }
-});
-
 const C = '33333333-3333-4333-8333-333333333333';
 const P1 = '44444444-4444-4444-8444-444444444444';
 const P2 = '55555555-5555-4555-8555-555555555555';
 const P3 = '66666666-6666-4666-8666-666666666666';
-
-test('photos are collected across the unit newest first, each remembering who uploaded it (it sits under their id in storage)', () => {
-  const rows = [
-    row(A, { approved: copy({ photo: P1 }), approved_at: '2026-10-01T00:00:00Z' }),
-    row(B, { approved: copy({ photo: P2 }), approved_at: '2026-10-10T00:00:00Z' }),
-  ];
-  assert.deepEqual(buildUnitStory(rows).story.approved.photos, [{ ref: P2, personId: B }, { ref: P1, personId: A }]);
-});
-
-test('a photo the whole unit shares (the seeded card photo on every person) is listed once', () => {
-  const shared = '/images/members/example-card.jpg';
-  const rows = [row(A, { approved: copy({ photo: shared }) }), row(B, { approved: copy({ photo: shared }) })];
-  assert.deepEqual(buildUnitStory(rows).story.approved.photos, [{ ref: shared, personId: A }]);
-});
-
-test('a unit keeps at most two photos: the two newest', () => {
-  const rows = [
-    row(A, { approved: copy({ photo: P1 }), approved_at: '2026-10-01T00:00:00Z' }),
-    row(B, { approved: copy({ photo: P2 }), approved_at: '2026-10-03T00:00:00Z' }),
-    row(C, { approved: copy({ photo: P3 }), approved_at: '2026-10-02T00:00:00Z' }),
-  ];
-  assert.deepEqual(buildUnitStory(rows).story.approved.photos.map((p) => p.ref), [P2, P3]);
-});
-
-test('an empty draft (the column default) is no draft; a real one is the unit draft, newest edit winning', () => {
-  const rows = [row(A), row(B, { draft: copy({ bio: 'Half-written bio.', why: '' }), draft_public: true, updated_at: '2026-10-15T00:00:00Z' })];
-  const { story } = buildUnitStory(rows);
-  assert.equal(story.draft.bio, 'Half-written bio.');
-  assert.equal(story.draftPublic, true);
-  assert.equal(buildUnitStory([row(A)]).story.draft, null);
-});
-
-test('only a copy actually in review is the unit\'s submission, and it makes the unit in_review', () => {
-  const rows = [
-    row(A, { status: 'in_review', submitted: copy({ bio: 'Submitted bio.', why: 'My quote.' }), submitted_public: false, submitted_at: '2026-10-18T00:00:00Z' }),
-    row(B, { submitted: copy({ bio: 'Old decided snapshot.' }), submitted_at: '2026-09-01T00:00:00Z' }), // approved since; not in review
-  ];
-  const { story } = buildUnitStory(rows);
-  assert.equal(story.status, 'in_review');
-  assert.equal(story.submitted.bio, 'Submitted bio.');
-  assert.deepEqual(story.submitted.quotes, { [A]: 'My quote.' });
-  assert.equal(story.submittedAt, '2026-10-18T00:00:00Z');
-  assert.equal(story.submittedPublic, false);
-});
 
 test('a unit may add photos up to the limit, each once', () => {
   assert.equal(MAX_PHOTOS, 2);
@@ -149,22 +73,6 @@ test('photos in a save must fit the limit and be distinct', () => {
   assert.deepEqual(mergeDraftEdit({ current: draftAt(), changes: { photos: [ph(P1), ph(P2), ph(P3)] }, baseVersion: 5, personId: A }), { ok: false, error: 'invalid', fields: ['photos'] });
   assert.deepEqual(mergeDraftEdit({ current: draftAt(), changes: { photos: [ph(P1), ph(P1, B)] }, baseVersion: 5, personId: A }), { ok: false, error: 'invalid', fields: ['photos'] });
   assert.equal(mergeDraftEdit({ current: draftAt(), changes: { photos: [ph(P1), ph(P2)] }, baseVersion: 5, personId: A }).ok, true);
-});
-
-test('the result says whose copy supplied the shared text, so a diverged unit can be reviewed', () => {
-  const old = row(A);
-  const edited = row(B, { approved: copy({ bio: 'We now run a seed bank.' }), approved_at: '2026-10-20T00:00:00Z' });
-  const { winners } = buildUnitStory([old, edited]);
-  assert.deepEqual(winners, { approved: B, draft: null, submitted: null });
-});
-
-test('each person keeps their own profile link, so a couple whose links differ is not diverged and loses neither', () => {
-  const rows = [row(A, { approved: copy({ social: 'https://example.org/asha' }) }), row(B, { approved: copy({ social: 'https://example.org/ravi' }) })];
-  const { story, diverged, winners } = buildUnitStory(rows);
-  assert.deepEqual(story.approved.links, { [A]: 'https://example.org/asha', [B]: 'https://example.org/ravi' });
-  assert.equal(diverged, false);
-  assert.equal(story.approved.bio, 'We grow millets.');
-  assert.ok(winners.approved); // still names a copy for the shared text
 });
 
 test('"link" is the editor\'s own profile link, like their quote; "social" is no longer a shared field', () => {
@@ -420,15 +328,6 @@ test('a first story has no live copy for the rules to compare with', () => {
   const risk = unitRiskRow(inReview({ approved: null, approved_public: null }));
   assert.equal(risk.approved, null);
   assert.equal(risk.approved_public, null);
-});
-
-// ---- the cutover switch ----
-
-test('stories follow the unit model only when the setting says so explicitly; anything missing or odd means the old path', () => {
-  assert.equal(unitSwitchLive({ value: { live: true } }), true);
-  for (const bad of [undefined, null, {}, { value: null }, { value: {} }, { value: { live: false } }, { value: { live: 'true' } }, { value: { live: 1 } }, { value: 'live' }]) {
-    assert.equal(unitSwitchLive(bad), false, JSON.stringify(bad));
-  }
 });
 
 // ---- the editor ----

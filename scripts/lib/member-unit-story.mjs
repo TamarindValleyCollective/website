@@ -12,65 +12,6 @@ export const MAX_PHOTOS = 2;
 
 const text = (v) => (typeof v === 'string' ? v.trim() : '');
 
-// The shared text of one per-person copy ({ bio, family, why, social, photo }).
-const sharedOf = (c) => ({ bio: text(c?.bio), family: text(c?.family) });
-
-// Merges one kind of copy (draft / submitted / approved) across the unit's people. The shared
-// fields come from the copy with the latest timestamp (a person who edited beats the seed that every
-// housemate still holds); each person keeps their own quote. `diverged` is true when the people's
-// shared text differed, so a person can check which copy won.
-const hasContent = (c) => !!c && typeof c === 'object' && ['bio', 'family', 'why', 'social', 'photo'].some((k) => text(c[k]));
-
-function mergeCopy(rows, { field, at, only = () => true }) {
-  const copies = rows.filter((r) => only(r) && hasContent(r[field]));
-  if (copies.length === 0) return null;
-  const newest = [...copies].sort((a, b) => String(b[at] ?? '').localeCompare(String(a[at] ?? '')))[0];
-  const quotes = {};
-  const links = {};
-  for (const r of copies) {
-    if (text(r[field].why)) quotes[r.person_id] = text(r[field].why);
-    if (text(r[field].social)) links[r.person_id] = text(r[field].social);
-  }
-  // Newest first, each photo once, remembering who holds it (uploaded photos are stored under their id).
-  const photos = [];
-  for (const r of [...copies].sort((a, b) => String(b[at] ?? '').localeCompare(String(a[at] ?? '')))) {
-    const ref = text(r[field].photo);
-    if (ref && !photos.some((p) => p.ref === ref)) photos.push({ ref, personId: r.person_id });
-  }
-  const key = (r) => JSON.stringify([sharedOf(r[field]).bio, sharedOf(r[field]).family]);
-  return { copy: { ...sharedOf(newest[field]), photos: photos.slice(0, MAX_PHOTOS), quotes, links }, winner: newest, diverged: new Set(copies.map(key)).size > 1 };
-}
-
-/**
- * @param {{ person_id: string, draft: any, draft_public: boolean, status: string, submitted: any,
- *   submitted_public: boolean | null, submitted_at: string | null, approved: any,
- *   approved_public: boolean | null, approved_at: string | null, updated_at: string }[]} rows
- *   the unit's per-person member_stories rows
- */
-export function buildUnitStory(rows) {
-  const approved = mergeCopy(rows, { field: 'approved', at: 'approved_at' });
-  const draft = mergeCopy(rows, { field: 'draft', at: 'updated_at' });
-  const inReview = rows.some((r) => r.status === 'in_review');
-  // A snapshot only counts while it is under review; a decided one is history.
-  const submitted = inReview ? mergeCopy(rows, { field: 'submitted', at: 'submitted_at', only: (r) => r.status === 'in_review' }) : null;
-  return {
-    story: {
-      draft: draft?.copy ?? null,
-      draftPublic: draft ? !!draft.winner.draft_public : null,
-      submitted: submitted?.copy ?? null,
-      submittedPublic: submitted ? !!submitted.winner.submitted_public : null,
-      submittedAt: submitted?.winner.submitted_at ?? null,
-      approved: approved?.copy ?? null,
-      approvedPublic: approved ? !!approved.winner.approved_public : null,
-      approvedAt: approved?.winner.approved_at ?? null,
-      status: inReview ? 'in_review' : approved ? 'approved' : 'draft',
-    },
-    diverged: [approved, draft, submitted].some((m) => m?.diverged),
-    // Whose copy supplied the shared text of each kind, so a diverged unit can be reviewed.
-    winners: { approved: approved?.winner.person_id ?? null, draft: draft?.winner.person_id ?? null, submitted: submitted?.winner.person_id ?? null },
-  };
-}
-
 // Adds one photo to the unit's photos if there is room and it isn't already there.
 // photo: { ref, personId } (the uploader's id is part of its storage path).
 /** @returns {{ ok: true, photos: any[] } | { ok: false, error: string }} */
@@ -353,14 +294,6 @@ export function unitRiskRow(row) {
     draft: riskCopy(row.draft),
   };
 }
-
-// ---- the cutover switch ----
-
-// The member_settings row (key `unit_stories`) says whether the live system reads and writes stories per
-// UNIT. Only an explicit { live: true } turns it on, so a missing row or anything odd keeps the per-person
-// stories the portal started with; the export, directory and editor all follow it.
-export const UNIT_STORIES_KEY = 'unit_stories';
-export const unitSwitchLive = (row) => row?.value?.live === true;
 
 // ---- the editor ----
 

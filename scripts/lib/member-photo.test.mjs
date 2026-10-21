@@ -1,7 +1,7 @@
 // Run with: node --test scripts/lib/member-photo.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_SQUARE_BYTES, isLegacyPhoto, isPhotoRef, isUploadedPhoto, jpegInfo, photoAccess, photoKeys, stripJpegMetadata, validatePhotoPair } from './member-photo.mjs';
+import { MAX_SQUARE_BYTES, isLegacyPhoto, isPhotoRef, isUploadedPhoto, jpegInfo, photoKeys, stripJpegMetadata, validatePhotoPair } from './member-photo.mjs';
 
 // A minimal JPEG: SOI, optional EXIF, a frame header with the given size, then the end.
 function jpeg(width, height, { exif = false, padTo = 0 } = {}) {
@@ -52,19 +52,6 @@ test('storage keys are built from two uuids only, so they cannot address another
   assert.deepEqual(photoKeys(A, B), { square: `member-photos/${A}/${B}.jpg`, full: `member-photos/${A}/${B}-full.jpg` });
   assert.throws(() => photoKeys('../x', B), /Invalid photo key/);
   assert.throws(() => photoKeys(A, `${B}/../..`), /Invalid photo key/);
-});
-
-test('who may fetch an uploaded photo: the author for any copy, others only for an approved photo of a listed person', () => {
-  const row = { person_id: A, draft: { photo: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' }, submitted: { photo: 'ssssssss-0000-4000-8000-000000000000'.replace(/s/g, 'a') }, approved: { photo: B } };
-  const draftId = row.draft.photo;
-  assert.equal(photoAccess({ viewerPersonId: A, row, photoId: draftId, listed: true }), 'own'); // their own draft
-  assert.equal(photoAccess({ viewerPersonId: 'someone-else', row, photoId: draftId, listed: true }), null); // never another's draft
-  assert.equal(photoAccess({ viewerPersonId: 'someone-else', row, photoId: row.submitted.photo, listed: true }), null); // nor one in review
-  assert.equal(photoAccess({ viewerPersonId: 'someone-else', row, photoId: B, listed: true }), 'approved');
-  assert.equal(photoAccess({ viewerPersonId: 'someone-else', row, photoId: B, listed: false }), null); // opted out of the directory
-  assert.equal(photoAccess({ viewerPersonId: A, row, photoId: B, listed: false }), 'own'); // the author still sees their own
-  assert.equal(photoAccess({ viewerPersonId: A, row: null, photoId: B, listed: true }), null);
-  assert.equal(photoAccess({ viewerPersonId: A, row, photoId: '/images/members/x.jpg', listed: true }), null); // public paths are not served here
 });
 
 // A JPEG with the segments a camera, a browser or an editor puts around the picture. `segment` builds one marker segment.
