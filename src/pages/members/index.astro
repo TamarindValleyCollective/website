@@ -2066,9 +2066,6 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   }
   const first = (full: string) => full.trim().split(/\s+/).find((w) => w.length > 1) ?? full;
   const acresFmt = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  // Hectares are always shown to four decimal places (0.1619, 0.0040).
-  const haFmt = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
-  const ha = (v: number | null) => (v == null ? null : haFmt.format(v));
   const sqftFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
   const VERIFICATION: Record<string, string> = { verified: 'Verified', pending_review: 'Awaiting core team', unverified: 'Not yet verified' };
   // Tick in a circle / clock / empty circle; the words stay for screen readers and the hover title.
@@ -2707,7 +2704,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     cols.append(
       h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.farm)), 'Farm'),
         h('div', 'kpis', undefined, kpi('Farm land', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), kpi('Farm plots', String(hh.plots.length))),
-        hh.plots.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Hectares', 'Acres', 'Status'], [...hh.plots].sort(byPatta).map((p) => [p.pattaNo, surveyCell(p.surveyNo, p.sourceDocumentId), ha(p.areaHectares), p.areaAcres, verifiedMark(p.verification)]), 2)) : h('p', 'lede', 'Patta details not available yet'),
+        hh.plots.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Acres', 'Status'], [...hh.plots].sort(byPatta).map((p) => [p.pattaNo, surveyCell(p.surveyNo, p.sourceDocumentId), p.areaAcres, verifiedMark(p.verification)]), 2)) : h('p', 'lede', 'Patta details not available yet'),
         landCardFooter(hh, 'farm')),
       h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.house)), 'House', hh.houseNo && hh.cluster ? h('span', 'pill', `Cluster ${hh.cluster}`) : null),
         h('div', 'kpis', undefined, kpi('House area', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), kpi('House plots', String(hh.housePattas.length))),
