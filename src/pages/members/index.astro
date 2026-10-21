@@ -247,6 +247,7 @@ import '../../styles/global.css';
   .search {
     display: flex;
     flex: 1;
+    min-width: 0; /* an input can't shrink below its default width unless its wrapper may, which pushed the bar past a phone's width */
     align-items: center;
     gap: 10px;
     max-width: 520px;
@@ -277,6 +278,7 @@ import '../../styles/global.css';
 
   .who-wrap {
     position: relative;
+    flex: none;
     margin-left: auto;
   }
 
@@ -2220,7 +2222,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     });
     dlg.append(
       h('h3', '', 'Your details'),
-      h('p', '', `Signed in as ${me!.email ?? 'your Google account'}. To change your name, email or household, ask the core team.`),
+      h('p', '', `Signed in as ${me!.email ?? 'your Google account'}. To change your name, email or unit, ask the core team.`),
       h('label', '', 'Mobile number', phone),
       h('label', 'check', undefined, dir, h('span', '', 'List me in the member directory')),
       msg,
@@ -2479,7 +2481,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         ),
         prompts,
       ),
-      widget('My household', { more: ['Details', 'unit'] }, peopleList(hh, person)),
+      widget('People in my unit', { more: ['Details', 'unit'] }, peopleList(hh, person)),
       widget('Stays', { soon: true }, h('p', 'lede', 'Book overnight stays for you and your family. Free for family; guests at a discounted rate.')),
       widget('Maintenance', { soon: true }, h('p', 'lede', 'Your annual maintenance, what is paid and what is due, with a UPI QR to pay.')),
       widget('Notices', { soon: true }, h('p', 'lede', 'Announcements from the core team.')),
@@ -3129,7 +3131,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         sections.push(h('section', 'dir-person', undefined, h('p', 'lede', `${joinNames(who)} ${who.length > 1 ? 'have' : 'has'} not shared a story yet.`)));
       }
       // The rest of the household (children, other family) in a section of their own, not a block each.
-      if (hh.familyMembers.length) sections.push(h('section', 'dir-person dir-household', undefined, familyRow(h('p', 'dir-family', `Also in this household: ${joinNames(hh.familyMembers.map(label))}`))));
+      if (hh.familyMembers.length) sections.push(h('section', 'dir-person dir-household', undefined, familyRow(h('p', 'dir-family', `Also in this unit: ${joinNames(hh.familyMembers.map(label))}`))));
       dlg.append(close, pills(hh), ...sections);
       dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
       dlg.addEventListener('close', () => dlg.remove());
@@ -3168,7 +3170,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         built = true;
       }
       chipsHost.replaceChildren(clusterChips());
-      count.textContent = `${shown.length} of ${list.length} households`;
+      count.textContent = `${shown.length} of ${list.length} units`;
       results.replaceChildren(shown.length ? h('div', 'dir-grid', undefined, ...shown.map(card)) : h('p', 'lede', 'No one matches.'));
     }
 
