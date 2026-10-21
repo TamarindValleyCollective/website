@@ -458,6 +458,11 @@ import SignInGate from '../../components/SignInGate.astro';
     grid-column: 1 / -1;
   }
 
+  /* Lets a widget's contents respond to the widget's own width, not the screen's. */
+  .widget {
+    container-type: inline-size;
+  }
+
   .widget h2,
   .panel h2 {
     display: flex;
@@ -979,6 +984,14 @@ import SignInGate from '../../components/SignInGate.astro';
     column-gap: 12px;
   }
 
+  /* In a narrow widget (a phone, or a half-width card) the two tiles stack, so the pills and figures keep one line each. */
+  @container (max-width: 440px) {
+    .tiles {
+      grid-template-columns: 1fr;
+      row-gap: 12px;
+    }
+  }
+
   .tile {
     display: grid;
     grid-row: span 3;
@@ -1016,6 +1029,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .tile .v {
+    white-space: nowrap;
     font-family: var(--font-display);
     font-size: var(--text-2xl);
     font-weight: 600;
