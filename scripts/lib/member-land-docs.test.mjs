@@ -85,8 +85,8 @@ test('initials in a name stand for the words they were made from: HS is Hosahall
 test('initials never make a match on their own, and must be the right letters', () => {
   assert.ok(!namesMatch('Ravi KS', 'RAVI HARISH SUBBU')); // K is not H
   assert.ok(!namesMatch('Ravi HS', 'ASHA HARISH SUBBU')); // the first word has to match too
-  assert.ok(!namesMatch('Om', 'OMKAR MURTHY')); // a short name is not initials
-  assert.ok(!namesMatch('Om Kumar', 'OMKAR MURTHY')); // 'om' is not O.M., because 'kumar' matched nothing
+  assert.ok(!namesMatch('Sa', 'SATISH ANAND')); // a short name is not initials
+  assert.ok(!namesMatch('Sa Kumar', 'SATISH ANAND')); // 'sa' is not S.A., because 'kumar' matched nothing
   assert.ok(!namesMatch('HS', 'HARISH SUBBU')); // initials alone prove nothing
 });
 

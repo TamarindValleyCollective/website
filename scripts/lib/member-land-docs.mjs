@@ -72,7 +72,7 @@ export function parseLandPdfText(pages) {
   if (/eservices\.tn\.gov\.in/i.test(text) && reference) {
     // The patta number is the second-from-last part of the reference (".../01954/80169" = 1954).
     const patta = pattaFromReference(reference);
-    // A long name wraps onto a second line ("OMKAR RAO\nSUBBU"), so one optional continuation line is part of the name.
+    // A long name wraps onto a second line ("ASHA RAO\nSUBBU"), so one optional continuation line is part of the name.
     const owners = [...text.matchAll(/^\s*\d+\.\s+([A-Za-z][A-Za-z .]*?(?:\n[A-Za-z][A-Za-z .]*?)?)\s+[^\u0000-\u007f]/gm)].map((m) => m[1].replace(/\s+/g, ' ').trim());
     const records = [];
     // A sub-division is digits then letters then, often, a digit again (3B, 3B2, 3C2): without the trailing digit a row such
@@ -271,7 +271,7 @@ function initialsOfRun(initials, words) {
 // nothing may be initials for the longer name's words, as in "Gopalakrishna HS" against
 // "GOPALAKRISHNA HOSAHALLI SUBRAMANI" (the register keeps the initials, the PDF spells the family
 // names out), but only beside at least one word that matched by spelling: initials never prove a
-// match alone, so "Om" is not "Omkar Murthy".
+// match alone, so "Sa" is not "Satish Anand".
 export function namesMatch(personName, ownerName) {
   const a = nameTokens(personName);
   const b = nameTokens(ownerName);
