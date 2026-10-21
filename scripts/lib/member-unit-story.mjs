@@ -196,7 +196,7 @@ const emptyCopy = (c) => !text(c?.bio) && !text(c?.family) && !(c?.photos ?? [])
  * housemates' beside it (read-only). `hasUnsubmittedChanges` keeps the status chip honest: text in
  * review or live is unaffected by edits, so they need to know their newest wording isn't handed in yet.
  * @param row a member_unit_stories row, or null
- * @param {{ personId: string, people: { id: string, firstName: string }[] }} viewer
+ * @param {{ personId: string, people: { id: string, firstName: string, primary?: boolean }[] }} viewer
  */
 export function unitStoryView(row, { personId, people }) {
   const state = draftState(row);
@@ -208,6 +208,9 @@ export function unitStoryView(row, { personId, people }) {
   return {
     version: state.version,
     draft: { bio: f.bio, family: f.family, quote: f.quotes[personId] ?? '', link: f.links[personId] ?? '', photos: f.photos },
+    // Everyone else in the unit, for the card's title, whether or not they have written anything of their own.
+    // (owners only, as the directory does: children and other family are not named on the card).
+    housemates: people.filter((p) => p.id !== personId && p.primary !== false).map((p) => p.firstName),
     others: people
       .filter((p) => p.id !== personId && (f.quotes[p.id] || f.links[p.id]))
       .map((p) => ({ firstName: p.firstName, quote: f.quotes[p.id] ?? '', link: f.links[p.id] ?? '' })),

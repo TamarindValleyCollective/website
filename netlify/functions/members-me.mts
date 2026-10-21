@@ -691,11 +691,14 @@ async function loadUnitStory(householdId: string): Promise<any | null> {
 async function unitOf(member: { personId: string; householdIds: string[] }) {
   const householdId = member.householdIds[0];
   if (!householdId) return null;
-  const links = await select('member_household_members', 'person_id', `household_id=eq.${householdId}`);
+  const links = await select('member_household_members', 'person_id,role', `household_id=eq.${householdId}`);
   const ids = links.map((l: any) => l.person_id);
+  // The card names the unit's owners (everyone, if there is none), as the directory does.
+  const anyOwner = links.some((l: any) => (l.role ?? 'owner') === 'owner');
+  const isPrimary = (id: string) => !anyOwner || (links.find((l: any) => l.person_id === id)?.role ?? 'owner') === 'owner';
   const people = ids.length ? await select('member_people', 'id,full_name', `id=in.(${ids.join(',')})`) : [];
   const [household] = await select('member_households', 'farm_unit', `id=eq.${householdId}`);
-  return { householdId, farmUnit: (household?.farm_unit as string | undefined) ?? '', people: people.map((p: any) => ({ id: p.id, firstName: firstNameOf(p.full_name) })) };
+  return { householdId, farmUnit: (household?.farm_unit as string | undefined) ?? '', people: people.map((p: any) => ({ id: p.id, firstName: firstNameOf(p.full_name), primary: isPrimary(p.id) })) };
 }
 
 // Writes the new draft only if nobody saved since it was read (the version is the guard), so two owners

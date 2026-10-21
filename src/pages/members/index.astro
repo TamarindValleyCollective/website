@@ -2749,6 +2749,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const savedFields = { bio: '', family: '', why: '', social: '', isPublic: false };
     let photos: { ref: string; personId: string }[] = [];
     let others: { firstName: string; quote: string; link: string }[] = [];
+    let housemates: string[] = [];
     const unitText = () => ({ bio: draft.bio, family: draft.family, why: draft.why, social: draft.social, isPublic });
     // The server's view of the unit's story, as the same StoryView the person's story uses.
     function applyUnitView(v: any) {
@@ -2756,6 +2757,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       version = v.version;
       photos = v.draft.photos;
       others = v.others;
+      housemates = v.housemates ?? [];
     }
     let firstName = first(me!.name);
     let isPublic = false;
@@ -2804,7 +2806,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         para.append(...mdNodes(bio, (t, inLink) => (inLink ? [document.createTextNode(t)] : boldFirst(t))));
       } else para.append(h('em', 'story-empty', 'Nothing here yet'));
       const shownPhoto = unitStories ? photos[0]?.ref : draft.photo;
-      const title = unitStories && others.length ? `${first(name)} & ${others.map((o) => o.firstName).join(' & ')}` : name;
+      const title = unitStories && housemates.length ? `${first(name)} & ${housemates.join(' & ')}` : name;
       nodes.push(h('div', 'story-card-top', undefined, shownPhoto ? photoImg(shownPhoto, 'avatar avatar--lg story-photo', 'square', unitStories) : h('span', 'avatar avatar--lg', first(name).slice(0, 1).toUpperCase()), h('div', '', undefined, h('h3', '', title), h('span', `story-vis ${isPublic ? 'story-vis--public' : ''}`, isPublic ? 'Members and tvc.farm' : 'Members only'))));
       nodes.push(para);
       if (draft.family.trim()) nodes.push(h('p', 'story-card-fam', undefined, ...mdNodes(draft.family.trim())));
