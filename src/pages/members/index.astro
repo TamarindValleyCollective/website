@@ -1932,13 +1932,13 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   }
   // A story photo as an <img>: a path on the public site as it is, an upload fetched with the member's
   // sign-in (nothing is served without it). If it cannot be loaded the image just disappears.
-  function photoImg(ref: string, cls: string, size: 'square' | 'full' = 'square'): HTMLImageElement {
+  function photoImg(ref: string, cls: string, size: 'square' | 'full' = 'square', unit = false): HTMLImageElement {
     const img = document.createElement('img');
     img.className = cls;
     img.alt = '';
     img.loading = 'lazy';
     img.decoding = 'async';
-    memberPhotoSrc(ref, size).then((src) => { img.src = src; }).catch(() => img.classList.add('photo-missing'));
+    memberPhotoSrc(ref, size, unit).then((src) => { img.src = src; }).catch(() => img.classList.add('photo-missing'));
     return img;
   }
   const first = (full: string) => full.trim().split(/\s+/).find((w) => w.length > 1) ?? full;
@@ -3010,11 +3010,15 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
     const snippet = (t: string) => { const p = toPlain(t); return p.length > 120 ? `${p.slice(0, 117).trimEnd()}…` : p; };
 
+    // True once the directory says its photos belong to the unit's stories (the cutover to unit stories), which are
+    // fetched from their own endpoint.
+    let unitPhotos = false;
+
     // A round photo when the person has one, otherwise their initial. Photos are 400x400 squares.
     // size: '' (card), 'lg' or 'xl' (the popup's header).
     function face(p: { name: string; photo?: string | null }, size = ''): HTMLElement {
       const sz = size ? ` dir-photo--${size}` : '';
-      if (p.photo) return photoImg(p.photo, `dir-photo${sz}`);
+      if (p.photo) return photoImg(p.photo, `dir-photo${sz}`, 'square', unitPhotos);
       return h('span', `avatar dir-initial${size ? ` dir-initial--${size}` : ''}`, first(p.name).slice(0, 1).toUpperCase());
     }
 
@@ -3179,6 +3183,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         const { status, data } = await memberFetch('/api/members-me/directory');
         if (status !== 200) throw new Error(data.error || 'Could not load the directory.');
         list = data.households as DirHousehold[];
+        unitPhotos = data.unitPhotos === true;
         draw();
       } catch (e) {
         body.replaceChildren(h('p', 'lede', e instanceof MemberAuthError ? 'Your session ended. Sign in again.' : e instanceof Error ? e.message : 'Could not load the directory.'));

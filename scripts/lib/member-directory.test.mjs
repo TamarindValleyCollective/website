@@ -1,7 +1,7 @@
 // Run with: node --test scripts/lib/member-directory.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDirectory } from './member-directory.mjs';
+import { buildDirectory, buildUnitDirectory } from './member-directory.mjs';
 
 const story = { bio: 'Asha is an engineer.', family: 'Lives in Bengaluru.', why: 'The soil.', social: 'https://www.linkedin.com/in/asha' };
 const data = {
@@ -196,4 +196,89 @@ test('households are in house-number order; those with no house come last, by fa
     stories: [],
   };
   assert.deepEqual(buildDirectory(data, 'x').map((h) => `${h.houseNo ?? '-'}/${h.farmUnit}`), ['H-04/F-03', 'H-30/F-01', '-/F-02', '-/F-04']);
+});
+
+// ---- one story per UNIT ----
+
+const U1 = '44444444-4444-4444-8444-444444444444';
+const U2 = '55555555-5555-4555-8555-555555555555';
+const unitData = (over = {}) => ({
+  people: [{ id: 'a', full_name: 'Prameela K' }, { id: 'b', full_name: 'Sree K' }, { id: 'k', full_name: 'Kid K' }],
+  memberships: [{ household_id: 'h', person_id: 'a', role: 'owner' }, { household_id: 'h', person_id: 'b', role: 'owner' }, { household_id: 'h', person_id: 'k', role: 'family' }],
+  households: [{ id: 'h', farm_unit: 'F-77', house_no: null, cluster: null }],
+  unitStories: [{ household_id: 'h', approved_public: false, approved: { bio: 'Sree is a director. Prameela designs.', family: 'One son.', photos: [], quotes: { a: 'Giving back.', b: 'Retirement years.' }, links: { a: 'https://example.org/p', b: 'https://example.org/s' } } }],
+  ...over,
+});
+
+test('a unit\'s story is one section for its owners with their own quote and link, whatever the text', () => {
+  const [hh] = buildUnitDirectory(unitData(), 'a');
+  assert.equal(hh.groups.length, 1);
+  const g = hh.groups[0];
+  assert.deepEqual(g.people.map((p) => p.name), ['Prameela K', 'Sree K']); // the child is in the family section, not a name on the story
+  assert.equal(g.bio, 'Sree is a director. Prameela designs.');
+  assert.equal(g.family, 'One son.');
+  assert.deepEqual(g.quotes, [{ name: 'Prameela K', why: 'Giving back.' }, { name: 'Sree K', why: 'Retirement years.' }]);
+  assert.deepEqual(g.links.map((l) => l.name), ['Prameela K', 'Sree K']);
+  assert.deepEqual(hh.withoutStory, []);
+  assert.deepEqual(hh.familyMembers, [{ name: 'Kid K', isYou: false }]);
+  assert.equal(hh.people.find((p) => p.name === 'Prameela K').isYou, true);
+});
+
+test('editing one owner\'s quote never splits the unit into two sections (the bug that unit stories fix)', () => {
+  const d = unitData();
+  d.unitStories[0].approved.quotes.a = 'A brand new quote.';
+  const [hh] = buildUnitDirectory(d, 'b');
+  assert.equal(hh.groups.length, 1);
+  assert.equal(hh.groups[0].quotes.find((q) => q.name === 'Prameela K').why, 'A brand new quote.'); // the viewer's own quote comes first, so look it up by name
+});
+
+test('only the approved copy is shown to members, with whether it is also public; a draft or one in review is never read', () => {
+  const [pub] = buildUnitDirectory(unitData({ unitStories: [{ ...unitData().unitStories[0], approved_public: true }] }), 'a');
+  assert.equal(pub.groups[0].onPublicSite, true);
+  const [priv] = buildUnitDirectory(unitData(), 'a');
+  assert.equal(priv.groups[0].onPublicSite, false);
+  const noApproved = unitData({ unitStories: [{ household_id: 'h', approved: null, approved_public: null, draft: { bio: 'secret' }, submitted: { bio: 'secret' } }] });
+  const [none] = buildUnitDirectory(noApproved, 'a');
+  assert.equal(none.hasStory, false);
+  assert.deepEqual(none.groups, []);
+  assert.equal(JSON.stringify(none).includes('secret'), false);
+});
+
+test('someone who opted out is not listed, and neither are their quote and link', () => {
+  const d = unitData();
+  d.people[1] = { ...d.people[1], directory_visible: false };
+  const [hh] = buildUnitDirectory(d, 'a');
+  assert.deepEqual(hh.people.map((p) => p.name), ['Prameela K', 'Kid K']);
+  assert.deepEqual(hh.groups[0].quotes, [{ name: 'Prameela K', why: 'Giving back.' }]);
+  assert.deepEqual(hh.groups[0].links.map((l) => l.name), ['Prameela K']);
+});
+
+test('the unit\'s photos are dealt to its owners in order, the viewer first, so a card can show two faces; never to the family', () => {
+  const photos = [{ ref: U1, personId: 'b' }, { ref: U2, personId: 'a' }];
+  const d = unitData();
+  d.unitStories[0].approved.photos = photos;
+  const [hh] = buildUnitDirectory(d, 'b'); // Sree is the viewer, so he is first
+  assert.deepEqual(hh.people.map((p) => [p.name, p.photo]), [['Sree K', U1], ['Prameela K', U2], ['Kid K', '']]);
+  d.unitStories[0].approved.photos = [photos[0]];
+  assert.deepEqual(buildUnitDirectory(d, 'b')[0].people.map((p) => p.photo), [U1, '', '']);
+});
+
+test('a photo alone is still shown, and a unit with a household with no listed owner treats everyone as primary', () => {
+  const photoOnly = unitData();
+  photoOnly.unitStories[0].approved = { bio: '', family: '', photos: [{ ref: U1, personId: 'a' }], quotes: {}, links: {} };
+  const [hh] = buildUnitDirectory(photoOnly, 'a');
+  assert.equal(hh.people[0].photo, U1);
+  assert.equal(hh.hasStory, false);
+  const noOwner = unitData();
+  noOwner.memberships = noOwner.memberships.map((m) => ({ ...m, role: 'family' }));
+  const [all] = buildUnitDirectory(noOwner, 'a');
+  assert.equal(all.groups[0].people.length, 3); // nobody is an owner, so nobody is left out of the story
+});
+
+test('the output carries no contact or land fields, whatever the input rows hold', () => {
+  const d = unitData();
+  d.people[0] = { ...d.people[0], email: 'a@example.org', phone: '98450 12345', pattaNo: '2417' };
+  d.unitStories[0] = { ...d.unitStories[0], reviewer_note: 'private', draft: { bio: 'draft' } };
+  const json = JSON.stringify(buildUnitDirectory(d, 'a'));
+  for (const leak of ['a@example.org', '98450', '2417', 'private', 'draft']) assert.equal(json.includes(leak), false, leak);
 });

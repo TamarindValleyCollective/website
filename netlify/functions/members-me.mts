@@ -38,10 +38,10 @@ import { validateProfileEdit, profileAuditDetail } from '../../scripts/lib/membe
 import { PRIVACY_NOTICE_VERSION, privacyNoticeRequired, validateAcceptance } from '../../scripts/lib/member-privacy.mjs';
 import { callAnthropic } from './lib/anthropic';
 import { checkDailyCap } from './lib/rate-limit';
-import { buildDirectory } from '../../scripts/lib/member-directory.mjs';
+import { buildDirectory, buildUnitDirectory } from '../../scripts/lib/member-directory.mjs';
 import { MAX_FULL_BYTES, MAX_SQUARE_BYTES, isUploadedPhoto, photoAccess, validatePhotoPair } from '../../scripts/lib/member-photo.mjs';
 import { deleteMemberPhoto, getMemberPhoto, putMemberPhoto } from './lib/member-photo-storage';
-import { assessSubmission, assessUnitSubmission } from './lib/story-risk';
+import { assessSubmission, assessUnitSubmission, unitStoriesLive } from './lib/story-risk';
 import { REVIEW_SYSTEM, localChecks, parseSuggestions, reviewPrompt, storyAuditDetail, storyView, validateDraft, validateForSubmit, withStoredPhoto } from '../../scripts/lib/member-story.mjs';
 import { MAX_PHOTOS, addPhoto, draftColumns, draftState, mergeDraftEdit, unitPhotoAccess, unitStoryView, validateUnitSave, validateUnitSubmit } from '../../scripts/lib/member-unit-story.mjs';
 import { ALLOWED_MIME, LAND_TYPES, MAX_HOUSEHOLD_BYTES, MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_UPLOADS_PER_DAY, NOT_A_LAND_PDF, WRONG_CARD, documentsReplacedBy, landTypeMismatch, memberSummary, normalizeExtraction, surveyKey } from '../../scripts/lib/member-land-docs.mjs';
@@ -916,13 +916,18 @@ async function handleDirectory(req: Request): Promise<Response> {
   const who = await requireAcknowledgedMember(req);
   if ('error' in who) return who.error;
   try {
+    // Per person (member_stories) or per unit (member_unit_stories): the cutover switch, off until the move is done.
+    const live = await unitStoriesLive();
     const [people, memberships, households, stories] = await Promise.all([
       select('member_people', 'id,full_name,active,directory_visible', 'active=eq.true&directory_visible=eq.true'),
       select('member_household_members', 'household_id,person_id,role', 'person_id=not.is.null'),
       select('member_households', 'id,farm_unit,house_no,cluster', 'id=not.is.null'),
-      select('member_stories', 'person_id,approved,approved_public', 'approved=not.is.null'),
+      live ? select('member_unit_stories', 'household_id,approved,approved_public', 'approved=not.is.null') : select('member_stories', 'person_id,approved,approved_public', 'approved=not.is.null'),
     ]);
-    return jsonResponse({ households: buildDirectory({ people, memberships, households, stories }, who.member.personId) });
+    // `unitPhotos` tells the page which endpoint serves the photos: a unit's, or a person's.
+    return jsonResponse(live
+      ? { unitPhotos: true, households: buildUnitDirectory({ people, memberships, households, unitStories: stories }, who.member.personId) }
+      : { households: buildDirectory({ people, memberships, households, stories }, who.member.personId) });
   } catch (err) {
     console.error('[members-me] directory load failed', err);
     return jsonResponse({ error: 'Server error' }, 500);

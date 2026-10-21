@@ -122,3 +122,43 @@ export function buildDirectory(data, viewerPersonId) {
     return farmNumber(a.farmUnit) - farmNumber(b.farmUnit);
   });
 }
+
+/**
+ * The same directory, from stories that belong to a whole UNIT (member_unit_stories). A unit's text is
+ * shared by its owners and each owner has their own quote and link, so it is handed to buildDirectory as
+ * one story per owner: the shared bio and family, that person's quote and link. Everything buildDirectory
+ * does is unchanged (who is listed, primary members, house-number order, no contact or land fields), and
+ * the owners' identical text is one section for the right reason: it IS one story, not two that happen
+ * to match, so one owner editing never splits it. The unit's photos (at most two, not tied to a person)
+ * are dealt to its owners in the order they appear, the viewer first, so a card can show two faces.
+ *
+ * @param {Omit<Parameters<typeof buildDirectory>[0], 'stories'> & { unitStories: { household_id: string, approved: any, approved_public: boolean | null }[] }} data
+ */
+export function buildUnitDirectory(data, viewerPersonId) {
+  const listed = new Set(data.people.filter((p) => p.active !== false && p.directory_visible !== false).map((p) => p.id));
+  const stories = [];
+  const unitByFarm = new Map();
+  for (const unit of data.unitStories) {
+    if (!unit.approved) continue;
+    const hh = data.households.find((h) => h.id === unit.household_id);
+    if (hh) unitByFarm.set(hh.farm_unit, unit);
+    const members = data.memberships.filter((m) => m.household_id === unit.household_id && listed.has(m.person_id));
+    const anyOwner = members.some((m) => (m.role ?? 'owner') === 'owner');
+    for (const m of members) {
+      if (anyOwner && (m.role ?? 'owner') !== 'owner') continue; // the family section names them; the story is the owners'
+      stories.push({
+        person_id: m.person_id,
+        approved: { bio: unit.approved.bio, family: unit.approved.family, why: unit.approved.quotes?.[m.person_id] ?? '', social: unit.approved.links?.[m.person_id] ?? '' },
+        approved_public: unit.approved_public,
+      });
+    }
+  }
+  const directory = buildDirectory({ ...data, stories }, viewerPersonId);
+  for (const hh of directory) {
+    const photos = (unitByFarm.get(hh.farmUnit)?.approved.photos ?? []).map((p) => text(p.ref)).filter(isPhotoRef);
+    hh.people.filter((p) => p.primary).forEach((p, i) => {
+      if (photos[i]) p.photo = photos[i];
+    });
+  }
+  return directory;
+}
