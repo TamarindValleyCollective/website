@@ -1537,7 +1537,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     tents: TentAssignment[];
     // The people a member named in the portal, before any tent: the same directory people as a tent's guests.
     // Prefilled into tents as Madhavan allocates them (see nextWaitingGuest).
-    party?: (Guest & { stayRequirements?: string })[];
+    party?: Guest[];
     note?: string;
     isPast: boolean;
     // Guest notifications (member stays only for now): `notice` is null until
@@ -3223,14 +3223,14 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       const title = b.eventTitle ?? b.label ?? typeDisplayLabel(b.type);
       const tentNames = b.tents.map((t) => UNITS.find((u) => u.id === t.tentId)?.label ?? t.tentId).join(', ') || (b.party?.length ? 'waiting for tents' : '(whole farm)');
       const canWrite = canWriteType(b.type);
-      // What a member's party has asked for this stay only (e.g. "no onions"); their standing allergies are on
-      // their directory record and show on their guest row once they are placed in a tent.
-      const stayNeeds = (b.party ?? []).filter((g) => g.stayRequirements).map((g) => `${g.name}: ${g.stayRequirements}`).join('; ');
+      // Allergies and food preferences a member entered for their party (their directory record, updated at each
+      // booking), so the kitchen knows before anyone is placed in a tent. Withheld from read-only admins by the server.
+      const stayNeeds = (b.party ?? []).filter((g) => g.preferences).map((g) => `${g.name}: ${g.preferences}`).join('; ');
       card.innerHTML = `
         <div>
           <strong>${escapeAttr(title)}</strong>
           <div class="meta">${b.startDate} · ${b.nights} night${b.nights > 1 ? 's' : ''} · ${escapeAttr(tentNames)}${b.exclusive ? ' · exclusive' : ''}</div>
-          ${stayNeeds ? `<div class="meta">Food needs this stay: ${escapeAttr(stayNeeds)}</div>` : ''}
+          ${stayNeeds ? `<div class="meta">Allergies and food: ${escapeAttr(stayNeeds)}</div>` : ''}
           ${b.notifiable ? `<div class="meta">${noticeStatusLabel(b)}</div>` : ''}
         </div>
         <div class="actions">

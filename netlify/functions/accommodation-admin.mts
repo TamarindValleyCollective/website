@@ -222,7 +222,7 @@ function shapeBooking(b: any, staff: StaffGrant) {
   return {
     ...rest,
     // The people named on a member's booking, shaped like a tent's guests (contact reduced to on-file flags).
-    ...(b.party ? { party: b.party.map((g: any) => ({ personId: g.personId, ageGroup: g.ageGroup, capacity: g.capacity, stayRequirements: canSeeNames(staff.role) ? g.stayRequirements : undefined, ...shapePerson(g, staff) })) } : {}),
+    ...(b.party ? { party: b.party.map((g: any) => ({ personId: g.personId, ageGroup: g.ageGroup, capacity: g.capacity, ...shapePerson(g, staff) })) } : {}),
     tents: (b.tents ?? []).map((t: any) => ({
       ...t,
       guests: (t.guests ?? []).map((g: any) => ({

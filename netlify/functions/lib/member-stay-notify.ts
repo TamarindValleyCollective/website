@@ -16,7 +16,7 @@ export interface StayEmail {
   startDate: string;
   nights: number;
   guestCount: number;
-  party: { name: string; ageGroup: string; guest: boolean; stayRequirements?: string }[];
+  party: { name: string; ageGroup: string; guest: boolean; preferences?: string }[];
   note: string;
 }
 
@@ -28,30 +28,20 @@ function who(stay: StayEmail): string {
   return stay.party.map((p) => `${p.name}${p.ageGroup === 'Child' ? ' (child)' : ''}${p.guest ? ' (paying guest)' : ''}`).join(', ');
 }
 
-// Food or allergy needs for this stay only, one line per person who has one ("no onions"). Their standing
-// allergies and preferences are on their guest directory record, which Madhavan sees when he allocates tents.
-function needs(stay: StayEmail): string {
-  return stay.party.filter((p) => p.stayRequirements).map((p) => `${p.name}: ${p.stayRequirements}`).join('; ');
+// Allergies and food preferences as entered in this booking (the person's standing record, prefilled and updated
+// each time), one entry per person who has any. Another unit's members are never asked, so never listed.
+function foodNeeds(stay: StayEmail): string {
+  return stay.party.filter((p) => p.preferences).map((p) => `${p.name}: ${p.preferences}`).join('; ');
 }
 
-async function tell(kind: 'booked' | 'cancelled' | 'needs', stay: StayEmail): Promise<void> {
-  if (kind === 'needs') {
-    // The member changed food needs for a stay already booked: the core team and Madhavan hear it, nobody else.
-    await sendEmail({
-      to: STAFF_EMAILS,
-      subject: `Food needs changed — ${stay.farmUnit} ${stay.startDate}`,
-      html: renderStaffEmail(`  <p style="margin-top:0;">${escapeHtml(stay.memberName)} (${escapeHtml(stay.farmUnit)}) changed food or allergy needs for the stay on ${escapeHtml(when(stay))}. Their standing allergies and preferences are unchanged.</p>
-  ${detailTable(stay.party.map((p, i) => detailRow(escapeHtml(p.name), escapeHtml(p.stayRequirements || 'No special needs for this stay'), { last: i === stay.party.length - 1 })).join(''))}`),
-    });
-    return;
-  }
+async function tell(kind: 'booked' | 'cancelled', stay: StayEmail): Promise<void> {
   const verb = kind === 'booked' ? 'booked' : 'cancelled';
   const rows =
     detailRow('Unit', escapeHtml(stay.farmUnit)) +
     detailRow('Booked by', escapeHtml(stay.memberName)) +
     detailRow('Dates', escapeHtml(when(stay))) +
     detailRow('People', escapeHtml(who(stay))) +
-    (needs(stay) ? detailRow('Food needs this stay', escapeHtml(needs(stay))) : '') +
+    (foodNeeds(stay) ? detailRow('Allergies and food', escapeHtml(foodNeeds(stay))) : '') +
     detailRow('Paying guests', String(stay.guestCount), { last: !stay.note }) +
     (stay.note ? detailRow('Note', escapeHtml(stay.note), { last: true }) : '');
   const staff = sendEmail({
@@ -80,14 +70,6 @@ export async function sendMemberStayBooked(stay: StayEmail): Promise<void> {
     await tell('booked', stay);
   } catch (err) {
     console.error('[member-stay-notify] booked email failed', err);
-  }
-}
-
-export async function sendMemberStayRequirementsUpdated(stay: StayEmail): Promise<void> {
-  try {
-    await tell('needs', stay);
-  } catch (err) {
-    console.error('[member-stay-notify] needs email failed', err);
   }
 }
 

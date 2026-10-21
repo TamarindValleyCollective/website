@@ -1568,11 +1568,10 @@ never touches Netlify either.
   (`accommodation_people.preferences`): shown prefilled to review for the member's own unit (never another
   unit's member, whose details are theirs), and what comes back **replaces** it, so it can be cleared
   (`accommodation_resolve_booking_person`'s `p_replace_preferences`), while a typed guest's are saved as typed.
-  Separately, anyone can have a **requirement for this stay only** ("no onions", `accommodation_booking_party.
-  stay_requirements`, at most 300 characters), which `POST /api/members-me/stays-update` lets the booking member
-  change until check-in (audit-first as `member.stay.requirements`; the core team and Madhavan are emailed what
-  changed); it shows on the booking card in the calendar and in the booking emails, and never touches the standing
-  record. The one allocation rule deliberately **not** applied is a guard against the same person on two
+  It is one field per person, not a separate per-stay one: a need for one visit ("no onions") is simply entered
+  there, and cleared or changed at the next booking, when the record is prefilled again. The calendar's booking
+  card lists what a booking's people have on record ("Allergies and food", hidden from read-only admins) and the
+  booking emails carry it, so the kitchen knows before anyone is placed in a tent. The one allocation rule deliberately **not** applied is a guard against the same person on two
   overlapping stays: migration 0025 dropped it on purpose (families sharing one contact tripped it on ordinary
   bookings). Because member-typed text now reaches the admin calendar, every place that page builds HTML from a
   name, preference, note or label escapes it (`escapeAttr` now covers `<`, `>` and `'` as well as `&` and `"`,

@@ -127,9 +127,6 @@ export function validateStayRequest(body, today, family = new Map(), available =
         entry.email = email;
       }
     }
-    // Food or allergy needs for this stay only ("no onions"): for anyone, apart from their standing preferences.
-    const need = typeof p?.stayRequirements === 'string' ? p.stayRequirements.trim().replace(/\s+/g, ' ').slice(0, 300) : '';
-    if (need) entry.stayRequirements = need;
     const key = entry.name.toLowerCase();
     if (names.has(key)) return { error: `${entry.name} is listed twice. Add a surname or initial to tell two people apart.` };
     names.add(key);

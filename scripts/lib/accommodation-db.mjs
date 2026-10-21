@@ -98,7 +98,7 @@ function isPastBooking(startDate, nights) {
 const ADMIN_SELECT =
   'select=id,type,event_slug,event_title,label,exclusive,start_date,nights,note,created_by,created_at,updated_by,updated_at,' +
   'accommodation_tent_assignments(tent_id,solo,accommodation_guests(seq,age_group,person_id,accommodation_people(name,mobile_number,gender,preferences,email))),' +
-  'accommodation_booking_party(seq,age_group,capacity,stay_requirements,person_id,accommodation_people(name,mobile_number,gender,preferences,email))';
+  'accommodation_booking_party(seq,age_group,capacity,person_id,accommodation_people(name,mobile_number,gender,preferences,email))';
 
 // Turns a PostgREST row (snake_case, SQL null for absent optional fields)
 // back into the exact JSON shape the client already gets today (camelCase,
@@ -141,7 +141,6 @@ function rowToBooking(row) {
       email: p.accommodation_people.email ?? undefined,
       ageGroup: p.age_group,
       capacity: p.capacity,
-      stayRequirements: p.stay_requirements ?? undefined,
     }));
   if (party.length) booking.party = party;
   if (row.event_slug != null) booking.eventSlug = row.event_slug;
@@ -217,15 +216,6 @@ export async function saveGuestContact({ name, mobileNumber, email, gender, pref
   });
 }
 
-// Changes one person's food or allergy needs for this stay only (the booking's own, not their standing preferences).
-export async function setPartyRequirement(bookingId, personId, text) {
-  await restFetch(`/accommodation_booking_party?booking_id=eq.${bookingId}&person_id=eq.${personId}`, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json', Prefer: 'return=minimal' },
-    body: JSON.stringify({ stay_requirements: text || null }),
-  });
-}
-
 // Records who is on a booking before it has tents (0052): one row per directory person. Replaces any earlier set.
 export async function setBookingParty(bookingId, people) {
   await restFetch(`/accommodation_booking_party?booking_id=eq.${bookingId}`, { method: 'DELETE' });
@@ -233,7 +223,7 @@ export async function setBookingParty(bookingId, people) {
   await restFetch('/accommodation_booking_party', {
     method: 'POST',
     headers: { 'content-type': 'application/json', Prefer: 'return=minimal' },
-    body: JSON.stringify(people.map((p, seq) => ({ booking_id: bookingId, person_id: p.personId, seq, age_group: p.ageGroup, capacity: p.capacity, stay_requirements: p.stayRequirements ?? null }))),
+    body: JSON.stringify(people.map((p, seq) => ({ booking_id: bookingId, person_id: p.personId, seq, age_group: p.ageGroup, capacity: p.capacity }))),
   });
 }
 

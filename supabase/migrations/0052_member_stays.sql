@@ -54,9 +54,6 @@ create table accommodation_booking_party (
   seq integer not null default 0,
   age_group text not null check (age_group in ('Adult', 'Child')),
   capacity text not null check (capacity in ('member', 'member_family', 'member_guest')),
-  -- Food or allergy needs for THIS stay only ("no onions"), apart from the person's standing allergies and
-  -- preferences on their directory record. The booking member can change it until check-in.
-  stay_requirements text check (stay_requirements is null or char_length(stay_requirements) <= 300),
   primary key (booking_id, person_id)
 );
 create index accommodation_booking_party_person_idx on accommodation_booking_party (person_id);

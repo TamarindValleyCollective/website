@@ -95,20 +95,11 @@ test("gender is asked for every guest and for the member's own unit, and kept on
   assert.equal(other.party[0].gender, undefined);
 });
 
-test("a member's own unit shows standing allergies and preferences to review, which replace the record; another unit's are never touched", () => {
+test("allergies and food preferences are one field per person, prefilled and updated each booking: a member's own unit's replace the record (and can be cleared), another unit's are never touched", () => {
   const r = validateStayRequest(req([member('m1', { preferences: '  vegetarian,   no garlic ' }), member('m2', { preferences: '' }), member('m3', { preferences: 'ignored' })]), TODAY, family);
   assert.deepEqual([r.party[0].preferences, r.party[0].replacePreferences], ['vegetarian, no garlic', true]);
   assert.deepEqual([r.party[1].preferences, r.party[1].replacePreferences], [null, true]); // cleared on purpose
   assert.deepEqual([r.party[2].preferences, r.party[2].replacePreferences], [undefined, undefined]);
-});
-
-test('a food or allergy need for this stay only is kept per person, apart from their standing preferences', () => {
-  const r = validateStayRequest(req([member('m1', { preferences: 'vegetarian', stayRequirements: '  No onions   today ' }), member('m3', { stayRequirements: 'Jain meals' }), person('Meera Iyer', { stayRequirements: 'x'.repeat(500) }), member('m2')]), TODAY, family);
-  assert.equal(r.party[0].stayRequirements, 'No onions today');
-  assert.equal(r.party[0].preferences, 'vegetarian'); // the standing one is separate
-  assert.equal(r.party[1].stayRequirements, 'Jain meals'); // anyone can have one, including another unit's member
-  assert.equal(r.party[2].stayRequirements.length, 300);
-  assert.equal('stayRequirements' in r.party[3], false);
 });
 
 test('a typed guest carries their allergies or preferences and email into the directory', () => {
@@ -147,8 +138,6 @@ test('the note for Madhavan names everyone and carries no contact details', () =
   assert.match(reachable, /guest directory: search by name/);
   assert.equal(reachable.includes('9845'), false);
   assert.match(partyNote(party, 'late arrival'), /Note: late arrival$/);
-  // food needs for a stay change after booking, so they live on the people, not in this fixed text
-  assert.equal(partyNote([{ ...party[0], stayRequirements: 'no onions' }], '').includes('onions'), false);
 });
 
 test('cancelling is allowed only before check-in', () => {

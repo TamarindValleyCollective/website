@@ -3897,10 +3897,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   // "waiting for tents" until he has. Members mostly book for themselves but may name other members for a group
   // trip. Members on the register stay free; anyone typed in is a paying guest (charged at the guest rate, a
   // discount set by the core team, which the core team confirms with the member after booking).
-  type StayPerson = { memberId: string | null; name: string; ageGroup: string; gender: string; mobile: string; email: string; preferences: string; stayRequirements: string };
+  type StayPerson = { memberId: string | null; name: string; ageGroup: string; gender: string; mobile: string; email: string; preferences: string };
   type Tents = { tents: number; beds: number };
   type StayAvail = { startDate: string; nights: number; checkOut: string; fixed: Tents; portable: Tents; bedsFree: number; waiting: number; maxParty: number; wholeFarmBlocked: boolean };
-  type StayRow = { id: string; householdId: string; startDate: string; nights: number; checkOut: string; people: string[]; needs: { name: string; stayRequirements: string }[]; guestCount: number; allocated: boolean; tents: string[]; canCancel: boolean };
+  type StayRow = { id: string; householdId: string; startDate: string; nights: number; checkOut: string; people: string[]; guestCount: number; allocated: boolean; tents: string[]; canCancel: boolean };
   type StayPeople = { own: { id: string; name: string; ageGroup: string; gender: string; preferences: string; hasMobile: boolean }[]; others: { id: string; name: string; farmUnit: string; ageGroup: string }[] };
   const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
   const stayDate = (iso: string) => dateFmt.format(new Date(`${iso}T00:00:00`));
@@ -3961,7 +3961,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       p.preferences = own?.preferences ?? '';
     };
     const blank = (memberId: string | null = null): StayPerson => {
-      const p: StayPerson = { memberId, name: '', ageGroup: '', gender: '', mobile: '', email: '', preferences: '', stayRequirements: '' };
+      const p: StayPerson = { memberId, name: '', ageGroup: '', gender: '', mobile: '', email: '', preferences: '' };
       if (memberId) fillFrom(p);
       else p.ageGroup = 'Adult';
       return p;
@@ -4044,7 +4044,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
             chooser('Gender', p.gender, GENDERS, (v) => { p.gender = v; }),
             textField('WhatsApp mobile number, for their stay details', 'WhatsApp number', p.mobile, (v) => { p.mobile = v; }, 'tel'),
             textField('Email, optional', 'Email (optional)', p.email, (v) => { p.email = v; }, 'email'),
-            textField('Allergies or food preferences, optional', 'Allergies or food preferences (optional)', p.preferences, (v) => { p.preferences = v; }, 'text', 300),
+            textField('Allergies or food preferences, optional', 'Allergies or food preferences (e.g. no onions)', p.preferences, (v) => { p.preferences = v; }, 'text', 300),
             h('span', 'stay-guest-tag', 'Paying guest'));
         } else {
           // On the register: adult or child for every member, and for the member's own unit gender and the
@@ -4053,12 +4053,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           if (own) {
             row.append(
               chooser('Gender', p.gender, GENDERS, (v) => { p.gender = v; }),
-              textField('Allergies or food preferences, saved to their profile', 'Allergies or food preferences (saved to their profile)', p.preferences, (v) => { p.preferences = v; }, 'text', 300));
+              textField('Allergies or food preferences, saved to their profile', 'Allergies or food preferences (e.g. no onions)', p.preferences, (v) => { p.preferences = v; }, 'text', 300));
             if (!own.hasMobile) row.append(h('span', 'stay-hint', 'No mobile number on file, so WhatsApp cannot reach them. Add one under My unit.'));
           }
         }
-        // For anyone: a food or allergy need for this stay only, which can still be changed until check-in.
-        row.append(textField('For this stay only', 'For this stay only, e.g. no onions (optional)', p.stayRequirements, (v) => { p.stayRequirements = v; }, 'text', 300));
         if (party.length > 1) {
           const rm = h('button', 'btn stay-remove', 'Remove');
           rm.setAttribute('type', 'button');
@@ -4073,7 +4071,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         add.addEventListener('click', () => { party.push(blank(nextMember())); renderPeople(); });
         set.append(add);
       }
-      set.append(h('p', 'stay-hint', 'Stay details go out on WhatsApp (and by email where one is given), so anyone who is not on the member register needs a WhatsApp number; a family can share one. Members use the number on file. Allergies saved to a profile come up next time, and anything for this stay only can be changed until check-in.'));
+      set.append(h('p', 'stay-hint', 'Stay details go out on WhatsApp (and by email where one is given), so anyone who is not on the member register needs a WhatsApp number; a family can share one. Members use the number on file. Allergies and food preferences are saved to the person’s profile and come up again next time: change them whenever they need to be different (for example, no onions this visit), and clear them when they no longer apply.'));
       peopleBox.append(set);
     }
 
@@ -4117,8 +4115,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       try {
         const people = party.map((p) => {
           const own = known.own.some((q) => q.id === p.memberId);
-          if (p.memberId) return { memberId: p.memberId, ageGroup: p.ageGroup, stayRequirements: p.stayRequirements, ...(own ? { gender: p.gender, preferences: p.preferences } : {}) };
-          return { name: p.name, ageGroup: p.ageGroup, gender: p.gender, mobileNumber: p.mobile, email: p.email, preferences: p.preferences, stayRequirements: p.stayRequirements };
+          if (p.memberId) return { memberId: p.memberId, ageGroup: p.ageGroup, ...(own ? { gender: p.gender, preferences: p.preferences } : {}) };
+          return { name: p.name, ageGroup: p.ageGroup, gender: p.gender, mobileNumber: p.mobile, email: p.email, preferences: p.preferences };
         });
         const { status, data } = await memberFetch('/api/members-me/stays', { method: 'POST', body: { householdId: hh.id, startDate: avail.startDate, nights: avail.nights, people, note: note.value } });
         if (status !== 200) {
@@ -4183,48 +4181,6 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       dlg.showModal();
     }
 
-    // Food or allergy needs for ONE stay ("no onions"), changeable until check-in. A person's standing allergies and
-    // preferences are on their profile and are reviewed when booking, not here.
-    function needsDialog(s: StayRow) {
-      const dlg = document.createElement('dialog');
-      dlg.className = 'modal';
-      const err = h('p', 'form-msg');
-      err.setAttribute('role', 'alert');
-      const wanted = new Map<string, string>(s.needs.map((n) => [n.name, n.stayRequirements]));
-      const fields = s.needs.map((n) => {
-        const input = document.createElement('input');
-        input.value = n.stayRequirements;
-        input.maxLength = 300;
-        input.placeholder = 'e.g. no onions';
-        input.autocomplete = 'off';
-        input.addEventListener('input', () => { wanted.set(n.name, input.value); });
-        return h('label', '', n.name, input);
-      });
-      const close = h('button', 'btn', 'Cancel');
-      close.setAttribute('type', 'button');
-      close.addEventListener('click', () => dlg.close());
-      const save = h('button', 'btn btn--solid', 'Save') as HTMLButtonElement;
-      save.setAttribute('type', 'button');
-      save.addEventListener('click', async () => {
-        save.disabled = true;
-        try {
-          const needs = [...wanted].map(([name, stayRequirements]) => ({ name, stayRequirements }));
-          const { status, data } = await memberFetch('/api/members-me/stays-update', { method: 'POST', body: { bookingId: s.id, needs } });
-          if (status !== 200) throw new Error(data.error || 'Could not save. Try again.');
-          dlg.close();
-          toast('Saved. The core team and Madhavan have been told.');
-          void loadStays();
-        } catch (e) {
-          save.disabled = false;
-          err.textContent = e instanceof MemberAuthError ? 'Your session ended. Sign in again.' : e instanceof Error ? e.message : 'Could not save.';
-        }
-      });
-      dlg.append(h('h3', '', 'Food needs for this stay'), h('p', '', `${stayDate(s.startDate)} to ${stayDate(s.checkOut)}. Only for this stay: a person's regular allergies and preferences stay as they are on their profile.`), ...fields, err, h('div', 'modal-actions', undefined, close, save));
-      dlg.addEventListener('close', () => dlg.remove());
-      document.body.append(dlg);
-      dlg.showModal();
-    }
-
     async function loadStays(): Promise<void> {
       try {
         const { status, data } = await memberFetch(`/api/members-me/stays?household=${encodeURIComponent(hh.id)}`);
@@ -4243,13 +4199,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
             h('p', 'stay-summary', `${stayDate(s.startDate)} to ${stayDate(s.checkOut)} · ${plural(s.nights, 'night')}`),
             h('p', 'stay-line', s.people.join(', ')),
             h('p', 'stay-line', s.allocated ? `Tents: ${s.tents.join(', ')}` : 'Waiting for Madhavan to allocate tents.'),
-            ...s.needs.filter((n) => n.stayRequirements).map((n) => h('p', 'stay-line', `${n.name}: ${n.stayRequirements}`)),
             s.guestCount ? h('p', 'stay-line', `${plural(s.guestCount, 'paying guest')}: the core team will confirm the charge.`) : null);
           if (s.canCancel) {
-            const needs = h('button', 'btn', 'Food needs for this stay');
-            needs.setAttribute('type', 'button');
-            needs.addEventListener('click', () => needsDialog(s));
-            card.append(needs);
             const cancel = h('button', 'btn', 'Cancel stay');
             cancel.setAttribute('type', 'button');
             cancel.addEventListener('click', () => cancelDialog(s));
