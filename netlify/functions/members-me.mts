@@ -773,7 +773,7 @@ async function handleUnitStorySubmit(req: Request): Promise<Response> {
     if (!unit) return jsonResponse({ error: 'You are not part of a unit yet. Ask the core team.' }, 409);
     const row = await loadUnitStory(unit.householdId);
     if (!row) return jsonResponse({ error: 'Save your story first.' }, 409);
-    const ok = validateUnitSubmit({ fields: draftState(row).fields, personId: member.personId });
+    const ok = validateUnitSubmit({ fields: draftState(row).fields });
     if (!ok.ok) return jsonResponse({ error: ok.error }, 400);
     const view = unitStoryView(row, { personId: member.personId, people: unit.people });
     if (!view.hasUnsubmittedChanges) return jsonResponse({ error: 'There is nothing new to submit.' }, 409);

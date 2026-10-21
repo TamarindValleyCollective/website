@@ -2729,7 +2729,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       crumbs('Home', 'Your story'),
       h('h1', 'page-title', 'Your story', h('small', '', 'Your card for the collective')),
       h('p', 'lede', unitStories
-        ? 'Your unit has one story, shared by everyone in it: either of you can edit what you do, your family and the photos. Your "why TVC" line is your own, and to link your name to a page of yours, select it in the text and press Link. Only the "why TVC" line is needed. The core team reads every story before it appears anywhere. Once approved, other members can read it in the Directory; it goes on tvc.farm only if you switch on "Show on tvc.farm".'
+        ? 'Your unit has one story, shared by everyone in it: either of you can edit what you do, your family and the photos. Your "why TVC" line is your own, and to link your name to a page of yours, select it in the text and press Link. The story needs at least one "why TVC" line from your unit before it can be submitted. The core team reads every story before it appears anywhere. Once approved, other members can read it in the Directory; it goes on tvc.farm only if you switch on "Show on tvc.farm".'
         : 'Say what you are comfortable sharing; only the one-line "why TVC" is needed. The core team reads every story before it appears anywhere. Once approved, other members can read it in the Directory; it goes on tvc.farm only if you switch on "Show on tvc.farm".'),
       // (not `cond ? null : el`: append(null) writes the text "null")
       ...(me!.directoryVisible ? [] : [h('p', 'lede lede--warn', 'You are not listed in the member directory, so other members cannot see your story and it will not go on tvc.farm either. You can change that in your account menu, under Your details.')]),
@@ -2973,7 +2973,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     async function submitClick() {
       if (!reviewed) { await runCheck(); return; }
       if (pending().length) { message = 'Accept or keep mine for each suggestion first.'; renderSubmit(); return; }
-      if (!draft.why.trim()) { message = 'Add your one-line "why TVC" before submitting.'; renderSubmit(); return; }
+      // A unit's story needs one "why TVC" line from anyone in it (a joint quote written by one of you is enough); a person's own story needs theirs.
+      if (!draft.why.trim() && !(unitStories && others.some((o) => o.quote))) { message = unitStories ? 'Your unit\'s story needs at least one "why TVC" line before it can be submitted. Write yours, or ask the other person in your unit to.' : 'Add your one-line "why TVC" before submitting.'; renderSubmit(); return; }
       await persist();
       if (saveState === 'error') return;
       try {
@@ -3280,7 +3281,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         statusEl,
         mdField('bio', 'What do you do today?', 'In your own words; the check can help with the house style (third person, e.g. "Asha works as…"). To link a name or a few words to a web page, select them and press Link. A link shows in the box as [words](address); the preview on the right shows how it will look.', 5),
         mdField('family', 'Family (optional)', 'First names are enough. Children\'s names and ages become public if you turn on "Show on tvc.farm". The same buttons work here.', 3),
-        field('why', 'In one sentence, why are you part of TVC?', unitStories ? 'Required. Shown as a quote on your unit\'s card, in your own voice. Everyone in the unit writes their own.' : 'Required. Shown as a quote on your card, in your own voice.', 2),
+        field('why', 'In one sentence, why are you part of TVC?', unitStories ? 'Shown as a quote on your unit\'s card, in your own voice. The story needs at least one "why TVC" line from your unit: yours, or one the other person has written.' : 'Required. Shown as a quote on your card, in your own voice.', 2),
         ...(unitStories ? [unitOthers()] : []),
         legacyProfile(),
         unitStories ? unitPhotosField() : photoField(),
