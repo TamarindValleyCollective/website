@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeUrl, parseMarkdown, toHtml, toPlain, linksIn, linkAt, toggleMark, setLink, removeLink } from './member-markdown.mjs';
+import { normalizeUrl, parseMarkdown, toHtml, toPlain, linksIn, linkAt, toggleMark, setLink, removeLink, foldProfileLink } from './member-markdown.mjs';
 
 test('normalizeUrl adds https and refuses anything that is not a web address', () => {
   assert.deepEqual(normalizeUrl('linkedin.com/in/asha-test'), { ok: true, url: 'https://linkedin.com/in/asha-test' });
@@ -96,4 +96,44 @@ test('setLink wraps the selection, edits an existing link, and removeLink keeps 
 test('parseMarkdown of nothing is nothing', () => {
   assert.deepEqual(parseMarkdown('  \n '), []);
   assert.deepEqual(parseMarkdown(undefined), []);
+});
+
+// ---- a profile link folded into the text ----
+
+const fold = (over = {}) => foldProfileLink({ bio: 'Asha runs a seed bank. Ravi teaches.', family: 'Two children.', social: 'https://example.org/asha', ...over }, 'Asha');
+
+test('a profile link becomes a link on the person\'s first name, where it first appears, and the old link is cleared', () => {
+  assert.deepEqual(fold(), { bio: '[Asha](https://example.org/asha) runs a seed bank. Ravi teaches.', family: 'Two children.', social: '' });
+});
+
+test('only the first mention is linked, in the bio before the family text', () => {
+  const r = fold({ bio: 'Ravi teaches. Asha runs a seed bank; Asha also writes.', family: 'Asha and Ravi have two children.' });
+  assert.equal(r.bio, 'Ravi teaches. [Asha](https://example.org/asha) runs a seed bank; Asha also writes.');
+  assert.equal(r.family, 'Asha and Ravi have two children.');
+  const inFamily = fold({ bio: 'A seed bank.', family: 'Asha and Ravi have two children.' });
+  assert.equal(inFamily.family, '[Asha](https://example.org/asha) and Ravi have two children.');
+  assert.equal(inFamily.social, '');
+});
+
+test('a mention that is already a link is left alone and the next one is used', () => {
+  const r = fold({ bio: '[Asha](https://example.org/other) runs a seed bank. Asha also writes.' });
+  assert.equal(r.bio, '[Asha](https://example.org/other) runs a seed bank. [Asha](https://example.org/asha) also writes.');
+});
+
+test('a name inside another word is not the name, and without the name the old link stays', () => {
+  const r = fold({ bio: 'Ashalata runs a seed bank.', family: '' });
+  assert.deepEqual(r, { bio: 'Ashalata runs a seed bank.', family: '', social: 'https://example.org/asha' });
+  assert.equal(fold({ bio: 'Ravi teaches.' }).social, 'https://example.org/asha');
+});
+
+test('an address that cannot be used, or no address, changes nothing', () => {
+  assert.equal(fold({ social: 'not a web address' }).bio, 'Asha runs a seed bank. Ravi teaches.');
+  assert.equal(fold({ social: 'not a web address' }).social, 'not a web address');
+  assert.deepEqual(fold({ social: '' }), { bio: 'Asha runs a seed bank. Ravi teaches.', family: 'Two children.', social: '' });
+});
+
+test('names with regular-expression characters or non-English letters are matched as plain text', () => {
+  assert.equal(foldProfileLink({ bio: 'Ana (Anu) works. Anu paints.', family: '', social: 'https://example.org/a' }, 'Anu').bio, 'Ana ([Anu](https://example.org/a)) works. Anu paints.');
+  assert.equal(foldProfileLink({ bio: 'Sree is a director.', family: '', social: 'https://example.org/s' }, 'Sr.e').bio, 'Sree is a director.'); // the dot is not a wildcard
+  assert.equal(foldProfileLink({ bio: 'Ömer reads.', family: '', social: 'https://example.org/o' }, 'Ömer').bio, '[Ömer](https://example.org/o) reads.');
 });

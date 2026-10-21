@@ -184,3 +184,27 @@ export function removeLink(value, from, to) {
   if (!existing) return { value, from, to };
   return { value: value.slice(0, existing.start) + existing.label + value.slice(existing.end), from: existing.start, to: existing.start + existing.label.length };
 }
+
+/**
+ * A person's profile link written into the text, on their first name where it first appears (the bio, then the family
+ * text), so it can be seen, changed or removed like any other link in the story and no separate field is needed. A mention
+ * that is already a link is skipped. Returns { bio, family, social }, with `social` cleared once the link has been written
+ * in; if the name is not in the text, or the address cannot be used, nothing changes and the old link stays.
+ * @param {{ bio: string, family: string, social: string }} draft
+ * @param {string} firstName
+ */
+export function foldProfileLink(draft, firstName) {
+  const url = draft.social.trim();
+  if (!url) return draft;
+  const href = normalizeUrl(url);
+  if (!href.ok) return draft;
+  const name = new RegExp(`(?<![\\p{L}\\p{N}_])${firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}_])`, 'gu');
+  for (const field of ['bio', 'family']) {
+    const text = draft[field];
+    for (const m of text.matchAll(name)) {
+      if (linkAt(text, m.index, m.index + m[0].length)) continue;
+      return { ...draft, [field]: `${text.slice(0, m.index)}[${m[0]}](${href.url})${text.slice(m.index + m[0].length)}`, social: '' };
+    }
+  }
+  return draft;
+}

@@ -1913,7 +1913,7 @@ import '../../styles/global.css';
   import { MAX_PHOTOS, conflictedDraftKeys, saveChanges } from '../../../scripts/lib/member-unit-story.mjs';
   import { facesToShow } from '../../../scripts/lib/member-directory.mjs';
   import { preparePhoto } from '../../../scripts/lib/photo-prepare.mjs';
-import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggleMark } from '../../../scripts/lib/member-markdown.mjs';
+import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggleMark, foldProfileLink as foldProfileIntoText } from '../../../scripts/lib/member-markdown.mjs';
   import { NOTICE_INTRO, NOTICE_TITLE, PRIVACY_NOTICE_VERSION, SECTIONS } from '../../../scripts/lib/member-privacy.mjs';
 
   declare const google: any;
@@ -2578,7 +2578,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       crumbs('Home', 'Your story'),
       h('h1', 'page-title', 'Your story', h('small', '', 'Your card for the collective')),
       h('p', 'lede', unitStories
-        ? 'Your unit has one story, shared by everyone in it: either of you can edit what you do, your family and the photos. Your "why TVC" line and your profile link are your own. Only the "why TVC" line is needed. The core team reads every story before it appears anywhere. Once approved, other members can read it in the Directory; it goes on tvc.farm only if you switch on "Show on tvc.farm".'
+        ? 'Your unit has one story, shared by everyone in it: either of you can edit what you do, your family and the photos. Your "why TVC" line is your own, and to link your name to a page of yours, select it in the text and press Link. Only the "why TVC" line is needed. The core team reads every story before it appears anywhere. Once approved, other members can read it in the Directory; it goes on tvc.farm only if you switch on "Show on tvc.farm".'
         : 'Say what you are comfortable sharing; only the one-line "why TVC" is needed. The core team reads every story before it appears anywhere. Once approved, other members can read it in the Directory; it goes on tvc.farm only if you switch on "Show on tvc.farm".'),
       // (not `cond ? null : el`: append(null) writes the text "null")
       ...(me!.directoryVisible ? [] : [h('p', 'lede lede--warn', 'You are not listed in the member directory, so other members cannot see your story and it will not go on tvc.farm either. You can change that in your account menu, under Your details.')]),
@@ -2776,7 +2776,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         // A field I did not touch simply follows them; one that clashed takes their version; one I changed that did not clash is mine, and is sent again below.
         if (clashed.includes(k) || draft[k] === savedFields[k]) {
           draft[k] = theirs[k];
-          fields[k].value = theirs[k];
+          if (fields[k]) fields[k].value = theirs[k]; // the profile link has no box of its own: it lives in the text
           savedFields[k] = theirs[k];
         }
       }
@@ -2956,19 +2956,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     // can be seen, changed or removed like any other. (It is saved with the next change.) If the name is not in
     // the text, or the address is not usable, the old link stays and is shown with a Remove button.
     function foldProfileLink() {
-      const url = draft.social.trim();
-      if (!url) return;
-      const href = normalizeUrl(url);
-      if (!href.ok) return;
-      const re = new RegExp(`(?<![\\p{L}\\p{N}_])${firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}_])`, 'gu');
-      for (const f of ['bio', 'family'] as const) {
-        for (const m of draft[f].matchAll(re)) {
-          if (linkAt(draft[f], m.index!, m.index! + m[0].length)) continue;
-          draft[f] = `${draft[f].slice(0, m.index)}[${m[0]}](${href.url})${draft[f].slice(m.index! + m[0].length)}`;
-          draft.social = '';
-          return;
-        }
-      }
+      Object.assign(draft, foldProfileIntoText(draft, firstName));
     }
     function legacyProfile(): HTMLElement | null {
       if (!draft.social) return null;
@@ -3118,6 +3106,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           Object.assign(draft, story!.draft);
           isPublic = story!.showOnPublicSite;
           Object.assign(savedFields, unitText()); // what the server holds, so the first save sends only what is changed
+          // A profile link of your own is written into the shared text on your first name (and cleared) rather than kept in a separate
+          // field: it is then saved with your next change, like any other edit, and the core team reads it with the story.
+          foldProfileLink();
         } else {
           story = data.story;
           firstName = data.firstName || firstName;
@@ -3135,12 +3126,13 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         mdField('bio', 'What do you do today?', 'In your own words; the check can help with the house style (third person, e.g. "Asha works as…"). To link a name or a few words to a web page, select them and press Link. A link shows in the box as [words](address); the preview on the right shows how it will look.', 5),
         mdField('family', 'Family (optional)', 'First names are enough. Children\'s names and ages become public if you turn on "Show on tvc.farm". The same buttons work here.', 3),
         field('why', 'In one sentence, why are you part of TVC?', unitStories ? 'Required. Shown as a quote on your unit\'s card, in your own voice. Everyone in the unit writes their own.' : 'Required. Shown as a quote on your card, in your own voice.', 2),
-        ...(unitStories ? [field('social', 'Your profile link (optional)', 'Your first name in the story links here, for example your LinkedIn page. Each person has their own.', 1), unitOthers()] : [legacyProfile()]),
+        ...(unitStories ? [unitOthers()] : []),
+        legacyProfile(),
         unitStories ? unitPhotosField() : photoField(),
         saveEl, reviewEl, submitEl);
       const side = h('aside', 'story-side', undefined, h('p', 'story-prev-label', 'Preview, as others will see your card'), previewEl);
       root.append(h('div', 'story', undefined, form, side));
-      for (const k of (unitStories ? EDIT_KEYS : (['bio', 'family', 'why'] as const))) fields[k].value = draft[k];
+      for (const k of ['bio', 'family', 'why'] as const) fields[k].value = draft[k];
       renderAll();
     })();
     return root;
