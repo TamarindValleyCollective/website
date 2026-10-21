@@ -86,7 +86,8 @@ export function buildPublished(data) {
     const whyList = uniq(whys);
     const social = stories.map((s) => clean(s?.social));
     while (social.length && !social[social.length - 1]) social.pop();
-    const photos = uniq(stories.map((s) => clean(s?.photo)));
+    // a unit story brings all of the unit's photos, an older story its single one; the same photo twice shows once
+    const photos = uniq(stories.flatMap((s) => s?.photos ?? [clean(s?.photo)]));
 
     const out = { name, bio, photo: photos[0] ?? null };
     if (photos.length > 1) out.photos = photos;
@@ -105,8 +106,7 @@ export function buildPublished(data) {
  * The same cards, from stories that belong to a whole UNIT (member_unit_stories). Only the approved copy,
  * and only when the unit's public switch is on, is read. The unit's text is the same for everyone in it and
  * each person has their own quote and link, so it is handed to buildPublished as one story per person:
- * the shared bio and family, that person's quote and link, and the unit's FIRST photo (the public card
- * shows one). buildPublished then does everything it always did: the 2017 card name, who is listed and
+ * the shared bio and family, that person's quote and link, and the unit's photos (the card shows them as a stack when there is more than one). buildPublished then does everything it always did: the 2017 card name, who is listed and
  * primary, one bio when everyone's text is the same, quotes and links paired with the names by position.
  *
  * @param {Omit<Parameters<typeof buildPublished>[0], 'stories'> & { unitStories: { household_id: string, approved: any, approved_public: boolean | null }[] }} data
@@ -115,11 +115,11 @@ export function buildPublishedUnits(data) {
   const stories = [];
   for (const unit of data.unitStories) {
     if (!unit.approved || unit.approved_public !== true) continue;
-    const photo = clean(unit.approved.photos?.[0]?.ref);
+    const photos = (unit.approved.photos ?? []).map((p) => clean(p?.ref)).filter(Boolean);
     for (const m of data.memberships.filter((x) => x.household_id === unit.household_id)) {
       stories.push({
         person_id: m.person_id,
-        approved: { bio: unit.approved.bio, family: unit.approved.family, why: unit.approved.quotes?.[m.person_id] ?? '', social: unit.approved.links?.[m.person_id] ?? '', photo },
+        approved: { bio: unit.approved.bio, family: unit.approved.family, why: unit.approved.quotes?.[m.person_id] ?? '', social: unit.approved.links?.[m.person_id] ?? '', photo: photos[0] ?? '', photos },
         approved_public: true,
       });
     }

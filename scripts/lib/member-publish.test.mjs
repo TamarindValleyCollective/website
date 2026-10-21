@@ -205,13 +205,13 @@ test('a quote the whole unit shares is one quote; a unit with no public story hi
   assert.deepEqual(buildPublishedUnits(draftOnly).cards, []);
 });
 
-test('only the unit\'s first photo goes on the public card, and the quote and link of someone unlisted stay out', () => {
+test('every photo of the unit goes on the public card, and the quote and link of someone unlisted stay out', () => {
   const photos = [{ ref: UP, personId: 'a' }, { ref: '/images/members/p.jpg', personId: 'b' }];
   const d = { ...base(), unitStories: [unit({ approved: { bio: 'B.', family: '', photos, quotes: { a: 'Mine.', b: 'Hers.' }, links: { a: 'https://x.test/a', b: 'https://x.test/b' } } })] };
   d.people = d.people.map((p) => (p.id === 'b' ? { ...p, directory_visible: false } : p));
   const [card] = buildPublishedUnits(d).cards;
   assert.equal(card.photo, UP);
-  assert.equal(card.photos, undefined);
+  assert.deepEqual(card.photos, [UP, '/images/members/p.jpg']);
   assert.equal(card.whyTVC, 'Mine.');
   assert.deepEqual(card.social, ['https://x.test/a']);
 });
