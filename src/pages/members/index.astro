@@ -1930,6 +1930,7 @@ import SignInGate from '../../components/SignInGate.astro';
 <script>
   import { clearMemberToken, getMemberToken, memberFetch, memberPhotoSrc, MemberAuthError, setMemberToken } from '../../../scripts/lib/member-client.mjs';
   import { MAX_PHOTOS, conflictedDraftKeys, saveChanges } from '../../../scripts/lib/member-unit-story.mjs';
+  import { shapeForRecord, surveyChoices } from '../../../scripts/lib/member-land-docs.mjs';
   import { facesToShow } from '../../../scripts/lib/member-directory.mjs';
   import { openPhoto, preparePhotoFrom } from '../../../scripts/lib/photo-prepare.mjs';
   import { MAX_ZOOM, cropRect, initialCrop, panBy, zoomTo } from '../../../scripts/lib/photo-crop.mjs';
@@ -2059,10 +2060,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   // The survey number as a link to its document, with the parcel's outline under it when there is one.
   function surveyCell(surveyNo: string | null, documentId: string | null): HTMLElement | string | null {
     const link = docLink(surveyNo ?? '', documentId);
-    if (!documentId || !surveyNo) return link || null;
+    if (!surveyNo) return link || null;
     const cell = h('div', 'survey-cell', undefined, link);
     void loadShapes().then((shapes) => {
-      const src = shapes[documentId];
+      const src = shapeForRecord(shapes, surveyNo, documentId);
       if (!src) return;
       const img = document.createElement('img');
       img.className = 'parcel-shape';
@@ -2329,7 +2330,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const history = h('button', 'link-btn', 'Uploaded documents');
     history.setAttribute('type', 'button');
     history.addEventListener('click', () => docsDialog(hh, landType));
-    const footer = h('div', 'card-docs', undefined, upload, history);
+    const sketch = h('button', 'link-btn', 'Add an FMB sketch');
+    sketch.setAttribute('type', 'button');
+    sketch.addEventListener('click', () => sketchDialog(hh, landType, () => { shapesLoad = null; void refreshDocs(hh); }));
+    const footer = h('div', 'card-docs', undefined, upload, sketch, history);
     const update = () => {
       if (!footer.isConnected) {
         docsListeners.delete(update);
@@ -2457,6 +2461,76 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       h('div', 'modal-actions', undefined, cancel, send),
     );
     dlg.addEventListener('close', () => dlg.remove());
+    document.body.append(dlg);
+    dlg.showModal();
+  }
+
+  // The FMB sketch on its own, for one survey number: the shape of the land then appears beside that
+  // survey number on the card. The file can't say which survey number it is (its labels are drawn,
+  // not text), so the member picks it. It is not a patta and changes no record.
+  function sketchDialog(hh: Hh, landType: 'farm' | 'house', done: () => void) {
+    const choices = surveyChoices((landType === 'house' ? hh.housePattas : hh.plots).map((r) => ({ survey_no: r.surveyNo })));
+    const dlg = document.createElement('dialog');
+    dlg.className = 'modal upload-modal';
+    const cancel = h('button', 'btn', 'Cancel');
+    cancel.addEventListener('click', () => dlg.close());
+    dlg.addEventListener('close', () => dlg.remove());
+    if (!choices.length) {
+      dlg.append(
+        h('h3', '', 'Add an FMB sketch'),
+        h('p', '', `There is no survey number on your ${landType === 'house' ? 'House plot' : 'Farm land'} card yet. Upload your patta first with "Upload a document", then come back to add the sketch.`),
+        h('div', 'modal-actions', undefined, cancel),
+      );
+      document.body.append(dlg);
+      dlg.showModal();
+      return;
+    }
+    const survey = document.createElement('select');
+    for (const s of choices) survey.append(new Option(s, s));
+    const file = document.createElement('input');
+    file.type = 'file';
+    file.accept = 'application/pdf';
+    const msg = h('p', 'form-msg');
+    msg.setAttribute('role', 'alert');
+    const send = h('button', 'btn btn--solid', 'Upload') as HTMLButtonElement;
+    send.addEventListener('click', async () => {
+      const chosen = file.files?.[0];
+      if (!chosen) {
+        msg.textContent = 'Choose a file first.';
+        return;
+      }
+      if (chosen.size > 1_000_000) {
+        msg.textContent = 'That file is too large to be an FMB sketch (under 1 MB).';
+        return;
+      }
+      send.disabled = true;
+      msg.textContent = '';
+      try {
+        const body = new FormData();
+        body.append('file', chosen);
+        body.append('landType', landType);
+        body.append('householdId', hh.id);
+        body.append('sketchFor', survey.value);
+        const { status, data } = await memberFetch('/api/members-me/land-documents', { method: 'POST', body });
+        if (status !== 200) throw new Error(data.error || 'Something went wrong. Try again.');
+        dlg.close();
+        done();
+        toast(data.replaced ? `Sketch added for survey no. ${survey.value}. It replaces your earlier one` : `Sketch added for survey no. ${survey.value}`);
+      } catch (err) {
+        send.disabled = false;
+        msg.textContent = err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : err instanceof Error ? err.message : 'Something went wrong.';
+      }
+    });
+    dlg.append(
+      h('h3', '', 'Add an FMB sketch'),
+      h('div', 'upload-help', undefined,
+        h('p', '', 'The FMB sketch is the drawing of your land. On the e-Services site, choose "Survey Number" in View Patta / Chitta and download the sketch. Upload that PDF here and the shape of the land appears beside the survey number on your card.'),
+        h('p', '', 'It does not change any record. To have a patta checked against your register, use "Upload a document" instead.')),
+      h('label', '', 'This sketch is for survey no.', survey),
+      h('label', '', 'File', file),
+      msg,
+      h('div', 'modal-actions', undefined, cancel, send),
+    );
     document.body.append(dlg);
     dlg.showModal();
   }

@@ -9,6 +9,7 @@
 //
 // Env (Netlify): R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET.
 import { AwsClient } from 'aws4fetch';
+import { surveyShapeKey } from '../../../scripts/lib/member-land-docs.mjs';
 
 function config() {
   const { R2_ACCOUNT_ID: account, R2_ACCESS_KEY_ID: accessKeyId, R2_SECRET_ACCESS_KEY: secretAccessKey, R2_BUCKET: bucket } = process.env;
@@ -60,7 +61,9 @@ export async function signedLandDocumentUrl(key: string, seconds = 60): Promise<
 export const landShapeKey = (storagePath: string): string => storagePath.replace(/\.pdf$/, '-shape.png');
 
 // The outlines of these documents as data URLs, for the ones that have one. `extracted.hasShape`
-// is set by the background reader when it stored one. A missing or unreadable file is skipped.
+// is set by the reader when it stored one. A missing or unreadable file is skipped.
+// A patta's outline is filed under its document id. A stand-alone FMB sketch belongs to no record
+// but to a survey number, so it is filed under that (surveyShapeKey) as well.
 export async function loadLandShapes(docs: { id: string; storage_path: string; extracted: any }[]): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   await Promise.all(
@@ -69,7 +72,10 @@ export async function loadLandShapes(docs: { id: string; storage_path: string; e
       .map(async (d) => {
         try {
           const bytes = await getLandDocument(landShapeKey(d.storage_path));
-          if (bytes) out[d.id] = `data:image/png;base64,${Buffer.from(bytes).toString('base64')}`;
+          if (!bytes) return;
+          const src = `data:image/png;base64,${Buffer.from(bytes).toString('base64')}`;
+          out[d.id] = src;
+          if (d.extracted?.kind === 'fmb_sketch' && d.extracted.surveyNo) out[surveyShapeKey(d.extracted.surveyNo)] = src;
         } catch (err) {
           console.error('[land-doc-storage] could not load a shape', err);
         }

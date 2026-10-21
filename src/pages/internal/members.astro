@@ -982,6 +982,7 @@ import SignInGate from '../../components/SignInGate.astro';
   import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch, staffPhotoSrc } from '../../../scripts/lib/staff-client.mjs';
   import { sizedPicture } from '../../../scripts/lib/member-google-picture.mjs';
   import { linksIn } from '../../../scripts/lib/member-markdown.mjs';
+  import { shapeForRecord } from '../../../scripts/lib/member-land-docs.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -1297,11 +1298,12 @@ import SignInGate from '../../components/SignInGate.astro';
     }
     return p;
   };
-  // The survey number, linked to the document it was read from when there is one.
+  // The survey number, linked to the document it was read from when there is one, with the parcel's
+  // outline beside it: from that document, or from an FMB sketch uploaded for the survey number.
   function surveyLink(hh: Household, surveyNo: string | null, documentId: string | null): string | null | HTMLElement {
-    if (!surveyNo || !documentId) return surveyNo;
+    if (!surveyNo) return surveyNo;
     const cell = h('div', { class: 'survey-cell' });
-    if (can.manage) {
+    if (documentId && can.manage) {
       const b = h('button', { class: 'doc-link', text: surveyNo, attrs: { type: 'button', title: 'Open the uploaded document' } });
       b.addEventListener('click', () =>
         void openLandFile(documentId, (m) => {
@@ -1312,7 +1314,7 @@ import SignInGate from '../../components/SignInGate.astro';
       cell.append(b);
     } else cell.append(document.createTextNode(surveyNo));
     void loadShapes(hh.id).then((shapes) => {
-      const src = shapes[documentId];
+      const src = shapeForRecord(shapes, surveyNo, documentId);
       if (!src) return;
       const img = document.createElement('img');
       img.className = 'parcel-shape';
@@ -1618,7 +1620,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   type LandDiff = { field: string; recorded: string; document: string };
   type LandItem = { surveyNo: string; pattaNo: string | null; areaHectares?: number | null; areaSqFt?: number | null; outcome: string; differences: LandDiff[]; ownerMatch: boolean | null; decision?: string };
-  type LandDocument = { id: string; landType: string; fileName: string | null; mimeType: string; status: string; error: string | null; uploadedAt: string; items: LandItem[] };
+  type LandDocument = { id: string; landType: string; fileName: string | null; mimeType: string; status: string; error: string | null; uploadedAt: string; sketchFor: string | null; items: LandItem[] };
   const chip = (severity: 'info' | 'warn' | 'error', text: string) => h('span', { class: `flag flag--${severity}`, text });
 
   // A record read from a document that still waits for the core team, with where it came from.
@@ -1726,7 +1728,7 @@ import SignInGate from '../../components/SignInGate.astro';
         const state = d.status === 'processing' ? chip('info', 'Reading…') : d.status === 'failed' ? chip('error', 'Not used') : waiting || (d.status === 'needs_review' && d.items.length === 0) ? chip('warn', 'Needs review') : chip('info', 'Done');
         const view = can.manage ? rowButton('View file', () => void openLandFile(d.id, report)) : null;
         const note = d.status === 'failed' ? (d.error ?? 'Could not be used.') : d.status === 'needs_review' && d.items.length === 0 ? 'Could not be read automatically. Open the file and add the record above by hand.' : null;
-        return h('div', { class: 'landq-file' }, landTag(d.landType), h('span', { class: 'landq-filemeta', text: `${new Date(d.uploadedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · ${d.mimeType === 'application/pdf' ? 'PDF' : 'Photo'}` }), state, view, note ? h('p', { class: 'landq-note', text: note }) : null);
+        return h('div', { class: 'landq-file' }, landTag(d.landType), h('span', { class: 'landq-filemeta', text: `${new Date(d.uploadedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · ${d.sketchFor ? `FMB sketch, survey no. ${d.sketchFor}` : d.mimeType === 'application/pdf' ? 'PDF' : 'Photo'}` }), state, view, note ? h('p', { class: 'landq-note', text: note }) : null);
       }));
 
       const draw = () => {

@@ -2,7 +2,7 @@
 // household's outlines are asked for. Same work as the background reader does for a new upload
 // (readLandShape), done lazily so it needs no script and no credentials outside the function.
 //
-// Only a single-survey PDF can have a sketch. A document checked and found without one is marked
+// Only a single-survey PDF (or a stand-alone FMB sketch the member uploaded) can have a sketch. A document checked and found without one is marked
 // `shapeChecked` so it is never opened again. A few documents per request keep it quick; the
 // rest are done the next time the page is opened.
 import { restHeaders } from '../../../scripts/lib/supabase.mjs';
@@ -24,7 +24,7 @@ export async function backfillLandShapes(docs: Doc[]): Promise<void> {
     try {
       const bytes = await getLandDocument(d.storage_path);
       if (!bytes) continue;
-      const shape = await readLandShape(bytes);
+      const shape = await readLandShape(bytes, { standalone: d.extracted?.kind === 'fmb_sketch' });
       if (shape) await putLandDocument(landShapeKey(d.storage_path), shape, 'image/png');
       const extracted = withShapeResult(d.extracted, Boolean(shape));
       const res = await fetch(`${base}/rest/v1/member_land_documents?id=eq.${d.id}`, {

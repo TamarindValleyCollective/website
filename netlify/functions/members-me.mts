@@ -26,7 +26,8 @@
 import { requireMember } from './lib/member-access';
 import { backfillLandShapes } from './lib/land-shape-backfill';
 import { deleteLandDocument, landShapeKey, loadLandShapes, putLandDocument, signedLandDocumentUrl } from './lib/land-doc-storage';
-import { readLandPdf } from './lib/land-doc-read';
+import { readLandPdf, readLandShape } from './lib/land-doc-read';
+import { withShapeResult } from '../../scripts/lib/land-shape.mjs';
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { buildHouseholdReview } from '../../scripts/lib/member-review.mjs';
 import { validateProfileEdit, profileAuditDetail } from '../../scripts/lib/member-profile.mjs';
@@ -39,7 +40,7 @@ import { deleteMemberPhoto, getMemberPhoto, putMemberPhoto } from './lib/member-
 import { assessUnitSubmission } from './lib/story-risk';
 import { REVIEW_SYSTEM, localChecks, parseSuggestions, reviewPrompt, validateDraft } from '../../scripts/lib/member-story.mjs';
 import { MAX_PHOTOS, addPhoto, draftColumns, draftState, mergeDraftEdit, unitPhotoAccess, unitStoryView, validateUnitSave, validateUnitSubmit } from '../../scripts/lib/member-unit-story.mjs';
-import { ALLOWED_MIME, LAND_TYPES, MAX_HOUSEHOLD_BYTES, MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_UPLOADS_PER_DAY, NOT_A_LAND_PDF, WRONG_CARD, documentsReplacedBy, landTypeMismatch, memberSummary, normalizeExtraction, surveyKey } from '../../scripts/lib/member-land-docs.mjs';
+import { ALLOWED_MIME, LAND_TYPES, MAX_HOUSEHOLD_BYTES, MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_UPLOADS_PER_DAY, NOT_A_LAND_PDF, NOT_A_SKETCH, SKETCH_IS_A_PATTA, SKETCH_NOT_YOURS, WRONG_CARD, documentsReplacedBy, landTypeMismatch, memberSummary, normalizeExtraction, normalizeSurveyNo, surveyKey, surveyOnRegister } from '../../scripts/lib/member-land-docs.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store, private' } });
@@ -211,7 +212,7 @@ function documentView(d: any) {
     fileName: d.original_filename,
     uploadedAt: d.created_at,
     status,
-    summary: memberSummary(status, Array.isArray(d.items) ? d.items : [], error),
+    summary: d.extracted?.kind === 'fmb_sketch' ? `FMB sketch for survey no. ${d.extracted.surveyNo}` : memberSummary(status, Array.isArray(d.items) ? d.items : [], error),
   };
 }
 
@@ -223,7 +224,7 @@ async function handleLandDocuments(req: Request): Promise<Response> {
 
   if (req.method === 'GET') {
     try {
-      const docs = await select('member_land_documents', 'id,household_id,land_type,original_filename,status,error,items,created_at', `household_id=in.${inList(member.householdIds)}&order=created_at.desc`);
+      const docs = await select('member_land_documents', 'id,household_id,land_type,original_filename,status,error,items,extracted,created_at', `household_id=in.${inList(member.householdIds)}&order=created_at.desc`);
       return jsonResponse({ documents: docs.slice(0, 50).map(documentView) });
     } catch (err) {
       console.error('[members-me] land documents load failed', err);
@@ -250,6 +251,12 @@ async function handleLandDocuments(req: Request): Promise<Response> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const mime = sniffMime(bytes);
   if (!mime || !ALLOWED_MIME.includes(mime)) return jsonResponse({ error: 'Upload a PDF (best), or a JPEG or PNG photo.' }, 415);
+  // An FMB sketch on its own: the member says which survey number it is for.
+  const sketchFor = String(form.get('sketchFor') ?? '').trim();
+  if (sketchFor) {
+    if (mime !== 'application/pdf') return jsonResponse({ error: NOT_A_SKETCH }, 415);
+    return handleSketchUpload({ member, file, bytes, landType, householdId, sketchFor });
+  }
   if (mime === 'application/pdf' && file.size > MAX_PDF_BYTES) return jsonResponse({ error: NOT_A_LAND_PDF }, 413);
   // A PDF must match one of the two e-Services layouts. The reader is local and takes milliseconds,
   // so anything else is refused here and never stored. Photos and scans can't be read; they are kept
@@ -341,6 +348,89 @@ async function handleLandDocuments(req: Request): Promise<Response> {
     return jsonResponse({ ok: true, documentId, replaced: replaced.length });
   } catch (err) {
     console.error('[members-me] land document upload failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
+// An FMB sketch on its own (e-Services' "Survey Number" download, sketch page only). Its labels are
+// drawn as shapes, not text, so nothing in it can be read: the member says which of their survey
+// numbers it is for, and it is kept only if an outline of the land can be drawn from it. It creates
+// and verifies no record. See "stand-alone FMB sketches" in scripts/lib/member-land-docs.mjs.
+async function handleSketchUpload({ member, file, bytes, landType, householdId, sketchFor }: { member: any; file: File; bytes: Uint8Array<ArrayBuffer>; landType: string; householdId: string; sketchFor: string }): Promise<Response> {
+  if (file.size > MAX_PDF_BYTES) return jsonResponse({ error: NOT_A_SKETCH }, 413);
+  try {
+    const rows = await select(landType === 'house' ? 'member_house_pattas' : 'member_plots', 'survey_no', `household_id=eq.${householdId}`);
+    if (!surveyOnRegister(sketchFor, rows)) return jsonResponse({ error: SKETCH_NOT_YOURS }, 422);
+    // A patta has its own path: it is read, checked against the register, and its sketch is picked up there.
+    if (await readLandPdf(bytes)) return jsonResponse({ error: SKETCH_IS_A_PATTA }, 422);
+    const shape = await readLandShape(bytes, { standalone: true });
+    if (!shape) return jsonResponse({ error: NOT_A_SKETCH }, 422);
+
+    const surveyNo = normalizeSurveyNo(sketchFor);
+    const sha256 = hex(await crypto.subtle.digest('SHA-256', bytes));
+    const all = await select('member_land_documents', 'id,sha256,status,created_at,size_bytes,storage_path,extracted', `household_id=eq.${householdId}`);
+    // A new sketch for a survey number replaces the earlier one (a fresh download is a different file).
+    const replaced = all.filter((d: any) => d.sha256 === sha256 || (d.extracted?.kind === 'fmb_sketch' && normalizeSurveyNo(d.extracted.surveyNo) === surveyNo));
+    const replacedIds = new Set(replaced.map((d: any) => d.id));
+    const recent = all.filter((d: any) => Date.parse(d.created_at) > Date.now() - 24 * 3600 * 1000 && !replacedIds.has(d.id));
+    const storedBytes = all.filter((d: any) => d.status !== 'failed' && !replacedIds.has(d.id)).reduce((n: number, d: any) => n + (d.size_bytes ?? 0), 0);
+    if (storedBytes + file.size > MAX_HOUSEHOLD_BYTES) return jsonResponse({ error: 'Your unit has reached its document storage limit. Please ask the core team.' }, 413);
+    if (recent.length >= MAX_UPLOADS_PER_DAY) return jsonResponse({ error: 'You have uploaded a lot of documents today. Please try again tomorrow, or ask the core team.' }, 429);
+
+    const documentId = crypto.randomUUID();
+    const storagePath = `${householdId}/${documentId}.pdf`;
+    // Recorded first, refused if it can't be (same rule as every self-service change).
+    const log = await fetch(`${supabaseUrl()}/rest/v1/member_audit_log`, {
+      method: 'POST',
+      headers: restHeaders({ Prefer: 'return=minimal' }),
+      body: JSON.stringify({ actor_person_id: member.personId, action: 'member.land.sketch', detail: { documentId, landType, replaced: replaced.length } }),
+    }).catch(() => null);
+    if (!log || !log.ok) {
+      console.error('[members-me] audit log write failed; sketch upload refused', log?.status);
+      return jsonResponse({ error: 'Could not record the upload, so nothing was saved. Try again.' }, 500);
+    }
+
+    const dropFiles = () => Promise.all([deleteLandDocument(storagePath), deleteLandDocument(landShapeKey(storagePath))].map((p) => p.catch(() => null)));
+    try {
+      await putLandDocument(storagePath, bytes, 'application/pdf');
+      await putLandDocument(landShapeKey(storagePath), shape, 'image/png');
+    } catch (err) {
+      console.error('[members-me] sketch storage upload failed', err);
+      await dropFiles();
+      return jsonResponse({ error: 'Server error' }, 500);
+    }
+    const inserted = await fetch(`${supabaseUrl()}/rest/v1/member_land_documents`, {
+      method: 'POST',
+      headers: restHeaders({ Prefer: 'return=minimal' }),
+      body: JSON.stringify({
+        id: documentId,
+        household_id: householdId,
+        uploaded_by_person_id: member.personId,
+        land_type: landType,
+        storage_path: storagePath,
+        original_filename: file.name.slice(0, 200) || null,
+        mime_type: 'application/pdf',
+        size_bytes: file.size,
+        sha256,
+        status: 'applied',
+        extracted: withShapeResult({ kind: 'fmb_sketch', surveyNo }, true),
+        items: [],
+        processed_at: new Date().toISOString(),
+      }),
+    });
+    if (!inserted.ok) {
+      console.error('[members-me] sketch insert failed', inserted.status);
+      await dropFiles(); // don't leave a file with no record
+      return jsonResponse({ error: 'Server error' }, 500);
+    }
+    // The new sketch is in: remove the one it replaces (files, then rows).
+    if (replaced.length) {
+      await Promise.all(replaced.flatMap((d: any) => [deleteLandDocument(d.storage_path), deleteLandDocument(landShapeKey(d.storage_path))]).map((p: Promise<unknown>) => p.catch(() => null)));
+      await fetch(`${supabaseUrl()}/rest/v1/member_land_documents?id=in.${inList(replaced.map((d: any) => d.id))}`, { method: 'DELETE', headers: restHeaders({ Prefer: 'return=minimal' }) }).catch((err) => console.error('[members-me] could not remove replaced sketches', err));
+    }
+    return jsonResponse({ ok: true, documentId, replaced: replaced.length, sketch: true });
+  } catch (err) {
+    console.error('[members-me] sketch upload failed', err);
     return jsonResponse({ error: 'Server error' }, 500);
   }
 }
