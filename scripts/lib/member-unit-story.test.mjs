@@ -14,7 +14,7 @@ const row = (person_id, over = {}) => ({
 
 test('a unit with one person keeps their approved story, their quote under their id', () => {
   const { story, diverged } = buildUnitStory([row(A)]);
-  assert.deepEqual(story.approved, { bio: 'We grow millets.', family: 'Two children.', social: '', photos: [], quotes: { [A]: 'Quiet land.' } });
+  assert.deepEqual(story.approved, { bio: 'We grow millets.', family: 'Two children.', photos: [], quotes: { [A]: 'Quiet land.' }, links: {} });
   assert.equal(story.approvedPublic, true);
   assert.equal(story.status, 'approved');
   assert.equal(diverged, false);
@@ -100,7 +100,7 @@ test('a unit may add photos up to the limit, each once', () => {
 // The shared draft as the server holds it: the fields, the version, and the version at which each field last changed.
 const draftAt = (over = {}) => ({
   version: 5,
-  fields: { bio: 'Our bio.', family: 'Our family.', social: '', photos: [], quotes: { [A]: 'A quote.', [B]: 'B quote.' }, public: false },
+  fields: { bio: 'Our bio.', family: 'Our family.', photos: [], quotes: { [A]: 'A quote.', [B]: 'B quote.' }, links: {}, public: false },
   changed: { bio: 2, family: 5 },
   ...over,
 });
@@ -149,4 +149,30 @@ test('photos in a save must fit the limit and be distinct', () => {
   assert.deepEqual(mergeDraftEdit({ current: draftAt(), changes: { photos: [ph(P1), ph(P2), ph(P3)] }, baseVersion: 5, personId: A }), { ok: false, error: 'invalid', fields: ['photos'] });
   assert.deepEqual(mergeDraftEdit({ current: draftAt(), changes: { photos: [ph(P1), ph(P1, B)] }, baseVersion: 5, personId: A }), { ok: false, error: 'invalid', fields: ['photos'] });
   assert.equal(mergeDraftEdit({ current: draftAt(), changes: { photos: [ph(P1), ph(P2)] }, baseVersion: 5, personId: A }).ok, true);
+});
+
+test('the result says whose copy supplied the shared text, so a diverged unit can be reviewed', () => {
+  const old = row(A);
+  const edited = row(B, { approved: copy({ bio: 'We now run a seed bank.' }), approved_at: '2026-10-20T00:00:00Z' });
+  const { winners } = buildUnitStory([old, edited]);
+  assert.deepEqual(winners, { approved: B, draft: null, submitted: null });
+});
+
+test('each person keeps their own profile link, so a couple whose links differ is not diverged and loses neither', () => {
+  const rows = [row(A, { approved: copy({ social: 'https://example.org/asha' }) }), row(B, { approved: copy({ social: 'https://example.org/ravi' }) })];
+  const { story, diverged, winners } = buildUnitStory(rows);
+  assert.deepEqual(story.approved.links, { [A]: 'https://example.org/asha', [B]: 'https://example.org/ravi' });
+  assert.equal(diverged, false);
+  assert.equal(story.approved.bio, 'We grow millets.');
+  assert.ok(winners.approved); // still names a copy for the shared text
+});
+
+test('"link" is the editor\'s own profile link, like their quote; "social" is no longer a shared field', () => {
+  const r = mergeDraftEdit({ current: draftAt(), changes: { link: 'https://example.org/mine' }, baseVersion: 5, personId: A });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.fields.links, { [A]: 'https://example.org/mine' });
+  assert.equal(r.changed[`link:${A}`], 6);
+  const clash = mergeDraftEdit({ current: draftAt({ changed: { [`link:${A}`]: 5 } }), changes: { link: 'https://example.org/other' }, baseVersion: 3, personId: A });
+  assert.deepEqual(clash, { ok: false, error: 'conflict', fields: ['link'] });
+  assert.deepEqual(mergeDraftEdit({ current: draftAt(), changes: { social: 'https://example.org/x' }, baseVersion: 5, personId: A }), { ok: false, error: 'unknown', fields: ['social'] });
 });
