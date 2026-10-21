@@ -1523,8 +1523,11 @@ never touches Netlify either.
   changed against the live copy; the edits `unitstory.approve`, `unitstory.reject` (needs a note the members see) and
   `unitstory.unpublish` (all `manage`, audit-first, the note never in the audit entry) apply to the exact submission the
   reviewer saw, so a resubmission can't be approved unseen; approving deletes the live photos it replaced (stored under their
-  uploader's id). The reviewer's photo view (`/api/members-admin/story-photo`) also serves unit photos. The admin queue's screen,
-  risk assessment, public export and the directory still read `member_stories` until they move over; backfill with
+  uploader's id). The reviewer's photo view (`/api/members-admin/story-photo`) also serves unit photos. The queue's screen is
+  a second panel under the person queue on `/internal/members` ("Unit stories waiting for review"; hidden while empty): each unit is a
+  card showing what changed first (chips, then the changed parts with a "Currently approved" fold, the unchanged parts folded into one
+  line), with Approve and Send back (a note is required). Risk assessment, the public export and the directory still read
+  `member_stories` until they move over; backfill with
   `scripts/preview-unit-stories.mjs` then `scripts/backfill-unit-stories.mjs` (applied to TVC ERP 2026-10-21, 40 units).
 - **Member stories (`members-me.mts`, migration 0044).** A member writes a short public-facing
   story about themselves (what they do, family, one-line "why TVC") on the portal's

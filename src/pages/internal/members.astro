@@ -37,6 +37,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       <section id="publish" class="publish card" aria-label="Publish to the website" hidden></section>
       <section id="autopublish" class="publish card" aria-label="Automatic publishing" hidden></section>
       <section id="stories" class="stories" aria-label="Stories waiting for review" hidden></section>
+      <section id="unit-stories" class="stories" aria-label="Unit stories waiting for review" hidden></section>
       <dl id="totals" class="totals"></dl>
 
       <div class="toolbar">
@@ -890,6 +891,40 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   .members .story-card {
     padding: 14px 16px;
+  }
+
+  /* A unit story: what changed as chips, the unchanged parts folded away, buttons a thumb can hit. */
+  .members .story-changes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0 0 10px;
+    padding: 0;
+    list-style: none;
+  }
+
+  .members .story-photos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .members .story-unchanged {
+    margin: 4px 0 12px;
+  }
+
+  .members .story-actions .rowbtns {
+    gap: 8px;
+  }
+
+  .members .story-actions .rowbtn--act {
+    min-height: 44px;
+    padding: 0 16px;
+  }
+
+  .members .story-actions textarea {
+    width: 100%;
+    margin: 8px 0;
   }
 
   .members .story-head {
@@ -1944,6 +1979,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   const STORY_LABEL: Record<keyof StoryText, string> = { bio: 'What they do today', family: 'Family', why: 'Why TVC', social: 'Profile link', photo: 'Photo' };
 
   async function loadStories() {
+    void loadUnitStories(); // the unit queue is shown beside it, and stays hidden while it is empty
     const box = $('stories');
     if (!can.edit) {
       box.hidden = true;
@@ -2066,6 +2102,135 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       return h('article', { class: 'card story-card' }, head, assessEl, flags, h('dl', { class: 'story-fields' }, ...rows), msg, actions);
     });
     box.replaceChildren(h('details', { class: 'story-queue', attrs: { open: '' } }, h('summary', { text: `Stories waiting for review (${stories.length})` }), h('div', { class: 'story-list' }, ...cards)));
+  }
+
+  // ---- unit stories waiting for review -----------------------------------------
+  // A story that belongs to a whole unit (member_unit_stories): bio, family and photos are the unit's, each
+  // person's quote and profile link are their own. The queue shows what changed first and folds the rest away.
+  // Hidden while nothing is waiting, so it costs the page nothing until stories move over to this model.
+  type UnitStoryItem = {
+    householdId: string; farmUnit: string; submittedAt: string; submittedBy: string | null; submittedPublic: boolean; approvedPublic: boolean | null;
+    submitted: UnitCopy; approved: UnitCopy | null; changes: { kind: string; name?: string }[];
+    flags: { field: string; kind: string; note: string }[];
+    assessment: StoryItem['assessment'];
+  };
+  type UnitCopy = { bio: string; family: string; photos: { ref: string; personId: string }[]; quotes: { name: string; text: string }[]; links: { name: string; url: string }[] };
+
+  async function loadUnitStories() {
+    const box = $('unit-stories');
+    if (!can.edit) {
+      box.hidden = true;
+      return;
+    }
+    try {
+      const { status, data } = await staffFetch('/api/members-admin/unit-stories');
+      if (status !== 200) throw new Error(data.error || 'Could not load.');
+      renderUnitStories(data.stories as UnitStoryItem[]);
+    } catch {
+      box.hidden = false;
+      box.replaceChildren(h('p', { class: 'muted', text: 'Could not load the unit stories waiting for review.' }));
+    }
+  }
+
+  async function decideUnitStory(st: UnitStoryItem, action: 'unitstory.approve' | 'unitstory.reject', note?: string) {
+    await send({ action, householdId: st.householdId, submittedAt: st.submittedAt, ...(note ? { note } : {}) });
+    await loadUnitStories();
+  }
+
+  // One line per change, in words: "What they do today", "Asha's quote"...
+  const changeWords = (c: { kind: string; name?: string }) =>
+    c.kind === 'new' ? 'New story' : c.kind === 'bio' ? 'What they do today' : c.kind === 'family' ? 'Family' : c.kind === 'photos' ? 'Photos' : c.kind === 'public' ? 'Public switch' : c.kind === 'quote' ? `${c.name}’s “Why TVC”` : `${c.name}’s profile link`;
+
+  function renderUnitStories(stories: UnitStoryItem[]) {
+    const box = $('unit-stories');
+    if (stories.length === 0) {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    const when = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const pic = (ref: string) => {
+      const img = document.createElement('img');
+      img.className = 'story-photo';
+      img.alt = '';
+      staffPhotoSrc(ref).then((src) => { img.src = src; }).catch(() => img.replaceWith(h('span', { class: 'muted', text: '(photo unavailable)' })));
+      return img;
+    };
+    const cards = stories.map((st) => {
+      const msg = h('p', { class: 'form-msg', attrs: { role: 'alert' } });
+      const isNew = !st.approved;
+      const changed = (kind: string, name?: string) => isNew || st.changes.some((c) => c.kind === kind && (name === undefined || c.name === name));
+      const changedRows: HTMLElement[] = [];
+      const unchanged: { label: string; node: HTMLElement }[] = [];
+      // Each part is a row; the changed ones are shown, the unchanged ones fold into one line.
+      const part = (label: string, kind: string, name: string | undefined, now: Node | null, was: Node | null) => {
+        if (!now && !was) return;
+        if (!changed(kind, name)) {
+          if (now) unchanged.push({ label, node: h('div', { class: 'story-row' }, h('dt', { text: label }), h('dd', {}, now)) });
+          return;
+        }
+        changedRows.push(h('div', { class: 'story-row' },
+          h('dt', { text: label }, isNew ? null : h('span', { class: 'flag flag--warn', text: now ? 'Changed' : 'Removed' })),
+          h('dd', { class: now ? 'story-text' : 'muted' }, now ?? '(removed)'),
+          !isNew && was ? h('details', { class: 'story-was' }, h('summary', { text: 'Currently approved' }), was) : null));
+      };
+      const text = (t: string) => (t ? h('span', { text: t }) : null);
+      part('What they do today', 'bio', undefined, text(st.submitted.bio), text(st.approved?.bio ?? ''));
+      part('Family', 'family', undefined, text(st.submitted.family), text(st.approved?.family ?? ''));
+      const photos = (c: UnitCopy | null) => (c?.photos.length ? h('div', { class: 'story-photos' }, ...c.photos.map((p) => pic(p.ref))) : null);
+      part('Photos', 'photos', undefined, photos(st.submitted), photos(st.approved));
+      const names = [...new Set([...st.submitted.quotes.map((q) => q.name), ...(st.approved?.quotes ?? []).map((q) => q.name)])];
+      for (const n of names) part(`${n}’s “Why TVC”`, 'quote', n, text(st.submitted.quotes.find((q) => q.name === n)?.text ?? ''), text(st.approved?.quotes.find((q) => q.name === n)?.text ?? ''));
+      const linkNames = [...new Set([...st.submitted.links.map((l) => l.name), ...(st.approved?.links ?? []).map((l) => l.name)])];
+      for (const n of linkNames) part(`${n}’s profile link`, 'link', n, text(st.submitted.links.find((l) => l.name === n)?.url ?? ''), text(st.approved?.links.find((l) => l.name === n)?.url ?? ''));
+      // Where the links in the text go, so a reviewer sees the addresses and not only the words.
+      const linkList = (c: UnitCopy | null) => [...linksIn(c?.bio ?? ''), ...linksIn(c?.family ?? '')];
+      const linksNow = linkList(st.submitted);
+      const linksWas = linkList(st.approved);
+      const linkKey = (ls: { label: string; href: string }[]) => ls.map((l) => `${l.label}\u0000${l.href}`).join('\n');
+      if (linksNow.length || linksWas.length) {
+        const lines = (ls: { label: string; href: string }[]) => h('ul', { class: 'story-links' }, ...ls.map((l) => h('li', {}, h('strong', { text: l.label }), ` → ${l.href}`)));
+        const linkChanged = !isNew && linkKey(linksNow) !== linkKey(linksWas);
+        changedRows.push(h('div', { class: 'story-row' },
+          h('dt', { text: 'Links in the text' }, linkChanged ? h('span', { class: 'flag flag--warn', text: 'Changed' }) : null),
+          linksNow.length ? h('dd', { class: 'story-text' }, lines(linksNow)) : h('dd', { class: 'muted', text: '(none)' }),
+          linkChanged && linksWas.length ? h('details', { class: 'story-was' }, h('summary', { text: 'Currently approved links' }), lines(linksWas)) : null));
+      }
+
+      const head = h('div', { class: 'story-head' },
+        h('span', { class: 'unit-pill', text: st.farmUnit }),
+        h('strong', { text: st.submittedBy ? `Submitted by ${st.submittedBy}` : 'Submitted' }),
+        h('span', { class: 'meta', text: when(st.submittedAt) }),
+        h('span', { class: `flag flag--${st.submittedPublic ? 'warn' : 'info'}`, text: st.submittedPublic ? 'Wants to be on tvc.farm' : 'Members only' }),
+        !isNew ? h('span', { class: 'flag flag--info', text: 'Edit to an approved story' }) : null);
+      const summary = h('ul', { class: 'story-changes', attrs: { 'aria-label': 'What changed' } }, ...(isNew ? [h('li', {}, h('span', { class: 'flag flag--info', text: 'New story' }))] : st.changes.map((c) => h('li', {}, h('span', { class: 'flag flag--warn', text: changeWords(c) })))));
+      const flags = st.flags.length ? h('ul', { class: 'flags' }, ...st.flags.map((f) => h('li', {}, h('span', { class: 'flag flag--warn', text: `${STORY_LABEL[f.field as keyof StoryText]}: ${f.note}` })))) : null;
+      const rest = unchanged.length ? h('details', { class: 'story-unchanged' }, h('summary', { text: `Unchanged: ${unchanged.map((u) => u.label).join(', ')}` }), h('dl', { class: 'story-fields' }, ...unchanged.map((u) => u.node))) : null;
+
+      let actions: HTMLElement;
+      if (!can.manage) {
+        actions = h('p', { class: 'muted', text: 'An admin approves or sends back stories.' });
+      } else {
+        const noteBox = h('textarea', { attrs: { rows: '3', maxlength: '500', placeholder: 'What should they change? They will see this note.' } }) as HTMLTextAreaElement;
+        const form = h('div', { class: 'story-reject', attrs: { hidden: '' } }, noteBox);
+        const sendBack = h('button', { class: 'rowbtn rowbtn--act', text: 'Send back with this note', attrs: { type: 'button' } });
+        sendBack.addEventListener('click', async () => {
+          if (!noteBox.value.trim()) { msg.textContent = 'Write a note so the members know what to change.'; return; }
+          try { await decideUnitStory(st, 'unitstory.reject', noteBox.value); } catch (err) { msg.textContent = err instanceof Error ? err.message : 'Something went wrong.'; }
+        });
+        form.append(sendBack);
+        const approve = h('button', { class: 'rowbtn rowbtn--act rowbtn--yes', text: 'Approve', attrs: { type: 'button' } });
+        approve.addEventListener('click', async () => {
+          approve.setAttribute('disabled', '');
+          try { await decideUnitStory(st, 'unitstory.approve'); } catch (err) { approve.removeAttribute('disabled'); msg.textContent = err instanceof Error ? err.message : 'Something went wrong.'; }
+        });
+        const reject = h('button', { class: 'rowbtn rowbtn--act', text: 'Send back…', attrs: { type: 'button' } });
+        reject.addEventListener('click', () => { form.hidden = !form.hidden; if (!form.hidden) noteBox.focus(); });
+        actions = h('div', { class: 'story-actions' }, h('div', { class: 'rowbtns' }, approve, reject), form);
+      }
+      return h('article', { class: 'card story-card' }, head, summary, flags, h('dl', { class: 'story-fields' }, ...changedRows), rest, msg, actions);
+    });
+    box.replaceChildren(h('details', { class: 'story-queue', attrs: { open: '' } }, h('summary', { text: `Unit stories waiting for review (${stories.length})` }), h('div', { class: 'story-list' }, ...cards)));
   }
 
   // ---- load & sign-in ----------------------------------------------------------
