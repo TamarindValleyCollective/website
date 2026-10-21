@@ -1294,6 +1294,51 @@ import '../../styles/global.css';
     flex: none;
   }
 
+  /* The crop dialog: the picture inside a circle, the shape it takes on the card. */
+  dialog.crop-modal {
+    width: min(360px, calc(100vw - 24px));
+    text-align: center;
+  }
+
+  .crop-stage {
+    display: grid;
+    place-items: center;
+    margin: 12px 0;
+  }
+
+  .crop-view {
+    width: 280px;
+    height: 280px;
+    max-width: 100%;
+    border-radius: 50%;
+    border: 2px solid var(--tvc-line-strong);
+    background: var(--tvc-stone);
+    cursor: grab;
+    touch-action: none; /* a drag moves the picture, it does not scroll the page */
+  }
+
+  .crop-view:active {
+    cursor: grabbing;
+  }
+
+  .crop-view:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 3px;
+  }
+
+  .crop-zoom {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 8px 8px;
+    font-size: 0.85rem;
+  }
+
+  .crop-zoom input {
+    flex: 1;
+    min-height: 44px;
+  }
+
   .story-photo-btns {
     display: flex;
     flex-wrap: wrap;
@@ -1912,7 +1957,8 @@ import '../../styles/global.css';
   import { clearMemberToken, getMemberToken, memberFetch, memberPhotoSrc, MemberAuthError, setMemberToken } from '../../../scripts/lib/member-client.mjs';
   import { MAX_PHOTOS, conflictedDraftKeys, saveChanges } from '../../../scripts/lib/member-unit-story.mjs';
   import { facesToShow } from '../../../scripts/lib/member-directory.mjs';
-  import { preparePhoto } from '../../../scripts/lib/photo-prepare.mjs';
+  import { openPhoto, preparePhotoFrom } from '../../../scripts/lib/photo-prepare.mjs';
+  import { MAX_ZOOM, cropRect, initialCrop, panBy, zoomTo } from '../../../scripts/lib/photo-crop.mjs';
 import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggleMark } from '../../../scripts/lib/member-markdown.mjs';
   import { NOTICE_INTRO, NOTICE_TITLE, PRIVACY_NOTICE_VERSION, SECTIONS } from '../../../scripts/lib/member-privacy.mjs';
 
@@ -2572,6 +2618,111 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   const STORY_FIELD: Record<string, string> = { bio: 'What you do today', family: 'Family', why: 'Why TVC' };
   const KIND_LABEL: Record<string, string> = { spelling: 'Spelling', grammar: 'Grammar', framing: 'House style', tone: 'Tone', privacy: 'Privacy', note: 'Note' };
 
+  // Before a photo is uploaded the member chooses what the circle shows: drag to centre it, zoom with the slider, the mouse
+  // wheel or a pinch. What is drawn here is cut from exactly the same rectangle (photo-crop.mjs), so the card matches the dialog.
+  // Resolves with the two JPEGs, or null if they cancel. Errors (a photo too small...) are thrown before the dialog opens.
+  async function cropPhoto(file: File): Promise<{ square: Blob; full: Blob } | null> {
+    const bitmap = await openPhoto(file);
+    const { width, height } = bitmap;
+    const VIEW = 280;
+    let state = initialCrop(width, height);
+    const canvas = document.createElement('canvas');
+    const px = Math.round(VIEW * Math.min(window.devicePixelRatio || 1, 2));
+    canvas.width = canvas.height = px;
+    canvas.className = 'crop-view';
+    canvas.tabIndex = 0;
+    canvas.setAttribute('role', 'img');
+    canvas.setAttribute('aria-label', 'Your photo. Drag to move it, or use the arrow keys; zoom with the slider or the plus and minus keys.');
+    const ctx = canvas.getContext('2d')!;
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = '1';
+    slider.max = String(MAX_ZOOM);
+    slider.step = '0.01';
+    slider.value = '1';
+    slider.setAttribute('aria-label', 'Zoom');
+    const draw = () => {
+      const r = cropRect(state, width, height);
+      ctx.clearRect(0, 0, px, px);
+      ctx.drawImage(bitmap, r.sx, r.sy, r.side, r.side, 0, 0, px, px);
+      slider.value = String(state.zoom);
+    };
+    const zoom = (z: number) => { state = zoomTo(state, z, width, height); draw(); };
+    const pan = (dx: number, dy: number) => { state = panBy(state, dx, dy, VIEW, width, height); draw(); };
+
+    // Dragging with one finger or the mouse moves the picture; two fingers pinch to zoom.
+    const pointers = new Map<number, { x: number; y: number }>();
+    let pinchStart: { distance: number; zoom: number } | null = null;
+    canvas.addEventListener('pointerdown', (e) => {
+      canvas.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        pinchStart = { distance: Math.hypot(a.x - b.x, a.y - b.y) || 1, zoom: state.zoom };
+      }
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      const last = pointers.get(e.pointerId);
+      if (!last) return;
+      const now = { x: e.clientX, y: e.clientY };
+      pointers.set(e.pointerId, now);
+      if (pointers.size === 1) pan(now.x - last.x, now.y - last.y);
+      else if (pointers.size === 2 && pinchStart) {
+        const [a, b] = [...pointers.values()];
+        zoom(pinchStart.zoom * ((Math.hypot(a.x - b.x, a.y - b.y) || 1) / pinchStart.distance));
+      }
+    });
+    const release = (e: PointerEvent) => { pointers.delete(e.pointerId); pinchStart = null; };
+    canvas.addEventListener('pointerup', release);
+    canvas.addEventListener('pointercancel', release);
+    canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoom(state.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)); }, { passive: false });
+    canvas.addEventListener('keydown', (e) => {
+      const step = 12;
+      const moves: Record<string, [number, number]> = { ArrowLeft: [step, 0], ArrowRight: [-step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] };
+      if (moves[e.key]) { e.preventDefault(); pan(...moves[e.key]); }
+      else if (e.key === '+' || e.key === '=') { e.preventDefault(); zoom(state.zoom * 1.1); }
+      else if (e.key === '-') { e.preventDefault(); zoom(state.zoom / 1.1); }
+    });
+    slider.addEventListener('input', () => zoom(Number(slider.value)));
+
+    return new Promise((resolve) => {
+      let result: { square: Blob; full: Blob } | null = null;
+      const dlg = document.createElement('dialog');
+      dlg.className = 'modal crop-modal';
+      const use = h('button', 'btn btn--solid', 'Use this photo') as HTMLButtonElement;
+      use.type = 'button';
+      const cancel = h('button', 'btn', 'Cancel') as HTMLButtonElement;
+      cancel.type = 'button';
+      const note = h('p', 'story-hint', 'The circle is how your photo will look on your card. Drag to move it, zoom to fit.');
+      use.addEventListener('click', async () => {
+        use.disabled = cancel.disabled = true;
+        note.textContent = 'Preparing your photo…';
+        try {
+          result = await preparePhotoFrom(bitmap, cropRect(state, width, height));
+          dlg.close();
+        } catch (e) {
+          note.textContent = msgOf(e);
+          note.className = 'story-hint story-hint--warn';
+          use.disabled = cancel.disabled = false;
+        }
+      });
+      cancel.addEventListener('click', () => dlg.close());
+      dlg.addEventListener('close', () => { if (!result) bitmap.close?.(); dlg.remove(); resolve(result); });
+      dlg.append(
+        h('h3', '', 'Position your photo'),
+        h('div', 'crop-stage', undefined, canvas),
+        h('label', 'crop-zoom', undefined, h('span', '', 'Zoom'), slider),
+        note,
+        h('div', 'modal-actions', undefined, cancel, use),
+      );
+      document.body.append(dlg);
+      draw();
+      dlg.showModal();
+      canvas.focus();
+    });
+  }
+  const msgOf = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong. Try again.');
+
   function viewStory(): HTMLElement {
     const root = h('div');
     root.append(
@@ -3025,7 +3176,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         busy = true; say('Preparing your photo…'); paintPhoto();
         let prepared: { square: Blob; full: Blob };
         try {
-          prepared = await preparePhoto(file);
+          const cropped = await cropPhoto(file);
+          if (!cropped) { busy = false; say('Cancelled. Nothing was uploaded.'); paintPhoto(); return; }
+          prepared = cropped;
         } catch (e) {
           busy = false; say(msg(e), true); paintPhoto();
           return;
@@ -3094,7 +3247,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         busy = true; say('Preparing your photo…'); paintPhoto();
         let prepared: { square: Blob; full: Blob };
         try {
-          prepared = await preparePhoto(file);
+          const cropped = await cropPhoto(file);
+          if (!cropped) { busy = false; say('Cancelled. Nothing was uploaded.'); paintPhoto(); return; }
+          prepared = cropped;
         } catch (e) {
           busy = false; say(msg(e), true); paintPhoto();
           return;
