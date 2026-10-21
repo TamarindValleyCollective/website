@@ -106,6 +106,9 @@ async function handleHome(req: Request): Promise<Response> {
       directoryVisible: own?.directory_visible ?? true,
     },
     households: reviewed,
+    // Whether the story editor writes the unit's shared story (the cutover switch) or the person's own; off until the move is done.
+    // A failure to read the switch must not stop the portal opening, so it means off.
+    unitStories: await unitStoriesLive().catch(() => false),
   });
 }
 

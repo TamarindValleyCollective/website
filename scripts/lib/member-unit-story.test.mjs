@@ -2,7 +2,7 @@
 // Made-up people and text only: this repo is public.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildUnitStory, addPhoto, mergeDraftEdit, validateUnitSave, validateUnitSubmit, draftState, draftColumns, unitStoryView, unitPhotoHolder, unitPhotoAccess, riskCopy, decisionApplies, decisionColumns, replacedPhotos, queueItem, unitRiskRow, unitSwitchLive, MAX_PHOTOS } from './member-unit-story.mjs';
+import { buildUnitStory, addPhoto, mergeDraftEdit, validateUnitSave, validateUnitSubmit, draftState, draftColumns, unitStoryView, unitPhotoHolder, unitPhotoAccess, riskCopy, decisionApplies, decisionColumns, replacedPhotos, queueItem, unitRiskRow, unitSwitchLive, saveChanges, conflictedDraftKeys, MAX_PHOTOS } from './member-unit-story.mjs';
 
 const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
@@ -410,4 +410,25 @@ test('stories follow the unit model only when the setting says so explicitly; an
   for (const bad of [undefined, null, {}, { value: null }, { value: {} }, { value: { live: false } }, { value: { live: 'true' } }, { value: { live: 1 } }, { value: 'live' }]) {
     assert.equal(unitSwitchLive(bad), false, JSON.stringify(bad));
   }
+});
+
+// ---- the editor ----
+
+const onScreen = (over = {}) => ({ bio: 'Our bio.', family: 'Our family.', why: 'My quote.', social: 'https://example.org/me', isPublic: false, ...over });
+
+test('a save carries only what changed since the last save, named the way the server expects', () => {
+  const saved = onScreen();
+  assert.deepEqual(saveChanges(saved, onScreen()), {});
+  assert.deepEqual(saveChanges(saved, onScreen({ bio: 'New bio.' })), { bio: 'New bio.' });
+  assert.deepEqual(saveChanges(saved, onScreen({ why: 'New quote.', social: '', isPublic: true })), { quote: 'New quote.', link: '', showOnPublicSite: true });
+  assert.deepEqual(saveChanges(saved, onScreen({ family: '', bio: 'B.' })), { bio: 'B.', family: '' });
+});
+
+test('a conflict reply names the server\'s fields; the page needs the on-screen ones, and ignores what it does not show', () => {
+  assert.deepEqual(conflictedDraftKeys(['bio', 'quote']), ['bio', 'why']);
+  assert.deepEqual(conflictedDraftKeys(['link', 'public', 'family']), ['social', 'isPublic', 'family']);
+  assert.deepEqual(conflictedDraftKeys(['photos']), ['photos']);
+  assert.deepEqual(conflictedDraftKeys([]), []);
+  assert.deepEqual(conflictedDraftKeys(undefined), []);
+  assert.deepEqual(conflictedDraftKeys(['nonsense']), []);
 });

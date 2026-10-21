@@ -1546,8 +1546,13 @@ never touches Netlify either.
   as before; on, `buildUnitDirectory` hands `buildDirectory` one story per owner built from the unit's approved copy (the shared bio and family,
   that person's quote and link), so a couple is one section because it is one story and one owner's edit can never split it. The unit's
   photos (at most two, not tied to a person) are dealt to its owners in order, the viewer first; the response says `unitPhotos: true` so
-  the page fetches them from `GET /api/members-me/unit-photo` instead of `/photo`. The portal's story editor still writes `member_stories`
-  until it moves over; backfill with
+  the page fetches them from `GET /api/members-me/unit-photo` instead of `/photo`. The portal's **story editor** follows the switch too: `GET /api/members-me/home` returns `unitStories`, and when on
+  the "Your story" page edits the unit's shared story instead of the person's. Bio, family and up to two photos are shared; the person's
+  own "why TVC" and profile link are theirs, and the housemates' lines are shown read-only. A save sends only what changed since the last
+  save (`saveChanges`) plus the version it started from, so two owners editing at once only collide on the same field; if they do, the
+  server refuses the save (409, naming the field), the page shows the other owner's version of just that field, keeps the rest of
+  the person's edits and sends them again (`conflictedDraftKeys`). With the switch off the editor and its endpoints are unchanged.
+  Backfill with
   `scripts/preview-unit-stories.mjs` then `scripts/backfill-unit-stories.mjs` (applied to TVC ERP 2026-10-21, 40 units).
 - **Member stories (`members-me.mts`, migration 0044).** A member writes a short public-facing
   story about themselves (what they do, family, one-line "why TVC") on the portal's

@@ -356,3 +356,25 @@ export function unitRiskRow(row) {
 // stories the portal started with; the export, directory and editor all follow it.
 export const UNIT_STORIES_KEY = 'unit_stories';
 export const unitSwitchLive = (row) => row?.value?.live === true;
+
+// ---- the editor ----
+
+// What the editor sends to save: only what changed since the last save (so two owners saving different
+// fields never overwrite each other), named as validateUnitSave expects. `saved` and `now` are the editor's
+// fields: { bio, family, why (the person's own quote), social (their own link), isPublic }.
+export function saveChanges(saved, now) {
+  const out = {};
+  for (const [field, name] of [['bio', 'bio'], ['family', 'family'], ['why', 'quote'], ['social', 'link']]) {
+    if (now[field] !== saved[field]) out[name] = now[field];
+  }
+  if (now.isPublic !== saved.isPublic) out.showOnPublicSite = now.isPublic;
+  return out;
+}
+
+const DRAFT_KEY = { bio: 'bio', family: 'family', quote: 'why', link: 'social', public: 'isPublic', photos: 'photos' };
+
+// A refused save names the fields the other owner changed, in the server's words; the page needs them as the
+// fields it shows, and ignores anything it does not.
+export function conflictedDraftKeys(fields) {
+  return (fields ?? []).map((f) => DRAFT_KEY[f]).filter(Boolean);
+}
