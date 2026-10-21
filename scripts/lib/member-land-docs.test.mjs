@@ -74,6 +74,22 @@ test('names written in Tamil and transliterated into English match across the us
   for (const [a, b] of pairs) assert.ok(namesMatch(a, b), `${a} / ${b}`);
 });
 
+test('initials in a name stand for the words they were made from: HS is Hosahalli Subramani', () => {
+  // The register keeps "Gopalakrishna HS"; the PDF spells the family names out. Made-up names.
+  assert.ok(namesMatch('Gopalakrishna HS', 'GOPALAKRISHNA HOSAHALLI SUBRAMANI'));
+  assert.ok(namesMatch('GOPALAKRISHNA HOSAHALLI SUBRAMANI', 'Gopalakrishna HS')); // either way round
+  assert.ok(namesMatch('Ravi KS', 'RAVI KOTTUR SUBBU RAO')); // the run of words need not be the last ones
+  assert.ok(namesMatch('Ravi S', 'RAVI SUBBU')); // a single initial was already fine
+});
+
+test('initials never make a match on their own, and must be the right letters', () => {
+  assert.ok(!namesMatch('Ravi KS', 'RAVI HARISH SUBBU')); // K is not H
+  assert.ok(!namesMatch('Ravi HS', 'ASHA HARISH SUBBU')); // the first word has to match too
+  assert.ok(!namesMatch('Sa', 'SATISH ANAND')); // a short name is not initials
+  assert.ok(!namesMatch('Sa Kumar', 'SATISH ANAND')); // 'sa' is not S.A., because 'kumar' matched nothing
+  assert.ok(!namesMatch('HS', 'HARISH SUBBU')); // initials alone prove nothing
+});
+
 test('names that are actually different people still do not match', () => {
   assert.ok(!namesMatch('Venkatesh Rao', 'Venkatesan Rao')); // two letters apart is a different name
   assert.ok(!namesMatch('Asha Rao', 'Meera Rao'));
@@ -219,6 +235,14 @@ test('a chitta whose sub-divisions end in a digit (4B2, 4C2) is read: each row i
   assert.deepEqual(raw.records.map((r) => [r.survey_no, r.area_ares, r.patta_no]), [['260/4B2', 1.2, '1234'], ['260/4C2', 0.5, '1234']]);
   const e = normalizeExtraction(raw).extraction;
   assert.deepEqual(e.records.map((r) => r.surveyNo), ['260/4B2', '260/4C2']);
+});
+
+test('an owner whose name wraps onto a second line is read as one name', () => {
+  const t = 'தமிழ்நாடு அரசு\nவருவாய் கிராமம் : தக்கட்டி பட்டா எண் : 1234\nஉரிைமயாளர்கள் ெபயர்\n' +
+    '1. ASHA RAO மகன் GOPALAKRISHNA HOSAHALLI\nSUBRAMANI\n-\n2. GOPALAKRISHNA HOSAHALLI\nSUBRAMANI மைன&MEERA RAO\n-\n' +
+    'புல எண் உட்பிரிவு\n260 4B2 0 - 1.20 0.03 -- -- -- --\n0 - 1.20 0.03\n' +
+    'குறிப்பு : https://eservices.tn.gov.in P/31/12/081/01234/90111 என்ற குறிப்பு';
+  assert.deepEqual(parseLandPdfText([t, '']).owners, ['ASHA RAO', 'GOPALAKRISHNA HOSAHALLI SUBRAMANI']);
 });
 
 test('text that matches no template is not read', () => {
