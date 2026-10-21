@@ -1481,7 +1481,7 @@ never touches Netlify either.
   still recorded and the admin queue says how many automatic verifications had names that matched nobody. For a
   record not yet in the register the names remain a hint beside a decision that is always an admin's. Names are
   compared by sound (`soundKey` in `scripts/lib/member-land-docs.mjs`: sh/s, th/t, zh/l, ksh/x, oo/u, doubled letters, ...)
-  as well as one letter of slack, so Sivakumar, Shivakumar and Sivakumaar are one name. Files are not deleted
+  as well as one letter of slack, so Sivakumar, Shivakumar and Sivakumaar are one name. Initials stand for the words they were made from ("Gopalakrishna HS" is "GOPALAKRISHNA HOSAHALLI SUBRAMANI", the register keeping initials where the PDF spells the family names out), but only beside a word that matched by spelling: initials never prove a match alone. A long owner name that wraps onto a second line in the PDF is read as one name. Files are not deleted
   when a row is; there is no retention job yet.
 
   **Replacing an earlier upload** (no migration): every upload is processed as a new one. Once it is

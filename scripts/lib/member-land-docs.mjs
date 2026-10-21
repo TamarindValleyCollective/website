@@ -72,7 +72,8 @@ export function parseLandPdfText(pages) {
   if (/eservices\.tn\.gov\.in/i.test(text) && reference) {
     // The patta number is the second-from-last part of the reference (".../01954/80169" = 1954).
     const patta = pattaFromReference(reference);
-    const owners = [...text.matchAll(/^\s*\d+\.\s+([A-Za-z][A-Za-z .]*?)\s+[^\u0000-\u007f]/gm)].map((m) => m[1].trim());
+    // A long name wraps onto a second line ("OMKAR RAO\nSUBBU"), so one optional continuation line is part of the name.
+    const owners = [...text.matchAll(/^\s*\d+\.\s+([A-Za-z][A-Za-z .]*?(?:\n[A-Za-z][A-Za-z .]*?)?)\s+[^\u0000-\u007f]/gm)].map((m) => m[1].replace(/\s+/g, ' ').trim());
     const records = [];
     // A sub-division is digits then letters then, often, a digit again (3B, 3B2, 3C2): without the trailing digit a row such
     // as "478 3B2 0 - 1.59 ..." matched nothing and the whole file was refused.
@@ -257,14 +258,29 @@ const sameWord = (a, b) => {
   return ka === kb || (ka.length >= 4 && kb.length >= 4 && editDistanceAtMostOne(ka, kb));
 };
 
+// Whether a 2-3 letter word is the initials of consecutive words ("hs" is "hosahalli subramani").
+function initialsOfRun(initials, words) {
+  for (let i = 0; i + initials.length <= words.length; i++) {
+    if ([...initials].every((c, k) => words[i + k][0] === c)) return true;
+  }
+  return false;
+}
+
 // A person matches an owner when every word of the shorter name appears in the longer one
-// ("Deepa Alex" in "DEEPA ALEX"; "Sharath Jeppu" in "SHARATH KUMAR JEPPU").
+// ("Deepa Alex" in "DEEPA ALEX"; "Sharath Jeppu" in "SHARATH KUMAR JEPPU"). A word that matched
+// nothing may be initials for the longer name's words, as in "Gopalakrishna HS" against
+// "GOPALAKRISHNA HOSAHALLI SUBRAMANI" (the register keeps the initials, the PDF spells the family
+// names out), but only beside at least one word that matched by spelling: initials never prove a
+// match alone, so "Om" is not "Omkar Murthy".
 export function namesMatch(personName, ownerName) {
   const a = nameTokens(personName);
   const b = nameTokens(ownerName);
   if (a.length === 0 || b.length === 0) return false;
   const [short, long] = a.length <= b.length ? [a, b] : [b, a];
-  return short.every((t) => long.some((u) => sameWord(t, u)));
+  const matched = short.map((t) => long.some((u) => sameWord(t, u)));
+  if (matched.every(Boolean)) return true;
+  if (!matched.some(Boolean)) return false;
+  return short.every((t, i) => matched[i] || (t.length <= 3 && initialsOfRun(t, long)));
 }
 
 export function ownerMatchesHousehold(owners, peopleNames) {
