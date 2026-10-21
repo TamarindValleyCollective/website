@@ -173,6 +173,18 @@ test('a chitta with dry, wet and other land adds the columns up', () => {
   assert.equal(parseLandPdfText([t, '']).records[0].area_ares, 3);
 });
 
+test('a chitta whose sub-divisions end in a digit (4B2, 4C2) is read: each row is its own survey number', () => {
+  // Made-up values in the shape of a real one: letters then a digit in the sub-division, a signature block after each row.
+  const t = 'தமிழ்நாடு அரசு\nவருவாய் கிராமம் : தக்கட்டி பட்டா எண் : 1234\nஉரிைமயாளர்கள் ெபயர்\n1. Asha Rao மகன் RAMA RAO -\n' +
+    'புல எண் உட்பிரிவு\n260 4B2 0 - 1.20 0.03 -- -- -- --\n2026/0105/31/000001-\nDigitally signed:Someone P\n30/03/2026\n' +
+    '260 4C2 0 - 0.50 0.02 -- -- -- --\n2026/0105/31/000001-\nDigitally signed:Someone P\n30/03/2026\n0 - 1.70 0.05\n' +
+    'குறிப்பு : https://eservices.tn.gov.in P/31/12/081/01234/90111 என்ற குறிப்பு';
+  const raw = parseLandPdfText([t, '']);
+  assert.deepEqual(raw.records.map((r) => [r.survey_no, r.area_ares, r.patta_no]), [['260/4B2', 1.2, '1234'], ['260/4C2', 0.5, '1234']]);
+  const e = normalizeExtraction(raw).extraction;
+  assert.deepEqual(e.records.map((r) => r.surveyNo), ['260/4B2', '260/4C2']);
+});
+
 test('text that matches no template is not read', () => {
   assert.equal(parseLandPdfText(['Sale deed between two parties', '']), null);
   assert.equal(parseLandPdfText(['']), null);
