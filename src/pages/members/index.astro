@@ -650,10 +650,19 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .kpis {
+    position: relative;
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 14px;
     margin: 16px 0 22px;
+  }
+
+  /* The House card's unit type: bottom right of its figures, in the gap above the table (the Farm card keeps the same gap, so the two tables line up). */
+  .kpis > .pills {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin: 4px 0 0;
   }
 
   .kpi {
@@ -760,10 +769,6 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   /* Under a Farm / House card: the two uploads as buttons (the main one filled), and a link to what has been uploaded (shown in a popup). */
-  .card-docs .pills {
-    margin-left: auto; /* the unit type sits at the bottom right of the House card */
-  }
-
   .card-docs {
     display: flex;
     flex-wrap: wrap;
@@ -894,7 +899,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .unit-cols .kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    margin: 12px 0 16px;
+    margin: 12px 0 34px; /* room under the figures for the House card's unit-type pill; the Farm card keeps it so the tables line up */
   }
 
   .shell table {
@@ -2601,7 +2606,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const sketch = h('button', 'btn', 'Add an FMB sketch');
     sketch.setAttribute('type', 'button');
     sketch.addEventListener('click', () => sketchDialog(hh, landType, () => { shapesLoad = null; void refreshDocs(hh); }));
-    const footer = h('div', 'card-docs', undefined, upload, sketch, history, landType === 'house' ? typePill(hh) : null);
+    const footer = h('div', 'card-docs', undefined, upload, sketch, history);
     const update = () => {
       if (!footer.isConnected) {
         docsListeners.delete(update);
@@ -2915,7 +2920,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         hh.plots.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Acres', 'Status'], [...hh.plots].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaAcres, acresFmt), verifiedMark(p.verification)]), 2)) : h('p', 'lede', 'Patta details not available yet'),
         landCardFooter(hh, 'farm')),
       h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.house)), 'House', housePills(hh)),
-        h('div', 'kpis', undefined, kpi('House area', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), kpi('House plots', String(hh.housePattas.length))),
+        h('div', 'kpis', undefined, kpi('House area', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), kpi('House plots', String(hh.housePattas.length)), typePill(hh)),
         hh.housePattas.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Sq ft', 'Status'], [...hh.housePattas].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaSqFt, sqftFmt), verifiedMark(p.verification)]), 2)) : h('p', 'lede', hh.houseNo ? 'Patta details not available yet' : 'No house allocated yet'),
         hh.houseNo ? landCardFooter(hh, 'house') : null),
     );
