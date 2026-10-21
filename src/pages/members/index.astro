@@ -1523,6 +1523,19 @@ import '../../styles/global.css';
     margin-bottom: 12px;
   }
 
+  /* Two photos of a unit overlap, like the Directory card. */
+  .story-card-faces {
+    display: flex;
+  }
+
+  .story-card-faces .avatar + .avatar {
+    margin-left: -14px;
+  }
+
+  .story-card-faces .avatar {
+    box-shadow: 0 0 0 2px var(--tvc-white);
+  }
+
   .story-card h3 {
     margin: 0 0 4px;
     font-size: 1.1rem;
@@ -2805,9 +2818,13 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         const boldFirst = (t: string) => t.split(new RegExp(`(\\b${firstName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b)`)).map((part) => (part === firstName ? h('strong', '', part) : document.createTextNode(part)));
         para.append(...mdNodes(bio, (t, inLink) => (inLink ? [document.createTextNode(t)] : boldFirst(t))));
       } else para.append(h('em', 'story-empty', 'Nothing here yet'));
-      const shownPhoto = unitStories ? photos[0]?.ref : draft.photo;
+      // The Directory shows up to two photos of a unit as overlapping faces, so the preview does too (one photo is one face).
+      const shownPhotos = unitStories ? photos.slice(0, MAX_PHOTOS).map((p) => p.ref) : draft.photo ? [draft.photo] : [];
       const title = unitStories && housemates.length ? `${first(name)} & ${housemates.join(' & ')}` : name;
-      nodes.push(h('div', 'story-card-top', undefined, shownPhoto ? photoImg(shownPhoto, 'avatar avatar--lg story-photo', 'square', unitStories) : h('span', 'avatar avatar--lg', first(name).slice(0, 1).toUpperCase()), h('div', '', undefined, h('h3', '', title), h('span', `story-vis ${isPublic ? 'story-vis--public' : ''}`, isPublic ? 'Members and tvc.farm' : 'Members only'))));
+      const faces = shownPhotos.length
+        ? h('span', 'story-card-faces', undefined, ...shownPhotos.map((ref) => photoImg(ref, 'avatar avatar--lg story-photo', 'square', unitStories)))
+        : h('span', 'avatar avatar--lg', first(name).slice(0, 1).toUpperCase());
+      nodes.push(h('div', 'story-card-top', undefined, faces, h('div', '', undefined, h('h3', '', title), h('span', `story-vis ${isPublic ? 'story-vis--public' : ''}`, isPublic ? 'Members and tvc.farm' : 'Members only'))));
       nodes.push(para);
       if (draft.family.trim()) nodes.push(h('p', 'story-card-fam', undefined, ...mdNodes(draft.family.trim())));
       if (draft.why.trim()) nodes.push(h('blockquote', 'story-card-why', draft.why.trim()));
