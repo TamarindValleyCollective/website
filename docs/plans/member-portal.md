@@ -48,6 +48,8 @@ Join key is the unit number `F-xx` from Member Master (it matches the vault). Th
 
 Agreed 2026-10-20. One story per person, public-facing only: no separate members-only version.
 
+**Changed 2026-10-21: one story per UNIT, not per person.** Seeding copied a couple's text onto each person and the directory merged them only while identical, so the first owner to edit and publish split the card. Bio, family, up to two photos and the "Show on tvc.farm" switch are now shared by the unit (one record, one review, one approval); each person keeps their own quote and profile link (the directory links a first name in the story to that person's link). Two owners can edit the shared draft at once: a save conflicts only if it touches a field the other owner changed since the version it started from. Table `member_unit_stories` (migration 0049, additive; `member_stories` stays as the rollback), rules in `scripts/lib/member-unit-story.mjs`, backfill by `scripts/preview-unit-stories.mjs` then `scripts/backfill-unit-stories.mjs`. **Rolled out in steps:** rules, then the table and backfill (done), then the member endpoints, staff queue and risk assessment, public export, directory and the editor. Until those move over, the portal still reads `member_stories`; the per-person descriptions below describe that code.
+
 - **Editing:** "Your story" page, one section per login in the household card (so partners no longer
   need hand-merging). Fields as on the form: what you do today, family, one-line "why TVC", photo.
   Only name and the why line are required. Bio and family take a little Markdown (bold, italic, links)
