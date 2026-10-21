@@ -971,6 +971,26 @@ import SignInGate from '../../components/SignInGate.astro';
     overflow-x: auto;
   }
 
+  .role-head {
+    margin: 14px 0 6px;
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .role-head:first-child {
+    margin-top: 0;
+  }
+
+  .shell tr.group-row th {
+    padding-top: 14px;
+    border-bottom: 0;
+    font-size: 0.8rem;
+    color: var(--tvc-ink-soft);
+    text-align: left;
+  }
+
   .people {
     list-style: none;
     margin: 0;
@@ -2358,6 +2378,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
     help: '<path d="M4 5h16v11H9l-5 4z"/>',
     farm: '<path d="M5 19c0-8 5-13 14-14 0 9-5 14-13 14z"/><path d="M5 19l8-8"/>',
+    people: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.5 0 4.5 2.2 4.5 5"/>',
     house: '<path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/><path d="M10 20v-6h4v6"/>',
   };
   // A small picture standing in for a label; the name stays available to screen readers and on hover.
@@ -2481,8 +2502,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   }
 
   // ---- building blocks ----
-  const widget = (title: string, opts: { wide?: boolean; more?: [string, string] } = {}, ...kids: Kid[]) => {
-    const head = h('h2', '', title);
+  const widget = (title: string, opts: { wide?: boolean; more?: [string, string]; icon?: string } = {}, ...kids: Kid[]) => {
+    const head = h('h2', '', undefined, opts.icon ? h('span', 'glyph', undefined, icon(opts.icon)) : null, title);
     if (opts.more) {
       const m = h('button', 'more', opts.more[0]);
       m.addEventListener('click', () => (location.hash = `#/${opts.more![1]}`));
@@ -2496,10 +2517,16 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       h('thead', '', undefined, h('tr', '', undefined, ...headers.map((t, i) => h('th', rightFrom >= 0 && i >= rightFrom ? 'r' : '', t)))),
       h('tbody', '', undefined, ...rows.map((r) => h('tr', '', undefined, ...r.map((c, i) => (c instanceof HTMLElement ? h('td', rightFrom >= 0 && i >= rightFrom ? 'r' : '', undefined, c) : h('td', rightFrom >= 0 && i >= rightFrom ? 'r' : '', c == null || c === '' ? '—' : String(c))))))),
     ));
+  // The household split by role, owners first, so owners and family are not mixed in one list.
+  const ROLE_GROUPS: [string, string][] = [['owner', 'Owners'], ['family', 'Family'], ['non_owner', 'Not owners']];
+  const peopleByRole = (people: Person[]) => ROLE_GROUPS.map(([role, label]) => ({ label, people: people.filter((p) => p.role === role) })).filter((g) => g.people.length);
   const peopleList = (hh: Hh, you: Person) =>
-    h('ul', 'people', undefined, ...hh.people.map((p) =>
-      h('li', '', undefined, h('span', 'avatar', first(p.name).slice(0, 1).toUpperCase()),
-        h('div', 'who2', undefined, h('strong', '', `${p.name}${p.id === you.id ? ' (you)' : ''}`), h('span', '', `${ROLE[p.role] ?? p.role} · ${p.hasEmail ? 'Email on file' : 'No email'} · ${p.hasPhone ? 'Mobile on file' : 'No mobile'}`)))));
+    h('div', '', undefined, ...peopleByRole(hh.people).flatMap((g) => [
+      h('h3', 'role-head', g.label),
+      h('ul', 'people', undefined, ...g.people.map((p) =>
+        h('li', '', undefined, h('span', 'avatar', first(p.name).slice(0, 1).toUpperCase()),
+          h('div', 'who2', undefined, h('strong', '', `${p.name}${p.id === you.id ? ' (you)' : ''}`), h('span', '', `${p.hasEmail ? 'Email on file' : 'No email'} · ${p.hasPhone ? 'Mobile on file' : 'No mobile'}`))))),
+    ]));
 
   // ---- editing my own details ----
   function detailsDialog() {
@@ -2877,14 +2904,14 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     if (checks) prompts.append(h('p', 'prompt', `${checks} detail${checks === 1 ? '' : 's'} in your unit's records look incomplete. The core team is working through them.`));
 
     grid.append(
-      widget('My unit', { more: ['View unit', 'unit'] },
+      widget('My unit', { more: ['View unit', 'unit'], icon: IC.unit },
         h('div', 'tiles', undefined,
           h('div', 'tile', undefined, h('div', 'k', undefined, glyph(IC.farm, 'Farm land')), h('div', 'v', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), h('div', 's', hh.plots.length ? `${hh.plots.length} plot${hh.plots.length === 1 ? '' : 's'}` : 'Not available yet')),
           h('div', 'tile', undefined, h('div', 'k', undefined, glyph(IC.house, 'House'), hh.houseNo && hh.cluster ? h('span', 'pill', `Cluster ${hh.cluster}`) : null), h('div', 'v', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), h('div', 's', !hh.houseNo ? 'No house allocated yet' : hh.housePattas.length ? `${hh.housePattas.length} plot${hh.housePattas.length === 1 ? '' : 's'}` : 'Area not on record')),
         ),
         prompts,
       ),
-      widget('People in my unit', {}, peopleList(hh, person)),
+      widget('People', { icon: IC.people }, peopleList(hh, person)),
     );
     root.append(grid);
 
@@ -2906,8 +2933,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         h('h1', 'page-title', 'My unit'),
         h('p', 'lede', 'Your unit is your farm land and, if you have one, your house plot. Cluster is the group of houses yours belongs to.')),
       hh.unitType ? h('div', 'unit-type', undefined, h('span', 'unit-type-label', 'Unit type'), h('strong', '', hh.unitType)) : null));
-    const panel = (title: string, ...kids: Kid[]) => {
-      const p = h('section', 'panel', undefined, h('h2', '', title), ...kids);
+    const panel = (title: string, body: Kid, iconPaths?: string) => {
+      const p = h('section', 'panel', undefined, h('h2', '', undefined, iconPaths ? h('span', 'glyph', undefined, icon(iconPaths)) : null, title), body);
       p.style.marginTop = '16px';
       return p;
     };
@@ -2923,7 +2950,15 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         hh.houseNo ? landCardFooter(hh, 'house') : null),
     );
     root.append(cols);
-    root.append(panel('People in this unit', tableOf(['Name', 'Role', 'Email', 'Mobile'], hh.people.map((p) => [`${p.name}${p.id === person.id ? ' (you)' : ''}`, ROLE[p.role] ?? p.role, p.hasEmail ? 'On file' : 'Missing', p.hasPhone ? 'On file' : 'Missing']))));
+    // One table, with a row naming each group, so owners and family are separate but the columns line up.
+    const peopleBody = h('tbody');
+    for (const g of peopleByRole(hh.people)) {
+      const head = h('th', '', g.label);
+      head.setAttribute('colspan', '3');
+      peopleBody.append(h('tr', 'group-row', undefined, head));
+      for (const p of g.people) peopleBody.append(h('tr', '', undefined, h('td', '', `${p.name}${p.id === person.id ? ' (you)' : ''}`), h('td', '', p.hasEmail ? 'On file' : 'Missing'), h('td', '', p.hasPhone ? 'On file' : 'Missing')));
+    }
+    root.append(panel('People', h('div', 'table-wrap', undefined, h('table', '', undefined, h('thead', '', undefined, h('tr', '', undefined, h('th', '', 'Name'), h('th', '', 'Email'), h('th', '', 'Mobile'))), peopleBody)), IC.people));
     return root;
   }
 
