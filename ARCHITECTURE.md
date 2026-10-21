@@ -1532,8 +1532,17 @@ never touches Netlify either.
   not paused, approves a low-risk story at once (the same change an admin's approval makes, replaced photos deleted) or holds a high-risk one
   and emails the core team ("Unit stories waiting for review"). With no usable model answer a public story is held without an email, as for
   a person's. The queue card shows the assessment, an admin's decision is written onto it, and the auto-publish panel's shadow stats and
-  "published automatically, hide" list count units too (a unit entry hides through `unitstory.unpublish`). The public export and the directory
-  still read `member_stories` until they move over; backfill with
+  "published automatically, hide" list count units too (a unit entry hides through `unitstory.unpublish`). **Cutover switch**: `member_settings` key `unit_stories`
+  (`{ "live": true }`; missing or anything else means off, `unitSwitchLive`) says whether the live system reads stories per unit. While it
+  is off, everything above exists but is not live and the portal keeps using `member_stories`. The **public export**
+  (`members-public.mts`, `GET /api/members-published` and `members-published-photo`) follows it: off, it builds the cards from
+  `member_stories` exactly as before; on, `buildPublishedUnits` turns each unit's approved, public copy into the same cards (the 2017
+  card name, each person's quote and link by position, the unit's first photo only) and serves a public photo from the uploader's
+  files only if the uploader is still a listed owner of the unit. The publish counters (`handlePublishStatus`,
+  `waitingPublicStories` for the daily build) count the table the site is built from. To flip it, refresh the backfill first
+  (`scripts/backfill-unit-stories.mjs --refresh`, only while the switch is off) and then
+  `insert into member_settings (key, value) values ('unit_stories', '{"live": true}') on conflict (key) do update set value = excluded.value;`.
+  The directory still reads `member_stories` until it moves over; backfill with
   `scripts/preview-unit-stories.mjs` then `scripts/backfill-unit-stories.mjs` (applied to TVC ERP 2026-10-21, 40 units).
 - **Member stories (`members-me.mts`, migration 0044).** A member writes a short public-facing
   story about themselves (what they do, family, one-line "why TVC") on the portal's

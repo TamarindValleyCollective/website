@@ -14,7 +14,8 @@
 // Turning a story off or removing a photo takes it out of these responses at once; it comes off the
 // site at the next build (the staff "Publish to the website" button starts one).
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
-import { buildPublished } from '../../scripts/lib/member-publish.mjs';
+import { buildPublished, buildPublishedUnits, publishedUnitPhotoHolder } from '../../scripts/lib/member-publish.mjs';
+import { UNIT_STORIES_KEY, unitSwitchLive } from '../../scripts/lib/member-unit-story.mjs';
 import { isUploadedPhoto } from '../../scripts/lib/member-photo.mjs';
 import { getMemberPhoto } from './lib/member-photo-storage';
 import { checkIpRateLimit, clientIp } from './lib/rate-limit';
@@ -30,17 +31,25 @@ async function select(table: string, columns: string, filter = ''): Promise<any[
   return res.json();
 }
 
+// Whether stories belong to the whole unit (member_unit_stories) or to each person (member_stories): the
+// cutover switch, off until the move to unit stories is done. Anything unreadable means the per-person path.
+async function unitStoriesLive(): Promise<boolean> {
+  const [row] = await select('member_settings', 'value', `key=eq.${UNIT_STORIES_KEY}`);
+  return unitSwitchLive(row);
+}
+
 async function handleCards(): Promise<Response> {
   try {
+    const live = await unitStoriesLive();
     const [households, people, memberships, stories, cards] = await Promise.all([
       select('member_households', 'id'),
       select('member_people', 'id,full_name,active,directory_visible'),
       select('member_household_members', 'household_id,person_id,role'),
       // Only the approved copy, and only where the switch is on: nothing else leaves the database here.
-      select('member_stories', 'person_id,approved,approved_public', 'approved=not.is.null'),
+      live ? select('member_unit_stories', 'household_id,approved,approved_public', 'approved=not.is.null') : select('member_stories', 'person_id,approved,approved_public', 'approved=not.is.null'),
       select('member_cards', 'household_id,card_name,person_ids'),
     ]);
-    const published = buildPublished({ households, people, memberships, stories, cards });
+    const published = live ? buildPublishedUnits({ households, people, memberships, unitStories: stories, cards }) : buildPublished({ households, people, memberships, stories, cards });
     return json({ generatedAt: new Date().toISOString(), ...published });
   } catch (err) {
     console.error('[members-public] cards failed', err);
@@ -55,6 +64,15 @@ async function handlePhoto(req: Request): Promise<Response> {
   const size = url.searchParams.get('size') === 'full' ? 'full' : 'square';
   if (!isUploadedPhoto(id)) return notFound();
   try {
+    if (await unitStoriesLive()) {
+      const [unitRow] = await select('member_unit_stories', 'household_id,approved,approved_public', `approved->photos=cs.[{"ref":"${id}"}]&approved_public=eq.true`);
+      if (!unitRow) return notFound();
+      const [people, memberships] = await Promise.all([select('member_people', 'id,active,directory_visible'), select('member_household_members', 'household_id,person_id,role', `household_id=eq.${unitRow.household_id}`)]);
+      const holder = publishedUnitPhotoHolder({ row: unitRow, photoId: id, people, memberships });
+      const unitBytes = holder ? await getMemberPhoto(holder, id, size) : null;
+      if (!unitBytes) return notFound();
+      return new Response(unitBytes, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'public, max-age=3600', 'x-content-type-options': 'nosniff' } });
+    }
     const [row] = await select('member_stories', 'person_id', `approved->>photo=eq.${id}&approved_public=eq.true`);
     if (!row) return notFound();
     // The person must still be listed and a primary member of a household, like everything else published.

@@ -2,7 +2,7 @@
 // Made-up people and text only: this repo is public.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildUnitStory, addPhoto, mergeDraftEdit, validateUnitSave, validateUnitSubmit, draftState, draftColumns, unitStoryView, unitPhotoHolder, unitPhotoAccess, riskCopy, decisionApplies, decisionColumns, replacedPhotos, queueItem, unitRiskRow, MAX_PHOTOS } from './member-unit-story.mjs';
+import { buildUnitStory, addPhoto, mergeDraftEdit, validateUnitSave, validateUnitSubmit, draftState, draftColumns, unitStoryView, unitPhotoHolder, unitPhotoAccess, riskCopy, decisionApplies, decisionColumns, replacedPhotos, queueItem, unitRiskRow, unitSwitchLive, MAX_PHOTOS } from './member-unit-story.mjs';
 
 const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
@@ -401,4 +401,13 @@ test('a first story has no live copy for the rules to compare with', () => {
   const risk = unitRiskRow(inReview({ approved: null, approved_public: null }));
   assert.equal(risk.approved, null);
   assert.equal(risk.approved_public, null);
+});
+
+// ---- the cutover switch ----
+
+test('stories follow the unit model only when the setting says so explicitly; anything missing or odd means the old path', () => {
+  assert.equal(unitSwitchLive({ value: { live: true } }), true);
+  for (const bad of [undefined, null, {}, { value: null }, { value: {} }, { value: { live: false } }, { value: { live: 'true' } }, { value: { live: 1 } }, { value: 'live' }]) {
+    assert.equal(unitSwitchLive(bad), false, JSON.stringify(bad));
+  }
 });

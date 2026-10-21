@@ -102,6 +102,47 @@ export function buildPublished(data) {
 }
 
 /**
+ * The same cards, from stories that belong to a whole UNIT (member_unit_stories). Only the approved copy,
+ * and only when the unit's public switch is on, is read. The unit's text is the same for everyone in it and
+ * each person has their own quote and link, so it is handed to buildPublished as one story per person:
+ * the shared bio and family, that person's quote and link, and the unit's FIRST photo (the public card
+ * shows one). buildPublished then does everything it always did: the 2017 card name, who is listed and
+ * primary, one bio when everyone's text is the same, quotes and links paired with the names by position.
+ *
+ * @param {Omit<Parameters<typeof buildPublished>[0], 'stories'> & { unitStories: { household_id: string, approved: any, approved_public: boolean | null }[] }} data
+ */
+export function buildPublishedUnits(data) {
+  const stories = [];
+  for (const unit of data.unitStories) {
+    if (!unit.approved || unit.approved_public !== true) continue;
+    const photo = clean(unit.approved.photos?.[0]?.ref);
+    for (const m of data.memberships.filter((x) => x.household_id === unit.household_id)) {
+      stories.push({
+        person_id: m.person_id,
+        approved: { bio: unit.approved.bio, family: unit.approved.family, why: unit.approved.quotes?.[m.person_id] ?? '', social: unit.approved.links?.[m.person_id] ?? '', photo },
+        approved_public: true,
+      });
+    }
+  }
+  return buildPublished({ ...data, stories });
+}
+
+/**
+ * Whose files a PUBLIC photo of a unit story is served from, or null. Only a photo in the approved copy of
+ * a unit whose public switch is on; and the member who uploaded it must still be listed (active, directory
+ * on) and an owner of that unit, like everything else published. The files sit under the uploader's id.
+ */
+export function publishedUnitPhotoHolder({ row, photoId, people, memberships }) {
+  if (!row?.approved || row.approved_public !== true) return null;
+  const holder = (row.approved.photos ?? []).find((p) => p.ref === photoId);
+  if (!holder) return null;
+  const person = people.find((p) => p.id === holder.personId);
+  if (!person || person.active === false || person.directory_visible === false) return null;
+  const owns = memberships.some((m) => m.person_id === holder.personId && m.household_id === row.household_id && (m.role ?? 'owner') === 'owner');
+  return owns ? holder.personId : null;
+}
+
+/**
  * Merges the published cards over the legacy ones. A legacy card keeps its place and its name; its
  * content is replaced by the published one, except for hand-written extras that still apply:
  *   - `summary` (the card-front line) while the bio is unchanged

@@ -256,7 +256,10 @@ export function riskCopy(copy) {
 
 // The columns an admin's decision on the submission in review writes. Approving makes the submitted
 // copy live; sending it back needs a note the members see, and the live copy is never touched.
-/** @returns {{ ok: true, columns: Record<string, any> } | { ok: false, error: string }} */
+/**
+ * @param {{ action: string, row: any, staffId: string | null, now: string, note?: string }} args
+ * @returns {{ ok: true, columns: Record<string, any> } | { ok: false, error: string }}
+ */
 export function decisionColumns({ action, row, staffId, now, note }) {
   if (action === 'approve') {
     return { ok: true, columns: { status: 'approved', approved: row.submitted, approved_public: row.submitted_public, approved_at: now, reviewed_by: staffId, reviewer_note: null, updated_at: now } };
@@ -345,3 +348,11 @@ export function unitRiskRow(row) {
     draft: riskCopy(row.draft),
   };
 }
+
+// ---- the cutover switch ----
+
+// The member_settings row (key `unit_stories`) says whether the live system reads and writes stories per
+// UNIT. Only an explicit { live: true } turns it on, so a missing row or anything odd keeps the per-person
+// stories the portal started with; the export, directory and editor all follow it.
+export const UNIT_STORIES_KEY = 'unit_stories';
+export const unitSwitchLive = (row) => row?.value?.live === true;
