@@ -738,7 +738,7 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
-  /* Under a Farm / House card: upload, and a link to what has been uploaded (shown in a popup). */
+  /* Under a Farm / House card: the two uploads as buttons (the main one filled), and a link to what has been uploaded (shown in a popup). */
   .card-docs {
     display: flex;
     flex-wrap: wrap;
@@ -2427,6 +2427,12 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         menu.append(b);
       });
     }
+    const details = h('button', '', 'Your details');
+    details.addEventListener('click', () => {
+      menu.hidden = true;
+      $('who').setAttribute('aria-expanded', 'false');
+      detailsDialog();
+    });
     const notice = h('button', '', 'Privacy notice');
     notice.addEventListener('click', () => {
       menu.hidden = true;
@@ -2437,7 +2443,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     contact.setAttribute('href', 'mailto:core-team@tvc.farm');
     const out = h('button', '', 'Sign out');
     out.addEventListener('click', signOut);
-    menu.append(notice, contact, out);
+    menu.append(details, notice, contact, out);
   }
 
   // ---- building blocks ----
@@ -2557,7 +2563,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const history = h('button', 'link-btn', 'Uploaded documents');
     history.setAttribute('type', 'button');
     history.addEventListener('click', () => docsDialog(hh, landType));
-    const sketch = h('button', 'link-btn', 'Add an FMB sketch');
+    const sketch = h('button', 'btn', 'Add an FMB sketch');
     sketch.setAttribute('type', 'button');
     sketch.addEventListener('click', () => sketchDialog(hh, landType, () => { shapesLoad = null; void refreshDocs(hh); }));
     const footer = h('div', 'card-docs', undefined, upload, sketch, history);
@@ -2879,15 +2885,6 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     );
     root.append(cols);
     root.append(panel('People in this unit', tableOf(['Name', 'Role', 'Email', 'Mobile'], hh.people.map((p) => [`${p.name}${p.id === person.id ? ' (you)' : ''}`, ROLE[p.role] ?? p.role, p.hasEmail ? 'On file' : 'Missing', p.hasPhone ? 'On file' : 'Missing']))));
-
-    const edit = h('button', 'btn btn--solid', 'Update my details');
-    edit.addEventListener('click', detailsDialog);
-    root.append(panel('My details',
-      h('p', 'lede', `Email: ${me!.email ?? 'not on file'}`),
-      h('p', 'lede', `Mobile: ${me!.phone ?? 'not on file'}`),
-      h('p', 'lede', `Member directory: ${me!.directoryVisible ? 'you are listed' : 'you are not listed'}`),
-      edit,
-    ));
     return root;
   }
 
