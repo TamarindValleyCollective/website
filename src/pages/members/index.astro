@@ -694,6 +694,40 @@ import SignInGate from '../../components/SignInGate.astro';
     font-weight: 700;
   }
 
+  .unit-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px 24px;
+  }
+
+  .unit-head > div:first-child {
+    flex: 1 1 320px;
+    min-width: 0;
+  }
+
+  .unit-type {
+    display: grid;
+    gap: 2px;
+    padding: 10px 18px;
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .unit-type-label {
+    font-size: 0.8rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .unit-type strong {
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    line-height: 1.15;
+  }
+
   .unit-cols {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2865,8 +2899,13 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const hh = hhNow();
     const person = meIn(hh);
     const root = h('div');
-    root.append(h('h1', 'page-title', 'My unit'));
-    root.append(h('p', 'lede', [hh.unitType ? `Unit type ${hh.unitType}` : null, `You are listed as ${ROLE[person.role] ?? person.role}`].filter(Boolean).join(' · ')), h('p', 'lede', 'Your unit is your farm land and, if you have one, your house plot. Cluster is the group of houses yours belongs to.'));
+    // The unit type sits at the right of the heading (room for a picture beside it later); the member's own role
+    // is already in the account menu and the people list, so it is not repeated here.
+    root.append(h('div', 'unit-head', undefined,
+      h('div', '', undefined,
+        h('h1', 'page-title', 'My unit'),
+        h('p', 'lede', 'Your unit is your farm land and, if you have one, your house plot. Cluster is the group of houses yours belongs to.')),
+      hh.unitType ? h('div', 'unit-type', undefined, h('span', 'unit-type-label', 'Unit type'), h('strong', '', hh.unitType)) : null));
     const panel = (title: string, ...kids: Kid[]) => {
       const p = h('section', 'panel', undefined, h('h2', '', title), ...kids);
       p.style.marginTop = '16px';
