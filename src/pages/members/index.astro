@@ -677,10 +677,9 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
-  /* Land areas in a table: monospaced, so the digits (and the decimal point) line up down the column. */
+  /* Land areas in a table: Inter's own equal-width digits, right-aligned, so the decimal points line up down the column. */
   .num {
-    font-family: var(--font-mono);
-    font-size: 0.92em;
+    font-variant-numeric: tabular-nums;
   }
 
   .kpi .v,
@@ -2223,8 +2222,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   const first = (full: string) => full.trim().split(/\s+/).find((w) => w.length > 1) ?? full;
   const acresFmt = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const sqftFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
-  // An area for a table cell: the same number of decimals in every row (acresFmt is always two), in the
-  // monospaced face so the digits line up down the column.
+  // An area for a table cell: the same number of decimals in every row (acresFmt is always two), in
+  // equal-width digits so they line up down the column.
   const area = (v: number | null, fmt: Intl.NumberFormat): HTMLElement | null => (v == null ? null : h('span', 'num', undefined, fmt.format(v)));
   const VERIFICATION: Record<string, string> = { verified: 'Verified', pending_review: 'Awaiting core team', unverified: 'Not yet verified' };
   // Tick in a circle / clock / empty circle; the words stay for screen readers and the hover title.
