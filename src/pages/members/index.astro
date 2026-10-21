@@ -650,19 +650,10 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .kpis {
-    position: relative;
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 14px;
     margin: 16px 0 22px;
-  }
-
-  /* The House card's unit type: bottom right of its figures, in the gap above the table (the Farm card keeps the same gap, so the two tables line up). */
-  .kpis > .pills {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    margin: 4px 0 0;
   }
 
   .kpi {
@@ -899,7 +890,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .unit-cols .kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    margin: 12px 0 34px; /* room under the figures for the House card's unit-type pill; the Farm card keeps it so the tables line up */
+    margin: 12px 0 16px;
   }
 
   .shell table {
@@ -2498,6 +2489,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   const unitTypeFamily = (t: string | null) => (t ? t.replace(/-V\d+$/i, '') : null);
   const housePills = (hh: Hh) => pillsOf([['House number', hh.houseNo, true]]);
   const typePill = (hh: Hh) => pillsOf([['Unit type', unitTypeFamily(hh.unitType)]]);
+  // On My unit the unit type sits beside the house number in the heading (on Home it is at the foot of the tile).
+  const houseHeadPills = (hh: Hh) => pillsOf([['Unit type', unitTypeFamily(hh.unitType)], ['House number', hh.houseNo, true]]);
   const peopleByRole = (people: Person[]) => ROLE_GROUPS.map(([role, label]) => ({ label, people: people.filter((p) => p.role === role) })).filter((g) => g.people.length);
   const peopleList = (hh: Hh, you: Person) =>
     h('div', '', undefined, ...peopleByRole(hh.people).flatMap((g) => [
@@ -2919,8 +2912,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         h('div', 'kpis', undefined, kpi('Farm land', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), kpi('Farm plots', String(hh.plots.length))),
         hh.plots.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Acres', 'Status'], [...hh.plots].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaAcres, acresFmt), verifiedMark(p.verification)]), 2)) : h('p', 'lede', 'Patta details not available yet'),
         landCardFooter(hh, 'farm')),
-      h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.house)), 'House', housePills(hh)),
-        h('div', 'kpis', undefined, kpi('House area', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), kpi('House plots', String(hh.housePattas.length)), typePill(hh)),
+      h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.house)), 'House', houseHeadPills(hh)),
+        h('div', 'kpis', undefined, kpi('House area', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), kpi('House plots', String(hh.housePattas.length))),
         hh.housePattas.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Sq ft', 'Status'], [...hh.housePattas].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaSqFt, sqftFmt), verifiedMark(p.verification)]), 2)) : h('p', 'lede', hh.houseNo ? 'Patta details not available yet' : 'No house allocated yet'),
         hh.houseNo ? landCardFooter(hh, 'house') : null),
     );
