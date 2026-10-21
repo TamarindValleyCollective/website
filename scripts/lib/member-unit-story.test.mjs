@@ -150,3 +150,10 @@ test('photos in a save must fit the limit and be distinct', () => {
   assert.deepEqual(mergeDraftEdit({ current: draftAt(), changes: { photos: [ph(P1), ph(P1, B)] }, baseVersion: 5, personId: A }), { ok: false, error: 'invalid', fields: ['photos'] });
   assert.equal(mergeDraftEdit({ current: draftAt(), changes: { photos: [ph(P1), ph(P2)] }, baseVersion: 5, personId: A }).ok, true);
 });
+
+test('the result says whose copy supplied the shared text, so a diverged unit can be reviewed', () => {
+  const old = row(A);
+  const edited = row(B, { approved: copy({ bio: 'We now run a seed bank.' }), approved_at: '2026-10-20T00:00:00Z' });
+  const { winners } = buildUnitStory([old, edited]);
+  assert.deepEqual(winners, { approved: B, draft: null, submitted: null });
+});

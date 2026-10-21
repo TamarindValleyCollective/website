@@ -58,6 +58,8 @@ export function buildUnitStory(rows) {
       status: inReview ? 'in_review' : approved ? 'approved' : 'draft',
     },
     diverged: [approved, draft, submitted].some((m) => m?.diverged),
+    // Whose copy supplied the shared text of each kind, so a diverged unit can be reviewed.
+    winners: { approved: approved?.winner.person_id ?? null, draft: draft?.winner.person_id ?? null, submitted: submitted?.winner.person_id ?? null },
   };
 }
 
