@@ -1653,7 +1653,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   // The decision in one sentence, for the row and for the top of the opened card.
   function landHeadline(i: LandItem): string {
     if (i.outcome === 'conflict') return 'Another unit already holds this survey number';
-    if (i.outcome === 'pending') return i.ownerMatch === false ? 'New record, and the owners on the document don’t match anyone here' : 'New record, not in the register yet';
+    if (i.outcome === 'pending') return i.ownerMatch === false ? 'New record; the owner names on the document don’t match anyone here (often just a different spelling)' : 'New record, not in the register yet';
     if (i.outcome === 'check') return 'Can’t be verified from this file alone';
     const fields = i.differences.filter((d) => d.field !== 'owners');
     if (fields.length === 0) return 'Owner names don’t match the unit';
@@ -1663,7 +1663,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   // Needs a careful look / differences to confirm / quick yes.
   const landGroup = (i: LandItem): 'stop' | 'check' | 'quick' =>
-    i.outcome === 'conflict' || (i.outcome === 'pending' && i.ownerMatch === false) ? 'stop' : i.outcome === 'pending' ? 'quick' : 'check';
+    i.outcome === 'conflict' ? 'stop' : i.outcome === 'pending' && i.ownerMatch !== false ? 'quick' : 'check';
 
   function landFacts(i: LandItem, landType: string): HTMLElement[] {
     const cells = (label: string, recorded: string, document: string) =>
@@ -1711,7 +1711,11 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       };
 
       const open: OpenRecord[] = docs.flatMap((doc) => doc.items.map((item, index) => ({ doc, item, index })).filter((r) => WAITING.includes(r.item.outcome) && !r.item.decision));
-      const verified = docs.reduce((n, d) => n + d.items.filter((i) => i.outcome === 'verified' && !i.decision).length, 0);
+      const autoVerified = docs.flatMap((d) => d.items).filter((i) => i.outcome === 'verified' && !i.decision);
+      const verified = autoVerified.length;
+      // Owner names are a transliteration from Tamil and often differ from the register, so they do not stop a record the register
+      // already holds from being verified (by its survey number, patta and area); the admin is told how many it happened to.
+      const namesUnmatched = autoVerified.filter((i) => i.ownerMatch === false).length;
       let openKey = '';
 
       const rowOf = (r: OpenRecord, redraw: () => void): HTMLElement => {
@@ -1756,7 +1760,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
           nodes.push(h('p', { class: 'landq-group', text: title }), ...list.map((r) => rowOf(r, draw)));
         }
         if (open.length === 0) nodes.push(h('p', { class: 'muted', text: 'Nothing waiting for a decision.' }));
-        if (verified) nodes.push(h('p', { class: 'landq-auto', text: `${plural(verified, 'record')} verified automatically` }));
+        if (verified) nodes.push(h('p', { class: 'landq-auto', text: `${plural(verified, 'record')} verified automatically${namesUnmatched ? `; for ${namesUnmatched === verified ? 'all of them' : namesUnmatched}, the owner names on the document did not match anyone here (names are often spelled differently when translated from Tamil)` : ''}` }));
         nodes.push(files);
         slot.replaceChildren(...nodes);
       };

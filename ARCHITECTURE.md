@@ -1467,15 +1467,21 @@ never touches Netlify either.
   the bucket has no public access or custom domain), records a `member_land_documents` row (the R2
   object key is `storage_path`; nothing else about the file is in R2), then calls the background
   function `members-land-extract-background.mts`. Fixed rules reconcile the reading with the
-  register: a record the register already holds whose survey number agrees (and patta number / area
-  / owners where readable) is marked `verified` (blanks filled, nothing overwritten); a survey number
+  register: a record the register already holds whose survey number agrees (and patta number and area
+  where readable) is marked `verified` (blanks filled, nothing overwritten); a survey number
   with no entry becomes a `pending_review` record; a disagreement, a photo, or a survey number held
   by another household changes nothing and waits. Admins see waiting documents as a flag on the
   household in `/internal/members`, open the file through a 60-second presigned R2 link
   (`POST /api/members-admin/land-document-link`, `manage` role, logged), and approve or reject each
   record (`landdoc.approve` / `landdoc.reject` through `/api/members-admin/edit`, audit-first). Owner
   names are readable only on a chitta; on an A-Register they are damaged Tamil text, so those verify
-  on survey/patta/area alone and "owners unknown" never auto-creates anything. Files are not deleted
+  on survey/patta/area alone and "owners unknown" never auto-creates anything. **Owner names never block a
+  record the register already holds**: the PDFs print a transliteration from Tamil that often disagrees with
+  the register's spelling, so only the survey number, patta and area decide (`reconcile`); `ownerMatch` is
+  still recorded and the admin queue says how many automatic verifications had names that matched nobody. For a
+  record not yet in the register the names remain a hint beside a decision that is always an admin's. Names are
+  compared by sound (`soundKey` in `scripts/lib/member-land-docs.mjs`: sh/s, th/t, zh/l, ksh/x, oo/u, doubled letters, ...)
+  as well as one letter of slack, so Sivakumar, Shivakumar and Sivakumaar are one name. Files are not deleted
   when a row is; there is no retention job yet.
 
   **Replacing an earlier upload** (no migration): every upload is processed as a new one. Once it is
