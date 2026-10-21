@@ -12,7 +12,7 @@
 import StaffLayout from '../../layouts/StaffLayout.astro';
 ---
 
-<StaffLayout title="Member register" description="Households, people and patta details." current="members">
+<StaffLayout title="Member register" description="Units, people and patta details." current="members">
   <section class="members section wrapper">
     <h1>Member register</h1>
     <p id="intro" class="hint">Sign in to review the member register.</p>
@@ -41,7 +41,13 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
       <div class="toolbar">
         <label>Search <input type="search" id="search" placeholder="Unit, house or name" autocomplete="off" /></label>
-        <label class="check"><input type="checkbox" id="only-flagged" /> Only households needing attention</label>
+        <label>Show
+          <select id="show">
+            <option value="all">All units</option>
+            <option value="validate">Needs validation</option>
+            <option value="attention">Needs attention</option>
+          </select>
+        </label>
       </div>
 
       <p id="masked-note" class="note" hidden>Names are masked for the read-only role.</p>
@@ -52,7 +58,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
       <div id="detail" class="detail-view" hidden>
         <div class="detail-head">
-          <button type="button" id="detail-close" class="link-button">&larr; All households</button>
+          <button type="button" id="detail-close" class="link-button">&larr; All units</button>
           <h2 id="detail-title"></h2>
         </div>
         <div id="detail-body" class="body"></div>
@@ -204,6 +210,15 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     display: flex;
     gap: 8px;
     align-items: center;
+  }
+
+  .members .toolbar select {
+    min-height: 40px;
+    padding: 8px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    font: inherit;
   }
 
   .members .toolbar input[type='search'] {
@@ -455,20 +470,175 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     background: var(--tvc-green);
   }
 
-  /* One uploaded land document, inside the Land documents card: a header and a small table,
-     separated from the next document by a rule rather than another box. */
-  .members .landdoc + .landdoc {
-    margin-top: 14px;
-    padding-top: 14px;
+  /* Land documents: the records waiting for a decision as rows grouped by how careful to be; a row
+     opens into a card with what differs and buttons that name what they do. The uploaded files
+     are listed small underneath. Built for a phone first: one column, 44px targets. */
+  .members .landq-group {
+    margin: 14px 2px 6px;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--tvc-ink-soft);
+  }
+
+  .members .landq-row {
+    margin-bottom: 8px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+    overflow: hidden;
+  }
+
+  .members .landq-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 56px;
+    padding: 10px 14px;
+    border: 0;
+    background: none;
+    font: inherit;
+    text-align: left;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .members .landq-head:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: -2px;
+  }
+
+  .members .landq-sentence {
+    flex: 1;
+    font-size: 0.95rem;
+    line-height: 1.3;
+  }
+
+  .members .landq-chev {
+    color: var(--tvc-ink-soft);
+  }
+
+  .members .landq-tag {
+    flex: none;
+    padding: 2px 9px;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .members .landq-tag--house {
+    background: var(--tvc-stone);
+    color: var(--tvc-earth-brown);
+  }
+
+  .members .landq-body {
+    padding: 0 14px 14px;
     border-top: 1px solid var(--tvc-line);
   }
 
-  .members .landdoc-head {
+  .members .landq-diff {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 8px 0;
+  }
+
+  .members .landq-diff > div {
+    padding: 6px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-sm);
+  }
+
+  .members .landq-diff small {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .members .landq-new {
+    border-color: var(--tvc-green);
+    background: var(--tvc-green-tint);
+  }
+
+  .members .landq-note {
+    margin: 6px 0;
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .members .landq-link {
+    min-height: 44px;
+  }
+
+  .members .landq-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .members .landq-btn {
+    flex: 1 1 12rem;
+    min-height: 48px;
+    padding: 0 14px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .members .landq-btn--main {
+    border-color: var(--tvc-green-dark);
+    background: var(--tvc-green-dark);
+    color: var(--tvc-white);
+  }
+
+  .members .landq-btn--danger {
+    border-color: var(--tvc-error-border);
+    color: var(--tvc-error-text);
+  }
+
+  .members .landq-auto {
+    margin: 10px 2px;
+    font-size: 0.9rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .members .landq-auto::before {
+    content: '✓ ';
+    color: var(--tvc-green-vivid);
+    font-weight: 700;
+  }
+
+  .members .landq-files {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .members .landq-file {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px 10px;
-    margin-bottom: 6px;
+    gap: 4px 10px;
+    padding: 6px 0;
+    font-size: 0.85rem;
+  }
+
+  .members .landq-file .landq-note {
+    flex-basis: 100%;
+    margin: 0;
+  }
+
+  .members .landq-filemeta {
+    margin-right: auto;
+    color: var(--tvc-ink-soft);
   }
 
   /* Verified / awaiting / not verified as an icon; the words stay for screen readers and on hover. */
@@ -524,30 +694,6 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     font: inherit;
     text-decoration: underline;
     cursor: pointer;
-  }
-
-  .members .landdoc-head strong {
-    margin-right: auto;
-    font-size: 0.9rem;
-  }
-
-  .members .landdoc-head .meta {
-    margin: 0;
-  }
-
-  .members .landdoc table td:last-child {
-    text-align: right;
-    white-space: nowrap;
-  }
-
-  .members .landdoc tr:last-child td {
-    border-bottom: none;
-  }
-
-  .members .landnote {
-    margin: 4px 0 0;
-    font-size: 0.82rem;
-    color: var(--tvc-ink-soft);
   }
 
   .members .rowbtn--danger {
@@ -862,14 +1008,17 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
   const sumOf = (list: Household[], pick: (hh: Household) => number) => list.reduce((n, hh) => n + pick(hh), 0);
 
-  const needsAttention = (hh: Household) => hh.flags.some((f) => f.severity !== 'info');
+  // Two different jobs: a land document is waiting for the core team to decide (validation), or the
+  // register itself has a problem to fix (attention: a missing patta, a mismatched number, ...).
+  const needsValidation = (hh: Household) => hh.flags.some((f) => f.kind === 'land_review');
+  const needsAttention = (hh: Household) => hh.flags.some((f) => f.kind !== 'land_review' && f.severity !== 'info');
 
   const CLUSTERS: (string | null)[] = ['H1-A', 'H1-B', 'H2', null];
 
   let households: Household[] = [];
 
   function flagChip(f: Flag): HTMLElement {
-    return h('span', { class: `flag flag--${f.severity}`, text: `${SEVERITY_WORD[f.severity]}: ${f.text}` });
+    return h('span', { class: `flag flag--${f.severity}`, text: `${f.kind === 'land_review' ? 'Validate' : SEVERITY_WORD[f.severity]}: ${f.text}` });
   }
 
   function table(headers: string[], rows: (string | number | null | HTMLElement)[][]): HTMLElement {
@@ -1187,7 +1336,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       ...(p.hasEmail ? [{ name: 'clearEmail', label: 'Remove the email on file', type: 'checkbox' } as Field] : []),
       { name: 'phone', label: 'Mobile number', type: 'tel', placeholder: p.hasPhone ? 'On file. Type a new number to replace it' : 'Not on file. Type a number to add one' },
       ...(p.hasPhone ? [{ name: 'clearPhone', label: 'Remove the number on file', type: 'checkbox' } as Field] : []),
-      ...(can.manage ? [{ name: 'role', label: 'Role in this household', type: 'select', options: ROLE_OPTIONS, value: p.role } as Field] : []),
+      ...(can.manage ? [{ name: 'role', label: 'Role in this unit', type: 'select', options: ROLE_OPTIONS, value: p.role } as Field] : []),
     ];
     return formEl(
       `Edit ${firstName(p.name)}`,
@@ -1213,10 +1362,10 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   function addPersonForm(hh: Household, slot: HTMLElement): HTMLFormElement {
     return formEl(
-      'Add a person to this household',
+      'Add a person to this unit',
       [
         { name: 'fullName', label: 'Name' },
-        { name: 'role', label: 'Role in this household', type: 'select', options: ROLE_OPTIONS, value: 'owner' },
+        { name: 'role', label: 'Role in this unit', type: 'select', options: ROLE_OPTIONS, value: 'owner' },
         { name: 'email', label: 'Email (optional)', type: 'email' },
         { name: 'phone', label: 'Mobile number (optional)', type: 'tel' },
       ],
@@ -1234,7 +1383,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   function moveForm(hh: Household, p: Person, slot: HTMLElement): HTMLFormElement {
     return formEl(
-      `Move ${firstName(p.name)} to another household`,
+      `Move ${firstName(p.name)} to another unit`,
       [{ name: 'to', label: 'Move to', type: 'select', options: householdOptions(hh.id) }],
       'Move',
       async (v) => {
@@ -1304,7 +1453,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     const cfg = LAND[kind];
     const current = (rec ?? {}) as Record<string, string | number | null>;
     const fields: Field[] = cfg.fields.map((f) => ({ ...f, value: current[f.name] == null ? '' : String(current[f.name]) }));
-    if (rec) fields.push({ name: 'householdId', label: 'Belongs to household', type: 'select', value: hh.id, options: householdOptions(), hint: 'Change this to move the record to another household.' });
+    if (rec) fields.push({ name: 'householdId', label: 'Belongs to unit', type: 'select', value: hh.id, options: householdOptions(), hint: 'Change this to move the record to another unit.' });
     const report = (m: string) => {
       const note = slot.querySelector('.form-msg');
       if (note) note.textContent = m;
@@ -1386,7 +1535,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
         can.manage
           ? confirmButton('Remove', 'Click again to remove', async () => {
               await send({ action: 'membership.remove', householdId: hh.id, personId: p.id });
-              await refreshAfterEdit('Removed from this household.');
+              await refreshAfterEdit('Removed from this unit.');
             }, reportPeople)
           : null,
       );
@@ -1455,17 +1604,41 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     if (location.hash) history.pushState(null, '', location.pathname + location.search);
   }
 
-  type LandItem = { surveyNo: string; pattaNo: string | null; outcome: string; differences: { field: string; recorded: string; document: string }[]; ownerMatch: boolean | null; decision?: string };
+  type LandDiff = { field: string; recorded: string; document: string };
+  type LandItem = { surveyNo: string; pattaNo: string | null; areaHectares?: number | null; areaSqFt?: number | null; outcome: string; differences: LandDiff[]; ownerMatch: boolean | null; decision?: string };
   type LandDocument = { id: string; landType: string; fileName: string | null; mimeType: string; status: string; error: string | null; uploadedAt: string; items: LandItem[] };
   const chip = (severity: 'info' | 'warn' | 'error', text: string) => h('span', { class: `flag flag--${severity}`, text });
-  // [label, severity] for each outcome of a record read from a document.
-  const RESULT: Record<string, [string, 'info' | 'warn' | 'error']> = {
-    verified: ['Verified', 'info'],
-    pending: ['New, needs review', 'warn'],
-    mismatch: ['Differs', 'warn'],
-    check: ['Needs a check', 'warn'],
-    conflict: ['Conflict', 'error'],
-  };
+
+  // A record read from a document that still waits for the core team, with where it came from.
+  type OpenRecord = { doc: LandDocument; item: LandItem; index: number };
+  const WAITING = ['pending', 'mismatch', 'check', 'conflict'];
+  const DIFF_LABEL: Record<string, string> = { patta_no: 'Patta', area: 'Area', area_sq_ft: 'Area', owners: 'Owners' };
+  const landTag = (landType: string) => h('span', { class: `landq-tag${landType === 'house' ? ' landq-tag--house' : ''}`, text: landType === 'house' ? 'House plot' : 'Farm land' });
+
+  // The decision in one sentence, for the row and for the top of the opened card.
+  function landHeadline(i: LandItem): string {
+    if (i.outcome === 'conflict') return 'Another unit already holds this survey number';
+    if (i.outcome === 'pending') return i.ownerMatch === false ? 'New record, and the owners on the document don’t match anyone here' : 'New record, not in the register yet';
+    if (i.outcome === 'check') return 'Can’t be verified from this file alone';
+    const fields = i.differences.filter((d) => d.field !== 'owners');
+    if (fields.length === 0) return 'Owner names don’t match the unit';
+    const first = fields[0];
+    return `${DIFF_LABEL[first.field] ?? first.field} differs: register ${first.recorded}, document ${first.document}${fields.length > 1 ? ` (+${fields.length - 1} more)` : ''}`;
+  }
+
+  // Needs a careful look / differences to confirm / quick yes.
+  const landGroup = (i: LandItem): 'stop' | 'check' | 'quick' =>
+    i.outcome === 'conflict' || (i.outcome === 'pending' && i.ownerMatch === false) ? 'stop' : i.outcome === 'pending' ? 'quick' : 'check';
+
+  function landFacts(i: LandItem, landType: string): HTMLElement[] {
+    const cells = (label: string, recorded: string, document: string) =>
+      h('div', { class: 'landq-diff' }, h('div', {}, h('small', { text: `${label} · register` }), h('strong', { text: recorded })), h('div', { class: 'landq-new' }, h('small', { text: `${label} · document` }), h('strong', { text: document })));
+    if (i.differences.length) return i.differences.map((d) => cells(DIFF_LABEL[d.field] ?? d.field, d.recorded, d.document));
+    if (i.outcome !== 'pending') return [];
+    // A new record: no register value to compare, so show what the document says.
+    const area = landType === 'house' ? (i.areaSqFt != null ? sqft(i.areaSqFt) : null) : i.areaHectares != null ? `${ha(i.areaHectares)} ha` : null;
+    return area ? [cells('Area', 'none', area)] : [];
+  }
 
   async function loadLandDocuments(hh: Household, slot: HTMLElement) {
     try {
@@ -1477,63 +1650,82 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
         slot.querySelector('.form-msg')?.remove();
         slot.prepend(h('p', { class: 'form-msg', text: m, attrs: { role: 'alert' } }));
       };
-      slot.replaceChildren(
-        ...docs.map((d) => {
-          const waiting = d.items.some((i) => ['pending', 'mismatch', 'check', 'conflict'].includes(i.outcome) && !i.decision);
-          const view = can.manage
-            ? rowButton('View file', () => void openLandFile(d.id, report))
-            : null;
-          const decide = (action: 'landdoc.approve' | 'landdoc.reject', itemIndex: number) => async () => {
-            try {
-              await send({ action, documentId: d.id, itemIndex });
-              await refreshAfterEdit(action === 'landdoc.approve' ? 'Approved and verified.' : 'Rejected.');
-            } catch (err) {
-              report(err instanceof Error ? err.message : 'Something went wrong.');
-            }
-          };
-          const act = (label: string, run: () => void, yes = false) => {
-            const b = rowButton(label, run);
-            b.classList.add('rowbtn--act');
-            if (yes) b.classList.add('rowbtn--yes');
-            return b;
-          };
-          const status = d.status === 'processing' ? chip('info', 'Reading…') : d.status === 'failed' ? chip('error', 'Not used') : waiting || (d.status === 'needs_review' && d.items.length === 0) ? chip('warn', 'Needs review') : chip('info', 'Done');
-          const result = (i: LandItem) =>
-            i.decision
-              ? h('span', { class: 'muted', text: i.decision === 'approved' ? 'Approved' : 'Rejected' })
-              : chip(RESULT[i.outcome]?.[1] ?? 'info', RESULT[i.outcome]?.[0] ?? i.outcome);
-          const actions = (i: LandItem, idx: number): HTMLElement => {
-            // An empty element, not '': the table prints "Not available yet" for an empty value.
-            if (!can.manage || i.decision) return h('span');
-            if (i.outcome === 'conflict') return h('span', { class: 'rowbtns' }, act('Dismiss', decide('landdoc.reject', idx)));
-            if (!['pending', 'mismatch', 'check'].includes(i.outcome)) return h('span');
-            return h('span', { class: 'rowbtns' }, act(i.outcome === 'mismatch' ? 'Use document' : 'Approve', decide('landdoc.approve', idx), true), act('Reject', decide('landdoc.reject', idx)));
-          };
-          // One line of detail per record that needs a decision, never one per verified record.
-          const notes = d.items.flatMap((i) => {
-            if (i.decision || ['verified'].includes(i.outcome)) return [];
-            const bits = [
-              i.outcome === 'conflict' ? 'This survey number is already on another household’s record; nothing was added.' : null,
-              i.outcome === 'check' ? 'Needs your check: a photo or scan, or a record the member added that is still waiting, can’t be verified by a document alone.' : null,
-              ...i.differences.filter((x) => x.field !== 'owners').map((x) => `register says ${x.recorded}, document says ${x.document}`),
-              i.ownerMatch === false ? 'owners on the document don’t match anyone here' : null,
-              i.ownerMatch === null && i.outcome === 'pending' ? 'owner names couldn’t be read; check them in the file' : null,
-            ].filter(Boolean);
-            return bits.length ? [h('p', { class: 'landnote', text: `${i.surveyNo}: ${bits.join('; ')}.` })] : [];
-          });
-          return h(
-            'div',
-            { class: 'landdoc' },
-            h('div', { class: 'landdoc-head' }, h('strong', { text: `${d.landType === 'house' ? 'House plot' : 'Farm land'} · ${new Date(d.uploadedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` }), h('span', { class: 'meta', text: d.mimeType === 'application/pdf' ? 'PDF' : 'Photo' }), status, view),
-            d.status === 'failed' ? h('p', { class: 'landnote', text: d.error ?? 'Could not be used.' }) : null,
-            d.status === 'needs_review' && d.items.length === 0
-              ? h('p', { class: 'landnote', text: 'Could not be read automatically. Open the file and add the record above by hand.' })
-              : null,
-            d.items.length ? table(['Survey no.', 'Patta', 'Result', ''], d.items.map((i, idx) => [i.surveyNo, i.pattaNo, result(i), actions(i, idx)])) : null,
-            ...notes,
-          );
-        }),
-      );
+      const decide = (action: 'landdoc.approve' | 'landdoc.reject', r: OpenRecord) => async () => {
+        try {
+          await send({ action, documentId: r.doc.id, itemIndex: r.index });
+          await refreshAfterEdit(action === 'landdoc.approve' ? 'Approved and verified.' : 'Rejected.');
+        } catch (err) {
+          report(err instanceof Error ? err.message : 'Something went wrong.');
+        }
+      };
+      const act = (label: string, run: () => void, kind: 'main' | 'danger' | '' = '') => {
+        const b = h('button', { class: `landq-btn${kind ? ` landq-btn--${kind}` : ''}`, text: label, attrs: { type: 'button' } });
+        b.addEventListener('click', run);
+        return b;
+      };
+      // Buttons say what will happen to the register. Reject on a record the member added removes it.
+      const buttons = (r: OpenRecord): HTMLElement | null => {
+        if (!can.manage) return null;
+        const approve = decide('landdoc.approve', r);
+        const reject = decide('landdoc.reject', r);
+        const i = r.item;
+        if (i.outcome === 'conflict') return h('div', { class: 'landq-actions' }, act('Dismiss', reject, 'main'));
+        const onlyOwners = i.outcome === 'mismatch' && i.differences.every((d) => d.field === 'owners');
+        const yes = i.outcome === 'pending' ? 'Add to register' : i.outcome === 'mismatch' && !onlyOwners ? 'Use the document’s values and verify' : 'Verify';
+        return h('div', { class: 'landq-actions' }, act(yes, approve, 'main'), act(i.outcome === 'pending' ? 'Reject and remove' : 'Reject', reject, 'danger'));
+      };
+
+      const open: OpenRecord[] = docs.flatMap((doc) => doc.items.map((item, index) => ({ doc, item, index })).filter((r) => WAITING.includes(r.item.outcome) && !r.item.decision));
+      const verified = docs.reduce((n, d) => n + d.items.filter((i) => i.outcome === 'verified' && !i.decision).length, 0);
+      let openKey = '';
+
+      const rowOf = (r: OpenRecord, redraw: () => void): HTMLElement => {
+        const key = `${r.doc.id}:${r.index}`;
+        const isOpen = openKey === key;
+        const head = h('button', { class: 'landq-head', attrs: { type: 'button', 'aria-expanded': String(isOpen) } }, landTag(r.doc.landType), h('span', { class: 'landq-sentence', text: `${r.item.surveyNo}: ${landHeadline(r.item)}` }), h('span', { class: 'landq-chev', text: isOpen ? '▴' : '▾', attrs: { 'aria-hidden': 'true' } }));
+        head.addEventListener('click', () => {
+          openKey = isOpen ? '' : key;
+          redraw();
+        });
+        const notes = [
+          r.item.outcome === 'conflict' ? 'Nothing was added. Sort it out in the register first, then dismiss this.' : null,
+          r.item.outcome === 'check' ? 'A photo or scan, or a record the member added that is still waiting, can’t be verified by a document alone.' : null,
+          r.item.ownerMatch === null && r.item.outcome === 'pending' ? 'Owner names couldn’t be read; check them in the file.' : null,
+        ].filter((n): n is string => Boolean(n));
+        const view = can.manage ? rowButton('View the PDF', () => void openLandFile(r.doc.id, report)) : null;
+        view?.classList.add('landq-link');
+        const body = h('div', { class: 'landq-body' }, ...landFacts(r.item, r.doc.landType), ...notes.map((n) => h('p', { class: 'landq-note', text: n })), view, buttons(r));
+        return h('section', { class: 'landq-row' }, head, isOpen ? body : null);
+      };
+
+      const GROUPS: { g: 'stop' | 'check' | 'quick'; title: string }[] = [
+        { g: 'stop', title: 'Needs a careful look' },
+        { g: 'check', title: 'Differences to confirm' },
+        { g: 'quick', title: 'Quick yes' },
+      ];
+
+      // Uploaded files, kept small: who/when/what, whether it was read, and a way to open it.
+      const files = h('div', { class: 'landq-files' }, ...docs.map((d) => {
+        const waiting = d.items.some((i) => WAITING.includes(i.outcome) && !i.decision);
+        const state = d.status === 'processing' ? chip('info', 'Reading…') : d.status === 'failed' ? chip('error', 'Not used') : waiting || (d.status === 'needs_review' && d.items.length === 0) ? chip('warn', 'Needs review') : chip('info', 'Done');
+        const view = can.manage ? rowButton('View file', () => void openLandFile(d.id, report)) : null;
+        const note = d.status === 'failed' ? (d.error ?? 'Could not be used.') : d.status === 'needs_review' && d.items.length === 0 ? 'Could not be read automatically. Open the file and add the record above by hand.' : null;
+        return h('div', { class: 'landq-file' }, landTag(d.landType), h('span', { class: 'landq-filemeta', text: `${new Date(d.uploadedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · ${d.mimeType === 'application/pdf' ? 'PDF' : 'Photo'}` }), state, view, note ? h('p', { class: 'landq-note', text: note }) : null);
+      }));
+
+      const draw = () => {
+        const nodes: Node[] = [];
+        for (const { g, title } of GROUPS) {
+          const list = open.filter((r) => landGroup(r.item) === g);
+          if (!list.length) continue;
+          nodes.push(h('p', { class: 'landq-group', text: title }), ...list.map((r) => rowOf(r, draw)));
+        }
+        if (open.length === 0) nodes.push(h('p', { class: 'muted', text: 'Nothing waiting for a decision.' }));
+        if (verified) nodes.push(h('p', { class: 'landq-auto', text: `${plural(verified, 'record')} verified automatically` }));
+        nodes.push(files);
+        slot.replaceChildren(...nodes);
+      };
+      draw();
     } catch (err) {
       slot.replaceChildren(h('p', { class: 'form-msg', text: err instanceof Error ? err.message : 'Could not load documents.' }));
     }
@@ -1553,14 +1745,15 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 
   function renderList() {
     const q = ($<HTMLInputElement>('search').value || '').trim().toLowerCase();
-    const only = $<HTMLInputElement>('only-flagged').checked;
+    const show = $<HTMLSelectElement>('show').value;
     const shown = households.filter((hh) => {
-      if (only && !needsAttention(hh)) return false;
+      if (show === 'validate' && !needsValidation(hh)) return false;
+      if (show === 'attention' && !needsAttention(hh)) return false;
       if (!q) return true;
       const hay = [hh.farmUnit, hh.houseNo ?? '', hh.cluster ?? '', ...hh.people.map((p) => p.name)].join(' ').toLowerCase();
       return hay.includes(q);
     });
-    $('count').textContent = `${shown.length} of ${households.length} households`;
+    $('count').textContent = `${shown.length} of ${households.length} units`;
     // Grouped by housing cluster, in a fixed order; households with no cluster
     // (no house built yet) come last.
     // Within a cluster, cards run in house-number order (H-01, H-02, ...); a
@@ -1576,7 +1769,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
         h(
           'section',
           { class: 'group' },
-          h('h2', {}, g.title, h('small', { text: `${plural(g.items.length, 'household')} · ${acres(sumOf(g.items, (x) => x.farmAcres))} farm · ${acres(sqftAsAcres(sumOf(g.items, (x) => x.houseSqFt)))} house` })),
+          h('h2', {}, g.title, h('small', { text: `${plural(g.items.length, 'unit')} · ${acres(sumOf(g.items, (x) => x.farmAcres))} farm · ${acres(sqftAsAcres(sumOf(g.items, (x) => x.houseSqFt)))} house` })),
           h('div', { class: 'grid' }, ...g.items.map(renderHousehold)),
         ),
       ),
@@ -1588,12 +1781,13 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     const withFarm = households.filter((hh) => hh.plots.length).length;
     const withHouse = households.filter((hh) => hh.housePattas.length).length;
     $('totals').replaceChildren(
-      stat('Households', String(t.households)),
+      stat('Units', String(t.households)),
       stat('People', String(t.people)),
       stat('With an email on file', `${t.peopleWithEmail} of ${t.people}`),
-      stat('Farm land', acres(t.farmAcres), `${haFmt.format(t.farmHectares)} ha · ${plural(t.farmPlots, 'plot')} · ${withFarm} of ${t.households} households have data`),
-      stat('House land', acres(sqftAsAcres(t.houseSqFt)), `${sqft(t.houseSqFt)} · ${withHouse} of ${t.households} households have data`),
-      stat('Households to check', String(t.householdsNeedingAttention)),
+      stat('Farm land', acres(t.farmAcres), `${haFmt.format(t.farmHectares)} ha · ${plural(t.farmPlots, 'plot')} · ${withFarm} of ${t.households} units have data`),
+      stat('House land', acres(sqftAsAcres(t.houseSqFt)), `${sqft(t.houseSqFt)} · ${withHouse} of ${t.households} units have data`),
+      stat('Need validation', String(households.filter(needsValidation).length), 'land documents waiting for a decision'),
+      stat('Need attention', String(households.filter(needsAttention).length), 'problems in the register'),
     );
   }
 
@@ -1924,8 +2118,8 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       await loadData();
       statusEl.hidden = true;
       intro.textContent = can.edit
-        ? 'The register of households, people and patta details. Emails and phone numbers are never shown here, only whether one is on file; you can replace or remove them.'
-        : 'The register of households, people and patta details. Emails and phone numbers are never shown here, only whether one is on file.';
+        ? 'The register of units, people and patta details. Emails and phone numbers are never shown here, only whether one is on file; you can replace or remove them.'
+        : 'The register of units, people and patta details. Emails and phone numbers are never shown here, only whether one is on file.';
       content.hidden = false;
     } catch (err) {
       if (err instanceof StaffAuthError) {
@@ -1958,7 +2152,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   $('use-different-account').addEventListener('click', signOut);
   $('sign-out').addEventListener('click', signOut);
   $('search').addEventListener('input', renderList);
-  $('only-flagged').addEventListener('change', renderList);
+  $('show').addEventListener('change', renderList);
 
   if (getToken()) load();
   else showGate();
