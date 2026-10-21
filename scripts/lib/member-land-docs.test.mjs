@@ -57,6 +57,31 @@ test('names tolerate transliteration and extra words', () => {
   assert.ok(!namesMatch('', 'Asha'));
 });
 
+test('names written in Tamil and transliterated into English match across the usual spelling variants', () => {
+  // Each pair is one name as the register has it and as the e-Services PDF printed it.
+  const pairs = [
+    ['Omshivaprakash HL', 'OMSIVAPRAKAS'], // sh / s, a dropped final letter, initials
+    ['Lakshmi Narayanan', 'LAXMI NARAYANAN'], // ksh / x
+    ['Sivakumar', 'Shivakumar'], // sh / s
+    ['Pazhani', 'Palani'], // zh / l
+    ['Thiagarajan', 'Tyagarajan'], // th / t, i / y
+    ['Chandran', 'Sandran'], // ch / s
+    ['Krishnamoorthy', 'KRISHNAMURTHI'], // oo / u, y / i
+    ['Veeramani', 'Viramani'], // ee / i
+    ['Vijayalakshmi', 'VIJAYALAXMI'],
+    ['Murugesan', 'MURUGESSAN'], // a doubled letter
+  ];
+  for (const [a, b] of pairs) assert.ok(namesMatch(a, b), `${a} / ${b}`);
+});
+
+test('names that are actually different people still do not match', () => {
+  assert.ok(!namesMatch('Venkatesh Rao', 'Venkatesan Rao')); // two letters apart is a different name
+  assert.ok(!namesMatch('Asha Rao', 'Meera Rao'));
+  assert.ok(!namesMatch('Ravi', 'Ravindra')); // a short name is not a prefix of a longer one
+  assert.ok(!namesMatch('Murugan', 'Muthukumar'));
+  assert.ok(!namesMatch('Sam', 'Samuel'));
+});
+
 test('an agreeing document verifies the existing record and fills only blanks', () => {
   const [item] = run([plot({ area_hectares: null, area_acres: null, patta_no: '777' })]);
   assert.equal(item.outcome, 'verified');
@@ -80,10 +105,21 @@ test('a different patta number or area is a mismatch and changes nothing', () =>
   assert.equal(documentStatus([a]), 'needs_review');
 });
 
-test('owners who are not in the household block verification', () => {
+test('owner names that match nobody in the household do not block a record the register already holds', () => {
+  // The names on the PDF are a transliteration from Tamil and cannot be trusted to match: the survey number,
+  // patta and area are what say this document is about the household's own land.
   const [item] = run([plot()], { household: { peopleNames: ['Someone Else'] } });
-  assert.equal(item.outcome, 'mismatch');
-  assert.ok(item.differences.some((d) => d.field === 'owners'));
+  assert.equal(item.outcome, 'verified');
+  assert.equal(item.ownerMatch, false); // still recorded, so an admin can see the names did not match
+  assert.ok(!item.differences.some((d) => d.field === 'owners'));
+});
+
+test('an owner-name difference never hides a real one, and a photo is still never verified on its own', () => {
+  const [wrongPatta] = run([plot({ patta_no: '999' })], { household: { peopleNames: ['Someone Else'] } });
+  assert.equal(wrongPatta.outcome, 'mismatch');
+  assert.deepEqual(wrongPatta.differences.map((d) => d.field), ['patta_no']);
+  const [photo] = run([plot()], { household: { peopleNames: ['Someone Else'] }, autoVerify: false });
+  assert.equal(photo.outcome, 'check');
 });
 
 test('a photo or scan is never verified on its own', () => {

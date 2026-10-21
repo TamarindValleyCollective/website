@@ -223,9 +223,37 @@ function editDistanceAtMostOne(a, b) {
   return a.length < b.length ? a.slice(i) === b.slice(i + 1) : a.slice(i + 1) === b.slice(i);
 }
 
-// Tamil to English transliteration varies (Sharath / Sarath), so allow one letter of slack on
-// words of four or more letters.
-const sameWord = (a, b) => a === b || (a.length >= 4 && b.length >= 4 && editDistanceAtMostOne(a, b));
+// A Tamil name is written in English by whoever transliterates it, and the e-Services PDFs and the
+// register rarely agree on the spelling: Sivakumar / Shivakumar, Lakshmi / Laxmi, Pazhani / Palani,
+// Krishnamoorthy / Krishnamurthi. soundKey writes a word the way it sounds, with those variants folded
+// together, so two spellings of one name get one key. It is for comparing, never for showing.
+function soundKey(word) {
+  return word
+    .replace(/ksh|x/g, 'ks')
+    .replace(/zh/g, 'l')
+    .replace(/sh|ch|z/g, 's')
+    .replace(/([tdbkgp])h/g, '$1')
+    .replace(/f/g, 'p')
+    .replace(/w/g, 'v')
+    .replace(/y/g, 'i')
+    .replace(/[cq]/g, 'k')
+    .replace(/ee/g, 'i')
+    .replace(/oo/g, 'u')
+    .replace(/aa/g, 'a')
+    .replace(/(.)\1+/g, '$1'); // a doubled letter is one
+}
+
+// Words match when they are the same, sound the same (soundKey), or are one letter apart; a word of
+// fewer than four letters has to match exactly, so Sam is not Samuel, and a longer name is never a
+// prefix of the one it starts.
+const sameWord = (a, b) => {
+  if (a === b) return true;
+  if (a.length < 4 || b.length < 4) return false;
+  if (editDistanceAtMostOne(a, b)) return true;
+  const ka = soundKey(a);
+  const kb = soundKey(b);
+  return ka === kb || (ka.length >= 4 && kb.length >= 4 && editDistanceAtMostOne(ka, kb));
+};
 
 // A person matches an owner when every word of the shorter name appears in the longer one
 // ("Deepa Alex" in "DEEPA ALEX"; "Sharath Jeppu" in "SHARATH KUMAR JEPPU").
@@ -296,7 +324,9 @@ export function reconcile({ extraction, landType, household, existing, heldElsew
         ? { field: 'area_sq_ft', recorded: String(num(match.area_sq_ft)), document: String(doc.areaSqFt) }
         : { field: 'area', recorded: String(num(match.area_hectares) ?? `${num(match.area_acres)} ac`), document: `${doc.areaHectares} ha` });
     }
-    if (ownerMatch === false) differences.push({ field: 'owners', recorded: 'household members', document: 'names on the document' });
+    // Owner names are NOT a difference here: they are a transliteration from Tamil and often disagree with the register.
+    // `ownerMatch` is kept on the item so an admin can see that they did not match, but the survey number, patta and area
+    // are what say this is the household's own land. (For a record not yet in the register the names still show as a hint.)
 
     // Only blanks are filled from the document.
     const fill = {};
