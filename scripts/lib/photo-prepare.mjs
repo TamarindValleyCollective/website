@@ -3,9 +3,11 @@
 // card, and an uncropped copy up to 1600px for click-to-enlarge.
 //
 // Drawing through a canvas also drops everything else in the file: the camera's make and model, the
-// time, and above all the GPS position, which the server then refuses to accept if it is still there.
+// time, and above all the GPS position. (The server removes any metadata block that is left, whatever the browser did.)
 // imageOrientation 'from-image' applies the camera's rotation first, so a phone photo is upright.
+// The member chooses what the circle shows (centring and zooming, photo-crop.mjs) before the square is cut.
 import { FULL_PX_MAX, MAX_FULL_BYTES, MAX_SQUARE_BYTES, SQUARE_PX_MIN } from './member-photo.mjs';
+import { cropRect, initialCrop } from './photo-crop.mjs';
 
 export const SQUARE_PX = 400;
 
@@ -32,8 +34,11 @@ function draw(bitmap, sx, sy, sw, sh, w, h) {
   return canvas;
 }
 
-/** @param {File} file @returns {Promise<{ square: Blob, full: Blob }>} */
-export async function preparePhoto(file) {
+/**
+ * Opens a chosen photo (upright, as the camera meant it) and checks it can be used. Throws a message fit to show the member.
+ * @param {File} file @returns {Promise<ImageBitmap>}
+ */
+export async function openPhoto(file) {
   if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw new Error('Choose a JPEG, PNG or WebP photo.');
   let bitmap;
   try {
@@ -44,11 +49,26 @@ export async function preparePhoto(file) {
   const { width, height } = bitmap;
   if (Math.min(width, height) < SQUARE_PX_MIN) throw new Error(`That photo is too small. Use one at least ${SQUARE_PX_MIN} pixels across.`);
   if (Math.max(width, height) / Math.min(width, height) > 4) throw new Error('Use a photo that is not extremely wide or tall.');
+  return bitmap;
+}
 
-  const side = Math.min(width, height);
-  const square = await encode(draw(bitmap, (width - side) / 2, (height - side) / 2, side, side, SQUARE_PX, SQUARE_PX), MAX_SQUARE_BYTES);
+/**
+ * The two JPEGs from an opened photo: the card's square cut from `crop` (a square of the picture, in picture pixels: see
+ * photo-crop.mjs), and the whole picture, uncropped, for click-to-enlarge. Closes the bitmap.
+ * @param {ImageBitmap} bitmap @param {{ sx: number, sy: number, side: number }} crop
+ * @returns {Promise<{ square: Blob, full: Blob }>}
+ */
+export async function preparePhotoFrom(bitmap, crop) {
+  const { width, height } = bitmap;
+  const square = await encode(draw(bitmap, crop.sx, crop.sy, crop.side, crop.side, SQUARE_PX, SQUARE_PX), MAX_SQUARE_BYTES);
   const scale = Math.min(1, FULL_PX_MAX / Math.max(width, height));
   const full = await encode(draw(bitmap, 0, 0, width, height, Math.round(width * scale), Math.round(height * scale)), MAX_FULL_BYTES);
   bitmap.close?.();
   return { square, full };
+}
+
+/** The photo with the default crop (the largest centred square), without a dialog. @param {File} file */
+export async function preparePhoto(file) {
+  const bitmap = await openPhoto(file);
+  return preparePhotoFrom(bitmap, cropRect(initialCrop(bitmap.width, bitmap.height), bitmap.width, bitmap.height));
 }
