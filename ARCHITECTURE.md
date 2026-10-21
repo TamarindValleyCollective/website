@@ -1551,7 +1551,7 @@ never touches Netlify either.
   own "why TVC" and profile link are theirs, and the housemates' lines are shown read-only. A save sends only what changed since the last
   save (`saveChanges`) plus the version it started from, so two owners editing at once only collide on the same field; if they do, the
   server refuses the save (409, naming the field), the page shows the other owner's version of just that field, keeps the rest of
-  the person's edits and sends them again (`conflictedDraftKeys`). With the switch off the editor and its endpoints are unchanged.
+  the person's edits and sends them again (`conflictedDraftKeys`). With the switch off the editor and its endpoints are unchanged. **Privacy notice v8** (`scripts/lib/member-privacy.mjs`) describes the unit model: the story is shared by everyone in the unit who can sign in, drafts are visible to them and the core team, any of them can submit it (a later submission replaces one in review) and switch it public, each person's own line and link are theirs but readable by the unit, the safety check sees everyone's lines, and turning a listing off hides only that person's own line and link while the shared story stays for the others; raising the version re-prompts every member at their next sign-in.
   Backfill with
   `scripts/preview-unit-stories.mjs` then `scripts/backfill-unit-stories.mjs` (applied to TVC ERP 2026-10-21, 40 units).
 - **Member stories (`members-me.mts`, migration 0044).** A member writes a short public-facing
