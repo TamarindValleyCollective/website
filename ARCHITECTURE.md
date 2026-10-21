@@ -1514,14 +1514,14 @@ never touches Netlify either.
   redoes everything once, so the first load of a household's page after deploy fills them in, with no
   script or credentials.
 
-- **Unit stories (`members-me.mts`, migration 0049; in progress, not used by the portal yet).** Stories are
-  moving from one record per person to one per unit, because bio and family describe the unit. `member_unit_stories`
+- **Unit stories (`members-me.mts`, migrations 0049 and 0050; live since 2026-10-21).** Stories moved
+  from one record per person to one per unit, because bio and family describe the unit. `member_unit_stories`
   (one row per household, same draft / submitted / approved copies, RLS on, anon revoked) holds the shared text, up to two
   photos and the public switch; each person's own quote and profile link sit under their id inside the copy. Rules are in
   `scripts/lib/member-unit-story.mjs` (tested). Two owners edit one shared draft: a save sends the version it started from
   and only the fields it changed, and conflicts only if the other owner changed one of the same fields (`draft_version` +
   `draft_changed`; the write is guarded on the version so a race loses cleanly). Endpoints, all behind the same
-  signed-in-and-acknowledged gate as the person story: `GET`/`POST /api/members-me/unit-story` (view; save a draft),
+  signed-in-and-acknowledged gate as the rest of the portal: `GET`/`POST /api/members-me/unit-story` (view; save a draft),
   `POST /api/members-me/unit-story-submit` (audit-first as `member.unit_story.submit`, never with the text; a second
   owner's submit replaces one in review), `POST /api/members-me/unit-story-photo` and `unit-story-photo-remove` (at most two
   photos, checked before any file is stored), and `GET /api/members-me/unit-photo` (the unit's people see any copy; other
@@ -1532,43 +1532,30 @@ never touches Netlify either.
   `unitstory.unpublish` (all `manage`, audit-first, the note never in the audit entry) apply to the exact submission the
   reviewer saw, so a resubmission can't be approved unseen; approving deletes the live photos it replaced (stored under their
   uploader's id). The reviewer's photo view (`/api/members-admin/story-photo`) also serves unit photos. The queue's screen is
-  a second panel under the person queue on `/internal/members` ("Unit stories waiting for review"; hidden while empty): each unit is a
+  the panel on `/internal/members` ("Unit stories waiting for review"; hidden while empty): each unit is a
   card showing what changed first (chips, then the changed parts with a "Currently approved" fold, the unchanged parts folded into one
   line), with Approve and Send back (a note is required). **Risk assessment** for a unit's story (migration 0050,
   `member_unit_story_assessments`, one row per submission): `POST unit-story-submit` calls `assessUnitSubmission` in `lib/story-risk.ts`,
   which shows the existing risk rules the unit's copies through `unitRiskRow` / `riskCopy`, records the assessment, and, in live mode and
   not paused, approves a low-risk story at once (the same change an admin's approval makes, replaced photos deleted) or holds a high-risk one
   and emails the core team ("Unit stories waiting for review"). With no usable model answer a public story is held without an email, as for
-  a person's. The queue card shows the assessment, an admin's decision is written onto it, and the auto-publish panel's shadow stats and
-  "published automatically, hide" list count units too (a unit entry hides through `unitstory.unpublish`). **Cutover switch**: `member_settings` key `unit_stories`
-  (`{ "live": true }`; missing or anything else means off, `unitSwitchLive`) says whether the live system reads stories per unit. While it
-  is off, everything above exists but is not live and the portal keeps using `member_stories`. The **public export**
-  (`members-public.mts`, `GET /api/members-published` and `members-published-photo`) follows it: off, it builds the cards from
-  `member_stories` exactly as before; on, `buildPublishedUnits` turns each unit's approved, public copy into the same cards (the 2017
+  a person's story. The queue card shows the assessment, an admin's decision is written onto it, and the auto-publish panel's shadow stats and
+  "published automatically, hide" list count units too (a unit entry hides through `unitstory.unpublish`). The **public export**
+  (`members-public.mts`, `GET /api/members-published` and `members-published-photo`): `buildPublishedUnits` turns each unit's approved, public copy into the cards (the 2017
   card name, each person's quote and link by position, the unit's first photo only) and serves a public photo from the uploader's
   files only if the uploader is still a listed owner of the unit. The publish counters (`handlePublishStatus`,
-  `waitingPublicStories` for the daily build) count the table the site is built from. To flip it, refresh the backfill first
-  (`scripts/backfill-unit-stories.mjs --refresh`, only while the switch is off) and then
-  `insert into member_settings (key, value) values ('unit_stories', '{"live": true}') on conflict (key) do update set value = excluded.value;`.
-  The **directory** (`GET /api/members-me/directory`) follows the same switch: off, `buildDirectory` from `member_stories`
-  as before; on, `buildUnitDirectory` hands `buildDirectory` one story per owner built from the unit's approved copy (the shared bio and family,
+  `waitingPublicStories` for the daily build) count public units. The **directory** (`GET /api/members-me/directory`): `buildUnitDirectory` hands `buildDirectory` one story per owner built from the unit's approved copy (the shared bio and family,
   that person's quote and link), so a couple is one section because it is one story and one owner's edit can never split it. The unit's
-  photos (at most two, not tied to a person) are dealt to its owners in order, the viewer first; the response says `unitPhotos: true` so
-  the page fetches them from `GET /api/members-me/unit-photo` instead of `/photo`. A card or popup header shows only the people who have a photo when anyone does (`facesToShow`), so one photo uploaded for two owners is one picture, not a picture and a stray initial. The portal's **story editor** follows the switch too: `GET /api/members-me/home` returns `unitStories`, and when on
-  the "Your story" page edits the unit's shared story instead of the person's. Bio, family and up to two photos are shared; the person's
+  photos (at most two, not tied to a person) are dealt to its owners in order, the viewer first, and fetched from `GET /api/members-me/unit-photo`; a card or popup header shows only the people who have a photo when anyone does (`facesToShow`), so one photo uploaded is one face. The cutover that moved the portal over (a `member_settings` switch, a backfill from the per-person tables, 40 units, 2026-10-21) is done and its scripts are deleted (see git history). The portal's
+  "Your story" page edits the unit's shared story. Bio, family and up to two photos are shared; the person's
   own "why TVC" line is theirs, and the housemates' lines are shown read-only. A unit's story needs **at least one** "why TVC" line from anyone in the unit before it can be submitted (`validateUnitSubmit`), because a couple's story often carries one joint quote that one of them wrote; it is not asked of each person or of whoever submits. There is no separate profile-link field: to link a name, select it in the text and press Link, and a profile link a person already has is written into the shared text on their first name when they open the editor (`foldProfileLink` in `scripts/lib/member-markdown.mjs`, saved with their next change and read by the core team with the story; if their name is not in the text it stays as a small line with a Remove button). A save sends only what changed since the last
   save (`saveChanges`) plus the version it started from, so two owners editing at once only collide on the same field; if they do, the
   server refuses the save (409, naming the field), the page shows the other owner's version of just that field, keeps the rest of
-  the person's edits and sends them again (`conflictedDraftKeys`). With the switch off the editor and its endpoints are unchanged. **Privacy notice v9** (`scripts/lib/member-privacy.mjs`) describes the unit model: the story is shared by everyone in the unit who can sign in, drafts are visible to them and the core team, any of them can submit it (a later submission replaces one in review) and switch it public, each person's own "why TVC" line is theirs but readable by the unit, links on names are part of the shared text and so editable by anyone in the unit, the safety check sees everyone's lines, and turning a listing off hides only that person's own line while the shared story, links included, stays for the others (v8 had said each person's profile link was theirs alone; v9 corrects that now that links live in the text); raising the version re-prompts every member at their next sign-in.
-  Backfill with
-  `scripts/preview-unit-stories.mjs` then `scripts/backfill-unit-stories.mjs` (applied to TVC ERP 2026-10-21, 40 units).
+  the person's edits and sends them again (`conflictedDraftKeys`). **Privacy notice v9** (`scripts/lib/member-privacy.mjs`) describes the unit model: the story is shared by everyone in the unit who can sign in, drafts are visible to them and the core team, any of them can submit it (a later submission replaces one in review) and switch it public, each person's own "why TVC" line is theirs but readable by the unit, links on names are part of the shared text and so editable by anyone in the unit, the safety check sees everyone's lines, and turning a listing off hides only that person's own line while the shared story, links included, stays for the others (v8 had said each person's profile link was theirs alone; v9 corrects that now that links live in the text); raising the version re-prompts every member at their next sign-in.
+
 - **Member stories (`members-me.mts`, migration 0044).** A member writes a short public-facing
   story about themselves (what they do, family, one-line "why TVC") on the portal's
-  "Your story" page, which replaces the "TVC Members: Your Story" Google Form. `member_stories` has
-  one row per person (FK to `member_people`) with three copies of the text: `draft` (autosaved by
-  `POST /api/members-me/story`), `submitted` (the snapshot in review, written by
-  `POST /api/members-me/story-submit`, audit-first as `member.story.submit`, never with the text) and
-  `approved` (written when the core team approves), so an edit never disturbs approved text. `show_on_public_site` defaults to off.
+  "Your story" page, which replaces the "TVC Members: Your Story" Google Form. The original per-person tables (`member_stories`, `member_story_assessments`; migrations 0044 and 0046) were dropped by migration 0051 once the unit model had been live; the rules below now apply to `member_unit_stories`, which has the same draft / submitted / approved copies, so an edit never disturbs approved text. `show_on_public_site` defaults to off.
   The bio and family text may carry a small Markdown subset (`**bold**`, `*italic*`, `[words](https://address)` links, blank line = paragraph; no HTML, images or headings): the editor's Bold/Italic/Link buttons write it, and one parser (`scripts/lib/member-markdown.mjs`) is shared by the editor preview, the directory popup, the admin queue (which lists each link's address), the public export and `MembersView`, so a link is only ever an explicit http(s) address. The writing check may fix words but a suggestion that would change an address is dropped. The old single "profile link" is still read (it links the first name) until the member opens their story, when it is written into the text as a normal link. `POST /api/members-me/story-review` returns
   suggestions on spelling, grammar, tone and house style (third person) from the Anthropic API
   (`lib/anthropic.ts`, model `STORY_REVIEW_MODEL`, default `claude-sonnet-5`; 10 checks per member and
@@ -1576,15 +1563,7 @@ never touches Netlify either.
   named in the family line). The model's output is kept only where it quotes the member's own text
   (`scripts/lib/member-story.mjs`), the page shows each suggestion and the member accepts or dismisses
   it, and nothing is applied without that. The story text and the member's first name are sent to
-  Anthropic for the check, so privacy notice v3 says so. **Approval queue** (`members-admin.mts`): `GET /api/members-admin/stories` (needs `edit`) lists
-  stories in review, oldest first, with the person's name and farm unit, what changed against the
-  approved copy and the fixed privacy flags; `story.approve` / `story.reject` (in `POST /edit`, need
-  `manage`) are audit-first like every register edit (the entry names the person id, never the text or
-  the note). Approving copies `submitted` to `approved`; rejecting needs a note the member sees and
-  leaves earlier approved text live (so anything that publishes must read `approved`, never `status`).
-  Both name the submission the reviewer saw (`submittedAt`) and match it in the update, so a
-  resubmission or a second reviewer can't be overridden. The panel sits above the totals on
-  `/internal/members`.
+  Anthropic for the check, so privacy notice v3 says so. **Approval queue**: see the unit stories entry above.
   **Member directory** (`GET /api/members-me/directory`, `scripts/lib/member-directory.mjs`): the portal's
   Directory lists the other members as households (farm plot, house number, cluster) with each person's **approved**
   story, for any signed-in member who has acknowledged the privacy notice. It is the one place a member
@@ -1593,25 +1572,20 @@ never touches Netlify either.
   listed (`directory_visible`, opt-out; an opted-out person's story is hidden too), and reads the
   `approved` copy only, whether or not it is also on tvc.farm. Profile links go to the page only if
   they are http(s), and open with `noopener noreferrer nofollow`. Privacy notice v4 describes it.
-  **Seeding** (`scripts/seed-member-stories.mjs`, `scripts/lib/member-story-seed.mjs`): the public cards in
-  `src/data/members.ts` are loaded as approved, published stories by generated SQL run once in the TVC ERP
-  SQL editor (preview, then apply). Matching cards to people happens in the database, so the file holds only
-  public card text; see the plan's "Seeding the cards". The directory merges identical bio and family into one
-  section (`groups`).
+  **Seeding**: the public cards in `src/data/members.ts` were loaded once as approved, published stories (generated SQL, scripts since deleted); `member_cards` records which household each 2017 card is. The directory merges identical bio and family into one section (`groups`).
   **Photos** (`scripts/lib/member-photo.mjs`, `lib/member-photo-storage.ts`, `scripts/lib/photo-prepare.mjs`):
   a story's photo is a string inside its draft / submitted / approved copy, like the text, so a new photo
   is reviewed with the story and the live photo never changes until approval. It is a uuid (an upload,
   kept in the same private R2 bucket as the land documents under `member-photos/<person>/<photo>[-full].jpg`)
   or a path under `/images/members/` (a photo already on the public site, set by the seeding). In the
   member's browser a canvas re-encode makes a 400px square and an uncropped copy up to 1600px (before it is uploaded the member positions the photo in a circle: drag to centre, zoom 1x to 4x by slider, wheel or pinch, with the arrow keys and +/- as well; `scripts/lib/photo-crop.mjs` gives the exact square the circle shows, `photo-prepare.mjs` cuts it, and the click-to-enlarge copy stays uncropped), which also
-  strips the camera's metadata including GPS; the server (`POST /api/members-me/story-photo`) re-checks
+  strips the camera's metadata including GPS; the server (`POST /api/members-me/unit-story-photo`) re-checks
   that both are real JPEGs, the sizes and the square, then REMOVES every metadata block itself (`stripJpegMetadata`: EXIF, XMP, IPTC, comments, multi-picture offsets; the JFIF header and ICC colour profile stay) and stores the cleaned bytes, never the uploaded ones, with
-  a cap of 10 uploads a member a day. Photos are never public: `GET /api/members-me/photo` serves one only
-  to its author (any copy) or, for the APPROVED photo of a listed member, to any signed-in member, and the
+  a cap of 10 uploads a member a day. Photos are never public: `GET /api/members-me/unit-photo` serves one only
+  to the unit's people (any copy) or, for the APPROVED photo of a listed member, to any signed-in member, and the
   page fetches it with the member's sign-in and shows it from a blob URL; `members-admin.mts` serves a
   submitted or approved photo to admins with `edit`. Replacing a photo, removing it, resubmitting or
-  approving deletes the files nothing refers to any more. `scripts/seed-member-stories.mjs` also writes
-  `seed-photos.sql`, which attaches each card's existing public photo to the people seeded from it. Privacy
+  approving deletes the files nothing refers to any more.Privacy
   notice v5 describes photos.
   **Public export** (`netlify/functions/members-public.mts`, `scripts/export-member-stories.mjs`,
   `scripts/lib/member-publish.mjs`, migration 0045 `member_cards`): the public Members page is the 2017 cards
@@ -1640,7 +1614,7 @@ never touches Netlify either.
   children or ages, a phone number or email, any new or changed link or an unusual one, a photo change, most of
   the text rewritten; only what is NEW is scanned once a story is already public) plus the Anthropic model's
   judgement (`STORY_RISK_MODEL`, default the story-check model; 200 a day, counted in `usage-meter`), which can
-  only raise the level. The result, low or high with reasons, is stored in `member_story_assessments` (never the
+  only raise the level. The result, low or high with reasons, is stored in `member_unit_story_assessments` (never the
   story text) and the person's later approve/reject is written beside it. A story not for the public site is
   always low. A setting `story_autopublish` in `member_settings` (`{ mode: shadow | live, paused }`, changed by
   admin `site.autopublish`, `manage`, audited) decides what happens: in SHADOW mode (the default) a person still
@@ -1649,7 +1623,7 @@ never touches Netlify either.
   stays in review and `sendStaffAlert` emails core-team with why and what changed (no email when the only reason
   is that the model was unavailable), and the scheduled function `members-daily-publish` (07:00 IST) starts one
   build if approved public stories are waiting. Paused keeps live mode but makes everything wait for a person.
-  Admins can take a published story off the site (`story.unpublish`, `manage`, which also starts a build). Photos
+  Admins can take a published story off the site (`unitstory.unpublish`, `manage`, which also starts a build). Photos
   are never sent to the model: any public photo change is a rule-based hold. Privacy notice v6 discloses the check.
   **Register cards and Google picture** (migration 0047, `scripts/lib/member-google-picture.mjs`): the admin
   member register's household cards name the owners by first name ("Asha & Ravi"), or by full name when a card

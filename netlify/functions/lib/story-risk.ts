@@ -1,6 +1,6 @@
 // Risk-based publishing of member stories (docs/plans/member-portal.md, "Risk-based publishing").
-// When a member submits a public story it is assessed (scripts/lib/member-risk.mjs: fixed rules plus
-// the model's judgement) and the assessment is recorded in member_story_assessments.
+// When a unit's story is submitted for the public site it is assessed (scripts/lib/member-risk.mjs: fixed rules plus
+// the model's judgement) and the assessment is recorded in member_unit_story_assessments.
 //
 // In SHADOW mode (the default, member_settings key story_autopublish) that is all that happens: a person
 // still approves everything and the admin queue shows what the assessment would have done, so it can be
@@ -16,7 +16,7 @@ import { deleteMemberPhoto } from './member-photo-storage';
 import { isUploadedPhoto } from '../../../scripts/lib/member-photo.mjs';
 import { RISK_SYSTEM, assessRules, combine, describeChange, outcomeFor, parseModelRisk, riskPrompt } from '../../../scripts/lib/member-risk.mjs';
 import { SETTING_KEY, actsAutomatically, parseSettings } from '../../../scripts/lib/member-autopublish.mjs';
-import { UNIT_STORIES_KEY, decisionColumns, replacedPhotos, unitRiskRow, unitSwitchLive } from '../../../scripts/lib/member-unit-story.mjs';
+import { decisionColumns, replacedPhotos, unitRiskRow } from '../../../scripts/lib/member-unit-story.mjs';
 
 const RISK_MODEL = process.env.STORY_RISK_MODEL || process.env.STORY_REVIEW_MODEL || 'claude-sonnet-5';
 const RISK_STORE = 'member-story-risk';
@@ -46,13 +46,7 @@ export async function loadSettings() {
   return parseSettings(r.rows[0]);
 }
 
-// Whether the live system reads and writes stories per UNIT (member_settings key `unit_stories`, off until the cutover).
-export async function unitStoriesLive(): Promise<boolean> {
-  const r = await sb(`member_settings?select=value&key=eq.${UNIT_STORIES_KEY}`);
-  if (!r.ok) throw new Error(`unit switch load failed: ${r.status}`);
-  return unitSwitchLive(r.rows[0]);
-}
-
+// The risk code reads a submission as a row naming its subject `person_id`; for a unit that field holds the unit's id (unitRiskRow).
 export type StoryRow = { person_id: string; draft?: any; submitted: any; submitted_public: boolean; submitted_at: string; approved: any; approved_public: boolean | null };
 
 // The model's view, or null when it was not run or did not give a usable answer (which the rules treat as "held for a person").
@@ -77,39 +71,18 @@ export function assess(row: StoryRow, model: { level: string; reasons: string[] 
   return combine(rules, model, { public: !!row.submitted_public });
 }
 
-// A person's story is recorded under person_id, a unit's under household_id (migration 0050); the risk code
-// names the subject `person_id` either way (unitRiskRow), so the table and column say which it is.
-type Target = { table: string; column: string };
-const PERSON_TARGET: Target = { table: 'member_story_assessments', column: 'person_id' };
-const UNIT_TARGET: Target = { table: 'member_unit_story_assessments', column: 'household_id' };
-
-async function record(row: StoryRow, a: ReturnType<typeof assess>, mode: string, target: Target = PERSON_TARGET) {
-  const r = await sb(`${target.table}?on_conflict=${target.column},submitted_at`, {
+// The assessment is recorded under the unit (migration 0050). The risk code names the subject `person_id` (unitRiskRow), so
+// that field is written to the household_id column.
+async function record(row: StoryRow, a: ReturnType<typeof assess>, mode: string) {
+  const r = await sb('member_unit_story_assessments?on_conflict=household_id,submitted_at', {
     method: 'POST',
     prefer: 'resolution=merge-duplicates,return=minimal',
-    body: { [target.column]: row.person_id, submitted_at: row.submitted_at, is_public: !!row.submitted_public, level: a.level, reasons: a.reasons, assessed_by: a.assessedBy, mode, outcome: outcomeFor(a), decision: null, decided_at: null },
+    body: { household_id: row.person_id, submitted_at: row.submitted_at, is_public: !!row.submitted_public, level: a.level, reasons: a.reasons, assessed_by: a.assessedBy, mode, outcome: outcomeFor(a), decision: null, decided_at: null },
   });
   if (!r.ok) console.error('[story-risk] could not record the assessment', r.status);
 }
 
-// What a person's approval does, done by the system for a low-risk story: the same change decideStory makes
-// (members-admin.mts), filtered on the exact submission so a resubmission can never be approved by mistake.
-async function approveBySystem(row: StoryRow): Promise<boolean> {
-  const now = new Date().toISOString();
-  const r = await sb(`member_stories?person_id=eq.${row.person_id}&status=eq.in_review&submitted_at=eq.${encodeURIComponent(row.submitted_at)}`, {
-    method: 'PATCH',
-    prefer: 'return=representation',
-    body: { status: 'approved', approved: row.submitted, approved_public: row.submitted_public, approved_at: now, reviewed_by: null, reviewer_note: null, updated_at: now },
-  });
-  if (!r.ok || r.rows.length === 0) return false;
-  // The live photo this replaces goes once no copy refers to it, as when a person approves.
-  const replaced = row.approved?.photo;
-  if (isUploadedPhoto(replaced) && replaced !== row.submitted?.photo && replaced !== row.draft?.photo) await deleteMemberPhoto(row.person_id, replaced).catch((err) => console.error('[story-risk] photo cleanup failed', err));
-  await sb(`member_story_assessments?person_id=eq.${row.person_id}&submitted_at=eq.${encodeURIComponent(row.submitted_at)}`, { method: 'PATCH', prefer: 'return=minimal', body: { decision: 'auto_approved', decided_at: now } });
-  return true;
-}
-
-function emailBody(name: string, a: ReturnType<typeof assess>, row: StoryRow, panel = 'Stories waiting for review'): string {
+function emailBody(name: string, a: ReturnType<typeof assess>, row: StoryRow, panel = 'Unit stories waiting for review'): string {
   const change = describeChange({ submitted: row.submitted, approved: row.approved });
   const reasons = a.reasons.filter((r: any) => r.code !== 'unassessed').map((r: any) => `<li>${escapeHtml(r.text)}</li>`).join('');
   const fields = change.fields
@@ -124,31 +97,7 @@ function emailBody(name: string, a: ReturnType<typeof assess>, row: StoryRow, pa
   <p style="margin-bottom:0;">Approve or send it back in the <a href="${QUEUE_URL}">member register</a>, under "${panel}". Nothing else needs doing: low-risk stories are published without an email.</p>`;
 }
 
-/**
- * Called after a story is submitted. Never throws: the member's submission has already succeeded, and a
- * problem here only means the story waits for a person, as it always has.
- * Returns whether the system approved it (so the caller can return the fresh state to the member).
- */
-export async function assessSubmission(row: StoryRow, memberName: string): Promise<{ approved: boolean }> {
-  try {
-    const settings = await loadSettings();
-    const model = row.submitted_public ? await askModel(row) : null;
-    const a = assess(row, model);
-    await record(row, a, settings.mode);
-    if (!actsAutomatically(settings)) return { approved: false };
-
-    if (outcomeFor(a) === 'publish') return { approved: await approveBySystem(row) };
-    if (a.notify) {
-      await sendStaffAlert(`A member story needs a look: ${memberName}`, emailBody(memberName, a, row)).catch((err) => console.error('[story-risk] alert email failed', err));
-    }
-    return { approved: false };
-  } catch (err) {
-    console.error('[story-risk] assessment failed', err);
-    return { approved: false };
-  }
-}
-
-// The same, for a story that belongs to a whole unit: the change an admin's approval makes (decisionColumns),
+// What an admin's approval does, done by the system for a low-risk story: the change decideUnitStory makes (decisionColumns),
 // filtered on the exact submission, then the replaced live photos go and the assessment records who decided.
 async function approveUnitBySystem(unitRow: any): Promise<boolean> {
   const now = new Date().toISOString();
@@ -168,8 +117,9 @@ async function approveUnitBySystem(unitRow: any): Promise<boolean> {
 }
 
 /**
- * Called after a UNIT's story is submitted (the unit twin of assessSubmission). Never throws, for the same
- * reason. `label` names the unit for the alert email ("F-12: Asha and Ravi").
+ * Called after a unit's story is submitted. Never throws: the submission has already succeeded, and a problem here only means
+ * the story waits for a person, as it always has. Returns whether the system approved it (so the caller can return the fresh
+ * state to the member). `label` names the unit for the alert email ("F-12: Asha and Ravi").
  */
 export async function assessUnitSubmission(unitRow: any, label: string): Promise<{ approved: boolean }> {
   try {
@@ -177,12 +127,12 @@ export async function assessUnitSubmission(unitRow: any, label: string): Promise
     const settings = await loadSettings();
     const model = row.submitted_public ? await askModel(row) : null;
     const a = assess(row, model);
-    await record(row, a, settings.mode, UNIT_TARGET);
+    await record(row, a, settings.mode);
     if (!actsAutomatically(settings)) return { approved: false };
 
     if (outcomeFor(a) === 'publish') return { approved: await approveUnitBySystem(unitRow) };
     if (a.notify) {
-      await sendStaffAlert(`A unit story needs a look: ${label}`, emailBody(label, a, row, 'Unit stories waiting for review')).catch((err) => console.error('[story-risk] alert email failed', err));
+      await sendStaffAlert(`A unit story needs a look: ${label}`, emailBody(label, a, row)).catch((err) => console.error('[story-risk] alert email failed', err));
     }
     return { approved: false };
   } catch (err) {
@@ -209,8 +159,6 @@ export async function recordAutoPublish(at: string): Promise<void> {
 // Public stories approved since the last publish.
 export async function waitingPublicStories(): Promise<number> {
   const last = await lastPublishAt();
-  const r = (await unitStoriesLive())
-    ? await sb('member_unit_stories?select=household_id,approved_at&approved_public=eq.true&limit=2000')
-    : await sb('member_stories?select=person_id,approved_at&approved_public=eq.true&limit=2000');
+  const r = await sb('member_unit_stories?select=household_id,approved_at&approved_public=eq.true&limit=2000');
   return r.rows.filter((x) => !last || Date.parse(x.approved_at) > Date.parse(last)).length;
 }

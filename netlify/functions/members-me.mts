@@ -7,13 +7,8 @@
 //   GET  /api/members-me/land-documents  their uploaded patta / survey documents and what became of them
 //   POST /api/members-me/land-documents  upload one (multipart: file, landType, householdId); read in the background
 //   GET  /api/members-me/directory     the other members: name, farm plot, cluster and their approved story (opt-out; never contact details)
-//   GET  /api/members-me/story         their own story: the draft, and where it stands (draft / in review / approved)
-//   POST /api/members-me/story         save their draft (autosave; not audited, it is unpublished writing only they and the core team can see)
+//   POST /api/members-me/unit-story / unit-story-submit / unit-story-photo(-remove), GET unit-story / unit-photo  the unit's shared story
 //   POST /api/members-me/story-review  suggestions on spelling, grammar, tone and house style (a model, plus fixed privacy checks); edits nothing
-//   POST /api/members-me/story-submit  hand the saved draft to the core team (audited first)
-//   POST /api/members-me/story-photo   upload a photo for the draft (multipart: square + full JPEGs, made in the browser)
-//   POST /api/members-me/story-photo-remove  take the photo off the draft
-//   GET  /api/members-me/photo?id=&size=  one uploaded photo, if the asker may see it (their own, or an approved one of a listed member)
 //
 // The privacy boundary is requireMember (lib/member-access.ts): a member is only
 // ever mapped to the households they are invited to, and every query below is
@@ -38,11 +33,11 @@ import { validateProfileEdit, profileAuditDetail } from '../../scripts/lib/membe
 import { PRIVACY_NOTICE_VERSION, privacyNoticeRequired, validateAcceptance } from '../../scripts/lib/member-privacy.mjs';
 import { callAnthropic } from './lib/anthropic';
 import { checkDailyCap } from './lib/rate-limit';
-import { buildDirectory, buildUnitDirectory } from '../../scripts/lib/member-directory.mjs';
-import { MAX_FULL_BYTES, MAX_SQUARE_BYTES, isUploadedPhoto, photoAccess, validatePhotoPair } from '../../scripts/lib/member-photo.mjs';
+import { buildUnitDirectory } from '../../scripts/lib/member-directory.mjs';
+import { MAX_FULL_BYTES, MAX_SQUARE_BYTES, isUploadedPhoto, validatePhotoPair } from '../../scripts/lib/member-photo.mjs';
 import { deleteMemberPhoto, getMemberPhoto, putMemberPhoto } from './lib/member-photo-storage';
-import { assessSubmission, assessUnitSubmission, unitStoriesLive } from './lib/story-risk';
-import { REVIEW_SYSTEM, localChecks, parseSuggestions, reviewPrompt, storyAuditDetail, storyView, validateDraft, validateForSubmit, withStoredPhoto } from '../../scripts/lib/member-story.mjs';
+import { assessUnitSubmission } from './lib/story-risk';
+import { REVIEW_SYSTEM, localChecks, parseSuggestions, reviewPrompt, validateDraft } from '../../scripts/lib/member-story.mjs';
 import { MAX_PHOTOS, addPhoto, draftColumns, draftState, mergeDraftEdit, unitPhotoAccess, unitStoryView, validateUnitSave, validateUnitSubmit } from '../../scripts/lib/member-unit-story.mjs';
 import { ALLOWED_MIME, LAND_TYPES, MAX_HOUSEHOLD_BYTES, MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_UPLOADS_PER_DAY, NOT_A_LAND_PDF, WRONG_CARD, documentsReplacedBy, landTypeMismatch, memberSummary, normalizeExtraction, surveyKey } from '../../scripts/lib/member-land-docs.mjs';
 
@@ -108,7 +103,6 @@ async function handleHome(req: Request): Promise<Response> {
     households: reviewed,
     // Whether the story editor writes the unit's shared story (the cutover switch) or the person's own; off until the move is done.
     // A failure to read the switch must not stop the portal opening, so it means off.
-    unitStories: await unitStoriesLive().catch(() => false),
   });
 }
 
@@ -400,7 +394,6 @@ async function handleLandShapes(req: Request): Promise<Response> {
 
 // ---- stories ----------------------------------------------------------------
 
-const STORY_COLUMNS = 'person_id,draft,draft_public,status,submitted,submitted_public,submitted_at,approved,approved_public,approved_at,reviewer_note';
 const STORY_REVIEW_STORE = 'member-story-review';
 // Per member per day, and for the whole portal: each check is one paid model call.
 const STORY_REVIEW_PER_MEMBER_DAILY = 10;
@@ -408,11 +401,6 @@ const STORY_REVIEW_GLOBAL_DAILY = 300;
 const STORY_REVIEW_TIMEOUT_MS = 20_000;
 // Same model as search-ai.mts's fallback, so the usage page's single Anthropic price entry stays right.
 const STORY_REVIEW_MODEL = process.env.STORY_REVIEW_MODEL || 'claude-sonnet-5';
-
-async function loadStory(personId: string): Promise<any | null> {
-  const rows = await select('member_stories', STORY_COLUMNS, `person_id=eq.${personId}`);
-  return rows[0] ?? null;
-}
 
 // Signed-in, invited and past the privacy notice: the same gate as /profile (also used by stories and the directory).
 async function requireAcknowledgedMember(req: Request) {
@@ -428,47 +416,6 @@ async function readJson(req: Request): Promise<unknown | undefined> {
   } catch {
     return undefined;
   }
-}
-
-async function handleStoryGet(req: Request): Promise<Response> {
-  const who = await requireAcknowledgedMember(req);
-  if ('error' in who) return who.error;
-  try {
-    return jsonResponse({ story: storyView(await loadStory(who.member.personId)), firstName: who.member.name.trim().split(/\s+/).find((w) => w.length > 1) ?? who.member.name });
-  } catch (err) {
-    console.error('[members-me] story load failed', err);
-    return jsonResponse({ error: 'Server error' }, 500);
-  }
-}
-
-async function handleStorySave(req: Request): Promise<Response> {
-  const who = await requireAcknowledgedMember(req);
-  if ('error' in who) return who.error;
-  const body = await readJson(req);
-  if (body === undefined) return jsonResponse({ error: 'Nothing to do.' }, 400);
-  const checked = validateDraft(body);
-  if (!checked.ok) return jsonResponse({ error: checked.error }, 400);
-
-  // Upsert on the person: only the draft side is written, so text in review or live is untouched.
-  // The draft's photo is changed only by the photo endpoints, so it is carried over, not overwritten.
-  let existing: any = null;
-  try {
-    existing = await loadStory(who.member.personId);
-  } catch (err) {
-    console.error('[members-me] story load failed', err);
-    return jsonResponse({ error: 'Could not save your draft. Try again.' }, 500);
-  }
-  const res = await fetch(`${supabaseUrl()}/rest/v1/member_stories?on_conflict=person_id&select=${STORY_COLUMNS}`, {
-    method: 'POST',
-    headers: restHeaders({ Prefer: 'resolution=merge-duplicates,return=representation' }),
-    body: JSON.stringify({ person_id: who.member.personId, draft: withStoredPhoto(checked.draft, existing?.draft), draft_public: checked.showOnPublicSite, updated_at: new Date().toISOString() }),
-  });
-  if (!res.ok) {
-    console.error('[members-me] story save failed', res.status);
-    return jsonResponse({ error: 'Could not save your draft. Try again.' }, 500);
-  }
-  const rows = await res.json();
-  return jsonResponse({ story: storyView(rows[0]) });
 }
 
 async function handleStoryReview(req: Request): Promise<Response> {
@@ -519,165 +466,15 @@ async function handleStoryReview(req: Request): Promise<Response> {
   });
 }
 
-async function handleStorySubmit(req: Request): Promise<Response> {
-  const who = await requireAcknowledgedMember(req);
-  if ('error' in who) return who.error;
-  const { member } = who;
-
-  let row: any;
-  try {
-    row = await loadStory(member.personId);
-  } catch (err) {
-    console.error('[members-me] story load failed', err);
-    return jsonResponse({ error: 'Server error' }, 500);
-  }
-  if (!row) return jsonResponse({ error: 'Save your story first.' }, 409);
-  const ok = validateForSubmit(row.draft);
-  if (!ok.ok) return jsonResponse({ error: ok.error }, 400);
-  if (!storyView(row).hasUnsubmittedChanges) return jsonResponse({ error: 'There is nothing new to submit.' }, 409);
-
-  // Logged before the change, and refused if it can't be, as for every self-service change.
-  const log = await fetch(`${supabaseUrl()}/rest/v1/member_audit_log`, {
-    method: 'POST',
-    headers: restHeaders({ Prefer: 'return=minimal' }),
-    body: JSON.stringify({ actor_person_id: member.personId, action: 'member.story.submit', detail: storyAuditDetail(row.draft, row.draft_public) }),
-  }).catch(() => null);
-  if (!log || !log.ok) {
-    console.error('[members-me] audit log write failed; story submit refused', log?.status);
-    return jsonResponse({ error: 'Could not record this, so nothing was submitted. Try again.' }, 500);
-  }
-
-  const res = await fetch(`${supabaseUrl()}/rest/v1/member_stories?person_id=eq.${member.personId}&select=${STORY_COLUMNS}`, {
-    method: 'PATCH',
-    headers: restHeaders({ Prefer: 'return=representation' }),
-    body: JSON.stringify({
-      status: 'in_review',
-      submitted: row.draft,
-      submitted_public: !!row.draft_public,
-      submitted_at: new Date().toISOString(),
-      reviewer_note: null,
-      updated_at: new Date().toISOString(),
-    }),
-  });
-  if (!res.ok) {
-    console.error('[members-me] story submit failed', res.status);
-    return jsonResponse({ error: 'Server error' }, 500);
-  }
-  const rows = await res.json();
-  await dropIfUnreferenced(member.personId, row.submitted?.photo, rows[0]); // the earlier submission's photo, if nothing else uses it
-  // Assessed for risk (lib/story-risk.ts). In shadow mode that only records what it would have done; once switched
-  // to live a low-risk story is approved here, so the member is shown where it ended up.
-  let current = rows[0];
-  const { approved } = await assessSubmission(rows[0], member.name);
-  if (approved) current = (await loadStory(member.personId)) ?? current;
-  return jsonResponse({ story: storyView(current) });
-}
-
 // ---- story photos -----------------------------------------------------------
 
 const PHOTO_UPLOADS_PER_DAY = 10;
 const PHOTO_STORE = 'member-story-photo';
 
-// Delete an uploaded photo's files once no copy of the story refers to it any more.
-async function dropIfUnreferenced(personId: string, photoId: unknown, row: any): Promise<void> {
-  if (!isUploadedPhoto(photoId)) return;
-  const stillUsed = [row?.draft, row?.submitted, row?.approved].some((copy) => copy?.photo === photoId);
-  if (!stillUsed) await deleteMemberPhoto(personId, photoId as string).catch((err) => console.error('[members-me] photo cleanup failed', err));
-}
-
-async function writeDraftPhoto(personId: string, photo: string): Promise<{ before: any; after: any }> {
-  const before = await loadStory(personId);
-  const draft = { ...(before?.draft ?? {}), photo };
-  if (!photo) delete (draft as any).photo;
-  const res = await fetch(`${supabaseUrl()}/rest/v1/member_stories?on_conflict=person_id&select=${STORY_COLUMNS}`, {
-    method: 'POST',
-    headers: restHeaders({ Prefer: 'resolution=merge-duplicates,return=representation' }),
-    body: JSON.stringify({ person_id: personId, draft, updated_at: new Date().toISOString() }),
-  });
-  if (!res.ok) throw new Error(`photo draft write failed: ${res.status}`);
-  return { before, after: (await res.json())[0] };
-}
-
-async function handleStoryPhoto(req: Request): Promise<Response> {
-  const who = await requireAcknowledgedMember(req);
-  if ('error' in who) return who.error;
-  const { member } = who;
-
-  let form: FormData;
-  try {
-    form = await req.formData();
-  } catch {
-    return jsonResponse({ error: 'Nothing to do.' }, 400);
-  }
-  const square = form.get('square');
-  const full = form.get('full');
-  if (!(square instanceof File) || !(full instanceof File) || square.size === 0 || full.size === 0) return jsonResponse({ error: 'Choose a photo.' }, 400);
-  // Refuse the oversized before reading them.
-  if (square.size > MAX_SQUARE_BYTES || full.size > MAX_FULL_BYTES) return jsonResponse({ error: 'That photo is too large. Try a smaller one.' }, 413);
-  const squareBytes = new Uint8Array(await square.arrayBuffer());
-  const fullBytes = new Uint8Array(await full.arrayBuffer());
-  // What is stored is what comes back from the check, with every metadata block removed (not the bytes that were uploaded).
-  const checked: { ok: boolean; error?: string; square?: Uint8Array; full?: Uint8Array } = validatePhotoPair(squareBytes, fullBytes);
-  if (!checked.ok) return jsonResponse({ error: checked.error }, 415);
-
-  try {
-    if (!(await checkDailyCap(PHOTO_STORE, `member-${member.personId}`, PHOTO_UPLOADS_PER_DAY))) {
-      return jsonResponse({ error: 'You have uploaded a lot of photos today. Please try again tomorrow.' }, 429);
-    }
-    const photoId = crypto.randomUUID();
-    await putMemberPhoto(member.personId, photoId, checked.square!, checked.full!); // the files first, so the draft never points at nothing
-    const { before, after } = await writeDraftPhoto(member.personId, photoId);
-    await dropIfUnreferenced(member.personId, before?.draft?.photo, after); // the draft's earlier photo, if nothing else uses it
-    return jsonResponse({ story: storyView(after) });
-  } catch (err) {
-    console.error('[members-me] story photo upload failed', err);
-    return jsonResponse({ error: 'Could not save your photo. Try again.' }, 500);
-  }
-}
-
-async function handleStoryPhotoRemove(req: Request): Promise<Response> {
-  const who = await requireAcknowledgedMember(req);
-  if ('error' in who) return who.error;
-  try {
-    const { before, after } = await writeDraftPhoto(who.member.personId, '');
-    await dropIfUnreferenced(who.member.personId, before?.draft?.photo, after);
-    return jsonResponse({ story: storyView(after) });
-  } catch (err) {
-    console.error('[members-me] story photo remove failed', err);
-    return jsonResponse({ error: 'Could not remove your photo. Try again.' }, 500);
-  }
-}
-
-// One uploaded photo. 404 for everything not allowed, so the response never says whether a photo exists.
-async function handlePhoto(req: Request): Promise<Response> {
-  const who = await requireAcknowledgedMember(req);
-  if ('error' in who) return who.error;
-  const url = new URL(req.url);
-  const id = url.searchParams.get('id') ?? '';
-  const size = url.searchParams.get('size') === 'full' ? 'full' : 'square';
-  const notFound = () => new Response('Not found', { status: 404, headers: { 'cache-control': 'no-store' } });
-  if (!isUploadedPhoto(id)) return notFound();
-  try {
-    const rows = await select('member_stories', 'person_id,draft,submitted,approved', `or=(draft->>photo.eq.${id},submitted->>photo.eq.${id},approved->>photo.eq.${id})`);
-    const row = rows[0];
-    if (!row) return notFound();
-    const [person] = await select('member_people', 'id,active,directory_visible', `id=eq.${row.person_id}`);
-    const listed = !!person && person.active !== false && person.directory_visible !== false;
-    if (!photoAccess({ viewerPersonId: who.member.personId, row, photoId: id, listed })) return notFound();
-    const bytes = await getMemberPhoto(row.person_id, id, size);
-    if (!bytes) return notFound();
-    return new Response(bytes, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=3600', 'x-content-type-options': 'nosniff' } });
-  } catch (err) {
-    console.error('[members-me] photo load failed', err);
-    return jsonResponse({ error: 'Server error' }, 500);
-  }
-}
-
 // ---- unit stories ------------------------------------------------------------
 // One story per UNIT (member_unit_stories, migration 0049): bio, family, photos and the public switch are
-// shared by the unit's owners; each person keeps their own quote and profile link. The rules are in
-// scripts/lib/member-unit-story.mjs. Nothing in the portal calls these yet: the admin queue, risk
-// assessment, public export and directory still read member_stories until they move over.
+// shared by the unit's owners; each person keeps their own quote. The rules are in
+// scripts/lib/member-unit-story.mjs.
 
 const UNIT_STORY_COLUMNS = 'household_id,draft,draft_public,draft_version,draft_changed,status,submitted,submitted_public,submitted_at,submitted_by,approved,approved_public,approved_at,reviewer_note';
 const firstNameOf = (full: string) => full.trim().split(/\s+/).find((w) => w.length > 1) ?? full;
@@ -924,18 +721,13 @@ async function handleDirectory(req: Request): Promise<Response> {
   const who = await requireAcknowledgedMember(req);
   if ('error' in who) return who.error;
   try {
-    // Per person (member_stories) or per unit (member_unit_stories): the cutover switch, off until the move is done.
-    const live = await unitStoriesLive();
-    const [people, memberships, households, stories] = await Promise.all([
+    const [people, memberships, households, unitStories] = await Promise.all([
       select('member_people', 'id,full_name,active,directory_visible', 'active=eq.true&directory_visible=eq.true'),
       select('member_household_members', 'household_id,person_id,role', 'person_id=not.is.null'),
       select('member_households', 'id,farm_unit,house_no,cluster', 'id=not.is.null'),
-      live ? select('member_unit_stories', 'household_id,approved,approved_public', 'approved=not.is.null') : select('member_stories', 'person_id,approved,approved_public', 'approved=not.is.null'),
+      select('member_unit_stories', 'household_id,approved,approved_public', 'approved=not.is.null'),
     ]);
-    // `unitPhotos` tells the page which endpoint serves the photos: a unit's, or a person's.
-    return jsonResponse(live
-      ? { unitPhotos: true, households: buildUnitDirectory({ people, memberships, households, unitStories: stories }, who.member.personId) }
-      : { households: buildDirectory({ people, memberships, households, stories }, who.member.personId) });
+    return jsonResponse({ unitPhotos: true, households: buildUnitDirectory({ people, memberships, households, unitStories }, who.member.personId) });
   } catch (err) {
     console.error('[members-me] directory load failed', err);
     return jsonResponse({ error: 'Server error' }, 500);
@@ -951,13 +743,7 @@ export default async (req: Request): Promise<Response> => {
   if (pathname === '/api/members-me/land-document-link' && req.method === 'POST') return handleLandDocumentLink(req);
   if (pathname === '/api/members-me/land-documents' && (req.method === 'GET' || req.method === 'POST')) return handleLandDocuments(req);
   if (pathname === '/api/members-me/directory' && req.method === 'GET') return handleDirectory(req);
-  if (pathname === '/api/members-me/photo' && req.method === 'GET') return handlePhoto(req);
-  if (pathname === '/api/members-me/story-photo' && req.method === 'POST') return handleStoryPhoto(req);
-  if (pathname === '/api/members-me/story-photo-remove' && req.method === 'POST') return handleStoryPhotoRemove(req);
-  if (pathname === '/api/members-me/story' && req.method === 'GET') return handleStoryGet(req);
-  if (pathname === '/api/members-me/story' && req.method === 'POST') return handleStorySave(req);
   if (pathname === '/api/members-me/story-review' && req.method === 'POST') return handleStoryReview(req);
-  if (pathname === '/api/members-me/story-submit' && req.method === 'POST') return handleStorySubmit(req);
   if (pathname === '/api/members-me/unit-story' && req.method === 'GET') return handleUnitStoryGet(req);
   if (pathname === '/api/members-me/unit-story' && req.method === 'POST') return handleUnitStorySave(req);
   if (pathname === '/api/members-me/unit-story-submit' && req.method === 'POST') return handleUnitStorySubmit(req);
@@ -967,4 +753,4 @@ export default async (req: Request): Promise<Response> => {
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-me/home', '/api/members-me/profile', '/api/members-me/privacy', '/api/members-me/land-documents', '/api/members-me/land-document-link', '/api/members-me/land-shapes', '/api/members-me/story', '/api/members-me/story-review', '/api/members-me/story-submit', '/api/members-me/directory', '/api/members-me/photo', '/api/members-me/story-photo', '/api/members-me/story-photo-remove', '/api/members-me/unit-story', '/api/members-me/unit-story-submit', '/api/members-me/unit-story-photo', '/api/members-me/unit-story-photo-remove', '/api/members-me/unit-photo'] };
+export const config = { path: ['/api/members-me/home', '/api/members-me/profile', '/api/members-me/privacy', '/api/members-me/land-documents', '/api/members-me/land-document-link', '/api/members-me/land-shapes', '/api/members-me/story-review', '/api/members-me/directory', '/api/members-me/unit-story', '/api/members-me/unit-story-submit', '/api/members-me/unit-story-photo', '/api/members-me/unit-story-photo-remove', '/api/members-me/unit-photo'] };
