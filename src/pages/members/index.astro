@@ -971,13 +971,18 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
+  /* The tiles share three rows (code pills, figure, caption), so the figures sit on one line even when one tile's pills wrap to two. */
   .tiles {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px;
+    grid-template-rows: auto auto auto;
+    column-gap: 12px;
   }
 
   .tile {
+    display: grid;
+    grid-row: span 3;
+    grid-template-rows: subgrid;
     padding: 12px 14px;
     border-radius: var(--radius-sm);
     background: var(--tvc-green-tint);
@@ -987,6 +992,7 @@ import SignInGate from '../../components/SignInGate.astro';
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
+    align-content: flex-start; /* the row is as tall as the other tile's, but its icon and pills stay at the top */
     align-items: center;
     justify-content: space-between;
     font-size: var(--text-xs);
