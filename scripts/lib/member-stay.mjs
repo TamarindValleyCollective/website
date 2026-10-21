@@ -57,7 +57,10 @@ export function availabilityFor({ occupiedTentIds, wholeFarmBlocked }) {
 // Every chosen tent needs at least one person and no more than it holds; a person needs a name, an age
 // group and a gender. A mobile number is optional (children, and family who have none), but must be valid
 // if given. `guest` marks a paying guest (not family) for the pricing step.
-export function validateStayRequest(body, today) {
+// A person already on the register is sent as `memberId` instead of typed details: `family` maps the ids of
+// the unit's registered people to { name, phone, email } read server-side, and they go in as an adult (the
+// register holds no age or gender) with the number and email we already have, never typed again.
+export function validateStayRequest(body, today, family = new Map()) {
   const dateError = validateStayDates({ startDate: body?.startDate, nights: body?.nights }, today);
   if (dateError) return { error: dateError };
   if (!Array.isArray(body.tents) || body.tents.length === 0) return { error: 'Choose at least one tent.' };
@@ -65,6 +68,7 @@ export function validateStayRequest(body, today) {
   const units = new Map(ACCOMMODATION_UNITS.map((u) => [u.id, u]));
   const tents = [];
   const names = new Set();
+  const usedMembers = new Set();
   let guestCount = 0;
   for (const t of body.tents) {
     const unit = units.get(t?.tentId);
@@ -76,6 +80,19 @@ export function validateStayRequest(body, today) {
     if (people.length > unit.capacity) return { error: `${unit.label} holds at most ${unit.capacity}.` };
     const guests = [];
     for (const p of people) {
+      if (p?.memberId !== undefined) {
+        const known = family.get(p.memberId);
+        if (!known) return { error: 'One of the family members is not in your unit.' };
+        if (usedMembers.has(p.memberId)) return { error: `${known.name} is listed twice.` };
+        usedMembers.add(p.memberId);
+        names.add(known.name.trim().toLowerCase());
+        const guest = { name: known.name.trim(), ageGroup: 'Adult', gender: 'NA' };
+        const phone = known.phone ? normalizeMobileNumber(known.phone) : null;
+        if (phone) guest.mobileNumber = phone;
+        if (known.email) guest.email = known.email;
+        guests.push(guest);
+        continue;
+      }
       const name = typeof p?.name === 'string' ? p.name.trim().replace(/\s+/g, ' ') : '';
       if (!name || name.length > 80) return { error: 'Each person needs a name.' };
       if (!AGE_GROUPS.includes(p.ageGroup)) return { error: `Say whether ${name} is an adult or a child.` };

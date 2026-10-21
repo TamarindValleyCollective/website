@@ -68,3 +68,16 @@ test('cancelling is allowed only before check-in', () => {
   assert.equal(canCancelStay('2026-10-21', TODAY), false);
   assert.equal(canCancelStay('2026-10-01', TODAY), false);
 });
+
+test('a registered family member needs no typed details and is never a paying guest', () => {
+  const family = new Map([['m1', { name: 'Asha Rao', phone: '98450 12345', email: 'asha@example.com' }], ['m2', { name: 'Ravi Rao', phone: null, email: null }]]);
+  const r = validateStayRequest(req([{ tentId: 'Tent01', guests: [{ memberId: 'm1', guest: true }, { memberId: 'm2' }, person('Dev Rao', { ageGroup: 'Child' })] }]), TODAY, family);
+  assert.equal(r.error, undefined);
+  assert.deepEqual(r.tents[0].guests[0], { name: 'Asha Rao', ageGroup: 'Adult', gender: 'NA', mobileNumber: '+919845012345', email: 'asha@example.com' });
+  assert.deepEqual(r.tents[0].guests[1], { name: 'Ravi Rao', ageGroup: 'Adult', gender: 'NA' });
+  assert.equal(r.guestCount, 0);
+  const bad = (tents) => validateStayRequest(req(tents), TODAY, family).error;
+  assert.match(bad([{ tentId: 'Tent01', guests: [{ memberId: 'someone-else' }] }]), /not in your unit/);
+  assert.match(bad([{ tentId: 'Tent01', guests: [{ memberId: 'm1' }] }, { tentId: 'Tent02', guests: [{ memberId: 'm1' }] }]), /listed twice/);
+  assert.match(bad([{ tentId: 'Tent01', guests: [{ memberId: 'm1' }, person('asha rao')] }]), /listed twice/);
+});

@@ -3898,7 +3898,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   // Pick check-in and nights, see which tents are free (type and how many it sleeps), choose, say who is
   // staying in each, and book. Own family is free; people marked "paying guest" are charged at the guest rate
   // (a discount set by the core team), which the core team confirms with the member after booking.
-  type StayPerson = { name: string; ageGroup: string; gender: string; mobile: string; guest: boolean };
+  type StayPerson = { memberId: string | null; name: string; ageGroup: string; gender: string; mobile: string; guest: boolean };
   type StayUnit = { id: string; label: string; shortLabel: string; capacity: number; kind: string; free: boolean };
   type StayGroup = { group: string; byot: boolean; units: StayUnit[] };
   type StayAvail = { startDate: string; nights: number; checkOut: string; tentsFree: number; bedsFree: number; pitchesFree: number; wholeFarmBlocked: boolean; groups: StayGroup[] };
@@ -3912,7 +3912,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const discount = h('span', '', '20%');
     root.append(
       h('h1', 'page-title', 'Stays'),
-      h('p', 'lede', undefined, 'Book nights at the farm for your family. Your own family stays free. Anyone you mark as a paying guest gets ', discount, ' off the guest rate, and the core team will confirm the charge with you.'));
+      h('p', 'lede', undefined, 'Book nights at the farm for your family. Your own family stays free; pick them from your unit, no need to type them in. Anyone else you mark as a paying guest gets ', discount, ' off the guest rate, and the core team will confirm the charge with you.'));
 
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
     const date = document.createElement('input');
@@ -3936,7 +3936,14 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
     let avail: StayAvail | null = null;
     const chosen = new Map<string, StayPerson[]>(); // tent id -> the people in it, in the order picked
-    const blankPerson = (name = ''): StayPerson => ({ name, ageGroup: 'Adult', gender: 'NA', mobile: '', guest: false });
+    // Someone already on the register is picked, not typed; "Someone else" (a child, a guest) is typed.
+    const usedMembers = () => new Set([...chosen.values()].flat().map((q) => q.memberId).filter(Boolean));
+    const nextFamily = (): string | null => {
+      if (chosen.size === 0 && hh.people.some((q) => q.id === me?.personId)) return me!.personId; // first row is the member
+      const used = usedMembers();
+      return hh.people.find((q) => !used.has(q.id))?.id ?? null;
+    };
+    const blankPerson = (memberId: string | null = null): StayPerson => ({ memberId, name: '', ageGroup: 'Adult', gender: 'NA', mobile: '', guest: false });
 
     function sync() {
       book.hidden = chosen.size === 0;
@@ -3960,7 +3967,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           box.disabled = !u.free;
           box.checked = chosen.has(u.id);
           box.addEventListener('change', () => {
-            if (box.checked) chosen.set(u.id, [blankPerson(chosen.size === 0 ? me?.name ?? '' : '')]);
+            if (box.checked) chosen.set(u.id, [blankPerson(nextFamily())]);
             else chosen.delete(u.id);
             sync();
           });
@@ -3978,34 +3985,48 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         const rows = chosen.get(u.id)!;
         const set = h('fieldset', 'stay-tent', undefined, h('legend', '', `${u.label} · ${u.kind === 'byot' ? `up to ${u.capacity}` : `sleeps ${u.capacity}`}`));
         rows.forEach((p, i) => {
-          const name = document.createElement('input');
-          name.placeholder = 'Full name';
-          name.value = p.name;
-          name.autocomplete = 'off';
-          name.setAttribute('aria-label', 'Full name');
-          name.addEventListener('input', () => { p.name = name.value; });
-          const age = document.createElement('select');
-          age.setAttribute('aria-label', 'Adult or child');
-          for (const v of ['Adult', 'Child']) age.append(new Option(v, v));
-          age.value = p.ageGroup;
-          age.addEventListener('change', () => { p.ageGroup = age.value; });
-          const gender = document.createElement('select');
-          gender.setAttribute('aria-label', 'Gender');
-          for (const [v, t] of [['Male', 'Male'], ['Female', 'Female'], ['NA', 'Prefer not to say']]) gender.append(new Option(t, v));
-          gender.value = p.gender;
-          gender.addEventListener('change', () => { p.gender = gender.value; });
-          const mobile = document.createElement('input');
-          mobile.type = 'tel';
-          mobile.placeholder = 'Mobile (optional)';
-          mobile.autocomplete = 'off';
-          mobile.setAttribute('aria-label', 'Mobile number, optional');
-          mobile.value = p.mobile;
-          mobile.addEventListener('input', () => { p.mobile = mobile.value; });
-          const paying = document.createElement('input');
-          paying.type = 'checkbox';
-          paying.checked = p.guest;
-          paying.addEventListener('change', () => { p.guest = paying.checked; });
-          const row = h('div', 'stay-person', undefined, name, age, gender, mobile, h('label', 'check', undefined, paying, h('span', '', 'Paying guest (not family)')));
+          const who = document.createElement('select');
+          who.setAttribute('aria-label', 'Who is staying');
+          const taken = usedMembers();
+          for (const q of hh.people) {
+            const o = new Option(q.id === me?.personId ? `${q.name} (you)` : q.name, q.id);
+            o.disabled = taken.has(q.id) && p.memberId !== q.id; // already placed in a tent
+            who.append(o);
+          }
+          who.append(new Option('Someone else (a child or a guest)', ''));
+          who.value = p.memberId ?? '';
+          who.addEventListener('change', () => { p.memberId = who.value || null; renderPeople(); });
+          const row = h('div', 'stay-person', undefined, who);
+          if (!p.memberId) {
+            const name = document.createElement('input');
+            name.placeholder = 'Full name';
+            name.value = p.name;
+            name.autocomplete = 'off';
+            name.setAttribute('aria-label', 'Full name');
+            name.addEventListener('input', () => { p.name = name.value; });
+            const age = document.createElement('select');
+            age.setAttribute('aria-label', 'Adult or child');
+            for (const v of ['Adult', 'Child']) age.append(new Option(v, v));
+            age.value = p.ageGroup;
+            age.addEventListener('change', () => { p.ageGroup = age.value; });
+            const gender = document.createElement('select');
+            gender.setAttribute('aria-label', 'Gender');
+            for (const [v, t] of [['Male', 'Male'], ['Female', 'Female'], ['NA', 'Prefer not to say']]) gender.append(new Option(t, v));
+            gender.value = p.gender;
+            gender.addEventListener('change', () => { p.gender = gender.value; });
+            const mobile = document.createElement('input');
+            mobile.type = 'tel';
+            mobile.placeholder = 'Mobile (optional)';
+            mobile.autocomplete = 'off';
+            mobile.setAttribute('aria-label', 'Mobile number, optional');
+            mobile.value = p.mobile;
+            mobile.addEventListener('input', () => { p.mobile = mobile.value; });
+            const paying = document.createElement('input');
+            paying.type = 'checkbox';
+            paying.checked = p.guest;
+            paying.addEventListener('change', () => { p.guest = paying.checked; });
+            row.append(name, age, gender, mobile, h('label', 'check', undefined, paying, h('span', '', 'Paying guest (not family)')));
+          }
           if (rows.length > 1) {
             const rm = h('button', 'btn stay-remove', 'Remove');
             rm.setAttribute('type', 'button');
@@ -4017,7 +4038,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         if (rows.length < u.capacity) {
           const add = h('button', 'btn', 'Add a person');
           add.setAttribute('type', 'button');
-          add.addEventListener('click', () => { rows.push(blankPerson()); renderPeople(); });
+          add.addEventListener('click', () => { rows.push(blankPerson(nextFamily())); renderPeople(); });
           set.append(add);
         }
         peopleBox.append(set);
@@ -4061,7 +4082,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       msg.textContent = '';
       book.disabled = true;
       try {
-        const tents = [...chosen.entries()].map(([tentId, rows]) => ({ tentId, guests: rows.map((p) => ({ name: p.name, ageGroup: p.ageGroup, gender: p.gender, mobileNumber: p.mobile, guest: p.guest })) }));
+        const tents = [...chosen.entries()].map(([tentId, rows]) => ({ tentId, guests: rows.map((p) => (p.memberId ? { memberId: p.memberId } : { name: p.name, ageGroup: p.ageGroup, gender: p.gender, mobileNumber: p.mobile, guest: p.guest })) }));
         const { status, data } = await memberFetch('/api/members-me/stays', { method: 'POST', body: { householdId: hh.id, startDate: avail.startDate, nights: avail.nights, tents } });
         if (status !== 200) {
           msg.textContent = data.error || 'Could not book. Try again.';

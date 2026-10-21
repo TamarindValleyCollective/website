@@ -937,12 +937,17 @@ async function handleStaysBook(req: Request): Promise<Response> {
   const { member } = who;
   const body = (await readJson(req)) as Record<string, unknown> | undefined;
   if (!body) return jsonResponse({ error: 'Nothing to do.' }, 400);
-  const checked: any = validateStayRequest(body, todayIst());
-  if (checked.error) return jsonResponse({ error: checked.error }, 400);
   const householdId = stayHousehold(member, body.householdId);
   if (!householdId) return jsonResponse({ error: 'You are not part of a unit yet. Ask the core team.' }, 409);
 
   try {
+    // The unit's registered people, read here so the member never types a name, number or email we already hold.
+    const links = await select('member_household_members', 'person_id', `household_id=eq.${householdId}`);
+    const people = links.length ? await select('member_people', 'id,full_name,phone,email', `id=in.${inList(links.map((l: any) => l.person_id))}&active=eq.true`) : [];
+    const family = new Map<string, { name: string; phone: string | null; email: string | null }>(people.map((p: any) => [p.id, { name: p.full_name, phone: p.phone ?? null, email: p.email ?? null }]));
+    const checked: any = validateStayRequest(body, todayIst(), family);
+    if (checked.error) return jsonResponse({ error: checked.error }, 400);
+
     // Refuse early, in plain words, if a tent was taken (or the farm closed) while the member was filling this in.
     // The database is the final word on a tent; it cannot see a farm closure, so that is checked here.
     const now = await occupancy(checked.startDate, checked.nights);
