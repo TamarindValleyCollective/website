@@ -9,6 +9,7 @@
 // This page deliberately has its own minimal shell: no public header, footer, cookie banner,
 // chat widget or analytics, none of which belong on a page of personal data.
 import '../../styles/global.css';
+import SignInGate from '../../components/SignInGate.astro';
 ---
 
 <html lang="en">
@@ -22,13 +23,12 @@ import '../../styles/global.css';
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   </head>
   <body>
-    <div id="gate" class="gate" hidden>
-      <img class="mark" src="/images/brand/tvc-logo-mark.svg" width="56" height="56" alt="Tamarind Valley Collective" />
-      <h1>Member portal</h1>
-      <p>Sign in with the Google account you gave the core team. If you have not been invited yet, please contact the core team.</p>
-      <div id="g_id_signin"></div>
-      <p id="gate-error" class="gate-error" role="alert" hidden></p>
-    </div>
+    <SignInGate
+      level="h1"
+      startHidden
+      title="Member portal"
+      copy="Sign in with the Google account you gave the core team. If you have not been invited yet, please contact the core team."
+    />
 
     <div class="shell" id="shell" hidden>
       <aside class="side" id="side" aria-label="Modules">
@@ -75,7 +75,6 @@ import '../../styles/global.css';
 
   .shell[hidden],
   .shell [hidden],
-  .gate[hidden],
   .toast[hidden] {
     display: none !important;
   }
@@ -921,44 +920,6 @@ import '../../styles/global.css';
     padding-left: 18px;
     color: var(--tvc-ink-soft);
     font-size: 0.9rem;
-  }
-
-  .gate {
-    max-width: 420px;
-    margin: 12vh auto 0;
-    padding: 28px;
-    background: var(--tvc-white);
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-soft);
-    text-align: center;
-  }
-
-  .gate .mark {
-    width: 56px;
-    height: 56px;
-    margin: 0 auto 12px;
-  }
-
-  .gate h1 {
-    margin: 0 0 8px;
-    font-size: 1.5rem;
-  }
-
-  .gate p {
-    margin: 0 0 18px;
-    color: var(--tvc-ink-soft);
-    font-size: 0.9rem;
-  }
-
-  .gate #g_id_signin {
-    display: flex;
-    justify-content: center;
-  }
-
-  .gate .gate-error {
-    margin: 16px 0 0;
-    color: var(--tvc-error-text);
   }
 
   dialog.modal label.check {

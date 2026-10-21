@@ -1,0 +1,104 @@
+---
+// The Google sign-in card shared by the member portal and every /internal page, so
+// both sites greet people the same way. It only renders markup and its look; each
+// page's own script still shows/hides it and fills it in by id:
+//   #gate (+ #g_id_signin, #gate-error)  the sign-in card
+//   #forbidden (+ #forbidden-email, #use-different-account)  "signed in, but not allowed here"
+// The forbidden card is rendered only when `forbiddenWhat` is given (the member
+// portal reports "not invited" inside #gate-error instead).
+interface Props {
+  title?: string;
+  copy?: string;
+  /** What the account was refused: "the Usage & limits tool", "this page". */
+  forbiddenWhat?: string;
+  /** What to do about it. */
+  forbiddenHint?: string;
+  /** Heading element: h1 where the gate is the whole page, h2 under a page's own h1. */
+  level?: 'h1' | 'h2';
+  /** The member portal's script reveals the gate itself, so it starts hidden there. */
+  startHidden?: boolean;
+}
+
+const {
+  title = 'Admin sign-in',
+  copy = 'Sign in with your Google account. If you have not been given access yet, please ask a super admin.',
+  forbiddenWhat,
+  forbiddenHint = 'Ask a super admin to give you a role, then sign in again.',
+  level = 'h2',
+  startHidden = false,
+} = Astro.props;
+const Heading = level;
+---
+
+<div id="gate" class="signin" hidden={startHidden}>
+  <img class="mark" src="/images/brand/tvc-logo-mark.svg" width="56" height="56" alt="Tamarind Valley Collective" />
+  <Heading>{title}</Heading>
+  <p>{copy}</p>
+  <div id="g_id_signin"></div>
+  <p id="gate-error" class="signin-error" role="alert" hidden></p>
+</div>
+
+{
+  forbiddenWhat && (
+    <div id="forbidden" class="signin" hidden>
+      <img class="mark" src="/images/brand/tvc-logo-mark.svg" width="56" height="56" alt="Tamarind Valley Collective" />
+      <Heading>No access</Heading>
+      <p>
+        Signed in as <strong id="forbidden-email" />, but this account doesn't have access to {forbiddenWhat}.
+      </p>
+      <p>{forbiddenHint}</p>
+      <p>
+        Are you a member? Your member dashboard is at <a href="/members/">tvc.farm/members</a>.
+      </p>
+      <button type="button" id="use-different-account" class="button button--outline">
+        Use a different account
+      </button>
+    </div>
+  )
+}
+
+<style>
+  .signin {
+    max-width: 420px;
+    margin: 12vh auto 0;
+    padding: 28px;
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+    text-align: center;
+  }
+
+  .signin[hidden] {
+    display: none;
+  }
+
+  .signin .mark {
+    display: block;
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 12px;
+  }
+
+  .signin :is(h1, h2) {
+    margin: 0 0 8px;
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+  }
+
+  .signin p {
+    margin: 0 0 18px;
+    color: var(--tvc-ink-soft);
+    font-size: 0.9rem;
+  }
+
+  .signin #g_id_signin {
+    display: flex;
+    justify-content: center;
+  }
+
+  .signin .signin-error {
+    margin: 16px 0 0;
+    color: var(--tvc-error-text);
+  }
+</style>

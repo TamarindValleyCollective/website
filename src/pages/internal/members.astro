@@ -10,6 +10,7 @@
 // sends an email or phone number, only whether one is on file; names are masked
 // there for the read-only role.
 import StaffLayout from '../../layouts/StaffLayout.astro';
+import SignInGate from '../../components/SignInGate.astro';
 ---
 
 <StaffLayout title="Member register" description="Units, people and patta details." current="members">
@@ -17,18 +18,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     <h1>Member register</h1>
     <p id="intro" class="hint">Sign in to review the member register.</p>
 
-    <div id="gate" class="gate card">
-      <p class="gate-copy">Sign in with your Google account.</p>
-      <div id="g_id_signin"></div>
-      <p id="gate-error" class="error" hidden></p>
-    </div>
-
-    <div id="forbidden" class="gate card" hidden>
-      <p class="gate-copy">Signed in as <strong id="forbidden-email"></strong>, but this account doesn't have access to the Member register.</p>
-      <p class="gate-copy">Ask a super admin to give you a role for it, then sign in again.</p>
-      <p class="gate-copy">Are you a member? Your member dashboard is at <a href="/members/">tvc.farm/members</a>.</p>
-      <button type="button" id="use-different-account" class="button button--outline">Use a different account</button>
-    </div>
+    <SignInGate forbiddenWhat="the Member register" />
 
     <p id="status" class="hint" hidden></p>
 
@@ -96,18 +86,6 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
-  }
-
-  .members .gate {
-    max-width: 420px;
-    margin-bottom: 24px;
-    padding: 18px 20px;
-  }
-
-  .members .gate-copy {
-    font-size: 0.9rem;
-    color: var(--tvc-ink-soft);
-    margin: 0 0 14px;
   }
 
   .members .error {

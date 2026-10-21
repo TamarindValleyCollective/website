@@ -748,7 +748,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   pool, WhatsApp, event payments and accommodation pages as well as the new ones), so signing in
   once opens them all and "use a different account" signs out of all of them; Access and Security
   also share one step-up (`tvc-staff-stepup`). Each tool still checks its own role on the server for
-  every request. **All seven internal pages share one app shell, `layouts/StaffLayout.astro`**: a
+  every request. **Every internal page and the member portal show the same sign-in card, `components/SignInGate.astro`**
+  (logo, heading, one line of copy, the Google button, and, on internal pages, a "No access" card), so the
+  wording and look are changed in one place; each page's script still drives it by id. **All seven internal pages share one app shell, `layouts/StaffLayout.astro`**: a
   collapsible left menu (Home, the four tools, and Access/Security for super admins) that sits
   flush left with the page content using the full remaining width, a slide-over menu with a top bar
   on phones, and none of the public site's header, footer or analytics (the pages stay `noindex`).

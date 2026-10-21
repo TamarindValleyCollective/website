@@ -8,6 +8,7 @@
 // nav; gated by Google Sign-In (see netlify/functions/photo-pool.mts) plus
 // a live curator allow-list, not a shared password.
 import StaffLayout from '../../layouts/StaffLayout.astro';
+import SignInGate from '../../components/SignInGate.astro';
 ---
 
 <StaffLayout title="Photo Pool" description="Internal photo review dashboard." current="photo-pool">
@@ -15,18 +16,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     <h1>Photo Pool</h1>
     <p class="hint">Review photos dropped into the shared Drive Inbox folder, then approve or reject each one.</p>
 
-    <div id="gate" class="gate card">
-      <p class="gate-copy">Sign in with the Google account you review photos with.</p>
-      <div id="g_id_signin"></div>
-      <p id="gate-error" class="error" hidden></p>
-    </div>
-
-    <div id="forbidden" class="gate card" hidden>
-      <p class="gate-copy">Signed in as <strong id="forbidden-email"></strong>, but this Google account isn't authorized to review photos.</p>
-      <p class="hint" style="margin: 4px 0 12px;">Ask an admin to add it to the curator list.</p>
-      <p class="gate-copy">Are you a member? Your member dashboard is at <a href="/members/">tvc.farm/members</a>.</p>
-      <button type="button" id="use-different-account" class="button">Use a different account</button>
-    </div>
+    <SignInGate forbiddenWhat="Photo Pool" />
 
     <p id="status" class="hint" hidden></p>
     <div id="grid" class="grid" hidden></div>
@@ -57,18 +47,6 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
-  }
-
-  .gate {
-    max-width: 400px;
-    padding: 20px 24px;
-    margin-bottom: 24px;
-  }
-
-  .gate-copy {
-    font-size: 0.9rem;
-    color: var(--tvc-ink-soft);
-    margin: 0 0 14px;
   }
 
   .error {

@@ -10,6 +10,7 @@
 // require at least two before it unlocks. Nothing secret is rendered with
 // innerHTML: every value is placed with textContent.
 import StaffLayout from '../../layouts/StaffLayout.astro';
+import SignInGate from '../../components/SignInGate.astro';
 ---
 
 <StaffLayout title="Security" description="Second factors for super admins." current="security">
@@ -17,17 +18,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     <h1>Security</h1>
     <p class="hint">Second factors for super admins. You sign in with Google first, then prove a second factor to unlock the tools that manage access.</p>
 
-    <div id="gate" class="gate card">
-      <p class="gate-copy">Sign in with your super-admin Google account.</p>
-      <div id="g_id_signin"></div>
-      <p id="gate-error" class="error" hidden></p>
-    </div>
-
-    <div id="forbidden" class="gate card" hidden>
-      <p class="gate-copy">Signed in as <strong id="forbidden-email"></strong>, but this Google account isn't a super admin.</p>
-      <p class="gate-copy">Are you a member? Your member dashboard is at <a href="/members/">tvc.farm/members</a>.</p>
-      <button type="button" id="use-different-account" class="button button--outline">Use a different account</button>
-    </div>
+    <SignInGate forbiddenWhat="this page" forbiddenHint="This page is for super admins only." copy="Sign in with your super-admin Google account." />
 
     <p id="status" class="hint" hidden></p>
 
@@ -140,18 +131,6 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
-  }
-
-  .gate {
-    max-width: 420px;
-    padding: 20px 24px;
-    margin-bottom: 24px;
-  }
-
-  .gate-copy {
-    font-size: 0.9rem;
-    color: var(--tvc-ink-soft);
-    margin: 0 0 14px;
   }
 
   .block {

@@ -5,6 +5,7 @@
 // unlinked from nav; gated by Google Sign-In plus the same curator allow-list
 // photo-pool.astro uses, not a shared password. See WHATSAPP.md.
 import StaffLayout from '../../layouts/StaffLayout.astro';
+import SignInGate from '../../components/SignInGate.astro';
 import { WHATSAPP_QUICK_REPLIES, type QuickReply } from '../../data/whatsapp-quick-replies';
 
 // Pinned replies become pills; the whole library, grouped by category in order of
@@ -25,18 +26,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
       <p class="page-head-sub">+91 80 4110 9754 · replies only send within 24h of the customer's last message</p>
     </div>
 
-    <div id="gate" class="gate card">
-      <p class="gate-copy">Sign in with the Google account you use for internal tools.</p>
-      <div id="g_id_signin"></div>
-      <p id="gate-error" class="error" hidden></p>
-    </div>
-
-    <div id="forbidden" class="gate card" hidden>
-      <p class="gate-copy">Signed in as <strong id="forbidden-email"></strong>, but this Google account isn't authorized to use the WhatsApp inbox.</p>
-      <p class="hint" style="margin: 4px 0 12px;">Ask an admin to add it to the admin list.</p>
-      <p class="gate-copy">Are you a member? Your member dashboard is at <a href="/members/">tvc.farm/members</a>.</p>
-      <button type="button" id="use-different-account" class="button">Use a different account</button>
-    </div>
+    <SignInGate forbiddenWhat="the WhatsApp inbox" />
 
     <div id="app" class="app" hidden>
       <div class="conversations card">
@@ -201,17 +191,6 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
        their own padding below. */
     padding: 0;
     overflow: hidden;
-  }
-
-  .gate {
-    max-width: 400px;
-    padding: 20px 24px;
-  }
-
-  .gate-copy {
-    font-size: 0.9rem;
-    color: var(--tvc-ink-soft);
-    margin: 0 0 14px;
   }
 
   .error {
