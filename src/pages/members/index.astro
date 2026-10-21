@@ -3447,12 +3447,18 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
     // Filters: housing cluster (fixed order) and unit type (whatever types the data has), one of each at a time.
     // A household with no house yet has no cluster; one with no unit type yet is under neither type chip.
+    // TO1-V2 is a variant of TO1, so both are filed under TO1. S units are one bedroom, D two, T three.
+    const baseType = (t: string | null) => (t ? t.replace(/-V\d+$/i, '') : null);
+    const BEDROOMS: Record<string, string> = { S: 'Single bedroom', D: 'Double bedroom', T: 'Three bedroom' };
+    const typeRank = (t: string) => { const i = 'SDT'.indexOf(t[0].toUpperCase()); return i < 0 ? 3 : i; };
     function filterChips(): HTMLElement {
-      const row = (label: string, selected: string | null, set: (v: string | null) => void, values: string[], countOf: (v: string) => number) => {
+      const row = (label: string, selected: string | null, set: (v: string | null) => void, values: string[], countOf: (v: string) => number, hint?: (v: string) => string | undefined) => {
         const chip = (value: string | null, text: string) => {
           const b = h('button', 'dir-chip', text);
           b.setAttribute('type', 'button');
           b.setAttribute('aria-pressed', String(selected === value));
+          const tip = value && hint ? hint(value) : undefined;
+          if (tip) b.title = tip;
           b.addEventListener('click', () => { set(value); draw(); });
           return b;
         };
@@ -3461,10 +3467,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         group.setAttribute('aria-label', label);
         return group;
       };
-      const types = [...new Set(list.map((x) => x.unitType).filter((t): t is string => !!t))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      const types = [...new Set(list.map((x) => baseType(x.unitType)).filter((t): t is string => !!t))].sort((a, b) => typeRank(a) - typeRank(b) || a.localeCompare(b, undefined, { numeric: true }));
       return h('div', '', undefined,
         row('Cluster', cluster, (v) => { cluster = v; }, ['H1-A', 'H1-B', 'H2'], (v) => list.filter((x) => x.cluster === v).length),
-        types.length ? row('Unit type', unitType, (v) => { unitType = v; }, types, (v) => list.filter((x) => x.unitType === v).length) : null);
+        types.length ? row('Unit type', unitType, (v) => { unitType = v; }, types, (v) => list.filter((x) => baseType(x.unitType) === v).length, (v) => BEDROOMS[v[0].toUpperCase()]) : null);
     }
 
     const chipsHost = h('div');
@@ -3474,7 +3480,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     let built = false;
 
     function draw() {
-      const shown = list.filter((hh) => (!onlyStories || hh.hasStory) && (!cluster || hh.cluster === cluster) && (!unitType || hh.unitType === unitType) && (!query || [hh.farmUnit, hh.houseNo ?? '', hh.cluster ?? '', ...hh.people.map((p) => p.name)].join(' ').toLowerCase().includes(query)));
+      const shown = list.filter((hh) => (!onlyStories || hh.hasStory) && (!cluster || hh.cluster === cluster) && (!unitType || baseType(hh.unitType) === unitType) && (!query || [hh.farmUnit, hh.houseNo ?? '', hh.cluster ?? '', ...hh.people.map((p) => p.name)].join(' ').toLowerCase().includes(query)));
       // The member's own household first (the sort is stable, so everyone else stays in house-number order).
       shown.sort((a, b) => Number(b.people.some((p) => p.isYou)) - Number(a.people.some((p) => p.isYou)));
       // The search box and the checkbox are built once and never re-created: replacing them on every keystroke
