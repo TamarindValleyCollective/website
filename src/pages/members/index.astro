@@ -695,7 +695,7 @@ import SignInGate from '../../components/SignInGate.astro';
     align-items: start;
   }
 
-  /* The cluster and unit-type pills of a House card, together at the right of its heading. */
+  /* The code pills of a card, together at the right of its heading. */
   .pills {
     display: flex;
     gap: 6px;
@@ -2476,7 +2476,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     ));
   // The household split by role, owners first, so owners and family are not mixed in one list.
   const ROLE_GROUPS: [string, string][] = [['owner', 'Owners'], ['family', 'Family'], ['non_owner', 'Not owners']];
-  // The codes that name a card, as pills in its heading: the farm unit on Farm; unit type, house number and cluster on House.
+  // The codes that name a card, as pills in its heading: the farm unit on Farm, the house number on House; the unit type sits at the foot of the House card.
   // No "Cluster"/"Type" words (the codes say it); the name is in the tooltip and the accessible name.
   // The code that names the card (farm unit, house number) is the solid pill; the descriptors are tinted.
   const pillsOf = (items: [string, string | null | undefined, boolean?][]): HTMLElement | null => {
@@ -2491,7 +2491,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   const farmPills = (hh: Hh) => pillsOf([['Farm unit', hh.farmUnit, true]]);
   // TO1-V2 is just a variant of TO1, so only the family is shown ("TO1").
   const unitTypeFamily = (t: string | null) => (t ? t.replace(/-V\d+$/i, '') : null);
-  const housePills = (hh: Hh) => pillsOf([['House number', hh.houseNo, true], ['Cluster', hh.houseNo ? hh.cluster : null]]);
+  const housePills = (hh: Hh) => pillsOf([['House number', hh.houseNo, true]]);
   const typePill = (hh: Hh) => pillsOf([['Unit type', unitTypeFamily(hh.unitType)]]);
   const peopleByRole = (people: Person[]) => ROLE_GROUPS.map(([role, label]) => ({ label, people: people.filter((p) => p.role === role) })).filter((g) => g.people.length);
   const peopleList = (hh: Hh, you: Person) =>
@@ -2902,7 +2902,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const root = h('div');
     root.append(
       h('h1', 'page-title', 'My unit'),
-      h('p', 'lede', 'Your unit is your farm land and, if you have one, your house plot. The codes on each card are its farm unit, and the unit type, house number and cluster of the house (hover one to see which).'));
+      h('p', 'lede', 'Your unit is your farm land and, if you have one, your house plot. The codes on each card are its farm unit, and the house number and unit type of the house (hover one to see which).'));
     const panel = (title: string, body: Kid, iconPaths?: string) => {
       const p = h('section', 'panel', undefined, h('h2', '', undefined, iconPaths ? h('span', 'glyph', undefined, icon(iconPaths)) : null, title), body);
       p.style.marginTop = '16px';
