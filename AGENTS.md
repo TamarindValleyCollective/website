@@ -68,6 +68,12 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
   rather than literals.
 - Fonts: headings use `--font-display`, everything else `--font-body`; `--font-wordmark` is only
   for the nav/footer lockup, and the `--font-3bs1h-*` faces only inside the 3Bs&1H series.
+- Member portal type (`members/index.astro`): sizes come from the `--text-*` scale in `global.css`
+  (xs 0.8 to 2xl 1.5rem, nothing smaller than 0.8rem), not literals. Roles: page title and section
+  titles (panel/widget/story-box `h2`) and dialog titles in Fraunces (`--font-display`) at
+  2xl / lg / xl; key figures (acres, sq ft) Fraunces 600 at 2xl; subheads (`.role-head`, table group
+  rows, notice `h4`) Inter 600; small uppercase Inter labels only for non-heading labels, always
+  tracking 0.08em; pills and links weight 600. Sentence case everywhere else (never uppercase an email).
 
 `npm run lint:css` checks this (Stylelint); the `Design language` GitHub Action runs it on every
 PR. Raw hex colors are errors (CI fails); radius literals are warnings for now. A color that genuinely isn't a TVC color (a third-party brand, a data
