@@ -709,8 +709,20 @@ import SignInGate from '../../components/SignInGate.astro';
     margin: -4px 0 -4px auto; /* don't make the row taller than its heading */
   }
 
+  .tile .pills {
+    flex-wrap: wrap;
+    margin: 0;
+  }
+
+  /* Filled, so they stand out on both the white House card and the tinted Home tile. */
   .pills .pill {
     margin: 0;
+    padding: 3px 12px;
+    border-color: var(--tvc-green-dark);
+    background: var(--tvc-green-dark);
+    color: var(--tvc-white);
+    font-size: 0.8rem;
+    font-weight: 700;
   }
 
   .pill {
@@ -1011,6 +1023,8 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .tile .k {
     display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
     align-items: center;
     justify-content: space-between;
     font-size: 0.7rem;
