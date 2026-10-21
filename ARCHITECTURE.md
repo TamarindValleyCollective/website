@@ -1356,6 +1356,11 @@ never touches Netlify either.
   fetch returns a valid JPEG; a browser-native `<img blob:...>` load, even of a locally-generated
   synthetic blob, fails; the same bytes decode fine as a `data:` URL or with no CSP present).
   `img-src` now includes `blob:`.
+  **CSP note (fixed 2026-10-21):** the member register's household cards (`/internal/members`)
+  load each member's Google profile picture (`member_people.google_picture_url`, hosts
+  `*.googleusercontent.com` / `*.ggpht.com`), but `img-src` didn't allowlist them, so the browser
+  blocked every picture and the cards' `error` fallback silently showed initials. `img-src` now
+  includes both hosts.
 - **WhatsApp dashboard** (`/internal/whatsapp`, 2026-08-20) — admin-only, same shape as Photo Pool
   above: unlinked, `noindex`, Google Sign-In gated, reusing the exact same curator allow-list
   Sheet. Shows every conversation persisted by `whatsapp-webhook.mts` in the "TVC ERP" Supabase
