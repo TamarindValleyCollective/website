@@ -1543,23 +1543,31 @@ never touches Netlify either.
   pattas whose outline the bitmap reader missed are redone on the next page load.
 
 - **Member stays (`members-me.mts`, migration 0052; built 2026-10-21, not yet live).** A member books nights
-  for their own unit on the portal's Stays page. `GET /api/members-me/stays-availability?start&nights` lists the
-  tents free for those nights (type, how many each sleeps, totals of tents and beds, and bring-your-own-tent
-  pitches apart); `occupancy()` reads `accommodation_tent_assignments` for the range and also treats a farm
-  closure or an exclusive private event as the whole farm taken, because the database records those as bookings
-  with no tent rows. `POST /api/members-me/stays` validates (`scripts/lib/member-stay.mjs`: one to 30 nights, not
-  in the past, every chosen tent holds at least one and at most its capacity, name, age group and gender per
-  person, mobile optional), refuses a taken tent or closed farm in plain words, writes `member_audit_log`
-  (`member.stay.create`) first, then creates an ordinary `member-stay` booking through the same
-  `accommodation_create_booking` RPC the admin calendar uses (so the EXCLUDE constraint is still the final guard
-  against a double booking), and records the household in `member_stays` (if that fails the booking is removed
-  again). `POST /api/members-me/stays-cancel` is allowed only before check-in, only for the member's own
-  households (404 otherwise), audit-first as `member.stay.cancel`; if the guests had been told by an admin
-  ("Finalize & notify") they get the existing cancellation notice. `lib/member-stay-notify.ts` emails the core
-  team and Madhavan, and the member as a receipt, for each booking and cancellation (best-effort; test mode
-  routes to the test inbox). Own family is free; people marked "paying guest" are only counted
-  (`member_stays.guest_count`): the discount is `portal_settings.guest_discount_percent` (20), shown on the page,
-  and charging, the UPI QR and WhatsApp are the next slices (docs/plans/member-portal.md, step 4).
+  on the portal's Stays page and does **not** choose tents: they are told how many fixed and portable tents are
+  free (and how many people each kind sleeps), name who is coming, and Madhavan allocates tents in the
+  accommodation calendar. `GET /api/members-me/stays-availability?start&nights` counts the farm's own tents
+  with no booking on those nights (bring-your-own-tent pitches are not offered). `occupancy()` also treats a
+  farm closure or an exclusive private event as the whole farm taken (the database records those as bookings
+  with no tent rows), and takes off the people of member stays that have no tents yet ("waiting", the busiest
+  night of the range, `waitingBeds`), so `maxParty` is what one more booking may name. `POST
+  /api/members-me/stays` validates (`scripts/lib/member-stay.mjs`: one to 30 nights, not in the past, 1 to 22
+  people, at most `maxParty`), refuses a closed farm or too many people in plain words, writes
+  `member_audit_log` (`member.stay.create`) first, then creates an ordinary `member-stay` booking through the
+  same `accommodation_create_booking` RPC the admin calendar uses, with **no tents** and a note for Madhavan
+  (party, children and paying guests marked, the member's own note, no contact details), and records the
+  household and party in `member_stays` (if that fails the booking is removed again). Each person is either on
+  the register (`memberId`: the unit's own people, or another member listed in the directory, never one who
+  opted out; free) or typed in (name and adult or child; **always a paying guest**, so a family member who
+  should stay free has to be on the register). `GET /api/members-me/stays?household=` returns the member's
+  stays, whether tents are allocated yet, and the people they may name. `POST /api/members-me/stays-cancel` is
+  allowed only before check-in, only for the member's own households (404 otherwise), audit-first as
+  `member.stay.cancel`; if the guests had been told by an admin ("Finalize & notify") they get the existing
+  cancellation notice. `lib/member-stay-notify.ts` emails the core team and Madhavan ("please allocate
+  tents"), and the member as a receipt, for each booking and cancellation (best-effort; test mode routes to
+  the test inbox). Two members booking at the same moment can both pass the room check; the calendar then
+  shows more people than beds and the core team sorts it out. Paying guests are only counted
+  (`member_stays.guest_count`): the discount is `portal_settings.guest_discount_percent` (20), shown on the
+  page; charging, the UPI QR and WhatsApp are the next slices (docs/plans/member-portal.md, step 4).
 
 - **Unit stories (`members-me.mts`, migrations 0049 and 0050; live since 2026-10-21).** Stories moved
   from one record per person to one per unit, because bio and family describe the unit. `member_unit_stories`

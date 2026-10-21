@@ -3,13 +3,11 @@
 // booked, as their receipt. Best-effort and never throws: the booking is already saved, so a failed email
 // is logged and does not undo it. In test mode (Razorpay test keys) sendEmail routes everything to the
 // test inbox. WhatsApp for stays follows once the Meta templates are approved (docs/plans/member-portal.md).
-import { ACCOMMODATION_UNITS } from '../../../scripts/lib/accommodation.mjs';
 import { checkOut } from '../../../scripts/lib/member-stay.mjs';
 import { escapeHtml, detailRow, detailTable, renderBrandedEmail, renderStaffEmail } from './email-layout';
 import { sendEmail } from './booking-notify';
 
 const STAFF_EMAILS = ['core-team@tvc.farm', 'madhavan@tvc.farm'];
-const UNIT_LABELS = new Map<string, string>(ACCOMMODATION_UNITS.map((u: { id: string; label: string }) => [u.id, u.label]));
 
 export interface StayEmail {
   farmUnit: string;
@@ -18,15 +16,16 @@ export interface StayEmail {
   startDate: string;
   nights: number;
   guestCount: number;
-  tents: { tentId: string; guests: { name: string }[] }[];
+  party: { name: string; ageGroup: string; guest: boolean }[];
+  note: string;
 }
 
 function when(stay: StayEmail): string {
   return `${stay.startDate} to ${checkOut(stay.startDate, stay.nights)} (${stay.nights} night${stay.nights === 1 ? '' : 's'})`;
 }
 
-function where(stay: StayEmail): string {
-  return stay.tents.map((t) => `${UNIT_LABELS.get(t.tentId) ?? t.tentId}: ${t.guests.map((g) => g.name).join(', ')}`).join('; ');
+function who(stay: StayEmail): string {
+  return stay.party.map((p) => `${p.name}${p.ageGroup === 'Child' ? ' (child)' : ''}${p.guest ? ' (paying guest)' : ''}`).join(', ');
 }
 
 async function tell(kind: 'booked' | 'cancelled', stay: StayEmail): Promise<void> {
@@ -35,12 +34,13 @@ async function tell(kind: 'booked' | 'cancelled', stay: StayEmail): Promise<void
     detailRow('Unit', escapeHtml(stay.farmUnit)) +
     detailRow('Booked by', escapeHtml(stay.memberName)) +
     detailRow('Dates', escapeHtml(when(stay))) +
-    detailRow('Tents and people', escapeHtml(where(stay))) +
-    detailRow('Paying guests', String(stay.guestCount), { last: true });
+    detailRow('People', escapeHtml(who(stay))) +
+    detailRow('Paying guests', String(stay.guestCount), { last: !stay.note }) +
+    (stay.note ? detailRow('Note', escapeHtml(stay.note), { last: true }) : '');
   const staff = sendEmail({
     to: STAFF_EMAILS,
     subject: `Member stay ${verb} — ${stay.farmUnit} ${stay.startDate}`,
-    html: renderStaffEmail(`  <p style="margin-top:0;">${escapeHtml(stay.memberName)} (${escapeHtml(stay.farmUnit)}) ${verb} a stay in the member portal. ${kind === 'booked' ? 'It is already on the accommodation calendar; guests are told when it is finalized there.' : 'It has been removed from the accommodation calendar.'}</p>
+    html: renderStaffEmail(`  <p style="margin-top:0;">${escapeHtml(stay.memberName)} (${escapeHtml(stay.farmUnit)}) ${verb} a stay in the member portal. ${kind === 'booked' ? 'It is on the accommodation calendar with no tents yet: Madhavan, please allocate tents there. Guests are told when it is finalized.' : 'It has been removed from the accommodation calendar.'}</p>
   ${detailTable(rows)}`),
   });
   const first = stay.memberName.trim().split(/\s+/)[0] || 'there';
@@ -50,8 +50,8 @@ async function tell(kind: 'booked' | 'cancelled', stay: StayEmail): Promise<void
         replyTo: 'core-team@tvc.farm',
         subject: kind === 'booked' ? 'Your stay at the farm is booked' : 'Your stay at the farm is cancelled',
         html: renderBrandedEmail(`        <p style="margin-top:0;">Hi ${escapeHtml(first)},</p>
-        <p>${kind === 'booked' ? 'Your stay is booked. Here is what we have.' : 'Your stay has been cancelled. Here is what was cancelled.'}</p>
-        ${detailTable(detailRow('Dates', escapeHtml(when(stay))) + detailRow('Tents and people', escapeHtml(where(stay)), { last: true }))}
+        <p>${kind === 'booked' ? 'Your stay is booked. Madhavan will allocate your tents and the core team will be in touch if anything needs sorting out.' : 'Your stay has been cancelled. Here is what was cancelled.'}</p>
+        ${detailTable(detailRow('Dates', escapeHtml(when(stay))) + detailRow('People', escapeHtml(who(stay)), { last: true }))}
         <p style="font-size:13px; margin-bottom:0;">To change anything, reply to this email and the core team will sort it out.</p>`),
       })
     : Promise.resolve(false);

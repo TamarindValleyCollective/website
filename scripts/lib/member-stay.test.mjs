@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { availabilityFor, canCancelStay, checkOut, validateStayDates, validateStayRequest } from './member-stay.mjs';
+import { availabilityFor, canCancelStay, checkOut, partyNote, validateStayDates, validateStayRequest, waitingBeds } from './member-stay.mjs';
 
 const TODAY = '2026-10-21';
-const person = (name, over = {}) => ({ name, ageGroup: 'Adult', gender: 'NA', ...over });
-const req = (tents, over = {}) => ({ startDate: '2026-11-01', nights: 2, tents, ...over });
+const person = (name, over = {}) => ({ name, ageGroup: 'Adult', ...over });
+const req = (people, over = {}) => ({ startDate: '2026-11-01', nights: 2, people, ...over });
+const family = new Map([['m1', { name: 'Asha Rao' }], ['m2', { name: 'Ravi Rao' }]]);
 
 test('dates: past, missing and too-long are refused; today is fine', () => {
   assert.equal(validateStayDates({ startDate: '2026-10-21', nights: 1 }, TODAY), null);
@@ -19,65 +20,69 @@ test('check-out is check-in plus nights', () => {
   assert.equal(checkOut('2026-10-30', 3), '2026-11-02');
 });
 
-test('availability counts only free farm tents and beds, and pitches apart', () => {
+test('availability shows fixed and portable tents apart, never the pitches', () => {
   const all = availabilityFor({ occupiedTentIds: [], wholeFarmBlocked: false });
-  assert.equal(all.tentsFree, 9);
+  assert.deepEqual(all.fixed, { tents: 5, beds: 13 });
+  assert.deepEqual(all.portable, { tents: 4, beds: 9 });
   assert.equal(all.bedsFree, 22);
-  assert.equal(all.pitchesFree, 5);
-  const some = availabilityFor({ occupiedTentIds: ['Tent01', 'Tent06', 'BYOT02'], wholeFarmBlocked: false });
-  assert.equal(some.tentsFree, 7);
-  assert.equal(some.bedsFree, 22 - 3 - 2);
-  assert.equal(some.pitchesFree, 4);
-  const malabar = some.groups.find((g) => g.group === 'Malabar Hut');
-  assert.deepEqual(malabar.units.map((u) => u.free), [false, true, true]);
-  assert.equal(some.groups.find((g) => g.group === 'Bring Your Own Tent').byot, true);
+  assert.equal(all.maxParty, 22);
+  const some = availabilityFor({ occupiedTentIds: ['Tent01', 'Tent06', 'Tent09', 'BYOT02'], wholeFarmBlocked: false });
+  assert.deepEqual(some.fixed, { tents: 3, beds: 8 });
+  assert.deepEqual(some.portable, { tents: 3, beds: 7 });
+});
+
+test('people already asked for and not yet given tents are taken off what is free', () => {
+  const a = availabilityFor({ occupiedTentIds: ['Tent01'], wholeFarmBlocked: false, waiting: 5 });
+  assert.equal(a.bedsFree, 19);
+  assert.equal(a.maxParty, 14);
+  assert.equal(availabilityFor({ occupiedTentIds: [], wholeFarmBlocked: false, waiting: 40 }).maxParty, 0);
 });
 
 test('a closure or exclusive event leaves nothing free', () => {
   const a = availabilityFor({ occupiedTentIds: [], wholeFarmBlocked: true });
-  assert.equal(a.tentsFree, 0);
   assert.equal(a.bedsFree, 0);
-  assert.equal(a.pitchesFree, 0);
+  assert.equal(a.maxParty, 0);
   assert.equal(a.wholeFarmBlocked, true);
 });
 
-test('a valid request is shaped for the booking RPC and counts paying guests', () => {
-  const r = validateStayRequest(req([{ tentId: 'Tent01', guests: [person('Asha Rao'), person('Kiran', { guest: true, mobileNumber: '98450 12345' })] }]), TODAY);
+test('waiting beds are the busiest night of the stay', () => {
+  const waiting = [{ startDate: '2026-11-01', nights: 2, people: 4 }, { startDate: '2026-11-02', nights: 3, people: 3 }, { startDate: '2026-12-01', nights: 1, people: 9 }];
+  assert.equal(waitingBeds(waiting, '2026-11-01', 1), 4);
+  assert.equal(waitingBeds(waiting, '2026-11-01', 3), 7); // the night of the 2nd has both
+  assert.equal(waitingBeds(waiting, '2026-11-05', 2), 0);
+  assert.equal(waitingBeds([], '2026-11-01', 2), 0);
+});
+
+test('a valid request keeps the party, counts paying guests, and never asks for tents', () => {
+  const r = validateStayRequest(req([{ memberId: 'm1', guest: true }, { memberId: 'm2' }, person('Dev Rao', { ageGroup: 'Child' }), person('Meera Iyer', { guest: false })], { note: ' near the stream ' }), TODAY, family);
   assert.equal(r.error, undefined);
-  assert.equal(r.guestCount, 1);
-  assert.equal(r.tents[0].guests[1].mobileNumber, '+919845012345');
-  assert.equal('guest' in r.tents[0].guests[1], false);
+  assert.deepEqual(r.party.map((p) => [p.name, p.ageGroup, p.guest]), [['Asha Rao', 'Adult', false], ['Ravi Rao', 'Adult', false], ['Dev Rao', 'Child', true], ['Meera Iyer', 'Adult', true]]);
+  assert.equal(r.guestCount, 2); // anyone typed is a paying guest, whatever the request says; the register's people never are
+  assert.equal(r.note, 'near the stream');
+  assert.equal('tents' in r, false);
 });
 
 test('a request is refused for each way it can be wrong', () => {
-  const bad = (tents, over) => validateStayRequest(req(tents, over), TODAY).error;
-  assert.match(bad([]), /at least one tent/);
-  assert.match(bad([{ tentId: 'Nope', guests: [person('A')] }]), /not one we have/);
-  assert.match(bad([{ tentId: 'Tent06', guests: [] }]), /who is staying/);
-  assert.match(bad([{ tentId: 'Tent06', guests: [person('A'), person('B'), person('C')] }]), /holds at most 2/);
-  assert.match(bad([{ tentId: 'Tent01', guests: [person('A')] }, { tentId: 'Tent01', guests: [person('B')] }]), /twice/);
-  assert.match(bad([{ tentId: 'Tent01', guests: [person('A')] }, { tentId: 'Tent02', guests: [person('a')] }]), /listed twice/);
-  assert.match(bad([{ tentId: 'Tent01', guests: [person('A', { ageGroup: 'Teen' })] }]), /adult or a child/);
-  assert.match(bad([{ tentId: 'Tent01', guests: [person('A', { gender: 'x' })] }]), /gender/);
-  assert.match(bad([{ tentId: 'Tent01', guests: [person('A', { mobileNumber: '123' })] }]), /valid mobile/);
-  assert.match(bad([{ tentId: 'Tent01', guests: [person(' ')] }]), /needs a name/);
+  const bad = (people, over, available) => validateStayRequest(req(people, over), TODAY, family, available).error;
+  assert.match(bad([]), /who is coming/);
+  assert.match(bad([{ memberId: 'stranger' }]), /not available to book for/);
+  assert.match(bad([{ memberId: 'm1' }, { memberId: 'm1' }]), /listed twice/);
+  assert.match(bad([{ memberId: 'm1' }, person('asha rao')]), /listed twice/);
+  assert.match(bad([person('A', { ageGroup: 'Teen' })]), /adult or a child/);
+  assert.match(bad([person(' ')]), /needs a name/);
+  assert.match(bad([person('A'), person('B'), person('C')], {}, 2), /Only 2 places are free/);
+  assert.match(bad([person('A')], {}, 0), /no room/);
+  assert.match(bad([person('A')], { nights: 0 }), /nights/);
+});
+
+test('the note for Madhavan names everyone and carries no contact details', () => {
+  const party = [{ name: 'Asha Rao', ageGroup: 'Adult', guest: false }, { name: 'Dev Rao', ageGroup: 'Child', guest: false }, { name: 'Meera Iyer', ageGroup: 'Adult', guest: true }];
+  assert.equal(partyNote(party, ''), 'Needs tents. Party of 3: Asha Rao, Dev Rao (child), Meera Iyer (paying guest).');
+  assert.match(partyNote(party, 'late arrival'), /Note: late arrival$/);
 });
 
 test('cancelling is allowed only before check-in', () => {
   assert.equal(canCancelStay('2026-10-22', TODAY), true);
   assert.equal(canCancelStay('2026-10-21', TODAY), false);
   assert.equal(canCancelStay('2026-10-01', TODAY), false);
-});
-
-test('a registered family member needs no typed details and is never a paying guest', () => {
-  const family = new Map([['m1', { name: 'Asha Rao', phone: '98450 12345', email: 'asha@example.com' }], ['m2', { name: 'Ravi Rao', phone: null, email: null }]]);
-  const r = validateStayRequest(req([{ tentId: 'Tent01', guests: [{ memberId: 'm1', guest: true }, { memberId: 'm2' }, person('Dev Rao', { ageGroup: 'Child' })] }]), TODAY, family);
-  assert.equal(r.error, undefined);
-  assert.deepEqual(r.tents[0].guests[0], { name: 'Asha Rao', ageGroup: 'Adult', gender: 'NA', mobileNumber: '+919845012345', email: 'asha@example.com' });
-  assert.deepEqual(r.tents[0].guests[1], { name: 'Ravi Rao', ageGroup: 'Adult', gender: 'NA' });
-  assert.equal(r.guestCount, 0);
-  const bad = (tents) => validateStayRequest(req(tents), TODAY, family).error;
-  assert.match(bad([{ tentId: 'Tent01', guests: [{ memberId: 'someone-else' }] }]), /not in your unit/);
-  assert.match(bad([{ tentId: 'Tent01', guests: [{ memberId: 'm1' }] }, { tentId: 'Tent02', guests: [{ memberId: 'm1' }] }]), /listed twice/);
-  assert.match(bad([{ tentId: 'Tent01', guests: [{ memberId: 'm1' }, person('asha rao')] }]), /listed twice/);
 });

@@ -34,7 +34,7 @@ import { validateProfileEdit, profileAuditDetail } from '../../scripts/lib/membe
 import { PRIVACY_NOTICE_VERSION, privacyNoticeRequired, validateAcceptance } from '../../scripts/lib/member-privacy.mjs';
 import { callAnthropic } from './lib/anthropic';
 import { ACCOMMODATION_UNITS } from '../../scripts/lib/accommodation.mjs';
-import { availabilityFor, canCancelStay, checkOut, validateStayDates, validateStayRequest } from '../../scripts/lib/member-stay.mjs';
+import { availabilityFor, canCancelStay, checkOut, partyNote, validateStayDates, validateStayRequest, waitingBeds } from '../../scripts/lib/member-stay.mjs';
 import { createBooking, deleteBooking, getBookingById, getNotice } from '../../scripts/lib/accommodation-db.mjs';
 import { sendStayCancellation } from './lib/stay-notify';
 import { sendMemberStayBooked, sendMemberStayCancelled } from './lib/member-stay-notify';
@@ -840,9 +840,11 @@ async function handleDirectory(req: Request): Promise<Response> {
 }
 
 // ---- Stays: a member books their own family's nights at the farm ----
-// The booking is an ordinary `member-stay` in the accommodation calendar (accommodation_create_booking, so the
-// database still refuses a tent that is taken). member_stays remembers which household booked it. A member
-// only ever sees, books for and cancels their own households' stays.
+// The booking is an ordinary `member-stay` in the accommodation calendar with NO tents: the member is told how
+// many fixed and portable tents are free, says who is coming, and Madhavan allocates tents in the calendar.
+// Until he does, the people are "waiting" and are taken off what the next member is told is free.
+// member_stays remembers which household booked it and who is coming. A member only ever sees, books for and
+// cancels their own households' stays.
 
 const todayIst = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 const UNIT_LABEL = new Map<string, string>(ACCOMMODATION_UNITS.map((u: { id: string; label: string }) => [u.id, u.label]));
@@ -853,15 +855,42 @@ function stayHousehold(member: { householdIds: string[] }, asked: unknown): stri
   return member.householdIds[0] ?? null;
 }
 
-// Tents with a booking on any of these nights, and whether the whole farm is closed or taken. The database
-// records a farm closure or an exclusive private event as a booking with no tents, so it is looked up apart.
+// Tents with a booking on any of these nights, whether the whole farm is closed or taken, and how many people
+// are waiting for tents. The database records a farm closure or an exclusive private event as a booking with
+// no tents, so it is looked up apart; so are member stays that Madhavan has not given tents yet.
 async function occupancy(startDate: string, nights: number) {
   const range = encodeURIComponent(`[${startDate},${checkOut(startDate, nights)})`);
-  const [assigned, blockers] = await Promise.all([
-    select('accommodation_tent_assignments', 'tent_id', `stay_range=ov.${range}`),
+  const [assigned, blockers, memberBookings] = await Promise.all([
+    select('accommodation_tent_assignments', 'tent_id,booking_id', `stay_range=ov.${range}`),
     select('accommodation_bookings', 'id', `stay_range=ov.${range}&or=(type.eq.farm-closure,and(type.eq.private-event,exclusive.eq.true))`),
+    select('accommodation_bookings', 'id,start_date,nights', `stay_range=ov.${range}&type=eq.member-stay`),
   ]);
-  return { occupiedTentIds: assigned.map((a: any) => a.tent_id as string), wholeFarmBlocked: blockers.length > 0 };
+  const hasTents = new Set(assigned.map((a: any) => a.booking_id));
+  const unallocated = memberBookings.filter((b: any) => !hasTents.has(b.id));
+  const sizes = unallocated.length ? await select('member_stays', 'booking_id,party_size', `booking_id=in.${inList(unallocated.map((b: any) => b.id))}`) : [];
+  const size = new Map<string, number>(sizes.map((s: any) => [s.booking_id, s.party_size]));
+  const waiting = waitingBeds(unallocated.filter((b: any) => size.has(b.id)).map((b: any) => ({ startDate: b.start_date, nights: b.nights, people: size.get(b.id) as number })), startDate, nights);
+  return { occupiedTentIds: assigned.map((a: any) => a.tent_id as string), wholeFarmBlocked: blockers.length > 0, waiting };
+}
+
+// Who can be named in a booking: the unit's own registered people, and the other members who are listed in the
+// directory (a member who opted out of it is never offered to anyone else). Names and farm units only, which is
+// what the directory already shows every member. Members mostly book for themselves, but may name others
+// when they travel as a group.
+async function stayPeople(householdId: string) {
+  const [links, households, people] = await Promise.all([
+    select('member_household_members', 'household_id,person_id', 'person_id=not.is.null'),
+    select('member_households', 'id,farm_unit', 'id=not.is.null'),
+    select('member_people', 'id,full_name,directory_visible', 'active=eq.true'),
+  ]);
+  const unit = new Map<string, string>(households.map((h: any) => [h.id, h.farm_unit]));
+  const own = new Set<string>(links.filter((l: any) => l.household_id === householdId).map((l: any) => l.person_id));
+  const unitOf = (id: string) => unit.get(links.find((l: any) => l.person_id === id)?.household_id) ?? '';
+  const byName = (a: any, b: any) => a.name.localeCompare(b.name);
+  return {
+    own: people.filter((p: any) => own.has(p.id)).map((p: any) => ({ id: p.id as string, name: p.full_name as string })).sort(byName),
+    others: people.filter((p: any) => !own.has(p.id) && p.directory_visible !== false && links.some((l: any) => l.person_id === p.id)).map((p: any) => ({ id: p.id as string, name: p.full_name as string, farmUnit: unitOf(p.id) })).sort(byName),
+  };
 }
 
 async function guestDiscountPercent(): Promise<number> {
@@ -883,17 +912,20 @@ async function auditStay(personId: string, action: string, detail: Record<string
   return Boolean(log && log.ok);
 }
 
-// A stay as the member sees it: names and tents only, never anyone's contact details.
-function stayView(booking: any, guestCount: number, householdId: string) {
+// A stay as the member sees it: who is coming, and which tents Madhavan has given them (none yet = waiting).
+function stayView(row: { booking_id: string; household_id: string; party: any[]; guest_count: number }, booking: any) {
+  const tents: string[] = (booking.tents ?? []).map((t: any) => UNIT_LABEL.get(t.tentId) ?? t.tentId);
   return {
-    id: booking.id as string,
-    householdId,
+    id: row.booking_id,
+    householdId: row.household_id,
     startDate: booking.startDate as string,
     nights: booking.nights as number,
     checkOut: checkOut(booking.startDate, booking.nights),
-    guestCount,
+    people: row.party.map((p: any) => `${p.name}${p.ageGroup === 'Child' ? ' (child)' : ''}${p.guest ? ' (paying guest)' : ''}`),
+    guestCount: row.guest_count,
+    allocated: tents.length > 0,
+    tents,
     canCancel: canCancelStay(booking.startDate, todayIst()),
-    tents: booking.tents.map((t: any) => ({ tentId: t.tentId, label: UNIT_LABEL.get(t.tentId) ?? t.tentId, guests: t.guests.map((g: any) => g.name as string) })),
   };
 }
 
@@ -901,14 +933,15 @@ async function handleStaysList(req: Request): Promise<Response> {
   const who = await requireAcknowledgedMember(req);
   if ('error' in who) return who.error;
   try {
-    const rows = await select('member_stays', 'booking_id,household_id,guest_count', `household_id=in.${inList(who.member.householdIds)}`);
+    const rows = await select('member_stays', 'booking_id,household_id,party,guest_count', `household_id=in.${inList(who.member.householdIds)}`);
     const stays = [];
     for (const r of rows) {
       const booking = await getBookingById(r.booking_id);
-      if (booking) stays.push(stayView(booking, r.guest_count, r.household_id));
+      if (booking) stays.push(stayView(r, booking));
     }
     stays.sort((a, b) => b.startDate.localeCompare(a.startDate));
-    return jsonResponse({ stays, guestDiscountPercent: await guestDiscountPercent() });
+    const householdId = stayHousehold(who.member, new URL(req.url).searchParams.get('household'));
+    return jsonResponse({ stays, guestDiscountPercent: await guestDiscountPercent(), people: householdId ? await stayPeople(householdId) : { own: [], others: [] } });
   } catch (err) {
     console.error('[members-me] stays list failed', err);
     return jsonResponse({ error: 'Server error' }, 500);
@@ -937,43 +970,33 @@ async function handleStaysBook(req: Request): Promise<Response> {
   const { member } = who;
   const body = (await readJson(req)) as Record<string, unknown> | undefined;
   if (!body) return jsonResponse({ error: 'Nothing to do.' }, 400);
+  const dateError = validateStayDates({ startDate: body.startDate as string, nights: body.nights as number }, todayIst());
+  if (dateError) return jsonResponse({ error: dateError }, 400);
   const householdId = stayHousehold(member, body.householdId);
   if (!householdId) return jsonResponse({ error: 'You are not part of a unit yet. Ask the core team.' }, 409);
 
   try {
-    // The unit's registered people, read here so the member never types a name, number or email we already hold.
-    const links = await select('member_household_members', 'person_id', `household_id=eq.${householdId}`);
-    const people = links.length ? await select('member_people', 'id,full_name,phone,email', `id=in.${inList(links.map((l: any) => l.person_id))}&active=eq.true`) : [];
-    const family = new Map<string, { name: string; phone: string | null; email: string | null }>(people.map((p: any) => [p.id, { name: p.full_name, phone: p.phone ?? null, email: p.email ?? null }]));
-    const checked: any = validateStayRequest(body, todayIst(), family);
+    // The registered people who may be named, read here so the member never types a name we already hold.
+    const named = await stayPeople(householdId);
+    const family = new Map<string, { name: string }>([...named.own, ...named.others].map((p) => [p.id, { name: p.name }]));
+
+    // Booking is allowed only where there is room. Two members booking at the same moment can both pass this;
+    // the calendar then shows more people than beds and the core team sorts it out, as for any other booking.
+    const free = availabilityFor(await occupancy(body.startDate as string, body.nights as number));
+    if (free.wholeFarmBlocked) return jsonResponse({ error: 'The farm is not available on those dates.' }, 409);
+    const checked: any = validateStayRequest(body, todayIst(), family, free.maxParty);
     if (checked.error) return jsonResponse({ error: checked.error }, 400);
 
-    // Refuse early, in plain words, if a tent was taken (or the farm closed) while the member was filling this in.
-    // The database is the final word on a tent; it cannot see a farm closure, so that is checked here.
-    const now = await occupancy(checked.startDate, checked.nights);
-    const taken = checked.tents.filter((t: any) => now.occupiedTentIds.includes(t.tentId));
-    if (now.wholeFarmBlocked || taken.length) {
-      return jsonResponse({ error: now.wholeFarmBlocked ? 'The farm is not available on those dates.' : `${taken.map((t: any) => UNIT_LABEL.get(t.tentId)).join(' and ')} ${taken.length > 1 ? 'were' : 'was'} just booked. Pick again.` }, 409);
-    }
     const [household] = await select('member_households', 'farm_unit', `id=eq.${householdId}`);
     const farmUnit = (household?.farm_unit as string | undefined) ?? '';
 
     // Logged before the booking, and refused if it can't be, so no booking goes unrecorded.
-    const logged = await auditStay(member.personId, 'member.stay.create', { householdId, startDate: checked.startDate, nights: checked.nights, tents: checked.tents.map((t: any) => t.tentId), guestCount: checked.guestCount });
+    const logged = await auditStay(member.personId, 'member.stay.create', { householdId, startDate: checked.startDate, nights: checked.nights, partySize: checked.party.length, guestCount: checked.guestCount });
     if (!logged) return jsonResponse({ error: 'Could not record the booking, so nothing was booked. Try again.' }, 500);
 
-    let booking: any;
-    try {
-      booking = await createBooking({ type: 'member-stay', label: `${farmUnit} · ${member.name}`, startDate: checked.startDate, nights: checked.nights, tents: checked.tents, createdBy: `member:${member.personId}` } as any);
-    } catch (err) {
-      if ((err as { status?: number }).status === 409) return jsonResponse({ error: 'One of those tents was just booked. Pick again.' }, 409);
-      throw err;
-    }
-    const link = await fetch(`${supabaseUrl()}/rest/v1/member_stays`, {
-      method: 'POST',
-      headers: restHeaders({ Prefer: 'return=minimal' }),
-      body: JSON.stringify({ booking_id: booking.id, household_id: householdId, requested_by: member.personId, guest_count: checked.guestCount }),
-    }).catch(() => null);
+    const booking: any = await createBooking({ type: 'member-stay', label: `${farmUnit} · ${member.name}`, startDate: checked.startDate, nights: checked.nights, tents: [], note: partyNote(checked.party, checked.note), createdBy: `member:${member.personId}` } as any);
+    const row = { booking_id: booking.id, household_id: householdId, requested_by: member.personId, party_size: checked.party.length, party: checked.party.map((p: any) => ({ name: p.name, ageGroup: p.ageGroup, guest: p.guest })), guest_count: checked.guestCount };
+    const link = await fetch(`${supabaseUrl()}/rest/v1/member_stays`, { method: 'POST', headers: restHeaders({ Prefer: 'return=minimal' }), body: JSON.stringify(row) }).catch(() => null);
     if (!link || !link.ok) {
       // A booking no household owns would sit on the calendar unseen by the member: take it back.
       await deleteBooking(booking.id, { deletedBy: `member:${member.personId}`, reason: 'Could not be linked to the household' }).catch(() => {});
@@ -982,8 +1005,8 @@ async function handleStaysBook(req: Request): Promise<Response> {
     }
 
     const [me] = await select('member_people', 'email', `id=eq.${member.personId}`);
-    await sendMemberStayBooked({ farmUnit, memberName: member.name, memberEmail: me?.email ?? null, startDate: booking.startDate, nights: booking.nights, guestCount: checked.guestCount, tents: booking.tents });
-    return jsonResponse({ stay: stayView(booking, checked.guestCount, householdId) });
+    await sendMemberStayBooked({ farmUnit, memberName: member.name, memberEmail: me?.email ?? null, startDate: booking.startDate, nights: booking.nights, guestCount: checked.guestCount, party: row.party, note: checked.note });
+    return jsonResponse({ stay: stayView(row, booking) });
   } catch (err) {
     console.error('[members-me] stay booking failed', err);
     return jsonResponse({ error: 'Could not book. Try again.' }, 500);
@@ -999,7 +1022,7 @@ async function handleStaysCancel(req: Request): Promise<Response> {
   if (!bookingId) return jsonResponse({ error: 'Nothing to do.' }, 400);
   try {
     // 404 whether it is missing or someone else's, so the response never says which bookings exist.
-    const [row] = await select('member_stays', 'household_id,guest_count', `booking_id=eq.${bookingId}&household_id=in.${inList(member.householdIds)}`);
+    const [row] = await select('member_stays', 'household_id,guest_count,party', `booking_id=eq.${bookingId}&household_id=in.${inList(member.householdIds)}`);
     const booking: any = row ? await getBookingById(bookingId) : null;
     if (!row || !booking) return jsonResponse({ error: 'That booking was not found.' }, 404);
     if (!canCancelStay(booking.startDate, todayIst())) return jsonResponse({ error: 'A stay that has started cannot be cancelled here. Contact the core team.' }, 409);
@@ -1014,7 +1037,7 @@ async function handleStaysCancel(req: Request): Promise<Response> {
 
     const [household] = await select('member_households', 'farm_unit', `id=eq.${row.household_id}`);
     const [me] = await select('member_people', 'email', `id=eq.${member.personId}`);
-    await sendMemberStayCancelled({ farmUnit: household?.farm_unit ?? '', memberName: member.name, memberEmail: me?.email ?? null, startDate: booking.startDate, nights: booking.nights, guestCount: row.guest_count, tents: booking.tents });
+    await sendMemberStayCancelled({ farmUnit: household?.farm_unit ?? '', memberName: member.name, memberEmail: me?.email ?? null, startDate: booking.startDate, nights: booking.nights, guestCount: row.guest_count, party: row.party, note: '' });
     return jsonResponse({ ok: true });
   } catch (err) {
     console.error('[members-me] stay cancel failed', err);

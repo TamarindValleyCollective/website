@@ -656,39 +656,30 @@ import SignInGate from '../../components/SignInGate.astro';
     font-weight: 600;
   }
 
-  .stay-group {
-    margin: 14px 0 6px;
-    font-family: var(--font-body);
-    font-size: var(--text-base);
-    font-weight: 600;
+  .stay-tents {
+    margin: 0 0 8px;
+    padding-left: 20px;
   }
 
-  .stay-units {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .stay-unit {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 44px;
-    padding: 8px 12px;
-    border: 1px solid var(--tvc-line-strong);
-    border-radius: var(--radius-sm);
+  .stay-guest-tag {
     font-size: var(--text-sm);
-    cursor: pointer;
-  }
-
-  .stay-unit--taken {
-    color: var(--tvc-ink-soft);
-    background: var(--tvc-cream);
-    cursor: not-allowed;
-  }
-
-  .stay-taken {
     font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .stay-note {
+    display: grid;
+    gap: 4px;
+    margin: 14px 0 12px;
+    font-size: var(--text-sm);
+  }
+
+  .stay-note textarea {
+    padding: 8px 10px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    font: inherit;
+    resize: vertical;
   }
 
   .stay-tent {
@@ -3895,14 +3886,16 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   }
 
   // ---- stays ----
-  // Pick check-in and nights, see which tents are free (type and how many it sleeps), choose, say who is
-  // staying in each, and book. Own family is free; people marked "paying guest" are charged at the guest rate
-  // (a discount set by the core team), which the core team confirms with the member after booking.
-  type StayPerson = { memberId: string | null; name: string; ageGroup: string; gender: string; mobile: string; guest: boolean };
-  type StayUnit = { id: string; label: string; shortLabel: string; capacity: number; kind: string; free: boolean };
-  type StayGroup = { group: string; byot: boolean; units: StayUnit[] };
-  type StayAvail = { startDate: string; nights: number; checkOut: string; tentsFree: number; bedsFree: number; pitchesFree: number; wholeFarmBlocked: boolean; groups: StayGroup[] };
-  type StayRow = { id: string; householdId: string; startDate: string; nights: number; checkOut: string; guestCount: number; canCancel: boolean; tents: { tentId: string; label: string; guests: string[] }[] };
+  // Pick check-in and nights, see how many fixed and portable tents are free, say who is coming, and book.
+  // The member does not choose tents: Madhavan allocates them in the accommodation calendar, and the stay shows
+  // "waiting for tents" until he has. Members mostly book for themselves but may name other members for a group
+  // trip. Members on the register stay free; anyone typed in is a paying guest (charged at the guest rate, a
+  // discount set by the core team, which the core team confirms with the member after booking).
+  type StayPerson = { memberId: string | null; name: string; ageGroup: string; guest: boolean };
+  type Tents = { tents: number; beds: number };
+  type StayAvail = { startDate: string; nights: number; checkOut: string; fixed: Tents; portable: Tents; bedsFree: number; waiting: number; maxParty: number; wholeFarmBlocked: boolean };
+  type StayRow = { id: string; householdId: string; startDate: string; nights: number; checkOut: string; people: string[]; guestCount: number; allocated: boolean; tents: string[]; canCancel: boolean };
+  type StayPeople = { own: { id: string; name: string }[]; others: { id: string; name: string; farmUnit: string }[] };
   const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
   const stayDate = (iso: string) => dateFmt.format(new Date(`${iso}T00:00:00`));
 
@@ -3912,7 +3905,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const discount = h('span', '', '20%');
     root.append(
       h('h1', 'page-title', 'Stays'),
-      h('p', 'lede', undefined, 'Book nights at the farm for your family. Your own family stays free; pick them from your unit, no need to type them in. Anyone else you mark as a paying guest gets ', discount, ' off the guest rate, and the core team will confirm the charge with you.'));
+      h('p', 'lede', undefined, 'Book nights at the farm. You will be told how many tents are free; you do not choose them, Madhavan allocates tents once you have booked. Members stay free, and you can add other members if you are coming as a group. Family should be on the member register (ask the core team to add anyone missing); anyone not on it is a paying guest, and gets ', discount, ' off the guest rate, and the core team will confirm the charge with you.'));
 
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
     const date = document.createElement('input');
@@ -3930,119 +3923,98 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const availBox = h('div', 'stay-avail');
     availBox.setAttribute('aria-live', 'polite');
     const peopleBox = h('div');
+    const note = document.createElement('textarea');
+    note.rows = 2;
+    note.maxLength = 300;
+    note.placeholder = 'Anything Madhavan should know (optional)';
+    note.setAttribute('aria-label', 'A note for Madhavan, optional');
+    const noteLabel = h('label', 'stay-note', undefined, 'A note for Madhavan', note);
     const book = h('button', 'btn btn--solid', 'Book this stay') as HTMLButtonElement;
     book.setAttribute('type', 'button');
-    book.hidden = true;
+    const bookBox = h('div', 'stay-book', undefined, noteLabel, book);
 
     let avail: StayAvail | null = null;
-    const chosen = new Map<string, StayPerson[]>(); // tent id -> the people in it, in the order picked
-    // Someone already on the register is picked, not typed; "Someone else" (a child, a guest) is typed.
-    const usedMembers = () => new Set([...chosen.values()].flat().map((q) => q.memberId).filter(Boolean));
-    const nextFamily = (): string | null => {
-      if (chosen.size === 0 && hh.people.some((q) => q.id === me?.personId)) return me!.personId; // first row is the member
-      const used = usedMembers();
-      return hh.people.find((q) => !used.has(q.id))?.id ?? null;
+    let known: StayPeople = { own: [], others: [] };
+    const party: StayPerson[] = [];
+    const mine = hh.people.find((q) => q.id === me?.personId)?.id ?? null;
+    const used = () => new Set(party.map((q) => q.memberId).filter(Boolean));
+    const nextMember = (): string | null => {
+      const taken = used();
+      if (party.length === 0 && mine) return mine; // the first person is the member
+      return known.own.find((q) => !taken.has(q.id))?.id ?? hh.people.find((q) => !taken.has(q.id))?.id ?? null;
     };
-    const blankPerson = (memberId: string | null = null): StayPerson => ({ memberId, name: '', ageGroup: 'Adult', gender: 'NA', mobile: '', guest: false });
-
-    function sync() {
-      book.hidden = chosen.size === 0;
-      renderPeople();
-    }
+    const blank = (memberId: string | null = null): StayPerson => ({ memberId, name: '', ageGroup: 'Adult', guest: false });
 
     function renderAvail() {
-      if (!avail) return availBox.replaceChildren();
+      availBox.replaceChildren();
+      bookBox.hidden = !avail || avail.maxParty === 0;
+      peopleBox.hidden = bookBox.hidden;
+      if (!avail) return;
       const a = avail;
-      const summary = a.wholeFarmBlocked
-        ? 'The farm is not available on those dates.'
-        : a.tentsFree === 0 && a.pitchesFree === 0
-          ? 'Nothing is free on those dates. Try other dates.'
-          : `${plural(a.tentsFree, 'tent')} free, sleeping ${plural(a.bedsFree, 'person', 'people')}${a.pitchesFree ? `, and ${plural(a.pitchesFree, 'pitch', 'pitches')} for your own tent` : ''}.`;
-      availBox.replaceChildren(h('p', 'stay-summary', `${stayDate(a.startDate)} to ${stayDate(a.checkOut)} · ${plural(a.nights, 'night')}`), h('p', 'lede', summary));
-      for (const g of a.groups) {
-        const list = h('div', 'stay-units');
-        for (const u of g.units) {
-          const box = document.createElement('input');
-          box.type = 'checkbox';
-          box.disabled = !u.free;
-          box.checked = chosen.has(u.id);
-          box.addEventListener('change', () => {
-            if (box.checked) chosen.set(u.id, [blankPerson(nextFamily())]);
-            else chosen.delete(u.id);
-            sync();
-          });
-          const text = g.byot ? `${u.shortLabel} · your own tent` : `${u.shortLabel} · sleeps ${u.capacity}`;
-          list.append(h('label', `stay-unit${u.free ? '' : ' stay-unit--taken'}`, undefined, box, h('span', '', text), u.free ? null : h('span', 'stay-taken', 'Booked')));
-        }
-        availBox.append(h('h3', 'stay-group', g.group), list);
-      }
+      availBox.append(h('p', 'stay-summary', `${stayDate(a.startDate)} to ${stayDate(a.checkOut)} · ${plural(a.nights, 'night')}`));
+      if (a.wholeFarmBlocked || a.maxParty === 0) return availBox.append(h('p', 'lede', a.wholeFarmBlocked ? 'The farm is not available on those dates. Try other dates.' : 'There is no room left on those dates. Try other dates.'));
+      const line = (label: string, k: Tents) => h('li', '', `${label}: ${plural(k.tents, 'tent')} free, sleeping ${plural(k.beds, 'person', 'people')}`);
+      availBox.append(
+        h('ul', 'stay-tents', undefined, line('Fixed tents', a.fixed), line('Portable tents', a.portable)),
+        h('p', 'lede', `You can book up to ${plural(a.maxParty, 'person', 'people')}${a.waiting ? `. Other members have already asked for ${plural(a.waiting, 'place')} here, which is taken off.` : '.'}`));
     }
 
     function renderPeople() {
       peopleBox.replaceChildren();
-      const order = avail?.groups.flatMap((g) => g.units).filter((u) => chosen.has(u.id)) ?? [];
-      for (const u of order) {
-        const rows = chosen.get(u.id)!;
-        const set = h('fieldset', 'stay-tent', undefined, h('legend', '', `${u.label} · ${u.kind === 'byot' ? `up to ${u.capacity}` : `sleeps ${u.capacity}`}`));
-        rows.forEach((p, i) => {
-          const who = document.createElement('select');
-          who.setAttribute('aria-label', 'Who is staying');
-          const taken = usedMembers();
-          for (const q of hh.people) {
-            const o = new Option(q.id === me?.personId ? `${q.name} (you)` : q.name, q.id);
-            o.disabled = taken.has(q.id) && p.memberId !== q.id; // already placed in a tent
-            who.append(o);
-          }
-          who.append(new Option('Someone else (a child or a guest)', ''));
-          who.value = p.memberId ?? '';
-          who.addEventListener('change', () => { p.memberId = who.value || null; renderPeople(); });
-          const row = h('div', 'stay-person', undefined, who);
-          if (!p.memberId) {
-            const name = document.createElement('input');
-            name.placeholder = 'Full name';
-            name.value = p.name;
-            name.autocomplete = 'off';
-            name.setAttribute('aria-label', 'Full name');
-            name.addEventListener('input', () => { p.name = name.value; });
-            const age = document.createElement('select');
-            age.setAttribute('aria-label', 'Adult or child');
-            for (const v of ['Adult', 'Child']) age.append(new Option(v, v));
-            age.value = p.ageGroup;
-            age.addEventListener('change', () => { p.ageGroup = age.value; });
-            const gender = document.createElement('select');
-            gender.setAttribute('aria-label', 'Gender');
-            for (const [v, t] of [['Male', 'Male'], ['Female', 'Female'], ['NA', 'Prefer not to say']]) gender.append(new Option(t, v));
-            gender.value = p.gender;
-            gender.addEventListener('change', () => { p.gender = gender.value; });
-            const mobile = document.createElement('input');
-            mobile.type = 'tel';
-            mobile.placeholder = 'Mobile (optional)';
-            mobile.autocomplete = 'off';
-            mobile.setAttribute('aria-label', 'Mobile number, optional');
-            mobile.value = p.mobile;
-            mobile.addEventListener('input', () => { p.mobile = mobile.value; });
-            const paying = document.createElement('input');
-            paying.type = 'checkbox';
-            paying.checked = p.guest;
-            paying.addEventListener('change', () => { p.guest = paying.checked; });
-            row.append(name, age, gender, mobile, h('label', 'check', undefined, paying, h('span', '', 'Paying guest (not family)')));
-          }
-          if (rows.length > 1) {
-            const rm = h('button', 'btn stay-remove', 'Remove');
-            rm.setAttribute('type', 'button');
-            rm.addEventListener('click', () => { rows.splice(i, 1); renderPeople(); });
-            row.append(rm);
-          }
-          set.append(row);
-        });
-        if (rows.length < u.capacity) {
-          const add = h('button', 'btn', 'Add a person');
-          add.setAttribute('type', 'button');
-          add.addEventListener('click', () => { rows.push(blankPerson(nextFamily())); renderPeople(); });
-          set.append(add);
+      if (!avail || avail.maxParty === 0) return;
+      const cap = avail.maxParty;
+      const set = h('fieldset', 'stay-tent', undefined, h('legend', '', `Who is coming (${party.length} of up to ${cap})`));
+      party.forEach((p, i) => {
+        const who = document.createElement('select');
+        who.setAttribute('aria-label', 'Who is coming');
+        const taken = used();
+        const group = (label: string, opts: HTMLOptionElement[]) => {
+          if (!opts.length) return;
+          const g = document.createElement('optgroup');
+          g.label = label;
+          g.append(...opts);
+          who.append(g);
+        };
+        const opt = (id: string, text: string) => {
+          const o = new Option(text, id);
+          o.disabled = taken.has(id) && p.memberId !== id; // already on this booking
+          return o;
+        };
+        group('Your unit', known.own.map((q) => opt(q.id, q.id === me?.personId ? `${q.name} (you)` : q.name)));
+        group('Other members', known.others.map((q) => opt(q.id, `${q.name} · ${q.farmUnit}`)));
+        group('Not on the register', [new Option('Someone else (paying guest)', '')]);
+        who.value = p.memberId ?? '';
+        who.addEventListener('change', () => { p.memberId = who.value || null; renderPeople(); });
+        const row = h('div', 'stay-person', undefined, who);
+        if (!p.memberId) {
+          const name = document.createElement('input');
+          name.placeholder = 'Full name';
+          name.value = p.name;
+          name.autocomplete = 'off';
+          name.setAttribute('aria-label', 'Full name');
+          name.addEventListener('input', () => { p.name = name.value; });
+          const age = document.createElement('select');
+          age.setAttribute('aria-label', 'Adult or child');
+          for (const v of ['Adult', 'Child']) age.append(new Option(v, v));
+          age.value = p.ageGroup;
+          age.addEventListener('change', () => { p.ageGroup = age.value; });
+          row.append(name, age, h('span', 'stay-guest-tag', 'Paying guest'));
         }
-        peopleBox.append(set);
+        if (party.length > 1) {
+          const rm = h('button', 'btn stay-remove', 'Remove');
+          rm.setAttribute('type', 'button');
+          rm.addEventListener('click', () => { party.splice(i, 1); renderPeople(); });
+          row.append(rm);
+        }
+        set.append(row);
+      });
+      if (party.length < cap) {
+        const add = h('button', 'btn', 'Add a person');
+        add.setAttribute('type', 'button');
+        add.addEventListener('click', () => { party.push(blank(nextMember())); renderPeople(); });
+        set.append(add);
       }
+      peopleBox.append(set);
     }
 
     let checking = 0;
@@ -4051,26 +4023,26 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const n = Number(nights.value);
       if (!date.value || !Number.isInteger(n) || n < 1) {
         avail = null;
-        chosen.clear();
         renderAvail();
-        return sync();
+        return renderPeople();
       }
-      const mine = ++checking;
+      const mineCheck = ++checking;
       availBox.replaceChildren(h('p', 'lede', 'Checking the farm…'));
       try {
         const { status, data } = await memberFetch(`/api/members-me/stays-availability?start=${encodeURIComponent(date.value)}&nights=${n}`);
-        if (mine !== checking) return; // a newer date was typed
+        if (mineCheck !== checking) return; // a newer date was typed
         if (status !== 200) throw new Error(data.error || 'Could not check availability.');
         avail = data as StayAvail;
-        // Keep what was chosen only while it is still free for the new dates.
-        const stillFree = new Set(avail.groups.flatMap((g) => g.units).filter((u) => u.free).map((u) => u.id));
-        for (const id of [...chosen.keys()]) if (!stillFree.has(id)) chosen.delete(id);
+        if (party.length === 0) party.push(blank(nextMember()));
+        // Never more people than there is room for: drop the last ones added.
+        while (party.length > Math.max(avail.maxParty, 1)) party.pop();
         renderAvail();
-        sync();
+        renderPeople();
       } catch (e) {
-        if (mine !== checking) return;
+        if (mineCheck !== checking) return;
         avail = null;
-        availBox.replaceChildren();
+        renderAvail();
+        renderPeople();
         msg.textContent = e instanceof MemberAuthError ? 'Your session ended. Sign in again.' : e instanceof Error ? e.message : 'Could not check availability.';
       }
     }
@@ -4082,19 +4054,20 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       msg.textContent = '';
       book.disabled = true;
       try {
-        const tents = [...chosen.entries()].map(([tentId, rows]) => ({ tentId, guests: rows.map((p) => (p.memberId ? { memberId: p.memberId } : { name: p.name, ageGroup: p.ageGroup, gender: p.gender, mobileNumber: p.mobile, guest: p.guest })) }));
-        const { status, data } = await memberFetch('/api/members-me/stays', { method: 'POST', body: { householdId: hh.id, startDate: avail.startDate, nights: avail.nights, tents } });
+        const people = party.map((p) => (p.memberId ? { memberId: p.memberId } : { name: p.name, ageGroup: p.ageGroup, guest: p.guest }));
+        const { status, data } = await memberFetch('/api/members-me/stays', { method: 'POST', body: { householdId: hh.id, startDate: avail.startDate, nights: avail.nights, people, note: note.value } });
         if (status !== 200) {
           msg.textContent = data.error || 'Could not book. Try again.';
-          if (status === 409) void check(); // someone else got there first: show what is free now
+          void check(); // what is free may have changed: show it as it is now
           return;
         }
-        chosen.clear();
+        party.length = 0;
         date.value = '';
         nights.value = '1';
+        note.value = '';
         avail = null;
         renderAvail();
-        sync();
+        renderPeople();
         toast('Your stay is booked. We have emailed you the details.');
         void loadStays();
       } catch (e) {
@@ -4104,15 +4077,16 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       }
     });
 
+    renderAvail();
     const form = h('section', 'panel', undefined,
       h('h2', '', 'Book a stay'),
       h('div', 'stay-when', undefined, h('label', '', 'Check-in', date), h('label', '', 'Nights', nights)),
-      availBox, peopleBox, msg, book);
+      availBox, peopleBox, msg, bookBox);
     form.style.marginTop = '16px';
 
     const mineBox = h('div');
-    const mine = h('section', 'panel', undefined, h('h2', '', 'Your stays'), mineBox);
-    mine.style.marginTop = '16px';
+    const mineSection = h('section', 'panel', undefined, h('h2', '', 'Your stays'), mineBox);
+    mineSection.style.marginTop = '16px';
 
     function cancelDialog(s: StayRow) {
       const dlg = document.createElement('dialog');
@@ -4138,7 +4112,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           err.textContent = e instanceof MemberAuthError ? 'Your session ended. Sign in again.' : e instanceof Error ? e.message : 'Could not cancel.';
         }
       });
-      dlg.append(h('h3', '', 'Cancel this stay?'), h('p', '', `${stayDate(s.startDate)} to ${stayDate(s.checkOut)}. The tents go back to being free for others, and the core team and Madhavan are told.`), err, h('div', 'modal-actions', undefined, keep, go));
+      dlg.append(h('h3', '', 'Cancel this stay?'), h('p', '', `${stayDate(s.startDate)} to ${stayDate(s.checkOut)}. The places go back to being free for others, and the core team and Madhavan are told.`), err, h('div', 'modal-actions', undefined, keep, go));
       dlg.addEventListener('close', () => dlg.remove());
       document.body.append(dlg);
       dlg.showModal();
@@ -4146,16 +4120,19 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
     async function loadStays() {
       try {
-        const { status, data } = await memberFetch('/api/members-me/stays');
+        const { status, data } = await memberFetch(`/api/members-me/stays?household=${encodeURIComponent(hh.id)}`);
         if (status !== 200) throw new Error(data.error || 'Could not load your stays.');
         discount.textContent = `${data.guestDiscountPercent}%`;
+        known = data.people as StayPeople;
+        if (avail) renderPeople();
         const list = (data.stays as StayRow[]).filter((s) => s.householdId === hh.id || all.length === 1);
         if (!list.length) return mineBox.replaceChildren(h('p', 'lede', 'You have no stays booked yet.'));
         mineBox.replaceChildren(...list.map((s) => {
           const past = !s.canCancel && s.checkOut < today;
           const card = h('div', `stay-card${past ? ' stay-card--past' : ''}`, undefined,
             h('p', 'stay-summary', `${stayDate(s.startDate)} to ${stayDate(s.checkOut)} · ${plural(s.nights, 'night')}`),
-            ...s.tents.map((t) => h('p', 'stay-line', `${t.label}: ${t.guests.join(', ')}`)),
+            h('p', 'stay-line', s.people.join(', ')),
+            h('p', 'stay-line', s.allocated ? `Tents: ${s.tents.join(', ')}` : 'Waiting for Madhavan to allocate tents.'),
             s.guestCount ? h('p', 'stay-line', `${plural(s.guestCount, 'paying guest')}: the core team will confirm the charge.`) : null);
           if (s.canCancel) {
             const cancel = h('button', 'btn', 'Cancel stay');
@@ -4171,7 +4148,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     }
     void loadStays();
 
-    root.append(form, mine);
+    root.append(form, mineSection);
     return root;
   }
 
