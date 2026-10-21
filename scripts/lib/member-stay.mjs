@@ -83,7 +83,20 @@ export function validateStayRequest(body, today, family = new Map(), available =
       if (!known) return { error: 'One of the members you named is not available to book for.' };
       if (usedMembers.has(p.memberId)) return { error: `${known.name} is listed twice.` };
       usedMembers.add(p.memberId);
-      entry = { name: known.name.trim(), ageGroup: 'Adult', guest: false, memberId: p.memberId };
+      // Neither adult or child nor gender is on the register, so both are asked for every member, as for a guest
+      // (age is per stay: a child grows up). A registered owner is offered "Adult" to start with; the form makes
+      // everyone else choose.
+      if (!AGE_GROUPS.includes(p.ageGroup)) return { error: `Say whether ${known.name.trim()} is an adult or a child.` };
+      entry = { name: known.name.trim(), ageGroup: p.ageGroup, guest: false, memberId: p.memberId };
+      if (known.own) {
+        // Someone in the member's own unit: their gender is kept on their directory record, and their standing
+        // allergies and preferences are shown, prefilled, to review. What comes back replaces what the directory
+        // holds; another member's are never shown, so never replaced.
+        if (!GENDERS.includes(p.gender)) return { error: `Choose a gender for ${entry.name}, or "Prefer not to say".` };
+        entry.gender = p.gender;
+        entry.preferences = typeof p.preferences === 'string' ? p.preferences.trim().replace(/\s+/g, ' ').slice(0, 300) || null : null;
+        entry.replacePreferences = true;
+      }
       // The register's own number and email, so notices reach them without anyone typing them again.
       const phone = known.phone ? normalizeMobileNumber(known.phone) : null;
       if (phone) entry.mobileNumber = phone;
@@ -91,28 +104,32 @@ export function validateStayRequest(body, today, family = new Map(), available =
     } else {
       const name = typeof p?.name === 'string' ? p.name.trim().replace(/\s+/g, ' ') : '';
       if (!name || name.length > 80) return { error: 'Each person needs a name.' };
+      if (/[<>]/.test(name)) return { error: 'A name cannot contain < or >.' };
       if (!AGE_GROUPS.includes(p.ageGroup)) return { error: `Say whether ${name} is an adult or a child.` };
       entry = { name, ageGroup: p.ageGroup, guest: true }; // not on the register: a paying guest, always
-      // The same details tent allocation records in the guest directory: gender (optional here) and any
-      // allergies or preferences, so the farm is ready for them.
-      entry.gender = GENDERS.includes(p.gender) ? p.gender : 'NA';
+      // The same details tent allocation requires and records in the guest directory: gender, and any allergies or
+      // preferences, so the farm is ready for them.
+      if (!GENDERS.includes(p.gender)) return { error: `Choose a gender for ${name}, or "Prefer not to say".` };
+      entry.gender = p.gender;
       const prefs = typeof p.preferences === 'string' ? p.preferences.trim().replace(/\s+/g, ' ').slice(0, 300) : '';
       if (prefs) entry.preferences = prefs;
-      // How to reach them with their stay notices. Optional for a child (a parent's details cover them),
-      // but an adult needs at least a mobile number or an email.
+      // How to reach them with their stay notices, which go out on WhatsApp (and by email if one is given). As in tent
+      // allocation, a new guest always needs a mobile number; a family sharing one number is fine (the directory
+      // tells people apart by number + name).
       const mobile = typeof p.mobileNumber === 'string' ? p.mobileNumber.trim() : '';
-      if (mobile) {
-        const normalized = normalizeMobileNumber(mobile);
-        if (!normalized) return { error: `"${mobile}" is not a valid mobile number. Use 10 digits, or include a country code.` };
-        entry.mobileNumber = normalized;
-      }
+      if (!mobile) return { error: `Add a WhatsApp mobile number for ${name}, so we can send them their stay details.` };
+      const normalized = normalizeMobileNumber(mobile);
+      if (!normalized) return { error: `"${mobile}" is not a valid mobile number. Use 10 digits, or include a country code.` };
+      entry.mobileNumber = normalized;
       const email = typeof p.email === 'string' ? p.email.trim() : '';
       if (email) {
         if (!isValidEmail(email)) return { error: `"${email}" is not a valid email address.` };
         entry.email = email;
       }
-      if (entry.ageGroup === 'Adult' && !entry.mobileNumber && !entry.email) return { error: `Add a mobile number or an email for ${name}, so we can send them their stay details.` };
     }
+    // Food or allergy needs for this stay only ("no onions"): for anyone, apart from their standing preferences.
+    const need = typeof p?.stayRequirements === 'string' ? p.stayRequirements.trim().replace(/\s+/g, ' ').slice(0, 300) : '';
+    if (need) entry.stayRequirements = need;
     const key = entry.name.toLowerCase();
     if (names.has(key)) return { error: `${entry.name} is listed twice. Add a surname or initial to tell two people apart.` };
     names.add(key);

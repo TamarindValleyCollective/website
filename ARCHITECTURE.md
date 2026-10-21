@@ -1557,9 +1557,26 @@ never touches Netlify either.
   (party, children and paying guests marked, the member's own note, no contact details), and records the
   household and party in `member_stays` (if that fails the booking is removed again). Each person is either on
   the register (`memberId`: the unit's own people, or another member listed in the directory, never one who
-  opted out; free) or typed in (name, adult or child, and a mobile number and/or email for their stay notices; an adult
-  needs at least one, a child may use a parent's; **always a paying guest**, so a family member who should
-  stay free has to be on the register). **One directory, one person.** Everyone who stays, whatever the channel (an event participant, a Linger
+  opted out; free) or typed in (**always a paying guest**, so a family member who should stay free has to be on
+  the register). **What is asked follows tent allocation** (`validateStayRequest`, `scripts/lib/member-stay.mjs`):
+  adult or child for every person, member or not (it is per stay, and on no register); gender for every guest and
+  for the member's own unit (it is on no register either, so it is kept on their directory record and offered
+  prefilled next time); for a typed guest a **WhatsApp mobile number is mandatory** (as for any new guest in
+  allocation; a family may share one, the directory tells people apart by number + name) and an email is optional,
+  and a member uses the number on the register (the form says so, and warns when there is none, since stay
+  notices go out on WhatsApp and by email). **Allergies and food preferences** are the person's standing record
+  (`accommodation_people.preferences`): shown prefilled to review for the member's own unit (never another
+  unit's member, whose details are theirs), and what comes back **replaces** it, so it can be cleared
+  (`accommodation_resolve_booking_person`'s `p_replace_preferences`), while a typed guest's are saved as typed.
+  Separately, anyone can have a **requirement for this stay only** ("no onions", `accommodation_booking_party.
+  stay_requirements`, at most 300 characters), which `POST /api/members-me/stays-update` lets the booking member
+  change until check-in (audit-first as `member.stay.requirements`; the core team and Madhavan are emailed what
+  changed); it shows on the booking card in the calendar and in the booking emails, and never touches the standing
+  record. The one allocation rule deliberately **not** applied is a guard against the same person on two
+  overlapping stays: migration 0025 dropped it on purpose (families sharing one contact tripped it on ordinary
+  bookings). Because member-typed text now reaches the admin calendar, every place that page builds HTML from a
+  name, preference, note or label escapes it (`escapeAttr` now covers `<`, `>` and `'` as well as `&` and `"`,
+  and the guest-row fields were unescaped before), and a typed name cannot contain `<` or `>`. **One directory, one person.** Everyone who stays, whatever the channel (an event participant, a Linger
   guest, a guest of a member, a member, member family), is one row in the guest directory
   (`accommodation_people`: name, mobile, email, gender, allergies and preferences), and a person's past stays
   (`listStaysForPerson`) are every booking they were on, in any capacity. A role is never stored on the person:

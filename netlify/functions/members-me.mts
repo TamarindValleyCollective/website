@@ -35,9 +35,9 @@ import { PRIVACY_NOTICE_VERSION, privacyNoticeRequired, validateAcceptance } fro
 import { callAnthropic } from './lib/anthropic';
 import { ACCOMMODATION_UNITS } from '../../scripts/lib/accommodation.mjs';
 import { availabilityFor, canCancelStay, checkOut, partyNote, validateStayDates, validateStayRequest, waitingBeds } from '../../scripts/lib/member-stay.mjs';
-import { createBooking, deleteBooking, getBookingById, getNotice, saveGuestContact, setBookingParty } from '../../scripts/lib/accommodation-db.mjs';
+import { createBooking, deleteBooking, getBookingById, getNotice, saveGuestContact, setBookingParty, setPartyRequirement } from '../../scripts/lib/accommodation-db.mjs';
 import { sendStayCancellation } from './lib/stay-notify';
-import { sendMemberStayBooked, sendMemberStayCancelled } from './lib/member-stay-notify';
+import { sendMemberStayBooked, sendMemberStayCancelled, sendMemberStayRequirementsUpdated } from './lib/member-stay-notify';
 import { checkDailyCap } from './lib/rate-limit';
 import { buildUnitDirectory } from '../../scripts/lib/member-directory.mjs';
 import { MAX_FULL_BYTES, MAX_SQUARE_BYTES, isUploadedPhoto, validatePhotoPair } from '../../scripts/lib/member-photo.mjs';
@@ -879,17 +879,27 @@ async function occupancy(startDate: string, nights: number) {
 // when they travel as a group.
 async function stayPeople(householdId: string) {
   const [links, households, people] = await Promise.all([
-    select('member_household_members', 'household_id,person_id', 'person_id=not.is.null'),
+    select('member_household_members', 'household_id,person_id,role', 'person_id=not.is.null'),
     select('member_households', 'id,farm_unit', 'id=not.is.null'),
-    select('member_people', 'id,full_name,directory_visible', 'active=eq.true'),
+    select('member_people', 'id,full_name,directory_visible,phone', 'active=eq.true'),
   ]);
   const unit = new Map<string, string>(households.map((h: any) => [h.id, h.farm_unit]));
   const own = new Set<string>(links.filter((l: any) => l.household_id === householdId).map((l: any) => l.person_id));
   const unitOf = (id: string) => unit.get(links.find((l: any) => l.person_id === id)?.household_id) ?? '';
   const byName = (a: any, b: any) => a.name.localeCompare(b.name);
+  // Neither adult or child nor gender is on the register. A registered owner starts as "Adult" (still shown, and
+  // changeable); everyone else makes the choice.
+  const ageStart = (id: string) => (links.some((l: any) => l.person_id === id && (l.role ?? 'owner') === 'owner') ? 'Adult' : '');
+  // The unit's own people come with what the guest directory already holds for them (the same person, linked or
+  // adopted from an earlier stay as a guest): gender, and their standing allergies and food preferences, to review.
+  // Another unit's members never do; the directory's details about them are theirs.
+  const ownIds = [...own];
+  await Promise.all(ownIds.map((id) => fetch(`${supabaseUrl()}/rest/v1/rpc/accommodation_link_member`, { method: 'POST', headers: restHeaders(), body: JSON.stringify({ p_member_person_id: id }) }).catch(() => null)));
+  const held = ownIds.length ? await select('accommodation_people', 'member_person_id,gender,preferences', `member_person_id=in.${inList(ownIds)}`) : [];
+  const heldBy = new Map<string, any>(held.map((h: any) => [h.member_person_id, h]));
   return {
-    own: people.filter((p: any) => own.has(p.id)).map((p: any) => ({ id: p.id as string, name: p.full_name as string })).sort(byName),
-    others: people.filter((p: any) => !own.has(p.id) && p.directory_visible !== false && links.some((l: any) => l.person_id === p.id)).map((p: any) => ({ id: p.id as string, name: p.full_name as string, farmUnit: unitOf(p.id) })).sort(byName),
+    own: people.filter((p: any) => own.has(p.id)).map((p: any) => ({ id: p.id as string, name: p.full_name as string, ageGroup: ageStart(p.id), gender: (heldBy.get(p.id)?.gender as string | undefined) ?? '', preferences: (heldBy.get(p.id)?.preferences as string | undefined) ?? '', hasMobile: Boolean(p.phone) })).sort(byName),
+    others: people.filter((p: any) => !own.has(p.id) && p.directory_visible !== false && links.some((l: any) => l.person_id === p.id)).map((p: any) => ({ id: p.id as string, name: p.full_name as string, farmUnit: unitOf(p.id), ageGroup: ageStart(p.id) })).sort(byName),
   };
 }
 
@@ -922,6 +932,8 @@ function stayView(row: { booking_id: string; household_id: string; party: any[];
     nights: booking.nights as number,
     checkOut: checkOut(booking.startDate, booking.nights),
     people: row.party.map((p: any) => `${p.name}${p.ageGroup === 'Child' ? ' (child)' : ''}${p.guest ? ' (paying guest)' : ''}`),
+    // Each person's food or allergy need for this stay only, which the member can change until check-in.
+    needs: row.party.map((p: any) => ({ name: p.name as string, stayRequirements: (p.stayRequirements as string | undefined) ?? '' })),
     guestCount: row.guest_count,
     allocated: tents.length > 0,
     tents,
@@ -983,7 +995,8 @@ async function handleStaysBook(req: Request): Promise<Response> {
     // Their number and email come from the register, read here and never sent to the browser.
     const contacts = askedIds.length && askedIds.every((id: string) => nameOf.has(id)) ? await select('member_people', 'id,phone,email', `id=in.${inList(askedIds)}`) : [];
     const contactOf = new Map<string, { phone: string | null; email: string | null }>(contacts.map((c: any) => [c.id, { phone: c.phone ?? null, email: c.email ?? null }]));
-    const family = new Map<string, { name: string; phone: string | null; email: string | null }>([...nameOf].map(([id, name]) => [id, { name, phone: contactOf.get(id)?.phone ?? null, email: contactOf.get(id)?.email ?? null }]));
+    const ownIds = new Set<string>(named.own.map((p: any) => p.id));
+    const family = new Map<string, { name: string; phone: string | null; email: string | null; own: boolean }>([...nameOf].map(([id, name]) => [id, { name, phone: contactOf.get(id)?.phone ?? null, email: contactOf.get(id)?.email ?? null, own: ownIds.has(id) }]));
 
     // Booking is allowed only where there is room. Two members booking at the same moment can both pass this;
     // the calendar then shows more people than beds and the core team sorts it out, as for any other booking.
@@ -1007,10 +1020,10 @@ async function handleStaysBook(req: Request): Promise<Response> {
     // and anyone not on it is a guest of the member who booked. Kept on the booking, not on the person.
     const roles = askedIds.length ? await select('member_household_members', 'person_id,role', `person_id=in.${inList(askedIds)}`) : [];
     const capacityFor = (memberId: string | undefined) => (!memberId ? 'member_guest' : roles.some((r: any) => r.person_id === memberId && (r.role ?? 'owner') === 'owner') ? 'member' : 'member_family');
-    const resolved: { personId: string; ageGroup: string; capacity: string }[] = [];
+    const resolved: { personId: string; ageGroup: string; capacity: string; stayRequirements?: string }[] = [];
     for (const p of checked.party) {
-      const personId = await saveGuestContact({ name: p.name, mobileNumber: p.mobileNumber, email: p.email, gender: p.gender, preferences: p.preferences, memberPersonId: p.memberId });
-      resolved.push({ personId, ageGroup: p.ageGroup, capacity: capacityFor(p.memberId) });
+      const personId = await saveGuestContact({ name: p.name, mobileNumber: p.mobileNumber, email: p.email, gender: p.gender, preferences: p.preferences, memberPersonId: p.memberId, replacePreferences: p.replacePreferences });
+      resolved.push({ personId, ageGroup: p.ageGroup, capacity: capacityFor(p.memberId), stayRequirements: p.stayRequirements });
     }
     const booking: any = await createBooking({ type: 'member-stay', label: `${farmUnit} · ${member.name}`, startDate: checked.startDate, nights: checked.nights, tents: [], note: partyNote(checked.party, checked.note), createdBy: `member:${member.personId}` } as any);
     try {
@@ -1020,7 +1033,7 @@ async function handleStaysBook(req: Request): Promise<Response> {
       await deleteBooking(booking.id, { deletedBy: `member:${member.personId}`, reason: 'Could not record the party' }).catch(() => {});
       throw err;
     }
-    const row = { booking_id: booking.id, household_id: householdId, requested_by: member.personId, party_size: checked.party.length, party: checked.party.map((p: any) => ({ name: p.name, ageGroup: p.ageGroup, guest: p.guest })), guest_count: checked.guestCount };
+    const row = { booking_id: booking.id, household_id: householdId, requested_by: member.personId, party_size: checked.party.length, party: checked.party.map((p: any, i: number) => ({ personId: resolved[i].personId, name: p.name, ageGroup: p.ageGroup, guest: p.guest, ...(p.stayRequirements ? { stayRequirements: p.stayRequirements } : {}) })), guest_count: checked.guestCount };
     const link = await fetch(`${supabaseUrl()}/rest/v1/member_stays`, { method: 'POST', headers: restHeaders({ Prefer: 'return=minimal' }), body: JSON.stringify(row) }).catch(() => null);
     if (!link || !link.ok) {
       // A booking no household owns would sit on the calendar unseen by the member: take it back.
@@ -1070,8 +1083,43 @@ async function handleStaysCancel(req: Request): Promise<Response> {
   }
 }
 
+// The booking member changes a person's food or allergy need for this one stay ("no onions"), until check-in.
+// Their standing allergies and preferences are on their profile in the guest directory and are not touched here.
+async function handleStaysRequirements(req: Request): Promise<Response> {
+  const who = await requireAcknowledgedMember(req);
+  if ('error' in who) return who.error;
+  const { member } = who;
+  const body = (await readJson(req)) as { bookingId?: unknown; needs?: unknown } | undefined;
+  const bookingId = typeof body?.bookingId === 'string' && /^[0-9a-f-]{36}$/i.test(body.bookingId) ? body.bookingId : '';
+  if (!bookingId || !Array.isArray(body?.needs)) return jsonResponse({ error: 'Nothing to do.' }, 400);
+  try {
+    const [row] = await select('member_stays', 'household_id,guest_count,party', `booking_id=eq.${bookingId}&household_id=in.${inList(member.householdIds)}`);
+    const booking: any = row ? await getBookingById(bookingId) : null;
+    if (!row || !booking) return jsonResponse({ error: 'That booking was not found.' }, 404);
+    if (!canCancelStay(booking.startDate, todayIst())) return jsonResponse({ error: 'A stay that has started cannot be changed here. Tell the core team.' }, 409);
+    const wanted = new Map<string, string>(body.needs.filter((n: any) => typeof n?.name === 'string').map((n: any) => [n.name, typeof n.stayRequirements === 'string' ? n.stayRequirements.trim().replace(/\s+/g, ' ').slice(0, 300) : '']));
+    const party = (row.party as any[]).map((p) => (wanted.has(p.name) ? { ...p, stayRequirements: wanted.get(p.name) || undefined } : p));
+    const changed = party.filter((p, i) => (p.stayRequirements ?? '') !== (row.party[i].stayRequirements ?? ''));
+    const view = () => stayView({ booking_id: bookingId, household_id: row.household_id, party, guest_count: row.guest_count }, booking);
+    if (changed.length === 0) return jsonResponse({ stay: view() });
+    if (!(await auditStay(member.personId, 'member.stay.requirements', { householdId: row.household_id, bookingId, people: changed.length }))) {
+      return jsonResponse({ error: 'Could not record the change, so nothing was changed. Try again.' }, 500);
+    }
+    for (const p of changed) if (p.personId) await setPartyRequirement(bookingId, p.personId, p.stayRequirements ?? '');
+    const saved = await fetch(`${supabaseUrl()}/rest/v1/member_stays?booking_id=eq.${bookingId}`, { method: 'PATCH', headers: restHeaders({ Prefer: 'return=minimal' }), body: JSON.stringify({ party }) }).catch(() => null);
+    if (!saved || !saved.ok) return jsonResponse({ error: 'Could not save the change. Try again.' }, 500);
+    const [household] = await select('member_households', 'farm_unit', `id=eq.${row.household_id}`);
+    await sendMemberStayRequirementsUpdated({ farmUnit: household?.farm_unit ?? '', memberName: member.name, memberEmail: null, startDate: booking.startDate, nights: booking.nights, guestCount: row.guest_count, party: changed, note: '' });
+    return jsonResponse({ stay: view() });
+  } catch (err) {
+    console.error('[members-me] stay requirements failed', err);
+    return jsonResponse({ error: 'Could not save. Try again.' }, 500);
+  }
+}
+
 export default async (req: Request): Promise<Response> => {
   const { pathname } = new URL(req.url);
+  if (pathname === '/api/members-me/stays-update' && req.method === 'POST') return handleStaysRequirements(req);
   if (pathname === '/api/members-me/stays' && req.method === 'GET') return handleStaysList(req);
   if (pathname === '/api/members-me/stays' && req.method === 'POST') return handleStaysBook(req);
   if (pathname === '/api/members-me/stays-availability' && req.method === 'GET') return handleStaysAvailability(req);
@@ -1093,4 +1141,4 @@ export default async (req: Request): Promise<Response> => {
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-me/home', '/api/members-me/profile', '/api/members-me/privacy', '/api/members-me/land-documents', '/api/members-me/land-document-link', '/api/members-me/land-shapes', '/api/members-me/story-review', '/api/members-me/directory', '/api/members-me/unit-story', '/api/members-me/unit-story-submit', '/api/members-me/unit-story-photo', '/api/members-me/unit-story-photo-remove', '/api/members-me/unit-photo', '/api/members-me/stays', '/api/members-me/stays-availability', '/api/members-me/stays-cancel'] };
+export const config = { path: ['/api/members-me/home', '/api/members-me/profile', '/api/members-me/privacy', '/api/members-me/land-documents', '/api/members-me/land-document-link', '/api/members-me/land-shapes', '/api/members-me/story-review', '/api/members-me/directory', '/api/members-me/unit-story', '/api/members-me/unit-story-submit', '/api/members-me/unit-story-photo', '/api/members-me/unit-story-photo-remove', '/api/members-me/unit-photo', '/api/members-me/stays', '/api/members-me/stays-availability', '/api/members-me/stays-cancel', '/api/members-me/stays-update'] };

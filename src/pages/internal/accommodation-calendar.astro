@@ -1537,7 +1537,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     tents: TentAssignment[];
     // The people a member named in the portal, before any tent: the same directory people as a tent's guests.
     // Prefilled into tents as Madhavan allocates them (see nextWaitingGuest).
-    party?: Guest[];
+    party?: (Guest & { stayRequirements?: string })[];
     note?: string;
     isPast: boolean;
     // Guest notifications (member stays only for now): `notice` is null until
@@ -1874,7 +1874,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         <div class="guest-fields">
           <label class="guest-field guest-field--name">
             <span class="guest-field-label">Name</span>
-            <input type="text" data-field="name" placeholder="Name" required autocomplete="off" value="${guest.name ?? ''}" />
+            <input type="text" data-field="name" placeholder="Name" required autocomplete="off" value="${escapeAttr(guest.name ?? '')}" />
           </label>
           <label class="guest-field guest-field--age">
             <span class="guest-field-label">Age</span>
@@ -1897,7 +1897,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
               save time, making the browser's native validation fail with zero
               visible feedback (Sharath, 2026-09-29: silently couldn't cancel
               one guest out of an old multi-guest event booking). -->
-            <input type="tel" data-field="mobileNumber" placeholder="Mobile" ${guest.personId ? '' : 'required'} value="${guest.mobileNumber ?? ''}" />
+            <input type="tel" data-field="mobileNumber" placeholder="Mobile" ${guest.personId ? '' : 'required'} value="${escapeAttr(guest.mobileNumber ?? '')}" />
             <span class="masked-field-display" hidden>
               <span class="masked-field-text"></span>
               <button type="button" class="masked-field-edit-btn">Replace</button>
@@ -1905,7 +1905,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
           </div>
           <div class="guest-field guest-field--email">
             <span class="guest-field-label">Email</span>
-            <input type="email" data-field="email" placeholder="Optional" value="${guest.email ?? ''}" />
+            <input type="email" data-field="email" placeholder="Optional" value="${escapeAttr(guest.email ?? '')}" />
             <span class="masked-field-display" hidden>
               <span class="masked-field-text"></span>
               <button type="button" class="masked-field-edit-btn">Replace</button>
@@ -1918,7 +1918,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       <p class="guest-multi-tent-note" hidden></p>
       <p class="email-warning" hidden></p>
       <div class="preferences-field">
-        <input type="text" data-field="preferences" class="preferences-input" placeholder="Preferences / allergies" value="${guest.preferences ?? ''}" hidden />
+        <input type="text" data-field="preferences" class="preferences-input" placeholder="Preferences / allergies" value="${escapeAttr(guest.preferences ?? '')}" hidden />
         <button type="button" class="preferences-add-btn" hidden>+ Preferences / allergies</button>
         <div class="preferences-display" hidden>
           <span class="guest-field-label">Preferences / allergies</span>
@@ -2092,9 +2092,9 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
       mobileConflict.hidden = false;
       mobileConflict.innerHTML = `
-        <p>This number is already saved for <strong>${different.name}</strong>.</p>
+        <p>This number is already saved for <strong>${escapeAttr(different.name)}</strong>.</p>
         <div class="mobile-number-conflict-actions">
-          <button type="button" class="button" data-action="same">Same person — fix name to "${typedName}"</button>
+          <button type="button" class="button" data-action="same">Same person — fix name to "${escapeAttr(typedName)}"</button>
           <button type="button" class="button" data-action="different">Different guest, same number</button>
         </div>
       `;
@@ -2257,7 +2257,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
             const tentLabel = s.tentId ? (UNITS.find((u) => u.id === s.tentId)?.label ?? s.tentId) : 'waiting for tents';
             const what = s.eventTitle ?? s.label ?? typeDisplayLabel(s.type);
             const as = s.capacity ? ` · ${CAPACITY_LABELS[s.capacity]}` : '';
-            return `<li>${s.startDate} · ${tentLabel} · ${what}${as}</li>`;
+            return `<li>${escapeAttr(s.startDate)} · ${escapeAttr(tentLabel)} · ${escapeAttr(what)}${as}</li>`;
           })
           .join('');
         panel.innerHTML = `Past stays:<ul>${items}</ul>`;
@@ -2950,8 +2950,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     return Array.from({ length: b.nights }, (_, i) => new Date(start + i * 86_400_000).toISOString().slice(0, 10));
   }
 
+  // For both attribute values and element text. Names, preferences and notes can now come from a member typing in
+  // the portal, so every one of them is escaped wherever this page builds HTML from them.
   function escapeAttr(s: string): string {
-    return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
   function cellTooltip(b: Booking, tentId: string): string {
@@ -3219,12 +3221,16 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       const card = document.createElement('div');
       card.className = 'booking-card';
       const title = b.eventTitle ?? b.label ?? typeDisplayLabel(b.type);
-      const tentNames = b.tents.map((t) => UNITS.find((u) => u.id === t.tentId)?.label ?? t.tentId).join(', ') || '(whole farm)';
+      const tentNames = b.tents.map((t) => UNITS.find((u) => u.id === t.tentId)?.label ?? t.tentId).join(', ') || (b.party?.length ? 'waiting for tents' : '(whole farm)');
       const canWrite = canWriteType(b.type);
+      // What a member's party has asked for this stay only (e.g. "no onions"); their standing allergies are on
+      // their directory record and show on their guest row once they are placed in a tent.
+      const stayNeeds = (b.party ?? []).filter((g) => g.stayRequirements).map((g) => `${g.name}: ${g.stayRequirements}`).join('; ');
       card.innerHTML = `
         <div>
-          <strong>${title}</strong>
-          <div class="meta">${b.startDate} · ${b.nights} night${b.nights > 1 ? 's' : ''} · ${tentNames}${b.exclusive ? ' · exclusive' : ''}</div>
+          <strong>${escapeAttr(title)}</strong>
+          <div class="meta">${b.startDate} · ${b.nights} night${b.nights > 1 ? 's' : ''} · ${escapeAttr(tentNames)}${b.exclusive ? ' · exclusive' : ''}</div>
+          ${stayNeeds ? `<div class="meta">Food needs this stay: ${escapeAttr(stayNeeds)}</div>` : ''}
           ${b.notifiable ? `<div class="meta">${noticeStatusLabel(b)}</div>` : ''}
         </div>
         <div class="actions">

@@ -3897,11 +3897,11 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   // "waiting for tents" until he has. Members mostly book for themselves but may name other members for a group
   // trip. Members on the register stay free; anyone typed in is a paying guest (charged at the guest rate, a
   // discount set by the core team, which the core team confirms with the member after booking).
-  type StayPerson = { memberId: string | null; name: string; ageGroup: string; gender: string; mobile: string; email: string; preferences: string };
+  type StayPerson = { memberId: string | null; name: string; ageGroup: string; gender: string; mobile: string; email: string; preferences: string; stayRequirements: string };
   type Tents = { tents: number; beds: number };
   type StayAvail = { startDate: string; nights: number; checkOut: string; fixed: Tents; portable: Tents; bedsFree: number; waiting: number; maxParty: number; wholeFarmBlocked: boolean };
-  type StayRow = { id: string; householdId: string; startDate: string; nights: number; checkOut: string; people: string[]; guestCount: number; allocated: boolean; tents: string[]; canCancel: boolean };
-  type StayPeople = { own: { id: string; name: string }[]; others: { id: string; name: string; farmUnit: string }[] };
+  type StayRow = { id: string; householdId: string; startDate: string; nights: number; checkOut: string; people: string[]; needs: { name: string; stayRequirements: string }[]; guestCount: number; allocated: boolean; tents: string[]; canCancel: boolean };
+  type StayPeople = { own: { id: string; name: string; ageGroup: string; gender: string; preferences: string; hasMobile: boolean }[]; others: { id: string; name: string; farmUnit: string; ageGroup: string }[] };
   const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
   const stayDate = (iso: string) => dateFmt.format(new Date(`${iso}T00:00:00`));
 
@@ -3941,6 +3941,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
     let avail: StayAvail | null = null;
     let known: StayPeople = { own: [], others: [] };
+    let knownReady: Promise<void> = Promise.resolve();
     const party: StayPerson[] = [];
     const mine = hh.people.find((q) => q.id === me?.personId)?.id ?? null;
     const used = () => new Set(party.map((q) => q.memberId).filter(Boolean));
@@ -3949,7 +3950,44 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       if (party.length === 0 && mine) return mine; // the first person is the member
       return known.own.find((q) => !taken.has(q.id))?.id ?? hh.people.find((q) => !taken.has(q.id))?.id ?? null;
     };
-    const blank = (memberId: string | null = null): StayPerson => ({ memberId, name: '', ageGroup: 'Adult', gender: 'NA', mobile: '', email: '', preferences: '' });
+    // Naming someone on the register fills in what we already hold: their gender and standing allergies and food
+    // preferences (for the member's own unit; another unit's are never shown), and adult for a registered owner.
+    // Adult or child and gender are on no register, so anything we do not hold starts as a choice to make.
+    const fillFrom = (p: StayPerson) => {
+      const own = known.own.find((q) => q.id === p.memberId);
+      const other = known.others.find((q) => q.id === p.memberId);
+      p.ageGroup = own?.ageGroup ?? other?.ageGroup ?? '';
+      p.gender = own?.gender ?? '';
+      p.preferences = own?.preferences ?? '';
+    };
+    const blank = (memberId: string | null = null): StayPerson => {
+      const p: StayPerson = { memberId, name: '', ageGroup: '', gender: '', mobile: '', email: '', preferences: '', stayRequirements: '' };
+      if (memberId) fillFrom(p);
+      else p.ageGroup = 'Adult';
+      return p;
+    };
+    const chooser = (label: string, value: string, options: [string, string][], onChange: (v: string) => void) => {
+      const sel = document.createElement('select');
+      sel.setAttribute('aria-label', label);
+      sel.append(new Option(`${label}…`, ''));
+      for (const [v, t] of options) sel.append(new Option(t, v));
+      sel.value = value;
+      sel.addEventListener('change', () => onChange(sel.value));
+      return sel;
+    };
+    const textField = (label: string, placeholder: string, value: string, onInput: (v: string) => void, type = 'text', max?: number) => {
+      const input = document.createElement('input');
+      input.type = type;
+      input.placeholder = placeholder;
+      input.autocomplete = 'off';
+      input.value = value;
+      if (max) input.maxLength = max;
+      input.setAttribute('aria-label', label);
+      input.addEventListener('input', () => onInput(input.value));
+      return input;
+    };
+    const AGES: [string, string][] = [['Adult', 'Adult'], ['Child', 'Child']];
+    const GENDERS: [string, string][] = [['Male', 'Male'], ['Female', 'Female'], ['NA', 'Prefer not to say']];
 
     function renderAvail() {
       availBox.replaceChildren();
@@ -3990,48 +4028,37 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         group('Other members', known.others.map((q) => opt(q.id, `${q.name} · ${q.farmUnit}`)));
         group('Not on the register', [new Option('Someone else (paying guest)', '')]);
         who.value = p.memberId ?? '';
-        who.addEventListener('change', () => { p.memberId = who.value || null; renderPeople(); });
+        who.addEventListener('change', () => {
+          p.memberId = who.value || null;
+          if (p.memberId) fillFrom(p);
+          else Object.assign(p, { name: '', ageGroup: 'Adult', gender: '', preferences: '' });
+          renderPeople();
+        });
         const row = h('div', 'stay-person', undefined, who);
+        const own = known.own.find((q) => q.id === p.memberId);
         if (!p.memberId) {
-          const name = document.createElement('input');
-          name.placeholder = 'Full name';
-          name.value = p.name;
-          name.autocomplete = 'off';
-          name.setAttribute('aria-label', 'Full name');
-          name.addEventListener('input', () => { p.name = name.value; });
-          const age = document.createElement('select');
-          age.setAttribute('aria-label', 'Adult or child');
-          for (const v of ['Adult', 'Child']) age.append(new Option(v, v));
-          age.value = p.ageGroup;
-          age.addEventListener('change', () => { p.ageGroup = age.value; });
-          const gender = document.createElement('select');
-          gender.setAttribute('aria-label', 'Gender');
-          for (const [v, t] of [['Male', 'Male'], ['Female', 'Female'], ['NA', 'Prefer not to say']]) gender.append(new Option(t, v));
-          gender.value = p.gender;
-          gender.addEventListener('change', () => { p.gender = gender.value; });
-          const mobile = document.createElement('input');
-          mobile.type = 'tel';
-          mobile.placeholder = 'Mobile';
-          mobile.autocomplete = 'off';
-          mobile.value = p.mobile;
-          mobile.setAttribute('aria-label', 'Mobile number, for their stay notices');
-          mobile.addEventListener('input', () => { p.mobile = mobile.value; });
-          const email = document.createElement('input');
-          email.type = 'email';
-          email.placeholder = 'Email';
-          email.autocomplete = 'off';
-          email.value = p.email;
-          email.setAttribute('aria-label', 'Email, for their stay notices');
-          email.addEventListener('input', () => { p.email = email.value; });
-          const prefs = document.createElement('input');
-          prefs.placeholder = 'Allergies or preferences (optional)';
-          prefs.maxLength = 300;
-          prefs.autocomplete = 'off';
-          prefs.value = p.preferences;
-          prefs.setAttribute('aria-label', 'Allergies or preferences, optional');
-          prefs.addEventListener('input', () => { p.preferences = prefs.value; });
-          row.append(name, age, gender, mobile, email, prefs, h('span', 'stay-guest-tag', 'Paying guest'));
+          // Not on the register: everything tent allocation asks of a new guest, and a WhatsApp number to reach them.
+          row.append(
+            textField('Full name', 'Full name', p.name, (v) => { p.name = v; }),
+            chooser('Adult or child', p.ageGroup, AGES, (v) => { p.ageGroup = v; }),
+            chooser('Gender', p.gender, GENDERS, (v) => { p.gender = v; }),
+            textField('WhatsApp mobile number, for their stay details', 'WhatsApp number', p.mobile, (v) => { p.mobile = v; }, 'tel'),
+            textField('Email, optional', 'Email (optional)', p.email, (v) => { p.email = v; }, 'email'),
+            textField('Allergies or food preferences, optional', 'Allergies or food preferences (optional)', p.preferences, (v) => { p.preferences = v; }, 'text', 300),
+            h('span', 'stay-guest-tag', 'Paying guest'));
+        } else {
+          // On the register: adult or child for every member, and for the member's own unit gender and the
+          // standing allergies and food preferences we already hold, to review. Their number is the one on file.
+          row.append(chooser('Adult or child', p.ageGroup, AGES, (v) => { p.ageGroup = v; }));
+          if (own) {
+            row.append(
+              chooser('Gender', p.gender, GENDERS, (v) => { p.gender = v; }),
+              textField('Allergies or food preferences, saved to their profile', 'Allergies or food preferences (saved to their profile)', p.preferences, (v) => { p.preferences = v; }, 'text', 300));
+            if (!own.hasMobile) row.append(h('span', 'stay-hint', 'No mobile number on file, so WhatsApp cannot reach them. Add one under My unit.'));
+          }
         }
+        // For anyone: a food or allergy need for this stay only, which can still be changed until check-in.
+        row.append(textField('For this stay only', 'For this stay only, e.g. no onions (optional)', p.stayRequirements, (v) => { p.stayRequirements = v; }, 'text', 300));
         if (party.length > 1) {
           const rm = h('button', 'btn stay-remove', 'Remove');
           rm.setAttribute('type', 'button');
@@ -4046,7 +4073,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         add.addEventListener('click', () => { party.push(blank(nextMember())); renderPeople(); });
         set.append(add);
       }
-      if (party.some((p) => !p.memberId)) set.append(h('p', 'stay-hint', 'For anyone who is not a member, add a mobile number or an email (a child can use a parent’s): we send them their stay details there. Allergies and preferences help the farm get ready for them.'));
+      set.append(h('p', 'stay-hint', 'Stay details go out on WhatsApp (and by email where one is given), so anyone who is not on the member register needs a WhatsApp number; a family can share one. Members use the number on file. Allergies saved to a profile come up next time, and anything for this stay only can be changed until check-in.'));
       peopleBox.append(set);
     }
 
@@ -4062,6 +4089,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const mineCheck = ++checking;
       availBox.replaceChildren(h('p', 'lede', 'Checking the farm…'));
       try {
+        await knownReady; // the unit's people, with what we already hold for them, before the first row is built
         const { status, data } = await memberFetch(`/api/members-me/stays-availability?start=${encodeURIComponent(date.value)}&nights=${n}`);
         if (mineCheck !== checking) return; // a newer date was typed
         if (status !== 200) throw new Error(data.error || 'Could not check availability.');
@@ -4087,7 +4115,11 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       msg.textContent = '';
       book.disabled = true;
       try {
-        const people = party.map((p) => (p.memberId ? { memberId: p.memberId } : { name: p.name, ageGroup: p.ageGroup, gender: p.gender, mobileNumber: p.mobile, email: p.email, preferences: p.preferences }));
+        const people = party.map((p) => {
+          const own = known.own.some((q) => q.id === p.memberId);
+          if (p.memberId) return { memberId: p.memberId, ageGroup: p.ageGroup, stayRequirements: p.stayRequirements, ...(own ? { gender: p.gender, preferences: p.preferences } : {}) };
+          return { name: p.name, ageGroup: p.ageGroup, gender: p.gender, mobileNumber: p.mobile, email: p.email, preferences: p.preferences, stayRequirements: p.stayRequirements };
+        });
         const { status, data } = await memberFetch('/api/members-me/stays', { method: 'POST', body: { householdId: hh.id, startDate: avail.startDate, nights: avail.nights, people, note: note.value } });
         if (status !== 200) {
           msg.textContent = data.error || 'Could not book. Try again.';
@@ -4102,7 +4134,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         renderAvail();
         renderPeople();
         toast('Your stay is booked. We have emailed you the details.');
-        void loadStays();
+        knownReady = loadStays(); // their saved details may have just changed
       } catch (e) {
         msg.textContent = e instanceof MemberAuthError ? 'Your session ended. Sign in again.' : e instanceof Error ? e.message : 'Could not book. Try again.';
       } finally {
@@ -4151,7 +4183,49 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       dlg.showModal();
     }
 
-    async function loadStays() {
+    // Food or allergy needs for ONE stay ("no onions"), changeable until check-in. A person's standing allergies and
+    // preferences are on their profile and are reviewed when booking, not here.
+    function needsDialog(s: StayRow) {
+      const dlg = document.createElement('dialog');
+      dlg.className = 'modal';
+      const err = h('p', 'form-msg');
+      err.setAttribute('role', 'alert');
+      const wanted = new Map<string, string>(s.needs.map((n) => [n.name, n.stayRequirements]));
+      const fields = s.needs.map((n) => {
+        const input = document.createElement('input');
+        input.value = n.stayRequirements;
+        input.maxLength = 300;
+        input.placeholder = 'e.g. no onions';
+        input.autocomplete = 'off';
+        input.addEventListener('input', () => { wanted.set(n.name, input.value); });
+        return h('label', '', n.name, input);
+      });
+      const close = h('button', 'btn', 'Cancel');
+      close.setAttribute('type', 'button');
+      close.addEventListener('click', () => dlg.close());
+      const save = h('button', 'btn btn--solid', 'Save') as HTMLButtonElement;
+      save.setAttribute('type', 'button');
+      save.addEventListener('click', async () => {
+        save.disabled = true;
+        try {
+          const needs = [...wanted].map(([name, stayRequirements]) => ({ name, stayRequirements }));
+          const { status, data } = await memberFetch('/api/members-me/stays-update', { method: 'POST', body: { bookingId: s.id, needs } });
+          if (status !== 200) throw new Error(data.error || 'Could not save. Try again.');
+          dlg.close();
+          toast('Saved. The core team and Madhavan have been told.');
+          void loadStays();
+        } catch (e) {
+          save.disabled = false;
+          err.textContent = e instanceof MemberAuthError ? 'Your session ended. Sign in again.' : e instanceof Error ? e.message : 'Could not save.';
+        }
+      });
+      dlg.append(h('h3', '', 'Food needs for this stay'), h('p', '', `${stayDate(s.startDate)} to ${stayDate(s.checkOut)}. Only for this stay: a person's regular allergies and preferences stay as they are on their profile.`), ...fields, err, h('div', 'modal-actions', undefined, close, save));
+      dlg.addEventListener('close', () => dlg.remove());
+      document.body.append(dlg);
+      dlg.showModal();
+    }
+
+    async function loadStays(): Promise<void> {
       try {
         const { status, data } = await memberFetch(`/api/members-me/stays?household=${encodeURIComponent(hh.id)}`);
         if (status !== 200) throw new Error(data.error || 'Could not load your stays.');
@@ -4159,15 +4233,23 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         known = data.people as StayPeople;
         if (avail) renderPeople();
         const list = (data.stays as StayRow[]).filter((s) => s.householdId === hh.id || all.length === 1);
-        if (!list.length) return mineBox.replaceChildren(h('p', 'lede', 'You have no stays booked yet.'));
+        if (!list.length) {
+          mineBox.replaceChildren(h('p', 'lede', 'You have no stays booked yet.'));
+          return;
+        }
         mineBox.replaceChildren(...list.map((s) => {
           const past = !s.canCancel && s.checkOut < today;
           const card = h('div', `stay-card${past ? ' stay-card--past' : ''}`, undefined,
             h('p', 'stay-summary', `${stayDate(s.startDate)} to ${stayDate(s.checkOut)} · ${plural(s.nights, 'night')}`),
             h('p', 'stay-line', s.people.join(', ')),
             h('p', 'stay-line', s.allocated ? `Tents: ${s.tents.join(', ')}` : 'Waiting for Madhavan to allocate tents.'),
+            ...s.needs.filter((n) => n.stayRequirements).map((n) => h('p', 'stay-line', `${n.name}: ${n.stayRequirements}`)),
             s.guestCount ? h('p', 'stay-line', `${plural(s.guestCount, 'paying guest')}: the core team will confirm the charge.`) : null);
           if (s.canCancel) {
+            const needs = h('button', 'btn', 'Food needs for this stay');
+            needs.setAttribute('type', 'button');
+            needs.addEventListener('click', () => needsDialog(s));
+            card.append(needs);
             const cancel = h('button', 'btn', 'Cancel stay');
             cancel.setAttribute('type', 'button');
             cancel.addEventListener('click', () => cancelDialog(s));
@@ -4179,7 +4261,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         mineBox.replaceChildren(h('p', 'lede', e instanceof MemberAuthError ? 'Your session ended. Sign in again.' : e instanceof Error ? e.message : 'Could not load your stays.'));
       }
     }
-    void loadStays();
+    knownReady = loadStays();
 
     root.append(form, mineSection);
     return root;

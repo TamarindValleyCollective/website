@@ -54,6 +54,9 @@ create table accommodation_booking_party (
   seq integer not null default 0,
   age_group text not null check (age_group in ('Adult', 'Child')),
   capacity text not null check (capacity in ('member', 'member_family', 'member_guest')),
+  -- Food or allergy needs for THIS stay only ("no onions"), apart from the person's standing allergies and
+  -- preferences on their directory record. The booking member can change it until check-in.
+  stay_requirements text check (stay_requirements is null or char_length(stay_requirements) <= 300),
   primary key (booking_id, person_id)
 );
 create index accommodation_booking_party_person_idx on accommodation_booking_party (person_id);
@@ -117,7 +120,8 @@ $$;
 -- mobile number + name exactly as tent allocation does (accommodation_resolve_person); with only an email, on
 -- email + name, never on name alone (two different people can share a name); with no contact, a new row.
 create function accommodation_resolve_booking_person(
-  p_name text, p_mobile_number text, p_email text, p_gender text, p_preferences text, p_member_person_id uuid default null
+  p_name text, p_mobile_number text, p_email text, p_gender text, p_preferences text, p_member_person_id uuid default null,
+  p_replace_preferences boolean default false
 ) returns uuid language plpgsql as $$
 declare
   v_id uuid;
@@ -130,7 +134,8 @@ begin
     end if;
     update accommodation_people
     set gender = coalesce(p_gender, gender),
-        preferences = coalesce(p_preferences, preferences),
+        -- a member reviewing their own standing allergies and preferences may clear them, so theirs REPLACE
+        preferences = case when p_replace_preferences then p_preferences else coalesce(p_preferences, preferences) end,
         email = coalesce(email, p_email),
         mobile_number = case
           when mobile_number is null and p_mobile_number is not null
@@ -173,8 +178,8 @@ end $$;
 alter function accommodation_phone_key(text) set search_path = public, pg_temp;
 alter function accommodation_find_member_match(text, text, text) set search_path = public, pg_temp;
 alter function accommodation_link_member(uuid) set search_path = public, pg_temp;
-alter function accommodation_resolve_booking_person(text, text, text, text, text, uuid) set search_path = public, pg_temp;
+alter function accommodation_resolve_booking_person(text, text, text, text, text, uuid, boolean) set search_path = public, pg_temp;
 revoke execute on function accommodation_link_member(uuid) from public, anon, authenticated;
 grant execute on function accommodation_link_member(uuid) to service_role;
-revoke execute on function accommodation_resolve_booking_person(text, text, text, text, text, uuid) from public, anon, authenticated;
-grant execute on function accommodation_resolve_booking_person(text, text, text, text, text, uuid) to service_role;
+revoke execute on function accommodation_resolve_booking_person(text, text, text, text, text, uuid, boolean) from public, anon, authenticated;
+grant execute on function accommodation_resolve_booking_person(text, text, text, text, text, uuid, boolean) to service_role;

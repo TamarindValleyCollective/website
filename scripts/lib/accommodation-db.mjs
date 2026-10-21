@@ -98,7 +98,7 @@ function isPastBooking(startDate, nights) {
 const ADMIN_SELECT =
   'select=id,type,event_slug,event_title,label,exclusive,start_date,nights,note,created_by,created_at,updated_by,updated_at,' +
   'accommodation_tent_assignments(tent_id,solo,accommodation_guests(seq,age_group,person_id,accommodation_people(name,mobile_number,gender,preferences,email))),' +
-  'accommodation_booking_party(seq,age_group,capacity,person_id,accommodation_people(name,mobile_number,gender,preferences,email))';
+  'accommodation_booking_party(seq,age_group,capacity,stay_requirements,person_id,accommodation_people(name,mobile_number,gender,preferences,email))';
 
 // Turns a PostgREST row (snake_case, SQL null for absent optional fields)
 // back into the exact JSON shape the client already gets today (camelCase,
@@ -141,6 +141,7 @@ function rowToBooking(row) {
       email: p.accommodation_people.email ?? undefined,
       ageGroup: p.age_group,
       capacity: p.capacity,
+      stayRequirements: p.stay_requirements ?? undefined,
     }));
   if (party.length) booking.party = party;
   if (row.event_slug != null) booking.eventSlug = row.event_slug;
@@ -204,14 +205,24 @@ export async function updateBooking({ id, type, eventSlug, eventTitle, label, ex
 // person linked to them, found or adopted from an earlier stay as a guest, so a guest who later joins is the
 // same person; anyone else is matched on mobile number + name (or email + name), never on name alone, so Madhavan can pick them by name when allocating tents and their stay notices reach them.
 // Used by a member booking in the portal, where the guests are known before any tent is.
-export async function saveGuestContact({ name, mobileNumber, email, gender, preferences, memberPersonId }) {
+export async function saveGuestContact({ name, mobileNumber, email, gender, preferences, memberPersonId, replacePreferences }) {
   return callRpc('accommodation_resolve_booking_person', {
     p_member_person_id: memberPersonId ?? null,
+    p_replace_preferences: Boolean(replacePreferences),
     p_name: name,
     p_mobile_number: mobileNumber ?? null,
     p_email: email ?? null,
     p_gender: gender ?? null,
     p_preferences: preferences ?? null,
+  });
+}
+
+// Changes one person's food or allergy needs for this stay only (the booking's own, not their standing preferences).
+export async function setPartyRequirement(bookingId, personId, text) {
+  await restFetch(`/accommodation_booking_party?booking_id=eq.${bookingId}&person_id=eq.${personId}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({ stay_requirements: text || null }),
   });
 }
 
@@ -222,7 +233,7 @@ export async function setBookingParty(bookingId, people) {
   await restFetch('/accommodation_booking_party', {
     method: 'POST',
     headers: { 'content-type': 'application/json', Prefer: 'return=minimal' },
-    body: JSON.stringify(people.map((p, seq) => ({ booking_id: bookingId, person_id: p.personId, seq, age_group: p.ageGroup, capacity: p.capacity }))),
+    body: JSON.stringify(people.map((p, seq) => ({ booking_id: bookingId, person_id: p.personId, seq, age_group: p.ageGroup, capacity: p.capacity, stay_requirements: p.stayRequirements ?? null }))),
   });
 }
 
