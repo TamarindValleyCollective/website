@@ -213,6 +213,42 @@ export function landTypeMismatch({ landType, extraction, farmRows, houseRows }) 
   return surveyNos.some((n) => other.has(n)) ? { actual: landType === 'house' ? 'farm' : 'house' } : null;
 }
 
+// ---- stand-alone FMB sketches ------------------------------------------------
+// A member can upload the FMB sketch on its own (e-Services' "Survey Number" download, sketch page
+// only). The file says nothing a template can read: its labels are drawn as shapes, not text. So
+// the member says which of their survey numbers it is for, and the file is kept only if an outline
+// of the land can be drawn from it. It creates and verifies no record; it only gives the record's
+// survey number its outline, found by survey number (shapeForRecord) since it is no patta.
+
+export const NOT_A_SKETCH = "We couldn't find the outline of the land in that file. Download the FMB sketch for this survey number from eservices.tn.gov.in (choose \"Survey Number\") and upload that PDF.";
+export const SKETCH_IS_A_PATTA = 'That file is a patta, not just a sketch. Upload it with "Upload a document" instead; the sketch in it is picked up there.';
+export const SKETCH_NOT_YOURS = "That survey number isn't on this card, so we haven't kept the sketch. Pick one of the survey numbers listed here.";
+
+// Whether a survey number is one the register holds. rows: { survey_no } (an entry may hold several).
+export function surveyOnRegister(surveyNo, rows) {
+  const want = normalizeSurveyNo(surveyNo);
+  return Boolean(want) && rows.some((row) => surveyTokens(row.survey_no).includes(want));
+}
+
+// The survey numbers on a card, one by one, for the member to pick from.
+export function surveyChoices(rows) {
+  return [...new Set(rows.flatMap((row) => surveyTokens(row.survey_no)))];
+}
+
+// A sketch's outline is filed under its survey number in the shapes a household is sent.
+export const surveyShapeKey = (surveyNo) => `survey:${normalizeSurveyNo(surveyNo)}`;
+
+// The outline to show beside a record: the one from the patta it was read from, else a sketch
+// uploaded on its own for one of its survey numbers. shapes: { documentId | survey key: data URL }.
+export function shapeForRecord(shapes, surveyNo, documentId) {
+  if (documentId && shapes[documentId]) return shapes[documentId];
+  for (const token of surveyTokens(surveyNo)) {
+    const found = shapes[surveyShapeKey(token)];
+    if (found) return found;
+  }
+  return null;
+}
+
 // ---- names -------------------------------------------------------------------
 
 const nameTokens = (name) => clean(name).toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter((t) => t.length > 1);

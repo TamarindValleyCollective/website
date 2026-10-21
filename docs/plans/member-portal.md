@@ -96,7 +96,7 @@ Agreed 2026-10-20. One story per person, public-facing only: no separate members
 - **Retires:** the Google Form and its name dropdown, the response Sheet, `check-member-story-responses.mjs`,
   and the member-update email Action (replaced by an admin approval queue and its own notification).
   `story-guide.astro` is replaced by in-portal help text.
-- **Table:** `member_stories` (migration 0044), one row per person, a new table beside the register
+- **Table (superseded by `member_unit_stories`, migration 0049; `member_stories` was dropped in 0051):** `member_stories` (migration 0044), one row per person, a new table beside the register
   tables (FK to `member_people`; the register tables are unchanged). Three copies of the text, as jsonb
   `{ bio, family, why, social }`: `draft` (what the member is writing), `submitted` (the snapshot in
   review) and `approved` (live), so an edit never disturbs approved text; `status` draft | in_review |

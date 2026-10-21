@@ -1,6 +1,8 @@
-// The shape of a parcel, from the field sketch ("புலப்படம்") on page 2 of a single-survey
-// Integrated Land Record. The sketch is a small bitmap, not vector lines, so the outline is
-// rebuilt from it in three steps:
+// The shape of a parcel, from the field sketch ("புலப்படம்", the FMB sketch) on page 2 of a
+// single-survey Integrated Land Record, or on the one page of a stand-alone FMB sketch download.
+// The sketch is either a small bitmap or, in the files e-Services produces now, vector lines
+// (shapeFromLines, below: exact, so it needs no line finding). From a bitmap the outline is rebuilt
+// in three steps:
 //   1. Find the long, solid, straight black lines (a Hough transform). Everything else black is
 //      text: a neighbour's survey number, a point number. Text touching the outline can't hide it
 //      (the drawing is often one connected blob, so "is this blob thin?" doesn't work).
@@ -15,13 +17,15 @@ import { deflateSync } from 'node:zlib';
 
 // Bumped whenever the outline reader changes, so stored outlines and "no outline" verdicts made by
 // an older reader are redone once (see shapeNeedsRefresh).
-export const SHAPE_VERSION = 3;
+export const SHAPE_VERSION = 4;
 
 // Whether a stored single-survey PDF's outline should be (re)made. `extracted` is the document's
 // stored reading: `hasShape` + `shapeVersion` when an outline was stored, `shapeChecked` (a
 // version) when the reader found none. Anything written by an older version, or before versions
 // existed (shapeChecked: true, no shapeVersion), is redone.
 export function shapeNeedsRefresh(extracted) {
+  // A stand-alone FMB sketch is only ever kept because it has an outline; it has no records.
+  if (extracted?.kind === 'fmb_sketch') return extracted.shapeVersion !== SHAPE_VERSION;
   if (!extracted || !Array.isArray(extracted.records) || extracted.records.length !== 1) return false;
   if (extracted.hasShape === true) return extracted.shapeVersion !== SHAPE_VERSION;
   return extracted.shapeChecked !== SHAPE_VERSION;
@@ -214,6 +218,153 @@ function largestPiece(edges) {
     parent.set(find(u), find(v));
   }
   return edges; // every piece is kept: pieces of one parcel are not always joined in the drawing
+}
+
+// ---- vector sketches ----------------------------------------------------------
+
+// pdf.js's path encoding inside a constructPath operation (DrawOPS), and the stroke colour the
+// outline is drawn in. The dimensions are blue and the corner labels red; the page frame is black
+// too, and is told apart by length (dropFrame).
+const PATH = { moveTo: 0, lineTo: 1, curveTo: 2, quadraticCurveTo: 3, closePath: 4 };
+const OUTLINE_INK = 0x30; // each channel at or below this is black; the frame's grey (#404040) is not
+const SNAP = 2.5; // pt: ends this close are one corner, and a corner this close to a line is on it
+const MIN_VECTOR_PERIMETER = 60; // pt
+
+const mulMatrix = (m, n) => [ // m first, then n (PDF's "cm": new = m x current)
+  n[0] * m[0] + n[2] * m[1], n[1] * m[0] + n[3] * m[1],
+  n[0] * m[2] + n[2] * m[3], n[1] * m[2] + n[3] * m[3],
+  n[0] * m[4] + n[2] * m[5] + n[4], n[1] * m[4] + n[3] * m[5] + n[5],
+];
+
+// The black stroked straight lines of a page, as [x1, y1, x2, y2] in points with y running down
+// the page. list: pdf.js's getOperatorList() result; OPS: pdf.js's OPS table; view: page.view.
+// Curves are skipped (an FMB parcel is straight lines); text is glyph shapes, filled, never stroked.
+export function strokedLinesFromOps(list, OPS, view) {
+  const strokeOps = new Set([OPS.stroke, OPS.closeStroke, OPS.fillStroke, OPS.eoFillStroke, OPS.closeFillStroke, OPS.closeEOFillStroke]);
+  const stack = [];
+  let ctm = [1, 0, 0, 1, 0, 0];
+  let black = true; // the initial stroke colour is black
+  const lines = [];
+  for (let i = 0; i < list.fnArray.length; i++) {
+    const fn = list.fnArray[i];
+    const args = list.argsArray[i];
+    if (fn === OPS.save) stack.push([ctm, black]);
+    else if (fn === OPS.restore) [ctm, black] = stack.pop() ?? [[1, 0, 0, 1, 0, 0], true];
+    else if (fn === OPS.transform) ctm = mulMatrix(args, ctm);
+    else if (fn === OPS.setStrokeRGBColor) black = /^#[0-9a-f]{6}$/i.test(args?.[0] ?? '') && [1, 3, 5].every((k) => parseInt(args[0].slice(k, k + 2), 16) <= OUTLINE_INK);
+    else if (fn === OPS.constructPath && black && strokeOps.has(args?.[0])) {
+      const d = args[1]?.[0];
+      if (!d || typeof d.length !== 'number') continue;
+      const at = (x, y) => [ctm[0] * x + ctm[2] * y + ctm[4] - view[0], view[3] - (ctm[1] * x + ctm[3] * y + ctm[5])];
+      let start = null, cur = null;
+      for (let k = 0; k < d.length; ) {
+        const op = d[k++];
+        if (op === PATH.moveTo) { cur = start = at(d[k], d[k + 1]); k += 2; }
+        else if (op === PATH.lineTo) { const p = at(d[k], d[k + 1]); k += 2; if (cur) lines.push([...cur, ...p]); cur = p; }
+        else if (op === PATH.curveTo) { cur = at(d[k + 4], d[k + 5]); k += 6; }
+        else if (op === PATH.quadraticCurveTo) { cur = at(d[k + 2], d[k + 3]); k += 4; }
+        else if (op === PATH.closePath) { if (cur && start) lines.push([...cur, ...start]); cur = start; }
+        else break; // not a path we understand
+      }
+    }
+  }
+  return lines;
+}
+
+// The parcel outline from a page's black lines (strokedLinesFromOps), or null. page: { width, height }.
+export function shapeFromLines(lines, page) {
+  const kept = dropFrame(lines.filter(([x1, y1, x2, y2]) => Math.hypot(x2 - x1, y2 - y1) >= 1), page);
+  const edges = vectorEdges(kept);
+  if (edges.length < 3) return null;
+  const perimeter = edges.reduce((n, [p, q]) => n + Math.hypot(p[0] - q[0], p[1] - q[1]), 0);
+  if (perimeter < MIN_VECTOR_PERIMETER) return null;
+  return draw(edges);
+}
+
+// The sketch sits in a ruled frame: an outer border, a rule under the header and one above the
+// footer. They are straight horizontal or vertical lines nearly as long as the frame is wide or
+// tall, which no side of a parcel (drawn inside the frame, with its labels around it) is.
+function dropFrame(lines, { width, height }) {
+  const axis = (l) => (Math.abs(l[0] - l[2]) < 1 ? 'v' : Math.abs(l[1] - l[3]) < 1 ? 'h' : null);
+  const len = (l) => Math.hypot(l[2] - l[0], l[3] - l[1]);
+  const longest = { h: 0, v: 0 };
+  for (const l of lines) if (axis(l)) longest[axis(l)] = Math.max(longest[axis(l)], len(l));
+  const floor = { h: 0.5 * width, v: 0.5 * height };
+  return lines.filter((l) => {
+    const a = axis(l);
+    return !(a && len(l) >= 0.9 * longest[a] && len(l) >= floor[a]);
+  });
+}
+
+// Straight lines -> the edges that lie on a closed loop. Ends that meet (within SNAP) are one
+// corner, a corner on the inside of another line splits it, and lines that cross split each
+// other; then every line is cut into pieces between corners, and pieces ending at a corner nothing
+// else meets (a tick past the end of a side, a stub) are dropped until only loops remain.
+function vectorEdges(lines) {
+  const nodes = [];
+  const nodeAt = (p) => {
+    let k = nodes.findIndex((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) <= SNAP);
+    if (k < 0) k = nodes.push(p) - 1;
+    return k;
+  };
+  const segs = lines.map(([x1, y1, x2, y2]) => ({ a: nodeAt([x1, y1]), b: nodeAt([x2, y2]), cuts: [] }));
+  const along = (s, p) => {
+    const [ax, ay] = nodes[s.a], [bx, by] = nodes[s.b];
+    const dx = bx - ax, dy = by - ay, n2 = dx * dx + dy * dy;
+    return n2 === 0 ? null : { t: ((p[0] - ax) * dx + (p[1] - ay) * dy) / n2, off: Math.abs((p[0] - ax) * dy - (p[1] - ay) * dx) / Math.sqrt(n2), len: Math.sqrt(n2) };
+  };
+  // A corner that lies on the inside of a line.
+  const ends = nodes.length;
+  for (const s of segs) {
+    if (s.a === s.b) continue;
+    for (let k = 0; k < ends; k++) {
+      if (k === s.a || k === s.b) continue;
+      const m = along(s, nodes[k]);
+      if (m && m.off <= SNAP && m.t > 0 && m.t < 1 && m.t * m.len > SNAP && (1 - m.t) * m.len > SNAP) s.cuts.push([m.t, k]);
+    }
+  }
+  // Two lines that cross each other.
+  for (let i = 0; i < segs.length; i++) {
+    for (let j = i + 1; j < segs.length; j++) {
+      const A = segs[i], B = segs[j];
+      if (A.a === A.b || B.a === B.b) continue;
+      const [p, q] = [nodes[A.a], nodes[A.b]], [r, u] = [nodes[B.a], nodes[B.b]];
+      const d1x = q[0] - p[0], d1y = q[1] - p[1], d2x = u[0] - r[0], d2y = u[1] - r[1];
+      const det = d1x * d2y - d1y * d2x;
+      if (Math.abs(det) < 0.05 * Math.hypot(d1x, d1y) * Math.hypot(d2x, d2y)) continue; // parallel
+      const t = ((r[0] - p[0]) * d2y - (r[1] - p[1]) * d2x) / det;
+      const v = ((r[0] - p[0]) * d1y - (r[1] - p[1]) * d1x) / det;
+      if (t <= 0 || t >= 1 || v <= 0 || v >= 1) continue;
+      const k = nodeAt([p[0] + t * d1x, p[1] + t * d1y]);
+      A.cuts.push([t, k]);
+      B.cuts.push([v, k]);
+    }
+  }
+  const seen = new Set();
+  let edges = [];
+  for (const s of segs) {
+    const chain = [[0, s.a], ...s.cuts.sort((x, y) => x[0] - y[0]), [1, s.b]];
+    for (let k = 1; k < chain.length; k++) {
+      const u = chain[k - 1][1], v = chain[k][1];
+      if (u === v) continue;
+      const key = u < v ? `${u}-${v}` : `${v}-${u}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        edges.push([u, v]);
+      }
+    }
+  }
+  for (let changed = true; changed; ) {
+    const degree = new Map();
+    for (const [u, v] of edges) {
+      degree.set(u, (degree.get(u) ?? 0) + 1);
+      degree.set(v, (degree.get(v) ?? 0) + 1);
+    }
+    const next = edges.filter(([u, v]) => degree.get(u) > 1 && degree.get(v) > 1);
+    changed = next.length !== edges.length;
+    edges = next;
+  }
+  return edges.map(([u, v]) => [nodes[u], nodes[v]]);
 }
 
 // ---- 3. drawing --------------------------------------------------------------

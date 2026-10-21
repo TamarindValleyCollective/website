@@ -26,7 +26,6 @@ import SignInGate from '../../components/SignInGate.astro';
      <div id="overview">
       <section id="publish" class="publish card" aria-label="Publish to the website" hidden></section>
       <section id="autopublish" class="publish card" aria-label="Automatic publishing" hidden></section>
-      <section id="stories" class="stories" aria-label="Stories waiting for review" hidden></section>
       <section id="unit-stories" class="stories" aria-label="Unit stories waiting for review" hidden></section>
       <dl id="totals" class="totals"></dl>
 
@@ -983,6 +982,7 @@ import SignInGate from '../../components/SignInGate.astro';
   import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch, staffPhotoSrc } from '../../../scripts/lib/staff-client.mjs';
   import { sizedPicture } from '../../../scripts/lib/member-google-picture.mjs';
   import { linksIn } from '../../../scripts/lib/member-markdown.mjs';
+  import { shapeForRecord } from '../../../scripts/lib/member-land-docs.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -1298,11 +1298,12 @@ import SignInGate from '../../components/SignInGate.astro';
     }
     return p;
   };
-  // The survey number, linked to the document it was read from when there is one.
+  // The survey number, linked to the document it was read from when there is one, with the parcel's
+  // outline beside it: from that document, or from an FMB sketch uploaded for the survey number.
   function surveyLink(hh: Household, surveyNo: string | null, documentId: string | null): string | null | HTMLElement {
-    if (!surveyNo || !documentId) return surveyNo;
+    if (!surveyNo) return surveyNo;
     const cell = h('div', { class: 'survey-cell' });
-    if (can.manage) {
+    if (documentId && can.manage) {
       const b = h('button', { class: 'doc-link', text: surveyNo, attrs: { type: 'button', title: 'Open the uploaded document' } });
       b.addEventListener('click', () =>
         void openLandFile(documentId, (m) => {
@@ -1313,7 +1314,7 @@ import SignInGate from '../../components/SignInGate.astro';
       cell.append(b);
     } else cell.append(document.createTextNode(surveyNo));
     void loadShapes(hh.id).then((shapes) => {
-      const src = shapes[documentId];
+      const src = shapeForRecord(shapes, surveyNo, documentId);
       if (!src) return;
       const img = document.createElement('img');
       img.className = 'parcel-shape';
@@ -1619,7 +1620,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   type LandDiff = { field: string; recorded: string; document: string };
   type LandItem = { surveyNo: string; pattaNo: string | null; areaHectares?: number | null; areaSqFt?: number | null; outcome: string; differences: LandDiff[]; ownerMatch: boolean | null; decision?: string };
-  type LandDocument = { id: string; landType: string; fileName: string | null; mimeType: string; status: string; error: string | null; uploadedAt: string; items: LandItem[] };
+  type LandDocument = { id: string; landType: string; fileName: string | null; mimeType: string; status: string; error: string | null; uploadedAt: string; sketchFor: string | null; items: LandItem[] };
   const chip = (severity: 'info' | 'warn' | 'error', text: string) => h('span', { class: `flag flag--${severity}`, text });
 
   // A record read from a document that still waits for the core team, with where it came from.
@@ -1727,7 +1728,7 @@ import SignInGate from '../../components/SignInGate.astro';
         const state = d.status === 'processing' ? chip('info', 'Reading…') : d.status === 'failed' ? chip('error', 'Not used') : waiting || (d.status === 'needs_review' && d.items.length === 0) ? chip('warn', 'Needs review') : chip('info', 'Done');
         const view = can.manage ? rowButton('View file', () => void openLandFile(d.id, report)) : null;
         const note = d.status === 'failed' ? (d.error ?? 'Could not be used.') : d.status === 'needs_review' && d.items.length === 0 ? 'Could not be read automatically. Open the file and add the record above by hand.' : null;
-        return h('div', { class: 'landq-file' }, landTag(d.landType), h('span', { class: 'landq-filemeta', text: `${new Date(d.uploadedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · ${d.mimeType === 'application/pdf' ? 'PDF' : 'Photo'}` }), state, view, note ? h('p', { class: 'landq-note', text: note }) : null);
+        return h('div', { class: 'landq-file' }, landTag(d.landType), h('span', { class: 'landq-filemeta', text: `${new Date(d.uploadedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · ${d.sketchFor ? `FMB sketch, survey no. ${d.sketchFor}` : d.mimeType === 'application/pdf' ? 'PDF' : 'Photo'}` }), state, view, note ? h('p', { class: 'landq-note', text: note }) : null);
       }));
 
       const draw = () => {
@@ -1874,7 +1875,7 @@ import SignInGate from '../../components/SignInGate.astro';
   // Every submitted public story is assessed for risk. In SHADOW mode (the default) that is shown on the queue and nothing
   // is done by itself, so the assessment can be compared with the team's own decisions. In LIVE mode a low-risk story is
   // published without a person, a high-risk one is held and the team emailed, and a daily job starts the build.
-  type Autopublish = { mode: 'shadow' | 'live'; paused: boolean; canChange: boolean; stats: { assessed: number; low: number; high: number; decided: number; missed: number; overHeld: number }; published: { personId?: string; householdId?: string; name: string; at: string; stillPublic: boolean }[] };
+  type Autopublish = { mode: 'shadow' | 'live'; paused: boolean; canChange: boolean; stats: { assessed: number; low: number; high: number; decided: number; missed: number; overHeld: number }; published: { householdId: string; name: string; at: string; stillPublic: boolean }[] };
 
   async function loadAutopublish() {
     const box = $('autopublish');
@@ -1932,9 +1933,9 @@ import SignInGate from '../../components/SignInGate.astro';
     if (st.canChange) {
       const row = h('div', { class: 'rowbtns' });
       if (st.mode === 'shadow') {
-        row.append(armedButton('Switch to live', 'Switch to live? Low-risk stories will then publish without anyone reading them. Click again to confirm', async () => { await send({ action: 'site.autopublish', mode: 'live' }); await loadAutopublish(); void loadStories(); }, 'rowbtn rowbtn--act rowbtn--yes'));
+        row.append(armedButton('Switch to live', 'Switch to live? Low-risk stories will then publish without anyone reading them. Click again to confirm', async () => { await send({ action: 'site.autopublish', mode: 'live' }); await loadAutopublish(); void loadUnitStories(); }, 'rowbtn rowbtn--act rowbtn--yes'));
       } else {
-        row.append(armedButton('Back to shadow mode', 'Go back to shadow mode? A person will approve everything again. Click again to confirm', async () => { await send({ action: 'site.autopublish', mode: 'shadow' }); await loadAutopublish(); void loadStories(); }));
+        row.append(armedButton('Back to shadow mode', 'Go back to shadow mode? A person will approve everything again. Click again to confirm', async () => { await send({ action: 'site.autopublish', mode: 'shadow' }); await loadAutopublish(); void loadUnitStories(); }));
         row.append(armedButton(st.paused ? 'Resume' : 'Pause', st.paused ? 'Resume automatic publishing? Click again to confirm' : 'Pause? Everything waits for a person until resumed. Click again to confirm', async () => { await send({ action: 'site.autopublish', paused: !st.paused }); await loadAutopublish(); }));
       }
       kids.push(row);
@@ -1944,7 +1945,7 @@ import SignInGate from '../../components/SignInGate.astro';
       kids.push(h('ul', { class: 'auto-list' }, ...st.published.map((p) => {
         const li = h('li', {}, h('span', { text: `${p.name} · ${when(p.at)} ` }));
         if (!p.stillPublic) li.append(h('span', { class: 'muted', text: '(no longer public)' }));
-        else if (st.canChange) li.append(armedButton('Hide', 'Hide from the public site? Click again to confirm', async () => { await send(p.householdId ? { action: 'unitstory.unpublish', householdId: p.householdId } : { action: 'story.unpublish', personId: p.personId }); msg.textContent = `${p.name} is off the public site once the build finishes.`; await loadAutopublish(); await loadPublish(); }));
+        else if (st.canChange) li.append(armedButton('Hide', 'Hide from the public site? Click again to confirm', async () => { await send({ action: 'unitstory.unpublish', householdId: p.householdId }); msg.textContent = `${p.name} is off the public site once the build finishes.`; await loadAutopublish(); await loadPublish(); }));
         return li;
       })));
     }
@@ -1952,149 +1953,19 @@ import SignInGate from '../../components/SignInGate.astro';
     box.replaceChildren(...(kids.filter(Boolean) as Node[]));
   }
 
-  // ---- stories waiting for review ------------------------------------------------
-  // A member's submitted story (see the portal's "Your story"). Approving makes the submitted text
-  // the approved copy; rejecting sends it back with a note the member sees. Both need `manage`,
-  // and name the submission seen, so wording the member sent meanwhile is never approved unseen.
+  // The fields the writing check and the risk rules can flag.
   type StoryText = { bio: string; family: string; why: string; social: string; photo: string };
-  type StoryItem = { personId: string; name: string; farmUnits: string[]; submittedAt: string; submitted: StoryText; submittedPublic: boolean; approved: StoryText | null; approvedPublic: boolean | null; flags: { field: string; kind: string; note: string }[]; assessment: { level: 'low' | 'high'; outcome: 'publish' | 'hold'; mode: 'shadow' | 'live'; reasons: { code: string; text: string; source: string }[] } | null };
   const STORY_LABEL: Record<keyof StoryText, string> = { bio: 'What they do today', family: 'Family', why: 'Why TVC', social: 'Profile link', photo: 'Photo' };
-
-  async function loadStories() {
-    void loadUnitStories(); // the unit queue is shown beside it, and stays hidden while it is empty
-    const box = $('stories');
-    if (!can.edit) {
-      box.hidden = true;
-      return;
-    }
-    try {
-      const { status, data } = await staffFetch('/api/members-admin/stories');
-      if (status !== 200) throw new Error(data.error || 'Could not load.');
-      renderStories(data.stories as StoryItem[]);
-    } catch {
-      box.hidden = false;
-      box.replaceChildren(h('p', { class: 'muted', text: 'Could not load the stories waiting for review.' }));
-    }
-  }
-
-  async function decideStory(story: StoryItem, action: 'story.approve' | 'story.reject', note?: string) {
-    await send({ action, personId: story.personId, submittedAt: story.submittedAt, ...(note ? { note } : {}) });
-    await loadStories();
-  }
-
-  function renderStories(stories: StoryItem[]) {
-    const box = $('stories');
-    box.hidden = false;
-    if (stories.length === 0) {
-      box.replaceChildren(h('p', { class: 'muted', text: 'No stories waiting for review.' }));
-      return;
-    }
-    const when = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-    const cards = stories.map((st) => {
-      const msg = h('p', { class: 'form-msg', attrs: { role: 'alert' } });
-      const rows: HTMLElement[] = [];
-      // A photo is shown (fetched with the reviewer's sign-in) and compared with the approved one. A photo
-      // of a child is not something we can detect, so the reviewer is the check.
-      const photoNow = st.submitted.photo;
-      const photoWas = st.approved?.photo ?? '';
-      if (photoNow || photoWas) {
-        const changed = !!st.approved && photoNow !== photoWas;
-        const pic = (ref: string) => {
-          const img = document.createElement('img');
-          img.className = 'story-photo';
-          img.alt = '';
-          staffPhotoSrc(ref).then((src) => { img.src = src; }).catch(() => img.replaceWith(h('span', { class: 'muted', text: '(photo unavailable)' })));
-          return img;
-        };
-        rows.push(
-          h('div', { class: 'story-row' },
-            h('dt', { text: STORY_LABEL.photo }, changed || (!st.approved && photoNow) ? h('span', { class: 'flag flag--warn', text: photoNow ? 'New photo' : 'Removed' }) : null),
-            h('dd', {}, photoNow ? pic(photoNow) : h('span', { class: 'muted', text: '(removed)' })),
-            changed && photoWas ? h('details', { class: 'story-was' }, h('summary', { text: 'Currently approved photo' }), pic(photoWas)) : null,
-          ),
-        );
-      }
-      for (const key of ['bio', 'family', 'why', 'social'] as const) {
-        const now = st.submitted[key];
-        const was = st.approved?.[key] ?? '';
-        if (!now && !was) continue;
-        const changed = !!st.approved && now !== was;
-        rows.push(
-          h('div', { class: 'story-row' },
-            h('dt', { text: STORY_LABEL[key] }, changed ? h('span', { class: 'flag flag--warn', text: now ? 'Changed' : 'Removed' }) : null),
-            h('dd', { class: now ? 'story-text' : 'muted', text: now || '(removed)' }),
-            changed && was ? h('details', { class: 'story-was' }, h('summary', { text: 'Currently approved wording' }), h('p', { class: 'story-text', text: was })) : null,
-          ),
-        );
-      }
-      // Where the links in the text go, so a reviewer sees the addresses and not only the words.
-      const linkList = (t: Partial<StoryText> | null | undefined) => [...linksIn(t?.bio ?? ''), ...linksIn(t?.family ?? '')];
-      const linksNow = linkList(st.submitted);
-      const linksWas = linkList(st.approved);
-      const linkKey = (ls: { label: string; href: string }[]) => ls.map((l) => `${l.label}\u0000${l.href}`).join('\n');
-      if (linksNow.length || linksWas.length) {
-        const linkChanged = !!st.approved && linkKey(linksNow) !== linkKey(linksWas);
-        const lines = (ls: { label: string; href: string }[]) => ls.map((l) => h('li', {}, h('strong', { text: l.label }), ` → ${l.href}`));
-        rows.push(
-          h('div', { class: 'story-row' },
-            h('dt', { text: 'Links in the text' }, linkChanged ? h('span', { class: 'flag flag--warn', text: 'Changed' }) : null),
-            linksNow.length ? h('dd', { class: 'story-text' }, h('ul', { class: 'story-links' }, ...lines(linksNow))) : h('dd', { class: 'muted', text: '(none)' }),
-            linkChanged && linksWas.length ? h('details', { class: 'story-was' }, h('summary', { text: 'Currently approved links' }), h('ul', { class: 'story-links' }, ...lines(linksWas))) : null,
-          ),
-        );
-      }
-      const head = h('div', { class: 'story-head' },
-        h('strong', { text: st.name }),
-        ...st.farmUnits.map((u) => h('span', { class: 'unit-pill', text: u })),
-        h('span', { class: 'meta', text: `Submitted ${when(st.submittedAt)}` }),
-        h('span', { class: `flag flag--${st.submittedPublic ? 'warn' : 'info'}`, text: st.submittedPublic ? 'Wants to be on tvc.farm' : 'Members only' }),
-        st.approved ? h('span', { class: 'flag flag--info', text: 'Edit to an approved story' }) : null,
-      );
-      const flags = st.flags.length
-        ? h('ul', { class: 'flags' }, ...st.flags.map((f) => h('li', {}, h('span', { class: 'flag flag--warn', text: `${STORY_LABEL[f.field as keyof StoryText]}: ${f.note}` }))))
-        : null;
-
-      // What the risk assessment made of this submission. In shadow mode a person still decides everything; this shows what
-      // the assessment would have done, so the two can be compared. In live mode a high-risk story is held for exactly this reason.
-      const a = st.assessment;
-      const assessEl = !a ? null : h('div', { class: `assess assess--${a.level}` },
-        h('strong', { text: a.level === 'low' ? (a.mode === 'shadow' ? 'Assessment: low risk, would have been published automatically' : 'Assessment: low risk') : (a.mode === 'shadow' ? 'Assessment: high risk, would have been held for you' : 'Assessment: high risk, held for you') }),
-        a.reasons.length ? h('ul', {}, ...a.reasons.map((r) => h('li', { text: r.text }))) : null);
-      let actions: HTMLElement;
-      if (!can.manage) {
-        actions = h('p', { class: 'muted', text: 'An admin approves or sends back stories.' });
-      } else {
-        const noteBox = h('textarea', { attrs: { rows: '3', maxlength: '500', placeholder: 'What should they change? They will see this note.' } }) as HTMLTextAreaElement;
-        const form = h('div', { class: 'story-reject', attrs: { hidden: '' } }, noteBox);
-        const sendBack = h('button', { class: 'rowbtn rowbtn--act', text: 'Send back with this note', attrs: { type: 'button' } });
-        sendBack.addEventListener('click', async () => {
-          if (!noteBox.value.trim()) { msg.textContent = 'Write a note so the member knows what to change.'; return; }
-          try { await decideStory(st, 'story.reject', noteBox.value); } catch (err) { msg.textContent = err instanceof Error ? err.message : 'Something went wrong.'; }
-        });
-        form.append(sendBack);
-        const approve = h('button', { class: 'rowbtn rowbtn--act rowbtn--yes', text: 'Approve', attrs: { type: 'button' } });
-        approve.addEventListener('click', async () => {
-          approve.setAttribute('disabled', '');
-          try { await decideStory(st, 'story.approve'); } catch (err) { approve.removeAttribute('disabled'); msg.textContent = err instanceof Error ? err.message : 'Something went wrong.'; }
-        });
-        const reject = h('button', { class: 'rowbtn rowbtn--act', text: 'Send back…', attrs: { type: 'button' } });
-        reject.addEventListener('click', () => { form.hidden = !form.hidden; if (!form.hidden) noteBox.focus(); });
-        actions = h('div', {}, h('div', { class: 'rowbtns' }, approve, reject), form);
-      }
-      return h('article', { class: 'card story-card' }, head, assessEl, flags, h('dl', { class: 'story-fields' }, ...rows), msg, actions);
-    });
-    box.replaceChildren(h('details', { class: 'story-queue', attrs: { open: '' } }, h('summary', { text: `Stories waiting for review (${stories.length})` }), h('div', { class: 'story-list' }, ...cards)));
-  }
 
   // ---- unit stories waiting for review -----------------------------------------
   // A story that belongs to a whole unit (member_unit_stories): bio, family and photos are the unit's, each
   // person's quote and profile link are their own. The queue shows what changed first and folds the rest away.
-  // Hidden while nothing is waiting, so it costs the page nothing until stories move over to this model.
+  // Hidden while nothing is waiting.
   type UnitStoryItem = {
     householdId: string; farmUnit: string; submittedAt: string; submittedBy: string | null; submittedPublic: boolean; approvedPublic: boolean | null;
     submitted: UnitCopy; approved: UnitCopy | null; changes: { kind: string; name?: string }[];
     flags: { field: string; kind: string; note: string }[];
-    assessment: StoryItem['assessment'];
+    assessment: { level: 'low' | 'high'; outcome: 'publish' | 'hold'; mode: 'shadow' | 'live'; reasons: { code: string; text: string; source: string }[] } | null;
   };
   type UnitCopy = { bio: string; family: string; photos: { ref: string; personId: string }[]; quotes: { name: string; text: string }[]; links: { name: string; url: string }[] };
 
@@ -2256,7 +2127,7 @@ import SignInGate from '../../components/SignInGate.astro';
     $('masked-note').hidden = !data.namesMasked;
     renderTotals(data.totals);
     renderList();
-    void loadStories();
+    void loadUnitStories();
     void loadPublish();
     void loadAutopublish();
   }

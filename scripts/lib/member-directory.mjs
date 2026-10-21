@@ -168,14 +168,11 @@ export function buildUnitDirectory(data, viewerPersonId) {
  * The faces a card or a popup header shows. A unit's photos belong to the unit, not to a person, so when
  * only some of its people have one (one photo uploaded for two owners) the others' initials would be a stray
  * circle beside the picture: only people with a photo are shown, and everyone when nobody has one.
- * Outside the unit model a person without a photo still shows their initial, as it always did.
  * @template {{ photo?: string | null }} P
  * @param {P[]} people
- * @param {boolean} unitMode
  * @returns {P[]}
  */
-export function facesToShow(people, unitMode) {
-  if (!unitMode) return people;
+export function facesToShow(people) {
   const withPhoto = people.filter((p) => p.photo);
   return withPhoto.length ? withPhoto : people;
 }

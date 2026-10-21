@@ -29,13 +29,10 @@ export const ACTION_CAPABILITY = {
   'landdoc.approve': 'manage',
   'landdoc.reject': 'manage',
   // The core team's decision on a member's submitted story (member_stories).
-  'story.approve': 'manage',
-  'story.reject': 'manage',
   // Start a site build so approved public stories reach tvc.farm (the admin "Publish to the website" button).
   'site.publish': 'manage',
   // Risk-based publishing: the shadow/live switch and the pause, and taking one story off the public site.
   'site.autopublish': 'manage',
-  'story.unpublish': 'manage',
   // The same three, for a story that belongs to the whole unit (member_unit_stories).
   'unitstory.approve': 'manage',
   'unitstory.reject': 'manage',
@@ -256,22 +253,8 @@ export function validateEdit(body) {
       return ok({ action, documentId: documentId.value, itemIndex });
     }
 
-    // `submittedAt` is the timestamp of the submission the reviewer was looking at, so a member
-    // who resubmits meanwhile can't have newer wording approved unseen.
-    case 'story.approve':
-    case 'story.reject': {
-      const personId = id(body, 'personId');
-      if (personId.error) return fail(personId.error);
-      const submittedAt = body.submittedAt;
-      if (typeof submittedAt !== 'string' || submittedAt.length > 40 || Number.isNaN(Date.parse(submittedAt))) return fail('submittedAt is missing or not valid.');
-      if (action === 'story.approve') return ok({ action, personId: personId.value, submittedAt });
-      // A rejection always says what to change: the member sees this note.
-      const note = requiredText(body, 'note', 'A note for the member', 500);
-      if (note.error) return fail(note.error);
-      return ok({ action, personId: personId.value, submittedAt, note: note.value });
-    }
-
-    // The decision on a unit's submitted story; same rules as a person's, keyed by the unit.
+    // `submittedAt` is the timestamp of the submission the reviewer was looking at, so a member's resubmission
+    // meanwhile can't have newer wording approved unseen.
     case 'unitstory.approve':
     case 'unitstory.reject': {
       const householdId = id(body, 'householdId');
@@ -304,11 +287,6 @@ export function validateEdit(body) {
         out.paused = body.paused;
       }
       return out.mode === undefined && out.paused === undefined ? fail('Nothing to change.') : ok(out);
-    }
-
-    case 'story.unpublish': {
-      const personId = id(body, 'personId');
-      return personId.error ? fail(personId.error) : ok({ action, personId: personId.value });
     }
 
     case 'plot.delete': {

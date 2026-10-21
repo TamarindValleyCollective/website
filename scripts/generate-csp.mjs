@@ -81,7 +81,11 @@ const csp = [
   // URL.createObjectURL(blob) - without blob: here, every thumbnail on that
   // page silently fails to decode (CSP img-src violations don't throw a JS
   // error the way a blocked script would).
-  "img-src 'self' data: blob: https://media.tvc.farm https://*.inaturalist.org https://inaturalist-open-data.s3.amazonaws.com https://*.tile.openstreetmap.org",
+  // *.googleusercontent.com / *.ggpht.com are Google's profile-picture hosts: the
+  // admin member register (/internal/members) shows each member's Google picture
+  // on their household card, falling back to an initial when the image fails - so
+  // without these the cards silently showed only initials.
+  "img-src 'self' data: blob: https://media.tvc.farm https://*.inaturalist.org https://inaturalist-open-data.s3.amazonaws.com https://*.tile.openstreetmap.org https://*.googleusercontent.com https://*.ggpht.com",
   "font-src 'self'",
   // GA4's actual runtime hit lands on analytics.google.com (a fallback to
   // stats.g.doubleclick.net too) - not www.google-analytics.com, that's a

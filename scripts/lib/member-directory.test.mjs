@@ -288,18 +288,12 @@ test('the output carries no contact or land fields, whatever the input rows hold
 
 // ---- which faces a card shows ----
 
-test('in a unit, only the people who have a photo are shown when anyone does; with none, everyone gets their initial', () => {
+test('only the people who have a photo are shown when anyone does; with none, everyone gets their initial', () => {
   const a = { name: 'Asha', photo: 'p1' };
   const b = { name: 'Ravi', photo: '' };
   const c = { name: 'Cy', photo: 'p2' };
-  assert.deepEqual(facesToShow([a, b], true), [a]); // one photo uploaded: one picture, no stray initial
-  assert.deepEqual(facesToShow([a, c], true), [a, c]); // two photos: two faces
-  assert.deepEqual(facesToShow([b, { name: 'Di', photo: null }], true), [b, { name: 'Di', photo: null }]); // none: initials, as before
-  assert.deepEqual(facesToShow([], true), []);
-});
-
-test('outside the unit model nothing changes: a person without a photo still shows their initial beside a housemate\'s photo', () => {
-  const a = { name: 'Asha', photo: 'p1' };
-  const b = { name: 'Ravi', photo: '' };
-  assert.deepEqual(facesToShow([a, b], false), [a, b]);
+  assert.deepEqual(facesToShow([a, b]), [a]); // one photo uploaded: one picture, no stray initial
+  assert.deepEqual(facesToShow([a, c]), [a, c]); // two photos: two faces
+  assert.deepEqual(facesToShow([b, { name: 'Di', photo: null }]), [b, { name: 'Di', photo: null }]); // none: initials, as before
+  assert.deepEqual(facesToShow([]), []);
 });
