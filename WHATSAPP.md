@@ -9,7 +9,7 @@
 Beyond the plain `wa.me` click-to-chat links (Friends of TVC group invite, `/contact` and
 booking-inquiry links — see `ARCHITECTURE.md`), the WhatsApp Cloud API integration is now **live**:
 `netlify/functions/whatsapp-webhook.mts` receives real inbound messages at `+91 80 4110 9754` and
-persists each one to Supabase, verified end-to-end with a real message on 2026-08-19. Staff can
+persists each one to Supabase, verified end-to-end with a real message on 2026-08-19. Admins can
 read and reply to conversations at `/internal/whatsapp` (2026-08-20, see Phase 4 below), and block
 or unblock a number directly from that dashboard (2026-09-07 — calls Meta Cloud API's native
 `block_users` endpoint, which makes Meta silently drop future inbound messages from that number
@@ -23,11 +23,11 @@ replies outside the 24-hour customer-service window).
 `netlify/functions/lib/whatsapp-send.ts` sends an approved template only if its name is in
 `WHATSAPP_APPROVED_TEMPLATES`. Five UTILITY templates are drafted for submission in
 `docs/whatsapp-templates.md` (event cancelled, refund initiated, refund processed, cancellation
-declined — to guests, alongside the existing emails — and a staff alert for new membership/general
+declined — to guests, alongside the existing emails — and an admin alert for new membership/general
 enquiries, `enquiry.mts`). Nothing is sent until Meta approves them and the env vars listed there
 are set. Test-mode bookings only ever WhatsApp `WHATSAPP_TEST_NUMBER`. Delivery of each template message is tracked in
 `whatsapp_template_sends` (migration `0032`, updated by `whatsapp-webhook.mts` from Meta's `statuses` events, shown
-per booking on the Event Payments dashboard, with a staff email when a guest message fails). **Status:** live since 2026-10-10 (migration `0032` applied to TVC ERP). Not yet confirmed against a real Meta status event.
+per booking on the Event Payments dashboard, with an admin email when a guest message fails). **Status:** live since 2026-10-10 (migration `0032` applied to TVC ERP). Not yet confirmed against a real Meta status event.
 
 **v2 templates (2026-10-10).** All five templates are live. Each now has a drafted `_v2`
 successor (same variables in the same order, plus a text header, a footer, bold key facts and
@@ -50,8 +50,8 @@ until then the approver alert and the payment link go out by email only. The pay
 WhatsApp consent box. See `RAZORPAY.md`.
 
 **Accommodation stay notices (2026-10-12).** Four more templates: `tvc_stay_confirmed`,
-`tvc_stay_updated`, `tvc_stay_cancelled` (guests) and `tvc_stay_staff_alert` (staff, via
-`WHATSAPP_STAFF_ALERT_NUMBERS`). Sent only when staff press "Finalize & notify" / "Send update" on a
+`tvc_stay_updated`, `tvc_stay_cancelled` (guests) and `tvc_stay_staff_alert` (admins, via
+`WHATSAPP_STAFF_ALERT_NUMBERS`). Sent only when admins press "Finalize & notify" / "Send update" on a
 member-stay booking in the accommodation calendar, never automatically. No per-guest opt-in field
 exists for calendar guests, so WhatsApp goes to any guest with a mobile on file (decided
 2026-10-12); the STOP opt-out list is still honoured. **Status: built, not yet submitted to Meta**,
@@ -91,7 +91,7 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
   can't be read. Exact keywords only — "cancel my booking" or "please stop calling" are normal
   messages; "cancel" is deliberately not a keyword. If saving the opt-out fails the webhook returns
   500 so Meta retries rather than confirming something that didn't happen. The out-of-hours
-  auto-reply doesn't also fire on a STOP. Covers all template sends, staff alerts included. The
+  auto-reply doesn't also fire on a STOP. Covers all template sends, admin alerts included. The
   approved templates themselves don't mention STOP (their text is frozen); the booking checkbox and
   the privacy page do.
 - **Inbox controls (2026-10-10).** In `/internal/whatsapp`:
@@ -109,16 +109,16 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
     filtered by what follows the slash (arrow keys move, Enter inserts in place of the command, Escape
     closes and keeps the text; a space ends the command). So the library can grow to dozens without
     crowding the screen. The "More replies" pill takes the ink "selected" look while the panel is open.
-  - **Read receipts**: when a staff member who can reply has a thread open and the guest's latest
+  - **Read receipts**: when an admin who can reply has a thread open and the guest's latest
     message is new, the guest's phone shows it as read (blue ticks), via `POST
     /api/whatsapp-admin/seen`. Read-only roles never send one.
-  - **Typing indicator**: "typing…" on the guest's phone while staff write, re-sent at most every 20 s.
+  - **Typing indicator**: "typing…" on the guest's phone while admins write, re-sent at most every 20 s.
   Both are best-effort (the endpoint always answers 200; Meta may refuse outside the 24-hour window).
   No migration. Checked in a browser against a mock backend 2026-10-10, not against real WhatsApp.
 - **Inbound media (2026-10-10).** Photos, voice notes, video, documents and stickers guests send now
   show in the inbox instead of "[image message — not shown here]". The webhook stores only Meta's
   media id and descriptors on the message (`whatsapp_messages.media_*`, migration `0037`, **apply
-  before deploying**), never the file. A staff member with `view` access sees photos and stickers
+  before deploying**), never the file. An admin with `view` access sees photos and stickers
   load by themselves; voice notes, video and documents wait for a click. The file is fetched from
   Meta on demand through `GET /api/whatsapp-admin/media?messageId=…` (looks the media id up from our
   own row, asks Graph for a short-lived URL, downloads it with the access token, passes the bytes
@@ -131,16 +131,16 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
   re-renders on every 15-second poll unless a message changed (a playing voice note used to be
   reset, and the scroll position jumped). The privacy page has a line about this. Checked in a
   browser against a mock backend, not against real Meta media.
-- **Inbox UI pass (2026-10-10).** `/internal/whatsapp` now uses the shared staff controls instead of
+- **Inbox UI pass (2026-10-10).** `/internal/whatsapp` now uses the shared admin controls instead of
   its own pill buttons: the thread-header actions, "Load more", the media buttons and Send are the
-  staff `.button` (36px, 8px radius; Send is the primary dark-green one, the rest `.button--outline`),
+  admin `.button` (36px, 8px radius; Send is the primary dark-green one, the rest `.button--outline`),
   the back button is an outline icon button with a drawn chevron, and the search, "Signing as" and
   reply fields use the 10px field radius with the control border. The canned replies keep a pill, as
   the same `chip` the biodiversity filters use, with a green tint on hover and a third-of-a-second ink
   fill when clicked (the text lands in a box that can be out of view on a phone). A contact who is blocked or opted out shows its
   button in the red outline state. The two panes now run edge to edge (the shared `.card`'s 28px
   padding used to float them inside the card), and on a phone the header's actions drop to their own
-  full-width row. Page-local modifiers are written `.button.x`, because the staff shell's
+  full-width row. Page-local modifiers are written `.button.x`, because the admin shell's
   `main .button` otherwise beats a class-only rule (Astro's scoping adds no specificity).
 - **Guest panel and "Needs reply" filter (2026-10-10).**
   - **Needs reply**: a chip row under the search box ("All" / "Needs reply" with a count) filters the
@@ -171,12 +171,12 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
   - Checked in Chrome against a mock backend at 1500, 1100 and ~430px; the data logic is tested with
     mocked Supabase (matching across number formats, role gating, masking, failure isolation).
 - **Suggested replies (2026-10-10).** A "Suggest reply" button in the inbox composer
-  (`whatsapp-suggest.mts`, `reply` capability) drafts an answer for a staff member to read, edit and
+  (`whatsapp-suggest.mts`, `reply` capability) drafts an answer for an admin to read, edit and
   send; it never sends anything itself. The draft is grounded in the site's own pages (the same
   retrieval as the chat widget), so it can't invent prices, dates or policies, and anything about a
   booking, cancellation or refund, or that the site doesn't cover, comes back flagged "Needs a human
   check" with a one-line reason. "Based on" links show which pages it used. Safety nets: the model sees
-  only the recent messages labelled Guest/TVC (no names, no numbers, no staff signatures), the
+  only the recent messages labelled Guest/TVC (no names, no numbers, no admin signatures), the
   conversation is treated as untrusted text, any link that isn't on tvc.farm is removed from the draft
   and the draft is flagged, and the audit log records who asked (`whatsapp.suggest_reply`), never the
   content. **Which AI reads the conversation is `WHATSAPP_SUGGEST_PROVIDER`: unset or `anthropic`
@@ -185,7 +185,7 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
   submitted content to improve its products and have people review it (see the privacy page), so
   switch to `gemini` only if the Gemini key is on a paid plan, or if you accept that for guests'
   private messages.** With the default and a Gemini key also set, nothing goes to Google. Limits:
-  15 per staff member per 10 minutes and 80 a day (`DAILY_CAP` in the function). Usage is counted in
+  15 per admin per 10 minutes and 80 a day (`DAILY_CAP` in the function). Usage is counted in
   the same Anthropic / Gemini meters as the chat widget and search, so it shows on `/internal/usage`.
   Needs `ANTHROPIC_API_KEY` (already set). No migration. On a phone the canned-reply row hides while
   a draft is open. Checked in Chrome against a mock backend and with mocked Anthropic/Gemini calls,
@@ -423,7 +423,7 @@ that Phase 3 step below is still open.
 - [x] **Build a reply admin page — done 2026-08-20.** `/internal/whatsapp` (a two-pane chat UI:
       conversation list + selected thread, reply textarea, 15-second polling gated on tab
       visibility), backed by `netlify/functions/whatsapp-admin.mts`. Gated behind Google
-      Sign-In plus per-module staff roles (`requireStaff`, role in the `whatsapp` module — migrated
+      Sign-In plus per-module admin roles (`requireStaff`, role in the `whatsapp` module — migrated
       2026-10 from the shared `PHOTO_POOL_ALLOWED_EMAILS_SHEET_ID` Sheet allow-list). The contact's
       phone number is never sent to the browser (see ARCHITECTURE.md).
       Message history is persisted in Postgres via the existing "TVC ERP" Supabase project
@@ -441,7 +441,7 @@ that Phase 3 step below is still open.
       failed send (most likely the 24-hour customer-service-window rejection, since no approved
       templates exist yet — see the open Phase 4 item below) is recorded as `status='failed'` with
       Meta's own error text, shown inline in the thread rather than silently dropped. Since more
-      than one staff member replies from this one inbox, every outbound message is automatically
+      than one admin replies from this one inbox, every outbound message is automatically
       signed with the sender's name (pulled from their Google account) — `"{body}\n\n- {name}"` —
       so the customer knows who they're talking to; this is part of the actual text sent to
       WhatsApp, not just internal metadata.
@@ -492,7 +492,7 @@ that Phase 3 step below is still open.
         `whatsapp_conversations?select=*,whatsapp_messages(...)` with a per-relationship
         `order`+`limit=1` — pulls each conversation's latest message in the same query).
       - **Per-reply responder name**, since the inbox is signed into from one *shared* Google
-        account (not one login per staff member) — the ID token's own name claim can't
+        account (not one login per admin) — the ID token's own name claim can't
         distinguish who's actually typing. Each person types their name once into a "Signing as"
         field, kept in `localStorage` on that browser; sent as `responderName` and appended to
         the outbound message text as `"{body}\n\n- {name}"` — part of what the customer actually
@@ -500,7 +500,7 @@ that Phase 3 step below is still open.
       - **WhatsApp/iMessage-style initials avatars** — Meta's Cloud API never sends a real contact
         photo, so this mirrors WhatsApp's own no-photo fallback: first-letters-of-name initials on
         a color picked deterministically from phone number (customer) or the typed signature name
-        (staff, so different repliers in one thread read as different people). Two of the five
+        (admins, so different repliers in one thread read as different people). Two of the five
         candidate palette colors (`--tvc-orange`, `--tvc-sky-blue`) only hit ~3.5:1 contrast for
         white initials text, failing WCAG AA (4.5:1) — swapped for this codebase's existing
         darker `-text` variants of the same two colors instead, which clear 5.3:1+.
@@ -534,7 +534,7 @@ that Phase 3 step below is still open.
         every new inbound message (in `upsertConversation`), so each new message gets its own full
         60-minute countdown rather than inheriting a stale timestamp from a previous unread streak
         on the same conversation. Considered notifying via WhatsApp itself instead of email — not
-        possible yet, since messaging a staff member (rather than replying to a customer) hits the
+        possible yet, since messaging an admin (rather than replying to a customer) hits the
         same 24-hour free-form-message window rule, and no message template is approved yet (see
         the open item below).
       - **Conversation search** — a search box above the conversation list, matching contact
@@ -620,7 +620,7 @@ that Phase 3 step below is still open.
          action as entering a password, so that diagnostic step was left to Sharath throughout.
 - [ ] (Drafted 2026-10-10 in `docs/whatsapp-templates.md`; waiting on submission + approval, then the env vars there.) Submit real templates in the **UTILITY** category (transactional — confirmations,
       notifications), not MARKETING — cleaner approval, longer free-window eligibility. First
-      trigger decided 2026-08-19: an internal staff alert on new Visit/general-enquiry form
+      trigger decided 2026-08-19: an internal admin alert on new Visit/general-enquiry form
       submissions (see resolved decision below) — template content itself still needs drafting.
 - [x] Update `ARCHITECTURE.md`'s function list and diagram once this function is live, per the
       standing instruction in `CLAUDE.md`. Node/status table done 2026-08-19 alongside the
@@ -641,7 +641,7 @@ that Phase 3 step below is still open.
 
 ## Resolved decisions
 
-- **First outbound trigger (2026-08-19):** an internal staff alert on new Visit/general-enquiry
+- **First outbound trigger (2026-08-19):** an internal admin alert on new Visit/general-enquiry
   form submissions — lower risk than a customer-facing message, internal-only, easier template
   approval. Not yet built — needs the UTILITY template above submitted and approved first, then
   wiring a WhatsApp send call into `netlify/functions/enquiry.mts` (or a new function) alongside

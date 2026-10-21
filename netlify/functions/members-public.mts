@@ -12,7 +12,7 @@
 // a story in review, a private story, a family member's or an opted-out person's photo all answer 404.
 //
 // Turning a story off or removing a photo takes it out of these responses at once; it comes off the
-// site at the next build (the staff "Publish to the website" button starts one).
+// site at the next build (the admin "Publish to the website" button starts one).
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { buildPublished, buildPublishedUnits, publishedUnitPhotoHolder } from '../../scripts/lib/member-publish.mjs';
 import { UNIT_STORIES_KEY, unitSwitchLive } from '../../scripts/lib/member-unit-story.mjs';

@@ -97,7 +97,7 @@ test('no entry in the register: a new pending record that always waits for the c
   assert.equal(item.outcome, 'pending');
   assert.equal(item.ownerMatch, true);
   assert.equal(documentStatus([item]), 'needs_review');
-  assert.equal(documentStatus([{ ...item, decision: 'approved' }]), 'applied'); // staff decided
+  assert.equal(documentStatus([{ ...item, decision: 'approved' }]), 'applied'); // admin decided
   const [stranger] = run([], { household: { peopleNames: ['Someone Else'] } });
   assert.equal(stranger.ownerMatch, false);
 });

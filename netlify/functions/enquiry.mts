@@ -68,7 +68,7 @@ export default async (req: Request): Promise<Response> => {
 
   try {
     await appendSheetRow(sheetId, sheet.range, [new Date().toISOString(), name, email, phone, message]);
-    // Internal WhatsApp heads-up for staff (a no-op until the template is
+    // Internal WhatsApp heads-up for admins (a no-op until the template is
     // approved and WHATSAPP_STAFF_ALERT_NUMBERS is set); never affects the
     // response, since the enquiry itself is already saved.
     await sendStaffWhatsAppAlert('tvc_staff_enquiry_alert', [

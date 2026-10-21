@@ -4,7 +4,7 @@
 //
 // Field classes (each module's Function applies them in its response mapper):
 //   * contact details (email, phone) — never sent to the browser at all, for
-//     any role. Staff can act on them (a reply is sent to the number) but not
+//     any role. Admins can act on them (a reply is sent to the number) but not
 //     read them; replacing one is a write-only form field.
 //   * personal names — sent in full to roles that operate the module
 //     (`admin`, `user`) and masked for `read_only` (auditors).

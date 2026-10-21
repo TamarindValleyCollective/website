@@ -161,7 +161,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
             <fieldset class="form-group">
               <legend>Internal notes</legend>
               <label>
-                Note <span class="hint-inline">(staff-only, never shown publicly)</span>
+                Note <span class="hint-inline">(admin-only, never shown publicly)</span>
                 <textarea id="f-note" rows="2"></textarea>
               </label>
 
@@ -1554,7 +1554,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     note?: string;
     isPast: boolean;
     // Guest notifications (member stays only for now): `notice` is null until
-    // staff finalize & notify; `pending` means edited since guests were told.
+    // admins finalize & notify; `pending` means edited since guests were told.
     notifiable?: boolean;
     notice?: { notifiedAt: string; pending: boolean } | null;
     createdBy: string;

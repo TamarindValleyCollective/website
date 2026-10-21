@@ -4,7 +4,7 @@
 // without touching the callers. The object key (member_land_documents.storage_path) is the
 // only thing the database holds about a file.
 //
-// Nothing is ever public: the bucket has no public access or custom domain, and staff open a
+// Nothing is ever public: the bucket has no public access or custom domain, and admins open a
 // file through a presigned link that expires after 60 seconds (members-admin.mts, logged).
 //
 // Env (Netlify): R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET.

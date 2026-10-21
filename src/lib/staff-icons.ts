@@ -1,4 +1,4 @@
-// Simple stroke icons for the internal staff pages (24x24 viewBox, drawn with
+// Simple stroke icons for the internal admin pages (24x24 viewBox, drawn with
 // currentColor). Shared by the sidebar (StaffLayout.astro) and the tool tiles on
 // the landing page (internal/index.astro). Decorative: the text label is what
 // screen readers read. Keyed by module id, plus 'home', 'access' and 'security'.

@@ -24,8 +24,8 @@ approves a template its text is frozen, so changing wording means submitting a n
 | `tvc_event_cancelled` | 1 first name · 2 event · 3 reason sentence · 4 refund amount | "Cancel event" refunds each booking (to the guest) |
 | `tvc_refund_initiated` | 1 first name · 2 refund amount · 3 event | a single refund is started from the dashboard |
 | `tvc_refund_processed` | 1 first name · 2 refund amount · 3 event | a refund is confirmed processed |
-| `tvc_cancellation_declined` | 1 first name · 2 event · 3 note | staff decline a cancellation request |
-| `tvc_staff_enquiry_alert` | 1 form type · 2 name · 3 message | a membership/general enquiry is submitted (to staff) |
+| `tvc_cancellation_declined` | 1 first name · 2 event · 3 note | admins decline a cancellation request |
+| `tvc_staff_enquiry_alert` | 1 form type · 2 name · 3 message | a membership/general enquiry is submitted (to admins) |
 
 ### `tvc_event_cancelled`
 ```
@@ -66,7 +66,7 @@ read env vars at deploy time):
 | Variable | Value |
 |---|---|
 | `WHATSAPP_APPROVED_TEMPLATES` | comma-separated names that are approved, e.g. `tvc_refund_initiated,tvc_refund_processed` — add each as it's approved |
-| `WHATSAPP_STAFF_ALERT_NUMBERS` | staff numbers for `tvc_staff_enquiry_alert`, comma-separated (any common format, e.g. `+91 98860 12670`) |
+| `WHATSAPP_STAFF_ALERT_NUMBERS` | admin numbers for `tvc_staff_enquiry_alert`, comma-separated (any common format, e.g. `+91 98860 12670`) |
 | `WHATSAPP_TEST_NUMBER` | optional: your own number. Test-mode bookings only ever WhatsApp this number (never the guest's); if unset they send nothing |
 | `WHATSAPP_AUTOACK_ENABLED` | `true` turns on the out-of-hours auto-reply (off when unset). See "Out-of-hours auto-reply" below |
 | `WHATSAPP_AUTOACK_HOURS` | optional staffed hours in IST, `HH:MM-HH:MM`; default `09:00-19:00`. Messages outside it get the auto-reply |
@@ -86,10 +86,10 @@ read env vars at deploy time):
   tracked in `whatsapp_template_sends` (migration `0032`): Meta only says "accepted" when we send,
   and the later webhook `statuses` events move it through sent → delivered → read, or failed with
   Meta's reason. The Event Payments dashboard's booking detail shows a **WhatsApp** line per
-  message. A **failed** guest message (typically a number that isn't on WhatsApp) emails staff once
+  message. A **failed** guest message (typically a number that isn't on WhatsApp) emails admins once
   (`core-team@tvc.farm`, cc Linger; test bookings only `contact@tvc.farm`), since the guest then has
   the email only. Only the last 4 digits of the number are stored. Messages with no booking (the
-  staff enquiry alert) are tracked but never trigger a failure email. A failure receipt that beats
+  admin enquiry alert) are tracked but never trigger a failure email. A failure receipt that beats
   the send's own database insert is retried once after 2 seconds.
 
 ## v2 — headers, footers, bold key facts and emoji (2026-10-10)
@@ -225,7 +225,7 @@ the claim is released and nothing is lost. Test-mode bookings go to `WHATSAPP_TE
 Guest-facing WhatsApp messages respect `event_payments.whatsapp_opt_in`, set from the booking
 form's checkbox: `false` sends nothing; `true` sends everything; `null` (older bookings) still gets
 refund/cancellation messages but not the new confirmation or reminder, which need an explicit
-`true`. The reminder query also filters on `whatsapp_opt_in = true`. Staff alerts are unaffected.
+`true`. The reminder query also filters on `whatsapp_opt_in = true`. Admin alerts are unaffected.
 
 ## STOP opt-out (2026-10-10)
 
@@ -248,7 +248,7 @@ default hours (09:00–19:00 IST) and deployed, but not yet confirmed with a rea
 ## Approval-gated booking (2026-10-11)
 
 **Status:** both submitted and approved by Meta (2026-10-11). Utility, English, **Header: Text**, footer filled in, no
-buttons (the link is in the body so staff can also copy it). Add each name to
+buttons (the link is in the body so admins can also copy it). Add each name to
 `WHATSAPP_APPROVED_TEMPLATES` only once Meta approves it. Meta rejects a body that starts or ends with a
 variable ("Variables can't be at the start or end of the template"), so every body must end with
 plain text; `tvc_booking_approval_request` ends with a closing sentence for that reason.
@@ -294,13 +294,13 @@ Samples: `Asha` · `Foraging Day` · `Saturday, 10 October 2026` · `2` · `₹4
 
 **Status:** drafted, not yet submitted. Utility, English, **Header: Text**, footer filled in. Add each
 name to `WHATSAPP_APPROVED_TEMPLATES` only once Meta approves it. Sent from the accommodation calendar
-by staff (`lib/stay-notify.ts`), member stays only for now. Each body ends in plain text.
+by admins (`lib/stay-notify.ts`), member stays only for now. Each body ends in plain text.
 
 | Name | Variables | Sent when |
 |---|---|---|
-| `tvc_stay_confirmed` | 1 first name · 2 tent(s) · 3 check-in · 4 check-out | staff press "Finalize & notify" |
-| `tvc_stay_updated` | 1 first name · 2 tent(s) · 3 check-in · 4 check-out | staff press "Send update" after an edit |
-| `tvc_stay_cancelled` | 1 first name · 2 check-in | a notified booking is cancelled (staff opt in), or a guest is removed from it |
+| `tvc_stay_confirmed` | 1 first name · 2 tent(s) · 3 check-in · 4 check-out | admins press "Finalize & notify" |
+| `tvc_stay_updated` | 1 first name · 2 tent(s) · 3 check-in · 4 check-out | admins press "Send update" after an edit |
+| `tvc_stay_cancelled` | 1 first name · 2 check-in | a notified booking is cancelled (admins opt in), or a guest is removed from it |
 | `tvc_stay_staff_alert` | 1 action · 2 member · 3 dates · 4 guests | with every send above; to `WHATSAPP_STAFF_ALERT_NUMBERS` |
 
 ### `tvc_stay_confirmed`

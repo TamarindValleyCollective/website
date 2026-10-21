@@ -6,7 +6,7 @@
 // scripts/pull-approved-photos.mjs for the next step (Approved -> local
 // folder -> the existing scripts/curate-photos.mjs pipeline, unchanged).
 //
-// Gated by Google Sign-In plus the shared staff access model (issue #89): a
+// Gated by Google Sign-In plus the shared admin access model (issue #89): a
 // curator authenticates with their own Google account (client-side via
 // Google Identity Services), and requireStaff (lib/staff-access.ts) verifies
 // the ID token and checks their role in the "photo-pool" module — `view` for

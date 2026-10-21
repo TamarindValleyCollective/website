@@ -6,7 +6,7 @@
 // we're back; it never tries to answer the question, so a wrong guess can't
 // reach a guest.
 
-// Staff hours in IST, "HH:MM-HH:MM", configurable via WHATSAPP_AUTOACK_HOURS.
+// Admin hours in IST, "HH:MM-HH:MM", configurable via WHATSAPP_AUTOACK_HOURS.
 const DEFAULT_HOURS = '09:00-19:00';
 const IST_OFFSET_MINUTES = 330;
 

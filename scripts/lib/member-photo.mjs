@@ -91,7 +91,7 @@ export function validatePhotoPair(square, full) {
 // of its copies; `listed` says whether that person is active and in the directory.
 //   own       the author, for the draft, the submitted or the approved photo
 //   approved  any signed-in member, for the APPROVED photo of someone who is listed
-//   review    staff, for a photo in review or an approved one (decided by the caller's role)
+//   review    admins, for a photo in review or an approved one (decided by the caller's role)
 export function photoAccess({ viewerPersonId, row, photoId, listed }) {
   if (!row || !isUploadedPhoto(photoId)) return null;
   const inCopy = (copy) => !!copy && copy.photo === photoId;

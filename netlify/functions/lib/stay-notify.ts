@@ -1,4 +1,4 @@
-// Guest + staff notifications for accommodation allocations, sent by a staff
+// Guest + admin notifications for accommodation allocations, sent by an admin
 // member from the accommodation calendar once an allocation is finalized
 // (accommodation-admin.mts: /bookings/notify, and /bookings/delete for
 // cancellations). Never automatic: saving a booking sends nothing. Like

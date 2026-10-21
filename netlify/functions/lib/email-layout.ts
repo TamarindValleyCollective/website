@@ -1,7 +1,7 @@
 // Shared branded shell for every guest-facing email (receipt, refund
 // notices, cancellation replies): green header with the TVC mark, white body
 // card, legal-entity footer. Callers pass only the inner body HTML. Internal
-// staff emails use renderStaffEmail instead. The template itself lives in
+// admin emails use renderStaffEmail instead. The template itself lives in
 // scripts/lib/email-layout.mjs (shared with the GitHub Actions scripts).
 import { LEGAL_ENTITY_NAME } from '../../../src/data/site-facts';
 import { escapeHtml, renderEmailShell } from '../../../scripts/lib/email-layout.mjs';

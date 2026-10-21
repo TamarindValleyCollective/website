@@ -162,7 +162,7 @@ export type StepUpMethod = 'totp' | 'recovery' | 'passkey';
 
 type StepUpClaims = { sid: string; m: StepUpMethod; iat: number; exp: number };
 
-// Stateless: <base64url claims>.<base64url HMAC>. Bound to one staff member
+// Stateless: <base64url claims>.<base64url HMAC>. Bound to one admin
 // and expires after ten minutes; the signature key never leaves the server.
 export function signStepUp(staffId: string, method: StepUpMethod, nowMs: number): string {
   const claims: StepUpClaims = { sid: staffId, m: method, iat: nowMs, exp: nowMs + STEPUP_TTL_MS };

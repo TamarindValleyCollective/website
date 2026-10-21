@@ -31,7 +31,7 @@ export const WHATSAPP_TEMPLATES = {
     body: "Hi {{1}}, thanks for your cancellation request for {{2}}. We're not able to cancel this booking under our cancellation and refund policy, so it stays confirmed. {{3}} If your plans have changed, reply here or email core-team@tvc.farm and we'll talk it through.",
     samples: ['Asha', 'Foraging Day', 'The event is less than 48 hours away.'],
   },
-  // Internal: sent to TVC staff, not guests.
+  // Internal: sent to TVC admins, not guests.
   tvc_staff_enquiry_alert: {
     body: 'New {{1}} enquiry received on the TVC website from {{2}}. Their message: {{3}} Please reply to them from the contact inbox or the enquiries sheet.',
     samples: ['membership', 'Asha Rao', 'I would like to know more about joining the collective.'],
@@ -60,7 +60,7 @@ export const WHATSAPP_TEMPLATES = {
     body: "Hi {{1}}, thanks for your cancellation request for *{{2}}*. We're not able to cancel this booking under our cancellation and refund policy, so it stays confirmed. ✅\n\n📝 {{3}}\n\nIf your plans have changed, just reply here or email core-team@tvc.farm and we'll talk it through.",
     samples: ['Asha', 'Foraging Day', 'The event is less than 48 hours away.'],
   },
-  // Internal: sent to TVC staff, not guests.
+  // Internal: sent to TVC admins, not guests.
   tvc_staff_enquiry_alert_v2: {
     header: 'New website enquiry',
     footer: 'TVC website · internal alert',
@@ -88,7 +88,7 @@ export const WHATSAPP_TEMPLATES = {
     ],
   },
   // Approval-gated booking (added 2026-10-11): the request goes to Linger
-  // staff, and the payment link goes to the guest only after they approve.
+  // admins, and the payment link goes to the guest only after they approve.
   // Internal: sent to the booking approvers (WHATSAPP_BOOKING_APPROVER_NUMBERS).
   tvc_booking_approval_request: {
     header: 'New booking request',
@@ -102,7 +102,7 @@ export const WHATSAPP_TEMPLATES = {
     body: 'Hi {{1}}, thanks for speaking with us! Your booking for *{{2}}* is approved. ✅\n\n📅 *Date:* {{3}}\n👥 *People:* {{4}}\n💰 *Total:* {{5}}\n\nPlease pay within 48 hours to confirm your spot:\n{{6}}\n\nQuestions? Just reply here or email core-team@tvc.farm.',
     samples: ['Asha', 'Foraging Day', 'Saturday, 10 October 2026', '2', '₹4,500', 'https://rzp.io/rzp/abc123'],
   },
-  // Accommodation allocation notices (added 2026-10-12): sent by staff from the
+  // Accommodation allocation notices (added 2026-10-12): sent by admins from the
   // accommodation calendar once an allocation is finalized (stay-notify.ts).
   // Member stays only for now. {{2}} is the tent(s) the guest is in.
   tvc_stay_confirmed: {
@@ -124,7 +124,7 @@ export const WHATSAPP_TEMPLATES = {
     body: "Hi {{1}}, your stay at the farm from *{{2}}* has been cancelled. 😔\n\nIf you weren't expecting this, or you'd like to rebook, just reply here or email core-team@tvc.farm and we'll sort it out.",
     samples: ['Asha', 'Saturday, 1 November 2026'],
   },
-  // Internal: sent to TVC staff (WHATSAPP_STAFF_ALERT_NUMBERS), not guests.
+  // Internal: sent to TVC admins (WHATSAPP_STAFF_ALERT_NUMBERS), not guests.
   tvc_stay_staff_alert: {
     header: 'Stay allocation',
     footer: 'TVC website · internal alert',

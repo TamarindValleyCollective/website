@@ -15,7 +15,7 @@
 // Privacy: a payer's email and phone number never leave this Function (the
 // page sees only whether each is on file); refunds and the refund email look
 // them up server-side. The payer's name is masked for read-only roles. The
-// staff member is recorded by id, not email, in `refunded_by` and in the
+// admin is recorded by id, not email, in `refunded_by` and in the
 // notes sent to Razorpay. Every refund is audit-logged before any money moves.
 import {
   listPaymentsForEvent,
@@ -380,7 +380,7 @@ async function refundOneBooking(row: any, amount: number, staff: StaffGrant, rea
     refund = await createRefund({
       paymentId: row.razorpay_payment_id,
       amount,
-      // The staff id, not their email: this note is stored by Razorpay.
+      // The admin id, not their email: this note is stored by Razorpay.
       notes: { refundedBy: staff.id, ...(reason ? { reason } : {}) },
     });
   } catch (err) {

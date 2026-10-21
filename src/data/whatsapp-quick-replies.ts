@@ -1,5 +1,5 @@
 // Canned replies for the WhatsApp inbox (src/pages/internal/whatsapp.astro).
-// Choosing one drops its text into the reply box for the staff member to edit
+// Choosing one drops its text into the reply box for the admin to edit
 // before sending — nothing is sent automatically. The reply is signed with the
 // sender's name by the server, so don't add a sign-off here.
 //

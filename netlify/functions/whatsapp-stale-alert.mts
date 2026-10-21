@@ -1,7 +1,7 @@
 // Netlify scheduled function (every 15 minutes) — the "make sure it
 // actually gets answered" safety net for /internal/whatsapp. Replaces the
 // old per-message email (removed 2026-08-20 from whatsapp-webhook.mts —
-// too noisy for a shared inbox several staff check) with a digest of every
+// too noisy for a shared inbox several admins check) with a digest of every
 // conversation that's been unread for 60+ minutes. Re-sent hourly for as
 // long as a conversation stays unread, not just once — a single alert that
 // gets missed shouldn't mean a message silently goes unanswered. See

@@ -1,6 +1,6 @@
 # Member portal (members.tvc.farm) — design
 
-Status: **design draft, 2026-10-18. Step 1 of the build order (register, import, staff review
+Status: **design draft, 2026-10-18. Step 1 of the build order (register, import, admin review
 screen) is built; the rest is not.** Decisions come from Sharath's answers in the planning
 conversation; open items are at the end. This is a public repo: no member names, contact details
 or land records belong in it (see "Private data" below).
@@ -48,7 +48,7 @@ Join key is the unit number `F-xx` from Member Master (it matches the vault). Th
 
 Agreed 2026-10-20. One story per person, public-facing only: no separate members-only version.
 
-**Changed 2026-10-21: one story per UNIT, not per person.** Seeding copied a couple's text onto each person and the directory merged them only while identical, so the first owner to edit and publish split the card. Bio, family, up to two photos and the "Show on tvc.farm" switch are now shared by the unit (one record, one review, one approval); each person keeps their own quote and profile link (the directory links a first name in the story to that person's link). Two owners can edit the shared draft at once: a save conflicts only if it touches a field the other owner changed since the version it started from. Table `member_unit_stories` (migration 0049, additive; `member_stories` stays as the rollback), rules in `scripts/lib/member-unit-story.mjs`, backfill by `scripts/preview-unit-stories.mjs` then `scripts/backfill-unit-stories.mjs`. **Rolled out in steps:** rules, then the table and backfill (done), then the member endpoints, staff queue and risk assessment, public export, directory and the editor. Until those move over, the portal still reads `member_stories`; the per-person descriptions below describe that code.
+**Changed 2026-10-21: one story per UNIT, not per person.** Seeding copied a couple's text onto each person and the directory merged them only while identical, so the first owner to edit and publish split the card. Bio, family, up to two photos and the "Show on tvc.farm" switch are now shared by the unit (one record, one review, one approval); each person keeps their own quote and profile link (the directory links a first name in the story to that person's link). Two owners can edit the shared draft at once: a save conflicts only if it touches a field the other owner changed since the version it started from. Table `member_unit_stories` (migration 0049, additive; `member_stories` stays as the rollback), rules in `scripts/lib/member-unit-story.mjs`, backfill by `scripts/preview-unit-stories.mjs` then `scripts/backfill-unit-stories.mjs`. **Rolled out in steps:** rules, then the table and backfill (done), then the member endpoints, admin queue and risk assessment, public export, directory and the editor. Until those move over, the portal still reads `member_stories`; the per-person descriptions below describe that code.
 
 - **Editing:** "Your story" page, one section per login in the household card (so partners no longer
   need hand-merging). Fields as on the form: what you do today, family, one-line "why TVC", photo.
@@ -123,7 +123,7 @@ Agreed 2026-10-20. One story per person, public-facing only: no separate members
 
 - Reuse `staff_users` / `staff_module_roles` / audit log for admins and super admins. Add a `member_portal` module.
 - Members are a separate identity class: sign-in succeeds only if the verified email matches a `member_people.email` with `can_login`. Unknown emails are refused with a "contact the core team" message.
-- Sensitive columns (email, phone) follow the existing masking and write-only rules for staff; a member sees only their own.
+- Sensitive columns (email, phone) follow the existing masking and write-only rules for admins; a member sees only their own.
 - Every admin edit and approval is written to the audit log before the change.
 
 ## Stays
@@ -153,9 +153,9 @@ Agreed 2026-10-20. One story per person, public-facing only: no separate members
 ## v1 build order
 
 1. Schema + import + admin review screen (no member login yet). **Built 2026-10-18** (migration 0040, `scripts/import-members.mjs`, `/internal/members`); maintenance tables and history import moved to step 3 because the maintenance tabs have no unit number to join on.
-1b. **Staff editing built 2026-10-18**: `edit` / `manage` capabilities on the `members` module and edit forms in the household dialog (names, write-only email and phone, membership, house/cluster, patta records), audited before each change. This is how data gaps are fixed before members are invited.
+1b. **Admin editing built 2026-10-18**: `edit` / `manage` capabilities on the `members` module and edit forms in the household dialog (names, write-only email and phone, membership, house/cluster, patta records), audited before each change. This is how data gaps are fixed before members are invited.
 2. Member sign-in, allow-list, own profile and plot, contact edit, change requests, privacy notice.
-   **First slice built 2026-10-18** (`/members/`, `members-me.mts`, migration 0041): Google sign-in for invited members only, the web-portal shell (left menu, unit chip, widget dashboard), My unit and household, and editing their own mobile number and directory listing; staff invite switch in the register. **Since built:** `members.tvc.farm` host routing (2026-10-18) and the first-login privacy notice (migration 0042; text and version in `scripts/lib/member-privacy.mjs`, shown before any data is released, re-read from the account menu). **Still to do in step 2:** Apple sign-in, the invitation email, change requests for protected fields, and a way to change a sign-in email safely.
+   **First slice built 2026-10-18** (`/members/`, `members-me.mts`, migration 0041): Google sign-in for invited members only, the web-portal shell (left menu, unit chip, widget dashboard), My unit and household, and editing their own mobile number and directory listing; admin invite switch in the register. **Since built:** `members.tvc.farm` host routing (2026-10-18) and the first-login privacy notice (migration 0042; text and version in `scripts/lib/member-privacy.mjs`, shown before any data is released, re-read from the account menu). **Still to do in step 2:** Apple sign-in, the invitation email, change requests for protected fields, and a way to change a sign-in email safely.
 3. Maintenance status (all members) + UPI QR + manual mark-paid.
 4. Own-stay booking + notifications + event-clash flag + guest pricing.
 5. Member stories: editor and writing check (built, see above), then approval queue, directory, photos and the public export. It can run alongside steps 3-4 as the first pilot feature.
@@ -231,9 +231,9 @@ submitted and only a high-risk one needs anyone:
   impersonation, details that help target the farm. It can only raise the level. If it is unavailable the story is
   held, quietly (no email).
 - **Photos** are not assessed by the model (that would send photos to Anthropic); any public photo change is held.
-- **Shadow mode first, and by default:** the assessment is recorded and shown in the staff queue ("would have been
+- **Shadow mode first, and by default:** the assessment is recorded and shown in the admin queue ("would have been
   published" / "would have been held, and why") but a person still approves everything and nothing is automatic.
-  The staff panel counts how often a person rejected a story the assessment called low (a miss, which means the
+  The admin panel counts how often a person rejected a story the assessment called low (a miss, which means the
   rules need tightening) and how often they approved one it would have held. Switch to live only when misses are
   zero over a meaningful number of stories. The switch is an admin button; Pause stops the automatic part without
   leaving live mode; "Published automatically in the last 7 days" lists each story with a Hide button.
@@ -242,12 +242,12 @@ submitted and only a high-risk one needs anyone:
 
 ### Register cards and the Google picture
 
-Agreed 2026-10-21. The staff member register's household cards (`/internal/members`) name the owners by first name
+Agreed 2026-10-21. The admin register's household cards (`/internal/members`) name the owners by first name
 ("Asha & Ravi"); a card with one person shows the full name, since there is room. Each shown person has a round picture
 beside the names: their Google profile picture, or their initial. The picture is taken from the Google sign-in token
 and kept (`member_people.google_picture_url`, migration 0047) only after the member accepts privacy notice v7, which
 says we keep it for the core team to recognise them, show it to no one else and drop it if they remove it from Google.
-It is refreshed at each sign-in, never shown to other members, and hidden from the read-only staff role (with the names).
+It is refreshed at each sign-in, never shown to other members, and hidden from the read-only admin role (with the names).
 Only people who have signed in to the portal have one.
 
 ### Public export
@@ -264,7 +264,7 @@ Approved stories with "Show on tvc.farm" on reach the public Members page, repla
   identical bio becomes one; different quotes and links stay one per person, paired with the names by
   position. A household that switched off, or whose members are all unlisted, is reduced to its name (the
   count of families does not change); a new member is added as a new card.
-- **Batched:** nothing reaches the site until the staff panel's **Publish to the website** (admin) starts a
+- **Batched:** nothing reaches the site until the admin panel's **Publish to the website** (admin) starts a
   build through a Netlify build hook; at most one per 10 minutes. The panel counts approved public stories
   waiting. A story switched off or a photo removed leaves the function's answer at once but comes off the
   site at the next publish.
@@ -294,7 +294,7 @@ Approved stories with "Show on tvc.farm" on reach the public Members page, repla
   that no EXIF block remains (`scripts/lib/member-photo.mjs`). 10 uploads per member per day.
 - **Who sees it:** nothing is public. A photo is served only to its author (any copy) or, for the approved
   photo of someone who is listed, to any signed-in member. The page fetches it with the member's sign-in
-  and shows it from a blob URL (the CSP already allows `blob:`). Staff reviewers see a submitted photo in the
+  and shows it from a blob URL (the CSP already allows `blob:`). Admin reviewers see a submitted photo in the
   approval queue, with the approved one beside it for comparison. A photo of a child cannot be detected, so
   the editor warns and the reviewer is the check.
 - **Faces in the directory:** one face for a single member, overlapping faces for a couple, "+N" beyond two;
@@ -320,7 +320,7 @@ already in the register or create a pending one for the core team. Decisions:
 - **What "verified" means:** the register's survey no. (and patta no. / area / owners where the
   document gives them) agree with a government extract the member uploaded. It is *not* checked
   against the e-Services server (the reference number on the page can be verified there by hand), so
-  staff can open any document and the audit log records what was applied.
+  admins can open any document and the audit log records what was applied.
 - **A-Register owner names are not readable** (damaged Tamil text), so a farm record verifies on
   survey/patta/area. A new entry is always held for the core team regardless.
 - **Files live in a private Cloudflare R2 bucket**, not Supabase: they are rarely opened, R2 has 10 GB
@@ -328,7 +328,7 @@ already in the register or create a pending one for the core team. Decisions:
   `land-doc-storage.ts`, so the store can change. The privacy notice (version 2) names Cloudflare.
 - **Limits:** PDF 1 MB, photo 3 MB, 20 MB per household, 10 uploads a day. A PDF that isn't one of the
   two e-Services layouts is refused at upload and never stored, so unrelated large or junk files
-  can't accumulate or reach the staff queue; only photos/scans (which can't be read) do.
+  can't accumulate or reach the admin queue; only photos/scans (which can't be read) do.
 - Verified rows carry `verification`, `verification_source` and the source document; a core team
   approval of a mismatch replaces the register's values with the document's.
 

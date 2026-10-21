@@ -145,7 +145,7 @@ export async function sendPaymentLinkToGuest(
   return wa === 'sent' || mail;
 }
 
-// To the guest, if staff decline: kind and short, no reason is shared.
+// To the guest, if admins decline: kind and short, no reason is shared.
 export async function sendDeclineToGuest(req: BookingRequestSummary): Promise<void> {
   await sendEmail({
     to: [req.email],

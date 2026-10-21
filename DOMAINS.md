@@ -100,7 +100,7 @@ reaches at the origin). Facts worth knowing:
 - **Routing** (`netlify.toml`, rules for `https://members.tvc.farm/...` only): `/` shows the portal;
   the portal's own paths (`/members/*`, `/_astro/*`, `/fonts/*`, `/images/brand/*`,
   `/api/members-me/*`, the tab icons) pass through; `/internal/*` redirects to `tvc.farm`; anything
-  else redirects to the portal's home. This keeps the public site and the staff tools off the
+  else redirects to the portal's home. This keeps the public site and the admin tools off the
   member host.
 - **Google sign-in**: `https://members.tvc.farm` must be listed under Authorized JavaScript origins
   of the OAuth web client, or the Google button fails there with "origin not allowed".

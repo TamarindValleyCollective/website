@@ -129,7 +129,7 @@ had only ever been tested against constructed mock `Request` objects before, nev
 real API, so the wrong-shape assumption went undetected until the first live test. Fixed and
 reverified directly against the API before going live.
 
-**Internal admin page:** `/internal/event-payments` (Google Sign-In + per-module staff roles —
+**Internal admin page:** `/internal/event-payments` (Google Sign-In + per-module admin roles —
 `view` to read, admin-only `refund` — via
 `netlify/functions/event-payments-admin.mts`; payer email and phone are never sent to the page) shows registrations, cancellations, and money
 collected per event, and can **trigger a real refund** for a booking — calling Razorpay's refund
@@ -138,9 +138,9 @@ directly, since Razorpay's own MCP server has fetch/list tools for refunds but n
 one. The page pre-fills a suggested amount from `/refund-policy`'s day-before-event tiers
 (75%/50%/0%), which the admin can override, and requires an explicit two-step confirm before
 anything is sent — no one-click refund. A successful API call only ever records **initiation**
-(`razorpay_refund_id`, `refund_amount`, `refund_status`, `refund_initiated_at`, `refunded_by` (the staff member's id from 2026-10, an email before that) —
+(`razorpay_refund_id`, `refund_amount`, `refund_status`, `refund_initiated_at`, `refunded_by` (the admin's id from 2026-10, an email before that) —
 migration `0020_event_payments_refunds.sql`/`0022_event_payments_refund_initiated.sql`) and emails
-the payer that a refund has started (cc `core-team@tvc.farm`/`stay@linger.in`) — the email carries a details table: event, people, amount paid, refund amount, amount retained (partial refunds only), date, payment ID and refund ID (the staff-entered reason is left out of single-booking refund emails). The bulk "Cancel event" action sends a different variant — subject "<event> has been cancelled — your refund is on its way", an apology intro, the form's **Reason** text shown to guests verbatim (HTML-escaped; the form label says so), and a pointer to `/events`; `refunded_at`
+the payer that a refund has started (cc `core-team@tvc.farm`/`stay@linger.in`) — the email carries a details table: event, people, amount paid, refund amount, amount retained (partial refunds only), date, payment ID and refund ID (the admin-entered reason is left out of single-booking refund emails). The bulk "Cancel event" action sends a different variant — subject "<event> has been cancelled — your refund is on its way", an apology intro, the form's **Reason** text shown to guests verbatim (HTML-escaped; the form label says so), and a pointer to `/events`; `refunded_at`
 itself is set later, only once Razorpay's `refund.processed` webhook confirms completion — see
 "Razorpay is the source of truth" above. A row shows a **Refund initiated** badge in between, and
 **Refund failed** with a retry option if Razorpay reports `refund.failed`. This is the same
@@ -151,7 +151,7 @@ is actually set.
 **Rehearsing bookings with the fake event.** Real events can't be used to practise bookings once they're in
 the past, and test bookings must never mix with real ones. `src/content/events/2027-12-31-fake-test-event.md`
 (`draft: true`, `razorpayReferenceId: fake-test-event`, ₹100/person) is a fixture for that: drafts have no public page,
-listing or route, so it appears only in the staff Event Payments dropdown (marked "(draft)") and, in `astro dev` only,
+listing or route, so it appears only in the admin Event Payments dropdown (marked "(draft)") and, in `astro dev` only,
 at `/internal/test-event/fake-test-event` (`getStaticPaths` returns nothing in a production build, so no such page
 exists there — verified by building). Its TEST-mode base Payment Link is created once with
 `netlify dev:exec node scripts/setup-fake-event.mjs` (refuses live keys; idempotent). To rehearse: run
@@ -165,7 +165,7 @@ asks Razorpay whether the payment id exists for its keys: "does not exist" means
 Before 2026-10-10 the production webhook labelled every payment by its own keys, so a test payment came in as `live`
 and its receipt copied Linger; fixed.
 
-**Test-mode emails.** Every email about a `mode = 'test'` booking (receipt, refund initiated/processed/event-cancelled, decline, guest cancellation acknowledgment, and the staff alerts) goes only to `contact@tvc.farm` with a `[TEST]` subject prefix — never the guest, Linger, or core-team (`netlify/functions/lib/email-routing.ts`), so refund and cancellation flows can be simulated safely.
+**Test-mode emails.** Every email about a `mode = 'test'` booking (receipt, refund initiated/processed/event-cancelled, decline, guest cancellation acknowledgment, and the admin alerts) goes only to `contact@tvc.farm` with a `[TEST]` subject prefix — never the guest, Linger, or core-team (`netlify/functions/lib/email-routing.ts`), so refund and cancellation flows can be simulated safely.
 
 **Fee and balance warning on refunds.** Razorpay keeps its fee (MDR + GST) when a payment is refunded, and a refund is paid from the account's available balance, which only ever held the net amount (payment minus fee) — so a refund before the payment's own settlement is short by exactly the fee (found 2026-10-10: ₹2,250 UPI payment, ₹53.10 fee, ₹2,196.90 available), and after settlement the balance is zero anyway. Both refund confirm steps (single and "Cancel event") now say TVC bears the fee and that the available balance must cover the refund, with the known fee total for a bulk cancel; add funds in Razorpay (Account & Settings → Balances) before confirming.
 
