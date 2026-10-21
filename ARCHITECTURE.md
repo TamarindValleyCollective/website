@@ -1570,7 +1570,7 @@ never touches Netlify either.
   a person's story. The queue card shows the assessment, an admin's decision is written onto it, and the auto-publish panel's shadow stats and
   "published automatically, hide" list count units too (a unit entry hides through `unitstory.unpublish`). The **public export**
   (`members-public.mts`, `GET /api/members-published` and `members-published-photo`): `buildPublishedUnits` turns each unit's approved, public copy into the cards (the 2017
-  card name, each person's quote and link by position, the unit's first photo only) and serves a public photo from the uploader's
+  card name, each person's quote and link by position, all of the unit's photos, shown stacked) and serves a public photo from the uploader's
   files only if the uploader is still a listed owner of the unit. The publish counters (`handlePublishStatus`,
   `waitingPublicStories` for the daily build) count public units. The **directory** (`GET /api/members-me/directory`): `buildUnitDirectory` hands `buildDirectory` one story per owner built from the unit's approved copy (the shared bio and family,
   that person's quote and link), so a couple is one section because it is one story and one owner's edit can never split it. The unit's
