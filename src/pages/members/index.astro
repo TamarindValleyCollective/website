@@ -624,6 +624,12 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
+  /* Land areas in a table: monospaced, so the digits (and the decimal point) line up down the column. */
+  .num {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+  }
+
   .kpi .v {
     margin-top: 6px;
     font-size: 1.5rem;
@@ -2013,8 +2019,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   type Person = { id: string; name: string; role: string; canLogin: boolean; hasEmail: boolean; hasPhone: boolean };
-  type Plot = { pattaNo: string | null; surveyNo: string | null; areaAcres: number | null; areaHectares: number | null; referenceNo: string | null; verification: string; sourceDocumentId: string | null };
-  type House = { pattaNo: string | null; surveyNo: string | null; areaSqFt: number | null; verification: string; sourceDocumentId: string | null };
+  type Plot = { pattaNo: string | null; surveyNo: string | null; areaAcres: number | null; areaHectares: number | null; referenceNo: string | null; verification: string; sourceDocumentId: string | null; pattaDocumentId: string | null; surveyDocumentId: string | null };
+  type House = { pattaNo: string | null; surveyNo: string | null; areaSqFt: number | null; verification: string; sourceDocumentId: string | null; pattaDocumentId: string | null; surveyDocumentId: string | null };
   type LandDoc = { id: string; householdId: string; landType: string; fileName: string | null; uploadedAt: string; status: string; summary: string };
   type Hh = { id: string; farmUnit: string; houseNo: string | null; cluster: string | null; unitType: string | null; people: Person[]; plots: Plot[]; housePattas: House[]; farmAcres: number; farmHectares: number; houseSqFt: number; flags: { severity: string; text: string }[] };
   type Me = { personId: string; name: string; email: string | null; phone: string | null; directoryVisible: boolean };
@@ -2066,10 +2072,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   }
   const first = (full: string) => full.trim().split(/\s+/).find((w) => w.length > 1) ?? full;
   const acresFmt = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  // Hectares are always shown to four decimal places (0.1619, 0.0040).
-  const haFmt = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
-  const ha = (v: number | null) => (v == null ? null : haFmt.format(v));
   const sqftFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
+  // An area for a table cell: the same number of decimals in every row (acresFmt is always two), in the
+  // monospaced face so the digits line up down the column.
+  const area = (v: number | null, fmt: Intl.NumberFormat): HTMLElement | null => (v == null ? null : h('span', 'num', undefined, fmt.format(v)));
   const VERIFICATION: Record<string, string> = { verified: 'Verified', pending_review: 'Awaiting core team', unverified: 'Not yet verified' };
   // Tick in a circle / clock / empty circle; the words stay for screen readers and the hover title.
   const VMARK: Record<string, string> = {
@@ -2128,13 +2134,15 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   let shapesLoad: Promise<Record<string, string>> | null = null;
   const loadShapes = () =>
     (shapesLoad ??= memberFetch('/api/members-me/land-shapes').then(({ status, data }) => (status === 200 ? (data.shapes as Record<string, string>) : {})).catch((): Record<string, string> => ({})));
-  // The survey number as a link to its document, with the parcel's outline under it when there is one.
-  function surveyCell(surveyNo: string | null, documentId: string | null): HTMLElement | string | null {
-    const link = docLink(surveyNo ?? '', documentId);
+  // The survey number as a link to its survey-number document or FMB sketch, with the parcel's outline
+  // under it when there is one. The outline comes from the file the record was read from (shapeDocumentId),
+  // or from a sketch uploaded for the survey number.
+  function surveyCell(surveyNo: string | null, linkDocumentId: string | null, shapeDocumentId: string | null): HTMLElement | string | null {
+    const link = docLink(surveyNo ?? '', linkDocumentId);
     if (!surveyNo) return link || null;
     const cell = h('div', 'survey-cell', undefined, link);
     void loadShapes().then((shapes) => {
-      const src = shapeForRecord(shapes, surveyNo, documentId);
+      const src = shapeForRecord(shapes, surveyNo, shapeDocumentId);
       if (!src) return;
       const img = document.createElement('img');
       img.className = 'parcel-shape';
@@ -2707,11 +2715,11 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     cols.append(
       h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.farm)), 'Farm'),
         h('div', 'kpis', undefined, kpi('Farm land', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), kpi('Farm plots', String(hh.plots.length))),
-        hh.plots.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Hectares', 'Acres', 'Status'], [...hh.plots].sort(byPatta).map((p) => [p.pattaNo, surveyCell(p.surveyNo, p.sourceDocumentId), ha(p.areaHectares), p.areaAcres, verifiedMark(p.verification)]), 2)) : h('p', 'lede', 'Patta details not available yet'),
+        hh.plots.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Acres', 'Status'], [...hh.plots].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaAcres, acresFmt), verifiedMark(p.verification)]), 2)) : h('p', 'lede', 'Patta details not available yet'),
         landCardFooter(hh, 'farm')),
       h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.house)), 'House', hh.houseNo && hh.cluster ? h('span', 'pill', `Cluster ${hh.cluster}`) : null),
         h('div', 'kpis', undefined, kpi('House area', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), kpi('House plots', String(hh.housePattas.length))),
-        hh.housePattas.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Sq ft', 'Status'], [...hh.housePattas].sort(byPatta).map((p) => [p.pattaNo, surveyCell(p.surveyNo, p.sourceDocumentId), p.areaSqFt, verifiedMark(p.verification)]), 2)) : h('p', 'lede', hh.houseNo ? 'Patta details not available yet' : 'No house allocated yet'),
+        hh.housePattas.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Sq ft', 'Status'], [...hh.housePattas].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaSqFt, sqftFmt), verifiedMark(p.verification)]), 2)) : h('p', 'lede', hh.houseNo ? 'Patta details not available yet' : 'No house allocated yet'),
         hh.houseNo ? landCardFooter(hh, 'house') : null),
     );
     root.append(cols);

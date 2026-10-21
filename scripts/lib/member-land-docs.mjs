@@ -249,6 +249,35 @@ export function shapeForRecord(shapes, surveyNo, documentId) {
   return null;
 }
 
+// ---- which uploaded file a patta or survey number links to --------------------
+// On the land tables the patta number opens the patta document it is in, and the survey number
+// opens a survey-number document or FMB sketch for it. Three kinds of file are told apart by what
+// was read from them: a stand-alone FMB sketch (extracted.kind 'fmb_sketch'), a survey-number
+// document (one survey number, and the sketch in it was found), and anything else, a patta.
+// A file that could not be read (status 'failed') is never linked. Newest first wins.
+//   docs: { id, land_type, status, created_at, extracted }
+//   record: { landType, pattaNo, surveyNo }  (surveyNo may hold several numbers)
+export function landDocumentKind(doc) {
+  const ex = doc?.extracted;
+  if (ex?.kind === 'fmb_sketch') return 'sketch';
+  const records = Array.isArray(ex?.records) ? ex.records : [];
+  if (records.length === 0) return null;
+  return records.length === 1 && ex.hasShape === true ? 'survey' : 'patta';
+}
+
+export function landDocumentLinks(docs, { landType, pattaNo, surveyNo }) {
+  const usable = docs
+    .filter((d) => d.status !== 'failed' && d.land_type === landType)
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  const wantPatta = pattaDigits(pattaNo);
+  const wantSurveys = surveyTokens(surveyNo);
+  const covers = (d) => (d.extracted?.kind === 'fmb_sketch' ? [normalizeSurveyNo(d.extracted.surveyNo)] : (d.extracted?.records ?? []).map((rec) => rec.surveyNo));
+  const pattaDoc = wantPatta == null ? null : usable.find((d) => landDocumentKind(d) === 'patta' && (d.extracted.records ?? []).some((rec) => pattaDigits(rec.pattaNo) === wantPatta));
+  const bySurvey = (kind) => usable.find((d) => landDocumentKind(d) === kind && covers(d).some((n) => wantSurveys.includes(n)));
+  const surveyDoc = bySurvey('sketch') ?? bySurvey('survey');
+  return { pattaDocumentId: pattaDoc?.id ?? null, surveyDocumentId: surveyDoc?.id ?? null };
+}
+
 // ---- names -------------------------------------------------------------------
 
 const nameTokens = (name) => clean(name).toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter((t) => t.length > 1);
