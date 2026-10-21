@@ -16,6 +16,7 @@ import { deleteMemberPhoto } from './member-photo-storage';
 import { isUploadedPhoto } from '../../../scripts/lib/member-photo.mjs';
 import { RISK_SYSTEM, assessRules, combine, describeChange, outcomeFor, parseModelRisk, riskPrompt } from '../../../scripts/lib/member-risk.mjs';
 import { SETTING_KEY, actsAutomatically, parseSettings } from '../../../scripts/lib/member-autopublish.mjs';
+import { decisionColumns, replacedPhotos, unitRiskRow } from '../../../scripts/lib/member-unit-story.mjs';
 
 const RISK_MODEL = process.env.STORY_RISK_MODEL || process.env.STORY_REVIEW_MODEL || 'claude-sonnet-5';
 const RISK_STORE = 'member-story-risk';
@@ -69,11 +70,17 @@ export function assess(row: StoryRow, model: { level: string; reasons: string[] 
   return combine(rules, model, { public: !!row.submitted_public });
 }
 
-async function record(row: StoryRow, a: ReturnType<typeof assess>, mode: string) {
-  const r = await sb('member_story_assessments?on_conflict=person_id,submitted_at', {
+// A person's story is recorded under person_id, a unit's under household_id (migration 0050); the risk code
+// names the subject `person_id` either way (unitRiskRow), so the table and column say which it is.
+type Target = { table: string; column: string };
+const PERSON_TARGET: Target = { table: 'member_story_assessments', column: 'person_id' };
+const UNIT_TARGET: Target = { table: 'member_unit_story_assessments', column: 'household_id' };
+
+async function record(row: StoryRow, a: ReturnType<typeof assess>, mode: string, target: Target = PERSON_TARGET) {
+  const r = await sb(`${target.table}?on_conflict=${target.column},submitted_at`, {
     method: 'POST',
     prefer: 'resolution=merge-duplicates,return=minimal',
-    body: { person_id: row.person_id, submitted_at: row.submitted_at, is_public: !!row.submitted_public, level: a.level, reasons: a.reasons, assessed_by: a.assessedBy, mode, outcome: outcomeFor(a), decision: null, decided_at: null },
+    body: { [target.column]: row.person_id, submitted_at: row.submitted_at, is_public: !!row.submitted_public, level: a.level, reasons: a.reasons, assessed_by: a.assessedBy, mode, outcome: outcomeFor(a), decision: null, decided_at: null },
   });
   if (!r.ok) console.error('[story-risk] could not record the assessment', r.status);
 }
@@ -95,7 +102,7 @@ async function approveBySystem(row: StoryRow): Promise<boolean> {
   return true;
 }
 
-function emailBody(name: string, a: ReturnType<typeof assess>, row: StoryRow): string {
+function emailBody(name: string, a: ReturnType<typeof assess>, row: StoryRow, panel = 'Stories waiting for review'): string {
   const change = describeChange({ submitted: row.submitted, approved: row.approved });
   const reasons = a.reasons.filter((r: any) => r.code !== 'unassessed').map((r: any) => `<li>${escapeHtml(r.text)}</li>`).join('');
   const fields = change.fields
@@ -107,7 +114,7 @@ function emailBody(name: string, a: ReturnType<typeof assess>, row: StoryRow): s
   ${fields ? `<p style="margin-bottom:4px;"><strong>What changed</strong></p><ul style="padding-left:18px;">${fields}</ul>` : ''}
   ${links ? `<p style="margin-bottom:4px;"><strong>Links</strong></p><ul style="padding-left:18px;">${links}</ul>` : ''}
   ${change.photo ? `<p>Photo ${change.photo}. Open the queue to see it.</p>` : ''}
-  <p style="margin-bottom:0;">Approve or send it back in the <a href="${QUEUE_URL}">member register</a>, under "Stories waiting for review". Nothing else needs doing: low-risk stories are published without an email.</p>`;
+  <p style="margin-bottom:0;">Approve or send it back in the <a href="${QUEUE_URL}">member register</a>, under "${panel}". Nothing else needs doing: low-risk stories are published without an email.</p>`;
 }
 
 /**
@@ -130,6 +137,49 @@ export async function assessSubmission(row: StoryRow, memberName: string): Promi
     return { approved: false };
   } catch (err) {
     console.error('[story-risk] assessment failed', err);
+    return { approved: false };
+  }
+}
+
+// The same, for a story that belongs to a whole unit: the change an admin's approval makes (decisionColumns),
+// filtered on the exact submission, then the replaced live photos go and the assessment records who decided.
+async function approveUnitBySystem(unitRow: any): Promise<boolean> {
+  const now = new Date().toISOString();
+  const decision = decisionColumns({ action: 'approve', row: unitRow, staffId: null, now });
+  if (!decision.ok) return false;
+  const r = await sb(`member_unit_stories?household_id=eq.${unitRow.household_id}&status=eq.in_review&submitted_at=eq.${encodeURIComponent(unitRow.submitted_at)}`, {
+    method: 'PATCH',
+    prefer: 'return=representation',
+    body: decision.columns,
+  });
+  if (!r.ok || r.rows.length === 0) return false;
+  for (const p of replacedPhotos(unitRow)) {
+    if (isUploadedPhoto(p.ref)) await deleteMemberPhoto(p.personId, p.ref).catch((err) => console.error('[story-risk] unit photo cleanup failed', err));
+  }
+  await sb(`member_unit_story_assessments?household_id=eq.${unitRow.household_id}&submitted_at=eq.${encodeURIComponent(unitRow.submitted_at)}`, { method: 'PATCH', prefer: 'return=minimal', body: { decision: 'auto_approved', decided_at: now } });
+  return true;
+}
+
+/**
+ * Called after a UNIT's story is submitted (the unit twin of assessSubmission). Never throws, for the same
+ * reason. `label` names the unit for the alert email ("F-12: Asha and Ravi").
+ */
+export async function assessUnitSubmission(unitRow: any, label: string): Promise<{ approved: boolean }> {
+  try {
+    const row = unitRiskRow(unitRow) as StoryRow;
+    const settings = await loadSettings();
+    const model = row.submitted_public ? await askModel(row) : null;
+    const a = assess(row, model);
+    await record(row, a, settings.mode, UNIT_TARGET);
+    if (!actsAutomatically(settings)) return { approved: false };
+
+    if (outcomeFor(a) === 'publish') return { approved: await approveUnitBySystem(unitRow) };
+    if (a.notify) {
+      await sendStaffAlert(`A unit story needs a look: ${label}`, emailBody(label, a, row, 'Unit stories waiting for review')).catch((err) => console.error('[story-risk] alert email failed', err));
+    }
+    return { approved: false };
+  } catch (err) {
+    console.error('[story-risk] unit assessment failed', err);
     return { approved: false };
   }
 }

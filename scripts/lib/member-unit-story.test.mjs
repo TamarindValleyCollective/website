@@ -2,7 +2,7 @@
 // Made-up people and text only: this repo is public.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildUnitStory, addPhoto, mergeDraftEdit, validateUnitSave, validateUnitSubmit, draftState, draftColumns, unitStoryView, unitPhotoHolder, unitPhotoAccess, riskCopy, decisionApplies, decisionColumns, replacedPhotos, queueItem, MAX_PHOTOS } from './member-unit-story.mjs';
+import { buildUnitStory, addPhoto, mergeDraftEdit, validateUnitSave, validateUnitSubmit, draftState, draftColumns, unitStoryView, unitPhotoHolder, unitPhotoAccess, riskCopy, decisionApplies, decisionColumns, replacedPhotos, queueItem, unitRiskRow, MAX_PHOTOS } from './member-unit-story.mjs';
 
 const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
@@ -381,4 +381,24 @@ test('a link change and an unknown person are shown, not dropped', () => {
   const item = queueItem(row, { people: who, farmUnit: 'F-12' });
   assert.deepEqual(item.changes, [{ kind: 'quote', name: 'Unknown' }, { kind: 'link', name: 'Asha Example' }]);
   assert.equal(item.submitted.quotes[0].name, 'Unknown');
+});
+
+// ---- risk assessment ----
+
+test('a unit submission is shown to the risk code as one row keyed by the unit, with its copies in the shape the rules read', () => {
+  const row = inReview();
+  const risk = unitRiskRow(row);
+  assert.equal(risk.person_id, 'h1'); // the risk code names its subject person_id; for a unit that is the unit's id
+  assert.equal(risk.submitted_at, row.submitted_at);
+  assert.equal(risk.submitted_public, true);
+  assert.equal(risk.approved_public, false);
+  assert.deepEqual(risk.submitted, riskCopy(row.submitted));
+  assert.deepEqual(risk.approved, riskCopy(row.approved));
+  assert.deepEqual(risk.draft, riskCopy(row.draft));
+});
+
+test('a first story has no live copy for the rules to compare with', () => {
+  const risk = unitRiskRow(inReview({ approved: null, approved_public: null }));
+  assert.equal(risk.approved, null);
+  assert.equal(risk.approved_public, null);
 });

@@ -41,7 +41,7 @@ import { checkDailyCap } from './lib/rate-limit';
 import { buildDirectory } from '../../scripts/lib/member-directory.mjs';
 import { MAX_FULL_BYTES, MAX_SQUARE_BYTES, isUploadedPhoto, photoAccess, validatePhotoPair } from '../../scripts/lib/member-photo.mjs';
 import { deleteMemberPhoto, getMemberPhoto, putMemberPhoto } from './lib/member-photo-storage';
-import { assessSubmission } from './lib/story-risk';
+import { assessSubmission, assessUnitSubmission } from './lib/story-risk';
 import { REVIEW_SYSTEM, localChecks, parseSuggestions, reviewPrompt, storyAuditDetail, storyView, validateDraft, validateForSubmit, withStoredPhoto } from '../../scripts/lib/member-story.mjs';
 import { MAX_PHOTOS, addPhoto, draftColumns, draftState, mergeDraftEdit, unitPhotoAccess, unitStoryView, validateUnitSave, validateUnitSubmit } from '../../scripts/lib/member-unit-story.mjs';
 import { ALLOWED_MIME, LAND_TYPES, MAX_HOUSEHOLD_BYTES, MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_UPLOADS_PER_DAY, NOT_A_LAND_PDF, WRONG_CARD, documentsReplacedBy, landTypeMismatch, memberSummary, normalizeExtraction, surveyKey } from '../../scripts/lib/member-land-docs.mjs';
@@ -690,7 +690,8 @@ async function unitOf(member: { personId: string; householdIds: string[] }) {
   const links = await select('member_household_members', 'person_id', `household_id=eq.${householdId}`);
   const ids = links.map((l: any) => l.person_id);
   const people = ids.length ? await select('member_people', 'id,full_name', `id=in.(${ids.join(',')})`) : [];
-  return { householdId, people: people.map((p: any) => ({ id: p.id, firstName: firstNameOf(p.full_name) })) };
+  const [household] = await select('member_households', 'farm_unit', `id=eq.${householdId}`);
+  return { householdId, farmUnit: (household?.farm_unit as string | undefined) ?? '', people: people.map((p: any) => ({ id: p.id, firstName: firstNameOf(p.full_name) })) };
 }
 
 // Writes the new draft only if nobody saved since it was read (the version is the guard), so two owners
@@ -795,8 +796,13 @@ async function handleUnitStorySubmit(req: Request): Promise<Response> {
       console.error('[members-me] unit story submit failed', res.status);
       return jsonResponse({ error: 'Server error' }, 500);
     }
-    const updated = (await res.json())[0];
+    let updated = (await res.json())[0];
     for (const old of row.submitted?.photos ?? []) await dropUnitPhotoIfUnreferenced(old, updated);
+    // Assessed for risk (lib/story-risk.ts), like a person's story: in shadow mode that only records what it would have
+    // done; once switched to live a low-risk story is approved here, so the member is shown where it ended up.
+    const label = `${unit.farmUnit}: ${unit.people.map((p) => p.firstName).join(' and ')}`;
+    const { approved } = await assessUnitSubmission(updated, label);
+    if (approved) updated = (await loadUnitStory(unit.householdId)) ?? updated;
     return jsonResponse({ story: unitStoryView(updated, { personId: member.personId, people: unit.people }) });
   } catch (err) {
     console.error('[members-me] unit story submit failed', err);

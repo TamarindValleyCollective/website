@@ -1892,7 +1892,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
   // Every submitted public story is assessed for risk. In SHADOW mode (the default) that is shown on the queue and nothing
   // is done by itself, so the assessment can be compared with the team's own decisions. In LIVE mode a low-risk story is
   // published without a person, a high-risk one is held and the team emailed, and a daily job starts the build.
-  type Autopublish = { mode: 'shadow' | 'live'; paused: boolean; canChange: boolean; stats: { assessed: number; low: number; high: number; decided: number; missed: number; overHeld: number }; published: { personId: string; name: string; at: string; stillPublic: boolean }[] };
+  type Autopublish = { mode: 'shadow' | 'live'; paused: boolean; canChange: boolean; stats: { assessed: number; low: number; high: number; decided: number; missed: number; overHeld: number }; published: { personId?: string; householdId?: string; name: string; at: string; stillPublic: boolean }[] };
 
   async function loadAutopublish() {
     const box = $('autopublish');
@@ -1962,7 +1962,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
       kids.push(h('ul', { class: 'auto-list' }, ...st.published.map((p) => {
         const li = h('li', {}, h('span', { text: `${p.name} · ${when(p.at)} ` }));
         if (!p.stillPublic) li.append(h('span', { class: 'muted', text: '(no longer public)' }));
-        else if (st.canChange) li.append(armedButton('Hide', 'Hide from the public site? Click again to confirm', async () => { await send({ action: 'story.unpublish', personId: p.personId }); msg.textContent = `${p.name} is off the public site once the build finishes.`; await loadAutopublish(); await loadPublish(); }));
+        else if (st.canChange) li.append(armedButton('Hide', 'Hide from the public site? Click again to confirm', async () => { await send(p.householdId ? { action: 'unitstory.unpublish', householdId: p.householdId } : { action: 'story.unpublish', personId: p.personId }); msg.textContent = `${p.name} is off the public site once the build finishes.`; await loadAutopublish(); await loadPublish(); }));
         return li;
       })));
     }
@@ -2205,6 +2205,11 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
         !isNew ? h('span', { class: 'flag flag--info', text: 'Edit to an approved story' }) : null);
       const summary = h('ul', { class: 'story-changes', attrs: { 'aria-label': 'What changed' } }, ...(isNew ? [h('li', {}, h('span', { class: 'flag flag--info', text: 'New story' }))] : st.changes.map((c) => h('li', {}, h('span', { class: 'flag flag--warn', text: changeWords(c) })))));
       const flags = st.flags.length ? h('ul', { class: 'flags' }, ...st.flags.map((f) => h('li', {}, h('span', { class: 'flag flag--warn', text: `${STORY_LABEL[f.field as keyof StoryText]}: ${f.note}` })))) : null;
+      // What the risk assessment made of this submission; in shadow mode a person still decides everything and this shows what it would have done.
+      const a = st.assessment;
+      const assessEl = !a ? null : h('div', { class: `assess assess--${a.level}` },
+        h('strong', { text: a.level === 'low' ? (a.mode === 'shadow' ? 'Assessment: low risk, would have been published automatically' : 'Assessment: low risk') : (a.mode === 'shadow' ? 'Assessment: high risk, would have been held for you' : 'Assessment: high risk, held for you') }),
+        a.reasons.length ? h('ul', {}, ...a.reasons.map((r) => h('li', { text: r.text }))) : null);
       const rest = unchanged.length ? h('details', { class: 'story-unchanged' }, h('summary', { text: `Unchanged: ${unchanged.map((u) => u.label).join(', ')}` }), h('dl', { class: 'story-fields' }, ...unchanged.map((u) => u.node))) : null;
 
       let actions: HTMLElement;
@@ -2228,7 +2233,7 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
         reject.addEventListener('click', () => { form.hidden = !form.hidden; if (!form.hidden) noteBox.focus(); });
         actions = h('div', { class: 'story-actions' }, h('div', { class: 'rowbtns' }, approve, reject), form);
       }
-      return h('article', { class: 'card story-card' }, head, summary, flags, h('dl', { class: 'story-fields' }, ...changedRows), rest, msg, actions);
+      return h('article', { class: 'card story-card' }, head, assessEl, summary, flags, h('dl', { class: 'story-fields' }, ...changedRows), rest, msg, actions);
     });
     box.replaceChildren(h('details', { class: 'story-queue', attrs: { open: '' } }, h('summary', { text: `Unit stories waiting for review (${stories.length})` }), h('div', { class: 'story-list' }, ...cards)));
   }
