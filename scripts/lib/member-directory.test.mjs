@@ -21,7 +21,7 @@ const data = {
   ],
   households: [
     { id: 'h12', farm_unit: 'F-12', house_no: null, cluster: null },
-    { id: 'h2', farm_unit: 'F-02', house_no: 'H-07', cluster: 'H1-A' },
+    { id: 'h2', farm_unit: 'F-02', house_no: 'H-07', cluster: 'H1-A', unit_type: 'DG1' },
     { id: 'h9', farm_unit: 'F-09', house_no: 'H-30', cluster: 'H2' },
   ],
   stories: [
@@ -36,6 +36,9 @@ test('households come out in house-number order with their listed people only', 
   assert.deepEqual(d[0].people.map((p) => p.name), ['Asha Rao']);
   assert.equal(d[0].cluster, 'H1-A');
   assert.equal(d[1].cluster, null);
+  // the unit type rides along too, null when none is recorded
+  assert.equal(d[0].unitType, 'DG1');
+  assert.equal(d[1].unitType, null);
   // the house number comes with the household, and is null when no house is built yet
   assert.equal(d[0].houseNo, 'H-07');
   assert.equal(d[1].houseNo, null);

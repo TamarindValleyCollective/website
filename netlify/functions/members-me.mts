@@ -929,7 +929,7 @@ async function handleDirectory(req: Request): Promise<Response> {
     const [people, memberships, households, stories] = await Promise.all([
       select('member_people', 'id,full_name,active,directory_visible', 'active=eq.true&directory_visible=eq.true'),
       select('member_household_members', 'household_id,person_id,role', 'person_id=not.is.null'),
-      select('member_households', 'id,farm_unit,house_no,cluster', 'id=not.is.null'),
+      select('member_households', 'id,farm_unit,house_no,cluster,unit_type', 'id=not.is.null'),
       live ? select('member_unit_stories', 'household_id,approved,approved_public', 'approved=not.is.null') : select('member_stories', 'person_id,approved,approved_public', 'approved=not.is.null'),
     ]);
     // `unitPhotos` tells the page which endpoint serves the photos: a unit's, or a person's.

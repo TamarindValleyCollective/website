@@ -1657,6 +1657,13 @@ import SignInGate from '../../components/SignInGate.astro';
     margin: 0 0 12px;
   }
 
+  .dir-chips-label {
+    align-self: center;
+    min-width: 4.5rem;
+    color: var(--tvc-ink-soft);
+    font-size: 0.8rem;
+  }
+
   .dir-chip {
     padding: 6px 14px;
     border: 1px solid var(--tvc-line-strong);
@@ -3281,7 +3288,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   type DirStory = { bio: string; family: string; why: string; social: string; onPublicSite: boolean };
   type DirPerson = { name: string; isYou: boolean; primary?: boolean; photo?: string | null; story: DirStory | null };
   type DirGroup = { people: { name: string; isYou: boolean }[]; bio: string; family: string; quotes: { name: string | null; why: string }[]; links: { name: string; url: string }[]; onPublicSite: boolean };
-  type DirHousehold = { farmUnit: string; houseNo: string | null; cluster: string | null; people: DirPerson[]; groups: DirGroup[]; withoutStory: { name: string; isYou: boolean }[]; familyMembers: { name: string; isYou: boolean }[]; hasStory: boolean };
+  type DirHousehold = { farmUnit: string; houseNo: string | null; cluster: string | null; unitType: string | null; people: DirPerson[]; groups: DirGroup[]; withoutStory: { name: string; isYou: boolean }[]; familyMembers: { name: string; isYou: boolean }[]; hasStory: boolean };
 
   function viewDirectory(): HTMLElement {
     const root = h('div');
@@ -3298,6 +3305,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     let query = '';
     let onlyStories = false;
     let cluster: string | null = null;
+    let unitType: string | null = null;
 
     const search = document.createElement('input');
     search.type = 'search';
@@ -3445,18 +3453,26 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       dlg.showModal();
     }
 
-    // Cluster filter: housing clusters in a fixed order, one at a time (a household with no house yet has no cluster).
-    function clusterChips(): HTMLElement {
-      const chip = (value: string | null, label: string) => {
-        const b = h('button', 'dir-chip', label);
-        b.setAttribute('type', 'button');
-        b.setAttribute('aria-pressed', String(cluster === value));
-        b.addEventListener('click', () => { cluster = value; draw(); });
-        return b;
+    // Filters: housing cluster (fixed order) and unit type (whatever types the data has), one of each at a time.
+    // A household with no house yet has no cluster; one with no unit type yet is under neither type chip.
+    function filterChips(): HTMLElement {
+      const row = (label: string, selected: string | null, set: (v: string | null) => void, values: string[], countOf: (v: string) => number) => {
+        const chip = (value: string | null, text: string) => {
+          const b = h('button', 'dir-chip', text);
+          b.setAttribute('type', 'button');
+          b.setAttribute('aria-pressed', String(selected === value));
+          b.addEventListener('click', () => { set(value); draw(); });
+          return b;
+        };
+        const group = h('div', 'dir-chips', undefined, h('span', 'dir-chips-label', label), chip(null, 'All'), ...values.map((v) => chip(v, `${v} (${countOf(v)})`)));
+        group.setAttribute('role', 'group');
+        group.setAttribute('aria-label', label);
+        return group;
       };
-      return h('div', 'dir-chips', undefined,
-        chip(null, 'All'),
-        ...['H1-A', 'H1-B', 'H2'].map((c) => chip(c, `Cluster ${c} (${list.filter((x) => x.cluster === c).length})`)));
+      const types = [...new Set(list.map((x) => x.unitType).filter((t): t is string => !!t))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      return h('div', '', undefined,
+        row('Cluster', cluster, (v) => { cluster = v; }, ['H1-A', 'H1-B', 'H2'], (v) => list.filter((x) => x.cluster === v).length),
+        types.length ? row('Unit type', unitType, (v) => { unitType = v; }, types, (v) => list.filter((x) => x.unitType === v).length) : null);
     }
 
     const chipsHost = h('div');
@@ -3466,7 +3482,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     let built = false;
 
     function draw() {
-      const shown = list.filter((hh) => (!onlyStories || hh.hasStory) && (!cluster || hh.cluster === cluster) && (!query || [hh.farmUnit, hh.houseNo ?? '', hh.cluster ?? '', ...hh.people.map((p) => p.name)].join(' ').toLowerCase().includes(query)));
+      const shown = list.filter((hh) => (!onlyStories || hh.hasStory) && (!cluster || hh.cluster === cluster) && (!unitType || hh.unitType === unitType) && (!query || [hh.farmUnit, hh.houseNo ?? '', hh.cluster ?? '', ...hh.people.map((p) => p.name)].join(' ').toLowerCase().includes(query)));
       // The member's own household first (the sort is stable, so everyone else stays in house-number order).
       shown.sort((a, b) => Number(b.people.some((p) => p.isYou)) - Number(a.people.some((p) => p.isYou)));
       // The search box and the checkbox are built once and never re-created: replacing them on every keystroke
@@ -3475,7 +3491,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         body.replaceChildren(chipsHost, bar, count, results);
         built = true;
       }
-      chipsHost.replaceChildren(clusterChips());
+      chipsHost.replaceChildren(filterChips());
       count.textContent = `${shown.length} of ${list.length} units`;
       results.replaceChildren(shown.length ? h('div', 'dir-grid', undefined, ...shown.map(card)) : h('p', 'lede', 'No one matches.'));
     }
