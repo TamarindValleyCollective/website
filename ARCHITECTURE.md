@@ -1601,7 +1601,7 @@ never touches Netlify either.
   is reviewed with the story and the live photo never changes until approval. It is a uuid (an upload,
   kept in the same private R2 bucket as the land documents under `member-photos/<person>/<photo>[-full].jpg`)
   or a path under `/images/members/` (a photo already on the public site, set by the seeding). In the
-  member's browser a canvas re-encode makes a 400px square and an uncropped copy up to 1600px, which also
+  member's browser a canvas re-encode makes a 400px square and an uncropped copy up to 1600px (before it is uploaded the member positions the photo in a circle: drag to centre, zoom 1x to 4x by slider, wheel or pinch, with the arrow keys and +/- as well; `scripts/lib/photo-crop.mjs` gives the exact square the circle shows, `photo-prepare.mjs` cuts it, and the click-to-enlarge copy stays uncropped), which also
   strips the camera's metadata including GPS; the server (`POST /api/members-me/story-photo`) re-checks
   that both are real JPEGs, the sizes and the square, then REMOVES every metadata block itself (`stripJpegMetadata`: EXIF, XMP, IPTC, comments, multi-picture offsets; the JFIF header and ICC colour profile stay) and stores the cleaned bytes, never the uploaded ones, with
   a cap of 10 uploads a member a day. Photos are never public: `GET /api/members-me/photo` serves one only
