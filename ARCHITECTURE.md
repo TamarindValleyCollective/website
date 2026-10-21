@@ -1518,7 +1518,13 @@ never touches Netlify either.
   owner's submit replaces one in review), `POST /api/members-me/unit-story-photo` and `unit-story-photo-remove` (at most two
   photos, checked before any file is stored), and `GET /api/members-me/unit-photo` (the unit's people see any copy; other
   members only an approved photo of a listed member). The writing check still goes through `POST /api/members-me/story-review`.
-  The staff queue, risk assessment, public export and directory still read `member_stories` until they move over; backfill with
+  **Admin queue** (`members-admin.mts`): `GET /api/members-admin/unit-stories` (needs `edit`) lists units in review, oldest first,
+  with whose submission it is, the submitted and live copies (each quote and link under the person who wrote it) and exactly what
+  changed against the live copy; the edits `unitstory.approve`, `unitstory.reject` (needs a note the members see) and
+  `unitstory.unpublish` (all `manage`, audit-first, the note never in the audit entry) apply to the exact submission the
+  reviewer saw, so a resubmission can't be approved unseen; approving deletes the live photos it replaced (stored under their
+  uploader's id). The reviewer's photo view (`/api/members-admin/story-photo`) also serves unit photos. The admin queue's screen,
+  risk assessment, public export and the directory still read `member_stories` until they move over; backfill with
   `scripts/preview-unit-stories.mjs` then `scripts/backfill-unit-stories.mjs` (applied to TVC ERP 2026-10-21, 40 units).
 - **Member stories (`members-me.mts`, migration 0044).** A member writes a short public-facing
   story about themselves (what they do, family, one-line "why TVC") on the portal's

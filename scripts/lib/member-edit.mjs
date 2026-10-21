@@ -36,6 +36,10 @@ export const ACTION_CAPABILITY = {
   // Risk-based publishing: the shadow/live switch and the pause, and taking one story off the public site.
   'site.autopublish': 'manage',
   'story.unpublish': 'manage',
+  // The same three, for a story that belongs to the whole unit (member_unit_stories).
+  'unitstory.approve': 'manage',
+  'unitstory.reject': 'manage',
+  'unitstory.unpublish': 'manage',
 };
 
 export const CLUSTERS = ['H1-A', 'H1-B', 'H2'];
@@ -265,6 +269,24 @@ export function validateEdit(body) {
       const note = requiredText(body, 'note', 'A note for the member', 500);
       if (note.error) return fail(note.error);
       return ok({ action, personId: personId.value, submittedAt, note: note.value });
+    }
+
+    // The decision on a unit's submitted story; same rules as a person's, keyed by the unit.
+    case 'unitstory.approve':
+    case 'unitstory.reject': {
+      const householdId = id(body, 'householdId');
+      if (householdId.error) return fail(householdId.error);
+      const submittedAt = body.submittedAt;
+      if (typeof submittedAt !== 'string' || submittedAt.length > 40 || Number.isNaN(Date.parse(submittedAt))) return fail('submittedAt is missing or not valid.');
+      if (action === 'unitstory.approve') return ok({ action, householdId: householdId.value, submittedAt });
+      const note = requiredText(body, 'note', 'A note for the members', 500);
+      if (note.error) return fail(note.error);
+      return ok({ action, householdId: householdId.value, submittedAt, note: note.value });
+    }
+
+    case 'unitstory.unpublish': {
+      const householdId = id(body, 'householdId');
+      return householdId.error ? fail(householdId.error) : ok({ action, householdId: householdId.value });
     }
 
     case 'site.publish':
