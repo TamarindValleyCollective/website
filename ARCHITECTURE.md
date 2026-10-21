@@ -1603,7 +1603,7 @@ never touches Netlify either.
   or a path under `/images/members/` (a photo already on the public site, set by the seeding). In the
   member's browser a canvas re-encode makes a 400px square and an uncropped copy up to 1600px, which also
   strips the camera's metadata including GPS; the server (`POST /api/members-me/story-photo`) re-checks
-  that both are real JPEGs, the sizes, the square, and that no EXIF block is left, then stores both, with
+  that both are real JPEGs, the sizes and the square, then REMOVES every metadata block itself (`stripJpegMetadata`: EXIF, XMP, IPTC, comments, multi-picture offsets; the JFIF header and ICC colour profile stay) and stores the cleaned bytes, never the uploaded ones, with
   a cap of 10 uploads a member a day. Photos are never public: `GET /api/members-me/photo` serves one only
   to its author (any copy) or, for the APPROVED photo of a listed member, to any signed-in member, and the
   page fetches it with the member's sign-in and shows it from a blob URL; `members-admin.mts` serves a

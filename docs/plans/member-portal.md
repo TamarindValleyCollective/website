@@ -291,7 +291,7 @@ Approved stories with "Show on tvc.farm" on reach the public Members page, repla
 - **Upload:** in "Your story" (Editor A). The browser makes the two JPEGs (a centre-cropped 400px square for
   the card, an uncropped copy up to 1600px for click-to-enlarge); drawing through a canvas also strips the
   camera's metadata, GPS included. The server never trusts that: it checks both are JPEGs, the sizes and
-  that no EXIF block remains (`scripts/lib/member-photo.mjs`). 10 uploads per member per day.
+  and removes any metadata block itself before storing (`stripJpegMetadata` in `scripts/lib/member-photo.mjs`; refusing a file that still had an EXIF block turned away iPhone uploads, because Safari's canvas export writes a small harmless one). 10 uploads per member per day.
 - **Who sees it:** nothing is public. A photo is served only to its author (any copy) or, for the approved
   photo of someone who is listed, to any signed-in member. The page fetches it with the member's sign-in
   and shows it from a blob URL (the CSP already allows `blob:`). Admin reviewers see a submitted photo in the
