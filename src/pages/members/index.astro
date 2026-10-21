@@ -702,15 +702,20 @@ import SignInGate from '../../components/SignInGate.astro';
     margin: 0;
   }
 
-  /* Filled, so they stand out on both the white House card and the tinted Home tile. */
+  /* Tinted with a dark outline (so they read on both the white card and the tinted Home tile); the key code is solid. */
   .pills .pill {
     margin: 0;
     padding: 3px 12px;
     border-color: var(--tvc-green-dark);
-    background: var(--tvc-green-dark);
-    color: var(--tvc-white);
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
     font-size: var(--text-xs);
     font-weight: 600;
+  }
+
+  .pills .pill--key {
+    background: var(--tvc-green-dark);
+    color: var(--tvc-white);
   }
 
   .pill {
@@ -2445,17 +2450,18 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   const ROLE_GROUPS: [string, string][] = [['owner', 'Owners'], ['family', 'Family'], ['non_owner', 'Not owners']];
   // The codes that name a card, as pills in its heading: the farm unit on Farm; unit type, house number and cluster on House.
   // No "Cluster"/"Type" words (the codes say it); the name is in the tooltip and the accessible name.
-  const pillsOf = (items: [string, string | null | undefined][]): HTMLElement | null => {
-    const shown = items.filter((i): i is [string, string] => !!i[1]);
-    return shown.length ? h('span', 'pills', undefined, ...shown.map(([label, value]) => {
-      const pill = h('span', 'pill', value);
+  // The code that names the card (farm unit, house number) is the solid pill; the descriptors are tinted.
+  const pillsOf = (items: [string, string | null | undefined, boolean?][]): HTMLElement | null => {
+    const shown = items.filter((i): i is [string, string, boolean?] => !!i[1]);
+    return shown.length ? h('span', 'pills', undefined, ...shown.map(([label, value, key]) => {
+      const pill = h('span', key ? 'pill pill--key' : 'pill', value);
       pill.title = label;
       pill.setAttribute('aria-label', `${label} ${value}`);
       return pill;
     })) : null;
   };
-  const farmPills = (hh: Hh) => pillsOf([['Farm unit', hh.farmUnit]]);
-  const housePills = (hh: Hh) => pillsOf([['Unit type', hh.unitType], ['House number', hh.houseNo], ['Cluster', hh.houseNo ? hh.cluster : null]]);
+  const farmPills = (hh: Hh) => pillsOf([['Farm unit', hh.farmUnit, true]]);
+  const housePills = (hh: Hh) => pillsOf([['Unit type', hh.unitType], ['House number', hh.houseNo, true], ['Cluster', hh.houseNo ? hh.cluster : null]]);
   const peopleByRole = (people: Person[]) => ROLE_GROUPS.map(([role, label]) => ({ label, people: people.filter((p) => p.role === role) })).filter((g) => g.people.length);
   const peopleList = (hh: Hh, you: Person) =>
     h('div', '', undefined, ...peopleByRole(hh.people).flatMap((g) => [
