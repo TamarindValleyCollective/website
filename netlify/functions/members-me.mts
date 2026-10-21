@@ -43,7 +43,7 @@ import { MAX_FULL_BYTES, MAX_SQUARE_BYTES, isUploadedPhoto, photoAccess, validat
 import { deleteMemberPhoto, getMemberPhoto, putMemberPhoto } from './lib/member-photo-storage';
 import { assessSubmission } from './lib/story-risk';
 import { REVIEW_SYSTEM, localChecks, parseSuggestions, reviewPrompt, storyAuditDetail, storyView, validateDraft, validateForSubmit, withStoredPhoto } from '../../scripts/lib/member-story.mjs';
-import { ALLOWED_MIME, LAND_TYPES, MAX_HOUSEHOLD_BYTES, MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_UPLOADS_PER_DAY, NOT_A_LAND_PDF, documentsReplacedBy, memberSummary, normalizeExtraction, surveyKey } from '../../scripts/lib/member-land-docs.mjs';
+import { ALLOWED_MIME, LAND_TYPES, MAX_HOUSEHOLD_BYTES, MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_UPLOADS_PER_DAY, NOT_A_LAND_PDF, WRONG_CARD, documentsReplacedBy, landTypeMismatch, memberSummary, normalizeExtraction, surveyKey } from '../../scripts/lib/member-land-docs.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store, private' } });
@@ -264,6 +264,16 @@ async function handleLandDocuments(req: Request): Promise<Response> {
   const sha256 = hex(await crypto.subtle.digest('SHA-256', bytes));
 
   try {
+    // A farm patta and a house patta are the same kind of file, so the card it was uploaded from is
+    // checked against what this household's registers already hold, before anything is stored.
+    if (checked.ok) {
+      const [farmRows, houseRows] = await Promise.all([
+        select('member_plots', 'survey_no', `household_id=eq.${householdId}`),
+        select('member_house_pattas', 'survey_no', `household_id=eq.${householdId}`),
+      ]);
+      const wrong = landTypeMismatch({ landType, extraction: checked.extraction, farmRows, houseRows });
+      if (wrong) return jsonResponse({ error: WRONG_CARD[wrong.actual as 'farm' | 'house'] }, 422);
+    }
     const all = await select('member_land_documents', 'id,sha256,status,created_at,size_bytes,land_type,storage_path,extracted', `household_id=eq.${householdId}`);
     // An upload is always a new upload. Earlier documents it duplicates are replaced once it is in.
     const replaced = documentsReplacedBy({ sha256, landType, key, existing: all, staleMs: STALE_PROCESSING_MS });

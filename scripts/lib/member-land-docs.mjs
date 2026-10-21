@@ -30,6 +30,10 @@ export const MAX_IMAGE_BYTES = 3_000_000;
 // Everything a household has stored (replaced or removed files don't count).
 export const MAX_HOUSEHOLD_BYTES = 20_000_000;
 export const NOT_A_LAND_PDF = "That PDF doesn't look like a patta or chitta from eservices.tn.gov.in, so we haven't kept it. Download the original from eservices.tn.gov.in and upload that. If you only have a paper copy, upload a clear photo of it instead.";
+export const WRONG_CARD = {
+  farm: 'These survey numbers are already on your Farm land card, so this looks like a farm land document. Please upload it from the Farm land card instead.',
+  house: 'These survey numbers are already on your House plot card, so this looks like a house plot document. Please upload it from the House plot card instead.',
+};
 export const ALLOWED_MIME = ['application/pdf', 'image/jpeg', 'image/png'];
 export const LAND_TYPES = ['farm', 'house'];
 export const MAX_UPLOADS_PER_DAY = 10; // per household, to bound the cost of reading files
@@ -189,6 +193,21 @@ export function documentsReplacedBy({ sha256, landType, key, existing, now = Dat
     if (d.sha256 === sha256) return true;
     return Boolean(key) && d.land_type === landType && surveyKey(d.extracted) === key;
   });
+}
+
+// A farm patta and a house patta are the same kind of PDF, so the file can't say which card it was
+// meant for. The household's own registers can: if none of the document's survey numbers is in the
+// register of the card used, but some are in the other one, it was uploaded on the wrong card.
+// Returns { actual: 'farm' | 'house' } for that case, otherwise null.
+//   farmRows / houseRows: this household's records, { survey_no }
+export function landTypeMismatch({ landType, extraction, farmRows, houseRows }) {
+  const held = (rows) => new Set(rows.flatMap((row) => surveyTokens(row.survey_no)));
+  const farm = held(farmRows);
+  const house = held(houseRows);
+  const [own, other] = landType === 'house' ? [house, farm] : [farm, house];
+  const surveyNos = extraction.records.map((rec) => rec.surveyNo);
+  if (surveyNos.some((n) => own.has(n))) return null;
+  return surveyNos.some((n) => other.has(n)) ? { actual: landType === 'house' ? 'farm' : 'house' } : null;
 }
 
 // ---- names -------------------------------------------------------------------
