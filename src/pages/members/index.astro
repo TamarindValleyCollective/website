@@ -978,6 +978,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .people .who2 span {
+    display: block;
     font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
@@ -1954,18 +1955,8 @@ import SignInGate from '../../components/SignInGate.astro';
     font-size: var(--text-xs);
   }
 
-  .person-cell {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-  }
-
   .contact {
     word-break: break-all;
-  }
-
-  .row-end {
-    text-align: right;
   }
 
   .link-btn--danger {
@@ -3221,38 +3212,43 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         hh.houseNo && !isFamily() ? landCardFooter(hh, 'house') : null),
     );
     root.append(cols);
-    // One table, with a row naming each group, so owners and family are separate but the columns line up.
-    // Owners also get a Remove button on each family member, and a way to add one.
+    // Owners in one panel and family members in another, side by side (stacked on a phone), each person as a
+    // picture, name and masked contact lines. Owners also get an edit button on each family member, and a way to add one.
     const owner = isOwner();
-    const span = owner ? 4 : 3;
-    const peopleBody = h('tbody');
-    for (const g of peopleByRole(hh.people)) {
-      const head = h('th', '', g.label);
-      head.setAttribute('colspan', String(span));
-      peopleBody.append(h('tr', 'group-row', undefined, head));
-      for (const p of g.people) {
-        const row = h('tr', '', undefined, h('td', '', undefined, h('span', 'person-cell', undefined, personFace(p, true), `${p.name}${p.id === person.id ? ' (you)' : ''}`)), h('td', 'contact', contact(p, person).email ?? 'Missing'), h('td', 'contact', contact(p, person).phone ?? 'Missing'));
-        if (owner) {
-          const edit = h('button', 'dir-edit dir-edit--sm', undefined, icon(IC.pen));
-          edit.setAttribute('type', 'button');
-          edit.setAttribute('aria-label', `Edit ${p.name}`);
-          edit.title = `Edit ${p.name}`;
-          edit.addEventListener('click', () => editFamilyDialog(p));
-          row.append(h('td', 'row-end', undefined, p.role === 'family' ? edit : null));
-        }
-        peopleBody.append(row);
+    const personRow = (p: Person) => {
+      const c = contact(p, person);
+      const who = h('div', 'who2', undefined, h('strong', '', `${p.name}${p.id === person.id ? ' (you)' : ''}`), h('span', 'contact', c.email ?? 'No email'), h('span', 'contact', c.phone ?? 'No mobile'));
+      const li = h('li', '', undefined, personFace(p), who);
+      if (owner && p.role === 'family') {
+        const edit = h('button', 'dir-edit dir-edit--sm', undefined, icon(IC.pen));
+        edit.setAttribute('type', 'button');
+        edit.setAttribute('aria-label', `Edit ${p.name}`);
+        edit.title = `Edit ${p.name}`;
+        edit.addEventListener('click', () => editFamilyDialog(p));
+        li.append(edit);
       }
-    }
-    const familyLogins = hh.people.filter((p) => p.role === 'family' && p.canLogin).length;
+      return li;
+    };
+    const listOf = (people: Person[]) => h('ul', 'people', undefined, ...people.map(personRow));
+    const owners = hh.people.filter((p) => p.role === 'owner');
+    const others = hh.people.filter((p) => p.role === 'non_owner');
+    const family = hh.people.filter((p) => p.role === 'family');
+    const familyLogins = family.filter((p) => p.canLogin).length;
     const add = h('button', 'btn', familyLogins >= FAMILY_LOGINS ? 'Request another family member' : 'Add a family member');
     add.setAttribute('type', 'button');
     add.addEventListener('click', () => addFamilyDialog(familyLogins >= FAMILY_LOGINS));
-    const head = h('tr', '', undefined, h('th', '', 'Name'), h('th', '', 'Email'), h('th', '', 'Mobile'), owner ? h('th', '') : null);
-    root.append(panel('People', h('div', '', undefined,
-      h('div', 'table-wrap', undefined, h('table', '', undefined, h('thead', '', undefined, head), peopleBody)),
-      h('p', 'story-hint', 'A picture means they have signed in to the portal. A letter means they have not yet, or their Google account has no picture.'),
-      owner ? h('p', 'lede', `Family members you add can sign in with their Google email to see your unit and, soon, book stays. They cannot edit your story, land documents or who is in your unit. You can add ${FAMILY_LOGINS} without anyone's approval; more than that goes to the core team.`) : null,
-      owner ? add : null), IC.people));
+    const peopleCols = h('div', 'unit-cols');
+    peopleCols.append(h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.people)), 'Owners'),
+      owners.length ? listOf(owners) : h('p', 'lede', 'No owners on record yet'),
+      others.length ? h('h3', 'role-head', 'Not owners') : null,
+      others.length ? listOf(others) : null));
+    if (owner || family.length) {
+      peopleCols.append(h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.people)), 'Family'),
+        family.length ? listOf(family) : h('p', 'lede', 'No family members added yet.'),
+        owner ? h('p', 'story-hint', `They sign in with Google to see your unit and, soon, book stays. They cannot edit your story, land documents or who is in your unit. Up to ${FAMILY_LOGINS} without approval.`) : null,
+        owner ? add : null));
+    }
+    root.append(peopleCols, h('p', 'story-hint', 'A picture means they have signed in to the portal. A letter means they have not yet, or their Google account has no picture.'));
     return root;
   }
 
