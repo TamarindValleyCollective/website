@@ -695,70 +695,52 @@ import SignInGate from '../../components/SignInGate.astro';
     align-items: start;
   }
 
-  /* The code that names a card (farm unit, house number) as a round house-number plaque, at the right of the heading: a thick green ring, a white
-     face, the code in the display face, and a dot at each side. */
+  /* The code that names a card (farm unit, house number): a clean round badge at the right of the heading. A hairline
+     ring and a lot of white space, so the number carries the weight, and a whisper of shadow to lift it off the card. */
   .pills {
     display: flex;
     flex: none;
-    margin: 0 0 0 auto; /* at the right of the card's heading */
+    margin: 0 0 0 auto;
   }
 
-  /* A longer code stretches the plaque into an oval rather than being cut off. */
+  /* A longer code stretches the badge into an oval rather than being cut off. */
   .pills .pill {
-    position: relative;
     display: grid;
     place-items: center;
     box-sizing: border-box;
-    min-width: 88px;
-    height: 88px;
+    min-width: 72px;
+    height: 72px;
     margin: 0;
-    padding: 0 6px;
-    border: 5px solid var(--tvc-green-dark);
+    padding: 0 8px;
+    border: 2px solid var(--tvc-green-dark);
     background: var(--tvc-white);
+    box-shadow: var(--shadow-soft);
     color: var(--tvc-green-dark);
-    /* Set outright: the plaque sits inside a Fraunces h2 on My unit and an uppercase Inter row on Home, and must look the same in both. */
+    /* Set outright: the badge sits inside a Fraunces h2 on My unit and an uppercase Inter row on Home, and must look the same in both.
+       Display type is set slightly tight, and the figures are tabular so F-12 and F-08 are the same width. */
     font-family: var(--font-display);
     font-size: var(--text-lg);
     font-weight: 600;
+    font-variant-numeric: tabular-nums;
     line-height: 1;
-    letter-spacing: normal;
+    letter-spacing: -0.01em;
     text-transform: none;
   }
 
-  .pills .pill::before,
-  .pills .pill::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    width: 4px;
-    height: 4px;
-    margin-top: -2px;
-    border-radius: 50%;
-    background: var(--tvc-green-dark);
-  }
-
-  .pills .pill::before {
-    left: 8px;
-  }
-
-  .pills .pill::after {
-    right: 8px;
-  }
-
-  /* The picture for Farm or House, beside the plaque: thin green lines, quiet. */
+  /* The picture for Farm or House, beside the badge: a monoline drawing in the same green, drawn at the same weight as the ring. */
   .scene-wrap {
     display: inline-flex;
   }
 
   .scene {
-    width: 64px;
-    height: 64px;
+    width: 56px;
+    height: 56px;
     fill: none;
     stroke: var(--tvc-green);
-    stroke-width: 1.6;
+    stroke-width: 1.5;
     stroke-linecap: round;
     stroke-linejoin: round;
-    opacity: 0.75;
+    opacity: 0.7;
   }
 
   .unit-head {
