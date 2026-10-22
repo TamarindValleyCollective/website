@@ -1477,6 +1477,16 @@ never touches Netlify either.
   (audit-logged first, `member.privacy.accept`). Raising `PRIVACY_NOTICE_VERSION` asks everyone again.
   Apple sign-in and the invitation email are not built yet.
 
+  **Feature tour** (migration 0056, not auto-applied): the steps live in `scripts/lib/member-tour.mjs`
+  (each has a `since` number, an audience, a route and a `data-tour` target on the page). The highest
+  `since` a person has seen is `member_people.tour_seen_through`; `/home` returns it as
+  `me.tourSeenThrough`. `null` (never signed in before) gets the whole tour on first sign-in, after the
+  privacy notice; a number gets only newer steps, as a dismissible "What's new" card on Home. Skipping
+  counts as seen (`POST /api/members-me/tour-seen`, never lowers the stored value); "Take the tour
+  again" in the account menu replays everything and records nothing. If the column is missing (migration
+  not applied) `/home` omits the value and the page shows no tour. To announce a feature, append a step
+  with the next `since`.
+
   **Land documents** (migration 0043, not auto-applied): a member uploads the patta / land survey
   PDF they downloaded from eservices.tn.gov.in (`POST /api/members-me/land-documents`, multipart).
   Limits: PDF 1 MB (a real extract is 50-130 KB), photo 3 MB, 10 uploads per household per day,

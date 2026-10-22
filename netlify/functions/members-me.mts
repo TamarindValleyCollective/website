@@ -4,6 +4,7 @@
 //   GET  /api/members-me/home     their household(s) and their own details
 //   POST /api/members-me/profile  change their mobile number / directory listing
 //   POST /api/members-me/privacy  acknowledge the first-login privacy notice
+//   POST /api/members-me/tour-seen  record that they have seen the feature tour (scripts/lib/member-tour.mjs)
 //   GET  /api/members-me/land-documents  their uploaded patta / survey documents and what became of them
 //   POST /api/members-me/land-documents  upload one (multipart: file, landType, householdId); read in the background
 //   GET  /api/members-me/directory     the other members: name, farm plot, cluster and their approved story (opt-out; never contact details)
@@ -36,6 +37,7 @@ import { familyAddOutcome, validateFamilyAdd, validateFamilyRemove, validateFami
 import { sendEmail } from './lib/booking-notify';
 import { detailRow, detailTable, escapeHtml, renderBrandedEmail, renderStaffEmail } from './lib/email-layout';
 import { PRIVACY_NOTICE_VERSION, privacyNoticeRequired, validateAcceptance } from '../../scripts/lib/member-privacy.mjs';
+import { validateTourSeen } from '../../scripts/lib/member-tour.mjs';
 import { callAnthropic } from './lib/anthropic';
 import { checkDailyCap } from './lib/rate-limit';
 import { buildUnitDirectory } from '../../scripts/lib/member-directory.mjs';
@@ -101,6 +103,9 @@ async function handleHome(req: Request): Promise<Response> {
   }
 
   const own = data.people.find((p: any) => p.id === member.personId);
+  // Which tour steps they have seen. A separate read that may fail (migration 0056 not applied yet): the portal opens
+  // anyway, and without the value the page shows no tour at all rather than the whole tour to everyone.
+  const tourRows = await select('member_people', 'tour_seen_through', `id=eq.${member.personId}`).catch(() => null);
   const reviewed = buildHouseholdReview(data);
   // The others in the unit are shown with their email and mobile masked ("p••••@gmail.com", "+91 •••••• 345"); the member's
   // own come back in full under `me`. buildHouseholdReview never carries the values (the admin register shares it), so they are added here.
@@ -131,6 +136,7 @@ async function handleHome(req: Request): Promise<Response> {
       role: member.roles[member.householdIds[0]] ?? 'owner',
       // Family member requests from their unit still waiting for the core team.
       familyRequestsPending: pendingFamily,
+      ...(tourRows ? { tourSeenThrough: tourRows[0]?.tour_seen_through ?? null } : {}),
     },
     households: reviewed,
     // Whether the story editor writes the unit's shared story (the cutover switch) or the person's own; off until the move is done.
@@ -215,6 +221,36 @@ async function handlePrivacy(req: Request): Promise<Response> {
     return jsonResponse({ error: 'Server error' }, 500);
   }
   return jsonResponse({ ok: true });
+}
+
+// The feature tour is finished or skipped: remember the newest step they have been shown. Not audited, it is
+// not a change to anything on the register.
+async function handleTourSeen(req: Request): Promise<Response> {
+  const gate = await requireAcknowledgedMember(req);
+  if ('error' in gate) return gate.error;
+  const { member } = gate;
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return jsonResponse({ error: 'Nothing to do.' }, 400);
+  }
+  try {
+    const rows = await select('member_people', 'tour_seen_through', `id=eq.${member.personId}`);
+    const checked = validateTourSeen(body, rows[0]?.tour_seen_through ?? null);
+    if (!checked.ok) return jsonResponse({ error: checked.error }, 400);
+    const res = await fetch(`${supabaseUrl()}/rest/v1/member_people?id=eq.${member.personId}`, {
+      method: 'PATCH',
+      headers: restHeaders({ Prefer: 'return=minimal' }),
+      body: JSON.stringify({ tour_seen_through: checked.through }),
+    });
+    if (!res.ok) throw new Error(`tour-seen update failed: ${res.status}`);
+    return jsonResponse({ ok: true, through: checked.through });
+  } catch (err) {
+    console.error('[members-me] tour-seen failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
 }
 
 // ---- land documents ---------------------------------------------------------
@@ -1046,6 +1082,7 @@ export default async (req: Request): Promise<Response> => {
   if (pathname === '/api/members-me/home' && req.method === 'GET') return handleHome(req);
   if (pathname === '/api/members-me/profile' && req.method === 'POST') return handleProfile(req);
   if (pathname === '/api/members-me/privacy' && req.method === 'POST') return handlePrivacy(req);
+  if (pathname === '/api/members-me/tour-seen' && req.method === 'POST') return handleTourSeen(req);
   if (pathname === '/api/members-me/land-shapes' && req.method === 'GET') return handleLandShapes(req);
   if (pathname === '/api/members-me/land-document-link' && req.method === 'POST') return handleLandDocumentLink(req);
   if (pathname === '/api/members-me/land-documents' && (req.method === 'GET' || req.method === 'POST')) return handleLandDocuments(req);
@@ -1063,4 +1100,4 @@ export default async (req: Request): Promise<Response> => {
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-me/home', '/api/members-me/profile', '/api/members-me/privacy', '/api/members-me/land-documents', '/api/members-me/land-document-link', '/api/members-me/land-shapes', '/api/members-me/story-review', '/api/members-me/directory', '/api/members-me/unit-story', '/api/members-me/unit-story-submit', '/api/members-me/unit-story-photo', '/api/members-me/unit-story-photo-remove', '/api/members-me/unit-photo', '/api/members-me/family-add', '/api/members-me/family-remove', '/api/members-me/family-update'] };
+export const config = { path: ['/api/members-me/home', '/api/members-me/profile', '/api/members-me/privacy', '/api/members-me/tour-seen', '/api/members-me/land-documents', '/api/members-me/land-document-link', '/api/members-me/land-shapes', '/api/members-me/story-review', '/api/members-me/directory', '/api/members-me/unit-story', '/api/members-me/unit-story-submit', '/api/members-me/unit-story-photo', '/api/members-me/unit-story-photo-remove', '/api/members-me/unit-photo', '/api/members-me/family-add', '/api/members-me/family-remove', '/api/members-me/family-update'] };
