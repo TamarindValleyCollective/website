@@ -299,6 +299,67 @@ import SignInGate from '../../components/SignInGate.astro';
     font-weight: 600;
   }
 
+  /* a card's summary is always on show; everything else sits behind this toggle */
+  .usage .svc-more {
+    margin-top: 12px;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .usage .svc-more > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0 2px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .usage .svc-more > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .usage .svc-more > summary::after {
+    content: '+';
+    font-size: 1.1rem;
+    line-height: 1;
+  }
+
+  .usage .svc-more[open] > summary::after {
+    content: '\2212';
+  }
+
+  .usage .svc-more > summary:hover {
+    color: var(--tvc-ink);
+  }
+
+  .usage .svc-more-body {
+    padding-top: 10px;
+  }
+
+  /* An open card takes the whole row, so it doesn't leave a tall gap under its neighbours; the
+     others flow back around it. On wide screens its details run in two columns. */
+  .usage .cards {
+    grid-auto-flow: row dense;
+  }
+
+  .usage .svc:has(.svc-more[open]) {
+    grid-column: 1 / -1;
+  }
+
+  @media (min-width: 900px) {
+    .usage .svc:has(.svc-more[open]) .svc-more-body {
+      column-count: 2;
+      column-gap: 32px;
+    }
+
+    .usage .svc:has(.svc-more[open]) .svc-more-body > * {
+      break-inside: avoid;
+    }
+  }
+
   .usage .hero {
     margin: 0;
     font-family: var(--font-display);
@@ -556,6 +617,9 @@ import SignInGate from '../../components/SignInGate.astro';
 
   // ---- formatting ----------------------------------------------------------
   const nf = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
+  // Typed-in readings can be small and fractional (1.2 GB of egress, $4.98 of credit): whole numbers would misreport them.
+  const nfSmall = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
+  const amount = (n: number) => (n >= 100 ? nf : nfSmall).format(n);
   const compact = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e4 ? `${(n / 1e3).toFixed(0)}k` : nf.format(n));
   const usd = (n: number) => `$${n.toFixed(2)}`;
   const mb = (bytes: number) => `${nf.format(bytes / 1024 / 1024)} MB`;
@@ -671,16 +735,27 @@ import SignInGate from '../../components/SignInGate.astro';
     return Date.now() > due.getTime() ? { text: `Update overdue (was due ${dueText}) · an admin types it in below`, late: true } : { text: `Update due ${dueText} · an admin types it in below` };
   }
 
-  function card(title: string, kind: Kind, level: Level | 'none', ...body: Kid[]): HTMLElement {
+  // A card is a summary (title, status, one headline figure, one bar) and, behind a "Details" toggle,
+  // everything else: how it updates, charts, breakdowns, caveats. `body` is the summary parts, then MORE,
+  // then the detail parts. Anything overdue is lifted back into the summary so it is never hidden.
+  const MORE = Symbol('more');
+  type Part = Kid | typeof MORE;
+  function card(title: string, kind: Kind, level: Level | 'none', ...body: Part[]): HTMLElement {
     const k = typeof kind === 'string' ? { mode: null, text: kind, fresh: undefined } : kind;
     const badge = k.mode ? h('span', { class: `mode mode--${k.mode}` }, icon(k.mode), MODE_LABEL[k.mode]) : null;
+    const at = body.indexOf(MORE);
+    const summary = (at === -1 ? body : body.slice(0, at)) as Kid[];
+    const more = (at === -1 ? [] : body.slice(at + 1)) as Kid[];
+    const fresh = k.fresh ?? [];
+    const freshLine = (f: { text: string; late?: boolean }) => h('p', { class: `svc-fresh${f.late ? ' svc-fresh--late' : ''}`, text: f.text });
     return h(
       'article',
       { class: 'card svc' },
       h('div', { class: 'svc-head' }, h('h3', { class: 'svc-title', text: title }), pill(level)),
-      h('p', { class: 'svc-kind' }, badge, h('span', { text: k.text })),
-      ...(k.fresh ?? []).map((f) => h('p', { class: `svc-fresh${f.late ? ' svc-fresh--late' : ''}`, text: f.text })),
-      ...body,
+      h('p', { class: 'svc-kind' }, badge),
+      ...summary,
+      ...fresh.filter((f) => f.late).map(freshLine),
+      h('details', { class: 'svc-more' }, h('summary', { text: 'Details' }), h('div', { class: 'svc-more-body' }, h('p', { class: 'svc-fresh', text: k.text }), ...fresh.filter((f) => !f.late).map(freshLine), ...more)),
     );
   }
 
@@ -692,6 +767,7 @@ import SignInGate from '../../components/SignInGate.astro';
     const est = a.credit.estimate;
     const reading = a.credit.reading;
     const parts: Kid[] = [];
+    const more: Kid[] = [];
     let level: Level | 'none' = est?.level ?? null;
     if (a.billingErrorsRecent > 0) level = 'critical';
     if (!reading && !a.billingErrorsRecent) level = 'none';
@@ -701,16 +777,17 @@ import SignInGate from '../../components/SignInGate.astro';
     }
     if (est) {
       parts.push(h('p', { class: 'hero', text: `about ${usd(est.remaining)}` }), h('p', { class: 'hero-sub', text: `credit left, estimated, of ${usd(est.total ?? est.remaining)}` }));
-      if (est.total) parts.push(meter(est.remaining / est.total, est.level, 'Anthropic credit left', `${Math.round((est.remaining / est.total) * 100)}% left`), h('p', { class: 'meter-caption', text: `${Math.round((est.remaining / est.total) * 100)}% left · based on the ${usd(reading.value)} entered ${ago(reading.capturedAt)}, minus ${usd(est.spent)} of metered usage since` }));
+      if (est.total) parts.push(meter(est.remaining / est.total, est.level, 'Anthropic credit left', `${Math.round((est.remaining / est.total) * 100)}% left`));
+      more.push(h('p', { class: 'meter-caption', text: `${Math.round((est.remaining / est.total) * 100)}% left · based on the ${usd(reading.value)} entered ${ago(reading.capturedAt)}, minus ${usd(est.spent)} of metered usage since` }));
     } else if (reading) {
       parts.push(h('p', { class: 'hero', text: usd(reading.value) }), h('p', { class: 'hero-sub', text: `entered ${ago(reading.capturedAt)}. Add the token prices below to turn usage into a live estimate.` }));
     } else {
       parts.push(h('p', { class: 'hero-sub', text: 'No credit balance entered yet. An admin can add it below so we can warn before it runs out.' }));
     }
     if (a.credit.expiresInDays !== null) {
-      parts.push(h('p', { class: 'hero-sub', text: a.credit.expiresInDays < 0 ? `Credit expired on ${dateText(reading.expiresOn)}.` : `Credit expires on ${dateText(reading.expiresOn)} (${a.credit.expiresInDays} day${a.credit.expiresInDays === 1 ? '' : 's'}).` }));
+      (a.credit.expiresInDays <= 30 ? parts : more).push(h('p', { class: 'hero-sub', text: a.credit.expiresInDays < 0 ? `Credit expired on ${dateText(reading.expiresOn)}.` : `Credit expires on ${dateText(reading.expiresOn)} (${a.credit.expiresInDays} day${a.credit.expiresInDays === 1 ? '' : 's'}).` }));
     }
-    parts.push(
+    more.push(
       h('dl', { class: 'stats' },
         stat('Today', nf.format(a.today.requests), `${compact(a.today.input_tokens + a.today.output_tokens)} tokens${a.today.costUsd !== null ? ` · ${usd(a.today.costUsd)}` : ''}`),
         stat('Last 7 days', nf.format(a.last7.requests), `${compact(a.last7.input_tokens + a.last7.output_tokens)} tokens${a.last7.costUsd !== null ? ` · ${usd(a.last7.costUsd)}` : ''}`),
@@ -721,8 +798,8 @@ import SignInGate from '../../components/SignInGate.astro';
     if (a.chatCapHitsToday || a.searchFallbackCapHitsToday) {
       parts.push(h('p', { class: 'svc-note', text: `Today the site turned away ${a.chatCapHitsToday} chat message(s) and ${a.searchFallbackCapHitsToday} paid search fallback(s) because a daily cap was reached.` }));
     }
-    parts.push(h('p', { class: 'svc-note', text: 'Counts only what the website itself sends (chat and the search fallback), not other uses of the same key. Dollar figures are estimates from the prices below.' }));
-    return card('Anthropic (Claude)', { mode: 'mixed', text: 'Usage measured live · credit balance typed in', fresh: [{ text: 'Usage: updates on every request the site makes.' }, nextManualUpdate(reading?.capturedAt, a.credit.meter.refreshEveryDays)] }, level, ...parts);
+    more.push(h('p', { class: 'svc-note', text: 'Counts only what the website itself sends (chat and the search fallback), not other uses of the same key. Dollar figures are estimates from the prices below.' }));
+    return card('Anthropic (Claude)', { mode: 'mixed', text: 'Usage measured live · credit balance typed in', fresh: [{ text: 'Usage: updates on every request the site makes.' }, nextManualUpdate(reading?.capturedAt, a.credit.meter.refreshEveryDays)] }, level, ...parts, MORE, ...more);
   }
 
   function geminiCard(o: Overview): HTMLElement {
@@ -730,10 +807,11 @@ import SignInGate from '../../components/SignInGate.astro';
     const limit: number | null = g.dailyLimit;
     const frac = limit ? g.today.requests / limit : 0;
     const level: Level = g.today.quotaExhausted > 0 ? 'warn' : limit && frac >= 0.9 ? 'critical' : limit && frac >= 0.7 ? 'warn' : null;
+    const more: Kid[] = [];
     const parts: Kid[] = [h('p', { class: 'hero', text: nf.format(g.today.requests) }), h('p', { class: 'hero-sub', text: limit ? `requests today of ${nf.format(limit)} allowed` : 'requests today (no daily limit entered)' })];
     if (limit) parts.push(meter(frac, level, 'Gemini requests used today', `${Math.round(frac * 100)}% of today's limit`), h('p', { class: 'meter-caption', text: `${Math.round(frac * 100)}% of today's limit` }));
     if (g.today.quotaExhausted > 0) parts.push(h('p', { class: 'hero-sub', text: `Google refused ${g.today.quotaExhausted} request(s) today: the free quota ran out.` }));
-    parts.push(
+    more.push(
       h('dl', { class: 'stats' },
         stat('Last 7 days', nf.format(g.last7.requests), 'requests'),
         stat('Refused (7 days)', nf.format(g.last7.quotaExhausted), 'free quota hit'),
@@ -742,7 +820,7 @@ import SignInGate from '../../components/SignInGate.astro';
       sparkline(g.requestsSeries.map((p: any) => ({ label: dayLabel(p.day), value: p.value })), 'Requests per day', (n) => `${nf.format(n)} request${n === 1 ? '' : 's'}`),
       h('p', { class: 'svc-note', text: 'Powers the "Ask AI" search answer. Days here are UTC; Google resets its own daily quota at a different hour.' }),
     );
-    return card('Google Gemini', { mode: 'live', text: 'Measured by the website', fresh: [{ text: 'Updates on every search the site makes.' }] }, level, ...parts);
+    return card('Google Gemini', { mode: 'live', text: 'Measured by the website', fresh: [{ text: 'Updates on every search the site makes.' }] }, level, ...parts, MORE, ...more);
   }
 
   function typesafeCard(o: Overview): HTMLElement {
@@ -757,6 +835,7 @@ import SignInGate from '../../components/SignInGate.astro';
       level,
       h('p', { class: 'hero', text: nf.format(t.today.requests) }),
       h('p', { class: 'hero-sub', text: t.today.errors ? `calls today, ${nf.format(t.today.errors)} failed` : 'calls today' }),
+      MORE,
       h('dl', { class: 'stats' },
         stat('Last 7 days', nf.format(t.last7.requests), `${spend(t.last7.costUsd)} · ${nf.format(t.last7.errors)} failed`),
         stat('This month', nf.format(t.month.requests), `${compact(t.month.inputTokens)} tokens · ${spend(t.month.costUsd)}`),
@@ -775,38 +854,42 @@ import SignInGate from '../../components/SignInGate.astro';
     const growthLevel: Level = days !== null && days <= 21 ? 'critical' : days !== null && days <= 60 ? 'warn' : null;
     const sizeLevel: Level = frac >= 0.9 ? 'critical' : frac >= 0.7 ? 'warn' : null;
     const level: Level = sizeLevel === 'critical' || growthLevel === 'critical' ? 'critical' : sizeLevel === 'warn' || growthLevel === 'warn' ? 'warn' : null;
+    const size = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : mb(bytes));
+    const lasts = (d: number) => {
+      const n = Math.max(1, Math.round(d));
+      return d < 90 ? `${n} day${n === 1 ? '' : 's'}` : d < 730 ? `${Math.round(d / 30)} months` : 'over 2 years';
+    };
+    // Summary: size, its bar and one line on how fast it is growing. The rest is behind Details.
     const parts: Kid[] = [h('p', { class: 'hero', text: mb(s.reading.bytes) }), h('p', { class: 'hero-sub', text: s.reading.limitBytes ? `of ${mb(s.reading.limitBytes)} on the free plan` : 'database size' })];
-    if (s.reading.limitBytes) parts.push(meter(frac, level, 'Supabase database size', `${Math.round(frac * 100)}% of the free size`), h('p', { class: 'meter-caption', text: `${frac < 0.01 ? 'under 1' : Math.round(frac * 100)}% used · measured ${ago(s.reading.capturedAt)}` }));
+    const more: Kid[] = [];
+    if (s.reading.limitBytes) parts.push(meter(frac, level, 'Supabase database size', `${Math.round(frac * 100)}% of the free size`));
+    if (!s.growth) {
+      parts.push(h('p', { class: 'hero-sub', text: 'Growth: not enough history yet (about a week of readings needed).' }));
+    } else if (days === null) {
+      parts.push(h('p', { class: 'hero-sub', text: `Not growing over the last ${Math.round(s.growth.spanDays)} days.` }));
+    } else {
+      const perWeek = s.growth.bytesPerDay * 7;
+      parts.push(h('p', { class: 'hero-sub', text: `Growing about ${perWeek < 100 * 1024 ? 'under 0.1' : nf.format(perWeek / 1024 / 1024)} MB a week · full in ${lasts(days)}` }));
+    }
+    more.push(h('p', { class: 'meter-caption', text: `${frac < 0.01 ? 'under 1' : Math.round(frac * 100)}% used · measured ${ago(s.reading.capturedAt)}` }));
     // One reading every 6 hours, but the chart (and its caption) counts days: keep each day's last reading.
     const perDay = new Map<string, any>();
     for (const p of s.history) perDay.set(String(p.at).slice(0, 10), p);
     if (perDay.size > 1) {
-      parts.push(sparkline([...perDay.values()].map((p: any) => ({ label: dateText(p.at), value: p.bytes / 1024 / 1024 })), 'Database size in MB', (n) => `${nf.format(n)} MB`));
-    }
-    // How fast it is growing, and so how long the free size lasts at that pace.
-    const size = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : mb(bytes));
-    const lasts = (d: number) => {
-      const n = Math.max(1, Math.round(d));
-      return d < 90 ? `about ${n} day${n === 1 ? '' : 's'}` : d < 730 ? `about ${Math.round(d / 30)} months` : 'over 2 years';
-    };
-    if (!s.growth) {
-      parts.push(h('p', { class: 'hero-sub', text: 'Growth: not enough history yet. It needs about a week of readings.' }));
-    } else if (days === null) {
-      parts.push(h('p', { class: 'hero-sub', text: `Growth: not growing over the last ${Math.round(s.growth.spanDays)} days.` }));
-    } else {
-      parts.push(h('dl', { class: 'stats' }, stat('Growth', `${s.growth.bytesPerDay * 7 < 100 * 1024 ? '<0.1' : nf.format(s.growth.bytesPerDay * 7 / 1024 / 1024)} MB`, 'per week, last 2 weeks'), stat('At this pace', lasts(days), 'until the free size is full')));
+      more.push(sparkline([...perDay.values()].map((p: any) => ({ label: dateText(p.at), value: p.bytes / 1024 / 1024 })), 'Database size in MB', (n) => `${nf.format(n)} MB`));
     }
     const tables: { name: string; bytes: number; rows: number }[] = s.tables?.list ?? [];
     if (tables.length) {
       // One row per table: names are long, so they get the full card width rather than a narrow stat column.
-      parts.push(h('p', { class: 'hero-sub', text: 'Biggest tables' }), ...tables.slice(0, 5).map((t) => h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: t.name }), h('span', { text: `${size(t.bytes)} · ~${nf.format(t.rows)} rows` })))));
+      // Grouped in one block so the two-column layout of an open card never splits the list.
+      more.push(h('div', {}, h('p', { class: 'hero-sub', text: 'Biggest tables' }), ...tables.slice(0, 5).map((t) => h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: t.name }), h('span', { text: `${size(t.bytes)} · ~${nf.format(t.rows)} rows` }))))));
     }
     if (s.connections?.max) {
       const cf = s.connections.inUse / s.connections.max;
-      parts.push(h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: 'Database connections open' }), h('span', { text: `${s.connections.inUse} of ${s.connections.max}` })), meter(cf, s.connections.level, 'Supabase database connections', `${Math.round(cf * 100)}% of the connection limit`)));
+      more.push(h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: 'Database connections open' }), h('span', { text: `${s.connections.inUse} of ${s.connections.max}` })), meter(cf, s.connections.level, 'Supabase database connections', `${Math.round(cf * 100)}% of the connection limit`)));
     }
-    parts.push(h('p', { class: 'svc-note', text: 'The free plan stops accepting new data at the limit. The growth pace is an estimate (a bulk import skews it for up to two weeks). Table sizes include indexes and cover this project\'s own tables, not Supabase\'s system data. Billed egress can\'t be measured, so it is its own typed-in card. The Supabase dashboard is the authority if any figure differs.' }));
-    return card('Supabase database', { mode: 'auto', text: 'Measured every 6 hours', fresh: [nextAutoUpdate(s.reading.capturedAt)] }, level, ...parts);
+    more.push(h('p', { class: 'svc-note', text: 'The free plan stops accepting new data at the limit. The growth pace is a straight-line estimate from the last two weeks of readings (a bulk import skews it for up to two weeks). Table sizes include indexes and cover this project\'s own tables, not Supabase\'s system data. Billed egress can\'t be measured, so it is its own typed-in card. The Supabase dashboard is the authority if any figure differs.' }));
+    return card('Supabase database', { mode: 'auto', text: 'Measured every 6 hours', fresh: [nextAutoUpdate(s.reading.capturedAt)] }, level, ...parts, MORE, ...more);
   }
 
   // Netlify's cycle dates come as Pacific-time ISO strings; read the calendar date straight from the
@@ -823,9 +906,11 @@ import SignInGate from '../../components/SignInGate.astro';
     const gb = (b: number) => `${(b / 1e9).toFixed(2)} GB`;
     const frac = r.limitBytes ? r.bytes / r.limitBytes : 0;
     const parts: Kid[] = [h('p', { class: 'hero', text: gb(r.bytes) }), h('p', { class: 'hero-sub', text: r.limitBytes ? `of ${gb(r.limitBytes)} free` : 'stored' })];
-    if (r.limitBytes) parts.push(meter(frac, r.level, 'Cloudflare R2 storage used', `${Math.round(frac * 100)}% of the free allowance`), h('p', { class: 'meter-caption', text: `${frac < 0.01 ? 'under 1' : Math.round(frac * 100)}% used · ${nf.format(r.objects)} object${r.objects === 1 ? '' : 's'} in ${r.buckets} bucket${r.buckets === 1 ? '' : 's'}` }));
-    parts.push(h('p', { class: 'svc-note', text: `Read from Cloudflare's analytics ${ago(r.capturedAt)}, refreshed every 6 hours. Past the free allowance R2 storage is billed per GB-month; the Cloudflare dashboard is the authority.` }));
-    return card('Cloudflare R2 storage', { mode: 'auto', text: 'Read from Cloudflare', fresh: [nextAutoUpdate(r.capturedAt)] }, r.level, ...parts);
+    const more: Kid[] = [];
+    if (r.limitBytes) parts.push(meter(frac, r.level, 'Cloudflare R2 storage used', `${Math.round(frac * 100)}% of the free allowance`));
+    if (r.limitBytes) more.push(h('p', { class: 'meter-caption', text: `${frac < 0.01 ? 'under 1' : Math.round(frac * 100)}% used · ${nf.format(r.objects)} object${r.objects === 1 ? '' : 's'} in ${r.buckets} bucket${r.buckets === 1 ? '' : 's'}` }));
+    more.push(h('p', { class: 'svc-note', text: `Read from Cloudflare's analytics ${ago(r.capturedAt)}, refreshed every 6 hours. Past the free allowance R2 storage is billed per GB-month; the Cloudflare dashboard is the authority.` }));
+    return card('Cloudflare R2 storage', { mode: 'auto', text: 'Read from Cloudflare', fresh: [nextAutoUpdate(r.capturedAt)] }, r.level, ...parts, MORE, ...more);
   }
 
   function resendCard(o: Overview): HTMLElement {
@@ -833,15 +918,22 @@ import SignInGate from '../../components/SignInGate.astro';
     const rows: [string, any][] = [['This month', r.monthly], ['Today', r.daily]];
     const level: Level = r.monthly?.level === 'critical' || r.daily?.level === 'critical' ? 'critical' : r.monthly?.level === 'warn' || r.daily?.level === 'warn' ? 'warn' : null;
     const parts: Kid[] = [];
+    const more: Kid[] = [];
+    // Summary: the quota that is closest to its limit (the monthly and daily ones can differ a lot).
+    const tightest = rows.filter(([, x]) => x && x.limit).sort((a, b) => b[1].used / b[1].limit - a[1].used / a[1].limit)[0];
+    if (tightest) {
+      const [label, x] = tightest;
+      parts.push(h('p', { class: 'hero', text: nf.format(x.used) }), h('p', { class: 'hero-sub', text: `emails sent ${label.toLowerCase()}, of ${nf.format(x.limit)} allowed` }), meter(x.used / x.limit, x.level, `Resend emails ${label.toLowerCase()}`, `${Math.round((x.used / x.limit) * 100)}% used`));
+    }
     for (const [label, x] of rows) {
       if (!x || !x.limit) continue;
       const frac = x.used / x.limit;
-      parts.push(
+      more.push(
         h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: `Emails sent ${label.toLowerCase()}` }), h('span', { text: `${nf.format(x.used)} of ${nf.format(x.limit)}${x.resetsAt ? ` · resets ${dateText(x.resetsAt)}` : ''}` })), meter(frac, x.level, `Resend emails ${label.toLowerCase()}`, `${Math.round(frac * 100)}% used`)),
       );
     }
-    parts.push(h('p', { class: 'svc-note', text: `Read from Resend's own usage API ${ago((r.monthly ?? r.daily).capturedAt)}, refreshed every 6 hours. Resend stops sending (and the site's emails fail) at the limit.` }));
-    return card('Resend emails', { mode: 'auto', text: 'Read from Resend', fresh: [nextAutoUpdate((r.monthly ?? r.daily).capturedAt)] }, level, ...parts);
+    more.push(h('p', { class: 'svc-note', text: `Read from Resend's own usage API ${ago((r.monthly ?? r.daily).capturedAt)}, refreshed every 6 hours. Resend stops sending (and the site's emails fail) at the limit.` }));
+    return card('Resend emails', { mode: 'auto', text: 'Read from Resend', fresh: [nextAutoUpdate((r.monthly ?? r.daily).capturedAt)] }, level, ...parts, MORE, ...more);
   }
 
   function manualCard(m: any): HTMLElement {
@@ -851,7 +943,8 @@ import SignInGate from '../../components/SignInGate.astro';
     const frac = r.limit ? (remaining ? 1 - r.value / r.limit : r.value / r.limit) : 0; // always the fraction USED, for the bar
     const staleForCycle = r.staleForCycle === true;
     const stale = !staleForCycle && daysAgo(r.capturedAt) > 35;
-    const parts: Kid[] = [h('p', { class: 'hero', text: `${nf.format(r.value)} ${m.unit}` }), h('p', { class: 'hero-sub', text: remaining ? (r.limit ? `left of ${nf.format(r.limit)} included` : 'left (limit not entered)') : r.limit ? `of ${nf.format(r.limit)} included` : 'limit not entered' })];
+    const more: Kid[] = [];
+    const parts: Kid[] = [h('p', { class: 'hero', text: `${amount(r.value)} ${m.unit}` }), h('p', { class: 'hero-sub', text: remaining ? (r.limit ? `left of ${amount(r.limit)} included` : 'left (limit not entered)') : r.limit ? `of ${amount(r.limit)} included` : 'limit not entered' })];
     const cycleMs = r.cycleStart && r.cycleEnd ? new Date(r.cycleEnd).getTime() - new Date(r.cycleStart).getTime() : 0;
     if (remaining && r.limit && cycleMs > 0 && !staleForCycle) {
       // Two bars that both drain left to right: credits left against days left in the billing cycle.
@@ -863,20 +956,26 @@ import SignInGate from '../../components/SignInGate.astro';
       const daysFrac = Math.min(1, msLeft / cycleMs);
       const row = (label: string, text: string, fraction: number, level: Level, what: string) =>
         h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: label }), h('span', { text })), meter(fraction, level, what, text));
-      parts.push(
-        row('Credits left', `${nf.format(r.value)} of ${nf.format(r.limit)}`, creditsFrac, m.level, `${m.label} left`),
+      parts.push(meter(creditsFrac, m.level, `${m.label} left`, `${amount(r.value)} of ${amount(r.limit)}`));
+      more.push(
+        row('Credits left', `${amount(r.value)} of ${amount(r.limit)}`, creditsFrac, m.level, `${m.label} left`),
         row('Days left', `${daysLeft} of ${daysTotal} · resets ${cycleDay(r.cycleEnd)}`, daysFrac, null, 'Days left in the billing cycle'),
         h('p', { class: 'meter-caption', text: daysLeft > 0 ? `About ${nf.format(Math.floor(r.value / daysLeft))} credits a day to last until the reset${creditsFrac < daysFrac ? ' · using credits faster than the cycle is passing' : ''}` : 'Resets today' }),
       );
     } else {
-      if (r.limit) parts.push(meter(frac, m.level, `${m.label} used`, `${Math.round(frac * 100)}% used`), h('p', { class: 'meter-caption', text: `${Math.round(frac * 100)}% used${remaining ? ` · ${nf.format(r.value)} left` : ''}` }));
+      if (r.limit) parts.push(meter(frac, m.level, `${m.label} used`, `${Math.round(frac * 100)}% used`));
+      if (r.limit) more.push(h('p', { class: 'meter-caption', text: `${Math.round(frac * 100)}% used${remaining ? ` · ${amount(r.value)} left` : ''}` }));
       if (r.cycleEnd) {
         const daysLeft = Math.max(0, Math.ceil((new Date(r.cycleEnd).getTime() - Date.now()) / 86_400_000));
-        parts.push(h('p', { class: 'meter-caption', text: `Resets in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (${cycleDay(r.cycleEnd)})` }));
+        more.push(h('p', { class: 'meter-caption', text: `Resets in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (${cycleDay(r.cycleEnd)})` }));
       }
     }
-    parts.push(h('p', { class: 'svc-note', text: `Typed in on ${dateText(r.capturedAt)} (${ago(r.capturedAt)}) from ${m.where}.${r.cycleStart ? ` Billing cycle ${cycleDay(r.cycleStart)} to ${cycleDay(r.cycleEnd, -1)}; the allowance is read from Netlify automatically.` : ''}${r.planStale ? ` Warning: Netlify plan data was last refreshed ${ago(r.planCapturedAt)}, so the limit and cycle dates may be out of date. Check the Netlify token.` : ''}${staleForCycle ? ' This reading is from a previous billing cycle, so the balance has reset since. Update it.' : ''}${stale ? ' This reading is more than a month old, so treat it with caution and update it.' : ''}` }));
-    return card(m.label, r.cycleStart ? { mode: 'mixed', text: 'Balance typed in · allowance read from Netlify', fresh: [nextManualUpdate(r.capturedAt, m.refreshEveryDays), { text: 'Allowance and billing cycle: ' + nextAutoUpdate(r.planCapturedAt).text.replace('Next update', 'next update') }] } : { mode: 'manual', text: 'Typed in from the provider', fresh: [nextManualUpdate(r.capturedAt, m.refreshEveryDays)] }, m.level, ...parts);
+    // A stale or out-of-date reading must not hide behind the toggle.
+    if (staleForCycle || stale || r.planStale) {
+      parts.push(h('p', { class: 'svc-fresh svc-fresh--late', text: staleForCycle ? 'This reading is from a previous billing cycle: update it.' : stale ? 'This reading is over a month old: update it.' : 'Netlify plan data looks out of date: check the token.' }));
+    }
+    more.push(h('p', { class: 'svc-note', text: `Typed in on ${dateText(r.capturedAt)} (${ago(r.capturedAt)}) from ${m.where}.${r.cycleStart ? ` Billing cycle ${cycleDay(r.cycleStart)} to ${cycleDay(r.cycleEnd, -1)}; the allowance is read from Netlify automatically.` : ''}${r.planStale ? ` Warning: Netlify plan data was last refreshed ${ago(r.planCapturedAt)}, so the limit and cycle dates may be out of date. Check the Netlify token.` : ''}${staleForCycle ? ' This reading is from a previous billing cycle, so the balance has reset since. Update it.' : ''}${stale ? ' This reading is more than a month old, so treat it with caution and update it.' : ''}` }));
+    return card(m.label, r.cycleStart ? { mode: 'mixed', text: 'Balance typed in · allowance read from Netlify', fresh: [nextManualUpdate(r.capturedAt, m.refreshEveryDays), { text: 'Allowance and billing cycle: ' + nextAutoUpdate(r.planCapturedAt).text.replace('Next update', 'next update') }] } : { mode: 'manual', text: 'Typed in from the provider', fresh: [nextManualUpdate(r.capturedAt, m.refreshEveryDays)] }, m.level, ...parts, MORE, ...more);
   }
 
   // ---- alerts ----------------------------------------------------------------
@@ -1065,7 +1164,12 @@ import SignInGate from '../../components/SignInGate.astro';
       renderAlerts(data.alerts);
       nextRunAt = data.schedule?.nextCollectorRunAt ?? null;
       runEveryHours = data.schedule?.collectorEveryHours ?? 6;
+      // The data reloads after every saved reading: keep whichever cards were open, open.
+      const openCards = new Set([...document.querySelectorAll('#cards .svc-more[open]')].map((d) => d.closest('.svc')?.querySelector('.svc-title')?.textContent));
       $('cards').replaceChildren(anthropicCard(data), geminiCard(data), typesafeCard(data), supabaseCard(data), ...(data.resend.fresh ? [resendCard(data)] : []), ...(data.r2.fresh ? [r2Card(data)] : []), ...data.manual.map(manualCard));
+      for (const d of document.querySelectorAll<HTMLDetailsElement>('#cards .svc-more')) {
+        if (openCards.has(d.closest('.svc')?.querySelector('.svc-title')?.textContent)) d.open = true;
+      }
       renderAdmin(data);
       $('foot').textContent = `Updated ${new Date(data.generatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}. Counts use UTC days. Warnings are emailed to the core team once, and again only if they get worse.`;
       content.hidden = false;
