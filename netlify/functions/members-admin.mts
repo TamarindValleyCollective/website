@@ -189,6 +189,16 @@ async function applyEdit(edit: any, staffId: string): Promise<void> {
     case 'unitstory.unpublish':
       return unpublishUnitStory(edit);
 
+    case 'familyrequest.approve':
+    case 'familyrequest.reject':
+      return decideFamilyRequest(edit);
+
+    case 'notice.dismiss': {
+      // Only an open one, so a second reviewer dismissing the same notice is not an error.
+      must(await db('PATCH', `member_admin_notices?${eq('id', edit.noticeId)}&dismissed_at=is.null`, { dismissed_at: new Date().toISOString(), dismissed_by: staffId }));
+      return;
+    }
+
     case 'unitstory.approve':
     case 'unitstory.reject':
       return decideUnitStory(edit, staffId);
@@ -484,6 +494,88 @@ async function decideUnitStory(edit: any, staffId: string): Promise<void> {
   }
 }
 
+// ---- notices -------------------------------------------------------------------
+// Things the core team should know but need not act on (an owner added a family member). They stay on the page
+// until someone dismisses them.
+
+async function handleNotices(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'members', 'edit');
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  try {
+    const rows = await select('member_admin_notices', 'id,kind,household_id,text,created_at', '&dismissed_at=is.null&order=created_at.desc&limit=100');
+    return jsonResponse({ notices: rows.map((r) => ({ id: r.id, kind: r.kind, text: r.text, createdAt: r.created_at })) });
+  } catch (err) {
+    console.error('[members-admin] notices load failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
+// ---- family member requests ---------------------------------------------------
+// An owner may add two family members who can sign in on their own (members-me.mts); a further one is a
+// row in member_family_requests that waits here. Approving makes the person (or brings back one removed earlier
+// with the same email) and links them to the unit as family with sign-in; the database allows up to six.
+
+async function handleFamilyRequests(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'members', 'edit');
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  try {
+    const rows = await select('member_family_requests', 'id,household_id,requested_by,full_name,email,phone,created_at', '&status=eq.pending&order=created_at.asc');
+    if (rows.length === 0) return jsonResponse({ requests: [] });
+    const [households, people] = await Promise.all([
+      select('member_households', 'id,farm_unit', `&id=in.(${[...new Set(rows.map((r) => r.household_id))].join(',')})`),
+      select('member_people', 'id,full_name', `&id=in.(${[...new Set(rows.map((r) => r.requested_by).filter(Boolean))].join(',') || '00000000-0000-0000-0000-000000000000'})`),
+    ]);
+    return jsonResponse({
+      requests: rows.map((r) => ({
+        id: r.id,
+        farmUnit: households.find((h) => h.id === r.household_id)?.farm_unit ?? '',
+        requestedBy: people.find((p) => p.id === r.requested_by)?.full_name ?? 'An owner',
+        fullName: r.full_name,
+        email: r.email,
+        phone: r.phone,
+        createdAt: r.created_at,
+      })),
+    });
+  } catch (err) {
+    console.error('[members-admin] family requests load failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
+async function decideFamilyRequest(edit: any): Promise<void> {
+  const stale = 'This request has already been dealt with. Reload the page.';
+  const [request] = await select('member_family_requests', 'id,household_id,full_name,email,phone,status', `&${eq('id', edit.requestId)}`);
+  if (!request || request.status !== 'pending') throw new EditError(stale, 409);
+  const mark = async (status: 'approved' | 'rejected') => {
+    // Filtered on still being pending, so two reviewers can't both decide it.
+    const r = must(await db('PATCH', `member_family_requests?${eq('id', request.id)}&status=eq.pending`, { status }));
+    if (r.rows.length === 0) throw new EditError(stale, 409);
+  };
+  if (edit.action === 'familyrequest.reject') return mark('rejected');
+
+  // Someone removed earlier is still in the register, inactive and with no unit: bring that record back.
+  const [known] = await select('member_people', 'id,active', `&${eq('email', request.email)}`);
+  let personId: string | undefined;
+  if (known) {
+    const inUnits = await select('member_household_members', 'household_id', `&${eq('person_id', known.id)}`);
+    if (known.active !== false || inUnits.length > 0) throw new EditError('That email already belongs to someone in the register. Add them to the unit from the register instead, then decline this request.', 409);
+    personId = known.id as string;
+    must(await db('PATCH', `member_people?${eq('id', personId)}`, { full_name: request.full_name, phone: request.phone, active: true }));
+  } else {
+    const created = must(await db('POST', 'member_people', { full_name: request.full_name, email: request.email, phone: request.phone }), EMAIL_TAKEN);
+    personId = created.rows[0]?.id;
+    if (!personId) throw new EditError('Server error', 500);
+  }
+  const link = await db('POST', 'member_household_members', { household_id: request.household_id, person_id: personId, role: 'family', can_login: true });
+  if (!link.ok) {
+    // Put things back as they were: a new person is removed again, a returning one made inactive again.
+    if (known) await db('PATCH', `member_people?${eq('id', personId)}`, { active: false });
+    else await db('DELETE', `member_people?${eq('id', personId)}`);
+    throw new EditError('This unit already has the most family members who can sign in (six).', 409);
+  }
+  await mark('approved');
+}
+
 // Takes one unit's story off the public site; its approved copy stays for the members.
 async function unpublishUnitStory(edit: any): Promise<void> {
   const r = must(await db('PATCH', `member_unit_stories?${eq('household_id', edit.householdId)}&approved_public=eq.true`, { approved_public: false, updated_at: new Date().toISOString() }));
@@ -627,6 +719,8 @@ export default async (req: Request): Promise<Response> => {
   if (pathname === '/api/members-admin/land-documents' && req.method === 'GET') return handleLandDocuments(req);
   if (pathname === '/api/members-admin/land-shapes' && req.method === 'GET') return handleLandShapes(req);
   if (pathname === '/api/members-admin/unit-stories' && req.method === 'GET') return handleUnitStories(req);
+  if (pathname === '/api/members-admin/family-requests' && req.method === 'GET') return handleFamilyRequests(req);
+  if (pathname === '/api/members-admin/notices' && req.method === 'GET') return handleNotices(req);
   if (pathname === '/api/members-admin/publish' && req.method === 'GET') return handlePublishStatus(req);
   if (pathname === '/api/members-admin/autopublish' && req.method === 'GET') return handleAutopublish(req);
   if (pathname === '/api/members-admin/story-photo' && req.method === 'GET') return handleStoryPhoto(req);
@@ -634,4 +728,4 @@ export default async (req: Request): Promise<Response> => {
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-admin/overview', '/api/members-admin/edit', '/api/members-admin/land-documents', '/api/members-admin/land-document-link', '/api/members-admin/land-shapes', '/api/members-admin/unit-stories', '/api/members-admin/story-photo', '/api/members-admin/publish', '/api/members-admin/autopublish'] };
+export const config = { path: ['/api/members-admin/overview', '/api/members-admin/edit', '/api/members-admin/land-documents', '/api/members-admin/land-document-link', '/api/members-admin/land-shapes', '/api/members-admin/unit-stories', '/api/members-admin/family-requests', '/api/members-admin/notices', '/api/members-admin/story-photo', '/api/members-admin/publish', '/api/members-admin/autopublish'] };
