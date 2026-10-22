@@ -23,6 +23,8 @@ import {
   MANUAL_METERS,
   TYPESAFE_USD_PER_MTOK,
   projectDbGrowth,
+  typesafeCreditEstimate,
+  netlifyDeployUsage,
   mergeNetlifyPlan,
   nextCollectorRun,
   COLLECTOR_EVERY_HOURS,
@@ -150,6 +152,15 @@ async function handleOverview(req: Request): Promise<Response> {
       month: { requests: count('gemini', 'requests', monthStart, today), inputTokens: count('gemini', 'input_tokens', monthStart, today), outputTokens: count('gemini', 'output_tokens', monthStart, today) },
       requestsSeries: series(daily, 'gemini', 'requests', today, 14),
     },
+    // What this cycle's production deploys have cost (15 credits each), read automatically; null until the collector has run.
+    netlify: (() => {
+      const activity = snapshots['netlify.deploy_activity'] ?? null;
+      const u = netlifyDeployUsage(activity, snapshots['netlify.plan_credits'] ?? null, now);
+      return {
+        deploys: u,
+        activity: activity && u ? { capturedAt: activity.captured_at, ...(activity.detail as Record<string, unknown>) } : null,
+      };
+    })(),
     typesafe: (() => {
       const usd = (from: string, to: string) => (count('typesafe', 'input_tokens', from, to) / 1_000_000) * TYPESAFE_USD_PER_MTOK;
       return {
@@ -157,6 +168,8 @@ async function handleOverview(req: Request): Promise<Response> {
         last7: { requests: count('typesafe', 'requests', weekStart, today), errors: count('typesafe', 'errors', weekStart, today), costUsd: usd(weekStart, today) },
         month: { requests: count('typesafe', 'requests', monthStart, today), inputTokens: count('typesafe', 'input_tokens', monthStart, today), costUsd: usd(monthStart, today) },
         requestsSeries: series(daily, 'typesafe', 'requests', today, 14),
+        // The balance typed in at the last top-up, less what the website has metered since (TypeSafe has no balance API).
+        creditEstimate: typesafeCreditEstimate(snapshots['typesafe.credit_remaining_usd'] ?? null, daily, now),
       };
     })(),
     supabase: {

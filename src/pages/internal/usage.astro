@@ -921,26 +921,40 @@ import SignInGate from '../../components/SignInGate.astro';
     return card('Google Gemini', { mode: 'live', text: 'Measured by the website', fresh: [{ text: 'Updates on every search the site makes.' }] }, level, ...parts, MORE, ...more);
   }
 
+  // Typed-in meters that appear inside their service's card (or as the Netlify card) instead of on their own.
+  const FOLDED_INTO_SERVICE_CARD = new Set(['typesafe.credit_remaining_usd', 'supabase.egress_gb', 'netlify.credits_remaining']);
+
+  // The more serious of several levels (a card shows the worst of what it measures).
+  const worst = (...levels: (Level | 'none')[]): Level => (levels.includes('critical') ? 'critical' : levels.includes('warn') ? 'warn' : null);
+
   function typesafeCard(o: Overview): HTMLElement {
     const t = o.typesafe;
+    const m = o.manual.find((x: any) => x.id === 'typesafe.credit_remaining_usd');
+    const est = t.creditEstimate;
     // Jev calls cost a few thousandths of a cent each, so whole cents would always read $0.00.
     const spend = (n: number) => (n < 0.01 ? `$${n.toFixed(4)}` : usd(n));
     const failing = t.today.errors >= 5 && t.today.errors / Math.max(t.today.requests, 1) >= 0.2;
-    const level: Level = failing ? 'warn' : null;
-    return card(
-      'TypeSafe (Jev)',
-      { mode: 'mixed', text: 'Usage measured live · credit balance typed in', fresh: [{ text: 'Usage: updates on every WhatsApp message read.' }] },
-      level,
-      h('p', { class: 'hero', text: nf.format(t.today.requests) }),
-      h('p', { class: 'hero-sub', text: t.today.errors ? `calls today, ${nf.format(t.today.errors)} failed` : 'calls today' }),
-      MORE,
+    const level: Level = worst(failing ? 'warn' : null, est?.level ?? null);
+    const calls = `${nf.format(t.today.requests)} call${t.today.requests === 1 ? '' : 's'} today${t.today.errors ? `, ${nf.format(t.today.errors)} failed` : ''}`;
+    const parts: Kid[] = [];
+    if (est) {
+      parts.push(h('p', { class: 'hero', text: `about ${spend(est.remaining)}` }), h('p', { class: 'hero-sub', text: `credit left, estimated, of ${usd(est.total ?? est.remaining)}` }));
+      if (est.total) parts.push(meter(est.remaining / est.total, est.level, 'TypeSafe credit left', `${Math.round((est.remaining / est.total) * 100)}% left`));
+      parts.push(h('p', { class: 'hero-sub', text: calls }));
+    } else {
+      parts.push(h('p', { class: 'hero', text: nf.format(t.today.requests) }), h('p', { class: 'hero-sub', text: calls.replace(/^\d[\d,]* /, '') }), h('p', { class: 'hero-sub', text: 'No credit entered yet. Enter the amount you loaded once, and the page subtracts what the site spends.' }));
+    }
+    const more: Kid[] = [];
+    if (est) more.push(h('p', { class: 'meter-caption', text: `${Math.round((est.remaining / (est.total || est.remaining || 1)) * 100)}% left · based on the ${usd(est.readingValue)} entered ${ago(est.readingAt)}, minus ${spend(est.spent)} of metered usage since` }));
+    more.push(
       h('dl', { class: 'stats' },
         stat('Last 7 days', nf.format(t.last7.requests), `${spend(t.last7.costUsd)} · ${nf.format(t.last7.errors)} failed`),
         stat('This month', nf.format(t.month.requests), `${compact(t.month.inputTokens)} tokens · ${spend(t.month.costUsd)}`),
       ),
       sparkline(t.requestsSeries.map((p: any) => ({ label: dayLabel(p.day), value: p.value })), 'Calls per day', (n) => `${nf.format(n)} call${n === 1 ? '' : 's'}`),
-      h('p', { class: 'svc-note', text: 'Reads each inbound WhatsApp message in shadow mode (nothing acts on them yet). Billed per input token only; spend here is an estimate from the published price. The credit balance is its own typed-in card, from console.typesafe.ai.' }),
+      h('p', { class: 'svc-note', text: 'Reads each inbound WhatsApp message in shadow mode (nothing acts on them yet). Billed per input token only. TypeSafe has no balance API, so the credit left is what you entered at the last top-up minus what this site has spent since (its own metered calls at the published price). Enter a new balance after each top-up; it needs no other upkeep. Anything TypeSafe is used for outside the website is not counted.' }),
     );
+    return card('TypeSafe (Jev)', { mode: 'mixed', text: 'Usage measured live · credit entered at each top-up', fresh: [{ text: 'Usage: updates on every WhatsApp message read.' }, { text: m?.reading ? `Credit: ${usd(m.reading.value)} entered ${ago(m.reading.capturedAt)}.` : 'Credit: not entered yet.' }] }, level, ...parts, MORE, ...more);
   }
 
   function supabaseCard(o: Overview): HTMLElement {
@@ -951,7 +965,8 @@ import SignInGate from '../../components/SignInGate.astro';
     const days: number | null = s.growth?.daysToFull ?? null;
     const growthLevel: Level = days !== null && days <= 21 ? 'critical' : days !== null && days <= 60 ? 'warn' : null;
     const sizeLevel: Level = frac >= 0.9 ? 'critical' : frac >= 0.7 ? 'warn' : null;
-    const level: Level = sizeLevel === 'critical' || growthLevel === 'critical' ? 'critical' : sizeLevel === 'warn' || growthLevel === 'warn' ? 'warn' : null;
+    const egress = o.manual.find((x: any) => x.id === 'supabase.egress_gb'); // billed egress: no API, so it is typed in
+    const level: Level = worst(sizeLevel, growthLevel, egress?.level ?? null);
     const size = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : mb(bytes));
     const lasts = (d: number) => {
       const n = Math.max(1, Math.round(d));
@@ -968,6 +983,9 @@ import SignInGate from '../../components/SignInGate.astro';
     } else {
       const perWeek = s.growth.bytesPerDay * 7;
       parts.push(h('p', { class: 'hero-sub', text: `Growing about ${perWeek < 100 * 1024 ? 'under 0.1' : nf.format(perWeek / 1024 / 1024)} MB a week · full in ${lasts(days)}` }));
+    }
+    if (egress?.level && egress.reading?.limit) {
+      parts.push(h('p', { class: 'svc-fresh svc-fresh--late', text: `Egress is at ${Math.round((egress.reading.value / egress.reading.limit) * 100)}% of its monthly limit.` }));
     }
     more.push(h('p', { class: 'meter-caption', text: `${frac < 0.01 ? 'under 1' : Math.round(frac * 100)}% used · measured ${ago(s.reading.capturedAt)}` }));
     // One reading every 6 hours, but the chart (and its caption) counts days: keep each day's last reading.
@@ -986,7 +1004,13 @@ import SignInGate from '../../components/SignInGate.astro';
       const cf = s.connections.inUse / s.connections.max;
       more.push(h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: 'Database connections open' }), h('span', { text: `${s.connections.inUse} of ${s.connections.max}` })), meter(cf, s.connections.level, 'Supabase database connections', `${Math.round(cf * 100)}% of the connection limit`)));
     }
-    more.push(h('p', { class: 'svc-note', text: 'The free plan stops accepting new data at the limit. The growth pace is a straight-line estimate from the last two weeks of readings (a bulk import skews it for up to two weeks). Table sizes include indexes and cover this project\'s own tables, not Supabase\'s system data. Billed egress can\'t be measured, so it is its own typed-in card. The Supabase dashboard is the authority if any figure differs.' }));
+    if (egress?.reading?.limit) {
+      const ef = egress.reading.value / egress.reading.limit;
+      more.push(h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: 'Egress this month (typed in)' }), h('span', { text: `${amount(egress.reading.value)} of ${amount(egress.reading.limit)} GB` })), meter(ef, egress.level, 'Supabase egress used', `${Math.round(ef * 100)}% of the monthly egress`)), h('p', { class: 'meter-caption', text: `Typed in ${ago(egress.reading.capturedAt)} from ${egress.where}.${daysAgo(egress.reading.capturedAt) > 35 ? ' That is over a month old: update it.' : ''}` }));
+    } else {
+      more.push(h('p', { class: 'hero-sub', text: `Egress (data sent out, free plan: 5 GB a month) can't be measured automatically. Read it at ${egress?.where ?? 'the Supabase dashboard'} and enter it below.` }));
+    }
+    more.push(h('p', { class: 'svc-note', text: 'The free plan stops accepting new data at the limit. The growth pace is a straight-line estimate from the last two weeks of readings (a bulk import skews it for up to two weeks). Table sizes include indexes and cover this project\'s own tables, not Supabase\'s system data. Billed egress can\'t be measured, so it is typed in above. The Supabase dashboard is the authority if any figure differs.' }));
     return card('Supabase database', { mode: 'auto', text: 'Measured every 6 hours', fresh: [nextAutoUpdate(s.reading.capturedAt)] }, level, ...parts, MORE, ...more);
   }
 
@@ -997,6 +1021,56 @@ import SignInGate from '../../components/SignInGate.astro';
     const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
     d.setUTCDate(d.getUTCDate() + offset);
     return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  }
+
+  // Netlify, read automatically: production deploys (a flat 15 credits each), build minutes, the last
+  // deploy. The credit balance itself has no API (and bandwidth, functions and requests cost credits too),
+  // so the typed-in balance stays in the details, next to how much of it the deploys explain.
+  function netlifyCard(o: Overview, typed: any | null): HTMLElement {
+    const d = o.netlify.deploys;
+    const a = o.netlify.activity;
+    const r = typed?.reading ?? null;
+    const level: Level = worst(d.level, d.onPaceToExceed ? 'warn' : null, typed?.level ?? null);
+    const parts: Kid[] = [
+      h('p', { class: 'hero', text: `${nf.format(d.credits)} credits` }),
+      h('p', { class: 'hero-sub', text: `used on production deploys this cycle, of ${nf.format(d.allowance)} included` }),
+      meter(d.fraction, d.level, 'Netlify credits used on deploys', `${Math.round(d.fraction * 100)}% of the allowance`),
+      h('p', { class: 'hero-sub', text: `${nf.format(d.deploys)} production deploy${d.deploys === 1 ? '' : 's'} · resets ${cycleDay(d.cycleEnd)}` }),
+    ];
+    if (d.onPaceToExceed) {
+      parts.push(h('p', { class: 'svc-fresh svc-fresh--late', text: `At this pace, deploys alone reach about ${nf.format(Math.round(d.projected))} credits by the end of the cycle.` }));
+    }
+    if (r?.staleForCycle) parts.push(h('p', { class: 'svc-fresh svc-fresh--late', text: 'The typed-in balance is from a previous billing cycle: update it.' }));
+
+    const more: Kid[] = [
+      h('dl', { class: 'stats' },
+        stat('Production deploys', nf.format(d.deploys), `${nf.format(d.credits)} credits`),
+        stat('Failed (free)', nf.format(a.production_failed ?? 0), 'production deploys'),
+        stat('Previews (free)', nf.format(a.previews ?? 0), 'deploy previews'),
+      ),
+    ];
+    const bm = a.build_minutes;
+    if (bm) {
+      more.push(h('dl', { class: 'stats' }, stat('Build minutes', nf.format(bm.current), `this cycle · last cycle ${nf.format(bm.previous)}`), stat('Deploy time', a.avg_deploy_seconds ? `${a.avg_deploy_seconds}s` : 'n/a', 'average, production')));
+    }
+    if (a.last_deploy) {
+      more.push(h('p', { class: 'hero-sub', text: `Last deploy: ${a.last_deploy.context === 'production' ? 'production' : 'preview'}, ${a.last_deploy.state}, ${ago(a.last_deploy.at)}.` }));
+    }
+    more.push(h('p', { class: 'hero-sub', text: d.projected !== null ? `Pace: ${nf.format(d.deploys)} deploys in ${Math.floor(d.elapsedDays)} days is about ${nf.format(Math.round(d.projected))} credits over the whole cycle.` : 'A pace estimate appears three days into each cycle.' }));
+    if (r?.limit && !r.staleForCycle) {
+      const used = 1 - r.value / r.limit;
+      more.push(
+        h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: "Netlify's own balance (typed in)" }), h('span', { text: `${amount(r.value)} of ${amount(r.limit)} left` })), meter(used, typed.level, 'Netlify credits used', `${Math.round(used * 100)}% used`)),
+        h('p', { class: 'meter-caption', text: `Typed in ${ago(r.capturedAt)} from ${typed.where}. Whatever it shows beyond deploys is bandwidth, functions and requests: they cost credits but Netlify's API reports none of them.` }),
+      );
+    } else if (!r) {
+      more.push(h('p', { class: 'hero-sub', text: `Bandwidth, functions and requests also cost credits, and Netlify's API reports none of them. Type in the balance from ${typed?.where ?? 'Netlify → Team → Billing and usage'} to see the full picture here.` }));
+    }
+    more.push(h('p', { class: 'svc-note', text: "A successful production deploy costs 15 credits; failed deploys, rollbacks and deploy previews cost nothing (Netlify's docs, \"How credits work\"). Counted from the site's deploy list every 6 hours. Each merge to main is one production deploy, so batching changes into fewer merges is the main way to save credits." }));
+
+    const fresh = [nextAutoUpdate(a.capturedAt)];
+    if (r) fresh.push(nextManualUpdate(r.capturedAt, typed.refreshEveryDays));
+    return card('Netlify', { mode: 'mixed', text: 'Deploys and build minutes read from Netlify · balance typed in', fresh }, level, ...parts, MORE, ...more);
   }
 
   function r2Card(o: Overview): HTMLElement {
@@ -1263,7 +1337,8 @@ import SignInGate from '../../components/SignInGate.astro';
       nextRunAt = data.schedule?.nextCollectorRunAt ?? null;
       runEveryHours = data.schedule?.collectorEveryHours ?? 6;
       // Re-rendered after every saved reading; the open card (openCardTitle) is rebuilt open.
-      placeCards([anthropicCard(data), geminiCard(data), typesafeCard(data), supabaseCard(data), ...(data.resend.fresh ? [resendCard(data)] : []), ...(data.r2.fresh ? [r2Card(data)] : []), ...data.manual.map(manualCard)]);
+      const netlifyTyped = data.manual.find((m: any) => m.id === 'netlify.credits_remaining') ?? null;
+      placeCards([anthropicCard(data), geminiCard(data), typesafeCard(data), supabaseCard(data), ...(data.resend.fresh ? [resendCard(data)] : []), ...(data.r2.fresh ? [r2Card(data)] : []), ...(data.netlify.deploys ? [netlifyCard(data, netlifyTyped)] : netlifyTyped ? [manualCard(netlifyTyped)] : []), ...data.manual.filter((m: any) => !FOLDED_INTO_SERVICE_CARD.has(m.id)).map(manualCard)]);
       renderAdmin(data);
       $('foot').textContent = `Updated ${new Date(data.generatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}. Counts use UTC days. Warnings are emailed to the core team once, and again only if they get worse.`;
       content.hidden = false;

@@ -111,10 +111,10 @@ export const MANUAL_METERS = {
     label: 'TypeSafe (Jev) credit',
     kind: 'remaining',
     unit: 'USD',
-    valueLabel: 'Credit left now (USD)',
-    limitLabel: 'Total credit you started with / last topped up (USD)',
-    where: 'console.typesafe.ai → Billing',
-    refreshEveryDays: 14,
+    valueLabel: 'Credit balance now (USD): enter it when you top up',
+    limitLabel: 'Same amount again (USD), the total the balance is measured against',
+    where: 'console.typesafe.ai (the amount you just loaded)',
+    refreshEveryDays: null, // no due date: the page subtracts the site's own metered spend, so it only needs re-entering at a top-up
   },
   'netlify.credits_remaining': {
     service: 'netlify',
@@ -304,9 +304,64 @@ export function anthropicCreditEstimate(snapshot, daily, prices, now = new Date(
   };
 }
 
+// Probable TypeSafe credit left. TypeSafe publishes no balance API, so, like Anthropic's, it is the
+// last typed-in reading (the credit loaded) minus what the website itself has spent since: our metered
+// input tokens times the published price (output tokens are free). Typing in is therefore only needed
+// when credit is topped up, not to keep the figure current. Counts the reading's own UTC day too, which
+// can double-count a few hours; that errs toward warning early. Null when no reading was typed in.
+export function typesafeCreditEstimate(snapshot, daily, now = new Date()) {
+  if (!snapshot) return null;
+  const fromDay = utcDay(new Date(snapshot.captured_at));
+  const tokens = sumDaily(daily, 'typesafe', 'input_tokens', fromDay, utcDay(now));
+  const spent = (tokens / 1_000_000) * TYPESAFE_USD_PER_MTOK;
+  const total = snapshot.limit_value === null || snapshot.limit_value === undefined ? null : Number(snapshot.limit_value);
+  const remaining = Math.max(0, Number(snapshot.value) - spent);
+  return { remaining, spent, total, readingAt: snapshot.captured_at, readingValue: Number(snapshot.value), level: levelForRemaining(remaining, total) };
+}
+
+// Netlify credit-based plans charge 15 credits per successful production deploy (failed deploys,
+// rollbacks and deploy previews are free): docs.netlify.com, "How credits work". Bandwidth, compute and
+// requests are charged too but Netlify's API reports none of them, so deploys are the part we can count
+// exactly, and what we count is a floor on credits used, never the whole figure.
+export const NETLIFY_CREDITS_PER_PRODUCTION_DEPLOY = 15;
+export const NETLIFY_PACE_MIN_DAYS = 3; // too early in a cycle, a few busy days would look like a trend
+
+// What this cycle's production deploys have cost. `activity` is the 'netlify.deploy_activity' snapshot
+// (value = credits spent on deploys, detail.period_start = the cycle it was counted for) and `plan` the
+// 'netlify.plan_credits' one (limit = the allowance, detail = the current cycle's dates). Null when either
+// is missing or the activity is from an earlier cycle (the collector has not run since it rolled over).
+export function netlifyDeployUsage(activity, plan, now = new Date()) {
+  if (!activity || !plan) return null;
+  const allowance = Number(plan.limit_value);
+  const start = plan.detail?.period_start;
+  const end = plan.detail?.next_period_start;
+  if (!isPositiveNumber(allowance) || !start || !end || activity.detail?.period_start !== start) return null;
+  const startMs = new Date(start).getTime();
+  const totalDays = (new Date(end).getTime() - startMs) / DAY_MS;
+  if (!(totalDays > 0)) return null;
+  const elapsedDays = Math.min(totalDays, Math.max(0, (now.getTime() - startMs) / DAY_MS));
+  const credits = Number(activity.value);
+  const projected = elapsedDays >= NETLIFY_PACE_MIN_DAYS ? (credits / elapsedDays) * totalDays : null;
+  return {
+    credits,
+    allowance,
+    fraction: credits / allowance,
+    deploys: Number(activity.detail?.production_ok ?? 0),
+    elapsedDays,
+    totalDays,
+    projected,
+    onPaceToExceed: projected !== null && projected >= allowance,
+    level: levelForUsed(credits, allowance),
+    cycleEnd: end,
+  };
+}
+
 export function daysUntilDate(isoDay, now = new Date()) {
   return Math.floor((new Date(`${isoDay}T23:59:59Z`).getTime() - now.getTime()) / DAY_MS);
 }
+
+// 4795 -> "4,795" (Indian grouping, like the page)
+const num = (n) => Math.round(Number(n)).toLocaleString('en-IN');
 
 function pct(n) {
   return `${Math.round(n * 100)}%`;
@@ -359,6 +414,41 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
       `Anthropic credit is running low (about ${money(estimate.remaining)} left, estimated)`,
       `That is roughly ${pct(estimate.remaining / estimate.total)} of the ${money(estimate.total)} total. It is an estimate: the balance typed in on ${utcDay(new Date(estimate.readingAt))} minus the website's own metered usage since. Check the real balance at console.anthropic.com → Billing.`,
     );
+  }
+
+  // TypeSafe credit: typed in once when topped up, then the website's own metered spend comes off it.
+  const tsCredit = typesafeCreditEstimate(snapshots['typesafe.credit_remaining_usd'], daily, now);
+  if (tsCredit && tsCredit.level) {
+    add(
+      'typesafe:credit',
+      tsCredit.level,
+      'typesafe',
+      `TypeSafe credit is running low (about ${money(tsCredit.remaining)} left, estimated)`,
+      `That is roughly ${pct(tsCredit.remaining / tsCredit.total)} of the ${money(tsCredit.total)} entered. It is an estimate: the balance typed in on ${utcDay(new Date(tsCredit.readingAt))} minus the website's own metered usage since. Top up at console.typesafe.ai and enter the new balance on this page.`,
+    );
+  }
+
+  // Netlify: what production deploys alone have cost this cycle (15 credits each), and whether the
+  // pace so far would use up the allowance before the cycle ends.
+  const nfDeploys = netlifyDeployUsage(snapshots['netlify.deploy_activity'], snapshots['netlify.plan_credits'], now);
+  if (nfDeploys) {
+    const left = Math.max(0, nfDeploys.allowance - nfDeploys.credits);
+    add(
+      'netlify:deploys',
+      nfDeploys.level,
+      'netlify',
+      `Netlify production deploys have used ${pct(nfDeploys.fraction)} of this cycle's credits`,
+      `${nfDeploys.deploys} production deploy${nfDeploys.deploys === 1 ? '' : 's'} at ${NETLIFY_CREDITS_PER_PRODUCTION_DEPLOY} credits each is ${num(nfDeploys.credits)} of ${num(nfDeploys.allowance)} credits, before bandwidth, functions and requests, which Netlify's API does not report. About ${num(left)} credits are left for everything else. Batch changes into fewer merges to main.`,
+    );
+    if (nfDeploys.onPaceToExceed && !nfDeploys.level) {
+      add(
+        'netlify:deploy-pace',
+        'warn',
+        'netlify',
+        "Netlify deploys are on pace to use up this cycle's credits",
+        `At the rate of the last ${Math.floor(nfDeploys.elapsedDays)} days, production deploys alone would cost about ${num(nfDeploys.projected)} credits by ${utcDay(new Date(nfDeploys.cycleEnd))}, against ${num(nfDeploys.allowance)} included. Each merge to main is a production deploy: batching changes into fewer merges saves 15 credits apiece.`,
+      );
+    }
   }
 
   // Credit expiry (only if a date was entered with the reading).
@@ -473,7 +563,7 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
 
   // Everything else a person types in. (Anthropic's balance has its own estimate above.)
   for (const [id, meter] of Object.entries(MANUAL_METERS)) {
-    if (id === 'anthropic.credit_remaining_usd') continue;
+    if (id === 'anthropic.credit_remaining_usd' || id === 'typesafe.credit_remaining_usd') continue; // these two have their own estimate above
     if (id === 'resend.emails_used' && resendAutomaticIsFresh(snapshots, now)) continue; // the API reading supersedes it
     if (id === 'cloudflare.r2_storage_gb' && r2AutomaticIsFresh(snapshots, now)) continue;
     const reading = snapshots[id];
