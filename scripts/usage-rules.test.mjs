@@ -15,6 +15,7 @@ import {
   sumDaily,
   addDays,
   daysUntilDate,
+  MANUAL_METERS,
 } from './lib/usage-rules.mjs';
 
 const NOW = new Date('2026-10-10T12:00:00Z');
@@ -120,6 +121,22 @@ test('evaluateAlerts: expiry within 7 days is critical, beyond 30 is quiet', () 
 test('evaluateAlerts: no credit estimate alert without prices', () => {
   const snapshots = { 'anthropic.credit_remaining_usd': { value: 1, limit_value: 50, captured_at: '2026-10-09T00:00:00Z' } };
   assert.equal(evaluateAlerts({ now: NOW, snapshots, settings: {} }).length, 0);
+});
+
+test('evaluateAlerts: TypeSafe errors alert only when many AND a large share of today\'s calls failed', () => {
+  const key = (daily) => evaluateAlerts({ now: NOW, daily }).map((a) => a.key);
+  assert.deepEqual(key([row('2026-10-10', 'typesafe', 'requests', 20), row('2026-10-10', 'typesafe', 'errors', 8)]), ['typesafe:errors']);
+  assert.deepEqual(key([row('2026-10-10', 'typesafe', 'requests', 100), row('2026-10-10', 'typesafe', 'errors', 8)]), []); // 8%: noise
+  assert.deepEqual(key([row('2026-10-10', 'typesafe', 'requests', 4), row('2026-10-10', 'typesafe', 'errors', 4)]), []); // too few to mean anything
+  assert.deepEqual(key([row('2026-10-09', 'typesafe', 'requests', 20), row('2026-10-09', 'typesafe', 'errors', 20)]), []); // yesterday
+});
+
+test('the TypeSafe credit balance is a typed-in meter that warns when low', () => {
+  assert.equal(MANUAL_METERS['typesafe.credit_remaining_usd'].kind, 'remaining');
+  const snapshots = { 'typesafe.credit_remaining_usd': { value: 1, limit_value: 5, captured_at: '2026-10-09T00:00:00Z' } };
+  const alerts = evaluateAlerts({ now: NOW, snapshots });
+  assert.equal(alerts[0].key, 'manual:typesafe.credit_remaining_usd');
+  assert.equal(alerts[0].level, 'warn');
 });
 
 test('evaluateAlerts: Gemini quota exhaustion today, and the optional daily limit', () => {

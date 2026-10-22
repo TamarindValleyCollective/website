@@ -21,6 +21,7 @@ import { listHealthEvents } from '../../scripts/lib/supabase.mjs';
 import { roleHasCapability } from './lib/staff-registry';
 import {
   MANUAL_METERS,
+  TYPESAFE_USD_PER_MTOK,
   mergeNetlifyPlan,
   nextCollectorRun,
   COLLECTOR_EVERY_HOURS,
@@ -147,6 +148,15 @@ async function handleOverview(req: Request): Promise<Response> {
       month: { requests: count('gemini', 'requests', monthStart, today), inputTokens: count('gemini', 'input_tokens', monthStart, today), outputTokens: count('gemini', 'output_tokens', monthStart, today) },
       requestsSeries: series(daily, 'gemini', 'requests', today, 14),
     },
+    typesafe: (() => {
+      const usd = (from: string, to: string) => (count('typesafe', 'input_tokens', from, to) / 1_000_000) * TYPESAFE_USD_PER_MTOK;
+      return {
+        today: { requests: count('typesafe', 'requests', today, today), errors: count('typesafe', 'errors', today, today) },
+        last7: { requests: count('typesafe', 'requests', weekStart, today), errors: count('typesafe', 'errors', weekStart, today), costUsd: usd(weekStart, today) },
+        month: { requests: count('typesafe', 'requests', monthStart, today), inputTokens: count('typesafe', 'input_tokens', monthStart, today), costUsd: usd(monthStart, today) },
+        requestsSeries: series(daily, 'typesafe', 'requests', today, 14),
+      };
+    })(),
     supabase: {
       reading: db ? { bytes: Number(db.value), limitBytes: db.limit_value === null ? null : Number(db.limit_value), capturedAt: db.captured_at } : null,
       connections: conns ? { inUse: Number(conns.value), max: conns.limit_value === null ? null : Number(conns.limit_value), capturedAt: conns.captured_at, level: isPositiveNumber(Number(conns.limit_value)) ? levelForUsed(Number(conns.value), Number(conns.limit_value)) : null } : null,

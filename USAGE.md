@@ -19,6 +19,7 @@ shows how close each one is and emails the core team before it runs out.
 |---|---|---|
 | Anthropic (chat, search fallback, member story check) | **Measured**: every call the website makes adds its requests/tokens/errors to a daily total (`lib/usage-meter.ts`). | Individual accounts have no usage API, so nothing is read from Anthropic. Local scripts using the same key aren't counted. |
 | Anthropic credit balance | **Typed in** by an admin, then *estimated*: balance minus metered spend since, using admin-entered token prices. | An estimate, labelled as one. The Console's own spend limit and low-balance email stay on as the independent backstop. |
+| TypeSafe (Jev) | **Measured** the same way (calls, input/output tokens, errors, timeouts) from `whatsapp-webhook.mts`'s shadow reads of inbound WhatsApp messages. **Credit balance typed in** (a $5 prepaid top-up on 2026-10-22). | TypeSafe bills input tokens only, at $0.042 per million (`TYPESAFE_USD_PER_MTOK` in `usage-rules.mjs`, a published price, not entered on the page); a read is about 500 tokens, so roughly $0.00002 each. No usage API is read: the balance is typed in from console.typesafe.ai → Billing, and the reads are off unless `TYPESAFE_WHATSAPP_SHADOW=true`, so the card stays at 0 until then. |
 | Google Gemini | **Measured** the same way (requests, tokens, HTTP 429 "quota ran out", fallbacks to paid Anthropic). | Google has no remaining-quota API. A daily request limit can be entered to get percentage warnings. |
 | Supabase database size and connections | **Measured** every 6 hours by `usage-collect.mts`: size against the free plan's 500 MB, and open direct connections against `max_connections` (60) through the read-only `usage_db_connections()` function (migration `0033`). | Egress (Supabase's billed data transfer) can't be read: the Management API only gives request counts, and the Metrics API's network counter is the host's raw traffic, not what Supabase bills. Check egress in the Supabase dashboard. |
 | Netlify credits | **Credits remaining** is **typed in**, as Netlify's billing page reports it (its API doesn't expose it). The **plan allowance and billing-cycle dates** are **read automatically** every 6 hours from `GET /accounts/{id}` by `usage-collect.mts`, using `NETLIFY_ACCESS_TOKEN`. | The read allowance overrides the typed limit. Credits reset each billing cycle (TVC's runs 19th to 18th), so a reading typed in *before* the current cycle began is flagged on the page and gives no alert. Without the token, everything falls back to fully typed in. |
@@ -28,7 +29,7 @@ shows how close each one is and emails the core team before it runs out.
 
 ## Which figures update themselves
 
-Every card carries a badge: **Automatic** (the 6-hourly `usage-collect` run, with the next run's time shown, and a note if one was missed), **Live** (counted on every request the site makes: Anthropic and Gemini usage), **Manual** (an admin types it in; shows when the update is due, and goes orange once overdue), or **Part manual** (Netlify credits: balance typed in, allowance and cycle automatic; Anthropic: usage live, credit balance typed in). The run schedule is `COLLECTOR_EVERY_HOURS` in `usage-rules.mjs`, which must match the cron in `usage-collect.mts`. Typed-in due dates come from `refreshEveryDays` on each meter in `MANUAL_METERS` (7 days for the Netlify balance, 14 for the rest).
+Every card carries a badge: **Automatic** (the 6-hourly `usage-collect` run, with the next run's time shown, and a note if one was missed), **Live** (counted on every request the site makes: Anthropic, Gemini and TypeSafe usage), **Manual** (an admin types it in; shows when the update is due, and goes orange once overdue), or **Part manual** (Netlify credits: balance typed in, allowance and cycle automatic; Anthropic and TypeSafe: usage live, credit balance typed in). The run schedule is `COLLECTOR_EVERY_HOURS` in `usage-rules.mjs`, which must match the cron in `usage-collect.mts`. Typed-in due dates come from `refreshEveryDays` on each meter in `MANUAL_METERS` (7 days for the Netlify balance, 14 for the rest).
 
 ## Alert rules
 
@@ -43,6 +44,8 @@ when they clear so a recurrence emails again. One digest per hourly run.
 | Any Gemini request refused (HTTP 429) today | Warning |
 | Gemini requests today ≥ 70% / 90% of the entered daily limit | Warning / Critical |
 | Chat daily cap, or search paid-fallback cap, hit today | Warning |
+| TypeSafe credit remaining ≤ 30% / ≤ 10% of the total entered | Warning / Critical |
+| TypeSafe (Jev) calls failing: at least 5 errors today and at least 20% of today's calls (the shadow reads fail silently otherwise) | Warning |
 | Supabase database ≥ 70% / 90% of its limit | Warning / Critical |
 | Supabase database connections ≥ 70% / 90% of the limit (60 on the free plan) | Warning / Critical |
 | Resend emails (monthly or daily, read from its API) ≥ 70% / 90% of the limit | Warning / Critical |
@@ -74,7 +77,8 @@ webhook fields are subscribed (App Dashboard → WhatsApp → Configuration → 
    `user` can view; `admin` can type in readings and change settings).
 3. An admin opens the page and enters: the Anthropic credit balance (and total, and expiry if any),
    the Anthropic input/output token prices (USD per million tokens, from Anthropic's pricing page),
-   the Gemini daily request limit (from the project's rate limits in Google AI Studio), and a first
+   the Gemini daily request limit (from the project's rate limits in Google AI Studio), the TypeSafe
+   credit balance (console.typesafe.ai → Billing; $5 topped up 2026-10-22), and a first
    reading for Netlify, Resend and Cloudflare R2.
    Current values (entered 2026-10-04): Anthropic **$2 input / $10 output per million tokens**, checked
    against Anthropic's pricing page for `claude-sonnet-5`, the one model both Claude call sites use
