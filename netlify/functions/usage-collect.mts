@@ -51,6 +51,36 @@ async function recordDbConnections(base: string): Promise<string> {
   }
 }
 
+// Records the biggest tables (usage_db_tables(), migration 0058) so a growing database can be
+// traced to what is filling it. Never throws, and skips quietly until the migration is applied.
+async function recordDbTables(base: string): Promise<string> {
+  try {
+    const res = await fetch(`${base}/rpc/usage_db_tables`, { method: 'POST', headers: restHeaders(), body: '{}' });
+    if (!res.ok) throw new Error(`usage_db_tables failed: ${res.status} ${await res.text()}`);
+    const rows = (await res.json()) as { table_name: string; total_bytes: number | string; row_estimate: number | string }[];
+    const tables = rows
+      .map((r) => ({ name: String(r.table_name), bytes: Number(r.total_bytes), rows: Number(r.row_estimate) }))
+      .filter((t) => t.name && Number.isFinite(t.bytes) && t.bytes >= 0);
+    if (tables.length === 0) throw new Error('usage_db_tables returned no tables');
+    const insertRes = await fetch(`${base}/usage_snapshots`, {
+      method: 'POST',
+      headers: restHeaders({ Prefer: 'return=minimal' }),
+      body: JSON.stringify({
+        service: 'supabase',
+        metric: 'db_tables',
+        value: tables.reduce((sum, t) => sum + t.bytes, 0),
+        unit: 'bytes',
+        detail: { tables },
+      }),
+    });
+    if (!insertRes.ok) throw new Error(`tables snapshot insert failed: ${insertRes.status} ${await insertRes.text()}`);
+    return `recorded ${tables.length}`;
+  } catch (err) {
+    console.error('[usage-collect] db tables failed', err);
+    return 'failed';
+  }
+}
+
 // TVC team's id on Netlify (not a secret; from `netlify api getAccount`).
 const NETLIFY_ACCOUNT_ID = '6a58597d0f1acc4a465937b6';
 
@@ -193,10 +223,11 @@ export default async (): Promise<Response> => {
     if (!insertRes.ok) throw new Error(`snapshot insert failed: ${insertRes.status} ${await insertRes.text()}`);
 
     const connections = await recordDbConnections(base);
+    const tables = await recordDbTables(base);
     const netlify = await recordNetlifyPlan(base);
     const resend = await recordResendUsage(base);
     const r2 = await recordR2Storage(base);
-    return new Response(JSON.stringify({ ok: true, bytes, connections, netlify, resend, r2 }), { status: 200 });
+    return new Response(JSON.stringify({ ok: true, bytes, connections, tables, netlify, resend, r2 }), { status: 200 });
   } catch (err) {
     console.error('[usage-collect] failed', err);
     return new Response('Failed to record usage snapshot', { status: 500 });

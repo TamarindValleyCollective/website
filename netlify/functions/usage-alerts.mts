@@ -54,7 +54,7 @@ export default async (): Promise<Response> => {
   try {
     const now = new Date();
     const data = await loadUsageData(now);
-    alerts = evaluateAlerts({ now, daily: data.daily, snapshots: data.snapshots, settings: data.settings });
+    alerts = evaluateAlerts({ now, daily: data.daily, snapshots: data.snapshots, settings: data.settings, dbHistory: data.dbHistory });
     previous = data.alertState;
   } catch (err) {
     console.error('[usage-alerts] failed to load usage data', err);

@@ -770,17 +770,35 @@ import SignInGate from '../../components/SignInGate.astro';
     const s = o.supabase;
     if (!s.reading) return card('Supabase database', { mode: 'auto', text: 'Measured every 6 hours', fresh: [nextAutoUpdate()] }, 'none', h('p', { class: 'hero-sub', text: 'No measurement recorded yet.' }));
     const frac = s.reading.limitBytes ? s.reading.bytes / s.reading.limitBytes : 0;
-    const level: Level = frac >= 0.9 ? 'critical' : frac >= 0.7 ? 'warn' : null;
+    // Size and growth can each be the reason to look; the card shows the worse of the two.
+    const days: number | null = s.growth?.daysToFull ?? null;
+    const growthLevel: Level = days !== null && days <= 21 ? 'critical' : days !== null && days <= 60 ? 'warn' : null;
+    const sizeLevel: Level = frac >= 0.9 ? 'critical' : frac >= 0.7 ? 'warn' : null;
+    const level: Level = sizeLevel === 'critical' || growthLevel === 'critical' ? 'critical' : sizeLevel === 'warn' || growthLevel === 'warn' ? 'warn' : null;
     const parts: Kid[] = [h('p', { class: 'hero', text: mb(s.reading.bytes) }), h('p', { class: 'hero-sub', text: s.reading.limitBytes ? `of ${mb(s.reading.limitBytes)} on the free plan` : 'database size' })];
     if (s.reading.limitBytes) parts.push(meter(frac, level, 'Supabase database size', `${Math.round(frac * 100)}% of the free size`), h('p', { class: 'meter-caption', text: `${frac < 0.01 ? 'under 1' : Math.round(frac * 100)}% used · measured ${ago(s.reading.capturedAt)}` }));
     if (s.history.length > 1) {
       parts.push(sparkline(s.history.map((p: any) => ({ label: dateText(p.at), value: p.bytes / 1024 / 1024 })), 'Database size in MB', (n) => `${nf.format(n)} MB`));
     }
+    // How fast it is growing, and so how long the free size lasts at that pace.
+    const size = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : mb(bytes));
+    const lasts = (d: number) => (d < 90 ? `about ${Math.max(1, Math.round(d))} days` : d < 730 ? `about ${Math.round(d / 30)} months` : 'over 2 years');
+    if (!s.growth) {
+      parts.push(h('p', { class: 'hero-sub', text: 'Growth: not enough history yet. It needs about a week of readings.' }));
+    } else if (days === null) {
+      parts.push(h('p', { class: 'hero-sub', text: `Growth: not growing over the last ${Math.round(s.growth.spanDays)} days.` }));
+    } else {
+      parts.push(h('dl', { class: 'stats' }, stat('Growth', `${s.growth.bytesPerDay * 7 < 100 * 1024 ? '<0.1' : nf.format(s.growth.bytesPerDay * 7 / 1024 / 1024)} MB`, 'per week, last 2 weeks'), stat('At this pace', lasts(days), 'until the free size is full')));
+    }
+    const tables: { name: string; bytes: number; rows: number }[] = s.tables?.list ?? [];
+    if (tables.length) {
+      parts.push(h('p', { class: 'hero-sub', text: 'Biggest tables' }), h('dl', { class: 'stats' }, ...tables.slice(0, 5).map((t) => stat(t.name, size(t.bytes), `about ${nf.format(t.rows)} rows`))));
+    }
     if (s.connections?.max) {
       const cf = s.connections.inUse / s.connections.max;
       parts.push(h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: 'Database connections open' }), h('span', { text: `${s.connections.inUse} of ${s.connections.max}` })), meter(cf, s.connections.level, 'Supabase database connections', `${Math.round(cf * 100)}% of the connection limit`)));
     }
-    parts.push(h('p', { class: 'svc-note', text: 'The free plan stops accepting new data at the limit. The Supabase dashboard is the authority if the two ever differ.' }));
+    parts.push(h('p', { class: 'svc-note', text: 'The free plan stops accepting new data at the limit. The growth pace is an estimate (a bulk import skews it for up to two weeks). Table sizes include indexes and cover this project\'s own tables, not Supabase\'s system data. Billed egress can\'t be measured, so it is its own typed-in card. The Supabase dashboard is the authority if any figure differs.' }));
     return card('Supabase database', { mode: 'auto', text: 'Measured every 6 hours', fresh: [nextAutoUpdate(s.reading.capturedAt)] }, level, ...parts);
   }
 

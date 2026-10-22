@@ -16,6 +16,7 @@ import {
   addDays,
   daysUntilDate,
   MANUAL_METERS,
+  projectDbGrowth,
 } from './lib/usage-rules.mjs';
 
 const NOW = new Date('2026-10-10T12:00:00Z');
@@ -121,6 +122,63 @@ test('evaluateAlerts: expiry within 7 days is critical, beyond 30 is quiet', () 
 test('evaluateAlerts: no credit estimate alert without prices', () => {
   const snapshots = { 'anthropic.credit_remaining_usd': { value: 1, limit_value: 50, captured_at: '2026-10-09T00:00:00Z' } };
   assert.equal(evaluateAlerts({ now: NOW, snapshots, settings: {} }).length, 0);
+});
+
+// A reading every 6 hours for `days` days ending at NOW, growing `mbPerDay` from `startMb`.
+const MB = 1024 * 1024;
+const sizeHistory = (days, startMb, mbPerDay) =>
+  Array.from({ length: days * 4 + 1 }, (_, i) => ({
+    captured_at: new Date(NOW.getTime() - (days * 4 - i) * 6 * 3600_000).toISOString(),
+    value: (startMb + (i / 4) * mbPerDay) * MB,
+  }));
+const LIMIT = 500 * MB;
+
+test('projectDbGrowth: reads the pace and the days left from a steady climb', () => {
+  const g = projectDbGrowth(sizeHistory(10, 100, 2), LIMIT, NOW); // 2 MB/day, ends at 120 MB
+  assert.ok(Math.abs(g.bytesPerDay / MB - 2) < 0.01);
+  assert.ok(Math.abs(g.daysToFull - 190) < 1); // (500 - 120) / 2
+  assert.ok(g.spanDays >= 9.9);
+});
+
+test('projectDbGrowth: flat or shrinking has no days-to-full', () => {
+  assert.equal(projectDbGrowth(sizeHistory(10, 100, 0), LIMIT, NOW).daysToFull, null);
+  assert.equal(projectDbGrowth(sizeHistory(10, 100, -1), LIMIT, NOW).daysToFull, null);
+});
+
+test('projectDbGrowth: too little history says nothing, rather than guessing', () => {
+  assert.equal(projectDbGrowth([], LIMIT, NOW), null);
+  assert.equal(projectDbGrowth(sizeHistory(3, 100, 5), LIMIT, NOW), null); // under 5 days
+  assert.equal(projectDbGrowth(sizeHistory(10, 100, 2).slice(0, 5), LIMIT, NOW), null); // under 8 readings
+  assert.equal(projectDbGrowth(sizeHistory(10, 100, 2), 0, NOW), null); // no limit to measure against
+});
+
+test('projectDbGrowth: only the last two weeks count, and junk readings are ignored', () => {
+  // 10 MB readings from 15-30 days ago: if the window let them in, the climb to 100 MB would look huge
+  const old = sizeHistory(30, 10, 0)
+    .filter((p) => new Date(p.captured_at).getTime() < NOW.getTime() - 15 * 24 * 3600_000)
+    .map((p) => ({ ...p, value: 10 * MB }));
+  assert.ok(old.length > 8);
+  const recent = sizeHistory(10, 100, 2);
+  const g = projectDbGrowth([...old, ...recent, { captured_at: 'not a date', value: 1 }, { captured_at: recent[0].captured_at, value: 'x' }], LIMIT, NOW);
+  assert.ok(Math.abs(g.bytesPerDay / MB - 2) < 0.2);
+});
+
+test('evaluateAlerts: database growth warns inside 60 days to full, critical inside 21, quiet beyond', () => {
+  const snapshots = { 'supabase.db_size_bytes': { value: 120 * MB, limit_value: LIMIT, captured_at: '2026-10-10T06:00:00Z' } };
+  const keys = (history) => evaluateAlerts({ now: NOW, snapshots, dbHistory: history }).filter((a) => a.key === 'supabase:db-growth');
+  // 120 MB now: 380 MB left. 5 MB/day -> 76 days (quiet); 8 MB/day -> 47 days (warn); 20 MB/day -> 19 days (critical)
+  assert.equal(keys(sizeHistory(10, 70, 5)).length, 0);
+  assert.equal(keys(sizeHistory(10, 40, 8))[0].level, 'warn');
+  assert.equal(keys(sizeHistory(10, -80, 20))[0].level, 'critical');
+  assert.equal(keys([]).length, 0); // no history: no growth alert
+});
+
+test('the Supabase egress balance is a typed-in "used" meter that warns near its limit', () => {
+  assert.equal(MANUAL_METERS['supabase.egress_gb'].kind, 'used');
+  const snapshots = { 'supabase.egress_gb': { value: 4, limit_value: 5, captured_at: '2026-10-09T00:00:00Z' } };
+  const alerts = evaluateAlerts({ now: NOW, snapshots });
+  assert.equal(alerts[0].key, 'manual:supabase.egress_gb');
+  assert.equal(alerts[0].level, 'warn'); // 80%
 });
 
 test('evaluateAlerts: TypeSafe errors alert only when many AND a large share of today\'s calls failed', () => {

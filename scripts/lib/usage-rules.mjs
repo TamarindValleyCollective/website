@@ -36,7 +36,63 @@ export const TYPESAFE_USD_PER_MTOK = 0.042;
 export const TYPESAFE_ERROR_MIN = 5; // errors in a day before the alert can fire
 export const TYPESAFE_ERROR_SHARE = 0.2; // ...and the share of that day's calls
 
+// How fast the Supabase database is growing and, if it is, when it would reach its limit. A
+// least-squares line through the last DB_GROWTH_WINDOW_DAYS of size readings (the collector
+// records one every 6 hours), so a single odd reading barely moves it. Returns null until
+// there are enough readings spread over enough days to mean anything; `daysToFull` is null
+// when the size is flat or shrinking. An estimate: a bulk import or a big delete inside the
+// window shifts it until it ages out.
+export const DB_GROWTH_WINDOW_DAYS = 14;
+export const DB_GROWTH_MIN_POINTS = 8;
+export const DB_GROWTH_MIN_SPAN_DAYS = 5;
+export const DB_GROWTH_WARN_DAYS = 60;
+export const DB_GROWTH_CRITICAL_DAYS = 21;
+
+/**
+ * @param {{ value: number | string, captured_at: string }[]} history
+ * @param {number} limitBytes
+ * @param {Date} now
+ * @returns {{ bytesPerDay: number, daysToFull: number | null, spanDays: number, latestBytes: number } | null}
+ */
+export function projectDbGrowth(history, limitBytes, now = new Date()) {
+  if (!isPositiveNumber(limitBytes)) return null;
+  const cutoff = now.getTime() - DB_GROWTH_WINDOW_DAYS * DAY_MS;
+  const points = history
+    .map((h) => ({ t: new Date(h.captured_at).getTime(), v: Number(h.value) }))
+    .filter((p) => Number.isFinite(p.t) && Number.isFinite(p.v) && p.v > 0 && p.t >= cutoff && p.t <= now.getTime())
+    .sort((a, b) => a.t - b.t);
+  if (points.length < DB_GROWTH_MIN_POINTS) return null;
+  const spanDays = (points[points.length - 1].t - points[0].t) / DAY_MS;
+  if (spanDays < DB_GROWTH_MIN_SPAN_DAYS) return null;
+
+  const n = points.length;
+  const x = points.map((p) => (p.t - points[0].t) / DAY_MS);
+  const meanX = x.reduce((a, b) => a + b, 0) / n;
+  const meanY = points.reduce((a, p) => a + p.v, 0) / n;
+  let num = 0;
+  let den = 0;
+  points.forEach((p, i) => {
+    num += (x[i] - meanX) * (p.v - meanY);
+    den += (x[i] - meanX) ** 2;
+  });
+  const bytesPerDay = den > 0 ? num / den : 0;
+  const latestBytes = points[n - 1].v;
+  const daysToFull = bytesPerDay > 0 ? Math.max(0, limitBytes - latestBytes) / bytesPerDay : null;
+  return { bytesPerDay, daysToFull, spanDays, latestBytes };
+}
+
 export const MANUAL_METERS = {
+  'supabase.egress_gb': {
+    service: 'supabase',
+    metric: 'egress_gb',
+    label: 'Supabase egress',
+    kind: 'used',
+    unit: 'GB',
+    valueLabel: 'Egress used this billing period (GB)',
+    limitLabel: 'Egress included per month (GB, as the dashboard shows; 5 on the free plan)',
+    where: 'Supabase dashboard → your organization → Usage',
+    refreshEveryDays: 14, // no API exposes billed egress, so it is read off the dashboard by hand
+  },
   'anthropic.credit_remaining_usd': {
     service: 'anthropic',
     metric: 'credit_remaining_usd',
@@ -270,8 +326,8 @@ function money(n) {
 // }
 // Returns [{ key, level: 'warn'|'critical', service, title, detail }]. `key`
 // identifies the underlying condition so a repeat of it isn't mailed twice.
-/** @param {{ now?: Date, daily?: any[], snapshots?: Record<string, any>, settings?: any }} input */
-export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSnapshots = {}, settings = {} }) {
+/** @param {{ now?: Date, daily?: any[], snapshots?: Record<string, any>, settings?: any, dbHistory?: { value: number, captured_at: string }[] }} input */
+export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSnapshots = {}, settings = {}, dbHistory = [] }) {
   const snapshots = mergeNetlifyPlan(rawSnapshots, now);
   const alerts = [];
   const today = utcDay(now);
@@ -363,6 +419,16 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
     const level = levelForUsed(Number(db.value), Number(db.limit_value));
     const mb = (b) => `${(Number(b) / 1024 / 1024).toFixed(0)} MB`;
     add('supabase:db-size', level, 'supabase', `Supabase database is at ${pct(Number(db.value) / Number(db.limit_value))} of its free size`, `${mb(db.value)} used of ${mb(db.limit_value)}. Free projects stop accepting writes at the limit.`);
+  }
+
+  // How fast the database is growing: a size under the 70% line can still be weeks from full.
+  if (db && isPositiveNumber(Number(db.limit_value))) {
+    const growth = projectDbGrowth(dbHistory, Number(db.limit_value), now);
+    if (growth && growth.daysToFull !== null) {
+      const level = growth.daysToFull <= DB_GROWTH_CRITICAL_DAYS ? 'critical' : growth.daysToFull <= DB_GROWTH_WARN_DAYS ? 'warn' : null;
+      const perWeek = ((growth.bytesPerDay * 7) / 1024 / 1024).toFixed(1);
+      add('supabase:db-growth', level, 'supabase', `Supabase database could be full in about ${Math.max(1, Math.round(growth.daysToFull))} days`, `It has been growing about ${perWeek} MB a week over the last ${Math.round(growth.spanDays)} days; at that pace the ${(Number(db.limit_value) / 1024 / 1024).toFixed(0)} MB free limit is reached in roughly ${Math.round(growth.daysToFull)} days. The page lists the biggest tables. One-off imports inflate this for up to two weeks.`);
+    }
   }
 
   // Resend: automatic quota readings, and a warning if they stop (once any has existed).
