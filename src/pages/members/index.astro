@@ -695,44 +695,32 @@ import SignInGate from '../../components/SignInGate.astro';
     align-items: start;
   }
 
-  /* The codes of a card (farm unit, house number, unit type), together at the right of its heading, each in a circle. */
+  /* The code that names a card (farm unit, house number) in a solid circle, at the left of the card's title. */
   .pills {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: -8px 0 -8px auto; /* a little taller than the heading, not a lot */
-  }
-
-  .tile .pills {
-    flex-wrap: wrap;
+    flex: none;
     margin: 0;
   }
 
-  /* A circle for a short code; a longer one stretches it into a pill rather than being cut off. The key code (farm unit,
-     house number) is solid, the descriptor (unit type) is tinted with a dark outline so it reads on the white card and on the tinted Home tile. */
+  /* A longer code stretches the circle into a pill rather than being cut off. */
   .pills .pill {
     display: grid;
     place-items: center;
     box-sizing: border-box;
-    min-width: 56px;
-    height: 56px;
+    min-width: 48px;
+    height: 48px;
     margin: 0;
-    padding: 0 10px;
-    border: 2px solid var(--tvc-green-dark);
-    background: var(--tvc-green-tint);
-    color: var(--tvc-green-dark);
-    /* Set outright: the codes sit inside a Fraunces h2 on My unit and an uppercase Inter row on Home, and must look the same in both. */
+    padding: 0 8px;
+    border: 0;
+    background: var(--tvc-green-dark);
+    color: var(--tvc-white);
+    /* Set outright: the code sits inside a Fraunces h2 on My unit and an uppercase Inter row on Home, and must look the same in both. */
     font-family: var(--font-display);
-    font-size: var(--text-lg);
+    font-size: var(--text-base);
     font-weight: 600;
     line-height: 1;
     letter-spacing: normal;
     text-transform: none;
-  }
-
-  .pills .pill--key {
-    background: var(--tvc-green-dark);
-    color: var(--tvc-white);
   }
 
   .pill {
@@ -971,6 +959,10 @@ import SignInGate from '../../components/SignInGate.astro';
     gap: 12px;
   }
 
+  .people + .story-hint {
+    margin-top: 14px;
+  }
+
   .people .who2 {
     flex: 1;
     min-width: 0;
@@ -1015,10 +1007,9 @@ import SignInGate from '../../components/SignInGate.astro';
   .tile .k {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
     align-content: flex-start; /* the row is as tall as the other tile's, but its icon and pills stay at the top */
     align-items: center;
-    justify-content: space-between;
+    gap: 10px;
     font-size: var(--text-xs);
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -2635,10 +2626,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     })) : null;
   };
   const farmPills = (hh: Hh) => pillsOf([['Farm unit', hh.farmUnit, true]]);
-  // TO1-V2 is just a variant of TO1, so only the family is shown ("TO1").
-  const unitTypeFamily = (t: string | null) => (t ? t.replace(/-V\d+$/i, '') : null);
-  // The unit type sits beside the house number, in the card heading on My unit and in the tile's top row on Home.
-  const houseHeadPills = (hh: Hh) => pillsOf([['Unit type', unitTypeFamily(hh.unitType)], ['House number', hh.houseNo, true]]);
+  const housePills = (hh: Hh) => pillsOf([['House number', hh.houseNo, true]]);
   const peopleByRole = (people: Person[]) => ROLE_GROUPS.map(([role, label]) => ({ label, people: people.filter((p) => p.role === role) })).filter((g) => g.people.length);
   // Google's picture for the person, or their initial when they have none (or it will not load). Someone who has
   // signed in has a picture on file, so this also shows who has used the portal.
@@ -3200,8 +3188,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     grid.append(
       widget('My unit', { more: ['View unit', 'unit'], icon: IC.unit },
         h('div', 'tiles', undefined,
-          h('div', 'tile', undefined, h('div', 'k', undefined, glyph(IC.farm, 'Farm land'), farmPills(hh)), h('div', 'v', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), h('div', 's', hh.plots.length ? `${hh.plots.length} plot${hh.plots.length === 1 ? '' : 's'}` : 'Not available yet')),
-          h('div', 'tile', undefined, h('div', 'k', undefined, glyph(IC.house, 'House'), houseHeadPills(hh)), h('div', 'v', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), h('div', 's', undefined, h('span', '', !hh.houseNo ? 'No house allocated yet' : hh.housePattas.length ? `${hh.housePattas.length} plot${hh.housePattas.length === 1 ? '' : 's'}` : 'Area not on record'))),
+          h('div', 'tile', undefined, h('div', 'k', undefined, farmPills(hh) ?? glyph(IC.farm, 'Farm land'), 'Farm land'), h('div', 'v', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), h('div', 's', hh.plots.length ? `${hh.plots.length} plot${hh.plots.length === 1 ? '' : 's'}` : 'Not available yet')),
+          h('div', 'tile', undefined, h('div', 'k', undefined, housePills(hh) ?? glyph(IC.house, 'House'), 'House'), h('div', 'v', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), h('div', 's', undefined, h('span', '', !hh.houseNo ? 'No house allocated yet' : hh.housePattas.length ? `${hh.housePattas.length} plot${hh.housePattas.length === 1 ? '' : 's'}` : 'Area not on record'))),
         ),
         prompts,
       ),
@@ -3222,7 +3210,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const root = h('div');
     root.append(
       h('h1', 'page-title', 'My unit'),
-      h('p', 'lede', 'Your unit is your farm land and, if you have one, your house plot. The codes on each card are its farm unit, and the house number and unit type of the house (hover one to see which).'));
+      h('p', 'lede', 'Your unit is your farm land and, if you have one, your house plot. The circle on each card is its farm unit or its house number.'));
     const panel = (title: string, body: Kid, iconPaths?: string) => {
       const p = h('section', 'panel', undefined, h('h2', '', undefined, iconPaths ? h('span', 'glyph', undefined, icon(iconPaths)) : null, title), body);
       p.style.marginTop = '16px';
@@ -3230,11 +3218,11 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     };
     const cols = h('div', 'unit-cols');
     cols.append(
-      h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.farm)), 'Farm', farmPills(hh)),
+      h('section', 'panel', undefined, h('h2', '', undefined, farmPills(hh) ?? h('span', 'glyph', undefined, icon(IC.farm)), 'Farm'),
         h('div', 'kpis', undefined, kpi('Farm land', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), kpi('Farm plots', String(hh.plots.length))),
         hh.plots.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Acres', 'Status'], [...hh.plots].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaAcres, acresFmt), verifiedMark(p.verification)]), 2)) : h('p', 'lede', 'Patta details not available yet'),
         isFamily() ? null : landCardFooter(hh, 'farm')),
-      h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.house)), 'House', houseHeadPills(hh)),
+      h('section', 'panel', undefined, h('h2', '', undefined, housePills(hh) ?? h('span', 'glyph', undefined, icon(IC.house)), 'House'),
         h('div', 'kpis', undefined, kpi('House area', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), kpi('House plots', String(hh.housePattas.length))),
         hh.housePattas.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Sq ft', 'Status'], [...hh.housePattas].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaSqFt, sqftFmt), verifiedMark(p.verification)]), 2)) : h('p', 'lede', hh.houseNo ? 'Patta details not available yet' : 'No house allocated yet'),
         hh.houseNo && !isFamily() ? landCardFooter(hh, 'house') : null),
