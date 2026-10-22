@@ -1,7 +1,7 @@
 // Run with: node --test scripts/lib/member-directory.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDirectory, buildUnitDirectory, facesToShow } from './member-directory.mjs';
+import { baseUnitType, bedroomsOf, buildDirectory, buildUnitDirectory, facesToShow } from './member-directory.mjs';
 
 const story = { bio: 'Asha is an engineer.', family: 'Lives in Bengaluru.', why: 'The soil.', social: 'https://www.linkedin.com/in/asha' };
 const data = {
@@ -296,4 +296,21 @@ test('only the people who have a photo are shown when anyone does; with none, ev
   assert.deepEqual(facesToShow([a, c]), [a, c]); // two photos: two faces
   assert.deepEqual(facesToShow([b, { name: 'Di', photo: null }]), [b, { name: 'Di', photo: null }]); // none: initials, as before
   assert.deepEqual(facesToShow([]), []);
+});
+
+// ---- unit types ----
+
+test("a unit type is filed under its bedroom count, whatever its variant", () => {
+  assert.equal(bedroomsOf("SG1"), "1 BHK");
+  assert.equal(bedroomsOf("DG1"), "2 BHK");
+  assert.equal(bedroomsOf("DF1-V2"), "2 BHK");
+  assert.equal(bedroomsOf("to1-v2"), "3 BHK");
+  for (const odd of [null, undefined, "", "  ", "X9", 5]) assert.equal(bedroomsOf(odd), null);
+});
+
+test("the variant suffix is dropped from a unit type", () => {
+  assert.equal(baseUnitType("TO1-V2"), "TO1");
+  assert.equal(baseUnitType(" DG1 "), "DG1");
+  assert.equal(baseUnitType(null), null);
+  assert.equal(baseUnitType(""), null);
 });
