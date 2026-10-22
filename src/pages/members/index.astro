@@ -2584,7 +2584,19 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     img.alt = '';
     img.loading = 'lazy';
     img.decoding = 'async';
-    memberPhotoSrc(ref, size).then((src) => { img.src = src; }).catch(() => img.classList.add('photo-missing'));
+    const load = () => memberPhotoSrc(ref, size).then((src) => { img.src = src; }).catch(() => img.classList.add('photo-missing'));
+    // The file is fetched with a script (it needs the sign-in), so `loading = 'lazy'` does nothing here: ask only
+    // once the picture is near the screen, or a long list requests every photo at the same moment.
+    if (typeof IntersectionObserver === 'undefined') {
+      load();
+    } else {
+      const seen = new IntersectionObserver((entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        seen.disconnect();
+        load();
+      }, { rootMargin: '300px' });
+      seen.observe(img);
+    }
     return img;
   }
   const first = (full: string) => full.trim().split(/\s+/).find((w) => w.length > 1) ?? full;

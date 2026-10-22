@@ -1638,7 +1638,11 @@ never touches Netlify either.
   that both are real JPEGs, the sizes and the square, then REMOVES every metadata block itself (`stripJpegMetadata`: EXIF, XMP, IPTC, comments, multi-picture offsets; the JFIF header and ICC colour profile stay) and stores the cleaned bytes, never the uploaded ones, with
   a cap of 10 uploads a member a day. Photos are never public: `GET /api/members-me/unit-photo` serves one only
   to the unit's people (any copy) or, for the APPROVED photo of a listed member, to any signed-in member, and the
-  page fetches it with the member's sign-in and shows it from a blob URL; `members-admin.mts` serves a
+  page fetches it with the member's sign-in and shows it from a blob URL, and only once the picture is near the
+  screen (`photoImg` waits on an IntersectionObserver, so a long directory doesn't request every photo at once). The
+  response is `private, max-age=604800, immutable`: a photo's id never changes (a replaced photo is a new id), so the
+  browser keeps it for a week and a repeat visit doesn't refetch; the story row is read in parallel with the
+  viewer check. `members-admin.mts` serves a
   submitted or approved photo to admins with `edit`. Replacing a photo, removing it, resubmitting or
   approving deletes the files nothing refers to any more.Privacy
   notice v5 describes photos.
