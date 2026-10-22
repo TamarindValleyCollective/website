@@ -68,6 +68,36 @@ export const TOUR_STEPS = [
     title: 'Add family members',
     text: 'Two can sign in with their own Google account and see the unit and our members. Ask the core team for more.',
   },
+  {
+    id: 'documents',
+    since: 3,
+    audience: 'owner',
+    route: 'unit',
+    target: 'land-docs',
+    tag: 'Documents',
+    title: 'Upload your land documents',
+    text: 'The pencil under a Farm land or House plot card opens its documents. Upload the PDF you downloaded from eservices.tn.gov.in and we read it: a record that agrees with the register shows as verified, and anything new, or any photo, is checked by the core team first. Nothing on the register changes without them.',
+  },
+  {
+    id: 'patta-or-survey',
+    since: 3,
+    audience: 'owner',
+    route: 'unit',
+    target: 'land-docs',
+    tag: 'Documents',
+    title: 'Patta or survey number document?',
+    text: 'A patta (choose Patta Number on e-Services) covers your patta number and lists every survey number under it. A survey number document (choose Survey Number) is for one survey number and usually comes with its sketch. You can upload both; clicking a patta or survey number on your card opens its file.',
+  },
+  {
+    id: 'fmb-sketch',
+    since: 3,
+    audience: 'owner',
+    route: 'unit',
+    target: 'land-docs',
+    tag: 'Documents',
+    title: 'What is an FMB sketch?',
+    text: 'The drawing of your land. Add it with "Add an FMB sketch" and the shape of the land appears beside that survey number on your card. A sketch never changes a record; to have a patta checked against the register, upload it as a document instead.',
+  },
 ];
 
 export const TOUR_LATEST = Math.max(...TOUR_STEPS.map((s) => s.since));
