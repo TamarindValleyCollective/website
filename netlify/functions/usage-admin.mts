@@ -155,7 +155,7 @@ async function handleOverview(req: Request): Promise<Response> {
     // What this cycle's production deploys have cost (15 credits each), read automatically; null until the collector has run.
     netlify: (() => {
       const activity = snapshots['netlify.deploy_activity'] ?? null;
-      const u = netlifyDeployUsage(activity, snapshots['netlify.plan_credits'] ?? null, now);
+      const u = netlifyDeployUsage(activity, snapshots['netlify.plan_credits'] ?? null, now, snapshots['netlify.credits_remaining'] ?? null);
       return {
         deploys: u,
         activity: activity && u ? { capturedAt: activity.captured_at, ...(activity.detail as Record<string, unknown>) } : null,

@@ -267,6 +267,41 @@ test('netlifyDeployUsage: names the day the allowance would run out at this pace
   assert.match(evaluateAlerts({ now: NF_NOW, snapshots: { 'netlify.plan_credits': plan, 'netlify.deploy_activity': activity(33) } })[0].title, /^Netlify credits are on pace to run out around 2[567] Oct$/);
 });
 
+test('netlifyDeployUsage: extra credits (a typed-in balance above the plan allowance) stretch the run-out date', () => {
+  const typed = (value, at) => ({ value, limit_value: 1000, captured_at: at });
+  const hourAgo = '2026-10-22T11:00:00Z';
+  const base = netlifyDeployUsage(activity(33), plan, NF_NOW); // allowance only: 505 credits left
+  const withExtra = netlifyDeployUsage(activity(33), plan, NF_NOW, typed(1394, hourAgo)); // top-ups: 1,394 really left
+  assert.equal(base.basis, 'allowance');
+  assert.equal(withExtra.basis, 'balance');
+  assert.ok(withExtra.remaining > 1380 && withExtra.remaining < 1394, String(withExtra.remaining)); // less the deploys since it was typed
+  assert.ok(Math.abs(withExtra.pool - (495 + withExtra.remaining)) < 1e-6);
+  assert.ok(withExtra.fraction < 0.3, String(withExtra.fraction)); // 495 of ~1,880 available, not 495 of 1,000
+  assert.equal(withExtra.level, null);
+  // 1,390 left at ~154 credits a day is about 9 days, not 3
+  const days = (withExtra.exhaustsAt && (new Date(withExtra.exhaustsAt) - NF_NOW) / 86_400_000) || 0;
+  assert.ok(days > 8 && days < 10, String(days));
+  assert.ok(new Date(withExtra.exhaustsAt) > new Date(base.exhaustsAt));
+  assert.equal(withExtra.onPaceToExceed, true); // still before the cycle ends on 19 Nov
+
+  // a balance from an earlier cycle, or over a week old, or nonsense, is ignored
+  assert.equal(netlifyDeployUsage(activity(33), plan, NF_NOW, typed(1394, '2026-10-10T00:00:00Z')).basis, 'allowance'); // before this cycle began
+  assert.equal(netlifyDeployUsage(activity(33), plan, new Date('2026-10-30T12:00:00Z'), typed(1394, hourAgo)).basis, 'allowance'); // older than 7 days
+  assert.equal(netlifyDeployUsage(activity(33), plan, NF_NOW, { value: 'x', limit_value: 1000, captured_at: hourAgo }).basis, 'allowance');
+  // a LOW typed balance brings the date forward and the alert level up
+  const low = netlifyDeployUsage(activity(33), plan, NF_NOW, typed(120, hourAgo));
+  assert.ok(low.remaining < 120 && new Date(low.exhaustsAt) < new Date(base.exhaustsAt));
+  assert.equal(low.level, 'warn'); // 495 of ~610 available = 81%
+});
+
+test('evaluateAlerts: the Netlify pace alert uses the balance typed in, so top-ups do not raise a false alarm', () => {
+  const snapshots = (balance) => ({ 'netlify.plan_credits': plan, 'netlify.deploy_activity': activity(33), ...(balance ? { 'netlify.credits_remaining': { value: balance, limit_value: 1000, captured_at: '2026-10-22T11:00:00Z' } } : {}) });
+  const pace = (balance) => evaluateAlerts({ now: NF_NOW, snapshots: snapshots(balance) }).find((a) => a.key === 'netlify:deploy-pace');
+  assert.match(pace(null).title, /run out around 2[567] Oct$/); // allowance only: about 3 days left
+  assert.match(pace(1394).title, /run out around (30|31) Oct$/); // with the extra credits: about 9 days
+  assert.equal(evaluateAlerts({ now: NF_NOW, snapshots: snapshots(1394) }).some((a) => a.key === 'netlify:deploys'), false); // 26% of what is available: no level alert
+});
+
 test('every alert says what to do, in words a non-technical reader can act on', () => {
   // a page that is on fire everywhere, so every rule that can speak does
   const snapshots = {
@@ -301,7 +336,7 @@ test('evaluateAlerts: deploy credits warn at 70% / critical at 90%; a pace warni
   assert.deepEqual(keys(50), ['netlify:deploys:warn']); // 750 credits = 75%; the level alert covers it, no extra pace warning
   assert.deepEqual(keys(62), ['netlify:deploys:critical']); // 930 credits = 93%
   assert.deepEqual(keys(2), []); // 30 credits, tiny pace: quiet
-  assert.match(run(50).find((a) => a.key === 'netlify:deploys').detail, /50 production deploys at 15 credits each is 750 of 1,000/);
+  assert.match(run(50).find((a) => a.key === 'netlify:deploys').detail, /50 production deploys at 15 credits each is 750 of the 1,000 credits available this cycle \(the plan allowance\)/);
 });
 
 test('evaluateAlerts: Gemini quota exhaustion today, and the optional daily limit', () => {

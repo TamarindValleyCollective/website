@@ -209,7 +209,7 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
   messages (English, romanised Kannada, Tamil, a bare "yes", a complaint): the labels were sensible,
   and a complaint with no question first scored low on needs-reply, so that question now says a
   problem needs a response. Not yet checked on real guest traffic, which is what the shadow run is for.
-  Cost is about $0.00002 per message; see `USAGE.md`.
+  Cost is about $0.00005 per message (about 1,100 input tokens each, measured on the first real read); see `USAGE.md`.
 - **Account-health alerts (2026-10-10).** Meta's health webhook fields (template approved / rejected /
   paused / disabled, template and phone-number quality changes, recategorisation, account
   restrictions) are stored in `whatsapp_health_events` (migration `0036`, **apply before
