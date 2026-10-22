@@ -223,11 +223,19 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   /* ---- service cards ---- */
+  /* independent columns (filled by placeCards in the script), so opening one card never leaves a gap beside it */
   .usage .cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+    display: flex;
+    align-items: flex-start;
     gap: 16px;
-    align-items: start;
+  }
+
+  .usage .cards-col {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
   }
 
   .usage .svc {
@@ -299,64 +307,106 @@ import SignInGate from '../../components/SignInGate.astro';
     font-weight: 600;
   }
 
-  /* a card's summary is always on show; everything else sits behind this toggle */
-  .usage .svc-more {
+  /* A card is a summary. Click anywhere on it to open its details (one at a time). The motion is the
+     iOS ease: fast out of the gate, a long soft landing, no overshoot, and the same path back. */
+  .usage .svc {
+    position: relative;
+    cursor: pointer;
+    transition: transform 140ms ease-out;
+  }
+
+  .usage .svc[data-pressed] {
+    transform: scale(0.985);
+  }
+
+  .usage .svc:has(.svc-toggle:focus-visible) {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .usage .svc-foot {
     margin-top: 12px;
     border-top: 1px solid var(--tvc-line);
   }
 
-  .usage .svc-more > summary {
+  .usage .svc-toggle {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    width: 100%;
     padding: 10px 0 2px;
+    border: 0;
+    background: none;
+    font: inherit;
     font-size: 0.82rem;
     font-weight: 600;
+    text-align: left;
     color: var(--tvc-ink-soft);
     cursor: pointer;
-    list-style: none;
   }
 
-  .usage .svc-more > summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .usage .svc-more > summary::after {
-    content: '+';
-    font-size: 1.1rem;
-    line-height: 1;
-  }
-
-  .usage .svc-more[open] > summary::after {
-    content: '\2212';
-  }
-
-  .usage .svc-more > summary:hover {
+  .usage .svc:hover .svc-toggle {
     color: var(--tvc-ink);
+  }
+
+  .usage .svc-toggle:focus-visible {
+    outline: none; /* the whole card shows the focus ring */
+  }
+
+  .usage .svc-toggle::after {
+    content: '';
+    width: 7px;
+    height: 7px;
+    margin-right: 3px;
+    border-right: 1.75px solid currentColor;
+    border-bottom: 1.75px solid currentColor;
+    transform: translateY(-2px) rotate(45deg);
+    transition: transform 450ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .usage .svc[data-open='true'] .svc-toggle::after {
+    transform: translateY(2px) rotate(225deg);
+  }
+
+  /* 0fr to 1fr animates the height to the content's real size, and a click mid-flight turns around from where it is */
+  .usage .svc-more {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 450ms cubic-bezier(0.32, 0.72, 0, 1);
+    cursor: auto;
+  }
+
+  .usage .svc[data-open='true'] .svc-more {
+    grid-template-rows: 1fr;
+  }
+
+  .usage .svc-more-clip {
+    min-height: 0;
+    overflow: hidden;
   }
 
   .usage .svc-more-body {
     padding-top: 10px;
+    opacity: 0;
+    transition: opacity 180ms ease-out;
   }
 
-  /* An open card takes the whole row, so it doesn't leave a tall gap under its neighbours; the
-     others flow back around it. On wide screens its details run in two columns. */
-  .usage .cards {
-    grid-auto-flow: row dense;
+  .usage .svc[data-open='true'] .svc-more-body {
+    opacity: 1;
+    transition: opacity 300ms ease-out 120ms;
   }
 
-  .usage .svc:has(.svc-more[open]) {
-    grid-column: 1 / -1;
-  }
-
-  @media (min-width: 900px) {
-    .usage .svc:has(.svc-more[open]) .svc-more-body {
-      column-count: 2;
-      column-gap: 32px;
+  @media (prefers-reduced-motion: reduce) {
+    .usage .svc,
+    .usage .svc-more,
+    .usage .svc-toggle::after {
+      transition-duration: 1ms;
     }
 
-    .usage .svc:has(.svc-more[open]) .svc-more-body > * {
-      break-inside: avoid;
+    .usage .svc-more-body,
+    .usage .svc[data-open='true'] .svc-more-body {
+      transition-duration: 1ms;
+      transition-delay: 0s;
     }
   }
 
@@ -748,15 +798,63 @@ import SignInGate from '../../components/SignInGate.astro';
     const more = (at === -1 ? [] : body.slice(at + 1)) as Kid[];
     const fresh = k.fresh ?? [];
     const freshLine = (f: { text: string; late?: boolean }) => h('p', { class: `svc-fresh${f.late ? ' svc-fresh--late' : ''}`, text: f.text });
+    const open = title === openCardTitle; // a re-render (after a saved reading) keeps the open card open, with no animation
+    const bodyId = `svc-more-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+    const toggle = h('button', { class: 'svc-toggle', attrs: { type: 'button', 'aria-expanded': String(open), 'aria-controls': bodyId, 'aria-label': `${title}: details` } }, h('span', { text: 'Details' }));
+    const bodyEl = h('div', { class: 'svc-more', attrs: { id: bodyId } }, h('div', { class: 'svc-more-clip' }, h('div', { class: 'svc-more-body' }, h('p', { class: 'svc-fresh', text: k.text }), ...fresh.filter((f) => !f.late).map(freshLine), ...more)));
+    if (!open) bodyEl.setAttribute('inert', ''); // closed content is out of the tab order and invisible to screen readers
     return h(
       'article',
-      { class: 'card svc' },
+      { class: 'card svc', attrs: { 'data-open': String(open) } },
       h('div', { class: 'svc-head' }, h('h3', { class: 'svc-title', text: title }), pill(level)),
       h('p', { class: 'svc-kind' }, badge),
       ...summary,
       ...fresh.filter((f) => f.late).map(freshLine),
-      h('details', { class: 'svc-more' }, h('summary', { text: 'Details' }), h('div', { class: 'svc-more-body' }, h('p', { class: 'svc-fresh', text: k.text }), ...fresh.filter((f) => !f.late).map(freshLine), ...more)),
+      h('div', { class: 'svc-foot' }, toggle, bodyEl),
     );
+  }
+
+  // One card open at a time. The whole card is the target (the button inside is for keyboards and screen
+  // readers); the open details are not, so they can be read and selected without folding shut.
+  let openCardTitle: string | null = null;
+  function setCardOpen(card: HTMLElement, open: boolean) {
+    card.dataset.open = String(open);
+    card.querySelector('.svc-toggle')?.setAttribute('aria-expanded', String(open));
+    card.querySelector('.svc-more')?.toggleAttribute('inert', !open);
+  }
+  function onCardsClick(e: MouseEvent) {
+    const target = e.target as Element;
+    const card = target.closest<HTMLElement>('.svc');
+    if (!card || target.closest('.svc-more')) return;
+    if (window.getSelection()?.toString()) return; // the end of a text selection is not a click
+    const opening = card.dataset.open !== 'true';
+    document.querySelectorAll<HTMLElement>('#cards .svc[data-open="true"]').forEach((c) => setCardOpen(c, false));
+    if (opening) setCardOpen(card, true);
+    openCardTitle = opening ? (card.querySelector('.svc-title')?.textContent ?? null) : null;
+  }
+  // Press feedback on pointer-down (before release), like a tap on a physical button.
+  function onCardsPress(e: PointerEvent) {
+    const card = (e.target as Element).closest<HTMLElement>('.svc');
+    if (card && !(e.target as Element).closest('.svc-more')) card.dataset.pressed = 'true';
+  }
+  function onCardsRelease() {
+    document.querySelectorAll<HTMLElement>('#cards .svc[data-pressed]').forEach((c) => delete c.dataset.pressed);
+  }
+
+  // Cards sit in independent columns (not grid rows), so an opening card only pushes down the cards
+  // beneath it in its own column and never leaves a gap beside it. Card i goes in column i mod n.
+  const CARD_MIN_WIDTH = 300;
+  const CARD_GAP = 16;
+  let cardNodes: HTMLElement[] = [];
+  let placedColumns = 0;
+  const columnCount = () => Math.max(1, Math.min(4, Math.floor(($('cards').clientWidth + CARD_GAP) / (CARD_MIN_WIDTH + CARD_GAP))));
+  function placeCards(nodes?: HTMLElement[]) {
+    if (nodes) cardNodes = nodes;
+    const n = columnCount();
+    const columns = Array.from({ length: n }, () => h('div', { class: 'cards-col' }));
+    cardNodes.forEach((c, i) => columns[i % n].append(c));
+    $('cards').replaceChildren(...columns);
+    placedColumns = n;
   }
 
   // ---- the cards -------------------------------------------------------------
@@ -1164,12 +1262,8 @@ import SignInGate from '../../components/SignInGate.astro';
       renderAlerts(data.alerts);
       nextRunAt = data.schedule?.nextCollectorRunAt ?? null;
       runEveryHours = data.schedule?.collectorEveryHours ?? 6;
-      // The data reloads after every saved reading: keep whichever cards were open, open.
-      const openCards = new Set([...document.querySelectorAll('#cards .svc-more[open]')].map((d) => d.closest('.svc')?.querySelector('.svc-title')?.textContent));
-      $('cards').replaceChildren(anthropicCard(data), geminiCard(data), typesafeCard(data), supabaseCard(data), ...(data.resend.fresh ? [resendCard(data)] : []), ...(data.r2.fresh ? [r2Card(data)] : []), ...data.manual.map(manualCard));
-      for (const d of document.querySelectorAll<HTMLDetailsElement>('#cards .svc-more')) {
-        if (openCards.has(d.closest('.svc')?.querySelector('.svc-title')?.textContent)) d.open = true;
-      }
+      // Re-rendered after every saved reading; the open card (openCardTitle) is rebuilt open.
+      placeCards([anthropicCard(data), geminiCard(data), typesafeCard(data), supabaseCard(data), ...(data.resend.fresh ? [resendCard(data)] : []), ...(data.r2.fresh ? [r2Card(data)] : []), ...data.manual.map(manualCard)]);
       renderAdmin(data);
       $('foot').textContent = `Updated ${new Date(data.generatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}. Counts use UTC days. Warnings are emailed to the core team once, and again only if they get worse.`;
       content.hidden = false;
@@ -1207,6 +1301,12 @@ import SignInGate from '../../components/SignInGate.astro';
     firstLoad = true;
     showGate();
   }
+  $('cards').addEventListener('click', onCardsClick);
+  $('cards').addEventListener('pointerdown', onCardsPress);
+  for (const type of ['pointerup', 'pointercancel']) document.addEventListener(type, onCardsRelease); // wherever the pointer is let go
+  new ResizeObserver(() => {
+    if (cardNodes.length && columnCount() !== placedColumns) placeCards();
+  }).observe($('cards'));
   $('use-different-account').addEventListener('click', signOut);
   $('sign-out').addEventListener('click', signOut);
 
