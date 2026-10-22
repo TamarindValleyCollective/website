@@ -745,6 +745,27 @@ import SignInGate from '../../components/SignInGate.astro';
     return card('Google Gemini', { mode: 'live', text: 'Measured by the website', fresh: [{ text: 'Updates on every search the site makes.' }] }, level, ...parts);
   }
 
+  function typesafeCard(o: Overview): HTMLElement {
+    const t = o.typesafe;
+    // Jev calls cost a few thousandths of a cent each, so whole cents would always read $0.00.
+    const spend = (n: number) => (n < 0.01 ? `$${n.toFixed(4)}` : usd(n));
+    const failing = t.today.errors >= 5 && t.today.errors / Math.max(t.today.requests, 1) >= 0.2;
+    const level: Level = failing ? 'warn' : null;
+    return card(
+      'TypeSafe (Jev)',
+      { mode: 'mixed', text: 'Usage measured live · credit balance typed in', fresh: [{ text: 'Usage: updates on every WhatsApp message read.' }] },
+      level,
+      h('p', { class: 'hero', text: nf.format(t.today.requests) }),
+      h('p', { class: 'hero-sub', text: t.today.errors ? `calls today, ${nf.format(t.today.errors)} failed` : 'calls today' }),
+      h('dl', { class: 'stats' },
+        stat('Last 7 days', nf.format(t.last7.requests), `${spend(t.last7.costUsd)} · ${nf.format(t.last7.errors)} failed`),
+        stat('This month', nf.format(t.month.requests), `${compact(t.month.inputTokens)} tokens · ${spend(t.month.costUsd)}`),
+      ),
+      sparkline(t.requestsSeries.map((p: any) => ({ label: dayLabel(p.day), value: p.value })), 'Calls per day', (n) => `${nf.format(n)} call${n === 1 ? '' : 's'}`),
+      h('p', { class: 'svc-note', text: 'Reads each inbound WhatsApp message in shadow mode (nothing acts on them yet). Billed per input token only; spend here is an estimate from the published price. The credit balance is its own typed-in card, from console.typesafe.ai.' }),
+    );
+  }
+
   function supabaseCard(o: Overview): HTMLElement {
     const s = o.supabase;
     if (!s.reading) return card('Supabase database', { mode: 'auto', text: 'Measured every 6 hours', fresh: [nextAutoUpdate()] }, 'none', h('p', { class: 'hero-sub', text: 'No measurement recorded yet.' }));
@@ -1019,7 +1040,7 @@ import SignInGate from '../../components/SignInGate.astro';
       renderAlerts(data.alerts);
       nextRunAt = data.schedule?.nextCollectorRunAt ?? null;
       runEveryHours = data.schedule?.collectorEveryHours ?? 6;
-      $('cards').replaceChildren(anthropicCard(data), geminiCard(data), supabaseCard(data), ...(data.resend.fresh ? [resendCard(data)] : []), ...(data.r2.fresh ? [r2Card(data)] : []), ...data.manual.map(manualCard));
+      $('cards').replaceChildren(anthropicCard(data), geminiCard(data), typesafeCard(data), supabaseCard(data), ...(data.resend.fresh ? [resendCard(data)] : []), ...(data.r2.fresh ? [r2Card(data)] : []), ...data.manual.map(manualCard));
       renderAdmin(data);
       $('foot').textContent = `Updated ${new Date(data.generatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}. Counts use UTC days. Warnings are emailed to the core team once, and again only if they get worse.`;
       content.hidden = false;

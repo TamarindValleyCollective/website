@@ -190,6 +190,26 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
   Needs `ANTHROPIC_API_KEY` (already set). No migration. On a phone the canned-reply row hides while
   a draft is open. Checked in Chrome against a mock backend and with mocked Anthropic/Gemini calls,
   not against the real models: judge the first real drafts before relying on it.
+- **Jev message reads (shadow mode, 2026-10-22).** Each inbound text or button message can be read
+  by TypeSafe's Jev model (`TYPESAFE_WHATSAPP_SHADOW=true` + `TYPESAFE_API_KEY`; **off by default**)
+  and the answers stored in `whatsapp_message_assessments` (migration `0057`, **apply before
+  deploying**; one row per message, no text). Four questions in `scripts/lib/whatsapp-assess.mjs`:
+  **intent** (visiting, stay, event, membership, payment, complaint, volunteering or work, thanks or
+  acknowledgement, other), **language** (English, Kannada, Tamil, Hindi, other), **urgency** (0 can
+  wait, 1 within hours, 2 needs a person now) and **needs reply** (0 to 1). Jev sees the last few
+  messages labelled Guest/TVC, never names or numbers. **Nothing uses the reads**: the inbox, the
+  "Needs reply" filter, the stale alert and the auto-reply all behave exactly as before. The point
+  is to compare them with what admins really do (reply time via a join on the next outbound
+  message) before deciding to act on them. Photos, voice notes and stickers are skipped. A failed
+  call is metered on `/internal/usage` and dropped; it never delays or fails a delivery (3s limit,
+  runs after the auto-reply). Model pinned to `jev-1.14.0` (`TYPESAFE_MODEL` to change), because the
+  `jev-latest` alias moves. `question_version` in the table must be bumped when a question's wording
+  changes. **Before turning the flag on**: apply migration `0057`, set both env vars on Netlify, and
+  note that `/privacy` now discloses the TypeSafe read. Checked with the real API on 12 sample
+  messages (English, romanised Kannada, Tamil, a bare "yes", a complaint): the labels were sensible,
+  and a complaint with no question first scored low on needs-reply, so that question now says a
+  problem needs a response. Not yet checked on real guest traffic, which is what the shadow run is for.
+  Cost is about $0.00002 per message; see `USAGE.md`.
 - **Account-health alerts (2026-10-10).** Meta's health webhook fields (template approved / rejected /
   paused / disabled, template and phone-number quality changes, recategorisation, account
   restrictions) are stored in `whatsapp_health_events` (migration `0036`, **apply before

@@ -27,10 +27,13 @@
 // unanswered-message digest, once per-message emails turned out to be more
 // clutter than signal for a shared inbox multiple admins check.
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { upsertConversation, insertMessage, updateTemplateSendStatus, templateSendExists, claimAutoAck, addOptOut, removeOptOut, recordHealthEvent } from '../../scripts/lib/supabase.mjs';
+import { upsertConversation, insertMessage, updateTemplateSendStatus, templateSendExists, claimAutoAck, addOptOut, removeOptOut, recordHealthEvent, listRecentMessagesByConversation, insertMessageAssessment } from '../../scripts/lib/supabase.mjs';
+import { askJev, buildQuestions, buildState, isAssessable, parseAnswers, DEFAULT_MODEL } from '../../scripts/lib/whatsapp-assess.mjs';
 import { getPaymentById } from '../../scripts/lib/event-payments-db.mjs';
 import { sendStaffAlert, escapeHtml } from './lib/refund-alert';
 import { sendWhatsAppText } from './lib/whatsapp-send';
+import { buildTranscript } from './lib/whatsapp-suggest';
+import { recordUsage } from './lib/usage-meter';
 import { autoAckText, isOutsideHours, shouldAutoAck } from './lib/whatsapp-autoack';
 import { classifyKeyword, STOP_REPLY, START_REPLY } from './lib/whatsapp-optout';
 import { classifyHealthEvent, healthEventKey } from './lib/whatsapp-health';
@@ -85,7 +88,7 @@ interface WhatsAppContact {
 // Meta retry the delivery. insertMessage() dedupes on wa_message_id (see
 // scripts/lib/supabase.mjs), so re-processing an already-persisted message
 // on retry is a safe no-op rather than a duplicate.
-async function persistIncomingMessage(message: WhatsAppMessage, contact: WhatsAppContact | undefined): Promise<{ id: string }> {
+async function persistIncomingMessage(message: WhatsAppMessage, contact: WhatsAppContact | undefined): Promise<{ conversation: { id: string }; messageId: string | null }> {
   const conversation = await upsertConversation({
     waPhone: message.from,
     displayName: contact?.profile?.name,
@@ -99,14 +102,15 @@ async function persistIncomingMessage(message: WhatsAppMessage, contact: WhatsAp
         }
       : null,
   });
-  await insertMessage({
+  const row = await insertMessage({
     conversationId: conversation.id,
     direction: 'inbound',
     body: describeMessage(message),
     waMessageId: message.id,
     media: extractMedia(message),
   });
-  return conversation;
+  // null when Meta re-delivered a message we already stored.
+  return { conversation, messageId: row?.id ?? null };
 }
 
 // What the inbox shows for an inbound message. Taps on our template/
@@ -192,6 +196,48 @@ async function maybeAutoAck(message: WhatsAppMessage, conversation: { id: string
     });
   } catch (err) {
     console.error('[whatsapp-webhook] Auto-reply failed', err);
+  }
+}
+
+// Jev's read of an inbound message (TYPESAFE_WHATSAPP_SHADOW=true), stored in
+// whatsapp_message_assessments for comparison with what admins actually do.
+// SHADOW MODE: nothing the inbox shows or a guest receives depends on it. Runs
+// last so it can never delay an opt-out confirmation or the auto-reply, and
+// never throws: a failed read is counted in the usage meter and dropped, and
+// must not make Meta retry the whole batch. See scripts/lib/whatsapp-assess.mjs.
+async function maybeAssess(message: WhatsAppMessage, conversation: { id: string }, messageId: string | null): Promise<void> {
+  try {
+    if (process.env.TYPESAFE_WHATSAPP_SHADOW !== 'true') return;
+    const apiKey = process.env.TYPESAFE_API_KEY;
+    if (!apiKey || !messageId) return;
+    const body = describeMessage(message);
+    if (!isAssessable(message.type, body)) return;
+
+    const recent = (await listRecentMessagesByConversation([conversation.id], 6)).get(conversation.id) ?? [];
+    const transcript = buildTranscript([...recent].reverse());
+
+    const started = Date.now();
+    const model = process.env.TYPESAFE_MODEL || DEFAULT_MODEL;
+    const result = await askJev({ apiKey, model, state: buildState(transcript, body), questions: buildQuestions() });
+    const latencyMs = Date.now() - started;
+
+    if (!result.ok) {
+      console.error('[whatsapp-webhook] Jev read failed', result.reason);
+      await recordUsage('typesafe', { requests: 1, errors: 1, timeouts: result.reason === 'timeout' ? 1 : 0 });
+      return;
+    }
+    const usage = result.response?.usage;
+    await recordUsage('typesafe', { requests: 1, input_tokens: usage?.input_tokens, output_tokens: usage?.output_tokens });
+
+    const row = parseAnswers(result.response);
+    if (!row) {
+      console.error('[whatsapp-webhook] Jev response did not match the questions asked');
+      await recordUsage('typesafe', { errors: 1 });
+      return;
+    }
+    await insertMessageAssessment(messageId, { ...row, latency_ms: latencyMs });
+  } catch (err) {
+    console.error('[whatsapp-webhook] Jev read failed', err);
   }
 }
 
@@ -313,8 +359,9 @@ export default async (req: Request): Promise<Response> => {
           const contactsByWaId = new Map<string, WhatsAppContact>((value.contacts ?? []).map((c: WhatsAppContact) => [c.wa_id, c]));
           for (const message of value.messages as WhatsAppMessage[]) {
             const contact = contactsByWaId.get(message.from);
-            const conversation = await persistIncomingMessage(message, contact);
+            const { conversation, messageId } = await persistIncomingMessage(message, contact);
             if (!(await handleOptOutKeyword(message, conversation))) await maybeAutoAck(message, conversation);
+            await maybeAssess(message, conversation, messageId);
           }
         } else if (change?.field === 'messages' && Array.isArray(value.statuses)) {
           // Delivery receipts for messages WE sent (sent → delivered → read,

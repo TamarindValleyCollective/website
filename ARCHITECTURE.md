@@ -172,7 +172,7 @@ flowchart TD
         WHATSAPPDASH["WhatsApp dashboard (/internal/whatsapp)<br/>Google Sign-In gated two-pane chat UI — conversation<br/>list + thread + reply box; unlinked, noindex,<br/>sitemap-excluded"]
         ACCOMMODATIONDASH["Accommodation Allocation (/internal/accommodation-calendar)<br/>Google Sign-In gated tent-booking dashboard —<br/>day/week/month views, guest directory + typeahead,<br/>audit log; unlinked, noindex, sitemap-excluded"]
         EVENTPAYDASH["Event Payments (/internal/event-payments)<br/>Google Sign-In gated dashboard — event dropdown,<br/>registrations/cancellations/money-collected stats,<br/>tier-suggested refund with two-step confirm;<br/>unlinked, noindex, sitemap-excluded"]
-        USAGEDASH["Usage &amp; limits (/internal/usage)<br/>Google Sign-In gated dashboard — Anthropic, Gemini,<br/>Supabase measured; Netlify allowance + Resend quota read<br/>from their APIs; Cloudflare R2 storage read from its<br/>analytics API; Netlify balance and the Anthropic credit<br/>balance typed in by an admin; domain<br/>renewals read live; unlinked, noindex, sitemap-excluded"]
+        USAGEDASH["Usage &amp; limits (/internal/usage)<br/>Google Sign-In gated dashboard — Anthropic, Gemini,<br/>TypeSafe, Supabase measured; Netlify allowance + Resend quota read<br/>from their APIs; Cloudflare R2 storage read from its<br/>analytics API; Netlify balance and the Anthropic credit<br/>balance typed in by an admin; domain<br/>renewals read live; unlinked, noindex, sitemap-excluded"]
     end
 
     subgraph EXTERNAL["External services (called directly by the browser)"]
@@ -181,6 +181,7 @@ flowchart TD
         YT["YouTube (iframe)"]
         ANTHROPIC["Anthropic Claude API<br/>(chat.mts server-side,<br/>search-ai.mts's fallback,<br/>members-me.mts's story check,<br/>and caption-photos.mjs locally)"]
         GEMINI["Google Gemini API (free tier)<br/>search-ai.mts server-side —<br/>site search's AI answer, tried first"]
+        TYPESAFE["TypeSafe API (Jev model)<br/>whatsapp-webhook.mts server-side —<br/>shadow-mode read of each inbound WhatsApp<br/>message; off unless TYPESAFE_WHATSAPP_SHADOW=true"]
         R2["Cloudflare R2<br/>media.tvc.farm — curated photo storage,<br/>served directly to the browser"]
         GTAG["Google Analytics<br/>googletagmanager.com/gtag/js"]
         CLARITYEXT["Microsoft Clarity<br/>www.clarity.ms tag → scripts.clarity.ms<br/>bundle → *.clarity.ms/collect (subdomain<br/>varies, load-balanced)"]
@@ -219,7 +220,8 @@ flowchart TD
     FUNC_STATION -.-> SUPABASE_HA
     WAMETA -.->|"POST webhook events"| APIFN6
     APIFN6 -.->|"send notification email"| RESEND
-    APIFN6 -.->|"upsert conversation,<br/>insert inbound message"| SUPABASE
+    APIFN6 -.->|"upsert conversation,<br/>insert inbound message,<br/>store Jev read (shadow)"| SUPABASE
+    APIFN6 -.->|"read of each inbound message<br/>(shadow mode, flag off by default)"| TYPESAFE
     APIFN8 -.->|"query unread 60+ min"| SUPABASE
     APIFN8 -.->|"send digest email"| RESEND
     BOOKINGFORM --> APIFN11
@@ -308,7 +310,7 @@ flowchart TD
 
     class PAGES,INTERNALPAGE,INTERNALPAGE2,INTERNALPAGE3,INTERNALPAGE4,INTERNALPAGE5,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,STATIONCARD,CDN,POOLDASH,WHATSAPPDASH,ACCOMMODATIONDASH,EVENTPAYDASH,USAGEDASH,BOOKINGFORM,CANCELPAGE,APPROVEPAGE staticStyle
     class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_STATION,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,FUNC_SRC14,FUNC_SRC15,FUNC_SRC16,FUNC_SRC17,FUNC_SRC18,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN_STATION,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,APIFN14,APIFN15,APIFN16,APIFN17,APIFN18,APIFN19,BLOBS,FORMS,ANTHROPIC netlifyStyle
-    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,SUPABASE,SUPABASE_HA,HASSIST,GEMINI,RAZORPAY,RDAP externalStyle
+    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,SUPABASE,SUPABASE_HA,HASSIST,GEMINI,TYPESAFE,RAZORPAY,RDAP externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL,SCRIPT_GSC localStyle
     class GHA_MEMBER,GHA_DOMAIN ciStyle
@@ -409,7 +411,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
 - **`netlify/functions/usage-admin.mts` + `usage-alerts.mts` + `/internal/usage` +
   `scripts/lib/usage-rules.mjs`** — the usage & limits module (see `USAGE.md`). A new `usage` admin
   module (`view` for any role, `configure` admin-only). `usage-admin.mts` serves the page: the
-  overview (Anthropic and Gemini counts, Supabase size, typed-in readings, active warnings), a
+  overview (Anthropic, Gemini and TypeSafe counts, Supabase size, typed-in readings, active warnings), a
   separate `/domains` route (live RDAP lookups with a 4s timeout, cached an hour, so a slow registry
   can't hold up the page), and the two admin writes — a typed-in reading from a provider's own
   dashboard and the price/limit settings — each audit-logged by admin id before it is written and
@@ -593,6 +595,16 @@ outside both the local machine and Netlify (the member-update-email workflow).
   (`lib/whatsapp-optout.ts`) as a command: it writes/deletes the sender's E.164 number in
   `whatsapp_opt_outs` (migration `0035`) and replies with a confirmation. `lib/whatsapp-send.ts`
   checks that table before every template send and fails closed if it can't be read.
+- **WhatsApp message reads (Jev, shadow mode)** — with `TYPESAFE_WHATSAPP_SHADOW=true` (off by
+  default; needs `TYPESAFE_API_KEY`), `whatsapp-webhook.mts` sends each inbound text/button message to
+  TypeSafe's Jev model (`scripts/lib/whatsapp-assess.mjs`: four questions — intent, language, urgency,
+  needs-reply — over the last few messages, labelled Guest/TVC with no names or numbers) and stores
+  the answers in `whatsapp_message_assessments` (migration `0057`, one row per message, no message
+  text; reply time is derived by joining the next outbound message). It runs after persistence, the
+  opt-out reply and the auto-reply, never throws and times out at 3s, so a TypeSafe outage cannot
+  delay or fail a delivery. **Nothing reads the table yet**: no inbox, filter, alert or guest reply
+  depends on it. The model is pinned (`jev-1.14.0`, override `TYPESAFE_MODEL`), not the `jev-latest`
+  alias. Calls are metered as the `typesafe` service on `/internal/usage` (see `USAGE.md`).
 - **WhatsApp consent** — `EventBookingForm.astro` has an optional "send updates on WhatsApp"
   checkbox; `event-booking.mts` puts the answer in the Payment Link's `notes.whatsappOptIn`,
   `razorpay-webhook.mts` stores it as `event_payments.whatsapp_opt_in` (migration `0034`), and

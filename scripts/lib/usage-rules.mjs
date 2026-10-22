@@ -29,6 +29,13 @@ const SEVERITY = { warn: 1, critical: 2 };
 // is LEFT (alert as it nears zero). No provider limits are hard-coded: the
 // person enters the limit alongside the reading, so a plan change on the
 // provider's side never silently makes our percentages wrong.
+// TypeSafe bills input tokens only (output is free): $0.042 per million for the
+// Jev models in use (docs.typesafe.ai/models). A published price, not an
+// admin-entered one like Anthropic's, so it lives here; update it if TypeSafe's changes.
+export const TYPESAFE_USD_PER_MTOK = 0.042;
+export const TYPESAFE_ERROR_MIN = 5; // errors in a day before the alert can fire
+export const TYPESAFE_ERROR_SHARE = 0.2; // ...and the share of that day's calls
+
 export const MANUAL_METERS = {
   'anthropic.credit_remaining_usd': {
     service: 'anthropic',
@@ -40,6 +47,17 @@ export const MANUAL_METERS = {
     limitLabel: 'Total credit you started with / last topped up (USD)',
     where: 'console.anthropic.com → Billing',
     supportsExpiry: true,
+    refreshEveryDays: 14,
+  },
+  'typesafe.credit_remaining_usd': {
+    service: 'typesafe',
+    metric: 'credit_remaining_usd',
+    label: 'TypeSafe (Jev) credit',
+    kind: 'remaining',
+    unit: 'USD',
+    valueLabel: 'Credit left now (USD)',
+    limitLabel: 'Total credit you started with / last topped up (USD)',
+    where: 'console.typesafe.ai → Billing',
     refreshEveryDays: 14,
   },
   'netlify.credits_remaining': {
@@ -317,6 +335,16 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
     const used = sumDaily(daily, 'gemini', 'requests', today, today);
     const level = levelForUsed(used, geminiLimit);
     add('gemini:daily', level, 'gemini', `Gemini is at ${pct(used / geminiLimit)} of today's request limit`, `${used} of ${geminiLimit} requests used so far today (UTC day; Google's own daily reset may fall at a different hour).`);
+  }
+
+  // TypeSafe (Jev) reads of WhatsApp messages run in shadow mode, so a failing
+  // call changes nothing visible: this is the only place anyone would notice.
+  // A handful of errors in a day is noise; many, and most of the day's calls,
+  // means the key, the credit or the service needs attention.
+  const jevErrors = sumDaily(daily, 'typesafe', 'errors', today, today);
+  const jevRequests = sumDaily(daily, 'typesafe', 'requests', today, today);
+  if (jevErrors >= TYPESAFE_ERROR_MIN && jevRequests > 0 && jevErrors / jevRequests >= TYPESAFE_ERROR_SHARE) {
+    add('typesafe:errors', 'warn', 'typesafe', 'TypeSafe (Jev) calls are failing', `${jevErrors} of ${jevRequests} calls failed today (${pct(jevErrors / jevRequests)}). The WhatsApp message reads are not being recorded. Likely the credit ran out, the key was revoked, or TypeSafe is down; check console.typesafe.ai.`);
   }
 
   // Our own caps being hit means real growth or someone hammering the site.

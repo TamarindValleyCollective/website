@@ -432,3 +432,19 @@ export async function listRecentMessagesByConversation(conversationIds, perConve
   const rows = await res.json();
   return new Map(rows.map((r) => [r.id, r.whatsapp_messages ?? []]));
 }
+
+// Stores Jev's read of one inbound message (shadow mode; migration 0057).
+// `fields` are the columns parseAnswers() in whatsapp-assess.mjs returns plus
+// latency_ms. ignore-duplicates: a re-delivered webhook for a message that was
+// already read must not overwrite the first read or error.
+/**
+ * @param {string} messageId
+ * @param {Record<string, unknown>} fields
+ */
+export async function insertMessageAssessment(messageId, fields) {
+  await restFetch('/whatsapp_message_assessments?on_conflict=message_id', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+    body: JSON.stringify([{ message_id: messageId, ...fields }]),
+  });
+}
