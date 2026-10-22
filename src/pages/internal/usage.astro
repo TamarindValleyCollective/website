@@ -768,6 +768,9 @@ import SignInGate from '../../components/SignInGate.astro';
   // Typed-in readings can be small and fractional (1.2 GB of egress, $4.98 of credit): whole numbers would misreport them.
   const nfSmall = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
   const amount = (n: number) => (n >= 100 ? nf : nfSmall).format(n);
+  // "640 of 1,000"; but when top-ups or carried-over credits put the balance above the plan's included credits,
+  // "1,394 (1,000 included + extra)" rather than the nonsense of "1,394 of 1,000".
+  const leftOf = (value: number, limit: number) => (value > limit ? `${amount(value)} (${amount(limit)} included + extra)` : `${amount(value)} of ${amount(limit)}`);
   const compact = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e4 ? `${(n / 1e3).toFixed(0)}k` : nf.format(n));
   const usd = (n: number) => `$${n.toFixed(2)}`;
   const mb = (bytes: number) => `${nf.format(bytes / 1024 / 1024)} MB`;
@@ -1151,7 +1154,7 @@ import SignInGate from '../../components/SignInGate.astro';
     const level: Level = worst(d.level, d.onPaceToExceed ? 'warn' : null, typed?.level ?? null);
     const parts: Kid[] = [
       h('p', { class: 'hero', text: `${nf.format(d.credits)} credits` }),
-      h('p', { class: 'hero-sub', text: `used on deploys, of ${nf.format(d.allowance)} included` }),
+      h('p', { class: 'hero-sub', text: d.basis === 'balance' ? `used on deploys, of ${nf.format(Math.round(d.pool))} available` : `used on deploys, of ${nf.format(d.allowance)} included` }),
       meter(d.fraction, d.level, 'Netlify credits used on deploys', `${Math.round(d.fraction * 100)}% of the allowance`),
       d.onPaceToExceed
         ? h('p', { class: 'hero-sub svc-fresh--late', text: `${nf.format(d.deploys)} deploys · runs out ~${shortDay(d.exhaustsAt)}` })
@@ -1173,12 +1176,12 @@ import SignInGate from '../../components/SignInGate.astro';
     if (a.last_deploy) {
       more.push(h('p', { class: 'hero-sub', text: `Last deploy: ${a.last_deploy.context === 'production' ? 'production' : 'preview'}, ${a.last_deploy.state}, ${ago(a.last_deploy.at)}.` }));
     }
-    more.push(h('p', { class: 'hero-sub', text: d.exhaustsAt ? `At this pace the ${nf.format(d.allowance)} credits run out around ${shortDay(d.exhaustsAt)}, before the cycle ends on ${cycleDay(d.cycleEnd)} (${nf.format(d.deploys)} deploys in ${Math.floor(d.elapsedDays)} days).` : d.projected !== null ? `Pace: ${nf.format(d.deploys)} deploys in ${Math.floor(d.elapsedDays)} days is about ${nf.format(Math.round(d.projected))} credits by the end of the cycle (${cycleDay(d.cycleEnd)}).` : `A pace estimate appears three days into each cycle. It resets ${cycleDay(d.cycleEnd)}.` }));
+    more.push(h('p', { class: 'hero-sub', text: d.exhaustsAt ? `At this pace the ${nf.format(Math.round(d.remaining))} credits left run out around ${shortDay(d.exhaustsAt)}, before the cycle ends on ${cycleDay(d.cycleEnd)} (${nf.format(d.deploys)} deploys in ${Math.floor(d.elapsedDays)} days).` : d.projected !== null ? `Pace: ${nf.format(d.deploys)} deploys in ${Math.floor(d.elapsedDays)} days is about ${nf.format(Math.round(d.projected))} credits by the end of the cycle (${cycleDay(d.cycleEnd)}).` : `A pace estimate appears three days into each cycle. It resets ${cycleDay(d.cycleEnd)}.` }));
     if (r?.limit && !r.staleForCycle) {
       const used = 1 - r.value / r.limit;
       more.push(
-        h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: "Netlify's own balance (typed in)" }), h('span', { text: `${amount(r.value)} of ${amount(r.limit)} left` })), meter(used, typed.level, 'Netlify credits used', `${Math.round(used * 100)}% used`)),
-        h('p', { class: 'meter-caption', text: `Typed in ${ago(r.capturedAt)} from ${typed.where}. Whatever it shows beyond deploys is bandwidth, functions and requests: they cost credits but Netlify's API reports none of them.` }),
+        h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: "Netlify's own balance (typed in)" }), h('span', { text: `${leftOf(r.value, r.limit)} left` })), meter(used, typed.level, 'Netlify credits used', `${Math.round(used * 100)}% used`)),
+        h('p', { class: 'meter-caption', text: `Typed in ${ago(r.capturedAt)} from ${typed.where}. ${r.value > r.limit ? "It is above the plan's included credits, so the extra is from top-ups or carried-over credits, and the run-out date uses it. " : ''}Whatever it shows beyond deploys is bandwidth, functions and requests: they cost credits but Netlify's API reports none of them.` }),
       );
     } else if (!r) {
       more.push(h('p', { class: 'hero-sub', text: `Bandwidth, functions and requests also cost credits, and Netlify's API reports none of them. Type in the balance from ${typed?.where ?? 'Netlify → Team → Billing and usage'} to see the full picture here.` }));
@@ -1237,7 +1240,7 @@ import SignInGate from '../../components/SignInGate.astro';
     const staleForCycle = r.staleForCycle === true;
     const stale = !staleForCycle && daysAgo(r.capturedAt) > 35;
     const more: Kid[] = [];
-    const parts: Kid[] = [h('p', { class: 'hero', text: `${amount(r.value)} ${m.unit}` }), h('p', { class: 'hero-sub', text: remaining ? (r.limit ? `left of ${amount(r.limit)} included` : 'left (limit not entered)') : r.limit ? `of ${amount(r.limit)} included` : 'limit not entered' })];
+    const parts: Kid[] = [h('p', { class: 'hero', text: `${amount(r.value)} ${m.unit}` }), h('p', { class: 'hero-sub', text: remaining ? (r.limit ? (r.value > r.limit ? `left (${amount(r.limit)} included + extra)` : `left of ${amount(r.limit)} included`) : 'left (limit not entered)') : r.limit ? `of ${amount(r.limit)} included` : 'limit not entered' })];
     const cycleMs = r.cycleStart && r.cycleEnd ? new Date(r.cycleEnd).getTime() - new Date(r.cycleStart).getTime() : 0;
     if (remaining && r.limit && cycleMs > 0 && !staleForCycle) {
       // Two bars that both drain left to right: credits left against days left in the billing cycle.
@@ -1249,9 +1252,9 @@ import SignInGate from '../../components/SignInGate.astro';
       const daysFrac = Math.min(1, msLeft / cycleMs);
       const row = (label: string, text: string, fraction: number, level: Level, what: string) =>
         h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: label }), h('span', { text })), meter(fraction, level, what, text));
-      parts.push(meter(creditsFrac, m.level, `${m.label} left`, `${amount(r.value)} of ${amount(r.limit)}`));
+      parts.push(meter(creditsFrac, m.level, `${m.label} left`, leftOf(r.value, r.limit)));
       more.push(
-        row('Credits left', `${amount(r.value)} of ${amount(r.limit)}`, creditsFrac, m.level, `${m.label} left`),
+        row('Credits left', leftOf(r.value, r.limit), creditsFrac, m.level, `${m.label} left`),
         row('Days left', `${daysLeft} of ${daysTotal} · resets ${cycleDay(r.cycleEnd)}`, daysFrac, null, 'Days left in the billing cycle'),
         h('p', { class: 'meter-caption', text: daysLeft > 0 ? `About ${nf.format(Math.floor(r.value / daysLeft))} credits a day to last until the reset${creditsFrac < daysFrac ? ' · using credits faster than the cycle is passing' : ''}` : 'Resets today' }),
       );

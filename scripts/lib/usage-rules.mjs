@@ -326,11 +326,19 @@ export function typesafeCreditEstimate(snapshot, daily, now = new Date()) {
 export const NETLIFY_CREDITS_PER_PRODUCTION_DEPLOY = 15;
 export const NETLIFY_PACE_MIN_DAYS = 3; // too early in a cycle, a few busy days would look like a trend
 
-// What this cycle's production deploys have cost. `activity` is the 'netlify.deploy_activity' snapshot
-// (value = credits spent on deploys, detail.period_start = the cycle it was counted for) and `plan` the
-// 'netlify.plan_credits' one (limit = the allowance, detail = the current cycle's dates). Null when either
-// is missing or the activity is from an earlier cycle (the collector has not run since it rolled over).
-export function netlifyDeployUsage(activity, plan, now = new Date()) {
+// What this cycle's production deploys have cost, and how long the credits left would last at that pace.
+// `activity` is the 'netlify.deploy_activity' snapshot (value = credits spent on deploys, detail.period_start
+// = the cycle it was counted for) and `plan` the 'netlify.plan_credits' one (limit = the plan's allowance,
+// detail = the current cycle's dates). `balance` is the optional typed-in 'netlify.credits_remaining'.
+//
+// The allowance is only the plan's included credits: top-ups and carried-over credits mean the real balance
+// can be higher (a typed-in 1,394 against 1,000 included is normal). So when a balance was typed in this
+// cycle, and within NETLIFY_BALANCE_MAX_AGE_DAYS, the credits left are that balance less what deploys have
+// used since (at the cycle's deploy pace); otherwise the allowance less deploy credits. Null when `activity`
+// or `plan` is missing, or `activity` is from an earlier cycle (the collector has not run since it rolled over).
+export const NETLIFY_BALANCE_MAX_AGE_DAYS = 7;
+
+export function netlifyDeployUsage(activity, plan, now = new Date(), balance = null) {
   if (!activity || !plan) return null;
   const allowance = Number(plan.limit_value);
   const start = plan.detail?.period_start;
@@ -341,20 +349,35 @@ export function netlifyDeployUsage(activity, plan, now = new Date()) {
   if (!(totalDays > 0)) return null;
   const elapsedDays = Math.min(totalDays, Math.max(0, (now.getTime() - startMs) / DAY_MS));
   const credits = Number(activity.value);
-  const projected = elapsedDays >= NETLIFY_PACE_MIN_DAYS ? (credits / elapsedDays) * totalDays : null;
-  // the day the allowance would be gone at this pace (only when that is before the cycle ends)
-  const exhaustsAt = projected !== null && projected >= allowance && credits > 0 && credits < allowance ? new Date(now.getTime() + ((allowance - credits) / (credits / elapsedDays)) * DAY_MS).toISOString() : null;
+  const rate = elapsedDays > 0 ? credits / elapsedDays : 0; // deploy credits a day, so far this cycle
+  const projected = elapsedDays >= NETLIFY_PACE_MIN_DAYS ? rate * totalDays : null;
+
+  let remaining = Math.max(0, allowance - credits);
+  let basis = 'allowance';
+  const typedAt = balance ? new Date(balance.captured_at).getTime() : NaN;
+  const typedAgeDays = (now.getTime() - typedAt) / DAY_MS;
+  if (balance && Number.isFinite(Number(balance.value)) && Number(balance.value) >= 0 && typedAt >= startMs && typedAgeDays >= 0 && typedAgeDays <= NETLIFY_BALANCE_MAX_AGE_DAYS) {
+    remaining = Math.max(0, Number(balance.value) - rate * typedAgeDays);
+    basis = 'balance';
+  }
+  const pool = basis === 'balance' ? credits + remaining : allowance; // every credit available this cycle
+  // when the credits left would be gone at this pace, if that is before the cycle ends
+  const exhaustsAt = projected !== null && rate > 0 && remaining > 0 ? new Date(now.getTime() + (remaining / rate) * DAY_MS) : null;
+  const onPaceToExceed = exhaustsAt !== null && exhaustsAt.getTime() < new Date(end).getTime();
   return {
     credits,
     allowance,
-    fraction: credits / allowance,
+    pool,
+    remaining,
+    basis,
+    fraction: credits / pool,
     deploys: Number(activity.detail?.production_ok ?? 0),
     elapsedDays,
     totalDays,
     projected,
-    onPaceToExceed: projected !== null && projected >= allowance,
-    exhaustsAt,
-    level: levelForUsed(credits, allowance),
+    onPaceToExceed,
+    exhaustsAt: onPaceToExceed ? exhaustsAt.toISOString() : null,
+    level: levelForUsed(credits, pool),
     cycleEnd: end,
   };
 }
@@ -470,15 +493,15 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
 
   // Netlify: what production deploys alone have cost this cycle (15 credits each), and whether the
   // pace so far would use up the allowance before the cycle ends.
-  const nfDeploys = netlifyDeployUsage(snapshots['netlify.deploy_activity'], snapshots['netlify.plan_credits'], now);
+  const nfDeploys = netlifyDeployUsage(snapshots['netlify.deploy_activity'], snapshots['netlify.plan_credits'], now, snapshots['netlify.credits_remaining'] ?? null);
   if (nfDeploys) {
-    const left = Math.max(0, nfDeploys.allowance - nfDeploys.credits);
+    const left = nfDeploys.remaining;
     add(
       'netlify:deploys',
       nfDeploys.level,
       'netlify',
       `Netlify production deploys have used ${pct(nfDeploys.fraction)} of this cycle's credits`,
-      `${nfDeploys.deploys} production deploy${nfDeploys.deploys === 1 ? '' : 's'} at ${NETLIFY_CREDITS_PER_PRODUCTION_DEPLOY} credits each is ${num(nfDeploys.credits)} of ${num(nfDeploys.allowance)} credits, before bandwidth, functions and requests, which Netlify's API does not report. About ${num(left)} credits are left for everything else. Batch changes into fewer merges to main.`,
+      `${nfDeploys.deploys} production deploy${nfDeploys.deploys === 1 ? '' : 's'} at ${NETLIFY_CREDITS_PER_PRODUCTION_DEPLOY} credits each is ${num(nfDeploys.credits)} of the ${num(nfDeploys.pool)} credits available this cycle${nfDeploys.basis === 'balance' ? ' (the balance typed in, plus what deploys have used since)' : ' (the plan allowance)'}, before bandwidth, functions and requests, which Netlify's API does not report. About ${num(left)} credits are left for everything else. Batch changes into fewer merges to main.`,
     );
     if (nfDeploys.onPaceToExceed && !nfDeploys.level) {
       add(
@@ -486,7 +509,7 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
         'warn',
         'netlify',
         `Netlify credits are on pace to run out around ${shortDate(nfDeploys.exhaustsAt)}`,
-        `At the rate of the last ${Math.floor(nfDeploys.elapsedDays)} days, production deploys alone would use up the ${num(nfDeploys.allowance)} included credits around ${shortDate(nfDeploys.exhaustsAt)}, before the cycle ends on ${shortDate(nfDeploys.cycleEnd)}. Each merge to main is a production deploy that costs 15 credits.`,
+        `At the rate of the last ${Math.floor(nfDeploys.elapsedDays)} days, production deploys alone would use up the ${num(nfDeploys.remaining)} credits left around ${shortDate(nfDeploys.exhaustsAt)}, before the cycle ends on ${shortDate(nfDeploys.cycleEnd)}. Each merge to main is a production deploy that costs 15 credits.`,
       );
     }
   }
