@@ -765,12 +765,10 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
-  /* Under a Farm / House card: the two uploads as buttons (the main one filled), and a link to what has been uploaded (shown in a popup). */
+  /* Under a Farm / House card: one small edit button, which opens the menu of document actions. */
   .card-docs {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px 16px;
+    justify-content: flex-end;
     margin-top: 14px;
   }
 
@@ -1940,6 +1938,12 @@ import SignInGate from '../../components/SignInGate.astro';
     stroke-linejoin: round;
   }
 
+  .menu-actions {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
   .dir-edit--sm {
     width: 28px;
     height: 28px;
@@ -2879,31 +2883,51 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       h('span', 'doc-sum', d.summary));
   }
 
-  // Under a Farm or House card's table: upload for that kind of land (no choice to make), and a
-  // link to what has been uploaded for it. The list itself is in a popup, not on the page.
+  // Under a Farm or House card's table: one small edit button that opens a short menu of what can be done with
+  // the documents for that kind of land (upload one, add an FMB sketch, see what has been uploaded). The list
+  // itself is in its own popup, not on the page.
   function landCardFooter(hh: Hh, landType: 'farm' | 'house'): HTMLElement {
-    const upload = h('button', 'btn btn--solid', 'Upload a document');
-    upload.setAttribute('type', 'button');
-    upload.addEventListener('click', () => uploadDialog(hh, landType, () => { shapesLoad = null; void refreshDocs(hh); }));
-    const history = h('button', 'link-btn', 'Uploaded documents');
-    history.setAttribute('type', 'button');
-    history.addEventListener('click', () => docsDialog(hh, landType));
-    const sketch = h('button', 'btn', 'Add an FMB sketch');
-    sketch.setAttribute('type', 'button');
-    sketch.addEventListener('click', () => sketchDialog(hh, landType, () => { shapesLoad = null; void refreshDocs(hh); }));
-    const footer = h('div', 'card-docs', undefined, upload, sketch, history);
-    const update = () => {
-      if (!footer.isConnected) {
-        docsListeners.delete(update);
-        return;
-      }
-      const n = docsOfType(landType).length;
-      history.textContent = n ? `Uploaded documents (${n})` : 'Uploaded documents';
-    };
-    docsListeners.add(update);
-    if (docsState.householdId === hh.id && docsState.loaded) update();
-    else void refreshDocs(hh);
+    const label = landType === 'farm' ? 'farm land' : 'house plot';
+    const edit = h('button', 'dir-edit dir-edit--sm', undefined, icon(IC.pen));
+    edit.setAttribute('type', 'button');
+    edit.setAttribute('aria-label', `Documents for your ${label}`);
+    edit.title = `Documents for your ${label}`;
+    edit.addEventListener('click', () => docsMenuDialog(hh, landType));
+    const footer = h('div', 'card-docs', undefined, edit);
+    // While this card is on the page it keeps the re-reading going after an upload (refreshDocs only polls while
+    // something is listening), so verified badges appear without a reload; it stops listening once the card is gone.
+    const alive = () => { if (!footer.isConnected) docsListeners.delete(alive); };
+    docsListeners.add(alive);
+    // The documents are read once so the menu can show how many there are.
+    if (!(docsState.householdId === hh.id && docsState.loaded)) void refreshDocs(hh);
     return footer;
+  }
+
+  function docsMenuDialog(hh: Hh, landType: 'farm' | 'house') {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'modal';
+    const n = docsOfType(landType).length;
+    const choice = (text: string, solid: boolean, run: () => void) => {
+      const b = h('button', solid ? 'btn btn--solid' : 'btn', text);
+      b.setAttribute('type', 'button');
+      b.addEventListener('click', () => { dlg.close(); run(); });
+      return b;
+    };
+    const refreshed = () => { shapesLoad = null; void refreshDocs(hh); };
+    const close = h('button', 'link-btn', 'Close');
+    close.setAttribute('type', 'button');
+    close.addEventListener('click', () => dlg.close());
+    dlg.append(
+      h('h3', '', landType === 'farm' ? 'Farm land documents' : 'House plot documents'),
+      h('div', 'menu-actions', undefined,
+        choice('Upload a document', true, () => uploadDialog(hh, landType, refreshed)),
+        choice('Add an FMB sketch', false, () => sketchDialog(hh, landType, refreshed)),
+        choice(n ? `Uploaded documents (${n})` : 'Uploaded documents', false, () => docsDialog(hh, landType))),
+      h('div', 'modal-actions', undefined, close),
+    );
+    dlg.addEventListener('close', () => dlg.remove());
+    document.body.append(dlg);
+    dlg.showModal();
   }
 
   function docsDialog(hh: Hh, landType: 'farm' | 'house') {
