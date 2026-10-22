@@ -173,3 +173,9 @@ test('deciding a family member request names the request and needs `manage`', ()
   assert.match(bad({ action: 'familyrequest.approve', requestId: 'x' }), /requestId/);
   assert.equal(validateEdit({ action: 'familyrequest.approve' }).ok, false);
 });
+
+test('dismissing a notice names it and needs only `edit`', () => {
+  assert.deepEqual(good({ action: 'notice.dismiss', noticeId: A }), { action: 'notice.dismiss', noticeId: A });
+  assert.equal(ACTION_CAPABILITY['notice.dismiss'], 'edit');
+  assert.match(bad({ action: 'notice.dismiss', noticeId: 'x' }), /noticeId/);
+});

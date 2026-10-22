@@ -193,6 +193,12 @@ async function applyEdit(edit: any, staffId: string): Promise<void> {
     case 'familyrequest.reject':
       return decideFamilyRequest(edit);
 
+    case 'notice.dismiss': {
+      // Only an open one, so a second reviewer dismissing the same notice is not an error.
+      must(await db('PATCH', `member_admin_notices?${eq('id', edit.noticeId)}&dismissed_at=is.null`, { dismissed_at: new Date().toISOString(), dismissed_by: staffId }));
+      return;
+    }
+
     case 'unitstory.approve':
     case 'unitstory.reject':
       return decideUnitStory(edit, staffId);
@@ -488,6 +494,22 @@ async function decideUnitStory(edit: any, staffId: string): Promise<void> {
   }
 }
 
+// ---- notices -------------------------------------------------------------------
+// Things the core team should know but need not act on (an owner added a family member). They stay on the page
+// until someone dismisses them.
+
+async function handleNotices(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'members', 'edit');
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  try {
+    const rows = await select('member_admin_notices', 'id,kind,household_id,text,created_at', '&dismissed_at=is.null&order=created_at.desc&limit=100');
+    return jsonResponse({ notices: rows.map((r) => ({ id: r.id, kind: r.kind, text: r.text, createdAt: r.created_at })) });
+  } catch (err) {
+    console.error('[members-admin] notices load failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
 // ---- family member requests ---------------------------------------------------
 // An owner may add two family members who can sign in on their own (members-me.mts); a further one is a
 // row in member_family_requests that waits here. Approving makes the person (or brings back one removed earlier
@@ -698,6 +720,7 @@ export default async (req: Request): Promise<Response> => {
   if (pathname === '/api/members-admin/land-shapes' && req.method === 'GET') return handleLandShapes(req);
   if (pathname === '/api/members-admin/unit-stories' && req.method === 'GET') return handleUnitStories(req);
   if (pathname === '/api/members-admin/family-requests' && req.method === 'GET') return handleFamilyRequests(req);
+  if (pathname === '/api/members-admin/notices' && req.method === 'GET') return handleNotices(req);
   if (pathname === '/api/members-admin/publish' && req.method === 'GET') return handlePublishStatus(req);
   if (pathname === '/api/members-admin/autopublish' && req.method === 'GET') return handleAutopublish(req);
   if (pathname === '/api/members-admin/story-photo' && req.method === 'GET') return handleStoryPhoto(req);
@@ -705,4 +728,4 @@ export default async (req: Request): Promise<Response> => {
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-admin/overview', '/api/members-admin/edit', '/api/members-admin/land-documents', '/api/members-admin/land-document-link', '/api/members-admin/land-shapes', '/api/members-admin/unit-stories', '/api/members-admin/family-requests', '/api/members-admin/story-photo', '/api/members-admin/publish', '/api/members-admin/autopublish'] };
+export const config = { path: ['/api/members-admin/overview', '/api/members-admin/edit', '/api/members-admin/land-documents', '/api/members-admin/land-document-link', '/api/members-admin/land-shapes', '/api/members-admin/unit-stories', '/api/members-admin/family-requests', '/api/members-admin/notices', '/api/members-admin/story-photo', '/api/members-admin/publish', '/api/members-admin/autopublish'] };

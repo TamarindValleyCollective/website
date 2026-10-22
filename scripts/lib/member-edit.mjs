@@ -37,6 +37,8 @@ export const ACTION_CAPABILITY = {
   'unitstory.approve': 'manage',
   'unitstory.reject': 'manage',
   'unitstory.unpublish': 'manage',
+  // Reading and dismissing a notice for the core team (member_admin_notices): no data changes, so `edit`.
+  'notice.dismiss': 'edit',
   // An owner's request for a family member beyond the two they may add themselves (member_family_requests).
   'familyrequest.approve': 'manage',
   'familyrequest.reject': 'manage',
@@ -268,6 +270,11 @@ export function validateEdit(body) {
       const note = requiredText(body, 'note', 'A note for the members', 500);
       if (note.error) return fail(note.error);
       return ok({ action, householdId: householdId.value, submittedAt, note: note.value });
+    }
+
+    case 'notice.dismiss': {
+      const noticeId = id(body, 'noticeId');
+      return noticeId.error ? fail(noticeId.error) : ok({ action, noticeId: noticeId.value });
     }
 
     case 'familyrequest.approve':

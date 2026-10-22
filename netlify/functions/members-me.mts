@@ -34,7 +34,7 @@ import { buildHouseholdReview } from '../../scripts/lib/member-review.mjs';
 import { validateProfileEdit, profileAuditDetail } from '../../scripts/lib/member-profile.mjs';
 import { familyAddOutcome, validateFamilyAdd, validateFamilyRemove, validateFamilyUpdate } from '../../scripts/lib/member-family.mjs';
 import { sendEmail } from './lib/booking-notify';
-import { detailRow, detailTable, escapeHtml, renderStaffEmail } from './lib/email-layout';
+import { detailRow, detailTable, escapeHtml, renderBrandedEmail, renderStaffEmail } from './lib/email-layout';
 import { PRIVACY_NOTICE_VERSION, privacyNoticeRequired, validateAcceptance } from '../../scripts/lib/member-privacy.mjs';
 import { callAnthropic } from './lib/anthropic';
 import { checkDailyCap } from './lib/rate-limit';
@@ -888,6 +888,26 @@ async function logChange(personId: string, action: string, detail: Record<string
   return !!res && res.ok;
 }
 
+// A notice for the core team that needs no action: it shows on /internal/members until someone dismisses it (best effort).
+async function noticeForCoreTeam(kind: string, householdId: string, text: string): Promise<void> {
+  await rest('POST', 'member_admin_notices', { kind, household_id: householdId, text }).catch((err) => console.error('[members-me] admin notice not saved', err));
+}
+
+// Tells the other owners of the unit by email (best effort; the person who made the change already knows). The text
+// carries no full email address: only a masked one, as the portal shows it to the unit.
+async function tellOtherOwners(householdId: string, exceptPersonId: string, subject: string, message: string, unit: string): Promise<void> {
+  try {
+    const links = await select('member_household_members', 'person_id', `household_id=eq.${householdId}&role=eq.owner&can_login=eq.true`);
+    const ids = links.map((l: any) => l.person_id).filter((id: string) => id !== exceptPersonId);
+    if (ids.length === 0) return;
+    const owners = await select('member_people', 'email', `id=in.${inList(ids)}&active=eq.true`);
+    const html = renderBrandedEmail(`<p style="margin-top:0;">${escapeHtml(message)}</p><p>This is for your unit ${escapeHtml(unit)}. You can see and change who is in your unit under <strong>My unit</strong> at <a href="https://members.tvc.farm">members.tvc.farm</a>, and remove a family member there at any time.</p>`);
+    await Promise.all(owners.filter((o: any) => o.email).map((o: any) => sendEmail({ to: [o.email], subject, html, replyTo: 'core-team@tvc.farm' }).catch(() => false)));
+  } catch (err) {
+    console.error('[members-me] could not tell the other owners', err);
+  }
+}
+
 async function tellCoreTeam(subject: string, lines: [string, string][]): Promise<void> {
   const rows = lines.map(([k, v], i) => detailRow(escapeHtml(k), escapeHtml(v), { last: i === lines.length - 1 })).join('');
   await sendEmail({ to: ['core-team@tvc.farm'], subject, html: renderStaffEmail(`<p style="margin-top:0;">${escapeHtml(subject)}</p>${detailTable(rows)}`) }).catch(() => false);
@@ -949,7 +969,9 @@ async function handleFamilyAdd(req: Request): Promise<Response> {
       else await rest('DELETE', `member_people?id=eq.${personId}`);
       return jsonResponse({ error: 'Your unit already has the maximum number of family members. Ask the core team for more.' }, 409);
     }
-    await tellCoreTeam(`Family member added to ${unit}`, [['Unit', unit], ['Added by', member.name], ['Name', fullName], ['Email', email]]);
+    // Nothing for the core team to do, so no email to them: a notice on the admin page, and the other owners are told.
+    await noticeForCoreTeam('family.added', householdId, `${member.name} added ${fullName} as a family member of ${unit}.`);
+    await tellOtherOwners(householdId, member.personId, `${fullName} was added to your unit ${unit}`, `${member.name} added ${fullName} (${maskEmail(email)}) as a family member of your unit. They can now sign in to the member portal with that Google account.`, unit);
     return jsonResponse({ ok: true, added: true });
   } catch (err) {
     console.error('[members-me] family add failed', err);
@@ -978,7 +1000,14 @@ async function handleFamilyUpdate(req: Request): Promise<Response> {
     const done = await rest('PATCH', `member_people?id=eq.${targetId}`, { ...(edit.fullName ? { full_name: edit.fullName } : {}), ...(edit.email ? { email: edit.email } : {}), ...(edit.phone ? { phone: edit.phone } : {}) });
     if (!done.ok) return jsonResponse({ error: 'Server error' }, 500);
     // A new email changes who can sign in, so the core team is told.
-    if (edit.email) await tellCoreTeam('Family member sign-in email changed', [['Changed by', member.name], ['New email', edit.email]]);
+    if (edit.email) {
+      const [household] = await select('member_households', 'farm_unit', `id=eq.${householdId}`);
+      const unit = (household?.farm_unit as string | undefined) ?? 'your unit';
+      const [who] = await select('member_people', 'full_name', `id=eq.${targetId}`);
+      const name = (who?.full_name as string | undefined) ?? 'A family member';
+      await noticeForCoreTeam('family.email_changed', householdId, `${member.name} changed the sign-in email of ${name} in ${unit}.`);
+      await tellOtherOwners(householdId, member.personId, `The sign-in email of ${name} was changed`, `${member.name} changed the Google email ${name} signs in with to ${maskEmail(edit.email)}.`, unit);
+    }
     return jsonResponse({ ok: true });
   } catch (err) {
     console.error('[members-me] family update failed', err);

@@ -27,6 +27,7 @@ import SignInGate from '../../components/SignInGate.astro';
       <section id="publish" class="publish card" aria-label="Publish to the website" hidden></section>
       <section id="autopublish" class="publish card" aria-label="Automatic publishing" hidden></section>
       <section id="unit-stories" class="stories" aria-label="Unit stories waiting for review" hidden></section>
+      <section id="notices" class="stories" aria-label="Notices" hidden></section>
       <section id="family-requests" class="stories" aria-label="Family member requests waiting for a decision" hidden></section>
       <dl id="totals" class="totals"></dl>
 
@@ -854,6 +855,21 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .members .stories {
     margin: 0 0 22px;
+  }
+
+  .members .notice-list {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .members .notice-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
   }
 
   .members .story-queue > summary {
@@ -2092,6 +2108,49 @@ import SignInGate from '../../components/SignInGate.astro';
     box.replaceChildren(h('details', { class: 'story-queue', attrs: { open: '' } }, h('summary', { text: `Unit stories waiting for review (${stories.length})` }), h('div', { class: 'story-list' }, ...cards)));
   }
 
+  // ---- notices ---------------------------------------------------------------------
+  // Things to know that need no action (an owner added a family member). Each stays until someone dismisses it.
+  type Notice = { id: string; kind: string; text: string; createdAt: string };
+
+  async function loadNotices() {
+    const box = $('notices');
+    if (!can.edit) {
+      box.hidden = true;
+      return;
+    }
+    try {
+      const { status, data } = await staffFetch('/api/members-admin/notices');
+      if (status !== 200) throw new Error(data.error || 'Could not load.');
+      renderNotices(data.notices as Notice[]);
+    } catch {
+      box.hidden = true; // a quiet extra: if it cannot load, the register is still usable
+    }
+  }
+
+  function renderNotices(notices: Notice[]) {
+    const box = $('notices');
+    if (notices.length === 0) {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    const when = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const rows = notices.map((n) => {
+      const dismiss = h('button', { class: 'rowbtn rowbtn--act', text: 'Dismiss', attrs: { type: 'button' } });
+      dismiss.addEventListener('click', async () => {
+        dismiss.setAttribute('disabled', '');
+        try {
+          await send({ action: 'notice.dismiss', noticeId: n.id });
+          await loadNotices();
+        } catch {
+          dismiss.removeAttribute('disabled');
+        }
+      });
+      return h('li', { class: 'notice-row' }, h('span', { text: n.text }), h('span', { class: 'muted', text: ` ${when(n.createdAt)}` }), ' ', dismiss);
+    });
+    box.replaceChildren(h('details', { class: 'story-queue', attrs: { open: '' } }, h('summary', { text: `Notices (${notices.length})` }), h('ul', { class: 'notice-list' }, ...rows)));
+  }
+
   // ---- family member requests ---------------------------------------------------
   // An owner may add two family members who can sign in on their own; a further one waits here. Approving adds
   // them to the unit as family with sign-in; declining just closes the request.
@@ -2184,6 +2243,7 @@ import SignInGate from '../../components/SignInGate.astro';
     renderTotals(data.totals);
     renderList();
     void loadUnitStories();
+    void loadNotices();
     void loadFamilyRequests();
     void loadPublish();
     void loadAutopublish();
