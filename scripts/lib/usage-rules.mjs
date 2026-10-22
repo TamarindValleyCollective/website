@@ -342,6 +342,8 @@ export function netlifyDeployUsage(activity, plan, now = new Date()) {
   const elapsedDays = Math.min(totalDays, Math.max(0, (now.getTime() - startMs) / DAY_MS));
   const credits = Number(activity.value);
   const projected = elapsedDays >= NETLIFY_PACE_MIN_DAYS ? (credits / elapsedDays) * totalDays : null;
+  // the day the allowance would be gone at this pace (only when that is before the cycle ends)
+  const exhaustsAt = projected !== null && projected >= allowance && credits > 0 && credits < allowance ? new Date(now.getTime() + ((allowance - credits) / (credits / elapsedDays)) * DAY_MS).toISOString() : null;
   return {
     credits,
     allowance,
@@ -351,6 +353,7 @@ export function netlifyDeployUsage(activity, plan, now = new Date()) {
     totalDays,
     projected,
     onPaceToExceed: projected !== null && projected >= allowance,
+    exhaustsAt,
     level: levelForUsed(credits, allowance),
     cycleEnd: end,
   };
@@ -359,6 +362,9 @@ export function netlifyDeployUsage(activity, plan, now = new Date()) {
 export function daysUntilDate(isoDay, now = new Date()) {
   return Math.floor((new Date(`${isoDay}T23:59:59Z`).getTime() - now.getTime()) / DAY_MS);
 }
+
+// "6 Nov" for an ISO timestamp, in UTC like the rest of the page's days
+const shortDate = (iso) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 // 4795 -> "4,795" (Indian grouping, like the page)
 const num = (n) => Math.round(Number(n)).toLocaleString('en-IN');
@@ -369,6 +375,40 @@ function pct(n) {
 
 function money(n) {
   return `$${n.toFixed(2)}`;
+}
+
+// What a person should do about each alert, in plain words for a non-technical core-team reader. Keyed by
+// alert key; `manual:<meter>` covers a typed-in meter. Attached to every alert as `action`, shown on the
+// page and in the hourly email, so a warning always says what to do and who to ask, never just "it is high".
+const ALERT_ACTIONS = {
+  'anthropic:billing': 'Add credit now at console.anthropic.com → Billing, then type the new balance into the form on this page. Until you do, the website chat and the AI search fallback stop working for visitors.',
+  'anthropic:credit': 'Top up at console.anthropic.com → Billing before it runs out, then type the new balance into the form on this page.',
+  'anthropic:expiry': 'Use the credit or top up before it expires (console.anthropic.com → Billing), then update the date on this page.',
+  'gemini:quota': 'Nothing to do right now: search answers switch to the paid Claude service, which costs a little. If it keeps happening, ask whoever manages Google AI Studio to raise the quota.',
+  'gemini:daily': 'No action needed yet. If it keeps climbing, ask whoever manages Google AI Studio to raise the daily limit.',
+  'site:chat-cap': 'Check whether the chat is simply popular or being abused (the Anthropic card shows volumes). The cap protects your credit; raise it only if the traffic is real.',
+  'site:search-cap': 'Check whether search is simply popular or being abused. The cap protects your Anthropic credit; raise it only if the traffic is real.',
+  'typesafe:credit': 'Top up at console.typesafe.ai, then type the new balance into the form on this page.',
+  'typesafe:errors': 'Ask the developer to check the TypeSafe key and credit at console.typesafe.ai. WhatsApp messages still arrive normally; only the experimental reads of them are failing.',
+  'supabase:db-size': 'Ask the developer to clear old data or move to a paid Supabase plan before the database is full. Once it is full, forms and the member portal stop saving.',
+  'supabase:db-growth': 'Open the Supabase card and look at "Biggest tables" to see what is growing, then ask the developer to trim it or plan an upgrade.',
+  'supabase:connections': 'Tell the developer: the website is holding too many open database connections.',
+  'netlify:deploys': 'Merge changes to the main branch less often: every merge publishes the site and costs 15 credits. Group several changes into one merge, and keep drafts in pull requests (those are free).',
+  'netlify:deploy-pace': 'Merge changes to the main branch less often: every merge publishes the site and costs 15 credits. Group several changes into one merge, and keep drafts in pull requests (those are free).',
+  'netlify:plan-stale': 'Tell the developer: the Netlify access token this page uses may have expired.',
+  'resend:monthly': 'Send fewer emails, or move to a paid Resend plan. At the limit the website stops sending emails such as booking confirmations.',
+  'resend:daily': 'Send fewer emails today, or move to a paid Resend plan. At the limit the website stops sending emails such as booking confirmations.',
+  'resend:stale': 'Tell the developer: the Resend usage key may have been revoked or expired.',
+  'cloudflare:r2-storage': 'The photo store is close to its free size. Ask the developer to remove or shrink unused photos, or accept a small monthly charge.',
+  'cloudflare:r2-stale': 'Tell the developer: the Cloudflare analytics token this page uses may have expired.',
+  'manual:netlify.credits_remaining': 'Check Netlify → Team → Billing and usage, and merge changes to the main branch less often: each merge costs 15 credits.',
+  'manual:supabase.egress_gb': 'Egress is data the database sends out. If it keeps climbing, tell the developer; if it is a one-off spike, no action is needed.',
+};
+const MANUAL_ACTION = "Update the figure on this page from the provider's dashboard. If it is genuinely close to the limit, top up or use less.";
+
+/** @param {string} key */
+export function alertAction(key) {
+  return ALERT_ACTIONS[key] ?? (key.startsWith('manual:') ? MANUAL_ACTION : null);
 }
 
 // ---- the alert rules ------------------------------------------------------
@@ -445,8 +485,8 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
         'netlify:deploy-pace',
         'warn',
         'netlify',
-        "Netlify deploys are on pace to use up this cycle's credits",
-        `At the rate of the last ${Math.floor(nfDeploys.elapsedDays)} days, production deploys alone would cost about ${num(nfDeploys.projected)} credits by ${utcDay(new Date(nfDeploys.cycleEnd))}, against ${num(nfDeploys.allowance)} included. Each merge to main is a production deploy: batching changes into fewer merges saves 15 credits apiece.`,
+        `Netlify credits are on pace to run out around ${shortDate(nfDeploys.exhaustsAt)}`,
+        `At the rate of the last ${Math.floor(nfDeploys.elapsedDays)} days, production deploys alone would use up the ${num(nfDeploys.allowance)} included credits around ${shortDate(nfDeploys.exhaustsAt)}, before the cycle ends on ${shortDate(nfDeploys.cycleEnd)}. Each merge to main is a production deploy that costs 15 credits.`,
       );
     }
   }
@@ -580,7 +620,7 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
     add(`manual:${id}`, levelForUsed(value, limit), meter.service, `${meter.label} at ${pct(value / limit)} of the limit`, `${value} of ${limit} ${meter.unit}, as last entered on ${utcDay(new Date(reading.captured_at))}. Update the reading on the usage page for a fresh figure.`);
   }
 
-  return alerts;
+  return alerts.map((a) => ({ ...a, action: alertAction(a.key) }));
 }
 
 // Compares currently-active alerts with what has already been mailed:

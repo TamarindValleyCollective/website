@@ -31,6 +31,16 @@ import SignInGate from '../../components/SignInGate.astro';
         <div id="alerts" role="status"></div>
       </section>
 
+      <details class="glossary">
+        <summary>What these words mean</summary>
+        <dl>
+          <div><dt>Credit</dt><dd>A prepaid balance a service draws down as the website uses it.</dd></div>
+          <div><dt>Egress</dt><dd>Data a service sends out. Supabase allows 5 GB a month on the free plan.</dd></div>
+          <div><dt>Deploy</dt><dd>Publishing a new version of the website. Every merge to the main branch is one, and costs Netlify 15 credits.</dd></div>
+          <div><dt>Estimated</dt><dd>Worked out from the last figure someone typed in, minus what the website has measurably used since.</dd></div>
+          <div><dt>Warning and critical</dt><dd>Warning is about 70% used (or 30% left). Critical is about 90% used (or 10% left).</dd></div>
+        </dl>
+      </details>
       <section aria-labelledby="services-title" class="block">
         <h2 id="services-title">Services</h2>
         <div id="cards" class="cards"></div>
@@ -114,7 +124,9 @@ import SignInGate from '../../components/SignInGate.astro';
     box-shadow: var(--shadow-soft);
   }
 
-  .usage .card.pad,
+  .usage .card.pad {
+    padding: 16px 18px;
+  }
 
   .usage .error {
     color: var(--tvc-error-text);
@@ -132,7 +144,7 @@ import SignInGate from '../../components/SignInGate.astro';
     font: inherit;
     background: none;
     border: none;
-    padding: 0;
+    padding: 12px 0;
     color: var(--tvc-ink-soft);
     text-decoration: underline;
     cursor: pointer;
@@ -145,7 +157,7 @@ import SignInGate from '../../components/SignInGate.astro';
     gap: 6px;
     padding: 3px 10px 3px 8px;
     border-radius: 999px;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     font-weight: 600;
     white-space: nowrap;
   }
@@ -188,19 +200,98 @@ import SignInGate from '../../components/SignInGate.astro';
     grid-template-columns: auto 1fr;
     gap: 12px;
     align-items: start;
-    padding: 12px 16px;
+    padding: 14px 16px;
     border: 1px solid var(--tvc-line);
-    border-left-width: 4px;
     border-radius: var(--radius-sm);
     background: var(--tvc-white);
   }
 
+  /* severity is the tint and the pill's word, not a coloured stripe */
   .usage .alert--warn {
-    border-left-color: var(--tvc-orange);
+    border-color: var(--tvc-orange);
+    background: var(--tvc-orange-tint);
   }
 
   .usage .alert--critical {
-    border-left-color: var(--tvc-error-text);
+    border-color: var(--tvc-error-border);
+    background: var(--tvc-error-bg);
+  }
+
+  .usage .alert-summary {
+    margin: 0 0 10px;
+    font-weight: 600;
+  }
+
+  .usage .alert-action {
+    margin: 8px 0 0;
+    font-size: 0.88rem;
+  }
+
+  .usage .alert-why > summary {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+    cursor: pointer;
+  }
+
+  .usage .alert-why > summary::after {
+    content: '+';
+    margin-left: 8px;
+    font-size: 1.1rem;
+    line-height: 1;
+  }
+
+  .usage .alert-why[open] > summary::after {
+    content: '\2212';
+  }
+
+  .usage .alert-why .alert-detail {
+    margin: 0;
+  }
+
+  .usage .alert-more {
+    margin: 6px 0 0;
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .usage .alert .link-button {
+    margin-top: 4px;
+    font-size: 0.85rem;
+  }
+
+  /* a short plain-words list for readers who do not live in these dashboards */
+  .usage .glossary {
+    margin: 0 0 20px;
+    font-size: 0.88rem;
+  }
+
+  .usage .glossary > summary {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+    cursor: pointer;
+  }
+
+  .usage .glossary dl {
+    margin: 0 0 4px;
+    display: grid;
+    gap: 8px;
+    max-width: 62ch;
+  }
+
+  .usage .glossary dt {
+    font-weight: 600;
+  }
+
+  .usage .glossary dd {
+    margin: 0;
+    color: var(--tvc-ink-soft);
   }
 
   .usage .alert-title {
@@ -266,7 +357,7 @@ import SignInGate from '../../components/SignInGate.astro';
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 8px;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     color: var(--tvc-ink-soft);
   }
 
@@ -277,7 +368,7 @@ import SignInGate from '../../components/SignInGate.astro';
     gap: 5px;
     padding: 2px 9px 2px 7px;
     border-radius: 999px;
-    font-size: 0.74rem;
+    font-size: 0.8rem;
     font-weight: 600;
     white-space: nowrap;
   }
@@ -302,7 +393,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .usage .svc-fresh {
     margin: 0 0 12px;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     line-height: 1.45;
     color: var(--tvc-ink-soft);
   }
@@ -339,7 +430,8 @@ import SignInGate from '../../components/SignInGate.astro';
     align-items: center;
     justify-content: space-between;
     width: 100%;
-    padding: 10px 0 2px;
+    min-height: 44px;
+    padding: 0;
     border: 0;
     background: none;
     font: inherit;
@@ -481,7 +573,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .usage .stat dt {
-    font-size: 0.74rem;
+    font-size: 0.8rem;
     color: var(--tvc-ink-soft);
   }
 
@@ -494,7 +586,7 @@ import SignInGate from '../../components/SignInGate.astro';
   .usage .stat dd small {
     display: block;
     font-weight: 400;
-    font-size: 0.74rem;
+    font-size: 0.8rem;
     color: var(--tvc-ink-soft);
   }
 
@@ -525,7 +617,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .usage .spark figcaption {
     margin-top: 4px;
-    font-size: 0.76rem;
+    font-size: 0.8rem;
     color: var(--tvc-ink-soft);
   }
 
@@ -544,7 +636,7 @@ import SignInGate from '../../components/SignInGate.astro';
   .usage td small {
     display: block;
     margin-top: 2px;
-    font-size: 0.76rem;
+    font-size: 0.8rem;
     color: var(--tvc-ink-soft);
   }
 
@@ -556,7 +648,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .usage th {
     text-align: left;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     font-weight: 600;
     color: var(--tvc-ink-soft);
     padding: 0 12px 8px 0;
@@ -612,6 +704,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .usage input {
     font: inherit;
+    min-height: 44px;
     padding: 8px 10px;
     max-width: 280px;
     border: 1px solid var(--tvc-line);
@@ -810,7 +903,7 @@ import SignInGate from '../../components/SignInGate.astro';
     if (!open) bodyEl.setAttribute('inert', ''); // closed content is out of the tab order and invisible to screen readers
     return h(
       'article',
-      { class: 'card svc', attrs: { 'data-open': String(open) } },
+      { class: 'card svc', attrs: { 'data-open': String(open), 'data-level': String(level ?? 'ok') } },
       h('div', { class: 'svc-top' },
         h('div', { class: 'svc-head' }, h('h3', { class: 'svc-title', text: title }), pill(level)),
         h('p', { class: 'svc-kind' }, badge),
@@ -839,6 +932,32 @@ import SignInGate from '../../components/SignInGate.astro';
     if (opening) setCardOpen(card, true);
     openCardTitle = opening ? (card.querySelector('.svc-title')?.textContent ?? null) : null;
   }
+  // Open a card from outside it (an alert's "See the card" link): fold the others, open this one, bring it into view.
+  const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function openCardByTitle(title: string) {
+    const card = [...document.querySelectorAll<HTMLElement>('#cards .svc')].find((c) => c.querySelector('.svc-title')?.textContent === title);
+    if (!card) return;
+    document.querySelectorAll<HTMLElement>('#cards .svc[data-open="true"]').forEach((c) => c !== card && setCardOpen(c, false));
+    setCardOpen(card, true);
+    openCardTitle = title;
+    card.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
+    card.querySelector<HTMLElement>('.svc-toggle')?.focus({ preventScroll: true });
+  }
+
+  // The figures a person types in live in forms far down the page; this takes them there, open and ready to type.
+  let canConfigure = false; // only admins have the forms
+  function enterReadingButton(meterId: string): HTMLElement | null {
+    if (!canConfigure) return null;
+    return linkButton('Enter a new reading', () => {
+      const form = document.getElementById(`reading-${meterId}`) as HTMLDetailsElement | null;
+      if (!form) return;
+      form.open = true;
+      form.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' });
+      form.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true });
+    });
+  }
+  const shortDay = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+
   // Press feedback on pointer-down (before release), like a tap on a physical button.
   function onCardsPress(e: PointerEvent) {
     const card = (e.target as Element).closest<HTMLElement>('.svc');
@@ -877,6 +996,7 @@ import SignInGate from '../../components/SignInGate.astro';
     if (a.credit.expiresInDays !== null) {
       (a.credit.expiresInDays <= 30 ? parts : more).push(h('p', { class: 'hero-sub', text: a.credit.expiresInDays < 0 ? `Credit expired on ${dateText(reading.expiresOn)}.` : `Credit expires on ${dateText(reading.expiresOn)} (${a.credit.expiresInDays} day${a.credit.expiresInDays === 1 ? '' : 's'}).` }));
     }
+    if (est && reading) parts.push(h('p', { class: 'hero-sub', text: `Balance entered ${ago(reading.capturedAt)}` }));
     more.push(
       h('dl', { class: 'stats' },
         stat('Today', nf.format(a.today.requests), `${compact(a.today.input_tokens + a.today.output_tokens)} tokens${a.today.costUsd !== null ? ` · ${usd(a.today.costUsd)}` : ''}`),
@@ -889,6 +1009,7 @@ import SignInGate from '../../components/SignInGate.astro';
       parts.push(h('p', { class: 'svc-note', text: `Today the site turned away ${a.chatCapHitsToday} chat message(s) and ${a.searchFallbackCapHitsToday} paid search fallback(s) because a daily cap was reached.` }));
     }
     more.push(h('p', { class: 'svc-note', text: 'Counts only what the website itself sends (chat and the search fallback), not other uses of the same key. Dollar figures are estimates from the prices below.' }));
+    more.push(enterReadingButton('anthropic.credit_remaining_usd'));
     return card('Anthropic (Claude)', { mode: 'mixed', text: 'Usage measured live · credit balance typed in', fresh: [{ text: 'Usage: updates on every request the site makes.' }, nextManualUpdate(reading?.capturedAt, a.credit.meter.refreshEveryDays)] }, level, ...parts, MORE, ...more);
   }
 
@@ -916,6 +1037,9 @@ import SignInGate from '../../components/SignInGate.astro';
   // Typed-in meters that appear inside their service's card (or as the Netlify card) instead of on their own.
   const FOLDED_INTO_SERVICE_CARD = new Set(['typesafe.credit_remaining_usd', 'supabase.egress_gb', 'netlify.credits_remaining']);
 
+  // Cards go critical, then warning, then the rest, so the one that needs a look is never behind calm ones.
+  const urgencyRank = (el: HTMLElement) => ({ critical: 2, warn: 1 } as Record<string, number>)[el.dataset.level ?? ''] ?? 0;
+
   // The more serious of several levels (a card shows the worst of what it measures).
   const worst = (...levels: (Level | 'none')[]): Level => (levels.includes('critical') ? 'critical' : levels.includes('warn') ? 'warn' : null);
 
@@ -932,7 +1056,7 @@ import SignInGate from '../../components/SignInGate.astro';
     if (est) {
       parts.push(h('p', { class: 'hero', text: `about ${spend(est.remaining)}` }), h('p', { class: 'hero-sub', text: `credit left, estimated, of ${usd(est.total ?? est.remaining)}` }));
       if (est.total) parts.push(meter(est.remaining / est.total, est.level, 'TypeSafe credit left', `${Math.round((est.remaining / est.total) * 100)}% left`));
-      parts.push(h('p', { class: 'hero-sub', text: calls }));
+      parts.push(h('p', { class: 'hero-sub', text: `${m?.reading ? `entered ${ago(m.reading.capturedAt)} · ` : ''}${calls}` }));
     } else {
       parts.push(h('p', { class: 'hero', text: nf.format(t.today.requests) }), h('p', { class: 'hero-sub', text: calls.replace(/^\d[\d,]* /, '') }), h('p', { class: 'hero-sub', text: 'No credit entered yet. Enter the amount you loaded once, and the page subtracts what the site spends.' }));
     }
@@ -946,6 +1070,7 @@ import SignInGate from '../../components/SignInGate.astro';
       sparkline(t.requestsSeries.map((p: any) => ({ label: dayLabel(p.day), value: p.value })), 'Calls per day', (n) => `${nf.format(n)} call${n === 1 ? '' : 's'}`),
       h('p', { class: 'svc-note', text: 'Reads each inbound WhatsApp message in shadow mode (nothing acts on them yet). Billed per input token only. TypeSafe has no balance API, so the credit left is what you entered at the last top-up minus what this site has spent since (its own metered calls at the published price). Enter a new balance after each top-up; it needs no other upkeep. Anything TypeSafe is used for outside the website is not counted.' }),
     );
+    more.push(enterReadingButton('typesafe.credit_remaining_usd'));
     return card('TypeSafe (Jev)', { mode: 'mixed', text: 'Usage measured live · credit entered at each top-up', fresh: [{ text: 'Usage: updates on every WhatsApp message read.' }, { text: m?.reading ? `Credit: ${usd(m.reading.value)} entered ${ago(m.reading.capturedAt)}.` : 'Credit: not entered yet.' }] }, level, ...parts, MORE, ...more);
   }
 
@@ -1002,7 +1127,8 @@ import SignInGate from '../../components/SignInGate.astro';
     } else {
       more.push(h('p', { class: 'hero-sub', text: `Egress (data sent out, free plan: 5 GB a month) can't be measured automatically. Read it at ${egress?.where ?? 'the Supabase dashboard'} and enter it below.` }));
     }
-    more.push(h('p', { class: 'svc-note', text: 'The free plan stops accepting new data at the limit. The growth pace is a straight-line estimate from the last two weeks of readings (a bulk import skews it for up to two weeks). Table sizes include indexes and cover this project\'s own tables, not Supabase\'s system data. Billed egress can\'t be measured, so it is typed in above. The Supabase dashboard is the authority if any figure differs.' }));
+    more.push(enterReadingButton('supabase.egress_gb'));
+    more.push(h('p', { class: 'svc-note', text: 'The free plan stops accepting new data at the limit. Growth is a straight-line estimate from the last two weeks of readings, so a bulk import skews it. Table sizes include indexes. Egress cannot be measured automatically, so it is typed in. The Supabase dashboard is the authority.' }));
     return card('Supabase database', { mode: 'auto', text: 'Measured every 6 hours', fresh: [nextAutoUpdate(s.reading.capturedAt)] }, level, ...parts, MORE, ...more);
   }
 
@@ -1028,7 +1154,7 @@ import SignInGate from '../../components/SignInGate.astro';
       h('p', { class: 'hero-sub', text: `used on deploys, of ${nf.format(d.allowance)} included` }),
       meter(d.fraction, d.level, 'Netlify credits used on deploys', `${Math.round(d.fraction * 100)}% of the allowance`),
       d.onPaceToExceed
-        ? h('p', { class: 'hero-sub svc-fresh--late', text: `${nf.format(d.deploys)} deploys · on pace for ~${nf.format(Math.round(d.projected))}` })
+        ? h('p', { class: 'hero-sub svc-fresh--late', text: `${nf.format(d.deploys)} deploys · runs out ~${shortDay(d.exhaustsAt)}` })
         : h('p', { class: 'hero-sub', text: `${nf.format(d.deploys)} deploy${d.deploys === 1 ? '' : 's'} · resets ${cycleDay(d.cycleEnd)}` }),
     ];
     if (r?.staleForCycle) parts.push(h('p', { class: 'svc-fresh svc-fresh--late', text: 'The typed-in balance is from a previous billing cycle: update it.' }));
@@ -1047,7 +1173,7 @@ import SignInGate from '../../components/SignInGate.astro';
     if (a.last_deploy) {
       more.push(h('p', { class: 'hero-sub', text: `Last deploy: ${a.last_deploy.context === 'production' ? 'production' : 'preview'}, ${a.last_deploy.state}, ${ago(a.last_deploy.at)}.` }));
     }
-    more.push(h('p', { class: 'hero-sub', text: d.projected !== null ? `Pace: ${nf.format(d.deploys)} deploys in ${Math.floor(d.elapsedDays)} days is about ${nf.format(Math.round(d.projected))} credits by the end of the cycle (${cycleDay(d.cycleEnd)}).` : `A pace estimate appears three days into each cycle. It resets ${cycleDay(d.cycleEnd)}.` }));
+    more.push(h('p', { class: 'hero-sub', text: d.exhaustsAt ? `At this pace the ${nf.format(d.allowance)} credits run out around ${shortDay(d.exhaustsAt)}, before the cycle ends on ${cycleDay(d.cycleEnd)} (${nf.format(d.deploys)} deploys in ${Math.floor(d.elapsedDays)} days).` : d.projected !== null ? `Pace: ${nf.format(d.deploys)} deploys in ${Math.floor(d.elapsedDays)} days is about ${nf.format(Math.round(d.projected))} credits by the end of the cycle (${cycleDay(d.cycleEnd)}).` : `A pace estimate appears three days into each cycle. It resets ${cycleDay(d.cycleEnd)}.` }));
     if (r?.limit && !r.staleForCycle) {
       const used = 1 - r.value / r.limit;
       more.push(
@@ -1057,6 +1183,7 @@ import SignInGate from '../../components/SignInGate.astro';
     } else if (!r) {
       more.push(h('p', { class: 'hero-sub', text: `Bandwidth, functions and requests also cost credits, and Netlify's API reports none of them. Type in the balance from ${typed?.where ?? 'Netlify → Team → Billing and usage'} to see the full picture here.` }));
     }
+    more.push(enterReadingButton('netlify.credits_remaining'));
     more.push(h('p', { class: 'svc-note', text: "A successful production deploy costs 15 credits; failed deploys, rollbacks and deploy previews cost nothing (Netlify's docs, \"How credits work\"). Counted from the site's deploy list every 6 hours. Each merge to main is one production deploy, so batching changes into fewer merges is the main way to save credits." }));
 
     const fresh = [nextAutoUpdate(a.capturedAt)];
@@ -1072,6 +1199,7 @@ import SignInGate from '../../components/SignInGate.astro';
     const more: Kid[] = [];
     if (r.limitBytes) parts.push(meter(frac, r.level, 'Cloudflare R2 storage used', `${Math.round(frac * 100)}% of the free allowance`));
     if (r.limitBytes) more.push(h('p', { class: 'meter-caption', text: `${frac < 0.01 ? 'under 1' : Math.round(frac * 100)}% used · ${nf.format(r.objects)} object${r.objects === 1 ? '' : 's'} in ${r.buckets} bucket${r.buckets === 1 ? '' : 's'}` }));
+    parts.push(h('p', { class: 'hero-sub', text: `${nf.format(r.objects)} file${r.objects === 1 ? '' : 's'} in ${r.buckets} bucket${r.buckets === 1 ? '' : 's'}` }));
     more.push(h('p', { class: 'svc-note', text: `Read from Cloudflare's analytics ${ago(r.capturedAt)}, refreshed every 6 hours. Past the free allowance R2 storage is billed per GB-month; the Cloudflare dashboard is the authority.` }));
     return card('Cloudflare R2 storage', { mode: 'auto', text: 'Read from Cloudflare', fresh: [nextAutoUpdate(r.capturedAt)] }, r.level, ...parts, MORE, ...more);
   }
@@ -1088,6 +1216,8 @@ import SignInGate from '../../components/SignInGate.astro';
       const [label, x] = tightest;
       parts.push(h('p', { class: 'hero', text: nf.format(x.used) }), h('p', { class: 'hero-sub', text: `emails sent ${label.toLowerCase()}, of ${nf.format(x.limit)} allowed` }), meter(x.used / x.limit, x.level, `Resend emails ${label.toLowerCase()}`, `${Math.round((x.used / x.limit) * 100)}% used`));
     }
+    const other = tightest ? rows.find(([l, x]) => l !== tightest[0] && x && x.limit) : undefined;
+    if (other) parts.push(h('p', { class: 'hero-sub', text: `${nf.format(other[1].used)} of ${nf.format(other[1].limit)} ${other[0].toLowerCase()}` }));
     for (const [label, x] of rows) {
       if (!x || !x.limit) continue;
       const frac = x.used / x.limit;
@@ -1142,15 +1272,54 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   // ---- alerts ----------------------------------------------------------------
-  function renderAlerts(alerts: any[]) {
+  // The card each service's alerts belong to, so an alert can take you to the figures behind it.
+  const SERVICE_CARD: Record<string, string> = { anthropic: 'Anthropic (Claude)', gemini: 'Google Gemini', typesafe: 'TypeSafe (Jev)', supabase: 'Supabase database', resend: 'Resend emails', cloudflare: 'Cloudflare R2 storage', netlify: 'Netlify' };
+
+  function linkButton(text: string, onClick: () => void): HTMLElement {
+    const b = h('button', { class: 'link-button', text, attrs: { type: 'button' } });
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  // One entry per service, led by its most serious alert (the others sit under it), each saying what to do,
+  // under a one-line count, so the top of the page answers "is anything wrong, and what do I do?".
+  function renderAlerts(alerts: any[], cardCount: number) {
     const box = $('alerts');
     if (alerts.length === 0) {
-      box.replaceChildren(h('p', { class: 'card all-clear' }, pill(null, 'All clear'), h('span', { text: 'Nothing is close to a limit, as far as we can measure.' })));
+      box.replaceChildren(h('p', { class: 'card all-clear' }, pill(null, 'All clear'), h('span', { text: `All ${cardCount} services are within their limits, as far as we can measure.` })));
       return;
     }
-    const sorted = [...alerts].sort((a, b) => Number(b.level === 'critical') - Number(a.level === 'critical'));
+    const rank = (a: any) => (a.level === 'critical' ? 0 : 1);
+    const byService = new Map<string, any[]>();
+    for (const a of [...alerts].sort((x, y) => rank(x) - rank(y))) {
+      if (!byService.has(a.service)) byService.set(a.service, []);
+      byService.get(a.service)!.push(a);
+    }
+    const groups = [...byService.entries()].sort((x, y) => rank(x[1][0]) - rank(y[1][0]));
+    const critical = groups.filter(([, g]) => g[0].level === 'critical').length;
+    const warning = groups.length - critical;
+    const fine = Math.max(0, cardCount - groups.length);
+    const summary = [critical ? `${critical} critical` : null, warning ? `${warning} warning${warning === 1 ? '' : 's'}` : null, `${fine} fine`].filter(Boolean).join(' · ');
     box.replaceChildren(
-      h('ul', { class: 'alert-list' }, ...sorted.map((a) => h('li', { class: `alert alert--${a.level}` }, pill(a.level), h('div', {}, h('p', { class: 'alert-title', text: a.title }), h('p', { class: 'alert-detail', text: a.detail + (a.emailedAt ? ` Emailed to the core team ${ago(a.emailedAt)}.` : '') }))))),
+      h('p', { class: 'alert-summary', text: summary }),
+      h('ul', { class: 'alert-list' }, ...groups.map(([service, group]) => {
+        const [lead, ...rest] = group;
+        const cardTitle = SERVICE_CARD[service];
+        return h('li', { class: `alert alert--${lead.level}` },
+          pill(lead.level),
+          h('div', {},
+            h('p', { class: 'alert-title', text: lead.title }),
+            lead.action ? h('p', { class: 'alert-action' }, h('strong', { text: 'What to do: ' }), lead.action) : null,
+            // the numbers behind it, one tap away, so the headline and the action stay short
+            h('details', { class: 'alert-why' },
+              h('summary', { text: 'Why this is flagged' }),
+              h('p', { class: 'alert-detail', text: lead.detail + (lead.emailedAt ? ` Emailed to the core team ${ago(lead.emailedAt)}.` : '') }),
+              ...rest.map((r) => h('p', { class: 'alert-more', text: `Also: ${r.title}.${r.action && r.action !== lead.action ? ` ${r.action}` : ''}` })),
+            ),
+            cardTitle ? linkButton(`See the ${cardTitle} card`, () => openCardByTitle(cardTitle)) : null,
+          ),
+        );
+      })),
     );
   }
 
@@ -1189,7 +1358,7 @@ import SignInGate from '../../components/SignInGate.astro';
         msg.textContent = err instanceof StaffAuthError ? 'Your session ended or this account cannot change readings.' : (err as Error).message;
       }
     });
-    return h('details', { class: 'card' }, h('summary', { text: `${meterInfo.label}${last?.value !== undefined ? ` · last entered ${last.value}` : ''}` }), form);
+    return h('details', { class: 'card', attrs: { id: `reading-${id}` } }, h('summary', { text: `${meterInfo.label}${last?.value !== undefined ? ` · last entered ${last.value}` : ''}` }), form);
   }
 
   function renderAdmin(o: Overview) {
@@ -1324,12 +1493,14 @@ import SignInGate from '../../components/SignInGate.astro';
       if (status !== 200) throw new Error('load failed');
       statusEl.hidden = true;
       intro.textContent = 'Free tiers and credits the website relies on. "Measured" figures come from our own systems; "typed in" ones come from a provider\'s dashboard and are only as fresh as the last entry.';
-      renderAlerts(data.alerts);
       nextRunAt = data.schedule?.nextCollectorRunAt ?? null;
       runEveryHours = data.schedule?.collectorEveryHours ?? 6;
       // Re-rendered after every saved reading; the open card (openCardTitle) is rebuilt open.
       const netlifyTyped = data.manual.find((m: any) => m.id === 'netlify.credits_remaining') ?? null;
-      $('cards').replaceChildren(...[anthropicCard(data), geminiCard(data), typesafeCard(data), supabaseCard(data), ...(data.resend.fresh ? [resendCard(data)] : []), ...(data.r2.fresh ? [r2Card(data)] : []), ...(data.netlify.deploys ? [netlifyCard(data, netlifyTyped)] : netlifyTyped ? [manualCard(netlifyTyped)] : []), ...data.manual.filter((m: any) => !FOLDED_INTO_SERVICE_CARD.has(m.id)).map(manualCard)]);
+      canConfigure = Boolean(data.canConfigure);
+      const nodes = [anthropicCard(data), geminiCard(data), typesafeCard(data), supabaseCard(data), ...(data.resend.fresh ? [resendCard(data)] : []), ...(data.r2.fresh ? [r2Card(data)] : []), ...(data.netlify.deploys ? [netlifyCard(data, netlifyTyped)] : netlifyTyped ? [manualCard(netlifyTyped)] : []), ...data.manual.filter((m: any) => !FOLDED_INTO_SERVICE_CARD.has(m.id)).map(manualCard)].sort((a, b) => urgencyRank(b) - urgencyRank(a)); // most urgent first; the sort is stable, so ties keep their order
+      $('cards').replaceChildren(...nodes);
+      renderAlerts(data.alerts, nodes.length);
       renderAdmin(data);
       $('foot').textContent = `Updated ${new Date(data.generatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}. Counts use UTC days. Warnings are emailed to the core team once, and again only if they get worse.`;
       content.hidden = false;

@@ -19,6 +19,7 @@ import {
   projectDbGrowth,
   typesafeCreditEstimate,
   netlifyDeployUsage,
+  alertAction,
 } from './lib/usage-rules.mjs';
 
 const NOW = new Date('2026-10-10T12:00:00Z');
@@ -255,6 +256,42 @@ test('netlifyDeployUsage: no projection in the first days, and none from an earl
   assert.equal(netlifyDeployUsage(activity(33, '2026-09-19T00:00:00.000-07:00'), plan, NF_NOW), null); // last cycle's count
   assert.equal(netlifyDeployUsage(null, plan, NF_NOW), null);
   assert.equal(netlifyDeployUsage(activity(33), null, NF_NOW), null);
+});
+
+test('netlifyDeployUsage: names the day the allowance would run out at this pace, only when it would', () => {
+  const u = netlifyDeployUsage(activity(33), plan, NF_NOW); // 495 credits in about 3.2 days, 1,000 included
+  const day = u.exhaustsAt.slice(0, 10);
+  assert.ok(day >= '2026-10-25' && day <= '2026-10-27', day); // about 3.3 more days at ~154 credits a day
+  assert.equal(netlifyDeployUsage(activity(2), plan, NF_NOW).exhaustsAt, null); // 30 credits: nowhere near
+  assert.equal(netlifyDeployUsage(activity(10), plan, new Date('2026-10-20T12:00:00Z')).exhaustsAt, null); // too early to project
+  assert.match(evaluateAlerts({ now: NF_NOW, snapshots: { 'netlify.plan_credits': plan, 'netlify.deploy_activity': activity(33) } })[0].title, /^Netlify credits are on pace to run out around 2[567] Oct$/);
+});
+
+test('every alert says what to do, in words a non-technical reader can act on', () => {
+  // a page that is on fire everywhere, so every rule that can speak does
+  const snapshots = {
+    'supabase.db_size_bytes': { value: 480 * MB, limit_value: LIMIT, captured_at: '2026-10-10T06:00:00Z' },
+    'supabase.db_connections': { value: 58, limit_value: 60, captured_at: '2026-10-10T06:00:00Z' },
+    'supabase.egress_gb': { value: 4.8, limit_value: 5, captured_at: '2026-10-09T00:00:00Z' },
+    'anthropic.credit_remaining_usd': { value: 1, limit_value: 50, captured_at: '2026-10-09T00:00:00Z', detail: { expires_on: '2026-10-12' } },
+    'typesafe.credit_remaining_usd': { value: 0.2, limit_value: 5, captured_at: '2026-10-09T00:00:00Z' },
+    'netlify.plan_credits': { value: 1000, limit_value: 1000, captured_at: '2026-10-10T00:00:00Z', detail: { period_start: '2026-10-01T00:00:00.000Z', next_period_start: '2026-11-01T00:00:00.000Z' } },
+    'netlify.deploy_activity': { value: 960, limit_value: null, captured_at: '2026-10-10T00:00:00Z', detail: { period_start: '2026-10-01T00:00:00.000Z', production_ok: 64 } },
+    'netlify.credits_remaining': { value: 50, limit_value: 1000, captured_at: '2026-10-09T00:00:00Z' },
+    'cloudflare.r2_storage_gb': { value: 9.5, limit_value: 10, captured_at: '2026-10-09T00:00:00Z' },
+  };
+  const daily = [
+    row('2026-10-10', 'anthropic', 'billing_errors', 3), row('2026-10-10', 'anthropic', 'chat_cap_hits', 2), row('2026-10-10', 'anthropic', 'search_fallback_cap_hits', 2),
+    row('2026-10-10', 'gemini', 'quota_exhausted', 4), row('2026-10-10', 'typesafe', 'requests', 20), row('2026-10-10', 'typesafe', 'errors', 9),
+  ];
+  const alerts = evaluateAlerts({ now: NOW, snapshots, daily, settings: { anthropic_prices: { input: 3, output: 15 } }, dbHistory: sizeHistory(10, 400, 8) });
+  assert.ok(alerts.length >= 8, `expected many alerts, got ${alerts.map((a) => a.key)}`);
+  for (const a of alerts) {
+    assert.ok(typeof a.action === 'string' && a.action.length > 30, `no guidance for ${a.key}`);
+    assert.ok(!/[{}]|undefined|NaN/.test(a.action), `bad guidance text for ${a.key}`);
+  }
+  assert.equal(alertAction('manual:some.future_meter').length > 30, true); // new typed-in meters get the generic advice
+  assert.equal(alertAction('not:a-real-alert'), null);
 });
 
 test('evaluateAlerts: deploy credits warn at 70% / critical at 90%; a pace warning only while still under 70%', () => {

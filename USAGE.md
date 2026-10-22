@@ -31,6 +31,15 @@ shows how close each one is and emails the core team before it runs out.
 
 Each card shows only a summary (the status, one headline figure and one bar, plus anything overdue or out of date); everything else (how it updates, charts, breakdowns, caveats) opens when you click anywhere on the card (or press its **Details** button), one card at a time, with a short ease-out animation (instant if the device asks for reduced motion). Cards sit in a grid and every collapsed card is the same height (the always-visible part has one reserved height, so keep a card's summary to the figure, a bar and one short line); an open card grows on its own and stays open when a saved reading reloads the page. Every card carries a badge: **Automatic** (the 6-hourly `usage-collect` run, with the next run's time shown, and a note if one was missed), **Live** (counted on every request the site makes: Anthropic, Gemini and TypeSafe usage), **Manual** (an admin types it in; shows when the update is due, and goes orange once overdue), or **Part manual** (Netlify credits: balance typed in, allowance and cycle automatic; Anthropic and TypeSafe: usage live, credit balance typed in). The run schedule is `COLLECTOR_EVERY_HOURS` in `usage-rules.mjs`, which must match the cron in `usage-collect.mts`. Typed-in due dates come from `refreshEveryDays` on each meter in `MANUAL_METERS` (7 days for the Netlify balance, 14 for the rest).
 
+## What the page shows (and how it is arranged)
+
+- **Top: "Needs attention".** A one-line count ("2 critical · 5 fine"), then **one entry per service** led by its most serious alert, each with a plain-language **What to do** line (written for non-technical core-team members, kept in `ALERT_ACTIONS` in `usage-rules.mjs`, and sent in the hourly email too), a **Why this is flagged** toggle holding the numbers (and any other alerts for the same service), and a link that opens that service's card. Severity is the tint and the pill's word, not a coloured stripe.
+- **"What these words mean":** a short glossary (credit, egress, deploy, estimated, warning/critical).
+- **Cards,** most urgent first (critical, then warning, then the rest; ties keep their order). Each card also has a button, for admins, that jumps to its entry form (**Enter a new reading**), and shows when the typed-in figure was entered.
+- Below the cards: domain renewals, WhatsApp account health, the reading forms and the prices.
+
+When a service has a new alert, add its plain-language action to `ALERT_ACTIONS`; the test in `usage-rules.test.mjs` fails if any alert has no guidance.
+
 ## Alert rules
 
 Emailed once when they appear, again only if they get worse (warning → critical), and forgotten
