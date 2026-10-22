@@ -3226,8 +3226,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     grid.append(
       widget('My unit', { more: ['View unit', 'unit'], icon: IC.unit },
         h('div', 'tiles', undefined,
-          h('div', 'tile', undefined, h('div', 'k', undefined, scene('farm', 'Farm land'), farmPills(hh)), h('div', 'v', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), h('div', 's', hh.plots.length ? `${hh.plots.length} plot${hh.plots.length === 1 ? '' : 's'}` : 'Not available yet')),
-          h('div', 'tile', undefined, h('div', 'k', undefined, scene('house', 'House'), housePills(hh)), h('div', 'v', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), h('div', 's', undefined, h('span', '', !hh.houseNo ? 'No house allocated yet' : hh.housePattas.length ? `${hh.housePattas.length} plot${hh.housePattas.length === 1 ? '' : 's'}` : 'Area not on record'))),
+          h('div', 'tile', undefined, h('div', 'k', undefined, scene('farm', 'Farm land'), farmPills(hh)), h('div', 'v', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), h('div', 's', hh.plots.length ? `${hh.plots.length} survey${hh.plots.length === 1 ? '' : 's'}` : 'Not available yet')),
+          h('div', 'tile', undefined, h('div', 'k', undefined, scene('house', 'House'), housePills(hh)), h('div', 'v', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), h('div', 's', undefined, h('span', '', !hh.houseNo ? 'No house allocated yet' : hh.housePattas.length ? `${hh.housePattas.length} survey${hh.housePattas.length === 1 ? '' : 's'}` : 'Area not on record'))),
         ),
         prompts,
       ),
@@ -3257,11 +3257,11 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const cols = h('div', 'unit-cols');
     cols.append(
       h('section', 'panel', undefined, h('h2', 'unit-head', undefined, scene('farm', 'Farm'), farmPills(hh)),
-        h('div', 'kpis', undefined, kpi('Farm land', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), kpi('Farm plots', String(hh.plots.length))),
+        h('div', 'kpis', undefined, kpi('Farm Area (Acres)', hh.plots.length ? acresFmt.format(hh.farmAcres) : '—'), kpi('Surveys', String(hh.plots.length))),
         hh.plots.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Acres', 'Status'], [...hh.plots].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaAcres, acresFmt), verifiedMark(p.verification)]), 2)) : h('p', 'lede', 'Patta details not available yet'),
         isFamily() ? null : landCardFooter(hh, 'farm')),
       h('section', 'panel', undefined, h('h2', 'unit-head', undefined, scene('house', 'House'), housePills(hh)),
-        h('div', 'kpis', undefined, kpi('House plot',hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), kpi('House plots', String(hh.housePattas.length))),
+        h('div', 'kpis', undefined, kpi('House Plot (Sq.ft.)', hh.houseSqFt > 0 ? sqftFmt.format(hh.houseSqFt) : '—'), kpi('Surveys', String(hh.housePattas.length))),
         hh.housePattas.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Sq ft', 'Status'], [...hh.housePattas].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaSqFt, sqftFmt), verifiedMark(p.verification)]), 2)) : h('p', 'lede', hh.houseNo ? 'Patta details not available yet' : 'No house allocated yet'),
         hh.houseNo && !isFamily() ? landCardFooter(hh, 'house') : null),
     );
