@@ -695,32 +695,74 @@ import SignInGate from '../../components/SignInGate.astro';
     align-items: start;
   }
 
-  /* The code that names a card (farm unit, house number) in a solid circle, at the left of the card's title. */
+  /* The code that names a card (farm unit, house number) as a round house-number plaque, at the right of the heading: a thick green ring, a white
+     face, the code in the display face, and a dot at each side. */
   .pills {
     display: flex;
     flex: none;
-    margin: 0;
+    margin: 0 0 0 auto; /* at the right of the card's heading */
   }
 
-  /* A longer code stretches the circle into a pill rather than being cut off. */
+  /* A longer code stretches the plaque into an oval rather than being cut off. */
   .pills .pill {
+    position: relative;
     display: grid;
     place-items: center;
     box-sizing: border-box;
-    min-width: 48px;
-    height: 48px;
+    min-width: 88px;
+    height: 88px;
     margin: 0;
-    padding: 0 8px;
-    border: 0;
-    background: var(--tvc-green-dark);
-    color: var(--tvc-white);
-    /* Set outright: the code sits inside a Fraunces h2 on My unit and an uppercase Inter row on Home, and must look the same in both. */
+    padding: 0 6px;
+    border: 5px solid var(--tvc-green-dark);
+    background: var(--tvc-white);
+    color: var(--tvc-green-dark);
+    /* Set outright: the plaque sits inside a Fraunces h2 on My unit and an uppercase Inter row on Home, and must look the same in both. */
     font-family: var(--font-display);
-    font-size: var(--text-base);
+    font-size: var(--text-lg);
     font-weight: 600;
     line-height: 1;
     letter-spacing: normal;
     text-transform: none;
+  }
+
+  .pills .pill::before,
+  .pills .pill::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 4px;
+    height: 4px;
+    margin-top: -2px;
+    border-radius: 50%;
+    background: var(--tvc-green-dark);
+  }
+
+  .pills .pill::before {
+    left: 8px;
+  }
+
+  .pills .pill::after {
+    right: 8px;
+  }
+
+  /* The picture for Farm or House, beside the plaque: thin green lines, quiet. */
+  .scene-wrap {
+    display: inline-flex;
+  }
+
+  .scene {
+    width: 64px;
+    height: 64px;
+    fill: none;
+    stroke: var(--tvc-green);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.75;
+  }
+
+  .unit-head {
+    gap: 16px;
   }
 
   .pill {
@@ -2481,6 +2523,20 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     return g;
   };
 
+  // A soft line drawing standing for Farm or House, in place of the word (which stays in the page for screen readers).
+  const SCENES: Record<'farm' | 'house', string> = {
+    farm: '<path d="M32 40V22"/><path d="M32 29c-8 0-12-5-12-12 8 0 12 5 12 12z"/><path d="M32 25c7 0 11-4 11-10-7 0-11 4-11 10z"/><path d="M6 46h52M11 52h42M17 58h30"/>',
+    house: '<path d="M7 31L32 10l25 21"/><path d="M14 27v28h36V27"/><path d="M27 55V40h10v15"/><path d="M42 20v-8h6v13"/><path d="M40 34h6"/>',
+  };
+  const scene = (kind: 'farm' | 'house', name: string) => {
+    const s = document.createElementNS(SVG_NS, 'svg');
+    s.setAttribute('viewBox', '0 0 64 64');
+    s.setAttribute('class', 'scene');
+    s.setAttribute('aria-hidden', 'true');
+    s.innerHTML = SCENES[kind]; // fixed constants only
+    return h('span', 'scene-wrap', undefined, s, h('span', 'sr-only', name));
+  };
+
   type NavItem = { id: string; label: string; icon: string; soon?: boolean; hidden?: boolean };
   const NAV: NavItem[] = [
     { id: 'dashboard', label: 'Home', icon: IC.dash },
@@ -3188,8 +3244,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     grid.append(
       widget('My unit', { more: ['View unit', 'unit'], icon: IC.unit },
         h('div', 'tiles', undefined,
-          h('div', 'tile', undefined, h('div', 'k', undefined, farmPills(hh) ?? glyph(IC.farm, 'Farm land'), 'Farm land'), h('div', 'v', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), h('div', 's', hh.plots.length ? `${hh.plots.length} plot${hh.plots.length === 1 ? '' : 's'}` : 'Not available yet')),
-          h('div', 'tile', undefined, h('div', 'k', undefined, housePills(hh) ?? glyph(IC.house, 'House'), 'House'), h('div', 'v', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), h('div', 's', undefined, h('span', '', !hh.houseNo ? 'No house allocated yet' : hh.housePattas.length ? `${hh.housePattas.length} plot${hh.housePattas.length === 1 ? '' : 's'}` : 'Area not on record'))),
+          h('div', 'tile', undefined, h('div', 'k', undefined, scene('farm', 'Farm land'), farmPills(hh)), h('div', 'v', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), h('div', 's', hh.plots.length ? `${hh.plots.length} plot${hh.plots.length === 1 ? '' : 's'}` : 'Not available yet')),
+          h('div', 'tile', undefined, h('div', 'k', undefined, scene('house', 'House'), housePills(hh)), h('div', 'v', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), h('div', 's', undefined, h('span', '', !hh.houseNo ? 'No house allocated yet' : hh.housePattas.length ? `${hh.housePattas.length} plot${hh.housePattas.length === 1 ? '' : 's'}` : 'Area not on record'))),
         ),
         prompts,
       ),
@@ -3218,11 +3274,11 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     };
     const cols = h('div', 'unit-cols');
     cols.append(
-      h('section', 'panel', undefined, h('h2', '', undefined, farmPills(hh) ?? h('span', 'glyph', undefined, icon(IC.farm)), 'Farm'),
+      h('section', 'panel', undefined, h('h2', 'unit-head', undefined, scene('farm', 'Farm'), farmPills(hh)),
         h('div', 'kpis', undefined, kpi('Farm land', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), kpi('Farm plots', String(hh.plots.length))),
         hh.plots.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Acres', 'Status'], [...hh.plots].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaAcres, acresFmt), verifiedMark(p.verification)]), 2)) : h('p', 'lede', 'Patta details not available yet'),
         isFamily() ? null : landCardFooter(hh, 'farm')),
-      h('section', 'panel', undefined, h('h2', '', undefined, housePills(hh) ?? h('span', 'glyph', undefined, icon(IC.house)), 'House'),
+      h('section', 'panel', undefined, h('h2', 'unit-head', undefined, scene('house', 'House'), housePills(hh)),
         h('div', 'kpis', undefined, kpi('House area', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), kpi('House plots', String(hh.housePattas.length))),
         hh.housePattas.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Sq ft', 'Status'], [...hh.housePattas].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaSqFt, sqftFmt), verifiedMark(p.verification)]), 2)) : h('p', 'lede', hh.houseNo ? 'Patta details not available yet' : 'No house allocated yet'),
         hh.houseNo && !isFamily() ? landCardFooter(hh, 'house') : null),
