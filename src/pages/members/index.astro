@@ -695,38 +695,56 @@ import SignInGate from '../../components/SignInGate.astro';
     align-items: start;
   }
 
-  /* The code pills of a card, together at the right of its heading. */
+  /* The code that names a card (farm unit, house number): a clean round badge at the right of the heading. A hairline
+     ring and a lot of white space, so the number carries the weight, and a whisper of shadow to lift it off the card. */
   .pills {
     display: flex;
-    gap: 6px;
-    margin: -4px 0 -4px auto; /* don't make the row taller than its heading */
+    flex: none;
+    margin: 0 0 0 auto;
   }
 
-  .tile .pills {
-    flex-wrap: wrap;
-    margin: 0;
-  }
-
-  /* Tinted with a dark outline (so they read on both the white card and the tinted Home tile); the key code is solid. */
+  /* A longer code stretches the badge into an oval rather than being cut off. */
   .pills .pill {
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    min-width: 72px;
+    height: 72px;
     margin: 0;
-    padding: 3px 12px;
-    border-color: var(--tvc-green-dark);
-    background: var(--tvc-green-tint);
+    padding: 0 8px;
+    border: 2px solid var(--tvc-green-dark);
+    background: var(--tvc-white);
+    box-shadow: var(--shadow-soft);
     color: var(--tvc-green-dark);
-    /* Set outright: the pills sit inside a Fraunces h2 on My unit and an uppercase Inter row on Home, and must look the same in both:
-       the display face they had under the headings. */
+    /* Set outright: the badge sits inside a Fraunces h2 on My unit and an uppercase Inter row on Home, and must look the same in both.
+       Display type is set slightly tight, and the figures are tabular so F-12 and F-08 are the same width. */
     font-family: var(--font-display);
-    font-size: var(--text-xs);
+    font-size: var(--text-lg);
     font-weight: 600;
-    line-height: 1.5;
-    letter-spacing: normal;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    letter-spacing: -0.01em;
     text-transform: none;
   }
 
-  .pills .pill--key {
-    background: var(--tvc-green-dark);
-    color: var(--tvc-white);
+  /* The picture for Farm or House, beside the badge: a monoline drawing in the same green, drawn at the same weight as the ring. */
+  .scene-wrap {
+    display: inline-flex;
+  }
+
+  .scene {
+    width: 56px;
+    height: 56px;
+    fill: none;
+    stroke: var(--tvc-green);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.7;
+  }
+
+  .unit-head {
+    gap: 16px;
   }
 
   .pill {
@@ -765,12 +783,10 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
-  /* Under a Farm / House card: the two uploads as buttons (the main one filled), and a link to what has been uploaded (shown in a popup). */
+  /* Under a Farm / House card: one small edit button, which opens the menu of document actions. */
   .card-docs {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px 16px;
+    justify-content: flex-end;
     margin-top: 14px;
   }
 
@@ -842,8 +858,9 @@ import SignInGate from '../../components/SignInGate.astro';
     flex: none;
   }
 
-  .merged-cell {
-    vertical-align: top;
+  /* A patta number shared by several survey rows is centred across all of them. */
+  .shell td.merged-cell {
+    vertical-align: middle;
   }
 
   .doc-link {
@@ -967,6 +984,10 @@ import SignInGate from '../../components/SignInGate.astro';
     gap: 12px;
   }
 
+  .people + .story-hint {
+    margin-top: 14px;
+  }
+
   .people .who2 {
     flex: 1;
     min-width: 0;
@@ -978,6 +999,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .people .who2 span {
+    display: block;
     font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
@@ -1010,10 +1032,9 @@ import SignInGate from '../../components/SignInGate.astro';
   .tile .k {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
     align-content: flex-start; /* the row is as tall as the other tile's, but its icon and pills stay at the top */
     align-items: center;
-    justify-content: space-between;
+    gap: 10px;
     font-size: var(--text-xs);
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -1126,6 +1147,27 @@ import SignInGate from '../../components/SignInGate.astro';
     gap: 4px;
     margin-bottom: 10px;
     font-size: var(--text-sm);
+  }
+
+  dialog.modal .field-cue {
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-xs);
+  }
+
+  /* While the cursor is in the field, the fuller explanation appears as a tinted callout with a green edge. */
+  dialog.modal .field-hint {
+    display: none;
+    padding: 8px 10px;
+    border-left: 3px solid var(--tvc-green);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    background: var(--tvc-green-tint);
+    color: var(--tvc-ink);
+    font-size: var(--text-sm);
+    line-height: 1.4;
+  }
+
+  dialog.modal label:focus-within .field-hint {
+    display: block;
   }
 
   dialog.modal input,
@@ -1873,6 +1915,119 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-sky-blue-text);
   }
 
+  .dir-cell {
+    position: relative;
+  }
+
+  .dir-cell > .dir-card {
+    width: 100%;
+    height: 100%;
+  }
+
+  .dir-card--you .dir-card-names {
+    padding-right: 76px;
+  }
+
+  .dir-card-tools {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .dir-edit {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--tvc-green);
+    color: var(--tvc-white);
+    cursor: pointer;
+  }
+
+  .dir-edit svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .menu-actions {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .dir-edit--sm {
+    width: 28px;
+    height: 28px;
+  }
+
+  .avatar {
+    object-fit: cover;
+  }
+
+  .avatar--sm {
+    width: 28px;
+    height: 28px;
+    font-size: var(--text-xs);
+  }
+
+  .contact {
+    word-break: break-all;
+  }
+
+  .link-btn--danger {
+    margin-right: auto;
+    color: var(--tvc-orange-text);
+  }
+
+  .dir-edit:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .dir-status {
+    display: grid;
+    place-items: center;
+    color: var(--tvc-ink-soft);
+  }
+
+  .dir-status svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .dir-status--review,
+  .dir-status--changes {
+    color: var(--tvc-orange-text);
+  }
+
+  .dir-status--live {
+    color: var(--tvc-green-dark);
+  }
+
+  .back-link {
+    display: inline-block;
+    margin: 0 0 10px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-green-dark);
+  }
+
   .dir-card--you {
     border-color: var(--tvc-green);
     background: var(--tvc-green-tint);
@@ -2171,6 +2326,7 @@ import SignInGate from '../../components/SignInGate.astro';
   import { clearMemberToken, getMemberToken, memberFetch, memberPhotoSrc, MemberAuthError, setMemberToken } from '../../../scripts/lib/member-client.mjs';
   import { MAX_PHOTOS, conflictedDraftKeys, saveChanges } from '../../../scripts/lib/member-unit-story.mjs';
   import { shapeForRecord, surveyChoices } from '../../../scripts/lib/member-land-docs.mjs';
+  import { sizedPicture } from '../../../scripts/lib/member-google-picture.mjs';
   import { facesToShow } from '../../../scripts/lib/member-directory.mjs';
   import { openPhoto, preparePhotoFrom } from '../../../scripts/lib/photo-prepare.mjs';
   import { MAX_ZOOM, cropRect, initialCrop, panBy, zoomTo } from '../../../scripts/lib/photo-crop.mjs';
@@ -2181,12 +2337,12 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-  type Person = { id: string; name: string; role: string; canLogin: boolean; hasEmail: boolean; hasPhone: boolean };
+  type Person = { id: string; name: string; role: string; canLogin: boolean; hasEmail: boolean; hasPhone: boolean; emailMasked: string | null; phoneMasked: string | null; picture: string | null };
   type Plot = { pattaNo: string | null; surveyNo: string | null; areaAcres: number | null; areaHectares: number | null; referenceNo: string | null; verification: string; sourceDocumentId: string | null; pattaDocumentId: string | null; surveyDocumentId: string | null };
   type House = { pattaNo: string | null; surveyNo: string | null; areaSqFt: number | null; verification: string; sourceDocumentId: string | null; pattaDocumentId: string | null; surveyDocumentId: string | null };
   type LandDoc = { id: string; householdId: string; landType: string; fileName: string | null; uploadedAt: string; status: string; summary: string };
   type Hh = { id: string; farmUnit: string; houseNo: string | null; cluster: string | null; unitType: string | null; people: Person[]; plots: Plot[]; housePattas: House[]; farmAcres: number; farmHectares: number; houseSqFt: number; flags: { severity: string; text: string }[] };
-  type Me = { personId: string; name: string; email: string | null; phone: string | null; directoryVisible: boolean };
+  type Me = { personId: string; name: string; email: string | null; phone: string | null; directoryVisible: boolean; role: string };
 
   type Kid = Node | string | null | undefined | false;
   function h(tag: string, cls = '', text?: string, ...kids: Kid[]): HTMLElement {
@@ -2350,11 +2506,26 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     return g;
   };
 
-  type NavItem = { id: string; label: string; icon: string; soon?: boolean };
+  // A soft line drawing standing for Farm or House, in place of the word (which stays in the page for screen readers).
+  const SCENES: Record<'farm' | 'house', string> = {
+    farm: '<path d="M32 40V22"/><path d="M32 29c-8 0-12-5-12-12 8 0 12 5 12 12z"/><path d="M32 25c7 0 11-4 11-10-7 0-11 4-11 10z"/><path d="M6 46h52M11 52h42M17 58h30"/>',
+    house: '<path d="M7 31L32 10l25 21"/><path d="M14 27v28h36V27"/><path d="M27 55V40h10v15"/><path d="M42 20v-8h6v13"/><path d="M40 34h6"/>',
+  };
+  const scene = (kind: 'farm' | 'house', name: string) => {
+    const s = document.createElementNS(SVG_NS, 'svg');
+    s.setAttribute('viewBox', '0 0 64 64');
+    s.setAttribute('class', 'scene');
+    s.setAttribute('aria-hidden', 'true');
+    s.innerHTML = SCENES[kind]; // fixed constants only
+    return h('span', 'scene-wrap', undefined, s, h('span', 'sr-only', name));
+  };
+
+  type NavItem = { id: string; label: string; icon: string; soon?: boolean; hidden?: boolean };
   const NAV: NavItem[] = [
     { id: 'dashboard', label: 'Home', icon: IC.dash },
     { id: 'unit', label: 'My unit', icon: IC.unit },
-    { id: 'story', label: 'Your story', icon: IC.pen },
+    // The story editor is opened from your own card under Our members, not from the menu.
+    { id: 'story', label: 'Your story', icon: IC.pen, hidden: true },
     { id: 'directory', label: 'Our members', icon: IC.book },
     // Not built yet: kept out of the menu (they would only lead to a "coming soon" page) and listed
     // once, quietly, at the foot of the Home page. The routes stay so an old bookmark still lands somewhere.
@@ -2379,6 +2550,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   };
 
   let me: Me | null = null;
+  // Family members sign in with fewer rights: they see the unit and the directory, but do not edit the story, land documents or who is in the unit.
+  const isFamily = () => me?.role === 'family';
+  const isOwner = () => me?.role === 'owner';
   let all: Hh[] = [];
   let current = 0;
   let route = 'dashboard';
@@ -2408,10 +2582,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const nav = $('nav');
     nav.replaceChildren();
     for (const item of NAV) {
-      if (item.soon) continue;
+      if (item.soon || item.hidden) continue;
       const a = h('a', 'nav-item', undefined, icon(item.icon), h('span', 'nav-label', item.label));
       a.setAttribute('href', `#/${item.id}`);
-      if (item.id === route) a.setAttribute('aria-current', 'page');
+      if (item.id === (route === 'story' ? 'directory' : route)) a.setAttribute('aria-current', 'page');
       a.title = item.label; // what the icon is, when the menu is collapsed to icons
       nav.append(a);
     }
@@ -2491,19 +2665,31 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     })) : null;
   };
   const farmPills = (hh: Hh) => pillsOf([['Farm unit', hh.farmUnit, true]]);
-  // TO1-V2 is just a variant of TO1, so only the family is shown ("TO1").
-  const unitTypeFamily = (t: string | null) => (t ? t.replace(/-V\d+$/i, '') : null);
   const housePills = (hh: Hh) => pillsOf([['House number', hh.houseNo, true]]);
-  const typePill = (hh: Hh) => pillsOf([['Unit type', unitTypeFamily(hh.unitType)]]);
-  // On My unit the unit type sits beside the house number in the heading (on Home it is at the foot of the tile).
-  const houseHeadPills = (hh: Hh) => pillsOf([['Unit type', unitTypeFamily(hh.unitType)], ['House number', hh.houseNo, true]]);
   const peopleByRole = (people: Person[]) => ROLE_GROUPS.map(([role, label]) => ({ label, people: people.filter((p) => p.role === role) })).filter((g) => g.people.length);
+  // Google's picture for the person, or their initial when they have none (or it will not load). Someone who has
+  // signed in has a picture on file, so this also shows who has used the portal.
+  const personFace = (p: { name: string; picture: string | null }, small = false) => {
+    const initial = h('span', `avatar${small ? ' avatar--sm' : ''}`, first(p.name).slice(0, 1).toUpperCase());
+    const src = sizedPicture(p.picture, 96);
+    if (!src) return initial;
+    const img = document.createElement('img');
+    img.className = `avatar${small ? ' avatar--sm' : ''}`;
+    img.alt = '';
+    img.loading = 'lazy';
+    img.referrerPolicy = 'no-referrer';
+    img.addEventListener('error', () => img.replaceWith(initial));
+    img.src = src;
+    return img;
+  };
+  // Your own email and mobile in full, everyone else's masked.
+  const contact = (p: Person, you: Person) => (p.id === you.id ? { email: me!.email, phone: me!.phone } : { email: p.emailMasked, phone: p.phoneMasked });
   const peopleList = (hh: Hh, you: Person) =>
     h('div', '', undefined, ...peopleByRole(hh.people).flatMap((g) => [
       h('h3', 'role-head', g.label),
       h('ul', 'people', undefined, ...g.people.map((p) =>
-        h('li', '', undefined, h('span', 'avatar', first(p.name).slice(0, 1).toUpperCase()),
-          h('div', 'who2', undefined, h('strong', '', `${p.name}${p.id === you.id ? ' (you)' : ''}`), h('span', '', `${p.hasEmail ? 'Email on file' : 'No email'} · ${p.hasPhone ? 'Mobile on file' : 'No mobile'}`))))),
+        h('li', '', undefined, personFace(p),
+          h('div', 'who2', undefined, h('strong', '', `${p.name}${p.id === you.id ? ' (you)' : ''}`), h('span', '', `${contact(p, you).email ?? 'No email'} · ${contact(p, you).phone ?? 'No mobile'}`))))),
     ]));
 
   // ---- editing my own details ----
@@ -2547,10 +2733,145 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     dlg.append(
       h('h3', '', 'Your details'),
       h('p', '', `Signed in as ${me!.email ?? 'your Google account'}. To change your name, email or unit, ask the core team.`),
-      h('label', '', 'Mobile number', phone),
+      hinted('WhatsApp number', phone, 'We use this number to message you on WhatsApp about stays and farm updates.', 'a number with WhatsApp'),
       h('label', 'check', undefined, dir, h('span', '', 'List me in the member directory')),
       msg,
       h('div', 'modal-actions', undefined, cancel, save),
+    );
+    dlg.addEventListener('close', () => dlg.remove());
+    document.body.append(dlg);
+    dlg.showModal();
+  }
+
+  // ---- family members ----
+  // A field with a hint that appears only while the cursor is in it (the hint stays attached for screen readers).
+  let hintSeq = 0;
+  const hinted = (label: string, input: HTMLInputElement, hint: string, cue = '') => {
+    const note = h('small', 'field-hint', hint);
+    note.id = `hint-${++hintSeq}`;
+    input.setAttribute('aria-describedby', note.id);
+    // The cue is a few words beside the label, always visible; the hint is the fuller explanation, shown as a callout while typing.
+    return h('label', '', undefined, h('span', '', label, cue ? h('span', 'field-cue', ` · ${cue}`) : null), input, note);
+  };
+  const GOOGLE_HINT = 'They sign in with Google, so this must be an address that has a Google account: Gmail, or a work or school address on Google. There is no password to remember.';
+  const WHATSAPP_HINT = 'We use this number to message them on WhatsApp about stays and farm updates.';
+  // Mirrors FAMILY_LOGIN_LIMIT in scripts/lib/member-family.mjs (the server enforces it).
+  const FAMILY_LOGINS = 2;
+
+  function addFamilyDialog(asRequest: boolean) {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'modal';
+    const field = (type: string, placeholder = '') => {
+      const i = document.createElement('input');
+      i.type = type;
+      i.autocomplete = 'off';
+      i.placeholder = placeholder;
+      return i;
+    };
+    const name = field('text');
+    const email = field('email', 'name@gmail.com');
+    const phone = field('tel', '98450 12345');
+    const msg = h('p', 'form-msg');
+    msg.setAttribute('role', 'alert');
+    const cancel = h('button', 'btn', 'Cancel');
+    cancel.addEventListener('click', () => dlg.close());
+    const save = h('button', 'btn btn--solid', asRequest ? 'Send request' : 'Add') as HTMLButtonElement;
+    save.addEventListener('click', async () => {
+      save.disabled = true;
+      msg.textContent = '';
+      try {
+        const { status, data } = await memberFetch('/api/members-me/family-add', { method: 'POST', body: { fullName: name.value, email: email.value, phone: phone.value } });
+        if (status !== 200) throw new Error(data.error || 'Something went wrong. Try again.');
+        dlg.close();
+        await load(true);
+        toast(data.requested ? 'Sent to the core team. They will let you know.' : 'Added. They can sign in now.');
+      } catch (err) {
+        save.disabled = false;
+        msg.textContent = err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : err instanceof Error ? err.message : 'Something went wrong.';
+      }
+    });
+    dlg.append(
+      h('h3', '', asRequest ? 'Request another family member' : 'Add a family member'),
+      h('p', '', asRequest
+        ? `Your unit already has ${FAMILY_LOGINS} family members who can sign in, so the core team decides on more.`
+        : 'They can see your unit and the member directory and, soon, book stays. They cannot edit your story, land documents or who is in your unit.'),
+      h('label', '', 'Name', name),
+      hinted('Google email', email, GOOGLE_HINT, 'Gmail or any Google account'),
+      hinted('WhatsApp number (optional)', phone, WHATSAPP_HINT, 'a number with WhatsApp'),
+      msg,
+      h('div', 'modal-actions', undefined, cancel, save),
+    );
+    dlg.addEventListener('close', () => dlg.remove());
+    document.body.append(dlg);
+    dlg.showModal();
+  }
+
+  // Edit a family member's details, or remove them. The email and mobile on file are never sent to an owner, so those
+  // fields start empty and a blank one keeps what is there.
+  function editFamilyDialog(p: { id: string; name: string }) {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'modal';
+    const input = (type: string, value: string, placeholder: string) => {
+      const i = document.createElement('input');
+      i.type = type;
+      i.autocomplete = 'off';
+      i.value = value;
+      i.placeholder = placeholder;
+      return i;
+    };
+    const name = input('text', p.name, '');
+    const email = input('email', '', 'Unchanged');
+    const phone = input('tel', '', 'Unchanged');
+    const msg = h('p', 'form-msg');
+    msg.setAttribute('role', 'alert');
+    const fail = (err: unknown) => {
+      msg.textContent = err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : err instanceof Error ? err.message : 'Something went wrong.';
+    };
+    const cancel = h('button', 'btn', 'Cancel');
+    cancel.addEventListener('click', () => dlg.close());
+    const save = h('button', 'btn btn--solid', 'Save') as HTMLButtonElement;
+    const remove = h('button', 'link-btn link-btn--danger', 'Remove from my unit') as HTMLButtonElement;
+    const run = async (btn: HTMLButtonElement, path: string, body: Record<string, unknown>, done: string) => {
+      btn.disabled = true;
+      msg.textContent = '';
+      try {
+        const { status, data } = await memberFetch(path, { method: 'POST', body });
+        if (status !== 200) throw new Error(data.error || 'Something went wrong. Try again.');
+        dlg.close();
+        await load(true);
+        toast(done);
+      } catch (err) {
+        btn.disabled = false;
+        fail(err);
+      }
+    };
+    save.addEventListener('click', () => {
+      const changes: Record<string, string> = {};
+      if (name.value.trim() !== p.name) changes.fullName = name.value;
+      if (email.value.trim()) changes.email = email.value;
+      if (phone.value.trim()) changes.phone = phone.value;
+      if (Object.keys(changes).length === 0) { msg.textContent = 'Nothing to change.'; return; }
+      void run(save, '/api/members-me/family-update', { personId: p.id, ...changes }, 'Saved');
+    });
+    // Asks again before removing, in the dialog itself.
+    let sure = false;
+    remove.addEventListener('click', () => {
+      if (!sure) {
+        sure = true;
+        remove.textContent = `Yes, remove ${first(p.name)}`;
+        msg.textContent = 'They will no longer be able to sign in. You can add them again later.';
+        return;
+      }
+      void run(remove, '/api/members-me/family-remove', { personId: p.id }, `${first(p.name)} can no longer sign in`);
+    });
+    dlg.append(
+      h('h3', '', `Edit ${p.name}`),
+      h('p', '', 'Leave a field blank to keep what is on file.'),
+      h('label', '', 'Name', name),
+      hinted('Google email', email, GOOGLE_HINT, 'Gmail or any Google account'),
+      hinted('WhatsApp number', phone, WHATSAPP_HINT, 'a number with WhatsApp'),
+      msg,
+      h('div', 'modal-actions', undefined, remove, cancel, save),
     );
     dlg.addEventListener('close', () => dlg.remove());
     document.body.append(dlg);
@@ -2593,31 +2914,51 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       h('span', 'doc-sum', d.summary));
   }
 
-  // Under a Farm or House card's table: upload for that kind of land (no choice to make), and a
-  // link to what has been uploaded for it. The list itself is in a popup, not on the page.
+  // Under a Farm or House card's table: one small edit button that opens a short menu of what can be done with
+  // the documents for that kind of land (upload one, add an FMB sketch, see what has been uploaded). The list
+  // itself is in its own popup, not on the page.
   function landCardFooter(hh: Hh, landType: 'farm' | 'house'): HTMLElement {
-    const upload = h('button', 'btn btn--solid', 'Upload a document');
-    upload.setAttribute('type', 'button');
-    upload.addEventListener('click', () => uploadDialog(hh, landType, () => { shapesLoad = null; void refreshDocs(hh); }));
-    const history = h('button', 'link-btn', 'Uploaded documents');
-    history.setAttribute('type', 'button');
-    history.addEventListener('click', () => docsDialog(hh, landType));
-    const sketch = h('button', 'btn', 'Add an FMB sketch');
-    sketch.setAttribute('type', 'button');
-    sketch.addEventListener('click', () => sketchDialog(hh, landType, () => { shapesLoad = null; void refreshDocs(hh); }));
-    const footer = h('div', 'card-docs', undefined, upload, sketch, history);
-    const update = () => {
-      if (!footer.isConnected) {
-        docsListeners.delete(update);
-        return;
-      }
-      const n = docsOfType(landType).length;
-      history.textContent = n ? `Uploaded documents (${n})` : 'Uploaded documents';
-    };
-    docsListeners.add(update);
-    if (docsState.householdId === hh.id && docsState.loaded) update();
-    else void refreshDocs(hh);
+    const label = landType === 'farm' ? 'farm land' : 'house plot';
+    const edit = h('button', 'dir-edit dir-edit--sm', undefined, icon(IC.pen));
+    edit.setAttribute('type', 'button');
+    edit.setAttribute('aria-label', `Documents for your ${label}`);
+    edit.title = `Documents for your ${label}`;
+    edit.addEventListener('click', () => docsMenuDialog(hh, landType));
+    const footer = h('div', 'card-docs', undefined, edit);
+    // While this card is on the page it keeps the re-reading going after an upload (refreshDocs only polls while
+    // something is listening), so verified badges appear without a reload; it stops listening once the card is gone.
+    const alive = () => { if (!footer.isConnected) docsListeners.delete(alive); };
+    docsListeners.add(alive);
+    // The documents are read once so the menu can show how many there are.
+    if (!(docsState.householdId === hh.id && docsState.loaded)) void refreshDocs(hh);
     return footer;
+  }
+
+  function docsMenuDialog(hh: Hh, landType: 'farm' | 'house') {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'modal';
+    const n = docsOfType(landType).length;
+    const choice = (text: string, solid: boolean, run: () => void) => {
+      const b = h('button', solid ? 'btn btn--solid' : 'btn', text);
+      b.setAttribute('type', 'button');
+      b.addEventListener('click', () => { dlg.close(); run(); });
+      return b;
+    };
+    const refreshed = () => { shapesLoad = null; void refreshDocs(hh); };
+    const close = h('button', 'link-btn', 'Close');
+    close.setAttribute('type', 'button');
+    close.addEventListener('click', () => dlg.close());
+    dlg.append(
+      h('h3', '', landType === 'farm' ? 'Farm land documents' : 'House plot documents'),
+      h('div', 'menu-actions', undefined,
+        choice('Upload a document', true, () => uploadDialog(hh, landType, refreshed)),
+        choice('Add an FMB sketch', false, () => sketchDialog(hh, landType, refreshed)),
+        choice(n ? `Uploaded documents (${n})` : 'Uploaded documents', false, () => docsDialog(hh, landType))),
+      h('div', 'modal-actions', undefined, close),
+    );
+    dlg.addEventListener('close', () => dlg.remove());
+    document.body.append(dlg);
+    dlg.showModal();
   }
 
   function docsDialog(hh: Hh, landType: 'farm' | 'house') {
@@ -2872,8 +3213,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       return b;
     };
     const next = !me!.phone
-      ? { title: 'Add your mobile number', text: 'So the core team can reach you about stays and farm updates.', actions: [(() => { const b = h('button', 'btn btn--solid', 'Add my number'); b.setAttribute('type', 'button'); b.addEventListener('click', detailsDialog); return b; })()] }
-      : { title: 'Your story', text: 'Add to it or change it whenever you like, and read what your neighbours have shared.', actions: [go('Open your story', 'story', true), go('See our members', 'directory')] };
+      ? { title: 'Add your WhatsApp number', text: 'So the core team can message you about stays and farm updates.', actions: [(() => { const b = h('button', 'btn btn--solid', 'Add my number'); b.setAttribute('type', 'button'); b.addEventListener('click', detailsDialog); return b; })()] }
+      : isFamily()
+      ? { title: 'Our members', text: 'Meet your neighbours in the valley.', actions: [go('See our members', 'directory', true)] }
+      : { title: 'Your story', text: 'Add to it or change it whenever you like, and read what your neighbours have shared.', actions: [go('Edit your story', 'story', true), go('See our members', 'directory')] };
     root.append(h('section', 'next', undefined, h('div', 'next-text', undefined, h('h2', '', next.title), h('p', '', next.text)), h('div', 'next-actions', undefined, ...next.actions)));
 
     const grid = h('div', 'widgets');
@@ -2884,8 +3227,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     grid.append(
       widget('My unit', { more: ['View unit', 'unit'], icon: IC.unit },
         h('div', 'tiles', undefined,
-          h('div', 'tile', undefined, h('div', 'k', undefined, glyph(IC.farm, 'Farm land'), farmPills(hh)), h('div', 'v', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), h('div', 's', hh.plots.length ? `${hh.plots.length} plot${hh.plots.length === 1 ? '' : 's'}` : 'Not available yet')),
-          h('div', 'tile', undefined, h('div', 'k', undefined, glyph(IC.house, 'House'), housePills(hh)), h('div', 'v', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), h('div', 's', undefined, h('span', '', !hh.houseNo ? 'No house allocated yet' : hh.housePattas.length ? `${hh.housePattas.length} plot${hh.housePattas.length === 1 ? '' : 's'}` : 'Area not on record'), typePill(hh))),
+          h('div', 'tile', undefined, h('div', 'k', undefined, scene('farm', 'Farm land'), farmPills(hh)), h('div', 'v', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), h('div', 's', hh.plots.length ? `${hh.plots.length} survey${hh.plots.length === 1 ? '' : 's'}` : 'Not available yet')),
+          h('div', 'tile', undefined, h('div', 'k', undefined, scene('house', 'House'), housePills(hh)), h('div', 'v', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), h('div', 's', undefined, h('span', '', !hh.houseNo ? 'No house allocated yet' : hh.housePattas.length ? `${hh.housePattas.length} survey${hh.housePattas.length === 1 ? '' : 's'}` : 'Area not on record'))),
         ),
         prompts,
       ),
@@ -2906,7 +3249,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const root = h('div');
     root.append(
       h('h1', 'page-title', 'My unit'),
-      h('p', 'lede', 'Your unit is your farm land and, if you have one, your house plot. The codes on each card are its farm unit, and the house number and unit type of the house (hover one to see which).'));
+      h('p', 'lede', 'Your unit is your farm land and, if you have one, your house plot. The circle on each card is its farm unit or its house number.'));
     const panel = (title: string, body: Kid, iconPaths?: string) => {
       const p = h('section', 'panel', undefined, h('h2', '', undefined, iconPaths ? h('span', 'glyph', undefined, icon(iconPaths)) : null, title), body);
       p.style.marginTop = '16px';
@@ -2914,25 +3257,53 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     };
     const cols = h('div', 'unit-cols');
     cols.append(
-      h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.farm)), 'Farm', farmPills(hh)),
-        h('div', 'kpis', undefined, kpi('Farm land', hh.plots.length ? `${acresFmt.format(hh.farmAcres)} ac` : '—'), kpi('Farm plots', String(hh.plots.length))),
+      h('section', 'panel', undefined, h('h2', 'unit-head', undefined, scene('farm', 'Farm'), farmPills(hh)),
+        h('div', 'kpis', undefined, kpi('Farm Area (Acres)', hh.plots.length ? acresFmt.format(hh.farmAcres) : '—'), kpi('Surveys', String(hh.plots.length))),
         hh.plots.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Acres', 'Status'], [...hh.plots].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaAcres, acresFmt), verifiedMark(p.verification)]), 2)) : h('p', 'lede', 'Patta details not available yet'),
-        landCardFooter(hh, 'farm')),
-      h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.house)), 'House', houseHeadPills(hh)),
-        h('div', 'kpis', undefined, kpi('House area', hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—'), kpi('House plots', String(hh.housePattas.length))),
+        isFamily() ? null : landCardFooter(hh, 'farm')),
+      h('section', 'panel', undefined, h('h2', 'unit-head', undefined, scene('house', 'House'), housePills(hh)),
+        h('div', 'kpis', undefined, kpi('House Plot (Sq.ft.)', hh.houseSqFt > 0 ? sqftFmt.format(hh.houseSqFt) : '—'), kpi('Surveys', String(hh.housePattas.length))),
         hh.housePattas.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Sq ft', 'Status'], [...hh.housePattas].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaSqFt, sqftFmt), verifiedMark(p.verification)]), 2)) : h('p', 'lede', hh.houseNo ? 'Patta details not available yet' : 'No house allocated yet'),
-        hh.houseNo ? landCardFooter(hh, 'house') : null),
+        hh.houseNo && !isFamily() ? landCardFooter(hh, 'house') : null),
     );
     root.append(cols);
-    // One table, with a row naming each group, so owners and family are separate but the columns line up.
-    const peopleBody = h('tbody');
-    for (const g of peopleByRole(hh.people)) {
-      const head = h('th', '', g.label);
-      head.setAttribute('colspan', '3');
-      peopleBody.append(h('tr', 'group-row', undefined, head));
-      for (const p of g.people) peopleBody.append(h('tr', '', undefined, h('td', '', `${p.name}${p.id === person.id ? ' (you)' : ''}`), h('td', '', p.hasEmail ? 'On file' : 'Missing'), h('td', '', p.hasPhone ? 'On file' : 'Missing')));
+    // Owners in one panel and family members in another, side by side (stacked on a phone), each person as a
+    // picture, name and masked contact lines. Owners also get an edit button on each family member, and a way to add one.
+    const owner = isOwner();
+    const personRow = (p: Person) => {
+      const c = contact(p, person);
+      const who = h('div', 'who2', undefined, h('strong', '', `${p.name}${p.id === person.id ? ' (you)' : ''}`), h('span', 'contact', c.email ?? 'No email'), h('span', 'contact', c.phone ?? 'No mobile'));
+      const li = h('li', '', undefined, personFace(p), who);
+      if (owner && p.role === 'family') {
+        const edit = h('button', 'dir-edit dir-edit--sm', undefined, icon(IC.pen));
+        edit.setAttribute('type', 'button');
+        edit.setAttribute('aria-label', `Edit ${p.name}`);
+        edit.title = `Edit ${p.name}`;
+        edit.addEventListener('click', () => editFamilyDialog(p));
+        li.append(edit);
+      }
+      return li;
+    };
+    const listOf = (people: Person[]) => h('ul', 'people', undefined, ...people.map(personRow));
+    const owners = hh.people.filter((p) => p.role === 'owner');
+    const others = hh.people.filter((p) => p.role === 'non_owner');
+    const family = hh.people.filter((p) => p.role === 'family');
+    const familyLogins = family.filter((p) => p.canLogin).length;
+    const add = h('button', 'btn', familyLogins >= FAMILY_LOGINS ? 'Request another family member' : 'Add a family member');
+    add.setAttribute('type', 'button');
+    add.addEventListener('click', () => addFamilyDialog(familyLogins >= FAMILY_LOGINS));
+    const peopleCols = h('div', 'unit-cols');
+    peopleCols.append(h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.people)), 'Owners'),
+      owners.length ? listOf(owners) : h('p', 'lede', 'No owners on record yet'),
+      others.length ? h('h3', 'role-head', 'Not owners') : null,
+      others.length ? listOf(others) : null));
+    if (owner || family.length) {
+      peopleCols.append(h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.people)), 'Family'),
+        family.length ? listOf(family) : h('p', 'lede', 'No family members added yet.'),
+        owner ? h('p', 'story-hint', `They sign in with Google to see your unit and, soon, book stays. They cannot edit your story, land documents or who is in your unit. Up to ${FAMILY_LOGINS} without approval.`) : null,
+        owner ? add : null));
     }
-    root.append(panel('People', h('div', 'table-wrap', undefined, h('table', '', undefined, h('thead', '', undefined, h('tr', '', undefined, h('th', '', 'Name'), h('th', '', 'Email'), h('th', '', 'Mobile'))), peopleBody)), IC.people));
+    root.append(peopleCols, h('p', 'story-hint', 'A picture means they have signed in to the portal. A letter means they have not yet, or their Google account has no picture.'));
     return root;
   }
 
@@ -3055,7 +3426,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
   function viewStory(): HTMLElement {
     const root = h('div');
+    const back = h('a', 'back-link', '← Our members');
+    back.setAttribute('href', '#/directory');
     root.append(
+      back,
       h('h1', 'page-title', 'Your story', h('small', '', 'Your card for the collective')),
       h('p', 'lede', 'Your unit has one story, shared by everyone in it: either of you can edit what you do, your family and the photos. Your "why TVC" line is your own, and to link your name to a page of yours, select it in the text and press Link. The story needs at least one "why TVC" line from your unit before it can be submitted. The core team reads every story before it appears anywhere. Once approved, other members can read it under Our members; it goes on tvc.farm only if you switch on "Show on tvc.farm".'),
       // (not `cond ? null : el`: append(null) writes the text "null")
@@ -3636,24 +4010,60 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         withCluster && hh.cluster ? pill('house', `Cluster ${hh.cluster}`, 'Housing cluster') : null);
     }
 
+    // Your own unit's story state, read once so the card can show where it stands (the directory itself only
+    // lists approved stories). null until it loads, or if it cannot be read: the card then just says "Edit story".
+    // The state is shown as a small icon with its name as a tooltip and screen-reader label, not as a pill.
+    const STATE_ICON = {
+      draft: '<path d="M12 3a9 9 0 1 0 .01 0" stroke-dasharray="2.5 3"/><path d="M9 12h6"/>',
+      review: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+      changes: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5v.01"/>',
+      live: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/>',
+    };
+    let mine: { written: boolean; text: string; label: string; tone: 'draft' | 'review' | 'changes' | 'live' } | null = null;
+    function describeMine(st: { status: string | null; hasUnsubmittedChanges: boolean; draft: { bio: string; family: string; quote: string } }) {
+      const written = !!(st.draft.bio.trim() || st.draft.family.trim() || st.draft.quote.trim());
+      const text = st.draft.bio.trim() || (st.draft.quote.trim() ? `“${st.draft.quote.trim()}”` : '');
+      if (st.status === 'in_review') return { written, text, label: st.hasUnsubmittedChanges ? 'In review (newer changes not submitted)' : 'In review with the core team', tone: 'review' as const };
+      if (st.status === 'rejected') return { written, text, label: 'Changes needed', tone: 'changes' as const };
+      if (st.status === 'approved') return { written, text, label: st.hasUnsubmittedChanges ? 'Approved (newer changes not submitted)' : 'Approved', tone: 'live' as const };
+      return { written, text, label: 'Draft, not submitted yet', tone: 'draft' as const };
+    }
+
     function card(hh: DirHousehold): HTMLElement {
       // The card names and shows only the primary members (the owners); the popup has everyone.
       const primary = hh.people.filter((p) => p.primary !== false);
       const withStory = primary.find((p) => p.story?.bio) ?? primary.find((p) => p.story) ?? hh.people.find((p) => p.story?.bio) ?? hh.people.find((p) => p.story);
       // First names on the card; the full names are in the popup, and search still matches them.
+      const isYours = hh.people.some((p) => p.isYou);
       const names = joinNames(primary.map((p) => (p.isYou ? `${first(p.name)} (you)` : first(p.name))));
       // The picture sits on the left, vertically centred against the text; names, the story's first lines and the
       // farm and house pills are in a column beside it.
-      const b = h('button', `dir-card${hh.people.some((p) => p.isYou) ? ' dir-card--you' : ''}`, undefined,
+      const b = h('button', `dir-card${isYours ? ' dir-card--you' : ''}`, undefined,
         h('span', 'dir-card-photo', undefined, faces(primary, 'card')),
         h('span', 'dir-card-body', undefined,
           h('span', 'dir-card-names', names),
-          h('span', 'dir-card-text', withStory?.story?.bio ? snippet(withStory.story.bio) : withStory?.story?.why ? `“${snippet(withStory.story.why)}”` : 'Has not shared a story yet'),
+          h('span', 'dir-card-text', withStory?.story?.bio ? snippet(withStory.story.bio) : withStory?.story?.why ? `“${snippet(withStory.story.why)}”` : isYours && mine?.text ? `${snippet(mine.text)}${mine.tone === 'live' ? '' : mine.tone === 'review' ? ' (waiting for approval)' : mine.tone === 'changes' ? ' (changes needed)' : ' (draft)'}` : 'Has not shared a story yet'),
           pills(hh, false)),
       );
       b.setAttribute('type', 'button');
       b.addEventListener('click', () => openProfile(hh));
-      return b;
+      if (!isYours || isFamily()) return b;
+      // Your own card carries the way into the editor, and where the story stands. The story is the unit's, so
+      // anyone in the unit sees it on the unit's card.
+      const label = mine && !mine.written ? 'Write your story' : primary.length > 1 ? 'Edit your unit\'s story (shared)' : 'Edit your story';
+      const edit = h('button', 'dir-edit', undefined, icon(IC.pen));
+      edit.setAttribute('type', 'button');
+      edit.setAttribute('aria-label', label);
+      edit.title = label;
+      edit.addEventListener('click', () => (location.hash = '#/story'));
+      const tools = h('span', 'dir-card-tools', undefined, mine && mine.written ? (() => {
+        const st = h('span', `dir-status dir-status--${mine.tone}`, undefined, icon(STATE_ICON[mine.tone]));
+        st.setAttribute('role', 'img');
+        st.setAttribute('aria-label', mine.label);
+        st.title = mine.label;
+        return st;
+      })() : null, edit);
+      return h('div', 'dir-cell', undefined, b, tools);
     }
 
     // The household's profile in a native dialog, laid out like the card on the public Members page: the
@@ -3776,6 +4186,11 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         if (status !== 200) throw new Error(data.error || 'Could not load the directory.');
         list = data.households as DirHousehold[];
         draw();
+        void memberFetch('/api/members-me/unit-story').then(({ status: st, data: d }) => {
+          if (st !== 200 || !d.story) return;
+          mine = describeMine(d.story);
+          if (built) draw();
+        }, () => {});
       } catch (e) {
         const retry = h('button', 'btn', 'Try again');
         retry.setAttribute('type', 'button');
@@ -3819,6 +4234,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   function onRoute() {
     const id = location.hash.replace(/^#\//, '') || 'dashboard';
     route = NAV.some((n) => n.id === id) ? id : 'dashboard';
+    if (route === 'story' && me && isFamily()) route = 'directory'; // the story is the owners' to edit
     if (me) renderView();
   }
 

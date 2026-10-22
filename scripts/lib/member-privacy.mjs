@@ -10,7 +10,7 @@
 // Keep it true: it describes what the portal does today, not what is planned.
 // Update it when the portal changes (the directory, dues, stays...).
 
-export const PRIVACY_NOTICE_VERSION = 9;
+export const PRIVACY_NOTICE_VERSION = 10;
 
 export const NOTICE_TITLE = 'How we handle your membership details';
 
@@ -32,15 +32,15 @@ export const SECTIONS = [
   },
   {
     heading: 'Who can see it',
-    body: 'You can see your own household. For the other people in it you see only whether an email or mobile is on file, never the numbers. The people in your unit can also read each other\'s draft lines. Other members can see your name, your farm plot number, house number and housing cluster, and your unit\'s approved story (including your own line and the links in the text) in the member directory, unless you turn your listing off. They never see your email, mobile number, land records or documents. The few core team members who run the register can see and correct all of it. Every change, by you or by them, is logged: which field changed, never the value.',
+    body: 'You can see your own household. For the other people in it you see their email and mobile number masked (like p••••@gmail.com and +91 •••••• 345), never in full, and the Google picture next to their name. The people in your unit can also read each other\'s draft lines. Other members can see your name, your farm plot number, house number and housing cluster, and your unit\'s approved story (including your own line and the links in the text) in the member directory, unless you turn your listing off. They never see your email, mobile number, land records or documents. The few core team members who run the register can see and correct all of it. Every change, by you or by them, is logged: which field changed, never the value.',
   },
   {
     heading: 'Signing in',
-    body: 'Google confirms your email address. We also keep the profile picture Google shows for your account, and refresh it each time you sign in, so the core team can recognise you on the member register. Only the core team sees it, other members never do, and it is not sent anywhere else; if you remove the picture from your Google account, ours is removed the next time you sign in. We use nothing else from your Google account and we do not store a password.',
+    body: 'Google confirms your email address. We also keep the profile picture Google shows for your account, and refresh it each time you sign in, so the core team can recognise you on the member register. The core team sees it, and so do the people in your own unit, next to your name (a picture there also shows you have signed in). Members of other units never do, and it is not sent anywhere else; if you remove the picture from your Google account, ours is removed the next time you sign in. We use nothing else from your Google account and we do not store a password.',
   },
   {
     heading: 'Your choices',
-    body: 'You can change your mobile number yourself. Turn "List me in the member directory" off and other members will not see you in the directory, and your own line is no longer shown. The shared story (what you do, your family, the photos and the links in the text) is about the whole unit, so it stays for as long as anyone else in your unit is listed; to take the story down completely, ask the core team. To change your name, email or household, ask the core team.',
+    body: 'You can change your own mobile number yourself. If you own the unit you can also add up to two family members, who sign in with their own Google account: they see your unit and the member directory, but cannot change the story, the land documents or who is in the unit, and you can edit or remove them at any time. The core team is told whenever one is added, and decides on any more than two. Turn "List me in the member directory" off and other members will not see you in the directory, and your own line is no longer shown. The shared story (what you do, your family, the photos and the links in the text) is about the whole unit, so it stays for as long as anyone else in your unit is listed; to take the story down completely, ask the core team. To change your name, email or household, ask the core team.',
   },
   {
     heading: 'Where it is kept',

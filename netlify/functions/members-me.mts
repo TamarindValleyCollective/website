@@ -23,7 +23,8 @@
 // notice (scripts/lib/member-privacy.mjs), /home returns only their name and the
 // notice version: no household data is released, and /profile refuses. Every self-service change is written to
 // member_audit_log BEFORE it is applied, and refused if that write fails.
-import { requireMember } from './lib/member-access';
+import { requireMember, type MemberSession } from './lib/member-access';
+import { maskEmail, maskPhone } from './lib/staff-masking';
 import { backfillLandShapes } from './lib/land-shape-backfill';
 import { deleteLandDocument, landShapeKey, loadLandShapes, putLandDocument, signedLandDocumentUrl } from './lib/land-doc-storage';
 import { readLandPdf, readLandShape } from './lib/land-doc-read';
@@ -31,6 +32,9 @@ import { withShapeResult } from '../../scripts/lib/land-shape.mjs';
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { buildHouseholdReview } from '../../scripts/lib/member-review.mjs';
 import { validateProfileEdit, profileAuditDetail } from '../../scripts/lib/member-profile.mjs';
+import { familyAddOutcome, validateFamilyAdd, validateFamilyRemove, validateFamilyUpdate } from '../../scripts/lib/member-family.mjs';
+import { sendEmail } from './lib/booking-notify';
+import { detailRow, detailTable, escapeHtml, renderStaffEmail } from './lib/email-layout';
 import { PRIVACY_NOTICE_VERSION, privacyNoticeRequired, validateAcceptance } from '../../scripts/lib/member-privacy.mjs';
 import { callAnthropic } from './lib/anthropic';
 import { checkDailyCap } from './lib/rate-limit';
@@ -84,7 +88,7 @@ async function handleHome(req: Request): Promise<Response> {
       select('member_land_documents', 'id,household_id,land_type,status,extracted,created_at', `household_id=in.${hh}`),
     ]);
     const personIds = [...new Set(memberships.map((m: any) => m.person_id))];
-    const people = personIds.length ? await select('member_people', 'id,full_name,email,phone,active,directory_visible', `id=in.${inList(personIds)}`) : [];
+    const people = personIds.length ? await select('member_people', 'id,full_name,email,phone,active,directory_visible,google_picture_url', `id=in.${inList(personIds)}`) : [];
     data = { households, memberships, plots, housePattas, notes, people };
     landDocs = docRows;
   } catch (err) {
@@ -94,6 +98,15 @@ async function handleHome(req: Request): Promise<Response> {
 
   const own = data.people.find((p: any) => p.id === member.personId);
   const reviewed = buildHouseholdReview(data);
+  // The others in the unit are shown with their email and mobile masked ("p••••@gmail.com", "+91 •••••• 345"); the member's
+  // own come back in full under `me`. buildHouseholdReview never carries the values (the admin register shares it), so they are added here.
+  for (const h of reviewed) {
+    for (const person of h.people as any[]) {
+      const row = data.people.find((p: any) => p.id === person.id);
+      person.emailMasked = row?.email ? maskEmail(row.email) : null;
+      person.phoneMasked = row?.phone ? maskPhone(row.phone) : null;
+    }
+  }
   // Each land record also says which uploaded file its patta number and its survey number open.
   for (const h of reviewed) {
     const docs = landDocs.filter((d: any) => d.household_id === h.id);
@@ -110,6 +123,8 @@ async function handleHome(req: Request): Promise<Response> {
       email: own?.email ?? null,
       phone: own?.phone ?? null,
       directoryVisible: own?.directory_visible ?? true,
+      // owner, family or non_owner in their unit: family members get a narrower portal.
+      role: member.roles[member.householdIds[0]] ?? 'owner',
     },
     households: reviewed,
     // Whether the story editor writes the unit's shared story (the cutover switch) or the person's own; off until the move is done.
@@ -230,6 +245,7 @@ async function handleLandDocuments(req: Request): Promise<Response> {
   const auth = await requireMember(req);
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
   const { member } = auth;
+  if (isFamilyIn(member)) return jsonResponse({ error: OWNERS_ONLY }, 403);
   if (privacyNoticeRequired(member.privacyVersion)) return jsonResponse({ error: 'Please read the privacy notice first.' }, 403);
 
   if (req.method === 'GET') {
@@ -451,6 +467,7 @@ async function handleLandDocumentLink(req: Request): Promise<Response> {
   const auth = await requireMember(req);
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
   const { member } = auth;
+  if (isFamilyIn(member)) return jsonResponse({ error: OWNERS_ONLY }, 403);
   if (privacyNoticeRequired(member.privacyVersion)) return jsonResponse({ error: 'Please read the privacy notice first.' }, 403);
   let documentId = '';
   try {
@@ -503,11 +520,25 @@ const STORY_REVIEW_TIMEOUT_MS = 20_000;
 const STORY_REVIEW_MODEL = process.env.STORY_REVIEW_MODEL || 'claude-sonnet-5';
 
 // Signed-in, invited and past the privacy notice: the same gate as /profile (also used by stories and the directory).
-async function requireAcknowledgedMember(req: Request) {
+async function requireAcknowledgedMember(req: Request): Promise<{ error: Response } | { member: MemberSession }> {
   const auth = await requireMember(req);
-  if (!auth.ok) return { error: jsonResponse({ error: auth.error }, auth.status) } as const;
-  if (privacyNoticeRequired(auth.member.privacyVersion)) return { error: jsonResponse({ error: 'Please read the privacy notice first.' }, 403) } as const;
-  return { member: auth.member } as const;
+  if (!auth.ok) return { error: jsonResponse({ error: auth.error }, auth.status) };
+  if (privacyNoticeRequired(auth.member.privacyVersion)) return { error: jsonResponse({ error: 'Please read the privacy notice first.' }, 403) };
+  return { member: auth.member };
+}
+
+const OWNERS_ONLY = 'Only the owners of a unit can do this.';
+
+// Family members sign in with fewer rights: they see their unit and the directory, and (once stays exist) book
+// stays, but never edit the unit's story or land documents, nor who is in the unit.
+const isFamilyIn = (member: { roles: Record<string, string>; householdIds: string[] }) => member.roles[member.householdIds[0]] === 'family';
+
+// requireAcknowledgedMember, minus family members.
+async function requireAcknowledgedOwner(req: Request): Promise<{ error: Response } | { member: MemberSession }> {
+  const who = await requireAcknowledgedMember(req);
+  if ('error' in who) return who;
+  if (isFamilyIn(who.member)) return { error: jsonResponse({ error: OWNERS_ONLY }, 403) };
+  return who;
 }
 
 async function readJson(req: Request): Promise<unknown | undefined> {
@@ -519,7 +550,7 @@ async function readJson(req: Request): Promise<unknown | undefined> {
 }
 
 async function handleStoryReview(req: Request): Promise<Response> {
-  const who = await requireAcknowledgedMember(req);
+  const who = await requireAcknowledgedOwner(req);
   if ('error' in who) return who.error;
   const body = await readJson(req);
   if (body === undefined) return jsonResponse({ error: 'Nothing to do.' }, 400);
@@ -641,7 +672,7 @@ async function handleUnitStoryGet(req: Request): Promise<Response> {
 }
 
 async function handleUnitStorySave(req: Request): Promise<Response> {
-  const who = await requireAcknowledgedMember(req);
+  const who = await requireAcknowledgedOwner(req);
   if ('error' in who) return who.error;
   const body = await readJson(req);
   if (body === undefined) return jsonResponse({ error: 'Nothing to do.' }, 400);
@@ -665,7 +696,7 @@ async function handleUnitStorySave(req: Request): Promise<Response> {
 }
 
 async function handleUnitStorySubmit(req: Request): Promise<Response> {
-  const who = await requireAcknowledgedMember(req);
+  const who = await requireAcknowledgedOwner(req);
   if ('error' in who) return who.error;
   const { member } = who;
   try {
@@ -715,7 +746,7 @@ async function handleUnitStorySubmit(req: Request): Promise<Response> {
 }
 
 async function handleUnitStoryPhoto(req: Request): Promise<Response> {
-  const who = await requireAcknowledgedMember(req);
+  const who = await requireAcknowledgedOwner(req);
   if ('error' in who) return who.error;
   const { member } = who;
   let form: FormData;
@@ -763,7 +794,7 @@ async function handleUnitStoryPhoto(req: Request): Promise<Response> {
 }
 
 async function handleUnitStoryPhotoRemove(req: Request): Promise<Response> {
-  const who = await requireAcknowledgedMember(req);
+  const who = await requireAcknowledgedOwner(req);
   if ('error' in who) return who.error;
   const body = (await readJson(req)) as { ref?: unknown } | undefined;
   const ref = typeof body?.ref === 'string' ? body.ref : '';
@@ -834,6 +865,147 @@ async function handleDirectory(req: Request): Promise<Response> {
   }
 }
 
+// ---- family members ---------------------------------------------------------
+// An owner adds the people of their own unit who may sign in, without approval up to the limit in
+// member-family.mjs; beyond it the add becomes a request the core team decides. The core team is told of
+// every add and request (best-effort email), the change is logged before it is made, and an owner can remove
+// a family member at once. Family members cannot do any of this.
+
+async function rest(method: 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<{ ok: boolean; rows: any[] }> {
+  const res = await fetch(`${supabaseUrl()}/rest/v1/${path}`, { method, headers: restHeaders({ Prefer: 'return=representation' }), body: body === undefined ? undefined : JSON.stringify(body) });
+  const rows = res.ok ? await res.json().catch(() => []) : [];
+  return { ok: res.ok, rows };
+}
+
+async function logChange(personId: string, action: string, detail: Record<string, unknown>): Promise<boolean> {
+  const res = await fetch(`${supabaseUrl()}/rest/v1/member_audit_log`, { method: 'POST', headers: restHeaders({ Prefer: 'return=minimal' }), body: JSON.stringify({ actor_person_id: personId, action, detail }) }).catch(() => null);
+  return !!res && res.ok;
+}
+
+async function tellCoreTeam(subject: string, lines: [string, string][]): Promise<void> {
+  const rows = lines.map(([k, v], i) => detailRow(escapeHtml(k), escapeHtml(v), { last: i === lines.length - 1 })).join('');
+  await sendEmail({ to: ['core-team@tvc.farm'], subject, html: renderStaffEmail(`<p style="margin-top:0;">${escapeHtml(subject)}</p>${detailTable(rows)}`) }).catch(() => false);
+}
+
+async function handleFamilyAdd(req: Request): Promise<Response> {
+  const who = await requireAcknowledgedMember(req);
+  if ('error' in who) return who.error;
+  const { member } = who;
+  const householdId = member.householdIds[0];
+  if (!householdId || member.roles[householdId] !== 'owner') return jsonResponse({ error: OWNERS_ONLY }, 403);
+  const body = await readJson(req);
+  const checked: { ok: boolean; edit?: { fullName: string; email: string; phone: string | null }; error?: string } = validateFamilyAdd(body);
+  if (!checked.ok) return jsonResponse({ error: checked.error }, 400);
+  const { fullName, email, phone } = checked.edit!;
+  try {
+    const [links, pending, [household]] = await Promise.all([
+      select('member_household_members', 'role,can_login', `household_id=eq.${householdId}`),
+      select('member_family_requests', 'id', `household_id=eq.${householdId}&status=eq.pending`),
+      select('member_households', 'farm_unit', `id=eq.${householdId}`),
+    ]);
+    const outcome = familyAddOutcome({ familyLogins: links.filter((l: any) => l.role === 'family' && l.can_login).length, pendingRequests: pending.length });
+    const unit = (household?.farm_unit as string | undefined) ?? 'a unit';
+    if (outcome === 'full') return jsonResponse({ error: 'Your unit already has requests waiting for the core team. Please wait for them to be decided.' }, 409);
+
+    if (outcome === 'request') {
+      if (!(await logChange(member.personId, 'member.family.request', { householdId }))) return jsonResponse({ error: 'Could not record the request, so nothing was sent. Try again.' }, 500);
+      const made = await rest('POST', 'member_family_requests', { household_id: householdId, requested_by: member.personId, full_name: fullName, email, phone });
+      if (!made.ok) return jsonResponse({ error: 'Server error' }, 500);
+      await tellCoreTeam(`Family member request for ${unit}`, [['Unit', unit], ['Requested by', member.name], ['Name', fullName], ['Email', email], ['Why it needs you', 'The unit already has the maximum number of family members who can sign in.']]);
+      return jsonResponse({ ok: true, requested: true });
+    }
+
+    // We can't tell the owner whether an email is already known (that would reveal who is a member), only that it did not work.
+    const COULD_NOT = 'We could not add that email. Check it, or ask the core team.';
+    // Someone removed earlier is still in the register, inactive and with no unit: adding them again brings back
+    // that same record (so anything tied to them is still theirs) instead of starting a new one. Anyone else
+    // holding the email, active or in another unit, is refused.
+    const [known] = await select('member_people', 'id,active', `email=eq.${encodeURIComponent(email)}`);
+    let personId: string | undefined;
+    if (known) {
+      const inUnits = await select('member_household_members', 'household_id', `person_id=eq.${known.id}`);
+      if (known.active !== false || inUnits.length > 0) return jsonResponse({ error: COULD_NOT }, 409);
+      personId = known.id as string;
+    }
+    if (!(await logChange(member.personId, 'member.family.add', { householdId, rejoined: !!personId }))) return jsonResponse({ error: 'Could not record the change, so nothing was changed. Try again.' }, 500);
+    if (personId) {
+      const back = await rest('PATCH', `member_people?id=eq.${personId}`, { full_name: fullName, phone, active: true });
+      if (!back.ok) return jsonResponse({ error: 'Server error' }, 500);
+    } else {
+      const person = await rest('POST', 'member_people', { full_name: fullName, email, phone });
+      personId = person.rows[0]?.id as string | undefined;
+      if (!person.ok || !personId) return jsonResponse({ error: COULD_NOT }, 409);
+    }
+    const link = await rest('POST', 'member_household_members', { household_id: householdId, person_id: personId, role: 'family', can_login: true });
+    if (!link.ok) {
+      // Put things back as they were: a new person is removed again, a returning one made inactive again.
+      if (known) await rest('PATCH', `member_people?id=eq.${personId}`, { active: false });
+      else await rest('DELETE', `member_people?id=eq.${personId}`);
+      return jsonResponse({ error: 'Your unit already has the maximum number of family members. Ask the core team for more.' }, 409);
+    }
+    await tellCoreTeam(`Family member added to ${unit}`, [['Unit', unit], ['Added by', member.name], ['Name', fullName], ['Email', email]]);
+    return jsonResponse({ ok: true, added: true });
+  } catch (err) {
+    console.error('[members-me] family add failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
+async function handleFamilyUpdate(req: Request): Promise<Response> {
+  const who = await requireAcknowledgedMember(req);
+  if ('error' in who) return who.error;
+  const { member } = who;
+  const householdId = member.householdIds[0];
+  if (!householdId || member.roles[householdId] !== 'owner') return jsonResponse({ error: OWNERS_ONLY }, 403);
+  const checked: { ok: boolean; personId?: string; edit?: { fullName?: string; email?: string; phone?: string }; error?: string } = validateFamilyUpdate(await readJson(req));
+  if (!checked.ok) return jsonResponse({ error: checked.error }, 400);
+  const targetId = checked.personId!;
+  const edit = checked.edit!;
+  try {
+    const links = await select('member_household_members', 'person_id', `household_id=eq.${householdId}&person_id=eq.${targetId}&role=eq.family`);
+    if (links.length === 0) return jsonResponse({ error: 'That person is not a family member of your unit.' }, 404);
+    if (edit.email) {
+      const holder = await select('member_people', 'id', `email=eq.${encodeURIComponent(edit.email)}`);
+      if (holder.some((p: any) => p.id !== targetId)) return jsonResponse({ error: 'We could not use that email. Check it, or ask the core team.' }, 409);
+    }
+    if (!(await logChange(member.personId, 'member.family.update', { householdId, fields: Object.keys(edit) }))) return jsonResponse({ error: 'Could not record the change, so nothing was changed. Try again.' }, 500);
+    const done = await rest('PATCH', `member_people?id=eq.${targetId}`, { ...(edit.fullName ? { full_name: edit.fullName } : {}), ...(edit.email ? { email: edit.email } : {}), ...(edit.phone ? { phone: edit.phone } : {}) });
+    if (!done.ok) return jsonResponse({ error: 'Server error' }, 500);
+    // A new email changes who can sign in, so the core team is told.
+    if (edit.email) await tellCoreTeam('Family member sign-in email changed', [['Changed by', member.name], ['New email', edit.email]]);
+    return jsonResponse({ ok: true });
+  } catch (err) {
+    console.error('[members-me] family update failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
+async function handleFamilyRemove(req: Request): Promise<Response> {
+  const who = await requireAcknowledgedMember(req);
+  if ('error' in who) return who.error;
+  const { member } = who;
+  const householdId = member.householdIds[0];
+  if (!householdId || member.roles[householdId] !== 'owner') return jsonResponse({ error: OWNERS_ONLY }, 403);
+  const checked: { ok: boolean; personId?: string; error?: string } = validateFamilyRemove(await readJson(req));
+  if (!checked.ok) return jsonResponse({ error: checked.error }, 400);
+  const targetId = checked.personId!;
+  try {
+    // Only a family member of the owner's own unit: never an owner, never another unit's person.
+    const links = await select('member_household_members', 'person_id', `household_id=eq.${householdId}&person_id=eq.${targetId}&role=eq.family`);
+    if (links.length === 0) return jsonResponse({ error: 'That person is not a family member of your unit.' }, 404);
+    if (!(await logChange(member.personId, 'member.family.remove', { householdId }))) return jsonResponse({ error: 'Could not record the change, so nothing was changed. Try again.' }, 500);
+    const removed = await rest('DELETE', `member_household_members?household_id=eq.${householdId}&person_id=eq.${targetId}`);
+    if (!removed.ok) return jsonResponse({ error: 'Server error' }, 500);
+    // A person with no unit left is made inactive, not deleted, as the core team's own removals do.
+    const left = await select('member_household_members', 'household_id', `person_id=eq.${targetId}`);
+    if (left.length === 0) await rest('PATCH', `member_people?id=eq.${targetId}`, { active: false });
+    return jsonResponse({ ok: true });
+  } catch (err) {
+    console.error('[members-me] family remove failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
 export default async (req: Request): Promise<Response> => {
   const { pathname } = new URL(req.url);
   if (pathname === '/api/members-me/home' && req.method === 'GET') return handleHome(req);
@@ -850,7 +1022,10 @@ export default async (req: Request): Promise<Response> => {
   if (pathname === '/api/members-me/unit-story-photo' && req.method === 'POST') return handleUnitStoryPhoto(req);
   if (pathname === '/api/members-me/unit-story-photo-remove' && req.method === 'POST') return handleUnitStoryPhotoRemove(req);
   if (pathname === '/api/members-me/unit-photo' && req.method === 'GET') return handleUnitPhoto(req);
+  if (pathname === '/api/members-me/family-add' && req.method === 'POST') return handleFamilyAdd(req);
+  if (pathname === '/api/members-me/family-update' && req.method === 'POST') return handleFamilyUpdate(req);
+  if (pathname === '/api/members-me/family-remove' && req.method === 'POST') return handleFamilyRemove(req);
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-me/home', '/api/members-me/profile', '/api/members-me/privacy', '/api/members-me/land-documents', '/api/members-me/land-document-link', '/api/members-me/land-shapes', '/api/members-me/story-review', '/api/members-me/directory', '/api/members-me/unit-story', '/api/members-me/unit-story-submit', '/api/members-me/unit-story-photo', '/api/members-me/unit-story-photo-remove', '/api/members-me/unit-photo'] };
+export const config = { path: ['/api/members-me/home', '/api/members-me/profile', '/api/members-me/privacy', '/api/members-me/land-documents', '/api/members-me/land-document-link', '/api/members-me/land-shapes', '/api/members-me/story-review', '/api/members-me/directory', '/api/members-me/unit-story', '/api/members-me/unit-story-submit', '/api/members-me/unit-story-photo', '/api/members-me/unit-story-photo-remove', '/api/members-me/unit-photo', '/api/members-me/family-add', '/api/members-me/family-remove', '/api/members-me/family-update'] };

@@ -24,6 +24,8 @@ export type MemberSession = {
   name: string;
   // Households this person may sign in for (can_login = true), in a stable order.
   householdIds: string[];
+  // Their role in each of those households (owner, family or non_owner). Family members sign in with fewer rights.
+  roles: Record<string, string>;
   // The privacy notice version they last acknowledged (null = never); see member-privacy.mjs.
   privacyVersion: number | null;
 };
@@ -68,10 +70,10 @@ export async function requireMember(req: Request): Promise<MemberAuthResult> {
     const people = await select('member_people', `email=eq.${encodeURIComponent(verified.email)}&active=eq.true&select=id,full_name,privacy_notice_version,google_picture_url&limit=2`);
     if (people.length !== 1) return { ok: false, status: 403, error: NOT_INVITED }; // none, or (never expected) ambiguous
     const person = people[0];
-    const links = await select('member_household_members', `person_id=eq.${person.id}&can_login=eq.true&select=household_id&order=household_id`);
+    const links = await select('member_household_members', `person_id=eq.${person.id}&can_login=eq.true&select=household_id,role&order=household_id`);
     if (links.length === 0) return { ok: false, status: 403, error: NOT_INVITED };
     await keepPicture(person, verified.googlePicture);
-    return { ok: true, member: { personId: person.id, name: person.full_name, householdIds: links.map((l: any) => l.household_id), privacyVersion: person.privacy_notice_version ?? null } };
+    return { ok: true, member: { personId: person.id, name: person.full_name, householdIds: links.map((l: any) => l.household_id), roles: Object.fromEntries(links.map((l: any) => [l.household_id, l.role ?? 'owner'])), privacyVersion: person.privacy_notice_version ?? null } };
   } catch (err) {
     console.error('[member-access] lookup failed', err);
     return { ok: false, status: 500, error: 'Server error' };

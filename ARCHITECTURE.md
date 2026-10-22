@@ -1444,11 +1444,21 @@ never touches Netlify either.
   not invited yet. The session is kept apart from admins' (`scripts/lib/member-client.mjs`).
   **Data**: `members-me.mts` (`GET /api/members-me/home`, `POST /api/members-me/profile`) reads only
   the households the member can sign in for, never the register. A member gets their own email and
-  mobile back; for everyone else in the household only whether one is on file. Members can change
+  mobile back in full; for everyone else in the household a masked form (`p••••@gmail.com`,
+  `+91 •••••• 345`, `maskEmail`/`maskPhone`, added in `members-me.mts` because the shared
+  `buildHouseholdReview` never carries the values). Members can change
   only their mobile number and directory listing (`scripts/lib/member-profile.mjs`); anything else
   goes through the core team. Each self-service change is written to `member_audit_log`
   (migration 0041, append-only, never holds a name, email or phone) BEFORE it is applied, and refused
-  if that write fails. Revoking `can_login` takes effect on the next request. **`members.tvc.farm`**
+  if that write fails. Revoking `can_login` takes effect on the next request. **Family members**: an
+  owner adds the people of their own unit who may sign in (`POST /api/members-me/family-add`,
+  `/family-update` and `/family-remove`; a removed person is made inactive, and adding the same email again
+  brings back that same record; `scripts/lib/member-family.mjs`). Up to two family members per unit sign in with
+  no approval (the `member_household_members` trigger caps sign-in at two owners and two family
+  members, migration 0053); a third is a row in `member_family_requests` for the core team, and the
+  core team gets an email (Resend) for every add and request. A family member has the `family` role,
+  which `lib/member-access.ts` puts on the session: `members-me.mts` refuses them the story editor,
+  land documents and family changes (403), and the portal hides those controls. **`members.tvc.farm`**
   is a domain alias on the same Netlify project (DNS: a proxied Cloudflare CNAME to
   `tvc-farm.netlify.app`); `netlify.toml` rules that match only that host show the portal at `/`,
   let through just the portal's own paths, send `/internal/*` to `tvc.farm` and everything else back
@@ -1660,7 +1670,9 @@ never touches Netlify either.
   on Google's image hosts; `requireMember` writes it to `member_people.google_picture_url` (audited first as
   `member.google_picture`, best effort, never blocking sign-in) only for a member who has accepted privacy notice
   v7, which says so, refreshes it at each sign-in and clears it if they removed it from Google. `members-admin.mts`
-  sends it only to roles that may see names (not `read_only`), and no member endpoint ever returns it.
+  sends it only to roles that may see names (not `read_only`). Since privacy notice v10 `GET /api/members-me/home`
+  also returns it, but only for the people in the member's own unit, shown next to their names (a picture
+  there also tells the unit who has signed in); no other member endpoint returns it, so other units never see it.
 
 ## Current Production Status
 

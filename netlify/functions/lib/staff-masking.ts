@@ -28,6 +28,15 @@ export function maskEmail(email: string): string {
   return `${local[0]}${'•'.repeat(Math.min(Math.max(local.length - 1, 3), 4))}${email.slice(at)}`;
 }
 
+// "+919845012345" -> "+91 •••••• 345". Keeps the country code and the last three digits, so a person who already
+// knows the number can recognise it, without it being spelled out.
+export function maskPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 6) return '•'.repeat(6);
+  const code = phone.trim().startsWith('+91') ? '+91 ' : '';
+  return `${code}${'•'.repeat(6)} ${digits.slice(-3)}`;
+}
+
 // "Priya Raman" -> "P•••• R••••". Keeps the first letter of each word (so
 // an auditor can still tell threads apart) and caps the dots so the length
 // doesn't give the name away. Uses code points, not UTF-16 units, so Kannada
