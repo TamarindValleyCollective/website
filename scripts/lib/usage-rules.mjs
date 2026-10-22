@@ -424,10 +424,13 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
   // How fast the database is growing: a size under the 70% line can still be weeks from full.
   if (db && isPositiveNumber(Number(db.limit_value))) {
     const growth = projectDbGrowth(dbHistory, Number(db.limit_value), now);
-    if (growth && growth.daysToFull !== null) {
+    // Already at the limit: the size alert above says so, and "full in 0 days" adds nothing.
+    if (growth && growth.daysToFull !== null && Number(db.value) < Number(db.limit_value)) {
       const level = growth.daysToFull <= DB_GROWTH_CRITICAL_DAYS ? 'critical' : growth.daysToFull <= DB_GROWTH_WARN_DAYS ? 'warn' : null;
       const perWeek = ((growth.bytesPerDay * 7) / 1024 / 1024).toFixed(1);
-      add('supabase:db-growth', level, 'supabase', `Supabase database could be full in about ${Math.max(1, Math.round(growth.daysToFull))} days`, `It has been growing about ${perWeek} MB a week over the last ${Math.round(growth.spanDays)} days; at that pace the ${(Number(db.limit_value) / 1024 / 1024).toFixed(0)} MB free limit is reached in roughly ${Math.round(growth.daysToFull)} days. The page lists the biggest tables. One-off imports inflate this for up to two weeks.`);
+      const days = Math.max(1, Math.round(growth.daysToFull));
+      const inDays = `${days} day${days === 1 ? '' : 's'}`;
+      add('supabase:db-growth', level, 'supabase', `Supabase database could be full in about ${inDays}`, `It has been growing about ${perWeek} MB a week over the last ${Math.round(growth.spanDays)} days; at that pace the ${(Number(db.limit_value) / 1024 / 1024).toFixed(0)} MB free limit is reached in roughly ${inDays}. The page lists the biggest tables. One-off imports inflate this for up to two weeks.`);
     }
   }
 

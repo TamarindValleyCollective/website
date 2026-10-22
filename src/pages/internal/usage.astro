@@ -777,12 +777,18 @@ import SignInGate from '../../components/SignInGate.astro';
     const level: Level = sizeLevel === 'critical' || growthLevel === 'critical' ? 'critical' : sizeLevel === 'warn' || growthLevel === 'warn' ? 'warn' : null;
     const parts: Kid[] = [h('p', { class: 'hero', text: mb(s.reading.bytes) }), h('p', { class: 'hero-sub', text: s.reading.limitBytes ? `of ${mb(s.reading.limitBytes)} on the free plan` : 'database size' })];
     if (s.reading.limitBytes) parts.push(meter(frac, level, 'Supabase database size', `${Math.round(frac * 100)}% of the free size`), h('p', { class: 'meter-caption', text: `${frac < 0.01 ? 'under 1' : Math.round(frac * 100)}% used · measured ${ago(s.reading.capturedAt)}` }));
-    if (s.history.length > 1) {
-      parts.push(sparkline(s.history.map((p: any) => ({ label: dateText(p.at), value: p.bytes / 1024 / 1024 })), 'Database size in MB', (n) => `${nf.format(n)} MB`));
+    // One reading every 6 hours, but the chart (and its caption) counts days: keep each day's last reading.
+    const perDay = new Map<string, any>();
+    for (const p of s.history) perDay.set(String(p.at).slice(0, 10), p);
+    if (perDay.size > 1) {
+      parts.push(sparkline([...perDay.values()].map((p: any) => ({ label: dateText(p.at), value: p.bytes / 1024 / 1024 })), 'Database size in MB', (n) => `${nf.format(n)} MB`));
     }
     // How fast it is growing, and so how long the free size lasts at that pace.
     const size = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : mb(bytes));
-    const lasts = (d: number) => (d < 90 ? `about ${Math.max(1, Math.round(d))} days` : d < 730 ? `about ${Math.round(d / 30)} months` : 'over 2 years');
+    const lasts = (d: number) => {
+      const n = Math.max(1, Math.round(d));
+      return d < 90 ? `about ${n} day${n === 1 ? '' : 's'}` : d < 730 ? `about ${Math.round(d / 30)} months` : 'over 2 years';
+    };
     if (!s.growth) {
       parts.push(h('p', { class: 'hero-sub', text: 'Growth: not enough history yet. It needs about a week of readings.' }));
     } else if (days === null) {
@@ -792,7 +798,8 @@ import SignInGate from '../../components/SignInGate.astro';
     }
     const tables: { name: string; bytes: number; rows: number }[] = s.tables?.list ?? [];
     if (tables.length) {
-      parts.push(h('p', { class: 'hero-sub', text: 'Biggest tables' }), h('dl', { class: 'stats' }, ...tables.slice(0, 5).map((t) => stat(t.name, size(t.bytes), `about ${nf.format(t.rows)} rows`))));
+      // One row per table: names are long, so they get the full card width rather than a narrow stat column.
+      parts.push(h('p', { class: 'hero-sub', text: 'Biggest tables' }), ...tables.slice(0, 5).map((t) => h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: t.name }), h('span', { text: `${size(t.bytes)} · ~${nf.format(t.rows)} rows` })))));
     }
     if (s.connections?.max) {
       const cf = s.connections.inUse / s.connections.max;

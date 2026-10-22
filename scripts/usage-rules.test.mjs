@@ -173,6 +173,18 @@ test('evaluateAlerts: database growth warns inside 60 days to full, critical ins
   assert.equal(keys([]).length, 0); // no history: no growth alert
 });
 
+test('evaluateAlerts: no growth alert once the database is already at the limit (the size alert covers it), and "1 day" is singular', () => {
+  const full = { 'supabase.db_size_bytes': { value: 505 * MB, limit_value: LIMIT, captured_at: '2026-10-10T06:00:00Z' } };
+  const keys = evaluateAlerts({ now: NOW, snapshots: full, dbHistory: sizeHistory(10, 400, 10) }).map((a) => a.key);
+  assert.deepEqual(keys, ['supabase:db-size']);
+
+  // 499 MB with 10 MB/day -> about a tenth of a day left: reads as "1 day", not "1 days"
+  const nearly = { 'supabase.db_size_bytes': { value: 499 * MB, limit_value: LIMIT, captured_at: '2026-10-10T06:00:00Z' } };
+  const growth = evaluateAlerts({ now: NOW, snapshots: nearly, dbHistory: sizeHistory(10, 399, 10) }).find((a) => a.key === 'supabase:db-growth');
+  assert.match(growth.title, /about 1 day$/);
+  assert.match(growth.detail, /roughly 1 day\./);
+});
+
 test('the Supabase egress balance is a typed-in "used" meter that warns near its limit', () => {
   assert.equal(MANUAL_METERS['supabase.egress_gb'].kind, 'used');
   const snapshots = { 'supabase.egress_gb': { value: 4, limit_value: 5, captured_at: '2026-10-09T00:00:00Z' } };
