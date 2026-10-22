@@ -176,3 +176,17 @@ export function facesToShow(people) {
   const withPhoto = people.filter((p) => p.photo);
   return withPhoto.length ? withPhoto : people;
 }
+
+// A unit type is a code like DG1, DF1-V2 or TO1: the first letter is the number of bedrooms (S single, D double,
+// T three) and "-V2" marks a variant of the same type. Members think in bedrooms, so the directory filter and the
+// member card say "2 BHK" rather than the code. A code that doesn't start with S, D or T has no bedroom count here.
+const BEDROOMS = { S: 1, D: 2, T: 3 };
+
+/** "2 BHK" for DG1, DF1-V2 and so on; null when the code is empty or its first letter isn't S, D or T. */
+export function bedroomsOf(unitType) {
+  const n = typeof unitType === 'string' ? BEDROOMS[unitType.trim()[0]?.toUpperCase()] : undefined;
+  return n ? `${n} BHK` : null;
+}
+
+/** The code without its variant suffix (TO1-V2 is a TO1), or null. */
+export const baseUnitType = (unitType) => (typeof unitType === 'string' && unitType.trim() ? unitType.trim().replace(/-V\d+$/i, '') : null);

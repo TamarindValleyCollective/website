@@ -2524,7 +2524,7 @@ import SignInGate from '../../components/SignInGate.astro';
   import { MAX_PHOTOS, conflictedDraftKeys, saveChanges } from '../../../scripts/lib/member-unit-story.mjs';
   import { shapeForRecord, surveyChoices } from '../../../scripts/lib/member-land-docs.mjs';
   import { sizedPicture } from '../../../scripts/lib/member-google-picture.mjs';
-  import { facesToShow } from '../../../scripts/lib/member-directory.mjs';
+  import { baseUnitType, bedroomsOf, facesToShow } from '../../../scripts/lib/member-directory.mjs';
   import { openPhoto, preparePhotoFrom } from '../../../scripts/lib/photo-prepare.mjs';
   import { MAX_ZOOM, cropRect, initialCrop, panBy, zoomTo } from '../../../scripts/lib/photo-crop.mjs';
 import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggleMark, foldProfileLink as foldProfileIntoText } from '../../../scripts/lib/member-markdown.mjs';
@@ -4395,8 +4395,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const joinNames = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}` : names[0] ?? '');
 
     // Farm plot in green; house and cluster in blue, because they belong to the housing, not the farm.
-    // The card shows farm and house only, as a footer (the cluster is a filter above, and is in the popup).
+    // The card shows farm and house only, as a footer (the cluster and unit type are filters above, and are in the popup).
     function pills(hh: DirHousehold, withCluster = true): HTMLElement {
+      const code = baseUnitType(hh.unitType);
+      const beds = bedroomsOf(hh.unitType);
       const pill = (cls: string, text: string, title: string) => {
         const el = h('span', `dir-pill dir-pill--${cls}`, text);
         el.title = title;
@@ -4405,7 +4407,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       return h('span', 'dir-pills', undefined,
         pill('farm', hh.farmUnit, 'Farm plot'),
         hh.houseNo ? pill('house', hh.houseNo, 'House') : null,
-        withCluster && hh.cluster ? pill('house', `Cluster ${hh.cluster}`, 'Housing cluster') : null);
+        withCluster && hh.cluster ? pill('house', `Cluster ${hh.cluster}`, 'Housing cluster') : null,
+        withCluster && code ? pill('house', beds ? `${beds} · ${code}` : code, 'Unit type') : null);
     }
 
     // Your own unit's story state, read once so the card can show where it stands (the directory itself only
@@ -4530,32 +4533,29 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       dlg.showModal();
     }
 
-    // Filters: housing cluster (fixed order) and unit type (whatever types the data has), one of each at a time.
-    // A household with no house yet has no cluster; one with no unit type yet is under neither type chip.
-    // TO1-V2 is a variant of TO1, so both are filed under TO1. S units are one bedroom, D two, T three.
-    const baseType = (t: string | null) => (t ? t.replace(/-V\d+$/i, '') : null);
-    const BEDROOMS: Record<string, string> = { S: 'Single bedroom', D: 'Double bedroom', T: 'Three bedroom' };
-    const typeRank = (t: string) => { const i = 'SDT'.indexOf(t[0].toUpperCase()); return i < 0 ? 3 : i; };
+    // Filters: housing cluster (fixed order) and bedrooms (1, 2 and 3 BHK), one of each at a time, with no counts on
+    // the chips. All the variants of a unit type are one bedroom count (DG1 and DF1-V2 are both 2 BHK). A household
+    // with no house yet has no cluster, and one with no unit type yet is under no bedroom chip. A code that isn't
+    // S, D or T has no bedroom count, so it keeps a chip of its own (its code) rather than vanishing from the filter.
+    const kindOf = (t: string | null) => bedroomsOf(t) ?? baseUnitType(t);
     function filterChips(): HTMLElement {
-      const row = (label: string, selected: string | null, set: (v: string | null) => void, values: string[], countOf: (v: string) => number, hint?: (v: string) => string | undefined) => {
+      const row = (label: string, selected: string | null, set: (v: string | null) => void, values: string[]) => {
         const chip = (value: string | null, text: string) => {
           const b = h('button', 'dir-chip', text);
           b.setAttribute('type', 'button');
           b.setAttribute('aria-pressed', String(selected === value));
-          const tip = value && hint ? hint(value) : undefined;
-          if (tip) b.title = tip;
           b.addEventListener('click', () => { set(value); draw(); });
           return b;
         };
-        const group = h('div', 'dir-chips', undefined, h('span', 'dir-chips-label', label), chip(null, 'All'), ...values.map((v) => chip(v, `${v} (${countOf(v)})`)));
+        const group = h('div', 'dir-chips', undefined, h('span', 'dir-chips-label', label), chip(null, 'All'), ...values.map((v) => chip(v, v)));
         group.setAttribute('role', 'group');
         group.setAttribute('aria-label', label);
         return group;
       };
-      const types = [...new Set(list.map((x) => baseType(x.unitType)).filter((t): t is string => !!t))].sort((a, b) => typeRank(a) - typeRank(b) || a.localeCompare(b, undefined, { numeric: true }));
+      const kinds = [...new Set(list.map((x) => kindOf(x.unitType)).filter((t): t is string => !!t))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
       return h('div', '', undefined,
-        row('Cluster', cluster, (v) => { cluster = v; }, ['H1-A', 'H1-B', 'H2'], (v) => list.filter((x) => x.cluster === v).length),
-        types.length ? row('Unit type', unitType, (v) => { unitType = v; }, types, (v) => list.filter((x) => baseType(x.unitType) === v).length, (v) => BEDROOMS[v[0].toUpperCase()]) : null);
+        row('Cluster', cluster, (v) => { cluster = v; }, ['H1-A', 'H1-B', 'H2']),
+        kinds.length ? row('Bedrooms', unitType, (v) => { unitType = v; }, kinds) : null);
     }
 
     const chipsHost = h('div');
@@ -4565,7 +4565,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     let built = false;
 
     function draw() {
-      const shown = list.filter((hh) => (!onlyStories || hh.hasStory) && (!cluster || hh.cluster === cluster) && (!unitType || baseType(hh.unitType) === unitType) && (!query || [hh.farmUnit, hh.houseNo ?? '', hh.cluster ?? '', ...hh.people.map((p) => p.name)].join(' ').toLowerCase().includes(query)));
+      const shown = list.filter((hh) => (!onlyStories || hh.hasStory) && (!cluster || hh.cluster === cluster) && (!unitType || kindOf(hh.unitType) === unitType) && (!query || [hh.farmUnit, hh.houseNo ?? '', hh.cluster ?? '', ...hh.people.map((p) => p.name)].join(' ').toLowerCase().includes(query)));
       // The member's own household first (the sort is stable, so everyone else stays in house-number order).
       shown.sort((a, b) => Number(b.people.some((p) => p.isYou)) - Number(a.people.some((p) => p.isYou)));
       // The search box and the checkbox are built once and never re-created: replacing them on every keystroke
