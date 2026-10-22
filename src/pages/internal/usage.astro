@@ -223,19 +223,24 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   /* ---- service cards ---- */
-  /* independent columns (filled by placeCards in the script), so opening one card never leaves a gap beside it */
+  /* a grid, so cards line up in rows; each card keeps its own height, so opening one doesn't stretch its neighbours */
   .usage .cards {
-    display: flex;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
     gap: 16px;
+    align-items: start;
   }
 
-  .usage .cards-col {
-    flex: 1 1 0;
-    min-width: 0;
+  /* the part of a card that is always on show has one height for every service (title, badge, figure,
+     bar and one line of context), so a row of collapsed cards is level whatever each one measures */
+  .usage .svc-top {
+    min-height: 11.9rem;
+    margin-bottom: 12px;
+  }
+
+  .usage .svc {
     display: flex;
     flex-direction: column;
-    gap: 16px;
   }
 
   .usage .svc {
@@ -325,7 +330,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .usage .svc-foot {
-    margin-top: 12px;
+    margin-top: auto;
     border-top: 1px solid var(--tvc-line);
   }
 
@@ -806,10 +811,12 @@ import SignInGate from '../../components/SignInGate.astro';
     return h(
       'article',
       { class: 'card svc', attrs: { 'data-open': String(open) } },
-      h('div', { class: 'svc-head' }, h('h3', { class: 'svc-title', text: title }), pill(level)),
-      h('p', { class: 'svc-kind' }, badge),
-      ...summary,
-      ...fresh.filter((f) => f.late).map(freshLine),
+      h('div', { class: 'svc-top' },
+        h('div', { class: 'svc-head' }, h('h3', { class: 'svc-title', text: title }), pill(level)),
+        h('p', { class: 'svc-kind' }, badge),
+        ...summary,
+        ...fresh.filter((f) => f.late).map(freshLine),
+      ),
       h('div', { class: 'svc-foot' }, toggle, bodyEl),
     );
   }
@@ -841,21 +848,6 @@ import SignInGate from '../../components/SignInGate.astro';
     document.querySelectorAll<HTMLElement>('#cards .svc[data-pressed]').forEach((c) => delete c.dataset.pressed);
   }
 
-  // Cards sit in independent columns (not grid rows), so an opening card only pushes down the cards
-  // beneath it in its own column and never leaves a gap beside it. Card i goes in column i mod n.
-  const CARD_MIN_WIDTH = 300;
-  const CARD_GAP = 16;
-  let cardNodes: HTMLElement[] = [];
-  let placedColumns = 0;
-  const columnCount = () => Math.max(1, Math.min(4, Math.floor(($('cards').clientWidth + CARD_GAP) / (CARD_MIN_WIDTH + CARD_GAP))));
-  function placeCards(nodes?: HTMLElement[]) {
-    if (nodes) cardNodes = nodes;
-    const n = columnCount();
-    const columns = Array.from({ length: n }, () => h('div', { class: 'cards-col' }));
-    cardNodes.forEach((c, i) => columns[i % n].append(c));
-    $('cards').replaceChildren(...columns);
-    placedColumns = n;
-  }
 
   // ---- the cards -------------------------------------------------------------
   type Overview = any;
@@ -977,12 +969,12 @@ import SignInGate from '../../components/SignInGate.astro';
     const more: Kid[] = [];
     if (s.reading.limitBytes) parts.push(meter(frac, level, 'Supabase database size', `${Math.round(frac * 100)}% of the free size`));
     if (!s.growth) {
-      parts.push(h('p', { class: 'hero-sub', text: 'Growth: not enough history yet (about a week of readings needed).' }));
+      parts.push(h('p', { class: 'hero-sub', text: 'Growth shows after about a week.' }));
     } else if (days === null) {
       parts.push(h('p', { class: 'hero-sub', text: `Not growing over the last ${Math.round(s.growth.spanDays)} days.` }));
     } else {
       const perWeek = s.growth.bytesPerDay * 7;
-      parts.push(h('p', { class: 'hero-sub', text: `Growing about ${perWeek < 100 * 1024 ? 'under 0.1' : nf.format(perWeek / 1024 / 1024)} MB a week · full in ${lasts(days)}` }));
+      parts.push(h('p', { class: 'hero-sub', text: `+${perWeek < 100 * 1024 ? '<0.1' : nf.format(perWeek / 1024 / 1024)} MB a week · full in ${lasts(days)}` }));
     }
     if (egress?.level && egress.reading?.limit) {
       parts.push(h('p', { class: 'svc-fresh svc-fresh--late', text: `Egress is at ${Math.round((egress.reading.value / egress.reading.limit) * 100)}% of its monthly limit.` }));
@@ -1033,13 +1025,12 @@ import SignInGate from '../../components/SignInGate.astro';
     const level: Level = worst(d.level, d.onPaceToExceed ? 'warn' : null, typed?.level ?? null);
     const parts: Kid[] = [
       h('p', { class: 'hero', text: `${nf.format(d.credits)} credits` }),
-      h('p', { class: 'hero-sub', text: `used on production deploys this cycle, of ${nf.format(d.allowance)} included` }),
+      h('p', { class: 'hero-sub', text: `used on deploys, of ${nf.format(d.allowance)} included` }),
       meter(d.fraction, d.level, 'Netlify credits used on deploys', `${Math.round(d.fraction * 100)}% of the allowance`),
-      h('p', { class: 'hero-sub', text: `${nf.format(d.deploys)} production deploy${d.deploys === 1 ? '' : 's'} · resets ${cycleDay(d.cycleEnd)}` }),
+      d.onPaceToExceed
+        ? h('p', { class: 'hero-sub svc-fresh--late', text: `${nf.format(d.deploys)} deploys · on pace for ~${nf.format(Math.round(d.projected))}` })
+        : h('p', { class: 'hero-sub', text: `${nf.format(d.deploys)} deploy${d.deploys === 1 ? '' : 's'} · resets ${cycleDay(d.cycleEnd)}` }),
     ];
-    if (d.onPaceToExceed) {
-      parts.push(h('p', { class: 'svc-fresh svc-fresh--late', text: `At this pace, deploys alone reach about ${nf.format(Math.round(d.projected))} credits by the end of the cycle.` }));
-    }
     if (r?.staleForCycle) parts.push(h('p', { class: 'svc-fresh svc-fresh--late', text: 'The typed-in balance is from a previous billing cycle: update it.' }));
 
     const more: Kid[] = [
@@ -1056,7 +1047,7 @@ import SignInGate from '../../components/SignInGate.astro';
     if (a.last_deploy) {
       more.push(h('p', { class: 'hero-sub', text: `Last deploy: ${a.last_deploy.context === 'production' ? 'production' : 'preview'}, ${a.last_deploy.state}, ${ago(a.last_deploy.at)}.` }));
     }
-    more.push(h('p', { class: 'hero-sub', text: d.projected !== null ? `Pace: ${nf.format(d.deploys)} deploys in ${Math.floor(d.elapsedDays)} days is about ${nf.format(Math.round(d.projected))} credits over the whole cycle.` : 'A pace estimate appears three days into each cycle.' }));
+    more.push(h('p', { class: 'hero-sub', text: d.projected !== null ? `Pace: ${nf.format(d.deploys)} deploys in ${Math.floor(d.elapsedDays)} days is about ${nf.format(Math.round(d.projected))} credits by the end of the cycle (${cycleDay(d.cycleEnd)}).` : `A pace estimate appears three days into each cycle. It resets ${cycleDay(d.cycleEnd)}.` }));
     if (r?.limit && !r.staleForCycle) {
       const used = 1 - r.value / r.limit;
       more.push(
@@ -1338,7 +1329,7 @@ import SignInGate from '../../components/SignInGate.astro';
       runEveryHours = data.schedule?.collectorEveryHours ?? 6;
       // Re-rendered after every saved reading; the open card (openCardTitle) is rebuilt open.
       const netlifyTyped = data.manual.find((m: any) => m.id === 'netlify.credits_remaining') ?? null;
-      placeCards([anthropicCard(data), geminiCard(data), typesafeCard(data), supabaseCard(data), ...(data.resend.fresh ? [resendCard(data)] : []), ...(data.r2.fresh ? [r2Card(data)] : []), ...(data.netlify.deploys ? [netlifyCard(data, netlifyTyped)] : netlifyTyped ? [manualCard(netlifyTyped)] : []), ...data.manual.filter((m: any) => !FOLDED_INTO_SERVICE_CARD.has(m.id)).map(manualCard)]);
+      $('cards').replaceChildren(...[anthropicCard(data), geminiCard(data), typesafeCard(data), supabaseCard(data), ...(data.resend.fresh ? [resendCard(data)] : []), ...(data.r2.fresh ? [r2Card(data)] : []), ...(data.netlify.deploys ? [netlifyCard(data, netlifyTyped)] : netlifyTyped ? [manualCard(netlifyTyped)] : []), ...data.manual.filter((m: any) => !FOLDED_INTO_SERVICE_CARD.has(m.id)).map(manualCard)]);
       renderAdmin(data);
       $('foot').textContent = `Updated ${new Date(data.generatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}. Counts use UTC days. Warnings are emailed to the core team once, and again only if they get worse.`;
       content.hidden = false;
@@ -1379,9 +1370,6 @@ import SignInGate from '../../components/SignInGate.astro';
   $('cards').addEventListener('click', onCardsClick);
   $('cards').addEventListener('pointerdown', onCardsPress);
   for (const type of ['pointerup', 'pointercancel']) document.addEventListener(type, onCardsRelease); // wherever the pointer is let go
-  new ResizeObserver(() => {
-    if (cardNodes.length && columnCount() !== placedColumns) placeCards();
-  }).observe($('cards'));
   $('use-different-account').addEventListener('click', signOut);
   $('sign-out').addEventListener('click', signOut);
 
