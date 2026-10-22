@@ -22,6 +22,9 @@ import { roleHasCapability } from './lib/staff-registry';
 import {
   MANUAL_METERS,
   TYPESAFE_USD_PER_MTOK,
+  projectDbGrowth,
+  typesafeCreditEstimate,
+  netlifyDeployUsage,
   mergeNetlifyPlan,
   nextCollectorRun,
   COLLECTOR_EVERY_HOURS,
@@ -84,13 +87,14 @@ async function handleOverview(req: Request): Promise<Response> {
   const reading = snapshots['anthropic.credit_remaining_usd'] ?? null;
   const estimate = anthropicCreditEstimate(reading, daily, prices, now);
 
-  const alerts = evaluateAlerts({ now, daily, snapshots, settings }).map((a: any) => {
+  const alerts = evaluateAlerts({ now, daily, snapshots, settings, dbHistory }).map((a: any) => {
     const state = alertState.find((s) => s.alert_key === a.key);
     return { ...a, emailedAt: state?.last_notified_at ?? null };
   });
 
   const db = snapshots['supabase.db_size_bytes'] ?? null;
   const conns = snapshots['supabase.db_connections'] ?? null;
+  const tablesSnap = snapshots['supabase.db_tables'] ?? null;
 
   const resendAuto = resendAutomaticIsFresh(snapshots, now);
   const r2Auto = r2AutomaticIsFresh(snapshots, now);
@@ -148,6 +152,15 @@ async function handleOverview(req: Request): Promise<Response> {
       month: { requests: count('gemini', 'requests', monthStart, today), inputTokens: count('gemini', 'input_tokens', monthStart, today), outputTokens: count('gemini', 'output_tokens', monthStart, today) },
       requestsSeries: series(daily, 'gemini', 'requests', today, 14),
     },
+    // What this cycle's production deploys have cost (15 credits each), read automatically; null until the collector has run.
+    netlify: (() => {
+      const activity = snapshots['netlify.deploy_activity'] ?? null;
+      const u = netlifyDeployUsage(activity, snapshots['netlify.plan_credits'] ?? null, now);
+      return {
+        deploys: u,
+        activity: activity && u ? { capturedAt: activity.captured_at, ...(activity.detail as Record<string, unknown>) } : null,
+      };
+    })(),
     typesafe: (() => {
       const usd = (from: string, to: string) => (count('typesafe', 'input_tokens', from, to) / 1_000_000) * TYPESAFE_USD_PER_MTOK;
       return {
@@ -155,12 +168,20 @@ async function handleOverview(req: Request): Promise<Response> {
         last7: { requests: count('typesafe', 'requests', weekStart, today), errors: count('typesafe', 'errors', weekStart, today), costUsd: usd(weekStart, today) },
         month: { requests: count('typesafe', 'requests', monthStart, today), inputTokens: count('typesafe', 'input_tokens', monthStart, today), costUsd: usd(monthStart, today) },
         requestsSeries: series(daily, 'typesafe', 'requests', today, 14),
+        // The balance typed in at the last top-up, less what the website has metered since (TypeSafe has no balance API).
+        creditEstimate: typesafeCreditEstimate(snapshots['typesafe.credit_remaining_usd'] ?? null, daily, now),
       };
     })(),
     supabase: {
       reading: db ? { bytes: Number(db.value), limitBytes: db.limit_value === null ? null : Number(db.limit_value), capturedAt: db.captured_at } : null,
       connections: conns ? { inUse: Number(conns.value), max: conns.limit_value === null ? null : Number(conns.limit_value), capturedAt: conns.captured_at, level: isPositiveNumber(Number(conns.limit_value)) ? levelForUsed(Number(conns.value), Number(conns.limit_value)) : null } : null,
       history: dbHistory.map((h) => ({ at: h.captured_at, bytes: Number(h.value) })),
+      growth: (() => {
+        const g = db && isPositiveNumber(Number(db.limit_value)) ? projectDbGrowth(dbHistory, Number(db.limit_value), now) : null;
+        return g ? { bytesPerDay: g.bytesPerDay, daysToFull: g.daysToFull, spanDays: g.spanDays } : null;
+      })(),
+      // The biggest tables at the last collector run; null until migration 0058 is applied.
+      tables: tablesSnap ? { capturedAt: tablesSnap.captured_at, list: Array.isArray(tablesSnap.detail?.tables) ? (tablesSnap.detail.tables as { name: string; bytes: number; rows: number }[]).slice(0, 8) : [] } : null,
     },
     resend: (() => {
       const read = (id: string) => {

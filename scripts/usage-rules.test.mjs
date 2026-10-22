@@ -16,6 +16,10 @@ import {
   addDays,
   daysUntilDate,
   MANUAL_METERS,
+  projectDbGrowth,
+  typesafeCreditEstimate,
+  netlifyDeployUsage,
+  alertAction,
 } from './lib/usage-rules.mjs';
 
 const NOW = new Date('2026-10-10T12:00:00Z');
@@ -123,6 +127,75 @@ test('evaluateAlerts: no credit estimate alert without prices', () => {
   assert.equal(evaluateAlerts({ now: NOW, snapshots, settings: {} }).length, 0);
 });
 
+// A reading every 6 hours for `days` days ending at NOW, growing `mbPerDay` from `startMb`.
+const MB = 1024 * 1024;
+const sizeHistory = (days, startMb, mbPerDay) =>
+  Array.from({ length: days * 4 + 1 }, (_, i) => ({
+    captured_at: new Date(NOW.getTime() - (days * 4 - i) * 6 * 3600_000).toISOString(),
+    value: (startMb + (i / 4) * mbPerDay) * MB,
+  }));
+const LIMIT = 500 * MB;
+
+test('projectDbGrowth: reads the pace and the days left from a steady climb', () => {
+  const g = projectDbGrowth(sizeHistory(10, 100, 2), LIMIT, NOW); // 2 MB/day, ends at 120 MB
+  assert.ok(Math.abs(g.bytesPerDay / MB - 2) < 0.01);
+  assert.ok(Math.abs(g.daysToFull - 190) < 1); // (500 - 120) / 2
+  assert.ok(g.spanDays >= 9.9);
+});
+
+test('projectDbGrowth: flat or shrinking has no days-to-full', () => {
+  assert.equal(projectDbGrowth(sizeHistory(10, 100, 0), LIMIT, NOW).daysToFull, null);
+  assert.equal(projectDbGrowth(sizeHistory(10, 100, -1), LIMIT, NOW).daysToFull, null);
+});
+
+test('projectDbGrowth: too little history says nothing, rather than guessing', () => {
+  assert.equal(projectDbGrowth([], LIMIT, NOW), null);
+  assert.equal(projectDbGrowth(sizeHistory(3, 100, 5), LIMIT, NOW), null); // under 5 days
+  assert.equal(projectDbGrowth(sizeHistory(10, 100, 2).slice(0, 5), LIMIT, NOW), null); // under 8 readings
+  assert.equal(projectDbGrowth(sizeHistory(10, 100, 2), 0, NOW), null); // no limit to measure against
+});
+
+test('projectDbGrowth: only the last two weeks count, and junk readings are ignored', () => {
+  // 10 MB readings from 15-30 days ago: if the window let them in, the climb to 100 MB would look huge
+  const old = sizeHistory(30, 10, 0)
+    .filter((p) => new Date(p.captured_at).getTime() < NOW.getTime() - 15 * 24 * 3600_000)
+    .map((p) => ({ ...p, value: 10 * MB }));
+  assert.ok(old.length > 8);
+  const recent = sizeHistory(10, 100, 2);
+  const g = projectDbGrowth([...old, ...recent, { captured_at: 'not a date', value: 1 }, { captured_at: recent[0].captured_at, value: 'x' }], LIMIT, NOW);
+  assert.ok(Math.abs(g.bytesPerDay / MB - 2) < 0.2);
+});
+
+test('evaluateAlerts: database growth warns inside 60 days to full, critical inside 21, quiet beyond', () => {
+  const snapshots = { 'supabase.db_size_bytes': { value: 120 * MB, limit_value: LIMIT, captured_at: '2026-10-10T06:00:00Z' } };
+  const keys = (history) => evaluateAlerts({ now: NOW, snapshots, dbHistory: history }).filter((a) => a.key === 'supabase:db-growth');
+  // 120 MB now: 380 MB left. 5 MB/day -> 76 days (quiet); 8 MB/day -> 47 days (warn); 20 MB/day -> 19 days (critical)
+  assert.equal(keys(sizeHistory(10, 70, 5)).length, 0);
+  assert.equal(keys(sizeHistory(10, 40, 8))[0].level, 'warn');
+  assert.equal(keys(sizeHistory(10, -80, 20))[0].level, 'critical');
+  assert.equal(keys([]).length, 0); // no history: no growth alert
+});
+
+test('evaluateAlerts: no growth alert once the database is already at the limit (the size alert covers it), and "1 day" is singular', () => {
+  const full = { 'supabase.db_size_bytes': { value: 505 * MB, limit_value: LIMIT, captured_at: '2026-10-10T06:00:00Z' } };
+  const keys = evaluateAlerts({ now: NOW, snapshots: full, dbHistory: sizeHistory(10, 400, 10) }).map((a) => a.key);
+  assert.deepEqual(keys, ['supabase:db-size']);
+
+  // 499 MB with 10 MB/day -> about a tenth of a day left: reads as "1 day", not "1 days"
+  const nearly = { 'supabase.db_size_bytes': { value: 499 * MB, limit_value: LIMIT, captured_at: '2026-10-10T06:00:00Z' } };
+  const growth = evaluateAlerts({ now: NOW, snapshots: nearly, dbHistory: sizeHistory(10, 399, 10) }).find((a) => a.key === 'supabase:db-growth');
+  assert.match(growth.title, /about 1 day$/);
+  assert.match(growth.detail, /roughly 1 day\./);
+});
+
+test('the Supabase egress balance is a typed-in "used" meter that warns near its limit', () => {
+  assert.equal(MANUAL_METERS['supabase.egress_gb'].kind, 'used');
+  const snapshots = { 'supabase.egress_gb': { value: 4, limit_value: 5, captured_at: '2026-10-09T00:00:00Z' } };
+  const alerts = evaluateAlerts({ now: NOW, snapshots });
+  assert.equal(alerts[0].key, 'manual:supabase.egress_gb');
+  assert.equal(alerts[0].level, 'warn'); // 80%
+});
+
 test('evaluateAlerts: TypeSafe errors alert only when many AND a large share of today\'s calls failed', () => {
   const key = (daily) => evaluateAlerts({ now: NOW, daily }).map((a) => a.key);
   assert.deepEqual(key([row('2026-10-10', 'typesafe', 'requests', 20), row('2026-10-10', 'typesafe', 'errors', 8)]), ['typesafe:errors']);
@@ -131,12 +204,104 @@ test('evaluateAlerts: TypeSafe errors alert only when many AND a large share of 
   assert.deepEqual(key([row('2026-10-09', 'typesafe', 'requests', 20), row('2026-10-09', 'typesafe', 'errors', 20)]), []); // yesterday
 });
 
-test('the TypeSafe credit balance is a typed-in meter that warns when low', () => {
+test('the TypeSafe credit balance is typed in once, and the website\'s own metered spend comes off it', () => {
   assert.equal(MANUAL_METERS['typesafe.credit_remaining_usd'].kind, 'remaining');
-  const snapshots = { 'typesafe.credit_remaining_usd': { value: 1, limit_value: 5, captured_at: '2026-10-09T00:00:00Z' } };
-  const alerts = evaluateAlerts({ now: NOW, snapshots });
-  assert.equal(alerts[0].key, 'manual:typesafe.credit_remaining_usd');
-  assert.equal(alerts[0].level, 'warn');
+  const reading = { value: 5, limit_value: 5, captured_at: '2026-10-09T08:00:00Z' };
+
+  // 50M input tokens at $0.042 per million = $2.10, counted from the reading's own day
+  const half = typesafeCreditEstimate(reading, [row('2026-10-09', 'typesafe', 'input_tokens', 20_000_000), row('2026-10-10', 'typesafe', 'input_tokens', 30_000_000)], NOW);
+  assert.ok(Math.abs(half.spent - 2.1) < 1e-9);
+  assert.ok(Math.abs(half.remaining - 2.9) < 1e-9);
+  assert.equal(half.level, null); // 58% left
+
+  // usage from before the reading is already in the typed-in number; it must not come off again
+  const before = typesafeCreditEstimate(reading, [row('2026-10-08', 'typesafe', 'input_tokens', 90_000_000)], NOW);
+  assert.equal(before.spent, 0);
+
+  // never negative, and nothing to estimate without a reading
+  assert.equal(typesafeCreditEstimate(reading, [row('2026-10-10', 'typesafe', 'input_tokens', 500_000_000)], NOW).remaining, 0);
+  assert.equal(typesafeCreditEstimate(null, [], NOW), null);
+});
+
+test('evaluateAlerts: TypeSafe credit levels from the estimate (and no duplicate generic alert)', () => {
+  const snapshots = { 'typesafe.credit_remaining_usd': { value: 5, limit_value: 5, captured_at: '2026-10-09T08:00:00Z' } };
+  const run = (tokens) => evaluateAlerts({ now: NOW, snapshots, daily: [row('2026-10-10', 'typesafe', 'input_tokens', tokens)] });
+  assert.equal(run(90_000_000).find((a) => a.key === 'typesafe:credit').level, 'warn'); // $3.78 spent, $1.22 left = 24%
+  assert.equal(run(115_000_000).find((a) => a.key === 'typesafe:credit').level, 'critical'); // $4.83 spent, $0.17 left = 3%
+  assert.equal(run(115_000_000).filter((a) => a.key.startsWith('manual:typesafe')).length, 0);
+});
+
+// ---- Netlify: what production deploys have cost this cycle ----
+const CYCLE_START = '2026-10-19T00:00:00.000-07:00';
+const CYCLE_END = '2026-11-19T00:00:00.000-08:00';
+const NF_NOW = new Date('2026-10-22T12:00:00Z'); // 3.2 days into a 31-day cycle
+const plan = { value: 1000, limit_value: 1000, captured_at: '2026-10-22T11:00:00Z', detail: { period_start: CYCLE_START, next_period_start: CYCLE_END } };
+const activity = (deploys, periodStart = CYCLE_START) => ({ value: deploys * 15, limit_value: null, captured_at: '2026-10-22T11:00:00Z', detail: { period_start: periodStart, production_ok: deploys } });
+
+test('netlifyDeployUsage: 15 credits a deploy, against the allowance, with a projection to the cycle end', () => {
+  const u = netlifyDeployUsage(activity(33), plan, NF_NOW);
+  assert.equal(u.credits, 495);
+  assert.equal(u.deploys, 33);
+  assert.ok(Math.abs(u.fraction - 0.495) < 1e-9);
+  assert.equal(u.level, null); // under 70%
+  assert.ok(u.elapsedDays > 3 && u.elapsedDays < 3.5);
+  assert.ok(u.projected > 4000 && u.projected < 5500); // 495 over ~3.2 days, scaled to 31
+  assert.equal(u.onPaceToExceed, true);
+});
+
+test('netlifyDeployUsage: no projection in the first days, and none from an earlier cycle', () => {
+  const early = netlifyDeployUsage(activity(10), plan, new Date('2026-10-20T12:00:00Z'));
+  assert.equal(early.projected, null);
+  assert.equal(early.onPaceToExceed, false);
+  assert.equal(netlifyDeployUsage(activity(33, '2026-09-19T00:00:00.000-07:00'), plan, NF_NOW), null); // last cycle's count
+  assert.equal(netlifyDeployUsage(null, plan, NF_NOW), null);
+  assert.equal(netlifyDeployUsage(activity(33), null, NF_NOW), null);
+});
+
+test('netlifyDeployUsage: names the day the allowance would run out at this pace, only when it would', () => {
+  const u = netlifyDeployUsage(activity(33), plan, NF_NOW); // 495 credits in about 3.2 days, 1,000 included
+  const day = u.exhaustsAt.slice(0, 10);
+  assert.ok(day >= '2026-10-25' && day <= '2026-10-27', day); // about 3.3 more days at ~154 credits a day
+  assert.equal(netlifyDeployUsage(activity(2), plan, NF_NOW).exhaustsAt, null); // 30 credits: nowhere near
+  assert.equal(netlifyDeployUsage(activity(10), plan, new Date('2026-10-20T12:00:00Z')).exhaustsAt, null); // too early to project
+  assert.match(evaluateAlerts({ now: NF_NOW, snapshots: { 'netlify.plan_credits': plan, 'netlify.deploy_activity': activity(33) } })[0].title, /^Netlify credits are on pace to run out around 2[567] Oct$/);
+});
+
+test('every alert says what to do, in words a non-technical reader can act on', () => {
+  // a page that is on fire everywhere, so every rule that can speak does
+  const snapshots = {
+    'supabase.db_size_bytes': { value: 480 * MB, limit_value: LIMIT, captured_at: '2026-10-10T06:00:00Z' },
+    'supabase.db_connections': { value: 58, limit_value: 60, captured_at: '2026-10-10T06:00:00Z' },
+    'supabase.egress_gb': { value: 4.8, limit_value: 5, captured_at: '2026-10-09T00:00:00Z' },
+    'anthropic.credit_remaining_usd': { value: 1, limit_value: 50, captured_at: '2026-10-09T00:00:00Z', detail: { expires_on: '2026-10-12' } },
+    'typesafe.credit_remaining_usd': { value: 0.2, limit_value: 5, captured_at: '2026-10-09T00:00:00Z' },
+    'netlify.plan_credits': { value: 1000, limit_value: 1000, captured_at: '2026-10-10T00:00:00Z', detail: { period_start: '2026-10-01T00:00:00.000Z', next_period_start: '2026-11-01T00:00:00.000Z' } },
+    'netlify.deploy_activity': { value: 960, limit_value: null, captured_at: '2026-10-10T00:00:00Z', detail: { period_start: '2026-10-01T00:00:00.000Z', production_ok: 64 } },
+    'netlify.credits_remaining': { value: 50, limit_value: 1000, captured_at: '2026-10-09T00:00:00Z' },
+    'cloudflare.r2_storage_gb': { value: 9.5, limit_value: 10, captured_at: '2026-10-09T00:00:00Z' },
+  };
+  const daily = [
+    row('2026-10-10', 'anthropic', 'billing_errors', 3), row('2026-10-10', 'anthropic', 'chat_cap_hits', 2), row('2026-10-10', 'anthropic', 'search_fallback_cap_hits', 2),
+    row('2026-10-10', 'gemini', 'quota_exhausted', 4), row('2026-10-10', 'typesafe', 'requests', 20), row('2026-10-10', 'typesafe', 'errors', 9),
+  ];
+  const alerts = evaluateAlerts({ now: NOW, snapshots, daily, settings: { anthropic_prices: { input: 3, output: 15 } }, dbHistory: sizeHistory(10, 400, 8) });
+  assert.ok(alerts.length >= 8, `expected many alerts, got ${alerts.map((a) => a.key)}`);
+  for (const a of alerts) {
+    assert.ok(typeof a.action === 'string' && a.action.length > 30, `no guidance for ${a.key}`);
+    assert.ok(!/[{}]|undefined|NaN/.test(a.action), `bad guidance text for ${a.key}`);
+  }
+  assert.equal(alertAction('manual:some.future_meter').length > 30, true); // new typed-in meters get the generic advice
+  assert.equal(alertAction('not:a-real-alert'), null);
+});
+
+test('evaluateAlerts: deploy credits warn at 70% / critical at 90%; a pace warning only while still under 70%', () => {
+  const run = (deploys, now = NF_NOW) => evaluateAlerts({ now, snapshots: { 'netlify.plan_credits': plan, 'netlify.deploy_activity': activity(deploys) } });
+  const keys = (deploys) => run(deploys).map((a) => `${a.key}:${a.level}`);
+  assert.deepEqual(keys(33), ['netlify:deploy-pace:warn']); // 495 credits: under 70%, but on pace to blow past 1,000
+  assert.deepEqual(keys(50), ['netlify:deploys:warn']); // 750 credits = 75%; the level alert covers it, no extra pace warning
+  assert.deepEqual(keys(62), ['netlify:deploys:critical']); // 930 credits = 93%
+  assert.deepEqual(keys(2), []); // 30 credits, tiny pace: quiet
+  assert.match(run(50).find((a) => a.key === 'netlify:deploys').detail, /50 production deploys at 15 credits each is 750 of 1,000/);
 });
 
 test('evaluateAlerts: Gemini quota exhaustion today, and the optional daily limit', () => {

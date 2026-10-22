@@ -36,7 +36,63 @@ export const TYPESAFE_USD_PER_MTOK = 0.042;
 export const TYPESAFE_ERROR_MIN = 5; // errors in a day before the alert can fire
 export const TYPESAFE_ERROR_SHARE = 0.2; // ...and the share of that day's calls
 
+// How fast the Supabase database is growing and, if it is, when it would reach its limit. A
+// least-squares line through the last DB_GROWTH_WINDOW_DAYS of size readings (the collector
+// records one every 6 hours), so a single odd reading barely moves it. Returns null until
+// there are enough readings spread over enough days to mean anything; `daysToFull` is null
+// when the size is flat or shrinking. An estimate: a bulk import or a big delete inside the
+// window shifts it until it ages out.
+export const DB_GROWTH_WINDOW_DAYS = 14;
+export const DB_GROWTH_MIN_POINTS = 8;
+export const DB_GROWTH_MIN_SPAN_DAYS = 5;
+export const DB_GROWTH_WARN_DAYS = 60;
+export const DB_GROWTH_CRITICAL_DAYS = 21;
+
+/**
+ * @param {{ value: number | string, captured_at: string }[]} history
+ * @param {number} limitBytes
+ * @param {Date} now
+ * @returns {{ bytesPerDay: number, daysToFull: number | null, spanDays: number, latestBytes: number } | null}
+ */
+export function projectDbGrowth(history, limitBytes, now = new Date()) {
+  if (!isPositiveNumber(limitBytes)) return null;
+  const cutoff = now.getTime() - DB_GROWTH_WINDOW_DAYS * DAY_MS;
+  const points = history
+    .map((h) => ({ t: new Date(h.captured_at).getTime(), v: Number(h.value) }))
+    .filter((p) => Number.isFinite(p.t) && Number.isFinite(p.v) && p.v > 0 && p.t >= cutoff && p.t <= now.getTime())
+    .sort((a, b) => a.t - b.t);
+  if (points.length < DB_GROWTH_MIN_POINTS) return null;
+  const spanDays = (points[points.length - 1].t - points[0].t) / DAY_MS;
+  if (spanDays < DB_GROWTH_MIN_SPAN_DAYS) return null;
+
+  const n = points.length;
+  const x = points.map((p) => (p.t - points[0].t) / DAY_MS);
+  const meanX = x.reduce((a, b) => a + b, 0) / n;
+  const meanY = points.reduce((a, p) => a + p.v, 0) / n;
+  let num = 0;
+  let den = 0;
+  points.forEach((p, i) => {
+    num += (x[i] - meanX) * (p.v - meanY);
+    den += (x[i] - meanX) ** 2;
+  });
+  const bytesPerDay = den > 0 ? num / den : 0;
+  const latestBytes = points[n - 1].v;
+  const daysToFull = bytesPerDay > 0 ? Math.max(0, limitBytes - latestBytes) / bytesPerDay : null;
+  return { bytesPerDay, daysToFull, spanDays, latestBytes };
+}
+
 export const MANUAL_METERS = {
+  'supabase.egress_gb': {
+    service: 'supabase',
+    metric: 'egress_gb',
+    label: 'Supabase egress',
+    kind: 'used',
+    unit: 'GB',
+    valueLabel: 'Egress used this billing period (GB)',
+    limitLabel: 'Egress included per month (GB, as the dashboard shows; 5 on the free plan)',
+    where: 'Supabase dashboard → your organization → Usage',
+    refreshEveryDays: 14, // no API exposes billed egress, so it is read off the dashboard by hand
+  },
   'anthropic.credit_remaining_usd': {
     service: 'anthropic',
     metric: 'credit_remaining_usd',
@@ -55,10 +111,10 @@ export const MANUAL_METERS = {
     label: 'TypeSafe (Jev) credit',
     kind: 'remaining',
     unit: 'USD',
-    valueLabel: 'Credit left now (USD)',
-    limitLabel: 'Total credit you started with / last topped up (USD)',
-    where: 'console.typesafe.ai → Billing',
-    refreshEveryDays: 14,
+    valueLabel: 'Credit balance now (USD): enter it when you top up',
+    limitLabel: 'Same amount again (USD), the total the balance is measured against',
+    where: 'console.typesafe.ai (the amount you just loaded)',
+    refreshEveryDays: null, // no due date: the page subtracts the site's own metered spend, so it only needs re-entering at a top-up
   },
   'netlify.credits_remaining': {
     service: 'netlify',
@@ -248,9 +304,70 @@ export function anthropicCreditEstimate(snapshot, daily, prices, now = new Date(
   };
 }
 
+// Probable TypeSafe credit left. TypeSafe publishes no balance API, so, like Anthropic's, it is the
+// last typed-in reading (the credit loaded) minus what the website itself has spent since: our metered
+// input tokens times the published price (output tokens are free). Typing in is therefore only needed
+// when credit is topped up, not to keep the figure current. Counts the reading's own UTC day too, which
+// can double-count a few hours; that errs toward warning early. Null when no reading was typed in.
+export function typesafeCreditEstimate(snapshot, daily, now = new Date()) {
+  if (!snapshot) return null;
+  const fromDay = utcDay(new Date(snapshot.captured_at));
+  const tokens = sumDaily(daily, 'typesafe', 'input_tokens', fromDay, utcDay(now));
+  const spent = (tokens / 1_000_000) * TYPESAFE_USD_PER_MTOK;
+  const total = snapshot.limit_value === null || snapshot.limit_value === undefined ? null : Number(snapshot.limit_value);
+  const remaining = Math.max(0, Number(snapshot.value) - spent);
+  return { remaining, spent, total, readingAt: snapshot.captured_at, readingValue: Number(snapshot.value), level: levelForRemaining(remaining, total) };
+}
+
+// Netlify credit-based plans charge 15 credits per successful production deploy (failed deploys,
+// rollbacks and deploy previews are free): docs.netlify.com, "How credits work". Bandwidth, compute and
+// requests are charged too but Netlify's API reports none of them, so deploys are the part we can count
+// exactly, and what we count is a floor on credits used, never the whole figure.
+export const NETLIFY_CREDITS_PER_PRODUCTION_DEPLOY = 15;
+export const NETLIFY_PACE_MIN_DAYS = 3; // too early in a cycle, a few busy days would look like a trend
+
+// What this cycle's production deploys have cost. `activity` is the 'netlify.deploy_activity' snapshot
+// (value = credits spent on deploys, detail.period_start = the cycle it was counted for) and `plan` the
+// 'netlify.plan_credits' one (limit = the allowance, detail = the current cycle's dates). Null when either
+// is missing or the activity is from an earlier cycle (the collector has not run since it rolled over).
+export function netlifyDeployUsage(activity, plan, now = new Date()) {
+  if (!activity || !plan) return null;
+  const allowance = Number(plan.limit_value);
+  const start = plan.detail?.period_start;
+  const end = plan.detail?.next_period_start;
+  if (!isPositiveNumber(allowance) || !start || !end || activity.detail?.period_start !== start) return null;
+  const startMs = new Date(start).getTime();
+  const totalDays = (new Date(end).getTime() - startMs) / DAY_MS;
+  if (!(totalDays > 0)) return null;
+  const elapsedDays = Math.min(totalDays, Math.max(0, (now.getTime() - startMs) / DAY_MS));
+  const credits = Number(activity.value);
+  const projected = elapsedDays >= NETLIFY_PACE_MIN_DAYS ? (credits / elapsedDays) * totalDays : null;
+  // the day the allowance would be gone at this pace (only when that is before the cycle ends)
+  const exhaustsAt = projected !== null && projected >= allowance && credits > 0 && credits < allowance ? new Date(now.getTime() + ((allowance - credits) / (credits / elapsedDays)) * DAY_MS).toISOString() : null;
+  return {
+    credits,
+    allowance,
+    fraction: credits / allowance,
+    deploys: Number(activity.detail?.production_ok ?? 0),
+    elapsedDays,
+    totalDays,
+    projected,
+    onPaceToExceed: projected !== null && projected >= allowance,
+    exhaustsAt,
+    level: levelForUsed(credits, allowance),
+    cycleEnd: end,
+  };
+}
+
 export function daysUntilDate(isoDay, now = new Date()) {
   return Math.floor((new Date(`${isoDay}T23:59:59Z`).getTime() - now.getTime()) / DAY_MS);
 }
+
+// "6 Nov" for an ISO timestamp, in UTC like the rest of the page's days
+const shortDate = (iso) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+// 4795 -> "4,795" (Indian grouping, like the page)
+const num = (n) => Math.round(Number(n)).toLocaleString('en-IN');
 
 function pct(n) {
   return `${Math.round(n * 100)}%`;
@@ -258,6 +375,40 @@ function pct(n) {
 
 function money(n) {
   return `$${n.toFixed(2)}`;
+}
+
+// What a person should do about each alert, in plain words for a non-technical core-team reader. Keyed by
+// alert key; `manual:<meter>` covers a typed-in meter. Attached to every alert as `action`, shown on the
+// page and in the hourly email, so a warning always says what to do and who to ask, never just "it is high".
+const ALERT_ACTIONS = {
+  'anthropic:billing': 'Add credit now at console.anthropic.com → Billing, then type the new balance into the form on this page. Until you do, the website chat and the AI search fallback stop working for visitors.',
+  'anthropic:credit': 'Top up at console.anthropic.com → Billing before it runs out, then type the new balance into the form on this page.',
+  'anthropic:expiry': 'Use the credit or top up before it expires (console.anthropic.com → Billing), then update the date on this page.',
+  'gemini:quota': 'Nothing to do right now: search answers switch to the paid Claude service, which costs a little. If it keeps happening, ask whoever manages Google AI Studio to raise the quota.',
+  'gemini:daily': 'No action needed yet. If it keeps climbing, ask whoever manages Google AI Studio to raise the daily limit.',
+  'site:chat-cap': 'Check whether the chat is simply popular or being abused (the Anthropic card shows volumes). The cap protects your credit; raise it only if the traffic is real.',
+  'site:search-cap': 'Check whether search is simply popular or being abused. The cap protects your Anthropic credit; raise it only if the traffic is real.',
+  'typesafe:credit': 'Top up at console.typesafe.ai, then type the new balance into the form on this page.',
+  'typesafe:errors': 'Ask the developer to check the TypeSafe key and credit at console.typesafe.ai. WhatsApp messages still arrive normally; only the experimental reads of them are failing.',
+  'supabase:db-size': 'Ask the developer to clear old data or move to a paid Supabase plan before the database is full. Once it is full, forms and the member portal stop saving.',
+  'supabase:db-growth': 'Open the Supabase card and look at "Biggest tables" to see what is growing, then ask the developer to trim it or plan an upgrade.',
+  'supabase:connections': 'Tell the developer: the website is holding too many open database connections.',
+  'netlify:deploys': 'Merge changes to the main branch less often: every merge publishes the site and costs 15 credits. Group several changes into one merge, and keep drafts in pull requests (those are free).',
+  'netlify:deploy-pace': 'Merge changes to the main branch less often: every merge publishes the site and costs 15 credits. Group several changes into one merge, and keep drafts in pull requests (those are free).',
+  'netlify:plan-stale': 'Tell the developer: the Netlify access token this page uses may have expired.',
+  'resend:monthly': 'Send fewer emails, or move to a paid Resend plan. At the limit the website stops sending emails such as booking confirmations.',
+  'resend:daily': 'Send fewer emails today, or move to a paid Resend plan. At the limit the website stops sending emails such as booking confirmations.',
+  'resend:stale': 'Tell the developer: the Resend usage key may have been revoked or expired.',
+  'cloudflare:r2-storage': 'The photo store is close to its free size. Ask the developer to remove or shrink unused photos, or accept a small monthly charge.',
+  'cloudflare:r2-stale': 'Tell the developer: the Cloudflare analytics token this page uses may have expired.',
+  'manual:netlify.credits_remaining': 'Check Netlify → Team → Billing and usage, and merge changes to the main branch less often: each merge costs 15 credits.',
+  'manual:supabase.egress_gb': 'Egress is data the database sends out. If it keeps climbing, tell the developer; if it is a one-off spike, no action is needed.',
+};
+const MANUAL_ACTION = "Update the figure on this page from the provider's dashboard. If it is genuinely close to the limit, top up or use less.";
+
+/** @param {string} key */
+export function alertAction(key) {
+  return ALERT_ACTIONS[key] ?? (key.startsWith('manual:') ? MANUAL_ACTION : null);
 }
 
 // ---- the alert rules ------------------------------------------------------
@@ -270,8 +421,8 @@ function money(n) {
 // }
 // Returns [{ key, level: 'warn'|'critical', service, title, detail }]. `key`
 // identifies the underlying condition so a repeat of it isn't mailed twice.
-/** @param {{ now?: Date, daily?: any[], snapshots?: Record<string, any>, settings?: any }} input */
-export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSnapshots = {}, settings = {} }) {
+/** @param {{ now?: Date, daily?: any[], snapshots?: Record<string, any>, settings?: any, dbHistory?: { value: number, captured_at: string }[] }} input */
+export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSnapshots = {}, settings = {}, dbHistory = [] }) {
   const snapshots = mergeNetlifyPlan(rawSnapshots, now);
   const alerts = [];
   const today = utcDay(now);
@@ -303,6 +454,41 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
       `Anthropic credit is running low (about ${money(estimate.remaining)} left, estimated)`,
       `That is roughly ${pct(estimate.remaining / estimate.total)} of the ${money(estimate.total)} total. It is an estimate: the balance typed in on ${utcDay(new Date(estimate.readingAt))} minus the website's own metered usage since. Check the real balance at console.anthropic.com → Billing.`,
     );
+  }
+
+  // TypeSafe credit: typed in once when topped up, then the website's own metered spend comes off it.
+  const tsCredit = typesafeCreditEstimate(snapshots['typesafe.credit_remaining_usd'], daily, now);
+  if (tsCredit && tsCredit.level) {
+    add(
+      'typesafe:credit',
+      tsCredit.level,
+      'typesafe',
+      `TypeSafe credit is running low (about ${money(tsCredit.remaining)} left, estimated)`,
+      `That is roughly ${pct(tsCredit.remaining / tsCredit.total)} of the ${money(tsCredit.total)} entered. It is an estimate: the balance typed in on ${utcDay(new Date(tsCredit.readingAt))} minus the website's own metered usage since. Top up at console.typesafe.ai and enter the new balance on this page.`,
+    );
+  }
+
+  // Netlify: what production deploys alone have cost this cycle (15 credits each), and whether the
+  // pace so far would use up the allowance before the cycle ends.
+  const nfDeploys = netlifyDeployUsage(snapshots['netlify.deploy_activity'], snapshots['netlify.plan_credits'], now);
+  if (nfDeploys) {
+    const left = Math.max(0, nfDeploys.allowance - nfDeploys.credits);
+    add(
+      'netlify:deploys',
+      nfDeploys.level,
+      'netlify',
+      `Netlify production deploys have used ${pct(nfDeploys.fraction)} of this cycle's credits`,
+      `${nfDeploys.deploys} production deploy${nfDeploys.deploys === 1 ? '' : 's'} at ${NETLIFY_CREDITS_PER_PRODUCTION_DEPLOY} credits each is ${num(nfDeploys.credits)} of ${num(nfDeploys.allowance)} credits, before bandwidth, functions and requests, which Netlify's API does not report. About ${num(left)} credits are left for everything else. Batch changes into fewer merges to main.`,
+    );
+    if (nfDeploys.onPaceToExceed && !nfDeploys.level) {
+      add(
+        'netlify:deploy-pace',
+        'warn',
+        'netlify',
+        `Netlify credits are on pace to run out around ${shortDate(nfDeploys.exhaustsAt)}`,
+        `At the rate of the last ${Math.floor(nfDeploys.elapsedDays)} days, production deploys alone would use up the ${num(nfDeploys.allowance)} included credits around ${shortDate(nfDeploys.exhaustsAt)}, before the cycle ends on ${shortDate(nfDeploys.cycleEnd)}. Each merge to main is a production deploy that costs 15 credits.`,
+      );
+    }
   }
 
   // Credit expiry (only if a date was entered with the reading).
@@ -365,6 +551,19 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
     add('supabase:db-size', level, 'supabase', `Supabase database is at ${pct(Number(db.value) / Number(db.limit_value))} of its free size`, `${mb(db.value)} used of ${mb(db.limit_value)}. Free projects stop accepting writes at the limit.`);
   }
 
+  // How fast the database is growing: a size under the 70% line can still be weeks from full.
+  if (db && isPositiveNumber(Number(db.limit_value))) {
+    const growth = projectDbGrowth(dbHistory, Number(db.limit_value), now);
+    // Already at the limit: the size alert above says so, and "full in 0 days" adds nothing.
+    if (growth && growth.daysToFull !== null && Number(db.value) < Number(db.limit_value)) {
+      const level = growth.daysToFull <= DB_GROWTH_CRITICAL_DAYS ? 'critical' : growth.daysToFull <= DB_GROWTH_WARN_DAYS ? 'warn' : null;
+      const perWeek = ((growth.bytesPerDay * 7) / 1024 / 1024).toFixed(1);
+      const days = Math.max(1, Math.round(growth.daysToFull));
+      const inDays = `${days} day${days === 1 ? '' : 's'}`;
+      add('supabase:db-growth', level, 'supabase', `Supabase database could be full in about ${inDays}`, `It has been growing about ${perWeek} MB a week over the last ${Math.round(growth.spanDays)} days; at that pace the ${(Number(db.limit_value) / 1024 / 1024).toFixed(0)} MB free limit is reached in roughly ${inDays}. The page lists the biggest tables. One-off imports inflate this for up to two weeks.`);
+    }
+  }
+
   // Resend: automatic quota readings, and a warning if they stop (once any has existed).
   for (const [id, meter] of Object.entries(RESEND_AUTO_METERS)) {
     const reading = snapshots[id];
@@ -404,7 +603,7 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
 
   // Everything else a person types in. (Anthropic's balance has its own estimate above.)
   for (const [id, meter] of Object.entries(MANUAL_METERS)) {
-    if (id === 'anthropic.credit_remaining_usd') continue;
+    if (id === 'anthropic.credit_remaining_usd' || id === 'typesafe.credit_remaining_usd') continue; // these two have their own estimate above
     if (id === 'resend.emails_used' && resendAutomaticIsFresh(snapshots, now)) continue; // the API reading supersedes it
     if (id === 'cloudflare.r2_storage_gb' && r2AutomaticIsFresh(snapshots, now)) continue;
     const reading = snapshots[id];
@@ -421,7 +620,7 @@ export function evaluateAlerts({ now = new Date(), daily = [], snapshots: rawSna
     add(`manual:${id}`, levelForUsed(value, limit), meter.service, `${meter.label} at ${pct(value / limit)} of the limit`, `${value} of ${limit} ${meter.unit}, as last entered on ${utcDay(new Date(reading.captured_at))}. Update the reading on the usage page for a fresh figure.`);
   }
 
-  return alerts;
+  return alerts.map((a) => ({ ...a, action: alertAction(a.key) }));
 }
 
 // Compares currently-active alerts with what has already been mailed:

@@ -104,7 +104,7 @@ flowchart TD
         FUNC_SRC12["netlify/functions/razorpay-webhook.mts<br/>Serverless function — verifies signature, records<br/>payment_link.paid in Supabase (idempotent), emails<br/>a branded receipt; also handles refund.created/<br/>processed/failed — Razorpay's own confirmation is<br/>the only thing that marks a row actually refunded"]
         FUNC_SRC13["netlify/functions/cancel-booking.mts<br/>Serverless function — records a guest's<br/>cancellation request (not an automatic<br/>refund), notifies TVC + Linger + guest"]
         FUNC_SRC14["netlify/functions/event-payments-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>per-event registrations/cancellations/money<br/>collected from Supabase, issues real Razorpay<br/>refunds (tier-suggested, admin-confirmed)"]
-        FUNC_SRC15["netlify/functions/usage-collect.mts<br/>Scheduled function (cron, every 6 hours) — appends<br/>the Supabase database size + open connections, Netlify's plan<br/>credits + billing cycle and Resend's email quota to usage_snapshots for<br/>the free-tier usage dashboard. Optional secrets:<br/>NETLIFY_ACCESS_TOKEN, RESEND_USAGE_API_KEY,<br/>CLOUDFLARE_ANALYTICS_TOKEN"]
+        FUNC_SRC15["netlify/functions/usage-collect.mts<br/>Scheduled function (cron, every 6 hours) — appends<br/>the Supabase database size, open connections + biggest tables, Netlify's plan<br/>credits + billing cycle and Resend's email quota to usage_snapshots for<br/>the free-tier usage dashboard. Optional secrets:<br/>NETLIFY_ACCESS_TOKEN, RESEND_USAGE_API_KEY,<br/>CLOUDFLARE_ANALYTICS_TOKEN"]
         FUNC_SRC16["netlify/functions/usage-admin.mts<br/>Serverless function, Google Sign-In gated (usage module) —<br/>overview of free-tier/credit usage, live domain<br/>expiry lookups, typed-in provider readings and<br/>price/limit settings (admins only, audit-logged)"]
         FUNC_SRC17["netlify/functions/usage-alerts.mts<br/>Scheduled function (cron, hourly) — evaluates the<br/>usage rules and emails core-team@tvc.farm one digest<br/>per new or worsened warning; remembers what it sent"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
@@ -190,7 +190,7 @@ flowchart TD
         GSHEET["Google Sheets API<br/>membership/general enquiry logs (write,<br/>enquiry.mts) + rainfall log (read,<br/>rainfall.mts) + Members story-form<br/>responses (read + write Processed-at/Notes,<br/>check-member-story-responses.mjs) —<br/>same service account, called server-side<br/>only (Functions) or from a local script"]
         GIDTOKEN["Google Identity Services / OAuth<br/>Curator sign-in (browser) +<br/>ID token verification against<br/>Google's public JWKS (photo-pool.mts)"]
         GSC["Google Search Console API<br/>urlInspection.index.inspect — read-only,<br/>same service account (Full user on the<br/>property as of 2026-08-08),<br/>called from a local script only"]
-        NETLIFYAPI["Netlify API<br/>GET /accounts/{id} — plan credits + billing cycle<br/>dates (credits USED is not exposed), called by<br/>usage-collect.mts with NETLIFY_ACCESS_TOKEN"]
+        NETLIFYAPI["Netlify API<br/>GET /accounts/{id} — plan credits + billing cycle<br/>dates; the site's deploy list + build minutes (credits<br/>USED is not exposed), called by usage-collect.mts<br/>with NETLIFY_ACCESS_TOKEN"]
         RESEND["Resend API<br/>Transactional email — noreply@tvc.farm,<br/>domain verified 2026-08-19,<br/>called from the GitHub Action above,<br/>whatsapp-stale-alert.mts and usage-collect.mts<br/>(GET /usage quota read)"]
         WAMETA["Meta WhatsApp Cloud API<br/>Sends inbound message + template-status<br/>events to /api/whatsapp-webhook;<br/>receives replies from whatsapp-admin.mts<br/>and (once approved) guest/staff templates<br/>from lib/whatsapp-send.ts; see WHATSAPP.md for setup status"]
         SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages,<br/>event_payments, staff_users/staff_module_roles/<br/>staff_audit_log (gate all four admin Functions),<br/>staff_mfa_factors/staff_recovery_codes/<br/>staff_mfa_state (super-admin second factors),<br/>usage_daily/usage_snapshots/usage_settings/<br/>usage_alert_state (free-tier metering + alerts) —<br/>service_role key, called server-side only"]
@@ -395,10 +395,15 @@ outside both the local machine and Netlify (the member-update-email workflow).
   running totals in Supabase `usage_daily` through the atomic `usage_record()` function. Metering
   never fails a request (errors are logged and swallowed, 2s timeout), and stores counts only — no
   message text, IPs or emails. `usage-collect.mts` (scheduled, every 6h) records the database size
-  to `usage_snapshots` against the free plan's 500 MB, and — when `NETLIFY_ACCESS_TOKEN` is set —
+  to `usage_snapshots` against the free plan's 500 MB (plus open connections and the 8 biggest tables via
+  `usage_db_connections()` / `usage_db_tables()`, migrations `0033` / `0058`; the page derives growth and time-to-full from the
+  size history, and an alert fires if the database would fill within 60 days), and — when `NETLIFY_ACCESS_TOKEN` is set —
   reads the TVC team's plan credit allowance and billing-cycle dates from the Netlify API
-  (`GET /accounts/{id}`; credits *remaining/used* is not exposed, so the remaining balance stays a typed-in reading; the Netlify
-  call failing never fails the Supabase one). It likewise reads Resend's daily/monthly email quota
+  (`GET /accounts/{id}`; credits *remaining/used* is not exposed, so the remaining balance stays a typed-in reading), and the
+  cycle's deploy activity (`GET /sites/{id}/deploys` and `GET /{account_id}/builds/status`: production deploys at a flat 15
+  credits each, failed/preview counts, build minutes, last deploy; counts and timings only, stored as a `netlify/deploy_activity`
+  snapshot) so the page can show credits spent on deploys and warn when the pace would exhaust the allowance; a Netlify
+  call failing never fails the Supabase one, and each read is independent of the others). It likewise reads Resend's daily/monthly email quota
   from `GET https://api.resend.com/usage` with a separate full-access `RESEND_USAGE_API_KEY` (the sending-only key is refused), and R2 storage
   from Cloudflare's GraphQL analytics API (`POST https://api.cloudflare.com/client/v4/graphql`,
   read-only `CLOUDFLARE_ANALYTICS_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`). Both tables and functions are service_role

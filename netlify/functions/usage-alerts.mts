@@ -20,7 +20,7 @@ const FROM = 'TVC Website <noreply@tvc.farm>';
 const NOTIFY_TO = ['core-team@tvc.farm'];
 const PAGE_URL = 'https://tvc.farm/internal/usage';
 
-type Alert = { key: string; level: 'warn' | 'critical'; title: string; detail: string };
+type Alert = { key: string; level: 'warn' | 'critical'; title: string; detail: string; action?: string | null };
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -33,7 +33,7 @@ async function sendDigest(apiKey: string, alerts: Alert[]): Promise<void> {
     .map(
       (a) => `<tr>
         <td style="padding:8px 12px; border-bottom:1px solid #e2ddc9; white-space:nowrap; vertical-align:top;"><strong>${a.level === 'critical' ? 'Critical' : 'Warning'}</strong></td>
-        <td style="padding:8px 12px; border-bottom:1px solid #e2ddc9;"><strong>${escapeHtml(a.title)}</strong><br><span style="color:#57604f; font-size:13px;">${escapeHtml(a.detail)}</span></td>
+        <td style="padding:8px 12px; border-bottom:1px solid #e2ddc9;"><strong>${escapeHtml(a.title)}</strong><br><span style="color:#57604f; font-size:13px;">${escapeHtml(a.detail)}</span>${a.action ? `<br><span style="font-size:13px;"><strong>What to do:</strong> ${escapeHtml(a.action)}</span>` : ''}</td>
       </tr>`,
     )
     .join('');
@@ -54,7 +54,7 @@ export default async (): Promise<Response> => {
   try {
     const now = new Date();
     const data = await loadUsageData(now);
-    alerts = evaluateAlerts({ now, daily: data.daily, snapshots: data.snapshots, settings: data.settings });
+    alerts = evaluateAlerts({ now, daily: data.daily, snapshots: data.snapshots, settings: data.settings, dbHistory: data.dbHistory });
     previous = data.alertState;
   } catch (err) {
     console.error('[usage-alerts] failed to load usage data', err);

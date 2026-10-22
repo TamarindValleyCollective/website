@@ -31,6 +31,16 @@ import SignInGate from '../../components/SignInGate.astro';
         <div id="alerts" role="status"></div>
       </section>
 
+      <details class="glossary">
+        <summary>What these words mean</summary>
+        <dl>
+          <div><dt>Credit</dt><dd>A prepaid balance a service draws down as the website uses it.</dd></div>
+          <div><dt>Egress</dt><dd>Data a service sends out. Supabase allows 5 GB a month on the free plan.</dd></div>
+          <div><dt>Deploy</dt><dd>Publishing a new version of the website. Every merge to the main branch is one, and costs Netlify 15 credits.</dd></div>
+          <div><dt>Estimated</dt><dd>Worked out from the last figure someone typed in, minus what the website has measurably used since.</dd></div>
+          <div><dt>Warning and critical</dt><dd>Warning is about 70% used (or 30% left). Critical is about 90% used (or 10% left).</dd></div>
+        </dl>
+      </details>
       <section aria-labelledby="services-title" class="block">
         <h2 id="services-title">Services</h2>
         <div id="cards" class="cards"></div>
@@ -114,7 +124,9 @@ import SignInGate from '../../components/SignInGate.astro';
     box-shadow: var(--shadow-soft);
   }
 
-  .usage .card.pad,
+  .usage .card.pad {
+    padding: 16px 18px;
+  }
 
   .usage .error {
     color: var(--tvc-error-text);
@@ -132,7 +144,7 @@ import SignInGate from '../../components/SignInGate.astro';
     font: inherit;
     background: none;
     border: none;
-    padding: 0;
+    padding: 12px 0;
     color: var(--tvc-ink-soft);
     text-decoration: underline;
     cursor: pointer;
@@ -145,7 +157,7 @@ import SignInGate from '../../components/SignInGate.astro';
     gap: 6px;
     padding: 3px 10px 3px 8px;
     border-radius: 999px;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     font-weight: 600;
     white-space: nowrap;
   }
@@ -188,19 +200,98 @@ import SignInGate from '../../components/SignInGate.astro';
     grid-template-columns: auto 1fr;
     gap: 12px;
     align-items: start;
-    padding: 12px 16px;
+    padding: 14px 16px;
     border: 1px solid var(--tvc-line);
-    border-left-width: 4px;
     border-radius: var(--radius-sm);
     background: var(--tvc-white);
   }
 
+  /* severity is the tint and the pill's word, not a coloured stripe */
   .usage .alert--warn {
-    border-left-color: var(--tvc-orange);
+    border-color: var(--tvc-orange);
+    background: var(--tvc-orange-tint);
   }
 
   .usage .alert--critical {
-    border-left-color: var(--tvc-error-text);
+    border-color: var(--tvc-error-border);
+    background: var(--tvc-error-bg);
+  }
+
+  .usage .alert-summary {
+    margin: 0 0 10px;
+    font-weight: 600;
+  }
+
+  .usage .alert-action {
+    margin: 8px 0 0;
+    font-size: 0.88rem;
+  }
+
+  .usage .alert-why > summary {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+    cursor: pointer;
+  }
+
+  .usage .alert-why > summary::after {
+    content: '+';
+    margin-left: 8px;
+    font-size: 1.1rem;
+    line-height: 1;
+  }
+
+  .usage .alert-why[open] > summary::after {
+    content: '\2212';
+  }
+
+  .usage .alert-why .alert-detail {
+    margin: 0;
+  }
+
+  .usage .alert-more {
+    margin: 6px 0 0;
+    font-size: 0.85rem;
+    color: var(--tvc-ink-soft);
+  }
+
+  .usage .alert .link-button {
+    margin-top: 4px;
+    font-size: 0.85rem;
+  }
+
+  /* a short plain-words list for readers who do not live in these dashboards */
+  .usage .glossary {
+    margin: 0 0 20px;
+    font-size: 0.88rem;
+  }
+
+  .usage .glossary > summary {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+    cursor: pointer;
+  }
+
+  .usage .glossary dl {
+    margin: 0 0 4px;
+    display: grid;
+    gap: 8px;
+    max-width: 62ch;
+  }
+
+  .usage .glossary dt {
+    font-weight: 600;
+  }
+
+  .usage .glossary dd {
+    margin: 0;
+    color: var(--tvc-ink-soft);
   }
 
   .usage .alert-title {
@@ -223,11 +314,24 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   /* ---- service cards ---- */
+  /* a grid, so cards line up in rows; each card keeps its own height, so opening one doesn't stretch its neighbours */
   .usage .cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
     gap: 16px;
     align-items: start;
+  }
+
+  /* the part of a card that is always on show has one height for every service (title, badge, figure,
+     bar and one line of context), so a row of collapsed cards is level whatever each one measures */
+  .usage .svc-top {
+    min-height: 11.9rem;
+    margin-bottom: 12px;
+  }
+
+  .usage .svc {
+    display: flex;
+    flex-direction: column;
   }
 
   .usage .svc {
@@ -253,7 +357,7 @@ import SignInGate from '../../components/SignInGate.astro';
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 8px;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     color: var(--tvc-ink-soft);
   }
 
@@ -264,7 +368,7 @@ import SignInGate from '../../components/SignInGate.astro';
     gap: 5px;
     padding: 2px 9px 2px 7px;
     border-radius: 999px;
-    font-size: 0.74rem;
+    font-size: 0.8rem;
     font-weight: 600;
     white-space: nowrap;
   }
@@ -289,7 +393,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .usage .svc-fresh {
     margin: 0 0 12px;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     line-height: 1.45;
     color: var(--tvc-ink-soft);
   }
@@ -297,6 +401,110 @@ import SignInGate from '../../components/SignInGate.astro';
   .usage .svc-fresh--late {
     color: var(--tvc-orange-text);
     font-weight: 600;
+  }
+
+  /* A card is a summary. Click anywhere on it to open its details (one at a time). The motion is the
+     iOS ease: fast out of the gate, a long soft landing, no overshoot, and the same path back. */
+  .usage .svc {
+    position: relative;
+    cursor: pointer;
+    transition: transform 140ms ease-out;
+  }
+
+  .usage .svc[data-pressed] {
+    transform: scale(0.985);
+  }
+
+  .usage .svc:has(.svc-toggle:focus-visible) {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .usage .svc-foot {
+    margin-top: auto;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .usage .svc-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-align: left;
+    color: var(--tvc-ink-soft);
+    cursor: pointer;
+  }
+
+  .usage .svc:hover .svc-toggle {
+    color: var(--tvc-ink);
+  }
+
+  .usage .svc-toggle:focus-visible {
+    outline: none; /* the whole card shows the focus ring */
+  }
+
+  .usage .svc-toggle::after {
+    content: '';
+    width: 7px;
+    height: 7px;
+    margin-right: 3px;
+    border-right: 1.75px solid currentColor;
+    border-bottom: 1.75px solid currentColor;
+    transform: translateY(-2px) rotate(45deg);
+    transition: transform 450ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .usage .svc[data-open='true'] .svc-toggle::after {
+    transform: translateY(2px) rotate(225deg);
+  }
+
+  /* 0fr to 1fr animates the height to the content's real size, and a click mid-flight turns around from where it is */
+  .usage .svc-more {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 450ms cubic-bezier(0.32, 0.72, 0, 1);
+    cursor: auto;
+  }
+
+  .usage .svc[data-open='true'] .svc-more {
+    grid-template-rows: 1fr;
+  }
+
+  .usage .svc-more-clip {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .usage .svc-more-body {
+    padding-top: 10px;
+    opacity: 0;
+    transition: opacity 180ms ease-out;
+  }
+
+  .usage .svc[data-open='true'] .svc-more-body {
+    opacity: 1;
+    transition: opacity 300ms ease-out 120ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .usage .svc,
+    .usage .svc-more,
+    .usage .svc-toggle::after {
+      transition-duration: 1ms;
+    }
+
+    .usage .svc-more-body,
+    .usage .svc[data-open='true'] .svc-more-body {
+      transition-duration: 1ms;
+      transition-delay: 0s;
+    }
   }
 
   .usage .hero {
@@ -365,7 +573,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .usage .stat dt {
-    font-size: 0.74rem;
+    font-size: 0.8rem;
     color: var(--tvc-ink-soft);
   }
 
@@ -378,7 +586,7 @@ import SignInGate from '../../components/SignInGate.astro';
   .usage .stat dd small {
     display: block;
     font-weight: 400;
-    font-size: 0.74rem;
+    font-size: 0.8rem;
     color: var(--tvc-ink-soft);
   }
 
@@ -409,7 +617,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .usage .spark figcaption {
     margin-top: 4px;
-    font-size: 0.76rem;
+    font-size: 0.8rem;
     color: var(--tvc-ink-soft);
   }
 
@@ -428,7 +636,7 @@ import SignInGate from '../../components/SignInGate.astro';
   .usage td small {
     display: block;
     margin-top: 2px;
-    font-size: 0.76rem;
+    font-size: 0.8rem;
     color: var(--tvc-ink-soft);
   }
 
@@ -440,7 +648,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .usage th {
     text-align: left;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     font-weight: 600;
     color: var(--tvc-ink-soft);
     padding: 0 12px 8px 0;
@@ -496,6 +704,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .usage input {
     font: inherit;
+    min-height: 44px;
     padding: 8px 10px;
     max-width: 280px;
     border: 1px solid var(--tvc-line);
@@ -556,6 +765,9 @@ import SignInGate from '../../components/SignInGate.astro';
 
   // ---- formatting ----------------------------------------------------------
   const nf = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
+  // Typed-in readings can be small and fractional (1.2 GB of egress, $4.98 of credit): whole numbers would misreport them.
+  const nfSmall = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
+  const amount = (n: number) => (n >= 100 ? nf : nfSmall).format(n);
   const compact = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e4 ? `${(n / 1e3).toFixed(0)}k` : nf.format(n));
   const usd = (n: number) => `$${n.toFixed(2)}`;
   const mb = (bytes: number) => `${nf.format(bytes / 1024 / 1024)} MB`;
@@ -671,18 +883,90 @@ import SignInGate from '../../components/SignInGate.astro';
     return Date.now() > due.getTime() ? { text: `Update overdue (was due ${dueText}) · an admin types it in below`, late: true } : { text: `Update due ${dueText} · an admin types it in below` };
   }
 
-  function card(title: string, kind: Kind, level: Level | 'none', ...body: Kid[]): HTMLElement {
+  // A card is a summary (title, status, one headline figure, one bar) and, behind a "Details" toggle,
+  // everything else: how it updates, charts, breakdowns, caveats. `body` is the summary parts, then MORE,
+  // then the detail parts. Anything overdue is lifted back into the summary so it is never hidden.
+  const MORE = Symbol('more');
+  type Part = Kid | typeof MORE;
+  function card(title: string, kind: Kind, level: Level | 'none', ...body: Part[]): HTMLElement {
     const k = typeof kind === 'string' ? { mode: null, text: kind, fresh: undefined } : kind;
     const badge = k.mode ? h('span', { class: `mode mode--${k.mode}` }, icon(k.mode), MODE_LABEL[k.mode]) : null;
+    const at = body.indexOf(MORE);
+    const summary = (at === -1 ? body : body.slice(0, at)) as Kid[];
+    const more = (at === -1 ? [] : body.slice(at + 1)) as Kid[];
+    const fresh = k.fresh ?? [];
+    const freshLine = (f: { text: string; late?: boolean }) => h('p', { class: `svc-fresh${f.late ? ' svc-fresh--late' : ''}`, text: f.text });
+    const open = title === openCardTitle; // a re-render (after a saved reading) keeps the open card open, with no animation
+    const bodyId = `svc-more-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+    const toggle = h('button', { class: 'svc-toggle', attrs: { type: 'button', 'aria-expanded': String(open), 'aria-controls': bodyId, 'aria-label': `${title}: details` } }, h('span', { text: 'Details' }));
+    const bodyEl = h('div', { class: 'svc-more', attrs: { id: bodyId } }, h('div', { class: 'svc-more-clip' }, h('div', { class: 'svc-more-body' }, h('p', { class: 'svc-fresh', text: k.text }), ...fresh.filter((f) => !f.late).map(freshLine), ...more)));
+    if (!open) bodyEl.setAttribute('inert', ''); // closed content is out of the tab order and invisible to screen readers
     return h(
       'article',
-      { class: 'card svc' },
-      h('div', { class: 'svc-head' }, h('h3', { class: 'svc-title', text: title }), pill(level)),
-      h('p', { class: 'svc-kind' }, badge, h('span', { text: k.text })),
-      ...(k.fresh ?? []).map((f) => h('p', { class: `svc-fresh${f.late ? ' svc-fresh--late' : ''}`, text: f.text })),
-      ...body,
+      { class: 'card svc', attrs: { 'data-open': String(open), 'data-level': String(level ?? 'ok') } },
+      h('div', { class: 'svc-top' },
+        h('div', { class: 'svc-head' }, h('h3', { class: 'svc-title', text: title }), pill(level)),
+        h('p', { class: 'svc-kind' }, badge),
+        ...summary,
+        ...fresh.filter((f) => f.late).map(freshLine),
+      ),
+      h('div', { class: 'svc-foot' }, toggle, bodyEl),
     );
   }
+
+  // One card open at a time. The whole card is the target (the button inside is for keyboards and screen
+  // readers); the open details are not, so they can be read and selected without folding shut.
+  let openCardTitle: string | null = null;
+  function setCardOpen(card: HTMLElement, open: boolean) {
+    card.dataset.open = String(open);
+    card.querySelector('.svc-toggle')?.setAttribute('aria-expanded', String(open));
+    card.querySelector('.svc-more')?.toggleAttribute('inert', !open);
+  }
+  function onCardsClick(e: MouseEvent) {
+    const target = e.target as Element;
+    const card = target.closest<HTMLElement>('.svc');
+    if (!card || target.closest('.svc-more')) return;
+    if (window.getSelection()?.toString()) return; // the end of a text selection is not a click
+    const opening = card.dataset.open !== 'true';
+    document.querySelectorAll<HTMLElement>('#cards .svc[data-open="true"]').forEach((c) => setCardOpen(c, false));
+    if (opening) setCardOpen(card, true);
+    openCardTitle = opening ? (card.querySelector('.svc-title')?.textContent ?? null) : null;
+  }
+  // Open a card from outside it (an alert's "See the card" link): fold the others, open this one, bring it into view.
+  const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function openCardByTitle(title: string) {
+    const card = [...document.querySelectorAll<HTMLElement>('#cards .svc')].find((c) => c.querySelector('.svc-title')?.textContent === title);
+    if (!card) return;
+    document.querySelectorAll<HTMLElement>('#cards .svc[data-open="true"]').forEach((c) => c !== card && setCardOpen(c, false));
+    setCardOpen(card, true);
+    openCardTitle = title;
+    card.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
+    card.querySelector<HTMLElement>('.svc-toggle')?.focus({ preventScroll: true });
+  }
+
+  // The figures a person types in live in forms far down the page; this takes them there, open and ready to type.
+  let canConfigure = false; // only admins have the forms
+  function enterReadingButton(meterId: string): HTMLElement | null {
+    if (!canConfigure) return null;
+    return linkButton('Enter a new reading', () => {
+      const form = document.getElementById(`reading-${meterId}`) as HTMLDetailsElement | null;
+      if (!form) return;
+      form.open = true;
+      form.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' });
+      form.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true });
+    });
+  }
+  const shortDay = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+  // Press feedback on pointer-down (before release), like a tap on a physical button.
+  function onCardsPress(e: PointerEvent) {
+    const card = (e.target as Element).closest<HTMLElement>('.svc');
+    if (card && !(e.target as Element).closest('.svc-more')) card.dataset.pressed = 'true';
+  }
+  function onCardsRelease() {
+    document.querySelectorAll<HTMLElement>('#cards .svc[data-pressed]').forEach((c) => delete c.dataset.pressed);
+  }
+
 
   // ---- the cards -------------------------------------------------------------
   type Overview = any;
@@ -692,6 +976,7 @@ import SignInGate from '../../components/SignInGate.astro';
     const est = a.credit.estimate;
     const reading = a.credit.reading;
     const parts: Kid[] = [];
+    const more: Kid[] = [];
     let level: Level | 'none' = est?.level ?? null;
     if (a.billingErrorsRecent > 0) level = 'critical';
     if (!reading && !a.billingErrorsRecent) level = 'none';
@@ -701,16 +986,18 @@ import SignInGate from '../../components/SignInGate.astro';
     }
     if (est) {
       parts.push(h('p', { class: 'hero', text: `about ${usd(est.remaining)}` }), h('p', { class: 'hero-sub', text: `credit left, estimated, of ${usd(est.total ?? est.remaining)}` }));
-      if (est.total) parts.push(meter(est.remaining / est.total, est.level, 'Anthropic credit left', `${Math.round((est.remaining / est.total) * 100)}% left`), h('p', { class: 'meter-caption', text: `${Math.round((est.remaining / est.total) * 100)}% left · based on the ${usd(reading.value)} entered ${ago(reading.capturedAt)}, minus ${usd(est.spent)} of metered usage since` }));
+      if (est.total) parts.push(meter(est.remaining / est.total, est.level, 'Anthropic credit left', `${Math.round((est.remaining / est.total) * 100)}% left`));
+      more.push(h('p', { class: 'meter-caption', text: `${Math.round((est.remaining / est.total) * 100)}% left · based on the ${usd(reading.value)} entered ${ago(reading.capturedAt)}, minus ${usd(est.spent)} of metered usage since` }));
     } else if (reading) {
       parts.push(h('p', { class: 'hero', text: usd(reading.value) }), h('p', { class: 'hero-sub', text: `entered ${ago(reading.capturedAt)}. Add the token prices below to turn usage into a live estimate.` }));
     } else {
       parts.push(h('p', { class: 'hero-sub', text: 'No credit balance entered yet. An admin can add it below so we can warn before it runs out.' }));
     }
     if (a.credit.expiresInDays !== null) {
-      parts.push(h('p', { class: 'hero-sub', text: a.credit.expiresInDays < 0 ? `Credit expired on ${dateText(reading.expiresOn)}.` : `Credit expires on ${dateText(reading.expiresOn)} (${a.credit.expiresInDays} day${a.credit.expiresInDays === 1 ? '' : 's'}).` }));
+      (a.credit.expiresInDays <= 30 ? parts : more).push(h('p', { class: 'hero-sub', text: a.credit.expiresInDays < 0 ? `Credit expired on ${dateText(reading.expiresOn)}.` : `Credit expires on ${dateText(reading.expiresOn)} (${a.credit.expiresInDays} day${a.credit.expiresInDays === 1 ? '' : 's'}).` }));
     }
-    parts.push(
+    if (est && reading) parts.push(h('p', { class: 'hero-sub', text: `Balance entered ${ago(reading.capturedAt)}` }));
+    more.push(
       h('dl', { class: 'stats' },
         stat('Today', nf.format(a.today.requests), `${compact(a.today.input_tokens + a.today.output_tokens)} tokens${a.today.costUsd !== null ? ` · ${usd(a.today.costUsd)}` : ''}`),
         stat('Last 7 days', nf.format(a.last7.requests), `${compact(a.last7.input_tokens + a.last7.output_tokens)} tokens${a.last7.costUsd !== null ? ` · ${usd(a.last7.costUsd)}` : ''}`),
@@ -721,8 +1008,9 @@ import SignInGate from '../../components/SignInGate.astro';
     if (a.chatCapHitsToday || a.searchFallbackCapHitsToday) {
       parts.push(h('p', { class: 'svc-note', text: `Today the site turned away ${a.chatCapHitsToday} chat message(s) and ${a.searchFallbackCapHitsToday} paid search fallback(s) because a daily cap was reached.` }));
     }
-    parts.push(h('p', { class: 'svc-note', text: 'Counts only what the website itself sends (chat and the search fallback), not other uses of the same key. Dollar figures are estimates from the prices below.' }));
-    return card('Anthropic (Claude)', { mode: 'mixed', text: 'Usage measured live · credit balance typed in', fresh: [{ text: 'Usage: updates on every request the site makes.' }, nextManualUpdate(reading?.capturedAt, a.credit.meter.refreshEveryDays)] }, level, ...parts);
+    more.push(h('p', { class: 'svc-note', text: 'Counts only what the website itself sends (chat and the search fallback), not other uses of the same key. Dollar figures are estimates from the prices below.' }));
+    more.push(enterReadingButton('anthropic.credit_remaining_usd'));
+    return card('Anthropic (Claude)', { mode: 'mixed', text: 'Usage measured live · credit balance typed in', fresh: [{ text: 'Usage: updates on every request the site makes.' }, nextManualUpdate(reading?.capturedAt, a.credit.meter.refreshEveryDays)] }, level, ...parts, MORE, ...more);
   }
 
   function geminiCard(o: Overview): HTMLElement {
@@ -730,10 +1018,11 @@ import SignInGate from '../../components/SignInGate.astro';
     const limit: number | null = g.dailyLimit;
     const frac = limit ? g.today.requests / limit : 0;
     const level: Level = g.today.quotaExhausted > 0 ? 'warn' : limit && frac >= 0.9 ? 'critical' : limit && frac >= 0.7 ? 'warn' : null;
+    const more: Kid[] = [];
     const parts: Kid[] = [h('p', { class: 'hero', text: nf.format(g.today.requests) }), h('p', { class: 'hero-sub', text: limit ? `requests today of ${nf.format(limit)} allowed` : 'requests today (no daily limit entered)' })];
     if (limit) parts.push(meter(frac, level, 'Gemini requests used today', `${Math.round(frac * 100)}% of today's limit`), h('p', { class: 'meter-caption', text: `${Math.round(frac * 100)}% of today's limit` }));
     if (g.today.quotaExhausted > 0) parts.push(h('p', { class: 'hero-sub', text: `Google refused ${g.today.quotaExhausted} request(s) today: the free quota ran out.` }));
-    parts.push(
+    more.push(
       h('dl', { class: 'stats' },
         stat('Last 7 days', nf.format(g.last7.requests), 'requests'),
         stat('Refused (7 days)', nf.format(g.last7.quotaExhausted), 'free quota hit'),
@@ -742,46 +1031,105 @@ import SignInGate from '../../components/SignInGate.astro';
       sparkline(g.requestsSeries.map((p: any) => ({ label: dayLabel(p.day), value: p.value })), 'Requests per day', (n) => `${nf.format(n)} request${n === 1 ? '' : 's'}`),
       h('p', { class: 'svc-note', text: 'Powers the "Ask AI" search answer. Days here are UTC; Google resets its own daily quota at a different hour.' }),
     );
-    return card('Google Gemini', { mode: 'live', text: 'Measured by the website', fresh: [{ text: 'Updates on every search the site makes.' }] }, level, ...parts);
+    return card('Google Gemini', { mode: 'live', text: 'Measured by the website', fresh: [{ text: 'Updates on every search the site makes.' }] }, level, ...parts, MORE, ...more);
   }
+
+  // Typed-in meters that appear inside their service's card (or as the Netlify card) instead of on their own.
+  const FOLDED_INTO_SERVICE_CARD = new Set(['typesafe.credit_remaining_usd', 'supabase.egress_gb', 'netlify.credits_remaining']);
+
+  // Cards go critical, then warning, then the rest, so the one that needs a look is never behind calm ones.
+  const urgencyRank = (el: HTMLElement) => ({ critical: 2, warn: 1 } as Record<string, number>)[el.dataset.level ?? ''] ?? 0;
+
+  // The more serious of several levels (a card shows the worst of what it measures).
+  const worst = (...levels: (Level | 'none')[]): Level => (levels.includes('critical') ? 'critical' : levels.includes('warn') ? 'warn' : null);
 
   function typesafeCard(o: Overview): HTMLElement {
     const t = o.typesafe;
+    const m = o.manual.find((x: any) => x.id === 'typesafe.credit_remaining_usd');
+    const est = t.creditEstimate;
     // Jev calls cost a few thousandths of a cent each, so whole cents would always read $0.00.
     const spend = (n: number) => (n < 0.01 ? `$${n.toFixed(4)}` : usd(n));
     const failing = t.today.errors >= 5 && t.today.errors / Math.max(t.today.requests, 1) >= 0.2;
-    const level: Level = failing ? 'warn' : null;
-    return card(
-      'TypeSafe (Jev)',
-      { mode: 'mixed', text: 'Usage measured live · credit balance typed in', fresh: [{ text: 'Usage: updates on every WhatsApp message read.' }] },
-      level,
-      h('p', { class: 'hero', text: nf.format(t.today.requests) }),
-      h('p', { class: 'hero-sub', text: t.today.errors ? `calls today, ${nf.format(t.today.errors)} failed` : 'calls today' }),
+    const level: Level = worst(failing ? 'warn' : null, est?.level ?? null);
+    const calls = `${nf.format(t.today.requests)} call${t.today.requests === 1 ? '' : 's'} today${t.today.errors ? `, ${nf.format(t.today.errors)} failed` : ''}`;
+    const parts: Kid[] = [];
+    if (est) {
+      parts.push(h('p', { class: 'hero', text: `about ${spend(est.remaining)}` }), h('p', { class: 'hero-sub', text: `credit left, estimated, of ${usd(est.total ?? est.remaining)}` }));
+      if (est.total) parts.push(meter(est.remaining / est.total, est.level, 'TypeSafe credit left', `${Math.round((est.remaining / est.total) * 100)}% left`));
+      parts.push(h('p', { class: 'hero-sub', text: `${m?.reading ? `entered ${ago(m.reading.capturedAt)} · ` : ''}${calls}` }));
+    } else {
+      parts.push(h('p', { class: 'hero', text: nf.format(t.today.requests) }), h('p', { class: 'hero-sub', text: calls.replace(/^\d[\d,]* /, '') }), h('p', { class: 'hero-sub', text: 'No credit entered yet. Enter the amount you loaded once, and the page subtracts what the site spends.' }));
+    }
+    const more: Kid[] = [];
+    if (est) more.push(h('p', { class: 'meter-caption', text: `${Math.round((est.remaining / (est.total || est.remaining || 1)) * 100)}% left · based on the ${usd(est.readingValue)} entered ${ago(est.readingAt)}, minus ${spend(est.spent)} of metered usage since` }));
+    more.push(
       h('dl', { class: 'stats' },
         stat('Last 7 days', nf.format(t.last7.requests), `${spend(t.last7.costUsd)} · ${nf.format(t.last7.errors)} failed`),
         stat('This month', nf.format(t.month.requests), `${compact(t.month.inputTokens)} tokens · ${spend(t.month.costUsd)}`),
       ),
       sparkline(t.requestsSeries.map((p: any) => ({ label: dayLabel(p.day), value: p.value })), 'Calls per day', (n) => `${nf.format(n)} call${n === 1 ? '' : 's'}`),
-      h('p', { class: 'svc-note', text: 'Reads each inbound WhatsApp message in shadow mode (nothing acts on them yet). Billed per input token only; spend here is an estimate from the published price. The credit balance is its own typed-in card, from console.typesafe.ai.' }),
+      h('p', { class: 'svc-note', text: 'Reads each inbound WhatsApp message in shadow mode (nothing acts on them yet). Billed per input token only. TypeSafe has no balance API, so the credit left is what you entered at the last top-up minus what this site has spent since (its own metered calls at the published price). Enter a new balance after each top-up; it needs no other upkeep. Anything TypeSafe is used for outside the website is not counted.' }),
     );
+    more.push(enterReadingButton('typesafe.credit_remaining_usd'));
+    return card('TypeSafe (Jev)', { mode: 'mixed', text: 'Usage measured live · credit entered at each top-up', fresh: [{ text: 'Usage: updates on every WhatsApp message read.' }, { text: m?.reading ? `Credit: ${usd(m.reading.value)} entered ${ago(m.reading.capturedAt)}.` : 'Credit: not entered yet.' }] }, level, ...parts, MORE, ...more);
   }
 
   function supabaseCard(o: Overview): HTMLElement {
     const s = o.supabase;
     if (!s.reading) return card('Supabase database', { mode: 'auto', text: 'Measured every 6 hours', fresh: [nextAutoUpdate()] }, 'none', h('p', { class: 'hero-sub', text: 'No measurement recorded yet.' }));
     const frac = s.reading.limitBytes ? s.reading.bytes / s.reading.limitBytes : 0;
-    const level: Level = frac >= 0.9 ? 'critical' : frac >= 0.7 ? 'warn' : null;
+    // Size and growth can each be the reason to look; the card shows the worse of the two.
+    const days: number | null = s.growth?.daysToFull ?? null;
+    const growthLevel: Level = days !== null && days <= 21 ? 'critical' : days !== null && days <= 60 ? 'warn' : null;
+    const sizeLevel: Level = frac >= 0.9 ? 'critical' : frac >= 0.7 ? 'warn' : null;
+    const egress = o.manual.find((x: any) => x.id === 'supabase.egress_gb'); // billed egress: no API, so it is typed in
+    const level: Level = worst(sizeLevel, growthLevel, egress?.level ?? null);
+    const size = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : mb(bytes));
+    const lasts = (d: number) => {
+      const n = Math.max(1, Math.round(d));
+      return d < 90 ? `${n} day${n === 1 ? '' : 's'}` : d < 730 ? `${Math.round(d / 30)} months` : 'over 2 years';
+    };
+    // Summary: size, its bar and one line on how fast it is growing. The rest is behind Details.
     const parts: Kid[] = [h('p', { class: 'hero', text: mb(s.reading.bytes) }), h('p', { class: 'hero-sub', text: s.reading.limitBytes ? `of ${mb(s.reading.limitBytes)} on the free plan` : 'database size' })];
-    if (s.reading.limitBytes) parts.push(meter(frac, level, 'Supabase database size', `${Math.round(frac * 100)}% of the free size`), h('p', { class: 'meter-caption', text: `${frac < 0.01 ? 'under 1' : Math.round(frac * 100)}% used · measured ${ago(s.reading.capturedAt)}` }));
-    if (s.history.length > 1) {
-      parts.push(sparkline(s.history.map((p: any) => ({ label: dateText(p.at), value: p.bytes / 1024 / 1024 })), 'Database size in MB', (n) => `${nf.format(n)} MB`));
+    const more: Kid[] = [];
+    if (s.reading.limitBytes) parts.push(meter(frac, level, 'Supabase database size', `${Math.round(frac * 100)}% of the free size`));
+    if (!s.growth) {
+      parts.push(h('p', { class: 'hero-sub', text: 'Growth shows after about a week.' }));
+    } else if (days === null) {
+      parts.push(h('p', { class: 'hero-sub', text: `Not growing over the last ${Math.round(s.growth.spanDays)} days.` }));
+    } else {
+      const perWeek = s.growth.bytesPerDay * 7;
+      parts.push(h('p', { class: 'hero-sub', text: `+${perWeek < 100 * 1024 ? '<0.1' : nf.format(perWeek / 1024 / 1024)} MB a week · full in ${lasts(days)}` }));
+    }
+    if (egress?.level && egress.reading?.limit) {
+      parts.push(h('p', { class: 'svc-fresh svc-fresh--late', text: `Egress is at ${Math.round((egress.reading.value / egress.reading.limit) * 100)}% of its monthly limit.` }));
+    }
+    more.push(h('p', { class: 'meter-caption', text: `${frac < 0.01 ? 'under 1' : Math.round(frac * 100)}% used · measured ${ago(s.reading.capturedAt)}` }));
+    // One reading every 6 hours, but the chart (and its caption) counts days: keep each day's last reading.
+    const perDay = new Map<string, any>();
+    for (const p of s.history) perDay.set(String(p.at).slice(0, 10), p);
+    if (perDay.size > 1) {
+      more.push(sparkline([...perDay.values()].map((p: any) => ({ label: dateText(p.at), value: p.bytes / 1024 / 1024 })), 'Database size in MB', (n) => `${nf.format(n)} MB`));
+    }
+    const tables: { name: string; bytes: number; rows: number }[] = s.tables?.list ?? [];
+    if (tables.length) {
+      // One row per table: names are long, so they get the full card width rather than a narrow stat column.
+      // Grouped in one block so the two-column layout of an open card never splits the list.
+      more.push(h('div', {}, h('p', { class: 'hero-sub', text: 'Biggest tables' }), ...tables.slice(0, 5).map((t) => h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: t.name }), h('span', { text: `${size(t.bytes)} · ~${nf.format(t.rows)} rows` }))))));
     }
     if (s.connections?.max) {
       const cf = s.connections.inUse / s.connections.max;
-      parts.push(h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: 'Database connections open' }), h('span', { text: `${s.connections.inUse} of ${s.connections.max}` })), meter(cf, s.connections.level, 'Supabase database connections', `${Math.round(cf * 100)}% of the connection limit`)));
+      more.push(h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: 'Database connections open' }), h('span', { text: `${s.connections.inUse} of ${s.connections.max}` })), meter(cf, s.connections.level, 'Supabase database connections', `${Math.round(cf * 100)}% of the connection limit`)));
     }
-    parts.push(h('p', { class: 'svc-note', text: 'The free plan stops accepting new data at the limit. The Supabase dashboard is the authority if the two ever differ.' }));
-    return card('Supabase database', { mode: 'auto', text: 'Measured every 6 hours', fresh: [nextAutoUpdate(s.reading.capturedAt)] }, level, ...parts);
+    if (egress?.reading?.limit) {
+      const ef = egress.reading.value / egress.reading.limit;
+      more.push(h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: 'Egress this month (typed in)' }), h('span', { text: `${amount(egress.reading.value)} of ${amount(egress.reading.limit)} GB` })), meter(ef, egress.level, 'Supabase egress used', `${Math.round(ef * 100)}% of the monthly egress`)), h('p', { class: 'meter-caption', text: `Typed in ${ago(egress.reading.capturedAt)} from ${egress.where}.${daysAgo(egress.reading.capturedAt) > 35 ? ' That is over a month old: update it.' : ''}` }));
+    } else {
+      more.push(h('p', { class: 'hero-sub', text: `Egress (data sent out, free plan: 5 GB a month) can't be measured automatically. Read it at ${egress?.where ?? 'the Supabase dashboard'} and enter it below.` }));
+    }
+    more.push(enterReadingButton('supabase.egress_gb'));
+    more.push(h('p', { class: 'svc-note', text: 'The free plan stops accepting new data at the limit. Growth is a straight-line estimate from the last two weeks of readings, so a bulk import skews it. Table sizes include indexes. Egress cannot be measured automatically, so it is typed in. The Supabase dashboard is the authority.' }));
+    return card('Supabase database', { mode: 'auto', text: 'Measured every 6 hours', fresh: [nextAutoUpdate(s.reading.capturedAt)] }, level, ...parts, MORE, ...more);
   }
 
   // Netlify's cycle dates come as Pacific-time ISO strings; read the calendar date straight from the
@@ -793,14 +1141,67 @@ import SignInGate from '../../components/SignInGate.astro';
     return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
   }
 
+  // Netlify, read automatically: production deploys (a flat 15 credits each), build minutes, the last
+  // deploy. The credit balance itself has no API (and bandwidth, functions and requests cost credits too),
+  // so the typed-in balance stays in the details, next to how much of it the deploys explain.
+  function netlifyCard(o: Overview, typed: any | null): HTMLElement {
+    const d = o.netlify.deploys;
+    const a = o.netlify.activity;
+    const r = typed?.reading ?? null;
+    const level: Level = worst(d.level, d.onPaceToExceed ? 'warn' : null, typed?.level ?? null);
+    const parts: Kid[] = [
+      h('p', { class: 'hero', text: `${nf.format(d.credits)} credits` }),
+      h('p', { class: 'hero-sub', text: `used on deploys, of ${nf.format(d.allowance)} included` }),
+      meter(d.fraction, d.level, 'Netlify credits used on deploys', `${Math.round(d.fraction * 100)}% of the allowance`),
+      d.onPaceToExceed
+        ? h('p', { class: 'hero-sub svc-fresh--late', text: `${nf.format(d.deploys)} deploys · runs out ~${shortDay(d.exhaustsAt)}` })
+        : h('p', { class: 'hero-sub', text: `${nf.format(d.deploys)} deploy${d.deploys === 1 ? '' : 's'} · resets ${cycleDay(d.cycleEnd)}` }),
+    ];
+    if (r?.staleForCycle) parts.push(h('p', { class: 'svc-fresh svc-fresh--late', text: 'The typed-in balance is from a previous billing cycle: update it.' }));
+
+    const more: Kid[] = [
+      h('dl', { class: 'stats' },
+        stat('Production deploys', nf.format(d.deploys), `${nf.format(d.credits)} credits`),
+        stat('Failed (free)', nf.format(a.production_failed ?? 0), 'production deploys'),
+        stat('Previews (free)', nf.format(a.previews ?? 0), 'deploy previews'),
+      ),
+    ];
+    const bm = a.build_minutes;
+    if (bm) {
+      more.push(h('dl', { class: 'stats' }, stat('Build minutes', nf.format(bm.current), `this cycle · last cycle ${nf.format(bm.previous)}`), stat('Deploy time', a.avg_deploy_seconds ? `${a.avg_deploy_seconds}s` : 'n/a', 'average, production')));
+    }
+    if (a.last_deploy) {
+      more.push(h('p', { class: 'hero-sub', text: `Last deploy: ${a.last_deploy.context === 'production' ? 'production' : 'preview'}, ${a.last_deploy.state}, ${ago(a.last_deploy.at)}.` }));
+    }
+    more.push(h('p', { class: 'hero-sub', text: d.exhaustsAt ? `At this pace the ${nf.format(d.allowance)} credits run out around ${shortDay(d.exhaustsAt)}, before the cycle ends on ${cycleDay(d.cycleEnd)} (${nf.format(d.deploys)} deploys in ${Math.floor(d.elapsedDays)} days).` : d.projected !== null ? `Pace: ${nf.format(d.deploys)} deploys in ${Math.floor(d.elapsedDays)} days is about ${nf.format(Math.round(d.projected))} credits by the end of the cycle (${cycleDay(d.cycleEnd)}).` : `A pace estimate appears three days into each cycle. It resets ${cycleDay(d.cycleEnd)}.` }));
+    if (r?.limit && !r.staleForCycle) {
+      const used = 1 - r.value / r.limit;
+      more.push(
+        h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: "Netlify's own balance (typed in)" }), h('span', { text: `${amount(r.value)} of ${amount(r.limit)} left` })), meter(used, typed.level, 'Netlify credits used', `${Math.round(used * 100)}% used`)),
+        h('p', { class: 'meter-caption', text: `Typed in ${ago(r.capturedAt)} from ${typed.where}. Whatever it shows beyond deploys is bandwidth, functions and requests: they cost credits but Netlify's API reports none of them.` }),
+      );
+    } else if (!r) {
+      more.push(h('p', { class: 'hero-sub', text: `Bandwidth, functions and requests also cost credits, and Netlify's API reports none of them. Type in the balance from ${typed?.where ?? 'Netlify → Team → Billing and usage'} to see the full picture here.` }));
+    }
+    more.push(enterReadingButton('netlify.credits_remaining'));
+    more.push(h('p', { class: 'svc-note', text: "A successful production deploy costs 15 credits; failed deploys, rollbacks and deploy previews cost nothing (Netlify's docs, \"How credits work\"). Counted from the site's deploy list every 6 hours. Each merge to main is one production deploy, so batching changes into fewer merges is the main way to save credits." }));
+
+    const fresh = [nextAutoUpdate(a.capturedAt)];
+    if (r) fresh.push(nextManualUpdate(r.capturedAt, typed.refreshEveryDays));
+    return card('Netlify', { mode: 'mixed', text: 'Deploys and build minutes read from Netlify · balance typed in', fresh }, level, ...parts, MORE, ...more);
+  }
+
   function r2Card(o: Overview): HTMLElement {
     const r = o.r2.reading;
     const gb = (b: number) => `${(b / 1e9).toFixed(2)} GB`;
     const frac = r.limitBytes ? r.bytes / r.limitBytes : 0;
     const parts: Kid[] = [h('p', { class: 'hero', text: gb(r.bytes) }), h('p', { class: 'hero-sub', text: r.limitBytes ? `of ${gb(r.limitBytes)} free` : 'stored' })];
-    if (r.limitBytes) parts.push(meter(frac, r.level, 'Cloudflare R2 storage used', `${Math.round(frac * 100)}% of the free allowance`), h('p', { class: 'meter-caption', text: `${frac < 0.01 ? 'under 1' : Math.round(frac * 100)}% used · ${nf.format(r.objects)} object${r.objects === 1 ? '' : 's'} in ${r.buckets} bucket${r.buckets === 1 ? '' : 's'}` }));
-    parts.push(h('p', { class: 'svc-note', text: `Read from Cloudflare's analytics ${ago(r.capturedAt)}, refreshed every 6 hours. Past the free allowance R2 storage is billed per GB-month; the Cloudflare dashboard is the authority.` }));
-    return card('Cloudflare R2 storage', { mode: 'auto', text: 'Read from Cloudflare', fresh: [nextAutoUpdate(r.capturedAt)] }, r.level, ...parts);
+    const more: Kid[] = [];
+    if (r.limitBytes) parts.push(meter(frac, r.level, 'Cloudflare R2 storage used', `${Math.round(frac * 100)}% of the free allowance`));
+    if (r.limitBytes) more.push(h('p', { class: 'meter-caption', text: `${frac < 0.01 ? 'under 1' : Math.round(frac * 100)}% used · ${nf.format(r.objects)} object${r.objects === 1 ? '' : 's'} in ${r.buckets} bucket${r.buckets === 1 ? '' : 's'}` }));
+    parts.push(h('p', { class: 'hero-sub', text: `${nf.format(r.objects)} file${r.objects === 1 ? '' : 's'} in ${r.buckets} bucket${r.buckets === 1 ? '' : 's'}` }));
+    more.push(h('p', { class: 'svc-note', text: `Read from Cloudflare's analytics ${ago(r.capturedAt)}, refreshed every 6 hours. Past the free allowance R2 storage is billed per GB-month; the Cloudflare dashboard is the authority.` }));
+    return card('Cloudflare R2 storage', { mode: 'auto', text: 'Read from Cloudflare', fresh: [nextAutoUpdate(r.capturedAt)] }, r.level, ...parts, MORE, ...more);
   }
 
   function resendCard(o: Overview): HTMLElement {
@@ -808,15 +1209,24 @@ import SignInGate from '../../components/SignInGate.astro';
     const rows: [string, any][] = [['This month', r.monthly], ['Today', r.daily]];
     const level: Level = r.monthly?.level === 'critical' || r.daily?.level === 'critical' ? 'critical' : r.monthly?.level === 'warn' || r.daily?.level === 'warn' ? 'warn' : null;
     const parts: Kid[] = [];
+    const more: Kid[] = [];
+    // Summary: the quota that is closest to its limit (the monthly and daily ones can differ a lot).
+    const tightest = rows.filter(([, x]) => x && x.limit).sort((a, b) => b[1].used / b[1].limit - a[1].used / a[1].limit)[0];
+    if (tightest) {
+      const [label, x] = tightest;
+      parts.push(h('p', { class: 'hero', text: nf.format(x.used) }), h('p', { class: 'hero-sub', text: `emails sent ${label.toLowerCase()}, of ${nf.format(x.limit)} allowed` }), meter(x.used / x.limit, x.level, `Resend emails ${label.toLowerCase()}`, `${Math.round((x.used / x.limit) * 100)}% used`));
+    }
+    const other = tightest ? rows.find(([l, x]) => l !== tightest[0] && x && x.limit) : undefined;
+    if (other) parts.push(h('p', { class: 'hero-sub', text: `${nf.format(other[1].used)} of ${nf.format(other[1].limit)} ${other[0].toLowerCase()}` }));
     for (const [label, x] of rows) {
       if (!x || !x.limit) continue;
       const frac = x.used / x.limit;
-      parts.push(
+      more.push(
         h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: `Emails sent ${label.toLowerCase()}` }), h('span', { text: `${nf.format(x.used)} of ${nf.format(x.limit)}${x.resetsAt ? ` · resets ${dateText(x.resetsAt)}` : ''}` })), meter(frac, x.level, `Resend emails ${label.toLowerCase()}`, `${Math.round(frac * 100)}% used`)),
       );
     }
-    parts.push(h('p', { class: 'svc-note', text: `Read from Resend's own usage API ${ago((r.monthly ?? r.daily).capturedAt)}, refreshed every 6 hours. Resend stops sending (and the site's emails fail) at the limit.` }));
-    return card('Resend emails', { mode: 'auto', text: 'Read from Resend', fresh: [nextAutoUpdate((r.monthly ?? r.daily).capturedAt)] }, level, ...parts);
+    more.push(h('p', { class: 'svc-note', text: `Read from Resend's own usage API ${ago((r.monthly ?? r.daily).capturedAt)}, refreshed every 6 hours. Resend stops sending (and the site's emails fail) at the limit.` }));
+    return card('Resend emails', { mode: 'auto', text: 'Read from Resend', fresh: [nextAutoUpdate((r.monthly ?? r.daily).capturedAt)] }, level, ...parts, MORE, ...more);
   }
 
   function manualCard(m: any): HTMLElement {
@@ -826,7 +1236,8 @@ import SignInGate from '../../components/SignInGate.astro';
     const frac = r.limit ? (remaining ? 1 - r.value / r.limit : r.value / r.limit) : 0; // always the fraction USED, for the bar
     const staleForCycle = r.staleForCycle === true;
     const stale = !staleForCycle && daysAgo(r.capturedAt) > 35;
-    const parts: Kid[] = [h('p', { class: 'hero', text: `${nf.format(r.value)} ${m.unit}` }), h('p', { class: 'hero-sub', text: remaining ? (r.limit ? `left of ${nf.format(r.limit)} included` : 'left (limit not entered)') : r.limit ? `of ${nf.format(r.limit)} included` : 'limit not entered' })];
+    const more: Kid[] = [];
+    const parts: Kid[] = [h('p', { class: 'hero', text: `${amount(r.value)} ${m.unit}` }), h('p', { class: 'hero-sub', text: remaining ? (r.limit ? `left of ${amount(r.limit)} included` : 'left (limit not entered)') : r.limit ? `of ${amount(r.limit)} included` : 'limit not entered' })];
     const cycleMs = r.cycleStart && r.cycleEnd ? new Date(r.cycleEnd).getTime() - new Date(r.cycleStart).getTime() : 0;
     if (remaining && r.limit && cycleMs > 0 && !staleForCycle) {
       // Two bars that both drain left to right: credits left against days left in the billing cycle.
@@ -838,32 +1249,77 @@ import SignInGate from '../../components/SignInGate.astro';
       const daysFrac = Math.min(1, msLeft / cycleMs);
       const row = (label: string, text: string, fraction: number, level: Level, what: string) =>
         h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: label }), h('span', { text })), meter(fraction, level, what, text));
-      parts.push(
-        row('Credits left', `${nf.format(r.value)} of ${nf.format(r.limit)}`, creditsFrac, m.level, `${m.label} left`),
+      parts.push(meter(creditsFrac, m.level, `${m.label} left`, `${amount(r.value)} of ${amount(r.limit)}`));
+      more.push(
+        row('Credits left', `${amount(r.value)} of ${amount(r.limit)}`, creditsFrac, m.level, `${m.label} left`),
         row('Days left', `${daysLeft} of ${daysTotal} · resets ${cycleDay(r.cycleEnd)}`, daysFrac, null, 'Days left in the billing cycle'),
         h('p', { class: 'meter-caption', text: daysLeft > 0 ? `About ${nf.format(Math.floor(r.value / daysLeft))} credits a day to last until the reset${creditsFrac < daysFrac ? ' · using credits faster than the cycle is passing' : ''}` : 'Resets today' }),
       );
     } else {
-      if (r.limit) parts.push(meter(frac, m.level, `${m.label} used`, `${Math.round(frac * 100)}% used`), h('p', { class: 'meter-caption', text: `${Math.round(frac * 100)}% used${remaining ? ` · ${nf.format(r.value)} left` : ''}` }));
+      if (r.limit) parts.push(meter(frac, m.level, `${m.label} used`, `${Math.round(frac * 100)}% used`));
+      if (r.limit) more.push(h('p', { class: 'meter-caption', text: `${Math.round(frac * 100)}% used${remaining ? ` · ${amount(r.value)} left` : ''}` }));
       if (r.cycleEnd) {
         const daysLeft = Math.max(0, Math.ceil((new Date(r.cycleEnd).getTime() - Date.now()) / 86_400_000));
-        parts.push(h('p', { class: 'meter-caption', text: `Resets in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (${cycleDay(r.cycleEnd)})` }));
+        more.push(h('p', { class: 'meter-caption', text: `Resets in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (${cycleDay(r.cycleEnd)})` }));
       }
     }
-    parts.push(h('p', { class: 'svc-note', text: `Typed in on ${dateText(r.capturedAt)} (${ago(r.capturedAt)}) from ${m.where}.${r.cycleStart ? ` Billing cycle ${cycleDay(r.cycleStart)} to ${cycleDay(r.cycleEnd, -1)}; the allowance is read from Netlify automatically.` : ''}${r.planStale ? ` Warning: Netlify plan data was last refreshed ${ago(r.planCapturedAt)}, so the limit and cycle dates may be out of date. Check the Netlify token.` : ''}${staleForCycle ? ' This reading is from a previous billing cycle, so the balance has reset since. Update it.' : ''}${stale ? ' This reading is more than a month old, so treat it with caution and update it.' : ''}` }));
-    return card(m.label, r.cycleStart ? { mode: 'mixed', text: 'Balance typed in · allowance read from Netlify', fresh: [nextManualUpdate(r.capturedAt, m.refreshEveryDays), { text: 'Allowance and billing cycle: ' + nextAutoUpdate(r.planCapturedAt).text.replace('Next update', 'next update') }] } : { mode: 'manual', text: 'Typed in from the provider', fresh: [nextManualUpdate(r.capturedAt, m.refreshEveryDays)] }, m.level, ...parts);
+    // A stale or out-of-date reading must not hide behind the toggle.
+    if (staleForCycle || stale || r.planStale) {
+      parts.push(h('p', { class: 'svc-fresh svc-fresh--late', text: staleForCycle ? 'This reading is from a previous billing cycle: update it.' : stale ? 'This reading is over a month old: update it.' : 'Netlify plan data looks out of date: check the token.' }));
+    }
+    more.push(h('p', { class: 'svc-note', text: `Typed in on ${dateText(r.capturedAt)} (${ago(r.capturedAt)}) from ${m.where}.${r.cycleStart ? ` Billing cycle ${cycleDay(r.cycleStart)} to ${cycleDay(r.cycleEnd, -1)}; the allowance is read from Netlify automatically.` : ''}${r.planStale ? ` Warning: Netlify plan data was last refreshed ${ago(r.planCapturedAt)}, so the limit and cycle dates may be out of date. Check the Netlify token.` : ''}${staleForCycle ? ' This reading is from a previous billing cycle, so the balance has reset since. Update it.' : ''}${stale ? ' This reading is more than a month old, so treat it with caution and update it.' : ''}` }));
+    return card(m.label, r.cycleStart ? { mode: 'mixed', text: 'Balance typed in · allowance read from Netlify', fresh: [nextManualUpdate(r.capturedAt, m.refreshEveryDays), { text: 'Allowance and billing cycle: ' + nextAutoUpdate(r.planCapturedAt).text.replace('Next update', 'next update') }] } : { mode: 'manual', text: 'Typed in from the provider', fresh: [nextManualUpdate(r.capturedAt, m.refreshEveryDays)] }, m.level, ...parts, MORE, ...more);
   }
 
   // ---- alerts ----------------------------------------------------------------
-  function renderAlerts(alerts: any[]) {
+  // The card each service's alerts belong to, so an alert can take you to the figures behind it.
+  const SERVICE_CARD: Record<string, string> = { anthropic: 'Anthropic (Claude)', gemini: 'Google Gemini', typesafe: 'TypeSafe (Jev)', supabase: 'Supabase database', resend: 'Resend emails', cloudflare: 'Cloudflare R2 storage', netlify: 'Netlify' };
+
+  function linkButton(text: string, onClick: () => void): HTMLElement {
+    const b = h('button', { class: 'link-button', text, attrs: { type: 'button' } });
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  // One entry per service, led by its most serious alert (the others sit under it), each saying what to do,
+  // under a one-line count, so the top of the page answers "is anything wrong, and what do I do?".
+  function renderAlerts(alerts: any[], cardCount: number) {
     const box = $('alerts');
     if (alerts.length === 0) {
-      box.replaceChildren(h('p', { class: 'card all-clear' }, pill(null, 'All clear'), h('span', { text: 'Nothing is close to a limit, as far as we can measure.' })));
+      box.replaceChildren(h('p', { class: 'card all-clear' }, pill(null, 'All clear'), h('span', { text: `All ${cardCount} services are within their limits, as far as we can measure.` })));
       return;
     }
-    const sorted = [...alerts].sort((a, b) => Number(b.level === 'critical') - Number(a.level === 'critical'));
+    const rank = (a: any) => (a.level === 'critical' ? 0 : 1);
+    const byService = new Map<string, any[]>();
+    for (const a of [...alerts].sort((x, y) => rank(x) - rank(y))) {
+      if (!byService.has(a.service)) byService.set(a.service, []);
+      byService.get(a.service)!.push(a);
+    }
+    const groups = [...byService.entries()].sort((x, y) => rank(x[1][0]) - rank(y[1][0]));
+    const critical = groups.filter(([, g]) => g[0].level === 'critical').length;
+    const warning = groups.length - critical;
+    const fine = Math.max(0, cardCount - groups.length);
+    const summary = [critical ? `${critical} critical` : null, warning ? `${warning} warning${warning === 1 ? '' : 's'}` : null, `${fine} fine`].filter(Boolean).join(' · ');
     box.replaceChildren(
-      h('ul', { class: 'alert-list' }, ...sorted.map((a) => h('li', { class: `alert alert--${a.level}` }, pill(a.level), h('div', {}, h('p', { class: 'alert-title', text: a.title }), h('p', { class: 'alert-detail', text: a.detail + (a.emailedAt ? ` Emailed to the core team ${ago(a.emailedAt)}.` : '') }))))),
+      h('p', { class: 'alert-summary', text: summary }),
+      h('ul', { class: 'alert-list' }, ...groups.map(([service, group]) => {
+        const [lead, ...rest] = group;
+        const cardTitle = SERVICE_CARD[service];
+        return h('li', { class: `alert alert--${lead.level}` },
+          pill(lead.level),
+          h('div', {},
+            h('p', { class: 'alert-title', text: lead.title }),
+            lead.action ? h('p', { class: 'alert-action' }, h('strong', { text: 'What to do: ' }), lead.action) : null,
+            // the numbers behind it, one tap away, so the headline and the action stay short
+            h('details', { class: 'alert-why' },
+              h('summary', { text: 'Why this is flagged' }),
+              h('p', { class: 'alert-detail', text: lead.detail + (lead.emailedAt ? ` Emailed to the core team ${ago(lead.emailedAt)}.` : '') }),
+              ...rest.map((r) => h('p', { class: 'alert-more', text: `Also: ${r.title}.${r.action && r.action !== lead.action ? ` ${r.action}` : ''}` })),
+            ),
+            cardTitle ? linkButton(`See the ${cardTitle} card`, () => openCardByTitle(cardTitle)) : null,
+          ),
+        );
+      })),
     );
   }
 
@@ -902,7 +1358,7 @@ import SignInGate from '../../components/SignInGate.astro';
         msg.textContent = err instanceof StaffAuthError ? 'Your session ended or this account cannot change readings.' : (err as Error).message;
       }
     });
-    return h('details', { class: 'card' }, h('summary', { text: `${meterInfo.label}${last?.value !== undefined ? ` · last entered ${last.value}` : ''}` }), form);
+    return h('details', { class: 'card', attrs: { id: `reading-${id}` } }, h('summary', { text: `${meterInfo.label}${last?.value !== undefined ? ` · last entered ${last.value}` : ''}` }), form);
   }
 
   function renderAdmin(o: Overview) {
@@ -1037,10 +1493,14 @@ import SignInGate from '../../components/SignInGate.astro';
       if (status !== 200) throw new Error('load failed');
       statusEl.hidden = true;
       intro.textContent = 'Free tiers and credits the website relies on. "Measured" figures come from our own systems; "typed in" ones come from a provider\'s dashboard and are only as fresh as the last entry.';
-      renderAlerts(data.alerts);
       nextRunAt = data.schedule?.nextCollectorRunAt ?? null;
       runEveryHours = data.schedule?.collectorEveryHours ?? 6;
-      $('cards').replaceChildren(anthropicCard(data), geminiCard(data), typesafeCard(data), supabaseCard(data), ...(data.resend.fresh ? [resendCard(data)] : []), ...(data.r2.fresh ? [r2Card(data)] : []), ...data.manual.map(manualCard));
+      // Re-rendered after every saved reading; the open card (openCardTitle) is rebuilt open.
+      const netlifyTyped = data.manual.find((m: any) => m.id === 'netlify.credits_remaining') ?? null;
+      canConfigure = Boolean(data.canConfigure);
+      const nodes = [anthropicCard(data), geminiCard(data), typesafeCard(data), supabaseCard(data), ...(data.resend.fresh ? [resendCard(data)] : []), ...(data.r2.fresh ? [r2Card(data)] : []), ...(data.netlify.deploys ? [netlifyCard(data, netlifyTyped)] : netlifyTyped ? [manualCard(netlifyTyped)] : []), ...data.manual.filter((m: any) => !FOLDED_INTO_SERVICE_CARD.has(m.id)).map(manualCard)].sort((a, b) => urgencyRank(b) - urgencyRank(a)); // most urgent first; the sort is stable, so ties keep their order
+      $('cards').replaceChildren(...nodes);
+      renderAlerts(data.alerts, nodes.length);
       renderAdmin(data);
       $('foot').textContent = `Updated ${new Date(data.generatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}. Counts use UTC days. Warnings are emailed to the core team once, and again only if they get worse.`;
       content.hidden = false;
@@ -1078,6 +1538,9 @@ import SignInGate from '../../components/SignInGate.astro';
     firstLoad = true;
     showGate();
   }
+  $('cards').addEventListener('click', onCardsClick);
+  $('cards').addEventListener('pointerdown', onCardsPress);
+  for (const type of ['pointerup', 'pointercancel']) document.addEventListener(type, onCardsRelease); // wherever the pointer is let go
   $('use-different-account').addEventListener('click', signOut);
   $('sign-out').addEventListener('click', signOut);
 

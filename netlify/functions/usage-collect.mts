@@ -24,6 +24,7 @@
 // itself is paused (domain renewals) deliberately lives in a GitHub Action
 // instead — see .github/workflows/domain-expiry.yml.
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
+import { NETLIFY_CREDITS_PER_PRODUCTION_DEPLOY } from '../../scripts/lib/usage-rules.mjs';
 
 // Supabase free plan: 500 MB of database per project. From supabase.com/pricing;
 // the Supabase dashboard is the authority if this ever drifts.
@@ -51,14 +52,45 @@ async function recordDbConnections(base: string): Promise<string> {
   }
 }
 
+// Records the biggest tables (usage_db_tables(), migration 0058) so a growing database can be
+// traced to what is filling it. Never throws, and skips quietly until the migration is applied.
+async function recordDbTables(base: string): Promise<string> {
+  try {
+    const res = await fetch(`${base}/rpc/usage_db_tables`, { method: 'POST', headers: restHeaders(), body: '{}' });
+    if (!res.ok) throw new Error(`usage_db_tables failed: ${res.status} ${await res.text()}`);
+    const rows = (await res.json()) as { table_name: string; total_bytes: number | string; row_estimate: number | string }[];
+    const tables = rows
+      .map((r) => ({ name: String(r.table_name), bytes: Number(r.total_bytes), rows: Number(r.row_estimate) }))
+      .filter((t) => t.name && Number.isFinite(t.bytes) && t.bytes >= 0);
+    if (tables.length === 0) throw new Error('usage_db_tables returned no tables');
+    const insertRes = await fetch(`${base}/usage_snapshots`, {
+      method: 'POST',
+      headers: restHeaders({ Prefer: 'return=minimal' }),
+      body: JSON.stringify({
+        service: 'supabase',
+        metric: 'db_tables',
+        value: tables.reduce((sum, t) => sum + t.bytes, 0),
+        unit: 'bytes',
+        detail: { tables },
+      }),
+    });
+    if (!insertRes.ok) throw new Error(`tables snapshot insert failed: ${insertRes.status} ${await insertRes.text()}`);
+    return `recorded ${tables.length}`;
+  } catch (err) {
+    console.error('[usage-collect] db tables failed', err);
+    return 'failed';
+  }
+}
+
 // TVC team's id on Netlify (not a secret; from `netlify api getAccount`).
 const NETLIFY_ACCOUNT_ID = '6a58597d0f1acc4a465937b6';
 
-// Records the plan's credit allowance and billing cycle. Never throws: the
-// Supabase reading above is the primary job and must not fail because of it.
-async function recordNetlifyPlan(base: string): Promise<string> {
+// Records the plan's credit allowance and billing cycle, and hands back the account so the
+// deploy count below can use the same cycle dates. Never throws: the Supabase reading above is
+// the primary job and must not fail because of it.
+async function recordNetlifyPlan(base: string): Promise<{ result: string; account: Record<string, any> | null }> {
   const token = process.env.NETLIFY_ACCESS_TOKEN;
-  if (!token) return 'skipped (no NETLIFY_ACCESS_TOKEN)';
+  if (!token) return { result: 'skipped (no NETLIFY_ACCESS_TOKEN)', account: null };
   try {
     const res = await fetch(`https://api.netlify.com/api/v1/accounts/${NETLIFY_ACCOUNT_ID}`, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) throw new Error(`netlify account fetch failed: ${res.status}`);
@@ -78,9 +110,92 @@ async function recordNetlifyPlan(base: string): Promise<string> {
       }),
     });
     if (!insertRes.ok) throw new Error(`netlify snapshot insert failed: ${insertRes.status} ${await insertRes.text()}`);
-    return 'recorded';
+    return { result: 'recorded', account };
   } catch (err) {
     console.error('[usage-collect] netlify plan failed', err);
+    return { result: 'failed', account: null };
+  }
+}
+
+// The site this runs on (Netlify sets SITE_ID in functions); the literal is the fallback.
+const NETLIFY_SITE_ID = process.env.SITE_ID || '7d747fcb-70bf-415d-8263-8b652e6bbf0a';
+
+// What the billing cycle's deploys and builds have been, from the same token. Netlify's API reports
+// no credits used, but production deploys cost a flat 15 credits each (failed ones, rollbacks and deploy
+// previews are free), so that part can be counted exactly; bandwidth, functions and requests cannot.
+// Stored as a snapshot whose value is the credits spent on deploys. Counts and timings only: no commit
+// messages, titles, branches or authors. Never throws, like recordNetlifyPlan.
+async function recordNetlifyActivity(base: string, account: Record<string, any> | null): Promise<string> {
+  const token = process.env.NETLIFY_ACCESS_TOKEN;
+  if (!token || !account) return 'skipped';
+  try {
+    const periodStart: string | undefined = account.current_billing_period_start;
+    if (!periodStart) throw new Error('netlify account has no billing period start');
+    const startMs = new Date(periodStart).getTime();
+    const headers = { Authorization: `Bearer ${token}` };
+
+    // Newest first, until a deploy older than the cycle (5 pages of 100 is a safety cap).
+    let ok = 0;
+    let failed = 0;
+    let previews = 0;
+    let deploySeconds = 0;
+    let timed = 0;
+    let last: { state: string; context: string; at: string } | null = null;
+    paging: for (let page = 1; page <= 5; page++) {
+      const res = await fetch(`https://api.netlify.com/api/v1/sites/${NETLIFY_SITE_ID}/deploys?per_page=100&page=${page}`, { headers });
+      if (!res.ok) throw new Error(`netlify deploys fetch failed: ${res.status}`);
+      const deploys = (await res.json()) as { state: string; context: string; created_at: string; deploy_time?: number | null }[];
+      for (const d of deploys) {
+        if (new Date(d.created_at).getTime() < startMs) break paging;
+        last ??= { state: d.state, context: d.context, at: d.created_at };
+        if (d.context !== 'production') previews++;
+        else if (d.state === 'ready') {
+          ok++;
+          if (Number.isFinite(Number(d.deploy_time)) && Number(d.deploy_time) > 0) {
+            deploySeconds += Number(d.deploy_time);
+            timed++;
+          }
+        } else if (d.state === 'error') failed++;
+      }
+      if (deploys.length < 100) break;
+    }
+
+    // Build minutes are a separate, best-effort read: losing them must not lose the deploy count.
+    let buildMinutes: { current: number; previous: number } | null = null;
+    try {
+      const res = await fetch(`https://api.netlify.com/api/v1/${NETLIFY_ACCOUNT_ID}/builds/status`, { headers });
+      if (res.ok) {
+        const m = (await res.json())?.minutes;
+        if (Number.isFinite(Number(m?.current))) buildMinutes = { current: Number(m.current), previous: Number(m.previous ?? 0) };
+      }
+    } catch {
+      // keep the deploy count
+    }
+
+    const insertRes = await fetch(`${base}/usage_snapshots`, {
+      method: 'POST',
+      headers: restHeaders({ Prefer: 'return=minimal' }),
+      body: JSON.stringify({
+        service: 'netlify',
+        metric: 'deploy_activity',
+        value: ok * NETLIFY_CREDITS_PER_PRODUCTION_DEPLOY,
+        unit: 'credits',
+        detail: {
+          source: 'netlify-api',
+          period_start: periodStart,
+          production_ok: ok,
+          production_failed: failed,
+          previews,
+          avg_deploy_seconds: timed ? Math.round(deploySeconds / timed) : null,
+          build_minutes: buildMinutes,
+          last_deploy: last,
+        },
+      }),
+    });
+    if (!insertRes.ok) throw new Error(`netlify activity insert failed: ${insertRes.status} ${await insertRes.text()}`);
+    return `recorded ${ok} production, ${previews} previews`;
+  } catch (err) {
+    console.error('[usage-collect] netlify activity failed', err);
     return 'failed';
   }
 }
@@ -193,10 +308,12 @@ export default async (): Promise<Response> => {
     if (!insertRes.ok) throw new Error(`snapshot insert failed: ${insertRes.status} ${await insertRes.text()}`);
 
     const connections = await recordDbConnections(base);
-    const netlify = await recordNetlifyPlan(base);
+    const tables = await recordDbTables(base);
+    const netlifyPlan = await recordNetlifyPlan(base);
+    const netlifyActivity = await recordNetlifyActivity(base, netlifyPlan.account);
     const resend = await recordResendUsage(base);
     const r2 = await recordR2Storage(base);
-    return new Response(JSON.stringify({ ok: true, bytes, connections, netlify, resend, r2 }), { status: 200 });
+    return new Response(JSON.stringify({ ok: true, bytes, connections, tables, netlify: netlifyPlan.result, netlifyActivity, resend, r2 }), { status: 200 });
   } catch (err) {
     console.error('[usage-collect] failed', err);
     return new Response('Failed to record usage snapshot', { status: 500 });
