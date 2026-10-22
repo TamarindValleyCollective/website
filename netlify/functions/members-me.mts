@@ -77,20 +77,24 @@ async function handleHome(req: Request): Promise<Response> {
 
   let data;
   let landDocs: any[] = [];
+  let pendingFamily = 0;
   try {
     const hh = inList(member.householdIds);
-    const [households, memberships, plots, housePattas, notes, docRows] = await Promise.all([
+    const [households, memberships, plots, housePattas, notes, docRows, familyRequests] = await Promise.all([
       select('member_households', 'id,farm_unit,house_no,cluster,unit_type', `id=in.${hh}`),
       select('member_household_members', 'household_id,person_id,role,can_login', `household_id=in.${hh}`),
       select('member_plots', 'id,household_id,patta_no,reference_no,survey_no,area_hectares,area_acres,settlement,verification,source_document_id', `household_id=in.${hh}`),
       select('member_house_pattas', 'id,household_id,patta_no,reference_no,survey_no,area_sq_ft,settlement,verification,source_document_id', `household_id=in.${hh}`),
       select('member_household_notes', 'household_id,kind', `household_id=in.${hh}`),
       select('member_land_documents', 'id,household_id,land_type,status,extracted,created_at', `household_id=in.${hh}`),
+      // Only a count for a note on the page, so a failure here must never stop the portal opening.
+      select('member_family_requests', 'household_id', `household_id=in.${hh}&status=eq.pending`).catch(() => [] as any[]),
     ]);
     const personIds = [...new Set(memberships.map((m: any) => m.person_id))];
     const people = personIds.length ? await select('member_people', 'id,full_name,email,phone,active,directory_visible,google_picture_url', `id=in.${inList(personIds)}`) : [];
     data = { households, memberships, plots, housePattas, notes, people };
     landDocs = docRows;
+    pendingFamily = familyRequests.length;
   } catch (err) {
     console.error('[members-me] failed to load', err);
     return jsonResponse({ error: 'Server error' }, 500);
@@ -125,6 +129,8 @@ async function handleHome(req: Request): Promise<Response> {
       directoryVisible: own?.directory_visible ?? true,
       // owner, family or non_owner in their unit: family members get a narrower portal.
       role: member.roles[member.householdIds[0]] ?? 'owner',
+      // Family member requests from their unit still waiting for the core team.
+      familyRequestsPending: pendingFamily,
     },
     households: reviewed,
     // Whether the story editor writes the unit's shared story (the cutover switch) or the person's own; off until the move is done.

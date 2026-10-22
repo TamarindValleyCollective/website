@@ -1456,7 +1456,12 @@ never touches Netlify either.
   brings back that same record; `scripts/lib/member-family.mjs`). Up to two family members per unit sign in with
   no approval (the `member_household_members` trigger caps sign-in at two owners and two family
   members, migration 0053); a third is a row in `member_family_requests` for the core team, and the
-  core team gets an email (Resend) for every add and request. A family member has the `family` role,
+  core team gets an email (Resend) for every add and request. The core team decides on requests in a
+  "Family member requests" list on `/internal/members` (`GET /api/members-admin/family-requests`, edit
+  actions `familyrequest.approve` / `.reject`, `manage` capability): approving creates the person (or
+  brings back an inactive one with the same email) as `family` with sign-in; migration 0054 raises the
+  database's family cap to six so an approval can go past the two an owner may add alone. The owner sees
+  "N requests are waiting for the core team" in the Family panel. A family member has the `family` role,
   which `lib/member-access.ts` puts on the session: `members-me.mts` refuses them the story editor,
   land documents and family changes (403), and the portal hides those controls. **`members.tvc.farm`**
   is a domain alias on the same Netlify project (DNS: a proxied Cloudflare CNAME to

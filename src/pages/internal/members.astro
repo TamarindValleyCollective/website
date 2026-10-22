@@ -27,6 +27,7 @@ import SignInGate from '../../components/SignInGate.astro';
       <section id="publish" class="publish card" aria-label="Publish to the website" hidden></section>
       <section id="autopublish" class="publish card" aria-label="Automatic publishing" hidden></section>
       <section id="unit-stories" class="stories" aria-label="Unit stories waiting for review" hidden></section>
+      <section id="family-requests" class="stories" aria-label="Family member requests waiting for a decision" hidden></section>
       <dl id="totals" class="totals"></dl>
 
       <div class="toolbar">
@@ -2091,6 +2092,61 @@ import SignInGate from '../../components/SignInGate.astro';
     box.replaceChildren(h('details', { class: 'story-queue', attrs: { open: '' } }, h('summary', { text: `Unit stories waiting for review (${stories.length})` }), h('div', { class: 'story-list' }, ...cards)));
   }
 
+  // ---- family member requests ---------------------------------------------------
+  // An owner may add two family members who can sign in on their own; a further one waits here. Approving adds
+  // them to the unit as family with sign-in; declining just closes the request.
+  type FamilyRequest = { id: string; farmUnit: string; requestedBy: string; fullName: string; email: string; phone: string | null; createdAt: string };
+
+  async function loadFamilyRequests() {
+    const box = $('family-requests');
+    if (!can.edit) {
+      box.hidden = true;
+      return;
+    }
+    try {
+      const { status, data } = await staffFetch('/api/members-admin/family-requests');
+      if (status !== 200) throw new Error(data.error || 'Could not load.');
+      renderFamilyRequests(data.requests as FamilyRequest[]);
+    } catch {
+      box.hidden = false;
+      box.replaceChildren(h('p', { class: 'muted', text: 'Could not load the family member requests.' }));
+    }
+  }
+
+  function renderFamilyRequests(requests: FamilyRequest[]) {
+    const box = $('family-requests');
+    if (requests.length === 0) {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    const when = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const cards = requests.map((r) => {
+      const msg = h('p', { class: 'form-msg', attrs: { role: 'alert' } });
+      const decide = (action: 'familyrequest.approve' | 'familyrequest.reject', buttons: HTMLElement[]) => async () => {
+        buttons.forEach((b) => b.setAttribute('disabled', ''));
+        try {
+          await send({ action, requestId: r.id });
+          await loadFamilyRequests();
+          await loadData(); // an approval adds a person to the register
+        } catch (err) {
+          buttons.forEach((b) => b.removeAttribute('disabled'));
+          msg.textContent = err instanceof Error ? err.message : 'Something went wrong.';
+        }
+      };
+      const approve = h('button', { class: 'rowbtn rowbtn--act rowbtn--yes', text: 'Approve', attrs: { type: 'button' } });
+      const decline = h('button', { class: 'rowbtn rowbtn--act', text: 'Decline', attrs: { type: 'button' } });
+      approve.addEventListener('click', decide('familyrequest.approve', [approve, decline]));
+      decline.addEventListener('click', decide('familyrequest.reject', [approve, decline]));
+      const actions = can.manage ? h('div', { class: 'rowbtns' }, approve, decline) : h('p', { class: 'muted', text: 'An admin decides on these requests.' });
+      return h('article', { class: 'card story-card' },
+        h('p', {}, h('strong', { text: `${r.farmUnit}: ${r.fullName}` }), ` (${r.email}${r.phone ? `, ${r.phone}` : ''})`),
+        h('p', { class: 'muted', text: `Asked for by ${r.requestedBy} on ${when(r.createdAt)}. The unit already has two family members who can sign in.` }),
+        msg, actions);
+    });
+    box.replaceChildren(h('details', { class: 'story-queue', attrs: { open: '' } }, h('summary', { text: `Family member requests (${requests.length})` }), h('div', { class: 'story-list' }, ...cards)));
+  }
+
   // ---- load & sign-in ----------------------------------------------------------
   const gate = $('gate');
   const gateError = $('gate-error');
@@ -2128,6 +2184,7 @@ import SignInGate from '../../components/SignInGate.astro';
     renderTotals(data.totals);
     renderList();
     void loadUnitStories();
+    void loadFamilyRequests();
     void loadPublish();
     void loadAutopublish();
   }

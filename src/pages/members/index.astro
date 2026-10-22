@@ -2342,7 +2342,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   type House = { pattaNo: string | null; surveyNo: string | null; areaSqFt: number | null; verification: string; sourceDocumentId: string | null; pattaDocumentId: string | null; surveyDocumentId: string | null };
   type LandDoc = { id: string; householdId: string; landType: string; fileName: string | null; uploadedAt: string; status: string; summary: string };
   type Hh = { id: string; farmUnit: string; houseNo: string | null; cluster: string | null; unitType: string | null; people: Person[]; plots: Plot[]; housePattas: House[]; farmAcres: number; farmHectares: number; houseSqFt: number; flags: { severity: string; text: string }[] };
-  type Me = { personId: string; name: string; email: string | null; phone: string | null; directoryVisible: boolean; role: string };
+  type Me = { personId: string; name: string; email: string | null; phone: string | null; directoryVisible: boolean; role: string; familyRequestsPending: number };
 
   type Kid = Node | string | null | undefined | false;
   function h(tag: string, cls = '', text?: string, ...kids: Kid[]): HTMLElement {
@@ -3300,6 +3300,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     if (owner || family.length) {
       peopleCols.append(h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.people)), 'Family'),
         family.length ? listOf(family) : h('p', 'lede', 'No family members added yet.'),
+        owner && me!.familyRequestsPending > 0 ? h('p', 'story-hint', `${me!.familyRequestsPending === 1 ? '1 request is' : `${me!.familyRequestsPending} requests are`} waiting for the core team.`) : null,
         owner ? h('p', 'story-hint', `They sign in with Google to see your unit and, soon, book stays. They cannot edit your story, land documents or who is in your unit. Up to ${FAMILY_LOGINS} without approval.`) : null,
         owner ? add : null));
     }

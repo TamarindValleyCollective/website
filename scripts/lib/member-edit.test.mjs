@@ -164,3 +164,12 @@ test('deciding a UNIT story names the unit and the submission seen, needs `manag
   assert.deepEqual(d.ids, { householdId: A });
   assert.ok(!JSON.stringify(d).includes('child'));
 });
+
+test('deciding a family member request names the request and needs `manage`', () => {
+  assert.deepEqual(good({ action: 'familyrequest.approve', requestId: A }), { action: 'familyrequest.approve', requestId: A });
+  assert.deepEqual(good({ action: 'familyrequest.reject', requestId: A }), { action: 'familyrequest.reject', requestId: A });
+  assert.equal(ACTION_CAPABILITY['familyrequest.approve'], 'manage');
+  assert.equal(ACTION_CAPABILITY['familyrequest.reject'], 'manage');
+  assert.match(bad({ action: 'familyrequest.approve', requestId: 'x' }), /requestId/);
+  assert.equal(validateEdit({ action: 'familyrequest.approve' }).ok, false);
+});

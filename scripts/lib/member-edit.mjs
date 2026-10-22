@@ -37,6 +37,9 @@ export const ACTION_CAPABILITY = {
   'unitstory.approve': 'manage',
   'unitstory.reject': 'manage',
   'unitstory.unpublish': 'manage',
+  // An owner's request for a family member beyond the two they may add themselves (member_family_requests).
+  'familyrequest.approve': 'manage',
+  'familyrequest.reject': 'manage',
 };
 
 export const CLUSTERS = ['H1-A', 'H1-B', 'H2'];
@@ -265,6 +268,12 @@ export function validateEdit(body) {
       const note = requiredText(body, 'note', 'A note for the members', 500);
       if (note.error) return fail(note.error);
       return ok({ action, householdId: householdId.value, submittedAt, note: note.value });
+    }
+
+    case 'familyrequest.approve':
+    case 'familyrequest.reject': {
+      const requestId = id(body, 'requestId');
+      return requestId.error ? fail(requestId.error) : ok({ action, requestId: requestId.value });
     }
 
     case 'unitstory.unpublish': {
