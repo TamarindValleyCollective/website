@@ -861,15 +861,21 @@ async function handleUnitStoryPhotoRemove(req: Request): Promise<Response> {
 
 // One unit photo. 404 for everything not allowed, so the response never says whether a photo exists.
 async function handleUnitPhoto(req: Request): Promise<Response> {
-  const who = await requireAcknowledgedMember(req);
-  if ('error' in who) return who.error;
   const url = new URL(req.url);
   const id = url.searchParams.get('id') ?? '';
   const size = url.searchParams.get('size') === 'full' ? 'full' : 'square';
   const notFound = () => new Response('Not found', { status: 404, headers: { 'cache-control': 'no-store' } });
+  // The story row is looked up while the viewer is being checked: the two don't depend on each other, and the
+  // row is only used once the viewer is known to be allowed. A page of photos makes one of these per photo.
+  const found = isUploadedPhoto(id)
+    ? select('member_unit_stories', 'household_id,draft,submitted,approved', `or=(draft->photos.cs.[{"ref":"${id}"}],submitted->photos.cs.[{"ref":"${id}"}],approved->photos.cs.[{"ref":"${id}"}])`)
+    : Promise.resolve([] as any[]);
+  found.catch(() => null); // reported below, once the viewer has been checked (no unhandled rejection meanwhile)
+  const who = await requireAcknowledgedMember(req);
+  if ('error' in who) return who.error;
   if (!isUploadedPhoto(id)) return notFound();
   try {
-    const rows = await select('member_unit_stories', 'household_id,draft,submitted,approved', `or=(draft->photos.cs.[{"ref":"${id}"}],submitted->photos.cs.[{"ref":"${id}"}],approved->photos.cs.[{"ref":"${id}"}])`);
+    const rows = await found;
     const row = rows[0];
     if (!row) return notFound();
     const holder = [row.draft, row.submitted, row.approved].flatMap((c) => c?.photos ?? []).find((p: any) => p.ref === id);
@@ -878,7 +884,7 @@ async function handleUnitPhoto(req: Request): Promise<Response> {
     if (!unitPhotoAccess({ viewerHouseholdIds: who.member.householdIds, row, photoId: id, listed })) return notFound();
     const bytes = await getMemberPhoto(holder.personId, id, size);
     if (!bytes) return notFound();
-    return new Response(bytes, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=3600', 'x-content-type-options': 'nosniff' } });
+    return new Response(bytes, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=604800, immutable', 'x-content-type-options': 'nosniff' } });
   } catch (err) {
     console.error('[members-me] unit photo load failed', err);
     return jsonResponse({ error: 'Server error' }, 500);
