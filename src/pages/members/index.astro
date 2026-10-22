@@ -3130,6 +3130,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     edit.setAttribute('type', 'button');
     edit.setAttribute('aria-label', `Documents for your ${label}`);
     edit.title = `Documents for your ${label}`;
+    edit.setAttribute('data-tour', 'land-docs');
     edit.addEventListener('click', () => docsMenuDialog(hh, landType));
     const footer = h('div', 'card-docs', undefined, edit);
     // While this card is on the page it keeps the re-reading going after an upload (refreshDocs only polls while
