@@ -121,7 +121,6 @@ import SignInGate from '../../components/SignInGate.astro';
       </section>
     </div>
   </section>
-  <p class="toast" id="toast" role="status" hidden></p>
 </StaffLayout>
 
 <script is:inline src="https://accounts.google.com/gsi/client"></script>
@@ -246,54 +245,12 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-orange-text);
   }
 
-  .sheet {
-    width: min(420px, calc(100vw - 32px));
-    padding: 22px;
-    border: 1px solid var(--tvc-line);
-    border-radius: 16px;
-    background: var(--tvc-white);
-    color: var(--tvc-ink);
-    box-shadow: var(--shadow-soft);
-  }
 
-  .sheet::backdrop {
-    background: rgba(8, 12, 8, 0.4);
-  }
 
-  .sheet[open] {
-    animation: sheet-in 240ms cubic-bezier(0.32, 0.72, 0, 1);
-  }
 
-  @keyframes sheet-in {
-    from {
-      opacity: 0;
-      transform: scale(0.96) translateY(6px);
-    }
-  }
 
-  @media (prefers-reduced-motion: reduce) {
-    .sheet[open] {
-      animation: sheet-fade 160ms ease-out;
-    }
 
-    @keyframes sheet-fade {
-      from {
-        opacity: 0;
-      }
-    }
-  }
 
-  .sheet h2 {
-    margin: 0 0 6px;
-    font-size: var(--text-lg);
-    letter-spacing: -0.01em;
-  }
-
-  .sheet-text {
-    margin: 0 0 16px;
-    font-size: var(--text-sm);
-    color: var(--tvc-ink-soft);
-  }
 
   .sheet-form {
     display: flex;
@@ -327,50 +284,9 @@ import SignInGate from '../../components/SignInGate.astro';
     font-size: var(--text-sm);
   }
 
-  .sheet-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 16px;
-  }
 
-  .toast {
-    position: fixed;
-    z-index: 80;
-    left: 50%;
-    bottom: 22px;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin: 0;
-    padding: 10px 10px 10px 16px;
-    border-radius: 12px;
-    background: var(--tvc-ink);
-    color: var(--tvc-stone);
-    font-size: var(--text-sm);
-    box-shadow: var(--shadow-soft);
-    transform: translateX(-50%);
-    animation: toast-rise 240ms cubic-bezier(0.32, 0.72, 0, 1);
-  }
 
-  @keyframes toast-rise {
-    from {
-      opacity: 0;
-      transform: translate(-50%, 10px);
-    }
-  }
 
-  .toast :global(.toast-undo) {
-    min-height: 32px;
-    padding: 4px 12px;
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: var(--tvc-green-dark);
-    color: var(--tvc-white);
-    font: inherit;
-    font-weight: 600;
-    cursor: pointer;
-  }
 
   /* ---- people tab: a list of people, and the selected person's tools as rows */
   .toolbar {
@@ -393,82 +309,14 @@ import SignInGate from '../../components/SignInGate.astro';
     margin-bottom: 14px;
   }
 
-  .field {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    box-sizing: border-box;
-    width: 100%;
-    max-width: 340px;
-    min-height: 38px;
-    padding: 0 12px;
-    border-radius: var(--radius-field);
-    background: var(--tvc-cream);
-  }
 
-  .field svg {
-    flex: none;
-    width: 15px;
-    height: 15px;
-    fill: none;
-    stroke: var(--tvc-ink-soft);
-    stroke-width: 2;
-    stroke-linecap: round;
-  }
 
-  .field input {
-    flex: 1;
-    min-width: 0;
-    border: 0;
-    outline: 0;
-    background: none;
-    color: var(--tvc-ink);
-    font: inherit;
-  }
 
-  .field:focus-within {
-    box-shadow: 0 0 0 2px var(--tvc-orange);
-  }
 
-  .segmented {
-    display: inline-flex;
-    flex-wrap: wrap;
-    gap: 2px;
-    padding: 2px;
-    border-radius: 9px;
-    background: var(--tvc-cream);
-  }
 
-  .segmented button {
-    min-height: 30px;
-    padding: 3px 12px;
-    border: 0;
-    border-radius: 7px;
-    background: none;
-    color: var(--tvc-ink-soft);
-    font: inherit;
-    font-size: var(--text-sm);
-    cursor: pointer;
-    transition: background 150ms ease-out, color 150ms ease-out;
-  }
 
-  .segmented button[aria-checked='true'] {
-    background: var(--tvc-white);
-    color: var(--tvc-ink);
-    font-weight: 500;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
-  }
 
-  .segmented button:focus-visible {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 1px;
-  }
 
-  @media (pointer: coarse) {
-    .segmented button {
-      min-height: 44px;
-    }
-  }
 
   .people-layout {
     display: grid;
@@ -1014,6 +862,7 @@ import SignInGate from '../../components/SignInGate.astro';
     decodeTokenEmail,
     fillAvatar,
     getToken,
+    showToast,
     minutesLabel,
     saveStepUp,
     setToken,
@@ -1087,7 +936,6 @@ import SignInGate from '../../components/SignInGate.astro';
   const lockBtn = $<HTMLButtonElement>('lock');
   const lockNow = $<HTMLButtonElement>('lock-now');
   const stepupClose = $<HTMLButtonElement>('stepup-close');
-  const toastEl = $('toast');
   const verifyEntry = wireCodeEntry({ form: verifyForm, input: verifyCode, toggle: verifySwitch });
   const verifyError = $('verify-error');
   const stepupLink = $('stepup-link');
@@ -1250,29 +1098,12 @@ import SignInGate from '../../components/SignInGate.astro';
     renderStepUp();
     renderPeople();
     closeStepup();
-    toast('Editing locked.');
+    showToast('Editing locked.');
   });
   // The label counts minutes down; keep it honest while the sheet is closed.
   window.setInterval(() => {
     if (state && !stepupDialog.open) renderStepUp();
   }, 20000);
-
-  // A short message at the foot of the page, with an Undo when the action can be reversed.
-  let toastTimer: number | undefined;
-  function toast(message: string, undo?: () => void) {
-    toastEl.replaceChildren(h('span', { text: message }));
-    if (undo) {
-      const button = h('button', { class: 'toast-undo', text: 'Undo', attrs: { type: 'button' } });
-      button.addEventListener('click', () => {
-        toastEl.hidden = true;
-        undo();
-      });
-      toastEl.append(button);
-    }
-    toastEl.hidden = false;
-    window.clearTimeout(toastTimer);
-    toastTimer = window.setTimeout(() => (toastEl.hidden = true), undo ? 8000 : 3500);
-  }
 
   verifyPasskey.addEventListener('click', async () => {
     verifyError.hidden = true;
@@ -1285,7 +1116,7 @@ import SignInGate from '../../components/SignInGate.astro';
         renderStepUp();
         renderPeople();
         closeStepup();
-        toast('Editing unlocked.');
+        showToast('Editing unlocked.');
       } else if (result.status === 429) {
         show(verifyError, `Too many wrong attempts. Try again in about ${minutesLabel((result.data.retryAfterSeconds ?? 900) * 1000)}.`);
       } else {
@@ -1318,7 +1149,7 @@ import SignInGate from '../../components/SignInGate.astro';
         renderStepUp();
         renderPeople();
         closeStepup();
-        toast('Editing unlocked.');
+        showToast('Editing unlocked.');
       } else if (status === 429) {
         show(verifyError, `Too many wrong codes. Try again in about ${minutesLabel((data.retryAfterSeconds ?? 900) * 1000)}.`);
       } else {
@@ -1549,7 +1380,7 @@ import SignInGate from '../../components/SignInGate.astro';
         toggle.disabled = true;
         if (await setActive(p, !was)) {
           announce(`${p.label} ${was ? 'deactivated' : 'reactivated'}.`);
-          toast(`${p.label} ${was ? 'deactivated' : 'reactivated'}.`, () => void setActive(p, was));
+          showToast(`${p.label} ${was ? 'deactivated' : 'reactivated'}.`, () => void setActive(p, was));
         } else {
           toggle.disabled = !canEdit();
         }
@@ -1569,9 +1400,9 @@ import SignInGate from '../../components/SignInGate.astro';
         return true;
       }
       announce(data.error ?? 'Could not change that.', true);
-      toast(data.error ?? 'Could not change that.');
+      showToast(data.error ?? 'Could not change that.');
     } catch (err) {
-      if (!handled(err)) toast('Could not reach the server.');
+      if (!handled(err)) showToast('Could not reach the server.');
     }
     return false;
   }

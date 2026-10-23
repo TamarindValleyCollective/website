@@ -126,7 +126,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   /* ---- status pill: a word and an icon, colour is only reinforcement ---- */
-  .usage .pill {
+  .usage .status-pill {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -137,26 +137,26 @@ import SignInGate from '../../components/SignInGate.astro';
     white-space: nowrap;
   }
 
-  .usage .pill svg {
+  .usage .status-pill svg {
     flex: none;
   }
 
-  .usage .pill--ok {
+  .usage .status-pill--ok {
     background: var(--tvc-green-tint);
     color: var(--tvc-green-dark);
   }
 
-  .usage .pill--warn {
+  .usage .status-pill--warn {
     background: var(--tvc-orange-tint);
     color: var(--tvc-orange-text);
   }
 
-  .usage .pill--critical {
+  .usage .status-pill--critical {
     background: var(--tvc-error-bg);
     color: var(--tvc-error-text);
   }
 
-  .usage .pill--none {
+  .usage .status-pill--none {
     background: var(--tvc-stone);
     color: var(--tvc-ink-soft);
   }
@@ -784,7 +784,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
   function pill(level: Level | 'none', okText?: string): HTMLElement {
     const kind = level ?? 'ok';
-    return h('span', { class: `pill pill--${kind}` }, icon(kind), okText && kind === 'ok' ? okText : LABEL[kind]);
+    return h('span', { class: `status-pill status-pill--${kind}` }, icon(kind), okText && kind === 'ok' ? okText : LABEL[kind]);
   }
 
   // A meter shows `fraction` (0..1) of a track. The words beside it carry the numbers.

@@ -72,7 +72,7 @@ import SignInGate from '../../components/SignInGate.astro';
         <h2>Your recovery codes</h2>
         <p class="note"><strong>Shown once.</strong> Each code works one time if you lose your authenticator. Store them somewhere safe and separate from your phone.</p>
         <ul id="codes" class="codes"></ul>
-        <div class="row">
+        <div class="field-row">
           <button type="button" id="codes-copy" class="button button--outline">Copy</button>
           <button type="button" id="codes-download" class="button button--outline">Download .txt</button>
           <button type="button" id="codes-done" class="button">I've saved them</button>
@@ -97,7 +97,7 @@ import SignInGate from '../../components/SignInGate.astro';
       <section id="manage-card" class="card block" hidden>
         <h2>Manage</h2>
         <p class="note">Available while your step-up is active.</p>
-        <div class="row">
+        <div class="field-row">
           <button type="button" id="regen-codes" class="button button--outline">Generate new recovery codes</button>
         </div>
         <h3>Other super admins</h3>
@@ -257,7 +257,7 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-ink);
   }
 
-  .row {
+  .field-row {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;

@@ -247,6 +247,38 @@ export async function passkeyStepUp(api) {
   });
 }
 
+// A short message at the foot of the page, with an Undo when the action can be reversed. One toast at a time; the
+// shell styles it (.toast, .toast-undo). Reversible actions use this instead of asking "Are you sure?".
+let toastTimer;
+/** @param {string} message @param {() => void} [undo] */
+export function showToast(message, undo) {
+  let el = document.getElementById('staff-toast');
+  if (!el) {
+    el = document.createElement('p');
+    el.id = 'staff-toast';
+    el.className = 'toast';
+    el.setAttribute('role', 'status');
+    (document.getElementById('staff-main') ?? document.body).append(el);
+  }
+  const text = document.createElement('span');
+  text.textContent = message; // text only, whatever the message contains
+  el.replaceChildren(text);
+  if (undo) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'toast-undo';
+    button.textContent = 'Undo';
+    button.addEventListener('click', () => {
+      el.hidden = true;
+      undo();
+    });
+    el.append(button);
+  }
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (el.hidden = true), undo ? 8000 : 3500);
+}
+
 // A person's round avatar: their initial, replaced by their Google picture once it has loaded (so a picture
 // that is blocked, slow or gone leaves the initial rather than a broken image). Text only, whatever the name is.
 /** @param {HTMLElement} el @param {string} name @param {string | null | undefined} picture */
