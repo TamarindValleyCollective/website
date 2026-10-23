@@ -634,37 +634,7 @@ import SignInGate from '../../components/SignInGate.astro';
   .person-detail :global(.module-row--solo) {
     display: block;
     padding: 0;
-  }
-
-  .person-detail :global(.crit-row) {
-    display: block;
-    width: 100%;
-    min-height: 48px;
-    padding: 8px 14px;
-    border: 0;
-    background: none;
-    color: var(--tvc-error-text);
-    font: inherit;
-    font-weight: 500;
-    text-align: center;
-    cursor: pointer;
-    transition: background 120ms ease-out;
-  }
-
-  @media (hover: hover) {
-    .person-detail :global(.crit-row:hover:not(:disabled)) {
-      background: var(--tvc-error-bg);
-    }
-  }
-
-  .person-detail :global(.crit-row:disabled) {
-    cursor: not-allowed;
-    opacity: 0.5;
-  }
-
-  .person-detail :global(.crit-row:focus-visible) {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: -2px;
+    min-height: 0;
   }
 
   .person-detail :global(.detail-foot) {
@@ -1373,7 +1343,7 @@ import SignInGate from '../../components/SignInGate.astro';
     }
     const out: HTMLElement[] = [head, rows];
     if (!p.isSuperAdmin && !p.isMe) {
-      const toggle = h('button', { class: 'crit-row', text: p.active ? `Deactivate ${p.label}` : `Reactivate ${p.label}`, attrs: { type: 'button' } });
+      const toggle = h('button', { class: 'row crit-row', text: p.active ? `Deactivate ${p.label}` : `Reactivate ${p.label}`, attrs: { type: 'button' } });
       toggle.disabled = !canEdit();
       toggle.addEventListener('click', async () => {
         const was = p.active;

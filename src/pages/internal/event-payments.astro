@@ -47,28 +47,28 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
       <p id="status" class="hint" hidden></p>
 
       <div id="results" hidden>
-        <div id="mode-switch" class="mode-switch" role="group" aria-label="Which bookings to show">
+        <div id="mode-switch" class="mode-switch segmented" role="group" aria-label="Which bookings to show">
           <button type="button" class="mode-btn is-active" data-mode="live" aria-pressed="true">Live <span class="mode-count" id="mode-live-count"></span></button>
           <button type="button" class="mode-btn" data-mode="test" aria-pressed="false">Test <span class="mode-count" id="mode-test-count"></span></button>
         </div>
         <p id="test-mode-banner" class="test-mode-banner" hidden></p>
         <div class="stats" data-tour="stats">
-          <div class="stat card">
+          <div class="stat">
             <span class="stat-label">Registrations</span>
             <span class="stat-value" id="stat-bookings"></span>
             <span class="stat-sub" id="stat-attendees"></span>
           </div>
-          <div class="stat card">
+          <div class="stat">
             <span class="stat-label">Cancelled</span>
             <span class="stat-value" id="stat-cancelled"></span>
             <span class="stat-sub" id="stat-pending"></span>
           </div>
-          <div class="stat card">
+          <div class="stat">
             <span class="stat-label">Collected</span>
             <span class="stat-value" id="stat-gross"></span>
             <span class="stat-sub" id="stat-gross-sub"></span>
           </div>
-          <div class="stat card">
+          <div class="stat">
             <span class="stat-label">Net to TVC</span>
             <span class="stat-value" id="stat-net"></span>
             <span class="stat-sub" id="stat-fees"></span>
@@ -120,7 +120,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
           </dl>
 
           <h3 class="money-heading">Fees by payment method</h3>
-          <div class="table-scroll" data-tour="bookings">
+          <div class="table-scroll">
             <table class="methods-table">
               <thead>
                 <tr>
@@ -138,8 +138,22 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
           </div>
         </details>
 
+        <div class="table-scroll" data-tour="bookings">
+          <table class="bookings-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="bookings-body"></tbody>
+          </table>
+        </div>
+
         <div id="bulk-cancel-section" class="bulk-cancel" hidden>
-          <button type="button" id="bulk-cancel-open" class="button button--danger-outline button--small">Cancel event</button>
+          <ul class="list bulk-cancel-trigger"><li><button type="button" id="bulk-cancel-open" class="row crit-row">Cancel event…</button></li></ul>
           <div id="bulk-cancel-panel" class="bulk-cancel-panel card" hidden>
             <p class="bulk-cancel-warning">⚠️ This refunds every eligible booking for this event and cannot be undone. Only use this for a full-event cancellation (e.g. weather, low turnout) — not to fix a single booking.</p>
             <p id="bulk-cancel-summary" class="bulk-cancel-summary"></p>
@@ -158,20 +172,6 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
               <button type="button" id="bulk-cancel-close-btn" class="button">Cancel</button>
             </div>
           </div>
-        </div>
-
-        <div class="table-scroll">
-          <table class="bookings-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="bookings-body"></tbody>
-          </table>
         </div>
       </div>
     </div>
@@ -211,8 +211,9 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   .bulk-cancel {
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
-    margin-bottom: 12px;
+    align-items: stretch;
+    max-width: 520px;
+    margin-top: 28px;
   }
 
   /* Same display-vs-[hidden] issue as .bulk-cancel-panel below — an explicit
@@ -385,37 +386,32 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     margin-bottom: 20px;
   }
 
+  /* The event is a pop-up: a quiet fill with a chevron, like the role pop-ups on Access. */
   .event-picker select {
-    font: inherit;
-    padding: 8px 10px;
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius-sm);
-  }
-
-  .mode-switch {
-    display: inline-flex;
-    border: 1px solid var(--tvc-line);
-    border-radius: 999px;
-    overflow: hidden;
-    margin: 0 0 16px;
-  }
-
-  .mode-btn {
     appearance: none;
+    -webkit-appearance: none;
+    min-height: 36px;
+    padding: 4px 32px 4px 12px;
     border: 0;
-    background: var(--tvc-white);
+    border-radius: var(--radius-sm);
+    background: var(--tvc-cream) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23868c83' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center / 12px;
     color: var(--tvc-ink);
     font: inherit;
-    font-weight: 600;
-    font-size: var(--text-sm);
-    padding: 8px 20px;
+    font-weight: 500;
     cursor: pointer;
   }
 
-  .mode-btn.is-active {
-    background: var(--tvc-green);
-    color: var(--tvc-white);
+  .event-picker select:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
   }
+
+  .mode-switch {
+    margin: 0 0 16px;
+  }
+
+
+
 
   .mode-count {
     font-weight: 400;
@@ -446,31 +442,38 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     color: var(--tvc-orange-text);
   }
 
+  /* The headline figures share one surface, divided by hairlines. */
   .stats {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 12px;
-    margin-bottom: 24px;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    margin-bottom: 20px;
+    background: var(--tvc-white);
+    border-radius: var(--radius);
+    box-shadow: 0 0 0 1px var(--tvc-line) inset;
+    overflow: hidden;
   }
 
   .stat {
-    padding: 14px 16px;
     display: flex;
     flex-direction: column;
     gap: 2px;
+    padding: 16px 18px;
+  }
+
+  .stat + .stat {
+    border-left: 1px solid var(--tvc-line);
   }
 
   .stat-label {
-    font-size: var(--text-xs);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
   .stat-value {
-    font-size: 1.4rem;
+    font-size: 1.625rem;
     font-weight: 700;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
   }
 
   .stat-sub {
@@ -485,11 +488,9 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
 
   .money-summary {
     cursor: pointer;
-    font-size: var(--text-xs);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--tvc-ink-soft);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--tvc-green-dark);
   }
 
   .ledger {
@@ -605,6 +606,13 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     overflow-x: auto;
   }
 
+  /* The bookings sit on one grouped surface, like every other list in the admin. */
+  .table-scroll[data-tour='bookings'] {
+    background: var(--tvc-white);
+    border-radius: var(--radius);
+    box-shadow: 0 0 0 1px var(--tvc-line) inset;
+  }
+
   .bookings-table {
     width: 100%;
     border-collapse: collapse;
@@ -678,12 +686,10 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
 
   :global(#bookings-body .badge) {
     display: inline-block;
-    padding: 2px 10px;
+    padding: 1px 9px;
     border-radius: 999px;
     font-size: var(--text-xs);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
+    font-weight: 600;
   }
 
   :global(#bookings-body .badge--paid) {
@@ -697,12 +703,12 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   }
 
   :global(#bookings-body .badge--declined) {
-    background: var(--tvc-line);
+    background: var(--tvc-cream);
     color: var(--tvc-ink-soft);
   }
 
   :global(#bookings-body .badge--refunded) {
-    background: var(--tvc-line);
+    background: var(--tvc-cream);
     color: var(--tvc-ink-soft);
   }
 

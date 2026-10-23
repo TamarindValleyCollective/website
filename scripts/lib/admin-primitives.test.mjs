@@ -12,7 +12,7 @@ const pagesDir = new URL('../../src/pages/internal/', import.meta.url);
 const shell = readFileSync(new URL('../../src/layouts/StaffLayout.astro', import.meta.url), 'utf8');
 const pages = readdirSync(pagesDir).filter((f) => f.endsWith('.astro'));
 
-const SHARED = ['.card', '.hint', '.note', '.error', '.section.wrapper', '[hidden]', '.visually-hidden', '.link-button', '.button--primary', '.button--danger', '.button--danger-outline', '.button--small', '.field', '.segmented', '.list', '.row', '.pill', '.sheet', '.toast'];
+const SHARED = ['.card', '.hint', '.note', '.error', '.section.wrapper', '[hidden]', '.visually-hidden', '.link-button', '.button--primary', '.button--danger', '.button--danger-outline', '.button--small', '.field', '.segmented', '.list', '.row', '.pill', '.sheet', '.toast', '.crit-row'];
 
 // A page may add to a shared rule; this lists the only ones that do, and what they may set.
 const ADDITIONS = {
