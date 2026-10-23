@@ -1105,7 +1105,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   // sign-in as /internal, /internal/access and /internal/security (see
   // scripts/lib/staff-client.mjs), so signing in once opens them all. Each tool
   // still checks its own role on the server for every request.
-  import { TOKEN_KEY as STORAGE_KEY } from '../../../scripts/lib/staff-client.mjs';
+  import { TOKEN_KEY as STORAGE_KEY, showToast } from '../../../scripts/lib/staff-client.mjs';
   // This inbox is signed into from one shared Google account used by several
   // admins, so the ID token's own name claim can't tell them apart — each
   // person types their own name once, remembered on that browser (localStorage,
@@ -2112,66 +2112,83 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   }
 
   // Admins opt a number out of (or back into) the booking confirmations, reminders
-  // and refund notices we send by WhatsApp — the same list a STOP reply writes
-  // to. Nothing is sent to the guest. Resuming asks first: it is only right when
-  // the guest themselves asked for the messages back.
-  optOutBtn.addEventListener('click', async () => {
-    if (!selectedConversationId || !selectedConversation) return;
-    const nextOptedOut = !selectedConversation.optedOut;
-    if (!nextOptedOut && !confirm(`Turn WhatsApp booking messages back on for ${selectedConversation.label}? Only do this if they asked for them.`)) return;
-    if (nextOptedOut && !confirm(`Stop WhatsApp booking messages (confirmations, reminders, refund notices) to ${selectedConversation.label}? They will still get emails.`)) return;
-
+  // and refund notices we send by WhatsApp: the same list a STOP reply writes
+  // to. Nothing is sent to the guest. Stopping happens at once with an Undo, since it
+  // can be reversed; resuming asks first, because it is only right when the guest
+  // themselves asked for the messages back.
+  async function setOptedOut(conversationId: string, optedOut: boolean): Promise<boolean> {
     optOutBtn.disabled = true;
     try {
       const res = await authedFetch('/api/whatsapp-admin/opt-out', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ conversationId: selectedConversationId, optedOut: nextOptedOut }),
+        body: JSON.stringify({ conversationId, optedOut }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        alert(data.error || 'Failed to update — try again.');
-        return;
+        showToast(data.error || 'Could not update that. Try again.');
+        return false;
       }
-      selectedConversation.optedOut = nextOptedOut;
-      updateOptOutBtn(nextOptedOut);
+      if (selectedConversation && selectedConversationId === conversationId) {
+        selectedConversation.optedOut = optedOut;
+        updateOptOutBtn(optedOut);
+      }
       loadConversations();
+      return true;
     } catch {
-      // handled by authedFetch
+      return false; // handled by authedFetch
     } finally {
       optOutBtn.disabled = false;
     }
-  });
+  }
 
-  blockBtn.addEventListener('click', async () => {
+  optOutBtn.addEventListener('click', async () => {
     if (!selectedConversationId || !selectedConversation) return;
-    const nextBlocked = !selectedConversation.isBlocked;
-    // Blocking silences a real customer with no way to reach us short of a
-    // new number — worth a confirm; unblocking is reversible, so it isn't.
-    if (nextBlocked && !confirm(`Block ${selectedConversation.label}? They won't be able to message this number until unblocked.`)) {
+    const id = selectedConversationId;
+    const label = selectedConversation.label;
+    const nextOptedOut = !selectedConversation.optedOut;
+    if (!nextOptedOut) {
+      if (!confirm(`Turn WhatsApp booking messages back on for ${label}? Only do this if they asked for them.`)) return;
+      await setOptedOut(id, false);
       return;
     }
+    if (await setOptedOut(id, true)) showToast(`Booking messages to ${label} stopped. They still get emails.`, () => void setOptedOut(id, false));
+  });
 
+  // Blocking is reversible, so it happens at once with an Undo, like unblocking.
+  async function setBlocked(conversationId: string, blocked: boolean): Promise<boolean> {
     blockBtn.disabled = true;
     try {
       const res = await authedFetch('/api/whatsapp-admin/block', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ conversationId: selectedConversationId, blocked: nextBlocked }),
+        body: JSON.stringify({ conversationId, blocked }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        alert(data.error || 'Failed to update block status — try again.');
-        return;
+        showToast(data.error || 'Could not update that. Try again.');
+        return false;
       }
-      selectedConversation.isBlocked = nextBlocked;
-      updateBlockBtn(nextBlocked);
+      if (selectedConversation && selectedConversationId === conversationId) {
+        selectedConversation.isBlocked = blocked;
+        updateBlockBtn(blocked);
+      }
       loadConversations();
+      return true;
     } catch {
-      // handled by authedFetch
+      return false; // handled by authedFetch
     } finally {
       blockBtn.disabled = false;
     }
+  }
+
+  blockBtn.addEventListener('click', async () => {
+    if (!selectedConversationId || !selectedConversation) return;
+    const id = selectedConversationId;
+    const label = selectedConversation.label;
+    const nextBlocked = !selectedConversation.isBlocked;
+    if (!(await setBlocked(id, nextBlocked))) return;
+    showToast(nextBlocked ? `${label} blocked.` : `${label} unblocked.`, () => void setBlocked(id, !nextBlocked));
   });
 
   loadMoreBtn.addEventListener('click', () => {
