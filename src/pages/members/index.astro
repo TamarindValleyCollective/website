@@ -51,10 +51,6 @@ import SignInGate from '../../components/SignInGate.astro';
           <button type="button" class="collapse" id="collapse" aria-label="Collapse the menu" title="Collapse the menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
         </div>
         <nav id="nav" aria-label="Member portal"></nav>
-        <div class="side-foot">
-          <a class="nav-item" href="mailto:core-team@tvc.farm"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg><span class="nav-label">Contact the core team</span></a>
-          <button type="button" class="nav-item" id="signout-side"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5v16h5M15 8l4 4-4 4M19 12H9"/></svg><span class="nav-label">Sign out</span></button>
-        </div>
       </aside>
       <div class="scrim" id="scrim"></div>
 
@@ -224,12 +220,6 @@ import SignInGate from '../../components/SignInGate.astro';
 
   #nav {
     padding: 4px 10px;
-  }
-
-  .side-foot {
-    margin-top: auto;
-    padding: 12px 10px;
-    border-top: 1px solid var(--tvc-line);
   }
 
   .scrim {
@@ -755,23 +745,231 @@ import SignInGate from '../../components/SignInGate.astro';
     transform: scale(0.97);
   }
 
-  .kpis {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 14px;
-    margin: 16px 0 22px;
+  /* ---- My unit: Land (a card each for farm land and house plot), then People (one grouped list) ---- */
+  .lede + .group-head {
+    margin-top: 18px;
   }
 
-  .kpi {
-    padding: 14px 16px;
+  .land {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
+
+  .unit-card {
+    overflow: hidden;
     background: var(--tvc-white);
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
   }
 
-  .kpi .k {
-    font-size: var(--text-xs);
+  .unit-card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 18px 0;
+  }
+
+  .unit-card-head h2 {
+    margin: 0;
+    font-family: var(--font-body);
+    font-size: var(--text-lg);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  /* The code that names a card (farm unit, house number): a small quiet pill beside the title. */
+  .code-pill {
+    padding: 1px 9px;
+    border-radius: 999px;
+    background: var(--tvc-cream);
     color: var(--tvc-ink-soft);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .code-pill--end {
+    margin-left: auto;
+  }
+
+  /* One plain figure for the land (the admin h1's size and tracking), with the other unit under it. */
+  .land-figure {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 10px;
+    padding: 6px 18px 14px;
+  }
+
+  .land-figure b {
+    font-size: 1.875rem;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.022em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .land-figure span {
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  .unit-card-empty {
+    margin: 0;
+    padding: 0 18px 16px;
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  /* The survey table runs edge to edge in the card, a hairline between rows. */
+  .unit-card .table-wrap th,
+  .unit-card .table-wrap td {
+    padding: 11px 18px;
+    border-top: 1px solid var(--tvc-line);
+    border-bottom: 0;
+    vertical-align: middle;
+  }
+
+  .unit-card .table-wrap th {
+    padding-block: 8px;
+  }
+
+  .unit-card .table-wrap th.r:last-child,
+  .unit-card .table-wrap td.r:last-child {
+    text-align: left;
+  }
+
+  /* Verified is a tick with its word; anything not yet verified is a pill that says so. */
+  .st {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-sm);
+    white-space: nowrap;
+  }
+
+  .st svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: var(--tvc-green-dark);
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .st-pill {
+    display: inline-flex;
+    padding: 1px 9px;
+    border-radius: 999px;
+    background: var(--tvc-cream);
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .st-pill--ok {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+  }
+
+  .st-pill--warn {
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+  }
+
+  /* A labelled row at the foot of a card (Documents) or the end of the people list (Add a family member). */
+  .card-row {
+    min-height: 48px;
+    padding-inline: 18px;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .card-row > svg:not(.chev) {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: var(--tvc-green-dark);
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .card-row .meta {
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  .action-row {
+    color: var(--tvc-green-dark);
+    font-weight: 600;
+  }
+
+  /* People: one grouped list, a small label per group; each person a row with a visible sign-in state. */
+  .sub-label {
+    padding: 14px 18px 6px;
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-xs);
+    font-weight: 600;
+  }
+
+  main .list > .sub-label + li::before {
+    display: none;
+  }
+
+  .person-row {
+    min-height: 64px;
+    padding-inline: 18px;
+    gap: 14px;
+  }
+
+  .person-row .avatar {
+    flex: none;
+    width: 40px;
+    height: 40px;
+  }
+
+  .person-row .detail {
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 560px) {
+    /* The survey table has to fit a phone's card without sideways scrolling: tighter cells, and the status wraps. */
+    .unit-card .table-wrap th,
+    .unit-card .table-wrap td {
+      padding-inline: 8px;
+    }
+
+    .unit-card .table-wrap th:first-child,
+    .unit-card .table-wrap td:first-child {
+      padding-left: 14px;
+    }
+
+    .unit-card .table-wrap th:last-child,
+    .unit-card .table-wrap td:last-child {
+      padding-right: 14px;
+    }
+
+    .unit-card .st-pill {
+      white-space: normal;
+    }
+
+    .person-row {
+      padding-inline: 14px;
+    }
+
+    .person-row .detail .sep {
+      display: none;
+    }
+
+    .person-row .detail .tel {
+      display: block;
+    }
   }
 
   /* Land areas in a table: Inter's own equal-width digits, right-aligned, so the decimal points line up down the column. */
@@ -782,22 +980,6 @@ import SignInGate from '../../components/SignInGate.astro';
   /* Equal-width digits for the tables (Inter has them; the Fraunces figures are never stacked in a column). */
   .table-wrap table {
     font-variant-numeric: tabular-nums;
-  }
-
-  .kpi .v {
-    margin-top: 6px;
-    font-family: var(--font-display);
-    font-size: var(--text-2xl);
-    font-weight: 600;
-    color: var(--tvc-green-dark);
-  }
-
-  .unit-cols {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-    margin-top: 16px;
-    align-items: start;
   }
 
   /* The code that names a card (farm unit, house number): a clean round badge at the right of the heading. A hairline
@@ -848,10 +1030,6 @@ import SignInGate from '../../components/SignInGate.astro';
     opacity: 0.7;
   }
 
-  .unit-head {
-    gap: 16px;
-  }
-
   .pill {
     margin: -4px 0 -4px auto; /* don't make the row taller than its heading */
     padding: 2px 10px;
@@ -886,13 +1064,6 @@ import SignInGate from '../../components/SignInGate.astro';
   .doc-sum {
     flex-basis: 100%;
     color: var(--tvc-ink-soft);
-  }
-
-  /* Under a Farm / House card: one small edit button, which opens the menu of document actions. */
-  .card-docs {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 14px;
   }
 
   .link-btn {
@@ -977,48 +1148,6 @@ import SignInGate from '../../components/SignInGate.astro';
     font-weight: 600;
     text-decoration: underline;
     cursor: pointer;
-  }
-
-  /* Verified / awaiting / not verified: an icon, with the words for screen readers and on hover. */
-  .vmark {
-    display: inline-flex;
-    vertical-align: middle;
-  }
-
-  .vmark svg {
-    width: 20px;
-    height: 20px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-  .vmark--verified {
-    color: var(--tvc-green);
-  }
-
-  .vmark--pending_review {
-    color: var(--tvc-orange-text);
-  }
-
-  .vmark--unverified {
-    color: var(--tvc-ink-soft);
-  }
-
-  .vmark .vtext {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-  }
-
-  .unit-cols .kpis {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    margin: 12px 0 16px;
   }
 
   .shell table {
@@ -1616,12 +1745,8 @@ import SignInGate from '../../components/SignInGate.astro';
 
     .widgets,
     .split,
-    .unit-cols {
+    .land {
       grid-template-columns: 1fr;
-    }
-
-    .kpis {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
 
@@ -2236,7 +2361,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   /* The directory is a grouped list (the admin portal's .list and .row): one line per unit, scannable. */
-  .dir-group {
+  .group-head {
     margin: 22px 0 8px;
     font-family: var(--font-body);
     font-size: var(--text-sm);
@@ -2244,7 +2369,7 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
-  .dir-group:first-child {
+  .group-head:first-child {
     margin-top: 4px;
   }
 
@@ -2536,11 +2661,6 @@ import SignInGate from '../../components/SignInGate.astro';
     display: grid;
     gap: 8px;
     margin-bottom: 8px;
-  }
-
-  .dir-edit--sm {
-    width: 28px;
-    height: 28px;
   }
 
   .avatar {
@@ -2904,15 +3024,14 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   // equal-width digits so they line up down the column.
   const area = (v: number | null, fmt: Intl.NumberFormat): HTMLElement | null => (v == null ? null : h('span', 'num', undefined, fmt.format(v)));
   const VERIFICATION: Record<string, string> = { verified: 'Verified', pending_review: 'Awaiting core team', unverified: 'Not yet verified' };
-  // Tick in a circle / clock / empty circle; the words stay for screen readers and the hover title.
-  const VMARK: Record<string, string> = {
-    verified: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/>',
-    pending_review: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/>',
-    unverified: '<circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/>',
-  };
+  // Verified is a tick with its word. Anything else is a pill that says what is missing, so no state
+  // depends on hovering an icon.
+  const VERIFIED_ICON = '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/>';
   function verifiedMark(v: string): HTMLElement {
     const key = VERIFICATION[v] ? v : 'unverified';
-    const el = h('span', `vmark vmark--${key}`, undefined, icon(VMARK[key]), h('span', 'vtext', VERIFICATION[key]));
+    const el = key === 'verified'
+      ? h('span', 'st', undefined, icon(VERIFIED_ICON), VERIFICATION.verified)
+      : h('span', `st-pill${key === 'pending_review' ? ' st-pill--warn' : ''}`, VERIFICATION[key]);
     el.title = VERIFICATION[key];
     return el;
   }
@@ -3195,7 +3314,6 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     if (opts.tour) section.setAttribute('data-tour', opts.tour);
     return section;
   };
-  const kpi = (k: string, v: string) => h('div', 'kpi', undefined, h('div', 'k', k), h('div', 'v', v));
   const tableOf = (headers: string[], rows: (string | number | null | HTMLElement)[][], rightFrom = -1): HTMLElement =>
     h('div', 'table-wrap', undefined, h('table', '', undefined,
       h('thead', '', undefined, h('tr', '', undefined, ...headers.map((t, i) => h('th', rightFrom >= 0 && i >= rightFrom ? 'r' : '', t)))),
@@ -3469,21 +3587,29 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   // the documents for that kind of land (upload one, add an FMB sketch, see what has been uploaded). The list
   // itself is in its own popup, not on the page.
   function landCardFooter(hh: Hh, landType: 'farm' | 'house'): HTMLElement {
-    const label = landType === 'farm' ? 'farm land' : 'house plot';
-    const edit = h('button', 'dir-edit dir-edit--sm', undefined, icon(IC.pen));
-    edit.setAttribute('type', 'button');
-    edit.setAttribute('aria-label', `Documents for your ${label}`);
-    edit.title = `Documents for your ${label}`;
-    edit.setAttribute('data-tour', 'land-docs');
-    edit.addEventListener('click', () => docsMenuDialog(hh, landType));
-    const footer = h('div', 'card-docs', undefined, edit);
-    // While this card is on the page it keeps the re-reading going after an upload (refreshDocs only polls while
-    // something is listening), so verified badges appear without a reload; it stops listening once the card is gone.
-    const alive = () => { if (!footer.isConnected) docsListeners.delete(alive); };
+    const chev = icon('<path d="M9 6l6 6-6 6"/>');
+    chev.setAttribute('class', 'chev');
+    const meta = h('span', 'meta');
+    const row = h('button', 'row card-row', undefined, icon('<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 13h5M10 17h5"/>'), h('span', 'grow', 'Documents'), meta, chev);
+    row.setAttribute('type', 'button');
+    row.setAttribute('data-tour', 'land-docs');
+    row.addEventListener('click', () => docsMenuDialog(hh, landType));
+    // How many are uploaded, once they have been read; blank until then rather than a wrong "None yet".
+    const paint = () => {
+      const n = docsOfType(landType).length;
+      meta.textContent = docsState.householdId === hh.id && docsState.loaded ? (n ? `${n} uploaded` : 'None yet') : '';
+    };
+    // While this row is on the page it keeps the re-reading going after an upload (refreshDocs only polls while
+    // something is listening), so verified badges appear without a reload; it stops listening once the row is gone.
+    const alive = () => {
+      if (!row.isConnected) docsListeners.delete(alive);
+      else paint();
+    };
     docsListeners.add(alive);
-    // The documents are read once so the menu can show how many there are.
+    paint();
+    // The documents are read once so the count can show.
     if (!(docsState.householdId === hh.id && docsState.loaded)) void refreshDocs(hh);
-    return footer;
+    return row;
   }
 
   function docsMenuDialog(hh: Hh, landType: 'farm' | 'house') {
@@ -3977,63 +4103,96 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const root = h('div');
     root.append(
       h('h1', 'page-title', 'My unit'),
-      h('p', 'lede', 'Your unit is your farm land and, if you have one, your house plot. The circle on each card is its farm unit or its house number.'));
-    const panel = (title: string, body: Kid, iconPaths?: string) => {
-      const p = h('section', 'panel', undefined, h('h2', '', undefined, iconPaths ? h('span', 'glyph', undefined, icon(iconPaths)) : null, title), body);
-      p.style.marginTop = '16px';
-      return p;
+      h('p', 'lede', 'Your farm land and house plot, and the people who share them.'),
+      h('h2', 'group-head', 'Land'));
+
+    // One card per kind of land: what it is (with its code), one figure, the survey table, and a Documents row.
+    const landCard = (o: { title: string; codes: HTMLElement[]; figure: string; other?: string; table: HTMLElement | null; empty: string; footer: HTMLElement | null }) =>
+      h('section', 'unit-card', undefined,
+        h('div', 'unit-card-head', undefined, h('h2', '', o.title), ...o.codes),
+        h('div', 'land-figure', undefined, h('b', '', o.figure), o.other ? h('span', '', o.other) : null),
+        o.table ?? h('p', 'unit-card-empty', o.empty),
+        o.footer);
+    const codePill = (text: string, title: string, end = false) => {
+      const el = h('span', `code-pill${end ? ' code-pill--end' : ''}`, text);
+      el.title = title;
+      return el;
     };
-    const cols = h('div', 'unit-cols');
-    cols.append(
-      h('section', 'panel', undefined, h('h2', 'unit-head', undefined, scene('farm', 'Farm'), farmPills(hh)),
-        h('div', 'kpis', undefined, kpi('Farm Area (Acres)', hh.plots.length ? acresFmt.format(hh.farmAcres) : '—'), kpi('Surveys', String(hh.plots.length))),
-        hh.plots.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Acres', 'Status'], [...hh.plots].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaAcres, acresFmt), verifiedMark(p.verification)]), 2)) : h('p', 'lede', 'Patta details not available yet'),
-        isFamily() ? null : landCardFooter(hh, 'farm')),
-      h('section', 'panel', undefined, h('h2', 'unit-head', undefined, scene('house', 'House'), housePills(hh)),
-        h('div', 'kpis', undefined, kpi('House Plot (Sq.ft.)', hh.houseSqFt > 0 ? sqftFmt.format(hh.houseSqFt) : '—'), kpi('Surveys', String(hh.housePattas.length))),
-        hh.housePattas.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Sq ft', 'Status'], [...hh.housePattas].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaSqFt, sqftFmt), verifiedMark(p.verification)]), 2)) : h('p', 'lede', hh.houseNo ? 'Patta details not available yet' : 'No house allocated yet'),
-        hh.houseNo && !isFamily() ? landCardFooter(hh, 'house') : null),
+    const kind = baseUnitType(hh.unitType);
+    const beds = bedroomsOf(hh.unitType);
+    const housingBits = [hh.cluster ? `Cluster ${hh.cluster}` : null, beds, kind].filter(Boolean).join(' · ');
+    const land = h('div', 'land');
+    land.append(
+      landCard({
+        title: 'Farm land',
+        codes: [codePill(hh.farmUnit, 'Farm unit')],
+        figure: hh.plots.length ? `${acresFmt.format(hh.farmAcres)} acres` : '—',
+        other: hh.plots.length ? `${acresFmt.format(hh.farmHectares)} hectares` : undefined,
+        table: hh.plots.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Acres', 'Status'], [...hh.plots].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaAcres, acresFmt), verifiedMark(p.verification)]), 2)) : null,
+        empty: 'Patta details not available yet',
+        footer: isFamily() ? null : landCardFooter(hh, 'farm'),
+      }),
+      landCard({
+        title: 'House plot',
+        codes: [...(hh.houseNo ? [codePill(hh.houseNo, 'House number')] : []), ...(housingBits ? [codePill(housingBits, 'Cluster and unit type', true)] : [])],
+        figure: hh.houseSqFt > 0 ? `${sqftFmt.format(hh.houseSqFt)} sq ft` : '—',
+        table: hh.housePattas.length ? mergePattaRuns(tableOf(['Patta no.', 'Survey no.', 'Sq ft', 'Status'], [...hh.housePattas].sort(byPatta).map((p) => [docLink(p.pattaNo ?? '', p.pattaDocumentId) || null, surveyCell(p.surveyNo, p.surveyDocumentId, p.sourceDocumentId), area(p.areaSqFt, sqftFmt), verifiedMark(p.verification)]), 2)) : null,
+        empty: hh.houseNo ? 'Patta details not available yet' : 'No house allocated yet',
+        footer: hh.houseNo && !isFamily() ? landCardFooter(hh, 'house') : null,
+      }),
     );
-    root.append(cols);
-    // Owners in one panel and family members in another, side by side (stacked on a phone), each person as a
-    // picture, name and masked contact lines. Owners also get an edit button on each family member, and a way to add one.
+    root.append(land, h('h2', 'group-head', 'People'));
+
+    // People: one grouped list. Each person is a row: their picture or initial, name, contact (masked for
+    // everyone but you), and where they stand with signing in, in words. Owners can open a family member to edit them.
     const owner = isOwner();
-    const personRow = (p: Person) => {
+    // A picture on file means they have signed in. No picture could be either "not yet" or a Google account without one,
+    // so the label for a person who can sign in is "Invited", not a claim that they never have.
+    const signIn = (p: Person): [string, string, string] =>
+      p.picture ? ['Signed in', ' st-pill--ok', 'Has signed in to the portal'] : p.canLogin ? ['Invited', '', 'Can sign in with Google; no sign-in seen yet'] : ['No sign-in', '', 'Cannot sign in to the portal'];
+    const personRow = (p: Person): HTMLElement => {
       const c = contact(p, person);
-      const who = h('div', 'who2', undefined, h('strong', '', `${p.name}${p.id === person.id ? ' (you)' : ''}`), h('span', 'contact', c.email ?? 'No email'), h('span', 'contact', c.phone ?? 'No mobile'));
-      const li = h('li', '', undefined, personFace(p), who);
+      const [word, tone, why] = signIn(p);
+      const state = h('span', `st-pill${tone}`, word);
+      state.title = why;
+      const body = [
+        personFace(p),
+        h('span', 'grow', undefined, h('span', 'title', `${p.name}${p.id === person.id ? ' (you)' : ''}`),
+          h('span', 'detail', undefined, c.email ?? 'No email', h('span', 'sep', ' · '), h('span', 'tel', c.phone ?? 'No mobile'))),
+        state,
+      ];
       if (owner && p.role === 'family') {
-        const edit = h('button', 'dir-edit dir-edit--sm', undefined, icon(IC.pen));
-        edit.setAttribute('type', 'button');
-        edit.setAttribute('aria-label', `Edit ${p.name}`);
-        edit.title = `Edit ${p.name}`;
-        edit.addEventListener('click', () => editFamilyDialog(p));
-        li.append(edit);
+        const chev = icon('<path d="M9 6l6 6-6 6"/>');
+        chev.setAttribute('class', 'chev');
+        const b = h('button', 'row person-row', undefined, ...body, chev);
+        b.setAttribute('type', 'button');
+        b.setAttribute('aria-label', `Edit ${p.name}`);
+        b.addEventListener('click', () => editFamilyDialog(p));
+        return h('li', '', undefined, b);
       }
-      return li;
+      return h('li', '', undefined, h('div', 'row person-row', undefined, ...body));
     };
-    const listOf = (people: Person[]) => h('ul', 'people', undefined, ...people.map(personRow));
     const owners = hh.people.filter((p) => p.role === 'owner');
     const others = hh.people.filter((p) => p.role === 'non_owner');
     const family = hh.people.filter((p) => p.role === 'family');
     const familyLogins = family.filter((p) => p.canLogin).length;
-    const add = h('button', 'btn', familyLogins >= FAMILY_LOGINS ? 'Request another family member' : 'Add a family member');
+    const requestMore = familyLogins >= FAMILY_LOGINS;
+    const add = h('button', 'row card-row action-row', undefined, icon('<path d="M12 5v14M5 12h14"/>'), h('span', 'grow', requestMore ? 'Request another family member' : 'Add a family member'));
     add.setAttribute('type', 'button');
     add.setAttribute('data-tour', 'add-family');
-    add.addEventListener('click', () => addFamilyDialog(familyLogins >= FAMILY_LOGINS));
-    const peopleCols = h('div', 'unit-cols');
-    peopleCols.append(h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.people)), 'Owners'),
-      owners.length ? listOf(owners) : h('p', 'lede', 'No owners on record yet'),
-      others.length ? h('h3', 'role-head', 'Not owners') : null,
-      others.length ? listOf(others) : null));
+    add.addEventListener('click', () => addFamilyDialog(requestMore));
+    const label = (text: string) => h('li', 'sub-label', text);
+    const items: HTMLElement[] = [label('Owners'), ...(owners.length ? owners.map(personRow) : [h('li', 'sub-label', 'No owners on record yet')])];
+    if (others.length) items.push(label('Not owners'), ...others.map(personRow));
     if (owner || family.length) {
-      peopleCols.append(h('section', 'panel', undefined, h('h2', '', undefined, h('span', 'glyph', undefined, icon(IC.people)), 'Family'),
-        family.length ? listOf(family) : h('p', 'lede', 'No family members added yet.'),
-        owner && me!.familyRequestsPending > 0 ? h('p', 'story-hint', `${me!.familyRequestsPending === 1 ? '1 request is' : `${me!.familyRequestsPending} requests are`} waiting for the core team.`) : null,
-        owner ? h('p', 'story-hint', `They sign in with Google to see your unit and, soon, book stays. They cannot edit your story, land documents or who is in your unit. Up to ${FAMILY_LOGINS} without approval.`) : null,
-        owner ? add : null));
+      items.push(label('Family'), ...(family.length ? family.map(personRow) : [h('li', 'unit-card-empty', 'No family members added yet.')]));
+      if (owner) items.push(h('li', '', undefined, add));
     }
-    root.append(peopleCols, h('p', 'story-hint', 'A picture means they have signed in to the portal. A letter means they have not yet, or their Google account has no picture.'));
+    root.append(h('ul', 'list', undefined, ...items));
+    const notes: HTMLElement[] = [];
+    if (owner && me!.familyRequestsPending > 0) notes.push(h('p', 'story-hint', `${me!.familyRequestsPending === 1 ? '1 request is' : `${me!.familyRequestsPending} requests are`} waiting for the core team.`));
+    if (owner) notes.push(h('p', 'story-hint', `Family members sign in with Google to see your unit and, soon, book stays. They cannot edit your story, land documents or who is in your unit. ${FAMILY_LOGINS} are included; more need core team approval.`));
+    root.append(...notes);
     return root;
   }
 
@@ -5040,9 +5199,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const listOf = (hs: DirHousehold[]) => (mode === 'cards' ? h('div', 'dir-grid', undefined, ...hs.map(unitCard)) : h('ul', 'list', undefined, ...hs.map(unitRow)));
       results.replaceChildren(shown.length
         ? h('div', '', undefined,
-            mineHh.length ? h('h2', 'dir-group', 'Your unit') : null,
+            mineHh.length ? h('h2', 'group-head', 'Your unit') : null,
             mineHh.length ? listOf(mineHh) : null,
-            rest.length && mineHh.length ? h('h2', 'dir-group', 'Everyone') : null,
+            rest.length && mineHh.length ? h('h2', 'group-head', 'Everyone') : null,
             rest.length ? listOf(rest) : null)
         : h('div', 'dir-empty', undefined, h('p', 'lede', 'No one matches that.'), clear));
     }
@@ -5288,7 +5447,6 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   side.addEventListener('pointercancel', endSwipe);
   $('menu').addEventListener('click', () => setMenu(!shell.classList.contains('open')));
   $('scrim').addEventListener('click', () => setMenu(false, true));
-  $('signout-side').addEventListener('click', signOut);
   $('boot-retry').addEventListener('click', () => void load());
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
