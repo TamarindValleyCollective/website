@@ -9,8 +9,17 @@
 // Nothing here is a security boundary: the server re-checks the Google token
 // and the step-up token on every request. This only stores them for the tab
 // and attaches them.
+import { installStaffDemo } from '../../src/lib/staff-demo';
+
 export const TOKEN_KEY = 'tvc-staff-idtoken';
 export const STEPUP_KEY = 'tvc-staff-stepup';
+
+// `astro dev` only: /internal/?demo fakes the sign-in and /api/staff-me (see src/lib/staff-demo.ts).
+// import.meta.env.DEV is false in a production build, so the demo module is dropped from what ships.
+// It runs here, at import time, so it is in place before any page script reads the token.
+if (import.meta.env?.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('demo')) {
+  installStaffDemo(TOKEN_KEY, new URLSearchParams(location.search).get('demo') || 'admin');
+}
 
 // A response code that means "signed in, but something more is needed" — as
 // opposed to a plain 403, which means "this account isn't allowed here".

@@ -697,6 +697,13 @@ outside both the local machine and Netlify (the member-update-email workflow).
   once: an authenticator app (TOTP, RFC 6238 — checked against the RFC's published vectors) and
   ten single-use recovery codes, and **passkeys** (WebAuthn: Face ID, Touch ID or a security key;
   **Admin host**: the admin tools are served from **`admin.tvc.farm`**, a domain alias on the same Netlify project (proxied Cloudflare CNAME to `tvc-farm.netlify.app`), like `members.tvc.farm`. `netlify.toml` rules that match only that host show `/internal/` at `/`, serve each admin page without the `/internal` prefix (`admin.tvc.farm/usage/` is a rewrite to `/internal/usage/`; `StaffLayout.astro` shortens in-page links on that host only), pass through the assets and the admin functions (`/api/*-admin`, `staff-mfa`, `staff-me`, `photo-pool`, `whatsapp-suggest`), and send everything else back to the admin home; `/internal/*` on that host, `tvc.farm`, `www.tvc.farm` and `members.tvc.farm` redirect (302) to the short form. Passkeys are bound to `admin.tvc.farm` (`relyingParty()` in `lib/staff-webauthn.ts`, plus `localhost` for dev), so they only work there; alert emails link to it. See `DOMAINS.md`.
+  **Admin portal name, tour and local demo**: the shell is titled "Admin Portal" (`StaffLayout.astro`). The Home page runs a
+  guided tour like the member portal's: steps and who sees which in `scripts/lib/staff-tour.mjs` (tested), the spotlight and
+  "What's new" card in `scripts/lib/staff-tour-ui.mjs`, global styles in `StaffLayout.astro`. A first visit starts the tour; a
+  returning admin sees only steps added since; "Take the tour" replays it. What each account has seen is kept in that browser's
+  `localStorage` (no database column, so a new browser repeats it). Locally, `astro dev` then `/internal/?demo` (or `?demo=limited`)
+  fakes the sign-in and `/api/staff-me` (`src/lib/staff-demo.ts`, called from `scripts/lib/staff-client.mjs` behind
+  `import.meta.env.DEV`, so production builds drop it); `?tour` replays the tour without recording.
   `lib/staff-webauthn.ts` wraps `@simplewebauthn/server`). A passkey is stored as a `passkey` row in
   `staff_mfa_factors` (public key and counter in `credential`, never a private key) and is bound to
   the site: the relying-party id is `tvc.farm` and only `https://tvc.farm`, `https://www.tvc.farm`
