@@ -40,7 +40,7 @@ const adminItems = [
 ] as const;
 ---
 
-<html lang="en">
+<html lang="en" data-page={current}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -67,19 +67,16 @@ const adminItems = [
   <body>
     <a class="skip-link" href="#staff-main">Skip to content</a>
     <div class="shell">
-      <header class="topbar">
-        <button type="button" id="menu-open" class="icon-button" aria-label="Open the menu" aria-controls="staff-sidebar" aria-expanded="false">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
-            <path d="M4 6h16M4 12h16M4 18h16"></path>
-          </svg>
-        </button>
-        <span class="topbar-title">Admin Portal</span>
-      </header>
 
       <aside class="sidebar" id="staff-sidebar" aria-label="Admin portal">
         <div class="brand">
           <img src="/images/brand/tvc-logo-mark.svg" width="30" height="30" alt="" />
           <span class="label brand-name">Admin Portal</span>
+          <button type="button" id="collapse" data-tour="collapse" class="collapse-button" aria-label="Collapse the menu" aria-pressed="false" title="Collapse the menu">
+            <svg class="collapse-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <path d="M15 6l-6 6 6 6"></path>
+            </svg>
+          </button>
           <button type="button" id="menu-close" class="icon-button menu-close" aria-label="Close the menu">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
               <path d="M6 6l12 12M18 6L6 18"></path>
@@ -124,30 +121,32 @@ const adminItems = [
           </div>
         </nav>
 
-        <div class="account" data-tour="account">
-          <p class="account-name label" id="staff-name" hidden></p>
-          <p class="account-email label" id="staff-email" hidden></p>
-          <button type="button" id="sign-out" class="account-button" title="Sign out" hidden>
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-              <path d="M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4"></path>
-              <path d="M16 8l4 4-4 4M20 12H9"></path>
-            </svg>
-            <span class="label">Sign out</span>
-          </button>
-          <button type="button" id="collapse" data-tour="collapse" class="account-button collapse-button" aria-label="Collapse the menu" aria-pressed="false" title="Collapse the menu">
-            <svg class="collapse-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-              <path d="M15 6l-6 6 6 6"></path>
-            </svg>
-            <span class="label">Collapse</span>
-          </button>
-        </div>
       </aside>
 
       <div class="scrim" id="scrim" hidden></div>
 
-      <main id="staff-main" data-width={width}>
-        <slot />
-      </main>
+      <div class="col">
+        <header class="topbar">
+          <button type="button" id="menu-open" class="icon-button" aria-label="Open the menu" aria-controls="staff-sidebar" aria-expanded="false">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
+              <path d="M4 6h16M4 12h16M4 18h16"></path>
+            </svg>
+          </button>
+          <span class="topbar-title">Admin Portal</span>
+          <div class="who-wrap" id="who-wrap" data-tour="account" hidden>
+            <button type="button" class="who" id="who" aria-haspopup="true" aria-expanded="false" aria-controls="who-menu">
+              <span class="avatar" id="avatar" aria-hidden="true"></span>
+              <span class="who-text"><strong id="who-name"></strong><small id="who-role"></small></span>
+              <svg class="caret" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 10l5 5 5-5"></path></svg>
+            </button>
+            <div class="who-menu" id="who-menu" hidden></div>
+          </div>
+        </header>
+
+        <main id="staff-main" data-width={width}>
+          <slot />
+        </main>
+      </div>
     </div>
   </body>
 </html>
@@ -155,7 +154,8 @@ const adminItems = [
 <style>
   :global(body) {
     margin: 0;
-    background: var(--tvc-cream);
+    background: var(--tvc-stone);
+    color: var(--tvc-ink);
   }
 
   .skip-link {
@@ -180,9 +180,18 @@ const adminItems = [
     min-height: 100vh;
   }
 
-  #staff-main {
+  .col {
     min-width: 0; /* lets wide tables and the calendar scroll instead of stretching the page */
-    background: var(--tvc-cream);
+  }
+
+  #staff-main {
+    min-width: 0;
+  }
+
+  /* The pages wrap themselves in the public site's .section, which paints cream. Here the stone
+     backdrop (like the member portal's) should run behind them, with the cards standing out in white. */
+  #staff-main :global(.section) {
+    background: transparent;
   }
 
   /* The pages wrap their content in the public site's .wrapper, a 1120px
@@ -278,6 +287,21 @@ const adminItems = [
     flex: none;
   }
 
+  .collapse-button {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 26px;
+    height: 26px;
+    margin-left: auto;
+    padding: 0;
+    border: 1px solid var(--tvc-line);
+    border-radius: 50%;
+    background: var(--tvc-white);
+    color: var(--tvc-green-dark);
+    cursor: pointer;
+  }
+
   .brand-name {
     font-family: var(--font-wordmark);
     font-weight: 700;
@@ -299,7 +323,8 @@ const adminItems = [
 
   .menu li[hidden],
   .menu div[hidden],
-  .account [hidden] {
+  .who-wrap[hidden],
+  .who-menu[hidden] {
     display: none;
   }
 
@@ -314,8 +339,7 @@ const adminItems = [
     white-space: nowrap;
   }
 
-  .menu a,
-  .account-button {
+  .menu a {
     position: relative;
     display: flex;
     align-items: center;
@@ -335,25 +359,26 @@ const adminItems = [
     white-space: nowrap;
   }
 
-  .menu a svg,
-  .account-button svg {
+  .menu a svg {
     flex: none;
   }
 
-  .menu a .label,
-  .account-button .label {
+  .menu a .label {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .menu a:hover,
-  .account-button:hover {
-    background: var(--tvc-green-tint);
+  @media (hover: hover) and (pointer: fine) {
+    .menu a:hover {
+      background: var(--tvc-cream);
+    }
   }
 
   .menu a:focus-visible,
-  .account-button:focus-visible,
+  .collapse-button:focus-visible,
+  .who:focus-visible,
+  .who-menu :global(button:focus-visible),
   .icon-button:focus-visible {
     outline: 2px solid var(--tvc-orange);
     outline-offset: 1px;
@@ -363,53 +388,6 @@ const adminItems = [
     background: var(--tvc-green-tint);
     color: var(--tvc-green-dark);
     font-weight: 600;
-  }
-
-  /* The orange mark is non-text, which is what --tvc-orange is for. */
-  .menu a[aria-current='page']::before {
-    content: '';
-    position: absolute;
-    left: -10px;
-    top: 7px;
-    bottom: 7px;
-    width: 3px;
-    border-radius: 0 3px 3px 0;
-    background: var(--tvc-orange);
-  }
-
-  .account {
-    padding: 10px;
-    border-top: 1px solid var(--tvc-line);
-  }
-
-  .account-name {
-    margin: 0 0 6px;
-    padding: 0 10px;
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--tvc-ink);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  /* Sits right under the name, so it takes the name's bottom margin. */
-  .account-name:not([hidden]) + .account-email {
-    margin-top: -4px;
-  }
-
-  .account-email {
-    margin: 0 0 6px;
-    padding: 0 10px;
-    font-size: 0.8rem;
-    color: var(--tvc-ink-soft);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .account-button {
-    color: var(--tvc-ink-soft);
   }
 
   .collapse-icon {
@@ -436,10 +414,150 @@ const adminItems = [
   /* Phone-only pieces: hidden by default, shown in the phone query below. This
      comes after .icon-button on purpose; declared before it, .icon-button's
      display would win and the close button would show on desktop. */
-  .topbar,
   .menu-close,
-  .scrim {
+  .scrim,
+  .topbar .icon-button,
+  .topbar-title {
     display: none;
+  }
+
+  /* ------------------------------------------------ top bar and the signed-in user */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 24px;
+    background: color-mix(in srgb, var(--tvc-white) 82%, transparent);
+    backdrop-filter: blur(16px) saturate(160%);
+    border-bottom: 1px solid transparent;
+    transition: border-color 150ms ease-out;
+  }
+
+  /* The hairline appears only once content is passing under the bar. */
+  .topbar.scrolled {
+    border-bottom-color: var(--tvc-line);
+  }
+
+  @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    .topbar {
+      background: var(--tvc-white);
+      backdrop-filter: none;
+      border-bottom-color: var(--tvc-line);
+    }
+  }
+
+  .who-wrap {
+    position: relative;
+    flex: none;
+    margin-left: auto;
+  }
+
+  .who {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 44px;
+    padding: 4px 12px 4px 8px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 999px;
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .avatar {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .who-text {
+    display: grid;
+    text-align: left;
+    line-height: 1.15;
+  }
+
+  .who-text strong {
+    font-size: var(--text-sm);
+  }
+
+  .who-text small {
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+  }
+
+  .caret {
+    flex: none;
+    color: var(--tvc-ink-soft);
+  }
+
+  .who-menu {
+    transform-origin: top right;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    z-index: 60;
+    min-width: 240px;
+    padding: 8px;
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .who-menu :global(p) {
+    margin: 4px 8px 6px;
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+    overflow-wrap: anywhere; /* a long email must not stretch the menu */
+  }
+
+  .who-menu :global(button) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 44px;
+    padding: 8px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: var(--text-base);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .who-menu :global(button:hover) {
+      background: var(--tvc-green-tint);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .who-menu:not([hidden]) {
+      animation: who-pop 140ms ease-out;
+    }
+  }
+
+  @keyframes who-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.97);
+    }
   }
 
   /* --------------------------------------------- collapsed (desktop only) */
@@ -462,8 +580,15 @@ const adminItems = [
       background: var(--tvc-line);
     }
 
+    /* Collapsed, the brand row is just the mark with the round button under it. */
     html[data-nav='collapsed'] .brand {
-      padding: 16px 19px;
+      flex-direction: column;
+      gap: 12px;
+      padding: 16px 0 8px;
+    }
+
+    html[data-nav='collapsed'] .collapse-button {
+      margin-left: 0;
     }
   }
 
@@ -474,27 +599,33 @@ const adminItems = [
     }
 
     .topbar {
-      position: sticky;
-      top: 0;
-      z-index: 50;
-      display: flex;
-      align-items: center;
       gap: 6px;
-      height: 52px;
-      padding: 0 8px;
-      background: var(--tvc-white);
-      border-bottom: 1px solid var(--tvc-line);
+      padding: 8px;
+    }
+
+    .topbar .icon-button {
+      display: inline-flex;
     }
 
     .topbar-title {
+      display: inline;
       font-family: var(--font-wordmark);
       font-weight: 700;
       color: var(--tvc-green-dark);
     }
 
+    /* The name and role would crowd the title on a phone; the initial still opens the menu. */
+    .who-text,
+    .caret {
+      display: none;
+    }
+
+    .who {
+      padding: 4px;
+    }
+
     /* Explicit full height: the desktop rule's align-self: start would otherwise
-       shrink this fixed panel to its content, leaving the account area floating
-       under the list instead of at the bottom. */
+       shrink this fixed panel to its content. */
     .sidebar {
       position: fixed;
       top: 0;
@@ -539,7 +670,8 @@ const adminItems = [
 
   @media (prefers-reduced-motion: reduce) {
     .sidebar,
-    .collapse-icon {
+    .collapse-icon,
+    .topbar {
       transition: none;
     }
   }
@@ -561,7 +693,9 @@ const adminItems = [
 </script>
 
 <script>
-  import { StaffAuthError, clearStepUp, clearToken, getToken, staffFetch } from '../../scripts/lib/staff-client.mjs';
+  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, staffFetch } from '../../scripts/lib/staff-client.mjs';
+  import { fullTourFor } from '../../scripts/lib/staff-tour.mjs';
+  import { offerTour, startTour } from '../../scripts/lib/staff-tour-ui.mjs';
 
   declare const google: any;
 
@@ -581,9 +715,11 @@ const adminItems = [
   const root = document.documentElement;
   const toolItems = Array.from(document.querySelectorAll<HTMLElement>('li[data-module]'));
   const adminGroup = $('admin-group');
-  const nameEl = $('staff-name');
-  const emailEl = $('staff-email');
-  const signOutBtn = $<HTMLButtonElement>('sign-out');
+  const page = root.dataset.page ?? '';
+  const whoWrap = $('who-wrap');
+  const whoBtn = $<HTMLButtonElement>('who');
+  const whoMenu = $('who-menu');
+  const topbar = document.querySelector<HTMLElement>('.topbar')!;
   const collapseBtn = $<HTMLButtonElement>('collapse');
   const menuOpen = $<HTMLButtonElement>('menu-open');
   const menuClose = $<HTMLButtonElement>('menu-close');
@@ -612,14 +748,76 @@ const adminItems = [
     }
   }
 
+  function signOut() {
+    clearToken();
+    clearStepUp();
+    try {
+      sessionStorage.removeItem(CACHE_KEY);
+    } catch {
+      // nothing to clear
+    }
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    location.reload(); // each page then shows its own sign-in panel
+  }
+
+  // ---- the signed-in user: a pill in the top bar that opens a small menu (like the member portal's)
+  const whoOpen = () => !whoMenu.hidden;
+  function setWho(open: boolean, returnFocus = false) {
+    whoMenu.hidden = !open;
+    whoBtn.setAttribute('aria-expanded', String(open));
+    if (open) whoMenu.querySelector<HTMLElement>('button')?.focus();
+    else if (returnFocus) whoBtn.focus();
+  }
+
+  function renderWho(me: Me | null) {
+    whoWrap.hidden = !me || !me.name;
+    setWho(false);
+    if (!me?.name) return;
+    $('avatar').textContent = me.name.trim().slice(0, 1).toUpperCase() || '?'; // text only, whatever the name contains
+    $('who-name').textContent = me.name;
+    $('who-role').textContent = me.isSuperAdmin ? 'Super admin' : 'Admin';
+    const items: HTMLElement[] = [];
+    if (me.maskedEmail) {
+      const signedIn = document.createElement('p');
+      signedIn.textContent = `Signed in as ${me.maskedEmail}`;
+      items.push(signedIn);
+    }
+    if (fullTourFor(page, me.isSuperAdmin).length) {
+      const tour = document.createElement('button');
+      tour.type = 'button';
+      tour.textContent = page === 'home' ? 'Take the tour' : 'Take the tour of this page';
+      tour.addEventListener('click', () => {
+        setWho(false);
+        startTour(fullTourFor(page, me.isSuperAdmin));
+      });
+      items.push(tour);
+    }
+    const out = document.createElement('button');
+    out.type = 'button';
+    out.textContent = 'Sign out';
+    out.addEventListener('click', signOut);
+    items.push(out);
+    whoMenu.replaceChildren(...items);
+  }
+  whoBtn.addEventListener('click', () => setWho(!whoOpen()));
+  document.addEventListener('click', (ev) => {
+    if (whoOpen() && !(ev.target as Element).closest('.who-wrap')) setWho(false);
+  });
+  window.addEventListener('scroll', () => topbar.classList.toggle('scrolled', window.scrollY > 4), { passive: true });
+
+  // Offer this page's tour once, and only to someone who can actually see the page behind it.
+  function canSeePage(me: Me): boolean {
+    if (page === 'home') return true;
+    if (page === 'access' || page === 'security') return me.isSuperAdmin;
+    return me.tools.some((t) => t.module === page);
+  }
+
   function apply(me: Me | null) {
     for (const li of toolItems) li.hidden = li.dataset.current !== 'true' && !me?.tools.some((t) => t.module === li.dataset.module);
     adminGroup.hidden = adminGroup.dataset.current !== 'true' && !me?.isSuperAdmin;
-    nameEl.hidden = !me?.name;
-    nameEl.textContent = me?.name ?? ''; // text only, whatever the name contains
-    emailEl.hidden = !me?.maskedEmail;
-    emailEl.textContent = me?.maskedEmail ?? '';
-    signOutBtn.hidden = !me;
+    renderWho(me);
+    const token = getToken();
+    if (me && me.name && token && canSeePage(me)) offerTour({ page, isSuperAdmin: me.isSuperAdmin, email: decodeTokenEmail(token) });
   }
 
   let pollTimer: number | undefined;
@@ -663,18 +861,6 @@ const adminItems = [
     if (document.visibilityState === 'visible') refresh();
   });
 
-  signOutBtn.addEventListener('click', () => {
-    clearToken();
-    clearStepUp();
-    try {
-      sessionStorage.removeItem(CACHE_KEY);
-    } catch {
-      // nothing to clear
-    }
-    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
-    location.reload(); // each page then shows its own sign-in panel
-  });
-
   // ---- collapse (desktop)
   function setCollapsed(collapsed: boolean) {
     root.setAttribute('data-nav', collapsed ? 'collapsed' : 'expanded');
@@ -682,7 +868,6 @@ const adminItems = [
     const label = collapsed ? 'Expand the menu' : 'Collapse the menu';
     collapseBtn.setAttribute('aria-label', label);
     collapseBtn.title = label;
-    collapseBtn.querySelector('.label')!.textContent = collapsed ? 'Expand' : 'Collapse';
   }
   setCollapsed(root.getAttribute('data-nav') === 'collapsed');
   collapseBtn.addEventListener('click', () => {
@@ -708,7 +893,9 @@ const adminItems = [
   menuClose.addEventListener('click', () => setMenu(false));
   scrim.addEventListener('click', () => setMenu(false));
   document.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Escape' && root.getAttribute('data-menu') === 'open') setMenu(false);
+    if (ev.key !== 'Escape') return;
+    if (whoOpen()) setWho(false, true);
+    else if (root.getAttribute('data-menu') === 'open') setMenu(false);
   });
   sidebar.addEventListener('click', (ev) => {
     if ((ev.target as HTMLElement).closest('.menu a') && root.getAttribute('data-menu') === 'open') setMenu(false);

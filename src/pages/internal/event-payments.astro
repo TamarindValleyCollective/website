@@ -37,7 +37,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
     <SignInGate forbiddenWhat="Event Payments" />
 
     <div id="app" hidden>
-      <label class="event-picker">
+      <label class="event-picker" data-tour="event">
         Event
         <select id="event-select">
           <option value="">Choose an event…</option>
@@ -52,7 +52,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
           <button type="button" class="mode-btn" data-mode="test" aria-pressed="false">Test <span class="mode-count" id="mode-test-count"></span></button>
         </div>
         <p id="test-mode-banner" class="test-mode-banner" hidden></p>
-        <div class="stats">
+        <div class="stats" data-tour="stats">
           <div class="stat card">
             <span class="stat-label">Registrations</span>
             <span class="stat-value" id="stat-bookings"></span>
@@ -79,7 +79,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
              on, and the rate differs by payment method, so this tallies what
              was charged (MDR vs GST, per method) and what actually settled.
              See event-payments-admin.mts's aggregates for how each is derived. -->
-        <details class="money card" open>
+        <details class="money card" data-tour="money" open>
           <summary class="money-summary">Money breakdown</summary>
           <dl class="ledger">
             <div class="ledger-row">
@@ -120,7 +120,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
           </dl>
 
           <h3 class="money-heading">Fees by payment method</h3>
-          <div class="table-scroll">
+          <div class="table-scroll" data-tour="bookings">
             <table class="methods-table">
               <thead>
                 <tr>

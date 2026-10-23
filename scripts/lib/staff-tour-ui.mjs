@@ -5,7 +5,7 @@
 //
 // Styles are global, in StaffLayout.astro (.tour*, .whatsnew*): this builds its DOM at run time, and
 // Astro's scoped CSS never reaches elements made that way.
-import { TOUR_LATEST } from './staff-tour.mjs';
+import { fullTourFor, tourLatest, tourStepsFor } from './staff-tour.mjs';
 
 function el(tag, className, text, ...kids) {
   const node = document.createElement(tag);
@@ -22,24 +22,47 @@ function button(className, text, onClick) {
   return b;
 }
 
-// ---- what this browser has seen, per account. Undefined = storage blocked, which shows no tour.
-const seenKey = (email) => `tvc-staff-tour:${email}`;
+// ---- what this browser has seen, per account and page. Undefined = storage blocked, which shows no tour.
+const seenKey = (email, page) => `tvc-staff-tour:${email}:${page}`;
 
-export function readSeenThrough(email) {
+export function readSeenThrough(email, page) {
   try {
-    const raw = localStorage.getItem(seenKey(email));
+    const raw = localStorage.getItem(seenKey(email, page));
     return raw === null ? null : Number(raw);
   } catch {
     return undefined;
   }
 }
 
-export function markSeen(email) {
+export function markSeen(email, page) {
   try {
-    localStorage.setItem(seenKey(email), String(TOUR_LATEST));
+    localStorage.setItem(seenKey(email, page), String(tourLatest(page)));
   } catch {
-    // the card simply comes back next visit
+    // the tour simply comes back next visit
   }
+}
+
+// What to do when a page opens, once we know who is signed in:
+//   `?tour` in the address  the whole tour for this page, recording nothing;
+//   never seen this page    the whole tour, started for them;
+//   seen it, steps since    on Home the "What's new" card (if the page has a #whats-new slot), elsewhere
+//                           just those steps as a short tour.
+// Closing, skipping or finishing counts as seen. Returns nothing; safe to call on every sign-in.
+let offered = false;
+export function offerTour({ page, isSuperAdmin, email }) {
+  if (offered) return;
+  offered = true;
+  if (new URLSearchParams(location.search).has('tour')) return startTour(fullTourFor(page, isSuperAdmin));
+  const seen = readSeenThrough(email, page);
+  const pending = tourStepsFor({ page, isSuperAdmin, seenThrough: seen });
+  if (!pending.length) return;
+  const slot = document.getElementById('whats-new');
+  const finished = () => {
+    markSeen(email, page);
+    slot?.replaceChildren();
+  };
+  if (seen !== null && slot) slot.replaceChildren(whatsNewCard(pending, { onShow: () => startTour(pending, { onFinish: finished }), onDismiss: finished }));
+  else startTour(pending, { onFinish: finished });
 }
 
 // ---- the "What's new" card, for someone who has seen the tour before
@@ -140,9 +163,11 @@ export function startTour(steps, { onFinish } = {}) {
   async function show(n) {
     const mine = ++run;
     const step = steps[n];
-    // The Home page fills in a moment after sign-in; wait briefly for the element, then fall back to a centred card.
+    // A tool fills in a while after sign-in (its data loads first), so an element inside the page gets about
+    // three seconds to show up; the shell is already there, so anything else gets a moment. Then a centred card.
     target = null;
-    for (let tries = 0; tries < 4; tries++) {
+    const inPage = !!document.querySelector(`[data-tour="${step.target}"]`)?.closest('#staff-main');
+    for (let tries = 0; tries < (inPage ? 60 : 4); tries++) {
       await new Promise((r) => setTimeout(r, tries ? 50 : 30));
       if (mine !== run) return;
       const found = document.querySelector(`[data-tour="${step.target}"]`);

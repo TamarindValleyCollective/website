@@ -28,7 +28,7 @@ import SignInGate from '../../components/SignInGate.astro';
     <p id="status" class="hint" hidden></p>
 
     <div id="panel" hidden>
-      <section id="stepup" class="banner" aria-live="polite">
+      <section id="stepup" class="banner" data-tour="stepup" aria-live="polite">
         <p id="stepup-text" class="banner-text"></p>
         <form id="verify-form" class="banner-form" hidden>
           <button type="button" id="verify-passkey" class="button" hidden>Use a passkey</button>
@@ -41,7 +41,7 @@ import SignInGate from '../../components/SignInGate.astro';
         <p id="verify-error" class="error banner-error" hidden></p>
       </section>
 
-      <div class="tabs" role="tablist" aria-label="Access sections">
+      <div class="tabs" role="tablist" data-tour="tabs" aria-label="Access sections">
         <button type="button" role="tab" id="tab-people" aria-selected="true" aria-controls="pane-people" class="tab">People</button>
         <button type="button" role="tab" id="tab-modules" aria-selected="false" aria-controls="pane-modules" class="tab">Who can use what</button>
         <button type="button" role="tab" id="tab-roles" aria-selected="false" aria-controls="pane-roles" class="tab">What each role can do</button>
@@ -51,7 +51,7 @@ import SignInGate from '../../components/SignInGate.astro';
       <section id="pane-people" role="tabpanel" aria-labelledby="tab-people">
         <div class="toolbar">
           <p id="people-count" class="note"></p>
-          <button type="button" id="add-toggle" class="button" aria-expanded="false" aria-controls="add-form">Add person</button>
+          <button type="button" id="add-toggle" class="button" data-tour="add-person" aria-expanded="false" aria-controls="add-form">Add person</button>
         </div>
 
         <form id="add-form" class="card block inline-form" hidden>

@@ -21,7 +21,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
 <StaffLayout title="WhatsApp" description="Internal WhatsApp reply dashboard." current="whatsapp" collapseByDefault>
   <section class="section wrapper">
-    <div class="page-head">
+    <div class="page-head" data-tour="header">
       <h1>WhatsApp</h1>
       <p class="page-head-sub">+91 80 4110 9754 · replies only send within 24h of the customer's last message</p>
     </div>
@@ -29,7 +29,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     <SignInGate forbiddenWhat="the WhatsApp inbox" />
 
     <div id="app" class="app" hidden>
-      <div class="conversations card">
+      <div class="conversations card" data-tour="conversations">
         <div class="search-row">
           <input type="search" id="conversation-search" placeholder="Search name or message…" aria-label="Search conversations" />
         </div>
@@ -48,7 +48,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
         </div>
         <button type="button" id="load-more-conversations" class="button button--outline load-more-btn" hidden>Load more</button>
       </div>
-      <div class="thread card">
+      <div class="thread card" data-tour="thread">
         <p id="thread-empty" class="pane-status">Select a conversation.</p>
         <div id="thread-header" class="thread-header" hidden>
           <button type="button" id="back-to-list" class="button button--outline button--icon back-btn" aria-label="Back to conversations">

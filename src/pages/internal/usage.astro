@@ -26,7 +26,7 @@ import SignInGate from '../../components/SignInGate.astro';
     <p id="status" class="hint" hidden></p>
 
     <div id="content" hidden>
-      <section aria-labelledby="alerts-title" class="block">
+      <section aria-labelledby="alerts-title" class="block" data-tour="alerts">
         <h2 id="alerts-title">Needs attention</h2>
         <div id="alerts" role="status"></div>
       </section>
@@ -41,12 +41,12 @@ import SignInGate from '../../components/SignInGate.astro';
           <div><dt>Warning and critical</dt><dd>Warning is about 70% used (or 30% left). Critical is about 90% used (or 10% left).</dd></div>
         </dl>
       </details>
-      <section aria-labelledby="services-title" class="block">
+      <section aria-labelledby="services-title" class="block" data-tour="services">
         <h2 id="services-title">Services</h2>
         <div id="cards" class="cards"></div>
       </section>
 
-      <section aria-labelledby="domains-title" class="block">
+      <section aria-labelledby="domains-title" class="block" data-tour="domains">
         <h2 id="domains-title">Domain renewals</h2>
         <div id="domains" class="card pad"><p class="muted">Checking the registries…</p></div>
       </section>

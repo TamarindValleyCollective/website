@@ -17,7 +17,6 @@ import SignInGate from '../../components/SignInGate.astro';
   <section class="section wrapper">
     <h1>Internal tools</h1>
     <p id="welcome" class="hint">Sign in to see the tools you can use.</p>
-    <p><button type="button" id="take-tour" class="button button--outline" hidden>Take the tour</button></p>
     <div id="whats-new"></div>
 
     <SignInGate forbiddenWhat="the internal tools" />
@@ -210,8 +209,6 @@ import SignInGate from '../../components/SignInGate.astro';
 <script>
   import { STAFF_ICONS } from '../../lib/staff-icons';
   import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch } from '../../../scripts/lib/staff-client.mjs';
-  import { fullTourFor, tourStepsFor } from '../../../scripts/lib/staff-tour.mjs';
-  import { markSeen, readSeenThrough, startTour, whatsNewCard } from '../../../scripts/lib/staff-tour-ui.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -236,8 +233,6 @@ import SignInGate from '../../components/SignInGate.astro';
   const noTools = $('no-tools');
   const adminSection = $('admin-section');
   const adminList = $('admin-tools');
-  const takeTour = $('take-tour');
-  const whatsNew = $('whats-new');
 
   // What each tool is for, shown on its tile. Admin tiles bring their own text.
   const DESCRIPTIONS: Record<string, string> = {
@@ -295,30 +290,7 @@ import SignInGate from '../../components/SignInGate.astro';
     return item;
   }
 
-  // First visit: the whole tour, started for them. A returning admin: a "What's new" card for just the
-  // steps added since. `?tour` replays the whole tour without recording anything. Closing, skipping or
-  // finishing either one counts as seen; the "Take the tour" button replays it and records nothing.
-  let tourOffered = false;
-  function offerTour(isSuperAdmin: boolean) {
-    takeTour.hidden = false;
-    takeTour.onclick = () => startTour(fullTourFor(isSuperAdmin));
-    if (tourOffered) return;
-    tourOffered = true;
-    const email = decodeTokenEmail(getToken() ?? '');
-    if (new URLSearchParams(location.search).has('tour')) return startTour(fullTourFor(isSuperAdmin));
-    const seen = readSeenThrough(email);
-    const pending = tourStepsFor({ isSuperAdmin, seenThrough: seen });
-    if (!pending.length) return;
-    const finished = () => {
-      markSeen(email);
-      whatsNew.replaceChildren();
-    };
-    if (seen === null) startTour(pending, { onFinish: finished });
-    else whatsNew.replaceChildren(whatsNewCard(pending, { onShow: () => startTour(pending, { onFinish: finished }), onDismiss: finished }));
-  }
-
   function showGate(message?: string) {
-    takeTour.hidden = true;
     gate.hidden = false;
     forbidden.hidden = true;
     toolsSection.hidden = true;
@@ -355,7 +327,6 @@ import SignInGate from '../../components/SignInGate.astro';
       noTools.hidden = hasTools || hasAdmin;
       adminList.replaceChildren(...(data.adminTools as Tool[]).map((t) => card(t, 'admin')));
       adminSection.hidden = data.adminTools.length === 0;
-      offerTour(data.isSuperAdmin === true);
     } catch (err) {
       if (err instanceof StaffAuthError) {
         if (err.kind === 'unauthorized') showGate('Your session expired — sign in again.');

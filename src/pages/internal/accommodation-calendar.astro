@@ -53,7 +53,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     <SignInGate forbiddenWhat="the Accommodation calendar" />
 
     <div id="app" hidden>
-      <div class="month-nav">
+      <div class="month-nav" data-tour="month-nav">
         <button type="button" id="prev-month" class="button">← Prev</button>
         <h2 id="month-label"></h2>
         <button type="button" id="next-month" class="button">Next →</button>
@@ -67,14 +67,14 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       <p id="status" class="hint" hidden></p>
 
       <div class="grid-scroll">
-        <table id="grid" class="grid-table"></table>
+        <table id="grid" class="grid-table" data-tour="grid"></table>
       </div>
 
       <div id="day-view" class="day-view" hidden></div>
 
       <div class="booking-list-header">
         <h2 id="booking-list-heading">Bookings this month</h2>
-        <button type="button" id="new-booking-btn" class="button button--primary">+ New booking</button>
+        <button type="button" id="new-booking-btn" class="button button--primary" data-tour="new-booking">+ New booking</button>
       </div>
       <div id="booking-list" class="booking-list"></div>
 

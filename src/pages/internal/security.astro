@@ -23,14 +23,14 @@ import SignInGate from '../../components/SignInGate.astro';
     <p id="status" class="hint" hidden></p>
 
     <div id="panel" hidden>
-      <section class="card block">
+      <section class="card block" data-tour="factors">
         <h2>Your second factors</h2>
         <ul id="methods" class="methods"></ul>
         <p id="ready-note" class="note"></p>
         <p id="locked-note" class="error" hidden></p>
       </section>
 
-      <section class="card block">
+      <section class="card block" data-tour="totp">
         <h2>Authenticator app</h2>
         <p class="note" id="totp-intro"></p>
         <button type="button" id="totp-start" class="button">Set up authenticator app</button>
@@ -54,9 +54,9 @@ import SignInGate from '../../components/SignInGate.astro';
         </div>
       </section>
 
-      <section id="passkey-card" class="card block" hidden>
+      <section id="passkey-card" class="card block" data-tour="passkeys" hidden>
         <h2>Passkeys</h2>
-        <p class="note" id="passkey-intro">Use Face ID, Touch ID or a security key instead of typing a code. A passkey only works on tvc.farm and never leaves your device.</p>
+        <p class="note" id="passkey-intro">Use Face ID, Touch ID or a security key instead of typing a code. A passkey only works on admin.tvc.farm and never leaves your device.</p>
         <ul id="passkeys" class="methods"></ul>
         <form id="passkey-form" class="inline-form">
           <label>
@@ -79,7 +79,7 @@ import SignInGate from '../../components/SignInGate.astro';
         </div>
       </section>
 
-      <section class="card block">
+      <section class="card block" data-tour="verify">
         <h2>Prove it's you</h2>
         <p id="stepup-state" class="note"></p>
         <form id="verify-form" class="inline-form">

@@ -29,9 +29,9 @@ import SignInGate from '../../components/SignInGate.astro';
       <section id="unit-stories" class="stories" aria-label="Unit stories waiting for review" hidden></section>
       <section id="notices" class="stories" aria-label="Notices" hidden></section>
       <section id="family-requests" class="stories" aria-label="Family member requests waiting for a decision" hidden></section>
-      <dl id="totals" class="totals"></dl>
+      <dl id="totals" class="totals" data-tour="totals"></dl>
 
-      <div class="toolbar">
+      <div class="toolbar" data-tour="toolbar">
         <label>Search <input type="search" id="search" placeholder="Unit, house or name" autocomplete="off" /></label>
         <label>Show
           <select id="show">
@@ -44,7 +44,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
       <p id="masked-note" class="note" hidden>Names are masked for the read-only role.</p>
       <p id="count" class="note" role="status"></p>
-      <div id="list"></div>
+      <div id="list" data-tour="list"></div>
 
      </div>
 
