@@ -96,7 +96,17 @@ function demoUsage() {
     canConfigure: true,
     generatedAt: new Date().toISOString(),
     schedule: { nextCollectorRunAt: new Date(Date.now() + 3 * 3600000).toISOString(), collectorEveryHours: 6 },
-    alerts: [],
+    // add `&clear` to the address to see the page with nothing wrong
+    alerts: location.search.includes('clear') ? [] : [
+      {
+        service: 'netlify',
+        level: 'warn',
+        title: 'Netlify credits are being used faster than the month is passing',
+        action: 'Hold non-essential deploys, or top up credits before the cycle ends.',
+        detail: '820 of 1,000 credits are left with 19 days to the reset, about 43 a day to last. Production deploys cost 15 credits each.',
+        emailedAt: ago(5),
+      },
+    ],
     settings: { anthropicPrices: { input: 3, output: 15 }, geminiDailyRequests: 1500 },
     anthropic: {
       billingErrorsRecent: 0,

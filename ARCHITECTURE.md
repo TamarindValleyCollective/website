@@ -750,8 +750,8 @@ outside both the local machine and Netlify (the member-update-email workflow).
   tools; Event Payments has a pop-up event picker, segmented Live and Test, one surface for the headline figures, bookings
   as a grouped surface and "Cancel event…" as a red row under them; Security's methods, passkeys and other super admins
   are grouped lists with pills; WhatsApp's search and All / Needs reply filter, the Member register's search and filter
-  pop-up, and the Accommodation calendar's Day / Week / Month toggle use the shared controls. The Usage page keeps its own
-  card layout (its status pill is `.status-pill`). The admin also has a **dark appearance** (token overrides at the foot of
+  pop-up, and the Accommodation calendar's Day / Week / Month toggle use the shared controls. The Usage page is a status line plus grouped lists: one row per service opens a sheet
+  with the figure, facts and (for admins) an inline "Enter a new reading" form; prices and limits are a sheet behind a Settings row. The admin also has a **dark appearance** (token overrides at the foot of
   `StaffLayout.astro`, so components follow with no rules of their own): it follows the device, and the account menu's
   Appearance control (Auto, Light, Dark) pins one, remembered in `localStorage` and applied by a script in `<head>`
   before first paint. Hard-coded greys were the only blockers (the accommodation calendar's past and closed cells now mix

@@ -229,7 +229,7 @@ export const TOURS = {
       target: 'alerts',
       tag: 'Usage',
       title: 'Needs attention',
-      text: 'Anything close to a free-tier or credit limit is listed first. Warning is about 70% used, critical about 90%.',
+      text: 'One line says how things stand. Anything close to a free-tier or credit limit is listed here first, with the reason; tap it for what to do. Warning is about 70% used, critical about 90%.',
     },
     {
       id: 'services',
@@ -237,8 +237,8 @@ export const TOURS = {
       audience: 'all',
       target: 'services',
       tag: 'Usage',
-      title: 'One card per service',
-      text: 'How much of each free tier or credit is used. A figure marked Estimated is the last number someone typed in, minus what the website has measurably used since.',
+      title: 'One row per service',
+      text: 'How much of each free tier or credit is used. Tap a row for its figures, history and, for an admin, to enter a new reading. A figure marked Estimated is the last number someone typed in, minus what the website has measurably used since.',
     },
     {
       id: 'domains',

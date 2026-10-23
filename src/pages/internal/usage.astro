@@ -26,10 +26,28 @@ import SignInGate from '../../components/SignInGate.astro';
     <p id="status" class="hint" hidden></p>
 
     <div id="content" hidden>
-      <section aria-labelledby="alerts-title" class="block" data-tour="alerts">
-        <h2 id="alerts-title">Needs attention</h2>
-        <div id="alerts" role="status"></div>
-      </section>
+      <div data-tour="alerts">
+        <p id="summary" class="summary" role="status"></p>
+        <div id="needs" hidden>
+          <h2>Needs attention</h2>
+          <ul id="needs-list" class="list"></ul>
+        </div>
+      </div>
+
+      <h2 id="services-title">Services</h2>
+      <ul id="cards" class="list" data-tour="services" aria-labelledby="services-title"></ul>
+      <p class="foot">A figure typed in from a provider's dashboard is only as fresh as the last entry; each service says how old it is. Warnings are emailed to the core team once, and again only if they get worse.</p>
+
+      <h2>Domain renewals</h2>
+      <ul id="domains" class="list" data-tour="domains"><li><div class="row"><span class="grow muted">Checking the registries…</span></div></li></ul>
+
+      <h2>WhatsApp account health</h2>
+      <ul id="wa-health" class="list"><li><div class="row"><span class="grow muted">Loading…</span></div></li></ul>
+
+      <div id="admin" hidden>
+        <h2>Settings</h2>
+        <ul class="list"><li><button type="button" id="prices-open" class="row"><span class="grow"><span class="title">Prices and limits</span><span class="detail">Token prices for the spend estimate, and the Gemini daily limit</span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></li></ul>
+      </div>
 
       <details class="glossary">
         <summary>What these words mean</summary>
@@ -41,37 +59,24 @@ import SignInGate from '../../components/SignInGate.astro';
           <div><dt>Warning and critical</dt><dd>Warning is about 70% used (or 30% left). Critical is about 90% used (or 10% left).</dd></div>
         </dl>
       </details>
-      <section aria-labelledby="services-title" class="block" data-tour="services">
-        <h2 id="services-title">Services</h2>
-        <div id="cards" class="cards"></div>
-      </section>
-
-      <section aria-labelledby="domains-title" class="block" data-tour="domains">
-        <h2 id="domains-title">Domain renewals</h2>
-        <div id="domains" class="card pad"><p class="muted">Checking the registries…</p></div>
-      </section>
-
-      <section aria-labelledby="wa-health-title" class="block">
-        <h2 id="wa-health-title">WhatsApp account health</h2>
-        <div id="wa-health" class="card pad"><p class="muted">Loading…</p></div>
-      </section>
-
-      <section id="admin" aria-labelledby="admin-title" class="block" hidden>
-        <h2 id="admin-title">Prices &amp; limits</h2>
-        <form id="settings-form" class="card pad form" novalidate>
-          <p class="muted">Turns Anthropic token counts into an estimated spend, and sets a daily request limit for Gemini. Both are optional; warnings that depend on a missing one stay quiet.</p>
-          <div class="fields">
-            <label>Anthropic input price <span class="muted">(USD per million tokens)</span><input type="number" step="any" min="0" inputmode="decimal" id="price-input" /></label>
-            <label>Anthropic output price <span class="muted">(USD per million tokens)</span><input type="number" step="any" min="0" inputmode="decimal" id="price-output" /></label>
-            <label>Gemini daily request limit <span class="muted">(from your Google AI Studio project)</span><input type="number" step="1" min="1" inputmode="numeric" id="gemini-limit" /></label>
-          </div>
-          <div class="actions"><button type="submit" class="button">Save</button><span id="settings-msg" class="msg" role="status"></span></div>
-        </form>
-      </section>
 
       <p class="muted foot" id="foot"></p>
-      <p id="signed-in" class="note"><button type="button" id="sign-out" class="link-button">Sign out</button></p>
     </div>
+
+    <dialog id="service-sheet" class="sheet sheet--service" aria-labelledby="service-title"></dialog>
+
+    <dialog id="prices-sheet" class="sheet" aria-labelledby="prices-title">
+      <h2 id="prices-title">Prices and limits</h2>
+      <form id="settings-form" class="form" novalidate>
+        <p class="sheet-text">Turns Anthropic token counts into an estimated spend, and sets a daily request limit for Gemini. Both are optional; warnings that depend on a missing one stay quiet.</p>
+        <div class="fields">
+          <label>Anthropic input price <span class="muted">(USD per million tokens)</span><input type="number" step="any" min="0" inputmode="decimal" id="price-input" /></label>
+          <label>Anthropic output price <span class="muted">(USD per million tokens)</span><input type="number" step="any" min="0" inputmode="decimal" id="price-output" /></label>
+          <label>Gemini daily request limit <span class="muted">(from your Google AI Studio project)</span><input type="number" step="1" min="1" inputmode="numeric" id="gemini-limit" /></label>
+        </div>
+        <div class="actions"><button type="button" id="prices-cancel" class="button button--outline">Cancel</button><button type="submit" class="button">Save</button><span id="settings-msg" class="msg" role="status"></span></div>
+      </form>
+    </dialog>
   </section>
 </StaffLayout>
 
@@ -87,34 +92,29 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
-  .usage .lead {
-    margin: 0 0 16px;
-    max-width: 62ch;
-  }
 
   .usage h2 {
-    font-size: var(--text-lg);
-    margin: 0 0 12px;
-  }
-
-  .usage h2.sub {
-    margin-top: 28px;
-  }
-
-  .usage .block {
-    margin-bottom: 32px;
+    margin: 26px 0 8px 14px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--tvc-ink-soft);
   }
 
 
-  .usage .card.pad {
-    padding: 16px 18px;
-  }
+
+
 
 
   .usage .note,
   .usage .foot {
     font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
+  }
+
+  .usage .foot {
+    max-width: 64ch;
+    margin: 8px 14px 0;
   }
 
   /* On top of the shared .link-button (StaffLayout): this one sits flush with its text. */
@@ -134,77 +134,18 @@ import SignInGate from '../../components/SignInGate.astro';
     background: var(--tvc-cream);
   }
 
-  /* ---- status pill: a word and an icon, colour is only reinforcement ---- */
-  .usage .status-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 3px 10px 3px 8px;
-    border-radius: 999px;
-    font-size: var(--text-xs);
-    font-weight: 600;
-    white-space: nowrap;
-  }
 
-  .usage .status-pill svg {
-    flex: none;
-  }
 
-  .usage .status-pill--ok {
-    background: var(--tvc-green-tint);
-    color: var(--tvc-green-dark);
-  }
 
-  .usage .status-pill--warn {
-    background: var(--tvc-orange-tint);
-    color: var(--tvc-orange-text);
-  }
 
-  .usage .status-pill--critical {
-    background: var(--tvc-error-bg);
-    color: var(--tvc-error-text);
-  }
 
-  .usage .status-pill--none {
-    background: var(--tvc-stone);
-    color: var(--tvc-ink-soft);
-  }
 
   /* ---- alerts ---- */
-  .usage .alert-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 10px;
-  }
 
-  .usage .alert {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 12px;
-    align-items: start;
-    padding: 14px 16px;
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius-sm);
-    background: var(--tvc-white);
-  }
 
   /* severity is the tint and the pill's word, not a coloured stripe */
-  .usage .alert--warn {
-    border-color: var(--tvc-orange);
-    background: var(--tvc-orange-tint);
-  }
 
-  .usage .alert--critical {
-    border-color: var(--tvc-error-border);
-    background: var(--tvc-error-bg);
-  }
 
-  .usage .alert-summary {
-    margin: 0 0 10px;
-    font-weight: 600;
-  }
 
   .usage .alert-action {
     margin: 8px 0 0;
@@ -242,10 +183,6 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
-  .usage .alert .link-button {
-    margin-top: 4px;
-    font-size: var(--text-sm);
-  }
 
   /* a short plain-words list for readers who do not live in these dashboards */
   .usage .glossary {
@@ -260,6 +197,7 @@ import SignInGate from '../../components/SignInGate.astro';
     font-weight: 600;
     color: var(--tvc-ink-soft);
     cursor: pointer;
+    margin-left: 14px;
   }
 
   .usage .glossary dl {
@@ -289,90 +227,165 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
-  .usage .all-clear {
+
+
+
+
+
+
+
+
+  /* how a card's figures get updated: Automatic / Live (no hands) vs Manual (a person types them in) */
+
+
+
+
+  .usage .svc-fresh {
+    margin: 0 0 12px;
+    font-size: var(--text-xs);
+    line-height: 1.45;
+    color: var(--tvc-ink-soft);
+  }
+
+  .usage .svc-fresh--late {
+    color: var(--tvc-orange-text);
+    font-weight: 600;
+  }
+
+
+
+
+
+
+
+
+
+
+  /* 0fr to 1fr animates the height to the content's real size, and a click mid-flight turns around from where it is */
+
+
+
+
+
+
+  /* ---- the page: a status line, then grouped lists; a service opens in a sheet ---- */
+  .usage .summary {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 12px 16px;
-    margin: 0;
+    gap: 8px;
+    margin: 0 0 4px;
+    font-weight: 500;
   }
 
-  /* ---- service cards ---- */
-  /* a grid, so cards line up in rows; each card keeps its own height, so opening one doesn't stretch its neighbours */
-  .usage .cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
-    gap: 16px;
-    align-items: start;
+  .usage .dot {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
   }
 
-  /* the part of a card that is always on show has one height for every service (title, badge, figure,
-     bar and one line of context), so a row of collapsed cards is level whatever each one measures */
-  .usage .svc-top {
-    min-height: 11.9rem;
-    margin-bottom: 12px;
+  .usage .dot--warn {
+    background: var(--tvc-orange);
   }
 
-  .usage .svc {
+  .usage .dot--crit {
+    background: var(--tvc-error-text);
+  }
+
+  .usage .row .value {
+    flex: none;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .usage .row .detail {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .usage .bar {
+    flex: none;
+    width: 84px;
+    height: 6px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--tvc-ink) 12%, var(--tvc-white));
+    overflow: hidden;
+  }
+
+  .usage .bar > i {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+    background: var(--tvc-green);
+  }
+
+  .usage .bar--warn > i {
+    background: var(--tvc-orange);
+  }
+
+  .usage .bar--crit > i {
+    background: var(--tvc-error-text);
+  }
+
+  #staff-main .usage .sheet--service {
+    width: min(480px, calc(100vw - 24px));
+    max-height: calc(100vh - 40px);
+    padding: 0;
+    overflow: hidden;
+    border-radius: 18px;
+    background: var(--tvc-stone);
+  }
+
+  #staff-main .usage .sheet--service[open] {
     display: flex;
     flex-direction: column;
   }
 
-  .usage .svc {
-    padding: 18px 20px;
-  }
-
-  .usage .svc-head {
+  .usage .sheet-head {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 4px;
+    gap: 10px;
+    padding: 14px 16px 6px;
   }
 
-  .usage .svc-title {
+  .usage .sheet-head h3 {
     margin: 0;
-    font-size: var(--text-md);
+    font-size: var(--text-lg);
+    letter-spacing: -0.01em;
   }
 
-  .usage .svc-kind {
-    margin: 2px 0 4px;
+  .usage .sheet-head-actions {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 6px 8px;
-    font-size: var(--text-xs);
-    color: var(--tvc-ink-soft);
+    gap: 8px;
   }
 
-  /* how a card's figures get updated: Automatic / Live (no hands) vs Manual (a person types them in) */
-  .usage .mode {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 2px 9px 2px 7px;
-    border-radius: 999px;
-    font-size: var(--text-xs);
-    font-weight: 600;
-    white-space: nowrap;
+  .usage .sheet-body {
+    display: grid;
+    grid-auto-rows: max-content;
+    gap: 14px;
+    padding: 4px 16px 18px;
+    overflow-y: auto;
   }
 
-  .usage .mode svg {
-    width: 13px;
-    height: 13px;
-    flex: none;
+  .usage .sheet-body > * {
+    min-width: 0;
   }
 
-  .usage .mode--auto,
-  .usage .mode--live {
-    background: var(--tvc-green-tint);
-    color: var(--tvc-green-dark);
+  .usage .sheet-hero > :first-child {
+    margin-top: 0;
   }
 
-  .usage .mode--manual,
-  .usage .mode--mixed {
-    background: var(--tvc-stone);
-    color: var(--tvc-ink);
+  .usage .sheet-foot {
+    margin: 0;
+  }
+
+  .usage .sheet-foot .svc-fresh {
+    margin: 0 0 4px;
   }
 
   .usage .svc-fresh {
@@ -387,115 +400,39 @@ import SignInGate from '../../components/SignInGate.astro';
     font-weight: 600;
   }
 
-  /* A card is a summary. Click anywhere on it to open its details (one at a time). The motion is the
-     iOS ease: fast out of the gate, a long soft landing, no overshoot, and the same path back. */
-  .usage .svc {
-    position: relative;
-    cursor: pointer;
-    transition: transform 140ms ease-out;
+  /* What an alert says about a service sits at the top of that service's sheet. */
+  .usage .alert-callout {
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-orange-tint);
   }
 
-  .usage .svc[data-pressed] {
-    transform: scale(0.985);
+  .usage .alert-callout--critical {
+    background: var(--tvc-error-bg);
   }
 
-  .usage .svc:has(.svc-toggle:focus-visible) {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 2px;
+  .usage .alert-callout > :first-child {
+    margin-top: 0;
   }
 
-  .usage .svc-foot {
-    margin-top: auto;
-    border-top: 1px solid var(--tvc-line);
+  .usage .glossary {
+    margin-top: 22px;
   }
 
-  .usage .svc-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    min-height: 44px;
-    padding: 0;
-    border: 0;
-    background: none;
-    font: inherit;
-    font-size: var(--text-xs);
-    font-weight: 600;
-    text-align: left;
-    color: var(--tvc-ink-soft);
-    cursor: pointer;
-  }
-
-  .usage .svc:hover .svc-toggle {
+  .usage dialog h2 {
+    margin: 0 0 6px;
     color: var(--tvc-ink);
-  }
-
-  .usage .svc-toggle:focus-visible {
-    outline: none; /* the whole card shows the focus ring */
-  }
-
-  .usage .svc-toggle::after {
-    content: '';
-    width: 7px;
-    height: 7px;
-    margin-right: 3px;
-    border-right: 1.75px solid currentColor;
-    border-bottom: 1.75px solid currentColor;
-    transform: translateY(-2px) rotate(45deg);
-    transition: transform 450ms cubic-bezier(0.32, 0.72, 0, 1);
-  }
-
-  .usage .svc[data-open='true'] .svc-toggle::after {
-    transform: translateY(2px) rotate(225deg);
-  }
-
-  /* 0fr to 1fr animates the height to the content's real size, and a click mid-flight turns around from where it is */
-  .usage .svc-more {
-    display: grid;
-    grid-template-rows: 0fr;
-    transition: grid-template-rows 450ms cubic-bezier(0.32, 0.72, 0, 1);
-    cursor: auto;
-  }
-
-  .usage .svc[data-open='true'] .svc-more {
-    grid-template-rows: 1fr;
-  }
-
-  .usage .svc-more-clip {
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .usage .svc-more-body {
-    padding-top: 10px;
-    opacity: 0;
-    transition: opacity 180ms ease-out;
-  }
-
-  .usage .svc[data-open='true'] .svc-more-body {
-    opacity: 1;
-    transition: opacity 300ms ease-out 120ms;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .usage .svc,
-    .usage .svc-more,
-    .usage .svc-toggle::after {
-      transition-duration: 1ms;
-    }
-
-    .usage .svc-more-body,
-    .usage .svc[data-open='true'] .svc-more-body {
-      transition-duration: 1ms;
-      transition-delay: 0s;
-    }
+    font-size: var(--text-lg);
+    letter-spacing: -0.01em;
   }
 
   .usage .hero {
     margin: 0;
-    font-family: var(--font-display);
-    font-size: 1.9rem;
-    line-height: 1.15;
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
     color: var(--tvc-ink);
   }
 
@@ -509,9 +446,9 @@ import SignInGate from '../../components/SignInGate.astro';
   .usage .meter {
     height: 8px;
     border-radius: 4px;
-    background: var(--tvc-stone);
+    background: color-mix(in srgb, var(--tvc-ink) 12%, var(--tvc-white));
     overflow: hidden;
-    margin: 6px 0 4px;
+    margin: 8px 0 4px;
   }
 
   .usage .meter-fill {
@@ -547,24 +484,44 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
+  /* The facts about a service are a grouped list: the label on the left, the figure on the right. */
   .usage .stats {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin: 12px 0 0;
-    padding: 12px 0 0;
-    border-top: 1px solid var(--tvc-line);
+    margin: 0;
+    padding: 0;
+    background: var(--tvc-white);
+    border-radius: var(--radius);
+    box-shadow: 0 0 0 1px var(--tvc-line) inset;
+    overflow: hidden;
+  }
+
+  .usage .stat {
+    position: relative;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+  }
+
+  .usage .stat + .stat::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 14px;
+    height: 1px;
+    background: var(--tvc-line);
   }
 
   .usage .stat dt {
-    font-size: var(--text-xs);
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
   .usage .stat dd {
-    margin: 2px 0 0;
-    font-weight: 600;
-    font-size: var(--text-base);
+    margin: 0;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
   }
 
   .usage .stat dd small {
@@ -611,63 +568,18 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
-  /* ---- domains table ---- */
-  .usage #domains,
-  .usage #wa-health {
-    overflow-x: auto;
-  }
 
-  .usage td small {
-    display: block;
-    margin-top: 2px;
-    font-size: var(--text-xs);
-    color: var(--tvc-ink-soft);
-  }
 
-  .usage table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: var(--text-sm);
-  }
 
-  .usage th {
-    text-align: left;
-    font-size: var(--text-xs);
-    font-weight: 600;
-    color: var(--tvc-ink-soft);
-    padding: 0 12px 8px 0;
-  }
 
-  .usage td {
-    padding: 8px 12px 8px 0;
-    border-top: 1px solid var(--tvc-line);
-    vertical-align: middle;
-  }
 
-  /* ---- forms ---- */
-  .usage .forms {
-    display: grid;
-    gap: 10px;
-    max-width: 720px;
-  }
 
-  .usage details.card > summary {
-    padding: 14px 18px;
-    cursor: pointer;
-    font-weight: 600;
-  }
 
-  .usage details.card[open] > summary {
-    border-bottom: 1px solid var(--tvc-line);
-  }
 
   .usage .form {
     max-width: 720px;
   }
 
-  .usage details .form {
-    padding: 16px 18px;
-  }
 
   .usage .fields {
     display: grid;
@@ -766,34 +678,9 @@ import SignInGate from '../../components/SignInGate.astro';
   const LABEL = { ok: 'OK', warn: 'Warning', critical: 'Critical', none: 'Not set up' } as const;
 
   // Icons give status a second signal besides colour.
-  const ICON: Record<string, string> = {
-    ok: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/>',
-    warn: '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.2v.1"/>',
-    critical: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5M12 16v.1"/>',
-    none: '<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>',
-    auto: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/>',
-    live: '<circle cx="12" cy="12" r="2.5"/><path d="M6.3 6.3a8 8 0 0 0 0 11.4M17.7 6.3a8 8 0 0 1 0 11.4"/>',
-    manual: '<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 7l3 3"/>',
-    mixed: '<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 7l3 3"/>',
-  };
-  function icon(kind: string): SVGElement {
-    const svg = document.createElementNS(SVG, 'svg');
-    svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('width', '16');
-    svg.setAttribute('height', '16');
-    svg.setAttribute('fill', 'none');
-    svg.setAttribute('stroke', 'currentColor');
-    svg.setAttribute('stroke-width', '2');
-    svg.setAttribute('stroke-linecap', 'round');
-    svg.setAttribute('stroke-linejoin', 'round');
-    svg.setAttribute('aria-hidden', 'true');
-    svg.setAttribute('focusable', 'false');
-    svg.innerHTML = ICON[kind]; // fixed constants above, no server data
-    return svg;
-  }
   function pill(level: Level | 'none', okText?: string): HTMLElement {
     const kind = level ?? 'ok';
-    return h('span', { class: `status-pill status-pill--${kind}` }, icon(kind), okText && kind === 'ok' ? okText : LABEL[kind]);
+    return h('span', { class: `pill pill--${kind === 'critical' ? 'crit' : kind === 'warn' ? 'warn' : 'ok'}`, text: okText && kind === 'ok' ? okText : LABEL[kind] });
   }
 
   // A meter shows `fraction` (0..1) of a track. The words beside it carry the numbers.
@@ -844,7 +731,6 @@ import SignInGate from '../../components/SignInGate.astro';
   // How a card's figures are kept up to date, shown as a badge plus when the next update is due.
   type Mode = 'auto' | 'live' | 'manual' | 'mixed';
   type Kind = string | { mode: Mode; text: string; fresh?: { text: string; late?: boolean }[] };
-  const MODE_LABEL: Record<Mode, string> = { auto: 'Automatic', live: 'Live', manual: 'Manual', mixed: 'Part manual' };
   let nextRunAt: string | null = null; // from the server: when usage-collect next runs
   let runEveryHours = 6;
 
@@ -875,70 +761,103 @@ import SignInGate from '../../components/SignInGate.astro';
   // then the detail parts. Anything overdue is lifted back into the summary so it is never hidden.
   const MORE = Symbol('more');
   type Part = Kid | typeof MORE;
+  // Each service is one row in a grouped list: its name, one line of state, a slim bar (or "Enter a reading"), a chevron.
+  // The row opens a sheet holding everything the old card kept on its face and behind "Details". Healthy services stay
+  // plain; only a warning or a critical one gets a coloured dot and bar.
+  type Entry = { title: string; level: Level | 'none'; k: { mode: Mode | null; text: string; fresh?: { text: string; late?: boolean }[] }; summary: Kid[]; more: Kid[] };
+  let entries = new Map<string, Entry>();
+  let alertsByCard = new Map<string, any[]>();
+  let openTitle: string | null = null;
+  const sheet = $<HTMLDialogElement>('service-sheet');
+  const chevron = (): SVGElement => {
+    const svg = document.createElementNS(SVG, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('class', 'chev');
+    svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS(SVG, 'path');
+    path.setAttribute('d', 'm9 6 6 6-6 6');
+    svg.append(path);
+    return svg;
+  };
+  const hasClass = (n: Kid, c: string): n is HTMLElement => n instanceof HTMLElement && n.classList.contains(c);
+  const freshLine = (f: { text: string; late?: boolean }) => h('p', { class: `svc-fresh${f.late ? ' svc-fresh--late' : ''}`, text: f.text });
+
   function card(title: string, kind: Kind, level: Level | 'none', ...body: Part[]): HTMLElement {
     const k = typeof kind === 'string' ? { mode: null, text: kind, fresh: undefined } : kind;
-    const badge = k.mode ? h('span', { class: `mode mode--${k.mode}` }, icon(k.mode), MODE_LABEL[k.mode]) : null;
     const at = body.indexOf(MORE);
     const summary = (at === -1 ? body : body.slice(0, at)) as Kid[];
     const more = (at === -1 ? [] : body.slice(at + 1)) as Kid[];
-    const fresh = k.fresh ?? [];
-    const freshLine = (f: { text: string; late?: boolean }) => h('p', { class: `svc-fresh${f.late ? ' svc-fresh--late' : ''}`, text: f.text });
-    const open = title === openCardTitle; // a re-render (after a saved reading) keeps the open card open, with no animation
-    const bodyId = `svc-more-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-    const toggle = h('button', { class: 'svc-toggle', attrs: { type: 'button', 'aria-expanded': String(open), 'aria-controls': bodyId, 'aria-label': `${title}: details` } }, h('span', { text: 'Details' }));
-    const bodyEl = h('div', { class: 'svc-more', attrs: { id: bodyId } }, h('div', { class: 'svc-more-clip' }, h('div', { class: 'svc-more-body' }, h('p', { class: 'svc-fresh', text: k.text }), ...fresh.filter((f) => !f.late).map(freshLine), ...more)));
-    if (!open) bodyEl.setAttribute('inert', ''); // closed content is out of the tab order and invisible to screen readers
-    return h(
-      'article',
-      { class: 'card svc', attrs: { 'data-open': String(open), 'data-level': String(level ?? 'ok') } },
-      h('div', { class: 'svc-top' },
-        h('div', { class: 'svc-head' }, h('h3', { class: 'svc-title', text: title }), pill(level)),
-        h('p', { class: 'svc-kind' }, badge),
-        ...summary,
-        ...fresh.filter((f) => f.late).map(freshLine),
+    entries.set(title, { title, level, k, summary, more });
+    const st = level === 'critical' ? 'crit' : level === 'warn' ? 'warn' : null;
+    const hero = summary.find((n) => hasClass(n, 'hero')) as HTMLElement | undefined;
+    const sub = summary.find((n) => hasClass(n, 'hero-sub')) as HTMLElement | undefined;
+    const line = [hero?.textContent, sub?.textContent].filter(Boolean).join(' ');
+    const meterEl = summary.find((n) => hasClass(n, 'meter')) as HTMLElement | undefined;
+    let right: HTMLElement | null = null;
+    if (meterEl) {
+      const fill = meterEl.querySelector<HTMLElement>('.meter-fill');
+      const bar = h('span', { class: `bar${st ? ` bar--${st}` : ''}`, attrs: { role: 'img', 'aria-label': meterEl.getAttribute('aria-valuetext') ?? '' } }, h('i'));
+      (bar.firstElementChild as HTMLElement).style.width = fill?.style.width ?? '0%';
+      right = bar;
+    } else if (summary.some((n) => hasClass(n, 'reading-inline'))) {
+      right = h('span', { class: 'pill', text: 'Enter a reading' });
+    }
+    const row = h('button', { class: 'row', attrs: { type: 'button' } }, st ? h('span', { class: `dot dot--${st}`, attrs: { 'aria-hidden': 'true' } }) : null, h('span', { class: 'grow' }, h('span', { class: 'title', text: title }), h('span', { class: 'detail', text: line })), right, chevron());
+    row.addEventListener('click', () => openService(title));
+    return h('li', { attrs: { 'data-level': String(level ?? 'ok') } }, row);
+  }
+
+  // The sheet for one service: any alert about it first, then the figure, then the facts, with how it is kept up to date last.
+  function fillSheet(title: string) {
+    const e = entries.get(title);
+    if (!e) return;
+    const alerts = alertsByCard.get(title) ?? [];
+    const lead = alerts[0];
+    const callout = lead
+      ? h('section', { class: `alert-callout alert-callout--${lead.level}` },
+          h('p', { class: 'alert-title', text: lead.title }),
+          lead.action ? h('p', { class: 'alert-action' }, h('strong', { text: 'What to do: ' }), lead.action) : null,
+          h('details', { class: 'alert-why' },
+            h('summary', { text: 'Why this is flagged' }),
+            h('p', { class: 'alert-detail', text: lead.detail + (lead.emailedAt ? ` Emailed to the core team ${ago(lead.emailedAt)}.` : '') }),
+            ...alerts.slice(1).map((r) => h('p', { class: 'alert-more', text: `Also: ${r.title}.${r.action && r.action !== lead.action ? ` ${r.action}` : ''}` })),
+          ),
+        )
+      : null;
+    const fresh = e.k.fresh ?? [];
+    const done = h('button', { class: 'button button--outline', text: 'Done', attrs: { type: 'button' } });
+    done.addEventListener('click', () => sheet.close());
+    const state = e.level === 'critical' ? pill('critical') : e.level === 'warn' ? pill('warn', 'Needs a look') : null;
+    if (state && e.level === 'warn') state.textContent = 'Needs a look';
+    sheet.replaceChildren(
+      h('div', { class: 'sheet-head' }, h('h3', { text: title, attrs: { id: 'service-title' } }), h('div', { class: 'sheet-head-actions' }, state, done)),
+      h('div', { class: 'sheet-body' },
+        callout,
+        h('div', { class: 'sheet-hero' }, ...e.summary, ...fresh.filter((f) => f.late).map(freshLine)),
+        ...e.more,
+        h('div', { class: 'sheet-foot' }, h('p', { class: 'svc-fresh', text: e.k.text }), ...fresh.filter((f) => !f.late).map(freshLine)),
       ),
-      h('div', { class: 'svc-foot' }, toggle, bodyEl),
     );
   }
+  function openService(title: string) {
+    openTitle = title;
+    fillSheet(title);
+    if (!sheet.open) sheet.showModal();
+  }
+  sheet.addEventListener('close', () => (openTitle = null));
+  sheet.addEventListener('click', (ev) => {
+    if (ev.target === sheet) sheet.close(); // a tap on the dimmed area outside the sheet
+  });
 
-  // One card open at a time. The whole card is the target (the button inside is for keyboards and screen
-  // readers); the open details are not, so they can be read and selected without folding shut.
-  let openCardTitle: string | null = null;
-  function setCardOpen(card: HTMLElement, open: boolean) {
-    card.dataset.open = String(open);
-    card.querySelector('.svc-toggle')?.setAttribute('aria-expanded', String(open));
-    card.querySelector('.svc-more')?.toggleAttribute('inert', !open);
-  }
-  function onCardsClick(e: MouseEvent) {
-    const target = e.target as Element;
-    const card = target.closest<HTMLElement>('.svc');
-    if (!card || target.closest('.svc-more, .reading-inline')) return;
-    if (window.getSelection()?.toString()) return; // the end of a text selection is not a click
-    const opening = card.dataset.open !== 'true';
-    document.querySelectorAll<HTMLElement>('#cards .svc[data-open="true"]').forEach((c) => setCardOpen(c, false));
-    if (opening) setCardOpen(card, true);
-    openCardTitle = opening ? (card.querySelector('.svc-title')?.textContent ?? null) : null;
-  }
-  // Open a card from outside it (an alert's "See the card" link): fold the others, open this one, bring it into view.
-  const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-  function openCardByTitle(title: string) {
-    const card = [...document.querySelectorAll<HTMLElement>('#cards .svc')].find((c) => c.querySelector('.svc-title')?.textContent === title);
-    if (!card) return;
-    document.querySelectorAll<HTMLElement>('#cards .svc[data-open="true"]').forEach((c) => c !== card && setCardOpen(c, false));
-    setCardOpen(card, true);
-    openCardTitle = title;
-    card.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
-    card.querySelector<HTMLElement>('.svc-toggle')?.focus({ preventScroll: true });
-  }
-
-  // The figures a person types in are entered in the card itself: "Enter a new reading" opens the form right
-  // there, and saving re-draws the card with the new figure (the card stays open). A second click, or Cancel, folds it.
+  // The figures a person types in are entered in the service's sheet: "Enter a new reading" opens the form right
+  // there, and saving re-draws the sheet with the new figure. A second click, or Cancel, folds it.
   let canConfigure = false; // only admins can enter readings
   let readingSetups = new Map<string, { meter: any; last: { value?: number; limit?: number | null; expiresOn?: string | null } | null; withExpiry: boolean }>();
   function enterReadingButton(meterId: string): HTMLElement | null {
     if (!canConfigure) return null;
     const wrap = h('div', { class: 'reading-inline' });
-    const toggle = linkButton('Enter a new reading', () => {
+    const toggle = h('button', { class: 'button', text: 'Enter a new reading', attrs: { type: 'button', 'aria-expanded': 'false' } });
+    toggle.addEventListener('click', () => {
       const setup = readingSetups.get(meterId);
       if (!setup) return;
       const open = wrap.querySelector('form');
@@ -956,21 +875,10 @@ import SignInGate from '../../components/SignInGate.astro';
       toggle.setAttribute('aria-expanded', 'true');
       form.querySelector<HTMLInputElement>('input')?.focus();
     });
-    toggle.setAttribute('aria-expanded', 'false');
     wrap.append(toggle);
     return wrap;
   }
   const shortDay = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-
-  // Press feedback on pointer-down (before release), like a tap on a physical button.
-  function onCardsPress(e: PointerEvent) {
-    const card = (e.target as Element).closest<HTMLElement>('.svc');
-    if (card && !(e.target as Element).closest('.svc-more, .reading-inline')) card.dataset.pressed = 'true';
-  }
-  function onCardsRelease() {
-    document.querySelectorAll<HTMLElement>('#cards .svc[data-pressed]').forEach((c) => delete c.dataset.pressed);
-  }
-
 
   // ---- the cards -------------------------------------------------------------
   type Overview = any;
@@ -1280,52 +1188,52 @@ import SignInGate from '../../components/SignInGate.astro';
   // The card each service's alerts belong to, so an alert can take you to the figures behind it.
   const SERVICE_CARD: Record<string, string> = { anthropic: 'Anthropic (Claude)', gemini: 'Google Gemini', typesafe: 'TypeSafe (Jev)', supabase: 'Supabase database', resend: 'Resend emails', cloudflare: 'Cloudflare R2 storage', netlify: 'Netlify' };
 
-  function linkButton(text: string, onClick: () => void): HTMLElement {
-    const b = h('button', { class: 'link-button', text, attrs: { type: 'button' } });
-    b.addEventListener('click', onClick);
-    return b;
+  // The answer comes first: one line that says how things stand. A service that needs a look is listed above the rest
+  // with its reason (tap it for what to do and why); the rest are plain rows below.
+  function cardTitleFor(service: string): string | null {
+    const named = SERVICE_CARD[service];
+    if (named && entries.has(named)) return named;
+    return [...entries.keys()].find((t) => t.toLowerCase().startsWith(service.toLowerCase())) ?? null;
   }
 
-  // One entry per service, led by its most serious alert (the others sit under it), each saying what to do,
-  // under a one-line count, so the top of the page answers "is anything wrong, and what do I do?".
-  function renderAlerts(alerts: any[], cardCount: number) {
-    const box = $('alerts');
-    if (alerts.length === 0) {
-      box.replaceChildren(h('p', { class: 'card all-clear' }, pill(null, 'All clear'), h('span', { text: `All ${cardCount} services are within their limits, as far as we can measure.` })));
-      return;
-    }
+  function renderOverview(alerts: any[], nodes: HTMLElement[]) {
+    alertsByCard = new Map();
     const rank = (a: any) => (a.level === 'critical' ? 0 : 1);
-    const byService = new Map<string, any[]>();
     for (const a of [...alerts].sort((x, y) => rank(x) - rank(y))) {
-      if (!byService.has(a.service)) byService.set(a.service, []);
-      byService.get(a.service)!.push(a);
+      const t = cardTitleFor(a.service);
+      if (!t) continue;
+      if (!alertsByCard.has(t)) alertsByCard.set(t, []);
+      alertsByCard.get(t)!.push(a);
     }
-    const groups = [...byService.entries()].sort((x, y) => rank(x[1][0]) - rank(y[1][0]));
-    const critical = groups.filter(([, g]) => g[0].level === 'critical').length;
-    const warning = groups.length - critical;
-    const fine = Math.max(0, cardCount - groups.length);
-    const summary = [critical ? `${critical} critical` : null, warning ? `${warning} warning${warning === 1 ? '' : 's'}` : null, `${fine} fine`].filter(Boolean).join(' · ');
-    box.replaceChildren(
-      h('p', { class: 'alert-summary', text: summary }),
-      h('ul', { class: 'alert-list' }, ...groups.map(([service, group]) => {
-        const [lead, ...rest] = group;
-        const cardTitle = SERVICE_CARD[service];
-        return h('li', { class: `alert alert--${lead.level}` },
-          pill(lead.level),
-          h('div', {},
-            h('p', { class: 'alert-title', text: lead.title }),
-            lead.action ? h('p', { class: 'alert-action' }, h('strong', { text: 'What to do: ' }), lead.action) : null,
-            // the numbers behind it, one tap away, so the headline and the action stay short
-            h('details', { class: 'alert-why' },
-              h('summary', { text: 'Why this is flagged' }),
-              h('p', { class: 'alert-detail', text: lead.detail + (lead.emailedAt ? ` Emailed to the core team ${ago(lead.emailedAt)}.` : '') }),
-              ...rest.map((r) => h('p', { class: 'alert-more', text: `Also: ${r.title}.${r.action && r.action !== lead.action ? ` ${r.action}` : ''}` })),
-            ),
-            cardTitle ? linkButton(`See the ${cardTitle} card`, () => openCardByTitle(cardTitle)) : null,
-          ),
-        );
-      })),
+    // A card that is at warning or critical needs a look even if no alert came with it.
+    const detailOf = new Map<string, string>();
+    for (const li of nodes) {
+      const t = li.querySelector('.title')?.textContent ?? '';
+      detailOf.set(t, li.querySelector('.detail')?.textContent ?? '');
+      const lv = li.dataset.level;
+      if ((lv === 'critical' || lv === 'warn') && !alertsByCard.has(t)) alertsByCard.set(t, [{ level: lv, title: detailOf.get(t) }]);
+    }
+    const needTitles = [...alertsByCard.keys()].sort((x, y) => rank(alertsByCard.get(x)![0]) - rank(alertsByCard.get(y)![0]));
+    const summary = $('summary');
+    if (needTitles.length === 0) {
+      summary.replaceChildren(pill(null, 'All clear'), h('span', { text: `All ${nodes.length} services are within their limits, as far as we can measure.` }));
+    } else {
+      const worstLevel = alertsByCard.get(needTitles[0])![0].level === 'critical' ? 'crit' : 'warn';
+      summary.replaceChildren(h('span', { class: `dot dot--${worstLevel}`, attrs: { 'aria-hidden': 'true' } }), h('span', { text: needTitles.length === 1 ? '1 service needs a look' : `${needTitles.length} services need a look` }));
+    }
+    $('needs').hidden = needTitles.length === 0;
+    $('needs-list').replaceChildren(
+      ...needTitles.map((t) => {
+        const group = alertsByCard.get(t)!;
+        const st = group[0].level === 'critical' ? 'crit' : 'warn';
+        const row = h('button', { class: 'row', attrs: { type: 'button' } }, h('span', { class: `dot dot--${st}`, attrs: { 'aria-hidden': 'true' } }), h('span', { class: 'grow' }, h('span', { class: 'title', text: t }), h('span', { class: 'detail', text: group[0].title })), chevron());
+        row.addEventListener('click', () => openService(t));
+        return h('li', {}, row);
+      }),
     );
+    $('services-title').textContent = needTitles.length ? 'Everything else' : 'Services';
+    const needSet = new Set(needTitles);
+    $('cards').replaceChildren(...nodes.filter((li) => !needSet.has(li.querySelector('.title')?.textContent ?? '')));
   }
 
   // ---- admin forms -----------------------------------------------------------
@@ -1376,6 +1284,16 @@ import SignInGate from '../../components/SignInGate.astro';
     ($('gemini-limit') as HTMLInputElement).value = o.settings.geminiDailyRequests ?? '';
   }
 
+  const pricesSheet = $<HTMLDialogElement>('prices-sheet');
+  $('prices-open').addEventListener('click', () => {
+    $('settings-msg').textContent = '';
+    pricesSheet.showModal();
+  });
+  $('prices-cancel').addEventListener('click', () => pricesSheet.close());
+  pricesSheet.addEventListener('click', (ev) => {
+    if (ev.target === pricesSheet) pricesSheet.close();
+  });
+
   $('settings-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const msg = $('settings-msg');
@@ -1402,7 +1320,8 @@ import SignInGate from '../../components/SignInGate.astro';
       const { status, data } = await staffFetch('/api/usage-admin/settings', { method: 'POST', body });
       if (status !== 200) throw new Error(data.error ?? 'Could not save');
       await load();
-      msg.textContent = 'Saved.';
+      pricesSheet.close();
+      showToast('Prices and limits saved.');
     } catch (err) {
       msg.className = 'msg msg--error';
       msg.textContent = err instanceof StaffAuthError ? 'Your session ended or this account cannot change settings.' : (err as Error).message;
@@ -1412,47 +1331,45 @@ import SignInGate from '../../components/SignInGate.astro';
   // ---- domains ---------------------------------------------------------------
   async function loadDomains() {
     const box = $('domains');
+    const empty = (text: string) => box.replaceChildren(h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow muted', text }))));
     try {
       const { status, data } = await staffFetch('/api/usage-admin/domains');
       if (status !== 200) throw new Error('failed');
       const rows = (data.domains as any[]).map((d) => {
-        if (d.error) return h('tr', {}, h('td', { text: d.domain }), h('td', { attrs: { colspan: '3' }, class: 'muted', text: d.error }));
+        if (d.error) return h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow' }, h('span', { class: 'title', text: d.domain }), h('span', { class: 'detail', text: d.error }))));
         const lvl: Level = d.daysLeft <= 14 ? 'critical' : d.daysLeft <= 60 ? 'warn' : null;
-        return h('tr', {}, h('td', {}, d.domain, h('small', { text: d.registrar ?? 'registrar unknown' })), h('td', { text: dateText(`${d.expiresOn}T00:00:00Z`) }), h('td', { text: d.daysLeft < 0 ? 'expired' : `${nf.format(d.daysLeft)} days` }), h('td', {}, pill(lvl, 'OK')));
+        return h('li', {}, h('div', { class: 'row' },
+          h('span', { class: 'grow' }, h('span', { class: 'title', text: d.domain }), h('span', { class: 'detail', text: `Expires ${dateText(`${d.expiresOn}T00:00:00Z`)} · ${d.registrar ?? 'registrar unknown'}` })),
+          lvl ? pill(lvl) : null,
+          h('span', { class: 'value', text: d.daysLeft < 0 ? 'expired' : `${nf.format(d.daysLeft)} days` })));
       });
-      box.replaceChildren(
-        h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Domain' }), h('th', { text: 'Expires' }), h('th', { text: 'Time left' }), h('th', { text: 'Status' }))), h('tbody', {}, ...rows)),
-        h('p', { class: 'svc-note', text: 'Read live from the registries. The core team is also emailed at 60 and 30 days before expiry, then daily from 14 days.' }),
-      );
+      if (rows.length === 0) return empty('No domains to report.');
+      box.replaceChildren(...rows);
     } catch {
-      box.replaceChildren(h('p', { class: 'muted', text: 'Could not check the registries right now. The daily email check is unaffected.' }));
+      empty('Could not check the registries right now. The daily email check is unaffected.');
     }
   }
 
   // ---- WhatsApp account health ---------------------------------------------------
   async function loadWhatsAppHealth() {
     const box = $('wa-health');
+    const note = (title: string, detail?: string) => box.replaceChildren(h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow' }, h('span', { class: 'title', text: title }), detail ? h('span', { class: 'detail', text: detail }) : null))));
     try {
       const { status, data } = await staffFetch('/api/usage-admin/whatsapp-health');
       if (status !== 200) throw new Error('failed');
       const events = data.events as Array<{ severity: string; title: string; detail: string | null; at: string }>;
-      if (events.length === 0) {
-        box.replaceChildren(
-          h('p', { class: 'muted', text: 'No events yet. Meta reports template approvals, quality drops and restrictions here as they happen.' }),
-          h('p', { class: 'svc-note', text: 'The core team is emailed about each one.' }),
-        );
-        return;
-      }
-      const rows = events.map((e) => {
-        const lvl: Level = e.severity === 'critical' ? 'critical' : e.severity === 'warning' ? 'warn' : null;
-        return h('tr', {}, h('td', {}, e.title, e.detail ? h('small', { text: e.detail }) : null), h('td', { text: `${dateText(e.at)}, ${new Date(e.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` }), h('td', {}, pill(lvl, 'Info')));
-      });
+      if (events.length === 0) return note('No events', 'Meta reports template approvals, quality drops and restrictions here as they happen. The core team is emailed about each one.');
       box.replaceChildren(
-        h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Event' }), h('th', { text: 'When' }), h('th', { text: 'Level' }))), h('tbody', {}, ...rows)),
-        h('p', { class: 'svc-note', text: 'Reported by Meta (template approved, rejected or paused; quality drops; restrictions). The core team is emailed about each one.' }),
+        ...events.map((e) => {
+          const lvl: Level = e.severity === 'critical' ? 'critical' : e.severity === 'warning' ? 'warn' : null;
+          return h('li', {}, h('div', { class: 'row' },
+            h('span', { class: 'grow' }, h('span', { class: 'title', text: e.title }), e.detail ? h('span', { class: 'detail', text: e.detail }) : null),
+            lvl ? pill(lvl) : null,
+            h('span', { class: 'value', text: `${dateText(e.at)}, ${new Date(e.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` })));
+        }),
       );
     } catch {
-      box.replaceChildren(h('p', { class: 'muted', text: 'Could not load WhatsApp events right now.' }));
+      note('Could not load WhatsApp events right now.');
     }
   }
 
@@ -1495,12 +1412,13 @@ import SignInGate from '../../components/SignInGate.astro';
       const { status, data } = await staffFetch('/api/usage-admin/overview');
       if (status !== 200) throw new Error('load failed');
       statusEl.hidden = true;
-      intro.textContent = 'Free tiers and credits the website relies on. "Measured" figures come from our own systems; "typed in" ones come from a provider\'s dashboard and are only as fresh as the last entry.';
+      intro.textContent = 'Free tiers and credits the website relies on, and how much is left.';
       nextRunAt = data.schedule?.nextCollectorRunAt ?? null;
       runEveryHours = data.schedule?.collectorEveryHours ?? 6;
-      // Re-rendered after every saved reading; the open card (openCardTitle) is rebuilt open.
+      // Re-rendered after every saved reading; an open sheet is filled again with the new figures.
       const netlifyTyped = data.manual.find((m: any) => m.id === 'netlify.credits_remaining') ?? null;
       canConfigure = Boolean(data.canConfigure);
+      entries = new Map();
       readingSetups = new Map();
       if (canConfigure) {
         const a = data.anthropic.credit;
@@ -1508,9 +1426,12 @@ import SignInGate from '../../components/SignInGate.astro';
         for (const m of data.manual) readingSetups.set(m.id, { meter: m, last: m.reading ? { value: m.reading.value, limit: m.reading.limit } : null, withExpiry: false });
       }
       const nodes = [anthropicCard(data), geminiCard(data), typesafeCard(data), supabaseCard(data), ...(data.resend.fresh ? [resendCard(data)] : []), ...(data.r2.fresh ? [r2Card(data)] : []), ...(data.netlify.deploys ? [netlifyCard(data, netlifyTyped)] : netlifyTyped ? [manualCard(netlifyTyped)] : []), ...data.manual.filter((m: any) => !FOLDED_INTO_SERVICE_CARD.has(m.id)).map(manualCard)].sort((a, b) => urgencyRank(b) - urgencyRank(a)); // most urgent first; the sort is stable, so ties keep their order
-      $('cards').replaceChildren(...nodes);
-      renderAlerts(data.alerts, nodes.length);
+      renderOverview(data.alerts, nodes);
       renderAdmin(data);
+      if (sheet.open && openTitle) {
+        if (entries.has(openTitle)) fillSheet(openTitle); // a saved reading re-draws the sheet that is open
+        else sheet.close();
+      }
       $('foot').textContent = `Updated ${new Date(data.generatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}. Counts use UTC days. Warnings are emailed to the core team once, and again only if they get worse.`;
       content.hidden = false;
       if (firstLoad) {
@@ -1547,11 +1468,7 @@ import SignInGate from '../../components/SignInGate.astro';
     firstLoad = true;
     showGate();
   }
-  $('cards').addEventListener('click', onCardsClick);
-  $('cards').addEventListener('pointerdown', onCardsPress);
-  for (const type of ['pointerup', 'pointercancel']) document.addEventListener(type, onCardsRelease); // wherever the pointer is let go
   $('use-different-account').addEventListener('click', signOut);
-  $('sign-out').addEventListener('click', signOut);
 
   if (getToken()) load();
   else showGate();
