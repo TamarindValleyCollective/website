@@ -482,6 +482,14 @@ const adminItems = [
     font-weight: 600;
   }
 
+  .avatar :global(img) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
   .who-text {
     display: grid;
     text-align: left;
@@ -693,7 +701,7 @@ const adminItems = [
 </script>
 
 <script>
-  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, staffFetch } from '../../scripts/lib/staff-client.mjs';
+  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, fillAvatar, getToken, staffFetch } from '../../scripts/lib/staff-client.mjs';
   import { fullTourFor } from '../../scripts/lib/staff-tour.mjs';
   import { offerTour, startTour } from '../../scripts/lib/staff-tour-ui.mjs';
 
@@ -702,6 +710,7 @@ const adminItems = [
   interface Me {
     name: string | null;
     maskedEmail?: string | null; // masked by the server; absent in answers cached before this existed
+    picture?: string | null; // their own Google picture, from their token; absent in older cached answers
     isSuperAdmin: boolean;
     tools: { module: string }[];
   }
@@ -773,7 +782,7 @@ const adminItems = [
     whoWrap.hidden = !me || !me.name;
     setWho(false);
     if (!me?.name) return;
-    $('avatar').textContent = me.name.trim().slice(0, 1).toUpperCase() || '?'; // text only, whatever the name contains
+    fillAvatar($('avatar'), me.name, me.picture);
     $('who-name').textContent = me.name;
     $('who-role').textContent = me.isSuperAdmin ? 'Super admin' : 'Admin';
     const items: HTMLElement[] = [];

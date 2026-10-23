@@ -736,7 +736,17 @@ outside both the local machine and Netlify (the member-update-email workflow).
   account has seen, per page, is kept in that browser's `localStorage` (no database column, so a new browser repeats it). Adding a
   step to a page's list needs a `data-tour` attribute on the element it points at. Locally, `astro dev` then `/internal/?demo` (or `?demo=limited`)
   fakes the sign-in and `/api/staff-me` (`src/lib/staff-demo.ts`, called from `scripts/lib/staff-client.mjs` behind
-  `import.meta.env.DEV`, so production builds drop it); `?tour` replays the tour without recording.
+  `import.meta.env.DEV`, so production builds drop it); `?tour` replays the tour without recording. The demo also answers
+  `/api/staff-admin/people` with a made-up set of people, so the Access page can be seen locally.
+- **Admin Google pictures** (`netlify/functions/lib/staff-picture.ts`, migration `0059_staff_google_picture.sql`,
+  `staff_users.google_picture_url`): the pill in the top bar shows the signed-in admin's own Google picture, which
+  `/api/staff-me` returns straight from their token (so it shows with no database change) and falls back to their initial.
+  `staff-me` also keeps the picture on the person (best effort, refreshed or cleared on each sign-in, only a https address
+  on Google's image hosts), and `GET /api/staff-admin/people` returns it for each person, so the Access page can show a face
+  beside each name. Only that person and super admins on Access ever see it. Reads and writes are isolated from the sign-in
+  queries and swallow errors, so an unapplied migration costs nothing but the faces. The Access People tab lists names and
+  faces only, with a search box and Access and Status filter chips like the member directory's; everything else about a person
+  (masked email, badges, a role per tool) is in the details beside the list.
 - **`netlify/functions/staff-admin.mts` + `lib/staff-admin-guard.ts`** — the API behind the
   Access module (issue #89): who is in the system, who holds which module role, an activity feed,
   and the changes themselves. **Super admins only.** Reading (`GET /api/staff-admin/people`,

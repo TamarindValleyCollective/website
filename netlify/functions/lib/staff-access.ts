@@ -199,7 +199,7 @@ export async function requireStaff<M extends ModuleId>(
   };
 }
 
-export type ActivePerson = StaffIdentity & { googleName: string | null };
+export type ActivePerson = StaffIdentity & { googleName: string | null; googlePicture: string | null };
 
 export type ActivePersonAuthResult =
   | { ok: true; person: ActivePerson }
@@ -237,7 +237,7 @@ export async function requireActivePerson(req: Request): Promise<ActivePersonAut
   await maybeFillName(user, verified.googleName);
   return {
     ok: true,
-    person: { id: user.id, email: user.email, name: user.name, isSuperAdmin: user.is_super_admin, googleName: verified.googleName },
+    person: { id: user.id, email: user.email, name: user.name, isSuperAdmin: user.is_super_admin, googleName: verified.googleName, googlePicture: verified.googlePicture },
   };
 }
 

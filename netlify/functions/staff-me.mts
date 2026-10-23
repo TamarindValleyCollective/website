@@ -13,6 +13,7 @@
 import { requireActivePerson } from './lib/staff-access';
 import { maskEmail } from './lib/staff-masking';
 import { rest } from './lib/staff-mfa-store';
+import { keepStaffPicture, sizedPicture } from './lib/staff-picture';
 import { MODULE_INFO, isModuleId, isRole } from './lib/staff-registry';
 
 const ROLE_LABELS = { admin: 'Admin', user: 'User', read_only: 'Read-only' } as const;
@@ -29,12 +30,17 @@ export default async (req: Request): Promise<Response> => {
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
   const person = auth.person;
 
+  // Keep the picture Google shows for them so super admins can see it on Access (best effort, never throws).
+  // The caller's own picture is returned straight from their token, so it shows even before that is stored.
+  await keepStaffPicture(person.id, person.googlePicture);
+
   try {
     const res = await rest(`/staff_module_roles?staff_id=eq.${person.id}&select=module,role`);
     const roles = (await res.json()) as { module: string; role: string }[];
     return jsonResponse({
       name: person.name ?? person.googleName ?? null,
       maskedEmail: person.email ? maskEmail(person.email) : null,
+      picture: sizedPicture(person.googlePicture, 96),
       isSuperAdmin: person.isSuperAdmin,
       tools: roles
         .filter((r) => isModuleId(r.module) && isRole(r.role))

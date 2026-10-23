@@ -71,6 +71,24 @@ import SignInGate from '../../components/SignInGate.astro';
         <p id="add-message" class="note" hidden></p>
         <p id="people-error" class="error" hidden></p>
 
+        <div class="people-find" data-tour="people-find">
+          <label class="visually-hidden" for="people-search">Search people</label>
+          <input type="search" id="people-search" class="people-search" placeholder="Search by name" autocomplete="off" />
+          <div class="filter-row" role="group" aria-label="Access" data-filter="access">
+            <span class="filter-label">Access</span>
+            <button type="button" class="filter-chip" data-value="all" aria-pressed="true">All</button>
+            <button type="button" class="filter-chip" data-value="super" aria-pressed="false">Super admins</button>
+            <button type="button" class="filter-chip" data-value="tools" aria-pressed="false">Has tools</button>
+            <button type="button" class="filter-chip" data-value="none" aria-pressed="false">No tools yet</button>
+          </div>
+          <div class="filter-row" role="group" aria-label="Status" data-filter="status">
+            <span class="filter-label">Status</span>
+            <button type="button" class="filter-chip" data-value="all" aria-pressed="true">All</button>
+            <button type="button" class="filter-chip" data-value="active" aria-pressed="false">Active</button>
+            <button type="button" class="filter-chip" data-value="inactive" aria-pressed="false">Deactivated</button>
+          </div>
+        </div>
+
         <div class="people-layout">
           <ul id="people" class="people-list" aria-label="People"></ul>
           <section id="person-detail" class="person-detail card" aria-live="polite"></section>
@@ -288,6 +306,61 @@ import SignInGate from '../../components/SignInGate.astro';
     margin: 0;
   }
 
+  /* Search and filters, like the member directory's. Static markup, so these styles are scoped normally. */
+  .people-find {
+    margin-bottom: 14px;
+  }
+
+  .people-search {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 420px;
+    margin-bottom: 10px;
+    padding: 8px 11px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+  }
+
+  .filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .filter-label {
+    min-width: 4rem;
+    color: var(--tvc-ink-soft);
+    font-size: 0.8rem;
+  }
+
+  .filter-chip {
+    padding: 6px 14px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: 999px;
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+
+  .filter-chip[aria-pressed='true'] {
+    border-color: var(--tvc-green-dark);
+    background: var(--tvc-green-dark);
+    color: var(--tvc-white);
+  }
+
+  .filter-chip:focus-visible,
+  .people-search:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
   .people-layout {
     display: grid;
     grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
@@ -303,11 +376,15 @@ import SignInGate from '../../components/SignInGate.astro';
     gap: 6px;
   }
 
+  /* The list is names and faces only; everything else about a person is in their details on the right. */
   .people-layout :global(.person-item) {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 10px;
     width: 100%;
     box-sizing: border-box;
-    padding: 10px 12px;
+    min-height: 44px;
+    padding: 6px 10px;
     font: inherit;
     text-align: left;
     color: var(--tvc-ink);
@@ -337,6 +414,40 @@ import SignInGate from '../../components/SignInGate.astro';
     box-shadow: inset 3px 0 0 var(--tvc-orange);
   }
 
+  .people-layout :global(.person-avatar) {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .people-layout :global(.person-avatar--lg) {
+    width: 52px;
+    height: 52px;
+    font-size: 1.25rem;
+  }
+
+  .people-layout :global(.person-avatar img) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .people-layout :global(.person-item .person-name) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .people-layout :global(.person-item.is-inactive .person-name) {
     color: var(--tvc-ink-soft);
   }
@@ -346,8 +457,7 @@ import SignInGate from '../../components/SignInGate.astro';
     font-weight: 600;
   }
 
-  .people-layout :global(.person-email),
-  .people-layout :global(.person-summary) {
+  .people-layout :global(.person-email) {
     display: block;
     font-size: 0.8rem;
     color: var(--tvc-ink-soft);
@@ -376,6 +486,13 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .person-detail {
     padding: 18px 22px;
+    min-width: 0;
+  }
+
+  .person-detail :global(.detail-who) {
+    display: flex;
+    align-items: center;
+    gap: 14px;
     min-width: 0;
   }
 
@@ -756,6 +873,7 @@ import SignInGate from '../../components/SignInGate.astro';
     clearStepUp,
     clearToken,
     decodeTokenEmail,
+    fillAvatar,
     getToken,
     minutesLabel,
     saveStepUp,
@@ -789,6 +907,7 @@ import SignInGate from '../../components/SignInGate.astro';
     id: string;
     label: string;
     maskedEmail?: string | null;
+    picture?: string | null; // their Google picture, once they have signed in since it was kept
     active: boolean;
     isSuperAdmin: boolean;
     isMe: boolean;
@@ -850,6 +969,8 @@ import SignInGate from '../../components/SignInGate.astro';
   const addMessage = $('add-message');
   const peopleError = $('people-error');
   const peopleList = $('people');
+  const peopleSearch = $<HTMLInputElement>('people-search');
+  const filterRows = Array.from(document.querySelectorAll<HTMLElement>('.filter-row'));
   const eventsList = $('events');
   const eventsSearch = $<HTMLInputElement>('events-search');
   const eventsCount = $('events-count');
@@ -859,6 +980,8 @@ import SignInGate from '../../components/SignInGate.astro';
 
   let state: PeopleResponse | null = null;
   const openLimits = new Set<string>(); // people whose booking-type limits are expanded
+  let query = ''; // the search box, lower-cased
+  const filters: Record<string, string> = { access: 'all', status: 'all' };
   let newPersonId: string | null = null; // highlighted after being added
   let selectedId: string | null = null; // the person whose tools are shown
   let refocus: string | null = null; // `${personId}|${moduleId}` to refocus after a redraw
@@ -1160,18 +1283,17 @@ import SignInGate from '../../components/SignInGate.astro';
     return badges;
   }
 
-  // One person in the list on the left.
+  // A round face: the Google picture if we have one, otherwise their initial.
+  function avatar(p: Person, large = false): HTMLElement {
+    const el = h('span', { class: large ? 'person-avatar person-avatar--lg' : 'person-avatar', attrs: { 'aria-hidden': 'true' } });
+    fillAvatar(el, p.label, p.picture);
+    return el;
+  }
+
+  // One person in the list on the left: just a face and a name. The details are on the right.
   function personItem(p: Person): HTMLElement {
-    const granted = p.roles.length;
     const classes = ['person-item', !p.active ? 'is-inactive' : '', p.id === newPersonId ? 'is-new' : ''].filter(Boolean).join(' ');
-    const item = h(
-      'button',
-      { class: classes, attrs: { type: 'button', 'data-person-row': p.id } },
-      h('span', { class: 'person-name', text: p.label }),
-      ...(p.maskedEmail ? [h('span', { class: 'person-email', text: p.maskedEmail })] : []),
-      personBadges(p),
-      h('span', { class: 'person-summary', text: granted ? `${granted} tool${granted === 1 ? '' : 's'}` : p.isSuperAdmin ? 'Manages access' : 'No tools' }),
-    );
+    const item = h('button', { class: classes, attrs: { type: 'button', 'data-person-row': p.id } }, avatar(p), h('span', { class: 'person-name', text: p.label }));
     if (p.id === selectedId) item.setAttribute('aria-current', 'true');
     item.addEventListener('click', () => {
       selectedId = p.id;
@@ -1185,7 +1307,14 @@ import SignInGate from '../../components/SignInGate.astro';
   // The selected person: who they are, deactivate/reactivate, and a row per tool.
   function personPanel(p: Person): HTMLElement[] {
     const head = h('div', { class: 'detail-head' });
-    head.append(h('div', {}, h('h2', { class: 'detail-title', text: p.label }), ...(p.maskedEmail ? [h('span', { class: 'person-email', text: p.maskedEmail })] : []), personBadges(p)));
+    head.append(
+      h(
+        'div',
+        { class: 'detail-who' },
+        avatar(p, true),
+        h('div', {}, h('h2', { class: 'detail-title', text: p.label }), ...(p.maskedEmail ? [h('span', { class: 'person-email', text: p.maskedEmail })] : []), personBadges(p)),
+      ),
+    );
 
     // Super admins are managed in the database, never from this screen.
     const action = h('div', { class: 'detail-action' });
@@ -1230,16 +1359,44 @@ import SignInGate from '../../components/SignInGate.astro';
     return [head, rows];
   }
 
+  // The search box and the filter chips narrow the list on the left. They are static markup, built once, so
+  // typing never loses the cursor; only the list and the details are redrawn.
+  function matchesFilters(p: Person): boolean {
+    if (filters.status === 'active' && !p.active) return false;
+    if (filters.status === 'inactive' && p.active) return false;
+    if (filters.access === 'super' && !p.isSuperAdmin) return false;
+    if (filters.access === 'tools' && p.roles.length === 0) return false;
+    if (filters.access === 'none' && p.roles.length > 0) return false;
+    return !query || `${p.label} ${p.maskedEmail ?? ''}`.toLowerCase().includes(query);
+  }
+
+  peopleSearch.addEventListener('input', () => {
+    query = peopleSearch.value.trim().toLowerCase();
+    renderPeople();
+  });
+  for (const row of filterRows) {
+    row.addEventListener('click', (ev) => {
+      const chip = (ev.target as Element).closest<HTMLElement>('.filter-chip');
+      if (!chip) return;
+      filters[row.dataset.filter!] = chip.dataset.value!;
+      for (const other of row.querySelectorAll<HTMLElement>('.filter-chip')) other.setAttribute('aria-pressed', String(other === chip));
+      renderPeople();
+    });
+  }
+
   function renderPeople() {
     if (!state) return;
     const order = (p: Person) => (!p.active ? 2 : p.isSuperAdmin ? 0 : 1);
     const sorted = state.people.map((p, i) => ({ p, i })).sort((a, b) => order(a.p) - order(b.p) || a.i - b.i).map((x) => x.p);
-    if (!sorted.some((p) => p.id === selectedId)) selectedId = sorted[0]?.id ?? null;
-    peopleList.replaceChildren(...sorted.map((p) => h('li', {}, personItem(p))));
-    const selected = sorted.find((p) => p.id === selectedId);
-    personDetail.replaceChildren(...(selected ? personPanel(selected) : [h('p', { class: 'empty', text: 'Nobody has been added yet.' })]));
+    const shown = sorted.filter(matchesFilters);
+    if (!shown.some((p) => p.id === selectedId)) selectedId = shown[0]?.id ?? null;
+    peopleList.replaceChildren(...shown.map((p) => h('li', {}, personItem(p))));
+    const selected = shown.find((p) => p.id === selectedId);
+    const emptyText = state.people.length ? 'Nobody matches the search and filters.' : 'Nobody has been added yet.';
+    personDetail.replaceChildren(...(selected ? personPanel(selected) : [h('p', { class: 'empty', text: emptyText })]));
     const active = state.people.filter((p) => p.active).length;
-    peopleCount.textContent = `${state.people.length} ${state.people.length === 1 ? 'person' : 'people'}${active === state.people.length ? '' : `, ${active} active`}`;
+    const total = `${state.people.length} ${state.people.length === 1 ? 'person' : 'people'}${active === state.people.length ? '' : `, ${active} active`}`;
+    peopleCount.textContent = shown.length === state.people.length ? total : `${shown.length} of ${total}`;
     renderModulesView();
     renderRolesGuide();
     if (refocus) {

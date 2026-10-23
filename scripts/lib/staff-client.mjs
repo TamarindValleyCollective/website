@@ -247,6 +247,20 @@ export async function passkeyStepUp(api) {
   });
 }
 
+// A person's round avatar: their initial, replaced by their Google picture once it has loaded (so a picture
+// that is blocked, slow or gone leaves the initial rather than a broken image). Text only, whatever the name is.
+/** @param {HTMLElement} el @param {string} name @param {string | null | undefined} picture */
+export function fillAvatar(el, name, picture) {
+  el.textContent = name.trim().slice(0, 1).toUpperCase() || '?';
+  if (!picture) return;
+  const img = document.createElement('img');
+  img.alt = '';
+  img.referrerPolicy = 'no-referrer'; // Google's picture hosts can refuse a request that names our page
+  img.decoding = 'async';
+  img.addEventListener('load', () => el.replaceChildren(img), { once: true });
+  img.src = picture;
+}
+
 // A story photo for the reviewer: an uploaded one is fetched with the admin sign-in (and step-up, if
 // any) and shown from a blob URL; a path on the public site is used as it is.
 const staffPhotoCache = new Map();

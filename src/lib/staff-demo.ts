@@ -22,6 +22,39 @@ const ROLE_LABELS: Record<string, string> = { admin: 'Admin', user: 'User', read
 
 const b64url = (value: unknown) => btoa(JSON.stringify(value)).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
 
+// A stand-in for a Google picture: a coloured disc with a letter, as an inline image (no network).
+const face = (letter: string, colour: string) =>
+  `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" fill="${colour}"/><text x="48" y="64" font-family="sans-serif" font-size="48" font-weight="600" text-anchor="middle" fill="#fff">${letter}</text></svg>`)}`;
+
+// The Access page's People tab: a spread of people so the search and filters have something to do.
+const ALL_TOOLS = ['photo-pool', 'whatsapp', 'event-payments', 'accommodation', 'members', 'usage'];
+const CAPABILITIES: Record<string, string[]> = { read_only: ['view'], user: ['view', 'edit'], admin: ['view', 'edit', 'manage'] };
+
+function demoAccess() {
+  const grant = (...pairs: [string, string][]) => pairs.map(([module, role]) => ({ module, role, scope: null }));
+  const person = (id: string, label: string, extra: Record<string, unknown>) => ({ id, label, maskedEmail: `${label[0].toLowerCase()}••••@tvc.farm`, picture: null, active: true, isSuperAdmin: false, isMe: false, mfa: null, roles: [], ...extra });
+  return {
+    me: { id: 'demo-1', ready: true, hasPasskey: true, stepUpValid: false },
+    modules: ALL_TOOLS.map((id) => ({
+      id,
+      label: TOOLS.find((t) => t.module === id)?.label ?? id,
+      roles: Object.entries(CAPABILITIES).map(([role, caps]) => ({ role, capabilities: caps.map((c) => ({ id: c, description: `Can ${c} in this tool` })) })),
+      scopeTypes: null,
+    })),
+    people: [
+      person('demo-1', 'Demo Admin', { isMe: true, isSuperAdmin: true, picture: face('D', '#4f7a5a'), mfa: { methodCount: 2, ready: true }, roles: grant(...ALL_TOOLS.map((t): [string, string] => [t, 'admin'])) }),
+      person('demo-2', 'Priya Raman', { isSuperAdmin: true, picture: face('P', '#b5651d'), mfa: { methodCount: 2, ready: true }, roles: grant(['members', 'admin'], ['usage', 'admin']) }),
+      person('demo-3', 'Rajesh Thiagarajan', { isSuperAdmin: true, picture: face('R', '#3b6ea5'), mfa: { methodCount: 1, ready: false }, roles: [] }),
+      person('demo-4', 'Madhavan K', { picture: face('M', '#7a4f7a'), roles: grant(['accommodation', 'user'], ['members', 'admin'], ['event-payments', 'read_only']) }),
+      person('demo-5', 'Ananya Iyer', { roles: grant(['whatsapp', 'user'], ['usage', 'read_only']) }),
+      person('demo-6', 'Sanket Patil', { picture: face('S', '#a5503b'), roles: grant(['photo-pool', 'admin']) }),
+      person('demo-7', 'Linger front desk', { roles: grant(['accommodation', 'user']) }),
+      person('demo-8', 'Karthik S', {}),
+      person('demo-9', 'Divya Menon', { active: false, roles: grant(['whatsapp', 'read_only']) }),
+    ],
+  };
+}
+
 function demoMe(kind: string) {
   const limited = kind === 'limited';
   const roles: Record<string, string> = limited
@@ -30,6 +63,7 @@ function demoMe(kind: string) {
   return {
     name: limited ? 'Demo Reader' : 'Demo Admin',
     maskedEmail: 'd••••@tvc.farm',
+    picture: limited ? null : face('D', '#4f7a5a'), // the limited one shows the initial, so both looks can be seen
     isSuperAdmin: !limited,
     tools: TOOLS.filter((t) => roles[t.module]).map((t) => ({ ...t, role: roles[t.module], roleLabel: ROLE_LABELS[roles[t.module]] })),
     adminTools: limited
@@ -54,9 +88,11 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
   const realFetch = window.fetch.bind(window);
   window.fetch = (input, init) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    if (new URL(url, location.href).pathname === '/api/staff-me') {
-      return Promise.resolve(new Response(JSON.stringify(demoMe(kind)), { status: 200, headers: { 'content-type': 'application/json' } }));
-    }
+    const path = new URL(url, location.href).pathname;
+    const reply = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } }));
+    if (path === '/api/staff-me') return reply(demoMe(kind));
+    if (path === '/api/staff-admin/people' && (init?.method ?? 'GET') === 'GET') return reply(demoAccess());
+    if (path === '/api/staff-admin/activity') return reply({ events: [], nextBefore: null });
     return realFetch(input, init);
   };
 

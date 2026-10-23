@@ -271,6 +271,15 @@ export const TOURS = {
       text: 'People, who can use which tool, what each role can do, and Activity, the record of changes.',
     },
     {
+      id: 'find',
+      since: 1,
+      audience: 'super',
+      target: 'people-find',
+      tag: 'Access',
+      title: 'Find someone',
+      text: 'Search by name, or narrow the list by access and status. The list shows faces and names only; pick one to see their details and their role in each tool.',
+    },
+    {
       id: 'add',
       since: 1,
       audience: 'super',

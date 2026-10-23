@@ -39,3 +39,13 @@ export function pictureUpdate({ stored, seen, acceptedVersion, requiredVersion }
   const current = safeGooglePicture(stored);
   return next === current ? { write: false } : { write: true, value: next };
 }
+
+/**
+ * The same refresh rule for an admin (staff_users.google_picture_url), which has no privacy-notice gate: admins are
+ * the core team, and the picture is shown only to that person and to super admins on the Access page. Write only
+ * if it differs from what is stored; a missing or non-Google picture clears the stored one.
+ */
+export function pictureChange({ stored, seen }) {
+  const next = safeGooglePicture(seen);
+  return next === safeGooglePicture(stored) ? { write: false } : { write: true, value: next };
+}
