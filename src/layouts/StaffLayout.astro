@@ -17,6 +17,7 @@
 // collapsed because they need the width). Phone: a top bar with a menu button
 // that slides the list over the page.
 import '../styles/global.css';
+import '../styles/portal-look.css';
 import { MODULE_INFO, type ModuleId } from '../../netlify/functions/lib/staff-registry';
 import { STAFF_ICONS as ICONS } from '../lib/staff-icons';
 
@@ -343,176 +344,9 @@ const adminItems = [
 
   /* ---- shared building blocks, from the Apple-style concept. Pages compose these; none redefines them. */
 
-  /* A search field: a magnifier, then the input, on a quiet fill. */
-  main :global(.field) {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    box-sizing: border-box;
-    width: 100%;
-    max-width: 340px;
-    min-height: 38px;
-    padding: 0 12px;
-    border-radius: var(--radius-field);
-    background: var(--tvc-cream);
-  }
+  /* .field (search) and .segmented (one choice from a few) are shared with the member portal: see styles/portal-look.css. */
 
-  main :global(.field svg) {
-    flex: none;
-    width: 15px;
-    height: 15px;
-    fill: none;
-    stroke: var(--tvc-ink-soft);
-    stroke-width: 2;
-    stroke-linecap: round;
-  }
-
-  main :global(.field input) {
-    flex: 1;
-    min-width: 0;
-    border: 0;
-    outline: 0;
-    background: none;
-    color: var(--tvc-ink);
-    font: inherit;
-  }
-
-  main :global(.field:focus-within) {
-    box-shadow: 0 0 0 2px var(--tvc-orange);
-  }
-
-  /* A segmented control: one choice from a few, always visible. */
-  main :global(.segmented) {
-    display: inline-flex;
-    flex-wrap: wrap;
-    gap: 2px;
-    padding: 2px;
-    border-radius: 9px;
-    background: var(--tvc-cream);
-  }
-
-  main :global(.segmented button) {
-    min-height: 30px;
-    padding: 3px 12px;
-    border: 0;
-    border-radius: 7px;
-    background: none;
-    color: var(--tvc-ink-soft);
-    font: inherit;
-    font-size: var(--text-sm);
-    cursor: pointer;
-    transition: background 150ms ease-out, color 150ms ease-out;
-  }
-
-  main :global(.segmented button[aria-checked='true']),
-  main :global(.segmented button[aria-pressed='true']) {
-    background: var(--tvc-white);
-    color: var(--tvc-ink);
-    font-weight: 500;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
-  }
-
-  main :global(.segmented button:focus-visible) {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 1px;
-  }
-
-  @media (pointer: coarse) {
-    main :global(.segmented button) {
-      min-height: 44px;
-    }
-  }
-
-  /* A grouped list: rows share one rounded surface, hairlines inset from the leading edge. */
-  main :global(.list) {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    background: var(--tvc-white);
-    border-radius: var(--radius);
-    box-shadow: 0 0 0 1px var(--tvc-line) inset;
-    overflow: hidden;
-  }
-
-  main :global(.list > li) {
-    position: relative;
-  }
-
-  main :global(.list > li + li)::before {
-    content: '';
-    position: absolute;
-    inset: 0 0 auto 14px;
-    height: 1px;
-    background: var(--tvc-line);
-  }
-
-  main :global(.row) {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    box-sizing: border-box;
-    width: 100%;
-    min-height: 48px;
-    padding: 8px 14px;
-    border: 0;
-    background: none;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    text-decoration: none;
-  }
-
-  main :global(a.row),
-  main :global(button.row) {
-    cursor: pointer;
-    transition: background 120ms ease-out;
-  }
-
-  main :global(a.row:active),
-  main :global(button.row:active) {
-    background: var(--tvc-cream);
-  }
-
-  @media (hover: hover) {
-    main :global(a.row:hover),
-    main :global(button.row:hover) {
-      background: var(--tvc-cream);
-    }
-  }
-
-  main :global(a.row:focus-visible),
-  main :global(button.row:focus-visible) {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: -2px;
-  }
-
-  main :global(.row .grow) {
-    flex: 1;
-    min-width: 0;
-  }
-
-  main :global(.row .title) {
-    display: block;
-    font-weight: 500;
-  }
-
-  main :global(.row .detail) {
-    display: block;
-    font-size: var(--text-xs);
-    color: var(--tvc-ink-soft);
-  }
-
-  main :global(.row .chev) {
-    flex: none;
-    width: 14px;
-    height: 14px;
-    fill: none;
-    stroke: var(--tvc-ink-soft);
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    opacity: 0.7;
-  }
+  /* .list and .row (a grouped list) are shared with the member portal: see styles/portal-look.css. */
 
   /* A destructive row: plain red text in its own group, never a filled button (the .row inside a .list). */
   main :global(.crit-row) {
@@ -1619,81 +1453,9 @@ const adminItems = [
   refresh();
 </script>
 
-<!-- The admin's look: calm, cool neutrals and the system type face (SF Pro on Apple devices, Inter elsewhere), the way
-     the Apple-style concept reads. It overrides the public site's --tvc-* tokens on admin pages only (this layout is the
-     only place it loads); `html:root` outranks global.css's `:root`. The dark appearance below overrides the same tokens
-     again. Components use the tokens and have no rules of their own for either. -->
+<!-- The admin's look (neutral tokens, system type, the dark appearance) lives in styles/portal-look.css, shared
+     with the member portal. This is the one rule that is admin-only: photos keep their own colours in dark. -->
 <style is:global>
-  /* stylelint-disable color-no-hex -- the admin look's own token values, same job as the --tvc-* ones in global.css */
-  html:root {
-    --tvc-stone: #f4f5f1;
-    --tvc-cream: #ebece7;
-    --tvc-line: rgba(27, 30, 27, 0.12);
-    --tvc-line-strong: #868c83;
-    --tvc-ink: #1b1e1b;
-    --tvc-ink-soft: #596057;
-    --tvc-green: #2a8f56;
-    --tvc-green-dark: #1f7a46;
-    --tvc-green-tint: rgba(31, 122, 70, 0.12);
-    --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
-    --font-display: var(--font-body);
-    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 28px rgba(20, 30, 20, 0.1);
-  }
-  /* stylelint-enable color-no-hex */
-</style>
-
-<!-- The dark appearance. It follows the device unless the person chose one in the account menu (Appearance),
-     which is remembered in this browser and applied before first paint (the script in <head>). Like the neutral
-     look it overrides tokens only: components use --tvc-* tokens (a Stylelint rule bans raw colours), so they
-     follow. The same set appears twice because the OS preference and the explicit choice are separate selectors. -->
-<style is:global>
-  /* stylelint-disable color-no-hex -- the dark appearance's own token values, same job as the --tvc-* ones in global.css */
-  @media (prefers-color-scheme: dark) {
-    html:not([data-theme='light']) {
-        --tvc-stone: #151715;
-    --tvc-cream: #1b1d1b;
-    --tvc-white: #242724;
-    --tvc-ink: #f1f3ef;
-    --tvc-ink-soft: #a9afa7;
-    --tvc-line: rgba(255, 255, 255, 0.13);
-    --tvc-line-strong: #7d837b;
-    --tvc-green: #4faa77;
-    --tvc-green-dark: #5bc88a;
-    --tvc-green-tint: rgba(91, 200, 138, 0.16);
-    --tvc-orange: #d98a5a;
-    --tvc-orange-text: #f0a272;
-    --tvc-orange-tint: rgba(217, 138, 90, 0.18);
-    --tvc-error-text: #ff6b60;
-    --tvc-error-border: rgba(255, 107, 96, 0.45);
-    --tvc-error-bg: rgba(255, 107, 96, 0.16);
-    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.45), 0 6px 22px rgba(0, 0, 0, 0.4);
-    color-scheme: dark;
-    }
-  }
-
-  html[data-theme='dark'] {
-      --tvc-stone: #151715;
-    --tvc-cream: #1b1d1b;
-    --tvc-white: #242724;
-    --tvc-ink: #f1f3ef;
-    --tvc-ink-soft: #a9afa7;
-    --tvc-line: rgba(255, 255, 255, 0.13);
-    --tvc-line-strong: #7d837b;
-    --tvc-green: #4faa77;
-    --tvc-green-dark: #5bc88a;
-    --tvc-green-tint: rgba(91, 200, 138, 0.16);
-    --tvc-orange: #d98a5a;
-    --tvc-orange-text: #f0a272;
-    --tvc-orange-tint: rgba(217, 138, 90, 0.18);
-    --tvc-error-text: #ff6b60;
-    --tvc-error-border: rgba(255, 107, 96, 0.45);
-    --tvc-error-bg: rgba(255, 107, 96, 0.16);
-    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.45), 0 6px 22px rgba(0, 0, 0, 0.4);
-    color-scheme: dark;
-  }
-  /* stylelint-enable color-no-hex */
-
-  /* Photos and the brand mark keep their own colours; the page around them is what turns dark. */
   html[data-theme='dark'] #staff-main img,
   html[data-theme='dark'] .brand img {
     color-scheme: normal;
