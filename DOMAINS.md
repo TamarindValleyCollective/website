@@ -116,13 +116,19 @@ reaches at the origin). Facts worth knowing:
 - **Netlify**: add `admin.tvc.farm` as a domain alias (app.netlify.com/projects/tvc-farm/domain-management).
   Until it is an alias the host answers a plain 404. Mind the certificate limit above: adding an alias
   creates a certificate order, so add it once and don't retry.
-- **Routing** (`netlify.toml`, rules for `https://admin.tvc.farm/...` only): `/` shows `/internal/`;
-  `/internal/*`, `/_astro/*`, `/fonts/*`, `/images/brand/*`, the tab icons and the admin functions
+- **Routing** (`netlify.toml`, rules for `https://admin.tvc.farm/...` only): the pages are served
+  **without the `/internal` prefix** (the files still live under `src/pages/internal/`). `/` shows the
+  admin home; `/usage/`, `/access/`, `/security/`, `/photo-pool/`, `/whatsapp/`, `/event-payments/`,
+  `/accommodation-calendar/`, `/members/` and `/test-event/` are each a rewrite to the same path under
+  `/internal/`. `/_astro/*`, `/fonts/*`, `/images/brand/*`, the tab icons and the admin functions
   (`whatsapp-admin`, `whatsapp-suggest`, `members-admin`, `accommodation-admin`,
   `event-payments-admin`, `usage-admin`, `photo-pool`, `staff-admin`, `staff-mfa`, `staff-me`) pass
-  through; anything else redirects to the admin home. A new admin function or asset path must be added
-  to that list or the catch-all swallows it. `tvc.farm/internal/*`, `www.tvc.farm/internal/*` and
-  `members.tvc.farm/internal/*` redirect (302) to `admin.tvc.farm/internal/*`.
+  through; anything else redirects to the admin home. **A new admin page, function or asset path must
+  be added to that list** or the catch-all swallows it. The old `admin.tvc.farm/internal/*` redirects
+  (302) to the short form, and `tvc.farm/internal/*`, `www.tvc.farm/internal/*` and
+  `members.tvc.farm/internal/*` redirect (302) straight to `admin.tvc.farm/*`. `StaffLayout.astro`
+  shortens in-page `/internal/...` links on this host only (previews and `netlify dev` still serve the
+  prefix); server-built links (alert emails) use the short form.
 - **Google sign-in**: `https://admin.tvc.farm` must be listed under Authorized JavaScript origins of
   the OAuth web client, or the Google button fails there with "origin not allowed".
 - **Passkeys**: bound to `admin.tvc.farm` (rpID), so passkeys enrolled on `tvc.farm` before the move do

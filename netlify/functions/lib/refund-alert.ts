@@ -46,7 +46,7 @@ export async function sendRefundFailureAlert(failures: RefundFailure[], context:
       : `<p>Razorpay accepted a refund and then reported it as failed. The guest was already told it was initiated, so they'll be waiting on it.</p>`;
   const html = `${intro}
   <ul style="padding-left:18px;">${items}</ul>
-  <p style="margin-bottom:0;">Common fix for "insufficient balance": top up the Razorpay account balance, then retry from <a href="https://admin.tvc.farm/internal/event-payments">the Event Payments dashboard</a> (for a full-event cancellation, run "Cancel event" again — it only retries bookings that aren't already refunded).</p>`;
+  <p style="margin-bottom:0;">Common fix for "insufficient balance": top up the Razorpay account balance, then retry from <a href="https://admin.tvc.farm/event-payments">the Event Payments dashboard</a> (for a full-event cancellation, run "Cancel event" again — it only retries bookings that aren't already refunded).</p>`;
 
   await sendStaffAlert(`⚠️ ${failures.length} refund${failures.length === 1 ? '' : 's'} failed — ${failures[0].eventTitle}`, html, failures.every((f) => f.isTest));
 }
