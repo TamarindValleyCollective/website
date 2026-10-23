@@ -175,6 +175,11 @@ import SignInGate from '../../components/SignInGate.astro';
     margin-bottom: 16px;
     border-bottom: 1px solid var(--tvc-line);
     overflow-x: auto; /* four tabs don't fit a phone: scroll them rather than wrap the labels */
+    scrollbar-width: none;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
   }
 
   .tab {

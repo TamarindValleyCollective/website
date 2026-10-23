@@ -314,6 +314,19 @@ import SignInGate from '../../components/SignInGate.astro';
     gap: 10px;
   }
 
+  /* On a phone the percentage sits above a shorter bar, so the service name and its line of detail keep their room. */
+  @media (max-width: 520px) {
+    .usage .row-meter {
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 5px;
+    }
+
+    .usage .row-meter .bar {
+      width: 64px;
+    }
+  }
+
   .usage .bar {
     flex: none;
     width: 84px;
