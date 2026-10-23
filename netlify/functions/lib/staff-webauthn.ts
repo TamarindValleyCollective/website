@@ -33,9 +33,11 @@ export function relyingParty(req: Request): { rpID: string; origin: string } {
   } catch {
     throw new WebAuthnOriginError('Passkeys need a browser request from the site itself.');
   }
-  if (url.protocol === 'https:' && (url.hostname === 'tvc.farm' || url.hostname === 'www.tvc.farm')) return { rpID: 'tvc.farm', origin: url.origin };
+  // The admin tools live on admin.tvc.farm only, so the passkey is bound to that host, not to tvc.farm
+  // (a parent-domain rpID would let any *.tvc.farm page ask for an assertion).
+  if (url.protocol === 'https:' && url.hostname === 'admin.tvc.farm') return { rpID: 'admin.tvc.farm', origin: url.origin };
   if (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1')) return { rpID: url.hostname, origin: url.origin };
-  throw new WebAuthnOriginError('Passkeys only work on tvc.farm (not on previews or other addresses).');
+  throw new WebAuthnOriginError('Passkeys only work on admin.tvc.farm (not on previews or other addresses).');
 }
 
 const toB64url = (bytes: Uint8Array): string => Buffer.from(bytes).toString('base64url');

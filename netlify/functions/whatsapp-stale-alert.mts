@@ -61,7 +61,7 @@ export default async (): Promise<Response> => {
 
   const subject = stale.length === 1 ? '1 WhatsApp message waiting for a reply' : `${stale.length} WhatsApp messages waiting for a reply`;
 
-  const html = renderStaffEmail(`  <p style="margin-top:0;">${stale.length === 1 ? 'This message has' : 'These messages have'} been unread for over an hour on <a href="https://tvc.farm/internal/whatsapp">+91 80 4110 9754</a>:</p>
+  const html = renderStaffEmail(`  <p style="margin-top:0;">${stale.length === 1 ? 'This message has' : 'These messages have'} been unread for over an hour on <a href="https://admin.tvc.farm/internal/whatsapp">+91 80 4110 9754</a>:</p>
   <table style="border-collapse:collapse; width:100%;">
     <thead>
       <tr style="text-align:left; font-size:13px; color:#57604f;">
@@ -72,7 +72,7 @@ export default async (): Promise<Response> => {
     </thead>
     <tbody>${rows}</tbody>
   </table>
-  <p style="font-size:13px; color:#57604f;">You'll get this again in an hour for anything still unread — sign in at <a href="https://tvc.farm/internal/whatsapp">tvc.farm/internal/whatsapp</a> to reply.</p>`);
+  <p style="font-size:13px; color:#57604f;">You'll get this again in an hour for anything still unread — sign in at <a href="https://admin.tvc.farm/internal/whatsapp">admin.tvc.farm/internal/whatsapp</a> to reply.</p>`);
 
   try {
     const res = await fetch(RESEND_API_URL, {

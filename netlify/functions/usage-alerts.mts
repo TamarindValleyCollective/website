@@ -18,7 +18,7 @@ import { decideNotifications, evaluateAlerts } from '../../scripts/lib/usage-rul
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const FROM = 'TVC Website <noreply@tvc.farm>';
 const NOTIFY_TO = ['core-team@tvc.farm'];
-const PAGE_URL = 'https://tvc.farm/internal/usage';
+const PAGE_URL = 'https://admin.tvc.farm/internal/usage';
 
 type Alert = { key: string; level: 'warn' | 'critical'; title: string; detail: string; action?: string | null };
 

@@ -99,13 +99,37 @@ reaches at the origin). Facts worth knowing:
   Netlify. The browser UI for this is app.netlify.com/projects/tvc-farm/domain-management.
 - **Routing** (`netlify.toml`, rules for `https://members.tvc.farm/...` only): `/` shows the portal;
   the portal's own paths (`/members/*`, `/_astro/*`, `/fonts/*`, `/images/brand/*`,
-  `/api/members-me/*`, the tab icons) pass through; `/internal/*` redirects to `tvc.farm`; anything
+  `/api/members-me/*`, the tab icons) pass through; `/internal/*` redirects to `admin.tvc.farm`; anything
   else redirects to the portal's home. This keeps the public site and the admin tools off the
   member host.
 - **Google sign-in**: `https://members.tvc.farm` must be listed under Authorized JavaScript origins
   of the OAuth web client, or the Google button fails there with "origin not allowed".
 - If the portal gains a new asset path or API, add it to the allow-list in `netlify.toml`, or the
   catch-all will send it back to the portal's home.
+
+## `admin.tvc.farm` (the admin tools)
+
+- **What it is**: the admin tools under `/internal/*` (core team and Madhavan's admin functions),
+  moved off the main host so they have their own origin. Not a separate site: a **domain alias on
+  the same Netlify project**, like `members.tvc.farm`, so one deploy serves all three hosts.
+- **DNS** (Cloudflare, zone `tvc.farm`): **CNAME `admin` -> `tvc-farm.netlify.app`, proxied**.
+- **Netlify**: add `admin.tvc.farm` as a domain alias (app.netlify.com/projects/tvc-farm/domain-management).
+  Until it is an alias the host answers a plain 404. Mind the certificate limit above: adding an alias
+  creates a certificate order, so add it once and don't retry.
+- **Routing** (`netlify.toml`, rules for `https://admin.tvc.farm/...` only): `/` shows `/internal/`;
+  `/internal/*`, `/_astro/*`, `/fonts/*`, `/images/brand/*`, the tab icons and the admin functions
+  (`whatsapp-admin`, `whatsapp-suggest`, `members-admin`, `accommodation-admin`,
+  `event-payments-admin`, `usage-admin`, `photo-pool`, `staff-admin`, `staff-mfa`, `staff-me`) pass
+  through; anything else redirects to the admin home. A new admin function or asset path must be added
+  to that list or the catch-all swallows it. `tvc.farm/internal/*`, `www.tvc.farm/internal/*` and
+  `members.tvc.farm/internal/*` redirect (302) to `admin.tvc.farm/internal/*`.
+- **Google sign-in**: `https://admin.tvc.farm` must be listed under Authorized JavaScript origins of
+  the OAuth web client, or the Google button fails there with "origin not allowed".
+- **Passkeys**: bound to `admin.tvc.farm` (rpID), so passkeys enrolled on `tvc.farm` before the move do
+  not work and every admin with one re-enrols (TOTP and recovery codes are unaffected). A second
+  super admin can clear someone's enrolment (`POST /api/staff-mfa/reset`).
+- **Order of cutover**: DNS record, Netlify alias, Google origin, then merge. Merging first would
+  redirect admins to a host that does not answer yet.
 
 ## Renewal monitoring
 

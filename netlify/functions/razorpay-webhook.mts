@@ -424,7 +424,7 @@ export default async (req: Request): Promise<Response> => {
         await sendStaffAlert(
           `⚠️ Payment received after registration closed — ${eventTitle}`,
           `<p style="margin-top:0;"><strong>${escapeHtml(payerName ?? 'A guest')}</strong> paid ${formatAmount(payment.amount, payment.currency)} for <strong>${escapeHtml(eventTitle)}</strong> (${attendeeCount} ${attendeeCount === 1 ? 'person' : 'people'}, payment ${escapeHtml(payment.id)}), but online registration for this event is already closed (${escapeHtml(base.status)}).</p>
-  <p>They were sent a normal receipt. If the event is cancelled, refund them from <a href="https://tvc.farm/internal/event-payments">the Event Payments dashboard</a>.</p>`,
+  <p>They were sent a normal receipt. If the event is cancelled, refund them from <a href="https://admin.tvc.farm/internal/event-payments">the Event Payments dashboard</a>.</p>`,
           mode === 'test',
         );
       }
