@@ -1639,7 +1639,7 @@ import SignInGate from '../../components/SignInGate.astro';
       transition: none !important;
     }
 
-    :is(.btn, .nav-item, .who, .menu-btn, .more, .who-menu button, .who-menu a):active {
+    :is(.btn, .nav-item, .who, .menu-btn, .more, .who-menu button, .who-menu a, .dir-card):active {
       transform: none !important;
     }
 
@@ -2248,6 +2248,137 @@ import SignInGate from '../../components/SignInGate.astro';
     margin-top: 4px;
   }
 
+  .dir-toolbar .dir-view {
+    margin-left: auto;
+  }
+
+  /* Cards view: big faces and the first lines of the story. Border-only, like every card in the portal. */
+  .dir-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
+    gap: 14px;
+  }
+
+  .dir-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    padding: 14px 16px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: transform 120ms ease-out, border-color 120ms ease-out;
+  }
+
+  .dir-card:active {
+    transform: scale(0.985);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .dir-card:hover {
+      border-color: var(--tvc-line-strong);
+    }
+  }
+
+  .dir-card:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .dir-cell {
+    position: relative;
+  }
+
+  .dir-card--you {
+    border-color: var(--tvc-green);
+    background: var(--tvc-green-tint);
+  }
+
+  .dir-card--you .dir-pill {
+    border-color: var(--tvc-line);
+    background: var(--tvc-white);
+  }
+
+  .dir-card--you .dir-card-names {
+    padding-right: 40px;
+  }
+
+  .dir-card-tools {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .dir-card-photo {
+    display: flex;
+    flex: none;
+    align-items: center;
+  }
+
+  .dir-card-body {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    align-self: stretch;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .dir-card-names {
+    font-weight: 700;
+  }
+
+  /* The farm and house code (and, on your own card, the story's state) is a footer at the bottom right,
+     pinned so it lines up across a row of cards. */
+  .dir-card-foot {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: auto;
+  }
+
+  .dir-card-foot .dir-pills {
+    margin: 0;
+  }
+
+  .dir-card-text {
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .dir-card .dir-photo--card,
+  .dir-card .dir-initial--card {
+    width: 120px;
+    height: 120px;
+    margin: 0;
+  }
+
+  .dir-card .dir-initial--card {
+    font-size: 2.4rem;
+  }
+
+  /* A couple with two different pictures: two smaller, overlapping. */
+  .dir-card .dir-faces--2 .dir-photo--card,
+  .dir-card .dir-faces--2 .dir-initial--card {
+    width: 92px;
+    height: 92px;
+  }
+
+  .dir-card .dir-faces--2 > * + * {
+    margin-left: -34px;
+  }
+
   .dir-row {
     min-height: 68px;
     gap: 14px;
@@ -2320,6 +2451,14 @@ import SignInGate from '../../components/SignInGate.astro';
     .dir-own-tools .dir-state,
     .dir-own .dir-pills {
       display: none;
+    }
+
+    .dir-card--you .dir-card-names {
+      padding-right: 56px;
+    }
+
+    .dir-toolbar .dir-view {
+      margin-left: 0;
     }
   }
 
@@ -4568,6 +4707,33 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     }
     paintOnly();
 
+    // List (one line per unit, to scan and find) or Cards (big faces and a few lines of each story, to browse).
+    // The choice is remembered on this device; storage can be blocked, so it is only a convenience.
+    const VIEW_KEY = 'tvc-member-directory-view';
+    let mode: 'list' | 'cards' = 'list';
+    try {
+      if (localStorage.getItem(VIEW_KEY) === 'cards') mode = 'cards';
+    } catch { /* blocked: the list */ }
+    const viewSeg = h('div', 'segmented dir-view');
+    viewSeg.setAttribute('role', 'group');
+    viewSeg.setAttribute('aria-label', 'Layout');
+    const viewButtons = [['list', 'List'], ['cards', 'Cards']].map(([v, text]) => {
+      const b = h('button', '', text);
+      b.setAttribute('type', 'button');
+      b.addEventListener('click', () => {
+        mode = v as 'list' | 'cards';
+        try { localStorage.setItem(VIEW_KEY, mode); } catch { /* not remembered */ }
+        paintView();
+        draw();
+      });
+      return b;
+    });
+    viewSeg.append(...viewButtons);
+    function paintView() {
+      viewButtons.forEach((b, i) => b.setAttribute('aria-pressed', String((i === 1) === (mode === 'cards'))));
+    }
+    paintView();
+
     const snippet = (t: string) => { const p = toPlain(t); return p.length > 120 ? `${p.slice(0, 117).trimEnd()}…` : p; };
 
     // A round photo when the person has one, otherwise their initial. Photos are 400x400 squares.
@@ -4632,20 +4798,42 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       return { written, text, label: 'Draft, not submitted yet', tone: 'draft' as const };
     }
 
-    // One unit as a row in the grouped list: faces, the owners' first names with the story's first line under them,
-    // the farm and house code, and a chevron. Your own unit's row also says where its story stands, in words, and
-    // carries the way into the editor. (The story is the unit's, so anyone in the unit sees it on the unit's row.)
-    const STATE_WORD = { draft: 'Draft', review: 'In review', changes: 'Changes needed', live: 'Approved' };
-    function unitRow(hh: DirHousehold): HTMLElement {
-      // The row names and shows only the primary members (the owners); the popup has everyone.
+    // What both views show for a unit: the owners' first names, the story's first line, and whether the unit is yours.
+    // (The popup has everyone, and search still matches full names.) No story means no line at all, so a unit
+    // without one is quiet rather than repeating "no story yet".
+    function unitInfo(hh: DirHousehold) {
       const primary = hh.people.filter((p) => p.primary !== false);
       const withStory = primary.find((p) => p.story?.bio) ?? primary.find((p) => p.story) ?? hh.people.find((p) => p.story?.bio) ?? hh.people.find((p) => p.story);
-      // First names on the row; the full names are in the popup, and search still matches them.
       const isYours = hh.people.some((p) => p.isYou);
       const names = joinNames(primary.map((p) => (p.isYou ? `${first(p.name)} (you)` : first(p.name))));
-      // No story means no line at all, so a unit without one is quiet rather than repeating "no story yet".
       const storyLine = withStory?.story?.bio ? snippet(withStory.story.bio) : withStory?.story?.why ? `“${snippet(withStory.story.why)}”` : isYours && mine?.text ? snippet(mine.text) : isYours ? 'You have not shared a story yet' : '';
-      const own = isYours && !isFamily();
+      return { primary, isYours, own: isYours && !isFamily(), names, storyLine };
+    }
+
+    // Your own unit carries where its story stands, in words, and the way into the editor. The story is the
+    // unit's, so anyone in the unit sees it on the unit's row or card.
+    const STATE_WORD = { draft: 'Draft', review: 'In review', changes: 'Changes needed', live: 'Approved' };
+    function storyState(): HTMLElement | null {
+      if (!mine || !mine.written) return null;
+      const state = h('span', `dir-state dir-state--${mine.tone}`, STATE_WORD[mine.tone]);
+      state.title = mine.label;
+      return state;
+    }
+    function ownTools(primaryCount: number, cls: string, withState = true): HTMLElement {
+      const label = mine && !mine.written ? 'Write your story' : primaryCount > 1 ? 'Edit your unit\'s story (shared)' : 'Edit your story';
+      const edit = h('button', 'dir-edit', undefined, icon(IC.pen));
+      edit.setAttribute('type', 'button');
+      edit.setAttribute('aria-label', label);
+      edit.title = label;
+      edit.setAttribute('data-tour', 'edit-story');
+      edit.addEventListener('click', () => (location.hash = '#/story'));
+      return h('span', cls, undefined, withState ? storyState() : null, edit);
+    }
+
+    // List view: one unit as a row in the grouped list (the admin portal's .list and .row): faces, the owners'
+    // first names with the story's first line under them, the farm and house code, and a chevron.
+    function unitRow(hh: DirHousehold): HTMLElement {
+      const { primary, own, names, storyLine } = unitInfo(hh);
       const chev = icon('<path d="M9 6l6 6-6 6"/>');
       chev.setAttribute('class', 'chev');
       const b = h('button', 'row dir-row', undefined,
@@ -4656,16 +4844,23 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       b.setAttribute('type', 'button');
       b.addEventListener('click', () => openProfile(hh, b));
       if (!own) return h('li', '', undefined, b);
-      const label = mine && !mine.written ? 'Write your story' : primary.length > 1 ? 'Edit your unit\'s story (shared)' : 'Edit your story';
-      const edit = h('button', 'dir-edit', undefined, icon(IC.pen));
-      edit.setAttribute('type', 'button');
-      edit.setAttribute('aria-label', label);
-      edit.title = label;
-      edit.setAttribute('data-tour', 'edit-story');
-      edit.addEventListener('click', () => (location.hash = '#/story'));
-      const state = mine && mine.written ? h('span', `dir-state dir-state--${mine.tone}`, STATE_WORD[mine.tone]) : null;
-      if (state) state.title = mine!.label;
-      return h('li', 'dir-own', undefined, b, h('span', 'dir-own-tools', undefined, state, edit));
+      return h('li', 'dir-own', undefined, b, ownTools(primary.length, 'dir-own-tools'));
+    }
+
+    // Cards view: the picture on the left, vertically centred against the text; the names, the story's first
+    // lines and the farm and house code are in a column beside it.
+    function unitCard(hh: DirHousehold): HTMLElement {
+      const { primary, isYours, own, names, storyLine } = unitInfo(hh);
+      const b = h('button', `dir-card${isYours ? ' dir-card--you' : ''}`, undefined,
+        h('span', 'dir-card-photo', undefined, faces(primary, 'card')),
+        h('span', 'dir-card-body', undefined,
+          h('span', 'dir-card-names', names),
+          storyLine ? h('span', 'dir-card-text', storyLine) : null,
+          h('span', 'dir-card-foot', undefined, own ? storyState() : null, pills(hh, false))));
+      b.setAttribute('type', 'button');
+      b.addEventListener('click', () => openProfile(hh, b));
+      if (!own) return b;
+      return h('div', 'dir-cell', undefined, b, ownTools(primary.length, 'dir-card-tools', false));
     }
 
     // The household's profile in a native dialog, laid out like the card on the public Members page: the
@@ -4810,7 +5005,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     }
 
     const chipsHost = h('div');
-    const bar = h('div', 'dir-toolbar', undefined, searchField, onlySeg);
+    const bar = h('div', 'dir-toolbar', undefined, searchField, onlySeg, viewSeg);
     const count = h('p', 'dir-count');
     const foot = h('p', 'dir-foot', 'Prefer not to be listed? Turn it off under Your details in the account menu.');
     const results = h('div');
@@ -4842,7 +5037,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const isMine = (x: DirHousehold) => x.people.some((p) => p.isYou);
       const mineHh = shown.filter(isMine);
       const rest = shown.filter((x) => !isMine(x));
-      const listOf = (hs: DirHousehold[]) => h('ul', 'list', undefined, ...hs.map(unitRow));
+      const listOf = (hs: DirHousehold[]) => (mode === 'cards' ? h('div', 'dir-grid', undefined, ...hs.map(unitCard)) : h('ul', 'list', undefined, ...hs.map(unitRow)));
       results.replaceChildren(shown.length
         ? h('div', '', undefined,
             mineHh.length ? h('h2', 'dir-group', 'Your unit') : null,
