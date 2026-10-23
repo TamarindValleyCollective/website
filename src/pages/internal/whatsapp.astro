@@ -31,11 +31,16 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     <div id="app" class="app" hidden>
       <div class="conversations card" data-tour="conversations">
         <div class="search-row">
-          <input type="search" id="conversation-search" placeholder="Search name or message…" aria-label="Search conversations" />
+          <label class="field">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+            <input type="search" id="conversation-search" placeholder="Search name or message" aria-label="Search conversations" autocomplete="off" />
+          </label>
         </div>
-        <div class="list-filters" role="group" aria-label="Filter conversations">
-          <button type="button" class="chip tap-target is-active" data-filter="all" aria-pressed="true">All</button>
-          <button type="button" class="chip tap-target" data-filter="needs-reply" aria-pressed="false">Needs reply<span id="needs-reply-count" class="chip-count"></span></button>
+        <div class="list-filters">
+          <div class="segmented" role="group" aria-label="Filter conversations">
+            <button type="button" class="tap-target is-active" data-filter="all" aria-pressed="true">All</button>
+            <button type="button" class="tap-target" data-filter="needs-reply" aria-pressed="false">Needs reply<span id="needs-reply-count" class="chip-count"></span></button>
+          </div>
         </div>
         <ul id="conversations-list"></ul>
         <p id="conversations-status" class="pane-status" hidden></p>
@@ -201,22 +206,12 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     border-bottom: 1px solid var(--tvc-line);
   }
 
-  .search-row input {
-    width: 100%;
-    min-height: 36px;
-    padding: 0 12px;
-    border: 1px solid var(--tvc-line-strong);
-    border-radius: var(--radius-field);
-    font: inherit;
-    font-size: var(--text-sm);
-    background: var(--tvc-white);
-    color: var(--tvc-ink);
+  .search-row .field {
+    max-width: none;
   }
 
   .list-filters {
     flex: 0 0 auto;
-    display: flex;
-    gap: 8px;
     padding: 10px 16px;
     border-bottom: 1px solid var(--tvc-line);
   }
@@ -673,7 +668,6 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     transform: rotate(180deg);
   }
 
-  .chip.is-active,
   .chip.picker-toggle.is-open {
     background: var(--tvc-ink);
     border-color: var(--tvc-ink);
@@ -1191,7 +1185,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   const guestBookings = document.getElementById('guest-bookings') as HTMLElement;
   const guestStays = document.getElementById('guest-stays') as HTMLElement;
   const needsReplyCount = document.getElementById('needs-reply-count') as HTMLElement;
-  const filterChips = [...document.querySelectorAll<HTMLButtonElement>('.list-filters .chip')];
+  const filterChips = [...document.querySelectorAll<HTMLButtonElement>('.list-filters button')];
   const messagesEl = document.getElementById('messages') as HTMLElement;
   const composer = document.getElementById('composer') as HTMLElement;
   const responderNameInput = document.getElementById('responder-name') as HTMLInputElement;

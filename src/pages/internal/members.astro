@@ -32,7 +32,10 @@ import SignInGate from '../../components/SignInGate.astro';
       <dl id="totals" class="totals" data-tour="totals"></dl>
 
       <div class="toolbar" data-tour="toolbar">
-        <label>Search <input type="search" id="search" placeholder="Unit, house or name" autocomplete="off" /></label>
+        <label class="field">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input type="search" id="search" placeholder="Search by unit, house or name" aria-label="Search the register" autocomplete="off" />
+        </label>
         <label>Show
           <select id="show">
             <option value="all">All units</option>
@@ -156,27 +159,37 @@ import SignInGate from '../../components/SignInGate.astro';
     font-size: var(--text-sm);
   }
 
+  /* The search is the shared field (a magnifier and an input in a row), not one of the stacked label-over-control pairs. */
+  .members .toolbar label.field {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    min-width: 260px;
+  }
+
   .members .toolbar label.check {
     display: flex;
     gap: 8px;
     align-items: center;
   }
 
+  /* The filter is a pop-up: a quiet fill and a chevron, like the role pop-ups on Access. */
   .members .toolbar select {
-    min-height: 40px;
-    padding: 8px 10px;
-    border: 1px solid var(--tvc-line);
+    appearance: none;
+    -webkit-appearance: none;
+    min-height: 38px;
+    padding: 4px 32px 4px 12px;
+    border: 0;
     border-radius: var(--radius-field);
-    background: var(--tvc-white);
+    background: var(--tvc-cream) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23868c83' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center / 12px;
+    color: var(--tvc-ink);
     font: inherit;
+    cursor: pointer;
   }
 
-  .members .toolbar input[type='search'] {
-    min-width: 240px;
-    padding: 8px 10px;
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius-field);
-    font: inherit;
+  .members .toolbar select:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
   }
 
   .members .group {

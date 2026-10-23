@@ -57,10 +57,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         <button type="button" id="prev-month" class="button">← Prev</button>
         <h2 id="month-label"></h2>
         <button type="button" id="next-month" class="button">Next →</button>
-        <div class="view-toggle" role="group" aria-label="Calendar view">
-          <button type="button" class="button view-toggle-btn" data-view="day">Day</button>
-          <button type="button" class="button view-toggle-btn view-toggle-btn--active" data-view="week">Week</button>
-          <button type="button" class="button view-toggle-btn" data-view="month">Month</button>
+        <div class="view-toggle segmented" role="group" aria-label="Calendar view">
+          <button type="button" class="view-toggle-btn" data-view="day" aria-pressed="false">Day</button>
+          <button type="button" class="view-toggle-btn view-toggle-btn--active" data-view="week" aria-pressed="true">Week</button>
+          <button type="button" class="view-toggle-btn" data-view="month" aria-pressed="false">Month</button>
         </div>
       </div>
 
@@ -230,21 +230,9 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     text-align: center;
   }
 
+  /* The shared segmented control does the look; this only pushes it to the right of the month. */
   .view-toggle {
-    display: flex;
-    gap: 4px;
     margin-left: auto;
-  }
-
-  .view-toggle-btn {
-    padding: 6px 14px;
-    font-size: var(--text-xs);
-  }
-
-  .view-toggle-btn--active {
-    background: var(--tvc-green);
-    border-color: var(--tvc-green);
-    color: var(--tvc-white);
   }
 
   /* Below this width, Prev/label/Next alone are already tight - let the
@@ -3620,7 +3608,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       const mode = btn.dataset.view as ViewMode;
       if (mode === viewMode) return;
       viewMode = mode;
-      for (const b of viewToggleButtons) b.classList.toggle('view-toggle-btn--active', b === btn);
+      for (const b of viewToggleButtons) {
+        b.classList.toggle('view-toggle-btn--active', b === btn);
+        b.setAttribute('aria-pressed', String(b === btn));
+      }
       loadView();
     });
   }

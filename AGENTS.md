@@ -76,7 +76,11 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
   tracking 0.08em; pills and links weight 600. Sentence case everywhere else (never uppercase an email).
 - Admin portal (`StaffLayout.astro`, `src/pages/internal/*`): the shell owns the shared primitives (`.card`,
   `.hint`, `.note`, `.error`, `.section.wrapper`, `[hidden]`, `.visually-hidden`, `.link-button`, and the button
-  modifiers `--outline`, `--primary`, `--danger`, `--danger-outline`, `--small`). A page uses them and never
+  modifiers `--outline`, `--primary`, `--danger`, `--danger-outline`, `--small`) and the building blocks of the
+  Apple-style layout: `.field` (search), `.segmented` (one choice from a few), `.list` with `.row` (a grouped list;
+  `a.row` and `button.row` are tappable), `.pill` (`--ok`, `--warn`, `--crit`), `.sheet` (a modal `<dialog>`),
+  `.toast` via `showToast(message, undo?)` in `staff-client.mjs`, and `.crit-row` (a destructive action as plain red
+  text in its own list). Build a new page from these rather than inventing controls. A page uses them and never
   redefines them; it may add to one (WhatsApp's `.card` sets padding and overflow) and
   `scripts/lib/admin-primitives.test.mjs` lists the few that do. Font sizes are `--text-*` tokens with
   nothing below 0.8rem (only display sizes of 1.3rem and up may be literal; Stylelint errors otherwise). A

@@ -115,6 +115,25 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     if (path === '/api/staff-me') return reply(demoMe(kind));
     if (path === '/api/staff-admin/people' && (init?.method ?? 'GET') === 'GET') return reply(demoAccess());
     if (path === '/api/staff-admin/activity') return reply({ events: [], nextBefore: null });
+    if (path === '/api/staff-mfa/status') {
+      const day = 86400000;
+      return reply({
+        methods: { totp: true, recovery: true, recoveryCodesRemaining: 8, passkey: true },
+        passkeys: [
+          { id: 'k1', label: 'MacBook Touch ID', createdAt: new Date(Date.now() - 20 * day).toISOString(), lastUsedAt: new Date(Date.now() - 2 * day).toISOString() },
+          { id: 'k2', label: 'iPhone', createdAt: new Date(Date.now() - 5 * day).toISOString(), lastUsedAt: null },
+        ],
+        pendingTotp: false,
+        methodCount: 2,
+        ready: true,
+        stepUpValid: false,
+        lockedUntil: null,
+        admins: [
+          { id: 'demo-2', label: 'Priya Raman', ready: true, methodCount: 2 },
+          { id: 'demo-3', label: 'Rajesh Thiagarajan', ready: false, methodCount: 1 },
+        ],
+      });
+    }
     if ((init?.method ?? 'GET') === 'POST') {
       let body: unknown = null;
       try {

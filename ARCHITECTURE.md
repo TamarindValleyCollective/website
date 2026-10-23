@@ -745,7 +745,13 @@ outside both the local machine and Netlify (the member-update-email workflow).
   **look** follows the Apple-style concept: calm cool neutrals and the system type face, as token overrides on admin pages
   only (`html:root` block in `StaffLayout.astro`, which outranks global.css's `:root`), large 34px titles, a translucent side
   menu whose current item is filled with the accent, flat hairline cards, and a `toolbar` slot in the top bar for page
-  controls. The admin also has a **dark appearance** (token overrides at the foot of
+  controls. The pieces the concept introduced (search `.field`, `.segmented` control, grouped `.list` and `.row`, `.pill`,
+  `.sheet`, `.toast` with `showToast()`, the red `.crit-row`) live in the shell and are reused: Home is a grouped list of
+  tools; Event Payments has a pop-up event picker, segmented Live and Test, one surface for the headline figures, bookings
+  as a grouped surface and "Cancel event…" as a red row under them; Security's methods, passkeys and other super admins
+  are grouped lists with pills; WhatsApp's search and All / Needs reply filter, the Member register's search and filter
+  pop-up, and the Accommodation calendar's Day / Week / Month toggle use the shared controls. The Usage page keeps its own
+  card layout (its status pill is `.status-pill`). The admin also has a **dark appearance** (token overrides at the foot of
   `StaffLayout.astro`, so components follow with no rules of their own): it follows the device, and the account menu's
   Appearance control (Auto, Light, Dark) pins one, remembered in `localStorage` and applied by a script in `<head>`
   before first paint. Hard-coded greys were the only blockers (the accommodation calendar's past and closed cells now mix
