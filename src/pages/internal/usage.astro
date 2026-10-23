@@ -64,6 +64,7 @@ import SignInGate from '../../components/SignInGate.astro';
     </div>
 
     <dialog id="service-sheet" class="sheet sheet--service" aria-labelledby="service-title"></dialog>
+    <dialog id="wa-sheet" class="sheet sheet--service" aria-labelledby="wa-title"></dialog>
 
     <dialog id="prices-sheet" class="sheet" aria-labelledby="prices-title">
       <h2 id="prices-title">Prices and limits</h2>
@@ -349,6 +350,14 @@ import SignInGate from '../../components/SignInGate.astro';
   #staff-main .usage .sheet--service[open] {
     display: flex;
     flex-direction: column;
+  }
+
+  .usage .sheet-label {
+    margin: 18px 0 6px 14px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
   }
 
   .usage .sheet-head {
@@ -1363,25 +1372,90 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   // ---- WhatsApp account health ---------------------------------------------------
+  // At a glance: how many templates are approved, waiting, or need attention, and the number's standing. The
+  // template-by-template list and Meta's recent notices open in a sheet.
+  interface HealthSummary {
+    total: number;
+    approved: number;
+    waiting: number;
+    attention: number;
+    templates: Array<{ name: string; state: 'approved' | 'waiting' | 'attention'; note: string | null }>;
+    phone: { state: 'ok' | 'attention' | 'quiet'; title: string | null; detail: string | null };
+  }
+  type HealthEvent = { severity: string; title: string; detail: string | null; at: string };
+
+  const waSheet = $('wa-sheet') as HTMLDialogElement;
+  waSheet.addEventListener('click', (ev) => {
+    if (ev.target === waSheet) waSheet.close();
+  });
+
+  const statePill = (kind: 'ok' | 'warn' | 'crit', text: string) => h('span', { class: `pill pill--${kind}`, text });
+  const eventTime = (at: string) => `${dateText(at)}, ${new Date(at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+
+  function eventRow(e: HealthEvent): HTMLElement {
+    const lvl: Level = e.severity === 'critical' ? 'critical' : e.severity === 'warning' ? 'warn' : null;
+    return h('li', {}, h('div', { class: 'row' },
+      h('span', { class: 'grow' }, h('span', { class: 'title', text: e.title }), e.detail ? h('span', { class: 'detail', text: e.detail }) : null),
+      lvl ? pill(lvl) : null,
+      h('span', { class: 'value', text: eventTime(e.at) })));
+  }
+
+  function fillWaSheet(sum: HealthSummary, events: HealthEvent[]) {
+    const done = h('button', { class: 'button button--outline', text: 'Done', attrs: { type: 'button' } });
+    done.addEventListener('click', () => waSheet.close());
+    const templateRows = sum.templates.map((t) => {
+      const state = t.state === 'attention' ? statePill('warn', 'Needs attention') : t.state === 'approved' ? statePill('ok', 'Approved') : h('span', { class: 'muted', text: 'Waiting' });
+      return h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow' }, h('span', { class: 'title', text: t.name }), t.note ? h('span', { class: 'detail', text: t.note }) : null), state));
+    });
+    const phoneText = sum.phone.state === 'quiet' ? 'No notices from Meta' : `${sum.phone.title}${sum.phone.detail ? `: ${sum.phone.detail}` : ''}`;
+    waSheet.replaceChildren(
+      h('div', { class: 'sheet-head' }, h('h3', { text: 'WhatsApp account health', attrs: { id: 'wa-title' } }), h('div', { class: 'sheet-head-actions' }, done)),
+      h('div', { class: 'sheet-body' },
+        h('h4', { class: 'sheet-label', text: 'Templates' }),
+        h('ul', { class: 'list' }, ...templateRows),
+        h('h4', { class: 'sheet-label', text: 'Phone number' }),
+        h('ul', { class: 'list' }, h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow' }, h('span', { class: 'title', text: phoneText }))))),
+        h('h4', { class: 'sheet-label', text: 'Recent notices from Meta' }),
+        h('ul', { class: 'list' }, ...(events.length ? events.map(eventRow) : [h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow muted', text: 'None yet. Meta reports template approvals, quality drops and restrictions as they happen, and the core team is emailed about each one.' })))])),
+        h('div', { class: 'sheet-foot' }, h('p', { class: 'svc-fresh', text: 'Approved means listed in the approved-templates setting. A template with no notice from Meta is counted as fine, because Meta only tells us when something changes.' })),
+      ),
+    );
+  }
+
   async function loadWhatsAppHealth() {
     const box = $('wa-health');
     const note = (title: string, detail?: string) => box.replaceChildren(h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow' }, h('span', { class: 'title', text: title }), detail ? h('span', { class: 'detail', text: detail }) : null))));
     try {
       const { status, data } = await staffFetch('/api/usage-admin/whatsapp-health');
       if (status !== 200) throw new Error('failed');
-      const events = data.events as Array<{ severity: string; title: string; detail: string | null; at: string }>;
-      if (events.length === 0) return note('No events', 'Meta reports template approvals, quality drops and restrictions here as they happen. The core team is emailed about each one.');
+      const sum = data.summary as HealthSummary;
+      const events = data.events as HealthEvent[];
+      const needing = sum.templates.filter((t) => t.state === 'attention').map((t) => t.name);
+      const stat = (title: string, detail: string, value: string | HTMLElement) => h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow' }, h('span', { class: 'title', text: title }), h('span', { class: 'detail', text: detail })), typeof value === 'string' ? h('span', { class: 'value', text: value }) : value));
+      const more = h('button', { class: 'row', attrs: { type: 'button' } },
+        h('span', { class: 'grow' }, h('span', { class: 'title', text: 'Details and recent notices' }), h('span', { class: 'detail', text: 'Each template, the phone number, and what Meta last told us' })));
+      const chev = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      chev.setAttribute('class', 'chev');
+      chev.setAttribute('viewBox', '0 0 24 24');
+      chev.setAttribute('aria-hidden', 'true');
+      const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      arrow.setAttribute('d', 'm9 6 6 6-6 6');
+      chev.append(arrow);
+      more.append(chev);
+      more.addEventListener('click', () => {
+        fillWaSheet(sum, events);
+        waSheet.showModal();
+      });
+      const phoneValue = sum.phone.state === 'attention' ? statePill('crit', 'Needs attention') : sum.phone.state === 'ok' ? statePill('ok', 'Good standing') : h('span', { class: 'value muted', text: 'No notices' });
       box.replaceChildren(
-        ...events.map((e) => {
-          const lvl: Level = e.severity === 'critical' ? 'critical' : e.severity === 'warning' ? 'warn' : null;
-          return h('li', {}, h('div', { class: 'row' },
-            h('span', { class: 'grow' }, h('span', { class: 'title', text: e.title }), e.detail ? h('span', { class: 'detail', text: e.detail }) : null),
-            lvl ? pill(lvl) : null,
-            h('span', { class: 'value', text: `${dateText(e.at)}, ${new Date(e.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` })));
-        }),
+        stat('Approved', 'Ready to send', `${sum.approved} of ${sum.total}`),
+        stat('Waiting for approval', 'Not on the approved list yet', String(sum.waiting)),
+        stat('Need attention', needing.length ? needing.slice(0, 2).join(', ') + (needing.length > 2 ? ` and ${needing.length - 2} more` : '') : 'Rejected, paused or low quality', sum.attention ? statePill('warn', String(sum.attention)) : '0'),
+        stat('Phone number', 'Quality and messaging limit', phoneValue),
+        h('li', {}, more),
       );
     } catch {
-      note('Could not load WhatsApp events right now.');
+      note('Could not load WhatsApp health right now.');
     }
   }
 

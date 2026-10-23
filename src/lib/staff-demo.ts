@@ -230,7 +230,16 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     }
     if (path === '/api/usage-admin/overview') return reply(demoUsage());
     if (path === '/api/usage-admin/domains') return reply({ domains: [] });
-    if (path === '/api/usage-admin/whatsapp-health') return reply({ events: [] });
+    if (path === '/api/usage-admin/whatsapp-health') {
+      const names = ['tvc_event_cancelled', 'tvc_refund_initiated', 'tvc_refund_processed', 'tvc_cancellation_declined', 'tvc_staff_enquiry_alert', 'tvc_event_cancelled_v2', 'tvc_refund_initiated_v2', 'tvc_stay_confirmed', 'tvc_stay_cancelled', 'tvc_stay_staff_alert'];
+      const attention = !location.search.includes('clear');
+      const templates = names.map((name, i) => ({ name, state: attention && i === 6 ? 'attention' : i < 7 ? 'approved' : 'waiting', note: attention && i === 6 ? 'rejected: tvc_refund_initiated_v2 (INVALID_FORMAT)' : null }));
+      const events = attention ? [{ severity: 'warning', title: 'Template rejected: tvc_refund_initiated_v2', detail: 'INVALID_FORMAT', at: new Date(Date.now() - 3 * 3_600_000).toISOString() }, { severity: 'info', title: 'Template approved: tvc_event_cancelled_v2', detail: null, at: new Date(Date.now() - 2 * 86_400_000).toISOString() }] : [];
+      return reply({
+        summary: { total: names.length, approved: templates.filter((t) => t.state === 'approved').length, waiting: templates.filter((t) => t.state === 'waiting').length, attention: templates.filter((t) => t.state === 'attention').length, templates, phone: attention ? { state: 'ok', title: 'Messaging limit raised', detail: '+91 80 4110 9754 · messaging limit TIER_1K' } : { state: 'quiet', title: null, detail: null } },
+        events,
+      });
+    }
     if (path === '/api/usage-admin/reading' && (init?.method ?? 'GET') === 'POST') {
       try {
         const body = JSON.parse(String(init?.body ?? 'null'));

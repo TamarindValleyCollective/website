@@ -18,6 +18,8 @@ import { requireStaff, logStaffAction } from './lib/staff-access';
 import { rest } from './lib/staff-mfa-store';
 import { loadUsageData } from './lib/usage-store';
 import { listHealthEvents } from '../../scripts/lib/supabase.mjs';
+import { summarizeWhatsAppHealth } from '../../scripts/lib/whatsapp-health-summary.mjs';
+import { WHATSAPP_TEMPLATES } from './lib/whatsapp-templates';
 import { roleHasCapability } from './lib/staff-registry';
 import {
   MANUAL_METERS,
@@ -357,15 +359,18 @@ async function handleSettings(req: Request): Promise<Response> {
   return jsonResponse({ ok: true });
 }
 
-// Recent WhatsApp account-health events (template approved/paused, quality
-// drops...) recorded by whatsapp-webhook.mts. Read-only.
+// WhatsApp account health: a summary (template counts, phone number standing) and the recent events (template
+// approved/paused, quality drops...) recorded by whatsapp-webhook.mts. Read-only.
 async function handleWhatsAppHealth(req: Request): Promise<Response> {
   const auth = await requireStaff(req, 'usage', 'view');
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
   try {
-    const events = await listHealthEvents(15);
+    // The summary needs the newest notice per template, so it reads further back than the 15 shown.
+    const all = (await listHealthEvents(200)) as any[];
+    const approved = (process.env.WHATSAPP_APPROVED_TEMPLATES ?? '').split(',').map((n) => n.trim()).filter(Boolean);
     return jsonResponse({
-      events: events.map((e: any) => ({ severity: e.severity, title: e.title, detail: e.detail, at: e.created_at })),
+      summary: summarizeWhatsAppHealth(Object.keys(WHATSAPP_TEMPLATES), approved, all),
+      events: all.slice(0, 15).map((e: any) => ({ severity: e.severity, title: e.title, detail: e.detail, at: e.created_at })),
     });
   } catch (err) {
     console.error('[usage-admin] failed to load WhatsApp health events', err);

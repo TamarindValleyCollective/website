@@ -74,7 +74,13 @@ Domain renewals are separate (GitHub Action): at 60 and 30 days, then daily from
 
 ## WhatsApp account health
 
-A fourth block on the page, "WhatsApp account health", lists the 15 most recent account events
+A fourth block on the page, "WhatsApp account health", shows four rows at a glance: templates
+**approved** (of all the site can send), **waiting for approval**, **needing attention** (rejected,
+flagged, paused, disabled, or quality yellow/red) and the **phone number's** standing. Meta never
+lists templates to us, so `scripts/lib/whatsapp-health-summary.mjs` combines the templates defined
+in `whatsapp-templates.ts`, the `WHATSAPP_APPROVED_TEMPLATES` setting and the newest event per
+template; a template with no event is counted as fine. "Details and recent notices" opens a sheet
+with every template's state, the phone number, and the 15 most recent account events
 Meta reported (template approved / rejected / paused / disabled, template or phone-number quality
 changes, a template recategorised, account restrictions or alerts). These are recorded by
 `whatsapp-webhook.mts` into `whatsapp_health_events` (migration `0036`) and **each is also emailed
