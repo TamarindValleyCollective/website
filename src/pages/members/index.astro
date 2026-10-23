@@ -982,8 +982,8 @@ import SignInGate from '../../components/SignInGate.astro';
     font-variant-numeric: tabular-nums;
   }
 
-  /* The code that names a card (farm unit, house number): a clean round badge at the right of the heading. A hairline
-     ring and a lot of white space, so the number carries the weight, and a whisper of shadow to lift it off the card. */
+  /* The code that names a card (farm unit, house number): a solid dark-green round badge at the right of the
+     heading, white figures on it. It is the same green as the current menu item and the primary buttons. */
   .pills {
     display: flex;
     flex: none;
@@ -995,14 +995,13 @@ import SignInGate from '../../components/SignInGate.astro';
     display: grid;
     place-items: center;
     box-sizing: border-box;
-    min-width: 72px;
-    height: 72px;
+    min-width: 64px;
+    height: 64px;
     margin: 0;
     padding: 0 8px;
-    border: 2px solid var(--tvc-green-dark);
-    background: var(--tvc-white);
-    box-shadow: var(--shadow-soft);
-    color: var(--tvc-green-dark);
+    border: 0;
+    background: var(--tvc-green-dark); /* solid, like the current menu item and the primary buttons; no shadow */
+    color: var(--tvc-white);
     /* Set outright: the badge sits inside a Fraunces h2 on My unit and an uppercase Inter row on Home, and must look the same in both.
        Display type is set slightly tight, and the figures are tabular so F-12 and F-08 are the same width. */
     font-family: var(--font-display);
@@ -1014,7 +1013,7 @@ import SignInGate from '../../components/SignInGate.astro';
     text-transform: none;
   }
 
-  /* The picture for Farm or House, beside the badge: a monoline drawing in the same green, drawn at the same weight as the ring. */
+  /* The picture for Farm or House, beside the badge: a faint monoline drawing in the same green. */
   .scene-wrap {
     display: inline-flex;
   }
