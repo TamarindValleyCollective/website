@@ -516,8 +516,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
      past-dimming, which only covers the one status that otherwise looked
      identical whether it was bookable or not). */
   .grid-table th.col--past {
-    /* stylelint-disable-next-line color-no-hex -- internal admin tool, neutral greys */
-    background: #d8d8d8;
+    background: color-mix(in srgb, var(--tvc-ink) 16%, var(--tvc-white));
   }
 
   .day-letter {
@@ -567,8 +566,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
      matches the header's own col--past shading rather than inventing a
      second grey. */
   .cell--free:not([data-tent-id]) {
-    /* stylelint-disable-next-line color-no-hex -- internal admin tool, neutral greys */
-    background: #d8d8d8;
+    background: color-mix(in srgb, var(--tvc-ink) 16%, var(--tvc-white));
   }
 
   .cell--occupied {
@@ -576,8 +574,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   .cell--closed {
-    /* stylelint-disable-next-line color-no-hex -- internal admin tool, neutral greys */
-    background: #e6e6e6;
+    background: color-mix(in srgb, var(--tvc-ink) 10%, var(--tvc-white));
   }
 
   .cell--occupied,
@@ -670,13 +667,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   .day-row--closed {
-    /* stylelint-disable-next-line color-no-hex -- internal admin tool, neutral greys */
-    background: #e6e6e6;
+    background: color-mix(in srgb, var(--tvc-ink) 10%, var(--tvc-white));
   }
 
   .day-row--free-past {
-    /* stylelint-disable-next-line color-no-hex -- internal admin tool, neutral greys */
-    background: #d8d8d8;
+    background: color-mix(in srgb, var(--tvc-ink) 16%, var(--tvc-white));
     color: var(--tvc-ink-soft);
   }
 

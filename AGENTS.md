@@ -81,7 +81,10 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
   `scripts/lib/admin-primitives.test.mjs` lists the few that do. Font sizes are `--text-*` tokens with
   nothing below 0.8rem (only display sizes of 1.3rem and up may be literal; Stylelint errors otherwise). A
   destructive control uses `--danger` or `--danger-outline`, never the primary fill. An alternative cooler look
-  exists behind `?look=neutral` in `astro dev` only (tokens at the foot of `StaffLayout.astro`).
+  exists behind `?look=neutral` in `astro dev` only (tokens at the foot of `StaffLayout.astro`). The admin also has a
+  dark appearance (same file, tokens only) that follows the device or the account menu's Appearance choice; keep it
+  working by using `--tvc-*` tokens for every colour in admin files (a raw colour will not turn dark; mix tokens with
+  `color-mix` when you need an in-between shade) and check a new page in Dark as well as Light.
 
 `npm run lint:css` checks this (Stylelint); the `Design language` GitHub Action runs it on every
 PR. Raw hex colors are errors (CI fails); radius literals are warnings for now. Admin font sizes outside the scale are errors. A color that genuinely isn't a TVC color (a third-party brand, a data

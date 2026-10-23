@@ -743,8 +743,11 @@ outside both the local machine and Netlify (the member-update-email workflow).
   visually hidden labels and the button modifiers (`--primary`, `--danger`, `--danger-outline`, `--small`) once; the nine
   pages no longer carry copies, and every font size in them is a `--text-*` token with a 0.8rem floor. A dev-only
   `?look=neutral` (and a toggle in the demo note) swaps in a cooler token set at the foot of `StaffLayout.astro` for
-  comparison; nothing sets it in production. Details and the rules for adding to a shared rule are in Design language in
-  `CLAUDE.md`.
+  comparison; nothing sets it in production. The admin also has a **dark appearance** (token overrides at the foot of
+  `StaffLayout.astro`, so components follow with no rules of their own): it follows the device, and the account menu's
+  Appearance control (Auto, Light, Dark) pins one, remembered in `localStorage` and applied by a script in `<head>`
+  before first paint. Hard-coded greys were the only blockers (the accommodation calendar's past and closed cells now mix
+  `--tvc-ink` into `--tvc-white`). Details and the rules for adding to a shared rule are in Design language in `CLAUDE.md`.
 - **Admin Google pictures** (`netlify/functions/lib/staff-picture.ts`, migration `0059_staff_google_picture.sql`,
   `staff_users.google_picture_url`): the pill in the top bar shows the signed-in admin's own Google picture, which
   `/api/staff-me` returns straight from their token (so it shows with no database change) and falls back to their initial.

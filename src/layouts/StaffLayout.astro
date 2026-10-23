@@ -60,6 +60,10 @@ const adminItems = [
           saved = localStorage.getItem('tvc-staff-nav-collapsed');
         } catch (e) {}
         var collapsed = saved === null ? collapseByDefault : saved === '1';
+        try {
+          var theme = localStorage.getItem('tvc-staff-theme');
+          if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {}
         document.documentElement.setAttribute('data-nav', collapsed ? 'collapsed' : 'expanded');
       })();
     </script>
@@ -630,6 +634,34 @@ const adminItems = [
     cursor: pointer;
   }
 
+  .who-menu :global(.appearance) {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 2px 4px 6px;
+    padding: 3px;
+    border-radius: 9px;
+    background: var(--tvc-cream);
+  }
+
+  .who-menu :global(.appearance button) {
+    flex: 1;
+    justify-content: center;
+    min-height: 30px;
+    padding: 2px 8px;
+    border-radius: 7px;
+    font-size: var(--text-xs);
+    font-weight: 500;
+    text-align: center;
+    color: var(--tvc-ink-soft);
+  }
+
+  .who-menu :global(.appearance button[aria-pressed='true']) {
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  }
+
   @media (hover: hover) and (pointer: fine) {
     .who-menu :global(button:hover) {
       background: var(--tvc-green-tint);
@@ -859,6 +891,44 @@ const adminItems = [
     else if (returnFocus) whoBtn.focus();
   }
 
+  // Appearance: follow the device (Auto), or pin Light or Dark. Remembered in this browser; the <head> script applies it early.
+  const THEME_KEY = 'tvc-staff-theme';
+  function currentTheme(): '' | 'light' | 'dark' {
+    const t = root.getAttribute('data-theme');
+    return t === 'light' || t === 'dark' ? t : '';
+  }
+  function setTheme(value: '' | 'light' | 'dark') {
+    if (value) root.setAttribute('data-theme', value);
+    else root.removeAttribute('data-theme');
+    try {
+      if (value) localStorage.setItem(THEME_KEY, value);
+      else localStorage.removeItem(THEME_KEY);
+    } catch {
+      // not remembered
+    }
+  }
+  function appearanceControl(): HTMLElement {
+    const group = document.createElement('div');
+    group.className = 'appearance';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', 'Appearance');
+    const options: ['' | 'light' | 'dark', string][] = [['', 'Auto'], ['light', 'Light'], ['dark', 'Dark']];
+    const paint = () => group.querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-pressed', String(options[i][0] === currentTheme())));
+    for (const [value, label] of options) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      b.addEventListener('click', (ev) => {
+        ev.stopPropagation(); // choosing an appearance keeps the menu open so the change can be seen
+        setTheme(value);
+        paint();
+      });
+      group.append(b);
+    }
+    paint();
+    return group;
+  }
+
   function renderWho(me: Me | null) {
     whoWrap.hidden = !me || !me.name;
     setWho(false);
@@ -882,6 +952,7 @@ const adminItems = [
       });
       items.push(tour);
     }
+    items.push(appearanceControl());
     const out = document.createElement('button');
     out.type = 'button';
     out.textContent = 'Sign out';
@@ -1014,6 +1085,64 @@ const adminItems = [
   html[data-look='neutral'] #staff-main h1,
   html[data-look='neutral'] #staff-main h2 {
     letter-spacing: -0.02em;
+  }
+</style>
+
+<!-- The dark appearance. It follows the device unless the person chose one in the account menu (Appearance),
+     which is remembered in this browser and applied before first paint (the script in <head>). Like the neutral
+     look it overrides tokens only: components use --tvc-* tokens (a Stylelint rule bans raw colours), so they
+     follow. The same set appears twice because the OS preference and the explicit choice are separate selectors. -->
+<style is:global>
+  /* stylelint-disable color-no-hex -- the dark appearance's own token values, same job as the --tvc-* ones in global.css */
+  @media (prefers-color-scheme: dark) {
+    html:not([data-theme='light']) {
+        --tvc-stone: #151715;
+    --tvc-cream: #1b1d1b;
+    --tvc-white: #242724;
+    --tvc-ink: #f1f3ef;
+    --tvc-ink-soft: #a9afa7;
+    --tvc-line: rgba(255, 255, 255, 0.13);
+    --tvc-line-strong: #7d837b;
+    --tvc-green: #4faa77;
+    --tvc-green-dark: #5bc88a;
+    --tvc-green-tint: rgba(91, 200, 138, 0.16);
+    --tvc-orange: #d98a5a;
+    --tvc-orange-text: #f0a272;
+    --tvc-orange-tint: rgba(217, 138, 90, 0.18);
+    --tvc-error-text: #ff6b60;
+    --tvc-error-border: rgba(255, 107, 96, 0.45);
+    --tvc-error-bg: rgba(255, 107, 96, 0.16);
+    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.45), 0 6px 22px rgba(0, 0, 0, 0.4);
+    color-scheme: dark;
+    }
+  }
+
+  html[data-theme='dark'] {
+      --tvc-stone: #151715;
+    --tvc-cream: #1b1d1b;
+    --tvc-white: #242724;
+    --tvc-ink: #f1f3ef;
+    --tvc-ink-soft: #a9afa7;
+    --tvc-line: rgba(255, 255, 255, 0.13);
+    --tvc-line-strong: #7d837b;
+    --tvc-green: #4faa77;
+    --tvc-green-dark: #5bc88a;
+    --tvc-green-tint: rgba(91, 200, 138, 0.16);
+    --tvc-orange: #d98a5a;
+    --tvc-orange-text: #f0a272;
+    --tvc-orange-tint: rgba(217, 138, 90, 0.18);
+    --tvc-error-text: #ff6b60;
+    --tvc-error-border: rgba(255, 107, 96, 0.45);
+    --tvc-error-bg: rgba(255, 107, 96, 0.16);
+    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.45), 0 6px 22px rgba(0, 0, 0, 0.4);
+    color-scheme: dark;
+  }
+  /* stylelint-enable color-no-hex */
+
+  /* Photos and the brand mark keep their own colours; the page around them is what turns dark. */
+  html[data-theme='dark'] #staff-main img,
+  html[data-theme='dark'] .brand img {
+    color-scheme: normal;
   }
 </style>
 

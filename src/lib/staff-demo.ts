@@ -118,7 +118,7 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     look.setAttribute('style', 'margin-left:10px;padding:2px 8px;border:1px solid currentColor;border-radius:6px;background:none;font:inherit;cursor:pointer');
     paint();
     note.append(text, look);
-    note.setAttribute('style', 'position:fixed;bottom:12px;right:12px;z-index:9999;margin:0;padding:6px 12px;border-radius:8px;font:600 0.8rem sans-serif;background:#fff;border:1px solid currentColor');
+    note.setAttribute('style', 'position:fixed;bottom:12px;right:12px;z-index:9999;margin:0;padding:6px 12px;border-radius:8px;font:600 0.8rem sans-serif;background:var(--tvc-white);color:var(--tvc-ink);border:1px solid currentColor');
     document.body.append(note);
   });
 }
