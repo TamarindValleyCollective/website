@@ -1056,10 +1056,6 @@ import SignInGate from '../../components/SignInGate.astro';
     font-size: var(--text-base);
   }
 
-  .doc-row .pill {
-    margin: 0;
-  }
-
   .doc-sum {
     flex-basis: 100%;
     color: var(--tvc-ink-soft);
@@ -1075,6 +1071,12 @@ import SignInGate from '../../components/SignInGate.astro';
     font-weight: 600;
     text-decoration: underline;
     cursor: pointer;
+  }
+
+  @media (pointer: coarse) {
+    .link-btn {
+      min-height: 44px;
+    }
   }
 
   dialog.modal.upload-modal {
@@ -1109,6 +1111,16 @@ import SignInGate from '../../components/SignInGate.astro';
   .upload-help a {
     color: var(--tvc-green-dark);
     font-weight: 600;
+  }
+
+  .upload-help summary {
+    padding: 2px 0;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .upload-help[open] summary {
+    margin-bottom: 8px;
   }
 
   dialog.modal.docs-modal {
@@ -1533,11 +1545,12 @@ import SignInGate from '../../components/SignInGate.astro';
 
   dialog.modal {
     width: min(420px, calc(100vw - 24px));
-    padding: 20px;
+    padding: 22px;
     border: 1px solid var(--tvc-line);
-    border-radius: var(--radius);
+    border-radius: 16px;
     background: var(--tvc-white);
     color: var(--tvc-ink);
+    box-shadow: var(--shadow-soft);
   }
 
   dialog.modal.notice {
@@ -1558,12 +1571,13 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   dialog.modal::backdrop {
-    background: rgb(0 0 0 / 0.4);
+    background: rgb(8 12 8 / 0.4);
   }
 
   dialog.modal h3 {
     margin: 0 0 6px;
     font-size: var(--text-xl);
+    letter-spacing: -0.01em;
   }
 
   dialog.modal p {
@@ -1584,12 +1598,11 @@ import SignInGate from '../../components/SignInGate.astro';
     font-size: var(--text-xs);
   }
 
-  /* While the cursor is in the field, the fuller explanation appears as a tinted callout with a green edge. */
+  /* While the cursor is in the field, the fuller explanation appears as a tinted callout. */
   dialog.modal .field-hint {
     display: none;
     padding: 8px 10px;
-    border-left: 3px solid var(--tvc-green);
-    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    border-radius: var(--radius-sm);
     background: var(--tvc-green-tint);
     color: var(--tvc-ink);
     font-size: var(--text-sm);
@@ -1605,14 +1618,40 @@ import SignInGate from '../../components/SignInGate.astro';
     padding: 8px 10px;
     border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
     font: inherit;
   }
 
+  @media (pointer: coarse) {
+    dialog.modal input:not([type='checkbox'], [type='range']),
+    dialog.modal select {
+      min-height: 44px;
+    }
+  }
+
+  /* Dialogs sit outside the portal's shell, so they need the same keyboard focus ring as everything else in it. */
+  dialog.modal :is(a, button, input, select, textarea, summary):focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  /* The buttons stay at the foot of a tall dialog while its content scrolls under them. */
   .modal-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
     display: flex;
     justify-content: flex-end;
     gap: 10px;
-    margin-top: 6px;
+    margin: 6px -22px 0;
+    padding: 12px 22px calc(12px + env(safe-area-inset-bottom, 0px));
+    background: var(--tvc-white);
+  }
+
+  /* The buttons' own padding stands in for the dialog's bottom padding. */
+  dialog.modal:has(> .modal-actions) {
+    padding-bottom: 10px;
   }
 
   .who-menu:not([hidden], .out) {
@@ -2647,53 +2686,6 @@ import SignInGate from '../../components/SignInGate.astro';
     }
   }
 
-  /* The profile: a card that grows out of the row you tapped; on a phone, a bottom sheet you can swipe down. */
-  dialog.dir-modal[open] {
-    animation: dir-pop-in 240ms cubic-bezier(0.32, 0.72, 0, 1);
-  }
-
-  dialog.dir-modal.dir-modal--out {
-    animation: dir-pop-out 150ms ease-in forwards;
-  }
-
-  @keyframes dir-pop-in {
-    from { opacity: 0; transform: scale(0.9); }
-  }
-
-  @keyframes dir-pop-out {
-    to { opacity: 0; transform: scale(0.94); }
-  }
-
-  @keyframes dir-sheet-in {
-    from { transform: translateY(100%); }
-  }
-
-  @keyframes dir-sheet-out {
-    to { transform: translateY(100%); }
-  }
-
-  @keyframes dir-fade-in {
-    from { opacity: 0; }
-  }
-
-  @keyframes dir-fade-out {
-    to { opacity: 0; }
-  }
-
-  .dir-grab {
-    display: none;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    dialog.dir-modal[open] {
-      animation: dir-fade-in 150ms ease-out;
-    }
-
-    dialog.dir-modal.dir-modal--out {
-      animation: dir-fade-out 120ms ease-in forwards;
-    }
-  }
-
   .dir-edit {
     display: grid;
     place-items: center;
@@ -2717,10 +2709,81 @@ import SignInGate from '../../components/SignInGate.astro';
     stroke-linejoin: round;
   }
 
-  .menu-actions {
-    display: grid;
-    gap: 8px;
-    margin-bottom: 8px;
+  /* The documents menu in a dialog: a grouped list of rows, each an icon, its name and a chevron. */
+  .menu-list {
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 0;
+    overflow: hidden;
+    border-radius: var(--radius);
+    box-shadow: 0 0 0 1px var(--tvc-line) inset;
+  }
+
+  .menu-list > li {
+    position: relative;
+  }
+
+  .menu-list > li + li::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 52px;
+    height: 1px;
+    background: var(--tvc-line);
+  }
+
+  .menu-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 52px;
+    padding: 8px 14px;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 120ms ease-out;
+  }
+
+  @media (hover: hover) {
+    .menu-row:hover {
+      background: var(--tvc-cream);
+    }
+  }
+
+  .menu-row:active {
+    background: var(--tvc-cream);
+  }
+
+  dialog.modal .menu-row:focus-visible {
+    outline-offset: -2px; /* inside the row, so the list's rounded edge does not clip it */
+  }
+
+  .menu-row .grow {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .menu-row > svg {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: var(--tvc-green-dark);
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .menu-row > .chev {
+    width: 14px;
+    height: 14px;
+    stroke: var(--tvc-ink-soft);
+    stroke-width: 2;
+    opacity: 0.7;
   }
 
   .avatar {
@@ -2884,45 +2947,87 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
-  /* The picture is on the left and vertically centred against the text beside it. */
-  /* On a card the pills are a footer at the bottom right, pinned to the bottom so they line up across a row. */
-  dialog.modal.dir-modal {
+  /* ---- the dialogs: a card that grows from its trigger; on a phone, a bottom sheet you can swipe down ---- */
+  dialog.modal.sheet {
     position: fixed; /* a fixed box in the top layer: the close button anchors to it, and the sheet docks to the screen's foot */
-    width: min(540px, calc(100vw - 24px));
-    max-height: calc(100vh - 48px);
+    max-height: calc(100dvh - 48px);
     overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  dialog.modal.dir-modal {
+    width: min(540px, calc(100vw - 24px));
+  }
+
+  dialog.sheet[open] {
+    animation: sheet-pop-in 240ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  dialog.sheet.sheet--out {
+    animation: sheet-pop-out 150ms ease-in forwards;
+  }
+
+  @keyframes sheet-pop-in {
+    from { opacity: 0; transform: scale(0.9); }
+  }
+
+  @keyframes sheet-pop-out {
+    to { opacity: 0; transform: scale(0.94); }
+  }
+
+  @keyframes sheet-slide-in {
+    from { transform: translateY(100%); }
+  }
+
+  @keyframes sheet-slide-out {
+    to { transform: translateY(100%); }
+  }
+
+  @keyframes sheet-fade-in {
+    from { opacity: 0; }
+  }
+
+  @keyframes sheet-fade-out {
+    to { opacity: 0; }
+  }
+
+  .sheet-grab {
+    display: none;
   }
 
   @media (max-width: 560px) {
-    dialog.modal.dir-modal {
+    dialog.modal.sheet {
       width: 100%;
       max-width: none;
       max-height: 88dvh;
       margin: auto 0 0;
-      padding-bottom: calc(20px + env(safe-area-inset-bottom));
+      padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px));
       border-width: 1px 0 0;
       border-radius: 16px 16px 0 0;
-      overscroll-behavior: contain;
     }
 
-    dialog.dir-modal[open] {
-      animation: dir-sheet-in 320ms cubic-bezier(0.32, 0.72, 0, 1);
+    dialog.modal.sheet:has(> .modal-actions) {
+      padding-bottom: 0;
     }
 
-    dialog.dir-modal.dir-modal--out {
-      animation: dir-sheet-out 220ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+    dialog.sheet[open] {
+      animation: sheet-slide-in 320ms cubic-bezier(0.32, 0.72, 0, 1);
+    }
+
+    dialog.sheet.sheet--out {
+      animation: sheet-slide-out 220ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
     }
 
     /* The grab area: dragging it down moves the sheet with the finger. */
-    .dir-grab {
+    .sheet-grab {
       display: block;
       height: 36px;
-      margin: -20px 0 0;
+      margin: -22px 0 0;
       cursor: grab;
       touch-action: none;
     }
 
-    .dir-grab::before {
+    .sheet-grab::before {
       content: '';
       display: block;
       width: 40px;
@@ -2931,6 +3036,16 @@ import SignInGate from '../../components/SignInGate.astro';
       border-radius: 3px;
       background: var(--tvc-line-strong);
       opacity: 0.6;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    dialog.sheet[open] {
+      animation: sheet-fade-in 150ms ease-out;
+    }
+
+    dialog.sheet.sheet--out {
+      animation: sheet-fade-out 120ms ease-in forwards;
     }
   }
 
@@ -3423,6 +3538,82 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           h('div', 'who2', undefined, h('strong', '', `${p.name}${p.id === you.id ? ' (you)' : ''}`), h('span', '', `${contact(p, you).email ?? 'No email'} · ${contact(p, you).phone ?? 'No mobile'}`))))),
     ]));
 
+  // ---- dialogs ----
+  // Every dialog goes through here, so they all behave alike. On a wide screen a dialog is a card that grows out of the
+  // control that opened it; on a phone it is a bottom sheet with a grab bar you can pull down. Leaving plays the entrance
+  // backwards, however it is closed (Cancel, Esc, a click outside, a swipe): `close` is wrapped, so the dialogs keep
+  // calling dlg.close() as before. `locked` is for the privacy notice a new member must read first: no Esc, no click
+  // outside, no grab bar.
+  const phoneSheet = window.matchMedia('(max-width: 560px)');
+  function presentSheet(dlg: HTMLDialogElement, opts: { from?: Element | null; locked?: boolean } = {}) {
+    dlg.classList.add('sheet');
+    const nativeClose = dlg.close.bind(dlg);
+    let leaving = false;
+    dlg.close = (returnValue?: string) => {
+      if (leaving || !dlg.open) {
+        nativeClose(returnValue);
+        return;
+      }
+      leaving = true;
+      dlg.classList.add('sheet--out');
+      const done = () => { if (dlg.open) nativeClose(returnValue); };
+      dlg.addEventListener('animationend', (e) => { if (e.target === dlg) done(); });
+      window.setTimeout(done, 400); // in case no animation runs
+    };
+    dlg.addEventListener('cancel', (e) => {
+      e.preventDefault();
+      if (!opts.locked) dlg.close();
+    });
+    if (!opts.locked) {
+      dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+      // On a phone the grab area at the top moves the sheet with the finger, and a flick carries it (the release
+      // velocity is projected the way scrolling is, and past halfway it goes). Elsewhere it is not shown.
+      const grab = h('div', 'sheet-grab');
+      grab.setAttribute('aria-hidden', 'true');
+      let drag: { id: number; y: number; t: number; dy: number; v: number } | null = null;
+      grab.addEventListener('pointerdown', (e) => {
+        drag = { id: e.pointerId, y: e.clientY, t: e.timeStamp, dy: 0, v: 0 };
+        grab.setPointerCapture(e.pointerId);
+        dlg.style.transition = 'none';
+      });
+      grab.addEventListener('pointermove', (e) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        const dy = e.clientY - drag.y;
+        drag.v = (dy - drag.dy) / Math.max(1, e.timeStamp - drag.t); // px per ms, from the last movement
+        drag.dy = dy;
+        drag.t = e.timeStamp;
+        dlg.style.transform = `translateY(${Math.max(0, dy)}px)`;
+      });
+      const endDrag = (e: PointerEvent) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        const { dy, v } = drag;
+        drag = null;
+        const projected = dy + v * (0.998 / (1 - 0.998));
+        if (dy > 0 && projected > dlg.offsetHeight / 2) {
+          dlg.style.transition = '';
+          dlg.close(); // carries on from where the finger left it
+        } else {
+          dlg.style.transition = 'transform 280ms cubic-bezier(0.32, 0.72, 0, 1)';
+          dlg.style.transform = '';
+        }
+      };
+      grab.addEventListener('pointerup', endDrag);
+      grab.addEventListener('pointercancel', endDrag);
+      dlg.prepend(grab);
+    }
+    document.body.append(dlg);
+    dlg.showModal();
+    // On a wide screen the card grows out of whatever opened it (the control that has focus, unless told otherwise).
+    const from = opts.from ?? document.activeElement;
+    if (from instanceof HTMLElement && !phoneSheet.matches) {
+      const at = from.getBoundingClientRect();
+      if (at.width > 0) {
+        const box = dlg.getBoundingClientRect();
+        dlg.style.transformOrigin = `${at.left + at.width / 2 - box.left}px ${at.top + at.height / 2 - box.top}px`;
+      }
+    }
+  }
+
   // ---- editing my own details ----
   function detailsDialog() {
     const dlg = document.createElement('dialog');
@@ -3470,8 +3661,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       h('div', 'modal-actions', undefined, cancel, save),
     );
     dlg.addEventListener('close', () => dlg.remove());
-    document.body.append(dlg);
-    dlg.showModal();
+    presentSheet(dlg);
   }
 
   // ---- family members ----
@@ -3533,8 +3723,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       h('div', 'modal-actions', undefined, cancel, save),
     );
     dlg.addEventListener('close', () => dlg.remove());
-    document.body.append(dlg);
-    dlg.showModal();
+    presentSheet(dlg);
   }
 
   // Edit a family member's details, or remove them. The email and mobile on file are never sent to an owner, so those
@@ -3605,8 +3794,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       h('div', 'modal-actions', undefined, remove, cancel, save),
     );
     dlg.addEventListener('close', () => dlg.remove());
-    document.body.append(dlg);
-    dlg.showModal();
+    presentSheet(dlg);
   }
 
   // ---- land documents ----
@@ -3641,7 +3829,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   function docRow(d: LandDoc): HTMLElement {
     return h('p', 'doc-row', undefined,
       h('strong', '', undefined, docLink(dateFmt.format(new Date(d.uploadedAt)) + (d.fileName ? ` · ${d.fileName}` : ''), d.status === 'failed' ? null : d.id)),
-      h('span', 'pill', DOC_STATUS[d.status] ?? d.status),
+      h('span', `st-pill${d.status === 'applied' ? ' st-pill--ok' : d.status === 'needs_review' ? ' st-pill--warn' : ''}`, DOC_STATUS[d.status] ?? d.status),
       h('span', 'doc-sum', d.summary));
   }
 
@@ -3678,27 +3866,29 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const dlg = document.createElement('dialog');
     dlg.className = 'modal';
     const n = docsOfType(landType).length;
-    const choice = (text: string, solid: boolean, run: () => void) => {
-      const b = h('button', solid ? 'btn btn--solid' : 'btn', text);
+    // What can be done with the documents: three rows in a grouped list, each an icon, its name and a chevron.
+    const choice = (iconPaths: string, text: string, run: () => void) => {
+      const chev = icon('<path d="M9 6l6 6-6 6"/>');
+      chev.setAttribute('class', 'chev');
+      const b = h('button', 'menu-row', undefined, icon(iconPaths), h('span', 'grow', text), chev);
       b.setAttribute('type', 'button');
       b.addEventListener('click', () => { dlg.close(); run(); });
-      return b;
+      return h('li', '', undefined, b);
     };
     const refreshed = () => { shapesLoad = null; void refreshDocs(hh); };
-    const close = h('button', 'link-btn', 'Close');
+    const close = h('button', 'btn', 'Close');
     close.setAttribute('type', 'button');
     close.addEventListener('click', () => dlg.close());
     dlg.append(
       h('h3', '', landType === 'farm' ? 'Farm land documents' : 'House plot documents'),
-      h('div', 'menu-actions', undefined,
-        choice('Upload a document', true, () => uploadDialog(hh, landType, refreshed)),
-        choice('Add an FMB sketch', false, () => sketchDialog(hh, landType, refreshed)),
-        choice(n ? `Uploaded documents (${n})` : 'Uploaded documents', false, () => docsDialog(hh, landType))),
+      h('ul', 'menu-list', undefined,
+        choice('<path d="M12 16V5M7 10l5-5 5 5M5 19h14"/>', 'Upload a document', () => uploadDialog(hh, landType, refreshed)),
+        choice('<path d="M4 20l4-1 11-11-3-3L5 16z"/>', 'Add an FMB sketch', () => sketchDialog(hh, landType, refreshed)),
+        choice('<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 13h5M10 17h5"/>', n ? `Uploaded documents (${n})` : 'Uploaded documents', () => docsDialog(hh, landType))),
       h('div', 'modal-actions', undefined, close),
     );
     dlg.addEventListener('close', () => dlg.remove());
-    document.body.append(dlg);
-    dlg.showModal();
+    presentSheet(dlg);
   }
 
   function docsDialog(hh: Hh, landType: 'farm' | 'house') {
@@ -3723,8 +3913,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       dlg.remove();
     });
     render();
-    document.body.append(dlg);
-    dlg.showModal();
+    presentSheet(dlg);
     void refreshDocs(hh);
   }
 
@@ -3754,7 +3943,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     link.setAttribute('href', 'https://eservices.tn.gov.in/eservicesnew/index.html');
     link.setAttribute('target', '_blank');
     link.setAttribute('rel', 'noopener noreferrer');
-    return h('div', 'upload-help', undefined,
+    return h('details', 'upload-help', undefined,
+      h('summary', '', 'How to get your document'),
       h('p', '', 'There are two kinds of document you can upload. Both come from the Tamil Nadu e-Services website, and you can upload both:'),
       h('ul', '', undefined,
         h('li', '', undefined, h('strong', '', 'Patta / chitta'), ' (choose "Patta Number"). It covers your patta number and lists every survey number under it.'),
@@ -3808,14 +3998,14 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     });
     dlg.append(
       h('h3', '', `Upload a ${landType === 'house' ? 'house plot' : 'farm land'} document`),
+      h('p', '', 'Upload your patta or survey number document from the Tamil Nadu e-Services site: a PDF under 1 MB, or a photo under 3 MB.'),
       uploadHelp(),
       h('label', '', 'File', file),
       msg,
       h('div', 'modal-actions', undefined, cancel, send),
     );
     dlg.addEventListener('close', () => dlg.remove());
-    document.body.append(dlg);
-    dlg.showModal();
+    presentSheet(dlg);
   }
 
   // The FMB sketch on its own, for one survey number: the shape of the land then appears beside that
@@ -3834,8 +4024,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         h('p', '', `There is no survey number on your ${landType === 'house' ? 'House plot' : 'Farm land'} card yet. Upload your patta first with "Upload a document", then come back to add the sketch.`),
         h('div', 'modal-actions', undefined, cancel),
       );
-      document.body.append(dlg);
-      dlg.showModal();
+      presentSheet(dlg);
       return;
     }
     const survey = document.createElement('select');
@@ -3884,8 +4073,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       msg,
       h('div', 'modal-actions', undefined, cancel, send),
     );
-    document.body.append(dlg);
-    dlg.showModal();
+    presentSheet(dlg);
   }
 
   // ---- the privacy notice ----
@@ -3934,8 +4122,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       msg,
       actions,
     );
-    document.body.append(dlg);
-    dlg.showModal();
+    presentSheet(dlg, { locked: required });
   }
 
   // ---- the feature tour ----
@@ -4367,9 +4554,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         note,
         h('div', 'modal-actions', undefined, cancel, use),
       );
-      document.body.append(dlg);
       draw();
-      dlg.showModal();
+      presentSheet(dlg);
       canvas.focus();
     });
   }
@@ -5117,54 +5303,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const dlg = document.createElement('dialog');
       dlg.className = 'modal dir-modal';
       dlg.setAttribute('aria-label', joinNames(hh.people.filter((p) => p.primary !== false).map((p) => p.name)));
-      // Leaving plays the entrance backwards (a card shrinks back into its row; a sheet slides down) and then
-      // closes. A swipe that has already moved the sheet carries on from where the finger left it.
-      let leaving = false;
-      const dismiss = () => {
-        if (leaving) return;
-        leaving = true;
-        dlg.classList.add('dir-modal--out');
-        const done = () => { if (dlg.open) dlg.close(); };
-        dlg.addEventListener('animationend', done, { once: true });
-        window.setTimeout(done, 400); // in case no animation runs
-      };
       const close = h('button', 'dir-close', undefined, icon('<path d="M6 6l12 12M18 6L6 18"/>'));
       close.setAttribute('type', 'button');
       close.setAttribute('aria-label', 'Close');
-      close.addEventListener('click', dismiss);
-      // On a phone the card is a bottom sheet with a grab area: drag it down with the finger, and a flick
-      // carries it (the release velocity is projected the way scrolling is, and past halfway it goes).
-      const grab = h('div', 'dir-grab');
-      grab.setAttribute('aria-hidden', 'true');
-      let drag: { id: number; y: number; t: number; dy: number; v: number } | null = null;
-      grab.addEventListener('pointerdown', (e) => {
-        drag = { id: e.pointerId, y: e.clientY, t: e.timeStamp, dy: 0, v: 0 };
-        grab.setPointerCapture(e.pointerId);
-        dlg.style.transition = 'none';
-      });
-      grab.addEventListener('pointermove', (e) => {
-        if (!drag || e.pointerId !== drag.id) return;
-        const dy = e.clientY - drag.y;
-        drag.v = (dy - drag.dy) / Math.max(1, e.timeStamp - drag.t); // px per ms, from the last movement
-        drag.dy = dy;
-        drag.t = e.timeStamp;
-        dlg.style.transform = `translateY(${Math.max(0, dy)}px)`;
-      });
-      const endDrag = (e: PointerEvent) => {
-        if (!drag || e.pointerId !== drag.id) return;
-        const { dy, v } = drag;
-        drag = null;
-        const projected = dy + v * (0.998 / (1 - 0.998));
-        if (dy > 0 && projected > dlg.offsetHeight / 2) {
-          dlg.style.transition = '';
-          dismiss();
-        } else {
-          dlg.style.transition = 'transform 280ms cubic-bezier(0.32, 0.72, 0, 1)';
-          dlg.style.transform = '';
-        }
-      };
-      grab.addEventListener('pointerup', endDrag);
-      grab.addEventListener('pointercancel', endDrag);
+      close.addEventListener('click', () => dlg.close());
       const label = (p: { name: string; isYou: boolean }) => (p.isYou ? `${p.name} (you)` : p.name);
 
       // The first names of everyone in the household are set in bold wherever the text mentions them.
@@ -5210,18 +5352,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       }
       // The rest of the household (children, other family) in a section of their own, not a block each.
       if (hh.familyMembers.length) sections.push(h('section', 'dir-person dir-household', undefined, familyRow(h('p', 'dir-family', `Also in this unit: ${joinNames(hh.familyMembers.map(label))}`))));
-      dlg.append(grab, close, pills(hh), ...sections);
-      dlg.addEventListener('click', (e) => { if (e.target === dlg) dismiss(); });
-      dlg.addEventListener('cancel', (e) => { e.preventDefault(); dismiss(); }); // Esc
+      dlg.append(close, pills(hh), ...sections);
       dlg.addEventListener('close', () => dlg.remove());
-      document.body.append(dlg);
-      dlg.showModal();
-      // On a wide screen the card grows out of the row that was opened.
-      if (from && !window.matchMedia('(max-width: 560px)').matches) {
-        const box = dlg.getBoundingClientRect();
-        const at = from.getBoundingClientRect();
-        dlg.style.transformOrigin = `${at.left + at.width / 2 - box.left}px ${at.top + at.height / 2 - box.top}px`;
-      }
+      presentSheet(dlg, { from });
     }
 
     // Filters: housing cluster (fixed order) and bedrooms (1, 2 and 3 BHK), one of each at a time, with no counts on
