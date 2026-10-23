@@ -271,6 +271,12 @@
   force = true
 
 [[redirects]]
+  from = "https://admin.tvc.farm/api/staff-today/*"
+  to = "/api/staff-today/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "https://admin.tvc.farm/favicon-16.png"
   to = "/favicon-16.png"
   status = 200

@@ -25,6 +25,15 @@
 export const TOURS = {
   home: [
     {
+      id: 'attention',
+      since: 1,
+      audience: 'all',
+      target: 'attention',
+      tag: 'Today',
+      title: 'What needs you',
+      text: 'One line says whether anything is waiting: conversations to reply to, cancellations to decide, stories to review, usage warnings. If something is, it is listed first with a number; tap it to go there.',
+    },
+    {
       id: 'tools',
       since: 1,
       audience: 'all',

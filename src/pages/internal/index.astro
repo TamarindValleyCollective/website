@@ -13,15 +13,27 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 import SignInGate from '../../components/SignInGate.astro';
 ---
 
-<StaffLayout title="Home" description="Your admin tools." current="home">
+<StaffLayout title="Today" description="What needs you today, and your admin tools." current="home">
   <section class="section wrapper">
-    <h1>Home</h1>
+    <h1>Today</h1>
     <p id="welcome" class="hint">Sign in to see the tools you can use.</p>
     <div id="whats-new"></div>
 
     <SignInGate forbiddenWhat="the internal tools" />
 
     <p id="status" class="hint" hidden></p>
+
+    <div id="attention" data-tour="attention" hidden>
+      <p id="today-summary" class="summary" role="status"></p>
+      <div id="today-needs" hidden>
+        <h2>Needs attention</h2>
+        <ul id="needs-list" class="list"></ul>
+      </div>
+      <div id="today-quiet" hidden>
+        <h2>All clear</h2>
+        <ul id="quiet-list" class="list"></ul>
+      </div>
+    </div>
 
     <div id="tools-section" data-tour="tools" hidden>
       <h2>Your tools</h2>
@@ -44,17 +56,52 @@ import SignInGate from '../../components/SignInGate.astro';
 
 
   h2 {
-    margin: 32px 0 12px;
+    margin: 26px 0 8px 14px;
     font-family: var(--font-body);
-    font-size: var(--text-xs);
+    font-size: var(--text-sm);
     font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
+    letter-spacing: 0.02em;
     color: var(--tvc-ink-soft);
   }
 
+  /* One line that says how things stand, then only what needs a person. */
+  .summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 4px;
+    font-weight: 500;
+  }
 
+  .summary .muted,
+  .muted {
+    color: var(--tvc-ink-soft);
+    font-weight: 400;
+  }
 
+  .tools :global(.dot),
+  .summary :global(.dot),
+  #needs-list :global(.dot) {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  :global(.dot--warn) {
+    background: var(--tvc-orange);
+  }
+
+  :global(.dot--crit) {
+    background: var(--tvc-error-text);
+  }
+
+  #needs-list :global(.count) {
+    flex: none;
+    font-size: var(--text-md);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
 
   /* The tools are one grouped list (shared .list and .row). The rows are built by the script, so what is
      specific to Home needs :global(): the icon badge on the left. */
@@ -100,6 +147,7 @@ import SignInGate from '../../components/SignInGate.astro';
   const forbiddenEmail = $('forbidden-email');
   const statusEl = $('status');
   const toolsSection = $('tools-section');
+  const attention = $('attention');
   const toolsList = $('tools');
   const noTools = $('no-tools');
   const adminSection = $('admin-section');
@@ -167,6 +215,7 @@ import SignInGate from '../../components/SignInGate.astro';
     gate.hidden = false;
     forbidden.hidden = true;
     toolsSection.hidden = true;
+    attention.hidden = true;
     adminSection.hidden = true;
     statusEl.hidden = true;
     welcome.textContent = 'Sign in to see the tools you can use.';
@@ -178,10 +227,88 @@ import SignInGate from '../../components/SignInGate.astro';
   function showForbidden() {
     gate.hidden = true;
     toolsSection.hidden = true;
+    attention.hidden = true;
     adminSection.hidden = true;
     statusEl.hidden = true;
     forbidden.hidden = false;
     forbiddenEmail.textContent = decodeTokenEmail(getToken() ?? '');
+  }
+
+  // ---- Today: what is waiting on this person --------------------------------------------------------------
+  interface TodayItem {
+    id: string;
+    tone: 'crit' | 'warn';
+    title: string;
+    detail: string;
+    count: number;
+    href: string;
+  }
+
+  function dot(tone: string): HTMLElement {
+    const el = span(`dot dot--${tone}`);
+    el.setAttribute('aria-hidden', 'true');
+    return el;
+  }
+
+  function renderToday(data: { items: TodayItem[]; quiet: string[]; failed: string[] }) {
+    const { items, quiet, failed } = data;
+    const nothingChecked = items.length === 0 && quiet.length === 0 && failed.length === 0;
+    attention.hidden = nothingChecked; // someone whose tools have no checks (the photo pool alone) just sees their tools
+    if (nothingChecked) return;
+
+    const summary = $('today-summary');
+    if (items.length === 0 && failed.length === 0) {
+      const ok = span('pill pill--ok', 'All clear');
+      summary.replaceChildren(ok, span('', 'Nothing needs you right now.'));
+    } else if (items.length === 0) {
+      summary.replaceChildren(span('muted', `Couldn't check ${failed.join(', ')} just now. Try refreshing.`));
+    } else {
+      summary.replaceChildren(dot(items[0].tone), span('', items.length === 1 ? '1 thing needs you' : `${items.length} things need you`));
+      if (failed.length) summary.append(span('muted', `Couldn't check ${failed.join(', ')}.`));
+    }
+
+    $('today-needs').hidden = items.length === 0;
+    $('needs-list').replaceChildren(
+      ...items.map((it) => {
+        const link = document.createElement('a');
+        link.className = 'row';
+        link.href = it.href;
+        const text = span('grow');
+        text.append(span('title', it.title), span('detail', it.detail));
+        link.append(dot(it.tone), text, span('count', String(it.count)), icon('<path d="m9 6 6 6-6 6"/>', 14, 'chev'));
+        const li = document.createElement('li');
+        li.append(link);
+        return li;
+      }),
+    );
+
+    $('today-quiet').hidden = quiet.length === 0;
+    $('quiet-list').replaceChildren(
+      ...quiet.map((text) => {
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.append(span('grow detail', text));
+        const li = document.createElement('li');
+        li.append(row);
+        return li;
+      }),
+    );
+  }
+
+  // Runs beside the tool list and never blocks it: if the check fails the page says so rather than "all clear".
+  async function loadToday() {
+    try {
+      const { status, data } = await staffFetch('/api/staff-today');
+      if (status !== 200) throw new Error('today failed');
+      renderToday(data);
+      attention.hidden = attention.hidden; // renderToday decides
+    } catch (err) {
+      if (err instanceof StaffAuthError) return; // the tool list already handled the session
+      attention.hidden = false;
+      $('today-summary').replaceChildren(span('muted', "Couldn't check what needs you just now. Try refreshing."));
+      $('today-needs').hidden = true;
+      $('today-quiet').hidden = true;
+    }
   }
 
   async function load() {
@@ -192,7 +319,7 @@ import SignInGate from '../../components/SignInGate.astro';
       const { status, data } = await staffFetch('/api/staff-me');
       if (status !== 200) throw new Error('load failed');
       statusEl.hidden = true;
-      welcome.textContent = data.name ? `Welcome, ${data.name}.` : 'Welcome.';
+      welcome.textContent = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
       toolsList.replaceChildren(...(data.tools as Tool[]).map((t) => card(t, 'tool')));
       const hasTools = data.tools.length > 0;
       const hasAdmin = data.adminTools.length > 0;
@@ -200,6 +327,7 @@ import SignInGate from '../../components/SignInGate.astro';
       noTools.hidden = hasTools || hasAdmin;
       adminList.replaceChildren(...(data.adminTools as Tool[]).map((t) => card(t, 'admin')));
       adminSection.hidden = data.adminTools.length === 0;
+      void loadToday();
     } catch (err) {
       if (err instanceof StaffAuthError) {
         if (err.kind === 'unauthorized') showGate('Your session expired — sign in again.');

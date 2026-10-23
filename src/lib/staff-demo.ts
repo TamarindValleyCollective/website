@@ -214,6 +214,20 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
         ],
       });
     }
+    if (path === '/api/staff-today') {
+      if (location.search.includes('clear')) return reply({ items: [], quiet: ['No WhatsApp conversations are waiting for a reply.', 'No cancellation requests are waiting on a decision.', 'Every service is within its free tier and credits.'], failed: [] });
+      return reply({
+        items: [
+          { id: 'whatsapp', tool: 'WhatsApp inbox', tone: 'warn', title: '3 conversations need a reply', detail: 'WhatsApp inbox · the oldest has waited 2 hours', count: 3, href: '/internal/whatsapp/' },
+          { id: 'event-payments', tool: 'Event payments', tone: 'warn', title: '1 cancellation request to decide', detail: 'Event payments · a guest has asked for a refund', count: 1, href: '/internal/event-payments/' },
+          { id: 'members', tool: 'Member register', tone: 'warn', title: '2 unit stories to review', detail: 'Member register · also 1 family request to decide', count: 3, href: '/internal/members/' },
+          { id: 'usage', tool: 'Usage & limits', tone: 'warn', title: '1 service is nearing a limit', detail: 'Usage & limits · open it for what to do', count: 1, href: '/internal/usage/' },
+          { id: 'security', tool: 'Security', tone: 'warn', title: '1 super admin has not set up two second factors', detail: 'Security · Rajesh Thiagarajan cannot change access yet', count: 1, href: '/internal/security/' },
+        ],
+        quiet: [],
+        failed: [],
+      });
+    }
     if (path === '/api/usage-admin/overview') return reply(demoUsage());
     if (path === '/api/usage-admin/domains') return reply({ domains: [] });
     if (path === '/api/usage-admin/whatsapp-health') return reply({ events: [] });
