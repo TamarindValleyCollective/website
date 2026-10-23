@@ -34,10 +34,16 @@ function topLevelRules(source) {
   return rules;
 }
 
+// The search field, segmented control and grouped list are shared with the member portal, so they live in
+// styles/portal-look.css (plain `main .x` rules) rather than in the admin shell.
+const IN_PORTAL_LOOK = ['.field', '.segmented', '.list', '.row'];
+const portalLook = readFileSync(new URL('../../src/styles/portal-look.css', import.meta.url), 'utf8');
+
 test('the shell defines every shared primitive', () => {
   for (const sel of SHARED) {
     const escaped = sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    assert.match(shell, new RegExp(`main :global\\(${escaped}\\)`), `StaffLayout.astro has no rule for ${sel}`);
+    if (IN_PORTAL_LOOK.includes(sel)) assert.match(portalLook, new RegExp(`^main ${escaped}[ ,{:]`, 'm'), `portal-look.css has no rule for ${sel}`);
+    else assert.match(shell, new RegExp(`main :global\\(${escaped}\\)`), `StaffLayout.astro has no rule for ${sel}`);
   }
 });
 
