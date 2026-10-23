@@ -696,6 +696,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   stateless, HMAC-signed step-up token bound to them, sent as `X-Stepup-Token`. Methods held at
   once: an authenticator app (TOTP, RFC 6238 — checked against the RFC's published vectors) and
   ten single-use recovery codes, and **passkeys** (WebAuthn: Face ID, Touch ID or a security key;
+  **Admin host**: the admin tools are served from **`admin.tvc.farm`**, a domain alias on the same Netlify project (proxied Cloudflare CNAME to `tvc-farm.netlify.app`), like `members.tvc.farm`. `netlify.toml` rules that match only that host show `/internal/` at `/`, pass through the admin pages, assets and the admin functions (`/api/*-admin`, `staff-mfa`, `staff-me`, `photo-pool`, `whatsapp-suggest`), and send everything else back to the admin home; `tvc.farm/internal/*`, `www.tvc.farm/internal/*` and `members.tvc.farm/internal/*` redirect (302) to it. Passkeys are bound to `admin.tvc.farm` (`relyingParty()` in `lib/staff-webauthn.ts`, plus `localhost` for dev), so they only work there; alert emails link to it. See `DOMAINS.md`.
   `lib/staff-webauthn.ts` wraps `@simplewebauthn/server`). A passkey is stored as a `passkey` row in
   `staff_mfa_factors` (public key and counter in `credential`, never a private key) and is bound to
   the site: the relying-party id is `tvc.farm` and only `https://tvc.farm`, `https://www.tvc.farm`
@@ -1485,7 +1486,7 @@ never touches Netlify either.
   land documents and family changes (403), and the portal hides those controls. **`members.tvc.farm`**
   is a domain alias on the same Netlify project (DNS: a proxied Cloudflare CNAME to
   `tvc-farm.netlify.app`); `netlify.toml` rules that match only that host show the portal at `/`,
-  let through just the portal's own paths, send `/internal/*` to `tvc.farm` and everything else back
+  let through just the portal's own paths, send `/internal/*` to `admin.tvc.farm` and everything else back
   to the portal's home (see `DOMAINS.md`, which also records the Netlify certificate incident).
   **First-login privacy notice**: until a member has acknowledged the current notice
   (`scripts/lib/member-privacy.mjs`, version stored in `member_people.privacy_notice_version`,

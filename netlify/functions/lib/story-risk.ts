@@ -22,7 +22,7 @@ const RISK_MODEL = process.env.STORY_RISK_MODEL || process.env.STORY_REVIEW_MODE
 const RISK_STORE = 'member-story-risk';
 const RISK_GLOBAL_DAILY = 200;
 const RISK_TIMEOUT_MS = 15_000;
-const QUEUE_URL = 'https://tvc.farm/internal/members/';
+const QUEUE_URL = 'https://admin.tvc.farm/internal/members/';
 
 function supabaseUrl(): string {
   const url = process.env.SUPABASE_URL;

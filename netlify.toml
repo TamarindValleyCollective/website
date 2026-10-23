@@ -104,10 +104,10 @@
   status = 200
   force = true
 
-# staff pages belong on the main host
+# admin pages belong on the admin host
 [[redirects]]
   from = "https://members.tvc.farm/internal/*"
-  to = "https://tvc.farm/internal/:splat"
+  to = "https://admin.tvc.farm/internal/:splat"
   status = 302
   force = true
 
@@ -115,6 +115,141 @@
 [[redirects]]
   from = "https://members.tvc.farm/*"
   to = "https://members.tvc.farm/"
+  status = 302
+  force = true
+
+# admin.tvc.farm is the admin tools (/internal/*). Like members.tvc.farm it is a domain alias on this
+# same Netlify project (DNS: a proxied CNAME in Cloudflare), so one deploy serves it, and these rules
+# only match that host. The root shows the admin home; the admin's own pages, assets and functions are
+# each listed (a rewrite to itself) so the catch-all never sees them; anything else is sent back to the
+# admin home, which keeps the public site off this host. See DOMAINS.md.
+[[redirects]]
+  from = "https://admin.tvc.farm/"
+  to = "/internal/"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/internal/*"
+  to = "/internal/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/_astro/*"
+  to = "/_astro/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/fonts/*"
+  to = "/fonts/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/images/brand/*"
+  to = "/images/brand/:splat"
+  status = 200
+  force = true
+
+# the admin functions (each checks the signed-in admin itself); the public ones are not listed
+[[redirects]]
+  from = "https://admin.tvc.farm/api/whatsapp-admin/*"
+  to = "/api/whatsapp-admin/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/api/whatsapp-suggest/*"
+  to = "/api/whatsapp-suggest/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/api/members-admin/*"
+  to = "/api/members-admin/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/api/accommodation-admin/*"
+  to = "/api/accommodation-admin/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/api/event-payments-admin/*"
+  to = "/api/event-payments-admin/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/api/usage-admin/*"
+  to = "/api/usage-admin/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/api/photo-pool/*"
+  to = "/api/photo-pool/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/api/staff-admin/*"
+  to = "/api/staff-admin/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/api/staff-mfa/*"
+  to = "/api/staff-mfa/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/api/staff-me/*"
+  to = "/api/staff-me/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/favicon-16.png"
+  to = "/favicon-16.png"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/favicon-32.png"
+  to = "/favicon-32.png"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/apple-touch-icon.png"
+  to = "/apple-touch-icon.png"
+  status = 200
+  force = true
+
+# everything else on this host goes to the admin home
+[[redirects]]
+  from = "https://admin.tvc.farm/*"
+  to = "https://admin.tvc.farm/"
+  status = 302
+  force = true
+
+# The admin tools moved off the main host. 302 (not 301) while the move settles, so a browser does
+# not cache it. Only these hosts match, so deploy previews and `netlify dev` still serve /internal/.
+[[redirects]]
+  from = "https://tvc.farm/internal/*"
+  to = "https://admin.tvc.farm/internal/:splat"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "https://www.tvc.farm/internal/*"
+  to = "https://admin.tvc.farm/internal/:splat"
   status = 302
   force = true
 

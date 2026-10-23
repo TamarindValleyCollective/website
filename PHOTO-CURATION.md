@@ -16,7 +16,7 @@ by default) all work.
 
 ## 2. Reviewing photos
 
-Open the review dashboard: **tvc.farm/internal/photo-pool** and sign in with your own Google
+Open the review dashboard: **admin.tvc.farm/internal/photo-pool** and sign in with your own Google
 account. If you're not already on the curator list, ask whoever manages the site to add your
 email — it's a one-line addition to a shared Google Sheet, no redeploy needed.
 
