@@ -57,10 +57,7 @@ import SignInGate from '../../components/SignInGate.astro';
       </section>
 
       <section id="admin" aria-labelledby="admin-title" class="block" hidden>
-        <h2 id="admin-title">Update readings</h2>
-        <p class="muted lead">Some services have no safe way for us to read their usage automatically, so an admin types the figure in from the provider's own dashboard. Warnings use the latest entry, so keep them fresh.</p>
-        <div id="readings" class="forms"></div>
-        <h2 class="sub">Prices &amp; limits</h2>
+        <h2 id="admin-title">Prices &amp; limits</h2>
         <form id="settings-form" class="card pad form" novalidate>
           <p class="muted">Turns Anthropic token counts into an estimated spend, and sets a daily request limit for Gemini. Both are optional; warnings that depend on a missing one stay quiet.</p>
           <div class="fields">
@@ -123,6 +120,18 @@ import SignInGate from '../../components/SignInGate.astro';
   /* On top of the shared .link-button (StaffLayout): this one sits flush with its text. */
   #staff-main .usage .link-button {
     padding: 12px 0;
+  }
+
+  /* The reading form lives inside its card: a quiet panel under the "Enter a new reading" link. */
+  .usage .reading-inline {
+    grid-column: 1 / -1;
+  }
+
+  .usage .reading-inline .form {
+    margin-top: 8px;
+    padding: 14px 16px;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-cream);
   }
 
   /* ---- status pill: a word and an icon, colour is only reinforcement ---- */
@@ -719,7 +728,7 @@ import SignInGate from '../../components/SignInGate.astro';
 </style>
 
 <script>
-  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch } from '../../../scripts/lib/staff-client.mjs';
+  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../scripts/lib/staff-client.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -858,7 +867,7 @@ import SignInGate from '../../components/SignInGate.astro';
     if (!capturedAt || !everyDays) return { text: 'Updated by hand when the figure changes' };
     const due = new Date(new Date(capturedAt).getTime() + everyDays * 86_400_000);
     const dueText = due.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
-    return Date.now() > due.getTime() ? { text: `Update overdue (was due ${dueText}) · an admin types it in below`, late: true } : { text: `Update due ${dueText} · an admin types it in below` };
+    return Date.now() > due.getTime() ? { text: `Update overdue (was due ${dueText}) · an admin enters it on this card`, late: true } : { text: `Update due ${dueText} · an admin enters it on this card` };
   }
 
   // A card is a summary (title, status, one headline figure, one bar) and, behind a "Details" toggle,
@@ -903,7 +912,7 @@ import SignInGate from '../../components/SignInGate.astro';
   function onCardsClick(e: MouseEvent) {
     const target = e.target as Element;
     const card = target.closest<HTMLElement>('.svc');
-    if (!card || target.closest('.svc-more')) return;
+    if (!card || target.closest('.svc-more, .reading-inline')) return;
     if (window.getSelection()?.toString()) return; // the end of a text selection is not a click
     const opening = card.dataset.open !== 'true';
     document.querySelectorAll<HTMLElement>('#cards .svc[data-open="true"]').forEach((c) => setCardOpen(c, false));
@@ -922,24 +931,41 @@ import SignInGate from '../../components/SignInGate.astro';
     card.querySelector<HTMLElement>('.svc-toggle')?.focus({ preventScroll: true });
   }
 
-  // The figures a person types in live in forms far down the page; this takes them there, open and ready to type.
-  let canConfigure = false; // only admins have the forms
+  // The figures a person types in are entered in the card itself: "Enter a new reading" opens the form right
+  // there, and saving re-draws the card with the new figure (the card stays open). A second click, or Cancel, folds it.
+  let canConfigure = false; // only admins can enter readings
+  let readingSetups = new Map<string, { meter: any; last: { value?: number; limit?: number | null; expiresOn?: string | null } | null; withExpiry: boolean }>();
   function enterReadingButton(meterId: string): HTMLElement | null {
     if (!canConfigure) return null;
-    return linkButton('Enter a new reading', () => {
-      const form = document.getElementById(`reading-${meterId}`) as HTMLDetailsElement | null;
-      if (!form) return;
-      form.open = true;
-      form.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' });
-      form.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true });
+    const wrap = h('div', { class: 'reading-inline' });
+    const toggle = linkButton('Enter a new reading', () => {
+      const setup = readingSetups.get(meterId);
+      if (!setup) return;
+      const open = wrap.querySelector('form');
+      if (open) {
+        open.remove();
+        toggle.setAttribute('aria-expanded', 'false');
+        return;
+      }
+      const form = readingForm(setup.meter, setup.last, setup.withExpiry, () => {
+        form.remove();
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.focus();
+      });
+      wrap.append(form);
+      toggle.setAttribute('aria-expanded', 'true');
+      form.querySelector<HTMLInputElement>('input')?.focus();
     });
+    toggle.setAttribute('aria-expanded', 'false');
+    wrap.append(toggle);
+    return wrap;
   }
   const shortDay = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
   // Press feedback on pointer-down (before release), like a tap on a physical button.
   function onCardsPress(e: PointerEvent) {
     const card = (e.target as Element).closest<HTMLElement>('.svc');
-    if (card && !(e.target as Element).closest('.svc-more')) card.dataset.pressed = 'true';
+    if (card && !(e.target as Element).closest('.svc-more, .reading-inline')) card.dataset.pressed = 'true';
   }
   function onCardsRelease() {
     document.querySelectorAll<HTMLElement>('#cards .svc[data-pressed]').forEach((c) => delete c.dataset.pressed);
@@ -969,7 +995,7 @@ import SignInGate from '../../components/SignInGate.astro';
     } else if (reading) {
       parts.push(h('p', { class: 'hero', text: usd(reading.value) }), h('p', { class: 'hero-sub', text: `entered ${ago(reading.capturedAt)}. Add the token prices below to turn usage into a live estimate.` }));
     } else {
-      parts.push(h('p', { class: 'hero-sub', text: 'No credit balance entered yet. An admin can add it below so we can warn before it runs out.' }));
+      parts.push(h('p', { class: 'hero-sub', text: 'No credit balance entered yet. An admin can add it here so we can warn before it runs out.' }));
     }
     if (a.credit.expiresInDays !== null) {
       (a.credit.expiresInDays <= 30 ? parts : more).push(h('p', { class: 'hero-sub', text: a.credit.expiresInDays < 0 ? `Credit expired on ${dateText(reading.expiresOn)}.` : `Credit expires on ${dateText(reading.expiresOn)} (${a.credit.expiresInDays} day${a.credit.expiresInDays === 1 ? '' : 's'}).` }));
@@ -987,7 +1013,7 @@ import SignInGate from '../../components/SignInGate.astro';
       parts.push(h('p', { class: 'svc-note', text: `Today the site turned away ${a.chatCapHitsToday} chat message(s) and ${a.searchFallbackCapHitsToday} paid search fallback(s) because a daily cap was reached.` }));
     }
     more.push(h('p', { class: 'svc-note', text: 'Counts only what the website itself sends (chat and the search fallback), not other uses of the same key. Dollar figures are estimates from the prices below.' }));
-    more.push(enterReadingButton('anthropic.credit_remaining_usd'));
+    (reading ? more : parts).push(enterReadingButton('anthropic.credit_remaining_usd'));
     return card('Anthropic (Claude)', { mode: 'mixed', text: 'Usage measured live · credit balance typed in', fresh: [{ text: 'Usage: updates on every request the site makes.' }, nextManualUpdate(reading?.capturedAt, a.credit.meter.refreshEveryDays)] }, level, ...parts, MORE, ...more);
   }
 
@@ -1048,7 +1074,7 @@ import SignInGate from '../../components/SignInGate.astro';
       sparkline(t.requestsSeries.map((p: any) => ({ label: dayLabel(p.day), value: p.value })), 'Calls per day', (n) => `${nf.format(n)} call${n === 1 ? '' : 's'}`),
       h('p', { class: 'svc-note', text: 'Reads each inbound WhatsApp message in shadow mode (nothing acts on them yet). Billed per input token only. TypeSafe has no balance API, so the credit left is what you entered at the last top-up minus what this site has spent since (its own metered calls at the published price). Enter a new balance after each top-up; it needs no other upkeep. Anything TypeSafe is used for outside the website is not counted.' }),
     );
-    more.push(enterReadingButton('typesafe.credit_remaining_usd'));
+    (est ? more : parts).push(enterReadingButton('typesafe.credit_remaining_usd'));
     return card('TypeSafe (Jev)', { mode: 'mixed', text: 'Usage measured live · credit entered at each top-up', fresh: [{ text: 'Usage: updates on every WhatsApp message read.' }, { text: m?.reading ? `Credit: ${usd(m.reading.value)} entered ${ago(m.reading.capturedAt)}.` : 'Credit: not entered yet.' }] }, level, ...parts, MORE, ...more);
   }
 
@@ -1103,7 +1129,7 @@ import SignInGate from '../../components/SignInGate.astro';
       const ef = egress.reading.value / egress.reading.limit;
       more.push(h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: 'Egress this month (typed in)' }), h('span', { text: `${amount(egress.reading.value)} of ${amount(egress.reading.limit)} GB` })), meter(ef, egress.level, 'Supabase egress used', `${Math.round(ef * 100)}% of the monthly egress`)), h('p', { class: 'meter-caption', text: `Typed in ${ago(egress.reading.capturedAt)} from ${egress.where}.${daysAgo(egress.reading.capturedAt) > 35 ? ' That is over a month old: update it.' : ''}` }));
     } else {
-      more.push(h('p', { class: 'hero-sub', text: `Egress (data sent out, free plan: 5 GB a month) can't be measured automatically. Read it at ${egress?.where ?? 'the Supabase dashboard'} and enter it below.` }));
+      more.push(h('p', { class: 'hero-sub', text: `Egress (data sent out, free plan: 5 GB a month) can't be measured automatically. Read it at ${egress?.where ?? 'the Supabase dashboard'} and enter it here.` }));
     }
     more.push(enterReadingButton('supabase.egress_gb'));
     more.push(h('p', { class: 'svc-note', text: 'The free plan stops accepting new data at the limit. Growth is a straight-line estimate from the last two weeks of readings, so a bulk import skews it. Table sizes include indexes. Egress cannot be measured automatically, so it is typed in. The Supabase dashboard is the authority.' }));
@@ -1209,7 +1235,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   function manualCard(m: any): HTMLElement {
     const r = m.reading;
-    if (!r) return card(m.label, { mode: 'manual', text: 'Typed in from the provider' }, 'none', h('p', { class: 'hero-sub', text: `No reading yet. Find it at ${m.where}, then an admin can enter it below.` }));
+    if (!r) return card(m.label, { mode: 'manual', text: 'Typed in from the provider' }, 'none', h('p', { class: 'hero-sub', text: `No reading yet. Find it at ${m.where}, then an admin can enter it here.` }), enterReadingButton(m.id));
     const remaining = m.kind === 'remaining';
     const frac = r.limit ? (remaining ? 1 - r.value / r.limit : r.value / r.limit) : 0; // always the fraction USED, for the bar
     const staleForCycle = r.staleForCycle === true;
@@ -1246,6 +1272,7 @@ import SignInGate from '../../components/SignInGate.astro';
       parts.push(h('p', { class: 'svc-fresh svc-fresh--late', text: staleForCycle ? 'This reading is from a previous billing cycle: update it.' : stale ? 'This reading is over a month old: update it.' : 'Netlify plan data looks out of date: check the token.' }));
     }
     more.push(h('p', { class: 'svc-note', text: `Typed in on ${dateText(r.capturedAt)} (${ago(r.capturedAt)}) from ${m.where}.${r.cycleStart ? ` Billing cycle ${cycleDay(r.cycleStart)} to ${cycleDay(r.cycleEnd, -1)}; the allowance is read from Netlify automatically.` : ''}${r.planStale ? ` Warning: Netlify plan data was last refreshed ${ago(r.planCapturedAt)}, so the limit and cycle dates may be out of date. Check the Netlify token.` : ''}${staleForCycle ? ' This reading is from a previous billing cycle, so the balance has reset since. Update it.' : ''}${stale ? ' This reading is more than a month old, so treat it with caution and update it.' : ''}` }));
+    more.push(enterReadingButton(m.id));
     return card(m.label, r.cycleStart ? { mode: 'mixed', text: 'Balance typed in · allowance read from Netlify', fresh: [nextManualUpdate(r.capturedAt, m.refreshEveryDays), { text: 'Allowance and billing cycle: ' + nextAutoUpdate(r.planCapturedAt).text.replace('Next update', 'next update') }] } : { mode: 'manual', text: 'Typed in from the provider', fresh: [nextManualUpdate(r.capturedAt, m.refreshEveryDays)] }, m.level, ...parts, MORE, ...more);
   }
 
@@ -1302,17 +1329,19 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   // ---- admin forms -----------------------------------------------------------
-  function readingForm(meterInfo: any, last: { value?: number; limit?: number | null; expiresOn?: string | null } | null, withExpiry: boolean): HTMLElement {
+  function readingForm(meterInfo: any, last: { value?: number; limit?: number | null; expiresOn?: string | null } | null, withExpiry: boolean, onCancel: () => void): HTMLFormElement {
     const id = meterInfo.id as string;
     const field = (name: string, label: string, value?: number | string | null, type = 'number') => {
       const input = h('input', { attrs: { name, type, ...(type === 'number' ? { step: 'any', min: '0', inputmode: 'decimal' } : {}), ...(value !== undefined && value !== null ? { value: String(value) } : {}), 'data-field': name } });
       return h('label', {}, label, input);
     };
     const msg = h('span', { class: 'msg', attrs: { role: 'status' } });
-    const form = h('form', { class: 'form', attrs: { novalidate: '' } },
+    const cancel = h('button', { class: 'button button--outline', text: 'Cancel', attrs: { type: 'button' } });
+    cancel.addEventListener('click', onCancel);
+    const form = h('form', { class: 'form reading-form', attrs: { novalidate: '' } },
       h('p', { class: 'muted', text: `Find this at ${meterInfo.where}.` }),
       h('div', { class: 'fields' }, field('value', meterInfo.valueLabel, last?.value), field('limit', meterInfo.limitLabel, last?.limit), withExpiry ? field('expiresOn', 'Credit expires on (optional)', last?.expiresOn ?? '', 'date') : null),
-      h('div', { class: 'actions' }, h('button', { class: 'button', text: 'Save reading', attrs: { type: 'submit' } }), msg),
+      h('div', { class: 'actions' }, h('button', { class: 'button', text: 'Save reading', attrs: { type: 'submit' } }), cancel, msg),
     );
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
@@ -1329,23 +1358,19 @@ import SignInGate from '../../components/SignInGate.astro';
       try {
         const { status, data } = await staffFetch('/api/usage-admin/reading', { method: 'POST', body: { meter: id, value, limit, ...(withExpiry && get('expiresOn') ? { expiresOn: get('expiresOn') } : {}) } });
         if (status !== 200) throw new Error(data.error ?? 'Could not save');
-        await load();
-        $('readings').querySelectorAll('details').forEach((d) => ((d as HTMLDetailsElement).open = false));
+        await load(); // the card is re-drawn (and stays open) with the new figure, so the form is gone
+        showToast(`${meterInfo.label} saved.`);
       } catch (err) {
         msg.className = 'msg msg--error';
         msg.textContent = err instanceof StaffAuthError ? 'Your session ended or this account cannot change readings.' : (err as Error).message;
       }
     });
-    return h('details', { class: 'card', attrs: { id: `reading-${id}` } }, h('summary', { text: `${meterInfo.label}${last?.value !== undefined ? ` · last entered ${last.value}` : ''}` }), form);
+    return form as HTMLFormElement;
   }
 
   function renderAdmin(o: Overview) {
     $('admin').hidden = !o.canConfigure;
     if (!o.canConfigure) return;
-    const a = o.anthropic.credit;
-    const forms: HTMLElement[] = [readingForm(a.meter, a.reading ? { value: a.reading.value, limit: a.reading.total, expiresOn: a.reading.expiresOn } : null, true)];
-    for (const m of o.manual) forms.push(readingForm(m, m.reading ? { value: m.reading.value, limit: m.reading.limit } : null, false));
-    $('readings').replaceChildren(...forms);
     ($('price-input') as HTMLInputElement).value = o.settings.anthropicPrices?.input ?? '';
     ($('price-output') as HTMLInputElement).value = o.settings.anthropicPrices?.output ?? '';
     ($('gemini-limit') as HTMLInputElement).value = o.settings.geminiDailyRequests ?? '';
@@ -1476,6 +1501,12 @@ import SignInGate from '../../components/SignInGate.astro';
       // Re-rendered after every saved reading; the open card (openCardTitle) is rebuilt open.
       const netlifyTyped = data.manual.find((m: any) => m.id === 'netlify.credits_remaining') ?? null;
       canConfigure = Boolean(data.canConfigure);
+      readingSetups = new Map();
+      if (canConfigure) {
+        const a = data.anthropic.credit;
+        readingSetups.set(a.meter.id, { meter: a.meter, last: a.reading ? { value: a.reading.value, limit: a.reading.total, expiresOn: a.reading.expiresOn } : null, withExpiry: true });
+        for (const m of data.manual) readingSetups.set(m.id, { meter: m, last: m.reading ? { value: m.reading.value, limit: m.reading.limit } : null, withExpiry: false });
+      }
       const nodes = [anthropicCard(data), geminiCard(data), typesafeCard(data), supabaseCard(data), ...(data.resend.fresh ? [resendCard(data)] : []), ...(data.r2.fresh ? [r2Card(data)] : []), ...(data.netlify.deploys ? [netlifyCard(data, netlifyTyped)] : netlifyTyped ? [manualCard(netlifyTyped)] : []), ...data.manual.filter((m: any) => !FOLDED_INTO_SERVICE_CARD.has(m.id)).map(manualCard)].sort((a, b) => urgencyRank(b) - urgencyRank(a)); // most urgent first; the sort is stable, so ties keep their order
       $('cards').replaceChildren(...nodes);
       renderAlerts(data.alerts, nodes.length);

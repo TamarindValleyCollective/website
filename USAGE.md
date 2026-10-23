@@ -35,8 +35,8 @@ Each card shows only a summary (the status, one headline figure and one bar, plu
 
 - **Top: "Needs attention".** A one-line count ("2 critical · 5 fine"), then **one entry per service** led by its most serious alert, each with a plain-language **What to do** line (written for non-technical core-team members, kept in `ALERT_ACTIONS` in `usage-rules.mjs`, and sent in the hourly email too), a **Why this is flagged** toggle holding the numbers (and any other alerts for the same service), and a link that opens that service's card. Severity is the tint and the pill's word, not a coloured stripe.
 - **"What these words mean":** a short glossary (credit, egress, deploy, estimated, warning/critical).
-- **Cards,** most urgent first (critical, then warning, then the rest; ties keep their order). Each card also has a button, for admins, that jumps to its entry form (**Enter a new reading**), and shows when the typed-in figure was entered.
-- Below the cards: domain renewals, WhatsApp account health, the reading forms and the prices.
+- **Cards,** most urgent first (critical, then warning, then the rest; ties keep their order). Each card with a typed-in figure has a link, for admins, that opens its entry form inside the card (**Enter a new reading**; a second click or Cancel folds it, saving re-draws the card and shows a toast), and shows when the figure was entered. A card with nothing entered yet shows the link on its face.
+- Below the cards: domain renewals, WhatsApp account health and (for admins) the prices and limits.
 
 When a service has a new alert, add its plain-language action to `ALERT_ACTIONS`; the test in `usage-rules.test.mjs` fails if any alert has no guidance.
 

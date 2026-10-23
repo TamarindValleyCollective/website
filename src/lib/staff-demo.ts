@@ -77,6 +77,76 @@ function demoWrite(path: string, body: any): { status: number; data: unknown } |
   return null;
 }
 
+// The Usage page's overview: four cards with typed-in or measured figures, enough to try "Enter a new reading".
+let usageState: any = null;
+function demoUsage() {
+  if (usageState) return usageState;
+  const ago = (hours: number) => new Date(Date.now() - hours * 3600000).toISOString();
+  const day = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+  const series = (base: number) => Array.from({ length: 14 }, (_, i) => ({ day: day(13 - i), value: Math.round(base + Math.sin(i) * base * 0.4 + i) }));
+  const meter = (id: string, label: string, where: string, valueLabel: string, limitLabel: string) => ({ id, label, where, valueLabel, limitLabel, refreshEveryDays: 30 });
+  const manual = (id: string, label: string, where: string, unit: string, value: number, limit: number | null, level: string | null) => ({
+    ...meter(id, label, where, 'Amount left', 'Amount included'),
+    kind: 'remaining',
+    unit,
+    level,
+    reading: { value, limit, capturedAt: ago(30) },
+  });
+  usageState = {
+    canConfigure: true,
+    generatedAt: new Date().toISOString(),
+    schedule: { nextCollectorRunAt: new Date(Date.now() + 3 * 3600000).toISOString(), collectorEveryHours: 6 },
+    alerts: [],
+    settings: { anthropicPrices: { input: 3, output: 15 }, geminiDailyRequests: 1500 },
+    anthropic: {
+      billingErrorsRecent: 0,
+      chatCapHitsToday: 0,
+      searchFallbackCapHitsToday: 0,
+      credit: {
+        meter: meter('anthropic.credit_remaining_usd', 'Anthropic credit', 'console.anthropic.com, under Billing', 'Credit left (USD)', 'Credit loaded in total (USD)'),
+        reading: { value: 42.5, total: 50, capturedAt: ago(70), expiresOn: day(-160) },
+        estimate: { remaining: 38.2, total: 50, level: null, spent: 4.3 },
+        expiresInDays: 160,
+      },
+      today: { requests: 42, input_tokens: 61000, output_tokens: 9000, costUsd: 0.31 },
+      last7: { requests: 310, input_tokens: 420000, output_tokens: 66000, costUsd: 2.25 },
+      month: { requests: 980, input_tokens: 1300000, output_tokens: 210000, costUsd: 7.05 },
+      requestsSeries: series(40),
+    },
+    gemini: {
+      dailyLimit: 1500,
+      today: { requests: 220, quotaExhausted: 0 },
+      last7: { requests: 1500, quotaExhausted: 0, fallbacksToAnthropic: 4 },
+      requestsSeries: series(210),
+    },
+    typesafe: {
+      creditEstimate: null,
+      today: { requests: 160, errors: 2 },
+      last7: { requests: 1100, costUsd: 0.04, errors: 6 },
+      month: { requests: 3400, inputTokens: 2100000, costUsd: 0.12 },
+      requestsSeries: series(150),
+    },
+    supabase: {
+      reading: { bytes: 118 * 1024 * 1024, limitBytes: 500 * 1024 * 1024, capturedAt: ago(3) },
+      growth: { spanDays: 14, bytesPerDay: 1.2 * 1024 * 1024, daysToFull: 320 },
+      history: Array.from({ length: 12 }, (_, i) => ({ at: ago((11 - i) * 24), bytes: (100 + i * 1.6) * 1024 * 1024 })),
+      tables: { list: [{ name: 'whatsapp_messages', bytes: 31 * 1024 * 1024, rows: 41000 }, { name: 'event_payments', bytes: 6 * 1024 * 1024, rows: 2100 }, { name: 'member_people', bytes: 2 * 1024 * 1024, rows: 97 }] },
+      connections: { max: 60, inUse: 9, level: null },
+    },
+    resend: { fresh: null },
+    r2: { fresh: null },
+    netlify: { deploys: null },
+    manual: [
+      manual('typesafe.credit_remaining_usd', 'TypeSafe credit', 'typesafe.ai dashboard', 'USD', 0, null, null),
+      manual('supabase.egress_gb', 'Supabase egress', 'Supabase dashboard, under Usage', 'GB', 1.2, 5, null),
+      manual('netlify.credits_remaining', 'Netlify credits', 'Netlify dashboard, under Usage', 'credits', 820, 1000, 'warn'),
+    ],
+  };
+  // an empty typed-in credit reads as "nothing entered yet": drop the reading so the card shows its empty state
+  usageState.manual[0].reading = null;
+  return usageState;
+}
+
 function demoMe(kind: string) {
   const limited = kind === 'limited';
   const roles: Record<string, string> = limited
@@ -133,6 +203,26 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
           { id: 'demo-3', label: 'Rajesh Thiagarajan', ready: false, methodCount: 1 },
         ],
       });
+    }
+    if (path === '/api/usage-admin/overview') return reply(demoUsage());
+    if (path === '/api/usage-admin/domains') return reply({ domains: [] });
+    if (path === '/api/usage-admin/whatsapp-health') return reply({ events: [] });
+    if (path === '/api/usage-admin/reading' && (init?.method ?? 'GET') === 'POST') {
+      try {
+        const body = JSON.parse(String(init?.body ?? 'null'));
+        const u = demoUsage();
+        const now = new Date().toISOString();
+        if (body.meter === 'anthropic.credit_remaining_usd') {
+          u.anthropic.credit.reading = { value: body.value, total: body.limit, capturedAt: now, expiresOn: body.expiresOn ?? null };
+          u.anthropic.credit.estimate = { remaining: body.value, total: body.limit, level: null, spent: 0 };
+        } else {
+          const m = u.manual.find((x: any) => x.id === body.meter);
+          if (m) m.reading = { value: body.value, limit: body.limit, capturedAt: now };
+        }
+      } catch {
+        // not JSON: ignore
+      }
+      return reply({ ok: true });
     }
     if ((init?.method ?? 'GET') === 'POST') {
       let body: unknown = null;
