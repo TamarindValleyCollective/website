@@ -14,6 +14,18 @@ import { installStaffDemo } from '../../src/lib/staff-demo';
 export const TOKEN_KEY = 'tvc-staff-idtoken';
 export const STEPUP_KEY = 'tvc-staff-stepup';
 
+// `astro dev` only: `?look=neutral` (or `?look=warm`) switches the admin between the warm TVC look and a cooler,
+// calmer one (the tokens are in StaffLayout.astro), and remembers the choice for the tab. Production never sets it.
+if (import.meta.env?.DEV && typeof document !== 'undefined') {
+  try {
+    const asked = new URLSearchParams(location.search).get('look');
+    if (asked === 'neutral' || asked === 'warm') sessionStorage.setItem('tvc-staff-look', asked);
+    if (sessionStorage.getItem('tvc-staff-look') === 'neutral') document.documentElement.dataset.look = 'neutral';
+  } catch {
+    // storage blocked: the warm look
+  }
+}
+
 // `astro dev` only: /internal/?demo fakes the sign-in and /api/staff-me (see src/lib/staff-demo.ts).
 // import.meta.env.DEV is false in a production build, so the demo module is dropped from what ships.
 // It runs here, at import time, so it is in place before any page script reads the token.

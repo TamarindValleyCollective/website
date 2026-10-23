@@ -187,34 +187,15 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
      just pushes the actual calendar workspace down. Scoped to this page
      only (Astro scopes .section.wrapper here to this file), doesn't
      touch the shared class elsewhere. */
-  .section.wrapper {
-    padding-top: 32px;
-    padding-bottom: 32px;
-  }
 
-  .hint {
-    color: var(--tvc-ink-soft);
-    margin: -8px 0 24px;
-  }
 
   .hint-inline {
     font-weight: 400;
     color: var(--tvc-ink-soft);
-    font-size: 0.82rem;
+    font-size: var(--text-xs);
   }
 
-  .card {
-    background: var(--tvc-white);
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-soft);
-  }
 
-  .error {
-    color: var(--tvc-error-text);
-    font-size: 0.85rem;
-    margin: 10px 0 0;
-  }
 
   .button {
     appearance: none;
@@ -224,15 +205,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     padding: 8px 18px;
     font: inherit;
     font-weight: 600;
-    font-size: 0.86rem;
+    font-size: var(--text-sm);
     cursor: pointer;
   }
 
-  .button--primary {
-    background: var(--tvc-green);
-    border-color: var(--tvc-green);
-    color: var(--tvc-white);
-  }
 
   .month-nav {
     display: flex;
@@ -262,7 +238,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   .view-toggle-btn {
     padding: 6px 14px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
   }
 
   .view-toggle-btn--active {
@@ -386,7 +362,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     display: flex;
     flex-direction: column;
     gap: 4px;
-    font-size: 0.86rem;
+    font-size: var(--text-sm);
     font-weight: 600;
   }
 
@@ -470,7 +446,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   .form-group legend {
     font-weight: 700;
-    font-size: 0.78rem;
+    font-size: var(--text-xs);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--tvc-ink-soft);
@@ -506,7 +482,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
        effect once content (month view) already exceeds that width. */
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.78rem;
+    font-size: var(--text-xs);
     white-space: nowrap;
   }
 
@@ -551,7 +527,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   .day-date {
     font-weight: 400;
     color: var(--tvc-ink-soft);
-    font-size: 0.72rem;
+    font-size: var(--text-xs);
   }
 
   .grid-table th.unit-col,
@@ -572,7 +548,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     background: var(--tvc-green);
     color: var(--tvc-white);
     font-weight: 700;
-    font-size: 0.68rem;
+    font-size: var(--text-xs);
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
@@ -643,7 +619,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     align-self: flex-start;
     margin-top: 12px;
     padding: 3px 10px;
-    font-size: 0.72rem;
+    font-size: var(--text-xs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -669,7 +645,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   .day-row-tent {
     flex: 0 0 140px;
     font-weight: 700;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
   }
 
   .day-row-main {
@@ -686,7 +662,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   .day-row-guests {
     color: var(--tvc-ink-soft);
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
   }
 
   .day-row--occupied {
@@ -736,7 +712,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   .booking-card .meta {
-    font-size: 0.82rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
@@ -777,7 +753,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     align-items: center;
     gap: 4px;
     font-weight: 700;
-    font-size: 0.72rem;
+    font-size: var(--text-xs);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--tvc-white);
@@ -865,21 +841,21 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   .tent-occupancy {
     justify-self: center;
     font-weight: 600;
-    font-size: 0.86rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
   /* Guest mode's dot meter only - closure mode's plain "(3)" capacity
      figure keeps the base muted/tight styling above. */
   .tent-occupancy--dots {
-    font-size: 0.95rem;
+    font-size: var(--text-base);
     letter-spacing: 2px;
     color: var(--tvc-green);
   }
 
   .tent-solo-check {
     margin-top: 6px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     font-weight: 400;
     color: var(--tvc-ink-soft);
   }
@@ -893,7 +869,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     align-items: center;
     gap: 8px;
     font-weight: 600;
-    font-size: 0.86rem;
+    font-size: var(--text-sm);
   }
 
   /* Collapsed state for a guest-mode tent that has guests but isn't the
@@ -911,7 +887,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     border-radius: var(--radius-sm);
     background: none;
     font: inherit;
-    font-size: 0.82rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
     text-align: left;
     cursor: pointer;
@@ -962,7 +938,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   .guest-row::before {
     counter-increment: guest;
     content: 'Guest ' counter(guest);
-    font-size: 0.66rem;
+    font-size: var(--text-xs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.03em;
@@ -1010,7 +986,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   .guest-field-label {
-    font-size: 0.66rem;
+    font-size: var(--text-xs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.03em;
@@ -1021,7 +997,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   .guest-field select {
     width: 100%;
     padding: 4px 8px;
-    font-size: 0.82rem;
+    font-size: var(--text-xs);
     font-family: inherit;
     /* Flex items default to min-width:auto, which floors their shrink at
        their content/intrinsic width - with 5 fields now on this row (name,
@@ -1057,7 +1033,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     display: flex;
     align-items: baseline;
     gap: 6px;
-    font-size: 0.82rem;
+    font-size: var(--text-xs);
     padding: 4px 0;
   }
 
@@ -1073,7 +1049,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     background: none;
     border: none;
     padding: 0;
-    font-size: 0.76rem;
+    font-size: var(--text-xs);
     text-decoration: underline;
     color: var(--tvc-ink-soft);
     cursor: pointer;
@@ -1083,7 +1059,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   .email-warning,
   .guest-multi-tent-note {
     margin: 0;
-    font-size: 0.76rem;
+    font-size: var(--text-xs);
     color: var(--tvc-orange-text);
     font-weight: 600;
   }
@@ -1092,7 +1068,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     padding: 8px 10px;
     background: var(--tvc-orange-tint);
     border-radius: 6px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
   }
 
   .mobile-number-conflict p {
@@ -1106,7 +1082,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   .mobile-number-conflict-actions .button {
-    font-size: 0.76rem;
+    font-size: var(--text-xs);
     padding: 4px 10px;
   }
 
@@ -1145,7 +1121,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     width: 100%;
     text-align: left;
     padding: 6px 10px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     border: none;
     background: none;
     cursor: pointer;
@@ -1157,7 +1133,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   .guest-history-toggle {
     align-self: flex-start;
-    font-size: 0.76rem;
+    font-size: var(--text-xs);
     padding: 2px 8px;
     background: none;
     border: none;
@@ -1174,7 +1150,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     background: none;
     border: none;
     padding: 0;
-    font-size: 0.78rem;
+    font-size: var(--text-xs);
     text-decoration: underline;
     color: var(--tvc-ink-soft);
     cursor: pointer;
@@ -1185,7 +1161,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     flex-wrap: wrap;
     align-items: baseline;
     gap: 6px;
-    font-size: 0.82rem;
+    font-size: var(--text-xs);
   }
 
   .preferences-display .preferences-text {
@@ -1199,7 +1175,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     background: none;
     border: none;
     padding: 0;
-    font-size: 0.76rem;
+    font-size: var(--text-xs);
     text-decoration: underline;
     color: var(--tvc-ink-soft);
     cursor: pointer;
@@ -1214,7 +1190,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     padding: 6px 10px;
     background: var(--tvc-green-tint);
     border-radius: 6px;
-    font-size: 0.78rem;
+    font-size: var(--text-xs);
   }
 
   .guest-history-panel ul {
@@ -1242,7 +1218,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   .reason-overlay-card p {
     margin: 0 0 10px;
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
   }
 
   .reason-overlay-card textarea {
@@ -1264,7 +1240,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   .add-guest {
     align-self: center;
     flex-shrink: 0;
-    font-size: 0.78rem;
+    font-size: var(--text-xs);
     padding: 3px 10px;
   }
 
@@ -1293,7 +1269,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   .tent-conflict-warning {
     margin: 2px 0 0;
-    font-size: 0.78rem;
+    font-size: var(--text-xs);
     color: var(--tvc-orange-text);
     font-weight: 600;
   }

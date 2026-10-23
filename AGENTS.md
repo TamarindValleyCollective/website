@@ -74,9 +74,17 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
   2xl / lg / xl; key figures (acres, sq ft) Fraunces 600 at 2xl; subheads (`.role-head`, table group
   rows, notice `h4`) Inter 600; small uppercase Inter labels only for non-heading labels, always
   tracking 0.08em; pills and links weight 600. Sentence case everywhere else (never uppercase an email).
+- Admin portal (`StaffLayout.astro`, `src/pages/internal/*`): the shell owns the shared primitives (`.card`,
+  `.hint`, `.note`, `.error`, `.section.wrapper`, `[hidden]`, `.visually-hidden`, `.link-button`, and the button
+  modifiers `--outline`, `--primary`, `--danger`, `--danger-outline`, `--small`). A page uses them and never
+  redefines them; it may add to one (WhatsApp's `.card` sets padding and overflow) and
+  `scripts/lib/admin-primitives.test.mjs` lists the few that do. Font sizes are `--text-*` tokens with
+  nothing below 0.8rem (only display sizes of 1.3rem and up may be literal; Stylelint errors otherwise). A
+  destructive control uses `--danger` or `--danger-outline`, never the primary fill. An alternative cooler look
+  exists behind `?look=neutral` in `astro dev` only (tokens at the foot of `StaffLayout.astro`).
 
 `npm run lint:css` checks this (Stylelint); the `Design language` GitHub Action runs it on every
-PR. Raw hex colors are errors (CI fails); radius literals are warnings for now. A color that genuinely isn't a TVC color (a third-party brand, a data
+PR. Raw hex colors are errors (CI fails); radius literals are warnings for now. Admin font sizes outside the scale are errors. A color that genuinely isn't a TVC color (a third-party brand, a data
 color) gets a `/* stylelint-disable-next-line color-no-hex -- reason */` comment above it. Update this section in the same change if the rules change.
 
 ## Change log

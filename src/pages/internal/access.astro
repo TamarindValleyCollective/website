@@ -124,26 +124,9 @@ import SignInGate from '../../components/SignInGate.astro';
 <script is:inline src="https://accounts.google.com/gsi/client"></script>
 
 <style>
-  .section.wrapper {
-    padding-top: 32px;
-    padding-bottom: 32px;
-  }
 
-  [hidden] {
-    display: none !important;
-  }
 
-  .hint {
-    color: var(--tvc-ink-soft);
-    margin: -8px 0 24px;
-  }
 
-  .card {
-    background: var(--tvc-white);
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-soft);
-  }
 
   .block {
     max-width: 760px;
@@ -151,22 +134,12 @@ import SignInGate from '../../components/SignInGate.astro';
     margin-bottom: 18px;
   }
 
-  .note {
-    font-size: 0.9rem;
-    color: var(--tvc-ink-soft);
-    margin: 0 0 10px;
-  }
 
   .note.full {
     flex-basis: 100%;
     margin: 0;
   }
 
-  .error {
-    color: var(--tvc-error-text);
-    font-size: 0.9rem;
-    margin: 10px 0 0;
-  }
 
   .inline-form {
     display: flex;
@@ -179,14 +152,14 @@ import SignInGate from '../../components/SignInGate.astro';
     display: flex;
     flex-direction: column;
     gap: 4px;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
   .inline-form input,
   .inline-form select {
     font: inherit;
-    font-size: 1rem;
+    font-size: var(--text-md);
     padding: 8px 10px;
     border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
@@ -204,7 +177,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .tab {
     font: inherit;
-    font-size: 1rem;
+    font-size: var(--text-md);
     background: none;
     border: none;
     border-bottom: 3px solid transparent;
@@ -221,25 +194,7 @@ import SignInGate from '../../components/SignInGate.astro';
     border-bottom-color: var(--tvc-orange);
   }
 
-  .visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
 
-  .link-button {
-    font: inherit;
-    font-size: 0.9rem;
-    background: none;
-    border: none;
-    padding: 8px 4px;
-    color: var(--tvc-ink-soft);
-    text-decoration: underline;
-    cursor: pointer;
-  }
 
   /* ---- the "unlock changes" strip: one quiet line, not a card of its own */
   .banner {
@@ -261,7 +216,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .banner-text {
     margin: 0;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink);
   }
 
@@ -274,7 +229,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .banner-form input {
     font: inherit;
-    font-size: 1rem;
+    font-size: var(--text-md);
     letter-spacing: 0.18em;
     width: 9.5em;
     padding: 8px 10px;
@@ -285,7 +240,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .banner-link {
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
   }
 
   .banner-error {
@@ -335,7 +290,7 @@ import SignInGate from '../../components/SignInGate.astro';
   .filter-label {
     min-width: 4rem;
     color: var(--tvc-ink-soft);
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
   }
 
   .filter-chip {
@@ -345,7 +300,7 @@ import SignInGate from '../../components/SignInGate.astro';
     background: var(--tvc-white);
     color: var(--tvc-ink);
     font: inherit;
-    font-size: 0.875rem;
+    font-size: var(--text-sm);
     cursor: pointer;
   }
 
@@ -423,14 +378,14 @@ import SignInGate from '../../components/SignInGate.astro';
     border-radius: 50%;
     background: var(--tvc-green-tint);
     color: var(--tvc-green-dark);
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     font-weight: 600;
   }
 
   .people-layout :global(.person-avatar--lg) {
     width: 52px;
     height: 52px;
-    font-size: 1.25rem;
+    font-size: var(--text-xl);
   }
 
   .people-layout :global(.person-avatar img) {
@@ -459,7 +414,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .people-layout :global(.person-email) {
     display: block;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
@@ -471,7 +426,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .people-layout :global(.badge) {
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     padding: 1px 8px;
     border-radius: var(--radius-sm);
@@ -509,7 +464,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .person-detail :global(.detail-title) {
     margin: 0;
-    font-size: 1.25rem;
+    font-size: var(--text-xl);
   }
 
   .person-detail :global(.detail-action) {
@@ -546,7 +501,7 @@ import SignInGate from '../../components/SignInGate.astro';
   .person-detail :global(.module-blurb) {
     display: block;
     margin-top: 2px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
@@ -559,7 +514,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .person-detail :global(.role-select) {
     font: inherit;
-    font-size: 1rem;
+    font-size: var(--text-md);
     width: 100%;
     min-height: 36px;
     padding: 4px 8px;
@@ -612,7 +567,7 @@ import SignInGate from '../../components/SignInGate.astro';
   .person-detail :global(.cell-note) {
     display: block;
     margin-top: 4px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     color: var(--tvc-error-text);
   }
 
@@ -622,7 +577,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .person-detail :global(.limit-button) {
     font: inherit;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     margin-top: 2px;
     padding: 8px 0;
     background: none;
@@ -642,7 +597,7 @@ import SignInGate from '../../components/SignInGate.astro';
   .person-detail :global(.limits-title) {
     flex-basis: 100%;
     margin: 0;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
@@ -650,12 +605,12 @@ import SignInGate from '../../components/SignInGate.astro';
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
   }
 
   .person-detail :global(.row-action) {
     font: inherit;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     min-height: 36px;
     padding: 4px 12px;
     border: 1px solid var(--tvc-line-strong);
@@ -711,7 +666,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .modules-view :global(h2) {
     margin: 0 0 8px;
-    font-size: 1.125rem;
+    font-size: var(--text-lg);
   }
 
   .modules-view :global(.role-group) {
@@ -720,7 +675,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .modules-view :global(.role-group-title) {
     margin: 0 0 4px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     letter-spacing: 0.05em;
     text-transform: uppercase;
@@ -735,7 +690,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .modules-view :global(.chip) {
     font: inherit;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     min-height: 32px;
     padding: 2px 10px;
     color: var(--tvc-green-dark);
@@ -757,7 +712,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .modules-view :global(.nobody) {
     margin: 10px 0 0;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
@@ -779,7 +734,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .roles-guide :global(h2) {
     margin: 0 0 6px;
-    font-size: 1.125rem;
+    font-size: var(--text-lg);
   }
 
   .roles-guide :global(.role-list) {
@@ -788,7 +743,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .roles-guide :global(.role-name) {
     margin-top: 10px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     letter-spacing: 0.05em;
     text-transform: uppercase;
@@ -797,7 +752,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .roles-guide :global(.role-text) {
     margin: 2px 0 0;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
   }
 
   /* Touch screens get the larger targets back. */
@@ -834,7 +789,7 @@ import SignInGate from '../../components/SignInGate.astro';
     width: 100%;
     max-width: 420px;
     font: inherit;
-    font-size: 1rem;
+    font-size: var(--text-md);
     padding: 8px 10px;
     border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
@@ -856,13 +811,13 @@ import SignInGate from '../../components/SignInGate.astro';
   .events :global(.event) {
     padding: 10px 0;
     border-bottom: 1px solid var(--tvc-line);
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
   }
 
   .events :global(.event-time),
   .events :global(.event-who) {
     display: block;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 </style>

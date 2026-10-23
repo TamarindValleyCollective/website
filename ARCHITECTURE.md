@@ -738,6 +738,13 @@ outside both the local machine and Netlify (the member-update-email workflow).
   fakes the sign-in and `/api/staff-me` (`src/lib/staff-demo.ts`, called from `scripts/lib/staff-client.mjs` behind
   `import.meta.env.DEV`, so production builds drop it); `?tour` replays the tour without recording. The demo also answers
   `/api/staff-admin/people` with a made-up set of people, so the Access page can be seen locally.
+- **Admin design primitives** (`StaffLayout.astro`, guarded by `scripts/lib/admin-primitives.test.mjs` and a Stylelint rule
+  in `.stylelintrc.json`): the shell defines the card surface, page hint, notes, error text, page rhythm, text-style buttons,
+  visually hidden labels and the button modifiers (`--primary`, `--danger`, `--danger-outline`, `--small`) once; the nine
+  pages no longer carry copies, and every font size in them is a `--text-*` token with a 0.8rem floor. A dev-only
+  `?look=neutral` (and a toggle in the demo note) swaps in a cooler token set at the foot of `StaffLayout.astro` for
+  comparison; nothing sets it in production. Details and the rules for adding to a shared rule are in Design language in
+  `CLAUDE.md`.
 - **Admin Google pictures** (`netlify/functions/lib/staff-picture.ts`, migration `0059_staff_google_picture.sql`,
   `staff_users.google_picture_url`): the pill in the top bar shows the signed-in admin's own Google picture, which
   `/api/staff-me` returns straight from their token (so it shows with no database change) and falls back to their initial.

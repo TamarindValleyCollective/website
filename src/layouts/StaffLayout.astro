@@ -205,11 +205,11 @@ const adminItems = [
     margin: 0 0 8px;
   }
 
-  /* Admin buttons. The shared .button is the public site's large orange pill; inside the
-     staff shell it becomes a compact, quiet control (36px, small radius). These rules are
-     deliberately low specificity (main .button) so a page's own modifier classes
-     (--danger, --primary, --icon...) still win, and global.css is untouched. The tour card
-     (scripts/lib/staff-tour-ui.mjs) sits on the body, outside main, so it is listed too. */
+  /* Admin buttons. The shared .button is the public site's large orange pill; inside the admin
+     shell it becomes a compact, quiet control (36px, small radius). The modifiers (--outline,
+     --primary, --danger, --danger-outline, --small) are defined once here, after the base rule at
+     the same specificity, so pages never need their own copies. The tour card (staff-tour-ui.mjs)
+     sits on the body, outside main, so it is listed too. */
   main :global(.button),
   :global(.tour .button) {
     display: inline-flex;
@@ -222,7 +222,7 @@ const adminItems = [
     border-radius: var(--radius-sm);
     background: var(--tvc-green-dark);
     color: var(--tvc-white);
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     font-weight: 600;
     line-height: 1.2;
     box-shadow: none;
@@ -239,6 +239,87 @@ const adminItems = [
   :global(.tour .button:disabled) {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  main :global(.button--primary) {
+    background: var(--tvc-green);
+    border-color: var(--tvc-green);
+    color: var(--tvc-white);
+  }
+
+  main :global(.button--danger) {
+    background: var(--tvc-error-text);
+    border-color: var(--tvc-error-text);
+    color: var(--tvc-white);
+  }
+
+  main :global(.button--danger-outline) {
+    background: var(--tvc-white);
+    border-color: var(--tvc-error-text);
+    color: var(--tvc-error-text);
+  }
+
+  main :global(.button--small) {
+    min-height: 28px;
+    padding: 0 12px;
+    font-size: var(--text-xs);
+  }
+
+  /* ---- shared primitives. Pages use these and do not redefine them (CLAUDE.md, Design language): the card
+     surface, the line under a page title, small notes, error text, the page's vertical rhythm, text-style
+     buttons, and visually hidden labels. A page may add to one (WhatsApp's panes run edge to edge) but
+     never repeats what is here. Sizes come from the --text-* scale, nothing below 0.8rem. */
+  main :global(.card) {
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+  }
+
+  main :global(.hint) {
+    color: var(--tvc-ink-soft);
+    margin: -8px 0 24px;
+  }
+
+  main :global(.note) {
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+    margin: 0 0 10px;
+  }
+
+  main :global(.error) {
+    color: var(--tvc-error-text);
+    font-size: var(--text-sm);
+    margin: 10px 0 0;
+  }
+
+  main :global(.section.wrapper) {
+    padding-top: 32px;
+    padding-bottom: 32px;
+  }
+
+  main :global([hidden]) {
+    display: none !important;
+  }
+
+  main :global(.visually-hidden) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  main :global(.link-button) {
+    font: inherit;
+    font-size: var(--text-sm);
+    background: none;
+    border: none;
+    padding: 8px 4px;
+    color: var(--tvc-ink-soft);
+    text-decoration: underline;
+    cursor: pointer;
   }
 
   @media (pointer: coarse) {
@@ -305,7 +386,7 @@ const adminItems = [
   .brand-name {
     font-family: var(--font-wordmark);
     font-weight: 700;
-    font-size: 1.125rem;
+    font-size: var(--text-lg);
     color: var(--tvc-green-dark);
     white-space: nowrap;
   }
@@ -331,7 +412,7 @@ const adminItems = [
   .group-label {
     margin: 18px 0 6px;
     padding: 0 10px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     letter-spacing: 0.05em;
     text-transform: uppercase;
@@ -351,7 +432,7 @@ const adminItems = [
     border-radius: var(--radius-sm);
     background: none;
     font: inherit;
-    font-size: 1rem;
+    font-size: var(--text-md);
     color: var(--tvc-ink);
     text-decoration: none;
     text-align: left;
@@ -912,6 +993,29 @@ const adminItems = [
 
   refresh();
 </script>
+
+<!-- An alternative look for the admin, to compare with the warm TVC one. Nothing sets data-look in production:
+     it is switched on in `astro dev` only (?look=neutral, see scripts/lib/staff-client.mjs), so these tokens
+     are inert for visitors. Cooler, calmer neutrals and the body face for headings, like the Apple-style
+     concept. It overrides tokens only; no component has a rule for it. -->
+<style is:global>
+  /* stylelint-disable color-no-hex -- the neutral look's own token values, same job as the --tvc-* ones in global.css */
+  html[data-look='neutral'] {
+    --tvc-stone: #eceeea;
+    --tvc-cream: #f5f6f3;
+    --tvc-line: #dadcd5;
+    --tvc-line-strong: #868c83;
+    --tvc-ink: #1b1e1b;
+    --tvc-ink-soft: #596057;
+    --font-display: var(--font-body);
+  }
+  /* stylelint-enable color-no-hex */
+
+  html[data-look='neutral'] #staff-main h1,
+  html[data-look='neutral'] #staff-main h2 {
+    letter-spacing: -0.02em;
+  }
+</style>
 
 <!-- The admin tour and the "What's new" card (scripts/lib/staff-tour-ui.mjs). Global because they are
      built at run time, where Astro's scoped CSS never reaches. Same look as the member portal's tour. -->

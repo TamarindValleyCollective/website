@@ -154,18 +154,11 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
      styles, so without this the element would render regardless of the
      `hidden` attribute (only occurs when the class rule sets `display`;
      harmless for the plain gate/forbidden panels above). */
-  [hidden] {
-    display: none !important;
-  }
 
   /* This is a tool, not a landing page — the site's default 96px section
      padding is calibrated for marketing pages and just pushes the actual
      workspace down. Scoped to this page only (Astro scopes .section.wrapper
      here to this file), doesn't touch the shared class elsewhere. */
-  .section.wrapper {
-    padding-top: 32px;
-    padding-bottom: 32px;
-  }
 
   .page-head {
     display: flex;
@@ -177,26 +170,15 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   .page-head-sub {
     margin: 0;
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
+  /* On top of the shared .card (StaffLayout): the panes run edge to edge (header rule, message
+     area, composer), so no padding and clipped corners. The gate panels set their own padding below. */
   .card {
-    background: var(--tvc-white);
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-soft);
-    /* The panes run edge to edge (header rule, message area, composer); the shared
-       .card's 28px padding would float them inside the card. The gate panels set
-       their own padding below. */
     padding: 0;
     overflow: hidden;
-  }
-
-  .error {
-    color: var(--tvc-error-text);
-    font-size: 0.85rem;
-    margin: 10px 0 0;
   }
 
   .app {
@@ -226,7 +208,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
     font: inherit;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     background: var(--tvc-white);
     color: var(--tvc-ink);
   }
@@ -256,7 +238,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     margin: 0;
     padding: 32px 16px;
     text-align: center;
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
@@ -355,13 +337,13 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   :global(.avatar-sm) {
     width: 36px;
     height: 36px;
-    font-size: 0.76rem;
+    font-size: var(--text-xs);
   }
 
   :global(.avatar-lg) {
     width: 40px;
     height: 40px;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
   }
 
   :global(.conversation-item .text) {
@@ -385,7 +367,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   :global(.conversation-item .name) {
     font-weight: 600;
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -394,14 +376,14 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   :global(.conversation-item .meta) {
     flex: 0 0 auto;
-    font-size: 0.72rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
   :global(.conversation-item .preview) {
     display: block;
     margin-top: 2px;
-    font-size: 0.78rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -449,7 +431,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   }
 
   .thread-header strong {
-    font-size: 0.95rem;
+    font-size: var(--text-base);
   }
 
   .thread-header-text {
@@ -459,7 +441,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   .thread-source {
     display: block;
-    font-size: 0.8125rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -490,7 +472,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   .guest-title {
     margin: 0;
     font-family: var(--font-body);
-    font-size: 0.95rem;
+    font-size: var(--text-base);
     font-weight: 600;
     color: var(--tvc-ink);
   }
@@ -511,13 +493,13 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   }
 
   .guest-facts dt {
-    font-size: 0.78rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
   .guest-facts dd {
     margin: 1px 0 0;
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink);
   }
 
@@ -530,14 +512,14 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   .guest-section h3 {
     margin: 0 0 8px;
     font-family: var(--font-body);
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     font-weight: 600;
     color: var(--tvc-ink);
   }
 
   :global(.guest-note) {
     margin: 0;
-    font-size: 0.82rem;
+    font-size: var(--text-xs);
     line-height: 1.4;
     color: var(--tvc-ink-soft);
   }
@@ -559,21 +541,21 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     flex-wrap: wrap;
     gap: 6px;
     margin: 0;
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
     font-weight: 600;
     color: var(--tvc-ink);
   }
 
   :global(.guest-item-line) {
     margin: 3px 0 0;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     line-height: 1.4;
     color: var(--tvc-ink-soft);
   }
 
   :global(.guest-person) {
     margin: 12px 0 6px;
-    font-size: 0.82rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     color: var(--tvc-ink);
   }
@@ -587,7 +569,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     border-radius: 999px;
     background: var(--tvc-green-tint);
     color: var(--tvc-green-dark);
-    font-size: 0.7rem;
+    font-size: var(--text-xs);
     font-weight: 600;
   }
 
@@ -670,7 +652,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     border-radius: 999px;
     font: inherit;
     font-weight: 600;
-    font-size: 0.82rem;
+    font-size: var(--text-xs);
     cursor: pointer;
     transition:
       background-color 150ms ease-out,
@@ -729,7 +711,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
      the full "Blocked" word in every row. */
   :global(.conversation-item .blocked-tag) {
     flex: 0 0 auto;
-    font-size: 0.68rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     color: var(--tvc-error-text);
     background: var(--tvc-error-bg);
@@ -774,13 +756,14 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   :global(.avatar-xs) {
     width: 22px;
     height: 22px;
+    /* stylelint-disable-next-line declaration-property-value-allowed-list -- an initial inside a 22px circle is a glyph, not text to read */
     font-size: 0.6rem;
   }
 
   :global(.bubble) {
     padding: 8px 12px;
     border-radius: var(--radius);
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
     line-height: 1.4;
     white-space: pre-wrap;
     word-break: break-word;
@@ -827,26 +810,26 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   }
 
   :global(.msg-media .msg-media-note) {
-    font-size: 0.78rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
   :global(.msg-media .msg-media-error) {
-    font-size: 0.78rem;
+    font-size: var(--text-xs);
     color: var(--tvc-error-text);
   }
 
   :global(.bubble .bubble-error) {
     display: block;
     margin-top: 4px;
-    font-size: 0.76rem;
+    font-size: var(--text-xs);
     color: var(--tvc-error-text);
   }
 
   :global(.bubble .bubble-meta) {
     display: block;
     margin-top: 4px;
-    font-size: 0.7rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
@@ -882,7 +865,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
     font: inherit;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     background: var(--tvc-white);
     color: var(--tvc-ink);
   }
@@ -902,7 +885,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     margin: 0;
     padding: 8px 14px 4px;
     font-family: var(--font-body);
-    font-size: 0.78rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     color: var(--tvc-ink-soft);
   }
@@ -932,7 +915,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   .picker-item-label {
     display: block;
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
     font-weight: 600;
     color: var(--tvc-ink);
   }
@@ -944,7 +927,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     -webkit-box-orient: vertical;
     overflow: hidden;
     margin-top: 2px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     line-height: 1.4;
     color: var(--tvc-ink-soft);
   }
@@ -952,7 +935,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   .picker-empty {
     margin: 0;
     padding: 16px 14px;
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
@@ -967,7 +950,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     align-items: center;
     gap: 8px;
     padding: 12px 16px 0;
-    font-size: 0.82rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
@@ -993,7 +976,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   }
 
   .suggestion-head {
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
   }
 
   .suggestion-note {
@@ -1003,7 +986,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   .suggestion-flag {
     margin-top: 6px;
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     font-weight: 600;
     color: var(--tvc-orange-text);
   }
@@ -1012,7 +995,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     margin-top: 8px;
     max-height: 9rem;
     overflow-y: auto;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     line-height: 1.45;
     white-space: pre-wrap;
     word-break: break-word;
@@ -1020,7 +1003,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   .suggestion-sources {
     margin-top: 8px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
@@ -1037,7 +1020,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
     font: inherit;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     background: var(--tvc-white);
     color: var(--tvc-ink);
   }
@@ -1057,7 +1040,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
     font: inherit;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     background: var(--tvc-white);
     color: var(--tvc-ink);
     resize: vertical;
@@ -1065,7 +1048,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   .reply-status {
     margin: 0 16px 10px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     color: var(--tvc-error-text);
   }
 

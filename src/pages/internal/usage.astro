@@ -81,22 +81,13 @@ import SignInGate from '../../components/SignInGate.astro';
 <script is:inline src="https://accounts.google.com/gsi/client"></script>
 
 <style is:global>
-  .usage [hidden] {
-    display: none !important;
-  }
-
   .usage.section.wrapper {
     padding-top: 32px;
     padding-bottom: 48px;
   }
 
-  .usage .hint,
   .usage .muted {
     color: var(--tvc-ink-soft);
-  }
-
-  .usage .hint {
-    margin: -8px 0 24px;
   }
 
   .usage .lead {
@@ -105,7 +96,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .usage h2 {
-    font-size: 1.1rem;
+    font-size: var(--text-lg);
     margin: 0 0 12px;
   }
 
@@ -117,37 +108,21 @@ import SignInGate from '../../components/SignInGate.astro';
     margin-bottom: 32px;
   }
 
-  .usage .card {
-    background: var(--tvc-white);
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-soft);
-  }
 
   .usage .card.pad {
     padding: 16px 18px;
   }
 
-  .usage .error {
-    color: var(--tvc-error-text);
-    font-size: 0.85rem;
-    margin: 10px 0 0;
-  }
 
   .usage .note,
   .usage .foot {
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
-  .usage .link-button {
-    font: inherit;
-    background: none;
-    border: none;
+  /* On top of the shared .link-button (StaffLayout): this one sits flush with its text. */
+  #staff-main .usage .link-button {
     padding: 12px 0;
-    color: var(--tvc-ink-soft);
-    text-decoration: underline;
-    cursor: pointer;
   }
 
   /* ---- status pill: a word and an icon, colour is only reinforcement ---- */
@@ -157,7 +132,7 @@ import SignInGate from '../../components/SignInGate.astro';
     gap: 6px;
     padding: 3px 10px 3px 8px;
     border-radius: 999px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     white-space: nowrap;
   }
@@ -224,14 +199,14 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .usage .alert-action {
     margin: 8px 0 0;
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
   }
 
   .usage .alert-why > summary {
     display: flex;
     align-items: center;
     min-height: 44px;
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     font-weight: 600;
     color: var(--tvc-ink-soft);
     cursor: pointer;
@@ -240,7 +215,7 @@ import SignInGate from '../../components/SignInGate.astro';
   .usage .alert-why > summary::after {
     content: '+';
     margin-left: 8px;
-    font-size: 1.1rem;
+    font-size: var(--text-lg);
     line-height: 1;
   }
 
@@ -254,19 +229,19 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .usage .alert-more {
     margin: 6px 0 0;
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
   .usage .alert .link-button {
     margin-top: 4px;
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
   }
 
   /* a short plain-words list for readers who do not live in these dashboards */
   .usage .glossary {
     margin: 0 0 20px;
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
   }
 
   .usage .glossary > summary {
@@ -301,7 +276,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .usage .alert-detail {
     margin: 4px 0 0;
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
@@ -348,7 +323,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .usage .svc-title {
     margin: 0;
-    font-size: 1.05rem;
+    font-size: var(--text-md);
   }
 
   .usage .svc-kind {
@@ -357,7 +332,7 @@ import SignInGate from '../../components/SignInGate.astro';
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 8px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
@@ -368,7 +343,7 @@ import SignInGate from '../../components/SignInGate.astro';
     gap: 5px;
     padding: 2px 9px 2px 7px;
     border-radius: 999px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     white-space: nowrap;
   }
@@ -393,7 +368,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .usage .svc-fresh {
     margin: 0 0 12px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     line-height: 1.45;
     color: var(--tvc-ink-soft);
   }
@@ -435,7 +410,7 @@ import SignInGate from '../../components/SignInGate.astro';
     border: 0;
     background: none;
     font: inherit;
-    font-size: 0.82rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     text-align: left;
     color: var(--tvc-ink-soft);
@@ -517,7 +492,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .usage .hero-sub {
     margin: 2px 0 10px;
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
@@ -549,7 +524,7 @@ import SignInGate from '../../components/SignInGate.astro';
     justify-content: space-between;
     gap: 8px;
     margin-top: 10px;
-    font-size: 0.82rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
@@ -559,7 +534,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .usage .meter-caption {
     margin: 0 0 12px;
-    font-size: 0.82rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
@@ -573,20 +548,20 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .usage .stat dt {
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
   .usage .stat dd {
     margin: 2px 0 0;
     font-weight: 600;
-    font-size: 0.95rem;
+    font-size: var(--text-base);
   }
 
   .usage .stat dd small {
     display: block;
     font-weight: 400;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
@@ -617,13 +592,13 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .usage .spark figcaption {
     margin-top: 4px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
   .usage .svc-note {
     margin: 12px 0 0;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
@@ -636,19 +611,19 @@ import SignInGate from '../../components/SignInGate.astro';
   .usage td small {
     display: block;
     margin-top: 2px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
   .usage table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.92rem;
+    font-size: var(--text-sm);
   }
 
   .usage th {
     text-align: left;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     color: var(--tvc-ink-soft);
     padding: 0 12px 8px 0;
@@ -694,7 +669,7 @@ import SignInGate from '../../components/SignInGate.astro';
   .usage label {
     display: grid;
     gap: 4px;
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
     font-weight: 600;
   }
 
@@ -728,7 +703,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .usage .msg {
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     color: var(--tvc-green-dark);
   }
 
