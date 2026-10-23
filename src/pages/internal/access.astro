@@ -19,6 +19,7 @@ import SignInGate from '../../components/SignInGate.astro';
 ---
 
 <StaffLayout title="Access" description="Who can do what in the internal tools." current="access">
+  <button slot="toolbar" type="button" id="lock" class="lock-pill" data-tour="stepup" hidden></button>
   <section class="section wrapper">
     <h1>Access</h1>
     <p class="hint">Who can use which internal tool, and what they can do in it. Only super admins can open this page.</p>
@@ -28,20 +29,25 @@ import SignInGate from '../../components/SignInGate.astro';
     <p id="status" class="hint" hidden></p>
 
     <div id="panel" hidden>
-      <section id="stepup" class="banner" aria-live="polite">
-        <p id="stepup-text" class="banner-text"></p>
-        <form id="verify-form" class="banner-form" hidden>
-          <button type="button" id="verify-passkey" class="button" hidden>Use a passkey</button>
+      <dialog id="stepup" class="sheet" aria-labelledby="stepup-title">
+        <h2 id="stepup-title">Unlock editing</h2>
+        <p id="stepup-text" class="sheet-text"></p>
+        <form id="verify-form" class="sheet-form" hidden>
           <label class="visually-hidden" for="verify-code">Code</label>
-          <input type="text" id="verify-code" name="verify-code" inputmode="numeric" autocomplete="one-time-code" required />
-          <button type="submit" class="button">Unlock changes</button>
+          <input type="text" id="verify-code" name="verify-code" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" required />
+          <button type="submit" class="button button--primary">Unlock</button>
+          <button type="button" id="verify-passkey" class="button button--outline" hidden>Use a passkey</button>
           <button type="button" id="verify-switch" class="link-button">Use a recovery code</button>
         </form>
-        <a id="stepup-link" class="banner-link" href="/internal/security/" hidden>Set up your second factors →</a>
-        <p id="verify-error" class="error banner-error" hidden></p>
-      </section>
+        <a id="stepup-link" class="sheet-link" href="/internal/security/" hidden>Set up your second factors →</a>
+        <p id="verify-error" class="error" hidden></p>
+        <div class="sheet-actions">
+          <button type="button" id="lock-now" class="button button--outline" hidden>Lock now</button>
+          <button type="button" id="stepup-close" class="button button--outline">Close</button>
+        </div>
+      </dialog>
 
-      <div class="tabs" role="tablist" aria-label="Access sections">
+      <div class="tabs" role="tablist" data-tour="tabs" aria-label="Access sections">
         <button type="button" role="tab" id="tab-people" aria-selected="true" aria-controls="pane-people" class="tab">People</button>
         <button type="button" role="tab" id="tab-modules" aria-selected="false" aria-controls="pane-modules" class="tab">Who can use what</button>
         <button type="button" role="tab" id="tab-roles" aria-selected="false" aria-controls="pane-roles" class="tab">What each role can do</button>
@@ -50,8 +56,8 @@ import SignInGate from '../../components/SignInGate.astro';
 
       <section id="pane-people" role="tabpanel" aria-labelledby="tab-people">
         <div class="toolbar">
-          <p id="people-count" class="note"></p>
-          <button type="button" id="add-toggle" class="button" aria-expanded="false" aria-controls="add-form">Add person</button>
+          <p id="people-count" class="note" role="status"></p>
+          <button type="button" id="add-toggle" class="button button--outline" data-tour="add-person" aria-expanded="false" aria-controls="add-form">Add person</button>
         </div>
 
         <form id="add-form" class="card block inline-form" hidden>
@@ -67,13 +73,27 @@ import SignInGate from '../../components/SignInGate.astro';
           <p class="note full">The address is used once to recognise them when they sign in with Google, and is never shown again. Their name fills in from Google on their first sign-in.</p>
         </form>
 
-        <p id="save-message" class="note" role="status" hidden></p>
+        <p id="save-message" class="note visually-hidden" role="status" hidden></p>
         <p id="add-message" class="note" hidden></p>
         <p id="people-error" class="error" hidden></p>
 
+        <div class="people-find" data-tour="people-find">
+          <label class="field" for="people-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+            <input type="search" id="people-search" placeholder="Search" autocomplete="off" aria-label="Search people" />
+          </label>
+          <div class="segmented" id="people-filter" role="radiogroup" aria-label="Show">
+            <button type="button" role="radio" data-value="all" aria-checked="true">All</button>
+            <button type="button" role="radio" data-value="super" aria-checked="false">Super admins</button>
+            <button type="button" role="radio" data-value="tools" aria-checked="false">Has tools</button>
+            <button type="button" role="radio" data-value="none" aria-checked="false">No tools</button>
+            <button type="button" role="radio" data-value="inactive" aria-checked="false">Deactivated</button>
+          </div>
+        </div>
+
         <div class="people-layout">
           <ul id="people" class="people-list" aria-label="People"></ul>
-          <section id="person-detail" class="person-detail card" aria-live="polite"></section>
+          <section id="person-detail" class="person-detail" aria-live="polite"></section>
         </div>
         <p class="note legend">Changes save as soon as you pick a role. “No access” hides the tool from that person entirely.</p>
       </section>
@@ -106,26 +126,9 @@ import SignInGate from '../../components/SignInGate.astro';
 <script is:inline src="https://accounts.google.com/gsi/client"></script>
 
 <style>
-  .section.wrapper {
-    padding-top: 32px;
-    padding-bottom: 32px;
-  }
 
-  [hidden] {
-    display: none !important;
-  }
 
-  .hint {
-    color: var(--tvc-ink-soft);
-    margin: -8px 0 24px;
-  }
 
-  .card {
-    background: var(--tvc-white);
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-soft);
-  }
 
   .block {
     max-width: 760px;
@@ -133,22 +136,12 @@ import SignInGate from '../../components/SignInGate.astro';
     margin-bottom: 18px;
   }
 
-  .note {
-    font-size: 0.9rem;
-    color: var(--tvc-ink-soft);
-    margin: 0 0 10px;
-  }
 
   .note.full {
     flex-basis: 100%;
     margin: 0;
   }
 
-  .error {
-    color: var(--tvc-error-text);
-    font-size: 0.9rem;
-    margin: 10px 0 0;
-  }
 
   .inline-form {
     display: flex;
@@ -161,14 +154,14 @@ import SignInGate from '../../components/SignInGate.astro';
     display: flex;
     flex-direction: column;
     gap: 4px;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
   .inline-form input,
   .inline-form select {
     font: inherit;
-    font-size: 1rem;
+    font-size: var(--text-md);
     padding: 8px 10px;
     border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
@@ -182,11 +175,16 @@ import SignInGate from '../../components/SignInGate.astro';
     margin-bottom: 16px;
     border-bottom: 1px solid var(--tvc-line);
     overflow-x: auto; /* four tabs don't fit a phone: scroll them rather than wrap the labels */
+    scrollbar-width: none;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
   }
 
   .tab {
     font: inherit;
-    font-size: 1rem;
+    font-size: var(--text-md);
     background: none;
     border: none;
     border-bottom: 3px solid transparent;
@@ -200,80 +198,100 @@ import SignInGate from '../../components/SignInGate.astro';
   .tab[aria-selected='true'] {
     color: var(--tvc-ink);
     font-weight: 600;
-    border-bottom-color: var(--tvc-orange);
+    border-bottom-color: var(--tvc-green-dark);
   }
 
-  .visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
 
-  .link-button {
-    font: inherit;
-    font-size: 0.9rem;
-    background: none;
-    border: none;
-    padding: 8px 4px;
-    color: var(--tvc-ink-soft);
-    text-decoration: underline;
-    cursor: pointer;
-  }
 
-  /* ---- the "unlock changes" strip: one quiet line, not a card of its own */
-  .banner {
-    display: flex;
-    flex-wrap: wrap;
+  /* ---- the lock in the toolbar, and the sheet it opens */
+  .lock-pill {
+    display: inline-flex;
     align-items: center;
-    gap: 8px 16px;
-    padding: 10px 16px;
-    margin-bottom: 18px;
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius);
+    gap: 7px;
+    min-height: 32px;
+    padding: 4px 12px;
+    border: 0;
+    border-radius: 999px;
     background: var(--tvc-cream);
-  }
-
-  .banner.is-unlocked {
-    background: var(--tvc-green-tint);
-    border-color: var(--tvc-green);
-  }
-
-  .banner-text {
-    margin: 0;
-    font-size: 0.9rem;
     color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 120ms ease-out, transform 100ms ease-out;
   }
 
-  .banner-form {
+  .lock-pill:active {
+    transform: scale(0.97);
+  }
+
+  .lock-pill:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .lock-pill :global(svg) {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .lock-pill[data-state='open'] {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+  }
+
+  .lock-pill[data-state='setup'] {
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+  }
+
+
+
+
+
+
+
+
+  .sheet-form {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    margin-bottom: 8px;
   }
 
-  .banner-form input {
-    font: inherit;
-    font-size: 1rem;
-    letter-spacing: 0.18em;
-    width: 9.5em;
-    padding: 8px 10px;
-    border: 1px solid var(--tvc-line-strong);
+  .sheet-form input {
+    flex: 1 1 100%;
+    min-height: 48px;
+    padding: 8px 12px;
+    border: 0;
     border-radius: var(--radius-field);
-    background: var(--tvc-white);
+    background: var(--tvc-cream);
     color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-xl);
+    letter-spacing: 0.3em;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
   }
 
-  .banner-link {
-    font-size: 0.9rem;
+  .sheet-form input:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
   }
 
-  .banner-error {
-    flex-basis: 100%;
-    margin: 0;
+  .sheet-link {
+    font-size: var(--text-sm);
   }
+
+
+
+
 
   /* ---- people tab: a list of people, and the selected person's tools as rows */
   .toolbar {
@@ -288,85 +306,160 @@ import SignInGate from '../../components/SignInGate.astro';
     margin: 0;
   }
 
+  /* Search and one segmented filter, like the Apple-style concept. Static markup, so these styles are scoped normally. */
+  .people-find {
+    display: grid;
+    justify-items: start;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+
+
+
+
+
+
+
+
+
   .people-layout {
     display: grid;
     grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
-    gap: 16px;
+    gap: 22px;
     align-items: start;
   }
 
+  /* One grouped surface for the people, hairlines between rows, inset past the face. */
   .people-list {
     list-style: none;
     margin: 0;
     padding: 0;
-    display: grid;
-    gap: 6px;
+    background: var(--tvc-white);
+    border-radius: var(--radius);
+    box-shadow: 0 0 0 1px var(--tvc-line) inset;
+    overflow: hidden;
+  }
+
+  .people-list > :global(li) {
+    position: relative;
+  }
+
+  .people-list > :global(li + li)::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 58px;
+    height: 1px;
+    background: var(--tvc-line);
   }
 
   .people-layout :global(.person-item) {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 12px;
     width: 100%;
     box-sizing: border-box;
-    padding: 10px 12px;
+    min-height: 48px;
+    padding: 8px 14px;
+    border: 0;
+    background: none;
+    color: var(--tvc-ink);
     font: inherit;
     text-align: left;
-    color: var(--tvc-ink);
-    background: var(--tvc-white);
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius-sm);
     cursor: pointer;
+    transition: background 120ms ease-out;
   }
 
-  .people-layout :global(.person-item:hover) {
-    background: var(--tvc-green-tint);
+  @media (hover: hover) {
+    .people-layout :global(.person-item:hover) {
+      background: var(--tvc-cream);
+    }
   }
 
   .people-layout :global(.person-item:focus-visible) {
     outline: 2px solid var(--tvc-orange);
-    outline-offset: 1px;
+    outline-offset: -2px;
   }
 
-  /* The orange bar is a non-text mark, which is what --tvc-orange is for. */
   .people-layout :global(.person-item[aria-current='true']) {
     background: var(--tvc-green-tint);
-    border-color: var(--tvc-green);
-    box-shadow: inset 3px 0 0 var(--tvc-orange);
   }
 
   .people-layout :global(.person-item.is-new:not([aria-current='true'])) {
     box-shadow: inset 3px 0 0 var(--tvc-orange);
   }
 
-  .people-layout :global(.person-item.is-inactive .person-name) {
+  .people-layout :global(.person-item.is-inactive) {
     color: var(--tvc-ink-soft);
   }
 
-  .people-layout :global(.person-name) {
-    display: block;
+  .people-layout :global(.person-chev) {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    margin-left: auto;
+    fill: none;
+    stroke: var(--tvc-ink-soft);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.7;
+  }
+
+  .people-layout :global(.person-avatar) {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+    font-size: var(--text-sm);
     font-weight: 600;
   }
 
-  .people-layout :global(.person-email),
-  .people-layout :global(.person-summary) {
+  .people-layout :global(.person-avatar--lg) {
+    width: 72px;
+    height: 72px;
+    font-size: 1.75rem;
+  }
+
+  .people-layout :global(.person-avatar img) {
     display: block;
-    font-size: 0.8rem;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .people-layout :global(.person-name) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .people-layout :global(.person-email) {
+    display: block;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
   .people-layout :global(.badges) {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
-    margin-top: 4px;
+    gap: 6px;
+    margin-top: 6px;
   }
 
   .people-layout :global(.badge) {
-    font-size: 0.8rem;
+    padding: 1px 9px;
+    border-radius: 999px;
+    background: var(--tvc-cream);
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-xs);
     font-weight: 600;
-    padding: 1px 8px;
-    border-radius: var(--radius-sm);
-    background: var(--tvc-green-tint);
-    color: var(--tvc-green-dark);
   }
 
   .people-layout :global(.badge--warn) {
@@ -375,24 +468,29 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .person-detail {
-    padding: 18px 22px;
+    min-width: 0;
+  }
+
+  .person-detail :global(.detail-who) {
+    display: flex;
+    align-items: center;
+    gap: 16px;
     min-width: 0;
   }
 
   .person-detail :global(.detail-head) {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 8px 16px;
-    padding-bottom: 14px;
-    margin-bottom: 4px;
-    border-bottom: 1px solid var(--tvc-line);
+    margin-bottom: 18px;
   }
 
   .person-detail :global(.detail-title) {
     margin: 0;
-    font-size: 1.25rem;
+    font-size: var(--text-2xl);
+    letter-spacing: -0.02em;
   }
 
   .person-detail :global(.detail-action) {
@@ -401,101 +499,98 @@ import SignInGate from '../../components/SignInGate.astro';
     align-items: flex-end;
   }
 
+  /* The tools as one grouped list: the tool on the left, a pop-up for the role on the right. */
   .person-detail :global(.module-rows) {
     list-style: none;
-    margin: 0;
+    margin: 0 0 6px;
     padding: 0;
+    background: var(--tvc-white);
+    border-radius: var(--radius);
+    box-shadow: 0 0 0 1px var(--tvc-line) inset;
+    overflow: hidden;
   }
 
   .person-detail :global(.module-row) {
+    position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(150px, 220px);
-    gap: 8px 16px;
-    align-items: start;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--tvc-line);
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 16px;
+    align-items: center;
+    min-height: 52px;
+    padding: 10px 14px;
   }
 
-  .person-detail :global(.module-row:last-child),
-  .person-detail :global(.limits-row:last-child) {
-    border-bottom: none;
+  .person-detail :global(.module-row + .module-row)::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 14px;
+    height: 1px;
+    background: var(--tvc-line);
   }
 
   .person-detail :global(.module-name) {
     display: block;
-    font-weight: 600;
+    font-weight: 500;
   }
 
+  /* What a role allows is on the pop-up's tooltip and on the "What each role can do" tab; repeating it under every
+     tool made the list noisy. Kept in the DOM so the tooltip text stays in step with the choice. */
   .person-detail :global(.module-blurb) {
-    display: block;
-    margin-top: 2px;
-    font-size: 0.8rem;
-    color: var(--tvc-ink-soft);
+    display: none;
+  }
+
+  .person-detail :global(.module-control) {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
   }
 
   .person-detail :global(.limits-row) {
+    grid-column: 1 / -1;
     padding: 12px 14px;
-    margin-bottom: 8px;
+    margin: 0 -14px -10px;
     background: var(--tvc-cream);
-    border-radius: var(--radius-sm);
   }
 
   .person-detail :global(.role-select) {
+    appearance: none;
+    -webkit-appearance: none;
+    min-height: 32px;
+    padding: 3px 30px 3px 12px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    /* a chevron, in a neutral grey that reads on both light and dark */
+    background: var(--tvc-cream) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23868c83' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 9px center / 12px;
+    color: var(--tvc-ink);
     font: inherit;
-    font-size: 1rem;
-    width: 100%;
-    min-height: 36px;
-    padding: 4px 8px;
-    border: 1px solid var(--tvc-line-strong);
-    border-radius: var(--radius-field);
-    background: var(--tvc-white);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .person-detail :global(.role-select[data-role='']) {
     color: var(--tvc-ink-soft);
   }
 
-  /* Nothing granted: no box until you reach for it, so the roles that are set stand out. */
-  .person-detail :global(.role-select[data-role='']) {
-    border-color: transparent;
-    background: transparent;
-  }
-
-  .person-detail :global(.role-select[data-role='']:hover),
-  .person-detail :global(.role-select[data-role='']:focus-visible) {
-    border-color: var(--tvc-line-strong);
-    background: var(--tvc-white);
-  }
-
-  .person-detail :global(.role-select[data-role='read_only']) {
-    background: var(--tvc-stone);
-    color: var(--tvc-ink);
-  }
-
-  .person-detail :global(.role-select[data-role='user']) {
-    background: var(--tvc-green-tint);
-    border-color: var(--tvc-green);
-    color: var(--tvc-green-dark);
-    font-weight: 600;
-  }
-
-  .person-detail :global(.role-select[data-role='admin']) {
-    background: var(--tvc-green-dark);
-    border-color: var(--tvc-green-dark);
-    color: var(--tvc-white);
-    font-weight: 600;
+  .person-detail :global(.role-select:focus-visible) {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
   }
 
   .person-detail :global(.role-select:disabled) {
     cursor: not-allowed;
-    opacity: 0.75;
+    opacity: 0.6;
   }
 
   .person-detail :global(.role-select.is-error) {
-    border-color: var(--tvc-error-text);
+    box-shadow: 0 0 0 2px var(--tvc-error-text);
   }
 
   .person-detail :global(.cell-note) {
     display: block;
     margin-top: 4px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     color: var(--tvc-error-text);
   }
 
@@ -504,13 +599,13 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .person-detail :global(.limit-button) {
-    font: inherit;
-    font-size: 0.8rem;
     margin-top: 2px;
     padding: 8px 0;
-    background: none;
     border: none;
+    background: none;
     color: var(--tvc-ink-soft);
+    font: inherit;
+    font-size: var(--text-xs);
     text-decoration: underline;
     cursor: pointer;
   }
@@ -525,7 +620,7 @@ import SignInGate from '../../components/SignInGate.astro';
   .person-detail :global(.limits-title) {
     flex-basis: 100%;
     margin: 0;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
@@ -533,38 +628,23 @@ import SignInGate from '../../components/SignInGate.astro';
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
   }
 
-  .person-detail :global(.row-action) {
-    font: inherit;
-    font-size: 0.9rem;
-    min-height: 36px;
-    padding: 4px 12px;
-    border: 1px solid var(--tvc-line-strong);
-    border-radius: var(--radius-sm);
-    background: var(--tvc-white);
-    color: var(--tvc-ink);
-    cursor: pointer;
-    white-space: nowrap;
+  /* Deactivate: its own group, plain red text. It happens at once and can be undone, so there is no confirm box. */
+  .person-detail :global(.module-rows--solo) {
+    margin-top: 22px;
   }
 
-  /* Deactivating is rare and recoverable: plain red text, not a filled block. */
-  .person-detail :global(.row-action--danger) {
-    border-color: transparent;
-    background: transparent;
-    color: var(--callout-red-text);
-    text-decoration: underline;
-    text-underline-offset: 3px;
+  .person-detail :global(.module-row--solo) {
+    display: block;
+    padding: 0;
+    min-height: 0;
   }
 
-  .person-detail :global(.row-action--danger:hover) {
-    background: var(--callout-red-bg);
-  }
-
-  .person-detail :global(.row-action:disabled) {
-    cursor: not-allowed;
-    opacity: 0.55;
+  .person-detail :global(.detail-foot) {
+    margin: 8px 14px 0;
+    max-width: 60ch;
   }
 
   .person-detail :global(.empty) {
@@ -576,7 +656,6 @@ import SignInGate from '../../components/SignInGate.astro';
     margin-top: 10px;
   }
 
-  /* ---- "who can use what": one card per tool, people grouped by role */
   .modules-view {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -594,7 +673,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .modules-view :global(h2) {
     margin: 0 0 8px;
-    font-size: 1.125rem;
+    font-size: var(--text-lg);
   }
 
   .modules-view :global(.role-group) {
@@ -603,7 +682,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .modules-view :global(.role-group-title) {
     margin: 0 0 4px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     letter-spacing: 0.05em;
     text-transform: uppercase;
@@ -618,7 +697,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .modules-view :global(.chip) {
     font: inherit;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     min-height: 32px;
     padding: 2px 10px;
     color: var(--tvc-green-dark);
@@ -640,7 +719,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .modules-view :global(.nobody) {
     margin: 10px 0 0;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
@@ -662,7 +741,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .roles-guide :global(h2) {
     margin: 0 0 6px;
-    font-size: 1.125rem;
+    font-size: var(--text-lg);
   }
 
   .roles-guide :global(.role-list) {
@@ -671,7 +750,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .roles-guide :global(.role-name) {
     margin-top: 10px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     letter-spacing: 0.05em;
     text-transform: uppercase;
@@ -680,7 +759,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .roles-guide :global(.role-text) {
     margin: 2px 0 0;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
   }
 
   /* Touch screens get the larger targets back. */
@@ -717,7 +796,7 @@ import SignInGate from '../../components/SignInGate.astro';
     width: 100%;
     max-width: 420px;
     font: inherit;
-    font-size: 1rem;
+    font-size: var(--text-md);
     padding: 8px 10px;
     border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
@@ -739,13 +818,13 @@ import SignInGate from '../../components/SignInGate.astro';
   .events :global(.event) {
     padding: 10px 0;
     border-bottom: 1px solid var(--tvc-line);
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
   }
 
   .events :global(.event-time),
   .events :global(.event-who) {
     display: block;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 </style>
@@ -756,7 +835,9 @@ import SignInGate from '../../components/SignInGate.astro';
     clearStepUp,
     clearToken,
     decodeTokenEmail,
+    fillAvatar,
     getToken,
+    showToast,
     minutesLabel,
     saveStepUp,
     setToken,
@@ -789,6 +870,7 @@ import SignInGate from '../../components/SignInGate.astro';
     id: string;
     label: string;
     maskedEmail?: string | null;
+    picture?: string | null; // their Google picture, once they have signed in since it was kept
     active: boolean;
     isSuperAdmin: boolean;
     isMe: boolean;
@@ -825,7 +907,10 @@ import SignInGate from '../../components/SignInGate.astro';
   const verifyCode = $<HTMLInputElement>('verify-code');
   const verifySwitch = $('verify-switch');
   const verifyPasskey = $<HTMLButtonElement>('verify-passkey');
-  const banner = $('stepup');
+  const stepupDialog = $<HTMLDialogElement>('stepup');
+  const lockBtn = $<HTMLButtonElement>('lock');
+  const lockNow = $<HTMLButtonElement>('lock-now');
+  const stepupClose = $<HTMLButtonElement>('stepup-close');
   const verifyEntry = wireCodeEntry({ form: verifyForm, input: verifyCode, toggle: verifySwitch });
   const verifyError = $('verify-error');
   const stepupLink = $('stepup-link');
@@ -850,6 +935,8 @@ import SignInGate from '../../components/SignInGate.astro';
   const addMessage = $('add-message');
   const peopleError = $('people-error');
   const peopleList = $('people');
+  const peopleSearch = $<HTMLInputElement>('people-search');
+  const filterButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('#people-filter button'));
   const eventsList = $('events');
   const eventsSearch = $<HTMLInputElement>('events-search');
   const eventsCount = $('events-count');
@@ -859,6 +946,8 @@ import SignInGate from '../../components/SignInGate.astro';
 
   let state: PeopleResponse | null = null;
   const openLimits = new Set<string>(); // people whose booking-type limits are expanded
+  let query = ''; // the search box, lower-cased
+  let filter = 'all'; // all, super, tools, none or inactive
   let newPersonId: string | null = null; // highlighted after being added
   let selectedId: string | null = null; // the person whose tools are shown
   let refocus: string | null = null; // `${personId}|${moduleId}` to refocus after a redraw
@@ -929,28 +1018,67 @@ import SignInGate from '../../components/SignInGate.astro';
   const handled = (err: unknown) => err instanceof StaffAuthError;
 
   // ---- the "unlock changes" strip
+  const LOCK_SHUT = '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>';
+  const LOCK_OPEN = '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/>';
+
+  // The lock in the toolbar says whether changes are open, and for how long; the sheet it opens does the unlocking.
+  function setLockPill(kind: 'locked' | 'open' | 'setup', label: string) {
+    lockBtn.hidden = false;
+    lockBtn.dataset.state = kind;
+    lockBtn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${kind === 'open' ? LOCK_OPEN : LOCK_SHUT}</svg>`;
+    lockBtn.append(label); // a text node, so the label is never read as markup
+    lockBtn.setAttribute('aria-label', kind === 'open' ? `${label}. Open for details or to lock again.` : kind === 'setup' ? 'Editing is locked until you set up two second factors.' : 'Editing is locked. Unlock to make changes.');
+  }
+
+  function closeStepup() {
+    if (stepupDialog.open) stepupDialog.close();
+  }
+
   function renderStepUp() {
     if (!state) return;
     const exp = stepUpExpiry();
     verifyError.hidden = true;
-    banner.classList.toggle('is-unlocked', Boolean(state.me.ready && exp));
+    const open = Boolean(state.me.ready && exp);
+    lockNow.hidden = !open;
     if (!state.me.ready) {
+      setLockPill('setup', 'Set up to edit');
       stepupText.textContent = 'You need two different second-factor methods set up before you can change anything. You can look around in the meantime.';
       verifyForm.hidden = true;
       stepupLink.hidden = false;
     } else if (exp) {
+      setLockPill('open', `Editing unlocked · ${minutesLabel(exp - Date.now())}`);
       stepupText.textContent = `Changes are unlocked for about ${minutesLabel(exp - Date.now())}.`;
       verifyForm.hidden = true;
       stepupLink.hidden = true;
     } else {
-      const wasHidden = verifyForm.hidden;
-      stepupText.textContent = 'Viewing only. Enter your authenticator code to make changes:';
+      setLockPill('locked', 'Unlock editing');
+      stepupText.textContent = 'Viewing only. Enter the code from your authenticator app to make changes.';
       verifyForm.hidden = false;
       verifyPasskey.hidden = !(state.me.hasPasskey && passkeysSupported());
       stepupLink.hidden = true;
-      if (wasHidden && document.activeElement === document.body) verifyCode.focus();
     }
   }
+
+  lockBtn.addEventListener('click', () => {
+    renderStepUp();
+    stepupDialog.showModal();
+    if (!verifyForm.hidden) verifyCode.focus();
+  });
+  stepupClose.addEventListener('click', closeStepup);
+  stepupDialog.addEventListener('click', (ev) => {
+    if (ev.target === stepupDialog) closeStepup(); // a tap on the dimmed area outside the sheet
+  });
+  lockNow.addEventListener('click', () => {
+    clearStepUp();
+    renderStepUp();
+    renderPeople();
+    closeStepup();
+    showToast('Editing locked.');
+  });
+  // The label counts minutes down; keep it honest while the sheet is closed.
+  window.setInterval(() => {
+    if (state && !stepupDialog.open) renderStepUp();
+  }, 20000);
 
   verifyPasskey.addEventListener('click', async () => {
     verifyError.hidden = true;
@@ -962,6 +1090,8 @@ import SignInGate from '../../components/SignInGate.astro';
         saveStepUp(result.data.stepUpToken, result.data.expiresInSeconds);
         renderStepUp();
         renderPeople();
+        closeStepup();
+        showToast('Editing unlocked.');
       } else if (result.status === 429) {
         show(verifyError, `Too many wrong attempts. Try again in about ${minutesLabel((result.data.retryAfterSeconds ?? 900) * 1000)}.`);
       } else {
@@ -993,6 +1123,8 @@ import SignInGate from '../../components/SignInGate.astro';
         verifyCode.value = '';
         renderStepUp();
         renderPeople();
+        closeStepup();
+        showToast('Editing unlocked.');
       } else if (status === 429) {
         show(verifyError, `Too many wrong codes. Try again in about ${minutesLabel((data.retryAfterSeconds ?? 900) * 1000)}.`);
       } else {
@@ -1160,18 +1292,28 @@ import SignInGate from '../../components/SignInGate.astro';
     return badges;
   }
 
-  // One person in the list on the left.
+  // A round face: the Google picture if we have one, otherwise their initial.
+  function avatar(p: Person, large = false): HTMLElement {
+    const el = h('span', { class: large ? 'person-avatar person-avatar--lg' : 'person-avatar', attrs: { 'aria-hidden': 'true' } });
+    fillAvatar(el, p.label, p.picture);
+    return el;
+  }
+
+  function chevron(): SVGElement {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('class', 'person-chev');
+    svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'm9 6 6 6-6 6');
+    svg.append(path);
+    return svg;
+  }
+
+  // One person in the list on the left: just a face and a name. The details are on the right.
   function personItem(p: Person): HTMLElement {
-    const granted = p.roles.length;
     const classes = ['person-item', !p.active ? 'is-inactive' : '', p.id === newPersonId ? 'is-new' : ''].filter(Boolean).join(' ');
-    const item = h(
-      'button',
-      { class: classes, attrs: { type: 'button', 'data-person-row': p.id } },
-      h('span', { class: 'person-name', text: p.label }),
-      ...(p.maskedEmail ? [h('span', { class: 'person-email', text: p.maskedEmail })] : []),
-      personBadges(p),
-      h('span', { class: 'person-summary', text: granted ? `${granted} tool${granted === 1 ? '' : 's'}` : p.isSuperAdmin ? 'Manages access' : 'No tools' }),
-    );
+    const item = h('button', { class: classes, attrs: { type: 'button', 'data-person-row': p.id } }, avatar(p), h('span', { class: 'person-name', text: p.label }), chevron());
     if (p.id === selectedId) item.setAttribute('aria-current', 'true');
     item.addEventListener('click', () => {
       selectedId = p.id;
@@ -1185,41 +1327,18 @@ import SignInGate from '../../components/SignInGate.astro';
   // The selected person: who they are, deactivate/reactivate, and a row per tool.
   function personPanel(p: Person): HTMLElement[] {
     const head = h('div', { class: 'detail-head' });
-    head.append(h('div', {}, h('h2', { class: 'detail-title', text: p.label }), ...(p.maskedEmail ? [h('span', { class: 'person-email', text: p.maskedEmail })] : []), personBadges(p)));
+    head.append(
+      h(
+        'div',
+        { class: 'detail-who' },
+        avatar(p, true),
+        h('div', {}, h('h2', { class: 'detail-title', text: p.label }), ...(p.maskedEmail ? [h('span', { class: 'person-email', text: p.maskedEmail })] : []), personBadges(p)),
+      ),
+    );
 
     // Super admins are managed in the database, never from this screen.
     const action = h('div', { class: 'detail-action' });
-    if (!p.isSuperAdmin && !p.isMe) {
-      const statusLine = h('span', { class: 'cell-note' });
-      const toggleActive = h('button', {
-        class: p.active ? 'row-action row-action--danger' : 'row-action',
-        text: p.active ? 'Deactivate' : 'Reactivate',
-        attrs: { type: 'button' },
-      });
-      toggleActive.disabled = !canEdit();
-      toggleActive.addEventListener('click', async () => {
-        if (p.active && !confirm(`Deactivate ${p.label}? They lose access to every tool straight away. You can reactivate them later.`)) return;
-        toggleActive.disabled = true;
-        try {
-          const { status, data } = await call('/api/staff-admin/people/active', { method: 'POST', body: { personId: p.id, active: !p.active } });
-          if (status === 200) {
-            announce(`${p.label} ${p.active ? 'deactivated' : 'reactivated'}.`);
-            await loadPeople();
-          } else {
-            statusLine.textContent = data.error ?? 'Could not change that.';
-            toggleActive.disabled = !canEdit();
-          }
-        } catch (err) {
-          if (!handled(err)) {
-            statusLine.textContent = 'Could not reach the server.';
-            toggleActive.disabled = !canEdit();
-          }
-        }
-      });
-      action.append(toggleActive, statusLine);
-    } else {
-      action.append(h('span', { class: 'cell-note cell-note--quiet', text: p.isMe ? 'Your own account' : 'Managed in the database' }));
-    }
+    if (p.isSuperAdmin || p.isMe) action.append(h('span', { class: 'cell-note cell-note--quiet', text: p.isMe ? 'Your own account' : 'Managed in the database' }));
     head.append(action);
 
     const rows = h('ul', { class: 'module-rows' });
@@ -1227,19 +1346,77 @@ import SignInGate from '../../components/SignInGate.astro';
       rows.append(moduleRow(p, module));
       if (module.scopeTypes && openLimits.has(p.id) && p.roles.find((r) => r.module === module.id)?.role === 'user') rows.append(limitsRow(p, module));
     }
-    return [head, rows];
+    const out: HTMLElement[] = [head, rows];
+    if (!p.isSuperAdmin && !p.isMe) {
+      const toggle = h('button', { class: 'row crit-row', text: p.active ? `Deactivate ${p.label}` : `Reactivate ${p.label}`, attrs: { type: 'button' } });
+      toggle.disabled = !canEdit();
+      toggle.addEventListener('click', async () => {
+        const was = p.active;
+        toggle.disabled = true;
+        if (await setActive(p, !was)) {
+          announce(`${p.label} ${was ? 'deactivated' : 'reactivated'}.`);
+          showToast(`${p.label} ${was ? 'deactivated' : 'reactivated'}.`, () => void setActive(p, was));
+        } else {
+          toggle.disabled = !canEdit();
+        }
+      });
+      out.push(h('ul', { class: 'module-rows module-rows--solo' }, h('li', { class: 'module-row module-row--solo' }, toggle)));
+      out.push(h('p', { class: 'note detail-foot', text: p.active ? 'They lose access to every tool straight away. You can undo this.' : 'They get their old access back.' }));
+    }
+    return out;
+  }
+
+  // Deactivating and reactivating are reversible, so they happen at once and the page offers Undo instead of asking first.
+  async function setActive(p: Person, active: boolean): Promise<boolean> {
+    try {
+      const { status, data } = await call('/api/staff-admin/people/active', { method: 'POST', body: { personId: p.id, active } });
+      if (status === 200) {
+        await loadPeople();
+        return true;
+      }
+      announce(data.error ?? 'Could not change that.', true);
+      showToast(data.error ?? 'Could not change that.');
+    } catch (err) {
+      if (!handled(err)) showToast('Could not reach the server.');
+    }
+    return false;
+  }
+
+  // The search box and the filter chips narrow the list on the left. They are static markup, built once, so
+  // typing never loses the cursor; only the list and the details are redrawn.
+  function matchesFilters(p: Person): boolean {
+    if (filter === 'inactive' && p.active) return false;
+    if (filter === 'super' && !p.isSuperAdmin) return false;
+    if (filter === 'tools' && p.roles.length === 0) return false;
+    if (filter === 'none' && p.roles.length > 0) return false;
+    return !query || `${p.label} ${p.maskedEmail ?? ''}`.toLowerCase().includes(query);
+  }
+
+  peopleSearch.addEventListener('input', () => {
+    query = peopleSearch.value.trim().toLowerCase();
+    renderPeople();
+  });
+  for (const button of filterButtons) {
+    button.addEventListener('click', () => {
+      filter = button.dataset.value!;
+      for (const other of filterButtons) other.setAttribute('aria-checked', String(other === button));
+      renderPeople();
+    });
   }
 
   function renderPeople() {
     if (!state) return;
     const order = (p: Person) => (!p.active ? 2 : p.isSuperAdmin ? 0 : 1);
     const sorted = state.people.map((p, i) => ({ p, i })).sort((a, b) => order(a.p) - order(b.p) || a.i - b.i).map((x) => x.p);
-    if (!sorted.some((p) => p.id === selectedId)) selectedId = sorted[0]?.id ?? null;
-    peopleList.replaceChildren(...sorted.map((p) => h('li', {}, personItem(p))));
-    const selected = sorted.find((p) => p.id === selectedId);
-    personDetail.replaceChildren(...(selected ? personPanel(selected) : [h('p', { class: 'empty', text: 'Nobody has been added yet.' })]));
+    const shown = sorted.filter(matchesFilters);
+    if (!shown.some((p) => p.id === selectedId)) selectedId = shown[0]?.id ?? null;
+    peopleList.replaceChildren(...shown.map((p) => h('li', {}, personItem(p))));
+    const selected = shown.find((p) => p.id === selectedId);
+    const emptyText = state.people.length ? 'Nobody matches the search and filters.' : 'Nobody has been added yet.';
+    personDetail.replaceChildren(...(selected ? personPanel(selected) : [h('p', { class: 'empty', text: emptyText })]));
     const active = state.people.filter((p) => p.active).length;
-    peopleCount.textContent = `${state.people.length} ${state.people.length === 1 ? 'person' : 'people'}${active === state.people.length ? '' : `, ${active} active`}`;
+    const total = `${state.people.length} ${state.people.length === 1 ? 'person' : 'people'}${active === state.people.length ? '' : `, ${active} active`}`;
+    peopleCount.textContent = shown.length === state.people.length ? total : `${shown.length} of ${total}`;
     renderModulesView();
     renderRolesGuide();
     if (refocus) {

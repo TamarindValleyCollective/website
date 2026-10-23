@@ -696,12 +696,11 @@ outside both the local machine and Netlify (the member-update-email workflow).
   stateless, HMAC-signed step-up token bound to them, sent as `X-Stepup-Token`. Methods held at
   once: an authenticator app (TOTP, RFC 6238 — checked against the RFC's published vectors) and
   ten single-use recovery codes, and **passkeys** (WebAuthn: Face ID, Touch ID or a security key;
-  **Admin host**: the admin tools are served from **`admin.tvc.farm`**, a domain alias on the same Netlify project (proxied Cloudflare CNAME to `tvc-farm.netlify.app`), like `members.tvc.farm`. `netlify.toml` rules that match only that host show `/internal/` at `/`, serve each admin page without the `/internal` prefix (`admin.tvc.farm/usage/` is a rewrite to `/internal/usage/`; `StaffLayout.astro` shortens in-page links on that host only), pass through the assets and the admin functions (`/api/*-admin`, `staff-mfa`, `staff-me`, `photo-pool`, `whatsapp-suggest`), and send everything else back to the admin home; `/internal/*` on that host, `tvc.farm`, `www.tvc.farm` and `members.tvc.farm` redirect (302) to the short form. Passkeys are bound to `admin.tvc.farm` (`relyingParty()` in `lib/staff-webauthn.ts`, plus `localhost` for dev), so they only work there; alert emails link to it. See `DOMAINS.md`.
   `lib/staff-webauthn.ts` wraps `@simplewebauthn/server`). A passkey is stored as a `passkey` row in
   `staff_mfa_factors` (public key and counter in `credential`, never a private key) and is bound to
-  the site: the relying-party id is `tvc.farm` and only `https://tvc.farm`, `https://www.tvc.farm`
-  and localhost (for trying it locally) are accepted origins, so previews and look-alike domains
-  fail. User verification (biometric/PIN) is required and no attestation statement is requested.
+  the admin host: the relying-party id is `admin.tvc.farm` and only `https://admin.tvc.farm`
+  and localhost (for trying it locally) are accepted origins, so previews, the public site and
+  look-alike domains fail. User verification (biometric/PIN) is required and no attestation statement is requested.
   Each registration/sign-in challenge is a row in `staff_webauthn_challenges` (migration
   `0030_staff_webauthn_challenges.sql`) consumed by deleting it, so a response is accepted once;
   five wrong attempts share the same 15-minute lockout as codes. Adding a passkey when other methods
@@ -725,6 +724,51 @@ outside both the local machine and Netlify (the member-update-email workflow).
   (bundled at build; the secret never goes to an online QR service), with the typed key and an
   `otpauth://` link as fallbacks; the secret and QR are wiped from the page when setup finishes
   or the session ends.
+- **Admin host**: the admin tools are served from **`admin.tvc.farm`**, a domain alias on the same Netlify project (proxied Cloudflare CNAME to `tvc-farm.netlify.app`), like `members.tvc.farm`. `netlify.toml` rules that match only that host show `/internal/` at `/`, serve each admin page without the `/internal` prefix (`admin.tvc.farm/usage/` is a rewrite to `/internal/usage/`; `StaffLayout.astro` shortens in-page links on that host only), pass through the assets and the admin functions (`/api/*-admin`, `staff-mfa`, `staff-me`, `staff-today`, `photo-pool`, `whatsapp-suggest`), and send everything else back to the admin home; `/internal/*` on that host, `tvc.farm`, `www.tvc.farm` and `members.tvc.farm` redirect (302) to the short form. Passkeys are bound to `admin.tvc.farm` (`relyingParty()` in `lib/staff-webauthn.ts`, plus `localhost` for dev), so they only work there; alert emails link to it. See `DOMAINS.md`.
+- **Admin portal shell, tours and local demo**: `StaffLayout.astro` is titled "Admin Portal" and is laid out like the member
+  portal: a white side menu with a round collapse button, a sticky translucent top bar, and the signed-in user as a pill at its
+  right (initial, name, "Super admin" or "Admin") that opens a menu with the masked email, "Take the tour of this page" and
+  "Sign out" (the older account block at the foot of the menu is gone). Home and every tool have a guided tour like the member
+  portal's: steps and who sees which in `scripts/lib/staff-tour.mjs` (tested, including that every step's `data-tour` target
+  still exists in its page), the spotlight and "What's new" card in `scripts/lib/staff-tour-ui.mjs`, global styles in
+  `StaffLayout.astro`. The shell starts a page's tour on the first visit (only for someone who can see that page); a returning
+  admin sees only steps added since (a "What's new" card on Home, a short tour elsewhere); the user menu replays it. What each
+  account has seen, per page, is kept in that browser's `localStorage` (no database column, so a new browser repeats it). Adding a
+  step to a page's list needs a `data-tour` attribute on the element it points at. Locally, `astro dev` then `/internal/?demo` (or `?demo=limited`)
+  fakes the sign-in and `/api/staff-me` (`src/lib/staff-demo.ts`, called from `scripts/lib/staff-client.mjs` behind
+  `import.meta.env.DEV`, so production builds drop it); `?tour` replays the tour without recording. The demo also answers
+  `/api/staff-admin/people` with a made-up set of people, so the Access page can be seen locally.
+- **Admin design primitives** (`StaffLayout.astro`, guarded by `scripts/lib/admin-primitives.test.mjs` and a Stylelint rule
+  in `.stylelintrc.json`): the shell defines the card surface, page hint, notes, error text, page rhythm, text-style buttons,
+  visually hidden labels and the button modifiers (`--primary`, `--danger`, `--danger-outline`, `--small`) once; the nine
+  pages no longer carry copies, and every font size in them is a `--text-*` token with a 0.8rem floor. The admin's
+  **look** follows the Apple-style concept: calm cool neutrals and the system type face, as token overrides on admin pages
+  only (`html:root` block in `StaffLayout.astro`, which outranks global.css's `:root`), large 34px titles, a translucent side
+  menu whose current item is filled with the accent, flat hairline cards, and a `toolbar` slot in the top bar for page
+  controls. The pieces the concept introduced (search `.field`, `.segmented` control, grouped `.list` and `.row`, `.pill`,
+  `.sheet`, `.toast` with `showToast()`, the red `.crit-row`) live in the shell and are reused: Home is a grouped list of
+  tools; Event Payments has a pop-up event picker, segmented Live and Test, one surface for the headline figures, bookings
+  as a grouped surface and "Cancel event…" as a red row under them; Security's methods, passkeys and other super admins
+  are grouped lists with pills; WhatsApp's search and All / Needs reply filter, the Member register's search and filter
+  pop-up, and the Accommodation calendar's Day / Week / Month toggle use the shared controls. The Usage page is a status line plus grouped lists: one row per service opens a sheet
+  with the figure, facts and (for admins) an inline "Enter a new reading" form; prices and limits are a sheet behind a Settings row. The admin also has a **dark appearance** (token overrides at the foot of
+  `StaffLayout.astro`, so components follow with no rules of their own): it follows the device, and the account menu's
+  Appearance control (Auto, Light, Dark) pins one, remembered in `localStorage` and applied by a script in `<head>`
+  before first paint. Hard-coded greys were the only blockers (the accommodation calendar's past and closed cells now mix
+  `--tvc-ink` into `--tvc-white`). Details and the rules for adding to a shared rule are in Design language in `CLAUDE.md`.
+- **Admin Google pictures** (`netlify/functions/lib/staff-picture.ts`, migration `0059_staff_google_picture.sql`,
+  `staff_users.google_picture_url`): the pill in the top bar shows the signed-in admin's own Google picture, which
+  `/api/staff-me` returns straight from their token (so it shows with no database change) and falls back to their initial.
+  `staff-me` also keeps the picture on the person (best effort, refreshed or cleared on each sign-in, only a https address
+  on Google's image hosts), and `GET /api/staff-admin/people` returns it for each person, so the Access page can show a face
+  beside each name. Only that person and super admins on Access ever see it. Reads and writes are isolated from the sign-in
+  queries and swallow errors, so an unapplied migration costs nothing but the faces. The Access People tab follows the
+  concept: a search field and one segmented filter (All, Super admins, Has tools, No tools, Deactivated) above one grouped list
+  of faces and names; the details beside it are a large face, masked email and badges, a grouped list with a pop-up for each
+  tool's role, and a separate "Deactivate" row. The unlock strip is now a **lock in the toolbar** (the layout's `toolbar`
+  slot): "Unlock editing", "Editing unlocked · N minutes" or "Set up to edit", which opens a sheet with the code field, the
+  passkey button and "Lock now". Deactivating or reactivating someone happens at once with an **Undo** toast (no `confirm()`);
+  role changes still save on selection.
 - **`netlify/functions/staff-admin.mts` + `lib/staff-admin-guard.ts`** — the API behind the
   Access module (issue #89): who is in the system, who holds which module role, an activity feed,
   and the changes themselves. **Super admins only.** Reading (`GET /api/staff-admin/people`,
@@ -761,7 +805,12 @@ outside both the local machine and Netlify (the member-update-email workflow).
   same field to plain text. `/internal` is the landing page: one sign-in and a list of the tools
   you hold a role in (from `staff-me.mts`, which answers only about the caller, returns no email and
   lists a tool only because a role exists — each tool still checks its own capability), plus Access
-  and Security for super admins. **Every internal page shares one Google sign-in per browser tab**
+  and Security for super admins. The landing page is **Today**: above the tools it lists what is waiting on the
+  person, from `netlify/functions/staff-today.mts` (`GET /api/staff-today`, any active admin, read-only, counts and
+  timings only). It checks only the tools the caller holds a role in: WhatsApp conversations needing a reply, live
+  event-payment cancellation requests, member stories and family requests awaiting review, usage alerts from
+  `usage_alert_state`, and (super admins) admins without two second factors. Each runs in its own try/catch, so a
+  failed check is named as "couldn't check X" rather than shown as all clear. **Every internal page shares one Google sign-in per browser tab**
   through `scripts/lib/staff-client.mjs` (storage key `tvc-staff-idtoken`, imported by the photo
   pool, WhatsApp, event payments and accommodation pages as well as the new ones), so signing in
   once opens them all and "use a different account" signs out of all of them; Access and Security
@@ -772,6 +821,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   collapsible left menu (Home, the four tools, and Access/Security for super admins) that sits
   flush left with the page content using the full remaining width, a slide-over menu with a top bar
   on phones, and none of the public site's header, footer or analytics (the pages stay `noindex`).
+  The shell also has a keyboard layer (all in `StaffLayout.astro`, no server involvement): Command/Ctrl K opens a
+  "Go to a tool" dialog that lists exactly the menu's links, so it only offers tools the person holds a role in, and
+  Left/Right/Home/End move and choose inside any `role="tab"` or `role="radio"` group.
   The menu reads `/api/staff-me` (cached in `sessionStorage` key `tvc-staff-me`, refreshed on
   focus and after sign-in) and shows only tools the person holds a role in; it is navigation only,
   never authorisation. The collapsed/expanded choice is kept in `localStorage`
@@ -1040,6 +1092,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   indexed counts — the last of those is a known-unreliable field on the legacy endpoint, printed
   with a caveat) plus real search performance: site-wide totals and top pages/queries by clicks.
   Needs Full user, not just Restricted — see the service-account note below.
+
 
 The service account was added as a Restricted user on the `tvc.farm` Search Console property
 (2026-08-07), then upgraded to Full user (2026-08-08) — Restricted users can only use URL

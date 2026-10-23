@@ -21,15 +21,33 @@ import SignInGate from '../../components/SignInGate.astro';
     <h1>Usage &amp; limits</h1>
     <p id="intro" class="hint">Sign in to see how much of our free tiers and credits we are using.</p>
 
-    <SignInGate forbiddenWhat="Usage & limits" />
+    <SignInGate forbiddenWhat="usage & limits" />
 
     <p id="status" class="hint" hidden></p>
 
     <div id="content" hidden>
-      <section aria-labelledby="alerts-title" class="block">
-        <h2 id="alerts-title">Needs attention</h2>
-        <div id="alerts" role="status"></div>
-      </section>
+      <div data-tour="alerts">
+        <p id="summary" class="summary" role="status"></p>
+        <div id="needs" hidden>
+          <h2>Needs attention</h2>
+          <ul id="needs-list" class="list"></ul>
+        </div>
+      </div>
+
+      <h2 id="services-title">Services</h2>
+      <ul id="cards" class="list" data-tour="services" aria-labelledby="services-title"></ul>
+      <p class="foot">Every bar shows how much is <b>used</b>, so a fuller bar is closer to the limit; what is left is in the words beside it. A figure typed in from a provider's dashboard is only as fresh as the last entry; each service says how old it is. Warnings are emailed to the core team once, and again only if they get worse.</p>
+
+      <h2>Domain renewals</h2>
+      <ul id="domains" class="list" data-tour="domains"><li><div class="row"><span class="grow muted">Checking the registries…</span></div></li></ul>
+
+      <h2>WhatsApp account health</h2>
+      <ul id="wa-health" class="list"><li><div class="row"><span class="grow muted">Loading…</span></div></li></ul>
+
+      <div id="admin" hidden>
+        <h2>Settings</h2>
+        <ul class="list"><li><button type="button" id="prices-open" class="row"><span class="grow"><span class="title">Prices and limits</span><span class="detail">Token prices for the spend estimate, and the Gemini daily limit</span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></li></ul>
+      </div>
 
       <details class="glossary">
         <summary>What these words mean</summary>
@@ -41,197 +59,105 @@ import SignInGate from '../../components/SignInGate.astro';
           <div><dt>Warning and critical</dt><dd>Warning is about 70% used (or 30% left). Critical is about 90% used (or 10% left).</dd></div>
         </dl>
       </details>
-      <section aria-labelledby="services-title" class="block">
-        <h2 id="services-title">Services</h2>
-        <div id="cards" class="cards"></div>
-      </section>
-
-      <section aria-labelledby="domains-title" class="block">
-        <h2 id="domains-title">Domain renewals</h2>
-        <div id="domains" class="card pad"><p class="muted">Checking the registries…</p></div>
-      </section>
-
-      <section aria-labelledby="wa-health-title" class="block">
-        <h2 id="wa-health-title">WhatsApp account health</h2>
-        <div id="wa-health" class="card pad"><p class="muted">Loading…</p></div>
-      </section>
-
-      <section id="admin" aria-labelledby="admin-title" class="block" hidden>
-        <h2 id="admin-title">Update readings</h2>
-        <p class="muted lead">Some services have no safe way for us to read their usage automatically, so an admin types the figure in from the provider's own dashboard. Warnings use the latest entry, so keep them fresh.</p>
-        <div id="readings" class="forms"></div>
-        <h2 class="sub">Prices &amp; limits</h2>
-        <form id="settings-form" class="card pad form" novalidate>
-          <p class="muted">Turns Anthropic token counts into an estimated spend, and sets a daily request limit for Gemini. Both are optional; warnings that depend on a missing one stay quiet.</p>
-          <div class="fields">
-            <label>Anthropic input price <span class="muted">(USD per million tokens)</span><input type="number" step="any" min="0" inputmode="decimal" id="price-input" /></label>
-            <label>Anthropic output price <span class="muted">(USD per million tokens)</span><input type="number" step="any" min="0" inputmode="decimal" id="price-output" /></label>
-            <label>Gemini daily request limit <span class="muted">(from your Google AI Studio project)</span><input type="number" step="1" min="1" inputmode="numeric" id="gemini-limit" /></label>
-          </div>
-          <div class="actions"><button type="submit" class="button">Save</button><span id="settings-msg" class="msg" role="status"></span></div>
-        </form>
-      </section>
 
       <p class="muted foot" id="foot"></p>
-      <p id="signed-in" class="note"><button type="button" id="sign-out" class="link-button">Sign out</button></p>
     </div>
+
+    <dialog id="service-sheet" class="sheet sheet--service" aria-labelledby="service-title"></dialog>
+    <dialog id="wa-sheet" class="sheet sheet--service" aria-labelledby="wa-title"></dialog>
+
+    <dialog id="prices-sheet" class="sheet" aria-labelledby="prices-title">
+      <h2 id="prices-title">Prices and limits</h2>
+      <form id="settings-form" class="form" novalidate>
+        <p class="sheet-text">Turns Anthropic token counts into an estimated spend, and sets a daily request limit for Gemini. Both are optional; warnings that depend on a missing one stay quiet.</p>
+        <div class="fields">
+          <label>Anthropic input price <span class="muted">(USD per million tokens)</span><input type="number" step="any" min="0" inputmode="decimal" id="price-input" /></label>
+          <label>Anthropic output price <span class="muted">(USD per million tokens)</span><input type="number" step="any" min="0" inputmode="decimal" id="price-output" /></label>
+          <label>Gemini daily request limit <span class="muted">(from your Google AI Studio project)</span><input type="number" step="1" min="1" inputmode="numeric" id="gemini-limit" /></label>
+        </div>
+        <div class="actions"><button type="button" id="prices-cancel" class="button button--outline">Cancel</button><button type="submit" class="button">Save</button><span id="settings-msg" class="msg" role="status"></span></div>
+      </form>
+    </dialog>
   </section>
 </StaffLayout>
 
 <script is:inline src="https://accounts.google.com/gsi/client"></script>
 
 <style is:global>
-  .usage [hidden] {
-    display: none !important;
-  }
-
   .usage.section.wrapper {
     padding-top: 32px;
     padding-bottom: 48px;
   }
 
-  .usage .hint,
   .usage .muted {
     color: var(--tvc-ink-soft);
   }
 
-  .usage .hint {
-    margin: -8px 0 24px;
-  }
-
-  .usage .lead {
-    margin: 0 0 16px;
-    max-width: 62ch;
-  }
 
   .usage h2 {
-    font-size: 1.1rem;
-    margin: 0 0 12px;
+    margin: 26px 0 8px 14px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--tvc-ink-soft);
   }
 
-  .usage h2.sub {
-    margin-top: 28px;
-  }
 
-  .usage .block {
-    margin-bottom: 32px;
-  }
 
-  .usage .card {
-    background: var(--tvc-white);
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-soft);
-  }
 
-  .usage .card.pad {
-    padding: 16px 18px;
-  }
 
-  .usage .error {
-    color: var(--tvc-error-text);
-    font-size: 0.85rem;
-    margin: 10px 0 0;
-  }
 
   .usage .note,
   .usage .foot {
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
-  .usage .link-button {
-    font: inherit;
-    background: none;
-    border: none;
+  .usage .foot {
+    max-width: 64ch;
+    margin: 8px 14px 0;
+  }
+
+  /* On top of the shared .link-button (StaffLayout): this one sits flush with its text. */
+  #staff-main .usage .link-button {
     padding: 12px 0;
-    color: var(--tvc-ink-soft);
-    text-decoration: underline;
-    cursor: pointer;
   }
 
-  /* ---- status pill: a word and an icon, colour is only reinforcement ---- */
-  .usage .pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 3px 10px 3px 8px;
-    border-radius: 999px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    white-space: nowrap;
+  /* The reading form lives inside its card: a quiet panel under the "Enter a new reading" link. */
+  .usage .reading-inline {
+    grid-column: 1 / -1;
   }
 
-  .usage .pill svg {
-    flex: none;
+  .usage .reading-inline .form {
+    margin-top: 8px;
+    padding: 14px 16px;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-cream);
   }
 
-  .usage .pill--ok {
-    background: var(--tvc-green-tint);
-    color: var(--tvc-green-dark);
-  }
 
-  .usage .pill--warn {
-    background: var(--tvc-orange-tint);
-    color: var(--tvc-orange-text);
-  }
 
-  .usage .pill--critical {
-    background: var(--tvc-error-bg);
-    color: var(--tvc-error-text);
-  }
 
-  .usage .pill--none {
-    background: var(--tvc-stone);
-    color: var(--tvc-ink-soft);
-  }
+
+
 
   /* ---- alerts ---- */
-  .usage .alert-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 10px;
-  }
 
-  .usage .alert {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 12px;
-    align-items: start;
-    padding: 14px 16px;
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius-sm);
-    background: var(--tvc-white);
-  }
 
   /* severity is the tint and the pill's word, not a coloured stripe */
-  .usage .alert--warn {
-    border-color: var(--tvc-orange);
-    background: var(--tvc-orange-tint);
-  }
 
-  .usage .alert--critical {
-    border-color: var(--tvc-error-border);
-    background: var(--tvc-error-bg);
-  }
 
-  .usage .alert-summary {
-    margin: 0 0 10px;
-    font-weight: 600;
-  }
 
   .usage .alert-action {
     margin: 8px 0 0;
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
   }
 
   .usage .alert-why > summary {
     display: flex;
     align-items: center;
     min-height: 44px;
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     font-weight: 600;
     color: var(--tvc-ink-soft);
     cursor: pointer;
@@ -240,7 +166,7 @@ import SignInGate from '../../components/SignInGate.astro';
   .usage .alert-why > summary::after {
     content: '+';
     margin-left: 8px;
-    font-size: 1.1rem;
+    font-size: var(--text-lg);
     line-height: 1;
   }
 
@@ -254,19 +180,15 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .usage .alert-more {
     margin: 6px 0 0;
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
-  .usage .alert .link-button {
-    margin-top: 4px;
-    font-size: 0.85rem;
-  }
 
   /* a short plain-words list for readers who do not live in these dashboards */
   .usage .glossary {
     margin: 0 0 20px;
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
   }
 
   .usage .glossary > summary {
@@ -276,6 +198,7 @@ import SignInGate from '../../components/SignInGate.astro';
     font-weight: 600;
     color: var(--tvc-ink-soft);
     cursor: pointer;
+    margin-left: 14px;
   }
 
   .usage .glossary dl {
@@ -301,99 +224,26 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .usage .alert-detail {
     margin: 4px 0 0;
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
-  .usage .all-clear {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 16px;
-    margin: 0;
-  }
 
-  /* ---- service cards ---- */
-  /* a grid, so cards line up in rows; each card keeps its own height, so opening one doesn't stretch its neighbours */
-  .usage .cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
-    gap: 16px;
-    align-items: start;
-  }
 
-  /* the part of a card that is always on show has one height for every service (title, badge, figure,
-     bar and one line of context), so a row of collapsed cards is level whatever each one measures */
-  .usage .svc-top {
-    min-height: 11.9rem;
-    margin-bottom: 12px;
-  }
 
-  .usage .svc {
-    display: flex;
-    flex-direction: column;
-  }
 
-  .usage .svc {
-    padding: 18px 20px;
-  }
 
-  .usage .svc-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 4px;
-  }
 
-  .usage .svc-title {
-    margin: 0;
-    font-size: 1.05rem;
-  }
 
-  .usage .svc-kind {
-    margin: 2px 0 4px;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px 8px;
-    font-size: 0.8rem;
-    color: var(--tvc-ink-soft);
-  }
 
   /* how a card's figures get updated: Automatic / Live (no hands) vs Manual (a person types them in) */
-  .usage .mode {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 2px 9px 2px 7px;
-    border-radius: 999px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    white-space: nowrap;
-  }
 
-  .usage .mode svg {
-    width: 13px;
-    height: 13px;
-    flex: none;
-  }
 
-  .usage .mode--auto,
-  .usage .mode--live {
-    background: var(--tvc-green-tint);
-    color: var(--tvc-green-dark);
-  }
 
-  .usage .mode--manual,
-  .usage .mode--mixed {
-    background: var(--tvc-stone);
-    color: var(--tvc-ink);
-  }
 
   .usage .svc-fresh {
     margin: 0 0 12px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     line-height: 1.45;
     color: var(--tvc-ink-soft);
   }
@@ -403,121 +253,221 @@ import SignInGate from '../../components/SignInGate.astro';
     font-weight: 600;
   }
 
-  /* A card is a summary. Click anywhere on it to open its details (one at a time). The motion is the
-     iOS ease: fast out of the gate, a long soft landing, no overshoot, and the same path back. */
-  .usage .svc {
-    position: relative;
-    cursor: pointer;
-    transition: transform 140ms ease-out;
-  }
 
-  .usage .svc[data-pressed] {
-    transform: scale(0.985);
-  }
 
-  .usage .svc:has(.svc-toggle:focus-visible) {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 2px;
-  }
 
-  .usage .svc-foot {
-    margin-top: auto;
-    border-top: 1px solid var(--tvc-line);
-  }
 
-  .usage .svc-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    min-height: 44px;
-    padding: 0;
-    border: 0;
-    background: none;
-    font: inherit;
-    font-size: 0.82rem;
-    font-weight: 600;
-    text-align: left;
-    color: var(--tvc-ink-soft);
-    cursor: pointer;
-  }
 
-  .usage .svc:hover .svc-toggle {
-    color: var(--tvc-ink);
-  }
 
-  .usage .svc-toggle:focus-visible {
-    outline: none; /* the whole card shows the focus ring */
-  }
 
-  .usage .svc-toggle::after {
-    content: '';
-    width: 7px;
-    height: 7px;
-    margin-right: 3px;
-    border-right: 1.75px solid currentColor;
-    border-bottom: 1.75px solid currentColor;
-    transform: translateY(-2px) rotate(45deg);
-    transition: transform 450ms cubic-bezier(0.32, 0.72, 0, 1);
-  }
 
-  .usage .svc[data-open='true'] .svc-toggle::after {
-    transform: translateY(2px) rotate(225deg);
-  }
 
   /* 0fr to 1fr animates the height to the content's real size, and a click mid-flight turns around from where it is */
-  .usage .svc-more {
-    display: grid;
-    grid-template-rows: 0fr;
-    transition: grid-template-rows 450ms cubic-bezier(0.32, 0.72, 0, 1);
-    cursor: auto;
+
+
+
+
+
+
+  /* ---- the page: a status line, then grouped lists; a service opens in a sheet ---- */
+  .usage .summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 4px;
+    font-weight: 500;
   }
 
-  .usage .svc[data-open='true'] .svc-more {
-    grid-template-rows: 1fr;
+  .usage .dot {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
   }
 
-  .usage .svc-more-clip {
-    min-height: 0;
+  .usage .dot--warn {
+    background: var(--tvc-orange);
+  }
+
+  .usage .dot--crit {
+    background: var(--tvc-error-text);
+  }
+
+  .usage .row .value {
+    flex: none;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .usage .row .detail {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .usage .row-meter {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* On a phone the percentage sits above a shorter bar, so the service name and its line of detail keep their room. */
+  @media (max-width: 520px) {
+    .usage .row-meter {
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 5px;
+    }
+
+    .usage .row-meter .bar {
+      width: 64px;
+    }
+  }
+
+  .usage .bar {
+    flex: none;
+    width: 84px;
+    height: 6px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--tvc-ink) 12%, var(--tvc-white));
     overflow: hidden;
   }
 
-  .usage .svc-more-body {
-    padding-top: 10px;
-    opacity: 0;
-    transition: opacity 180ms ease-out;
+  .usage .bar > i {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+    background: var(--tvc-green);
   }
 
-  .usage .svc[data-open='true'] .svc-more-body {
-    opacity: 1;
-    transition: opacity 300ms ease-out 120ms;
+  .usage .bar--warn > i {
+    background: var(--tvc-orange);
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .usage .svc,
-    .usage .svc-more,
-    .usage .svc-toggle::after {
-      transition-duration: 1ms;
-    }
+  .usage .bar--crit > i {
+    background: var(--tvc-error-text);
+  }
 
-    .usage .svc-more-body,
-    .usage .svc[data-open='true'] .svc-more-body {
-      transition-duration: 1ms;
-      transition-delay: 0s;
-    }
+  #staff-main .usage .sheet--service {
+    width: min(480px, calc(100vw - 24px));
+    max-height: calc(100vh - 40px);
+    padding: 0;
+    overflow: hidden;
+    border-radius: 18px;
+    background: var(--tvc-stone);
+  }
+
+  #staff-main .usage .sheet--service[open] {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .usage .sheet-label {
+    margin: 18px 0 6px 14px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .usage .sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px 16px 6px;
+  }
+
+  .usage .sheet-head h3 {
+    margin: 0;
+    font-size: var(--text-lg);
+    letter-spacing: -0.01em;
+  }
+
+  .usage .sheet-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .usage .sheet-body {
+    display: grid;
+    grid-auto-rows: max-content;
+    gap: 14px;
+    padding: 4px 16px 18px;
+    overflow-y: auto;
+  }
+
+  .usage .sheet-body > * {
+    min-width: 0;
+  }
+
+  .usage .sheet-hero > :first-child {
+    margin-top: 0;
+  }
+
+  .usage .sheet-foot {
+    margin: 0;
+  }
+
+  .usage .sheet-foot .svc-fresh {
+    margin: 0 0 4px;
+  }
+
+  .usage .svc-fresh {
+    margin: 0 0 12px;
+    font-size: var(--text-xs);
+    line-height: 1.45;
+    color: var(--tvc-ink-soft);
+  }
+
+  .usage .svc-fresh--late {
+    color: var(--tvc-orange-text);
+    font-weight: 600;
+  }
+
+  /* What an alert says about a service sits at the top of that service's sheet. */
+  .usage .alert-callout {
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-orange-tint);
+  }
+
+  .usage .alert-callout--critical {
+    background: var(--tvc-error-bg);
+  }
+
+  .usage .alert-callout > :first-child {
+    margin-top: 0;
+  }
+
+  .usage .glossary {
+    margin-top: 22px;
+  }
+
+  .usage dialog h2 {
+    margin: 0 0 6px;
+    color: var(--tvc-ink);
+    font-size: var(--text-lg);
+    letter-spacing: -0.01em;
   }
 
   .usage .hero {
     margin: 0;
-    font-family: var(--font-display);
-    font-size: 1.9rem;
-    line-height: 1.15;
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
     color: var(--tvc-ink);
   }
 
   .usage .hero-sub {
     margin: 2px 0 10px;
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
@@ -525,9 +475,9 @@ import SignInGate from '../../components/SignInGate.astro';
   .usage .meter {
     height: 8px;
     border-radius: 4px;
-    background: var(--tvc-stone);
+    background: color-mix(in srgb, var(--tvc-ink) 12%, var(--tvc-white));
     overflow: hidden;
-    margin: 6px 0 4px;
+    margin: 8px 0 4px;
   }
 
   .usage .meter-fill {
@@ -549,7 +499,7 @@ import SignInGate from '../../components/SignInGate.astro';
     justify-content: space-between;
     gap: 8px;
     margin-top: 10px;
-    font-size: 0.82rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
@@ -559,34 +509,54 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .usage .meter-caption {
     margin: 0 0 12px;
-    font-size: 0.82rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
+  /* The facts about a service are a grouped list: the label on the left, the figure on the right. */
   .usage .stats {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin: 12px 0 0;
-    padding: 12px 0 0;
-    border-top: 1px solid var(--tvc-line);
+    margin: 0;
+    padding: 0;
+    background: var(--tvc-white);
+    border-radius: var(--radius);
+    box-shadow: 0 0 0 1px var(--tvc-line) inset;
+    overflow: hidden;
+  }
+
+  .usage .stat {
+    position: relative;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+  }
+
+  .usage .stat + .stat::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 14px;
+    height: 1px;
+    background: var(--tvc-line);
   }
 
   .usage .stat dt {
-    font-size: 0.8rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
   .usage .stat dd {
-    margin: 2px 0 0;
-    font-weight: 600;
-    font-size: 0.95rem;
+    margin: 0;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
   }
 
   .usage .stat dd small {
     display: block;
     font-weight: 400;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
@@ -617,73 +587,28 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .usage .spark figcaption {
     margin-top: 4px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
   .usage .svc-note {
     margin: 12px 0 0;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
-  /* ---- domains table ---- */
-  .usage #domains,
-  .usage #wa-health {
-    overflow-x: auto;
-  }
 
-  .usage td small {
-    display: block;
-    margin-top: 2px;
-    font-size: 0.8rem;
-    color: var(--tvc-ink-soft);
-  }
 
-  .usage table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.92rem;
-  }
 
-  .usage th {
-    text-align: left;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--tvc-ink-soft);
-    padding: 0 12px 8px 0;
-  }
 
-  .usage td {
-    padding: 8px 12px 8px 0;
-    border-top: 1px solid var(--tvc-line);
-    vertical-align: middle;
-  }
 
-  /* ---- forms ---- */
-  .usage .forms {
-    display: grid;
-    gap: 10px;
-    max-width: 720px;
-  }
 
-  .usage details.card > summary {
-    padding: 14px 18px;
-    cursor: pointer;
-    font-weight: 600;
-  }
 
-  .usage details.card[open] > summary {
-    border-bottom: 1px solid var(--tvc-line);
-  }
 
   .usage .form {
     max-width: 720px;
   }
 
-  .usage details .form {
-    padding: 16px 18px;
-  }
 
   .usage .fields {
     display: grid;
@@ -694,7 +619,7 @@ import SignInGate from '../../components/SignInGate.astro';
   .usage label {
     display: grid;
     gap: 4px;
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
     font-weight: 600;
   }
 
@@ -728,7 +653,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .usage .msg {
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     color: var(--tvc-green-dark);
   }
 
@@ -744,7 +669,7 @@ import SignInGate from '../../components/SignInGate.astro';
 </style>
 
 <script>
-  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch } from '../../../scripts/lib/staff-client.mjs';
+  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../scripts/lib/staff-client.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -782,34 +707,9 @@ import SignInGate from '../../components/SignInGate.astro';
   const LABEL = { ok: 'OK', warn: 'Warning', critical: 'Critical', none: 'Not set up' } as const;
 
   // Icons give status a second signal besides colour.
-  const ICON: Record<string, string> = {
-    ok: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/>',
-    warn: '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.2v.1"/>',
-    critical: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5M12 16v.1"/>',
-    none: '<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>',
-    auto: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/>',
-    live: '<circle cx="12" cy="12" r="2.5"/><path d="M6.3 6.3a8 8 0 0 0 0 11.4M17.7 6.3a8 8 0 0 1 0 11.4"/>',
-    manual: '<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 7l3 3"/>',
-    mixed: '<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 7l3 3"/>',
-  };
-  function icon(kind: string): SVGElement {
-    const svg = document.createElementNS(SVG, 'svg');
-    svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('width', '16');
-    svg.setAttribute('height', '16');
-    svg.setAttribute('fill', 'none');
-    svg.setAttribute('stroke', 'currentColor');
-    svg.setAttribute('stroke-width', '2');
-    svg.setAttribute('stroke-linecap', 'round');
-    svg.setAttribute('stroke-linejoin', 'round');
-    svg.setAttribute('aria-hidden', 'true');
-    svg.setAttribute('focusable', 'false');
-    svg.innerHTML = ICON[kind]; // fixed constants above, no server data
-    return svg;
-  }
   function pill(level: Level | 'none', okText?: string): HTMLElement {
     const kind = level ?? 'ok';
-    return h('span', { class: `pill pill--${kind}` }, icon(kind), okText && kind === 'ok' ? okText : LABEL[kind]);
+    return h('span', { class: `pill pill--${kind === 'critical' ? 'crit' : kind === 'warn' ? 'warn' : 'ok'}`, text: okText && kind === 'ok' ? okText : LABEL[kind] });
   }
 
   // A meter shows `fraction` (0..1) of a track. The words beside it carry the numbers.
@@ -860,7 +760,6 @@ import SignInGate from '../../components/SignInGate.astro';
   // How a card's figures are kept up to date, shown as a badge plus when the next update is due.
   type Mode = 'auto' | 'live' | 'manual' | 'mixed';
   type Kind = string | { mode: Mode; text: string; fresh?: { text: string; late?: boolean }[] };
-  const MODE_LABEL: Record<Mode, string> = { auto: 'Automatic', live: 'Live', manual: 'Manual', mixed: 'Part manual' };
   let nextRunAt: string | null = null; // from the server: when usage-collect next runs
   let runEveryHours = 6;
 
@@ -883,7 +782,7 @@ import SignInGate from '../../components/SignInGate.astro';
     if (!capturedAt || !everyDays) return { text: 'Updated by hand when the figure changes' };
     const due = new Date(new Date(capturedAt).getTime() + everyDays * 86_400_000);
     const dueText = due.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
-    return Date.now() > due.getTime() ? { text: `Update overdue (was due ${dueText}) · an admin types it in below`, late: true } : { text: `Update due ${dueText} · an admin types it in below` };
+    return Date.now() > due.getTime() ? { text: `Update overdue (was due ${dueText}) · an admin enters it on this card`, late: true } : { text: `Update due ${dueText} · an admin enters it on this card` };
   }
 
   // A card is a summary (title, status, one headline figure, one bar) and, behind a "Details" toggle,
@@ -891,85 +790,126 @@ import SignInGate from '../../components/SignInGate.astro';
   // then the detail parts. Anything overdue is lifted back into the summary so it is never hidden.
   const MORE = Symbol('more');
   type Part = Kid | typeof MORE;
+  // Each service is one row in a grouped list: its name, one line of state, a slim bar (or "Enter a reading"), a chevron.
+  // The row opens a sheet holding everything the old card kept on its face and behind "Details". Healthy services stay
+  // plain; only a warning or a critical one gets a coloured dot and bar.
+  type Entry = { title: string; level: Level | 'none'; k: { mode: Mode | null; text: string; fresh?: { text: string; late?: boolean }[] }; summary: Kid[]; more: Kid[] };
+  let entries = new Map<string, Entry>();
+  let alertsByCard = new Map<string, any[]>();
+  let openTitle: string | null = null;
+  const sheet = $<HTMLDialogElement>('service-sheet');
+  const chevron = (): SVGElement => {
+    const svg = document.createElementNS(SVG, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('class', 'chev');
+    svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS(SVG, 'path');
+    path.setAttribute('d', 'm9 6 6 6-6 6');
+    svg.append(path);
+    return svg;
+  };
+  const hasClass = (n: Kid, c: string): n is HTMLElement => n instanceof HTMLElement && n.classList.contains(c);
+  const freshLine = (f: { text: string; late?: boolean }) => h('p', { class: `svc-fresh${f.late ? ' svc-fresh--late' : ''}`, text: f.text });
+
   function card(title: string, kind: Kind, level: Level | 'none', ...body: Part[]): HTMLElement {
     const k = typeof kind === 'string' ? { mode: null, text: kind, fresh: undefined } : kind;
-    const badge = k.mode ? h('span', { class: `mode mode--${k.mode}` }, icon(k.mode), MODE_LABEL[k.mode]) : null;
     const at = body.indexOf(MORE);
     const summary = (at === -1 ? body : body.slice(0, at)) as Kid[];
     const more = (at === -1 ? [] : body.slice(at + 1)) as Kid[];
-    const fresh = k.fresh ?? [];
-    const freshLine = (f: { text: string; late?: boolean }) => h('p', { class: `svc-fresh${f.late ? ' svc-fresh--late' : ''}`, text: f.text });
-    const open = title === openCardTitle; // a re-render (after a saved reading) keeps the open card open, with no animation
-    const bodyId = `svc-more-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-    const toggle = h('button', { class: 'svc-toggle', attrs: { type: 'button', 'aria-expanded': String(open), 'aria-controls': bodyId, 'aria-label': `${title}: details` } }, h('span', { text: 'Details' }));
-    const bodyEl = h('div', { class: 'svc-more', attrs: { id: bodyId } }, h('div', { class: 'svc-more-clip' }, h('div', { class: 'svc-more-body' }, h('p', { class: 'svc-fresh', text: k.text }), ...fresh.filter((f) => !f.late).map(freshLine), ...more)));
-    if (!open) bodyEl.setAttribute('inert', ''); // closed content is out of the tab order and invisible to screen readers
-    return h(
-      'article',
-      { class: 'card svc', attrs: { 'data-open': String(open), 'data-level': String(level ?? 'ok') } },
-      h('div', { class: 'svc-top' },
-        h('div', { class: 'svc-head' }, h('h3', { class: 'svc-title', text: title }), pill(level)),
-        h('p', { class: 'svc-kind' }, badge),
-        ...summary,
-        ...fresh.filter((f) => f.late).map(freshLine),
+    entries.set(title, { title, level, k, summary, more });
+    const st = level === 'critical' ? 'crit' : level === 'warn' ? 'warn' : null;
+    const hero = summary.find((n) => hasClass(n, 'hero')) as HTMLElement | undefined;
+    const sub = summary.find((n) => hasClass(n, 'hero-sub')) as HTMLElement | undefined;
+    const line = [hero?.textContent, sub?.textContent].filter(Boolean).join(' ');
+    const meterEl = summary.find((n) => hasClass(n, 'meter')) as HTMLElement | undefined;
+    let right: HTMLElement | null = null;
+    if (meterEl) {
+      const fill = meterEl.querySelector<HTMLElement>('.meter-fill');
+      // Every bar on this page fills with what is USED, so a fuller bar always means closer to the limit.
+      const used = meterEl.getAttribute('aria-valuenow') ?? '0';
+      const bar = h('span', { class: `bar${st ? ` bar--${st}` : ''}`, attrs: { 'aria-hidden': 'true' } }, h('i'));
+      (bar.firstElementChild as HTMLElement).style.width = fill?.style.width ?? '0%';
+      right = h('span', { class: 'row-meter', attrs: { role: 'img', 'aria-label': `${used}% used` } }, h('span', { class: 'value', text: `${used}% used` }), bar);
+    } else if (summary.some((n) => hasClass(n, 'reading-inline'))) {
+      right = h('span', { class: 'pill', text: 'Enter a reading' });
+    }
+    const row = h('button', { class: 'row', attrs: { type: 'button' } }, st ? h('span', { class: `dot dot--${st}`, attrs: { 'aria-hidden': 'true' } }) : null, h('span', { class: 'grow' }, h('span', { class: 'title', text: title }), h('span', { class: 'detail', text: line })), right, chevron());
+    row.addEventListener('click', () => openService(title));
+    return h('li', { attrs: { 'data-level': String(level ?? 'ok') } }, row);
+  }
+
+  // The sheet for one service: any alert about it first, then the figure, then the facts, with how it is kept up to date last.
+  function fillSheet(title: string) {
+    const e = entries.get(title);
+    if (!e) return;
+    const alerts = alertsByCard.get(title) ?? [];
+    const lead = alerts[0];
+    const callout = lead
+      ? h('section', { class: `alert-callout alert-callout--${lead.level}` },
+          h('p', { class: 'alert-title', text: lead.title }),
+          lead.action ? h('p', { class: 'alert-action' }, h('strong', { text: 'What to do: ' }), lead.action) : null,
+          h('details', { class: 'alert-why' },
+            h('summary', { text: 'Why this is flagged' }),
+            h('p', { class: 'alert-detail', text: lead.detail + (lead.emailedAt ? ` Emailed to the core team ${ago(lead.emailedAt)}.` : '') }),
+            ...alerts.slice(1).map((r) => h('p', { class: 'alert-more', text: `Also: ${r.title}.${r.action && r.action !== lead.action ? ` ${r.action}` : ''}` })),
+          ),
+        )
+      : null;
+    const fresh = e.k.fresh ?? [];
+    const done = h('button', { class: 'button button--outline', text: 'Done', attrs: { type: 'button' } });
+    done.addEventListener('click', () => sheet.close());
+    const state = e.level === 'critical' ? pill('critical') : e.level === 'warn' ? pill('warn', 'Needs a look') : null;
+    if (state && e.level === 'warn') state.textContent = 'Needs a look';
+    sheet.replaceChildren(
+      h('div', { class: 'sheet-head' }, h('h3', { text: title, attrs: { id: 'service-title' } }), h('div', { class: 'sheet-head-actions' }, state, done)),
+      h('div', { class: 'sheet-body' },
+        callout,
+        h('div', { class: 'sheet-hero' }, ...e.summary, ...fresh.filter((f) => f.late).map(freshLine)),
+        ...e.more,
+        h('div', { class: 'sheet-foot' }, h('p', { class: 'svc-fresh', text: e.k.text }), ...fresh.filter((f) => !f.late).map(freshLine)),
       ),
-      h('div', { class: 'svc-foot' }, toggle, bodyEl),
     );
   }
+  function openService(title: string) {
+    openTitle = title;
+    fillSheet(title);
+    if (!sheet.open) sheet.showModal();
+  }
+  sheet.addEventListener('close', () => (openTitle = null));
+  sheet.addEventListener('click', (ev) => {
+    if (ev.target === sheet) sheet.close(); // a tap on the dimmed area outside the sheet
+  });
 
-  // One card open at a time. The whole card is the target (the button inside is for keyboards and screen
-  // readers); the open details are not, so they can be read and selected without folding shut.
-  let openCardTitle: string | null = null;
-  function setCardOpen(card: HTMLElement, open: boolean) {
-    card.dataset.open = String(open);
-    card.querySelector('.svc-toggle')?.setAttribute('aria-expanded', String(open));
-    card.querySelector('.svc-more')?.toggleAttribute('inert', !open);
-  }
-  function onCardsClick(e: MouseEvent) {
-    const target = e.target as Element;
-    const card = target.closest<HTMLElement>('.svc');
-    if (!card || target.closest('.svc-more')) return;
-    if (window.getSelection()?.toString()) return; // the end of a text selection is not a click
-    const opening = card.dataset.open !== 'true';
-    document.querySelectorAll<HTMLElement>('#cards .svc[data-open="true"]').forEach((c) => setCardOpen(c, false));
-    if (opening) setCardOpen(card, true);
-    openCardTitle = opening ? (card.querySelector('.svc-title')?.textContent ?? null) : null;
-  }
-  // Open a card from outside it (an alert's "See the card" link): fold the others, open this one, bring it into view.
-  const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-  function openCardByTitle(title: string) {
-    const card = [...document.querySelectorAll<HTMLElement>('#cards .svc')].find((c) => c.querySelector('.svc-title')?.textContent === title);
-    if (!card) return;
-    document.querySelectorAll<HTMLElement>('#cards .svc[data-open="true"]').forEach((c) => c !== card && setCardOpen(c, false));
-    setCardOpen(card, true);
-    openCardTitle = title;
-    card.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
-    card.querySelector<HTMLElement>('.svc-toggle')?.focus({ preventScroll: true });
-  }
-
-  // The figures a person types in live in forms far down the page; this takes them there, open and ready to type.
-  let canConfigure = false; // only admins have the forms
+  // The figures a person types in are entered in the service's sheet: "Enter a new reading" opens the form right
+  // there, and saving re-draws the sheet with the new figure. A second click, or Cancel, folds it.
+  let canConfigure = false; // only admins can enter readings
+  let readingSetups = new Map<string, { meter: any; last: { value?: number; limit?: number | null; expiresOn?: string | null } | null; withExpiry: boolean }>();
   function enterReadingButton(meterId: string): HTMLElement | null {
     if (!canConfigure) return null;
-    return linkButton('Enter a new reading', () => {
-      const form = document.getElementById(`reading-${meterId}`) as HTMLDetailsElement | null;
-      if (!form) return;
-      form.open = true;
-      form.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' });
-      form.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true });
+    const wrap = h('div', { class: 'reading-inline' });
+    const toggle = h('button', { class: 'button', text: 'Enter a new reading', attrs: { type: 'button', 'aria-expanded': 'false' } });
+    toggle.addEventListener('click', () => {
+      const setup = readingSetups.get(meterId);
+      if (!setup) return;
+      const open = wrap.querySelector('form');
+      if (open) {
+        open.remove();
+        toggle.setAttribute('aria-expanded', 'false');
+        return;
+      }
+      const form = readingForm(setup.meter, setup.last, setup.withExpiry, () => {
+        form.remove();
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.focus();
+      });
+      wrap.append(form);
+      toggle.setAttribute('aria-expanded', 'true');
+      form.querySelector<HTMLInputElement>('input')?.focus();
     });
+    wrap.append(toggle);
+    return wrap;
   }
   const shortDay = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-
-  // Press feedback on pointer-down (before release), like a tap on a physical button.
-  function onCardsPress(e: PointerEvent) {
-    const card = (e.target as Element).closest<HTMLElement>('.svc');
-    if (card && !(e.target as Element).closest('.svc-more')) card.dataset.pressed = 'true';
-  }
-  function onCardsRelease() {
-    document.querySelectorAll<HTMLElement>('#cards .svc[data-pressed]').forEach((c) => delete c.dataset.pressed);
-  }
-
 
   // ---- the cards -------------------------------------------------------------
   type Overview = any;
@@ -989,12 +929,12 @@ import SignInGate from '../../components/SignInGate.astro';
     }
     if (est) {
       parts.push(h('p', { class: 'hero', text: `about ${usd(est.remaining)}` }), h('p', { class: 'hero-sub', text: `credit left, estimated, of ${usd(est.total ?? est.remaining)}` }));
-      if (est.total) parts.push(meter(est.remaining / est.total, est.level, 'Anthropic credit left', `${Math.round((est.remaining / est.total) * 100)}% left`));
-      more.push(h('p', { class: 'meter-caption', text: `${Math.round((est.remaining / est.total) * 100)}% left · based on the ${usd(reading.value)} entered ${ago(reading.capturedAt)}, minus ${usd(est.spent)} of metered usage since` }));
+      if (est.total) parts.push(meter(1 - est.remaining / est.total, est.level, 'Anthropic credit used', `${Math.round((1 - est.remaining / est.total) * 100)}% used`));
+      more.push(h('p', { class: 'meter-caption', text: `${Math.round((1 - est.remaining / est.total) * 100)}% used · ${usd(est.remaining)} left · based on the ${usd(reading.value)} entered ${ago(reading.capturedAt)}, minus ${usd(est.spent)} of metered usage since` }));
     } else if (reading) {
       parts.push(h('p', { class: 'hero', text: usd(reading.value) }), h('p', { class: 'hero-sub', text: `entered ${ago(reading.capturedAt)}. Add the token prices below to turn usage into a live estimate.` }));
     } else {
-      parts.push(h('p', { class: 'hero-sub', text: 'No credit balance entered yet. An admin can add it below so we can warn before it runs out.' }));
+      parts.push(h('p', { class: 'hero-sub', text: 'No credit balance entered yet. An admin can add it here so we can warn before it runs out.' }));
     }
     if (a.credit.expiresInDays !== null) {
       (a.credit.expiresInDays <= 30 ? parts : more).push(h('p', { class: 'hero-sub', text: a.credit.expiresInDays < 0 ? `Credit expired on ${dateText(reading.expiresOn)}.` : `Credit expires on ${dateText(reading.expiresOn)} (${a.credit.expiresInDays} day${a.credit.expiresInDays === 1 ? '' : 's'}).` }));
@@ -1012,7 +952,7 @@ import SignInGate from '../../components/SignInGate.astro';
       parts.push(h('p', { class: 'svc-note', text: `Today the site turned away ${a.chatCapHitsToday} chat message(s) and ${a.searchFallbackCapHitsToday} paid search fallback(s) because a daily cap was reached.` }));
     }
     more.push(h('p', { class: 'svc-note', text: 'Counts only what the website itself sends (chat and the search fallback), not other uses of the same key. Dollar figures are estimates from the prices below.' }));
-    more.push(enterReadingButton('anthropic.credit_remaining_usd'));
+    (reading ? more : parts).push(enterReadingButton('anthropic.credit_remaining_usd'));
     return card('Anthropic (Claude)', { mode: 'mixed', text: 'Usage measured live · credit balance typed in', fresh: [{ text: 'Usage: updates on every request the site makes.' }, nextManualUpdate(reading?.capturedAt, a.credit.meter.refreshEveryDays)] }, level, ...parts, MORE, ...more);
   }
 
@@ -1058,13 +998,13 @@ import SignInGate from '../../components/SignInGate.astro';
     const parts: Kid[] = [];
     if (est) {
       parts.push(h('p', { class: 'hero', text: `about ${spend(est.remaining)}` }), h('p', { class: 'hero-sub', text: `credit left, estimated, of ${usd(est.total ?? est.remaining)}` }));
-      if (est.total) parts.push(meter(est.remaining / est.total, est.level, 'TypeSafe credit left', `${Math.round((est.remaining / est.total) * 100)}% left`));
+      if (est.total) parts.push(meter(1 - est.remaining / est.total, est.level, 'TypeSafe credit used', `${Math.round((1 - est.remaining / est.total) * 100)}% used`));
       parts.push(h('p', { class: 'hero-sub', text: `${m?.reading ? `entered ${ago(m.reading.capturedAt)} · ` : ''}${calls}` }));
     } else {
       parts.push(h('p', { class: 'hero', text: nf.format(t.today.requests) }), h('p', { class: 'hero-sub', text: calls.replace(/^\d[\d,]* /, '') }), h('p', { class: 'hero-sub', text: 'No credit entered yet. Enter the amount you loaded once, and the page subtracts what the site spends.' }));
     }
     const more: Kid[] = [];
-    if (est) more.push(h('p', { class: 'meter-caption', text: `${Math.round((est.remaining / (est.total || est.remaining || 1)) * 100)}% left · based on the ${usd(est.readingValue)} entered ${ago(est.readingAt)}, minus ${spend(est.spent)} of metered usage since` }));
+    if (est) more.push(h('p', { class: 'meter-caption', text: `${Math.round((1 - est.remaining / (est.total || est.remaining || 1)) * 100)}% used · ${spend(est.remaining)} left · based on the ${usd(est.readingValue)} entered ${ago(est.readingAt)}, minus ${spend(est.spent)} of metered usage since` }));
     more.push(
       h('dl', { class: 'stats' },
         stat('Last 7 days', nf.format(t.last7.requests), `${spend(t.last7.costUsd)} · ${nf.format(t.last7.errors)} failed`),
@@ -1073,7 +1013,7 @@ import SignInGate from '../../components/SignInGate.astro';
       sparkline(t.requestsSeries.map((p: any) => ({ label: dayLabel(p.day), value: p.value })), 'Calls per day', (n) => `${nf.format(n)} call${n === 1 ? '' : 's'}`),
       h('p', { class: 'svc-note', text: 'Reads each inbound WhatsApp message in shadow mode (nothing acts on them yet). Billed per input token only. TypeSafe has no balance API, so the credit left is what you entered at the last top-up minus what this site has spent since (its own metered calls at the published price). Enter a new balance after each top-up; it needs no other upkeep. Anything TypeSafe is used for outside the website is not counted.' }),
     );
-    more.push(enterReadingButton('typesafe.credit_remaining_usd'));
+    (est ? more : parts).push(enterReadingButton('typesafe.credit_remaining_usd'));
     return card('TypeSafe (Jev)', { mode: 'mixed', text: 'Usage measured live · credit entered at each top-up', fresh: [{ text: 'Usage: updates on every WhatsApp message read.' }, { text: m?.reading ? `Credit: ${usd(m.reading.value)} entered ${ago(m.reading.capturedAt)}.` : 'Credit: not entered yet.' }] }, level, ...parts, MORE, ...more);
   }
 
@@ -1128,7 +1068,7 @@ import SignInGate from '../../components/SignInGate.astro';
       const ef = egress.reading.value / egress.reading.limit;
       more.push(h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: 'Egress this month (typed in)' }), h('span', { text: `${amount(egress.reading.value)} of ${amount(egress.reading.limit)} GB` })), meter(ef, egress.level, 'Supabase egress used', `${Math.round(ef * 100)}% of the monthly egress`)), h('p', { class: 'meter-caption', text: `Typed in ${ago(egress.reading.capturedAt)} from ${egress.where}.${daysAgo(egress.reading.capturedAt) > 35 ? ' That is over a month old: update it.' : ''}` }));
     } else {
-      more.push(h('p', { class: 'hero-sub', text: `Egress (data sent out, free plan: 5 GB a month) can't be measured automatically. Read it at ${egress?.where ?? 'the Supabase dashboard'} and enter it below.` }));
+      more.push(h('p', { class: 'hero-sub', text: `Egress (data sent out, free plan: 5 GB a month) can't be measured automatically. Read it at ${egress?.where ?? 'the Supabase dashboard'} and enter it here.` }));
     }
     more.push(enterReadingButton('supabase.egress_gb'));
     more.push(h('p', { class: 'svc-note', text: 'The free plan stops accepting new data at the limit. Growth is a straight-line estimate from the last two weeks of readings, so a bulk import skews it. Table sizes include indexes. Egress cannot be measured automatically, so it is typed in. The Supabase dashboard is the authority.' }));
@@ -1180,7 +1120,7 @@ import SignInGate from '../../components/SignInGate.astro';
     if (r?.limit && !r.staleForCycle) {
       const used = 1 - r.value / r.limit;
       more.push(
-        h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: "Netlify's own balance (typed in)" }), h('span', { text: `${leftOf(r.value, r.limit)} left` })), meter(used, typed.level, 'Netlify credits used', `${Math.round(used * 100)}% used`)),
+        h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: "Netlify's own balance (typed in)" }), h('span', { text: `${Math.round(used * 100)}% used · ${leftOf(r.value, r.limit)} left` })), meter(used, typed.level, 'Netlify credits used', `${Math.round(used * 100)}% used`)),
         h('p', { class: 'meter-caption', text: `Typed in ${ago(r.capturedAt)} from ${typed.where}. ${r.value > r.limit ? "It is above the plan's included credits, so the extra is from top-ups or carried-over credits, and the run-out date uses it. " : ''}Whatever it shows beyond deploys is bandwidth, functions and requests: they cost credits but Netlify's API reports none of them.` }),
       );
     } else if (!r) {
@@ -1234,7 +1174,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   function manualCard(m: any): HTMLElement {
     const r = m.reading;
-    if (!r) return card(m.label, { mode: 'manual', text: 'Typed in from the provider' }, 'none', h('p', { class: 'hero-sub', text: `No reading yet. Find it at ${m.where}, then an admin can enter it below.` }));
+    if (!r) return card(m.label, { mode: 'manual', text: 'Typed in from the provider' }, 'none', h('p', { class: 'hero-sub', text: `No reading yet. Find it at ${m.where}, then an admin can enter it here.` }), enterReadingButton(m.id));
     const remaining = m.kind === 'remaining';
     const frac = r.limit ? (remaining ? 1 - r.value / r.limit : r.value / r.limit) : 0; // always the fraction USED, for the bar
     const staleForCycle = r.staleForCycle === true;
@@ -1243,19 +1183,22 @@ import SignInGate from '../../components/SignInGate.astro';
     const parts: Kid[] = [h('p', { class: 'hero', text: `${amount(r.value)} ${m.unit}` }), h('p', { class: 'hero-sub', text: remaining ? (r.limit ? (r.value > r.limit ? `left (${amount(r.limit)} included + extra)` : `left of ${amount(r.limit)} included`) : 'left (limit not entered)') : r.limit ? `of ${amount(r.limit)} included` : 'limit not entered' })];
     const cycleMs = r.cycleStart && r.cycleEnd ? new Date(r.cycleEnd).getTime() - new Date(r.cycleStart).getTime() : 0;
     if (remaining && r.limit && cycleMs > 0 && !staleForCycle) {
-      // Two bars that both drain left to right: credits left against days left in the billing cycle.
-      // Credits draining faster than days means spending is ahead of pace.
+      // Two bars that both fill left to right: credits used against how much of the billing cycle has passed.
+      // Credits filling faster than the cycle means spending is ahead of pace.
       const msLeft = Math.max(0, new Date(r.cycleEnd).getTime() - Date.now());
       const daysLeft = Math.ceil(msLeft / 86_400_000);
       const daysTotal = Math.round(cycleMs / 86_400_000);
-      const creditsFrac = Math.max(0, r.value / r.limit);
-      const daysFrac = Math.min(1, msLeft / cycleMs);
+      const creditsFrac = Math.max(0, r.value / r.limit); // still left
+      const daysFrac = Math.min(1, msLeft / cycleMs); // still to come
+      const usedFrac = Math.min(1, Math.max(0, 1 - creditsFrac));
+      const elapsedFrac = Math.min(1, Math.max(0, 1 - daysFrac));
+      const usedPct = Math.round(usedFrac * 100);
       const row = (label: string, text: string, fraction: number, level: Level, what: string) =>
         h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: label }), h('span', { text })), meter(fraction, level, what, text));
-      parts.push(meter(creditsFrac, m.level, `${m.label} left`, leftOf(r.value, r.limit)));
+      parts.push(meter(usedFrac, m.level, `${m.label} used`, `${usedPct}% used`));
       more.push(
-        row('Credits left', leftOf(r.value, r.limit), creditsFrac, m.level, `${m.label} left`),
-        row('Days left', `${daysLeft} of ${daysTotal} · resets ${cycleDay(r.cycleEnd)}`, daysFrac, null, 'Days left in the billing cycle'),
+        row('Credits used', `${usedPct}% · ${leftOf(r.value, r.limit)}`, usedFrac, m.level, `${m.label} used`),
+        row('Billing cycle passed', `${daysTotal - daysLeft} of ${daysTotal} days · resets ${cycleDay(r.cycleEnd)}`, elapsedFrac, null, 'Billing cycle passed'),
         h('p', { class: 'meter-caption', text: daysLeft > 0 ? `About ${nf.format(Math.floor(r.value / daysLeft))} credits a day to last until the reset${creditsFrac < daysFrac ? ' · using credits faster than the cycle is passing' : ''}` : 'Resets today' }),
       );
     } else {
@@ -1271,6 +1214,7 @@ import SignInGate from '../../components/SignInGate.astro';
       parts.push(h('p', { class: 'svc-fresh svc-fresh--late', text: staleForCycle ? 'This reading is from a previous billing cycle: update it.' : stale ? 'This reading is over a month old: update it.' : 'Netlify plan data looks out of date: check the token.' }));
     }
     more.push(h('p', { class: 'svc-note', text: `Typed in on ${dateText(r.capturedAt)} (${ago(r.capturedAt)}) from ${m.where}.${r.cycleStart ? ` Billing cycle ${cycleDay(r.cycleStart)} to ${cycleDay(r.cycleEnd, -1)}; the allowance is read from Netlify automatically.` : ''}${r.planStale ? ` Warning: Netlify plan data was last refreshed ${ago(r.planCapturedAt)}, so the limit and cycle dates may be out of date. Check the Netlify token.` : ''}${staleForCycle ? ' This reading is from a previous billing cycle, so the balance has reset since. Update it.' : ''}${stale ? ' This reading is more than a month old, so treat it with caution and update it.' : ''}` }));
+    more.push(enterReadingButton(m.id));
     return card(m.label, r.cycleStart ? { mode: 'mixed', text: 'Balance typed in · allowance read from Netlify', fresh: [nextManualUpdate(r.capturedAt, m.refreshEveryDays), { text: 'Allowance and billing cycle: ' + nextAutoUpdate(r.planCapturedAt).text.replace('Next update', 'next update') }] } : { mode: 'manual', text: 'Typed in from the provider', fresh: [nextManualUpdate(r.capturedAt, m.refreshEveryDays)] }, m.level, ...parts, MORE, ...more);
   }
 
@@ -1278,66 +1222,68 @@ import SignInGate from '../../components/SignInGate.astro';
   // The card each service's alerts belong to, so an alert can take you to the figures behind it.
   const SERVICE_CARD: Record<string, string> = { anthropic: 'Anthropic (Claude)', gemini: 'Google Gemini', typesafe: 'TypeSafe (Jev)', supabase: 'Supabase database', resend: 'Resend emails', cloudflare: 'Cloudflare R2 storage', netlify: 'Netlify' };
 
-  function linkButton(text: string, onClick: () => void): HTMLElement {
-    const b = h('button', { class: 'link-button', text, attrs: { type: 'button' } });
-    b.addEventListener('click', onClick);
-    return b;
+  // The answer comes first: one line that says how things stand. A service that needs a look is listed above the rest
+  // with its reason (tap it for what to do and why); the rest are plain rows below.
+  function cardTitleFor(service: string): string | null {
+    const named = SERVICE_CARD[service];
+    if (named && entries.has(named)) return named;
+    return [...entries.keys()].find((t) => t.toLowerCase().startsWith(service.toLowerCase())) ?? null;
   }
 
-  // One entry per service, led by its most serious alert (the others sit under it), each saying what to do,
-  // under a one-line count, so the top of the page answers "is anything wrong, and what do I do?".
-  function renderAlerts(alerts: any[], cardCount: number) {
-    const box = $('alerts');
-    if (alerts.length === 0) {
-      box.replaceChildren(h('p', { class: 'card all-clear' }, pill(null, 'All clear'), h('span', { text: `All ${cardCount} services are within their limits, as far as we can measure.` })));
-      return;
-    }
+  function renderOverview(alerts: any[], nodes: HTMLElement[]) {
+    alertsByCard = new Map();
     const rank = (a: any) => (a.level === 'critical' ? 0 : 1);
-    const byService = new Map<string, any[]>();
     for (const a of [...alerts].sort((x, y) => rank(x) - rank(y))) {
-      if (!byService.has(a.service)) byService.set(a.service, []);
-      byService.get(a.service)!.push(a);
+      const t = cardTitleFor(a.service);
+      if (!t) continue;
+      if (!alertsByCard.has(t)) alertsByCard.set(t, []);
+      alertsByCard.get(t)!.push(a);
     }
-    const groups = [...byService.entries()].sort((x, y) => rank(x[1][0]) - rank(y[1][0]));
-    const critical = groups.filter(([, g]) => g[0].level === 'critical').length;
-    const warning = groups.length - critical;
-    const fine = Math.max(0, cardCount - groups.length);
-    const summary = [critical ? `${critical} critical` : null, warning ? `${warning} warning${warning === 1 ? '' : 's'}` : null, `${fine} fine`].filter(Boolean).join(' · ');
-    box.replaceChildren(
-      h('p', { class: 'alert-summary', text: summary }),
-      h('ul', { class: 'alert-list' }, ...groups.map(([service, group]) => {
-        const [lead, ...rest] = group;
-        const cardTitle = SERVICE_CARD[service];
-        return h('li', { class: `alert alert--${lead.level}` },
-          pill(lead.level),
-          h('div', {},
-            h('p', { class: 'alert-title', text: lead.title }),
-            lead.action ? h('p', { class: 'alert-action' }, h('strong', { text: 'What to do: ' }), lead.action) : null,
-            // the numbers behind it, one tap away, so the headline and the action stay short
-            h('details', { class: 'alert-why' },
-              h('summary', { text: 'Why this is flagged' }),
-              h('p', { class: 'alert-detail', text: lead.detail + (lead.emailedAt ? ` Emailed to the core team ${ago(lead.emailedAt)}.` : '') }),
-              ...rest.map((r) => h('p', { class: 'alert-more', text: `Also: ${r.title}.${r.action && r.action !== lead.action ? ` ${r.action}` : ''}` })),
-            ),
-            cardTitle ? linkButton(`See the ${cardTitle} card`, () => openCardByTitle(cardTitle)) : null,
-          ),
-        );
-      })),
+    // A card that is at warning or critical needs a look even if no alert came with it.
+    const detailOf = new Map<string, string>();
+    for (const li of nodes) {
+      const t = li.querySelector('.title')?.textContent ?? '';
+      detailOf.set(t, li.querySelector('.detail')?.textContent ?? '');
+      const lv = li.dataset.level;
+      if ((lv === 'critical' || lv === 'warn') && !alertsByCard.has(t)) alertsByCard.set(t, [{ level: lv, title: detailOf.get(t) }]);
+    }
+    const needTitles = [...alertsByCard.keys()].sort((x, y) => rank(alertsByCard.get(x)![0]) - rank(alertsByCard.get(y)![0]));
+    const summary = $('summary');
+    if (needTitles.length === 0) {
+      summary.replaceChildren(pill(null, 'All clear'), h('span', { text: `All ${nodes.length} services are within their limits, as far as we can measure.` }));
+    } else {
+      const worstLevel = alertsByCard.get(needTitles[0])![0].level === 'critical' ? 'crit' : 'warn';
+      summary.replaceChildren(h('span', { class: `dot dot--${worstLevel}`, attrs: { 'aria-hidden': 'true' } }), h('span', { text: needTitles.length === 1 ? '1 service needs a look' : `${needTitles.length} services need a look` }));
+    }
+    $('needs').hidden = needTitles.length === 0;
+    $('needs-list').replaceChildren(
+      ...needTitles.map((t) => {
+        const group = alertsByCard.get(t)!;
+        const st = group[0].level === 'critical' ? 'crit' : 'warn';
+        const row = h('button', { class: 'row', attrs: { type: 'button' } }, h('span', { class: `dot dot--${st}`, attrs: { 'aria-hidden': 'true' } }), h('span', { class: 'grow' }, h('span', { class: 'title', text: t }), h('span', { class: 'detail', text: group[0].title })), nodes.find((li) => li.querySelector('.title')?.textContent === t)?.querySelector('.row-meter')?.cloneNode(true) as HTMLElement | undefined, chevron());
+        row.addEventListener('click', () => openService(t));
+        return h('li', {}, row);
+      }),
     );
+    $('services-title').textContent = needTitles.length ? 'Everything else' : 'Services';
+    const needSet = new Set(needTitles);
+    $('cards').replaceChildren(...nodes.filter((li) => !needSet.has(li.querySelector('.title')?.textContent ?? '')));
   }
 
   // ---- admin forms -----------------------------------------------------------
-  function readingForm(meterInfo: any, last: { value?: number; limit?: number | null; expiresOn?: string | null } | null, withExpiry: boolean): HTMLElement {
+  function readingForm(meterInfo: any, last: { value?: number; limit?: number | null; expiresOn?: string | null } | null, withExpiry: boolean, onCancel: () => void): HTMLFormElement {
     const id = meterInfo.id as string;
     const field = (name: string, label: string, value?: number | string | null, type = 'number') => {
       const input = h('input', { attrs: { name, type, ...(type === 'number' ? { step: 'any', min: '0', inputmode: 'decimal' } : {}), ...(value !== undefined && value !== null ? { value: String(value) } : {}), 'data-field': name } });
       return h('label', {}, label, input);
     };
     const msg = h('span', { class: 'msg', attrs: { role: 'status' } });
-    const form = h('form', { class: 'form', attrs: { novalidate: '' } },
+    const cancel = h('button', { class: 'button button--outline', text: 'Cancel', attrs: { type: 'button' } });
+    cancel.addEventListener('click', onCancel);
+    const form = h('form', { class: 'form reading-form', attrs: { novalidate: '' } },
       h('p', { class: 'muted', text: `Find this at ${meterInfo.where}.` }),
       h('div', { class: 'fields' }, field('value', meterInfo.valueLabel, last?.value), field('limit', meterInfo.limitLabel, last?.limit), withExpiry ? field('expiresOn', 'Credit expires on (optional)', last?.expiresOn ?? '', 'date') : null),
-      h('div', { class: 'actions' }, h('button', { class: 'button', text: 'Save reading', attrs: { type: 'submit' } }), msg),
+      h('div', { class: 'actions' }, h('button', { class: 'button', text: 'Save reading', attrs: { type: 'submit' } }), cancel, msg),
     );
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
@@ -1354,27 +1300,33 @@ import SignInGate from '../../components/SignInGate.astro';
       try {
         const { status, data } = await staffFetch('/api/usage-admin/reading', { method: 'POST', body: { meter: id, value, limit, ...(withExpiry && get('expiresOn') ? { expiresOn: get('expiresOn') } : {}) } });
         if (status !== 200) throw new Error(data.error ?? 'Could not save');
-        await load();
-        $('readings').querySelectorAll('details').forEach((d) => ((d as HTMLDetailsElement).open = false));
+        await load(); // the card is re-drawn (and stays open) with the new figure, so the form is gone
+        showToast(`${meterInfo.label} saved.`);
       } catch (err) {
         msg.className = 'msg msg--error';
         msg.textContent = err instanceof StaffAuthError ? 'Your session ended or this account cannot change readings.' : (err as Error).message;
       }
     });
-    return h('details', { class: 'card', attrs: { id: `reading-${id}` } }, h('summary', { text: `${meterInfo.label}${last?.value !== undefined ? ` · last entered ${last.value}` : ''}` }), form);
+    return form as HTMLFormElement;
   }
 
   function renderAdmin(o: Overview) {
     $('admin').hidden = !o.canConfigure;
     if (!o.canConfigure) return;
-    const a = o.anthropic.credit;
-    const forms: HTMLElement[] = [readingForm(a.meter, a.reading ? { value: a.reading.value, limit: a.reading.total, expiresOn: a.reading.expiresOn } : null, true)];
-    for (const m of o.manual) forms.push(readingForm(m, m.reading ? { value: m.reading.value, limit: m.reading.limit } : null, false));
-    $('readings').replaceChildren(...forms);
     ($('price-input') as HTMLInputElement).value = o.settings.anthropicPrices?.input ?? '';
     ($('price-output') as HTMLInputElement).value = o.settings.anthropicPrices?.output ?? '';
     ($('gemini-limit') as HTMLInputElement).value = o.settings.geminiDailyRequests ?? '';
   }
+
+  const pricesSheet = $<HTMLDialogElement>('prices-sheet');
+  $('prices-open').addEventListener('click', () => {
+    $('settings-msg').textContent = '';
+    pricesSheet.showModal();
+  });
+  $('prices-cancel').addEventListener('click', () => pricesSheet.close());
+  pricesSheet.addEventListener('click', (ev) => {
+    if (ev.target === pricesSheet) pricesSheet.close();
+  });
 
   $('settings-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -1402,7 +1354,8 @@ import SignInGate from '../../components/SignInGate.astro';
       const { status, data } = await staffFetch('/api/usage-admin/settings', { method: 'POST', body });
       if (status !== 200) throw new Error(data.error ?? 'Could not save');
       await load();
-      msg.textContent = 'Saved.';
+      pricesSheet.close();
+      showToast('Prices and limits saved.');
     } catch (err) {
       msg.className = 'msg msg--error';
       msg.textContent = err instanceof StaffAuthError ? 'Your session ended or this account cannot change settings.' : (err as Error).message;
@@ -1412,47 +1365,110 @@ import SignInGate from '../../components/SignInGate.astro';
   // ---- domains ---------------------------------------------------------------
   async function loadDomains() {
     const box = $('domains');
+    const empty = (text: string) => box.replaceChildren(h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow muted', text }))));
     try {
       const { status, data } = await staffFetch('/api/usage-admin/domains');
       if (status !== 200) throw new Error('failed');
       const rows = (data.domains as any[]).map((d) => {
-        if (d.error) return h('tr', {}, h('td', { text: d.domain }), h('td', { attrs: { colspan: '3' }, class: 'muted', text: d.error }));
+        if (d.error) return h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow' }, h('span', { class: 'title', text: d.domain }), h('span', { class: 'detail', text: d.error }))));
         const lvl: Level = d.daysLeft <= 14 ? 'critical' : d.daysLeft <= 60 ? 'warn' : null;
-        return h('tr', {}, h('td', {}, d.domain, h('small', { text: d.registrar ?? 'registrar unknown' })), h('td', { text: dateText(`${d.expiresOn}T00:00:00Z`) }), h('td', { text: d.daysLeft < 0 ? 'expired' : `${nf.format(d.daysLeft)} days` }), h('td', {}, pill(lvl, 'OK')));
+        return h('li', {}, h('div', { class: 'row' },
+          h('span', { class: 'grow' }, h('span', { class: 'title', text: d.domain }), h('span', { class: 'detail', text: `Expires ${dateText(`${d.expiresOn}T00:00:00Z`)} · ${d.registrar ?? 'registrar unknown'}` })),
+          lvl ? pill(lvl) : null,
+          h('span', { class: 'value', text: d.daysLeft < 0 ? 'expired' : `${nf.format(d.daysLeft)} days` })));
       });
-      box.replaceChildren(
-        h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Domain' }), h('th', { text: 'Expires' }), h('th', { text: 'Time left' }), h('th', { text: 'Status' }))), h('tbody', {}, ...rows)),
-        h('p', { class: 'svc-note', text: 'Read live from the registries. The core team is also emailed at 60 and 30 days before expiry, then daily from 14 days.' }),
-      );
+      if (rows.length === 0) return empty('No domains to report.');
+      box.replaceChildren(...rows);
     } catch {
-      box.replaceChildren(h('p', { class: 'muted', text: 'Could not check the registries right now. The daily email check is unaffected.' }));
+      empty('Could not check the registries right now. The daily email check is unaffected.');
     }
   }
 
   // ---- WhatsApp account health ---------------------------------------------------
+  // At a glance: how many templates are approved, waiting, or need attention, and the number's standing. The
+  // template-by-template list and Meta's recent notices open in a sheet.
+  interface HealthSummary {
+    total: number;
+    approved: number;
+    waiting: number;
+    attention: number;
+    templates: Array<{ name: string; state: 'approved' | 'waiting' | 'attention'; note: string | null }>;
+    phone: { state: 'ok' | 'attention' | 'quiet'; title: string | null; detail: string | null };
+  }
+  type HealthEvent = { severity: string; title: string; detail: string | null; at: string };
+
+  const waSheet = $('wa-sheet') as HTMLDialogElement;
+  waSheet.addEventListener('click', (ev) => {
+    if (ev.target === waSheet) waSheet.close();
+  });
+
+  const statePill = (kind: 'ok' | 'warn' | 'crit', text: string) => h('span', { class: `pill pill--${kind}`, text });
+  const eventTime = (at: string) => `${dateText(at)}, ${new Date(at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+
+  function eventRow(e: HealthEvent): HTMLElement {
+    const lvl: Level = e.severity === 'critical' ? 'critical' : e.severity === 'warning' ? 'warn' : null;
+    return h('li', {}, h('div', { class: 'row' },
+      h('span', { class: 'grow' }, h('span', { class: 'title', text: e.title }), e.detail ? h('span', { class: 'detail', text: e.detail }) : null),
+      lvl ? pill(lvl) : null,
+      h('span', { class: 'value', text: eventTime(e.at) })));
+  }
+
+  function fillWaSheet(sum: HealthSummary, events: HealthEvent[]) {
+    const done = h('button', { class: 'button button--outline', text: 'Done', attrs: { type: 'button' } });
+    done.addEventListener('click', () => waSheet.close());
+    const templateRows = sum.templates.map((t) => {
+      const state = t.state === 'attention' ? statePill('warn', 'Needs attention') : t.state === 'approved' ? statePill('ok', 'Approved') : h('span', { class: 'muted', text: 'Waiting' });
+      return h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow' }, h('span', { class: 'title', text: t.name }), t.note ? h('span', { class: 'detail', text: t.note }) : null), state));
+    });
+    const phoneText = sum.phone.state === 'quiet' ? 'No notices from Meta' : `${sum.phone.title}${sum.phone.detail ? `: ${sum.phone.detail}` : ''}`;
+    waSheet.replaceChildren(
+      h('div', { class: 'sheet-head' }, h('h3', { text: 'WhatsApp account health', attrs: { id: 'wa-title' } }), h('div', { class: 'sheet-head-actions' }, done)),
+      h('div', { class: 'sheet-body' },
+        h('h4', { class: 'sheet-label', text: 'Templates' }),
+        h('ul', { class: 'list' }, ...templateRows),
+        h('h4', { class: 'sheet-label', text: 'Phone number' }),
+        h('ul', { class: 'list' }, h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow' }, h('span', { class: 'title', text: phoneText }))))),
+        h('h4', { class: 'sheet-label', text: 'Recent notices from Meta' }),
+        h('ul', { class: 'list' }, ...(events.length ? events.map(eventRow) : [h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow muted', text: 'None yet. Meta reports template approvals, quality drops and restrictions as they happen, and the core team is emailed about each one.' })))])),
+        h('div', { class: 'sheet-foot' }, h('p', { class: 'svc-fresh', text: 'Approved means listed in the approved-templates setting. A template with no notice from Meta is counted as fine, because Meta only tells us when something changes.' })),
+      ),
+    );
+  }
+
   async function loadWhatsAppHealth() {
     const box = $('wa-health');
+    const note = (title: string, detail?: string) => box.replaceChildren(h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow' }, h('span', { class: 'title', text: title }), detail ? h('span', { class: 'detail', text: detail }) : null))));
     try {
       const { status, data } = await staffFetch('/api/usage-admin/whatsapp-health');
       if (status !== 200) throw new Error('failed');
-      const events = data.events as Array<{ severity: string; title: string; detail: string | null; at: string }>;
-      if (events.length === 0) {
-        box.replaceChildren(
-          h('p', { class: 'muted', text: 'No events yet. Meta reports template approvals, quality drops and restrictions here as they happen.' }),
-          h('p', { class: 'svc-note', text: 'The core team is emailed about each one.' }),
-        );
-        return;
-      }
-      const rows = events.map((e) => {
-        const lvl: Level = e.severity === 'critical' ? 'critical' : e.severity === 'warning' ? 'warn' : null;
-        return h('tr', {}, h('td', {}, e.title, e.detail ? h('small', { text: e.detail }) : null), h('td', { text: `${dateText(e.at)}, ${new Date(e.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` }), h('td', {}, pill(lvl, 'Info')));
+      const sum = data.summary as HealthSummary;
+      const events = data.events as HealthEvent[];
+      const needing = sum.templates.filter((t) => t.state === 'attention').map((t) => t.name);
+      const stat = (title: string, detail: string, value: string | HTMLElement) => h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow' }, h('span', { class: 'title', text: title }), h('span', { class: 'detail', text: detail })), typeof value === 'string' ? h('span', { class: 'value', text: value }) : value));
+      const more = h('button', { class: 'row', attrs: { type: 'button' } },
+        h('span', { class: 'grow' }, h('span', { class: 'title', text: 'Details and recent notices' }), h('span', { class: 'detail', text: 'Each template, the phone number, and what Meta last told us' })));
+      const chev = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      chev.setAttribute('class', 'chev');
+      chev.setAttribute('viewBox', '0 0 24 24');
+      chev.setAttribute('aria-hidden', 'true');
+      const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      arrow.setAttribute('d', 'm9 6 6 6-6 6');
+      chev.append(arrow);
+      more.append(chev);
+      more.addEventListener('click', () => {
+        fillWaSheet(sum, events);
+        waSheet.showModal();
       });
+      const phoneValue = sum.phone.state === 'attention' ? statePill('crit', 'Needs attention') : sum.phone.state === 'ok' ? statePill('ok', 'Good standing') : h('span', { class: 'value muted', text: 'No notices' });
       box.replaceChildren(
-        h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Event' }), h('th', { text: 'When' }), h('th', { text: 'Level' }))), h('tbody', {}, ...rows)),
-        h('p', { class: 'svc-note', text: 'Reported by Meta (template approved, rejected or paused; quality drops; restrictions). The core team is emailed about each one.' }),
+        stat('Approved', 'Ready to send', `${sum.approved} of ${sum.total}`),
+        stat('Waiting for approval', 'Not on the approved list yet', String(sum.waiting)),
+        stat('Need attention', needing.length ? needing.slice(0, 2).join(', ') + (needing.length > 2 ? ` and ${needing.length - 2} more` : '') : 'Rejected, paused or low quality', sum.attention ? statePill('warn', String(sum.attention)) : '0'),
+        stat('Phone number', 'Quality and messaging limit', phoneValue),
+        h('li', {}, more),
       );
     } catch {
-      box.replaceChildren(h('p', { class: 'muted', text: 'Could not load WhatsApp events right now.' }));
+      note('Could not load WhatsApp health right now.');
     }
   }
 
@@ -1495,16 +1511,26 @@ import SignInGate from '../../components/SignInGate.astro';
       const { status, data } = await staffFetch('/api/usage-admin/overview');
       if (status !== 200) throw new Error('load failed');
       statusEl.hidden = true;
-      intro.textContent = 'Free tiers and credits the website relies on. "Measured" figures come from our own systems; "typed in" ones come from a provider\'s dashboard and are only as fresh as the last entry.';
+      intro.textContent = 'Free tiers and credits the website relies on, and how much is left.';
       nextRunAt = data.schedule?.nextCollectorRunAt ?? null;
       runEveryHours = data.schedule?.collectorEveryHours ?? 6;
-      // Re-rendered after every saved reading; the open card (openCardTitle) is rebuilt open.
+      // Re-rendered after every saved reading; an open sheet is filled again with the new figures.
       const netlifyTyped = data.manual.find((m: any) => m.id === 'netlify.credits_remaining') ?? null;
       canConfigure = Boolean(data.canConfigure);
+      entries = new Map();
+      readingSetups = new Map();
+      if (canConfigure) {
+        const a = data.anthropic.credit;
+        readingSetups.set(a.meter.id, { meter: a.meter, last: a.reading ? { value: a.reading.value, limit: a.reading.total, expiresOn: a.reading.expiresOn } : null, withExpiry: true });
+        for (const m of data.manual) readingSetups.set(m.id, { meter: m, last: m.reading ? { value: m.reading.value, limit: m.reading.limit } : null, withExpiry: false });
+      }
       const nodes = [anthropicCard(data), geminiCard(data), typesafeCard(data), supabaseCard(data), ...(data.resend.fresh ? [resendCard(data)] : []), ...(data.r2.fresh ? [r2Card(data)] : []), ...(data.netlify.deploys ? [netlifyCard(data, netlifyTyped)] : netlifyTyped ? [manualCard(netlifyTyped)] : []), ...data.manual.filter((m: any) => !FOLDED_INTO_SERVICE_CARD.has(m.id)).map(manualCard)].sort((a, b) => urgencyRank(b) - urgencyRank(a)); // most urgent first; the sort is stable, so ties keep their order
-      $('cards').replaceChildren(...nodes);
-      renderAlerts(data.alerts, nodes.length);
+      renderOverview(data.alerts, nodes);
       renderAdmin(data);
+      if (sheet.open && openTitle) {
+        if (entries.has(openTitle)) fillSheet(openTitle); // a saved reading re-draws the sheet that is open
+        else sheet.close();
+      }
       $('foot').textContent = `Updated ${new Date(data.generatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}. Counts use UTC days. Warnings are emailed to the core team once, and again only if they get worse.`;
       content.hidden = false;
       if (firstLoad) {
@@ -1541,11 +1567,7 @@ import SignInGate from '../../components/SignInGate.astro';
     firstLoad = true;
     showGate();
   }
-  $('cards').addEventListener('click', onCardsClick);
-  $('cards').addEventListener('pointerdown', onCardsPress);
-  for (const type of ['pointerup', 'pointercancel']) document.addEventListener(type, onCardsRelease); // wherever the pointer is let go
   $('use-different-account').addEventListener('click', signOut);
-  $('sign-out').addEventListener('click', signOut);
 
   if (getToken()) load();
   else showGate();

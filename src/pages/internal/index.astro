@@ -13,24 +13,37 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 import SignInGate from '../../components/SignInGate.astro';
 ---
 
-<StaffLayout title="Internal tools" description="Your internal tools." current="home">
+<StaffLayout title="Today" description="What needs you today, and your admin tools." current="home">
   <section class="section wrapper">
-    <h1>Internal tools</h1>
+    <h1>Today</h1>
     <p id="welcome" class="hint">Sign in to see the tools you can use.</p>
+    <div id="whats-new"></div>
 
-    <SignInGate forbiddenWhat="the internal tools" />
+    <SignInGate forbiddenWhat="the admin portal" />
 
     <p id="status" class="hint" hidden></p>
 
-    <div id="tools-section" hidden>
+    <div id="attention" data-tour="attention" hidden>
+      <p id="today-summary" class="summary" role="status"></p>
+      <div id="today-needs" hidden>
+        <h2>Needs attention</h2>
+        <ul id="needs-list" class="list"></ul>
+      </div>
+      <div id="today-quiet" hidden>
+        <h2>All clear</h2>
+        <ul id="quiet-list" class="list"></ul>
+      </div>
+    </div>
+
+    <div id="tools-section" data-tour="tools" hidden>
       <h2>Your tools</h2>
-      <ul id="tools" class="tools"></ul>
+      <ul id="tools" class="list tools"></ul>
       <p id="no-tools" class="note" hidden>You're signed in, but you don't have access to any tool yet. Ask a super admin.</p>
     </div>
 
-    <div id="admin-section" hidden>
+    <div id="admin-section" data-tour="admin-tools" hidden>
       <h2>Administration</h2>
-      <ul id="admin-tools" class="tools"></ul>
+      <ul id="admin-tools" class="list tools"></ul>
     </div>
 
   </section>
@@ -39,168 +52,74 @@ import SignInGate from '../../components/SignInGate.astro';
 <script is:inline src="https://accounts.google.com/gsi/client"></script>
 
 <style>
-  .section.wrapper {
-    padding-top: 32px;
-    padding-bottom: 32px;
-  }
 
-  [hidden] {
-    display: none !important;
-  }
 
-  .hint {
-    color: var(--tvc-ink-soft);
-    margin: -8px 0 24px;
-  }
 
   h2 {
-    margin: 32px 0 12px;
+    margin: 26px 0 8px 14px;
     font-family: var(--font-body);
-    font-size: 0.8rem;
+    font-size: var(--text-sm);
     font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
+    letter-spacing: 0.02em;
     color: var(--tvc-ink-soft);
   }
 
-  .card {
-    background: var(--tvc-white);
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-soft);
-  }
-
-  .note {
-    font-size: 0.9rem;
-    color: var(--tvc-ink-soft);
-    margin: 0 0 10px;
-  }
-
-  .error {
-    color: var(--tvc-error-text);
-    font-size: 0.9rem;
-    margin: 10px 0 0;
-  }
-
-  .tools {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 16px;
-  }
-
-  /* The tiles are built by the script, so they need :global(). Each is an
-     icon badge, the name, a one-line purpose, and the person's role with an
-     arrow along the bottom. */
-  .tools :global(a.tool) {
+  /* One line that says how things stand, then only what needs a person. */
+  .summary {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    height: 100%;
-    box-sizing: border-box;
-    padding: 20px 22px 18px;
-    background: var(--tvc-white);
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-soft);
-    color: var(--tvc-ink);
-    text-decoration: none;
-    transition: transform 0.15s ease, border-color 0.15s ease;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 4px;
+    font-weight: 500;
   }
 
-  .tools :global(a.tool:hover),
-  .tools :global(a.tool:focus-visible) {
-    border-color: var(--tvc-orange);
-    transform: translateY(-2px);
+  .summary .muted,
+  .muted {
+    color: var(--tvc-ink-soft);
+    font-weight: 400;
   }
 
-  .tools :global(a.tool:focus-visible) {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 2px;
+  .tools :global(.dot),
+  .summary :global(.dot),
+  #needs-list :global(.dot) {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
   }
 
+  :global(.dot--warn) {
+    background: var(--tvc-orange);
+  }
+
+  :global(.dot--crit) {
+    background: var(--tvc-error-text);
+  }
+
+  #needs-list :global(.count) {
+    flex: none;
+    font-size: var(--text-md);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* The tools are one grouped list (shared .list and .row). The rows are built by the script, so what is
+     specific to Home needs :global(): the icon badge on the left. */
   .tools :global(.tool-icon) {
     display: inline-flex;
+    flex: none;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 44px;
-    margin-bottom: 14px;
-    border-radius: var(--radius-field);
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
     background: var(--tvc-green-tint);
     color: var(--tvc-green-dark);
   }
 
-  .tools :global(.tool-name) {
-    font-family: var(--font-display);
-    font-size: 1.125rem;
-    font-weight: 600;
-    line-height: 1.3;
-  }
-
-  .tools :global(.tool-desc) {
-    flex: 1;
-    margin-top: 4px;
-    font-size: 0.9rem;
-    line-height: 1.45;
-    color: var(--tvc-ink-soft);
-  }
-
-  .tools :global(.tool-foot) {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    margin-top: 16px;
-    min-height: 24px;
-  }
-
-  .tools :global(.tool-role) {
-    padding: 2px 10px;
-    border-radius: 999px;
-    background: var(--tvc-green-tint);
-    color: var(--tvc-green-dark);
-    font-size: 0.8rem;
-    font-weight: 600;
-  }
-
-  .tools :global(.tool-arrow) {
-    margin-left: auto;
-    color: var(--tvc-green-dark);
-    opacity: 0.5;
-    transition: transform 0.15s ease, opacity 0.15s ease;
-  }
-
-  .tools :global(a.tool:hover .tool-arrow),
-  .tools :global(a.tool:focus-visible .tool-arrow) {
-    opacity: 1;
-    transform: translateX(3px);
-  }
-
-  /* Admin tiles: same layout, quieter badge and a green-dark outline so they read as a separate group. */
-  .tools :global(a.tool--admin) {
-    border-color: var(--tvc-green-dark);
-  }
-
-  .tools :global(a.tool--admin .tool-icon) {
+  .tools :global(.tool-icon--admin) {
     background: var(--tvc-green-dark);
     color: var(--tvc-white);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .tools :global(a.tool),
-    .tools :global(.tool-arrow) {
-      transition: none;
-    }
-
-    .tools :global(a.tool:hover),
-    .tools :global(a.tool:focus-visible),
-    .tools :global(a.tool:hover .tool-arrow),
-    .tools :global(a.tool:focus-visible .tool-arrow) {
-      transform: none;
-    }
   }
 
 </style>
@@ -228,6 +147,7 @@ import SignInGate from '../../components/SignInGate.astro';
   const forbiddenEmail = $('forbidden-email');
   const statusEl = $('status');
   const toolsSection = $('tools-section');
+  const attention = $('attention');
   const toolsList = $('tools');
   const noTools = $('no-tools');
   const adminSection = $('admin-section');
@@ -273,17 +193,19 @@ import SignInGate from '../../components/SignInGate.astro';
   function card(tool: Tool, kind: 'tool' | 'admin'): HTMLElement {
     const key = tool.module ?? tool.label.toLowerCase();
     const link = document.createElement('a');
-    link.className = kind === 'admin' ? 'tool tool--admin' : 'tool';
+    link.className = 'row';
     link.href = tool.path;
 
-    const badge = span('tool-icon');
-    badge.append(icon(STAFF_ICONS[key] ?? STAFF_ICONS.home, 22, 'tool-icon-svg'));
+    const badge = span(kind === 'admin' ? 'tool-icon tool-icon--admin' : 'tool-icon');
+    badge.append(icon(STAFF_ICONS[key] ?? STAFF_ICONS.home, 20, 'tool-icon-svg'));
 
-    const foot = span('tool-foot');
-    if (tool.roleLabel) foot.append(span('tool-role', tool.roleLabel));
-    foot.append(icon('<path d="M5 12h14M13 6l6 6-6 6"/>', 18, 'tool-arrow'));
+    const text = span('grow');
+    text.append(span('title', tool.label), span('detail', tool.description ?? DESCRIPTIONS[key] ?? ''));
 
-    link.append(badge, span('tool-name', tool.label), span('tool-desc', tool.description ?? DESCRIPTIONS[key] ?? ''), foot);
+    link.append(badge, text);
+    if (tool.roleLabel) link.append(span('pill pill--ok', tool.roleLabel));
+    link.append(icon('<path d="m9 6 6 6-6 6"/>', 14, 'chev'));
+
     const item = document.createElement('li');
     item.append(link);
     return item;
@@ -293,6 +215,7 @@ import SignInGate from '../../components/SignInGate.astro';
     gate.hidden = false;
     forbidden.hidden = true;
     toolsSection.hidden = true;
+    attention.hidden = true;
     adminSection.hidden = true;
     statusEl.hidden = true;
     welcome.textContent = 'Sign in to see the tools you can use.';
@@ -304,10 +227,88 @@ import SignInGate from '../../components/SignInGate.astro';
   function showForbidden() {
     gate.hidden = true;
     toolsSection.hidden = true;
+    attention.hidden = true;
     adminSection.hidden = true;
     statusEl.hidden = true;
     forbidden.hidden = false;
     forbiddenEmail.textContent = decodeTokenEmail(getToken() ?? '');
+  }
+
+  // ---- Today: what is waiting on this person --------------------------------------------------------------
+  interface TodayItem {
+    id: string;
+    tone: 'crit' | 'warn';
+    title: string;
+    detail: string;
+    count: number;
+    href: string;
+  }
+
+  function dot(tone: string): HTMLElement {
+    const el = span(`dot dot--${tone}`);
+    el.setAttribute('aria-hidden', 'true');
+    return el;
+  }
+
+  function renderToday(data: { items: TodayItem[]; quiet: string[]; failed: string[] }) {
+    const { items, quiet, failed } = data;
+    const nothingChecked = items.length === 0 && quiet.length === 0 && failed.length === 0;
+    attention.hidden = nothingChecked; // someone whose tools have no checks (the photo pool alone) just sees their tools
+    if (nothingChecked) return;
+
+    const summary = $('today-summary');
+    if (items.length === 0 && failed.length === 0) {
+      const ok = span('pill pill--ok', 'All clear');
+      summary.replaceChildren(ok, span('', 'Nothing needs you right now.'));
+    } else if (items.length === 0) {
+      summary.replaceChildren(span('muted', `Couldn't check ${failed.join(', ')} just now. Try refreshing.`));
+    } else {
+      summary.replaceChildren(dot(items[0].tone), span('', items.length === 1 ? '1 thing needs you' : `${items.length} things need you`));
+      if (failed.length) summary.append(span('muted', `Couldn't check ${failed.join(', ')}.`));
+    }
+
+    $('today-needs').hidden = items.length === 0;
+    $('needs-list').replaceChildren(
+      ...items.map((it) => {
+        const link = document.createElement('a');
+        link.className = 'row';
+        link.href = it.href;
+        const text = span('grow');
+        text.append(span('title', it.title), span('detail', it.detail));
+        link.append(dot(it.tone), text, span('count', String(it.count)), icon('<path d="m9 6 6 6-6 6"/>', 14, 'chev'));
+        const li = document.createElement('li');
+        li.append(link);
+        return li;
+      }),
+    );
+
+    $('today-quiet').hidden = quiet.length === 0;
+    $('quiet-list').replaceChildren(
+      ...quiet.map((text) => {
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.append(span('grow detail', text));
+        const li = document.createElement('li');
+        li.append(row);
+        return li;
+      }),
+    );
+  }
+
+  // Runs beside the tool list and never blocks it: if the check fails the page says so rather than "all clear".
+  async function loadToday() {
+    try {
+      const { status, data } = await staffFetch('/api/staff-today');
+      if (status !== 200) throw new Error('today failed');
+      renderToday(data);
+      attention.hidden = attention.hidden; // renderToday decides
+    } catch (err) {
+      if (err instanceof StaffAuthError) return; // the tool list already handled the session
+      attention.hidden = false;
+      $('today-summary').replaceChildren(span('muted', "Couldn't check what needs you just now. Try refreshing."));
+      $('today-needs').hidden = true;
+      $('today-quiet').hidden = true;
+    }
   }
 
   async function load() {
@@ -318,7 +319,7 @@ import SignInGate from '../../components/SignInGate.astro';
       const { status, data } = await staffFetch('/api/staff-me');
       if (status !== 200) throw new Error('load failed');
       statusEl.hidden = true;
-      welcome.textContent = data.name ? `Welcome, ${data.name}.` : 'Welcome.';
+      welcome.textContent = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
       toolsList.replaceChildren(...(data.tools as Tool[]).map((t) => card(t, 'tool')));
       const hasTools = data.tools.length > 0;
       const hasAdmin = data.adminTools.length > 0;
@@ -326,6 +327,7 @@ import SignInGate from '../../components/SignInGate.astro';
       noTools.hidden = hasTools || hasAdmin;
       adminList.replaceChildren(...(data.adminTools as Tool[]).map((t) => card(t, 'admin')));
       adminSection.hidden = data.adminTools.length === 0;
+      void loadToday();
     } catch (err) {
       if (err instanceof StaffAuthError) {
         if (err.kind === 'unauthorized') showGate('Your session expired — sign in again.');

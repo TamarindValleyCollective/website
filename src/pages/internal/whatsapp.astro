@@ -19,23 +19,28 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 }
 ---
 
-<StaffLayout title="WhatsApp" description="Internal WhatsApp reply dashboard." current="whatsapp" collapseByDefault>
+<StaffLayout title="WhatsApp inbox" description="Internal WhatsApp reply dashboard." current="whatsapp" collapseByDefault>
   <section class="section wrapper">
-    <div class="page-head">
-      <h1>WhatsApp</h1>
+    <div class="page-head" data-tour="header">
+      <h1>WhatsApp inbox</h1>
       <p class="page-head-sub">+91 80 4110 9754 · replies only send within 24h of the customer's last message</p>
     </div>
 
     <SignInGate forbiddenWhat="the WhatsApp inbox" />
 
     <div id="app" class="app" hidden>
-      <div class="conversations card">
+      <div class="conversations card" data-tour="conversations">
         <div class="search-row">
-          <input type="search" id="conversation-search" placeholder="Search name or message…" aria-label="Search conversations" />
+          <label class="field">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+            <input type="search" id="conversation-search" placeholder="Search name or message" aria-label="Search conversations" autocomplete="off" />
+          </label>
         </div>
-        <div class="list-filters" role="group" aria-label="Filter conversations">
-          <button type="button" class="chip tap-target is-active" data-filter="all" aria-pressed="true">All</button>
-          <button type="button" class="chip tap-target" data-filter="needs-reply" aria-pressed="false">Needs reply<span id="needs-reply-count" class="chip-count"></span></button>
+        <div class="list-filters">
+          <div class="segmented" role="group" aria-label="Filter conversations">
+            <button type="button" class="tap-target is-active" data-filter="all" aria-pressed="true">All</button>
+            <button type="button" class="tap-target" data-filter="needs-reply" aria-pressed="false">Needs reply<span id="needs-reply-count" class="chip-count"></span></button>
+          </div>
         </div>
         <ul id="conversations-list"></ul>
         <p id="conversations-status" class="pane-status" hidden></p>
@@ -48,7 +53,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
         </div>
         <button type="button" id="load-more-conversations" class="button button--outline load-more-btn" hidden>Load more</button>
       </div>
-      <div class="thread card">
+      <div class="thread card" data-tour="thread">
         <p id="thread-empty" class="pane-status">Select a conversation.</p>
         <div id="thread-header" class="thread-header" hidden>
           <button type="button" id="back-to-list" class="button button--outline button--icon back-btn" aria-label="Back to conversations">
@@ -154,18 +159,11 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
      styles, so without this the element would render regardless of the
      `hidden` attribute (only occurs when the class rule sets `display`;
      harmless for the plain gate/forbidden panels above). */
-  [hidden] {
-    display: none !important;
-  }
 
   /* This is a tool, not a landing page — the site's default 96px section
      padding is calibrated for marketing pages and just pushes the actual
      workspace down. Scoped to this page only (Astro scopes .section.wrapper
      here to this file), doesn't touch the shared class elsewhere. */
-  .section.wrapper {
-    padding-top: 32px;
-    padding-bottom: 32px;
-  }
 
   .page-head {
     display: flex;
@@ -177,26 +175,15 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   .page-head-sub {
     margin: 0;
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
+  /* On top of the shared .card (StaffLayout): the panes run edge to edge (header rule, message
+     area, composer), so no padding and clipped corners. The gate panels set their own padding below. */
   .card {
-    background: var(--tvc-white);
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-soft);
-    /* The panes run edge to edge (header rule, message area, composer); the shared
-       .card's 28px padding would float them inside the card. The gate panels set
-       their own padding below. */
     padding: 0;
     overflow: hidden;
-  }
-
-  .error {
-    color: var(--tvc-error-text);
-    font-size: 0.85rem;
-    margin: 10px 0 0;
   }
 
   .app {
@@ -219,22 +206,12 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     border-bottom: 1px solid var(--tvc-line);
   }
 
-  .search-row input {
-    width: 100%;
-    min-height: 36px;
-    padding: 0 12px;
-    border: 1px solid var(--tvc-line-strong);
-    border-radius: var(--radius-field);
-    font: inherit;
-    font-size: 0.9rem;
-    background: var(--tvc-white);
-    color: var(--tvc-ink);
+  .search-row .field {
+    max-width: none;
   }
 
   .list-filters {
     flex: 0 0 auto;
-    display: flex;
-    gap: 8px;
     padding: 10px 16px;
     border-bottom: 1px solid var(--tvc-line);
   }
@@ -256,7 +233,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     margin: 0;
     padding: 32px 16px;
     text-align: center;
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
@@ -355,13 +332,13 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   :global(.avatar-sm) {
     width: 36px;
     height: 36px;
-    font-size: 0.76rem;
+    font-size: var(--text-xs);
   }
 
   :global(.avatar-lg) {
     width: 40px;
     height: 40px;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
   }
 
   :global(.conversation-item .text) {
@@ -385,7 +362,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   :global(.conversation-item .name) {
     font-weight: 600;
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -394,14 +371,14 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   :global(.conversation-item .meta) {
     flex: 0 0 auto;
-    font-size: 0.72rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
   :global(.conversation-item .preview) {
     display: block;
     margin-top: 2px;
-    font-size: 0.78rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -449,7 +426,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   }
 
   .thread-header strong {
-    font-size: 0.95rem;
+    font-size: var(--text-base);
   }
 
   .thread-header-text {
@@ -459,7 +436,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   .thread-source {
     display: block;
-    font-size: 0.8125rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -490,7 +467,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   .guest-title {
     margin: 0;
     font-family: var(--font-body);
-    font-size: 0.95rem;
+    font-size: var(--text-base);
     font-weight: 600;
     color: var(--tvc-ink);
   }
@@ -511,13 +488,13 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   }
 
   .guest-facts dt {
-    font-size: 0.78rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
   .guest-facts dd {
     margin: 1px 0 0;
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink);
   }
 
@@ -530,14 +507,14 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   .guest-section h3 {
     margin: 0 0 8px;
     font-family: var(--font-body);
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     font-weight: 600;
     color: var(--tvc-ink);
   }
 
   :global(.guest-note) {
     margin: 0;
-    font-size: 0.82rem;
+    font-size: var(--text-xs);
     line-height: 1.4;
     color: var(--tvc-ink-soft);
   }
@@ -559,21 +536,21 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     flex-wrap: wrap;
     gap: 6px;
     margin: 0;
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
     font-weight: 600;
     color: var(--tvc-ink);
   }
 
   :global(.guest-item-line) {
     margin: 3px 0 0;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     line-height: 1.4;
     color: var(--tvc-ink-soft);
   }
 
   :global(.guest-person) {
     margin: 12px 0 6px;
-    font-size: 0.82rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     color: var(--tvc-ink);
   }
@@ -587,7 +564,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     border-radius: 999px;
     background: var(--tvc-green-tint);
     color: var(--tvc-green-dark);
-    font-size: 0.7rem;
+    font-size: var(--text-xs);
     font-weight: 600;
   }
 
@@ -628,14 +605,8 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     }
   }
 
-  /* Page-local modifiers on the shared admin .button, same convention as the other
-     staff pages (written .button.x because the shell's `main .button` would otherwise win):
-     --icon for a square icon-only control, --danger-outline for a control whose
-     current state is a restriction. */
-  .button.button--icon {
-    width: 36px;
-    padding: 0;
-  }
+  /* A page-local look for --danger-outline: here it marks a control whose current state is a restriction
+     (written .button.x because the shell's `main .button` would otherwise win). */
 
   .button.button--danger-outline,
   .button.button--danger-outline:hover {
@@ -644,11 +615,6 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     color: var(--tvc-error-text);
   }
 
-  @media (pointer: coarse) {
-    .button.button--icon {
-      width: 44px;
-    }
-  }
 
   .quick-replies {
     display: flex;
@@ -670,7 +636,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     border-radius: 999px;
     font: inherit;
     font-weight: 600;
-    font-size: 0.82rem;
+    font-size: var(--text-xs);
     cursor: pointer;
     transition:
       background-color 150ms ease-out,
@@ -691,7 +657,6 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     transform: rotate(180deg);
   }
 
-  .chip.is-active,
   .chip.picker-toggle.is-open {
     background: var(--tvc-ink);
     border-color: var(--tvc-ink);
@@ -729,7 +694,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
      the full "Blocked" word in every row. */
   :global(.conversation-item .blocked-tag) {
     flex: 0 0 auto;
-    font-size: 0.68rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     color: var(--tvc-error-text);
     background: var(--tvc-error-bg);
@@ -774,13 +739,14 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   :global(.avatar-xs) {
     width: 22px;
     height: 22px;
+    /* stylelint-disable-next-line declaration-property-value-allowed-list -- an initial inside a 22px circle is a glyph, not text to read */
     font-size: 0.6rem;
   }
 
   :global(.bubble) {
     padding: 8px 12px;
     border-radius: var(--radius);
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
     line-height: 1.4;
     white-space: pre-wrap;
     word-break: break-word;
@@ -827,26 +793,26 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   }
 
   :global(.msg-media .msg-media-note) {
-    font-size: 0.78rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
   :global(.msg-media .msg-media-error) {
-    font-size: 0.78rem;
+    font-size: var(--text-xs);
     color: var(--tvc-error-text);
   }
 
   :global(.bubble .bubble-error) {
     display: block;
     margin-top: 4px;
-    font-size: 0.76rem;
+    font-size: var(--text-xs);
     color: var(--tvc-error-text);
   }
 
   :global(.bubble .bubble-meta) {
     display: block;
     margin-top: 4px;
-    font-size: 0.7rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
@@ -882,7 +848,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
     font: inherit;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     background: var(--tvc-white);
     color: var(--tvc-ink);
   }
@@ -902,7 +868,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     margin: 0;
     padding: 8px 14px 4px;
     font-family: var(--font-body);
-    font-size: 0.78rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     color: var(--tvc-ink-soft);
   }
@@ -932,7 +898,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   .picker-item-label {
     display: block;
-    font-size: 0.88rem;
+    font-size: var(--text-sm);
     font-weight: 600;
     color: var(--tvc-ink);
   }
@@ -944,7 +910,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     -webkit-box-orient: vertical;
     overflow: hidden;
     margin-top: 2px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     line-height: 1.4;
     color: var(--tvc-ink-soft);
   }
@@ -952,7 +918,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   .picker-empty {
     margin: 0;
     padding: 16px 14px;
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
@@ -967,7 +933,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     align-items: center;
     gap: 8px;
     padding: 12px 16px 0;
-    font-size: 0.82rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
@@ -993,7 +959,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   }
 
   .suggestion-head {
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
   }
 
   .suggestion-note {
@@ -1003,7 +969,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   .suggestion-flag {
     margin-top: 6px;
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
     font-weight: 600;
     color: var(--tvc-orange-text);
   }
@@ -1012,7 +978,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     margin-top: 8px;
     max-height: 9rem;
     overflow-y: auto;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     line-height: 1.45;
     white-space: pre-wrap;
     word-break: break-word;
@@ -1020,7 +986,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   .suggestion-sources {
     margin-top: 8px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     color: var(--tvc-ink-soft);
   }
 
@@ -1037,7 +1003,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
     font: inherit;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     background: var(--tvc-white);
     color: var(--tvc-ink);
   }
@@ -1057,7 +1023,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
     font: inherit;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     background: var(--tvc-white);
     color: var(--tvc-ink);
     resize: vertical;
@@ -1065,7 +1031,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   .reply-status {
     margin: 0 16px 10px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     color: var(--tvc-error-text);
   }
 
@@ -1139,7 +1105,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   // sign-in as /internal, /internal/access and /internal/security (see
   // scripts/lib/staff-client.mjs), so signing in once opens them all. Each tool
   // still checks its own role on the server for every request.
-  import { TOKEN_KEY as STORAGE_KEY } from '../../../scripts/lib/staff-client.mjs';
+  import { TOKEN_KEY as STORAGE_KEY, showToast } from '../../../scripts/lib/staff-client.mjs';
   // This inbox is signed into from one shared Google account used by several
   // admins, so the ID token's own name claim can't tell them apart — each
   // person types their own name once, remembered on that browser (localStorage,
@@ -1208,7 +1174,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   const guestBookings = document.getElementById('guest-bookings') as HTMLElement;
   const guestStays = document.getElementById('guest-stays') as HTMLElement;
   const needsReplyCount = document.getElementById('needs-reply-count') as HTMLElement;
-  const filterChips = [...document.querySelectorAll<HTMLButtonElement>('.list-filters .chip')];
+  const filterChips = [...document.querySelectorAll<HTMLButtonElement>('.list-filters button')];
   const messagesEl = document.getElementById('messages') as HTMLElement;
   const composer = document.getElementById('composer') as HTMLElement;
   const responderNameInput = document.getElementById('responder-name') as HTMLInputElement;
@@ -1994,7 +1960,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   function renderBookings(data: GuestData['eventBookings']) {
     guestBookings.replaceChildren();
     if (!data.visible) {
-      guestBookings.append(guestEl('p', 'guest-note', 'Booking details are limited to people with access to Event Payments.'));
+      guestBookings.append(guestEl('p', 'guest-note', 'Booking details are limited to people with access to Event payments.'));
       return;
     }
     if (data.error) {
@@ -2146,66 +2112,83 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   }
 
   // Admins opt a number out of (or back into) the booking confirmations, reminders
-  // and refund notices we send by WhatsApp — the same list a STOP reply writes
-  // to. Nothing is sent to the guest. Resuming asks first: it is only right when
-  // the guest themselves asked for the messages back.
-  optOutBtn.addEventListener('click', async () => {
-    if (!selectedConversationId || !selectedConversation) return;
-    const nextOptedOut = !selectedConversation.optedOut;
-    if (!nextOptedOut && !confirm(`Turn WhatsApp booking messages back on for ${selectedConversation.label}? Only do this if they asked for them.`)) return;
-    if (nextOptedOut && !confirm(`Stop WhatsApp booking messages (confirmations, reminders, refund notices) to ${selectedConversation.label}? They will still get emails.`)) return;
-
+  // and refund notices we send by WhatsApp: the same list a STOP reply writes
+  // to. Nothing is sent to the guest. Stopping happens at once with an Undo, since it
+  // can be reversed; resuming asks first, because it is only right when the guest
+  // themselves asked for the messages back.
+  async function setOptedOut(conversationId: string, optedOut: boolean): Promise<boolean> {
     optOutBtn.disabled = true;
     try {
       const res = await authedFetch('/api/whatsapp-admin/opt-out', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ conversationId: selectedConversationId, optedOut: nextOptedOut }),
+        body: JSON.stringify({ conversationId, optedOut }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        alert(data.error || 'Failed to update — try again.');
-        return;
+        showToast(data.error || 'Could not update that. Try again.');
+        return false;
       }
-      selectedConversation.optedOut = nextOptedOut;
-      updateOptOutBtn(nextOptedOut);
+      if (selectedConversation && selectedConversationId === conversationId) {
+        selectedConversation.optedOut = optedOut;
+        updateOptOutBtn(optedOut);
+      }
       loadConversations();
+      return true;
     } catch {
-      // handled by authedFetch
+      return false; // handled by authedFetch
     } finally {
       optOutBtn.disabled = false;
     }
-  });
+  }
 
-  blockBtn.addEventListener('click', async () => {
+  optOutBtn.addEventListener('click', async () => {
     if (!selectedConversationId || !selectedConversation) return;
-    const nextBlocked = !selectedConversation.isBlocked;
-    // Blocking silences a real customer with no way to reach us short of a
-    // new number — worth a confirm; unblocking is reversible, so it isn't.
-    if (nextBlocked && !confirm(`Block ${selectedConversation.label}? They won't be able to message this number until unblocked.`)) {
+    const id = selectedConversationId;
+    const label = selectedConversation.label;
+    const nextOptedOut = !selectedConversation.optedOut;
+    if (!nextOptedOut) {
+      if (!confirm(`Turn WhatsApp booking messages back on for ${label}? Only do this if they asked for them.`)) return;
+      await setOptedOut(id, false);
       return;
     }
+    if (await setOptedOut(id, true)) showToast(`Booking messages to ${label} stopped. They still get emails.`, () => void setOptedOut(id, false));
+  });
 
+  // Blocking is reversible, so it happens at once with an Undo, like unblocking.
+  async function setBlocked(conversationId: string, blocked: boolean): Promise<boolean> {
     blockBtn.disabled = true;
     try {
       const res = await authedFetch('/api/whatsapp-admin/block', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ conversationId: selectedConversationId, blocked: nextBlocked }),
+        body: JSON.stringify({ conversationId, blocked }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        alert(data.error || 'Failed to update block status — try again.');
-        return;
+        showToast(data.error || 'Could not update that. Try again.');
+        return false;
       }
-      selectedConversation.isBlocked = nextBlocked;
-      updateBlockBtn(nextBlocked);
+      if (selectedConversation && selectedConversationId === conversationId) {
+        selectedConversation.isBlocked = blocked;
+        updateBlockBtn(blocked);
+      }
       loadConversations();
+      return true;
     } catch {
-      // handled by authedFetch
+      return false; // handled by authedFetch
     } finally {
       blockBtn.disabled = false;
     }
+  }
+
+  blockBtn.addEventListener('click', async () => {
+    if (!selectedConversationId || !selectedConversation) return;
+    const id = selectedConversationId;
+    const label = selectedConversation.label;
+    const nextBlocked = !selectedConversation.isBlocked;
+    if (!(await setBlocked(id, nextBlocked))) return;
+    showToast(nextBlocked ? `${label} blocked.` : `${label} unblocked.`, () => void setBlocked(id, !nextBlocked));
   });
 
   loadMoreBtn.addEventListener('click', () => {

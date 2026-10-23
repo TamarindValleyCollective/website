@@ -323,7 +323,7 @@ export async function templateSendExists(waMessageId) {
 }
 
 // Latest delivery state of every template message sent about the given
-// bookings, for the Event Payments dashboard.
+// bookings, for the Event payments dashboard.
 /**
  * @param {string[]} bookingIds
  * @returns {Promise<Array<{ event_payment_id: string, template: string, status: string, error_message: string | null, status_at: string | null, created_at: string }>>}

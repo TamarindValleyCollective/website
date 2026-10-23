@@ -74,9 +74,27 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
   2xl / lg / xl; key figures (acres, sq ft) Fraunces 600 at 2xl; subheads (`.role-head`, table group
   rows, notice `h4`) Inter 600; small uppercase Inter labels only for non-heading labels, always
   tracking 0.08em; pills and links weight 600. Sentence case everywhere else (never uppercase an email).
+- Admin portal (`StaffLayout.astro`, `src/pages/internal/*`): the shell owns the shared primitives (`.card`,
+  `.hint`, `.note`, `.error`, `.section.wrapper`, `[hidden]`, `.visually-hidden`, `.link-button`, and the button
+  modifiers `--outline`, `--primary`, `--danger`, `--danger-outline`, `--small`) and the building blocks of the
+  Apple-style layout: `.field` (search), `.segmented` (one choice from a few), `.list` with `.row` (a grouped list;
+  `a.row` and `button.row` are tappable), `.pill` (`--ok`, `--warn`, `--crit`), `.sheet` (a modal `<dialog>`),
+  `.toast` via `showToast(message, undo?)` in `staff-client.mjs`, and `.crit-row` (a destructive action as plain red
+  text in its own list). Build a new page from these rather than inventing controls. A page uses them and never
+  redefines them; it may add to one (WhatsApp's `.card` sets padding and overflow) and
+  `scripts/lib/admin-primitives.test.mjs` lists the few that do. Font sizes are `--text-*` tokens with
+  nothing below 0.8rem (only display sizes of 1.3rem and up may be literal; Stylelint errors otherwise). A
+  destructive control uses `--danger` or `--danger-outline`, never the primary fill, and a reversible action
+  (deactivate someone) happens at once with an Undo toast instead of a `confirm()` box; only irreversible money gets
+  an alert. The admin's look follows the Apple-style concept: calm cool neutrals and the system type face (SF Pro on
+  Apple devices, Inter elsewhere) set as token overrides on admin pages only (the `html:root` block in
+  `StaffLayout.astro`), not the public site's warm tokens or Fraunces. The admin also has a
+  dark appearance (same file, tokens only) that follows the device or the account menu's Appearance choice; keep it
+  working by using `--tvc-*` tokens for every colour in admin files (a raw colour will not turn dark; mix tokens with
+  `color-mix` when you need an in-between shade) and check a new page in Dark as well as Light.
 
 `npm run lint:css` checks this (Stylelint); the `Design language` GitHub Action runs it on every
-PR. Raw hex colors are errors (CI fails); radius literals are warnings for now. A color that genuinely isn't a TVC color (a third-party brand, a data
+PR. Raw hex colors are errors (CI fails); radius literals are warnings for now. Admin font sizes outside the scale are errors. A color that genuinely isn't a TVC color (a third-party brand, a data
 color) gets a `/* stylelint-disable-next-line color-no-hex -- reason */` comment above it. Update this section in the same change if the rules change.
 
 ## Change log

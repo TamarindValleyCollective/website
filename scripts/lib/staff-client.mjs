@@ -9,8 +9,17 @@
 // Nothing here is a security boundary: the server re-checks the Google token
 // and the step-up token on every request. This only stores them for the tab
 // and attaches them.
+import { installStaffDemo } from '../../src/lib/staff-demo';
+
 export const TOKEN_KEY = 'tvc-staff-idtoken';
 export const STEPUP_KEY = 'tvc-staff-stepup';
+
+// `astro dev` only: /internal/?demo fakes the sign-in and /api/staff-me (see src/lib/staff-demo.ts).
+// import.meta.env.DEV is false in a production build, so the demo module is dropped from what ships.
+// It runs here, at import time, so it is in place before any page script reads the token.
+if (import.meta.env?.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('demo')) {
+  installStaffDemo(TOKEN_KEY, new URLSearchParams(location.search).get('demo') || 'admin');
+}
 
 // A response code that means "signed in, but something more is needed" — as
 // opposed to a plain 403, which means "this account isn't allowed here".
@@ -236,6 +245,52 @@ export async function passkeyStepUp(api) {
       },
     },
   });
+}
+
+// A short message at the foot of the page, with an Undo when the action can be reversed. One toast at a time; the
+// shell styles it (.toast, .toast-undo). Reversible actions use this instead of asking "Are you sure?".
+let toastTimer;
+/** @param {string} message @param {() => void} [undo] */
+export function showToast(message, undo) {
+  let el = document.getElementById('staff-toast');
+  if (!el) {
+    el = document.createElement('p');
+    el.id = 'staff-toast';
+    el.className = 'toast';
+    el.setAttribute('role', 'status');
+    (document.getElementById('staff-main') ?? document.body).append(el);
+  }
+  const text = document.createElement('span');
+  text.textContent = message; // text only, whatever the message contains
+  el.replaceChildren(text);
+  if (undo) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'toast-undo';
+    button.textContent = 'Undo';
+    button.addEventListener('click', () => {
+      el.hidden = true;
+      undo();
+    });
+    el.append(button);
+  }
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (el.hidden = true), undo ? 8000 : 3500);
+}
+
+// A person's round avatar: their initial, replaced by their Google picture once it has loaded (so a picture
+// that is blocked, slow or gone leaves the initial rather than a broken image). Text only, whatever the name is.
+/** @param {HTMLElement} el @param {string} name @param {string | null | undefined} picture */
+export function fillAvatar(el, name, picture) {
+  el.textContent = name.trim().slice(0, 1).toUpperCase() || '?';
+  if (!picture) return;
+  const img = document.createElement('img');
+  img.alt = '';
+  img.referrerPolicy = 'no-referrer'; // Google's picture hosts can refuse a request that names our page
+  img.decoding = 'async';
+  img.addEventListener('load', () => el.replaceChildren(img), { once: true });
+  img.src = picture;
 }
 
 // A story photo for the reviewer: an uploaded one is fetched with the admin sign-in (and step-up, if

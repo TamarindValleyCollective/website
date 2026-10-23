@@ -21,6 +21,7 @@ import { maskEmail } from './lib/staff-masking';
 import { requireAccessAdmin, stepUpIsValid } from './lib/staff-admin-guard';
 import { MfaNotConfiguredError } from './lib/staff-mfa-crypto';
 import { mfaSummary, rest } from './lib/staff-mfa-store';
+import { loadStaffPictures } from './lib/staff-picture';
 import {
   BOOKING_TYPES,
   MODULES,
@@ -105,6 +106,8 @@ async function handleList(req: Request, admin: SuperAdmin): Promise<Response> {
   ]);
   const people = (await peopleRes.json()) as PersonRow[];
   const roles = (await rolesRes.json()) as RoleRow[];
+  // Their Google pictures, kept when they sign in (migration 0059). Best effort: empty until it is applied.
+  const pictures = await loadStaffPictures();
 
   // Second-factor readiness is shown for super admins only (they are the ones
   // it applies to); a handful of small queries, not one per visitor.
@@ -135,6 +138,7 @@ async function handleList(req: Request, admin: SuperAdmin): Promise<Response> {
       // Null while the name is missing, because the label is then the masked
       // address already. Masked here; the full address is never sent.
       maskedEmail: p.name && p.email ? maskEmail(p.email) : null,
+      picture: pictures.get(p.id) ?? null,
       active: p.active,
       isSuperAdmin: p.is_super_admin,
       isMe: p.id === admin.id,

@@ -23,14 +23,14 @@ import SignInGate from '../../components/SignInGate.astro';
     <p id="status" class="hint" hidden></p>
 
     <div id="panel" hidden>
-      <section class="card block">
+      <section class="card block" data-tour="factors">
         <h2>Your second factors</h2>
-        <ul id="methods" class="methods"></ul>
+        <ul id="methods" class="list"></ul>
         <p id="ready-note" class="note"></p>
         <p id="locked-note" class="error" hidden></p>
       </section>
 
-      <section class="card block">
+      <section class="card block" data-tour="totp">
         <h2>Authenticator app</h2>
         <p class="note" id="totp-intro"></p>
         <button type="button" id="totp-start" class="button">Set up authenticator app</button>
@@ -54,10 +54,10 @@ import SignInGate from '../../components/SignInGate.astro';
         </div>
       </section>
 
-      <section id="passkey-card" class="card block" hidden>
+      <section id="passkey-card" class="card block" data-tour="passkeys" hidden>
         <h2>Passkeys</h2>
-        <p class="note" id="passkey-intro">Use Face ID, Touch ID or a security key instead of typing a code. A passkey only works on tvc.farm and never leaves your device.</p>
-        <ul id="passkeys" class="methods"></ul>
+        <p class="note" id="passkey-intro">Use Face ID, Touch ID or a security key instead of typing a code. A passkey only works on admin.tvc.farm and never leaves your device.</p>
+        <ul id="passkeys" class="list"></ul>
         <form id="passkey-form" class="inline-form">
           <label>
             Name (optional)
@@ -72,14 +72,14 @@ import SignInGate from '../../components/SignInGate.astro';
         <h2>Your recovery codes</h2>
         <p class="note"><strong>Shown once.</strong> Each code works one time if you lose your authenticator. Store them somewhere safe and separate from your phone.</p>
         <ul id="codes" class="codes"></ul>
-        <div class="row">
+        <div class="field-row">
           <button type="button" id="codes-copy" class="button button--outline">Copy</button>
           <button type="button" id="codes-download" class="button button--outline">Download .txt</button>
           <button type="button" id="codes-done" class="button">I've saved them</button>
         </div>
       </section>
 
-      <section class="card block">
+      <section class="card block" data-tour="verify">
         <h2>Prove it's you</h2>
         <p id="stepup-state" class="note"></p>
         <form id="verify-form" class="inline-form">
@@ -97,12 +97,12 @@ import SignInGate from '../../components/SignInGate.astro';
       <section id="manage-card" class="card block" hidden>
         <h2>Manage</h2>
         <p class="note">Available while your step-up is active.</p>
-        <div class="row">
+        <div class="field-row">
           <button type="button" id="regen-codes" class="button button--outline">Generate new recovery codes</button>
         </div>
         <h3>Other super admins</h3>
         <p class="note">If someone has lost both their authenticator and their recovery codes, reset them here. They then set up again from scratch.</p>
-        <ul id="admins" class="admins"></ul>
+        <ul id="admins" class="list"></ul>
         <p id="manage-error" class="error" hidden></p>
       </section>
     </div>
@@ -112,26 +112,9 @@ import SignInGate from '../../components/SignInGate.astro';
 <script is:inline src="https://accounts.google.com/gsi/client"></script>
 
 <style>
-  .section.wrapper {
-    padding-top: 32px;
-    padding-bottom: 32px;
-  }
 
-  [hidden] {
-    display: none !important;
-  }
 
-  .hint {
-    color: var(--tvc-ink-soft);
-    margin: -8px 0 24px;
-  }
 
-  .card {
-    background: var(--tvc-white);
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-soft);
-  }
 
   .block {
     max-width: 640px;
@@ -140,63 +123,25 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .block h2 {
-    font-size: 1.125rem;
+    font-size: var(--text-lg);
     margin: 0 0 10px;
   }
 
   .block h3 {
-    font-size: 1rem;
+    font-size: var(--text-md);
     margin: 20px 0 6px;
   }
 
-  .note {
-    font-size: 0.9rem;
-    color: var(--tvc-ink-soft);
+
+
+  .block :global(.list) {
     margin: 0 0 12px;
   }
 
-  .error {
-    color: var(--tvc-error-text);
-    font-size: 0.9rem;
-    margin: 10px 0 0;
-  }
-
-  .methods,
-  .admins,
   .codes {
     list-style: none;
     margin: 0 0 12px;
     padding: 0;
-  }
-
-  .methods :global(li),
-  .admins :global(li) {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--tvc-line);
-    font-size: 0.9rem;
-  }
-
-  .methods :global(li:last-child),
-  .admins :global(li:last-child) {
-    border-bottom: none;
-  }
-
-  :global(.badge) {
-    font-size: 0.8rem;
-    font-weight: 600;
-    padding: 2px 10px;
-    border-radius: var(--radius-sm);
-    background: var(--tvc-orange-tint);
-    color: var(--tvc-orange-text);
-  }
-
-  :global(.badge--on) {
-    background: var(--tvc-green-tint);
-    color: var(--tvc-green-dark);
   }
 
   .qr {
@@ -209,7 +154,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .manual summary {
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
     margin-bottom: 8px;
   }
@@ -221,7 +166,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .secret {
-    font-size: 1.125rem;
+    font-size: var(--text-lg);
     font-weight: 600;
     word-break: break-all;
     background: var(--tvc-green-tint);
@@ -237,7 +182,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .codes :global(li) {
-    font-size: 1rem;
+    font-size: var(--text-md);
     font-weight: 600;
     background: var(--tvc-green-tint);
     border-radius: var(--radius-sm);
@@ -257,16 +202,6 @@ import SignInGate from '../../components/SignInGate.astro';
     margin-bottom: 0;
   }
 
-  .link-button {
-    font: inherit;
-    font-size: 0.9rem;
-    background: none;
-    border: none;
-    padding: 8px 4px;
-    color: var(--tvc-ink-soft);
-    text-decoration: underline;
-    cursor: pointer;
-  }
 
   .inline-form {
     display: flex;
@@ -279,14 +214,14 @@ import SignInGate from '../../components/SignInGate.astro';
     display: flex;
     flex-direction: column;
     gap: 4px;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
   .inline-form input,
   .inline-form select {
     font: inherit;
-    font-size: 1rem;
+    font-size: var(--text-md);
     padding: 8px 10px;
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius-field);
@@ -294,17 +229,11 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-ink);
   }
 
-  .row {
+  .field-row {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
     margin-bottom: 8px;
-  }
-
-  :global(.button--danger) {
-    background: var(--callout-red-bg);
-    border-color: var(--callout-red-text);
-    color: var(--callout-red-text);
   }
 </style>
 
@@ -480,14 +409,37 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   // ---- rendering
+  // One row of a grouped list: a name on the left, a status pill on the right.
   function li(label: string, badgeText: string, on: boolean): HTMLLIElement {
     const item = document.createElement('li');
+    const row = document.createElement('div');
+    row.className = 'row';
     const name = document.createElement('span');
+    name.className = 'grow';
     name.textContent = label;
     const badge = document.createElement('span');
-    badge.className = on ? 'badge badge--on' : 'badge';
+    badge.className = on ? 'pill pill--ok' : 'pill pill--warn';
     badge.textContent = badgeText;
-    item.append(name, badge);
+    row.append(name, badge);
+    item.append(row);
+    return item;
+  }
+
+  // A row with some text and one small danger-outline button (Remove, Reset).
+  function actionRow(text: string, buttonText: string, onClick: () => void): HTMLLIElement {
+    const item = document.createElement('li');
+    const row = document.createElement('div');
+    row.className = 'row';
+    const info = document.createElement('span');
+    info.className = 'grow';
+    info.textContent = text;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'button button--danger-outline button--small';
+    btn.textContent = buttonText;
+    btn.addEventListener('click', onClick);
+    row.append(info, btn);
+    item.append(row);
     return item;
   }
 
@@ -536,17 +488,9 @@ import SignInGate from '../../components/SignInGate.astro';
     passkeyCard.hidden = !passkeysSupported();
     passkeyList.replaceChildren(
       ...status.passkeys.map((k) => {
-        const item = document.createElement('li');
-        const info = document.createElement('span');
         const added = new Date(k.createdAt).toLocaleDateString();
-        info.textContent = k.lastUsedAt ? `${k.label} — added ${added}, last used ${new Date(k.lastUsedAt).toLocaleDateString()}` : `${k.label} — added ${added}`;
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'button button--danger';
-        btn.textContent = 'Remove';
-        btn.addEventListener('click', () => removePasskey(k));
-        item.append(info, btn);
-        return item;
+        const text = k.lastUsedAt ? `${k.label} — added ${added}, last used ${new Date(k.lastUsedAt).toLocaleDateString()}` : `${k.label} — added ${added}`;
+        return actionRow(text, 'Remove', () => removePasskey(k));
       }),
     );
   }
@@ -623,18 +567,7 @@ import SignInGate from '../../components/SignInGate.astro';
       return;
     }
     adminsList.replaceChildren(
-      ...admins.map((a) => {
-        const item = document.createElement('li');
-        const info = document.createElement('span');
-        info.textContent = `${a.label} — ${a.ready ? 'ready' : `${a.methodCount} of 2 methods`}`;
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'button button--danger';
-        btn.textContent = 'Reset';
-        btn.addEventListener('click', () => resetAdmin(a));
-        item.append(info, btn);
-        return item;
-      }),
+      ...admins.map((a) => actionRow(`${a.label} — ${a.ready ? 'ready' : `${a.methodCount} of 2 methods`}`, 'Reset', () => resetAdmin(a))),
     );
   }
 

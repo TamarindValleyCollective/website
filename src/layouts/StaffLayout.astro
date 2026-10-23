@@ -40,7 +40,7 @@ const adminItems = [
 ] as const;
 ---
 
-<html lang="en">
+<html lang="en" data-page={current}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -50,7 +50,7 @@ const adminItems = [
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <title>{title} · TVC Internal</title>
+    <title>{title} · Admin Portal</title>
     <!-- Sets the menu's expanded/collapsed state before first paint so the
          page doesn't jump. Runs before the body exists. -->
     <script is:inline define:vars={{ collapseByDefault }}>
@@ -60,6 +60,10 @@ const adminItems = [
           saved = localStorage.getItem('tvc-staff-nav-collapsed');
         } catch (e) {}
         var collapsed = saved === null ? collapseByDefault : saved === '1';
+        try {
+          var theme = localStorage.getItem('tvc-staff-theme');
+          if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {}
         document.documentElement.setAttribute('data-nav', collapsed ? 'collapsed' : 'expanded');
       })();
     </script>
@@ -67,19 +71,16 @@ const adminItems = [
   <body>
     <a class="skip-link" href="#staff-main">Skip to content</a>
     <div class="shell">
-      <header class="topbar">
-        <button type="button" id="menu-open" class="icon-button" aria-label="Open the menu" aria-controls="staff-sidebar" aria-expanded="false">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
-            <path d="M4 6h16M4 12h16M4 18h16"></path>
-          </svg>
-        </button>
-        <span class="topbar-title">TVC Internal</span>
-      </header>
 
-      <aside class="sidebar" id="staff-sidebar" aria-label="Internal tools">
+      <aside class="sidebar" id="staff-sidebar" aria-label="Admin portal">
         <div class="brand">
           <img src="/images/brand/tvc-logo-mark.svg" width="30" height="30" alt="" />
-          <span class="label brand-name">TVC Internal</span>
+          <span class="label brand-name">Admin Portal</span>
+          <button type="button" id="collapse" data-tour="collapse" class="collapse-button" aria-label="Collapse the menu" aria-pressed="false" title="Collapse the menu">
+            <svg class="collapse-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <path d="M15 6l-6 6 6 6"></path>
+            </svg>
+          </button>
           <button type="button" id="menu-close" class="icon-button menu-close" aria-label="Close the menu">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
               <path d="M6 6l12 12M18 6L6 18"></path>
@@ -87,12 +88,12 @@ const adminItems = [
           </button>
         </div>
 
-        <nav class="menu" aria-label="Tools">
+        <nav class="menu" aria-label="Tools" data-tour="menu">
           <ul>
             <li>
-              <a href="/internal/" title="Home" aria-current={current === 'home' ? 'page' : undefined}>
+              <a href="/internal/" title="Today" aria-current={current === 'home' ? 'page' : undefined}>
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" set:html={ICONS.home} />
-                <span class="label">Home</span>
+                <span class="label">Today</span>
               </a>
             </li>
           </ul>
@@ -124,30 +125,39 @@ const adminItems = [
           </div>
         </nav>
 
-        <div class="account">
-          <p class="account-name label" id="staff-name" hidden></p>
-          <p class="account-email label" id="staff-email" hidden></p>
-          <button type="button" id="sign-out" class="account-button" title="Sign out" hidden>
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-              <path d="M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4"></path>
-              <path d="M16 8l4 4-4 4M20 12H9"></path>
-            </svg>
-            <span class="label">Sign out</span>
-          </button>
-          <button type="button" id="collapse" class="account-button collapse-button" aria-label="Collapse the menu" aria-pressed="false" title="Collapse the menu">
-            <svg class="collapse-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-              <path d="M15 6l-6 6 6 6"></path>
-            </svg>
-            <span class="label">Collapse</span>
-          </button>
-        </div>
       </aside>
 
       <div class="scrim" id="scrim" hidden></div>
 
-      <main id="staff-main" data-width={width}>
-        <slot />
-      </main>
+      <dialog class="switcher" id="switcher" aria-label="Go to a tool">
+        <input id="switcher-input" type="text" placeholder="Go to a tool" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="true" aria-controls="switcher-list" aria-autocomplete="list" aria-label="Go to a tool" />
+        <ul id="switcher-list" role="listbox" aria-label="Tools"></ul>
+        <p class="switcher-empty" id="switcher-empty" hidden>Nothing matches.</p>
+      </dialog>
+
+      <div class="col">
+        <header class="topbar">
+          <button type="button" id="menu-open" class="icon-button" aria-label="Open the menu" aria-controls="staff-sidebar" aria-expanded="false">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
+              <path d="M4 6h16M4 12h16M4 18h16"></path>
+            </svg>
+          </button>
+          <span class="topbar-title">Admin Portal</span>
+          <div class="toolbar-slot"><slot name="toolbar" /></div>
+          <div class="who-wrap" id="who-wrap" data-tour="account" hidden>
+            <button type="button" class="who" id="who" aria-haspopup="true" aria-expanded="false" aria-controls="who-menu">
+              <span class="avatar" id="avatar" aria-hidden="true"></span>
+              <span class="who-text"><strong id="who-name"></strong><small id="who-role"></small></span>
+              <svg class="caret" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 10l5 5 5-5"></path></svg>
+            </button>
+            <div class="who-menu" id="who-menu" hidden></div>
+          </div>
+        </header>
+
+        <main id="staff-main" data-width={width}>
+          <slot />
+        </main>
+      </div>
     </div>
   </body>
 </html>
@@ -155,7 +165,8 @@ const adminItems = [
 <style>
   :global(body) {
     margin: 0;
-    background: var(--tvc-cream);
+    background: var(--tvc-stone);
+    color: var(--tvc-ink);
   }
 
   .skip-link {
@@ -180,9 +191,18 @@ const adminItems = [
     min-height: 100vh;
   }
 
-  #staff-main {
+  .col {
     min-width: 0; /* lets wide tables and the calendar scroll instead of stretching the page */
-    background: var(--tvc-cream);
+  }
+
+  #staff-main {
+    min-width: 0;
+  }
+
+  /* The pages wrap themselves in the public site's .section, which paints cream. Here the stone
+     backdrop (like the member portal's) should run behind them, with the cards standing out in white. */
+  #staff-main :global(.section) {
+    background: transparent;
   }
 
   /* The pages wrap their content in the public site's .wrapper, a 1120px
@@ -191,16 +211,25 @@ const adminItems = [
      forms and cards keep their own sensible inner widths. */
   /* One title style for every tool: the older pages used 1.6rem to 2.9rem. */
   #staff-main :global(h1) {
-    font-size: 1.75rem;
-    line-height: 1.2;
-    margin: 0 0 8px;
+    font-size: 2.125rem;
+    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: -0.022em;
+    margin: 6px 0 6px;
+    text-wrap: balance;
   }
 
-  /* Admin buttons. The shared .button is the public site's large orange pill; inside the
-     staff shell it becomes a compact, quiet control (36px, small radius). These rules are
-     deliberately low specificity (main .button) so a page's own modifier classes
-     (--danger, --primary, --icon...) still win, and global.css is untouched. */
-  main :global(.button) {
+  #staff-main :global(h2) {
+    letter-spacing: -0.015em;
+  }
+
+  /* Admin buttons. The shared .button is the public site's large orange pill; inside the admin
+     shell it becomes a compact, quiet control (36px, small radius). The modifiers (--outline,
+     --primary, --danger, --danger-outline, --small) are defined once here, after the base rule at
+     the same specificity, so pages never need their own copies. The tour card (staff-tour-ui.mjs)
+     sits on the body, outside main, so it is listed too. */
+  main :global(.button),
+  :global(.tour .button) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -211,26 +240,519 @@ const adminItems = [
     border-radius: var(--radius-sm);
     background: var(--tvc-green-dark);
     color: var(--tvc-white);
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     font-weight: 600;
     line-height: 1.2;
     box-shadow: none;
   }
 
-  main :global(.button--outline) {
+  main :global(.button--outline),
+  :global(.tour .button--outline) {
     border-color: var(--tvc-line-strong);
     background: var(--tvc-white);
     color: var(--tvc-ink);
   }
 
-  main :global(.button:disabled) {
+  main :global(.button:disabled),
+  :global(.tour .button:disabled) {
     opacity: 0.5;
     cursor: not-allowed;
   }
 
+  main :global(.button--primary) {
+    background: var(--tvc-green);
+    border-color: var(--tvc-green);
+    color: var(--tvc-white);
+  }
+
+  main :global(.button--danger) {
+    background: var(--tvc-error-text);
+    border-color: var(--tvc-error-text);
+    color: var(--tvc-white);
+  }
+
+  main :global(.button--danger-outline) {
+    background: var(--tvc-white);
+    border-color: var(--tvc-error-text);
+    color: var(--tvc-error-text);
+  }
+
+  /* An icon-only button (a close or back control): a square, so the glyph is never squeezed by the label padding. */
+  main :global(.button--icon) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+    line-height: 1;
+  }
+
+  main :global(.button--small) {
+    min-height: 28px;
+    padding: 0 12px;
+    font-size: var(--text-xs);
+  }
+
+  /* ---- shared primitives. Pages use these and do not redefine them (CLAUDE.md, Design language): the card
+     surface, the line under a page title, small notes, error text, the page's vertical rhythm, text-style
+     buttons, and visually hidden labels. A page may add to one (WhatsApp's panes run edge to edge) but
+     never repeats what is here. Sizes come from the --text-* scale, nothing below 0.8rem. */
+  main :global(.card) {
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+  }
+
+  main :global(.hint) {
+    color: var(--tvc-ink-soft);
+    margin: -8px 0 24px;
+  }
+
+  main :global(.note) {
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+    margin: 0 0 10px;
+  }
+
+  main :global(.error) {
+    color: var(--tvc-error-text);
+    font-size: var(--text-sm);
+    margin: 10px 0 0;
+  }
+
+  main :global(.section.wrapper) {
+    padding-top: 32px;
+    padding-bottom: 32px;
+  }
+
+  main :global([hidden]) {
+    display: none !important;
+  }
+
+  main :global(.visually-hidden) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* ---- shared building blocks, from the Apple-style concept. Pages compose these; none redefines them. */
+
+  /* A search field: a magnifier, then the input, on a quiet fill. */
+  main :global(.field) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 340px;
+    min-height: 38px;
+    padding: 0 12px;
+    border-radius: var(--radius-field);
+    background: var(--tvc-cream);
+  }
+
+  main :global(.field svg) {
+    flex: none;
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: var(--tvc-ink-soft);
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+
+  main :global(.field input) {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: none;
+    color: var(--tvc-ink);
+    font: inherit;
+  }
+
+  main :global(.field:focus-within) {
+    box-shadow: 0 0 0 2px var(--tvc-orange);
+  }
+
+  /* A segmented control: one choice from a few, always visible. */
+  main :global(.segmented) {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 9px;
+    background: var(--tvc-cream);
+  }
+
+  main :global(.segmented button) {
+    min-height: 30px;
+    padding: 3px 12px;
+    border: 0;
+    border-radius: 7px;
+    background: none;
+    color: var(--tvc-ink-soft);
+    font: inherit;
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: background 150ms ease-out, color 150ms ease-out;
+  }
+
+  main :global(.segmented button[aria-checked='true']),
+  main :global(.segmented button[aria-pressed='true']) {
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font-weight: 500;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+  }
+
+  main :global(.segmented button:focus-visible) {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 1px;
+  }
+
   @media (pointer: coarse) {
-    main :global(.button) {
+    main :global(.segmented button) {
       min-height: 44px;
+    }
+  }
+
+  /* A grouped list: rows share one rounded surface, hairlines inset from the leading edge. */
+  main :global(.list) {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    background: var(--tvc-white);
+    border-radius: var(--radius);
+    box-shadow: 0 0 0 1px var(--tvc-line) inset;
+    overflow: hidden;
+  }
+
+  main :global(.list > li) {
+    position: relative;
+  }
+
+  main :global(.list > li + li)::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 14px;
+    height: 1px;
+    background: var(--tvc-line);
+  }
+
+  main :global(.row) {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 48px;
+    padding: 8px 14px;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+  }
+
+  main :global(a.row),
+  main :global(button.row) {
+    cursor: pointer;
+    transition: background 120ms ease-out;
+  }
+
+  main :global(a.row:active),
+  main :global(button.row:active) {
+    background: var(--tvc-cream);
+  }
+
+  @media (hover: hover) {
+    main :global(a.row:hover),
+    main :global(button.row:hover) {
+      background: var(--tvc-cream);
+    }
+  }
+
+  main :global(a.row:focus-visible),
+  main :global(button.row:focus-visible) {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: -2px;
+  }
+
+  main :global(.row .grow) {
+    flex: 1;
+    min-width: 0;
+  }
+
+  main :global(.row .title) {
+    display: block;
+    font-weight: 500;
+  }
+
+  main :global(.row .detail) {
+    display: block;
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+  }
+
+  main :global(.row .chev) {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: var(--tvc-ink-soft);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.7;
+  }
+
+  /* A destructive row: plain red text in its own group, never a filled button (the .row inside a .list). */
+  main :global(.crit-row) {
+    justify-content: center;
+    color: var(--tvc-error-text);
+    font-weight: 500;
+    text-align: center;
+  }
+
+  @media (hover: hover) {
+    main :global(button.crit-row:hover:not(:disabled)) {
+      background: var(--tvc-error-bg);
+    }
+  }
+
+  main :global(.crit-row:disabled) {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  /* A small status pill; the colour only reinforces the word. */
+  main :global(.pill) {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 9px;
+    border-radius: 999px;
+    background: var(--tvc-cream);
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  main :global(.pill--ok) {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+  }
+
+  main :global(.pill--warn) {
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+  }
+
+  main :global(.pill--crit) {
+    background: var(--tvc-error-bg);
+    color: var(--tvc-error-text);
+  }
+
+  /* Go to a tool (Command/Ctrl K): a search field over a short list, near the top like a command palette. */
+  .switcher {
+    width: min(460px, calc(100vw - 32px));
+    margin: 12vh auto auto;
+    padding: 8px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 16px;
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .switcher::backdrop {
+    background: rgba(8, 12, 8, 0.4);
+  }
+
+  .switcher[open] {
+    animation: staff-sheet-in 200ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .switcher input {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 0;
+    border-bottom: 1px solid var(--tvc-line);
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: var(--text-md);
+    outline: none;
+  }
+
+  .switcher ul {
+    margin: 6px 0 0;
+    padding: 0;
+    list-style: none;
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+
+  .switcher li {
+    padding: 10px 12px;
+    border-radius: var(--radius-field);
+    cursor: pointer;
+  }
+
+  .switcher li[aria-selected='true'] {
+    background: var(--tvc-cream);
+  }
+
+  .switcher-empty {
+    margin: 0;
+    padding: 12px;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .who-menu :global(kbd) {
+    margin-left: auto;
+    font: inherit;
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .switcher[open] {
+      animation: none;
+    }
+  }
+
+  /* One focus ring for anything that has none of its own: a keyboard user can always see where they are. */
+  main :global(:where(a, button, summary, select, [tabindex]):focus-visible) {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  /* A sheet: a small modal <dialog> for one focused task (unlocking, a refund). */
+  main :global(.sheet) {
+    width: min(420px, calc(100vw - 32px));
+    padding: 22px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 16px;
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    box-shadow: var(--shadow-soft);
+  }
+
+  main :global(.sheet::backdrop) {
+    background: rgba(8, 12, 8, 0.4);
+  }
+
+  main :global(.sheet[open]) {
+    animation: staff-sheet-in 240ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  @keyframes staff-sheet-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96) translateY(6px);
+    }
+  }
+
+  main :global(.sheet h2) {
+    margin: 0 0 6px;
+    font-size: var(--text-lg);
+    letter-spacing: -0.01em;
+  }
+
+  main :global(.sheet-text) {
+    margin: 0 0 16px;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  main :global(.sheet-actions) {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 16px;
+  }
+
+  /* A toast: one short message at the foot of the page, with Undo when the action can be reversed (showToast). */
+  main :global(.toast) {
+    position: fixed;
+    z-index: 80;
+    left: 50%;
+    bottom: 22px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 0;
+    padding: 10px 10px 10px 16px;
+    border-radius: 12px;
+    background: var(--tvc-ink);
+    color: var(--tvc-stone);
+    font-size: var(--text-sm);
+    box-shadow: var(--shadow-soft);
+    transform: translateX(-50%);
+    animation: staff-toast-rise 240ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  @keyframes staff-toast-rise {
+    from {
+      opacity: 0;
+      transform: translate(-50%, 10px);
+    }
+  }
+
+  main :global(.toast-undo) {
+    min-height: 32px;
+    padding: 4px 12px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-green-dark);
+    color: var(--tvc-white);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    main :global(.sheet[open]),
+    main :global(.toast) {
+      animation: none;
+    }
+  }
+
+  main :global(.link-button) {
+    font: inherit;
+    font-size: var(--text-sm);
+    background: none;
+    border: none;
+    padding: 8px 4px;
+    color: var(--tvc-ink-soft);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  @media (pointer: coarse) {
+    main :global(.button),
+    :global(.tour .button) {
+      min-height: 44px;
+    }
+  }
+
+  @media (pointer: coarse) {
+    main :global(.button--icon) {
+      width: 44px;
+      min-width: 44px;
+      height: 44px;
     }
   }
 
@@ -249,7 +771,8 @@ const adminItems = [
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    background: var(--tvc-white);
+    background: color-mix(in srgb, var(--tvc-white) 74%, transparent);
+    backdrop-filter: blur(28px) saturate(180%);
     border-right: 1px solid var(--tvc-line);
     overflow-x: hidden;
     overflow-y: auto;
@@ -273,11 +796,26 @@ const adminItems = [
     flex: none;
   }
 
-  .brand-name {
-    font-family: var(--font-wordmark);
-    font-weight: 700;
-    font-size: 1.125rem;
+  .collapse-button {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 26px;
+    height: 26px;
+    margin-left: auto;
+    padding: 0;
+    border: 1px solid var(--tvc-line);
+    border-radius: 50%;
+    background: var(--tvc-white);
     color: var(--tvc-green-dark);
+    cursor: pointer;
+  }
+
+  .brand-name {
+    font-weight: 600;
+    font-size: var(--text-lg);
+    letter-spacing: -0.01em;
+    color: var(--tvc-ink);
     white-space: nowrap;
   }
 
@@ -294,14 +832,15 @@ const adminItems = [
 
   .menu li[hidden],
   .menu div[hidden],
-  .account [hidden] {
+  .who-wrap[hidden],
+  .who-menu[hidden] {
     display: none;
   }
 
   .group-label {
     margin: 18px 0 6px;
     padding: 0 10px;
-    font-size: 0.8rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     letter-spacing: 0.05em;
     text-transform: uppercase;
@@ -309,8 +848,7 @@ const adminItems = [
     white-space: nowrap;
   }
 
-  .menu a,
-  .account-button {
+  .menu a {
     position: relative;
     display: flex;
     align-items: center;
@@ -322,7 +860,7 @@ const adminItems = [
     border-radius: var(--radius-sm);
     background: none;
     font: inherit;
-    font-size: 1rem;
+    font-size: var(--text-md);
     color: var(--tvc-ink);
     text-decoration: none;
     text-align: left;
@@ -330,81 +868,49 @@ const adminItems = [
     white-space: nowrap;
   }
 
-  .menu a svg,
-  .account-button svg {
+  .menu a svg {
     flex: none;
   }
 
-  .menu a .label,
-  .account-button .label {
+  .menu a .label {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .menu a:hover,
-  .account-button:hover {
-    background: var(--tvc-green-tint);
+  @media (hover: hover) and (pointer: fine) {
+    .menu a:hover {
+      background: var(--tvc-cream);
+    }
   }
 
   .menu a:focus-visible,
-  .account-button:focus-visible,
+  .collapse-button:focus-visible,
+  .who:focus-visible,
+  .who-menu :global(button:focus-visible),
   .icon-button:focus-visible {
     outline: 2px solid var(--tvc-orange);
     outline-offset: 1px;
   }
 
-  .menu a[aria-current='page'] {
-    background: var(--tvc-green-tint);
+  .menu a svg {
     color: var(--tvc-green-dark);
+  }
+
+  .menu a[aria-current='page'] {
+    background: var(--tvc-green-dark);
+    color: var(--tvc-white);
     font-weight: 600;
   }
 
-  /* The orange mark is non-text, which is what --tvc-orange is for. */
-  .menu a[aria-current='page']::before {
-    content: '';
-    position: absolute;
-    left: -10px;
-    top: 7px;
-    bottom: 7px;
-    width: 3px;
-    border-radius: 0 3px 3px 0;
-    background: var(--tvc-orange);
+  .menu a[aria-current='page'] svg {
+    color: var(--tvc-white);
   }
 
-  .account {
-    padding: 10px;
-    border-top: 1px solid var(--tvc-line);
-  }
-
-  .account-name {
-    margin: 0 0 6px;
-    padding: 0 10px;
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--tvc-ink);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  /* Sits right under the name, so it takes the name's bottom margin. */
-  .account-name:not([hidden]) + .account-email {
-    margin-top: -4px;
-  }
-
-  .account-email {
-    margin: 0 0 6px;
-    padding: 0 10px;
-    font-size: 0.8rem;
-    color: var(--tvc-ink-soft);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .account-button {
-    color: var(--tvc-ink-soft);
+  @media (pointer: fine) {
+    .menu a {
+      padding-block: 8px;
+    }
   }
 
   .collapse-icon {
@@ -431,10 +937,202 @@ const adminItems = [
   /* Phone-only pieces: hidden by default, shown in the phone query below. This
      comes after .icon-button on purpose; declared before it, .icon-button's
      display would win and the close button would show on desktop. */
-  .topbar,
   .menu-close,
-  .scrim {
+  .scrim,
+  .topbar .icon-button,
+  .topbar-title {
     display: none;
+  }
+
+  /* ------------------------------------------------ top bar and the signed-in user */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 24px;
+    background: color-mix(in srgb, var(--tvc-white) 82%, transparent);
+    backdrop-filter: blur(16px) saturate(160%);
+    border-bottom: 1px solid transparent;
+    transition: border-color 150ms ease-out;
+  }
+
+  /* The hairline appears only once content is passing under the bar. */
+  .topbar.scrolled {
+    border-bottom-color: var(--tvc-line);
+  }
+
+  @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    .sidebar {
+      background: var(--tvc-white);
+      backdrop-filter: none;
+    }
+
+    .topbar {
+      background: var(--tvc-white);
+      backdrop-filter: none;
+      border-bottom-color: var(--tvc-line);
+    }
+  }
+
+  .toolbar-slot {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+  }
+
+  .who-wrap {
+    position: relative;
+    flex: none;
+    margin-left: auto;
+  }
+
+  .toolbar-slot:has(*) + .who-wrap {
+    margin-left: 0;
+  }
+
+  .who {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 44px;
+    padding: 4px 12px 4px 8px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 999px;
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .avatar {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .avatar :global(img) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .who-text {
+    display: grid;
+    text-align: left;
+    line-height: 1.15;
+  }
+
+  .who-text strong {
+    font-size: var(--text-sm);
+  }
+
+  .who-text small {
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+  }
+
+  .caret {
+    flex: none;
+    color: var(--tvc-ink-soft);
+  }
+
+  .who-menu {
+    transform-origin: top right;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    z-index: 60;
+    min-width: 240px;
+    padding: 8px;
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .who-menu :global(p) {
+    margin: 4px 8px 6px;
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+    overflow-wrap: anywhere; /* a long email must not stretch the menu */
+  }
+
+  .who-menu :global(button) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 44px;
+    padding: 8px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: var(--text-base);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .who-menu :global(.appearance) {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 2px 4px 6px;
+    padding: 3px;
+    border-radius: 9px;
+    background: var(--tvc-cream);
+  }
+
+  .who-menu :global(.appearance button) {
+    flex: 1;
+    justify-content: center;
+    min-height: 30px;
+    padding: 2px 8px;
+    border-radius: 7px;
+    font-size: var(--text-xs);
+    font-weight: 500;
+    text-align: center;
+    color: var(--tvc-ink-soft);
+  }
+
+  .who-menu :global(.appearance button[aria-pressed='true']) {
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .who-menu :global(button:hover) {
+      background: var(--tvc-green-tint);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .who-menu:not([hidden]) {
+      animation: who-pop 140ms ease-out;
+    }
+  }
+
+  @keyframes who-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.97);
+    }
   }
 
   /* --------------------------------------------- collapsed (desktop only) */
@@ -457,8 +1155,15 @@ const adminItems = [
       background: var(--tvc-line);
     }
 
+    /* Collapsed, the brand row is just the mark with the round button under it. */
     html[data-nav='collapsed'] .brand {
-      padding: 16px 19px;
+      flex-direction: column;
+      gap: 12px;
+      padding: 16px 0 8px;
+    }
+
+    html[data-nav='collapsed'] .collapse-button {
+      margin-left: 0;
     }
   }
 
@@ -469,27 +1174,33 @@ const adminItems = [
     }
 
     .topbar {
-      position: sticky;
-      top: 0;
-      z-index: 50;
-      display: flex;
-      align-items: center;
       gap: 6px;
-      height: 52px;
-      padding: 0 8px;
-      background: var(--tvc-white);
-      border-bottom: 1px solid var(--tvc-line);
+      padding: 8px;
+    }
+
+    .topbar .icon-button {
+      display: inline-flex;
     }
 
     .topbar-title {
+      display: inline;
       font-family: var(--font-wordmark);
       font-weight: 700;
       color: var(--tvc-green-dark);
     }
 
+    /* The name and role would crowd the title on a phone; the initial still opens the menu. */
+    .who-text,
+    .caret {
+      display: none;
+    }
+
+    .who {
+      padding: 4px;
+    }
+
     /* Explicit full height: the desktop rule's align-self: start would otherwise
-       shrink this fixed panel to its content, leaving the account area floating
-       under the list instead of at the bottom. */
+       shrink this fixed panel to its content. */
     .sidebar {
       position: fixed;
       top: 0;
@@ -534,7 +1245,8 @@ const adminItems = [
 
   @media (prefers-reduced-motion: reduce) {
     .sidebar,
-    .collapse-icon {
+    .collapse-icon,
+    .topbar {
       transition: none;
     }
   }
@@ -556,13 +1268,16 @@ const adminItems = [
 </script>
 
 <script>
-  import { StaffAuthError, clearStepUp, clearToken, getToken, staffFetch } from '../../scripts/lib/staff-client.mjs';
+  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, fillAvatar, getToken, staffFetch } from '../../scripts/lib/staff-client.mjs';
+  import { fullTourFor } from '../../scripts/lib/staff-tour.mjs';
+  import { offerTour, startTour } from '../../scripts/lib/staff-tour-ui.mjs';
 
   declare const google: any;
 
   interface Me {
     name: string | null;
     maskedEmail?: string | null; // masked by the server; absent in answers cached before this existed
+    picture?: string | null; // their own Google picture, from their token; absent in older cached answers
     isSuperAdmin: boolean;
     tools: { module: string }[];
   }
@@ -576,9 +1291,11 @@ const adminItems = [
   const root = document.documentElement;
   const toolItems = Array.from(document.querySelectorAll<HTMLElement>('li[data-module]'));
   const adminGroup = $('admin-group');
-  const nameEl = $('staff-name');
-  const emailEl = $('staff-email');
-  const signOutBtn = $<HTMLButtonElement>('sign-out');
+  const page = root.dataset.page ?? '';
+  const whoWrap = $('who-wrap');
+  const whoBtn = $<HTMLButtonElement>('who');
+  const whoMenu = $('who-menu');
+  const topbar = document.querySelector<HTMLElement>('.topbar')!;
   const collapseBtn = $<HTMLButtonElement>('collapse');
   const menuOpen = $<HTMLButtonElement>('menu-open');
   const menuClose = $<HTMLButtonElement>('menu-close');
@@ -607,14 +1324,126 @@ const adminItems = [
     }
   }
 
+  function signOut() {
+    clearToken();
+    clearStepUp();
+    try {
+      sessionStorage.removeItem(CACHE_KEY);
+    } catch {
+      // nothing to clear
+    }
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    location.reload(); // each page then shows its own sign-in panel
+  }
+
+  // ---- the signed-in user: a pill in the top bar that opens a small menu (like the member portal's)
+  const whoOpen = () => !whoMenu.hidden;
+  function setWho(open: boolean, returnFocus = false) {
+    whoMenu.hidden = !open;
+    whoBtn.setAttribute('aria-expanded', String(open));
+    if (open) whoMenu.querySelector<HTMLElement>('button')?.focus();
+    else if (returnFocus) whoBtn.focus();
+  }
+
+  // Appearance: follow the device (Auto), or pin Light or Dark. Remembered in this browser; the <head> script applies it early.
+  const THEME_KEY = 'tvc-staff-theme';
+  function currentTheme(): '' | 'light' | 'dark' {
+    const t = root.getAttribute('data-theme');
+    return t === 'light' || t === 'dark' ? t : '';
+  }
+  function setTheme(value: '' | 'light' | 'dark') {
+    if (value) root.setAttribute('data-theme', value);
+    else root.removeAttribute('data-theme');
+    try {
+      if (value) localStorage.setItem(THEME_KEY, value);
+      else localStorage.removeItem(THEME_KEY);
+    } catch {
+      // not remembered
+    }
+  }
+  function appearanceControl(): HTMLElement {
+    const group = document.createElement('div');
+    group.className = 'appearance';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', 'Appearance');
+    const options: ['' | 'light' | 'dark', string][] = [['', 'Auto'], ['light', 'Light'], ['dark', 'Dark']];
+    const paint = () => group.querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-pressed', String(options[i][0] === currentTheme())));
+    for (const [value, label] of options) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      b.addEventListener('click', (ev) => {
+        ev.stopPropagation(); // choosing an appearance keeps the menu open so the change can be seen
+        setTheme(value);
+        paint();
+      });
+      group.append(b);
+    }
+    paint();
+    return group;
+  }
+
+  function renderWho(me: Me | null) {
+    whoWrap.hidden = !me || !me.name;
+    setWho(false);
+    if (!me?.name) return;
+    fillAvatar($('avatar'), me.name, me.picture);
+    $('who-name').textContent = me.name;
+    $('who-role').textContent = me.isSuperAdmin ? 'Super admin' : 'Admin';
+    const items: HTMLElement[] = [];
+    if (me.maskedEmail) {
+      const signedIn = document.createElement('p');
+      signedIn.textContent = `Signed in as ${me.maskedEmail}`;
+      items.push(signedIn);
+    }
+    if (fullTourFor(page, me.isSuperAdmin).length) {
+      const tour = document.createElement('button');
+      tour.type = 'button';
+      tour.textContent = page === 'home' ? 'Take the tour' : 'Take the tour of this page';
+      tour.addEventListener('click', () => {
+        setWho(false);
+        startTour(fullTourFor(page, me.isSuperAdmin));
+      });
+      items.push(tour);
+    }
+    const jump = document.createElement('button');
+    jump.type = 'button';
+    jump.append('Go to a tool');
+    const hint = document.createElement('kbd');
+    hint.textContent = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl K';
+    jump.append(hint);
+    jump.addEventListener('click', () => {
+      setWho(false);
+      openSwitcher();
+    });
+    items.push(jump);
+    items.push(appearanceControl());
+    const out = document.createElement('button');
+    out.type = 'button';
+    out.textContent = 'Sign out';
+    out.addEventListener('click', signOut);
+    items.push(out);
+    whoMenu.replaceChildren(...items);
+  }
+  whoBtn.addEventListener('click', () => setWho(!whoOpen()));
+  document.addEventListener('click', (ev) => {
+    if (whoOpen() && !(ev.target as Element).closest('.who-wrap')) setWho(false);
+  });
+  window.addEventListener('scroll', () => topbar.classList.toggle('scrolled', window.scrollY > 4), { passive: true });
+
+  // Offer this page's tour once, and only to someone who can actually see the page behind it.
+  function canSeePage(me: Me): boolean {
+    if (page === 'home') return true;
+    if (page === 'access' || page === 'security') return me.isSuperAdmin;
+    return me.tools.some((t) => t.module === page);
+  }
+
   function apply(me: Me | null) {
     for (const li of toolItems) li.hidden = li.dataset.current !== 'true' && !me?.tools.some((t) => t.module === li.dataset.module);
     adminGroup.hidden = adminGroup.dataset.current !== 'true' && !me?.isSuperAdmin;
-    nameEl.hidden = !me?.name;
-    nameEl.textContent = me?.name ?? ''; // text only, whatever the name contains
-    emailEl.hidden = !me?.maskedEmail;
-    emailEl.textContent = me?.maskedEmail ?? '';
-    signOutBtn.hidden = !me;
+    renderWho(me);
+    const token = getToken();
+    if (me && me.name && token && canSeePage(me)) offerTour({ page, isSuperAdmin: me.isSuperAdmin, email: decodeTokenEmail(token) });
   }
 
   let pollTimer: number | undefined;
@@ -658,18 +1487,6 @@ const adminItems = [
     if (document.visibilityState === 'visible') refresh();
   });
 
-  signOutBtn.addEventListener('click', () => {
-    clearToken();
-    clearStepUp();
-    try {
-      sessionStorage.removeItem(CACHE_KEY);
-    } catch {
-      // nothing to clear
-    }
-    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
-    location.reload(); // each page then shows its own sign-in panel
-  });
-
   // ---- collapse (desktop)
   function setCollapsed(collapsed: boolean) {
     root.setAttribute('data-nav', collapsed ? 'collapsed' : 'expanded');
@@ -677,7 +1494,6 @@ const adminItems = [
     const label = collapsed ? 'Expand the menu' : 'Collapse the menu';
     collapseBtn.setAttribute('aria-label', label);
     collapseBtn.title = label;
-    collapseBtn.querySelector('.label')!.textContent = collapsed ? 'Expand' : 'Collapse';
   }
   setCollapsed(root.getAttribute('data-nav') === 'collapsed');
   collapseBtn.addEventListener('click', () => {
@@ -703,11 +1519,384 @@ const adminItems = [
   menuClose.addEventListener('click', () => setMenu(false));
   scrim.addEventListener('click', () => setMenu(false));
   document.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Escape' && root.getAttribute('data-menu') === 'open') setMenu(false);
+    if (ev.key !== 'Escape') return;
+    if (whoOpen()) setWho(false, true);
+    else if (root.getAttribute('data-menu') === 'open') setMenu(false);
   });
   sidebar.addEventListener('click', (ev) => {
     if ((ev.target as HTMLElement).closest('.menu a') && root.getAttribute('data-menu') === 'open') setMenu(false);
   });
 
+  // ---- go to a tool: Command or Ctrl plus K, from any page. It lists exactly the menu's links, so a tool
+  // appears only if the person holds a role in it.
+  const switcher = $('switcher') as HTMLDialogElement;
+  const switcherInput = $('switcher-input') as HTMLInputElement;
+  const switcherList = $('switcher-list');
+  const switcherEmpty = $('switcher-empty');
+  let switcherShown: { label: string; href: string }[] = [];
+  let switcherActive = 0;
+
+  function paintSwitcher() {
+    const q = switcherInput.value.trim().toLowerCase();
+    const all = [...document.querySelectorAll<HTMLAnchorElement>('.menu a')].map((a) => ({ label: a.querySelector('.label')?.textContent?.trim() ?? a.title, href: a.href }));
+    switcherShown = all.filter((t) => t.label.toLowerCase().includes(q));
+    switcherActive = Math.min(switcherActive, Math.max(0, switcherShown.length - 1));
+    switcherList.replaceChildren(
+      ...switcherShown.map((t, i) => {
+        const li = document.createElement('li');
+        li.id = `switcher-opt-${i}`;
+        li.setAttribute('role', 'option');
+        li.setAttribute('aria-selected', String(i === switcherActive));
+        li.textContent = t.label;
+        li.addEventListener('click', () => (location.href = t.href));
+        li.addEventListener('mousemove', () => {
+          if (switcherActive === i) return;
+          switcherActive = i;
+          paintSwitcher();
+        });
+        return li;
+      }),
+    );
+    switcherEmpty.hidden = switcherShown.length > 0;
+    if (switcherShown.length) switcherInput.setAttribute('aria-activedescendant', `switcher-opt-${switcherActive}`);
+    else switcherInput.removeAttribute('aria-activedescendant');
+    switcherList.children[switcherActive]?.scrollIntoView({ block: 'nearest' });
+  }
+
+  function openSwitcher() {
+    if (switcher.open) return;
+    switcherInput.value = '';
+    switcherActive = 0;
+    paintSwitcher();
+    switcher.showModal();
+    switcherInput.focus();
+  }
+
+  switcherInput.addEventListener('input', () => {
+    switcherActive = 0;
+    paintSwitcher();
+  });
+  switcherInput.addEventListener('keydown', (ev) => {
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      if (!switcherShown.length) return;
+      switcherActive = (switcherActive + (ev.key === 'ArrowDown' ? 1 : -1) + switcherShown.length) % switcherShown.length;
+      paintSwitcher();
+    } else if (ev.key === 'Enter') {
+      ev.preventDefault();
+      const t = switcherShown[switcherActive];
+      if (t) location.href = t.href;
+    }
+  });
+  // a click on the dim area (the dialog element itself) closes it
+  switcher.addEventListener('click', (ev) => {
+    if (ev.target === switcher) switcher.close();
+  });
+  document.addEventListener('keydown', (ev) => {
+    if ((ev.metaKey || ev.ctrlKey) && !ev.altKey && ev.key.toLowerCase() === 'k') {
+      ev.preventDefault();
+      if (document.querySelector('dialog[open]:not(#switcher)')) return; // a task sheet is open: finish that first
+      if (switcher.open) switcher.close();
+      else openSwitcher();
+    }
+  });
+
+  // ---- arrow keys inside tabs and radio groups: Left/Right (or Up/Down) move and choose, Home/End jump
+  document.addEventListener('keydown', (ev) => {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(ev.key)) return;
+    const current = (ev.target as Element).closest<HTMLElement>('[role="tab"], [role="radio"]');
+    const group = current?.closest('[role="tablist"], [role="radiogroup"]');
+    if (!current || !group) return;
+    const options = [...group.querySelectorAll<HTMLButtonElement>('[role="tab"], [role="radio"]')].filter((o) => !o.disabled && !o.hidden);
+    const at = options.indexOf(current as HTMLButtonElement);
+    if (at < 0) return;
+    ev.preventDefault();
+    const next = ev.key === 'Home' ? 0 : ev.key === 'End' ? options.length - 1 : (at + (ev.key === 'ArrowRight' || ev.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+    options[next].focus();
+    options[next].click();
+  });
+
   refresh();
 </script>
+
+<!-- The admin's look: calm, cool neutrals and the system type face (SF Pro on Apple devices, Inter elsewhere), the way
+     the Apple-style concept reads. It overrides the public site's --tvc-* tokens on admin pages only (this layout is the
+     only place it loads); `html:root` outranks global.css's `:root`. The dark appearance below overrides the same tokens
+     again. Components use the tokens and have no rules of their own for either. -->
+<style is:global>
+  /* stylelint-disable color-no-hex -- the admin look's own token values, same job as the --tvc-* ones in global.css */
+  html:root {
+    --tvc-stone: #f4f5f1;
+    --tvc-cream: #ebece7;
+    --tvc-line: rgba(27, 30, 27, 0.12);
+    --tvc-line-strong: #868c83;
+    --tvc-ink: #1b1e1b;
+    --tvc-ink-soft: #596057;
+    --tvc-green: #2a8f56;
+    --tvc-green-dark: #1f7a46;
+    --tvc-green-tint: rgba(31, 122, 70, 0.12);
+    --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+    --font-display: var(--font-body);
+    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 28px rgba(20, 30, 20, 0.1);
+  }
+  /* stylelint-enable color-no-hex */
+</style>
+
+<!-- The dark appearance. It follows the device unless the person chose one in the account menu (Appearance),
+     which is remembered in this browser and applied before first paint (the script in <head>). Like the neutral
+     look it overrides tokens only: components use --tvc-* tokens (a Stylelint rule bans raw colours), so they
+     follow. The same set appears twice because the OS preference and the explicit choice are separate selectors. -->
+<style is:global>
+  /* stylelint-disable color-no-hex -- the dark appearance's own token values, same job as the --tvc-* ones in global.css */
+  @media (prefers-color-scheme: dark) {
+    html:not([data-theme='light']) {
+        --tvc-stone: #151715;
+    --tvc-cream: #1b1d1b;
+    --tvc-white: #242724;
+    --tvc-ink: #f1f3ef;
+    --tvc-ink-soft: #a9afa7;
+    --tvc-line: rgba(255, 255, 255, 0.13);
+    --tvc-line-strong: #7d837b;
+    --tvc-green: #4faa77;
+    --tvc-green-dark: #5bc88a;
+    --tvc-green-tint: rgba(91, 200, 138, 0.16);
+    --tvc-orange: #d98a5a;
+    --tvc-orange-text: #f0a272;
+    --tvc-orange-tint: rgba(217, 138, 90, 0.18);
+    --tvc-error-text: #ff6b60;
+    --tvc-error-border: rgba(255, 107, 96, 0.45);
+    --tvc-error-bg: rgba(255, 107, 96, 0.16);
+    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.45), 0 6px 22px rgba(0, 0, 0, 0.4);
+    color-scheme: dark;
+    }
+  }
+
+  html[data-theme='dark'] {
+      --tvc-stone: #151715;
+    --tvc-cream: #1b1d1b;
+    --tvc-white: #242724;
+    --tvc-ink: #f1f3ef;
+    --tvc-ink-soft: #a9afa7;
+    --tvc-line: rgba(255, 255, 255, 0.13);
+    --tvc-line-strong: #7d837b;
+    --tvc-green: #4faa77;
+    --tvc-green-dark: #5bc88a;
+    --tvc-green-tint: rgba(91, 200, 138, 0.16);
+    --tvc-orange: #d98a5a;
+    --tvc-orange-text: #f0a272;
+    --tvc-orange-tint: rgba(217, 138, 90, 0.18);
+    --tvc-error-text: #ff6b60;
+    --tvc-error-border: rgba(255, 107, 96, 0.45);
+    --tvc-error-bg: rgba(255, 107, 96, 0.16);
+    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.45), 0 6px 22px rgba(0, 0, 0, 0.4);
+    color-scheme: dark;
+  }
+  /* stylelint-enable color-no-hex */
+
+  /* Photos and the brand mark keep their own colours; the page around them is what turns dark. */
+  html[data-theme='dark'] #staff-main img,
+  html[data-theme='dark'] .brand img {
+    color-scheme: normal;
+  }
+</style>
+
+<!-- The admin tour and the "What's new" card (scripts/lib/staff-tour-ui.mjs). Global because they are
+     built at run time, where Astro's scoped CSS never reaches. Same look as the member portal's tour. -->
+<style is:global>
+  .whatsnew {
+    margin: 0 0 16px;
+    padding: 18px 20px;
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .whatsnew-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .whatsnew-head h2 {
+    margin: 0 0 10px;
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+  }
+
+  .whatsnew-eyebrow,
+  .tour-count {
+    margin: 0 0 4px;
+    color: var(--tvc-orange-text);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .whatsnew-close {
+    flex: none;
+    min-width: 44px;
+    min-height: 44px;
+    margin: -10px -10px 0 0;
+    border: 0;
+    background: none;
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-2xl);
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .whatsnew-list {
+    display: grid;
+    gap: 10px;
+    margin: 0 0 14px;
+    padding: 0;
+    list-style: none;
+    font-size: var(--text-base);
+    line-height: 1.5;
+  }
+
+  .whatsnew-list li {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .whatsnew-tag {
+    flex: none;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+    font-size: var(--text-xs);
+    font-weight: 600;
+  }
+
+  .whatsnew-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .tour {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+  }
+
+  /* .button sets display, which would beat the hidden attribute on Back (first step) and Skip (last) */
+  .tour [hidden] {
+    display: none;
+  }
+
+  .tour-block {
+    position: absolute;
+    inset: 0;
+    background: rgb(34 41 31 / 0.55);
+  }
+
+  .tour--spot .tour-block {
+    background: transparent;
+  }
+
+  .tour-spot {
+    position: absolute;
+    border-radius: var(--radius);
+    outline: 3px solid var(--tvc-orange);
+    box-shadow: 0 0 0 100vmax rgb(34 41 31 / 0.55);
+    pointer-events: none;
+  }
+
+  .tour-card {
+    position: absolute;
+    width: min(360px, calc(100vw - 24px));
+    box-sizing: border-box;
+    padding: 20px;
+    background: var(--tvc-white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .tour-card--centre {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  .tour-count {
+    margin-bottom: 6px;
+  }
+
+  .tour-card h2 {
+    margin: 0 0 8px;
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+  }
+
+  .tour-text {
+    margin: 0 0 16px;
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-base);
+    line-height: 1.5;
+  }
+
+  .tour-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .tour-dots {
+    display: flex;
+    gap: 6px;
+  }
+
+  .tour-dots span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--tvc-line);
+  }
+
+  .tour-dots .on {
+    background: var(--tvc-green);
+  }
+
+  .tour-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .tour-skip {
+    min-height: 44px;
+    padding: 0 10px;
+    border: 0;
+    background: none;
+    color: var(--tvc-ink-soft);
+    font: inherit;
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+
+  @media (max-width: 560px) {
+    .tour-card:not(.tour-card--centre) {
+      top: auto;
+      right: 12px;
+      bottom: 12px;
+      left: 12px;
+      width: auto;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .tour-spot {
+      transition: top 200ms ease-out, left 200ms ease-out, width 200ms ease-out, height 200ms ease-out;
+    }
+  }
+</style>

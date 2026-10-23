@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pictureUpdate, safeGooglePicture, sizedPicture } from './member-google-picture.mjs';
+import { pictureChange, pictureUpdate, safeGooglePicture, sizedPicture } from './member-google-picture.mjs';
 
 const PIC = 'https://lh3.googleusercontent.com/a/AbCdEf123=s96-c';
 
@@ -30,4 +30,14 @@ test('it is refreshed when it changes, cleared when Google no longer has one, an
   assert.deepEqual(pictureUpdate({ stored: PIC, seen: undefined, acceptedVersion: 7, requiredVersion: 7 }), { write: true, value: null });
   assert.deepEqual(pictureUpdate({ stored: PIC, seen: PIC, acceptedVersion: 7, requiredVersion: 7 }), { write: false });
   assert.deepEqual(pictureUpdate({ stored: null, seen: 'https://evil.example/x', acceptedVersion: 7, requiredVersion: 7 }), { write: false });
+});
+
+test('an admin picture is written when it changes, cleared when gone, and left alone when the same', () => {
+  const NEW = 'https://lh3.googleusercontent.com/a/Other=s96-c';
+  assert.deepEqual(pictureChange({ stored: null, seen: PIC }), { write: true, value: PIC });
+  assert.deepEqual(pictureChange({ stored: PIC, seen: NEW }), { write: true, value: NEW });
+  assert.deepEqual(pictureChange({ stored: PIC, seen: undefined }), { write: true, value: null });
+  assert.deepEqual(pictureChange({ stored: PIC, seen: PIC }), { write: false });
+  assert.deepEqual(pictureChange({ stored: null, seen: 'https://evil.example/x' }), { write: false });
+  assert.deepEqual(pictureChange({ stored: null, seen: null }), { write: false });
 });
