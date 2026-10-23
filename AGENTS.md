@@ -75,7 +75,10 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
   Auto/Light/Dark control in the account menu). Type: sizes come from the `--text-*` scale (nothing
   smaller than 0.8rem); the page title is 2.125rem 700 like the admin `h1`; section and dialog titles
   lg / xl; subheads weight 600; small uppercase labels only for non-heading labels, tracking 0.08em.
-  Sentence case everywhere else (never uppercase an email).
+  Sentence case everywhere else (never uppercase an email). Every dialog on the member page goes through
+  `presentSheet(dlg)` (a card that grows from its trigger; a swipe-down bottom sheet on phones; `locked` for
+  one that must be read) and calls `dlg.close()` as usual: the presenter wraps `close` to play the exit.
+  Never `append` + `showModal` a dialog directly.
 - Admin portal (`StaffLayout.astro`, `src/pages/internal/*`): the shell owns the shared primitives (`.card`,
   `.hint`, `.note`, `.error`, `.section.wrapper`, `[hidden]`, `.visually-hidden`, `.link-button`, and the button
   modifiers `--outline`, `--primary`, `--danger`, `--danger-outline`, `--small`) and the building blocks of the
