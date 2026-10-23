@@ -1272,16 +1272,16 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
      non-danger button here this page's own neutral pill look end to end -
      base, hover, and focus, not just the text color. :not(.button--primary)
      excludes the one button that's meant to look like the site's green CTA;
-     :not(.button--danger) excludes destructive actions below, which get
+     :not(.button--danger-outline) excludes destructive actions below, which get
      their own look so a destructive action never renders identically to a
      safe one (Edit vs Cancel were indistinguishable before this). */
-  .button.button:not(.button--primary):not(.button--danger) {
+  .button.button:not(.button--primary):not(.button--danger-outline) {
     background: var(--tvc-white);
     color: var(--tvc-ink);
   }
 
-  .button.button:not(.button--primary):not(.button--danger):hover,
-  .button.button:not(.button--primary):not(.button--danger):focus-visible {
+  .button.button:not(.button--primary):not(.button--danger-outline):hover,
+  .button.button:not(.button--primary):not(.button--danger-outline):focus-visible {
     background: var(--tvc-line);
     color: var(--tvc-ink);
   }
@@ -1289,14 +1289,14 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   /* Destructive actions (cancelling a booking, removing a guest row) get a
      visibly different treatment from neutral ones (Edit, +Guest) so the two
      are never one indistinguishable pill color. */
-  .button.button--danger {
+  .button.button--danger-outline {
     background: var(--tvc-white);
     border-color: var(--tvc-error-text);
     color: var(--tvc-error-text);
   }
 
-  .button.button--danger:hover,
-  .button.button--danger:focus-visible {
+  .button.button--danger-outline:hover,
+  .button.button--danger-outline:focus-visible {
     background: var(--tvc-error-text);
     border-color: var(--tvc-error-text);
     color: var(--tvc-white);
@@ -1323,22 +1323,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
      and `.button.button--icon`'s doubled class matches `.button.button`'s
      own specificity trick to beat global.css's padding regardless of load
      order. */
-  .button.button--icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    line-height: 1;
-  }
 
-  @media (max-width: 639px) {
-    .button.button--icon {
-      width: 44px;
-      height: 44px;
-    }
-  }
 
   [hidden] {
     display: none !important;
@@ -1877,7 +1862,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         </div>
       </div>
       <button type="button" class="guest-history-toggle" ${guest.personId ? '' : 'hidden'}>Past stays</button>
-      <button type="button" class="button button--danger button--icon remove-guest" aria-label="Remove guest">
+      <button type="button" class="button button--danger-outline button--icon remove-guest" aria-label="Remove guest">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true" focusable="false">
           <path d="M6 6L18 18M18 6L6 18" />
         </svg>
@@ -3169,7 +3154,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         <div class="actions">
           ${canWrite && b.notifiable && (!b.notice || b.notice.pending) && b.tents.some((t) => t.guests.length) && !b.isPast ? `<button type="button" class="button notify-guests">${b.notice ? 'Send update' : 'Finalize &amp; notify'}</button>` : ''}
           <button type="button" class="button edit-booking">${canWrite ? 'Edit' : 'View'}</button>
-          ${canWrite ? '<button type="button" class="button button--danger cancel-booking">Cancel</button>' : ''}
+          ${canWrite ? '<button type="button" class="button button--danger-outline cancel-booking">Cancel</button>' : ''}
         </div>
       `;
       card.querySelector('.edit-booking')!.addEventListener('click', () => loadIntoForm(b));

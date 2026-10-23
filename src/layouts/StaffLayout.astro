@@ -271,6 +271,19 @@ const adminItems = [
     color: var(--tvc-error-text);
   }
 
+  /* An icon-only button (a close or back control): a square, so the glyph is never squeezed by the label padding. */
+  main :global(.button--icon) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+    line-height: 1;
+  }
+
   main :global(.button--small) {
     min-height: 28px;
     padding: 0 12px;
@@ -648,6 +661,14 @@ const adminItems = [
     main :global(.button),
     :global(.tour .button) {
       min-height: 44px;
+    }
+  }
+
+  @media (pointer: coarse) {
+    main :global(.button--icon) {
+      width: 44px;
+      min-width: 44px;
+      height: 44px;
     }
   }
 

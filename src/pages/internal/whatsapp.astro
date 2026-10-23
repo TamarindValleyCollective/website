@@ -605,14 +605,8 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     }
   }
 
-  /* Page-local modifiers on the shared admin .button, same convention as the other
-     staff pages (written .button.x because the shell's `main .button` would otherwise win):
-     --icon for a square icon-only control, --danger-outline for a control whose
-     current state is a restriction. */
-  .button.button--icon {
-    width: 36px;
-    padding: 0;
-  }
+  /* A page-local look for --danger-outline: here it marks a control whose current state is a restriction
+     (written .button.x because the shell's `main .button` would otherwise win). */
 
   .button.button--danger-outline,
   .button.button--danger-outline:hover {
@@ -621,11 +615,6 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     color: var(--tvc-error-text);
   }
 
-  @media (pointer: coarse) {
-    .button.button--icon {
-      width: 44px;
-    }
-  }
 
   .quick-replies {
     display: flex;
