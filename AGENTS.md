@@ -80,8 +80,11 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
   redefines them; it may add to one (WhatsApp's `.card` sets padding and overflow) and
   `scripts/lib/admin-primitives.test.mjs` lists the few that do. Font sizes are `--text-*` tokens with
   nothing below 0.8rem (only display sizes of 1.3rem and up may be literal; Stylelint errors otherwise). A
-  destructive control uses `--danger` or `--danger-outline`, never the primary fill. An alternative cooler look
-  exists behind `?look=neutral` in `astro dev` only (tokens at the foot of `StaffLayout.astro`). The admin also has a
+  destructive control uses `--danger` or `--danger-outline`, never the primary fill, and a reversible action
+  (deactivate someone) happens at once with an Undo toast instead of a `confirm()` box; only irreversible money gets
+  an alert. The admin's look follows the Apple-style concept: calm cool neutrals and the system type face (SF Pro on
+  Apple devices, Inter elsewhere) set as token overrides on admin pages only (the `html:root` block in
+  `StaffLayout.astro`), not the public site's warm tokens or Fraunces. The admin also has a
   dark appearance (same file, tokens only) that follows the device or the account menu's Appearance choice; keep it
   working by using `--tvc-*` tokens for every colour in admin files (a raw colour will not turn dark; mix tokens with
   `color-mix` when you need an in-between shade) and check a new page in Dark as well as Light.

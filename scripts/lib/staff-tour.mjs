@@ -258,8 +258,8 @@ export const TOURS = {
       audience: 'super',
       target: 'stepup',
       tag: 'Access',
-      title: 'Prove it is you first',
-      text: 'Changing access needs a fresh second-factor check. Verify here; if you have not set up two methods yet, Security walks you through it.',
+      title: 'Unlock before you edit',
+      text: 'The lock in the toolbar. Open it and enter a code from your authenticator app, or use a passkey, to unlock changes for ten minutes. Until then you can look but not edit. If you have not set up two methods yet, Security walks you through it.',
     },
     {
       id: 'tabs',

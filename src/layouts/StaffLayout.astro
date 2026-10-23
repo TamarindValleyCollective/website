@@ -137,6 +137,7 @@ const adminItems = [
             </svg>
           </button>
           <span class="topbar-title">Admin Portal</span>
+          <div class="toolbar-slot"><slot name="toolbar" /></div>
           <div class="who-wrap" id="who-wrap" data-tour="account" hidden>
             <button type="button" class="who" id="who" aria-haspopup="true" aria-expanded="false" aria-controls="who-menu">
               <span class="avatar" id="avatar" aria-hidden="true"></span>
@@ -204,9 +205,16 @@ const adminItems = [
      forms and cards keep their own sensible inner widths. */
   /* One title style for every tool: the older pages used 1.6rem to 2.9rem. */
   #staff-main :global(h1) {
-    font-size: 1.75rem;
-    line-height: 1.2;
-    margin: 0 0 8px;
+    font-size: 2.125rem;
+    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: -0.022em;
+    margin: 6px 0 6px;
+    text-wrap: balance;
+  }
+
+  #staff-main :global(h2) {
+    letter-spacing: -0.015em;
   }
 
   /* Admin buttons. The shared .button is the public site's large orange pill; inside the admin
@@ -277,7 +285,6 @@ const adminItems = [
     background: var(--tvc-white);
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
-    box-shadow: var(--shadow-soft);
   }
 
   main :global(.hint) {
@@ -348,7 +355,8 @@ const adminItems = [
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    background: var(--tvc-white);
+    background: color-mix(in srgb, var(--tvc-white) 74%, transparent);
+    backdrop-filter: blur(28px) saturate(180%);
     border-right: 1px solid var(--tvc-line);
     overflow-x: hidden;
     overflow-y: auto;
@@ -388,10 +396,10 @@ const adminItems = [
   }
 
   .brand-name {
-    font-family: var(--font-wordmark);
-    font-weight: 700;
+    font-weight: 600;
     font-size: var(--text-lg);
-    color: var(--tvc-green-dark);
+    letter-spacing: -0.01em;
+    color: var(--tvc-ink);
     white-space: nowrap;
   }
 
@@ -469,10 +477,24 @@ const adminItems = [
     outline-offset: 1px;
   }
 
-  .menu a[aria-current='page'] {
-    background: var(--tvc-green-tint);
+  .menu a svg {
     color: var(--tvc-green-dark);
+  }
+
+  .menu a[aria-current='page'] {
+    background: var(--tvc-green-dark);
+    color: var(--tvc-white);
     font-weight: 600;
+  }
+
+  .menu a[aria-current='page'] svg {
+    color: var(--tvc-white);
+  }
+
+  @media (pointer: fine) {
+    .menu a {
+      padding-block: 8px;
+    }
   }
 
   .collapse-icon {
@@ -527,6 +549,11 @@ const adminItems = [
   }
 
   @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    .sidebar {
+      background: var(--tvc-white);
+      backdrop-filter: none;
+    }
+
     .topbar {
       background: var(--tvc-white);
       backdrop-filter: none;
@@ -534,10 +561,21 @@ const adminItems = [
     }
   }
 
+  .toolbar-slot {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+  }
+
   .who-wrap {
     position: relative;
     flex: none;
     margin-left: auto;
+  }
+
+  .toolbar-slot:has(*) + .who-wrap {
+    margin-left: 0;
   }
 
   .who {
@@ -1065,27 +1103,27 @@ const adminItems = [
   refresh();
 </script>
 
-<!-- An alternative look for the admin, to compare with the warm TVC one. Nothing sets data-look in production:
-     it is switched on in `astro dev` only (?look=neutral, see scripts/lib/staff-client.mjs), so these tokens
-     are inert for visitors. Cooler, calmer neutrals and the body face for headings, like the Apple-style
-     concept. It overrides tokens only; no component has a rule for it. -->
+<!-- The admin's look: calm, cool neutrals and the system type face (SF Pro on Apple devices, Inter elsewhere), the way
+     the Apple-style concept reads. It overrides the public site's --tvc-* tokens on admin pages only (this layout is the
+     only place it loads); `html:root` outranks global.css's `:root`. The dark appearance below overrides the same tokens
+     again. Components use the tokens and have no rules of their own for either. -->
 <style is:global>
-  /* stylelint-disable color-no-hex -- the neutral look's own token values, same job as the --tvc-* ones in global.css */
-  html[data-look='neutral'] {
-    --tvc-stone: #eceeea;
-    --tvc-cream: #f5f6f3;
-    --tvc-line: #dadcd5;
+  /* stylelint-disable color-no-hex -- the admin look's own token values, same job as the --tvc-* ones in global.css */
+  html:root {
+    --tvc-stone: #f4f5f1;
+    --tvc-cream: #ebece7;
+    --tvc-line: rgba(27, 30, 27, 0.12);
     --tvc-line-strong: #868c83;
     --tvc-ink: #1b1e1b;
     --tvc-ink-soft: #596057;
+    --tvc-green: #2a8f56;
+    --tvc-green-dark: #1f7a46;
+    --tvc-green-tint: rgba(31, 122, 70, 0.12);
+    --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
     --font-display: var(--font-body);
+    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 28px rgba(20, 30, 20, 0.1);
   }
   /* stylelint-enable color-no-hex */
-
-  html[data-look='neutral'] #staff-main h1,
-  html[data-look='neutral'] #staff-main h2 {
-    letter-spacing: -0.02em;
-  }
 </style>
 
 <!-- The dark appearance. It follows the device unless the person chose one in the account menu (Appearance),

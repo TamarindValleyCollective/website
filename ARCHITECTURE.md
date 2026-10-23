@@ -741,9 +741,11 @@ outside both the local machine and Netlify (the member-update-email workflow).
 - **Admin design primitives** (`StaffLayout.astro`, guarded by `scripts/lib/admin-primitives.test.mjs` and a Stylelint rule
   in `.stylelintrc.json`): the shell defines the card surface, page hint, notes, error text, page rhythm, text-style buttons,
   visually hidden labels and the button modifiers (`--primary`, `--danger`, `--danger-outline`, `--small`) once; the nine
-  pages no longer carry copies, and every font size in them is a `--text-*` token with a 0.8rem floor. A dev-only
-  `?look=neutral` (and a toggle in the demo note) swaps in a cooler token set at the foot of `StaffLayout.astro` for
-  comparison; nothing sets it in production. The admin also has a **dark appearance** (token overrides at the foot of
+  pages no longer carry copies, and every font size in them is a `--text-*` token with a 0.8rem floor. The admin's
+  **look** follows the Apple-style concept: calm cool neutrals and the system type face, as token overrides on admin pages
+  only (`html:root` block in `StaffLayout.astro`, which outranks global.css's `:root`), large 34px titles, a translucent side
+  menu whose current item is filled with the accent, flat hairline cards, and a `toolbar` slot in the top bar for page
+  controls. The admin also has a **dark appearance** (token overrides at the foot of
   `StaffLayout.astro`, so components follow with no rules of their own): it follows the device, and the account menu's
   Appearance control (Auto, Light, Dark) pins one, remembered in `localStorage` and applied by a script in `<head>`
   before first paint. Hard-coded greys were the only blockers (the accommodation calendar's past and closed cells now mix
@@ -754,9 +756,13 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `staff-me` also keeps the picture on the person (best effort, refreshed or cleared on each sign-in, only a https address
   on Google's image hosts), and `GET /api/staff-admin/people` returns it for each person, so the Access page can show a face
   beside each name. Only that person and super admins on Access ever see it. Reads and writes are isolated from the sign-in
-  queries and swallow errors, so an unapplied migration costs nothing but the faces. The Access People tab lists names and
-  faces only, with a search box and Access and Status filter chips like the member directory's; everything else about a person
-  (masked email, badges, a role per tool) is in the details beside the list.
+  queries and swallow errors, so an unapplied migration costs nothing but the faces. The Access People tab follows the
+  concept: a search field and one segmented filter (All, Super admins, Has tools, No tools, Deactivated) above one grouped list
+  of faces and names; the details beside it are a large face, masked email and badges, a grouped list with a pop-up for each
+  tool's role, and a separate "Deactivate" row. The unlock strip is now a **lock in the toolbar** (the layout's `toolbar`
+  slot): "Unlock editing", "Editing unlocked · N minutes" or "Set up to edit", which opens a sheet with the code field, the
+  passkey button and "Lock now". Deactivating or reactivating someone happens at once with an **Undo** toast (no `confirm()`);
+  role changes still save on selection.
 - **`netlify/functions/staff-admin.mts` + `lib/staff-admin-guard.ts`** — the API behind the
   Access module (issue #89): who is in the system, who holds which module role, an activity feed,
   and the changes themselves. **Super admins only.** Reading (`GET /api/staff-admin/people`,

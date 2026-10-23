@@ -30,7 +30,7 @@ const face = (letter: string, colour: string) =>
 const ALL_TOOLS = ['photo-pool', 'whatsapp', 'event-payments', 'accommodation', 'members', 'usage'];
 const CAPABILITIES: Record<string, string[]> = { read_only: ['view'], user: ['view', 'edit'], admin: ['view', 'edit', 'manage'] };
 
-function demoAccess() {
+function makeAccess() {
   const grant = (...pairs: [string, string][]) => pairs.map(([module, role]) => ({ module, role, scope: null }));
   const person = (id: string, label: string, extra: Record<string, unknown>) => ({ id, label, maskedEmail: `${label[0].toLowerCase()}••••@tvc.farm`, picture: null, active: true, isSuperAdmin: false, isMe: false, mfa: null, roles: [], ...extra });
   return {
@@ -53,6 +53,28 @@ function demoAccess() {
       person('demo-9', 'Divya Menon', { active: false, roles: grant(['whatsapp', 'read_only']) }),
     ],
   };
+}
+
+// One set of people for the whole session, so a role change or a deactivation in the demo sticks until reload.
+let accessState: ReturnType<typeof makeAccess> | null = null;
+const demoAccess = () => (accessState ??= makeAccess());
+
+// The writes the Access page makes. They change the demo set only; nothing leaves the page.
+function demoWrite(path: string, body: any): { status: number; data: unknown } | null {
+  if (path === '/api/staff-mfa/verify') return { status: 200, data: { stepUpToken: 'demo-step-up', expiresInSeconds: 600 } };
+  const person = demoAccess().people.find((x) => x.id === body?.personId);
+  if (path === '/api/staff-admin/people/active' && person) {
+    person.active = body.active === true;
+    return { status: 200, data: { ok: true } };
+  }
+  if (path === '/api/staff-admin/roles' && person) {
+    const roles = person.roles as { module: string; role: string; scope: null }[];
+    const i = roles.findIndex((r) => r.module === body.module);
+    if (i >= 0) roles.splice(i, 1);
+    if (body.role) roles.push({ module: body.module, role: body.role, scope: null });
+    return { status: 200, data: { ok: true } };
+  }
+  return null;
 }
 
 function demoMe(kind: string) {
@@ -93,6 +115,16 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     if (path === '/api/staff-me') return reply(demoMe(kind));
     if (path === '/api/staff-admin/people' && (init?.method ?? 'GET') === 'GET') return reply(demoAccess());
     if (path === '/api/staff-admin/activity') return reply({ events: [], nextBefore: null });
+    if ((init?.method ?? 'GET') === 'POST') {
+      let body: unknown = null;
+      try {
+        body = JSON.parse(String(init?.body ?? 'null'));
+      } catch {
+        // not JSON: not ours
+      }
+      const done = demoWrite(path, body);
+      if (done) return Promise.resolve(new Response(JSON.stringify(done.data), { status: done.status, headers: { 'content-type': 'application/json' } }));
+    }
     return realFetch(input, init);
   };
 
@@ -100,24 +132,7 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     const note = document.createElement('p');
     const text = document.createElement('span');
     text.textContent = kind === 'limited' ? 'Demo mode: a fake admin with two tools.' : 'Demo mode: a fake super admin. Nothing here reaches the real data.';
-    // Switches the admin between the warm TVC look and the neutral one (tokens in StaffLayout.astro).
-    const look = document.createElement('button');
-    look.type = 'button';
-    const paint = () => (look.textContent = `Look: ${document.documentElement.dataset.look === 'neutral' ? 'neutral' : 'warm'}`);
-    look.addEventListener('click', () => {
-      const next = document.documentElement.dataset.look === 'neutral' ? 'warm' : 'neutral';
-      if (next === 'neutral') document.documentElement.dataset.look = 'neutral';
-      else delete document.documentElement.dataset.look;
-      try {
-        sessionStorage.setItem('tvc-staff-look', next);
-      } catch {
-        // not remembered
-      }
-      paint();
-    });
-    look.setAttribute('style', 'margin-left:10px;padding:2px 8px;border:1px solid currentColor;border-radius:6px;background:none;font:inherit;cursor:pointer');
-    paint();
-    note.append(text, look);
+    note.append(text);
     note.setAttribute('style', 'position:fixed;bottom:12px;right:12px;z-index:9999;margin:0;padding:6px 12px;border-radius:8px;font:600 0.8rem sans-serif;background:var(--tvc-white);color:var(--tvc-ink);border:1px solid currentColor');
     document.body.append(note);
   });
