@@ -160,3 +160,94 @@ main .segmented button:focus-visible {
     min-height: 44px;
   }
 }
+
+/* A grouped list: rows share one rounded surface, hairlines inset from the leading edge. */
+main .list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--tvc-white);
+  border-radius: var(--radius);
+  box-shadow: 0 0 0 1px var(--tvc-line) inset;
+  overflow: hidden;
+}
+
+main .list > li {
+  position: relative;
+}
+
+main .list > li + li::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 14px;
+  height: 1px;
+  background: var(--tvc-line);
+}
+
+main .row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 14px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+}
+
+main a.row,
+main button.row {
+  cursor: pointer;
+  transition: background 120ms ease-out;
+}
+
+main a.row:active,
+main button.row:active {
+  background: var(--tvc-cream);
+}
+
+@media (hover: hover) {
+  main a.row:hover,
+  main button.row:hover {
+    background: var(--tvc-cream);
+  }
+}
+
+main a.row:focus-visible,
+main button.row:focus-visible {
+  outline: 2px solid var(--tvc-orange);
+  outline-offset: -2px;
+}
+
+main .row .grow {
+  flex: 1;
+  min-width: 0;
+}
+
+main .row .title {
+  display: block;
+  font-weight: 500;
+}
+
+main .row .detail {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--tvc-ink-soft);
+}
+
+main .row .chev {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: var(--tvc-ink-soft);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.7;
+}

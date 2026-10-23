@@ -755,14 +755,6 @@ import SignInGate from '../../components/SignInGate.astro';
     transform: scale(0.97);
   }
 
-  .dir-card {
-    transition: transform 120ms ease-out, border-color 120ms ease-out;
-  }
-
-  .dir-card:active {
-    transform: scale(0.985);
-  }
-
   .kpis {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1647,7 +1639,7 @@ import SignInGate from '../../components/SignInGate.astro';
       transition: none !important;
     }
 
-    :is(.btn, .nav-item, .who, .menu-btn, .more, .who-menu button, .who-menu a, .dir-card):active {
+    :is(.btn, .nav-item, .who, .menu-btn, .more, .who-menu button, .who-menu a):active {
       transform: none !important;
     }
 
@@ -2214,48 +2206,17 @@ import SignInGate from '../../components/SignInGate.astro';
     white-space: nowrap;
   }
 
-  .dir-skel {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
-    gap: 14px;
-  }
-
   .dir-skel span {
-    min-height: 84px;
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius);
+    min-height: 68px;
     background: var(--tvc-cream);
   }
 
-  .dir-grid {
+  .dir-skel {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
-    gap: 14px;
-  }
-
-  .dir-card {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 14px 16px;
-    border: 1px solid var(--tvc-line);
+    gap: 1px;
+    overflow: hidden;
     border-radius: var(--radius);
-    background: var(--tvc-white);
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .dir-card:hover {
-      border-color: var(--tvc-line-strong);
-    }
-  }
-
-  .dir-card:focus-visible {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 2px;
+    box-shadow: 0 0 0 1px var(--tvc-line) inset;
   }
 
   .dir-pill {
@@ -2274,26 +2235,78 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
-  .dir-cell {
-    position: relative;
+  /* The directory is a grouped list (the admin portal's .list and .row): one line per unit, scannable. */
+  .dir-group {
+    margin: 22px 0 8px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
   }
 
-  .dir-cell > .dir-card {
-    width: 100%;
-    height: 100%;
+  .dir-group:first-child {
+    margin-top: 4px;
   }
 
-  .dir-card--you .dir-card-names {
-    padding-right: 76px;
+  .dir-row {
+    min-height: 68px;
+    gap: 14px;
   }
 
-  .dir-card-tools {
-    position: absolute;
-    top: 10px;
-    right: 10px;
+  .dir-row .title {
+    font-weight: 600;
+  }
+
+  .dir-row .detail {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dir-row .dir-pills {
+    margin: 0;
+    flex: none;
+  }
+
+  /* Your own unit's row: the row opens the profile; the story's state and the way into the editor sit beside it. */
+  .dir-own {
     display: flex;
     align-items: center;
-    gap: 8px;
+    background: var(--tvc-green-tint);
+  }
+
+  .dir-own > .row {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .dir-own-tools {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 10px;
+    padding-right: 14px;
+  }
+
+  /* The story's state, in words (the full sentence is the tooltip and the screen-reader label). */
+  .dir-state {
+    padding: 1px 9px;
+    border-radius: 999px;
+    background: var(--tvc-white);
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .dir-state--review,
+  .dir-state--changes {
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+  }
+
+  .dir-state--live {
+    color: var(--tvc-green-dark);
   }
 
   @media (pointer: coarse) {
@@ -2301,9 +2314,59 @@ import SignInGate from '../../components/SignInGate.astro';
       width: 44px;
       height: 44px;
     }
+  }
 
-    .dir-card--you .dir-card-names {
-      padding-right: 104px;
+  @media (max-width: 560px) {
+    .dir-own-tools .dir-state,
+    .dir-own .dir-pills {
+      display: none;
+    }
+  }
+
+  /* The profile: a card that grows out of the row you tapped; on a phone, a bottom sheet you can swipe down. */
+  dialog.dir-modal[open] {
+    animation: dir-pop-in 240ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  dialog.dir-modal.dir-modal--out {
+    animation: dir-pop-out 150ms ease-in forwards;
+  }
+
+  @keyframes dir-pop-in {
+    from { opacity: 0; transform: scale(0.9); }
+  }
+
+  @keyframes dir-pop-out {
+    to { opacity: 0; transform: scale(0.94); }
+  }
+
+  @keyframes dir-sheet-in {
+    from { transform: translateY(100%); }
+  }
+
+  @keyframes dir-sheet-out {
+    to { transform: translateY(100%); }
+  }
+
+  @keyframes dir-fade-in {
+    from { opacity: 0; }
+  }
+
+  @keyframes dir-fade-out {
+    to { opacity: 0; }
+  }
+
+  .dir-grab {
+    display: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    dialog.dir-modal[open] {
+      animation: dir-fade-in 150ms ease-out;
+    }
+
+    dialog.dir-modal.dir-modal--out {
+      animation: dir-fade-out 120ms ease-in forwards;
     }
   }
 
@@ -2365,31 +2428,6 @@ import SignInGate from '../../components/SignInGate.astro';
     outline-offset: 2px;
   }
 
-  .dir-status {
-    display: grid;
-    place-items: center;
-    color: var(--tvc-ink-soft);
-  }
-
-  .dir-status svg {
-    width: 18px;
-    height: 18px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.8;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-  .dir-status--review,
-  .dir-status--changes {
-    color: var(--tvc-orange-text);
-  }
-
-  .dir-status--live {
-    color: var(--tvc-green-dark);
-  }
-
   .back-link {
     display: inline-block;
     margin: 0 0 10px;
@@ -2398,17 +2436,7 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-green-dark);
   }
 
-  .dir-card--you {
-    border-color: var(--tvc-green);
-    background: var(--tvc-green-tint);
-  }
-
   /* On the tinted card the pills go white with a hairline edge. */
-  .dir-card--you .dir-pill {
-    border-color: var(--tvc-line);
-    background: var(--tvc-white);
-  }
-
   .dir-faces {
     display: flex;
     flex: none;
@@ -2432,28 +2460,7 @@ import SignInGate from '../../components/SignInGate.astro';
     font-size: 1rem;
   }
 
-  .dir-photo--card,
-  .dir-initial--card {
-    width: 120px;
-    height: 120px;
-    margin: 0;
-  }
-
-  .dir-initial--card {
-    font-size: 2.4rem;
-  }
-
   /* A couple with two different pictures: two smaller, overlapping. */
-  .dir-faces--2 .dir-photo--card,
-  .dir-faces--2 .dir-initial--card {
-    width: 92px;
-    height: 92px;
-  }
-
-  .dir-card .dir-faces--2 > * + * {
-    margin-left: -34px;
-  }
-
   .dir-photo--lg,
   .dir-initial--lg {
     width: 64px;
@@ -2557,65 +2564,85 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   /* The picture is on the left and vertically centred against the text beside it. */
-  .dir-card-photo {
-    display: flex;
-    flex: none;
-    align-items: center;
-  }
-
-  .dir-card-body {
-    display: flex;
-    flex: 1 1 0;
-    flex-direction: column;
-    align-self: stretch;
-    gap: 6px;
-    min-width: 0;
-  }
-
-  .dir-card-names {
-    font-weight: 700;
-  }
-
   /* On a card the pills are a footer at the bottom right, pinned to the bottom so they line up across a row. */
-  .dir-card-body > .dir-pills {
-    margin: auto 0 0 auto;
-  }
-
-  .dir-card-pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .dir-card-text {
-    font-size: var(--text-sm);
-    color: var(--tvc-ink-soft);
-  }
-
   dialog.modal.dir-modal {
-    position: relative;
+    position: fixed; /* a fixed box in the top layer: the close button anchors to it, and the sheet docks to the screen's foot */
     width: min(540px, calc(100vw - 24px));
     max-height: calc(100vh - 48px);
     overflow-y: auto;
   }
 
+  @media (max-width: 560px) {
+    dialog.modal.dir-modal {
+      width: 100%;
+      max-width: none;
+      max-height: 88dvh;
+      margin: auto 0 0;
+      padding-bottom: calc(20px + env(safe-area-inset-bottom));
+      border-width: 1px 0 0;
+      border-radius: 16px 16px 0 0;
+      overscroll-behavior: contain;
+    }
+
+    dialog.dir-modal[open] {
+      animation: dir-sheet-in 320ms cubic-bezier(0.32, 0.72, 0, 1);
+    }
+
+    dialog.dir-modal.dir-modal--out {
+      animation: dir-sheet-out 220ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+    }
+
+    /* The grab area: dragging it down moves the sheet with the finger. */
+    .dir-grab {
+      display: block;
+      height: 36px;
+      margin: -20px 0 0;
+      cursor: grab;
+      touch-action: none;
+    }
+
+    .dir-grab::before {
+      content: '';
+      display: block;
+      width: 40px;
+      height: 5px;
+      margin: 12px auto 0;
+      border-radius: 3px;
+      background: var(--tvc-line-strong);
+      opacity: 0.6;
+    }
+  }
+
   .dir-close {
     position: absolute;
-    top: 8px;
-    right: 12px;
+    top: 6px;
+    right: 6px;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
     border: 0;
+    border-radius: 50%;
     background: none;
     color: var(--tvc-ink-soft);
-    font-size: var(--text-2xl);
-    line-height: 1;
     cursor: pointer;
+  }
+
+  .dir-close svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
   }
 
   .dir-pills {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    margin: 0 28px 14px 0;
+    margin: 0 48px 14px 0;
   }
 
   .dir-person {
@@ -4595,13 +4622,6 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
     // Your own unit's story state, read once so the card can show where it stands (the directory itself only
     // lists approved stories). null until it loads, or if it cannot be read: the card then just says "Edit story".
-    // The state is shown as a small icon with its name as a tooltip and screen-reader label, not as a pill.
-    const STATE_ICON = {
-      draft: '<path d="M12 3a9 9 0 1 0 .01 0" stroke-dasharray="2.5 3"/><path d="M9 12h6"/>',
-      review: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-      changes: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5v.01"/>',
-      live: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/>',
-    };
     let mine: { written: boolean; text: string; label: string; tone: 'draft' | 'review' | 'changes' | 'live' } | null = null;
     function describeMine(st: { status: string | null; hasUnsubmittedChanges: boolean; draft: { bio: string; family: string; quote: string } }) {
       const written = !!(st.draft.bio.trim() || st.draft.family.trim() || st.draft.quote.trim());
@@ -4612,29 +4632,30 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       return { written, text, label: 'Draft, not submitted yet', tone: 'draft' as const };
     }
 
-    function card(hh: DirHousehold): HTMLElement {
-      // The card names and shows only the primary members (the owners); the popup has everyone.
+    // One unit as a row in the grouped list: faces, the owners' first names with the story's first line under them,
+    // the farm and house code, and a chevron. Your own unit's row also says where its story stands, in words, and
+    // carries the way into the editor. (The story is the unit's, so anyone in the unit sees it on the unit's row.)
+    const STATE_WORD = { draft: 'Draft', review: 'In review', changes: 'Changes needed', live: 'Approved' };
+    function unitRow(hh: DirHousehold): HTMLElement {
+      // The row names and shows only the primary members (the owners); the popup has everyone.
       const primary = hh.people.filter((p) => p.primary !== false);
       const withStory = primary.find((p) => p.story?.bio) ?? primary.find((p) => p.story) ?? hh.people.find((p) => p.story?.bio) ?? hh.people.find((p) => p.story);
-      // First names on the card; the full names are in the popup, and search still matches them.
+      // First names on the row; the full names are in the popup, and search still matches them.
       const isYours = hh.people.some((p) => p.isYou);
       const names = joinNames(primary.map((p) => (p.isYou ? `${first(p.name)} (you)` : first(p.name))));
-      // The picture sits on the left, vertically centred against the text; names, the story's first lines and the
-      // farm and house pills are in a column beside it.
-      const storyLine = withStory?.story?.bio ? snippet(withStory.story.bio) : withStory?.story?.why ? `“${snippet(withStory.story.why)}”` : isYours && mine?.text ? `${snippet(mine.text)}${mine.tone === 'live' ? '' : mine.tone === 'review' ? ' (waiting for approval)' : mine.tone === 'changes' ? ' (changes needed)' : ' (draft)'}` : isYours ? 'You have not shared a story yet' : '';
-      const b = h('button', `dir-card${isYours ? ' dir-card--you' : ''}`, undefined,
-        h('span', 'dir-card-photo', undefined, faces(primary, 'card')),
-        h('span', 'dir-card-body', undefined,
-          h('span', 'dir-card-names', names),
-          // No story means no line at all, so a card without one is quiet rather than repeating "no story yet".
-          storyLine ? h('span', 'dir-card-text', storyLine) : null,
-          pills(hh, false)),
-      );
+      // No story means no line at all, so a unit without one is quiet rather than repeating "no story yet".
+      const storyLine = withStory?.story?.bio ? snippet(withStory.story.bio) : withStory?.story?.why ? `“${snippet(withStory.story.why)}”` : isYours && mine?.text ? snippet(mine.text) : isYours ? 'You have not shared a story yet' : '';
+      const own = isYours && !isFamily();
+      const chev = icon('<path d="M9 6l6 6-6 6"/>');
+      chev.setAttribute('class', 'chev');
+      const b = h('button', 'row dir-row', undefined,
+        faces(primary),
+        h('span', 'grow', undefined, h('span', 'title', names), storyLine ? h('span', 'detail', storyLine) : null),
+        pills(hh, false),
+        own ? null : chev);
       b.setAttribute('type', 'button');
-      b.addEventListener('click', () => openProfile(hh));
-      if (!isYours || isFamily()) return b;
-      // Your own card carries the way into the editor, and where the story stands. The story is the unit's, so
-      // anyone in the unit sees it on the unit's card.
+      b.addEventListener('click', () => openProfile(hh, b));
+      if (!own) return h('li', '', undefined, b);
       const label = mine && !mine.written ? 'Write your story' : primary.length > 1 ? 'Edit your unit\'s story (shared)' : 'Edit your story';
       const edit = h('button', 'dir-edit', undefined, icon(IC.pen));
       edit.setAttribute('type', 'button');
@@ -4642,14 +4663,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       edit.title = label;
       edit.setAttribute('data-tour', 'edit-story');
       edit.addEventListener('click', () => (location.hash = '#/story'));
-      const tools = h('span', 'dir-card-tools', undefined, mine && mine.written ? (() => {
-        const st = h('span', `dir-status dir-status--${mine.tone}`, undefined, icon(STATE_ICON[mine.tone]));
-        st.setAttribute('role', 'img');
-        st.setAttribute('aria-label', mine.label);
-        st.title = mine.label;
-        return st;
-      })() : null, edit);
-      return h('div', 'dir-cell', undefined, b, tools);
+      const state = mine && mine.written ? h('span', `dir-state dir-state--${mine.tone}`, STATE_WORD[mine.tone]) : null;
+      if (state) state.title = mine!.label;
+      return h('li', 'dir-own', undefined, b, h('span', 'dir-own-tools', undefined, state, edit));
     }
 
     // The household's profile in a native dialog, laid out like the card on the public Members page: the
@@ -4657,14 +4673,58 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     // with an icon, and the quote. The list underneath keeps its scroll position and search; Esc and a
     // click outside close it, and focus returns to the card that opened it.
     const FAMILY_ICON = '<circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><circle cx="17" cy="9" r="2.3"/><path d="M16.2 14.4c2.8.2 4.8 2 4.8 5.1"/>';
-    function openProfile(hh: DirHousehold) {
+    function openProfile(hh: DirHousehold, from?: HTMLElement) {
       const dlg = document.createElement('dialog');
       dlg.className = 'modal dir-modal';
       dlg.setAttribute('aria-label', joinNames(hh.people.filter((p) => p.primary !== false).map((p) => p.name)));
-      const close = h('button', 'dir-close', '×');
+      // Leaving plays the entrance backwards (a card shrinks back into its row; a sheet slides down) and then
+      // closes. A swipe that has already moved the sheet carries on from where the finger left it.
+      let leaving = false;
+      const dismiss = () => {
+        if (leaving) return;
+        leaving = true;
+        dlg.classList.add('dir-modal--out');
+        const done = () => { if (dlg.open) dlg.close(); };
+        dlg.addEventListener('animationend', done, { once: true });
+        window.setTimeout(done, 400); // in case no animation runs
+      };
+      const close = h('button', 'dir-close', undefined, icon('<path d="M6 6l12 12M18 6L6 18"/>'));
       close.setAttribute('type', 'button');
       close.setAttribute('aria-label', 'Close');
-      close.addEventListener('click', () => dlg.close());
+      close.addEventListener('click', dismiss);
+      // On a phone the card is a bottom sheet with a grab area: drag it down with the finger, and a flick
+      // carries it (the release velocity is projected the way scrolling is, and past halfway it goes).
+      const grab = h('div', 'dir-grab');
+      grab.setAttribute('aria-hidden', 'true');
+      let drag: { id: number; y: number; t: number; dy: number; v: number } | null = null;
+      grab.addEventListener('pointerdown', (e) => {
+        drag = { id: e.pointerId, y: e.clientY, t: e.timeStamp, dy: 0, v: 0 };
+        grab.setPointerCapture(e.pointerId);
+        dlg.style.transition = 'none';
+      });
+      grab.addEventListener('pointermove', (e) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        const dy = e.clientY - drag.y;
+        drag.v = (dy - drag.dy) / Math.max(1, e.timeStamp - drag.t); // px per ms, from the last movement
+        drag.dy = dy;
+        drag.t = e.timeStamp;
+        dlg.style.transform = `translateY(${Math.max(0, dy)}px)`;
+      });
+      const endDrag = (e: PointerEvent) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        const { dy, v } = drag;
+        drag = null;
+        const projected = dy + v * (0.998 / (1 - 0.998));
+        if (dy > 0 && projected > dlg.offsetHeight / 2) {
+          dlg.style.transition = '';
+          dismiss();
+        } else {
+          dlg.style.transition = 'transform 280ms cubic-bezier(0.32, 0.72, 0, 1)';
+          dlg.style.transform = '';
+        }
+      };
+      grab.addEventListener('pointerup', endDrag);
+      grab.addEventListener('pointercancel', endDrag);
       const label = (p: { name: string; isYou: boolean }) => (p.isYou ? `${p.name} (you)` : p.name);
 
       // The first names of everyone in the household are set in bold wherever the text mentions them.
@@ -4710,11 +4770,18 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       }
       // The rest of the household (children, other family) in a section of their own, not a block each.
       if (hh.familyMembers.length) sections.push(h('section', 'dir-person dir-household', undefined, familyRow(h('p', 'dir-family', `Also in this unit: ${joinNames(hh.familyMembers.map(label))}`))));
-      dlg.append(close, pills(hh), ...sections);
-      dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+      dlg.append(grab, close, pills(hh), ...sections);
+      dlg.addEventListener('click', (e) => { if (e.target === dlg) dismiss(); });
+      dlg.addEventListener('cancel', (e) => { e.preventDefault(); dismiss(); }); // Esc
       dlg.addEventListener('close', () => dlg.remove());
       document.body.append(dlg);
       dlg.showModal();
+      // On a wide screen the card grows out of the row that was opened.
+      if (from && !window.matchMedia('(max-width: 560px)').matches) {
+        const box = dlg.getBoundingClientRect();
+        const at = from.getBoundingClientRect();
+        dlg.style.transformOrigin = `${at.left + at.width / 2 - box.left}px ${at.top + at.height / 2 - box.top}px`;
+      }
     }
 
     // Filters: housing cluster (fixed order) and bedrooms (1, 2 and 3 BHK), one of each at a time, with no counts on
@@ -4772,7 +4839,17 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         paintOnly();
         draw();
       });
-      results.replaceChildren(shown.length ? h('div', 'dir-grid', undefined, ...shown.map(card)) : h('div', 'dir-empty', undefined, h('p', 'lede', 'No one matches that.'), clear));
+      const isMine = (x: DirHousehold) => x.people.some((p) => p.isYou);
+      const mineHh = shown.filter(isMine);
+      const rest = shown.filter((x) => !isMine(x));
+      const listOf = (hs: DirHousehold[]) => h('ul', 'list', undefined, ...hs.map(unitRow));
+      results.replaceChildren(shown.length
+        ? h('div', '', undefined,
+            mineHh.length ? h('h2', 'dir-group', 'Your unit') : null,
+            mineHh.length ? listOf(mineHh) : null,
+            rest.length && mineHh.length ? h('h2', 'dir-group', 'Everyone') : null,
+            rest.length ? listOf(rest) : null)
+        : h('div', 'dir-empty', undefined, h('p', 'lede', 'No one matches that.'), clear));
     }
 
     void (async () => {
