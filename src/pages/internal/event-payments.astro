@@ -29,12 +29,12 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
   }));
 ---
 
-<StaffLayout title="Event Payments" description="Internal event payment tracking and refunds." current="event-payments">
+<StaffLayout title="Event payments" description="Internal event payment tracking and refunds." current="event-payments">
   <section class="section wrapper">
-    <h1>Event Payments</h1>
+    <h1>Event payments</h1>
     <p class="hint">Registrations, cancellations, and money collected per event — and where to issue a refund.</p>
 
-    <SignInGate forbiddenWhat="Event Payments" />
+    <SignInGate forbiddenWhat="event payments" />
 
     <div id="app" hidden>
       <label class="event-picker" data-tour="event">

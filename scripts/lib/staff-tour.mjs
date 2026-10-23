@@ -38,7 +38,7 @@ export const TOURS = {
       since: 1,
       audience: 'all',
       target: 'tools',
-      tag: 'Home',
+      tag: 'Today',
       title: 'Your tools',
       text: 'One tile for each tool you have a role in. The label on a tile is your role there: Admin, User or Read-only.',
     },

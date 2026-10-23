@@ -11,12 +11,12 @@ import StaffLayout from '../../layouts/StaffLayout.astro';
 import SignInGate from '../../components/SignInGate.astro';
 ---
 
-<StaffLayout title="Photo Pool" description="Internal photo review dashboard." current="photo-pool">
+<StaffLayout title="Photo pool" description="Internal photo review dashboard." current="photo-pool">
   <section class="section wrapper">
-    <h1>Photo Pool</h1>
+    <h1>Photo pool</h1>
     <p class="hint" data-tour="intro">Review photos dropped into the shared Drive Inbox folder, then approve or reject each one.</p>
 
-    <SignInGate forbiddenWhat="Photo Pool" />
+    <SignInGate forbiddenWhat="the photo pool" />
 
     <p id="status" class="hint" hidden></p>
     <div id="grid" class="grid" data-tour="grid" hidden></div>

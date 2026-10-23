@@ -45,12 +45,12 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }));
 ---
 
-<StaffLayout title="Accommodation Allocation" description="Internal accommodation booking tool." current="accommodation" collapseByDefault>
+<StaffLayout title="Accommodation calendar" description="Internal accommodation booking tool." current="accommodation" collapseByDefault>
   <section class="section wrapper">
-    <h1>Accommodation Allocation</h1>
+    <h1>Accommodation calendar</h1>
     <p class="hint">Record who's in which tent, for how long. The public site only ever shows aggregate availability derived from this.</p>
 
-    <SignInGate forbiddenWhat="the Accommodation calendar" />
+    <SignInGate forbiddenWhat="the accommodation calendar" />
 
     <div id="app" hidden>
       <div class="month-nav" data-tour="month-nav">

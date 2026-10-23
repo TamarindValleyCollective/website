@@ -19,10 +19,10 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 }
 ---
 
-<StaffLayout title="WhatsApp" description="Internal WhatsApp reply dashboard." current="whatsapp" collapseByDefault>
+<StaffLayout title="WhatsApp inbox" description="Internal WhatsApp reply dashboard." current="whatsapp" collapseByDefault>
   <section class="section wrapper">
     <div class="page-head" data-tour="header">
-      <h1>WhatsApp</h1>
+      <h1>WhatsApp inbox</h1>
       <p class="page-head-sub">+91 80 4110 9754 · replies only send within 24h of the customer's last message</p>
     </div>
 
@@ -1960,7 +1960,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   function renderBookings(data: GuestData['eventBookings']) {
     guestBookings.replaceChildren();
     if (!data.visible) {
-      guestBookings.append(guestEl('p', 'guest-note', 'Booking details are limited to people with access to Event Payments.'));
+      guestBookings.append(guestEl('p', 'guest-note', 'Booking details are limited to people with access to Event payments.'));
       return;
     }
     if (data.error) {
