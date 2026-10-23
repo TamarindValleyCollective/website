@@ -36,7 +36,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
       <h2 id="services-title">Services</h2>
       <ul id="cards" class="list" data-tour="services" aria-labelledby="services-title"></ul>
-      <p class="foot">A figure typed in from a provider's dashboard is only as fresh as the last entry; each service says how old it is. Warnings are emailed to the core team once, and again only if they get worse.</p>
+      <p class="foot">Every bar shows how much is <b>used</b>, so a fuller bar is closer to the limit; what is left is in the words beside it. A figure typed in from a provider's dashboard is only as fresh as the last entry; each service says how old it is. Warnings are emailed to the core team once, and again only if they get worse.</p>
 
       <h2>Domain renewals</h2>
       <ul id="domains" class="list" data-tour="domains"><li><div class="row"><span class="grow muted">Checking the registries…</span></div></li></ul>
@@ -304,6 +304,13 @@ import SignInGate from '../../components/SignInGate.astro';
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .usage .row-meter {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 10px;
   }
 
   .usage .bar {
@@ -796,9 +803,11 @@ import SignInGate from '../../components/SignInGate.astro';
     let right: HTMLElement | null = null;
     if (meterEl) {
       const fill = meterEl.querySelector<HTMLElement>('.meter-fill');
-      const bar = h('span', { class: `bar${st ? ` bar--${st}` : ''}`, attrs: { role: 'img', 'aria-label': meterEl.getAttribute('aria-valuetext') ?? '' } }, h('i'));
+      // Every bar on this page fills with what is USED, so a fuller bar always means closer to the limit.
+      const used = meterEl.getAttribute('aria-valuenow') ?? '0';
+      const bar = h('span', { class: `bar${st ? ` bar--${st}` : ''}`, attrs: { 'aria-hidden': 'true' } }, h('i'));
       (bar.firstElementChild as HTMLElement).style.width = fill?.style.width ?? '0%';
-      right = bar;
+      right = h('span', { class: 'row-meter', attrs: { role: 'img', 'aria-label': `${used}% used` } }, h('span', { class: 'value', text: `${used}% used` }), bar);
     } else if (summary.some((n) => hasClass(n, 'reading-inline'))) {
       right = h('span', { class: 'pill', text: 'Enter a reading' });
     }
@@ -898,8 +907,8 @@ import SignInGate from '../../components/SignInGate.astro';
     }
     if (est) {
       parts.push(h('p', { class: 'hero', text: `about ${usd(est.remaining)}` }), h('p', { class: 'hero-sub', text: `credit left, estimated, of ${usd(est.total ?? est.remaining)}` }));
-      if (est.total) parts.push(meter(est.remaining / est.total, est.level, 'Anthropic credit left', `${Math.round((est.remaining / est.total) * 100)}% left`));
-      more.push(h('p', { class: 'meter-caption', text: `${Math.round((est.remaining / est.total) * 100)}% left · based on the ${usd(reading.value)} entered ${ago(reading.capturedAt)}, minus ${usd(est.spent)} of metered usage since` }));
+      if (est.total) parts.push(meter(1 - est.remaining / est.total, est.level, 'Anthropic credit used', `${Math.round((1 - est.remaining / est.total) * 100)}% used`));
+      more.push(h('p', { class: 'meter-caption', text: `${Math.round((1 - est.remaining / est.total) * 100)}% used · ${usd(est.remaining)} left · based on the ${usd(reading.value)} entered ${ago(reading.capturedAt)}, minus ${usd(est.spent)} of metered usage since` }));
     } else if (reading) {
       parts.push(h('p', { class: 'hero', text: usd(reading.value) }), h('p', { class: 'hero-sub', text: `entered ${ago(reading.capturedAt)}. Add the token prices below to turn usage into a live estimate.` }));
     } else {
@@ -967,13 +976,13 @@ import SignInGate from '../../components/SignInGate.astro';
     const parts: Kid[] = [];
     if (est) {
       parts.push(h('p', { class: 'hero', text: `about ${spend(est.remaining)}` }), h('p', { class: 'hero-sub', text: `credit left, estimated, of ${usd(est.total ?? est.remaining)}` }));
-      if (est.total) parts.push(meter(est.remaining / est.total, est.level, 'TypeSafe credit left', `${Math.round((est.remaining / est.total) * 100)}% left`));
+      if (est.total) parts.push(meter(1 - est.remaining / est.total, est.level, 'TypeSafe credit used', `${Math.round((1 - est.remaining / est.total) * 100)}% used`));
       parts.push(h('p', { class: 'hero-sub', text: `${m?.reading ? `entered ${ago(m.reading.capturedAt)} · ` : ''}${calls}` }));
     } else {
       parts.push(h('p', { class: 'hero', text: nf.format(t.today.requests) }), h('p', { class: 'hero-sub', text: calls.replace(/^\d[\d,]* /, '') }), h('p', { class: 'hero-sub', text: 'No credit entered yet. Enter the amount you loaded once, and the page subtracts what the site spends.' }));
     }
     const more: Kid[] = [];
-    if (est) more.push(h('p', { class: 'meter-caption', text: `${Math.round((est.remaining / (est.total || est.remaining || 1)) * 100)}% left · based on the ${usd(est.readingValue)} entered ${ago(est.readingAt)}, minus ${spend(est.spent)} of metered usage since` }));
+    if (est) more.push(h('p', { class: 'meter-caption', text: `${Math.round((1 - est.remaining / (est.total || est.remaining || 1)) * 100)}% used · ${spend(est.remaining)} left · based on the ${usd(est.readingValue)} entered ${ago(est.readingAt)}, minus ${spend(est.spent)} of metered usage since` }));
     more.push(
       h('dl', { class: 'stats' },
         stat('Last 7 days', nf.format(t.last7.requests), `${spend(t.last7.costUsd)} · ${nf.format(t.last7.errors)} failed`),
@@ -1089,7 +1098,7 @@ import SignInGate from '../../components/SignInGate.astro';
     if (r?.limit && !r.staleForCycle) {
       const used = 1 - r.value / r.limit;
       more.push(
-        h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: "Netlify's own balance (typed in)" }), h('span', { text: `${leftOf(r.value, r.limit)} left` })), meter(used, typed.level, 'Netlify credits used', `${Math.round(used * 100)}% used`)),
+        h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: "Netlify's own balance (typed in)" }), h('span', { text: `${Math.round(used * 100)}% used · ${leftOf(r.value, r.limit)} left` })), meter(used, typed.level, 'Netlify credits used', `${Math.round(used * 100)}% used`)),
         h('p', { class: 'meter-caption', text: `Typed in ${ago(r.capturedAt)} from ${typed.where}. ${r.value > r.limit ? "It is above the plan's included credits, so the extra is from top-ups or carried-over credits, and the run-out date uses it. " : ''}Whatever it shows beyond deploys is bandwidth, functions and requests: they cost credits but Netlify's API reports none of them.` }),
       );
     } else if (!r) {
@@ -1152,19 +1161,22 @@ import SignInGate from '../../components/SignInGate.astro';
     const parts: Kid[] = [h('p', { class: 'hero', text: `${amount(r.value)} ${m.unit}` }), h('p', { class: 'hero-sub', text: remaining ? (r.limit ? (r.value > r.limit ? `left (${amount(r.limit)} included + extra)` : `left of ${amount(r.limit)} included`) : 'left (limit not entered)') : r.limit ? `of ${amount(r.limit)} included` : 'limit not entered' })];
     const cycleMs = r.cycleStart && r.cycleEnd ? new Date(r.cycleEnd).getTime() - new Date(r.cycleStart).getTime() : 0;
     if (remaining && r.limit && cycleMs > 0 && !staleForCycle) {
-      // Two bars that both drain left to right: credits left against days left in the billing cycle.
-      // Credits draining faster than days means spending is ahead of pace.
+      // Two bars that both fill left to right: credits used against how much of the billing cycle has passed.
+      // Credits filling faster than the cycle means spending is ahead of pace.
       const msLeft = Math.max(0, new Date(r.cycleEnd).getTime() - Date.now());
       const daysLeft = Math.ceil(msLeft / 86_400_000);
       const daysTotal = Math.round(cycleMs / 86_400_000);
-      const creditsFrac = Math.max(0, r.value / r.limit);
-      const daysFrac = Math.min(1, msLeft / cycleMs);
+      const creditsFrac = Math.max(0, r.value / r.limit); // still left
+      const daysFrac = Math.min(1, msLeft / cycleMs); // still to come
+      const usedFrac = Math.min(1, Math.max(0, 1 - creditsFrac));
+      const elapsedFrac = Math.min(1, Math.max(0, 1 - daysFrac));
+      const usedPct = Math.round(usedFrac * 100);
       const row = (label: string, text: string, fraction: number, level: Level, what: string) =>
         h('div', { class: 'meter-row' }, h('div', { class: 'meter-row-head' }, h('span', { text: label }), h('span', { text })), meter(fraction, level, what, text));
-      parts.push(meter(creditsFrac, m.level, `${m.label} left`, leftOf(r.value, r.limit)));
+      parts.push(meter(usedFrac, m.level, `${m.label} used`, `${usedPct}% used`));
       more.push(
-        row('Credits left', leftOf(r.value, r.limit), creditsFrac, m.level, `${m.label} left`),
-        row('Days left', `${daysLeft} of ${daysTotal} · resets ${cycleDay(r.cycleEnd)}`, daysFrac, null, 'Days left in the billing cycle'),
+        row('Credits used', `${usedPct}% · ${leftOf(r.value, r.limit)}`, usedFrac, m.level, `${m.label} used`),
+        row('Billing cycle passed', `${daysTotal - daysLeft} of ${daysTotal} days · resets ${cycleDay(r.cycleEnd)}`, elapsedFrac, null, 'Billing cycle passed'),
         h('p', { class: 'meter-caption', text: daysLeft > 0 ? `About ${nf.format(Math.floor(r.value / daysLeft))} credits a day to last until the reset${creditsFrac < daysFrac ? ' · using credits faster than the cycle is passing' : ''}` : 'Resets today' }),
       );
     } else {
@@ -1226,7 +1238,7 @@ import SignInGate from '../../components/SignInGate.astro';
       ...needTitles.map((t) => {
         const group = alertsByCard.get(t)!;
         const st = group[0].level === 'critical' ? 'crit' : 'warn';
-        const row = h('button', { class: 'row', attrs: { type: 'button' } }, h('span', { class: `dot dot--${st}`, attrs: { 'aria-hidden': 'true' } }), h('span', { class: 'grow' }, h('span', { class: 'title', text: t }), h('span', { class: 'detail', text: group[0].title })), chevron());
+        const row = h('button', { class: 'row', attrs: { type: 'button' } }, h('span', { class: `dot dot--${st}`, attrs: { 'aria-hidden': 'true' } }), h('span', { class: 'grow' }, h('span', { class: 'title', text: t }), h('span', { class: 'detail', text: group[0].title })), nodes.find((li) => li.querySelector('.title')?.textContent === t)?.querySelector('.row-meter')?.cloneNode(true) as HTMLElement | undefined, chevron());
         row.addEventListener('click', () => openService(t));
         return h('li', {}, row);
       }),
