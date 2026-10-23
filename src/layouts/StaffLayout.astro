@@ -540,6 +540,21 @@ const adminItems = [
   }
 </style>
 
+<script is:inline>
+  // On admin.tvc.farm the pages are served without the /internal prefix (netlify.toml), so show
+  // the short address in every in-page link. Elsewhere (previews, netlify dev) the prefix is real.
+  // The long form still redirects there, so a link this misses only costs one hop.
+  if (location.hostname === 'admin.tvc.farm') {
+    const shorten = (root) =>
+      root.querySelectorAll('a[href^="/internal"]').forEach((a) => {
+        const href = a.getAttribute('href');
+        if (href === '/internal' || href.startsWith('/internal/')) a.setAttribute('href', href.slice('/internal'.length) || '/');
+      });
+    shorten(document);
+    new MutationObserver((records) => records.forEach((r) => r.addedNodes.forEach((n) => n.nodeType === 1 && shorten(n)))).observe(document.body, { childList: true, subtree: true });
+  }
+</script>
+
 <script>
   import { StaffAuthError, clearStepUp, clearToken, getToken, staffFetch } from '../../scripts/lib/staff-client.mjs';
 

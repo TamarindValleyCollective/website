@@ -277,7 +277,7 @@ async function handleDeliveryStatus(status: any): Promise<void> {
     `⚠️ WhatsApp message not delivered — ${booking?.event_title ?? updated.template}`,
     `<p>The WhatsApp message <code>${escapeHtml(String(updated.template).replace(/_v2$/, ''))}</code> to <strong>${escapeHtml(booking?.payer_name ?? 'a guest')}</strong> (number ending ${escapeHtml(updated.recipient_last4 ?? '?')}) was <strong>not delivered</strong>.</p>
   <p style="color:#8a2f1f;">${escapeHtml(updated.error_message ?? 'WhatsApp reported the message as failed.')}</p>
-  <p>They will have received the email only. Check the number on <a href="https://admin.tvc.farm/internal/event-payments">the Event Payments dashboard</a> and contact them another way if it matters.</p>`,
+  <p>They will have received the email only. Check the number on <a href="https://admin.tvc.farm/event-payments">the Event Payments dashboard</a> and contact them another way if it matters.</p>`,
     isTest,
   );
 }
@@ -300,7 +300,7 @@ async function handleHealthChange(entry: any, field: string, value: any): Promis
     await sendStaffAlert(
       `${marker}WhatsApp: ${event.title}`,
       `<p><strong>${escapeHtml(event.title)}</strong></p>${event.detail ? `<p>${escapeHtml(event.detail)}</p>` : ''}
-  <p style="color:#57604f;">Reported by Meta (${escapeHtml(field)}). ${event.severity === 'info' ? 'See' : 'Guest WhatsApp messages may be affected — see'} <a href="https://admin.tvc.farm/internal/usage">the usage page</a> for recent events, or WhatsApp Manager for details.</p>`,
+  <p style="color:#57604f;">Reported by Meta (${escapeHtml(field)}). ${event.severity === 'info' ? 'See' : 'Guest WhatsApp messages may be affected — see'} <a href="https://admin.tvc.farm/usage">the usage page</a> for recent events, or WhatsApp Manager for details.</p>`,
     );
   } catch (err) {
     console.error('[whatsapp-webhook] Failed to email health alert', err);

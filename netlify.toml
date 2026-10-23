@@ -104,10 +104,10 @@
   status = 200
   force = true
 
-# admin pages belong on the admin host
+# admin pages belong on the admin host (no /internal prefix there)
 [[redirects]]
   from = "https://members.tvc.farm/internal/*"
-  to = "https://admin.tvc.farm/internal/:splat"
+  to = "https://admin.tvc.farm/:splat"
   status = 302
   force = true
 
@@ -129,10 +129,66 @@
   status = 200
   force = true
 
+# the admin pages, without the /internal prefix (the files still live under src/pages/internal/)
+[[redirects]]
+  from = "https://admin.tvc.farm/access/*"
+  to = "/internal/access/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/security/*"
+  to = "/internal/security/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/photo-pool/*"
+  to = "/internal/photo-pool/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/whatsapp/*"
+  to = "/internal/whatsapp/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/event-payments/*"
+  to = "/internal/event-payments/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/accommodation-calendar/*"
+  to = "/internal/accommodation-calendar/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/members/*"
+  to = "/internal/members/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/usage/*"
+  to = "/internal/usage/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/test-event/*"
+  to = "/internal/test-event/:splat"
+  status = 200
+  force = true
+
+# the old long form still works for bookmarks and emails already sent: send it to the short one
 [[redirects]]
   from = "https://admin.tvc.farm/internal/*"
-  to = "/internal/:splat"
-  status = 200
+  to = "https://admin.tvc.farm/:splat"
+  status = 302
   force = true
 
 [[redirects]]
@@ -243,13 +299,13 @@
 # not cache it. Only these hosts match, so deploy previews and `netlify dev` still serve /internal/.
 [[redirects]]
   from = "https://tvc.farm/internal/*"
-  to = "https://admin.tvc.farm/internal/:splat"
+  to = "https://admin.tvc.farm/:splat"
   status = 302
   force = true
 
 [[redirects]]
   from = "https://www.tvc.farm/internal/*"
-  to = "https://admin.tvc.farm/internal/:splat"
+  to = "https://admin.tvc.farm/:splat"
   status = 302
   force = true
 
