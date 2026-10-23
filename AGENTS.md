@@ -68,12 +68,14 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
   rather than literals.
 - Fonts: headings use `--font-display`, everything else `--font-body`; `--font-wordmark` is only
   for the nav/footer lockup, and the `--font-3bs1h-*` faces only inside the 3Bs&1H series.
-- Member portal type (`members/index.astro`): sizes come from the `--text-*` scale in `global.css`
-  (xs 0.8 to 2xl 1.5rem, nothing smaller than 0.8rem), not literals. Roles: page title and section
-  titles (panel/widget/story-box `h2`) and dialog titles in Fraunces (`--font-display`) at
-  2xl / lg / xl; key figures (acres, sq ft) Fraunces 600 at 2xl; subheads (`.role-head`, table group
-  rows, notice `h4`) Inter 600; small uppercase Inter labels only for non-heading labels, always
-  tracking 0.08em; pills and links weight 600. Sentence case everywhere else (never uppercase an email).
+- Member portal (`members/index.astro`) wears the admin portal's look: both shells import
+  `src/styles/portal-look.css` (the neutral tokens, the system type face and the dark appearance), so
+  `--font-display` is the system face there and a token change lands in both. The shell matches
+  `StaffLayout` (frosted sidebar, solid-green current item, compact 36px `.btn`, border-only cards, an
+  Auto/Light/Dark control in the account menu). Type: sizes come from the `--text-*` scale (nothing
+  smaller than 0.8rem); the page title is 2.125rem 700 like the admin `h1`; section and dialog titles
+  lg / xl; subheads weight 600; small uppercase labels only for non-heading labels, tracking 0.08em.
+  Sentence case everywhere else (never uppercase an email).
 - Admin portal (`StaffLayout.astro`, `src/pages/internal/*`): the shell owns the shared primitives (`.card`,
   `.hint`, `.note`, `.error`, `.section.wrapper`, `[hidden]`, `.visually-hidden`, `.link-button`, and the button
   modifiers `--outline`, `--primary`, `--danger`, `--danger-outline`, `--small`) and the building blocks of the

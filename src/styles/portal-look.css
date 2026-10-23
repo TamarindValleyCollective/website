@@ -1,0 +1,74 @@
+/* The look shared by the admin portal (StaffLayout.astro) and the member portal (members/index.astro):
+   calm, cool neutrals and the system type face (SF Pro on Apple devices, Inter elsewhere), the way the
+   Apple-style concept reads. It overrides the public site's --tvc-* tokens on those two shells only (they
+   are the only places it loads); `html:root` outranks global.css's `:root`. The dark appearance below
+   overrides the same tokens again. Components use the tokens and have no rules of their own for either.
+   Change a value here and both portals follow. */
+
+/* stylelint-disable color-no-hex -- the portal look's own token values, same job as the --tvc-* ones in global.css */
+html:root {
+  --tvc-stone: #f4f5f1;
+  --tvc-cream: #ebece7;
+  --tvc-line: rgba(27, 30, 27, 0.12);
+  --tvc-line-strong: #868c83;
+  --tvc-ink: #1b1e1b;
+  --tvc-ink-soft: #596057;
+  --tvc-green: #2a8f56;
+  --tvc-green-dark: #1f7a46;
+  --tvc-green-tint: rgba(31, 122, 70, 0.12);
+  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+  --font-display: var(--font-body);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 28px rgba(20, 30, 20, 0.1);
+}
+/* stylelint-enable color-no-hex */
+
+/* The dark appearance. It follows the device unless the person chose one in the account menu (Appearance),
+   which is remembered in this browser and applied before first paint (the script in each shell's <head>).
+   Like the neutral look it overrides tokens only: components use --tvc-* tokens (a Stylelint rule bans raw
+   colours), so they follow. The same set appears twice because the OS preference and the explicit choice
+   are separate selectors. */
+/* stylelint-disable color-no-hex -- the dark appearance's own token values, same job as the --tvc-* ones in global.css */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme='light']) {
+    --tvc-stone: #151715;
+    --tvc-cream: #1b1d1b;
+    --tvc-white: #242724;
+    --tvc-ink: #f1f3ef;
+    --tvc-ink-soft: #a9afa7;
+    --tvc-line: rgba(255, 255, 255, 0.13);
+    --tvc-line-strong: #7d837b;
+    --tvc-green: #4faa77;
+    --tvc-green-dark: #5bc88a;
+    --tvc-green-tint: rgba(91, 200, 138, 0.16);
+    --tvc-orange: #d98a5a;
+    --tvc-orange-text: #f0a272;
+    --tvc-orange-tint: rgba(217, 138, 90, 0.18);
+    --tvc-error-text: #ff6b60;
+    --tvc-error-border: rgba(255, 107, 96, 0.45);
+    --tvc-error-bg: rgba(255, 107, 96, 0.16);
+    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.45), 0 6px 22px rgba(0, 0, 0, 0.4);
+    color-scheme: dark;
+  }
+}
+
+html[data-theme='dark'] {
+  --tvc-stone: #151715;
+  --tvc-cream: #1b1d1b;
+  --tvc-white: #242724;
+  --tvc-ink: #f1f3ef;
+  --tvc-ink-soft: #a9afa7;
+  --tvc-line: rgba(255, 255, 255, 0.13);
+  --tvc-line-strong: #7d837b;
+  --tvc-green: #4faa77;
+  --tvc-green-dark: #5bc88a;
+  --tvc-green-tint: rgba(91, 200, 138, 0.16);
+  --tvc-orange: #d98a5a;
+  --tvc-orange-text: #f0a272;
+  --tvc-orange-tint: rgba(217, 138, 90, 0.18);
+  --tvc-error-text: #ff6b60;
+  --tvc-error-border: rgba(255, 107, 96, 0.45);
+  --tvc-error-bg: rgba(255, 107, 96, 0.16);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.45), 0 6px 22px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}
+/* stylelint-enable color-no-hex */
