@@ -129,6 +129,12 @@ const adminItems = [
 
       <div class="scrim" id="scrim" hidden></div>
 
+      <dialog class="switcher" id="switcher" aria-label="Go to a tool">
+        <input id="switcher-input" type="text" placeholder="Go to a tool" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="true" aria-controls="switcher-list" aria-autocomplete="list" aria-label="Go to a tool" />
+        <ul id="switcher-list" role="listbox" aria-label="Tools"></ul>
+        <p class="switcher-empty" id="switcher-empty" hidden>Nothing matches.</p>
+      </dialog>
+
       <div class="col">
         <header class="topbar">
           <button type="button" id="menu-open" class="icon-button" aria-label="Open the menu" aria-controls="staff-sidebar" aria-expanded="false">
@@ -553,6 +559,84 @@ const adminItems = [
   main :global(.pill--crit) {
     background: var(--tvc-error-bg);
     color: var(--tvc-error-text);
+  }
+
+  /* Go to a tool (Command/Ctrl K): a search field over a short list, near the top like a command palette. */
+  .switcher {
+    width: min(460px, calc(100vw - 32px));
+    margin: 12vh auto auto;
+    padding: 8px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 16px;
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .switcher::backdrop {
+    background: rgba(8, 12, 8, 0.4);
+  }
+
+  .switcher[open] {
+    animation: staff-sheet-in 200ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .switcher input {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 0;
+    border-bottom: 1px solid var(--tvc-line);
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: var(--text-md);
+    outline: none;
+  }
+
+  .switcher ul {
+    margin: 6px 0 0;
+    padding: 0;
+    list-style: none;
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+
+  .switcher li {
+    padding: 10px 12px;
+    border-radius: var(--radius-field);
+    cursor: pointer;
+  }
+
+  .switcher li[aria-selected='true'] {
+    background: var(--tvc-cream);
+  }
+
+  .switcher-empty {
+    margin: 0;
+    padding: 12px;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .who-menu :global(kbd) {
+    margin-left: auto;
+    font: inherit;
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .switcher[open] {
+      animation: none;
+    }
+  }
+
+  /* One focus ring for anything that has none of its own: a keyboard user can always see where they are. */
+  main :global(:where(a, button, summary, select, [tabindex]):focus-visible) {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
   }
 
   /* A sheet: a small modal <dialog> for one focused task (unlocking, a refund). */
@@ -1322,6 +1406,17 @@ const adminItems = [
       });
       items.push(tour);
     }
+    const jump = document.createElement('button');
+    jump.type = 'button';
+    jump.append('Go to a tool');
+    const hint = document.createElement('kbd');
+    hint.textContent = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl K';
+    jump.append(hint);
+    jump.addEventListener('click', () => {
+      setWho(false);
+      openSwitcher();
+    });
+    items.push(jump);
     items.push(appearanceControl());
     const out = document.createElement('button');
     out.type = 'button';
@@ -1430,6 +1525,95 @@ const adminItems = [
   });
   sidebar.addEventListener('click', (ev) => {
     if ((ev.target as HTMLElement).closest('.menu a') && root.getAttribute('data-menu') === 'open') setMenu(false);
+  });
+
+  // ---- go to a tool: Command or Ctrl plus K, from any page. It lists exactly the menu's links, so a tool
+  // appears only if the person holds a role in it.
+  const switcher = $('switcher') as HTMLDialogElement;
+  const switcherInput = $('switcher-input') as HTMLInputElement;
+  const switcherList = $('switcher-list');
+  const switcherEmpty = $('switcher-empty');
+  let switcherShown: { label: string; href: string }[] = [];
+  let switcherActive = 0;
+
+  function paintSwitcher() {
+    const q = switcherInput.value.trim().toLowerCase();
+    const all = [...document.querySelectorAll<HTMLAnchorElement>('.menu a')].map((a) => ({ label: a.querySelector('.label')?.textContent?.trim() ?? a.title, href: a.href }));
+    switcherShown = all.filter((t) => t.label.toLowerCase().includes(q));
+    switcherActive = Math.min(switcherActive, Math.max(0, switcherShown.length - 1));
+    switcherList.replaceChildren(
+      ...switcherShown.map((t, i) => {
+        const li = document.createElement('li');
+        li.id = `switcher-opt-${i}`;
+        li.setAttribute('role', 'option');
+        li.setAttribute('aria-selected', String(i === switcherActive));
+        li.textContent = t.label;
+        li.addEventListener('click', () => (location.href = t.href));
+        li.addEventListener('mousemove', () => {
+          if (switcherActive === i) return;
+          switcherActive = i;
+          paintSwitcher();
+        });
+        return li;
+      }),
+    );
+    switcherEmpty.hidden = switcherShown.length > 0;
+    if (switcherShown.length) switcherInput.setAttribute('aria-activedescendant', `switcher-opt-${switcherActive}`);
+    else switcherInput.removeAttribute('aria-activedescendant');
+    switcherList.children[switcherActive]?.scrollIntoView({ block: 'nearest' });
+  }
+
+  function openSwitcher() {
+    if (switcher.open) return;
+    switcherInput.value = '';
+    switcherActive = 0;
+    paintSwitcher();
+    switcher.showModal();
+    switcherInput.focus();
+  }
+
+  switcherInput.addEventListener('input', () => {
+    switcherActive = 0;
+    paintSwitcher();
+  });
+  switcherInput.addEventListener('keydown', (ev) => {
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      if (!switcherShown.length) return;
+      switcherActive = (switcherActive + (ev.key === 'ArrowDown' ? 1 : -1) + switcherShown.length) % switcherShown.length;
+      paintSwitcher();
+    } else if (ev.key === 'Enter') {
+      ev.preventDefault();
+      const t = switcherShown[switcherActive];
+      if (t) location.href = t.href;
+    }
+  });
+  // a click on the dim area (the dialog element itself) closes it
+  switcher.addEventListener('click', (ev) => {
+    if (ev.target === switcher) switcher.close();
+  });
+  document.addEventListener('keydown', (ev) => {
+    if ((ev.metaKey || ev.ctrlKey) && !ev.altKey && ev.key.toLowerCase() === 'k') {
+      ev.preventDefault();
+      if (document.querySelector('dialog[open]:not(#switcher)')) return; // a task sheet is open: finish that first
+      if (switcher.open) switcher.close();
+      else openSwitcher();
+    }
+  });
+
+  // ---- arrow keys inside tabs and radio groups: Left/Right (or Up/Down) move and choose, Home/End jump
+  document.addEventListener('keydown', (ev) => {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(ev.key)) return;
+    const current = (ev.target as Element).closest<HTMLElement>('[role="tab"], [role="radio"]');
+    const group = current?.closest('[role="tablist"], [role="radiogroup"]');
+    if (!current || !group) return;
+    const options = [...group.querySelectorAll<HTMLButtonElement>('[role="tab"], [role="radio"]')].filter((o) => !o.disabled && !o.hidden);
+    const at = options.indexOf(current as HTMLButtonElement);
+    if (at < 0) return;
+    ev.preventDefault();
+    const next = ev.key === 'Home' ? 0 : ev.key === 'End' ? options.length - 1 : (at + (ev.key === 'ArrowRight' || ev.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+    options[next].focus();
+    options[next].click();
   });
 
   refresh();

@@ -821,6 +821,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   collapsible left menu (Home, the four tools, and Access/Security for super admins) that sits
   flush left with the page content using the full remaining width, a slide-over menu with a top bar
   on phones, and none of the public site's header, footer or analytics (the pages stay `noindex`).
+  The shell also has a keyboard layer (all in `StaffLayout.astro`, no server involvement): Command/Ctrl K opens a
+  "Go to a tool" dialog that lists exactly the menu's links, so it only offers tools the person holds a role in, and
+  Left/Right/Home/End move and choose inside any `role="tab"` or `role="radio"` group.
   The menu reads `/api/staff-me` (cached in `sessionStorage` key `tvc-staff-me`, refreshed on
   focus and after sign-in) and shows only tools the person holds a role in; it is navigation only,
   never authorisation. The collapsed/expanded choice is kept in `localStorage`
