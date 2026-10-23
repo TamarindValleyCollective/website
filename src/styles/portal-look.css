@@ -46,6 +46,9 @@ html:root {
     --tvc-error-text: #ff6b60;
     --tvc-error-border: rgba(255, 107, 96, 0.45);
     --tvc-error-bg: rgba(255, 107, 96, 0.16);
+    --tvc-sky-blue: #6aa9c9;
+    --tvc-sky-blue-text: #8fc3de;
+    --callout-sky-bg: rgba(106, 169, 201, 0.16);
     --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.45), 0 6px 22px rgba(0, 0, 0, 0.4);
     color-scheme: dark;
   }
@@ -68,7 +71,92 @@ html[data-theme='dark'] {
   --tvc-error-text: #ff6b60;
   --tvc-error-border: rgba(255, 107, 96, 0.45);
   --tvc-error-bg: rgba(255, 107, 96, 0.16);
+  --tvc-sky-blue: #6aa9c9;
+  --tvc-sky-blue-text: #8fc3de;
+  --callout-sky-bg: rgba(106, 169, 201, 0.16);
   --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.45), 0 6px 22px rgba(0, 0, 0, 0.4);
   color-scheme: dark;
 }
 /* stylelint-enable color-no-hex */
+
+/* ---- shared building blocks (the Apple-style concept): used by both portals' pages, inside <main>. ---- */
+
+/* A search field: a magnifier, then the input, on a quiet fill. */
+main .field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 340px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: var(--radius-field);
+  background: var(--tvc-cream);
+}
+
+main .field svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: var(--tvc-ink-soft);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+main .field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--tvc-ink);
+  font: inherit;
+}
+
+main .field:focus-within {
+  box-shadow: 0 0 0 2px var(--tvc-orange);
+}
+
+/* A segmented control: one choice from a few, always visible. */
+main .segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--tvc-cream);
+}
+
+main .segmented button {
+  min-height: 30px;
+  padding: 3px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--tvc-ink-soft);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background 150ms ease-out, color 150ms ease-out;
+}
+
+main .segmented button[aria-checked='true'],
+main .segmented button[aria-pressed='true'] {
+  background: var(--tvc-white);
+  color: var(--tvc-ink);
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+}
+
+main .segmented button:focus-visible {
+  outline: 2px solid var(--tvc-orange);
+  outline-offset: 1px;
+}
+
+@media (pointer: coarse) {
+  main .segmented button {
+    min-height: 44px;
+  }
+}

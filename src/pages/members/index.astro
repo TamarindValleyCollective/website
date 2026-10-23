@@ -100,6 +100,10 @@ import SignInGate from '../../components/SignInGate.astro';
     display: none !important;
   }
 
+  :root {
+    --topbar-h: 68px; /* the sticky top bar: 44px account pill + 12px above and below */
+  }
+
   .shell {
     transition: grid-template-columns 200ms cubic-bezier(0.23, 1, 0.32, 1);
     display: grid;
@@ -743,11 +747,11 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   /* Feedback on the press itself, not on release. */
-  :is(.btn, .nav-item, .who, .menu-btn, .more, .dir-chip, .who-menu button, .who-menu a) {
+  :is(.btn, .nav-item, .who, .menu-btn, .more, .who-menu button, .who-menu a) {
     transition: transform 120ms ease-out, background-color 120ms ease-out;
   }
 
-  :is(.btn, .nav-item, .who, .menu-btn, .more, .dir-chip, .who-menu button, .who-menu a):active:not(:disabled) {
+  :is(.btn, .nav-item, .who, .menu-btn, .more, .who-menu button, .who-menu a):active:not(:disabled) {
     transform: scale(0.97);
   }
 
@@ -1605,6 +1609,15 @@ import SignInGate from '../../components/SignInGate.astro';
       gap: 10px;
     }
 
+    :root {
+      --topbar-h: 64px;
+    }
+
+    .dir-toolbar {
+      margin-inline: -14px;
+      padding-inline: 14px;
+    }
+
     #view {
       padding: 16px 14px 40px;
     }
@@ -1634,7 +1647,7 @@ import SignInGate from '../../components/SignInGate.astro';
       transition: none !important;
     }
 
-    :is(.btn, .nav-item, .who, .menu-btn, .more, .dir-chip, .who-menu button, .who-menu a, .dir-card):active {
+    :is(.btn, .nav-item, .who, .menu-btn, .more, .who-menu button, .who-menu a, .dir-card):active {
       transform: none !important;
     }
 
@@ -2128,29 +2141,67 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   /* ---- directory ---- */
-  .dir-bar {
+  /* The search and the story filter stay under the top bar while the list scrolls (a translucent bar, like Apple's). */
+  .dir-toolbar {
+    position: sticky;
+    top: var(--topbar-h);
+    z-index: 3;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 10px 18px;
-    margin: 0 0 8px;
+    gap: 10px 14px;
+    margin: 0 -24px 6px;
+    padding: 10px 24px;
+    background: color-mix(in srgb, var(--tvc-stone) 82%, transparent);
+    backdrop-filter: blur(16px) saturate(160%);
   }
 
-  .dir-bar input[type='search'] {
+  @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    .dir-toolbar {
+      background: var(--tvc-stone);
+      backdrop-filter: none;
+    }
+  }
+
+  .dir-toolbar .field {
     flex: 1 1 260px;
-    min-width: 0;
     max-width: 420px;
-    padding: 8px 11px;
-    border: 1px solid var(--tvc-line-strong);
-    border-radius: var(--radius-field);
-    background: var(--tvc-white);
-    font: inherit;
   }
 
-  .dir-bar label.check {
+  .dir-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 22px;
+    margin: 0 0 6px;
+  }
+
+  .dir-filter {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+  }
+
+  .dir-filter-label {
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-xs);
+  }
+
+  .dir-count {
+    margin: 10px 0 12px;
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  .dir-empty {
+    display: grid;
+    justify-items: start;
+    gap: 12px;
+    margin: 8px 0;
+  }
+
+  .dir-foot {
+    margin: 22px 0 0;
+    color: var(--tvc-ink-soft);
     font-size: var(--text-sm);
   }
 
@@ -2190,7 +2241,7 @@ import SignInGate from '../../components/SignInGate.astro';
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
     background: var(--tvc-white);
-    box-shadow: var(--shadow-soft);
+    color: inherit;
     font: inherit;
     text-align: left;
     cursor: pointer;
@@ -2216,14 +2267,11 @@ import SignInGate from '../../components/SignInGate.astro';
     white-space: nowrap;
   }
 
-  .dir-pill--farm {
-    background: var(--tvc-green-tint);
-    color: var(--tvc-green-dark);
-  }
-
+  /* Farm plot and house are one quiet pill: the code is the information, so no second accent colour. */
+  .dir-pill--farm,
   .dir-pill--house {
-    background: var(--callout-sky-bg);
-    color: var(--tvc-sky-blue-text);
+    background: var(--tvc-cream);
+    color: var(--tvc-ink-soft);
   }
 
   .dir-cell {
@@ -2246,6 +2294,17 @@ import SignInGate from '../../components/SignInGate.astro';
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+
+  @media (pointer: coarse) {
+    .dir-edit {
+      width: 44px;
+      height: 44px;
+    }
+
+    .dir-card--you .dir-card-names {
+      padding-right: 104px;
+    }
   }
 
   .dir-edit {
@@ -2344,51 +2403,10 @@ import SignInGate from '../../components/SignInGate.astro';
     background: var(--tvc-green-tint);
   }
 
-  /* On the tinted card the pills go white with a coloured edge, so farm (green) and housing (blue) stay distinct. */
-  .dir-card--you .dir-pill--farm {
-    border-color: var(--tvc-green);
+  /* On the tinted card the pills go white with a hairline edge. */
+  .dir-card--you .dir-pill {
+    border-color: var(--tvc-line);
     background: var(--tvc-white);
-  }
-
-  .dir-card--you .dir-pill--house {
-    border-color: var(--tvc-sky-blue);
-    background: var(--tvc-white);
-  }
-
-  .dir-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin: 0 0 12px;
-  }
-
-  .dir-chips-label {
-    align-self: center;
-    min-width: 4.5rem;
-    color: var(--tvc-ink-soft);
-    font-size: var(--text-xs);
-  }
-
-  .dir-chip {
-    padding: 6px 14px;
-    border: 1px solid var(--tvc-line-strong);
-    border-radius: 999px;
-    background: var(--tvc-white);
-    color: var(--tvc-ink);
-    font: inherit;
-    font-size: var(--text-sm);
-    cursor: pointer;
-  }
-
-  .dir-chip[aria-pressed='true'] {
-    border-color: var(--tvc-green-dark);
-    background: var(--tvc-green-dark);
-    color: var(--tvc-white);
-  }
-
-  .dir-chip:focus-visible {
-    outline: 2px solid var(--tvc-orange);
-    outline-offset: 2px;
   }
 
   .dir-faces {
@@ -4487,7 +4505,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const body = h('div');
     root.append(
       h('h1', 'page-title', 'Our members', h('small', '', 'The collective')),
-      h('p', 'lede', 'Names, farm plot numbers and the story each member chose to share. Contact details are never shown. Anyone can opt out of being listed under Your details in the account menu.'),
+      h('p', 'lede', 'Names, farm plots and the story each member chose to share. Contact details are never shown.'),
       body,
     );
     // Cards the size of the real ones, so the page does not jump when the list arrives.
@@ -4505,9 +4523,23 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     search.autocomplete = 'off';
     search.setAttribute('aria-label', 'Search the directory');
     search.addEventListener('input', () => { query = search.value.trim().toLowerCase(); draw(); });
-    const only = document.createElement('input');
-    only.type = 'checkbox';
-    only.addEventListener('change', () => { onlyStories = only.checked; draw(); });
+    // A search field in the admin portal's style: magnifier, then the input, on a quiet fill.
+    const searchField = h('label', 'field', undefined, icon('<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'), search);
+    // One choice of two, always visible, instead of a checkbox.
+    const onlySeg = h('div', 'segmented');
+    onlySeg.setAttribute('role', 'group');
+    onlySeg.setAttribute('aria-label', 'Show');
+    const onlyButtons = [[false, 'All'], [true, 'With a story']].map(([v, text]) => {
+      const b = h('button', '', text as string);
+      b.setAttribute('type', 'button');
+      b.addEventListener('click', () => { onlyStories = v as boolean; paintOnly(); draw(); });
+      return b;
+    });
+    onlySeg.append(...onlyButtons);
+    function paintOnly() {
+      onlyButtons.forEach((b, i) => b.setAttribute('aria-pressed', String((i === 1) === onlyStories)));
+    }
+    paintOnly();
 
     const snippet = (t: string) => { const p = toPlain(t); return p.length > 120 ? `${p.slice(0, 117).trimEnd()}…` : p; };
 
@@ -4552,6 +4584,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         el.title = title;
         return el;
       };
+      // On a card, one quiet pill ("F-12 · H-12"); the popup lists plot, house, cluster and type separately.
+      if (!withCluster) return h('span', 'dir-pills', undefined, pill('farm', hh.houseNo ? `${hh.farmUnit} · ${hh.houseNo}` : hh.farmUnit, hh.houseNo ? 'Farm plot and house' : 'Farm plot'));
       return h('span', 'dir-pills', undefined,
         pill('farm', hh.farmUnit, 'Farm plot'),
         hh.houseNo ? pill('house', hh.houseNo, 'House') : null,
@@ -4587,11 +4621,13 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const names = joinNames(primary.map((p) => (p.isYou ? `${first(p.name)} (you)` : first(p.name))));
       // The picture sits on the left, vertically centred against the text; names, the story's first lines and the
       // farm and house pills are in a column beside it.
+      const storyLine = withStory?.story?.bio ? snippet(withStory.story.bio) : withStory?.story?.why ? `“${snippet(withStory.story.why)}”` : isYours && mine?.text ? `${snippet(mine.text)}${mine.tone === 'live' ? '' : mine.tone === 'review' ? ' (waiting for approval)' : mine.tone === 'changes' ? ' (changes needed)' : ' (draft)'}` : isYours ? 'You have not shared a story yet' : '';
       const b = h('button', `dir-card${isYours ? ' dir-card--you' : ''}`, undefined,
         h('span', 'dir-card-photo', undefined, faces(primary, 'card')),
         h('span', 'dir-card-body', undefined,
           h('span', 'dir-card-names', names),
-          h('span', 'dir-card-text', withStory?.story?.bio ? snippet(withStory.story.bio) : withStory?.story?.why ? `“${snippet(withStory.story.why)}”` : isYours && mine?.text ? `${snippet(mine.text)}${mine.tone === 'live' ? '' : mine.tone === 'review' ? ' (waiting for approval)' : mine.tone === 'changes' ? ' (changes needed)' : ' (draft)'}` : 'Has not shared a story yet'),
+          // No story means no line at all, so a card without one is quiet rather than repeating "no story yet".
+          storyLine ? h('span', 'dir-card-text', storyLine) : null,
           pills(hh, false)),
       );
       b.setAttribute('type', 'button');
@@ -4688,27 +4724,28 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const kindOf = (t: string | null) => bedroomsOf(t) ?? baseUnitType(t);
     function filterChips(): HTMLElement {
       const row = (label: string, selected: string | null, set: (v: string | null) => void, values: string[]) => {
-        const chip = (value: string | null, text: string) => {
-          const b = h('button', 'dir-chip', text);
+        const group = h('div', 'segmented');
+        group.setAttribute('role', 'group');
+        group.setAttribute('aria-label', label);
+        for (const [value, text] of [[null, 'All'], ...values.map((v) => [v, v])] as [string | null, string][]) {
+          const b = h('button', '', text);
           b.setAttribute('type', 'button');
           b.setAttribute('aria-pressed', String(selected === value));
           b.addEventListener('click', () => { set(value); draw(); });
-          return b;
-        };
-        const group = h('div', 'dir-chips', undefined, h('span', 'dir-chips-label', label), chip(null, 'All'), ...values.map((v) => chip(v, v)));
-        group.setAttribute('role', 'group');
-        group.setAttribute('aria-label', label);
-        return group;
+          group.append(b);
+        }
+        return h('div', 'dir-filter', undefined, h('span', 'dir-filter-label', label), group);
       };
       const kinds = [...new Set(list.map((x) => kindOf(x.unitType)).filter((t): t is string => !!t))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-      return h('div', '', undefined,
+      return h('div', 'dir-filters', undefined,
         row('Cluster', cluster, (v) => { cluster = v; }, ['H1-A', 'H1-B', 'H2']),
         kinds.length ? row('Bedrooms', unitType, (v) => { unitType = v; }, kinds) : null);
     }
 
     const chipsHost = h('div');
-    const bar = h('div', 'dir-bar', undefined, search, h('label', 'check', undefined, only, h('span', '', 'Only members with a story')));
-    const count = h('p', 'lede');
+    const bar = h('div', 'dir-toolbar', undefined, searchField, onlySeg);
+    const count = h('p', 'dir-count');
+    const foot = h('p', 'dir-foot', 'Prefer not to be listed? Turn it off under Your details in the account menu.');
     const results = h('div');
     let built = false;
 
@@ -4719,12 +4756,23 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       // The search box and the checkbox are built once and never re-created: replacing them on every keystroke
       // would take the cursor out of the box after each character. Only the chips, the count and the results are redrawn.
       if (!built) {
-        body.replaceChildren(chipsHost, bar, count, results);
+        body.replaceChildren(bar, chipsHost, count, results, foot);
         built = true;
       }
       chipsHost.replaceChildren(filterChips());
-      count.textContent = `${shown.length} of ${list.length} units`;
-      results.replaceChildren(shown.length ? h('div', 'dir-grid', undefined, ...shown.map(card)) : h('p', 'lede', 'No one matches.'));
+      count.textContent = `${shown.length} of ${list.length} households`;
+      const clear = h('button', 'btn', 'Clear search and filters');
+      clear.setAttribute('type', 'button');
+      clear.addEventListener('click', () => {
+        query = '';
+        search.value = '';
+        onlyStories = false;
+        cluster = null;
+        unitType = null;
+        paintOnly();
+        draw();
+      });
+      results.replaceChildren(shown.length ? h('div', 'dir-grid', undefined, ...shown.map(card)) : h('div', 'dir-empty', undefined, h('p', 'lede', 'No one matches that.'), clear));
     }
 
     void (async () => {
