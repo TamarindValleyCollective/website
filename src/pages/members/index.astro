@@ -1226,7 +1226,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   /* Filters: a button on a phone that opens Cluster and Bedrooms; always open on a wide screen. */
-  .dir-more > summary {
+  .dir-filters-toggle > summary {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -1240,21 +1240,21 @@ import SignInGate from '../../components/SignInGate.astro';
     list-style: none;
   }
 
-  .dir-more > summary::-webkit-details-marker {
+  .dir-filters-toggle > summary::-webkit-details-marker {
     display: none;
   }
 
-  .dir-more > summary:focus-visible {
+  .dir-filters-toggle > summary:focus-visible {
     outline: 2px solid var(--tvc-orange);
     outline-offset: 2px;
   }
 
-  .dir-more[open] > summary {
+  .dir-filters-toggle[open] > summary {
     margin-bottom: 8px;
   }
 
   @media (min-width: 561px) {
-    .dir-more > summary {
+    .dir-filters-toggle > summary {
       display: none;
     }
   }
@@ -5713,7 +5713,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const chipsHost = h('div');
     // On a phone Cluster and Bedrooms sit behind one Filters button (with how many are on); wide screens show them.
     const moreSummary = h('summary', '', 'Filters');
-    const more = h('details', 'dir-more', undefined, moreSummary, chipsHost) as HTMLDetailsElement;
+    const more = h('details', 'dir-filters-toggle', undefined, moreSummary, chipsHost) as HTMLDetailsElement;
     more.open = !window.matchMedia('(max-width: 560px)').matches;
     const bar = h('div', 'dir-toolbar', undefined, searchField, onlySeg, viewSeg);
     const count = h('p', 'dir-count');

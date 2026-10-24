@@ -10,10 +10,10 @@ this file is the working reference for what is actually in the repo.
 | Phase | Scope | State |
 | --- | --- | --- |
 | 0 | Agree the design, guest fields, price breakdown, settlement terms and notice wording with Linger | In progress (docs written, not signed off) |
-| 1 | Units as data, unit catalogue, read-only availability, key issuance, an OpenAPI file (written, see below) | **Deployed 2026-10-24** (PRs #456 and #457; migration `0060` applied to TVC ERP). No partner has a key yet; see Verification and Security for what was tested and the known limits |
+| 1 | Units as data, unit catalogue, read-only availability, key issuance, an OpenAPI file (written, see below) | **Deployed 2026-10-24** (PRs #456 and #457; migration `0060` applied to TVC ERP). See Verification for what was tested |
 | 2 | Holds, pools assigned by TVC, confirm with guest details and price, Razorpay payment, the sandbox, expiry, `updated_since` | Not started |
 | 3 | Settlement ledger, monthly statements, refund reversals | Not started |
-| 4 | Member homes: windows, auto-accept, change requests, three-way split | Not started |
+| 4 | Member homes: windows, auto-accept, change requests | Not started |
 
 ## What phase 1 does
 
@@ -52,7 +52,8 @@ Needs `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the environment, for exa
    terminal and never in a chat with an AI assistant:
    `node scripts/partner-key.mjs issue linger "Linger production" --expires 2027-10-01 --print-sql`.
    It needs no secrets: it prints the key (once; only its SHA-256 hash is ever stored) and an `insert`
-   statement containing the hash, which you run in the Supabase SQL editor. (Without `--print-sql` the
+   statement containing the hash, which you run in the Supabase SQL editor. A mistyped flag is refused
+   with a hint, never silently ignored. (Without `--print-sql` the
    command inserts the row itself, which needs `SUPABASE_SERVICE_ROLE_KEY`.)
 6. Hand it over (see Key handover below), then confirm receipt.
 7. Rotate: issue a second key, let the partner switch, `keys linger` to find the old id, then
@@ -94,8 +95,6 @@ The key is shown once and cannot be recovered, so how it travels matters.
 - **Farm closures are applied to every unit explicitly**, because a closure booking stores no
   tent rows. Exclusive bookings are treated the same, which errs towards showing less
   availability.
-- **Rate limiter fails open** if Netlify Blobs is down, like `chat.mts`, so a partner is not
-  locked out by an outage of the limiter. It reads with strong consistency (see Verification).
 
 ## Where the code is
 
@@ -115,63 +114,30 @@ Tests: `node --test scripts/lib/partner-*.test.mjs`.
 
 ## Verification so far
 
-Before deploy: unit tests; a scratch Postgres with the real accommodation migrations (the
-`stay_range` text format, closures holding no tent rows, and the exclusion constraint were
-confirmed); and the bundled function driven through a fake PostgREST.
+Before deploy: unit tests; a scratch Postgres with the real accommodation migrations (the `stay_range`
+text format, closures holding no tent rows and the exclusion constraint were confirmed); the bundled
+function driven through a fake PostgREST; and contract tests that run the real handler against
+`docs/partner-api/openapi.json`.
 
-**On production, 2026-10-24** (migration `0060` applied, a temporary key `linger-test` with two
-units and a three-unit pool, since revoked): no key, wrong key and revoked key all return the same
-401; `POST` is 405 and an unknown path 404; `GET /units` returned exactly the granted units and
-pool with no ownership details; `GET /availability` returned 200 with per-unit and per-pool
-nights, and `422 invalid_window` for a past, reversed, over-90-night or missing window.
+On production, 2026-10-24 (migration `0060` applied, temporary keys with a few units and a pool, since
+revoked): authentication failures, unsupported methods and unknown paths, the catalogue, availability and
+window validation all behaved as documented, and the request limits were tested and corrected (see the
+changelog).
 
-**Not verified on production:** the *occupied* path (a booking, closure or exclusive booking
-turning nights `unavailable`), because the live calendar has no bookings in the next 12 months and
-a test booking would have meant writing to it. It is covered by unit tests and the scratch
-database only.
+**Not verified on production:** the *occupied* path (a booking, closure or exclusive booking turning
+nights `unavailable`), because the live calendar has no bookings in the next 12 months and a test booking
+would have meant writing to it. It is covered by unit tests and the scratch database only.
 
-**Rate limits, found and fixed on production.** The first run showed neither limit ever triggering
-(70 rapid valid requests against 60 a minute, 40 bad-key requests against 20 per 5 minutes, no limiter
-errors logged). Cause: Netlify Blobs reads are eventually consistent by default, so a burst read a
-stale count. Fixed in #457 (strong-consistency reads for this API only). Re-test after the fix:
+## Security
 
-| Test | Result |
-| --- | --- |
-| Valid key, 150 requests 25 at a time (limit 60 a minute) | 106 passed, 44 refused with `429` and `Retry-After: 60`; the next request was refused too |
-| Valid key, 75 requests one at a time | None refused, because at about 1.5 s each they never put 60 in one minute (a flawed test, not a defect) |
-| Bad keys, 120 requests 25 at a time (limit 20 per 5 minutes) | 63 `401`, 57 `429` |
-| Bad keys, sequential, with the window already full | A mix of `401` and `429` |
+Design principles (what a partner can rely on): keys are random, shown once and stored only as a hash;
+every key failure returns the same response; a key sees only the units granted to it and can expire or be
+revoked at once; HTTPS only and no caching; the function reads booking dates only and never queries a
+guest table; errors never reveal upstream detail, owners or why a night is blocked.
 
-So the per-key limit holds, with leakage under heavy concurrency (read-then-write, no retry). The
-failed-key limit is best-effort: it counts by client IP, and behind Cloudflare the IP the function
-sees varies between connections. Real enforcement should be a Cloudflare rate-limiting rule on
-`/api/partner/*` (not set up yet).
-
-## Security: what it is and what it is not
-
-**Strong:** keys are 256 random bits, stored only as a SHA-256 hash, shown once; every key failure
-returns the same generic 401; keys are scoped to granted units and can expire or be revoked at once;
-HTTPS only (HSTS), `Cache-Control: no-store`; the function reads booking dates only and never queries
-a guest table, so phase 1 is PII-free by construction; all database tables are RLS-on with no
-policies; request values are validated before they reach a query and unit ids come from the database;
-errors are generic and never reveal upstream detail, owners, unit kinds or reasons a night is blocked.
-
-**Known limits (phase 1):**
-
-- The key is the only credential. Whoever holds it has that partner's access until revoked. Mitigations
-  today: expiry, revocation, rotation, `last_used_at`. Planned: an optional allow-list of the
-  partner's server IPs, and alerts on unusual use.
-- Rate limits are approximate (see above).
-- Successful requests are not logged per key, so a leaked key's reads could not be reconstructed.
-  Planned for phase 2: a request log (key id, route, status, window) with alerts.
-- The function runs with the Supabase service-role key. It is read-only by construction today, but a
-  least-privilege database role limited to the tables it needs is the better design and should be done
-  before phase 2 adds writes.
-- Phase 2 raises the stakes (a leaked key could create holds and push guest data): open-hold caps,
-  IP allow-listing for write keys, a request audit log and an independent security review are planned
-  before it ships.
-- The `tvcp_` prefix makes a leaked key detectable (for example a GitHub secret-scanning custom pattern).
-- Not independently reviewed or penetration tested.
+The security assessment, its known limits and the hardening plan are kept in the private technical spec
+rather than in this public repository. Ask the core team for them. Report a suspected leak of a key to
+`core-team@tvc.farm` at once.
 
 ## Testing environments (decided 2026-10-24, not built yet)
 

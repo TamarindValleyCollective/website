@@ -62,6 +62,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
           <span id="thread-avatar" class="avatar avatar-lg" aria-hidden="true"></span>
           <div class="thread-header-text">
             <strong id="thread-name"></strong>
+            <span id="thread-phone" class="thread-source"></span>
             <span id="thread-source" class="thread-source" hidden></span>
           </div>
           <button type="button" id="guest-toggle" class="button button--outline guest-toggle" aria-expanded="false" aria-controls="guest-panel">Guest</button>
@@ -1095,6 +1096,43 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     :global(.message-row) {
       max-width: 88%;
     }
+
+    /* The composer was ~40% of a phone screen, leaving room for three messages. Keep the
+       name box and Suggest reply on one row, and let the canned replies scroll sideways in
+       a single row instead of wrapping onto two. */
+    .composer-signature {
+      flex-wrap: nowrap;
+      padding: 10px 12px 0;
+    }
+
+    .composer-signature input {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+
+    .composer-signature .suggest-btn {
+      flex: none;
+      white-space: nowrap;
+    }
+
+    .quick-replies {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      padding: 10px 12px 2px;
+      scrollbar-width: none;
+    }
+
+    .quick-replies::-webkit-scrollbar {
+      display: none;
+    }
+
+    .quick-replies > * {
+      flex: none;
+    }
+
+    .reply-form {
+      padding: 8px 12px 12px;
+    }
   }
 </style>
 
@@ -1120,6 +1158,8 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     // Display name (masked for read-only roles) or an opaque "Contact XXXX"
     // — the contact's phone number is never sent to the browser.
     label: string;
+    // "+91 •••••• 345": country code and last three digits only, masked on the server.
+    phoneMasked: string;
     lastMessageAt: string;
     unread: boolean;
     lastMessagePreview: string | null;
@@ -1162,6 +1202,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   const threadAvatar = document.getElementById('thread-avatar') as HTMLElement;
   const threadName = document.getElementById('thread-name') as HTMLElement;
   const threadSource = document.getElementById('thread-source') as HTMLElement;
+  const threadPhone = document.getElementById('thread-phone') as HTMLElement;
   const blockBtn = document.getElementById('block-btn') as HTMLButtonElement;
   const optOutBtn = document.getElementById('optout-btn') as HTMLButtonElement;
   const guestToggle = document.getElementById('guest-toggle') as HTMLButtonElement;
@@ -1599,6 +1640,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   // What this signed-in role may do; refreshed on every conversation poll.
   let capabilities = { reply: false, manage: false };
+  let signerDefault = '';
 
   async function loadConversations() {
     try {
@@ -1611,8 +1653,14 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
         conversationsStatus.textContent = 'Failed to load conversations.';
         return;
       }
-      const data = (await res.json()) as { conversations: Conversation[]; capabilities: { reply: boolean; manage: boolean } };
+      const data = (await res.json()) as { conversations: Conversation[]; capabilities: { reply: boolean; manage: boolean }; signerDefault?: string | null };
       capabilities = data.capabilities;
+      // Each admin signs in with their own account, so their registered name is the default signature.
+      // A name typed here (kept in this browser) still wins; the field is only filled while it is empty.
+      if (data.signerDefault) {
+        signerDefault = data.signerDefault;
+        if (!responderNameInput.value) responderNameInput.value = signerDefault;
+      }
       renderConversations(data.conversations);
       // A full page back implies there may be more beyond it; a short page
       // means we've reached the end. Not exact (an exact-multiple total
@@ -2077,6 +2125,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     threadAvatar.textContent = getInitials(conv.label, conv.id);
     threadAvatar.style.background = getAvatarColor(conv.id);
     threadName.textContent = conv.label;
+    threadPhone.textContent = conv.phoneMasked ?? '';
     threadSource.hidden = !conv.referral;
     threadSource.textContent = conv.referral
       ? `Came from a ${conv.referral.type === 'post' ? 'post' : 'WhatsApp ad'}${conv.referral.headline ? `: ${conv.referral.headline}` : ''}`
@@ -2225,7 +2274,10 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   responderNameInput.value = localStorage.getItem(RESPONDER_NAME_KEY) ?? '';
   responderNameInput.addEventListener('input', () => {
-    localStorage.setItem(RESPONDER_NAME_KEY, responderNameInput.value.trim());
+    // Only a name that differs from the account's own is worth remembering; clearing the box goes back to the default.
+    const typed = responderNameInput.value.trim();
+    if (typed && typed !== signerDefault) localStorage.setItem(RESPONDER_NAME_KEY, typed);
+    else localStorage.removeItem(RESPONDER_NAME_KEY);
   });
 
   // Cmd/Ctrl+Enter submits — plain Enter stays a newline, since replies are
@@ -2242,7 +2294,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     e.preventDefault();
     if (!selectedConversationId) return;
     const body = replyInput.value.trim();
-    const responderName = responderNameInput.value.trim();
+    const responderName = responderNameInput.value.trim() || signerDefault;
     if (!body) return;
     if (!responderName) {
       responderNameInput.focus();
