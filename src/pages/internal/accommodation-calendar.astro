@@ -1381,7 +1381,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   // sign-in as /internal, /internal/access and /internal/security (see
   // scripts/lib/staff-client.mjs), so signing in once opens them all. Each tool
   // still checks its own role on the server for every request.
-  import { TOKEN_KEY as STORAGE_KEY } from '../../../scripts/lib/staff-client.mjs';
+  import { TOKEN_KEY as STORAGE_KEY, askSheet, showToast } from '../../../scripts/lib/staff-client.mjs';
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
   interface EventOption {
@@ -3183,7 +3183,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   async function notifyGuests(b: Booking, button: HTMLButtonElement) {
     const label = b.notice ? 'Send the changes to the guests affected' : 'Tell the guests their allocation is final';
-    if (!confirm(`${label}?\n\nThey are messaged on WhatsApp and email wherever we have a mobile or email, and the TVC team and Linger get a summary.`)) return;
+    if (!(await askSheet({ title: `${label}?`, text: 'They are messaged on WhatsApp and email wherever we have a mobile or email, and the TVC team and Linger get a summary.', actions: [{ label: 'Send the message', value: true, kind: 'primary' }, { label: 'Not yet', value: false }] }))) return;
     button.disabled = true;
     try {
       const res = await authedFetch('/api/accommodation-admin/bookings/notify', {
@@ -3193,11 +3193,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
-      alert(data.message ?? `${describeOutcomes(data.outcomes)}${data.recorded ? '' : '\n\nNobody was reached, so this was not recorded - you can try again.'}`);
+      await askSheet({ title: 'Guests messaged', text: data.message ?? `${describeOutcomes(data.outcomes)}${data.recorded ? '' : '\n\nNobody was reached, so this was not recorded - you can try again.'}`, actions: [{ label: 'OK', value: true, kind: 'primary' }] });
       await loadView();
     } catch (err) {
       const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
-      if (!handled) alert(err instanceof Error ? `Failed to notify guests: ${err.message}` : 'Failed to notify guests - try again.');
+      if (!handled) showToast(err instanceof Error ? `Could not notify the guests: ${err.message}` : 'Could not notify the guests. Try again.');
       button.disabled = false;
     }
   }
@@ -3237,11 +3237,22 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       const entered = await showReasonPrompt('This stay has already happened. Why is it being cancelled?');
       if (!entered) return; // either "Never mind" or an empty reason - both abort
       reason = entered;
-    } else if (!confirm('Cancel this booking?')) {
-      return;
     }
-    // Guests who were already told about this stay: offer to tell them it's off.
-    const tellGuests = Boolean(b.notice) && !b.isPast && confirm('The guests were already told about this stay. Send them a cancellation message too?\n\nOK = cancel and notify them. Cancel = cancel without notifying.');
+    // One question with a button for each outcome. (The old pair of native boxes said "OK = cancel and notify", where
+    // Cancel meant "cancel without notifying": easy to misread.)
+    let tellGuests = false;
+    if (!b.isPast) {
+      const told = Boolean(b.notice);
+      const choice = await askSheet({
+        title: 'Cancel this booking?',
+        text: told ? 'The guests were already told about this stay.' : undefined,
+        actions: told
+          ? [{ label: 'Cancel and message the guests', value: 'notify', kind: 'danger' }, { label: 'Cancel without messaging them', value: 'quiet', kind: 'danger-outline' }, { label: 'Keep the booking', value: null }]
+          : [{ label: 'Cancel the booking', value: 'quiet', kind: 'danger' }, { label: 'Keep the booking', value: null }],
+      });
+      if (!choice) return;
+      tellGuests = choice === 'notify';
+    }
     try {
       const res = await authedFetch('/api/accommodation-admin/bookings/delete', {
         method: 'POST',
@@ -3258,11 +3269,12 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         throw new Error(data.error ?? `Request failed (${res.status})`);
       }
       const result = await res.json().catch(() => ({}));
-      if (result.outcomes?.length) alert(`Booking cancelled.\n\n${describeOutcomes(result.outcomes)}`);
+      if (result.outcomes?.length) await askSheet({ title: 'Booking cancelled', text: describeOutcomes(result.outcomes), actions: [{ label: 'OK', value: true, kind: 'primary' }] });
+      else showToast('Booking cancelled.');
       await loadView();
     } catch (err) {
       const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
-      if (!handled) alert(err instanceof Error ? `Failed to cancel booking: ${err.message}` : 'Failed to cancel booking — try again.');
+      if (!handled) showToast(err instanceof Error ? `Could not cancel the booking: ${err.message}` : 'Could not cancel the booking. Try again.');
     }
   }
 
@@ -3316,8 +3328,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   // way the reason-for-a-past-edit prompt does. Only asks when there's
   // actually something to lose - an untouched or already-viewed-unchanged
   // form closes immediately, same as before this fix.
-  function attemptCloseModal() {
-    if (isFormDirty() && !confirm('Discard changes to this booking?')) return;
+  async function attemptCloseModal() {
+    if (isFormDirty() && !(await askSheet({ title: 'Discard changes to this booking?', actions: [{ label: 'Discard changes', value: true, kind: 'danger' }, { label: 'Keep editing', value: false }] }))) return;
     resetForm();
     closeBookingModal();
   }

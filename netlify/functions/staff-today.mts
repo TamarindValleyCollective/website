@@ -61,7 +61,7 @@ async function checkMembers(): Promise<Check> {
   const [stories, family] = await Promise.all([count('/member_unit_stories?select=household_id&status=eq.in_review'), count('/member_family_requests?select=id&status=eq.pending')]);
   const parts = [stories ? plural(stories, 'unit story', 'unit stories') + ' to review' : null, family ? plural(family, 'family request', 'family requests') + ' to decide' : null].filter(Boolean) as string[];
   if (parts.length === 0) return { quiet: 'Nothing is waiting on you in the member register.' };
-  return { item: { id: 'members', tool: 'Member register', tone: 'warn', title: parts[0], detail: `Member register${parts.length > 1 ? ` · also ${parts[1]}` : ''}`, count: stories + family, href: '/internal/members/' } };
+  return { item: { id: 'members', tool: 'Member register', tone: 'warn', title: parts[0], detail: `Member register${parts.length > 1 ? ` · also ${parts[1]}` : ''}`, count: stories || family, href: '/internal/members/' } }; // the badge counts what the title names (the family requests are in the detail)
 }
 
 async function checkUsage(): Promise<Check> {

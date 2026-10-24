@@ -1159,6 +1159,21 @@ import SignInGate from '../../components/SignInGate.astro';
     saveMessage.classList.toggle('error', isError);
   }
 
+  // Puts a role back as it was (the Undo on the toast): the same call, then a fresh list.
+  async function undoRole(p: Person, module: ModuleInfo, previous: string) {
+    try {
+      const { status, data } = await call('/api/staff-admin/roles', { method: 'POST', body: { personId: p.id, module: module.id, role: previous || null } });
+      if (status !== 200) {
+        showToast(data.error ?? 'Could not undo that.');
+        return;
+      }
+      announce(`${p.label}: ${module.label} is back to ${roleLabel(previous)}.`);
+      await loadPeople();
+    } catch (err) {
+      if (!handled(err)) showToast('Could not reach the server.');
+    }
+  }
+
   async function saveRole(p: Person, module: ModuleInfo, role: string, select: HTMLSelectElement, cellNote: HTMLElement) {
     const previous = p.roles.find((r) => r.module === module.id)?.role ?? '';
     select.disabled = true;
@@ -1171,6 +1186,8 @@ import SignInGate from '../../components/SignInGate.astro';
         refocus = `${p.id}|${module.id}`;
         announce(`${p.label}: ${module.label} is now ${roleLabel(role)}.`);
         await loadPeople(); // re-draws with what the server now holds
+        // A role is the most powerful thing on this page, so a mis-pick can be taken back for a few seconds.
+        showToast(`${p.label}: ${module.label} set to ${roleLabel(role)}.`, () => void undoRole(p, module, previous));
         return;
       }
       select.value = previous;

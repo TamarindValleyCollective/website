@@ -594,7 +594,13 @@ const adminItems = [
      16px so iOS Safari does not zoom the page when one is focused. */
   @media (pointer: coarse) {
     main :global(.toast-undo),
-    .who-menu :global(.appearance button) {
+    .who-menu :global(.appearance button),
+    main :global(.lock-pill),
+    main :global(.role-select),
+    main :global(.chip),
+    main :global(.button--small),
+    main :global(.event-picker select),
+    main :global(.toolbar select) {
       min-height: 44px;
     }
 
