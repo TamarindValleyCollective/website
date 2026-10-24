@@ -1,0 +1,281 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "TVC Partner Calendar API",
+    "version": "1.0.0",
+    "summary": "Read-only access to Tamarind Valley Collective's accommodation calendar (phase 1).",
+    "description": "Lets an approved partner (Linger) see which TVC units it may sell and whether each is free on a given night, before promising a stay to a guest.\n\n**Phase 1 is read-only.** Holds, bookings, guest details, payment and settlement arrive in later phases and will be added to this file as new endpoints within `v1`. Clients must ignore response fields they do not recognise.\n\n## Authentication\nEvery request needs `Authorization: Bearer <key>`. Keys look like `tvcp_` followed by 43 URL-safe characters, are issued by TVC to a named person at the partner, and are shown once. A missing, malformed, unknown, expired or revoked key all return the same `401`. Call the API from your server only; never from a browser or mobile app.\n\n## Dates\nAll dates are calendar dates (`YYYY-MM-DD`) in India time. A stay is a start date plus a number of nights, so the end date of a window is **not** included: `from=2026-12-12&to=2026-12-15` covers the nights of 12, 13 and 14 December.\n\n## What the API never tells you\nWhy a night is unavailable, who holds it, who owns a unit, and anything about guests.\n\n## Limits\nUp to 60 requests a minute per key, windows of at most 90 nights, dates no more than 365 days ahead. Treat `429` as authoritative and back off for `Retry-After` seconds. Limits may change with at least 30 days' notice.\n\n## Versioning\nAdditive changes (new fields, new optional parameters, new endpoints) stay in `v1`. A breaking change gets a new version with at least 30 days of overlap and `Deprecation` and `Sunset` headers on the old one.\n\n## Environments\nProduction is live. A sandbox with fake data is planned for phase 2 (see `servers`); until then phase 1 can be tested on production with a read-only key because it carries no personal data.",
+    "contact": {
+      "name": "TVC core team",
+      "email": "core-team@tvc.farm"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://tvc.farm/api/partner/v1",
+      "description": "Production"
+    },
+    {
+      "url": "https://sandbox.tvc.farm/api/partner/v1",
+      "description": "Sandbox (planned for phase 2; not available yet). Fake data, test payments, no real messages. Sandbox keys do not work in production and vice versa."
+    }
+  ],
+  "security": [{ "bearerAuth": [] }],
+  "tags": [
+    { "name": "Catalogue", "description": "What the partner may sell." },
+    { "name": "Availability", "description": "Free and unavailable nights." }
+  ],
+  "paths": {
+    "/units": {
+      "get": {
+        "tags": ["Catalogue"],
+        "operationId": "listUnits",
+        "summary": "List the units and pools this key may sell",
+        "description": "Returns only what TVC has granted to this partner; a new key sees an empty catalogue until grants are made. Units granted individually appear in `units`. A pool (a group of interchangeable units, such as TVC's tents) appears in `pools` with its size and capacity range, and its member units are not listed separately: a pool is sold by quantity and TVC assigns the physical unit. Inactive units and pools are left out.\n\nAny method other than `GET` returns `405` with `Allow: GET`.",
+        "responses": {
+          "200": {
+            "description": "The partner's catalogue.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Catalogue" },
+                "example": {
+                  "units": [
+                    { "id": "Tent06", "name": "Upper Bamboo Hut", "capacity": 2, "group": "Bamboo Huts" },
+                    { "id": "Tent07", "name": "Lower Bamboo Hut", "capacity": 2, "group": "Bamboo Huts" }
+                  ],
+                  "pools": [
+                    { "id": "tents", "name": "TVC tents", "size": 3, "capacity": { "min": 2, "max": 3 } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "502": { "$ref": "#/components/responses/UpstreamError" }
+        }
+      }
+    },
+    "/availability": {
+      "get": {
+        "tags": ["Availability"],
+        "operationId": "getAvailability",
+        "summary": "Per-night availability for the granted units and pools",
+        "description": "For every granted unit, reports each night in the window as `free` or `unavailable`. For every granted pool, reports how many of its units are free that night out of its total. A night is `unavailable` for any reason (a booking, an event, a closure of the unit or the whole farm); the reason is never disclosed.\n\nThe window must be real dates, at most 90 nights, start today (India time) or later, and end within 365 days of today. Anything else returns `422 invalid_window`.\n\nAny method other than `GET` returns `405` with `Allow: GET`.",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "description": "First night of the window, inclusive.",
+            "schema": { "type": "string", "format": "date" },
+            "example": "2026-12-12"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "description": "End of the window, exclusive: the night of this date is not included. Must be after `from`.",
+            "schema": { "type": "string", "format": "date" },
+            "example": "2026-12-15"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Availability for the window.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Availability" },
+                "example": {
+                  "from": "2026-12-12",
+                  "to": "2026-12-15",
+                  "units": [
+                    {
+                      "id": "Tent06",
+                      "nights": { "2026-12-12": "free", "2026-12-13": "unavailable", "2026-12-14": "free" }
+                    }
+                  ],
+                  "pools": [
+                    {
+                      "id": "tents",
+                      "nights": {
+                        "2026-12-12": { "free": 3, "total": 3 },
+                        "2026-12-13": { "free": 1, "total": 3 },
+                        "2026-12-14": { "free": 2, "total": 3 }
+                      }
+                    }
+                  ],
+                  "generatedAt": "2026-10-24T08:15:00.000Z"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "422": {
+            "description": "The window is not acceptable. `error.message` says which rule was broken.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "error": { "code": "invalid_window", "message": "from cannot be in the past" } }
+              }
+            }
+          },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "502": { "$ref": "#/components/responses/UpstreamError" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "tvcp_ followed by 43 URL-safe characters",
+        "description": "A partner API key issued by TVC. Send it as `Authorization: Bearer <key>`."
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "The key is missing, malformed, unknown, expired or revoked. The response is identical in every case. Repeated failed attempts from one address are also limited and return `429`.",
+        "headers": {
+          "WWW-Authenticate": { "description": "Always `Bearer`.", "schema": { "type": "string", "const": "Bearer" } }
+        },
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": { "code": "invalid_key", "message": "Missing or invalid API key" } }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "Too many requests (60 a minute per key), or too many failed key attempts from one address. Wait `Retry-After` seconds.",
+        "headers": {
+          "Retry-After": { "description": "Seconds to wait before retrying.", "schema": { "type": "integer", "minimum": 1 } }
+        },
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": { "code": "rate_limited", "message": "Too many requests. Slow down." } }
+          }
+        }
+      },
+      "UpstreamError": {
+        "description": "The calendar is temporarily unavailable. Retry with backoff. The body never contains technical detail.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": { "code": "upstream_error", "message": "The calendar is temporarily unavailable. Try again shortly." } }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "message"],
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "Stable, machine-readable. Branch on this, not on `message`.",
+                "enum": ["invalid_key", "not_found", "method_not_allowed", "invalid_window", "rate_limited", "upstream_error"]
+              },
+              "message": { "type": "string", "description": "Human-readable; may change." }
+            }
+          }
+        }
+      },
+      "Unit": {
+        "type": "object",
+        "required": ["id", "name", "capacity"],
+        "properties": {
+          "id": { "type": "string", "description": "Stable identifier. Use this in later phases to hold or book the unit.", "examples": ["Tent06"] },
+          "name": { "type": "string" },
+          "capacity": { "type": "integer", "minimum": 1, "description": "Maximum number of guests." },
+          "group": { "type": "string", "description": "Optional display grouping, such as a hut name. Not an ownership or type signal." }
+        }
+      },
+      "Pool": {
+        "type": "object",
+        "required": ["id", "name", "size", "capacity"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "size": { "type": "integer", "minimum": 0, "description": "Number of active units in the pool." },
+          "capacity": {
+            "type": "object",
+            "required": ["min", "max"],
+            "description": "Smallest and largest guest capacity among the pool's units; the physical unit TVC assigns may be any of them.",
+            "properties": {
+              "min": { "type": "integer", "minimum": 0 },
+              "max": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      },
+      "Catalogue": {
+        "type": "object",
+        "required": ["units", "pools"],
+        "properties": {
+          "units": { "type": "array", "items": { "$ref": "#/components/schemas/Unit" } },
+          "pools": { "type": "array", "items": { "$ref": "#/components/schemas/Pool" } }
+        }
+      },
+      "NightStatus": {
+        "type": "string",
+        "enum": ["free", "unavailable"],
+        "description": "`free` means the whole night can be sold. `unavailable` means it cannot, for a reason that is not disclosed."
+      },
+      "UnitAvailability": {
+        "type": "object",
+        "required": ["id", "nights"],
+        "properties": {
+          "id": { "type": "string", "description": "A unit id from the catalogue." },
+          "nights": {
+            "type": "object",
+            "description": "One entry for each night of the window, keyed by date (`YYYY-MM-DD`).",
+            "patternProperties": { "^\\d{4}-\\d{2}-\\d{2}$": { "$ref": "#/components/schemas/NightStatus" } },
+            "additionalProperties": false
+          }
+        }
+      },
+      "PoolNight": {
+        "type": "object",
+        "required": ["free", "total"],
+        "properties": {
+          "free": { "type": "integer", "minimum": 0, "description": "Units in the pool that are free that night." },
+          "total": { "type": "integer", "minimum": 0, "description": "Active units in the pool." }
+        }
+      },
+      "PoolAvailability": {
+        "type": "object",
+        "required": ["id", "nights"],
+        "properties": {
+          "id": { "type": "string", "description": "A pool id from the catalogue." },
+          "nights": {
+            "type": "object",
+            "patternProperties": { "^\\d{4}-\\d{2}-\\d{2}$": { "$ref": "#/components/schemas/PoolNight" } },
+            "additionalProperties": false
+          }
+        }
+      },
+      "Availability": {
+        "type": "object",
+        "required": ["from", "to", "units", "pools", "generatedAt"],
+        "properties": {
+          "from": { "type": "string", "format": "date", "description": "First night, inclusive." },
+          "to": { "type": "string", "format": "date", "description": "End of the window, exclusive." },
+          "units": { "type": "array", "items": { "$ref": "#/components/schemas/UnitAvailability" } },
+          "pools": { "type": "array", "items": { "$ref": "#/components/schemas/PoolAvailability" } },
+          "generatedAt": { "type": "string", "format": "date-time", "description": "When TVC computed this answer. Treat availability as a snapshot: a hold (phase 2) is what secures a unit." }
+        }
+      }
+    }
+  }
+}
