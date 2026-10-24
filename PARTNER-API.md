@@ -52,7 +52,8 @@ Needs `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the environment, for exa
    terminal and never in a chat with an AI assistant:
    `node scripts/partner-key.mjs issue linger "Linger production" --expires 2027-10-01 --print-sql`.
    It needs no secrets: it prints the key (once; only its SHA-256 hash is ever stored) and an `insert`
-   statement containing the hash, which you run in the Supabase SQL editor. (Without `--print-sql` the
+   statement containing the hash, which you run in the Supabase SQL editor. A mistyped flag is refused
+   with a hint, never silently ignored. (Without `--print-sql` the
    command inserts the row itself, which needs `SUPABASE_SERVICE_ROLE_KEY`.)
 6. Hand it over (see Key handover below), then confirm receipt.
 7. Rotate: issue a second key, let the partner switch, `keys linger` to find the old id, then
