@@ -1,0 +1,39 @@
+name: Migrations applied
+
+# Fails a PR that adds or changes a file in supabase/migrations/ which isn't recorded as
+# applied on the live Supabase project (merging doesn't apply migrations; passkeys broke once
+# on an unapplied 0030). See scripts/check-migrations-applied.mjs and supabase/migrations/
+# 0063_applied_migrations_function.sql.
+#
+# Uses the SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY repo secrets the fee-reconcile workflow
+# already uses. Skipped for PRs from forks (they get no secrets, and must not be given any).
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run unit tests
+        run: node --test scripts/check-migrations-applied.test.mjs
+
+      - name: Check migrations are applied
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/check-migrations-applied.mjs ${{ github.base_ref }}
