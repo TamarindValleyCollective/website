@@ -10,7 +10,7 @@ this file is the working reference for what is actually in the repo.
 | Phase | Scope | State |
 | --- | --- | --- |
 | 0 | Agree the design, guest fields, price breakdown, settlement terms and notice wording with Linger | In progress (docs written, not signed off) |
-| 1 | Units as data, unit catalogue, read-only availability, key issuance, an OpenAPI file (not yet written) | **Deployed 2026-10-24** (PRs #456 and #457; migration `0060` applied to TVC ERP). No partner has a key yet; see Verification and Security for what was tested and the known limits |
+| 1 | Units as data, unit catalogue, read-only availability, key issuance, an OpenAPI file (written, see below) | **Deployed 2026-10-24** (PRs #456 and #457; migration `0060` applied to TVC ERP). No partner has a key yet; see Verification and Security for what was tested and the known limits |
 | 2 | Holds, pools assigned by TVC, confirm with guest details and price, Razorpay payment, the sandbox, expiry, `updated_since` | Not started |
 | 3 | Settlement ledger, monthly statements, refund reversals | Not started |
 | 4 | Member homes: windows, auto-accept, change requests, three-way split | Not started |
@@ -81,6 +81,8 @@ Needs `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the environment, for exa
 | `scripts/lib/partner-keys.mjs` | Key generation, hashing, bearer parsing |
 | `scripts/lib/partner-db.mjs` | PostgREST access |
 | `scripts/partner-key.mjs` | Operator CLI |
+| `docs/partner-api/openapi.json` | The API contract partners build against (OpenAPI 3.1, JSON) |
+| `scripts/lib/partner-openapi.test.mjs` | Contract tests: the handler against the spec, no dependencies |
 
 Tests: `node --test scripts/lib/partner-*.test.mjs`.
 
@@ -168,7 +170,11 @@ hostname `sandbox.tvc.farm`. Still to check: the Supabase plan and its cost, and
   record which migration each environment has here.
 - Versioning: additive changes stay in `v1` (clients ignore unknown fields); a breaking change gets
   `v2` with at least 30 days of overlap plus `Deprecation` and `Sunset` headers.
-- An OpenAPI file is the source of truth and ships with phase 1; contract tests run against it.
+- `docs/partner-api/openapi.json` (OpenAPI 3.1, written 2026-10-24) is the source of truth partners build
+  against. `scripts/lib/partner-openapi.test.mjs` runs the real handler for every documented outcome
+  (200, 401, 404, 405, 422, 429, 502) and fails if a response, status or header stops matching the file,
+  so **change the file and the code together**. It is shared with partners as a file for now; serving it
+  from the API itself is an option later.
 - Phase 1 is read-only with no personal data, so it needs no sandbox: test on production with a
   read-only key. The sandbox is built for phase 2.
 - Costs and risks: a second Supabase project may cost money; branch deploys use Netlify credits, so

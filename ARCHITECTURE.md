@@ -693,7 +693,8 @@ outside both the local machine and Netlify (the member-update-email workflow).
   closure or an exclusive booking closes every unit (closures have no tent rows, so they are
   applied explicitly). All logic is in `scripts/lib/partner-api-core.mjs` (handler, tested with
   fakes), `partner-availability.mjs` (pure window/availability rules), `partner-keys.mjs` and
-  `partner-db.mjs`; the `.mts` only wires in Supabase, the limiter and the client IP.
+  `partner-db.mjs`; the `.mts` only wires in Supabase, the limiter and the client IP. The partner-facing
+  contract is `docs/partner-api/openapi.json`, kept honest by `scripts/lib/partner-openapi.test.mjs`.
   **Units as data (migration `0060`):** `accommodation_units` (seeded with the 14 existing ids)
   plus `accommodation_unit_pools` hold the inventory in the database. This is additive only:
   the admin calendar still uses `ACCOMMODATION_UNITS` in `scripts/lib/accommodation.mjs` and the
