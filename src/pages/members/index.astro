@@ -40,6 +40,12 @@ import SignInGate from '../../components/SignInGate.astro';
 
     <div class="boot" id="boot" role="status" hidden>
       <p id="boot-msg">Opening the member portal…</p>
+      <div class="boot-skel" id="boot-skel" aria-hidden="true">
+        <span class="skel skel--title"></span>
+        <span class="skel skel--line"></span>
+        <span class="skel skel--card"></span>
+        <span class="skel skel--card"></span>
+      </div>
       <button type="button" class="btn btn--solid" id="boot-retry" hidden>Try again</button>
     </div>
 
@@ -352,9 +358,61 @@ import SignInGate from '../../components/SignInGate.astro';
     display: grid;
     justify-items: center;
     gap: 14px;
-    padding: 96px 24px;
+    padding: 56px 24px;
     text-align: center;
     color: var(--tvc-ink-soft);
+  }
+
+  /* While the first answer is on its way: the shape of the page it will become, so nothing jumps when it arrives. */
+  .boot-skel {
+    display: grid;
+    gap: 14px;
+    width: min(720px, 100%);
+    margin-top: 8px;
+  }
+
+  .boot-skel[hidden] {
+    display: none;
+  }
+
+  .skel {
+    display: block;
+    border-radius: var(--radius);
+    background: var(--tvc-cream);
+    box-shadow: 0 0 0 1px var(--tvc-line) inset;
+  }
+
+  .skel--title {
+    width: 45%;
+    height: 34px;
+    border-radius: var(--radius-sm);
+  }
+
+  .skel--line {
+    width: 70%;
+    height: 16px;
+    border-radius: var(--radius-sm);
+  }
+
+  .skel--card {
+    height: 120px;
+  }
+
+  .story-skel {
+    display: grid;
+    gap: 14px;
+    margin-top: 16px;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .skel,
+    .dir-skel span {
+      animation: skel-pulse 1.4s ease-in-out infinite;
+    }
+
+    @keyframes skel-pulse {
+      50% { opacity: 0.55; }
+    }
   }
 
   .boot[hidden] {
@@ -408,7 +466,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .who-text small {
-    font-size: var(--text-xs);
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
@@ -427,7 +485,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .who-menu p {
     margin: 4px 8px 6px;
-    font-size: var(--text-xs);
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
     overflow-wrap: anywhere; /* a long email must not stretch the menu */
   }
@@ -766,13 +824,15 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .unit-card-head {
     display: flex;
+    flex-wrap: wrap; /* a long cluster-and-type pill drops to its own line instead of squeezing the title */
     align-items: center;
-    gap: 10px;
+    gap: 6px 10px;
     padding: 16px 18px 0;
   }
 
   .unit-card-head h2 {
     margin: 0;
+    white-space: nowrap;
     font-family: var(--font-body);
     font-size: var(--text-lg);
     font-weight: 600;
@@ -835,6 +895,28 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .unit-card .table-wrap th {
     padding-block: 8px;
+  }
+
+  /* On a phone four columns share 375px: tighter gutters between them, the card's own gutter at the ends, and no
+     header or status pill breaking over two lines. */
+  @media (max-width: 560px) {
+    .unit-card .table-wrap th,
+    .unit-card .table-wrap td {
+      padding-inline: 8px;
+    }
+
+    .unit-card .table-wrap :is(th, td):first-child {
+      padding-left: 18px;
+    }
+
+    .unit-card .table-wrap :is(th, td):last-child {
+      padding-right: 18px;
+    }
+
+    .unit-card .table-wrap th,
+    .unit-card .st {
+      white-space: nowrap;
+    }
   }
 
   .unit-card .table-wrap th.r:last-child,
@@ -914,7 +996,7 @@ import SignInGate from '../../components/SignInGate.astro';
   .sub-label {
     padding: 14px 18px 6px;
     color: var(--tvc-ink-soft);
-    font-size: var(--text-xs);
+    font-size: var(--text-sm);
     font-weight: 600;
   }
 
@@ -1176,7 +1258,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .shell th {
-    font-size: var(--text-xs);
+    font-size: var(--text-sm);
     font-weight: 600;
     color: var(--tvc-ink-soft);
   }
@@ -1245,7 +1327,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .people .who2 span {
     display: block;
-    font-size: var(--text-xs);
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
@@ -1280,7 +1362,7 @@ import SignInGate from '../../components/SignInGate.astro';
     align-content: flex-start; /* the row is as tall as the other tile's, but its icon and pills stay at the top */
     align-items: center;
     gap: 10px;
-    font-size: var(--text-xs);
+    font-size: var(--text-sm);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--tvc-ink-soft);
@@ -1313,7 +1395,7 @@ import SignInGate from '../../components/SignInGate.astro';
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    font-size: var(--text-xs);
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
@@ -1595,7 +1677,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   dialog.modal .field-cue {
     color: var(--tvc-ink-soft);
-    font-size: var(--text-xs);
+    font-size: var(--text-sm);
   }
 
   /* While the cursor is in the field, the fuller explanation appears as a tinted callout. */
@@ -1772,7 +1854,8 @@ import SignInGate from '../../components/SignInGate.astro';
       --topbar-h: 64px;
     }
 
-    .dir-toolbar {
+    /* #view in front: the base .dir-toolbar rule further down would otherwise win on source order. */
+    #view .dir-toolbar {
       margin-inline: -14px;
       padding-inline: 14px;
     }
@@ -1971,7 +2054,7 @@ import SignInGate from '../../components/SignInGate.astro';
   .story-save {
     min-height: 1.2em;
     margin: 0;
-    font-size: var(--text-xs);
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
@@ -2163,7 +2246,7 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .story-sug-field {
-    font-size: var(--text-xs);
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
@@ -2399,7 +2482,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .dir-filter-label {
     color: var(--tvc-ink-soft);
-    font-size: var(--text-xs);
+    font-size: var(--text-sm);
   }
 
   .dir-count {
@@ -2959,6 +3042,11 @@ import SignInGate from '../../components/SignInGate.astro';
     width: min(540px, calc(100vw - 24px));
   }
 
+  /* The corner close button must not sit on top of the title. */
+  dialog.modal.sheet > h3 {
+    padding-right: 36px;
+  }
+
   dialog.sheet[open] {
     animation: sheet-pop-in 240ms cubic-bezier(0.32, 0.72, 0, 1);
   }
@@ -3109,7 +3197,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .dir-vis {
     margin: 10px 0 0;
-    font-size: var(--text-xs);
+    font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 </style>
@@ -3600,6 +3688,15 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       grab.addEventListener('pointerup', endDrag);
       grab.addEventListener('pointercancel', endDrag);
       dlg.prepend(grab);
+      // A close button in the corner, so a sheet never depends on finding Cancel or knowing to swipe. (The profile
+      // sheet brings its own.)
+      if (!dlg.querySelector('.dir-close')) {
+        const x = h('button', 'dir-close', undefined, icon('<path d="M6 6l12 12M18 6L6 18"/>'));
+        x.setAttribute('type', 'button');
+        x.setAttribute('aria-label', 'Close');
+        x.addEventListener('click', () => dlg.close());
+        dlg.append(x);
+      }
     }
     document.body.append(dlg);
     dlg.showModal();
@@ -4577,7 +4674,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       // (not `cond ? null : el`: append(null) writes the text "null")
       ...(me!.directoryVisible ? [] : [h('p', 'lede lede--warn', 'You are not listed in the member directory, so other members cannot see your story and it will not go on tvc.farm either. You can change that in your account menu, under Your details.')]),
     );
-    const loading = h('p', 'lede', 'Loading your story…');
+    const loading = h('div', 'story-skel', undefined,
+      h('span', 'sr-only', 'Loading your story…'),
+      h('span', 'skel skel--line'), h('span', 'skel skel--card'), h('span', 'skel skel--card'));
+    loading.setAttribute('role', 'status');
     root.append(loading);
 
     const draft: StoryDraft = { bio: '', family: '', why: '', social: '', photo: '' };
@@ -5049,6 +5149,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         // field: it is then saved with your next change, like any other edit, and the core team reads it with the story.
         foldProfileLink();
       } catch (e) {
+        loading.className = 'lede';
         loading.textContent = msg(e);
         return;
       }
@@ -5454,10 +5555,22 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     );
   }
 
+  // A new page eases in over ~150ms instead of snapping. Cancelling the last one first keeps it interruptible; a
+  // reduced-motion reader gets the swap as it was.
+  const noMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let shownRoute = '';
+  let fade: Animation | null = null;
+  function fadeInView() {
+    fade?.cancel();
+    fade = noMotion.matches ? null : $('view').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, easing: 'ease-out' });
+  }
+
   function renderView() {
     const prevNext = $('view').querySelector('.next h2')?.textContent;
     const fn = route === 'dashboard' ? viewDashboard : route === 'unit' ? viewUnit : route === 'story' ? viewStory : route === 'directory' ? viewDirectory : () => viewSoon(route);
     $('view').replaceChildren(fn());
+    if (shownRoute && shownRoute !== route) fadeInView();
+    shownRoute = route;
     // Same page, new next step (the member just added their number): cross-fade instead of swapping.
     const card = $('view').querySelector('.next');
     if (card && prevNext && prevNext !== card.querySelector('h2')?.textContent) card.classList.add('next--swap');
@@ -5502,6 +5615,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     $('boot').hidden = false;
     $('boot-msg').textContent = message;
     $('boot-retry').hidden = !retry;
+    $('boot-skel').hidden = retry; // a failure is not a page on its way
   }
 
   function loadFailed() {
