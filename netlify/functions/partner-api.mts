@@ -36,9 +36,9 @@ export default async (req: Request): Promise<Response> =>
     listBlockingBookings,
     clientIp,
     // 60 requests a minute per key.
-    keyRateAllowed: (keyId: string) => allowed(() => checkIpRateLimit(STORE, `key:${keyId}`, 60_000, 60)),
+    keyRateAllowed: (keyId: string) => allowed(() => checkIpRateLimit(STORE, `key:${keyId}`, 60_000, 60, { strong: true })),
     // 20 failed attempts per IP in 5 minutes.
-    authFailAllowed: (ip: string) => allowed(() => checkIpRateLimit(`${STORE}-auth`, ip, 5 * 60_000, 20)),
+    authFailAllowed: (ip: string) => allowed(() => checkIpRateLimit(`${STORE}-auth`, ip, 5 * 60_000, 20, { strong: true })),
   });
 
 export const config = {

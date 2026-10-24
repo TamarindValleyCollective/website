@@ -10,7 +10,7 @@ this file is the working reference for what is actually in the repo.
 | Phase | Scope | State |
 | --- | --- | --- |
 | 0 | Agree the design, guest fields, price breakdown, settlement terms and notice wording with Linger | In progress (docs written, not signed off) |
-| 1 | Units as data, unit catalogue, read-only availability, key issuance | **Built; migration `0060` applied to TVC ERP on 2026-10-24; function not yet deployed** (merge #456, then follow the runbook) |
+| 1 | Units as data, unit catalogue, read-only availability, key issuance | **Deployed 2026-10-24** (PR #456; migration `0060` applied to TVC ERP). No partner has a key yet; a rate-limit fix is awaiting deploy (see Verification) |
 | 2 | Holds, pools assigned by TVC, confirm with guest details and price, Razorpay payment, expiry, `updated_since` | Not started |
 | 3 | Settlement ledger, monthly statements, refund reversals | Not started |
 | 4 | Member homes: windows, auto-accept, change requests, three-way split | Not started |
@@ -68,7 +68,7 @@ Needs `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the environment, for exa
   tent rows. Exclusive bookings are treated the same, which errs towards showing less
   availability.
 - **Rate limiter fails open** if Netlify Blobs is down, like `chat.mts`, so a partner is not
-  locked out by an outage of the limiter.
+  locked out by an outage of the limiter. It reads with strong consistency (see Verification).
 
 ## Where the code is
 
@@ -84,11 +84,27 @@ Needs `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the environment, for exa
 
 Tests: `node --test scripts/lib/partner-*.test.mjs`.
 
-## Not yet verified
+## Verification so far
 
-Phase 1 has been unit-tested, run against a scratch Postgres with the real accommodation
-migrations (the `stay_range` text format, closures holding no tent rows, and the exclusion
-constraint were confirmed), and the bundled function was driven through a fake PostgREST. It has
-**not** been run against the real TVC ERP project, behind Netlify, or with the real PostgREST
-(the `ov.` range filter and `or=(...)` filter are the same shapes `accommodation-db.mjs` and
-standard PostgREST use). Do that on a deploy preview before giving Linger a key.
+Before deploy: unit tests; a scratch Postgres with the real accommodation migrations (the
+`stay_range` text format, closures holding no tent rows, and the exclusion constraint were
+confirmed); and the bundled function driven through a fake PostgREST.
+
+**On production, 2026-10-24** (migration `0060` applied, a temporary key `linger-test` with two
+units and a three-unit pool, since revoked): no key, wrong key and revoked key all return the same
+401; `POST` is 405 and an unknown path 404; `GET /units` returned exactly the granted units and
+pool with no ownership details; `GET /availability` returned 200 with per-unit and per-pool
+nights, and `422 invalid_window` for a past, reversed, over-90-night or missing window.
+
+**Not verified on production:** the *occupied* path (a booking, closure or exclusive booking
+turning nights `unavailable`), because the live calendar has no bookings in the next 12 months and
+a test booking would have meant writing to it. It is covered by unit tests and the scratch
+database only.
+
+**Found on production: the rate limits did not hold.** 70 rapid requests with a valid key (limit
+60 a minute) and 40 with a bad key (limit 20 per 5 minutes) all passed, with no limiter errors in
+the function log. The cause is Netlify Blobs' default eventual consistency: a burst reads a stale
+count. Fixed by reading the counter with strong consistency for this API only (`strong` option in
+`lib/rate-limit.ts`); the chat and search limiters are unchanged. **Re-run the burst test after
+that deploys** before giving Linger a key: it is still a read-then-write, so concurrent requests can
+slip a few extra through.
