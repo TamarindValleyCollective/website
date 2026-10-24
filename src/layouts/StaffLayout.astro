@@ -746,7 +746,7 @@ const adminItems = [
   }
 
   .menu a svg {
-    color: var(--tvc-green-dark);
+    color: var(--tvc-icon);
   }
 
   .menu a[aria-current='page'] {
@@ -1477,6 +1477,23 @@ const adminItems = [
   html[data-theme='dark'] #staff-main img,
   html[data-theme='dark'] .brand img {
     color-scheme: normal;
+  }
+
+  /* The logo mark is a dark green disc: on the dark sidebar it needs a light ground to read, like an app icon. */
+  @media (prefers-color-scheme: dark) {
+    html:not([data-theme='light']) .brand img {
+      padding: 2px;
+      border-radius: 50%;
+      background: var(--tvc-ink);
+      box-sizing: border-box;
+    }
+  }
+
+  html[data-theme='dark'] .brand img {
+    padding: 2px;
+    border-radius: 50%;
+    background: var(--tvc-ink);
+    box-sizing: border-box;
   }
 </style>
 

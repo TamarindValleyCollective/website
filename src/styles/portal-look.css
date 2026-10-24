@@ -40,6 +40,8 @@ html:root {
     --tvc-green: #4faa77;
     --tvc-green-dark: #5bc88a;
     --tvc-green-tint: rgba(91, 200, 138, 0.16);
+    --tvc-icon: #8fe3b2;
+    --tvc-icon-tile: rgba(91, 200, 138, 0.26);
     --tvc-orange: #d98a5a;
     --tvc-orange-text: #f0a272;
     --tvc-orange-tint: rgba(217, 138, 90, 0.18);
@@ -65,6 +67,8 @@ html[data-theme='dark'] {
   --tvc-green: #4faa77;
   --tvc-green-dark: #5bc88a;
   --tvc-green-tint: rgba(91, 200, 138, 0.16);
+  --tvc-icon: #8fe3b2;
+  --tvc-icon-tile: rgba(91, 200, 138, 0.26);
   --tvc-orange: #d98a5a;
   --tvc-orange-text: #f0a272;
   --tvc-orange-tint: rgba(217, 138, 90, 0.18);
