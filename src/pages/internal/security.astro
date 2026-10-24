@@ -240,7 +240,7 @@ import SignInGate from '../../components/SignInGate.astro';
 <script>
   import { buildQrSvg } from '../../../scripts/lib/qr-svg.mjs';
   // One sign-in and one step-up are shared with /internal and /internal/access.
-  import { TOKEN_KEY as STORAGE_KEY, STEPUP_KEY, passkeyStepUp, passkeysSupported, registerPasskey, wireCodeEntry } from '../../../scripts/lib/staff-client.mjs';
+  import { TOKEN_KEY as STORAGE_KEY, STEPUP_KEY, askSheet, passkeyStepUp, passkeysSupported, registerPasskey, wireCodeEntry } from '../../../scripts/lib/staff-client.mjs';
 
   declare const google: any;
 
@@ -497,7 +497,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   async function removePasskey(k: { id: string; label: string }) {
     passkeyError.hidden = true;
-    if (!confirm(`Remove the passkey "${k.label}"? You will no longer be able to use it.`)) return;
+    if (!(await askSheet({ title: `Remove the passkey "${k.label}"?`, text: 'You will no longer be able to use it to sign in.', actions: [{ label: 'Remove passkey', value: true, kind: 'danger' }, { label: 'Keep it', value: false }] }))) return;
     try {
       const { status, data } = await api('/api/staff-mfa/passkey/remove', { method: 'POST', body: { id: k.id } });
       if (status === 200) await loadStatus();
@@ -687,7 +687,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   $('regen-codes').addEventListener('click', async () => {
     manageError.hidden = true;
-    if (!confirm('Generate new recovery codes? The old ones stop working immediately.')) return;
+    if (!(await askSheet({ title: 'Generate new recovery codes?', text: 'The old ones stop working immediately.', actions: [{ label: 'Generate new codes', value: true, kind: 'danger' }, { label: 'Keep the old codes', value: false }] }))) return;
     try {
       const { status, data } = await api('/api/staff-mfa/recovery-codes', { method: 'POST' });
       if (status === 200) {
@@ -703,7 +703,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   async function resetAdmin(admin: AdminRow) {
     manageError.hidden = true;
-    if (!confirm(`Reset the second factors for ${admin.label}? They will have to set everything up again.`)) return;
+    if (!(await askSheet({ title: `Reset the second factors for ${admin.label}?`, text: 'They will have to set everything up again.', actions: [{ label: 'Reset second factors', value: true, kind: 'danger' }, { label: 'Cancel', value: false }] }))) return;
     try {
       const { status, data } = await api('/api/staff-mfa/reset', { method: 'POST', body: { targetId: admin.id } });
       if (status === 200) await loadStatus();

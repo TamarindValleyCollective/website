@@ -164,7 +164,7 @@ import SignInGate from '../../components/SignInGate.astro';
     display: flex;
     gap: 8px;
     align-items: center;
-    min-width: 260px;
+    min-width: min(100%, 260px); /* never wider than a phone */
   }
 
   .members .toolbar label.check {
@@ -507,6 +507,13 @@ import SignInGate from '../../components/SignInGate.astro';
     grid-template-columns: 1fr 1fr;
     gap: 8px;
     margin: 8px 0;
+  }
+
+  /* The two columns (what the document says, what the register says) stack on a phone. */
+  @media (max-width: 480px) {
+    .members .landq-diff {
+      grid-template-columns: 1fr;
+    }
   }
 
   .members .landq-diff > div {

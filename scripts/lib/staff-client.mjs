@@ -251,6 +251,59 @@ export async function passkeyStepUp(api) {
 // shell styles it (.toast, .toast-undo). Reversible actions use this instead of asking "Are you sure?".
 let toastTimer;
 /** @param {string} message @param {() => void} [undo] */
+/**
+ * A question in the page's own sheet instead of the browser's confirm()/alert(): labelled buttons that say what each
+ * one does, so there is no "OK means cancel" to misread. Resolves with the chosen action's `value`, or null when the
+ * sheet is dismissed (Esc, a click outside). One action makes it a plain notice.
+ * @param {{ title: string, text?: string, actions: { label: string, value: unknown, kind?: 'primary' | 'danger' | 'danger-outline' | 'plain' }[] }} options
+ * @returns {Promise<unknown>}
+ */
+export function askSheet({ title, text, actions }) {
+  return new Promise((resolve) => {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'sheet';
+    dlg.setAttribute('aria-labelledby', 'ask-sheet-title');
+    const h2 = document.createElement('h2');
+    h2.id = 'ask-sheet-title';
+    h2.textContent = title;
+    dlg.append(h2);
+    for (const line of text ? String(text).split('\n\n') : []) {
+      const p = document.createElement('p');
+      p.className = 'sheet-text';
+      p.textContent = line; // text only, whatever the message contains
+      dlg.append(p);
+    }
+    const row = document.createElement('div');
+    row.className = 'sheet-actions';
+    row.style.flexWrap = 'wrap';
+    let answer = null;
+    for (const a of actions) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = a.label;
+      b.className = `button${a.kind === 'primary' ? ' button--primary' : a.kind === 'danger' ? ' button--danger' : a.kind === 'danger-outline' ? ' button--danger-outline' : ' button--outline'}`;
+      b.addEventListener('click', () => {
+        answer = a.value;
+        dlg.close();
+      });
+      row.append(b);
+    }
+    dlg.append(row);
+    dlg.addEventListener('close', () => {
+      dlg.remove();
+      resolve(answer);
+    });
+    dlg.addEventListener('click', (e) => {
+      if (e.target === dlg) dlg.close();
+    });
+    (document.getElementById('staff-main') ?? document.body).append(dlg);
+    dlg.showModal();
+    // The safe choice (the last, plain one) has focus, so an Enter or a stray tap cannot do the risky thing.
+    const safe = [...row.children].reverse().find((b) => b.className.includes('button--outline')) ?? row.lastElementChild;
+    safe?.focus();
+  });
+}
+
 export function showToast(message, undo) {
   let el = document.getElementById('staff-toast');
   if (!el) {

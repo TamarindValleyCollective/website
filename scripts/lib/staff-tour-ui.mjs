@@ -116,6 +116,7 @@ export function startTour(steps, { onFinish } = {}) {
     spot.hidden = !target;
     card.classList.toggle('tour-card--centre', !target);
     card.style.cssText = '';
+    delete card.dataset.side;
     if (!target) return;
     const r = target.getBoundingClientRect();
     const pad = 6;
@@ -123,17 +124,25 @@ export function startTour(steps, { onFinish } = {}) {
     if (phone.matches) return; // a sheet along the bottom, set in CSS
     const w = card.offsetWidth;
     const ht = card.offsetHeight;
-    const room = 16;
+    const room = 28; // the spotlight ring plus air; the pointer sits in it
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    let side = 'right';
     let left = r.right + room;
     let top = clamp(r.top, 12, window.innerHeight - ht - 12);
-    if (left + w > window.innerWidth - 12) left = r.left - room - w; // no room to the right: to the left
+    if (left + w > window.innerWidth - 12) { left = r.left - room - w; side = 'left'; } // no room to the right: to the left
     if (left < 12) {
       left = clamp(r.left, 12, window.innerWidth - w - 12); // neither: below, else above
-      top = r.bottom + room + ht < window.innerHeight ? r.bottom + room : Math.max(12, r.top - room - ht);
+      const below = r.bottom + room + ht < window.innerHeight;
+      top = below ? r.bottom + room : Math.max(12, r.top - room - ht);
+      side = below ? 'below' : 'above';
     }
     card.style.left = `${left}px`;
     card.style.top = `${top}px`;
+    // A pointer on the edge facing the target, aimed at the middle of it (kept off the card's rounded corners).
+    card.dataset.side = side;
+    const sideways = side === 'left' || side === 'right';
+    const along = sideways ? r.top + r.height / 2 - top : r.left + Math.min(r.width / 2, 120) - left;
+    card.style.setProperty('--pointer', `${clamp(along, 28, (sideways ? ht : w) - 28)}px`);
   }
 
   function finish() {

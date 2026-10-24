@@ -82,6 +82,9 @@
   --tvc-green: #3d6e52;
   --tvc-green-dark: #294a36;
   --tvc-green-tint: #e8f2ea;
+  /* Icons on a tinted tile (admin tools, sidebar). Dark overrides live in portal-look.css so they read on a dark surface. */
+  --tvc-icon: var(--tvc-green-dark);
+  --tvc-icon-tile: var(--tvc-green-tint);
   --tvc-orange: #bd7248;
   /* --tvc-orange itself is only 3.46:1 on --tvc-cream - fine for large
      UI/decorative use (borders, backgrounds, icons) but fails WCAG AA

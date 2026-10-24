@@ -1105,7 +1105,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   // sign-in as /internal, /internal/access and /internal/security (see
   // scripts/lib/staff-client.mjs), so signing in once opens them all. Each tool
   // still checks its own role on the server for every request.
-  import { TOKEN_KEY as STORAGE_KEY, showToast } from '../../../scripts/lib/staff-client.mjs';
+  import { TOKEN_KEY as STORAGE_KEY, askSheet, showToast } from '../../../scripts/lib/staff-client.mjs';
   // This inbox is signed into from one shared Google account used by several
   // admins, so the ID token's own name claim can't tell them apart — each
   // person types their own name once, remembered on that browser (localStorage,
@@ -2148,7 +2148,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     const label = selectedConversation.label;
     const nextOptedOut = !selectedConversation.optedOut;
     if (!nextOptedOut) {
-      if (!confirm(`Turn WhatsApp booking messages back on for ${label}? Only do this if they asked for them.`)) return;
+      if (!(await askSheet({ title: `Turn booking messages back on for ${label}?`, text: 'They stopped them with STOP. Only turn them back on if they asked for them.', actions: [{ label: 'Turn messages back on', value: true, kind: 'primary' }, { label: 'Leave them off', value: false }] }))) return;
       await setOptedOut(id, false);
       return;
     }
