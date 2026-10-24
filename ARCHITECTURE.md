@@ -25,7 +25,9 @@ WhatsApp reply dashboard at `/internal/whatsapp`, a scheduled (cron, no HTTP pat
 `/api/accommodation-admin` backing the internal, unlinked tent-booking dashboard at
 `/internal/accommodation-calendar` — the public, aggregate-only availability view this admin
 tool was originally built alongside was deliberately **not** shipped to production with it
-(dropped 2026-08-30, approach TBD), and four functions backing the reusable event payment
+(dropped 2026-08-30, approach TBD), `/api/partner/v1/*` (a read-only, key-authenticated API
+through which Linger's booking system reads the unit catalogue and per-night availability —
+phase 1 of the partner calendar API, see the entry below), and four functions backing the reusable event payment
 module — `/api/event-booking` (saves a pending booking request and alerts Linger; since 2026-10-11 it
 no longer creates a payment link), `/api/booking-approval` (Linger staff approve or decline from a
 tokenised link; approving creates the per-booking Razorpay Payment Link and sends it to the guest), `/api/razorpay-
@@ -101,6 +103,7 @@ flowchart TD
         FUNC_SRC9["netlify/functions/accommodation-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>full tent-booking CRUD backed by Postgres<br/>(EXCLUDE constraints make double-booking<br/>physically impossible), guest directory,<br/>full audit log, past-booking justification"]
         FUNC_SRC11["netlify/functions/event-booking.mts<br/>Serverless function — checks the event's base<br/>Payment Link is open, saves a pending request<br/>in Supabase, WhatsApps + emails Linger a<br/>tokenised approve link, emails the guest"]
         FUNC_SRC18["netlify/functions/event-booking-approval.mts<br/>Serverless function, tokenised link (no login) —<br/>GET reads, POST approves or declines; approve<br/>creates the per-booking Payment Link (price x<br/>headcount, 48h) and sends it to the guest"]
+        FUNC_SRC19["netlify/functions/partner-api.mts<br/>Serverless function, bearer-key auth (no login) —<br/>read-only unit catalogue + per-night availability<br/>for Linger; booking dates only, never guest data"]
         FUNC_SRC12["netlify/functions/razorpay-webhook.mts<br/>Serverless function — verifies signature, records<br/>payment_link.paid in Supabase (idempotent), emails<br/>a branded receipt; also handles refund.created/<br/>processed/failed — Razorpay's own confirmation is<br/>the only thing that marks a row actually refunded"]
         FUNC_SRC13["netlify/functions/cancel-booking.mts<br/>Serverless function — records a guest's<br/>cancellation request (not an automatic<br/>refund), notifies TVC + Linger + guest"]
         FUNC_SRC14["netlify/functions/event-payments-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>per-event registrations/cancellations/money<br/>collected from Supabase, issues real Razorpay<br/>refunds (tier-suggested, admin-confirmed)"]
@@ -132,6 +135,7 @@ flowchart TD
         APIFN9["Netlify Function: /api/accommodation-admin<br/>Deployed and live — merged 2026-08-30,<br/>verified against production"]
         APIFN11["Netlify Function: /api/event-booking<br/>Request-only since 2026-10-11 (approval-gated);<br/>Payment Link creation moved to APIFN19"]
         APIFN19["Netlify Function: /api/booking-approval<br/>Linger approve/decline; needs migration 0038<br/>applied before it can work"]
+        APIFN20["Netlify Function: /api/partner/v1/*<br/>Phase 1, read-only — built, not deployed;<br/>needs migration 0060 applied and a key issued"]
         APIFN12["Netlify Function: /api/razorpay-webhook<br/>Deployed and live — live-mode webhook<br/>configured, signature verification confirmed"]
         APIFN13["Netlify Function: /api/cancel-booking<br/>Deployed and live"]
         APIFN14["Netlify Function: /api/event-payments-admin<br/>Deployed and live — backs /internal/event-payments,<br/>issues real refunds via Razorpay's API"]
@@ -193,6 +197,7 @@ flowchart TD
         NETLIFYAPI["Netlify API<br/>GET /accounts/{id} — plan credits + billing cycle<br/>dates; the site's deploy list + build minutes (credits<br/>USED is not exposed), called by usage-collect.mts<br/>with NETLIFY_ACCESS_TOKEN"]
         RESEND["Resend API<br/>Transactional email — noreply@tvc.farm,<br/>domain verified 2026-08-19,<br/>called from the GitHub Action above,<br/>whatsapp-stale-alert.mts and usage-collect.mts<br/>(GET /usage quota read)"]
         WAMETA["Meta WhatsApp Cloud API<br/>Sends inbound message + template-status<br/>events to /api/whatsapp-webhook;<br/>receives replies from whatsapp-admin.mts<br/>and (once approved) guest/staff templates<br/>from lib/whatsapp-send.ts; see WHATSAPP.md for setup status"]
+        LINGERSYS["Linger booking system<br/>External partner — calls /api/partner/v1/*<br/>server-to-server with its own API key"]
         SUPABASE["Supabase Postgres ('TVC ERP' project)<br/>whatsapp_conversations/whatsapp_messages,<br/>event_payments, staff_users/staff_module_roles/<br/>staff_audit_log (gate all four admin Functions),<br/>staff_mfa_factors/staff_recovery_codes/<br/>staff_mfa_state (super-admin second factors),<br/>usage_daily/usage_snapshots/usage_settings/<br/>usage_alert_state (free-tier metering + alerts) —<br/>service_role key, called server-side only"]
         SUPABASE_HA["Supabase Postgres (separate 'HomeAssistant' project/org)<br/>sensor_readings (Home Assistant pushes with the anon key,<br/>insert-only, registered sensors only), sensors registry,<br/>sensor_hourly rollup — supabase/homeassistant/"]
         HASSIST["Home Assistant (farmassistant.tvc.farm)<br/>Automation 'Push weather sensors to Supabase'<br/>from the Meshtastic campground weather station"]
@@ -272,6 +277,8 @@ flowchart TD
     APIFN9 -.->|"read/write bookings, guests,<br/>audit log"| SUPABASE
     APIFN9 -.->|"check admin role"| SUPABASE
     APIFN9 -.->|"verify admin ID token"| GIDTOKEN
+    LINGERSYS -.->|"GET /units, /availability<br/>(Bearer key)"| APIFN20
+    APIFN20 -.->|"check key hash + grants,<br/>read booking dates only"| SUPABASE
     ACCOMMODATIONDASH -.->|"Sign in with Google"| GIDTOKEN
     EVENTPAYDASH --> APIFN14
     APIFN14 -.->|"read/write bookings,<br/>record refunds"| SUPABASE
@@ -309,8 +316,8 @@ flowchart TD
     classDef ciStyle fill:#eef4fb,stroke:#3b6ea5,color:#1c3f5f
 
     class PAGES,INTERNALPAGE,INTERNALPAGE2,INTERNALPAGE3,INTERNALPAGE4,INTERNALPAGE5,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,STATIONCARD,CDN,POOLDASH,WHATSAPPDASH,ACCOMMODATIONDASH,EVENTPAYDASH,USAGEDASH,BOOKINGFORM,CANCELPAGE,APPROVEPAGE staticStyle
-    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_STATION,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,FUNC_SRC14,FUNC_SRC15,FUNC_SRC16,FUNC_SRC17,FUNC_SRC18,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN_STATION,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,APIFN14,APIFN15,APIFN16,APIFN17,APIFN18,APIFN19,BLOBS,FORMS,ANTHROPIC netlifyStyle
-    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,SUPABASE,SUPABASE_HA,HASSIST,GEMINI,TYPESAFE,RAZORPAY,RDAP externalStyle
+    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_STATION,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,FUNC_SRC14,FUNC_SRC15,FUNC_SRC16,FUNC_SRC17,FUNC_SRC18,FUNC_SRC19,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN_STATION,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,APIFN14,APIFN15,APIFN16,APIFN17,APIFN18,APIFN19,APIFN20,BLOBS,FORMS,ANTHROPIC netlifyStyle
+    class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,LINGERSYS,SUPABASE,SUPABASE_HA,HASSIST,GEMINI,TYPESAFE,RAZORPAY,RDAP externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL,SCRIPT_GSC localStyle
     class GHA_MEMBER,GHA_DOMAIN ciStyle
@@ -665,6 +672,34 @@ outside both the local machine and Netlify (the member-update-email workflow).
   deleting a notified booking offers a cancellation message (`notifyGuests` on `/bookings/delete`).
   Gated by `NOTIFIABLE_BOOKING_TYPES` in `stay-notice.mjs`. Test mode (Razorpay test keys) routes
   to the test inbox / `WHATSAPP_TEST_NUMBER`.
+- **`netlify/functions/partner-api.mts`** — the partner calendar API Linger's booking system
+  calls, at `/api/partner/v1/*`. **Phase 1 (read-only), built 2026-10-24, not yet deployed**;
+  holds, confirmation, guest details, payment and settlement are later phases (design: the
+  "Partner Calendar API: Technical Spec" doc; `PARTNER-API.md` is the working reference). Two
+  endpoints: `GET /units` (the units and pools that partner may sell) and `GET /availability?from=&to=`
+  (per night `free`/`unavailable` for each unit, and `{free, total}` per pool; windows of at most 90
+  nights, starting today in India time at the earliest, within a year). Not behind Google
+  Sign-In: auth is a per-partner **bearer key** (`tvcp_` + 256 random bits), stored only as a
+  SHA-256 hash in `partner_api_keys` (migration `0060`), issued and revoked with
+  `scripts/partner-key.mjs`, shown once. Every key failure (missing, malformed, unknown,
+  revoked, expired) returns the same generic 401 and counts toward a per-IP limit (20 per 5
+  minutes); a valid key is limited to 60 requests a minute, both via Netlify Blobs through
+  `lib/rate-limit.ts` (fails open, like `chat.mts`). What a partner sees is exactly its grants
+  in `partner_unit_access`/`partner_pool_access`; nothing is granted by default. A pool is a
+  group of interchangeable units (e.g. TVC tents) reported by count, not by unit. The function
+  reads booking *dates* only — it never queries a guest table — and never reveals who owns a
+  unit, its `kind` (which would expose member homes) or why a night is unavailable. A farm
+  closure or an exclusive booking closes every unit (closures have no tent rows, so they are
+  applied explicitly). All logic is in `scripts/lib/partner-api-core.mjs` (handler, tested with
+  fakes), `partner-availability.mjs` (pure window/availability rules), `partner-keys.mjs` and
+  `partner-db.mjs`; the `.mts` only wires in Supabase, the limiter and the client IP.
+  **Units as data (migration `0060`):** `accommodation_units` (seeded with the 14 existing ids)
+  plus `accommodation_unit_pools` hold the inventory in the database. This is additive only:
+  the admin calendar still uses `ACCOMMODATION_UNITS` in `scripts/lib/accommodation.mjs` and the
+  hardcoded `tent_id` CHECK and farm-closure arrays in the booking RPCs. Moving those onto the
+  table is deferred to phase 2; until then `scripts/lib/partner-units.test.mjs` fails if the
+  seed and `ACCOMMODATION_UNITS` drift apart. Applying `0060` is manual and must happen before
+  this function's code can work.
 - **`netlify/functions/lib/staff-access.ts` + `staff-registry.ts`** — the shared access layer
   for the internal admin tools (issue #89), meant to replace the per-function Sheet allow-lists
   above. `requireStaff(req, module, capability)` verifies the Google ID token (for tvc.farm /
@@ -1794,6 +1829,7 @@ never touches Netlify either.
 | WhatsApp event reminders (`whatsapp-event-reminders.mts`, scheduled) | 🟡 Deployed 2026-10-10 with migration `0033` applied; both templates approved; sends only to opted-in guests |
 | WhatsApp unread digest (`whatsapp-stale-alert.mts`, scheduled) | ✅ Live — cron every 15 minutes, emails `core-team@tvc.farm` one digest of conversations unread 60+ minutes, re-sent hourly per conversation until read. Replaces the old per-message email (2026-08-20) |
 | Accommodation Allocation dashboard (`/internal/accommodation-calendar`, `/api/accommodation-admin`) | ✅ Live — merged to `main` and deployed 2026-08-30 (PR #116); verified directly against production (`/internal/accommodation-calendar` returns 200, `/api/accommodation-admin/bookings` returns 401 unauthenticated as expected for the Google Sign-In gate, `accommodation-admin` listed among the deploy's live functions). The public availability view (`/visit/availability`) built alongside it was **not** included in this launch — dropped 2026-08-30, pending a rethink; confirmed 404 on production |
+| Partner calendar API, phase 1 (`/api/partner/v1/*`, read-only, for Linger) | 🔴 Built 2026-10-24, **not deployed**: needs migration `0060` applied to TVC ERP, a pool and grants set with `scripts/partner-key.mjs`, and a key issued to Linger. Unit-tested and exercised against a scratch Postgres and a fake PostgREST; not yet run against the real project |
 | Event payment tracking (`EventBookingForm`, `/api/event-booking`, `/api/razorpay-webhook`, `/api/cancel-booking`) | ✅ Live as of 2026-09-24 — real live-mode Razorpay keys and webhook configured; a real Payment Link creation verified directly against the live API. One event uses it so far (Foraging Day, 10 Oct 2026); reusable for any event with no code change — see `RAZORPAY.md`. Full webhook→Supabase→receipt chain confirmed in Test mode with two real test payments; Live mode confirmed only through Payment Link creation (an unpaid dry run), not yet through an actual completed live payment |
 | Event Payments dashboard + refund trigger (`/internal/event-payments`, `/api/event-payments-admin`) | 🟠 Deployed to production 2026-09-24 (merged to `main`, migrations `0020`-`0024` applied to the live "TVC ERP" project) — registrations/cancellations/money-collected read against real `event_payments` rows, and test-mode/live-mode filtering plus the refund-initiated/refund-processed/refund-failed status split (see `RAZORPAY.md`) are all live. 2026-09-25: refund-tier date fix, duplicate-payment guard, bulk event-wide cancellation, and payment-method capture shipped; fee reconciliation (`fee_amount`) is written but the nightly script that populates it isn't running yet — needs repo secrets added (see `RAZORPAY.md`). Still **not yet exercised**: no real refund has actually been triggered end-to-end against a live payment (`createRefund` → live Razorpay API → `refund.processed` webhook → `refunded_at` set) — do that once before fully trusting the refund flow for a real cancellation |
 
