@@ -79,7 +79,7 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
   Sentence case everywhere else (never uppercase an email). Every dialog on the member page goes through
   `presentSheet(dlg)` (a card that grows from its trigger; a swipe-down bottom sheet on phones; `locked` for
   one that must be read) and calls `dlg.close()` as usual: the presenter wraps `close` to play the exit.
-  Never `append` + `showModal` a dialog directly.
+  Never `append` + `showModal` a dialog directly. On phones (560px and below) the main navigation is a bottom tab bar (`#tabbar`, filled by `renderNav`); fixed-bottom things (toast, story bar, `#view` padding) offset by `--tabbar-h`. A phone-only override placed before its base rule in the file loses to it; raise its specificity.
 - Admin portal (`StaffLayout.astro`, `src/pages/internal/*`): the shell owns the shared primitives (`.card`,
   `.hint`, `.note`, `.error`, `.section.wrapper`, `[hidden]`, `.visually-hidden`, `.link-button`, and the button
   modifiers `--outline`, `--primary`, `--danger`, `--danger-outline`, `--small`) and the building blocks of the
