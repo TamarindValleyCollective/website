@@ -17,8 +17,20 @@ export function clientIp(req: Request): string {
 }
 
 // Returns false once `ip` has made `max` requests inside the current window.
-export async function checkIpRateLimit(storeName: string, ip: string, windowMs: number, max: number): Promise<boolean> {
-  const store = getStore(storeName);
+// Blobs reads are eventually consistent by default, which lets a quick burst
+// read a stale count and sail past the limit (seen on the partner API: 100+
+// requests in two minutes all passed a 60-a-minute limit). `strong` reads the
+// latest count, at the cost of a slower read; use it where the limit must hold
+// for a burst. Still a read-then-write with no retry, so concurrent requests
+// can slip a few extra through, never lock anyone out.
+export async function checkIpRateLimit(
+  storeName: string,
+  ip: string,
+  windowMs: number,
+  max: number,
+  options: { strong?: boolean } = {},
+): Promise<boolean> {
+  const store = options.strong ? getStore({ name: storeName, consistency: 'strong' }) : getStore(storeName);
   const now = Date.now();
   const key = `ip:${ip}`;
   const record = (await store.get(key, { type: 'json' })) as RateLimitRecord | null;
