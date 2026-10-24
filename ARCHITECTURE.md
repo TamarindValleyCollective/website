@@ -1038,7 +1038,14 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `service_role` key, used server-side by Netlify Functions and scripts, reads or writes data, so RLS
   is a second layer rather than the only one. A future table that needs `anon`/`authenticated` access
   must be granted it explicitly. `pg_trgm` and `btree_gist` live in the `extensions` schema (migration
-  `0062`), not `public`; SQL that calls their functions by name must qualify them.
+  `0062`), not `public`; SQL that calls their functions by name must qualify them. Migrations are not
+  applied by merging: apply each to the project first (`apply_migration` or `supabase db push`, so it is
+  recorded under the file's name without its number). The `Migrations applied` Action
+  (`.github/workflows/check-migrations-applied.yml`, `scripts/check-migrations-applied.mjs`) fails a PR
+  that adds or changes a migration with no such recorded name, reading the history through the
+  service-role-only `applied_migrations()` (migration `0063`) with the existing `SUPABASE_URL` /
+  `SUPABASE_SERVICE_ROLE_KEY` repo secrets. It checks only the files a PR touches, since about 17 older
+  ones were applied by hand and never recorded; fork PRs skip it.
 - **`scripts/lib/supabase.mjs`** — hand-rolled Supabase PostgREST REST client (`fetch` + the
   `service_role` key, no `@supabase/supabase-js` dependency — matching this repo's preference for
   small hand-rolled clients over heavy libraries) for the `whatsapp_conversations`/
