@@ -1032,6 +1032,12 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `0 22 * * *` (~03:30 IST), live with repo secrets since 2026-09-26. Can't run locally via
   `netlify dev:exec`: Netlify masks the Sensitive-flagged service-role key on read. Trigger it
   with `gh workflow run` instead. See `RAZORPAY.md`.
+- **Supabase access model** — every table in the "TVC ERP" project's `public` schema has RLS on with no
+  policies, and (migration `0061_revoke_anon_authenticated_table_grants.sql`) `anon`/`authenticated`
+  hold no table or sequence grants, with default privileges revoked for new objects. Only the
+  `service_role` key, used server-side by Netlify Functions and scripts, reads or writes data, so RLS
+  is a second layer rather than the only one. A future table that needs `anon`/`authenticated` access
+  must be granted it explicitly.
 - **`scripts/lib/supabase.mjs`** — hand-rolled Supabase PostgREST REST client (`fetch` + the
   `service_role` key, no `@supabase/supabase-js` dependency — matching this repo's preference for
   small hand-rolled clients over heavy libraries) for the `whatsapp_conversations`/
