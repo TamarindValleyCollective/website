@@ -590,6 +590,24 @@ const adminItems = [
     }
   }
 
+  /* A finger, not a mouse: the Undo in a toast and the appearance choice get full-size targets, and form fields are
+     16px so iOS Safari does not zoom the page when one is focused. */
+  @media (pointer: coarse) {
+    main :global(.toast-undo),
+    .who-menu :global(.appearance button) {
+      min-height: 44px;
+    }
+
+    main :global(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'])),
+    main :global(select),
+    main :global(textarea),
+    :global(.sheet) :global(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'])),
+    :global(.sheet) :global(select),
+    :global(.sheet) :global(textarea) {
+      font-size: var(--text-md);
+    }
+  }
+
   #staff-main[data-width='full'] :global(.wrapper) {
     max-width: none;
     margin: 0;
@@ -1577,8 +1595,32 @@ const adminItems = [
     box-sizing: border-box;
     padding: 20px;
     background: var(--tvc-white);
+    /* Ringed in the spotlight's orange: a dark card on a dark scrim has no edge otherwise, and the pair reads as one. */
+    border: 2px solid var(--tvc-orange);
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
+    --pointer: 50%; /* where the pointer sits along its edge; the script aims it at the target */
+  }
+
+  /* The pointer: a turned square on the edge that faces the highlighted element. */
+  .tour-card[data-side]::before {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border: 2px solid transparent;
+    border-radius: 3px;
+    background: inherit;
+    transform: translate(-50%, -50%) rotate(45deg);
+  }
+
+  .tour-card[data-side='right']::before { left: 0; top: var(--pointer); border-color: transparent transparent var(--tvc-orange) var(--tvc-orange); }
+  .tour-card[data-side='left']::before { left: 100%; top: var(--pointer); border-color: var(--tvc-orange) var(--tvc-orange) transparent transparent; }
+  .tour-card[data-side='below']::before { left: var(--pointer); top: 0; border-color: var(--tvc-orange) transparent transparent var(--tvc-orange); }
+  .tour-card[data-side='above']::before { left: var(--pointer); top: 100%; border-color: transparent var(--tvc-orange) var(--tvc-orange) transparent; }
+
+  .tour-card--centre::before {
+    display: none;
   }
 
   .tour-card--centre {

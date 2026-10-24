@@ -159,6 +159,14 @@ main .segmented button:focus-visible {
   main .segmented button {
     min-height: 44px;
   }
+
+  main .field {
+    min-height: 44px;
+  }
+
+  main .field input {
+    font-size: var(--text-md);
+  }
 }
 
 /* A grouped list: rows share one rounded surface, hairlines inset from the leading edge. */
