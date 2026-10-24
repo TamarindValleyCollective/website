@@ -154,6 +154,23 @@ import SignInGate from '../../components/SignInGate.astro';
     object-fit: contain;
   }
 
+  /* The mark is a dark green disc: in the dark appearance it sits on a light ground, like an app icon. */
+  html[data-theme='dark'] .mark {
+    box-sizing: border-box;
+    padding: 2px;
+    border-radius: 50%;
+    background: var(--tvc-ink);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    html:not([data-theme='light']) .mark {
+      box-sizing: border-box;
+      padding: 2px;
+      border-radius: 50%;
+      background: var(--tvc-ink);
+    }
+  }
+
   .brand-name {
     flex: none;
     font-size: var(--text-lg);
@@ -270,7 +287,7 @@ import SignInGate from '../../components/SignInGate.astro';
     width: 20px;
     height: 20px;
     fill: none;
-    stroke: var(--tvc-green-dark);
+    stroke: var(--tvc-icon);
     stroke-width: 1.8;
     stroke-linecap: round;
     stroke-linejoin: round;
@@ -450,7 +467,7 @@ import SignInGate from '../../components/SignInGate.astro';
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: var(--tvc-green-tint);
+    background: var(--tvc-icon-tile);
     color: var(--tvc-green-dark);
     font-size: var(--text-sm);
     font-weight: 600;
@@ -977,7 +994,7 @@ import SignInGate from '../../components/SignInGate.astro';
     width: 20px;
     height: 20px;
     fill: none;
-    stroke: var(--tvc-green-dark);
+    stroke: var(--tvc-icon);
     stroke-width: 1.8;
     stroke-linecap: round;
     stroke-linejoin: round;
@@ -1105,11 +1122,11 @@ import SignInGate from '../../components/SignInGate.astro';
     width: 56px;
     height: 56px;
     fill: none;
-    stroke: var(--tvc-green);
+    stroke: var(--tvc-icon);
     stroke-width: 1.5;
     stroke-linecap: round;
     stroke-linejoin: round;
-    opacity: 0.7;
+    opacity: 0.75;
   }
 
   .pill {
@@ -1502,7 +1519,7 @@ import SignInGate from '../../components/SignInGate.astro';
     grid-template-rows: subgrid;
     padding: 12px 14px;
     border-radius: var(--radius-sm);
-    background: var(--tvc-green-tint);
+    background: var(--tvc-icon-tile);
   }
 
   .tile .k {
@@ -1525,7 +1542,7 @@ import SignInGate from '../../components/SignInGate.astro';
     width: 22px;
     height: 22px;
     fill: none;
-    stroke: var(--tvc-green-dark);
+    stroke: var(--tvc-icon);
     stroke-width: 1.8;
     stroke-linecap: round;
     stroke-linejoin: round;
@@ -3035,7 +3052,7 @@ import SignInGate from '../../components/SignInGate.astro';
     width: 20px;
     height: 20px;
     fill: none;
-    stroke: var(--tvc-green-dark);
+    stroke: var(--tvc-icon);
     stroke-width: 1.8;
     stroke-linecap: round;
     stroke-linejoin: round;
