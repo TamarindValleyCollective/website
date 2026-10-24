@@ -33,6 +33,14 @@ project, unrelated to the website itself, kept here alongside `RAZORPAY.md`/`BUF
 that's where TVC's other operational tooling docs live. **Update it in the same change**
 whenever that changes — the sync script, sheet layout, trigger cadence, or Drive folder.
 
+## Partner API documentation
+
+`PARTNER-API.md` documents the partner calendar API Linger's booking system calls
+(`/api/partner/v1/*`): the endpoints, the operator runbook for keys and grants, what is built versus
+planned (phases 0-4), and what has and has not been verified. **Update it in the same change**
+whenever that changes — a new endpoint or phase, a changed limit or auth rule, a new migration, a
+new partner.
+
 ## Usage & limits documentation
 
 `USAGE.md` documents the free-tier / credit usage dashboard (`/internal/usage`) and its alert
