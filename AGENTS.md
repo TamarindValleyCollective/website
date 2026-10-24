@@ -73,12 +73,13 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
   `--font-display` is the system face there and a token change lands in both. The shell matches
   `StaffLayout` (frosted sidebar, solid-green current item, compact 36px `.btn`, border-only cards, an
   Auto/Light/Dark control in the account menu). Type: sizes come from the `--text-*` scale (nothing
-  smaller than 0.8rem); the page title is 2.125rem 700 like the admin `h1`; section and dialog titles
+  smaller than 0.8rem; text people read (contact lines, hints, captions, table headers, filter labels) is
+  `--text-sm`, and `--text-xs` is for pills, badges and uppercase labels); the page title is 2.125rem 700 like the admin `h1`; section and dialog titles
   lg / xl; subheads weight 600; small uppercase labels only for non-heading labels, tracking 0.08em.
   Sentence case everywhere else (never uppercase an email). Every dialog on the member page goes through
   `presentSheet(dlg)` (a card that grows from its trigger; a swipe-down bottom sheet on phones; `locked` for
   one that must be read) and calls `dlg.close()` as usual: the presenter wraps `close` to play the exit.
-  Never `append` + `showModal` a dialog directly.
+  Never `append` + `showModal` a dialog directly. On phones (560px and below) the main navigation is a bottom tab bar (`#tabbar`, filled by `renderNav`); fixed-bottom things (toast, story bar, `#view` padding) offset by `--tabbar-h`. A phone-only override placed before its base rule in the file loses to it; raise its specificity.
 - Admin portal (`StaffLayout.astro`, `src/pages/internal/*`): the shell owns the shared primitives (`.card`,
   `.hint`, `.note`, `.error`, `.section.wrapper`, `[hidden]`, `.visually-hidden`, `.link-button`, and the button
   modifiers `--outline`, `--primary`, `--danger`, `--danger-outline`, `--small`) and the building blocks of the
