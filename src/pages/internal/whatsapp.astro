@@ -1095,6 +1095,43 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     :global(.message-row) {
       max-width: 88%;
     }
+
+    /* The composer was ~40% of a phone screen, leaving room for three messages. Keep the
+       name box and Suggest reply on one row, and let the canned replies scroll sideways in
+       a single row instead of wrapping onto two. */
+    .composer-signature {
+      flex-wrap: nowrap;
+      padding: 10px 12px 0;
+    }
+
+    .composer-signature input {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+
+    .composer-signature .suggest-btn {
+      flex: none;
+      white-space: nowrap;
+    }
+
+    .quick-replies {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      padding: 10px 12px 2px;
+      scrollbar-width: none;
+    }
+
+    .quick-replies::-webkit-scrollbar {
+      display: none;
+    }
+
+    .quick-replies > * {
+      flex: none;
+    }
+
+    .reply-form {
+      padding: 8px 12px 12px;
+    }
   }
 </style>
 
