@@ -135,7 +135,7 @@ flowchart TD
         APIFN9["Netlify Function: /api/accommodation-admin<br/>Deployed and live — merged 2026-08-30,<br/>verified against production"]
         APIFN11["Netlify Function: /api/event-booking<br/>Request-only since 2026-10-11 (approval-gated);<br/>Payment Link creation moved to APIFN19"]
         APIFN19["Netlify Function: /api/booking-approval<br/>Linger approve/decline; needs migration 0038<br/>applied before it can work"]
-        APIFN20["Netlify Function: /api/partner/v1/*<br/>Phase 1, read-only — built, not deployed;<br/>needs migration 0060 applied and a key issued"]
+        APIFN20["Netlify Function: /api/partner/v1/*<br/>Phase 1, read-only — built, not deployed;<br/>migration 0060 applied; needs a key issued"]
         APIFN12["Netlify Function: /api/razorpay-webhook<br/>Deployed and live — live-mode webhook<br/>configured, signature verification confirmed"]
         APIFN13["Netlify Function: /api/cancel-booking<br/>Deployed and live"]
         APIFN14["Netlify Function: /api/event-payments-admin<br/>Deployed and live — backs /internal/event-payments,<br/>issues real refunds via Razorpay's API"]
@@ -698,8 +698,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   the admin calendar still uses `ACCOMMODATION_UNITS` in `scripts/lib/accommodation.mjs` and the
   hardcoded `tent_id` CHECK and farm-closure arrays in the booking RPCs. Moving those onto the
   table is deferred to phase 2; until then `scripts/lib/partner-units.test.mjs` fails if the
-  seed and `ACCOMMODATION_UNITS` drift apart. Applying `0060` is manual and must happen before
-  this function's code can work.
+  seed and `ACCOMMODATION_UNITS` drift apart. `0060` was applied to TVC ERP by hand on 2026-10-24 (migrations are not applied on merge).
 - **`netlify/functions/lib/staff-access.ts` + `staff-registry.ts`** — the shared access layer
   for the internal admin tools (issue #89), meant to replace the per-function Sheet allow-lists
   above. `requireStaff(req, module, capability)` verifies the Google ID token (for tvc.farm /
@@ -1829,7 +1828,7 @@ never touches Netlify either.
 | WhatsApp event reminders (`whatsapp-event-reminders.mts`, scheduled) | 🟡 Deployed 2026-10-10 with migration `0033` applied; both templates approved; sends only to opted-in guests |
 | WhatsApp unread digest (`whatsapp-stale-alert.mts`, scheduled) | ✅ Live — cron every 15 minutes, emails `core-team@tvc.farm` one digest of conversations unread 60+ minutes, re-sent hourly per conversation until read. Replaces the old per-message email (2026-08-20) |
 | Accommodation Allocation dashboard (`/internal/accommodation-calendar`, `/api/accommodation-admin`) | ✅ Live — merged to `main` and deployed 2026-08-30 (PR #116); verified directly against production (`/internal/accommodation-calendar` returns 200, `/api/accommodation-admin/bookings` returns 401 unauthenticated as expected for the Google Sign-In gate, `accommodation-admin` listed among the deploy's live functions). The public availability view (`/visit/availability`) built alongside it was **not** included in this launch — dropped 2026-08-30, pending a rethink; confirmed 404 on production |
-| Partner calendar API, phase 1 (`/api/partner/v1/*`, read-only, for Linger) | 🔴 Built 2026-10-24, **not deployed**: needs migration `0060` applied to TVC ERP, a pool and grants set with `scripts/partner-key.mjs`, and a key issued to Linger. Unit-tested and exercised against a scratch Postgres and a fake PostgREST; not yet run against the real project |
+| Partner calendar API, phase 1 (`/api/partner/v1/*`, read-only, for Linger) | 🔴 Built 2026-10-24, **not deployed**: migration `0060` is applied to TVC ERP (2026-10-24); still needs the PR merged, a pool and grants set with `scripts/partner-key.mjs`, and a key issued to Linger. Unit-tested and exercised against a scratch Postgres and a fake PostgREST; not yet run against the real project |
 | Event payment tracking (`EventBookingForm`, `/api/event-booking`, `/api/razorpay-webhook`, `/api/cancel-booking`) | ✅ Live as of 2026-09-24 — real live-mode Razorpay keys and webhook configured; a real Payment Link creation verified directly against the live API. One event uses it so far (Foraging Day, 10 Oct 2026); reusable for any event with no code change — see `RAZORPAY.md`. Full webhook→Supabase→receipt chain confirmed in Test mode with two real test payments; Live mode confirmed only through Payment Link creation (an unpaid dry run), not yet through an actual completed live payment |
 | Event Payments dashboard + refund trigger (`/internal/event-payments`, `/api/event-payments-admin`) | 🟠 Deployed to production 2026-09-24 (merged to `main`, migrations `0020`-`0024` applied to the live "TVC ERP" project) — registrations/cancellations/money-collected read against real `event_payments` rows, and test-mode/live-mode filtering plus the refund-initiated/refund-processed/refund-failed status split (see `RAZORPAY.md`) are all live. 2026-09-25: refund-tier date fix, duplicate-payment guard, bulk event-wide cancellation, and payment-method capture shipped; fee reconciliation (`fee_amount`) is written but the nightly script that populates it isn't running yet — needs repo secrets added (see `RAZORPAY.md`). Still **not yet exercised**: no real refund has actually been triggered end-to-end against a live payment (`createRefund` → live Razorpay API → `refund.processed` webhook → `refunded_at` set) — do that once before fully trusting the refund flow for a real cancellation |
 

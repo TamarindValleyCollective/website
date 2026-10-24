@@ -10,7 +10,7 @@ this file is the working reference for what is actually in the repo.
 | Phase | Scope | State |
 | --- | --- | --- |
 | 0 | Agree the design, guest fields, price breakdown, settlement terms and notice wording with Linger | In progress (docs written, not signed off) |
-| 1 | Units as data, unit catalogue, read-only availability, key issuance | **Built, not deployed** (migration `0060` unapplied; see below) |
+| 1 | Units as data, unit catalogue, read-only availability, key issuance | **Built; migration `0060` applied to TVC ERP on 2026-10-24; function not yet deployed** (merge #456, then follow the runbook) |
 | 2 | Holds, pools assigned by TVC, confirm with guest details and price, Razorpay payment, expiry, `updated_since` | Not started |
 | 3 | Settlement ledger, monthly statements, refund reversals | Not started |
 | 4 | Member homes: windows, auto-accept, change requests, three-way split | Not started |
@@ -40,8 +40,9 @@ Base address `https://tvc.farm/api/partner/v1`, JSON, `GET` only, `Authorization
 Needs `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the environment, for example
 `netlify dev:exec node scripts/partner-key.mjs ...`.
 
-1. **Apply migration `0060_partner_api_foundation.sql`** to the TVC ERP project. Migrations are
-   not applied on merge. Until it is applied the function returns 502.
+1. **Migration `0060_partner_api_foundation.sql`** is already applied to the TVC ERP project (done
+   2026-10-24, verified: 14 units, 5 tables with row level security, no keys or grants). Migrations
+   are not applied on merge, so any future one needs doing by hand.
 2. `node scripts/partner-key.mjs units` lists the seeded units.
 3. Optional pool, for units sold by quantity: `create-pool tents "TVC tents"`, then
    `add-to-pool tents Tent01 Tent02 ...`.
