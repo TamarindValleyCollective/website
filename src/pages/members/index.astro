@@ -5662,11 +5662,16 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     load();
   }
 
+  // Google's own button is white by default, a bright slab on the dark card, so in the dark appearance it is drawn dark.
+  const deviceDark = window.matchMedia('(prefers-color-scheme: dark)');
+  const isDark = () => (currentTheme() ? currentTheme() === 'dark' : deviceDark.matches);
   function renderSignInButton() {
     if (typeof google === 'undefined') return;
     google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
-    google.accounts.id.renderButton($('g_id_signin'), { theme: 'outline', size: 'large' });
+    $('g_id_signin').replaceChildren();
+    google.accounts.id.renderButton($('g_id_signin'), { theme: isDark() ? 'filled_black' : 'outline', size: 'large' });
   }
+  deviceDark.addEventListener('change', () => { if (!$('gate').hidden) renderSignInButton(); });
 
   function signOut() {
     clearMemberToken();
