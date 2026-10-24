@@ -10,8 +10,8 @@ this file is the working reference for what is actually in the repo.
 | Phase | Scope | State |
 | --- | --- | --- |
 | 0 | Agree the design, guest fields, price breakdown, settlement terms and notice wording with Linger | In progress (docs written, not signed off) |
-| 1 | Units as data, unit catalogue, read-only availability, key issuance | **Deployed 2026-10-24** (PR #456; migration `0060` applied to TVC ERP). No partner has a key yet; a rate-limit fix is awaiting deploy (see Verification) |
-| 2 | Holds, pools assigned by TVC, confirm with guest details and price, Razorpay payment, expiry, `updated_since` | Not started |
+| 1 | Units as data, unit catalogue, read-only availability, key issuance, an OpenAPI file (not yet written) | **Deployed 2026-10-24** (PRs #456 and #457; migration `0060` applied to TVC ERP). No partner has a key yet; see Verification and Security for what was tested and the known limits |
+| 2 | Holds, pools assigned by TVC, confirm with guest details and price, Razorpay payment, the sandbox, expiry, `updated_since` | Not started |
 | 3 | Settlement ledger, monthly statements, refund reversals | Not started |
 | 4 | Member homes: windows, auto-accept, change requests, three-way split | Not started |
 
@@ -101,10 +101,77 @@ turning nights `unavailable`), because the live calendar has no bookings in the 
 a test booking would have meant writing to it. It is covered by unit tests and the scratch
 database only.
 
-**Found on production: the rate limits did not hold.** 70 rapid requests with a valid key (limit
-60 a minute) and 40 with a bad key (limit 20 per 5 minutes) all passed, with no limiter errors in
-the function log. The cause is Netlify Blobs' default eventual consistency: a burst reads a stale
-count. Fixed by reading the counter with strong consistency for this API only (`strong` option in
-`lib/rate-limit.ts`); the chat and search limiters are unchanged. **Re-run the burst test after
-that deploys** before giving Linger a key: it is still a read-then-write, so concurrent requests can
-slip a few extra through.
+**Rate limits, found and fixed on production.** The first run showed neither limit ever triggering
+(70 rapid valid requests against 60 a minute, 40 bad-key requests against 20 per 5 minutes, no limiter
+errors logged). Cause: Netlify Blobs reads are eventually consistent by default, so a burst read a
+stale count. Fixed in #457 (strong-consistency reads for this API only). Re-test after the fix:
+
+| Test | Result |
+| --- | --- |
+| Valid key, 150 requests 25 at a time (limit 60 a minute) | 106 passed, 44 refused with `429` and `Retry-After: 60`; the next request was refused too |
+| Valid key, 75 requests one at a time | None refused, because at about 1.5 s each they never put 60 in one minute (a flawed test, not a defect) |
+| Bad keys, 120 requests 25 at a time (limit 20 per 5 minutes) | 63 `401`, 57 `429` |
+| Bad keys, sequential, with the window already full | A mix of `401` and `429` |
+
+So the per-key limit holds, with leakage under heavy concurrency (read-then-write, no retry). The
+failed-key limit is best-effort: it counts by client IP, and behind Cloudflare the IP the function
+sees varies between connections. Real enforcement should be a Cloudflare rate-limiting rule on
+`/api/partner/*` (not set up yet).
+
+## Security: what it is and what it is not
+
+**Strong:** keys are 256 random bits, stored only as a SHA-256 hash, shown once; every key failure
+returns the same generic 401; keys are scoped to granted units and can expire or be revoked at once;
+HTTPS only (HSTS), `Cache-Control: no-store`; the function reads booking dates only and never queries
+a guest table, so phase 1 is PII-free by construction; all database tables are RLS-on with no
+policies; request values are validated before they reach a query and unit ids come from the database;
+errors are generic and never reveal upstream detail, owners, unit kinds or reasons a night is blocked.
+
+**Known limits (phase 1):**
+
+- The key is the only credential. Whoever holds it has that partner's access until revoked. Mitigations
+  today: expiry, revocation, rotation, `last_used_at`. Planned: an optional allow-list of the
+  partner's server IPs, and alerts on unusual use.
+- Rate limits are approximate (see above).
+- Successful requests are not logged per key, so a leaked key's reads could not be reconstructed.
+  Planned for phase 2: a request log (key id, route, status, window) with alerts.
+- The function runs with the Supabase service-role key. It is read-only by construction today, but a
+  least-privilege database role limited to the tables it needs is the better design and should be done
+  before phase 2 adds writes.
+- Phase 2 raises the stakes (a leaked key could create holds and push guest data): open-hold caps,
+  IP allow-listing for write keys, a request audit log and an independent security review are planned
+  before it ships.
+- The `tvcp_` prefix makes a leaked key detectable (for example a GitHub secret-scanning custom pattern).
+- Not independently reviewed or penetration tested.
+
+## Testing environments (decided 2026-10-24, not built yet)
+
+Partners test against a sandbox that is a separate stack, not a flag on production data, and the
+sandbox runs one phase ahead of production. Decided with Sharath: a separate Supabase project and the
+hostname `sandbox.tvc.farm`. Still to check: the Supabase plan and its cost, and DNS for the hostname.
+
+| Environment | Address | Data | Payments and messages |
+| --- | --- | --- | --- |
+| Production | `tvc.farm/api/partner/v1` | Real | Live Razorpay, real notices |
+| Sandbox | `sandbox.tvc.farm/api/partner/v1` | Fake, in its own Supabase project, reset on demand and nightly | Razorpay test mode; WhatsApp and email off (logged instead) |
+| Specification and mock | OpenAPI file in the repo | None | None |
+
+- Sandbox is its own Netlify deploy (a branch deploy) with its own env vars. Sandbox keys use a
+  different prefix (`tvcs_`); neither environment accepts the other's keys. A start-up guard refuses to
+  run if the configured database belongs to the other environment.
+- Same code as production, or the next phase; only environment variables differ.
+- A seed and reset script, with named scenarios (full farm, closure, expiring hold). In the sandbox
+  only, an `externalRef` prefix triggers an outcome: `TEST-CONFLICT` 409, `TEST-EXPIRED` 410,
+  `TEST-PRICE` `price_mismatch`, `TEST-PAYFAIL` a failed payment.
+- Release flow: build, deploy to the sandbox, the partner certifies, promote to production; the partner
+  changes only the base address and key. Migrations go to the sandbox project first, then production;
+  record which migration each environment has here.
+- Versioning: additive changes stay in `v1` (clients ignore unknown fields); a breaking change gets
+  `v2` with at least 30 days of overlap plus `Deprecation` and `Sunset` headers.
+- An OpenAPI file is the source of truth and ships with phase 1; contract tests run against it.
+- Phase 1 is read-only with no personal data, so it needs no sandbox: test on production with a
+  read-only key. The sandbox is built for phase 2.
+- Costs and risks: a second Supabase project may cost money; branch deploys use Netlify credits, so
+  sandbox deploys must be deliberate; every migration is applied twice.
+
+Migrations applied: production `0060` (2026-10-24). Sandbox: none yet.
