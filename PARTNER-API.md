@@ -48,10 +48,37 @@ Needs `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the environment, for exa
    `add-to-pool tents Tent01 Tent02 ...`.
 4. Grant access: `grant-unit linger Tent06 Tent07` and/or `grant-pool linger tents`. Nothing is
    granted by default, so a new key sees an empty catalogue until this is done.
-5. `issue linger "Linger production" [--expires 2027-10-01]` prints the key **once**. It is not
-   stored (only its SHA-256 hash is). Send it over a secure channel.
-6. Rotate: issue a second key, let the partner switch, `keys linger` to find the old id, then
+5. Issue the key. For a real partner key use the **offline mode**, run by a person at their own
+   terminal and never in a chat with an AI assistant:
+   `node scripts/partner-key.mjs issue linger "Linger production" --expires 2027-10-01 --print-sql`.
+   It needs no secrets: it prints the key (once; only its SHA-256 hash is ever stored) and an `insert`
+   statement containing the hash, which you run in the Supabase SQL editor. (Without `--print-sql` the
+   command inserts the row itself, which needs `SUPABASE_SERVICE_ROLE_KEY`.)
+6. Hand it over (see Key handover below), then confirm receipt.
+7. Rotate: issue a second key, let the partner switch, `keys linger` to find the old id, then
    `revoke <keyId>`. Revocation applies on the very next request.
+
+## Key handover
+
+The key is shown once and cannot be recovered, so how it travels matters.
+
+- **Recipient:** one named technical contact at the partner, agreed in advance. Record who and when in
+  the key's name or in this repo's private notes, not in the repo itself.
+- **Channel:** a one-time secret link (a password manager's share link or a "send once" tool) with
+  an expiry and a single view. Send the link to the contact's work email; if the tool uses a passphrase,
+  send that by a different channel (a call or a message). Do **not** send the key by plain email,
+  WhatsApp or Slack, put it in a ticket or a repo, or paste it into an AI assistant's chat. Strongest
+  option when the partner can: they give us a public key (age or PGP) and we encrypt the key to it.
+- **Confirm receipt** by quoting the key's prefix (`tvcp_xxxx`), which proves it is the right key without
+  revealing it. `keys <partnerId>` shows `last used`: a first use before the partner confirms receipt, or
+  from an unexpected time or place, is a reason to revoke and reissue.
+- **Sandbox keys** (`tvcs_`, once the sandbox exists) work only against fake data, but follow the same
+  process so the habit is the same.
+- **Lifetime:** set `--expires` (a year at most), rotate at least yearly and whenever someone with access
+  leaves, and revoke at once on any suspicion. Two keys can be active together, so rotation has no
+  downtime.
+- **Not built yet:** a partner self-service page to rotate its own keys, and per-request logging. Both are
+  listed under Security.
 
 ## Design decisions worth remembering
 

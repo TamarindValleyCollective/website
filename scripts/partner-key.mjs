@@ -11,9 +11,14 @@
 //   node scripts/partner-key.mjs grant-pool <partnerId> <poolId>
 //   node scripts/partner-key.mjs revoke-unit <partnerId> <unitId>
 //   node scripts/partner-key.mjs revoke-pool <partnerId> <poolId>
-//   node scripts/partner-key.mjs issue <partnerId> "<key name>" [--expires 2027-10-01]
+//   node scripts/partner-key.mjs issue <partnerId> "<key name>" [--expires 2027-10-01] [--print-sql]
 //   node scripts/partner-key.mjs keys [partnerId]
 //   node scripts/partner-key.mjs revoke <keyId>
+//
+// `issue --print-sql` needs NO database access and no secrets: it generates the key locally and prints
+// the key plus an INSERT statement (the hash only) for you to run in the Supabase SQL editor. Use it for a
+// real partner key, so the key exists only on your machine and in the channel you hand it over on (never
+// in a chat with an AI assistant, a ticket or a repository).
 //
 // `issue` prints the key ONCE. It is not stored (only its SHA-256 hash is), so
 // it cannot be shown again: copy it straight to the partner's secure channel.
@@ -41,6 +46,8 @@ for (let i = 0; i < rest.length; i += 1) {
   if (rest[i] === '--expires') {
     flags.expires = rest[i + 1];
     i += 1;
+  } else if (rest[i] === '--print-sql') {
+    flags.printSql = true;
   } else {
     args.push(rest[i]);
   }
@@ -124,6 +131,19 @@ try {
         expiresAt = parsed.toISOString();
       }
       const { key, prefix, hash } = generatePartnerKey();
+      if (flags.printSql) {
+        const q = (v) => `'${String(v).replace(/'/g, "''")}'`;
+        console.log('Run this in the Supabase SQL editor (TVC ERP). It contains only the key\'s hash:');
+        console.log('');
+        console.log('insert into partner_api_keys (partner_id, name, key_prefix, key_hash, created_by, expires_at)');
+        console.log(`values (${q(partnerId)}, ${q(name)}, ${q(prefix)}, ${q(hash)}, ${q(userInfo().username)}, ${expiresAt ? q(expiresAt) : 'null'});`);
+        console.log('');
+        console.log(`Prefix: ${prefix}… (quote this to the partner to confirm they received the right key)`);
+        console.log('');
+        console.log('API key (shown once, never stored; hand it over on a secure channel):');
+        console.log(key);
+        break;
+      }
       const row = await insertKey({ partnerId, name, prefix, hash, createdBy: userInfo().username, expiresAt });
       console.log(`Key id:  ${row.id}`);
       console.log(`Partner: ${partnerId}`);
