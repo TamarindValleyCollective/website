@@ -131,6 +131,10 @@ until configured; details and Meta submission text in `docs/whatsapp-templates.m
   re-renders on every 15-second poll unless a message changed (a playing voice note used to be
   reset, and the scroll position jumped). The privacy page has a line about this. Checked in a
   browser against a mock backend, not against real Meta media.
+- **Masked number in the inbox (2026-10-24).** The thread header shows the contact's number masked on the
+  server (`+91 •••••• 345`: country code and last three digits, `maskPhone`), so an admin can tell an unnamed
+  "Contact XXXX" sender apart (spam or a real guest). The full number still never reaches the browser, and
+  search still doesn't match on it. No migration.
 - **Inbox UI pass (2026-10-10).** `/internal/whatsapp` now uses the shared admin controls instead of
   its own pill buttons: the thread-header actions, "Load more", the media buttons and Send are the
   admin `.button` (36px, 8px radius; Send is the primary dark-green one, the rest `.button--outline`),

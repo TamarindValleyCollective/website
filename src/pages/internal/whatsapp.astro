@@ -62,6 +62,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
           <span id="thread-avatar" class="avatar avatar-lg" aria-hidden="true"></span>
           <div class="thread-header-text">
             <strong id="thread-name"></strong>
+            <span id="thread-phone" class="thread-source"></span>
             <span id="thread-source" class="thread-source" hidden></span>
           </div>
           <button type="button" id="guest-toggle" class="button button--outline guest-toggle" aria-expanded="false" aria-controls="guest-panel">Guest</button>
@@ -1157,6 +1158,8 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     // Display name (masked for read-only roles) or an opaque "Contact XXXX"
     // — the contact's phone number is never sent to the browser.
     label: string;
+    // "+91 •••••• 345": country code and last three digits only, masked on the server.
+    phoneMasked: string;
     lastMessageAt: string;
     unread: boolean;
     lastMessagePreview: string | null;
@@ -1199,6 +1202,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   const threadAvatar = document.getElementById('thread-avatar') as HTMLElement;
   const threadName = document.getElementById('thread-name') as HTMLElement;
   const threadSource = document.getElementById('thread-source') as HTMLElement;
+  const threadPhone = document.getElementById('thread-phone') as HTMLElement;
   const blockBtn = document.getElementById('block-btn') as HTMLButtonElement;
   const optOutBtn = document.getElementById('optout-btn') as HTMLButtonElement;
   const guestToggle = document.getElementById('guest-toggle') as HTMLButtonElement;
@@ -2114,6 +2118,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     threadAvatar.textContent = getInitials(conv.label, conv.id);
     threadAvatar.style.background = getAvatarColor(conv.id);
     threadName.textContent = conv.label;
+    threadPhone.textContent = conv.phoneMasked;
     threadSource.hidden = !conv.referral;
     threadSource.textContent = conv.referral
       ? `Came from a ${conv.referral.type === 'post' ? 'post' : 'WhatsApp ad'}${conv.referral.headline ? `: ${conv.referral.headline}` : ''}`

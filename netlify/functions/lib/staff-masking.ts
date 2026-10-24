@@ -3,8 +3,8 @@
 // the browser is visible in devtools whatever the UI draws.
 //
 // Field classes (each module's Function applies them in its response mapper):
-//   * contact details (email, phone) — never sent to the browser at all, for
-//     any role. Admins can act on them (a reply is sent to the number) but not
+//   * contact details (email, phone) — never sent to the browser in full, for
+//     any role (the WhatsApp inbox and member portal send maskPhone's form only). Admins can act on them (a reply is sent to the number) but not
 //     read them; replacing one is a write-only form field.
 //   * personal names — sent in full to roles that operate the module
 //     (`admin`, `user`) and masked for `read_only` (auditors).

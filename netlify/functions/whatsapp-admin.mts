@@ -9,9 +9,10 @@
 // `manage` to block/unblock. This replaced the shared "Photo Pool Curators"
 // Sheet allow-list (2026-10).
 //
-// Privacy: a contact's phone number never leaves this Function — replies and
-// blocks look it up server-side by conversation id, but no response carries
-// it, and search never matches on it. Contact names are visible to roles that
+// Privacy: a contact's phone number never leaves this Function in full — replies and
+// blocks look it up server-side by conversation id, and the conversation list carries
+// only a masked form ("+91 •••••• 345", lib/staff-masking.ts) so an admin can tell an
+// unnamed sender apart; search never matches on the number. Contact names are visible to roles that
 // operate the inbox and masked for read-only roles (lib/staff-masking.ts); a
 // contact with no name gets an opaque "Contact XXXX" label rather than their
 // number. Message bodies are sent to anyone who can `view`, since that
@@ -35,7 +36,7 @@ import { loadGuestContext } from './lib/guest-context';
 import { needsReply } from './lib/whatsapp-guest';
 import { baseMime, mediaResponseHeaders, MAX_MEDIA_BYTES } from './lib/whatsapp-media';
 import { requireStaff, logStaffAction, type StaffGrant } from './lib/staff-access';
-import { canSeeNames, maskEmail, maskName } from './lib/staff-masking';
+import { canSeeNames, maskEmail, maskName, maskPhone } from './lib/staff-masking';
 import { roleHasCapability, type Capability } from './lib/staff-registry';
 
 const WHATSAPP_GRAPH_API_VERSION = 'v21.0';
@@ -99,8 +100,9 @@ async function handleConversations(url: URL, staff: StaffGrant): Promise<Respons
         const lastMessage = c.whatsapp_messages?.[0];
         return {
           id: c.id,
-          // Never the phone number. See contactLabel/maskName above.
+          // Never the full phone number: phoneMasked is country code + last three digits.
           label: c.display_name ? (namesVisible ? c.display_name : maskName(c.display_name)) : contactLabel(c.id),
+          phoneMasked: maskPhone(`+${c.wa_phone}`),
           lastMessageAt: c.last_message_at,
           // Global, not per-user — see the migration comment for why. A
           // conversation with no last_read_at has never been opened by anyone.
