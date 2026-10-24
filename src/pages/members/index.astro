@@ -1535,8 +1535,32 @@ import SignInGate from '../../components/SignInGate.astro';
     box-sizing: border-box;
     padding: 20px;
     background: var(--tvc-white);
+    /* Ringed in the spotlight's orange: a dark card on a dark scrim has no edge otherwise, and the pair reads as one. */
+    border: 2px solid var(--tvc-orange);
     border-radius: var(--radius);
     box-shadow: var(--shadow-soft);
+  }
+
+  /* The pointer: a turned square on the edge that faces the highlighted element. */
+  .tour-card[data-side]::before {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border: 2px solid transparent;
+    border-radius: 3px;
+    background: inherit;
+    transform: translate(-50%, -50%) rotate(45deg);
+  }
+
+  /* Only the two edges that stick out carry the ring, so it joins the card's own. */
+  .tour-card[data-side='right']::before { left: 0; top: var(--pointer); border-color: transparent transparent var(--tvc-orange) var(--tvc-orange); }
+  .tour-card[data-side='left']::before { left: 100%; top: var(--pointer); border-color: var(--tvc-orange) var(--tvc-orange) transparent transparent; }
+  .tour-card[data-side='below']::before { left: var(--pointer); top: 0; border-color: var(--tvc-orange) transparent transparent var(--tvc-orange); }
+  .tour-card[data-side='above']::before { left: var(--pointer); top: 100%; border-color: transparent var(--tvc-orange) var(--tvc-orange) transparent; }
+
+  .tour-card--centre::before {
+    display: none;
   }
 
   .tour-card--centre {
@@ -4296,6 +4320,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       spot.hidden = !target;
       card.classList.toggle('tour-card--centre', !target);
       card.style.cssText = '';
+      delete card.dataset.side;
       if (!target) return;
       const r = target.getBoundingClientRect();
       const pad = 6;
@@ -4303,17 +4328,24 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       if (phone.matches) return; // a sheet along the bottom, set in CSS
       const w = card.offsetWidth;
       const ht = card.offsetHeight;
-      const room = 16;
+      const room = 28; // the spotlight ring plus air, and the pointer sits in it
       const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+      let side = 'right';
       let left = r.right + room;
       let top = clamp(r.top, 12, window.innerHeight - ht - 12);
-      if (left + w > window.innerWidth - 12) left = r.left - room - w; // no room to the right: to the left
+      if (left + w > window.innerWidth - 12) { left = r.left - room - w; side = 'left'; } // no room to the right: to the left
       if (left < 12) {
         left = clamp(r.left, 12, window.innerWidth - w - 12); // neither: below, else above
-        top = r.bottom + room + ht < window.innerHeight ? r.bottom + room : Math.max(12, r.top - room - ht);
+        const below = r.bottom + room + ht < window.innerHeight;
+        top = below ? r.bottom + room : Math.max(12, r.top - room - ht);
+        side = below ? 'below' : 'above';
       }
       card.style.left = `${left}px`;
       card.style.top = `${top}px`;
+      // A pointer on the edge facing the target, aimed at the middle of it (kept off the card's rounded corners).
+      card.dataset.side = side;
+      const along = side === 'left' || side === 'right' ? r.top + r.height / 2 - top : r.left + Math.min(r.width / 2, 120) - left;
+      card.style.setProperty('--pointer', `${clamp(along, 28, (side === 'left' || side === 'right' ? ht : w) - 28)}px`);
     }
 
     function finish() {
