@@ -92,6 +92,9 @@ async function handleConversations(url: URL, staff: StaffGrant): Promise<Respons
       console.error('Failed to read recent messages for the needs-reply filter', err);
     }
     return jsonResponse({
+      // The admin's own name for the reply signature: the page prefills "Signing as" with it, so
+      // nobody retypes it on a new browser or device. Only ever the caller's own name.
+      signerDefault: staff.name || staff.googleName || null,
       capabilities: {
         reply: roleHasCapability('whatsapp', staff.role, 'reply'),
         manage: roleHasCapability('whatsapp', staff.role, 'manage'),
