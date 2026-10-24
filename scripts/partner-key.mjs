@@ -42,15 +42,34 @@ import {
 const [command, ...rest] = process.argv.slice(2);
 const flags = {};
 const args = [];
+const KNOWN_FLAGS = ['--expires', '--print-sql'];
 for (let i = 0; i < rest.length; i += 1) {
-  if (rest[i] === '--expires') {
+  const arg = rest[i];
+  if (arg.startsWith('--') && !KNOWN_FLAGS.includes(arg)) {
+    // A mistyped flag must stop the command, never fall through as a plain
+    // argument: `--print-sq` once silently switched `issue` to writing to the
+    // database itself.
+    const guess = KNOWN_FLAGS.find((f) => f.startsWith(arg) || arg.startsWith(f));
+    console.error(`Unknown flag "${arg}".${guess ? ` Did you mean ${guess}?` : ''}`);
+    console.error('Usage: see the header of scripts/partner-key.mjs');
+    process.exit(2);
+  }
+  if (arg === '--expires') {
     flags.expires = rest[i + 1];
+    if (!flags.expires || flags.expires.startsWith('--')) {
+      console.error('--expires needs a date, for example --expires 2027-10-01');
+      process.exit(2);
+    }
     i += 1;
-  } else if (rest[i] === '--print-sql') {
+  } else if (arg === '--print-sql') {
     flags.printSql = true;
   } else {
-    args.push(rest[i]);
+    args.push(arg);
   }
+}
+if (command !== 'issue' && (flags.expires || flags.printSql)) {
+  console.error('--expires and --print-sql only apply to the "issue" command.');
+  process.exit(2);
 }
 
 const PARTNER_ID = /^[a-z0-9][a-z0-9-]{1,31}$/;
