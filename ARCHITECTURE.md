@@ -1037,7 +1037,8 @@ outside both the local machine and Netlify (the member-update-email workflow).
   hold no table or sequence grants, with default privileges revoked for new objects. Only the
   `service_role` key, used server-side by Netlify Functions and scripts, reads or writes data, so RLS
   is a second layer rather than the only one. A future table that needs `anon`/`authenticated` access
-  must be granted it explicitly.
+  must be granted it explicitly. `pg_trgm` and `btree_gist` live in the `extensions` schema (migration
+  `0062`), not `public`; SQL that calls their functions by name must qualify them.
 - **`scripts/lib/supabase.mjs`** — hand-rolled Supabase PostgREST REST client (`fetch` + the
   `service_role` key, no `@supabase/supabase-js` dependency — matching this repo's preference for
   small hand-rolled clients over heavy libraries) for the `whatsapp_conversations`/
