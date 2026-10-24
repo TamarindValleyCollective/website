@@ -80,6 +80,23 @@ const Heading = level;
     margin: 0 auto 12px;
   }
 
+  /* Dark appearance (the portals set data-theme or follow the device): the dark green mark on a light ground. */
+  :global(html[data-theme='dark']) .signin .mark {
+    box-sizing: border-box;
+    padding: 4px;
+    border-radius: 50%;
+    background: var(--tvc-ink);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :global(html:not([data-theme='light'])) .signin .mark {
+      box-sizing: border-box;
+      padding: 4px;
+      border-radius: 50%;
+      background: var(--tvc-ink);
+    }
+  }
+
   .signin :is(h1, h2) {
     margin: 0 0 8px;
     font-family: var(--font-display);
