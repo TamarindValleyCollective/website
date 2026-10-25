@@ -464,8 +464,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     text-align: center;
   }
 
+  /* Weekends are a cool blue tint, a hue the status colours (green free, orange occupied, grey closed/past) never
+     use. A grey weekend read as "closed" or "past", and in the dark appearance it was lighter than the weekdays
+     while its cells were darker. */
   .grid-table th.col--weekend {
-    background: var(--tvc-line);
+    background: color-mix(in srgb, var(--tvc-sky-blue) 24%, var(--tvc-white));
   }
 
   /* Body cells get the weekend cue too (Sharath: it shouldn't be
@@ -473,11 +476,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
      background - a flat color would replace, not sit alongside, the
      free/occupied/closed status color that same cell already carries,
      muddying the one thing that background is actually for. Layering a
-     dark wash on top (background-image, painted over background-color)
-     darkens whichever status color is underneath by the same amount
+     blue wash on top (background-image, painted over background-color)
+     tints whichever status color is underneath by the same amount
      instead of replacing it. */
   .grid-table td.col--weekend {
-    background-image: linear-gradient(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.08));
+    background-image: linear-gradient(color-mix(in srgb, var(--tvc-sky-blue) 12%, transparent), color-mix(in srgb, var(--tvc-sky-blue) 12%, transparent));
   }
 
   /* A past date's header gets a visibly darker/greyer tint than a weekend
