@@ -19,6 +19,10 @@ belong here.** Those live in the private design docs.
   - TVC-common units: Madhavan.
   - A **whole home**: Madhavan manages it on the member's behalf and **approves** each request.
   - A **room**: the **member** manages it and accepts or declines each request.
+- **Members manage their units only through the member portal** (members.tvc.farm). They never use
+  the admin calendar or `/internal`. Madhavan's calendar is the admin tool; a member's "My room" or
+  "My home" screen is the member portal's. They share the booking data and the grid components, not the
+  screens or the permissions.
 - TVC runs the guest's stay either way (food, farm tour), so Madhavan needs to *see* every stay,
   including in homes he does not manage.
 - All communication with guests goes through the member portal, not direct contact. A member sees a
@@ -44,7 +48,9 @@ belong here.** Those live in the private design docs.
 | Whole home | Edit, approve, see guests | See their own home and its stays | Hold, confirm |
 | Room | **View only**, see guests | Set mode and open dates, accept or decline, see guests | Hold, confirm (when offered) |
 
-Permissions are by **unit**, not by booking type as today. Madhavan holds a grant on the units TVC
+A member's column is what they can do in the member portal. For a whole home they see its stays and
+requests read-only there, because Madhavan manages it for them. Permissions are by **unit**, not by booking
+type as today. Madhavan holds a grant on the units TVC
 manages; a member holds one on their own listing; Linger's key is scoped to the units it has been granted.
 
 ## Booking lifecycle
