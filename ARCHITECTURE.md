@@ -697,12 +697,16 @@ outside both the local machine and Netlify (the member-update-email workflow).
   fakes), `partner-availability.mjs` (pure window/availability rules), `partner-keys.mjs` and
   `partner-db.mjs`; the `.mts` only wires in Supabase, the limiter and the client IP. The partner-facing
   contract is `docs/partner-api/openapi.json`, kept honest by `scripts/lib/partner-openapi.test.mjs`.
-  **Units as data (migration `0060`):** `accommodation_units` (seeded with the 14 existing ids)
-  plus `accommodation_unit_pools` hold the inventory in the database. This is additive only:
-  the admin calendar still uses `ACCOMMODATION_UNITS` in `scripts/lib/accommodation.mjs` and the
-  hardcoded `tent_id` CHECK and farm-closure arrays in the booking RPCs. Moving those onto the
-  table is deferred to phase 2; until then `scripts/lib/partner-units.test.mjs` fails if the
-  seed and `ACCOMMODATION_UNITS` drift apart. `0060` was applied to TVC ERP by hand on 2026-10-24 (migrations are not applied on merge).
+  **Units as data (migrations `0060`, `0065`):** `accommodation_units` (seeded with the 14 existing ids)
+  plus `accommodation_unit_pools` hold the inventory in the database, and since `0065` the admin calendar,
+  the stay notices and the WhatsApp guest panel read them too (`listUnits()` in `accommodation-db.mjs`, cached
+  for 30 seconds, with the built-in `ACCOMMODATION_UNITS` as a fallback if the table cannot be read). A unit's
+  type is its pool; a unit has a status (rentable, paused, offboarded), a manager (TVC or member), a shape
+  (whole or room, for member units), tags, a private note and an `ignores_farm_closure` flag. The `tent_id`
+  CHECK became a foreign key, and the booking functions take a whole-farm closure's unit list from
+  `accommodation_farm_closure_unit_ids()`. The admin function refuses writes to a unit a member manages
+  (the farm manager only views those). `scripts/lib/partner-units.test.mjs` still compares the original 14 ids
+  with the `0060` seed. `0060` and `0065` are applied to TVC ERP by hand (migrations are not applied on merge); plan in `docs/plans/accommodation-units-as-data.md`.
 - **`netlify/functions/lib/staff-access.ts` + `staff-registry.ts`** — the shared access layer
   for the internal admin tools (issue #89), meant to replace the per-function Sheet allow-lists
   above. `requireStaff(req, module, capability)` verifies the Google ID token (for tvc.farm /

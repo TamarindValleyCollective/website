@@ -135,3 +135,60 @@ test('the catalogue never reveals ownership or unit kind', () => {
   const text = JSON.stringify(catalogue);
   for (const leak of ['owner', 'kind', 'F-12', 'member']) assert.ok(!text.includes(leak), `catalogue leaks ${leak}`);
 });
+
+test('a farm closure does not apply to a unit its owner set to stay open', () => {
+  const out = buildAvailability({
+    dates,
+    units: [unit('Tent01'), unit('M1', { ignores_farm_closure: true })],
+    pools: [],
+    assignments: [],
+    blocks: [{ start: '2026-12-13', end: '2026-12-14' }],
+  });
+  assert.deepEqual(Object.values(out.units[0].nights), ['free', 'unavailable', 'free']);
+  assert.deepEqual(Object.values(out.units[1].nights), ['free', 'free', 'free']);
+});
+
+test('a stay-open unit is still unavailable on the nights it is booked', () => {
+  const out = buildAvailability({
+    dates,
+    units: [unit('M1', { ignores_farm_closure: true })],
+    pools: [],
+    assignments: [{ tent_id: 'M1', stay_range: '[2026-12-12,2026-12-13)' }],
+    blocks: [{ start: '2026-12-13', end: '2026-12-14' }],
+  });
+  assert.deepEqual(Object.values(out.units[0].nights), ['unavailable', 'free', 'free']);
+});
+
+test('a paused unit is unavailable every night and does not count in its pool', () => {
+  const tent = unit('Tent03');
+  const paused = unit('Tent04', { status: 'paused' });
+  const out = buildAvailability({
+    dates,
+    units: [paused],
+    pools: [{ id: 'tents', name: 'Tents', units: [tent, paused] }],
+    assignments: [],
+    blocks: [],
+  });
+  assert.deepEqual(Object.values(out.units[0].nights), ['unavailable', 'unavailable', 'unavailable']);
+  assert.deepEqual(out.pools[0].nights['2026-12-12'], { free: 1, total: 1 });
+});
+
+test('a pool of stay-open and closed units counts each correctly on a closure night', () => {
+  const out = buildAvailability({
+    dates,
+    units: [],
+    pools: [{ id: '2bhk', name: '2 BHK', units: [unit('A'), unit('B', { ignores_farm_closure: true })] }],
+    assignments: [],
+    blocks: [{ start: '2026-12-13', end: '2026-12-14' }],
+  });
+  assert.deepEqual(out.pools[0].nights['2026-12-13'], { free: 1, total: 2 });
+  assert.deepEqual(out.pools[0].nights['2026-12-12'], { free: 2, total: 2 });
+});
+
+test('the catalogue sizes a pool by units that are offered, not paused ones', () => {
+  const catalogue = toCatalogue({
+    units: [],
+    pools: [{ id: 'tents', name: 'Tents', active: true, units: [unit('Tent03'), unit('Tent04', { status: 'paused' })] }],
+  });
+  assert.equal(catalogue.pools[0].size, 1);
+});

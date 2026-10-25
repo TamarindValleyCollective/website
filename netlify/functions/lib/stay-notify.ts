@@ -9,16 +9,16 @@
 // A guest is messaged on every channel we have for them: WhatsApp if a mobile
 // is on file (STOP opt-outs are still honoured by sendWhatsAppTemplate; there
 // is no per-guest opt-in field, by decision 2026-10-12), email if one is.
-import { ACCOMMODATION_UNITS } from '../../../scripts/lib/accommodation.mjs';
 import { diffNotices, snapshotOf, checkOutDate } from '../../../scripts/lib/stay-notice.mjs';
-import { getPeopleByIds } from '../../../scripts/lib/accommodation-db.mjs';
+import { getPeopleByIds, getUnitLabels } from '../../../scripts/lib/accommodation-db.mjs';
 import { escapeHtml, detailRow, detailTable, EMAIL_COLORS, renderBrandedEmail, renderStaffEmail } from './email-layout';
 import { sendEmail, isTestMode } from './booking-notify';
 import { sendWhatsAppTemplate, sendStaffWhatsAppAlert, firstNameOf, formatEventDate, cleanTemplateParam } from './whatsapp-send';
 import type { WhatsAppTemplateName } from './whatsapp-templates';
 
 const STAFF_EMAILS = ['core-team@tvc.farm', 'stay@linger.in'];
-const UNIT_LABELS = new Map<string, string>(ACCOMMODATION_UNITS.map((u: { id: string; label: string }) => [u.id, u.label]));
+// Unit names come from the units table (members' units are not in code); loaded at the start of each send.
+let UNIT_LABELS = new Map<string, string>();
 
 type Kind = 'confirmed' | 'updated' | 'cancelled';
 interface Snapshot {
@@ -124,6 +124,7 @@ async function notifyStaff(action: Kind, member: string, snapshot: Snapshot, out
 // finalized) and the booking as it stands now calls for. Returns the outcomes
 // (no contact details) so the page can show who was reached.
 export async function sendStayNotices(booking: any, previous: Snapshot | null): Promise<{ current: Snapshot; outcomes: GuestOutcome[] }> {
+  UNIT_LABELS = await getUnitLabels();
   const current: Snapshot = snapshotOf(booking);
   const changes = diffNotices(previous, current) as { personId: string; kind: Kind }[];
   const people = new Map<string, Person>();
@@ -143,6 +144,7 @@ export async function sendStayNotices(booking: any, previous: Snapshot | null): 
 
 // The whole booking is being cancelled: tell everyone the last notice named.
 export async function sendStayCancellation(booking: any, previous: Snapshot): Promise<GuestOutcome[]> {
+  UNIT_LABELS = await getUnitLabels();
   const ids = [...new Set(previous.assignments.map((a) => a.personId))];
   const people = await getPeopleByIds(ids);
   const outcomes: GuestOutcome[] = [];

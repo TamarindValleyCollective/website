@@ -12,6 +12,10 @@
 //   - an exclusive booking (a private event that has the whole farm) covers
 //     the night. The flag's exact meaning lives in the admin UI, so this
 //     errs on the side of showing less availability, never more.
+//   - the unit is paused (not being offered at the moment).
+// A farm closure or an exclusive booking does not apply to a unit whose owner
+// has set it to stay open (`ignores_farm_closure`): the common kitchen may be
+// closed while a member's own kitchen is not.
 // A partner is never told why a unit is unavailable, only that it is.
 
 export const MAX_WINDOW_NIGHTS = 90;
@@ -86,7 +90,7 @@ export function toCatalogue({ units, pools }) {
     pools: pools
       .filter((p) => p.active)
       .map((p) => {
-        const members = p.units.filter((u) => u.active);
+        const members = p.units.filter(offered);
         const caps = members.map((u) => u.capacity);
         return {
           id: p.id,
@@ -102,6 +106,11 @@ export function toCatalogue({ units, pools }) {
 // grants); pools: [{ id, name, units: [every active unit in the pool] }];
 // assignments: [{ tent_id, stay_range }]; blocks: [{ start, end }] ranges that
 // close every unit (farm closures, exclusive bookings).
+// A unit counts towards a pool's size and free count while it is offered: not offboarded and not paused.
+function offered(u) {
+  return u.active && u.status !== 'paused';
+}
+
 export function buildAvailability({ dates, units, pools, assignments, blocks }) {
   const busy = new Map();
   for (const a of assignments) {
@@ -111,9 +120,10 @@ export function buildAvailability({ dates, units, pools, assignments, blocks }) 
   }
   const allBlocks = blocks.filter((b) => b && b.start && b.end);
 
-  function isFree(unitId, date) {
-    if (allBlocks.some((b) => covers(b, date))) return false;
-    return !(busy.get(unitId) ?? []).some((r) => covers(r, date));
+  function isFree(unit, date) {
+    if (unit.status === 'paused') return false;
+    if (!unit.ignores_farm_closure && allBlocks.some((b) => covers(b, date))) return false;
+    return !(busy.get(unit.id) ?? []).some((r) => covers(r, date));
   }
 
   return {
@@ -123,14 +133,14 @@ export function buildAvailability({ dates, units, pools, assignments, blocks }) 
       .filter((u) => u.active)
       .map((u) => ({
         id: u.id,
-        nights: Object.fromEntries(dates.map((d) => [d, isFree(u.id, d) ? 'free' : 'unavailable'])),
+        nights: Object.fromEntries(dates.map((d) => [d, isFree(u, d) ? 'free' : 'unavailable'])),
       })),
     pools: pools.map((p) => {
-      const members = p.units.filter((u) => u.active);
+      const members = p.units.filter(offered);
       return {
         id: p.id,
         nights: Object.fromEntries(
-          dates.map((d) => [d, { free: members.filter((u) => isFree(u.id, d)).length, total: members.length }]),
+          dates.map((d) => [d, { free: members.filter((u) => isFree(u, d)).length, total: members.length }]),
         ),
       };
     }),

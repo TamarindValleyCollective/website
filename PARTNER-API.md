@@ -88,13 +88,18 @@ The key is shown once and cannot be recovered, so how it travels matters.
 - **No guest data anywhere in this function.** It reads booking dates only
   (`accommodation_tent_assignments`, and `accommodation_bookings` for closures). Guest tables
   are never queried, so the API is PII-free by construction.
-- **Additive migration.** `0060` adds tables and a seed; it changes nothing the admin calendar
-  uses. The tent list still also lives in `ACCOMMODATION_UNITS`, the `tent_id` CHECK and the
-  farm-closure arrays in the booking RPCs; `scripts/lib/partner-units.test.mjs` keeps the seed
-  in step with `ACCOMMODATION_UNITS` until phase 2 moves everything onto `accommodation_units`.
+- **Additive migration.** `0060` adds tables and a seed. Migration `0065` then moved the admin
+  calendar onto `accommodation_units` too (see below), so the table is the one source of truth;
+  `ACCOMMODATION_UNITS` in code is only the fallback list and the seed `scripts/lib/partner-units.test.mjs`
+  compares against.
+- **Types are pools.** Since `0065` a unit's type (Tents, Bamboo huts, Bring your own tent, and the member
+  types 1 bedroom, 1 BHK, 2 BHK, 3 BHK) is its pool, so what a partner books by quantity is a type.
+- **Status.** A unit is `rentable`, `paused` or `offboarded`. A paused unit is shown as unavailable every night
+  and does not count towards its pool's size or free count; an offboarded unit is not shown at all.
 - **Farm closures are applied to every unit explicitly**, because a closure booking stores no
   tent rows. Exclusive bookings are treated the same, which errs towards showing less
-  availability.
+  availability. A unit whose owner set it to stay open (`ignores_farm_closure`) is not closed by either:
+  the common kitchen may be closed while a member's own kitchen is not.
 
 ## Where the code is
 

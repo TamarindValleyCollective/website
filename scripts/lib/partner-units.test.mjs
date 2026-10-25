@@ -3,10 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { ACCOMMODATION_UNITS } from './accommodation.mjs';
 
-// Until phase 2 moves the admin calendar onto accommodation_units, the farm's
-// inventory lives in two places: ACCOMMODATION_UNITS (what the admin tool and
-// its tent_id CHECK use) and the seed in migration 0060 (what the partner API
-// reads). This keeps them from drifting apart unnoticed.
+// The inventory now lives in accommodation_units (migration 0065 moved the admin calendar onto it). The
+// ACCOMMODATION_UNITS constant is the fallback list used when the table cannot be read, and the seed in migration
+// 0060 is what first filled the table. This keeps the original 14 from drifting apart unnoticed.
 const sql = readFileSync(new URL('../../supabase/migrations/0060_partner_api_foundation.sql', import.meta.url), 'utf8');
 const seed = [...sql.matchAll(/^\s*\('([^']+)', '([^']*)', '([^']*)', '([^']*)', '([^']*)', (\d+), (\d+)\)[,;]/gm)].map((m) => ({
   id: m[1],
