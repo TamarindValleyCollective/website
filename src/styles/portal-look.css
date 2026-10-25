@@ -269,3 +269,79 @@ main .row .chev {
 #g_id_signin {
   color-scheme: light;
 }
+
+/* The progress bar for an offer to rent out a home (scripts/lib/rental-stepper.mjs): dots joined by a line, the stage
+   reached filled and bold, earlier ones ticked, later ones hollow. Shared by the member and the admin shells. */
+.stepper {
+  display: flex;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.stepper li {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  padding-right: 8px;
+}
+
+.stepper li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 9px;
+  left: 28px;
+  right: 8px;
+  height: 2px;
+  background: var(--tvc-line);
+}
+
+.stepper li[data-state='done']:not(:last-child)::after {
+  background: var(--tvc-green-vivid);
+}
+
+.stepper-dot {
+  position: relative;
+  display: block;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--tvc-line-strong);
+  border-radius: 50%;
+  background: var(--tvc-surface);
+}
+
+.stepper li[data-state='current'] .stepper-dot {
+  border-color: var(--tvc-green-vivid);
+  background: var(--tvc-green-vivid);
+}
+
+.stepper li[data-state='done'] .stepper-dot {
+  border-color: var(--tvc-green-vivid);
+}
+
+.stepper li[data-state='done'] .stepper-dot::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 5px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--tvc-green-vivid);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.stepper-label {
+  display: block;
+  margin-top: 6px;
+  font-size: var(--text-sm);
+  line-height: 1.25;
+  color: var(--tvc-ink-soft);
+  text-wrap: balance;
+}
+
+.stepper li[data-state='current'] .stepper-label {
+  color: var(--tvc-ink);
+  font-weight: 700;
+}

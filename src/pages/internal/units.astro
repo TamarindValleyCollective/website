@@ -208,6 +208,8 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
 <script>
   import { StaffAuthError, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../scripts/lib/staff-client.mjs';
   import { initStepUpLock } from '../../../scripts/lib/staff-stepup-ui.mjs';
+  import { rentalStepper } from '../../../scripts/lib/rental-stepper.mjs';
+  import { stageIndex } from '../../../scripts/lib/rental-stages.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -551,6 +553,7 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
               h('h2', { text: homeLabel(o) }),
               h('p', { class: 'offer-meta', text: `${o.memberName || 'A member'} · ${o.shape === 'whole' ? 'Whole unit' : 'A single room'}${o.cluster ? ` · ${o.cluster}` : ''} · asked ${new Date(o.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` }),
               h('div', { class: 'stack-form' }, h('label', {}, h('span', { text: 'Type' }), select), o.shape === 'whole' ? h('label', {}, box, h('span', { text: 'TVC manages it for the member' })) : h('p', { class: 'offer-meta', text: 'A room: the member accepts requests themselves. It starts on auto-reject.' })),
+              rentalStepper(stageIndex({ offerStatus: 'interested', contractStatus: c?.status })),
               c ? contractPanel(o, c) : sharePanel(o, select, box),
               h(
                 'div',
