@@ -13,7 +13,8 @@
 //
 // Only an owner who can sign in may use it, and only for their own household's unit. Every change is written to
 // member_audit_log before it is made (ids and field names only, never a name or an email). The whole feature is dark until
-// MEMBER_RENTAL_ENABLED=true, so it can be shipped before Linger is ready to talk to members.
+// MEMBER_RENTAL_ENABLED=true (everyone), or for the households a super admin lists under Units -> Early access, so it can be
+// shipped, and piloted, before Linger is ready to talk to every member.
 import { requireMember, type MemberSession } from './lib/member-access';
 import { privacyNoticeRequired } from '../../scripts/lib/member-privacy.mjs';
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
@@ -24,10 +25,11 @@ import { checkFile, contractForMember, documentKey } from '../../scripts/lib/mem
 import { getContractDocument, putContractDocument } from './lib/contract-storage';
 import { needsPayout, payoutForMember, validatePayout } from '../../scripts/lib/member-payout.mjs';
 import { encryptPayoutText } from './lib/staff-mfa-crypto';
+import { featureOn } from '../../scripts/lib/member-features.mjs';
 
 const OWNERS_ONLY = 'Only the owners of a unit can offer it to guests.';
 const todayInIst = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-const enabled = () => process.env.MEMBER_RENTAL_ENABLED === 'true';
+
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -59,6 +61,14 @@ async function write(method: 'POST' | 'PATCH' | 'DELETE', path: string, body?: u
   return { ok: res.ok, status: res.status, rows };
 }
 
+// On for everyone when MEMBER_RENTAL_ENABLED is "true"; otherwise only for a household a super admin has listed under
+// Units -> Early access (member_feature_access).
+async function rentalOn(householdId: string): Promise<boolean> {
+  if (featureOn(process.env.MEMBER_RENTAL_ENABLED, false)) return true;
+  const rows = await select('member_feature_access', `household_id=eq.${householdId}&feature=eq.rental&select=feature`);
+  return featureOn(process.env.MEMBER_RENTAL_ENABLED, rows.length > 0);
+}
+
 async function logChange(personId: string, action: string, detail: Record<string, unknown>): Promise<boolean> {
   const res = await fetch(`${base()}/member_audit_log`, { method: 'POST', headers: restHeaders({ Prefer: 'return=minimal' }), body: JSON.stringify({ actor_person_id: personId, action, detail }) }).catch(() => null);
   return !!res && res.ok;
@@ -71,6 +81,8 @@ async function requireOwner(req: Request): Promise<{ error: Response } | { membe
   if (privacyNoticeRequired(auth.member.privacyVersion)) return { error: jsonResponse({ error: 'Please read the privacy notice first.' }, 403) };
   const householdId = auth.member.householdIds[0];
   if (!householdId || auth.member.roles[householdId] !== 'owner') return { error: jsonResponse({ error: OWNERS_ONLY }, 403) };
+  // Dark for a household that is not on the list: writes and documents answer as if the page did not exist.
+  if (!(await rentalOn(householdId))) return { error: jsonResponse({ error: 'Not found' }, 404) };
   return { member: auth.member, householdId };
 }
 
@@ -101,8 +113,8 @@ async function openContract(offerId: string | undefined): Promise<Contract | nul
 async function handleGet(req: Request): Promise<Response> {
   const auth = await requireMember(req);
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
-  if (!enabled()) return jsonResponse({ enabled: false });
   const householdId = auth.member.householdIds[0];
+  if (!householdId || !(await rentalOn(householdId))) return jsonResponse({ enabled: false });
   if (!householdId || auth.member.roles[householdId] !== 'owner') return jsonResponse({ enabled: true, eligible: false });
   const data = await load(householdId);
   if (!data) return jsonResponse({ enabled: true, eligible: false });
@@ -306,8 +318,6 @@ export default async (req: Request): Promise<Response> => {
   const write = m === 'POST' ? routes[p] : undefined;
   const read = m === 'GET' ? (p === '/api/members-me/rental' ? handleGet : p === '/api/members-me/rental/contract' ? handleContractGet : undefined) : undefined;
   if (!read && !write) return jsonResponse({ error: 'Not found' }, 404);
-  // Dark until it is switched on; writes and the document answer as if the page did not exist.
-  if (!enabled() && (write || p !== '/api/members-me/rental')) return jsonResponse({ error: 'Not found' }, 404);
   try {
     return write ? await write(req) : await read!(req);
   } catch (err) {

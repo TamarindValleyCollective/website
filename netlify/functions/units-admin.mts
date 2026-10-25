@@ -17,6 +17,7 @@ import { validateShare, validateRecord, enableProblem, contractForAdmin, documen
 import { putContractDocument, signedContractUrl } from './lib/contract-storage';
 import { payoutForAdmin, validateVerification } from '../../scripts/lib/member-payout.mjs';
 import { decryptPayoutText } from './lib/staff-mfa-crypto';
+import { FEATURES, validateAccess } from '../../scripts/lib/member-features.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const OFFBOARD_REASONS = ['member_withdrew', 'contract_ended', 'not_suitable', 'other'];
@@ -121,6 +122,11 @@ async function handleOverview(req: Request, admin: SuperAdmin): Promise<Response
   const payoutHouseholds = payoutRows.length ? ((await (await rest(`/member_households?id=${inList(payoutRows.map((r) => r.household_id))}&select=id,farm_unit`)).json()) as { id: string; farm_unit: string }[]) : [];
   const farmUnitOf = new Map(payoutHouseholds.map((h) => [h.id, h.farm_unit]));
 
+  // Early access: who may use a feature that is not on for everyone. `everyone` says the Netlify flag already is.
+  const accessRows = (await (await rest('/member_feature_access?select=household_id,feature,created_at&order=created_at.asc')).json()) as { household_id: string; feature: string; created_at: string }[];
+  const accessHouseholds = accessRows.length ? ((await (await rest(`/member_households?id=${inList(accessRows.map((r) => r.household_id))}&select=id,farm_unit`)).json()) as { id: string; farm_unit: string }[]) : [];
+  const accessUnitOf = new Map(accessHouseholds.map((h) => [h.id, h.farm_unit]));
+
   let stepUpValid = false;
   try {
     stepUpValid = stepUpIsValid(req, admin.id);
@@ -132,6 +138,10 @@ async function handleOverview(req: Request, admin: SuperAdmin): Promise<Response
   return jsonResponse({
     me: { id: admin.id, ready: mfa.ready, hasPasskey: mfa.passkey, stepUpValid },
     types: pools.map((p) => ({ id: p.id, label: p.name, ownerType: p.owner_type })),
+    access: {
+      features: Object.entries(FEATURES).map(([id, f]) => ({ id, label: f.label, everyone: process.env[f.env] === 'true' })),
+      grants: accessRows.map((r) => ({ farmUnit: accessUnitOf.get(r.household_id) ?? '', feature: r.feature, since: r.created_at })),
+    },
     payouts: payoutRows.map((r) => ({ ...payoutForAdmin(r), farmUnit: farmUnitOf.get(r.household_id) ?? '' })),
     units: units.map((u) => ({
       id: u.id,
@@ -334,6 +344,19 @@ async function handlePayoutReveal(req: Request, admin: SuperAdmin): Promise<Resp
   return jsonResponse({ payeeName: row.payee_name, method: row.method, details: JSON.parse(decryptPayoutText(row.details_enc)), pan: decryptPayoutText(row.pan_enc) });
 }
 
+// Adds a household to a feature's early-access list, or takes it off.
+async function handleAccess(req: Request, admin: SuperAdmin): Promise<Response> {
+  const checked = validateAccess(await readJson(req));
+  if ('error' in checked) return jsonResponse({ error: checked.error }, 400);
+  const { farmUnit, feature, enabled } = checked.access;
+  const hh = ((await (await rest(`/member_households?farm_unit=eq.${encodeURIComponent(farmUnit)}&select=id`)).json()) as { id: string }[])[0];
+  if (!hh) return jsonResponse({ error: `There is no home ${farmUnit}.` }, 404);
+  if (!(await audit(admin, enabled ? 'units.access_granted' : 'units.access_removed', { householdId: hh.id, feature }))) return jsonResponse({ error: 'Could not write the audit log; nothing was changed.' }, 500);
+  if (enabled) await rest('/member_feature_access?on_conflict=household_id,feature', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ household_id: hh.id, feature, granted_by: admin.id }) });
+  else await rest(`/member_feature_access?household_id=eq.${hh.id}&feature=eq.${feature}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+  return jsonResponse({ ok: true });
+}
+
 async function handleStatus(req: Request, admin: SuperAdmin): Promise<Response> {
   const body = await readJson<{ unitId?: string; status?: string }>(req);
   if (!body || typeof body.unitId !== 'string' || !body.unitId) return jsonResponse({ error: 'unitId is required' }, 400);
@@ -382,6 +405,7 @@ export default async (req: Request): Promise<Response> => {
     '/api/units-admin/contracts/share': handleContractShare,
     '/api/units-admin/contracts/record': handleContractRecord,
     '/api/units-admin/contracts/link': handleContractLink,
+    '/api/units-admin/access': handleAccess,
     '/api/units-admin/payouts/verify': handlePayoutVerify,
     '/api/units-admin/payouts/reveal': handlePayoutReveal,
     '/api/units-admin/units/status': handleStatus,
@@ -419,6 +443,7 @@ export const config = {
     '/api/units-admin/contracts/share',
     '/api/units-admin/contracts/record',
     '/api/units-admin/contracts/link',
+    '/api/units-admin/access',
     '/api/units-admin/payouts/verify',
     '/api/units-admin/payouts/reveal',
     '/api/units-admin/units/status',

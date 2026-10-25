@@ -844,6 +844,11 @@ outside both the local machine and Netlify (the member-update-email workflow).
   (`units.payout_revealed`, household only), shown for 30 seconds. Rules in `scripts/lib/member-payout.mjs`. Rotating
   `STAFF_MFA_KEY` makes stored payout details unreadable until members re-enter them. There is no finance role yet, so
   this is super-admin only.
+  **Early access (migration `0071`, `member_feature_access`):** a member feature is on for everyone when its Netlify
+  flag is `true` (My rental: `MEMBER_RENTAL_ENABLED`), and otherwise only for the households a super admin lists on
+  Units → Early access (by farm unit; step-up, audited as `units.access_granted` / `units.access_removed`). A household
+  not listed gets the same 404 as when the feature does not exist. The rule is in `scripts/lib/member-features.mjs`;
+  a later feature adds its name there and to the table's check constraint, with no new table.
 - **`netlify/functions/staff-admin.mts` + `lib/staff-admin-guard.ts`** — the API behind the
   Access module (issue #89): who is in the system, who holds which module role, an activity feed,
   and the changes themselves. **Super admins only.** Reading (`GET /api/staff-admin/people`,
