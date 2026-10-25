@@ -4848,7 +4848,29 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     unit?: { shape: string; typeId: string; manager: 'tvc' | 'member'; status: string; requestMode: string; ignoresFarmClosure: boolean } | null;
     stays?: { id: string; startDate: string; nights: number; label: string | null; guests: { name: string; ageGroup: string; gender?: string; preferences: string }[] }[];
     blocks?: { id: string; startDate: string; nights: number; mine: boolean; farm: boolean }[];
+    contract?: { stage: 'sign' | 'review'; termsVersion: string; sharedAt: string; canUpload: boolean; hasSigned: boolean } | null;
   };
+
+  // The contract copies are read by the server for the member and handed over as data; the member never gets a storage link.
+  async function openContractCopy(which: 'contract' | 'signed') {
+    try {
+      const { status, data } = await memberFetch(`/api/members-me/rental/contract?which=${which}`);
+      if (status !== 200) return toast(data.error || 'Could not open that.');
+      const bytes = Uint8Array.from(atob(data.base64), (c) => c.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: data.mime }));
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      toast(err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : 'Could not reach the server.');
+    }
+  }
+  const fileAsBase64 = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result).split(',')[1] ?? '');
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(file);
+    });
   let rental: RentalData | null = null;
 
   function setRentalVisible(on: boolean) {
@@ -4955,10 +4977,38 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         const withdraw = h('button', 'btn', 'Withdraw') as HTMLButtonElement;
         withdraw.type = 'button';
         withdraw.addEventListener('click', () => void act('/api/members-me/rental/withdraw', {}, 'Withdrawn.'));
+        const k = d.contract;
+        let contractCard: HTMLElement | null = null;
+        if (k) {
+          const pick = h('input') as HTMLInputElement;
+          pick.type = 'file';
+          pick.accept = 'application/pdf,image/jpeg,image/png';
+          pick.setAttribute('aria-label', 'Your signed copy');
+          const read = h('button', 'btn', 'Read the contract') as HTMLButtonElement;
+          read.type = 'button';
+          read.addEventListener('click', () => void openContractCopy('contract'));
+          const mine = h('button', 'btn', 'See my signed copy') as HTMLButtonElement;
+          mine.type = 'button';
+          mine.addEventListener('click', () => void openContractCopy('signed'));
+          const up = h('button', 'btn btn--solid', k.hasSigned ? 'Replace my signed copy' : 'Upload my signed copy') as HTMLButtonElement;
+          up.type = 'button';
+          up.addEventListener('click', async () => {
+            const f = pick.files?.[0];
+            if (!f) return toast('Choose your signed copy first.');
+            up.disabled = true;
+            const ok = await act('/api/members-me/rental/contract/signed', { file: { mime: f.type, base64: await fileAsBase64(f) } }, 'Thank you. The core team will enable your unit.');
+            if (!ok) up.disabled = false;
+          });
+          contractCard = card('Your contract',
+            say(k.hasSigned ? 'We have your signed copy. The core team will check it and enable your unit; you will see it here when they do.' : 'Read the contract. It is between you, TVC and Linger. Sign it, then upload the signed copy here (a PDF or a clear photo, up to 4 MB). Your unit is enabled once TVC has it.'),
+            h('div', 'rent-dates', undefined, read, k.hasSigned ? mine : null),
+            k.canUpload ? h('div', 'rent-dates', undefined, pick, up) : null);
+        }
         sections.push(card('Waiting for the contract',
-          h('div', 'rent-steps', undefined, h('span', 'on', 'You offered it'), h('span', '', 'Contract signed with Linger'), h('span', '', 'Enabled by TVC')),
+          h('div', 'rent-steps', undefined, h('span', 'on', 'You offered it'), h('span', k?.hasSigned ? 'on' : '', 'Contract signed'), h('span', '', 'Enabled by TVC')),
           say(`Linger has been told and will get in touch to agree terms. Once the contract is signed, the core team enables your unit and it appears here with its settings. Offered as ${d.offer?.shape === 'room' ? '1 bedroom (a single room)' : `${label} (whole unit)${d.offer?.delegateToTvc ? ', managed by TVC' : ''}`}.`),
           withdraw));
+        if (contractCard) sections.unshift(contractCard);
       } else if (d.unit) {
         const u = d.unit;
         const label = d.types?.find((t) => t.id === u.typeId)?.label ?? '';

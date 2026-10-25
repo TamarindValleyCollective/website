@@ -227,6 +227,28 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
     typeId: string;
     delegateToTvc: boolean;
     createdAt: string;
+    contract: ContractInfo | null;
+  }
+  interface ContractInfo {
+    id: string;
+    status: 'shared' | 'signed' | 'active' | 'ended' | 'cancelled';
+    termsVersion: string;
+    typeId: string;
+    manager: 'tvc' | 'member';
+    split: { member: number; tvc: number; linger: number } | null;
+    memberPayout: string;
+    settlementCycle: string;
+    hasSigned: boolean;
+    signedUploadedAt: string | null;
+    signedOn: string | null;
+    effectiveFrom: string | null;
+    endsOn: string | null;
+    noticeDays: number | null;
+    lingerContractRef: string | null;
+    lingerPropertyRef: string | null;
+    lingerRoomRef: string | null;
+    sharedAt: string;
+    problem: string | null;
   }
   interface Overview {
     me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean };
@@ -380,6 +402,92 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
     return h('span', { class: `pill ${u.status === 'rentable' ? 'pill--ok' : u.status === 'paused' ? 'pill--warn' : ''}`, text: u.status === 'rentable' ? 'Rentable' : u.status === 'paused' ? 'Paused' : 'Offboarded' });
   }
 
+  // ---- the three-way contract (Linger, TVC, the member) behind an offer
+  const field = (label: string, input: HTMLElement) => h('label', {}, h('span', { text: label }), input);
+  const textInput = (label: string, value = '', type = 'text') => h('input', { attrs: { type, 'aria-label': label, value, ...(type === 'number' ? { min: '0', step: 'any' } : {}) } });
+  const readBase64 = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result).split(',')[1] ?? '');
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(file);
+    });
+
+  async function openDocument(offerId: string, which: 'contract' | 'signed') {
+    if (!mayChange()) return;
+    try {
+      const { status, data: out } = await call('/api/units-admin/contracts/link', { method: 'POST', body: { offerId, which } });
+      if (status === 200 && out.url) window.open(out.url, '_blank', 'noopener');
+      else if (out?.code === 'STEP_UP_REQUIRED') lock.open();
+      else showToast(out?.error ?? 'Could not open that.');
+    } catch (err) {
+      if (!handled(err)) showToast('Could not reach the server.');
+    }
+  }
+
+  // Step 1: share the electronic copy and the terms it was drawn up on. The member signs it and uploads their copy.
+  function sharePanel(o: OfferRow, select: HTMLSelectElement, box: HTMLInputElement): HTMLElement {
+    const version = textInput('Terms version');
+    const member = textInput('Member %', '', 'number');
+    const tvc = textInput('TVC %', '', 'number');
+    const linger = textInput('Linger %', '', 'number');
+    const payout = h('select', { attrs: { 'aria-label': 'Member payout' } }, h('option', { text: 'Bank transfer', attrs: { value: 'bank_transfer' } }), h('option', { text: 'Set against maintenance', attrs: { value: 'maintenance_adjustment' } }));
+    const file = h('input', { attrs: { type: 'file', accept: 'application/pdf,image/jpeg,image/png', 'aria-label': 'Contract copy' } });
+    const send = h('button', { class: 'button button--outline', text: 'Share with the member', attrs: { type: 'button' } });
+    send.addEventListener('click', async () => {
+      const f = file.files?.[0];
+      if (!f) return showToast('Choose the contract copy to share.');
+      send.disabled = true;
+      const ok = await change('/api/units-admin/contracts/share', { offerId: o.id, termsVersion: version.value, memberPct: member.value, tvcPct: tvc.value, lingerPct: linger.value, memberPayout: payout.value, typeId: select.value, delegateToTvc: o.shape === 'whole' && box.checked, file: { mime: f.type, base64: await readBase64(f) } }, 'Shared. The member can sign it in their portal.');
+      if (!ok.ok) send.disabled = false;
+    });
+    return h(
+      'div',
+      { class: 'stack-form' },
+      h('p', { class: 'offer-meta', text: 'Step 1 of 3: share the contract. Linger, TVC and the member sign it; the member uploads the signed copy in their portal.' }),
+      field('Version of the terms', version),
+      field('Member share (%)', member),
+      field('TVC share (%)', tvc),
+      field('Linger share (%)', linger),
+      field('Member payout', payout),
+      field('Contract copy (PDF, JPG or PNG, up to 4 MB)', file),
+      h('p', { class: 'offer-meta', text: 'The shares are fixed by unit type and must add up to 100, or all be left blank for now.' }),
+      send,
+    );
+  }
+
+  // Steps 2 and 3: wait for the signed copy, record the dates and Linger's references, then enable.
+  function contractPanel(o: OfferRow, c: ContractInfo): HTMLElement {
+    const inputs = {
+      signedOn: textInput('Signed on', c.signedOn ?? '', 'date'),
+      effectiveFrom: textInput('Effective from', c.effectiveFrom ?? '', 'date'),
+      endsOn: textInput('Ends on', c.endsOn ?? '', 'date'),
+      noticeDays: textInput('Notice (days)', c.noticeDays === null ? '' : String(c.noticeDays), 'number'),
+      lingerContractRef: textInput("Linger's contract reference", c.lingerContractRef ?? ''),
+      lingerPropertyRef: textInput("Linger's property id", c.lingerPropertyRef ?? ''),
+      lingerRoomRef: textInput("Linger's room id", c.lingerRoomRef ?? ''),
+    };
+    const save = h('button', { class: 'button button--outline', text: 'Save these', attrs: { type: 'button' } });
+    save.addEventListener('click', () => void change('/api/units-admin/contracts/record', { offerId: o.id, ...Object.fromEntries(Object.entries(inputs).map(([k, el]) => [k, el.value])) }, 'Saved.'));
+    const split = c.split ? `${c.split.member}% member · ${c.split.tvc}% TVC · ${c.split.linger}% Linger` : 'Shares not entered yet';
+    return h(
+      'div',
+      { class: 'stack-form' },
+      h('p', { class: 'offer-meta', text: `Contract ${c.termsVersion}, shared ${new Date(c.sharedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}. ${split}. Member payout: ${c.memberPayout === 'maintenance_adjustment' ? 'set against maintenance' : 'bank transfer'}.` }),
+      h('p', { class: 'offer-meta', text: c.hasSigned ? `Signed copy uploaded ${c.signedUploadedAt ? new Date(c.signedUploadedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}.` : 'Waiting for the member to upload the signed copy.' }),
+      h('div', { class: 'offer-actions' }, h('button', { class: 'button button--outline', text: 'Open shared copy', attrs: { type: 'button' }, on: { click: () => void openDocument(o.id, 'contract') } }), c.hasSigned ? h('button', { class: 'button button--outline', text: 'Open signed copy', attrs: { type: 'button' }, on: { click: () => void openDocument(o.id, 'signed') } }) : null),
+      field('Signed on', inputs.signedOn),
+      field('Effective from', inputs.effectiveFrom),
+      field('Ends on (blank if open-ended)', inputs.endsOn),
+      field('Notice (days)', inputs.noticeDays),
+      field("Linger's contract reference", inputs.lingerContractRef),
+      field("Linger's property id", inputs.lingerPropertyRef),
+      field("Linger's room id", inputs.lingerRoomRef),
+      save,
+      c.problem ? h('p', { class: 'offer-meta', text: `Before you can enable: ${c.problem}` }) : null,
+    );
+  }
+
   function renderPipeline() {
     const d = data!;
     $('pipeline-count').textContent = d.offers.length ? String(d.offers.length) : '';
@@ -391,16 +499,26 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
         ? d.offers.map((o) => {
             const select = h('select', { attrs: { 'aria-label': 'Type' } }, ...d.types.filter((t) => MEMBER_TYPE_IDS.includes(t.id) && (o.shape === 'room' ? t.id === '1br' : t.id !== '1br')).map((t) => h('option', { text: t.label, attrs: { value: t.id, ...(t.id === o.typeId ? { selected: '' } : {}) } })));
             const box = h('input', { attrs: { type: 'checkbox', ...(o.delegateToTvc ? { checked: '' } : {}) } });
+            const c = o.contract;
+            // Once the contract is shared, the type and manager are what was put in front of the member.
+            if (c) {
+              select.value = c.typeId;
+              select.disabled = true;
+              box.checked = c.manager === 'tvc';
+              box.disabled = true;
+            }
+            const enable = h('button', { class: 'button', text: 'Enable', attrs: { type: 'button', ...(c?.problem || !c ? { disabled: '' } : {}) }, on: { click: () => void change('/api/units-admin/offers/enable', { offerId: o.id, typeId: select.value, delegateToTvc: o.shape === 'whole' && box.checked }, `Home ${o.farmUnit} is enabled.`) } });
             return h(
               'div',
               { class: 'card offer' },
               h('h2', { text: `Home ${o.farmUnit}` }),
               h('p', { class: 'offer-meta', text: `${o.memberName || 'A member'} · ${o.shape === 'whole' ? 'Whole unit' : 'A single room'}${o.cluster ? ` · ${o.cluster}` : ''} · asked ${new Date(o.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` }),
               h('div', { class: 'stack-form' }, h('label', {}, h('span', { text: 'Type' }), select), o.shape === 'whole' ? h('label', {}, box, h('span', { text: 'TVC manages it for the member' })) : h('p', { class: 'offer-meta', text: 'A room: the member accepts requests themselves. It starts on auto-reject.' })),
+              c ? contractPanel(o, c) : sharePanel(o, select, box),
               h(
                 'div',
                 { class: 'offer-actions' },
-                h('button', { class: 'button', text: 'Enable', attrs: { type: 'button' }, on: { click: () => void change('/api/units-admin/offers/enable', { offerId: o.id, typeId: select.value, delegateToTvc: o.shape === 'whole' && box.checked }, `Home ${o.farmUnit} is enabled.`) } }),
+                enable,
                 h('button', { class: 'button button--outline', text: 'Decline', attrs: { type: 'button' }, on: { click: () => void change('/api/units-admin/offers/decline', { offerId: o.id }, 'Offer declined.') } }),
               ),
             );

@@ -12,7 +12,9 @@ import { requireSuperAdmin, logStaffAction, type SuperAdmin } from './lib/staff-
 import { requireAccessAdmin, stepUpIsValid } from './lib/staff-admin-guard';
 import { MfaNotConfiguredError } from './lib/staff-mfa-crypto';
 import { mfaSummary, rest } from './lib/staff-mfa-store';
-import { enablePlan, offboardProblem, editPatch, statusChange } from '../../scripts/lib/member-units.mjs';
+import { enablePlan, offboardProblem, offerProblem, editPatch, statusChange } from '../../scripts/lib/member-units.mjs';
+import { validateShare, validateRecord, enableProblem, contractForAdmin, documentKey } from '../../scripts/lib/member-contract.mjs';
+import { putContractDocument, signedContractUrl } from './lib/contract-storage';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const OFFBOARD_REASONS = ['member_withdrew', 'contract_ended', 'not_suitable', 'other'];
@@ -108,6 +110,9 @@ async function handleOverview(req: Request, admin: SuperAdmin): Promise<Response
   const personIds = [...new Set([...owners.map((o) => o.person_id), ...offers.map((o) => o.requested_by).filter((p): p is string => Boolean(p))])];
   const people = personIds.length ? ((await (await rest(`/member_people?id=${inList(personIds)}&select=id,full_name`)).json()) as { id: string; full_name: string }[]) : [];
   const nameOf = new Map(people.map((p) => [p.id, p.full_name]));
+  const offerIds = offers.map((o) => o.id);
+  const contracts = offerIds.length ? ((await (await rest(`/member_unit_contracts?offer_id=${inList(offerIds)}&select=${CONTRACT_SELECT}`)).json()) as ContractRow[]) : [];
+  const contractOf = new Map(contracts.map((c) => [c.offer_id, c]));
 
   let stepUpValid = false;
   try {
@@ -148,8 +153,43 @@ async function handleOverview(req: Request, admin: SuperAdmin): Promise<Response
       typeId: o.type_id,
       delegateToTvc: o.delegate_to_tvc,
       createdAt: o.created_at,
+      contract: contractForAdmin(contractOf.get(o.id) ?? null),
     })),
   });
+}
+
+const CONTRACT_SELECT = 'id,offer_id,household_id,farm_unit,status,terms_version,type_id,shape,manager,member_pct,tvc_pct,linger_pct,member_payout,settlement_cycle,linger_contract_ref,linger_property_ref,linger_room_ref,signed_on,effective_from,ends_on,notice_days,contract_doc,signed_doc,shared_at,signed_uploaded_at';
+type ContractRow = {
+  id: string;
+  offer_id: string;
+  household_id: string;
+  farm_unit: string;
+  status: string;
+  terms_version: string;
+  type_id: string;
+  shape: string;
+  manager: string;
+  member_pct: number | null;
+  tvc_pct: number | null;
+  linger_pct: number | null;
+  member_payout: string;
+  settlement_cycle: string;
+  linger_contract_ref: string | null;
+  linger_property_ref: string | null;
+  linger_room_ref: string | null;
+  signed_on: string | null;
+  effective_from: string | null;
+  ends_on: string | null;
+  notice_days: number | null;
+  contract_doc: string;
+  signed_doc: string | null;
+  shared_at: string;
+  signed_uploaded_at: string | null;
+};
+
+async function getContractForOffer(offerId: string): Promise<ContractRow | null> {
+  const res = await rest(`/member_unit_contracts?offer_id=eq.${offerId}&select=${CONTRACT_SELECT}`);
+  return ((await res.json()) as ContractRow[])[0] ?? null;
 }
 
 type Offer = { id: string; household_id: string; shape: string; type_id: string; delegate_to_tvc: boolean; status: string };
@@ -171,8 +211,13 @@ async function handleEnable(req: Request, admin: SuperAdmin): Promise<Response> 
   const delegateToTvc = body.delegateToTvc === undefined ? offer.delegate_to_tvc : body.delegateToTvc === true;
   const plan = enablePlan({ offer, household: hh, existing, typeId, delegateToTvc, nextSortOrder: (maxRes[0]?.sort_order ?? 0) + 1 });
   if ('error' in plan) return jsonResponse({ error: plan.error }, 400);
+  // The contract was shared for a particular type and manager; enabling on different terms would not match what was signed.
+  const contract = await getContractForOffer(offer.id);
+  const gate = enableProblem(contract);
+  if (gate) return jsonResponse({ error: gate }, 400);
+  if (contract!.type_id !== typeId || contract!.manager !== plan.unit.manager) return jsonResponse({ error: 'The signed contract is for a different type or manager. Share a new contract before changing them.' }, 400);
 
-  if (!(await audit(admin, 'units.offer_enabled', { offerId: offer.id, unitId: plan.unit.id, typeId, manager: plan.unit.manager, shape: offer.shape }))) {
+  if (!(await audit(admin, 'units.offer_enabled', { offerId: offer.id, unitId: plan.unit.id, typeId, manager: plan.unit.manager, shape: offer.shape, contractId: contract!.id }))) {
     return jsonResponse({ error: 'Could not write the audit log; nothing was changed.' }, 500);
   }
   // Claim the offer first, so two admins enabling it at once cannot both create a unit.
@@ -189,7 +234,57 @@ async function handleEnable(req: Request, admin: SuperAdmin): Promise<Response> 
     await rest(`/member_unit_offers?id=eq.${offer.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'interested', decided_by: null, decided_at: null }) }).catch(() => {});
     throw err;
   }
+  await rest(`/member_unit_contracts?id=eq.${contract!.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'active', activated_by: admin.id, activated_at: new Date().toISOString(), updated_at: new Date().toISOString() }) });
   return jsonResponse({ ok: true, unitId: plan.unit.id });
+}
+
+// Shares the electronic copy of the contract with the member, who then signs it and uploads their copy.
+async function handleContractShare(req: Request, admin: SuperAdmin): Promise<Response> {
+  const body = await readJson<Record<string, unknown> & { offerId?: string }>(req);
+  if (!body || !UUID.test(body.offerId ?? '')) return jsonResponse({ error: 'offerId must be a UUID' }, 400);
+  const offer = await getOffer(body.offerId!);
+  if (!offer) return jsonResponse({ error: 'Offer not found' }, 404);
+  // The admin may change the type or the manager before sharing; the contract is for what is chosen here.
+  const chosen = { ...offer, type_id: typeof body.typeId === 'string' ? body.typeId : offer.type_id, delegate_to_tvc: body.delegateToTvc === undefined ? offer.delegate_to_tvc : body.delegateToTvc === true };
+  const problem = offerProblem({ shape: chosen.shape, typeId: chosen.type_id, delegateToTvc: chosen.delegate_to_tvc });
+  if (problem) return jsonResponse({ error: problem }, 400);
+  const checked = validateShare(body, chosen);
+  if ('error' in checked) return jsonResponse({ error: checked.error }, 400);
+  if (await getContractForOffer(offer.id)) return jsonResponse({ error: 'A contract has already been shared for this offer.' }, 409);
+  const id = crypto.randomUUID();
+  const key = documentKey(offer.household_id, id, 'contract', checked.file.ext);
+  const hh = ((await (await rest(`/member_households?id=eq.${offer.household_id}&select=farm_unit`)).json()) as { farm_unit: string }[])[0];
+  if (!hh) return jsonResponse({ error: 'Household not found' }, 404);
+  if (!(await audit(admin, 'units.contract_shared', { offerId: offer.id, contractId: id, termsVersion: checked.row.terms_version }))) return jsonResponse({ error: 'Could not write the audit log; nothing was changed.' }, 500);
+  await putContractDocument(key, Buffer.from((body.file as { base64: string }).base64, 'base64'), checked.file.mime);
+  await rest('/member_unit_contracts', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ id, offer_id: offer.id, household_id: offer.household_id, farm_unit: hh.farm_unit, contract_doc: key, shared_by: admin.id, ...checked.row }) });
+  return jsonResponse({ ok: true });
+}
+
+// Dates, notice and Linger's references, recorded before the unit is enabled.
+async function handleContractRecord(req: Request, admin: SuperAdmin): Promise<Response> {
+  const body = await readJson<Record<string, unknown> & { offerId?: string }>(req);
+  if (!body || !UUID.test(body.offerId ?? '')) return jsonResponse({ error: 'offerId must be a UUID' }, 400);
+  const contract = await getContractForOffer(body.offerId!);
+  if (!contract) return jsonResponse({ error: 'No contract has been shared for this offer.' }, 404);
+  if (contract.status !== 'shared' && contract.status !== 'signed') return jsonResponse({ error: 'This contract can no longer be changed here.' }, 409);
+  const { offerId: _ignored, ...fields } = body;
+  const rec = validateRecord(fields);
+  if ('error' in rec) return jsonResponse({ error: rec.error }, 400);
+  if (!(await audit(admin, 'units.contract_recorded', { contractId: contract.id, fields: Object.keys(rec.patch) }))) return jsonResponse({ error: 'Could not write the audit log; nothing was changed.' }, 500);
+  await rest(`/member_unit_contracts?id=eq.${contract.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ...rec.patch, updated_at: new Date().toISOString() }) });
+  return jsonResponse({ ok: true });
+}
+
+// A link to the shared or signed copy that works for 60 seconds. Logged, and behind the same step-up as a change.
+async function handleContractLink(req: Request, admin: SuperAdmin): Promise<Response> {
+  const body = await readJson<{ offerId?: string; which?: string }>(req);
+  if (!body || !UUID.test(body.offerId ?? '') || (body.which !== 'contract' && body.which !== 'signed')) return jsonResponse({ error: 'offerId and which (contract or signed) are required' }, 400);
+  const contract = await getContractForOffer(body.offerId!);
+  const key = body.which === 'signed' ? contract?.signed_doc : contract?.contract_doc;
+  if (!contract || !key) return jsonResponse({ error: 'That document is not there yet.' }, 404);
+  if (!(await audit(admin, 'units.contract_opened', { contractId: contract.id, which: body.which }))) return jsonResponse({ error: 'Could not write the audit log; nothing was changed.' }, 500);
+  return jsonResponse({ url: await signedContractUrl(key) });
 }
 
 async function handleDecline(req: Request, admin: SuperAdmin): Promise<Response> {
@@ -201,6 +296,7 @@ async function handleDecline(req: Request, admin: SuperAdmin): Promise<Response>
   if (!(await audit(admin, 'units.offer_declined', { offerId: offer.id }))) return jsonResponse({ error: 'Could not write the audit log; nothing was changed.' }, 500);
   const done = (await (await rest(`/member_unit_offers?id=eq.${offer.id}&status=eq.interested`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ status: 'declined', decided_by: admin.id, decided_at: new Date().toISOString() }) })).json()) as unknown[];
   if (!done.length) return jsonResponse({ error: 'This offer has already been dealt with.' }, 409);
+  await rest(`/member_unit_contracts?offer_id=eq.${offer.id}&status=in.(shared,signed)`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'cancelled', updated_at: new Date().toISOString() }) });
   return jsonResponse({ ok: true });
 }
 
@@ -249,6 +345,9 @@ export default async (req: Request): Promise<Response> => {
   const writes: Record<string, (req: Request, admin: SuperAdmin) => Promise<Response>> = {
     '/api/units-admin/offers/enable': handleEnable,
     '/api/units-admin/offers/decline': handleDecline,
+    '/api/units-admin/contracts/share': handleContractShare,
+    '/api/units-admin/contracts/record': handleContractRecord,
+    '/api/units-admin/contracts/link': handleContractLink,
     '/api/units-admin/units/status': handleStatus,
     '/api/units-admin/units/offboard': handleOffboard,
     '/api/units-admin/units/edit': handleEdit,
@@ -281,6 +380,9 @@ export const config = {
     '/api/units-admin/overview',
     '/api/units-admin/offers/enable',
     '/api/units-admin/offers/decline',
+    '/api/units-admin/contracts/share',
+    '/api/units-admin/contracts/record',
+    '/api/units-admin/contracts/link',
     '/api/units-admin/units/status',
     '/api/units-admin/units/offboard',
     '/api/units-admin/units/edit',
