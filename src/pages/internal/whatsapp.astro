@@ -1009,6 +1009,14 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     color: var(--tvc-ink);
   }
 
+  /* Same focus as every admin field: a border and a soft halo. */
+  .composer-signature input:focus,
+  .reply-form textarea:focus {
+    outline: none;
+    border-color: var(--tvc-orange);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--tvc-orange) 28%, transparent);
+  }
+
   .reply-form {
     display: flex;
     align-items: flex-end;

@@ -479,7 +479,11 @@ const adminItems = [
     outline-offset: 2px;
   }
 
-  /* A short form that sits in a card: labels above their fields, the button on the same baseline as the fields. */
+  /* Admin forms. Two layouts share one look for labels and fields:
+       .inline-form   a short form in a card: fields and the button in one wrapping row, on the same baseline
+       .stack-form    a longer form: labels above fields, one column (a page's own grid may re-arrange it)
+     The field rules are written with :where() so they carry almost no specificity: a page may make one field
+     denser (the accommodation guest rows) without fighting them, but it does not restyle borders, focus or labels. */
   main :global(.inline-form) {
     display: flex;
     flex-wrap: wrap;
@@ -487,7 +491,12 @@ const adminItems = [
     gap: 14px 12px;
   }
 
-  main :global(.inline-form label) {
+  main :global(.stack-form) {
+    display: grid;
+    gap: 14px;
+  }
+
+  main :global(:where(.inline-form, .stack-form) label) {
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -496,16 +505,26 @@ const adminItems = [
     color: var(--tvc-ink);
   }
 
-  main :global(.inline-form .opt) {
+  /* A checkbox or radio and its words: one row, the whole label is the target. */
+  main :global(:where(.inline-form, .stack-form) label:has(> input[type='checkbox'], > input[type='radio'])) {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  main :global(:where(.inline-form, .stack-form) input:is([type='checkbox'], [type='radio'])) {
+    accent-color: var(--tvc-green-dark);
+  }
+
+  main :global(:where(.inline-form, .stack-form) :is(.opt, small)) {
     font-weight: 400;
     color: var(--tvc-ink-soft);
   }
 
-  main :global(.inline-form input),
-  main :global(.inline-form select) {
+  main :global(:where(.inline-form, .stack-form) :is(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='hidden']), select, textarea)) {
     box-sizing: border-box;
-    min-height: 36px;
-    padding: 0 12px;
     border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
     background: var(--tvc-white);
@@ -516,17 +535,32 @@ const adminItems = [
     transition: border-color 120ms ease-out, box-shadow 120ms ease-out;
   }
 
+  main :global(:where(.inline-form, .stack-form) :is(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='hidden']), select)) {
+    min-height: 36px;
+    padding: 0 12px;
+  }
+
+  main :global(:where(.inline-form, .stack-form) textarea) {
+    padding: 8px 12px;
+    resize: vertical;
+  }
+
   /* The field itself shows focus (a border and a soft halo), not a ring floating off its edge. */
-  main :global(.inline-form input:focus),
-  main :global(.inline-form select:focus) {
+  main :global(:where(.inline-form, .stack-form) :is(input, select, textarea):focus) {
     outline: none;
     border-color: var(--tvc-orange);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--tvc-orange) 28%, transparent);
   }
 
+  main :global(:where(.inline-form, .stack-form) :is(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='hidden']), select):disabled),
+  main :global(:where(.inline-form, .stack-form) textarea:disabled) {
+    background: var(--tvc-cream);
+    color: var(--tvc-ink-soft);
+    cursor: not-allowed;
+  }
+
   @media (pointer: coarse) {
-    main :global(.inline-form input),
-    main :global(.inline-form select) {
+    main :global(:where(.inline-form, .stack-form) :is(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='hidden']), select)) {
       min-height: 44px;
     }
   }

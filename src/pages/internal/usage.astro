@@ -68,7 +68,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
     <dialog id="prices-sheet" class="sheet" aria-labelledby="prices-title">
       <h2 id="prices-title">Prices and limits</h2>
-      <form id="settings-form" class="form" novalidate>
+      <form id="settings-form" class="form stack-form" novalidate>
         <p class="sheet-text">Turns Anthropic token counts into an estimated spend, and sets a daily request limit for Gemini. Both are optional; warnings that depend on a missing one stay quiet.</p>
         <div class="fields">
           <label>Anthropic input price <span class="muted">(USD per million tokens)</span><input type="number" step="any" min="0" inputmode="decimal" id="price-input" /></label>
@@ -616,29 +616,14 @@ import SignInGate from '../../components/SignInGate.astro';
     margin: 12px 0;
   }
 
-  .usage label {
-    display: grid;
-    gap: 4px;
-    font-size: var(--text-sm);
-    font-weight: 600;
-  }
-
   .usage label .muted {
     font-weight: 400;
   }
 
-  .usage input {
-    font: inherit;
-    min-height: 44px;
-    padding: 8px 10px;
+  .usage .form input {
     max-width: 280px;
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius-field);
-    background: var(--tvc-white);
-    color: var(--tvc-ink);
   }
 
-  .usage input:focus-visible,
   .usage summary:focus-visible,
   .usage .link-button:focus-visible {
     outline: 2px solid var(--tvc-orange);
@@ -1280,7 +1265,7 @@ import SignInGate from '../../components/SignInGate.astro';
     const msg = h('span', { class: 'msg', attrs: { role: 'status' } });
     const cancel = h('button', { class: 'button button--outline', text: 'Cancel', attrs: { type: 'button' } });
     cancel.addEventListener('click', onCancel);
-    const form = h('form', { class: 'form reading-form', attrs: { novalidate: '' } },
+    const form = h('form', { class: 'form reading-form stack-form', attrs: { novalidate: '' } },
       h('p', { class: 'muted', text: `Find this at ${meterInfo.where}.` }),
       h('div', { class: 'fields' }, field('value', meterInfo.valueLabel, last?.value), field('limit', meterInfo.limitLabel, last?.limit), withExpiry ? field('expiresOn', 'Credit expires on (optional)', last?.expiresOn ?? '', 'date') : null),
       h('div', { class: 'actions' }, h('button', { class: 'button', text: 'Save reading', attrs: { type: 'submit' } }), cancel, msg),

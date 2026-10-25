@@ -94,7 +94,7 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
   Apple-style layout: `.field` (search), `.segmented` (one choice from a few), `.list` with `.row` (a grouped list;
   `a.row` and `button.row` are tappable), `.pill` (`--ok`, `--warn`, `--crit`), `.sheet` (a modal `<dialog>`),
   `.toast` via `showToast(message, undo?)` in `staff-client.mjs`, and `.crit-row` (a destructive action as plain red
-  text in its own list). A short form in a card is `.inline-form` (labels above fields, 36px fields, focus as a border and halo). Build a new page from these rather than inventing controls. A page uses them and never
+  text in its own list). A short form in a card is `.inline-form` (fields and the button in one wrapping row) and a longer one is `.stack-form` (one column, or a page's own grid): both give labels above fields, 36px fields (44px on touch), strong borders and focus as a border and halo. Their field rules carry no specificity, so a page may make one field denser but never redefines borders, focus or labels; the gate (`SignInGate`) starts hidden and each page shows it only when nobody is signed in. Build a new page from these rather than inventing controls. A page uses them and never
   redefines them; it may add to one (WhatsApp's `.card` sets padding and overflow) and
   `scripts/lib/admin-primitives.test.mjs` lists the few that do. Font sizes are `--text-*` tokens with
   nothing below 0.8rem (only display sizes of 1.3rem and up may be literal; Stylelint errors otherwise). A
