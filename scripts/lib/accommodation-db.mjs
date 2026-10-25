@@ -235,6 +235,37 @@ export async function deleteBooking(id, { deletedBy, reason }) {
   await callRpc('accommodation_delete_booking', { p_id: id, p_deleted_by: deletedBy, p_reason: reason || null });
 }
 
+// The bookings on one unit from `fromDate` on, for the unit's owner (the member portal). No contact details are read:
+// a guest comes back with a name, age group, gender and preferences only. Whole-farm closures hold no tent rows, so they
+// are read separately. Shaped like rowToBooking's output so member-rental.mjs can work on it.
+export async function listBookingsForUnit(unitId, fromDate) {
+  const range = encodeURIComponent(`[${fromDate},2100-01-01)`);
+  const assigned = await (await restFetch(`/accommodation_tent_assignments?tent_id=eq.${encodeURIComponent(unitId)}&stay_range=ov.${range}&select=booking_id`)).json();
+  const ids = [...new Set(assigned.map((a) => a.booking_id))];
+  const select = 'select=id,type,label,start_date,nights,created_by,accommodation_tent_assignments(tent_id,accommodation_guests(seq,age_group,accommodation_people(name,gender,preferences)))';
+  const [booked, closures] = await Promise.all([
+    ids.length ? restFetch(`/accommodation_bookings?id=in.(${ids.join(',')})&${select}`).then((r) => r.json()) : [],
+    restFetch(`/accommodation_bookings?type=eq.farm-closure&stay_range=ov.${range}&select=id,type,label,start_date,nights,created_by`).then((r) => r.json()),
+  ]);
+  return [...booked, ...closures].map((row) => ({
+    id: row.id,
+    type: row.type,
+    label: row.label ?? null,
+    startDate: row.start_date,
+    nights: row.nights,
+    createdBy: row.created_by ?? null,
+    tents: (row.accommodation_tent_assignments ?? [])
+      .filter((ta) => ta.tent_id === unitId)
+      .map((ta) => ({
+        tentId: ta.tent_id,
+        guests: (ta.accommodation_guests ?? [])
+          .slice()
+          .sort((x, y) => x.seq - y.seq)
+          .map((g) => ({ name: g.accommodation_people.name, ageGroup: g.age_group, gender: g.accommodation_people.gender ?? undefined, preferences: g.accommodation_people.preferences ?? undefined })),
+      })),
+  }));
+}
+
 const PERSON_FIELDS = 'id,name,mobile_number,gender,preferences,email';
 
 // Mobile number takes priority when both are given - it's the reliable

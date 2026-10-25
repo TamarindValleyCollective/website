@@ -1613,6 +1613,137 @@ import SignInGate from '../../components/SignInGate.astro';
     display: none;
   }
 
+  /* ---- My rental ---- */
+  .rent {
+    display: grid;
+    gap: 14px;
+  }
+
+  .rent-note {
+    margin: 0 0 12px;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+    line-height: 1.45;
+  }
+
+  .rent-opt {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    margin: 0 0 10px;
+    padding: 12px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-field);
+    cursor: pointer;
+  }
+
+  .rent-opt input {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    margin: 2px 0 0;
+    accent-color: var(--tvc-green-dark);
+  }
+
+  .rent-opt b {
+    display: block;
+    font-size: var(--text-base);
+  }
+
+  .rent-opt span span {
+    display: block;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+    line-height: 1.4;
+  }
+
+  .rent-field {
+    display: grid;
+    gap: 6px;
+    margin: 0 0 12px;
+    max-width: 240px;
+    font-size: var(--text-sm);
+  }
+
+  .rent-field select {
+    min-height: 44px;
+    padding: 0 12px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-md);
+  }
+
+  .rent-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0 0 10px;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .rent-steps span {
+    padding: 3px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 999px;
+  }
+
+  .rent-steps span.on {
+    border-color: transparent;
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+    font-weight: 600;
+  }
+
+  .rent-list {
+    margin: 0 0 12px;
+    padding: 0;
+    list-style: none;
+    font-size: var(--text-sm);
+  }
+
+  .rent-list > li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .rent-stays > li {
+    display: block;
+  }
+
+  .rent-guests {
+    margin: 4px 0 0;
+    padding-left: 18px;
+    color: var(--tvc-ink-soft);
+    list-style: disc;
+  }
+
+  .rent-dates {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .rent-dates input {
+    min-height: 44px;
+    padding: 0 12px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-md);
+  }
+
   /* ---- the feature tour (startTour) and the "What's new" card ---- */
   .whatsnew {
     margin: 0 0 16px;
@@ -3688,6 +3819,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     { id: 'unit', label: 'My unit', icon: IC.unit },
     // Owners only: a family member's story route lands on Our members.
     { id: 'story', label: 'Your story', icon: IC.pen },
+    // Owners only, and only once the feature is switched on (MEMBER_RENTAL_ENABLED): probeRental() shows it.
+    { id: 'rental', label: 'My rental', icon: IC.stay, hidden: true },
     { id: 'directory', label: 'Our members', icon: IC.book },
     // Not built yet: kept out of the menu (they would only lead to a "coming soon" page) and listed
     // once, quietly, at the foot of the Home page. The routes stay so an old bookmark still lands somewhere.
@@ -4700,6 +4833,215 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     window.addEventListener('resize', place);
     window.addEventListener('scroll', place, true);
     show(0);
+  }
+
+  // ---- My rental ----
+  // Offer your unit to guests who book through Linger, then manage it. The menu item stays hidden until the server says
+  // the feature is on and this person is an owner (probeRental). Plan: docs/plans/accommodation-member-units.md.
+  type RentalData = {
+    enabled: boolean;
+    eligible: boolean;
+    farmUnit?: string;
+    state?: 'none' | 'interested' | 'rentable' | 'paused';
+    types?: { id: string; label: string }[];
+    offer?: { shape: string; typeId: string; delegateToTvc: boolean; createdAt: string } | null;
+    unit?: { shape: string; typeId: string; manager: 'tvc' | 'member'; status: string; requestMode: string; ignoresFarmClosure: boolean } | null;
+    stays?: { id: string; startDate: string; nights: number; label: string | null; guests: { name: string; ageGroup: string; gender?: string; preferences: string }[] }[];
+    blocks?: { id: string; startDate: string; nights: number; mine: boolean; farm: boolean }[];
+  };
+  let rental: RentalData | null = null;
+
+  function setRentalVisible(on: boolean) {
+    const item = NAV.find((n) => n.id === 'rental');
+    if (!item || item.hidden === !on) return;
+    item.hidden = !on;
+    renderNav();
+    if (on && location.hash === '#/rental') onRoute();
+  }
+
+  async function probeRental() {
+    try {
+      const { status, data } = await memberFetch('/api/members-me/rental');
+      if (status === 200 && data.enabled && data.eligible) {
+        rental = data;
+        setRentalVisible(true);
+      } else setRentalVisible(false);
+    } catch {
+      // The page works without it.
+    }
+  }
+
+  const RENTAL_MODES: [string, string, string][] = [
+    ['reject', 'Auto-reject (the default)', 'Your unit is not offered, so guests cannot be sent to it. Nothing for you to do.'],
+    ['ask', 'Ask me each time', 'When Madhavan allocates a guest to your unit, you accept or decline. If you do not answer within 24 hours it is declined.'],
+    ['auto', 'Auto-accept', 'A guest allocated to dates you have not blocked is accepted straight away.'],
+  ];
+  const dateLabel = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const endLabel = (d: string, nights: number) => dateLabel(new Date(Date.parse(`${d}T00:00:00Z`) + nights * 86_400_000).toISOString().slice(0, 10));
+
+  function viewRental(): HTMLElement {
+    const root = h('div');
+    root.append(h('h1', 'page-title', 'My rental'), h('p', 'lede', 'Offer your unit to guests who book through Linger. TVC looks after the guests while they are here.'));
+    const body = h('div', 'rent');
+    root.append(body);
+
+    const paint = () => {
+      const d = rental;
+      if (!d?.eligible) return body.replaceChildren(h('p', 'lede', 'This page is for the owners of a unit.'));
+      const sections: HTMLElement[] = [];
+      const card = (title: string, ...kids: (HTMLElement | null)[]) => h('section', 'unit-card', undefined, h('div', 'unit-card-head', undefined, h('h2', '', title)), ...kids);
+      const say = (text: string) => h('p', 'rent-note', text);
+      const act = async (path: string, payload: unknown, done: string): Promise<boolean> => {
+        try {
+          const { status, data } = await memberFetch(path, { method: 'POST', body: payload });
+          if (status !== 200) {
+            toast(data.error || 'Something went wrong. Try again.');
+            return false;
+          }
+          toast(done);
+          await refresh();
+          return true;
+        } catch (err) {
+          toast(err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : 'Could not reach the server.');
+          return false;
+        }
+      };
+
+      if (d.state === 'none') {
+        let shape: 'whole' | 'room' = 'whole';
+        const size = h('select') as HTMLSelectElement;
+        size.id = 'rent-size';
+        for (const [v, l] of [['1bhk', '1 BHK'], ['2bhk', '2 BHK'], ['3bhk', '3 BHK']]) size.append(Object.assign(document.createElement('option'), { value: v, textContent: l }));
+        size.value = '2bhk';
+        const delegate = h('input') as HTMLInputElement;
+        delegate.type = 'checkbox';
+        delegate.id = 'rent-delegate';
+        const whole = h('input') as HTMLInputElement;
+        const room = h('input') as HTMLInputElement;
+        for (const [r, v] of [[whole, 'whole'], [room, 'room']] as [HTMLInputElement, string][]) {
+          r.type = 'radio';
+          r.name = 'rent-shape';
+          r.value = v;
+        }
+        whole.checked = true;
+        const wholeOnly = h('div', 'rent-more', undefined,
+          h('label', 'rent-field', undefined, h('span', 'field-label', 'Size'), size),
+          h('label', 'rent-opt', undefined, delegate, h('span', '', undefined, h('b', '', 'Let TVC manage it for me'), h('span', '', 'Madhavan answers requests and looks after the stays. You see them here.'))));
+        const roomOnly = h('p', 'rent-note', 'For a room you accept or decline requests yourself. It starts on auto-reject, so nothing is offered until you choose otherwise.');
+        roomOnly.hidden = true;
+        const sync = () => {
+          shape = room.checked ? 'room' : 'whole';
+          wholeOnly.hidden = shape === 'room';
+          roomOnly.hidden = shape === 'whole';
+        };
+        whole.addEventListener('change', sync);
+        room.addEventListener('change', sync);
+        const send = h('button', 'btn btn--solid', 'Tell Linger I’m interested') as HTMLButtonElement;
+        send.type = 'button';
+        send.addEventListener('click', async () => {
+          send.disabled = true;
+          const ok = await act('/api/members-me/rental/offer', { shape, size: size.value, delegateToTvc: shape === 'whole' && delegate.checked }, 'Linger has been told. They will be in touch.');
+          if (!ok) send.disabled = false;
+        });
+        sections.push(card('Offer your unit',
+          say('Terms are the same for every member and depend only on the size of the unit. Linger agrees them with you before anything is offered.'),
+          h('label', 'rent-opt', undefined, whole, h('span', '', undefined, h('b', '', 'My whole unit'), h('span', '', 'Guests have the whole home to themselves.'))),
+          h('label', 'rent-opt', undefined, room, h('span', '', undefined, h('b', '', 'A single room'), h('span', '', 'You live there and rent out one room. It is booked as "1 bedroom".'))),
+          wholeOnly, roomOnly,
+          say('When you press the button, TVC and Linger are told which unit you are offering, and Linger is given your name and sign-in email so they can get in touch with you.'),
+          send));
+      } else if (d.state === 'interested') {
+        const label = d.types?.find((t) => t.id === d.offer?.typeId)?.label ?? '';
+        const withdraw = h('button', 'btn', 'Withdraw') as HTMLButtonElement;
+        withdraw.type = 'button';
+        withdraw.addEventListener('click', () => void act('/api/members-me/rental/withdraw', {}, 'Withdrawn.'));
+        sections.push(card('Waiting for the contract',
+          h('div', 'rent-steps', undefined, h('span', 'on', 'You offered it'), h('span', '', 'Contract signed with Linger'), h('span', '', 'Enabled by TVC')),
+          say(`Linger has been told and will get in touch to agree terms. Once the contract is signed, the core team enables your unit and it appears here with its settings. Offered as ${d.offer?.shape === 'room' ? '1 bedroom (a single room)' : `${label} (whole unit)${d.offer?.delegateToTvc ? ', managed by TVC' : ''}`}.`),
+          withdraw));
+      } else if (d.unit) {
+        const u = d.unit;
+        const label = d.types?.find((t) => t.id === u.typeId)?.label ?? '';
+        sections.push(card('Your rental',
+          h('div', 'rent-steps', undefined, h('span', 'on', 'You offered it'), h('span', 'on', 'Contract signed with Linger'), h('span', 'on', 'Enabled by TVC')),
+          say(`${label} · ${u.shape === 'room' ? 'a single room' : 'whole unit'} · ${u.manager === 'tvc' ? 'TVC manages it for you' : 'you manage it'}.${d.state === 'paused' ? ' The core team has paused it for now, so it is not offered.' : ''}`)));
+
+        if (u.manager === 'member') {
+          const opts = RENTAL_MODES.map(([v, t, text]) => {
+            const r = h('input') as HTMLInputElement;
+            r.type = 'radio';
+            r.name = 'rent-mode';
+            r.value = v;
+            r.checked = u.requestMode === v;
+            r.addEventListener('change', () => void act('/api/members-me/rental/settings', { requestMode: v }, `Requests: ${t.replace(' (the default)', '')}.`));
+            return h('label', 'rent-opt', undefined, r, h('span', '', undefined, h('b', '', t), h('span', '', text)));
+          });
+          sections.push(card('When Madhavan allocates a guest to your unit', ...opts));
+        } else sections.push(card('Requests', say('TVC manages your unit, so Madhavan answers requests for it. You can see the stays below.')));
+
+        const open = h('input') as HTMLInputElement;
+        open.type = 'checkbox';
+        open.checked = u.ignoresFarmClosure;
+        open.addEventListener('change', () => void act('/api/members-me/rental/settings', { ignoresFarmClosure: open.checked }, open.checked ? 'Your unit stays open when the farm is closed.' : 'Your unit closes with the farm.'));
+        sections.push(card('When the farm is closed', h('label', 'rent-opt', undefined, open, h('span', '', undefined, h('b', '', 'Keep my unit open'), h('span', '', 'The common kitchen may be closed while your own kitchen is not. Leave this off and your unit closes with the farm.')))));
+
+        const from = h('input') as HTMLInputElement;
+        const to = h('input') as HTMLInputElement;
+        for (const [i, id, l] of [[from, 'rent-from', 'First night'], [to, 'rent-to', 'Last night']] as [HTMLInputElement, string, string][]) {
+          i.type = 'date';
+          i.id = id;
+          i.setAttribute('aria-label', l);
+        }
+        const add = h('button', 'btn', 'Block these nights') as HTMLButtonElement;
+        add.type = 'button';
+        add.addEventListener('click', async () => {
+          if (!from.value || !to.value) return toast('Choose the first and the last night.');
+          add.disabled = true;
+          const ok = await act('/api/members-me/rental/blocks', { from: from.value, to: to.value }, 'Nights blocked.');
+          if (!ok) add.disabled = false;
+        });
+        const blocks = d.blocks ?? [];
+        sections.push(card('Dates you are not available',
+          say('Block nights when you are away or have your own guests. Linger and the core team see only that the unit is unavailable, not why. A guest’s nights cannot be blocked.'),
+          blocks.length
+            ? h('ul', 'rent-list', undefined, ...blocks.map((b) => {
+                const li = h('li', '', undefined, h('span', '', b.farm ? `${dateLabel(b.startDate)} to ${endLabel(b.startDate, b.nights)}: the farm is closed` : `${dateLabel(b.startDate)} to ${endLabel(b.startDate, b.nights)}${b.mine ? '' : ': unavailable (TVC)'}`));
+                if (b.mine) {
+                  const rm = h('button', 'link-btn', 'Remove') as HTMLButtonElement;
+                  rm.type = 'button';
+                  rm.addEventListener('click', () => void act('/api/members-me/rental/blocks/remove', { id: b.id }, 'Block removed.'));
+                  li.append(rm);
+                }
+                return li;
+              }))
+            : say('Nothing blocked.'),
+          h('div', 'rent-dates', undefined, from, to, add)));
+
+        const stays = d.stays ?? [];
+        sections.push(card('Stays',
+          stays.length
+            ? h('ul', 'rent-list rent-stays', undefined, ...stays.map((st) => h('li', '', undefined,
+                h('b', '', `${dateLabel(st.startDate)} to ${endLabel(st.startDate, st.nights)} · ${st.guests.length} guest${st.guests.length === 1 ? '' : 's'}`),
+                h('ul', 'rent-guests', undefined, ...st.guests.map((g) => h('li', '', `${g.name} · ${g.ageGroup}${g.gender ? `, ${g.gender.toLowerCase()}` : ''}${g.preferences ? ` · ${g.preferences}` : ''}`))))))
+            : say('No stays yet.'),
+          say('You see each guest’s name, age group, gender and preferences, and nothing else: TVC looks after the guests and talks to them.')));
+      }
+      body.replaceChildren(...sections);
+    };
+
+    const refresh = async () => {
+      try {
+        const { status, data } = await memberFetch('/api/members-me/rental');
+        if (status === 200) rental = data;
+      } catch {
+        // keep what is shown
+      }
+      paint();
+    };
+    if (rental) paint();
+    else body.append(h('span', 'skel skel--card'));
+    void refresh();
+    return root;
   }
 
   // ---- views ----
@@ -5883,7 +6225,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
   function renderView() {
     const prevNext = $('view').querySelector('.next h2')?.textContent;
-    const fn = route === 'dashboard' ? viewDashboard : route === 'unit' ? viewUnit : route === 'story' ? viewStory : route === 'directory' ? viewDirectory : () => viewSoon(route);
+    const fn = route === 'dashboard' ? viewDashboard : route === 'unit' ? viewUnit : route === 'story' ? viewStory : route === 'rental' ? viewRental : route === 'directory' ? viewDirectory : () => viewSoon(route);
     $('view').replaceChildren(fn());
     if (shownRoute && shownRoute !== route) fadeInView();
     shownRoute = route;
@@ -5909,6 +6251,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const id = location.hash.replace(/^#\//, '') || 'dashboard';
     route = NAV.some((n) => n.id === id) ? id : 'dashboard';
     if (route === 'story' && me && isFamily()) route = 'directory'; // the story is the owners' to edit
+    if (route === 'rental' && NAV.find((n) => n.id === 'rental')?.hidden) route = 'dashboard'; // not switched on, or not an owner
     if (me) renderView();
   }
 
@@ -5961,6 +6304,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       $('shell').hidden = false;
       renderWho();
       onRoute();
+      void probeRental();
       // A brand new member is walked through everything once, after the privacy notice (which came first above).
       if (!tourAutoStarted && me!.tourSeenThrough === null) {
         tourAutoStarted = true;
