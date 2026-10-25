@@ -1152,6 +1152,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   // scripts/lib/staff-client.mjs), so signing in once opens them all. Each tool
   // still checks its own role on the server for every request.
   import { TOKEN_KEY as STORAGE_KEY, askSheet, showToast } from '../../../scripts/lib/staff-client.mjs';
+  import { setBusy } from '../../../scripts/lib/busy.mjs';
   // This inbox is signed into from one shared Google account used by several
   // admins, so the ID token's own name claim can't tell them apart — each
   // person types their own name once, remembered on that browser (localStorage,
@@ -1521,7 +1522,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   function downloadButton(m: Message): HTMLButtonElement {
     const name = m.media!.filename || 'file';
     const btn = mediaButton(`Download ${name}`, async () => {
-      btn.disabled = true;
+      const done = setBusy(btn);
       try {
         const url = await fetchMedia(m.id);
         const a = document.createElement('a');
@@ -1531,7 +1532,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
       } catch (err) {
         btn.replaceWith(mediaText('msg-media-error', (err as Error).message));
       } finally {
-        btn.disabled = false;
+        done();
       }
     });
     return btn;
@@ -1753,6 +1754,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     composer.classList.remove('has-suggestion');
     suggestError.hidden = true;
     suggestBtn.disabled = false;
+    suggestBtn.removeAttribute('aria-busy');
     suggestLabel.textContent = 'Suggest reply';
   }
 
@@ -1764,6 +1766,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     suggestError.hidden = true;
     const seq = ++suggestSeq;
     suggestBtn.disabled = true;
+    suggestBtn.setAttribute('aria-busy', 'true');
     suggestLabel.textContent = 'Drafting…';
     try {
       const res = await authedFetch('/api/whatsapp-suggest', {
@@ -1806,6 +1809,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     } finally {
       if (seq === suggestSeq) {
         suggestBtn.disabled = false;
+        suggestBtn.removeAttribute('aria-busy');
         suggestLabel.textContent = 'Suggest reply';
       }
     }
@@ -2174,7 +2178,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
   // can be reversed; resuming asks first, because it is only right when the guest
   // themselves asked for the messages back.
   async function setOptedOut(conversationId: string, optedOut: boolean): Promise<boolean> {
-    optOutBtn.disabled = true;
+    const doneOptOut = setBusy(optOutBtn);
     try {
       const res = await authedFetch('/api/whatsapp-admin/opt-out', {
         method: 'POST',
@@ -2195,7 +2199,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     } catch {
       return false; // handled by authedFetch
     } finally {
-      optOutBtn.disabled = false;
+      doneOptOut();
     }
   }
 
@@ -2214,7 +2218,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
 
   // Blocking is reversible, so it happens at once with an Undo, like unblocking.
   async function setBlocked(conversationId: string, blocked: boolean): Promise<boolean> {
-    blockBtn.disabled = true;
+    const doneBlock = setBusy(blockBtn);
     try {
       const res = await authedFetch('/api/whatsapp-admin/block', {
         method: 'POST',
@@ -2235,7 +2239,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     } catch {
       return false; // handled by authedFetch
     } finally {
-      blockBtn.disabled = false;
+      doneBlock();
     }
   }
 
@@ -2309,8 +2313,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
       return;
     }
 
-    replySend.disabled = true;
-    replySend.textContent = 'Sending…';
+    const doneReply = setBusy(replySend, 'Sending…');
     replyStatus.hidden = true;
     try {
       const res = await authedFetch('/api/whatsapp-admin/reply', {
@@ -2330,8 +2333,7 @@ for (const q of WHATSAPP_QUICK_REPLIES) {
     } catch {
       // handled by authedFetch
     } finally {
-      replySend.disabled = false;
-      replySend.textContent = 'Send';
+      doneReply();
     }
   });
 

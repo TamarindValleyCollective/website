@@ -43,6 +43,7 @@ import PageHero from '../components/PageHero.astro';
 </BaseLayout>
 
 <script>
+  import { setBusy } from '../../scripts/lib/busy.mjs';
   const paymentId = new URLSearchParams(window.location.search).get('paymentId');
   const loading = document.getElementById('cb-loading')!;
   const notFound = document.getElementById('cb-not-found')!;
@@ -90,8 +91,7 @@ import PageHero from '../components/PageHero.astro';
 
   document.getElementById('cb-confirm-btn')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget as HTMLButtonElement;
-    btn.disabled = true;
-    btn.textContent = 'Sending…';
+    const finish = setBusy(btn, 'Sending…');
     errorEl.hidden = true;
     try {
       const res = await fetch('/api/cancel-booking', {
@@ -104,8 +104,7 @@ import PageHero from '../components/PageHero.astro';
     } catch {
       errorEl.textContent = 'Something went wrong — try again, or email core-team@tvc.farm directly.';
       errorEl.hidden = false;
-      btn.disabled = false;
-      btn.textContent = 'Request cancellation';
+      finish();
     }
   });
 

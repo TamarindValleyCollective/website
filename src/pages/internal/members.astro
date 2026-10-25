@@ -956,6 +956,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
 <script>
   import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch, staffPhotoSrc } from '../../../scripts/lib/staff-client.mjs';
+  import { setBusy } from '../../../scripts/lib/busy.mjs';
   import { sizedPicture } from '../../../scripts/lib/member-google-picture.mjs';
   import { linksIn } from '../../../scripts/lib/member-markdown.mjs';
   import { shapeForRecord } from '../../../scripts/lib/member-land-docs.mjs';
@@ -1173,12 +1174,12 @@ import SignInGate from '../../components/SignInGate.astro';
       const values: Record<string, string> = {};
       for (const [name, control] of inputs) values[name] = control instanceof HTMLInputElement && control.type === 'checkbox' ? (control.checked ? 'on' : '') : control.value;
       msg.textContent = '';
-      save.disabled = true;
+      const done = setBusy(save, 'Saving…');
       try {
         await onSubmit(values);
       } catch (err) {
         msg.textContent = err instanceof Error ? err.message : 'Something went wrong.';
-        save.disabled = false;
+        done();
       }
     });
     return form;

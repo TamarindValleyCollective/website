@@ -3605,6 +3605,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
 <script>
   import { clearMemberToken, getMemberToken, memberFetch, memberPhotoSrc, MemberAuthError, setMemberToken } from '../../../scripts/lib/member-client.mjs';
+  import { setBusy } from '../../../scripts/lib/busy.mjs';
   import { MAX_PHOTOS, conflictedDraftKeys, saveChanges } from '../../../scripts/lib/member-unit-story.mjs';
   import { shapeForRecord, surveyChoices } from '../../../scripts/lib/member-land-docs.mjs';
   import { sizedPicture } from '../../../scripts/lib/member-google-picture.mjs';
@@ -4149,7 +4150,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         msg.textContent = 'Nothing to change.';
         return;
       }
-      save.disabled = true;
+      const done = setBusy(save, 'Saving…');
       msg.textContent = '';
       try {
         const { status, data } = await memberFetch('/api/members-me/profile', { method: 'POST', body });
@@ -4158,7 +4159,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         await load(true);
         toast('Your details are saved');
       } catch (err) {
-        save.disabled = false;
+        done();
         msg.textContent = err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : err instanceof Error ? err.message : 'Something went wrong.';
       }
     });
@@ -4210,7 +4211,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     cancel.addEventListener('click', () => dlg.close());
     const save = h('button', 'btn btn--solid', asRequest ? 'Send request' : 'Add') as HTMLButtonElement;
     save.addEventListener('click', async () => {
-      save.disabled = true;
+      const done = setBusy(save, asRequest ? 'Sending…' : 'Adding…');
       msg.textContent = '';
       try {
         const { status, data } = await memberFetch('/api/members-me/family-add', { method: 'POST', body: { fullName: name.value, email: email.value, phone: phone.value } });
@@ -4219,7 +4220,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         await load(true);
         toast(data.requested ? 'Sent to the core team. They will let you know.' : 'Added. They can sign in now.');
       } catch (err) {
-        save.disabled = false;
+        done();
         msg.textContent = err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : err instanceof Error ? err.message : 'Something went wrong.';
       }
     });
@@ -4263,8 +4264,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     cancel.addEventListener('click', () => dlg.close());
     const save = h('button', 'btn btn--solid', 'Save') as HTMLButtonElement;
     const remove = h('button', 'link-btn link-btn--danger', 'Remove from my unit') as HTMLButtonElement;
-    const run = async (btn: HTMLButtonElement, path: string, body: Record<string, unknown>, done: string) => {
-      btn.disabled = true;
+    const run = async (btn: HTMLButtonElement, path: string, body: Record<string, unknown>, done: string, doing: string) => {
+      const finish = setBusy(btn, doing);
       msg.textContent = '';
       try {
         const { status, data } = await memberFetch(path, { method: 'POST', body });
@@ -4273,7 +4274,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         await load(true);
         toast(done);
       } catch (err) {
-        btn.disabled = false;
+        finish();
         fail(err);
       }
     };
@@ -4283,7 +4284,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       if (email.value.trim()) changes.email = email.value;
       if (phone.value.trim()) changes.phone = phone.value;
       if (Object.keys(changes).length === 0) { msg.textContent = 'Nothing to change.'; return; }
-      void run(save, '/api/members-me/family-update', { personId: p.id, ...changes }, 'Saved');
+      void run(save, '/api/members-me/family-update', { personId: p.id, ...changes }, 'Saved', 'Saving…');
     });
     // Asks again before removing, in the dialog itself.
     let sure = false;
@@ -4298,7 +4299,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         msg.textContent = 'They will no longer be able to sign in. You can add them again later.';
         return;
       }
-      void run(remove, '/api/members-me/family-remove', { personId: p.id }, `${first(p.name)} can no longer sign in`);
+      void run(remove, '/api/members-me/family-remove', { personId: p.id }, `${first(p.name)} can no longer sign in`, 'Removing…');
     });
     dlg.append(
       h('h3', '', `Edit ${p.name}`),
@@ -4503,7 +4504,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         return;
       }
       if (chosen.size > (chosen.type === 'application/pdf' ? 1_000_000 : 3_000_000)) return;
-      send.disabled = true;
+      const finish = setBusy(send, 'Uploading…');
       msg.textContent = '';
       try {
         const body = new FormData();
@@ -4516,7 +4517,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         done();
         toast(data.replaced ? 'Uploaded. It replaces your earlier upload, and we are reading it now' : 'Uploaded. We are reading it now');
       } catch (err) {
-        send.disabled = false;
+        finish();
         msg.textContent = err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : err instanceof Error ? err.message : 'Something went wrong.';
       }
     });
@@ -4569,7 +4570,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         msg.textContent = 'That file is too large to be an FMB sketch (under 1 MB).';
         return;
       }
-      send.disabled = true;
+      const finish = setBusy(send, 'Uploading…');
       msg.textContent = '';
       try {
         const body = new FormData();
@@ -4583,7 +4584,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         done();
         toast(data.replaced ? `Sketch added for survey no. ${survey.value}. It replaces your earlier one` : `Sketch added for survey no. ${survey.value}`);
       } catch (err) {
-        send.disabled = false;
+        finish();
         msg.textContent = err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : err instanceof Error ? err.message : 'Something went wrong.';
       }
     });
@@ -4619,7 +4620,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       });
       const ok = h('button', 'btn btn--solid', 'I have read this') as HTMLButtonElement;
       ok.addEventListener('click', async () => {
-        ok.disabled = true;
+        const done = setBusy(ok, 'Saving…');
         msg.textContent = '';
         try {
           const { status, data } = await memberFetch('/api/members-me/privacy', { method: 'POST', body: { version: PRIVACY_NOTICE_VERSION } });
@@ -4627,7 +4628,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           dlg.remove();
           await load();
         } catch (err) {
-          ok.disabled = false;
+          done();
           msg.textContent = err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : err instanceof Error ? err.message : 'Something went wrong.';
         }
       });
@@ -4853,7 +4854,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   };
 
   // The contract copies are read by the server for the member and handed over as data; the member never gets a storage link.
-  async function openContractCopy(which: 'contract' | 'signed') {
+  async function openContractCopy(which: 'contract' | 'signed', btn: HTMLButtonElement) {
+    const finish = setBusy(btn, 'Opening…');
     try {
       const { status, data } = await memberFetch(`/api/members-me/rental/contract?which=${which}`);
       if (status !== 200) return toast(data.error || 'Could not open that.');
@@ -4863,6 +4865,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
       toast(err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : 'Could not reach the server.');
+    } finally {
+      finish();
     }
   }
   const fileAsBase64 = (file: File) =>
@@ -4914,7 +4918,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const sections: HTMLElement[] = [];
       const card = (title: string, ...kids: (HTMLElement | null)[]) => h('section', 'unit-card', undefined, h('div', 'unit-card-head', undefined, h('h2', '', title)), ...kids);
       const say = (text: string) => h('p', 'rent-note', text);
-      const act = async (path: string, payload: unknown, done: string): Promise<boolean> => {
+      const act = async (path: string, payload: unknown, done: string, btn?: HTMLButtonElement, doing?: string): Promise<boolean> => {
+        const finish = btn ? setBusy(btn, doing) : () => {};
         try {
           const { status, data } = await memberFetch(path, { method: 'POST', body: payload });
           if (status !== 200) {
@@ -4927,6 +4932,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         } catch (err) {
           toast(err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : 'Could not reach the server.');
           return false;
+        } finally {
+          finish();
         }
       };
 
@@ -4980,9 +4987,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           const save = h('button', 'btn btn--solid', 'Save payout details') as HTMLButtonElement;
           save.type = 'button';
           save.addEventListener('click', async () => {
-            save.disabled = true;
-            const ok = await act('/api/members-me/rental/payout', { payeeName: name.value, method: method.value, account: account.value, ifsc: ifsc.value, upi: upi.value, pan: pan.value }, 'Saved. TVC will check it before paying you.');
-            if (!ok) save.disabled = false;
+            await act('/api/members-me/rental/payout', { payeeName: name.value, method: method.value, account: account.value, ifsc: ifsc.value, upi: upi.value, pan: pan.value }, 'Saved. TVC will check it before paying you.', save, 'Saving…');
           });
           box.replaceChildren(
             say('TVC collects the guests’ payments and pays your share. We keep these details encrypted and show them back only as the last four characters. A PAN is needed for every payout.'),
@@ -5030,9 +5035,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         const send = h('button', 'btn btn--solid', 'Tell Linger I’m interested') as HTMLButtonElement;
         send.type = 'button';
         send.addEventListener('click', async () => {
-          send.disabled = true;
-          const ok = await act('/api/members-me/rental/offer', { shape, size: size.value, delegateToTvc: shape === 'whole' && delegate.checked }, 'Linger has been told. They will be in touch.');
-          if (!ok) send.disabled = false;
+          await act('/api/members-me/rental/offer', { shape, size: size.value, delegateToTvc: shape === 'whole' && delegate.checked }, 'Linger has been told. They will be in touch.', send, 'Sending…');
         });
         sections.push(card('Offer your unit',
           say('Terms are the same for every member and depend only on the size of the unit. Linger agrees them with you before anything is offered.'),
@@ -5045,7 +5048,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         const label = d.types?.find((t) => t.id === d.offer?.typeId)?.label ?? '';
         const withdraw = h('button', 'btn', 'Withdraw') as HTMLButtonElement;
         withdraw.type = 'button';
-        withdraw.addEventListener('click', () => void act('/api/members-me/rental/withdraw', {}, 'Withdrawn.'));
+        withdraw.addEventListener('click', () => void act('/api/members-me/rental/withdraw', {}, 'Withdrawn.', withdraw, 'Withdrawing…'));
         const k = d.contract;
         let contractCard: HTMLElement | null = null;
         if (k) {
@@ -5055,18 +5058,16 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           pick.setAttribute('aria-label', 'Your signed copy');
           const read = h('button', 'btn', 'Read the contract') as HTMLButtonElement;
           read.type = 'button';
-          read.addEventListener('click', () => void openContractCopy('contract'));
+          read.addEventListener('click', () => void openContractCopy('contract', read));
           const mine = h('button', 'btn', 'See my signed copy') as HTMLButtonElement;
           mine.type = 'button';
-          mine.addEventListener('click', () => void openContractCopy('signed'));
+          mine.addEventListener('click', () => void openContractCopy('signed', mine));
           const up = h('button', 'btn btn--solid', k.hasSigned ? 'Replace my signed copy' : 'Upload my signed copy') as HTMLButtonElement;
           up.type = 'button';
           up.addEventListener('click', async () => {
             const f = pick.files?.[0];
             if (!f) return toast('Choose your signed copy first.');
-            up.disabled = true;
-            const ok = await act('/api/members-me/rental/contract/signed', { file: { mime: f.type, base64: await fileAsBase64(f) } }, 'Thank you. The core team will enable your unit.');
-            if (!ok) up.disabled = false;
+            await act('/api/members-me/rental/contract/signed', { file: { mime: f.type, base64: await fileAsBase64(f) } }, 'Thank you. The core team will enable your unit.', up, 'Uploading…');
           });
           contractCard = card('Your contract',
             say(k.hasSigned ? 'We have your signed copy. The core team will check it and enable your unit; you will see it here when they do.' : 'Read the contract. It is between you, TVC and Linger. Sign it, then upload the signed copy here (a PDF or a clear photo, up to 4 MB). Your unit is enabled once TVC has it.'),
@@ -5117,9 +5118,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         add.type = 'button';
         add.addEventListener('click', async () => {
           if (!from.value || !to.value) return toast('Choose the first and the last night.');
-          add.disabled = true;
-          const ok = await act('/api/members-me/rental/blocks', { from: from.value, to: to.value }, 'Nights blocked.');
-          if (!ok) add.disabled = false;
+          await act('/api/members-me/rental/blocks', { from: from.value, to: to.value }, 'Nights blocked.', add, 'Blocking…');
         });
         const blocks = d.blocks ?? [];
         sections.push(card('Dates you are not available',
@@ -5130,7 +5129,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
                 if (b.mine) {
                   const rm = h('button', 'link-btn', 'Remove') as HTMLButtonElement;
                   rm.type = 'button';
-                  rm.addEventListener('click', () => void act('/api/members-me/rental/blocks/remove', { id: b.id }, 'Block removed.'));
+                  rm.addEventListener('click', () => void act('/api/members-me/rental/blocks/remove', { id: b.id }, 'Block removed.', rm, 'Removing…'));
                   li.append(rm);
                 }
                 return li;
@@ -5482,6 +5481,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     let suggestions: Suggestion[] = [];
     let reviewed = false;
     let checking = false;
+    let submitting = false;
     let notice: string | null = null;
     let message = '';
     let saveState: 'idle' | 'saving' | 'saved' | 'error' = 'idle';
@@ -5584,9 +5584,11 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       cb.checked = isPublic;
       cb.addEventListener('change', () => { isPublic = cb.checked; edited(); renderSubmit(); });
       const inReview = story?.status === 'in_review' && !story.hasUnsubmittedChanges;
-      const go = h('button', 'btn btn--cta', inReview ? 'Submitted' : reviewed ? 'Submit to the core team' : 'Check & submit') as HTMLButtonElement;
+      const waiting = checking || submitting;
+      const go = h('button', 'btn btn--cta', checking ? 'Checking your writing…' : submitting ? 'Submitting…' : inReview ? 'Submitted' : reviewed ? 'Submit to the core team' : 'Check & submit') as HTMLButtonElement;
       go.type = 'button';
-      go.disabled = inReview || checking;
+      go.disabled = inReview || waiting;
+      if (waiting) go.setAttribute('aria-busy', 'true');
       go.addEventListener('click', () => void submitClick());
       publishEl.replaceChildren(
         h('label', 'check story-toggle', undefined, cb, h('span', '', undefined, h('strong', '', 'Show on tvc.farm'), h('small', '', isPublic ? 'On: once approved, your card will also appear on the public Members page, visible to anyone.' : 'Off: once approved, only logged-in members will see your card.'))));
@@ -5695,8 +5697,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       if (pending().length) { message = 'Accept or keep mine for each suggestion first.'; renderSubmit(); return; }
       // A unit's story needs one "why TVC" line from anyone in it (a joint quote written by one of you is enough).
       if (!draft.why.trim() && !others.some((o) => o.quote)) { message = 'Your unit\'s story needs at least one "why TVC" line before it can be submitted. Write yours, or ask the other person in your unit to.'; renderSubmit(); return; }
+      submitting = true;
+      renderSubmit();
       await persist();
-      if (saveState === 'error') return;
+      if (saveState === 'error') { submitting = false; renderSubmit(); return; }
       try {
         const { status, data } = await memberFetch('/api/members-me/unit-story-submit', { method: 'POST', body: {} });
         if (status !== 200) throw new Error(data.error || 'Could not submit. Try again.');
@@ -5706,6 +5710,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       } catch (e) {
         message = msg(e);
       }
+      submitting = false;
       renderAll();
     }
 

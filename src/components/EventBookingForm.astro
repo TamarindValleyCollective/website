@@ -271,6 +271,7 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
       if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.textContent = 'Sending request…';
+        submitBtn.setAttribute('aria-busy', 'true');
       }
 
       try {
@@ -303,6 +304,7 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
           if (submitBtn) {
             submitBtn.disabled = false;
             submitBtn.textContent = 'Request a spot →';
+            submitBtn.removeAttribute('aria-busy');
           }
           return;
         }
@@ -327,6 +329,7 @@ const counts = Array.from({ length: MAX_ATTENDEES }, (_, i) => i + 1);
         if (submitBtn) {
           submitBtn.disabled = false;
           submitBtn.textContent = 'Request a spot →';
+          submitBtn.removeAttribute('aria-busy');
         }
       }
     }

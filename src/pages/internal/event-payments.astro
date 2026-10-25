@@ -1169,6 +1169,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
         const confirmBtn = reviewEl.querySelector('.decline-confirm-btn') as HTMLButtonElement;
         confirmBtn.disabled = true;
         confirmBtn.textContent = 'Declining…';
+        confirmBtn.setAttribute('aria-busy', 'true');
         try {
           const res = await authedFetch('/api/event-payments-admin/decline', {
             method: 'POST',
@@ -1302,6 +1303,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
         const confirmBtn = reviewEl.querySelector('.refund-confirm-btn') as HTMLButtonElement;
         confirmBtn.disabled = true;
         confirmBtn.textContent = 'Issuing refund…';
+        confirmBtn.setAttribute('aria-busy', 'true');
         try {
           const res = await authedFetch('/api/event-payments-admin/refund', {
             method: 'POST',
@@ -1555,6 +1557,7 @@ const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/')
       const confirmBtn = bulkCancelReview.querySelector('.bulk-cancel-confirm-btn') as HTMLButtonElement;
       confirmBtn.disabled = true;
       confirmBtn.textContent = 'Refunding…';
+      confirmBtn.setAttribute('aria-busy', 'true');
       try {
         if (!currentEvent) throw new Error('No event selected');
         const res = await authedFetch('/api/event-payments-admin/bulk-refund', {
