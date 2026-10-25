@@ -83,15 +83,17 @@ async function requireOwner(req: Request): Promise<{ error: Response } | { membe
   if (!householdId || auth.member.roles[householdId] !== 'owner') return { error: jsonResponse({ error: OWNERS_ONLY }, 403) };
   // Dark for a household that is not on the list: writes and documents answer as if the page did not exist.
   if (!(await rentalOn(householdId))) return { error: jsonResponse({ error: 'Not found' }, 404) };
+  const [home] = (await select('member_households', `id=eq.${householdId}&select=house_no`)) as { house_no: string | null }[];
+  if (!home?.house_no) return { error: jsonResponse({ error: 'Only a home can be offered, and yours has none yet.' }, 403) };
   return { member: auth.member, householdId };
 }
 
-type Household = { id: string; farm_unit: string; cluster: string | null };
+type Household = { id: string; farm_unit: string; house_no: string | null; cluster: string | null };
 type Offer = { id: string; shape: string; type_id: string; delegate_to_tvc: boolean; status: string; created_at: string };
 type Unit = { id: string; pool_id: string | null; listing_shape: string | null; manager: 'tvc' | 'member'; status: string; request_mode: string; ignores_farm_closure: boolean };
 
 async function load(householdId: string) {
-  const [household] = (await select('member_households', `id=eq.${householdId}&select=id,farm_unit,cluster`)) as Household[];
+  const [household] = (await select('member_households', `id=eq.${householdId}&select=id,farm_unit,house_no,cluster`)) as Household[];
   if (!household) return null;
   const [[offer], [unit], types] = await Promise.all([
     select('member_unit_offers', `household_id=eq.${householdId}&order=created_at.desc&limit=1&select=id,shape,type_id,delegate_to_tvc,status,created_at`) as Promise<Offer[]>,
@@ -117,7 +119,8 @@ async function handleGet(req: Request): Promise<Response> {
   if (!householdId || !(await rentalOn(householdId))) return jsonResponse({ enabled: false });
   if (!householdId || auth.member.roles[householdId] !== 'owner') return jsonResponse({ enabled: true, eligible: false });
   const data = await load(householdId);
-  if (!data) return jsonResponse({ enabled: true, eligible: false });
+  // A household with no home yet (no house number) has nothing to rent out.
+  if (!data || !data.household.house_no) return jsonResponse({ enabled: true, eligible: false });
   const { household, offer, unit, types } = data;
   const state = rentalState({ offer, unit });
   const today = todayInIst();

@@ -103,10 +103,10 @@ async function handleOverview(req: Request, admin: SuperAdmin): Promise<Response
   const householdIds = [...new Set(offers.map((o) => o.household_id))];
   const farmUnits = [...new Set(units.map((u) => u.owner_farm_unit).filter((f): f is string => Boolean(f)))];
   const [offerHouseholds, unitHouseholds] = await Promise.all([
-    householdIds.length ? rest(`/member_households?id=${inList(householdIds)}&select=id,farm_unit,cluster`).then((r) => r.json()) : [],
+    householdIds.length ? rest(`/member_households?id=${inList(householdIds)}&select=id,farm_unit,house_no,cluster`).then((r) => r.json()) : [],
     farmUnits.length ? rest(`/member_households?farm_unit=${inList(farmUnits)}&select=id,farm_unit`).then((r) => r.json()) : [],
   ]);
-  const hhById = new Map<string, { id: string; farm_unit: string; cluster: string | null }>((offerHouseholds as any[]).map((h) => [h.id, h]));
+  const hhById = new Map<string, { id: string; farm_unit: string; house_no: string | null; cluster: string | null }>((offerHouseholds as any[]).map((h) => [h.id, h]));
   const hhByFarmUnit = new Map<string, string>((unitHouseholds as any[]).map((h) => [h.farm_unit, h.id]));
   const ownerHouseholdIds = [...hhByFarmUnit.values()];
   const owners = ownerHouseholdIds.length ? ((await (await rest(`/member_household_members?household_id=${inList(ownerHouseholdIds)}&role=eq.owner&select=household_id,person_id`)).json()) as { household_id: string; person_id: string }[]) : [];
@@ -119,13 +119,14 @@ async function handleOverview(req: Request, admin: SuperAdmin): Promise<Response
 
   // Payout accounts: masked ("ending 4821") and never decrypted here; revealing one is its own audited, step-up call.
   const payoutRows = (await (await rest('/member_payout_accounts?select=household_id,payee_name,method,details_last4,pan_last4,status,tds_applies,tds_rate,verified_at,updated_at&order=updated_at.desc')).json()) as any[];
-  const payoutHouseholds = payoutRows.length ? ((await (await rest(`/member_households?id=${inList(payoutRows.map((r) => r.household_id))}&select=id,farm_unit`)).json()) as { id: string; farm_unit: string }[]) : [];
+  const payoutHouseholds = payoutRows.length ? ((await (await rest(`/member_households?id=${inList(payoutRows.map((r) => r.household_id))}&select=id,farm_unit,house_no`)).json()) as { id: string; farm_unit: string; house_no: string | null }[]) : [];
   const farmUnitOf = new Map(payoutHouseholds.map((h) => [h.id, h.farm_unit]));
+  const houseNoOf = new Map(payoutHouseholds.map((h) => [h.id, h.house_no]));
 
   // Early access: who may use a feature that is not on for everyone. `everyone` says the Netlify flag already is. The
   // picker lists every household by its owners' names, so a member is chosen, not a number typed.
   const accessRows = (await (await rest('/member_feature_access?select=household_id,feature,created_at&order=created_at.asc')).json()) as { household_id: string; feature: string; created_at: string }[];
-  const allHouseholds = (await (await rest('/member_households?select=id,farm_unit,cluster&order=farm_unit.asc')).json()) as { id: string; farm_unit: string; cluster: string | null }[];
+  const allHouseholds = (await (await rest('/member_households?select=id,farm_unit,house_no,cluster&order=house_no.asc')).json()) as { id: string; farm_unit: string; house_no: string | null; cluster: string | null }[];
   const allOwners = (await (await rest('/member_household_members?role=eq.owner&select=household_id,person_id')).json()) as { household_id: string; person_id: string }[];
   const ownerPeople = allOwners.length ? ((await (await rest(`/member_people?id=${inList([...new Set(allOwners.map((o) => o.person_id))])}&select=id,full_name`)).json()) as { id: string; full_name: string }[]) : [];
   const personName = new Map(ownerPeople.map((p) => [p.id, p.full_name]));
@@ -145,10 +146,11 @@ async function handleOverview(req: Request, admin: SuperAdmin): Promise<Response
     types: pools.map((p) => ({ id: p.id, label: p.name, ownerType: p.owner_type })),
     access: {
       features: Object.entries(FEATURES).map(([id, f]) => ({ id, label: f.label, everyone: process.env[f.env] === 'true' })),
-      members: allHouseholds.map((h) => ({ householdId: h.id, farmUnit: h.farm_unit, names: ownerNamesOf(h.id) })).filter((m) => m.names.length),
-      grants: accessRows.map((r) => ({ householdId: r.household_id, farmUnit: householdOf.get(r.household_id)?.farm_unit ?? '', names: ownerNamesOf(r.household_id), feature: r.feature, since: r.created_at })),
+      // Only a household with a home (a house number) can rent one out, so only those are offered.
+      members: allHouseholds.filter((h) => h.house_no).map((h) => ({ householdId: h.id, farmUnit: h.farm_unit, houseNo: h.house_no, names: ownerNamesOf(h.id) })).filter((m) => m.names.length),
+      grants: accessRows.map((r) => ({ householdId: r.household_id, farmUnit: householdOf.get(r.household_id)?.farm_unit ?? '', houseNo: householdOf.get(r.household_id)?.house_no ?? null, names: ownerNamesOf(r.household_id), feature: r.feature, since: r.created_at })),
     },
-    payouts: payoutRows.map((r) => ({ ...payoutForAdmin(r), farmUnit: farmUnitOf.get(r.household_id) ?? '' })),
+    payouts: payoutRows.map((r) => ({ ...payoutForAdmin(r), farmUnit: farmUnitOf.get(r.household_id) ?? '', houseNo: houseNoOf.get(r.household_id) ?? null })),
     units: units.map((u) => ({
       id: u.id,
       name: u.name,
@@ -171,6 +173,7 @@ async function handleOverview(req: Request, admin: SuperAdmin): Promise<Response
     offers: offers.map((o) => ({
       id: o.id,
       farmUnit: hhById.get(o.household_id)?.farm_unit ?? '',
+      houseNo: hhById.get(o.household_id)?.house_no ?? null,
       cluster: hhById.get(o.household_id)?.cluster ?? null,
       memberName: o.requested_by ? (nameOf.get(o.requested_by) ?? '') : '',
       shape: o.shape,
