@@ -28,8 +28,14 @@ manage their own unit afterwards, all on the data model step 2 put in place. Two
 
 1. **Offer.** The member chooses whole unit or room (and size for a whole unit, and whether they want TVC to manage
    it). This writes a row in a new `member_unit_offers` table with status `interested`; no unit exists yet.
-2. **Linger is told** and talks to the member; the contract is outside this system.
-3. **Enable.** The super admin sees the offer in **Units → Pipeline**, confirms the type (1 bedroom, 1 BHK,
+2. **Linger is told** and talks to the member. The contract is a three-way agreement (Linger, TVC, the member):
+   the super admin shares the electronic copy from the offer card with the terms version, the split (fixed by
+   unit type) and the member's payout; the member reads it in **My rental** and uploads the signed copy; the
+   admin records the dates and Linger's references. (Step 3c, migration `0069`, table `member_unit_contracts`.)
+   Digital signing may replace the upload later. TVC collects the money and pays Linger and the member (a member's
+   payout may be set against maintenance); a stay counts in the settlement cycle it ends in. Bank, UPI and tax
+   details are not stored yet.
+3. **Enable** (only once the signed copy is in). The super admin sees the offer in **Units → Pipeline**, confirms the type (1 bedroom, 1 BHK,
    2 BHK, 3 BHK) and whether TVC manages it, and enables it. That creates the unit (status `rentable`, request mode
    **auto-reject**) and marks the offer `enabled`. Only now can it be allocated.
 4. **Manage.** The member sets the request mode (auto-reject by default, ask me each time, auto-accept), blocks

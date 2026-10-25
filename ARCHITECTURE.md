@@ -823,6 +823,17 @@ outside both the local machine and Netlify (the member-update-email workflow).
   made. The rules (what an offer may contain, what enabling creates, edits) are in
   `scripts/lib/member-units.mjs`. A member's blocked dates are `unit-closure` bookings, so they reuse the
   booking conflict check and audit. `src/lib/staff-demo.ts` fakes the Units API in `?demo` mode.
+  **The contract (step 3c, migration `0069`, `member_unit_contracts`):** a three-way agreement between Linger,
+  TVC and the member. The admin shares the electronic copy from the offer card (a PDF/JPG/PNG up to 4 MB, sent
+  as base64) with the terms version, the revenue split (fixed by unit type, entered per contract, all three shares or
+  none) and the member's payout (bank transfer, or set against maintenance); the member reads it and uploads the signed
+  copy on the My rental page (`members-rental.mts`, which reads the file for them: a member is never given a storage
+  link); the admin then records the signing and effective dates, notice and Linger's contract/property/room
+  references, and **Enable is refused until the signed copy is in**. Files live in the same private R2 bucket as the
+  land documents under `contracts/<household>/<contract>-(contract|signed).<ext>` (`lib/contract-storage.ts`);
+  admins open them through a 60-second presigned link behind the step-up and an audit entry. The rules are in
+  `scripts/lib/member-contract.mjs`. TVC collects the money and pays Linger and the member; a stay counts in the
+  settlement cycle it ends in (check-out). Bank, UPI and tax details are not stored yet.
 - **`netlify/functions/staff-admin.mts` + `lib/staff-admin-guard.ts`** — the API behind the
   Access module (issue #89): who is in the system, who holds which module role, an activity feed,
   and the changes themselves. **Super admins only.** Reading (`GET /api/staff-admin/people`,

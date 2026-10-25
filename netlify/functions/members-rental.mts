@@ -20,6 +20,8 @@ import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { createBooking, deleteBooking, getBookingById, listBookingsForUnit } from '../../scripts/lib/accommodation-db.mjs';
 import { validateOffer, validateSettings, validateBlock, canRemoveBlock, rentalState, shapeUnitBookings, offerNotice } from '../../scripts/lib/member-rental.mjs';
 import { recordPartnerEvent, sendOfferNotice } from './lib/linger-notify';
+import { checkFile, contractForMember, documentKey } from '../../scripts/lib/member-contract.mjs';
+import { getContractDocument, putContractDocument } from './lib/contract-storage';
 
 const OWNERS_ONLY = 'Only the owners of a unit can offer it to guests.';
 const todayInIst = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
@@ -85,6 +87,15 @@ async function load(householdId: string) {
   return { household, offer: offer ?? null, unit: unit ?? null, types };
 }
 
+type Contract = { id: string; status: string; terms_version: string; shared_at: string; contract_doc: string; signed_doc: string | null };
+
+// The contract shared for the offer that is still waiting, if there is one.
+async function openContract(offerId: string | undefined): Promise<Contract | null> {
+  if (!offerId) return null;
+  const rows = (await select('member_unit_contracts', `offer_id=eq.${offerId}&status=in.(shared,signed)&select=id,status,terms_version,shared_at,contract_doc,signed_doc`)) as Contract[];
+  return rows[0] ?? null;
+}
+
 async function handleGet(req: Request): Promise<Response> {
   const auth = await requireMember(req);
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
@@ -101,7 +112,9 @@ async function handleGet(req: Request): Promise<Response> {
   const shaped = shapeUnitBookings(bookings, household.farm_unit, today);
   // A farm-wide closure only matters to a unit that does not stay open through it.
   const blocks = shaped.blocks.filter((b: { farm: boolean }) => !(b.farm && unit?.ignores_farm_closure));
+  const contract = offer?.status === 'interested' ? await openContract(offer.id) : null;
   return jsonResponse({
+    contract: contractForMember(contract),
     enabled: true,
     eligible: true,
     farmUnit: household.farm_unit,
@@ -148,6 +161,43 @@ async function handleWithdraw(req: Request): Promise<Response> {
   if (!(await logChange(member.personId, 'member.rental.withdraw', { householdId }))) return jsonResponse({ error: 'Could not record the change. Try again.' }, 500);
   const done = await write('PATCH', `member_unit_offers?id=eq.${data.offer.id}&status=eq.interested`, { status: 'withdrawn', decided_at: new Date().toISOString() });
   if (!done.ok || !done.rows.length) return jsonResponse({ error: 'The offer has already been dealt with.' }, 409);
+  await write('PATCH', `member_unit_contracts?offer_id=eq.${data.offer.id}&status=in.(shared,signed)`, { status: 'cancelled', updated_at: new Date().toISOString() });
+  return jsonResponse({ ok: true });
+}
+
+// The member reads their own contract copy (the one shared with them, or the signed one they uploaded). The server reads
+// the file and hands it over; the member is never given a storage link.
+async function handleContractGet(req: Request): Promise<Response> {
+  const who = await requireOwner(req);
+  if ('error' in who) return who.error;
+  const which = new URL(req.url).searchParams.get('which') === 'signed' ? 'signed' : 'contract';
+  const data = await load(who.householdId);
+  const contract = await openContract(data?.offer?.status === 'interested' ? data.offer.id : undefined);
+  const key = which === 'signed' ? contract?.signed_doc : contract?.contract_doc;
+  if (!contract || !key) return jsonResponse({ error: 'That document is not there.' }, 404);
+  const bytes = await getContractDocument(key);
+  if (!bytes) return jsonResponse({ error: 'That document is not there.' }, 404);
+  const ext = key.split('.').pop() as string;
+  const mime = ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : 'image/jpeg';
+  return jsonResponse({ mime, name: `tvc-rental-${which}.${ext}`, base64: Buffer.from(bytes).toString('base64') });
+}
+
+// The member uploads the copy they have signed. The admin then records the dates and enables the unit.
+async function handleContractSigned(req: Request): Promise<Response> {
+  const who = await requireOwner(req);
+  if ('error' in who) return who.error;
+  const { member, householdId } = who;
+  const body = await readJson<{ file?: { mime?: string; base64?: string } }>(req);
+  const file = checkFile(body?.file);
+  if ('error' in file) return jsonResponse({ error: file.error }, 400);
+  const data = await load(householdId);
+  const contract = await openContract(data?.offer?.status === 'interested' ? data.offer.id : undefined);
+  if (!contract) return jsonResponse({ error: 'There is no contract waiting for you to sign.' }, 409);
+  if (!(await logChange(member.personId, 'member.rental.contract_signed', { householdId, contractId: contract.id }))) return jsonResponse({ error: 'Could not record the upload, so nothing was saved. Try again.' }, 500);
+  const key = documentKey(householdId, contract.id, 'signed', file.ext);
+  await putContractDocument(key, Buffer.from(body!.file!.base64!, 'base64'), file.mime);
+  const done = await write('PATCH', `member_unit_contracts?id=eq.${contract.id}&status=in.(shared,signed)`, { status: 'signed', signed_doc: key, signed_uploaded_by: member.personId, signed_uploaded_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+  if (!done.ok || !done.rows.length) return jsonResponse({ error: 'The contract has already been dealt with.' }, 409);
   return jsonResponse({ ok: true });
 }
 
@@ -212,13 +262,15 @@ export default async (req: Request): Promise<Response> => {
     '/api/members-me/rental/settings': handleSettings,
     '/api/members-me/rental/blocks': handleBlockAdd,
     '/api/members-me/rental/blocks/remove': handleBlockRemove,
+    '/api/members-me/rental/contract/signed': handleContractSigned,
   };
   const write = m === 'POST' ? routes[p] : undefined;
-  if (!(p === '/api/members-me/rental' && m === 'GET') && !write) return jsonResponse({ error: 'Not found' }, 404);
-  // Dark until it is switched on; writes answer as if the page did not exist.
-  if (write && !enabled()) return jsonResponse({ error: 'Not found' }, 404);
+  const read = m === 'GET' ? (p === '/api/members-me/rental' ? handleGet : p === '/api/members-me/rental/contract' ? handleContractGet : undefined) : undefined;
+  if (!read && !write) return jsonResponse({ error: 'Not found' }, 404);
+  // Dark until it is switched on; writes and the document answer as if the page did not exist.
+  if (!enabled() && (write || p !== '/api/members-me/rental')) return jsonResponse({ error: 'Not found' }, 404);
   try {
-    return write ? await write(req) : await handleGet(req);
+    return write ? await write(req) : await read!(req);
   } catch (err) {
     console.error('[members-rental] request failed', err);
     return jsonResponse({ error: 'Server error' }, 500);
@@ -226,5 +278,5 @@ export default async (req: Request): Promise<Response> => {
 };
 
 export const config = {
-  path: ['/api/members-me/rental', '/api/members-me/rental/offer', '/api/members-me/rental/withdraw', '/api/members-me/rental/settings', '/api/members-me/rental/blocks', '/api/members-me/rental/blocks/remove'],
+  path: ['/api/members-me/rental', '/api/members-me/rental/offer', '/api/members-me/rental/withdraw', '/api/members-me/rental/settings', '/api/members-me/rental/blocks', '/api/members-me/rental/blocks/remove', '/api/members-me/rental/contract', '/api/members-me/rental/contract/signed'],
 };
