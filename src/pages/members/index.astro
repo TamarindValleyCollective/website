@@ -4842,6 +4842,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     enabled: boolean;
     eligible: boolean;
     farmUnit?: string;
+    houseNo?: string | null;
     state?: 'none' | 'interested' | 'rentable' | 'paused';
     types?: { id: string; label: string }[];
     offer?: { shape: string; typeId: string; delegateToTvc: boolean; createdAt: string } | null;
@@ -4905,11 +4906,15 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   function viewRental(): HTMLElement {
     const root = h('div');
     root.append(h('h1', 'page-title', 'My rental'), h('p', 'lede', 'Offer your unit to guests who book through Linger. TVC looks after the guests while they are here.'));
+    const homeLine = h('p', 'rent-note');
+    homeLine.hidden = true;
     const body = h('div', 'rent');
-    root.append(body);
+    root.append(homeLine, body);
 
     const paint = () => {
       const d = rental;
+      homeLine.hidden = !d?.houseNo;
+      if (d?.houseNo) homeLine.textContent = `Home ${d.houseNo}`;
       if (!d?.eligible) return body.replaceChildren(h('p', 'lede', 'This page is for the owners of a unit.'));
       const sections: HTMLElement[] = [];
       const card = (title: string, ...kids: (HTMLElement | null)[]) => h('section', 'unit-card', undefined, h('div', 'unit-card-head', undefined, h('h2', '', title)), ...kids);

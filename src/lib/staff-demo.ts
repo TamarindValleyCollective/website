@@ -64,7 +64,9 @@ let unitsState: any = null;
 function demoUnits() {
   if (unitsState) return unitsState;
   const tvc = (id: string, name: string, type: string, capacity: number, tags: string[] = []) => ({ id, name, type, kind: 'fixed', capacity, ownerType: 'tvc', ownerFarmUnit: null, ownerNames: [], manager: 'tvc', status: 'rentable', listingShape: null, cluster: null, tags, note: null, requestMode: 'reject', ignoresFarmClosure: false, bookingsAhead: 0 });
-  const member = (farm: string, type: string, shape: string, manager: string, mode: string, cluster: string, owners: string[], extra: Record<string, unknown> = {}) => ({ id: farm, name: `Home ${farm}`, type, kind: 'member-home', capacity: ({ '1br': 2, '1bhk': 3, '2bhk': 4, '3bhk': 6 } as Record<string, number>)[type], ownerType: 'member', ownerFarmUnit: farm, ownerNames: owners, manager, status: 'rentable', listingShape: shape, cluster, tags: [], note: null, requestMode: mode, ignoresFarmClosure: false, bookingsAhead: 0, ...extra });
+  // A home is known by its house number; the farm number (F-12) is only its id.
+  const HOUSE: Record<string, string> = { 'F-12': 'H-10', 'F-05': 'H-27', 'F-31': 'H-31', 'F-09': 'H-14' };
+  const member = (farm: string, type: string, shape: string, manager: string, mode: string, cluster: string, owners: string[], extra: Record<string, unknown> = {}) => ({ id: farm, name: `Home ${HOUSE[farm] ?? farm}`, type, kind: 'member-home', capacity: ({ '1br': 2, '1bhk': 3, '2bhk': 4, '3bhk': 6 } as Record<string, number>)[type], ownerType: 'member', ownerFarmUnit: farm, ownerNames: owners, manager, status: 'rentable', listingShape: shape, cluster, tags: [], note: null, requestMode: mode, ignoresFarmClosure: false, bookingsAhead: 0, ...extra });
   unitsState = {
     me: { id: 'demo-1', ready: true, hasPasskey: true, stepUpValid: false },
     types: [['tent', 'Tents', 'tvc'], ['hut', 'Bamboo huts', 'tvc'], ['byot', 'Bring your own tent', 'tvc'], ['1br', '1 bedroom', 'member'], ['1bhk', '1 BHK', 'member'], ['2bhk', '2 BHK', 'member'], ['3bhk', '3 BHK', 'member']].map(([id, label, ownerType]) => ({ id, label, ownerType })),
@@ -77,10 +79,19 @@ function demoUnits() {
       member('F-31', '1br', 'room', 'member', 'ask', 'H2', ['Divya Menon'], { tags: ['quiet', 'host on site'] }),
       member('F-09', '1br', 'room', 'member', 'reject', 'H1-A', ['Anil Kamath']),
     ],
+    payouts: [
+      { householdId: 'h-12', farmUnit: 'F-12', houseNo: 'H-10', payeeName: 'Kiran Rao', method: 'bank', shown: 'ending 9012', panShown: 'ending 234F', status: 'submitted', tdsApplies: null, tdsRate: null, verifiedAt: null, updatedAt: new Date().toISOString() },
+      { householdId: 'h-05', farmUnit: 'F-05', houseNo: 'H-27', payeeName: 'Shobha Shetty', method: 'upi', shown: 'ending hetty', panShown: 'ending 567G', status: 'verified', tdsApplies: true, tdsRate: 10, verifiedAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    ],
+    access: {
+      features: [{ id: 'rental', label: 'My rental', everyone: false }],
+      members: [['h-01', 'F-01', 'H-10', ['Kritika Vishwanathan', 'Rajiv Prakash']], ['h-02', 'F-02', 'H-25', ['Ramesh Agarwal', 'Sarika Agarwal']], ['h-03', 'F-03', 'H-08', ['Divya Tiwari', 'Sudhir Tiwari']], ['h-04', 'F-04', 'H-40', ['Vidya Atherya']], ['h-05', 'F-05', 'H-27', ['Srividhya Govindan', 'Swaminathan Rajamani']], ['h-29', 'F-29', 'H-17', ['Deepa Alex', 'Sharath Jeppu']]].map(([householdId, farmUnit, houseNo, names]) => ({ householdId, farmUnit, houseNo, names })),
+      grants: [{ householdId: 'h-29', farmUnit: 'F-29', houseNo: 'H-17', names: ['Deepa Alex', 'Sharath Jeppu'], feature: 'rental', since: new Date().toISOString() }],
+    },
     offers: [
-      { id: 'o1', farmUnit: 'F-02', cluster: 'H1-A', memberName: 'Suresh Reddy', shape: 'whole', typeId: '1bhk', delegateToTvc: true, createdAt: new Date(Date.now() - 2 * 86400000).toISOString() },
-      { id: 'o2', farmUnit: 'F-19', cluster: 'H2', memberName: 'Asha Kulkarni', shape: 'room', typeId: '1br', delegateToTvc: false, createdAt: new Date().toISOString() },
-      { id: 'o3', farmUnit: 'F-24', cluster: 'H1-B', memberName: 'Mohan Joshi', shape: 'whole', typeId: '2bhk', delegateToTvc: true, createdAt: new Date(Date.now() - 6 * 86400000).toISOString() },
+      { id: 'o1', farmUnit: 'F-02', houseNo: 'H-25', contract: null, cluster: 'H1-A', memberName: 'Suresh Reddy', shape: 'whole', typeId: '1bhk', delegateToTvc: true, createdAt: new Date(Date.now() - 2 * 86400000).toISOString() },
+      { id: 'o2', farmUnit: 'F-19', houseNo: 'H-33', contract: { id: 'c2', status: 'shared', termsVersion: '2026-1', typeId: '1br', manager: 'member', split: { member: 50, tvc: 20, linger: 30 }, memberPayout: 'bank_transfer', settlementCycle: 'monthly', hasSigned: false, signedUploadedAt: null, signedOn: null, effectiveFrom: null, endsOn: null, noticeDays: null, lingerContractRef: null, lingerPropertyRef: null, lingerRoomRef: null, sharedAt: new Date(Date.now() - 86400000).toISOString(), problem: 'The member has not uploaded the signed contract yet.' }, cluster: 'H2', memberName: 'Asha Kulkarni', shape: 'room', typeId: '1br', delegateToTvc: false, createdAt: new Date().toISOString() },
+      { id: 'o3', farmUnit: 'F-15', houseNo: 'H-12', contract: { id: 'c3', status: 'signed', termsVersion: '2026-1', typeId: '2bhk', manager: 'tvc', split: { member: 50, tvc: 20, linger: 30 }, memberPayout: 'maintenance_adjustment', settlementCycle: 'monthly', hasSigned: true, signedUploadedAt: new Date(Date.now() - 3600000).toISOString(), signedOn: null, effectiveFrom: null, endsOn: null, noticeDays: 30, lingerContractRef: null, lingerPropertyRef: null, lingerRoomRef: null, sharedAt: new Date(Date.now() - 5 * 86400000).toISOString(), problem: 'Enter the date the contract takes effect.' }, cluster: 'H1-B', memberName: 'Mohan Joshi', shape: 'whole', typeId: '2bhk', delegateToTvc: true, createdAt: new Date(Date.now() - 6 * 86400000).toISOString() },
     ],
   };
   return unitsState;
@@ -89,13 +100,21 @@ function demoUnits() {
 function demoUnitsWrite(path: string, body: any): { status: number; data: unknown } | null {
   const st = demoUnits();
   const unit = st.units.find((u: any) => u.id === body?.unitId);
+  if (path === '/api/units-admin/access') {
+    const a = st.access;
+    if (body.enabled) {
+      const m = a.members.find((x: any) => x.householdId === body.householdId);
+      if (m && !a.grants.some((g: any) => g.householdId === m.householdId && g.feature === body.feature)) a.grants.push({ ...m, feature: body.feature, since: new Date().toISOString() });
+    } else a.grants = a.grants.filter((g: any) => !(g.householdId === body.householdId && g.feature === body.feature));
+    return { status: 200, data: { ok: true } };
+  }
   if (path === '/api/units-admin/offers/enable') {
     const i = st.offers.findIndex((o: any) => o.id === body.offerId);
     if (i < 0) return { status: 404, data: { error: 'Offer not found' } };
     const o = st.offers[i];
     st.offers.splice(i, 1);
     const typeId = body.typeId ?? o.typeId;
-    st.units.push({ id: o.farmUnit, name: `Home ${o.farmUnit}`, type: typeId, kind: 'member-home', capacity: ({ '1br': 2, '1bhk': 3, '2bhk': 4, '3bhk': 6 } as Record<string, number>)[typeId], ownerType: 'member', ownerFarmUnit: o.farmUnit, ownerNames: [o.memberName], manager: o.shape === 'whole' && body.delegateToTvc ? 'tvc' : 'member', status: 'rentable', listingShape: o.shape, cluster: o.cluster, tags: [], note: null, requestMode: 'reject', ignoresFarmClosure: false, bookingsAhead: 0 });
+    st.units.push({ id: o.farmUnit, name: `Home ${o.houseNo ?? o.farmUnit}`, type: typeId, kind: 'member-home', capacity: ({ '1br': 2, '1bhk': 3, '2bhk': 4, '3bhk': 6 } as Record<string, number>)[typeId], ownerType: 'member', ownerFarmUnit: o.farmUnit, ownerNames: [o.memberName], manager: o.shape === 'whole' && body.delegateToTvc ? 'tvc' : 'member', status: 'rentable', listingShape: o.shape, cluster: o.cluster, tags: [], note: null, requestMode: 'reject', ignoresFarmClosure: false, bookingsAhead: 0 });
     return { status: 200, data: { ok: true, unitId: o.farmUnit } };
   }
   if (path === '/api/units-admin/offers/decline') {

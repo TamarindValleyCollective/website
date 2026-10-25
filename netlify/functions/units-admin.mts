@@ -231,7 +231,7 @@ async function handleEnable(req: Request, admin: SuperAdmin): Promise<Response> 
   if (!body || !UUID.test(body.offerId ?? '')) return jsonResponse({ error: 'offerId must be a UUID' }, 400);
   const offer = await getOffer(body.offerId!);
   if (!offer) return jsonResponse({ error: 'Offer not found' }, 404);
-  const hh = ((await (await rest(`/member_households?id=eq.${offer.household_id}&select=id,farm_unit,cluster`)).json()) as { id: string; farm_unit: string; cluster: string | null }[])[0];
+  const hh = ((await (await rest(`/member_households?id=eq.${offer.household_id}&select=id,farm_unit,house_no,cluster`)).json()) as { id: string; farm_unit: string; house_no: string | null; cluster: string | null }[])[0];
   const existing = hh ? await getUnit(hh.farm_unit) : null;
   const maxRes = (await (await rest('/accommodation_units?select=sort_order&order=sort_order.desc&limit=1')).json()) as { sort_order: number }[];
   const typeId = typeof body.typeId === 'string' ? body.typeId : offer.type_id;

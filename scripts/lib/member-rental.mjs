@@ -101,14 +101,15 @@ export function shapeUnitBookings(bookings, unitId, today) {
 
 // The two lines TVC and Linger are sent when a member offers a unit. Contact details go because Linger needs them to get
 // in touch, and the member agreed to that when they pressed the button; they are not shown anywhere else.
-export function offerNotice({ farmUnit, cluster, shape, typeLabel, delegateToTvc, memberName, memberEmail }) {
+export function offerNotice({ houseNo, farmUnit, cluster, shape, typeLabel, delegateToTvc, memberName, memberEmail }) {
   const rows = [
-    ['Unit', `${farmUnit}${cluster ? ` (cluster ${cluster})` : ''}`],
+    ['Home', `${houseNo}${cluster ? ` (cluster ${cluster})` : ''}`],
+    ['Plot (reference)', farmUnit],
     ['Offered as', `${shape === 'whole' ? 'Whole unit' : 'A single room'}, ${typeLabel}`],
     ['Managed by', shape === 'whole' && delegateToTvc ? 'TVC for the member (the member asked for this)' : 'The member'],
     ['Member', memberName],
     ['Sign-in email', memberEmail],
     ['Next', 'Linger to get in touch with the member about terms. Once the contract is signed, the admin team enables the unit.'],
   ];
-  return { subject: `A member is offering a unit: ${farmUnit} (${typeLabel})`, rows };
+  return { subject: `A member is offering a home: ${houseNo} (${typeLabel})`, rows };
 }

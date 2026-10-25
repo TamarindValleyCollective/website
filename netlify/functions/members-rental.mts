@@ -138,6 +138,7 @@ async function handleGet(req: Request): Promise<Response> {
     enabled: true,
     eligible: true,
     farmUnit: household.farm_unit,
+    houseNo: household.house_no,
     state,
     types: types.map((t) => ({ id: t.id, label: t.name })),
     offer: offer && offer.status === 'interested' ? { shape: offer.shape, typeId: offer.type_id, delegateToTvc: offer.delegate_to_tvc, createdAt: offer.created_at } : null,
@@ -166,8 +167,8 @@ async function handleOffer(req: Request): Promise<Response> {
   // Tell TVC and Linger. The event is recorded first so a later API push can use it; a failed email never undoes the offer.
   const typeLabel = data.types.find((t) => t.id === typeId)?.name ?? typeId;
   const [person] = await select('member_people', `id=eq.${member.personId}&select=full_name,email`);
-  const notice = offerNotice({ farmUnit: data.household.farm_unit, cluster: data.household.cluster, shape, typeLabel, delegateToTvc, memberName: person?.full_name ?? member.name, memberEmail: person?.email ?? '' });
-  const eventId = await recordPartnerEvent('linger', { type: 'unit.offered', subject: data.household.farm_unit, payload: { offerId: made.rows[0]?.id, farmUnit: data.household.farm_unit, cluster: data.household.cluster, shape, typeId, typeLabel, delegateToTvc, memberName: person?.full_name ?? member.name, memberEmail: person?.email ?? null } });
+  const notice = offerNotice({ houseNo: data.household.house_no, farmUnit: data.household.farm_unit, cluster: data.household.cluster, shape, typeLabel, delegateToTvc, memberName: person?.full_name ?? member.name, memberEmail: person?.email ?? '' });
+  const eventId = await recordPartnerEvent('linger', { type: 'unit.offered', subject: data.household.farm_unit, payload: { offerId: made.rows[0]?.id, houseNo: data.household.house_no, farmUnit: data.household.farm_unit, cluster: data.household.cluster, shape, typeId, typeLabel, delegateToTvc, memberName: person?.full_name ?? member.name, memberEmail: person?.email ?? null } });
   const sent = await sendOfferNotice({ subject: notice.subject, rows: notice.rows as [string, string][] }, eventId);
   return jsonResponse({ ok: true, lingerTold: sent.linger });
 }

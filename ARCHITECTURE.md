@@ -815,7 +815,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   (Admin menu, super admins only; plan `docs/plans/accommodation-member-units.md`). A member offers
   their unit in the member portal (a row in `member_unit_offers`, migration `0067`); here a super admin
   enables the offer once the contract is signed (creating the `accommodation_units` row, id = the
-  household's farm unit, named neutrally `Home F-12`, on auto-reject), declines it, pauses or resumes a
+  household's farm unit, named neutrally by its house number (`Home H-10`; its id stays the farm number `F-12`, which is the plot and never shown as a name), on auto-reject), declines it, pauses or resumes a
   unit, offboards one (refused while it has future bookings), and edits a unit's tags, cluster, capacity
   and the farm manager's private note. Reading needs a super admin; every change goes through
   `requireAccessAdmin` (the same second-factor step-up as the Access page, via the shared

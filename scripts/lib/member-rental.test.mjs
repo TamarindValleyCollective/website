@@ -84,16 +84,17 @@ test('bookings on a unit: stays show guests without contact details, blocks say 
 });
 
 test('the notice names the unit, the offer, who manages it and who to talk to', () => {
-  const n = offerNotice({ farmUnit: 'F-12', cluster: 'H1-A', shape: 'whole', typeLabel: '2 BHK', delegateToTvc: true, memberName: 'Kiran Rao', memberEmail: 'kiran@example.com' });
-  assert.equal(n.subject, 'A member is offering a unit: F-12 (2 BHK)');
+  const n = offerNotice({ houseNo: 'H-10', farmUnit: 'F-12', cluster: 'H1-A', shape: 'whole', typeLabel: '2 BHK', delegateToTvc: true, memberName: 'Kiran Rao', memberEmail: 'kiran@example.com' });
+  assert.equal(n.subject, 'A member is offering a home: H-10 (2 BHK)');
   const rows = Object.fromEntries(n.rows);
-  assert.equal(rows['Unit'], 'F-12 (cluster H1-A)');
+  assert.equal(rows['Home'], 'H-10 (cluster H1-A)');
+  assert.equal(rows['Plot (reference)'], 'F-12');
   assert.equal(rows['Offered as'], 'Whole unit, 2 BHK');
   assert.match(rows['Managed by'], /TVC for the member/);
   assert.equal(rows['Member'], 'Kiran Rao');
   assert.equal(rows['Sign-in email'], 'kiran@example.com');
-  const room = Object.fromEntries(offerNotice({ farmUnit: 'F-31', cluster: null, shape: 'room', typeLabel: '1 bedroom', delegateToTvc: false, memberName: 'D', memberEmail: 'd@example.com' }).rows);
+  const room = Object.fromEntries(offerNotice({ houseNo: 'H-31', farmUnit: 'F-31', cluster: null, shape: 'room', typeLabel: '1 bedroom', delegateToTvc: false, memberName: 'D', memberEmail: 'd@example.com' }).rows);
   assert.equal(room['Offered as'], 'A single room, 1 bedroom');
   assert.equal(room['Managed by'], 'The member');
-  assert.equal(room['Unit'], 'F-31');
+  assert.equal(room['Home'], 'H-31');
 });
