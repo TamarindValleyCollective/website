@@ -1680,7 +1680,7 @@ import SignInGate from '../../components/SignInGate.astro';
   .tour-block {
     position: absolute;
     inset: 0;
-    background: rgb(34 41 31 / 0.55);
+    background: rgb(34 41 31 / 0.35);
   }
 
   .tour--spot .tour-block {
@@ -1691,7 +1691,7 @@ import SignInGate from '../../components/SignInGate.astro';
     position: absolute;
     border-radius: var(--radius);
     outline: 3px solid var(--tvc-orange);
-    box-shadow: 0 0 0 100vmax rgb(34 41 31 / 0.55);
+    box-shadow: 0 0 0 100vmax rgb(34 41 31 / 0.35);
     pointer-events: none;
   }
 
@@ -4586,7 +4586,6 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           break;
         }
       }
-      target?.scrollIntoView({ block: 'center' });
 
       const last = n === steps.length - 1;
       const back = h('button', 'btn', 'Back');
@@ -4609,6 +4608,15 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         h('div', 'tour-foot', undefined,
           h('div', 'tour-dots', undefined, ...steps.map((_, i) => h('span', i === n ? 'on' : ''))),
           h('div', 'tour-buttons', undefined, skip, back, next)));
+      // Bring the target into the part of the screen the sticky top bar and (on a phone) the bottom card leave free.
+      if (target) {
+        const r = target.getBoundingClientRect();
+        const top = (document.querySelector('.topbar')?.getBoundingClientRect().bottom ?? 0) + 16;
+        const bottom = window.innerHeight - (phone.matches ? card.offsetHeight + 28 : 16);
+        const fits = r.height <= bottom - top;
+        const shift = fits ? (r.top < top ? r.top - top : r.bottom > bottom ? r.bottom - bottom : 0) : r.top - top;
+        if (shift) window.scrollBy({ top: shift, behavior: 'instant' });
+      }
       place();
       next.focus({ preventScroll: true });
     }
