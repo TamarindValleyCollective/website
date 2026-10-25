@@ -828,8 +828,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   Admin, coloured by level) that **saves as soon as it is changed** (a refused change puts the cell
   back and says why). A User in the accommodation calendar gets a "Limited to N booking types" control
   that opens the booking-type checkboxes. Row actions deactivate/reactivate; adding a person is a
-  button that reveals the email form. A second tab, "What each role can do", is a read-only permission
-  matrix per tool (capabilities × Read-only/User/Admin, built from the registry), and a third is the
+  button that reveals the email form. A second tab is the
   activity log with ids shown as names. The page starts read-only; a slim "unlock changes" strip
   takes the authenticator code (see below) and keeps the step-up for ten minutes; without two enrolled
   methods it links to `/internal/security` instead. Names are placed with `textContent`

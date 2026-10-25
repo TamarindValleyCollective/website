@@ -49,7 +49,6 @@ import SignInGate from '../../components/SignInGate.astro';
 
       <div class="tabs" role="tablist" data-tour="tabs" aria-label="Access sections">
         <button type="button" role="tab" id="tab-people" aria-selected="true" aria-controls="pane-people" class="tab">People</button>
-        <button type="button" role="tab" id="tab-roles" aria-selected="false" aria-controls="pane-roles" class="tab">What each role can do</button>
         <button type="button" role="tab" id="tab-activity" aria-selected="false" aria-controls="pane-activity" class="tab">Activity</button>
       </div>
 
@@ -99,11 +98,6 @@ import SignInGate from '../../components/SignInGate.astro';
           <section id="person-detail" class="person-detail" aria-live="polite"></section>
         </div>
         <p class="note legend">Changes save as soon as you pick a role. “No access” hides the tool from that person entirely.</p>
-      </section>
-
-      <section id="pane-roles" role="tabpanel" aria-labelledby="tab-roles" hidden>
-        <p class="note">What each role lets someone do, tool by tool. This is fixed in the code and changes only through a reviewed update.</p>
-        <div id="roles-guide" class="roles-guide"></div>
       </section>
 
       <section id="pane-activity" role="tabpanel" aria-labelledby="tab-activity" hidden>
@@ -686,45 +680,6 @@ import SignInGate from '../../components/SignInGate.astro';
     margin-top: 10px;
   }
 
-  /* ---- "what each role can do": one card per tool, one line per distinct role */
-  .roles-guide {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 16px;
-    align-items: start;
-  }
-
-  .roles-guide :global(.guide) {
-    padding: 16px 18px;
-    background: var(--tvc-white);
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-soft);
-  }
-
-  .roles-guide :global(h2) {
-    margin: 0 0 6px;
-    font-size: var(--text-lg);
-  }
-
-  .roles-guide :global(.role-list) {
-    margin: 0;
-  }
-
-  .roles-guide :global(.role-name) {
-    margin-top: 10px;
-    font-size: var(--text-xs);
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--tvc-ink-soft);
-  }
-
-  .roles-guide :global(.role-text) {
-    margin: 2px 0 0;
-    font-size: var(--text-sm);
-  }
-
   /* Touch screens get the larger targets back. */
   @media (pointer: coarse) {
     .person-detail :global(.role-select),
@@ -878,16 +833,13 @@ import SignInGate from '../../components/SignInGate.astro';
   const verifyError = $('verify-error');
   const stepupLink = $('stepup-link');
   const tabPeople = $('tab-people');
-  const tabRoles = $('tab-roles');
   const tabActivity = $('tab-activity');
   const panePeople = $('pane-people');
-  const paneRoles = $('pane-roles');
   const paneActivity = $('pane-activity');
   const addToggle = $<HTMLButtonElement>('add-toggle');
   const peopleCount = $('people-count');
   const saveMessage = $('save-message');
   const personDetail = $('person-detail');
-  const rolesGuide = $('roles-guide');
   const addForm = $<HTMLFormElement>('add-form');
   const addEmail = $<HTMLInputElement>('add-email');
   const addName = $<HTMLInputElement>('add-name');
@@ -1408,42 +1360,11 @@ import SignInGate from '../../components/SignInGate.astro';
     const active = state.people.filter((p) => p.active).length;
     const total = `${state.people.length} ${state.people.length === 1 ? 'person' : 'people'}${active === state.people.length ? '' : `, ${active} active`}`;
     peopleCount.textContent = shown.length === state.people.length ? total : `${shown.length} of ${total}`;
-    renderRolesGuide();
     if (refocus) {
       const [pid, mid] = refocus.split('|');
       refocus = null;
       personDetail.querySelector<HTMLElement>(`select[data-person="${pid}"][data-module="${mid}"]`)?.focus();
     }
-  }
-
-  // "What each role can do": per tool, one line per distinct role. A role that carries the
-  // same things as the one below it shares its line ("User, Admin"); a role that carries
-  // everything the previous one does, plus more, lists only the extras ("Also: …"). Where the
-  // roles don't nest (a capability kept from admins, say) the full list is shown instead.
-  function renderRolesGuide() {
-    if (!state) return;
-    const order = ['read_only', 'user', 'admin'];
-    type Caps = { id: string; description: string }[];
-    const sameSet = (x: Caps, y: Caps) => x.length === y.length && x.every((c) => y.some((d) => d.id === c.id));
-    rolesGuide.replaceChildren(
-      ...state.modules.map((module) => {
-        const groups: { roles: string[]; caps: Caps; prev: Caps | null }[] = [];
-        for (const role of order) {
-          const caps = module.roles.find((r) => r.role === role)?.capabilities ?? [];
-          const last = groups[groups.length - 1];
-          if (last && sameSet(last.caps, caps)) last.roles.push(role);
-          else groups.push({ roles: [role], caps, prev: last?.caps ?? null });
-        }
-        const list = h('dl', { class: 'role-list' });
-        for (const g of groups) {
-          const nested = g.prev !== null && g.prev.length > 0 && g.prev.every((c) => g.caps.some((d) => d.id === c.id));
-          const shown = nested ? g.caps.filter((c) => !g.prev!.some((d) => d.id === c.id)) : g.caps;
-          const text = g.caps.length === 0 ? 'Cannot open this tool.' : `${nested ? 'Also: ' : ''}${shown.map((c) => c.description).join('; ')}.`;
-          list.append(h('dt', { class: 'role-name', text: g.roles.map((r) => ROLE_LABELS[r]).join(', ') }), h('dd', { class: 'role-text', text }));
-        }
-        return h('div', { class: 'guide' }, h('h2', { text: module.label }), list);
-      }),
-    );
   }
 
   async function loadPeople() {
@@ -1622,8 +1543,8 @@ import SignInGate from '../../components/SignInGate.astro';
   });
   eventsMore.addEventListener('click', () => loadEvents(true));
 
-  function selectTab(which: 'people' | 'roles' | 'activity') {
-    const tabs = { people: [tabPeople, panePeople], roles: [tabRoles, paneRoles], activity: [tabActivity, paneActivity] } as const;
+  function selectTab(which: 'people' | 'activity') {
+    const tabs = { people: [tabPeople, panePeople], activity: [tabActivity, paneActivity] } as const;
     for (const [name, [tab, pane]] of Object.entries(tabs)) {
       tab.setAttribute('aria-selected', String(name === which));
       pane.hidden = name !== which;
@@ -1631,7 +1552,6 @@ import SignInGate from '../../components/SignInGate.astro';
     if (which === 'activity' && !activityLoaded) loadEvents(false);
   }
   tabPeople.addEventListener('click', () => selectTab('people'));
-  tabRoles.addEventListener('click', () => selectTab('roles'));
   tabActivity.addEventListener('click', () => selectTab('activity'));
 
   // ---- sign-in

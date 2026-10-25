@@ -276,8 +276,8 @@ export const TOURS = {
       audience: 'super',
       target: 'tabs',
       tag: 'Access',
-      title: 'Three views',
-      text: 'People, what each role can do, and Activity, the record of changes.',
+      title: 'Two views',
+      text: 'People, where you give and take away roles, and Activity, the record of changes.',
     },
     {
       id: 'find',
