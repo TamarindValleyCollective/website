@@ -1676,28 +1676,6 @@ import SignInGate from '../../components/SignInGate.astro';
     font-size: var(--text-md);
   }
 
-  .rent-steps {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin: 0 0 10px;
-    font-size: var(--text-sm);
-    color: var(--tvc-ink-soft);
-  }
-
-  .rent-steps span {
-    padding: 3px 10px;
-    border: 1px solid var(--tvc-line);
-    border-radius: 999px;
-  }
-
-  .rent-steps span.on {
-    border-color: transparent;
-    background: var(--tvc-green-tint);
-    color: var(--tvc-green-dark);
-    font-weight: 600;
-  }
-
   .rent-list {
     margin: 0 0 12px;
     padding: 0;
@@ -3606,6 +3584,8 @@ import SignInGate from '../../components/SignInGate.astro';
 <script>
   import { clearMemberToken, getMemberToken, memberFetch, memberPhotoSrc, MemberAuthError, setMemberToken } from '../../../scripts/lib/member-client.mjs';
   import { setBusy } from '../../../scripts/lib/busy.mjs';
+  import { rentalStepper } from '../../../scripts/lib/rental-stepper.mjs';
+  import { stageIndex } from '../../../scripts/lib/rental-stages.mjs';
   import { MAX_PHOTOS, conflictedDraftKeys, saveChanges } from '../../../scripts/lib/member-unit-story.mjs';
   import { shapeForRecord, surveyChoices } from '../../../scripts/lib/member-land-docs.mjs';
   import { sizedPicture } from '../../../scripts/lib/member-google-picture.mjs';
@@ -4843,6 +4823,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     enabled: boolean;
     eligible: boolean;
     farmUnit?: string;
+    houseNo?: string | null;
     state?: 'none' | 'interested' | 'rentable' | 'paused';
     types?: { id: string; label: string }[];
     offer?: { shape: string; typeId: string; delegateToTvc: boolean; createdAt: string } | null;
@@ -4909,11 +4890,15 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   function viewRental(): HTMLElement {
     const root = h('div');
     root.append(h('h1', 'page-title', 'My rental'), h('p', 'lede', 'Offer your unit to guests who book through Linger. TVC looks after the guests while they are here.'));
+    const homeLine = h('p', 'rent-note');
+    homeLine.hidden = true;
     const body = h('div', 'rent');
-    root.append(body);
+    root.append(homeLine, body);
 
     const paint = () => {
       const d = rental;
+      homeLine.hidden = !d?.houseNo;
+      if (d?.houseNo) homeLine.textContent = `Home ${d.houseNo}`;
       if (!d?.eligible) return body.replaceChildren(h('p', 'lede', 'This page is for the owners of a unit.'));
       const sections: HTMLElement[] = [];
       const card = (title: string, ...kids: (HTMLElement | null)[]) => h('section', 'unit-card', undefined, h('div', 'unit-card-head', undefined, h('h2', '', title)), ...kids);
@@ -5075,7 +5060,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
             k.canUpload ? h('div', 'rent-dates', undefined, pick, up) : null);
         }
         sections.push(card('Waiting for the contract',
-          h('div', 'rent-steps', undefined, h('span', 'on', 'You offered it'), h('span', k?.hasSigned ? 'on' : '', 'Contract signed'), h('span', '', 'Enabled by TVC')),
+          rentalStepper(stageIndex({ offerStatus: 'interested', contractStatus: k ? (k.stage === 'review' ? 'signed' : 'shared') : undefined })),
           say(`Linger has been told and will get in touch to agree terms. Once the contract is signed, the core team enables your unit and it appears here with its settings. Offered as ${d.offer?.shape === 'room' ? '1 bedroom (a single room)' : `${label} (whole unit)${d.offer?.delegateToTvc ? ', managed by TVC' : ''}`}.`),
           withdraw));
         if (contractCard) sections.unshift(contractCard);
@@ -5085,7 +5070,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         const u = d.unit;
         const label = d.types?.find((t) => t.id === u.typeId)?.label ?? '';
         sections.push(card('Your rental',
-          h('div', 'rent-steps', undefined, h('span', 'on', 'You offered it'), h('span', 'on', 'Contract signed with Linger'), h('span', 'on', 'Enabled by TVC')),
+          rentalStepper(stageIndex({ unitStatus: u.status })),
           say(`${label} · ${u.shape === 'room' ? 'a single room' : 'whole unit'} · ${u.manager === 'tvc' ? 'TVC manages it for you' : 'you manage it'}.${d.state === 'paused' ? ' The core team has paused it for now, so it is not offered.' : ''}`)));
 
         if (u.manager === 'member') {

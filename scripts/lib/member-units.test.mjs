@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { offerProblem, enablePlan, offboardProblem, editPatch, statusChange, DEFAULT_CAPACITY } from './member-units.mjs';
 
-const household = { farm_unit: 'F-12', cluster: 'H1-A' };
+const household = { farm_unit: 'F-12', house_no: 'H-10', cluster: 'H1-A' };
 const offer = { id: 'o1', status: 'interested', shape: 'whole' };
 
 test('an offer is a whole unit of 1 to 3 BHK, or a single room offered as 1 bedroom', () => {
@@ -28,7 +28,7 @@ test('enabling a whole unit TVC manages creates a rentable, auto-reject unit wit
   assert.equal(plan.unit.capacity, DEFAULT_CAPACITY['2bhk']);
   assert.equal(plan.unit.cluster, 'H1-A');
   assert.equal(plan.unit.ignores_farm_closure, false);
-  assert.equal(plan.unit.name, 'Home F-12');
+  assert.equal(plan.unit.name, 'Home H-10');
 });
 
 test('a whole unit not delegated, and a room, are managed by the member', () => {
@@ -39,8 +39,14 @@ test('a whole unit not delegated, and a room, are managed by the member', () => 
 });
 
 test('a unit name never contains a member name', () => {
-  const { unit } = enablePlan({ offer, household: { farm_unit: 'F-31', cluster: null }, typeId: '3bhk', delegateToTvc: false, nextSortOrder: 1 });
-  assert.match(unit.name, /^Home F-31$/);
+  const { unit } = enablePlan({ offer, household: { farm_unit: 'F-31', house_no: 'H-31', cluster: null }, typeId: '3bhk', delegateToTvc: false, nextSortOrder: 1 });
+  assert.match(unit.name, /^Home H-31$/);
+  assert.equal(unit.id, 'F-31');
+});
+
+test('a household with no home cannot be enabled, and the unit is named by its house number, not its plot', () => {
+  assert.match(enablePlan({ offer, household: { farm_unit: 'F-09', house_no: null, cluster: null }, typeId: '2bhk', nextSortOrder: 1 }).error, /no home/);
+  assert.equal(enablePlan({ offer, household, typeId: '2bhk', delegateToTvc: false, nextSortOrder: 1 }).unit.name, 'Home H-10');
 });
 
 test('enabling refuses an offer that is not waiting, a household with a unit, and a bad type', () => {

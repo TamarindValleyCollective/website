@@ -209,6 +209,8 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
   import { StaffAuthError, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../scripts/lib/staff-client.mjs';
   import { busyForPress, setBusy } from '../../../scripts/lib/busy.mjs';
   import { initStepUpLock } from '../../../scripts/lib/staff-stepup-ui.mjs';
+  import { rentalStepper } from '../../../scripts/lib/rental-stepper.mjs';
+  import { stageIndex } from '../../../scripts/lib/rental-stages.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -234,6 +236,7 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
   interface OfferRow {
     id: string;
     farmUnit: string;
+    houseNo: string | null;
     cluster: string | null;
     memberName: string;
     shape: 'whole' | 'room';
@@ -269,11 +272,12 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
     units: UnitRow[];
     offers: OfferRow[];
     payouts: PayoutRow[];
-    access: { features: { id: string; label: string; everyone: boolean }[]; members: { householdId: string; farmUnit: string; names: string[] }[]; grants: { householdId: string; farmUnit: string; names: string[]; feature: string; since: string }[] };
+    access: { features: { id: string; label: string; everyone: boolean }[]; members: { householdId: string; farmUnit: string; houseNo: string; names: string[] }[]; grants: { householdId: string; farmUnit: string; houseNo: string | null; names: string[]; feature: string; since: string }[] };
   }
   interface PayoutRow {
     householdId: string;
     farmUnit: string;
+    houseNo: string | null;
     payeeName: string;
     method: 'bank' | 'upi';
     shown: string;
@@ -325,6 +329,8 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
     return node;
   }
 
+  // A home is known by its house number (H-10). The farm number (F-01) is the plot it stands on: only a fallback.
+  const homeLabel = (x: { houseNo: string | null; farmUnit: string }) => (x.houseNo ? `Home ${x.houseNo}` : `Plot ${x.farmUnit}`);
   const typeLabel = (id: string) => data?.types.find((t) => t.id === id)?.label ?? id;
   const isMember = (u: UnitRow) => u.ownerType === 'member';
   const handled = (err: unknown) => err instanceof StaffAuthError;
@@ -548,9 +554,10 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
             return h(
               'div',
               { class: 'card offer' },
-              h('h2', { text: `Home ${o.farmUnit}` }),
+              h('h2', { text: homeLabel(o) }),
               h('p', { class: 'offer-meta', text: `${o.memberName || 'A member'} · ${o.shape === 'whole' ? 'Whole unit' : 'A single room'}${o.cluster ? ` · ${o.cluster}` : ''} · asked ${new Date(o.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` }),
               h('div', { class: 'stack-form' }, h('label', {}, h('span', { text: 'Type' }), select), o.shape === 'whole' ? h('label', {}, box, h('span', { text: 'TVC manages it for the member' })) : h('p', { class: 'offer-meta', text: 'A room: the member accepts requests themselves. It starts on auto-reject.' })),
+              rentalStepper(stageIndex({ offerStatus: 'interested', contractStatus: c?.status })),
               c ? contractPanel(o, c) : sharePanel(o, select, box),
               h(
                 'div',
@@ -595,7 +602,7 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
             return h(
               'div',
               { class: 'card offer' },
-              h('h2', { text: `Home ${r.farmUnit}` }),
+              h('h2', { text: homeLabel(r) }),
               h('p', { class: 'offer-meta', text: `${r.payeeName} · ${r.method === 'bank' ? 'Bank account' : 'UPI'} ${r.shown} · PAN ${r.panShown} · ${r.status === 'verified' ? 'Verified' : 'Waiting for verification'}` }),
               shown,
               h('div', { class: 'stack-form' }, h('label', {}, tds, h('span', { text: 'TDS is deducted' })), field('TDS rate (%)', rate)),
@@ -607,7 +614,7 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
   }
 
   // ---- early access: which members may use a feature that is not on for everyone
-  const whoLabel = (m: { names: string[]; farmUnit: string }) => `${m.names.join(' & ')} · Home ${m.farmUnit}`;
+  const whoLabel = (m: { names: string[]; farmUnit: string; houseNo: string | null }) => `${m.names.join(' & ')} · ${homeLabel(m)}`;
 
   function renderAccess() {
     const { features, members, grants } = data!.access ?? { features: [], members: [], grants: [] };
@@ -637,8 +644,8 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
             h(
               'div',
               { class: 'card offer' },
-              h('h2', { text: g.names.length ? g.names.join(' & ') : `Home ${g.farmUnit}` }),
-              h('p', { class: 'offer-meta', text: `Home ${g.farmUnit} · ${features.find((f) => f.id === g.feature)?.label ?? g.feature} · since ${new Date(g.since).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` }),
+              h('h2', { text: g.names.length ? g.names.join(' & ') : homeLabel(g) }),
+              h('p', { class: 'offer-meta', text: `${homeLabel(g)} · ${features.find((f) => f.id === g.feature)?.label ?? g.feature} · since ${new Date(g.since).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` }),
               h('div', { class: 'offer-actions' }, h('button', { class: 'button button--outline', text: 'Remove', attrs: { type: 'button' }, on: { click: () => void change('/api/units-admin/access', { householdId: g.householdId, feature: g.feature, enabled: false }, 'Removed.') } })),
             ),
           )

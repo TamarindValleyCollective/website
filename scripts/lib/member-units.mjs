@@ -33,14 +33,17 @@ export function offerProblem({ shape, typeId, delegateToTvc }) {
 export function enablePlan({ offer, household, existing, typeId, delegateToTvc, nextSortOrder }) {
   if (!offer || offer.status !== 'interested') return { error: 'This offer is not waiting to be enabled.' };
   if (!household || !FARM_UNIT.test(household.farm_unit ?? '')) return { error: 'The household has no farm unit.' };
+  // A unit is a home: it is known by its house number (H-10) to the member, the admins, Madhavan and Linger alike.
+  // The farm number (F-12) stays its id, but it is the plot, not the name anyone sees.
+  if (!household.house_no) return { error: 'This household has no home (no house number) yet.' };
   const problem = offerProblem({ shape: offer.shape, typeId, delegateToTvc });
   if (problem) return { error: problem };
   if (existing && existing.status !== 'offboarded') return { error: `${household.farm_unit} already has a unit.` };
   const unit = {
     id: household.farm_unit,
     // Neutral on purpose: a unit's name can reach a partner, and must not name the member.
-    name: `Home ${household.farm_unit}`,
-    short_name: `Home ${household.farm_unit}`,
+    name: `Home ${household.house_no}`,
+    short_name: `Home ${household.house_no}`,
     group_name: null,
     kind: 'member-home',
     capacity: DEFAULT_CAPACITY[typeId],
