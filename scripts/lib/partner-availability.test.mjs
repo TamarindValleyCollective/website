@@ -185,6 +185,28 @@ test('a pool of stay-open and closed units counts each correctly on a closure ni
   assert.deepEqual(out.pools[0].nights['2026-12-12'], { free: 2, total: 2 });
 });
 
+test('a member-managed unit on auto-reject is not offered: unavailable, and not counted in its pool', () => {
+  const rejecting = unit('F-31', { manager: 'member', request_mode: 'reject' });
+  const accepting = unit('F-32', { manager: 'member', request_mode: 'auto' });
+  const out = buildAvailability({
+    dates,
+    units: [rejecting, accepting],
+    pools: [{ id: '1br', name: '1 bedroom', units: [rejecting, accepting] }],
+    assignments: [],
+    blocks: [],
+  });
+  assert.deepEqual(Object.values(out.units[0].nights), ['unavailable', 'unavailable', 'unavailable']);
+  assert.deepEqual(Object.values(out.units[1].nights), ['free', 'free', 'free']);
+  assert.deepEqual(out.pools[0].nights['2026-12-12'], { free: 1, total: 1 });
+});
+
+test('a unit TVC manages is not affected by a request mode', () => {
+  const delegated = unit('F-12', { manager: 'tvc', request_mode: 'reject' });
+  const out = buildAvailability({ dates, units: [delegated], pools: [{ id: '2bhk', name: '2 BHK', units: [delegated] }], assignments: [], blocks: [] });
+  assert.deepEqual(Object.values(out.units[0].nights), ['free', 'free', 'free']);
+  assert.deepEqual(out.pools[0].nights['2026-12-12'], { free: 1, total: 1 });
+});
+
 test('the catalogue sizes a pool by units that are offered, not paused ones', () => {
   const catalogue = toCatalogue({
     units: [],

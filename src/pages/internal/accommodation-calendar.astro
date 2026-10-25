@@ -1506,6 +1506,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     ownerFarmUnit?: string | null;
     listingShape?: 'whole' | 'room' | null;
     ignoresFarmClosure?: boolean;
+    requestMode?: 'reject' | 'ask' | 'auto';
     note?: string;
   }
 
@@ -3212,8 +3213,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     for (const type of TYPES) {
       const unitsOfType = shownUnits.filter((u) => u.type === type.id);
       if (!unitsOfType.length) continue;
-      // Paused units are not on offer, so they do not count in what is free.
-      const offered = unitsOfType.filter((u) => u.status !== 'paused');
+      // Paused units, and member-managed units set to auto-reject, are not on offer, so they do not count in what is free.
+      const offered = unitsOfType.filter((u) => u.status !== 'paused' && !(u.manager === 'member' && u.requestMode === 'reject'));
       const open = openTypes.has(type.id);
       let counts = '';
       for (const d of dates) {

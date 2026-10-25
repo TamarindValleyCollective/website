@@ -96,6 +96,9 @@ The key is shown once and cannot be recovered, so how it travels matters.
   types 1 bedroom, 1 BHK, 2 BHK, 3 BHK) is its pool, so what a partner books by quantity is a type.
 - **Status.** A unit is `rentable`, `paused` or `offboarded`. A paused unit is shown as unavailable every night
   and does not count towards its pool's size or free count; an offboarded unit is not shown at all.
+- **Request mode.** A unit its member manages (not one TVC manages for them) starts on `reject`, meaning it is not
+  offered: unavailable every night and not counted in its type. It is offered once the member chooses "ask me" or
+  "auto-accept" in the member portal.
 - **Farm closures are applied to every unit explicitly**, because a closure booking stores no
   tent rows. Exclusive bookings are treated the same, which errs towards showing less
   availability. A unit whose owner set it to stay open (`ignores_farm_closure`) is not closed by either:

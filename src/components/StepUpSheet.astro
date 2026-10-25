@@ -1,0 +1,105 @@
+---
+// The sheet an admin page opens to unlock changes (the "Unlock editing" step-up), with the styles of the lock in the
+// toolbar that opens it. Wired by scripts/lib/staff-stepup-ui.mjs, which finds everything by the ids below. The lock
+// button itself is the page's own, because a toolbar item has to be a direct child of the page's layout:
+//   <button slot="toolbar" type="button" id="lock" class="lock-pill" hidden></button>
+// The Access page still carries its own copy of this; moving it onto this component is a follow-up.
+---
+
+<dialog id="stepup" class="sheet" aria-labelledby="stepup-title">
+  <h2 id="stepup-title">Unlock editing</h2>
+  <p id="stepup-text" class="sheet-text"></p>
+  <form id="verify-form" class="sheet-form" hidden>
+    <label class="visually-hidden" for="verify-code">Code</label>
+    <input type="text" id="verify-code" name="verify-code" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" required />
+    <button type="submit" class="button button--primary">Unlock</button>
+    <button type="button" id="verify-passkey" class="button button--outline" hidden>Use a passkey</button>
+    <button type="button" id="verify-switch" class="link-button">Use a recovery code</button>
+  </form>
+  <a id="stepup-link" class="sheet-link" href="/internal/security/" hidden>Set up your second factors →</a>
+  <p id="verify-error" class="error" hidden></p>
+  <div class="sheet-actions">
+    <button type="button" id="lock-now" class="button button--outline" hidden>Lock now</button>
+    <button type="button" id="stepup-close" class="button button--outline">Close</button>
+  </div>
+</dialog>
+
+<style is:global>
+  .lock-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 32px;
+    padding: 4px 12px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--tvc-cream);
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 120ms ease-out, transform 100ms ease-out;
+  }
+
+  .lock-pill:active {
+    transform: scale(0.97);
+  }
+
+  .lock-pill:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .lock-pill svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .lock-pill[data-state='open'] {
+    background: var(--tvc-green-tint);
+    color: var(--tvc-green-dark);
+  }
+
+  .lock-pill[data-state='setup'] {
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+  }
+
+  #stepup .sheet-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  #stepup .sheet-form input {
+    flex: 1 1 100%;
+    min-height: 48px;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: var(--radius-field);
+    background: var(--tvc-cream);
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-xl);
+    letter-spacing: 0.3em;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #stepup .sheet-form input:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  #stepup .sheet-link {
+    font-size: var(--text-sm);
+  }
+</style>
