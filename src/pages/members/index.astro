@@ -1581,17 +1581,36 @@ import SignInGate from '../../components/SignInGate.astro';
     font-size: var(--text-base);
   }
 
+  /* The whole row is the target, like the portal's other list rows. */
   dialog.modal label.check {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
+    min-height: 48px;
+    padding: 12px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-field);
+    font-size: var(--text-base);
+    cursor: pointer;
   }
 
-  .form-msg {
-    min-height: 1.2em;
-    margin: 0 0 4px;
+  dialog.modal label.check input {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    accent-color: var(--tvc-green-dark);
+  }
+
+  /* Takes no room until there is something to say. */
+  dialog.modal .form-msg {
+    margin: 0 0 12px;
     color: var(--tvc-error-text);
     font-size: var(--text-sm);
+  }
+
+  dialog.modal .form-msg:empty {
+    display: none;
   }
 
   /* ---- the feature tour (startTour) and the "What's new" card ---- */
@@ -1861,14 +1880,26 @@ import SignInGate from '../../components/SignInGate.astro';
 
   dialog.modal label {
     display: grid;
-    gap: 4px;
-    margin-bottom: 10px;
+    gap: 6px;
+    margin-bottom: 16px;
     font-size: var(--text-sm);
   }
 
-  dialog.modal .field-cue {
+  dialog.modal .field-label {
+    font-weight: 600;
+    color: var(--tvc-ink);
+  }
+
+  dialog.modal .field-opt {
+    font-weight: 400;
+    color: var(--tvc-ink-soft);
+  }
+
+  /* The short cue sits under the field, quiet, and stays there; the fuller hint appears below it while typing. */
+  dialog.modal .field-help {
     color: var(--tvc-ink-soft);
     font-size: var(--text-sm);
+    line-height: 1.4;
   }
 
   /* While the cursor is in the field, the fuller explanation appears as a tinted callout. */
@@ -1886,25 +1917,61 @@ import SignInGate from '../../components/SignInGate.astro';
     display: block;
   }
 
-  dialog.modal input,
+  dialog.modal input:not([type='checkbox'], [type='range'], [type='file']),
   dialog.modal select {
-    padding: 8px 10px;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 44px;
+    padding: 0 12px;
     border: 1px solid var(--tvc-line-strong);
     border-radius: var(--radius-field);
     background: var(--tvc-white);
     color: var(--tvc-ink);
     font: inherit;
+    font-size: var(--text-md);
+    transition: border-color 120ms ease-out, box-shadow 120ms ease-out;
   }
 
-  @media (pointer: coarse) {
-    dialog.modal input:not([type='checkbox'], [type='range']),
-    dialog.modal select {
-      min-height: 44px;
-    }
+  dialog.modal input::placeholder {
+    color: var(--tvc-ink-soft);
+    opacity: 0.75;
+  }
+
+  /* A field shows focus on itself (a border and a soft halo), not with a ring floating off its edge. */
+  dialog.modal :is(input:not([type='checkbox'], [type='range'], [type='file']), select):focus-visible {
+    outline: none;
+    border-color: var(--tvc-orange);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--tvc-orange) 28%, transparent);
+  }
+
+  /* The file picker: a dashed drop area with a button that matches the portal's, not the browser's grey one. */
+  dialog.modal input[type='file'] {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 14px;
+    border: 1px dashed var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-sm);
+  }
+
+  dialog.modal input[type='file']::file-selector-button {
+    min-height: 36px;
+    margin-right: 12px;
+    padding: 0 14px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    cursor: pointer;
   }
 
   /* Dialogs sit outside the portal's shell, so they need the same keyboard focus ring as everything else in it. */
-  dialog.modal :is(a, button, input, select, textarea, summary):focus-visible {
+  dialog.modal :is(a, button, textarea, summary, input[type='checkbox'], input[type='file']):focus-visible {
     outline: 2px solid var(--tvc-orange);
     outline-offset: 2px;
   }
@@ -1917,14 +1984,20 @@ import SignInGate from '../../components/SignInGate.astro';
     display: flex;
     justify-content: flex-end;
     gap: 10px;
-    margin: 6px -22px 0;
-    padding: 12px 22px calc(12px + env(safe-area-inset-bottom, 0px));
+    margin: 20px -22px 0;
+    padding: 14px 22px calc(14px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--tvc-line);
     background: var(--tvc-white);
+  }
+
+  .modal-actions .btn {
+    min-height: 40px;
+    padding: 0 16px;
   }
 
   /* The buttons' own padding stands in for the dialog's bottom padding. */
   dialog.modal:has(> .modal-actions) {
-    padding-bottom: 10px;
+    padding-bottom: 0;
   }
 
   .who-menu:not([hidden], .out) {
@@ -3975,8 +4048,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const note = h('small', 'field-hint', hint);
     note.id = `hint-${++hintSeq}`;
     input.setAttribute('aria-describedby', note.id);
-    // The cue is a few words beside the label, always visible; the hint is the fuller explanation, shown as a callout while typing.
-    return h('label', '', undefined, h('span', '', label, cue ? h('span', 'field-cue', ` · ${cue}`) : null), input, note);
+    // The cue is one quiet line under the field, always visible; the hint is the fuller explanation, shown as a callout while typing.
+    const optional = label.endsWith(' (optional)');
+    const text = optional ? label.slice(0, -' (optional)'.length) : label;
+    return h('label', '', undefined, h('span', 'field-label', text, optional ? h('span', 'field-opt', ' (optional)') : null), input, cue ? h('small', 'field-help', cue.charAt(0).toUpperCase() + cue.slice(1)) : null, note);
   };
   const GOOGLE_HINT = 'They sign in with Google, so this must be an address that has a Google account: Gmail, or a work or school address on Google. There is no password to remember.';
   const WHATSAPP_HINT = 'We use this number to message them on WhatsApp about stays and farm updates.';
@@ -4020,7 +4095,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       h('p', '', asRequest
         ? `Your unit already has ${FAMILY_LOGINS} family members who can sign in, so the core team decides on more.`
         : 'They can see your unit and the member directory and, soon, book stays. They cannot edit your story, land documents or who is in your unit.'),
-      h('label', '', 'Name', name),
+      h('label', '', undefined, h('span', 'field-label', 'Name'), name),
       hinted('Google email', email, GOOGLE_HINT, 'Gmail or any Google account'),
       hinted('WhatsApp number (optional)', phone, WHATSAPP_HINT, 'a number with WhatsApp'),
       msg,
@@ -4095,7 +4170,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     dlg.append(
       h('h3', '', `Edit ${p.name}`),
       h('p', '', 'Leave a field blank to keep what is on file.'),
-      h('label', '', 'Name', name),
+      h('label', '', undefined, h('span', 'field-label', 'Name'), name),
       hinted('Google email', email, GOOGLE_HINT, 'Gmail or any Google account'),
       hinted('WhatsApp number', phone, WHATSAPP_HINT, 'a number with WhatsApp'),
       msg,
@@ -4316,7 +4391,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       h('h3', '', `Upload a ${landType === 'house' ? 'house plot' : 'farm land'} document`),
       h('p', '', 'Upload your patta or survey number document from the Tamil Nadu e-Services site: a PDF under 1 MB, or a photo under 3 MB.'),
       uploadHelp(),
-      h('label', '', 'File', file),
+      h('label', '', undefined, h('span', 'field-label', 'File'), file),
       msg,
       h('div', 'modal-actions', undefined, cancel, send),
     );
@@ -4384,8 +4459,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       h('div', 'upload-help', undefined,
         h('p', '', 'The FMB sketch is the drawing of your land. On the e-Services site, choose "Survey Number" in View Patta / Chitta and download the sketch. Upload that PDF here and the shape of the land appears beside the survey number on your card.'),
         h('p', '', 'It does not change any record. To have a patta checked against your register, use "Upload a document" instead.')),
-      h('label', '', 'This sketch is for survey no.', survey),
-      h('label', '', 'File', file),
+      h('label', '', undefined, h('span', 'field-label', 'This sketch is for survey no.'), survey),
+      h('label', '', undefined, h('span', 'field-label', 'File'), file),
       msg,
       h('div', 'modal-actions', undefined, cancel, send),
     );

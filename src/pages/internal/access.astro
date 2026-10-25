@@ -64,7 +64,7 @@ import SignInGate from '../../components/SignInGate.astro';
             <input type="email" id="add-email" autocomplete="off" required />
           </label>
           <label>
-            Name (optional)
+            Name <span class="opt">(optional)</span>
             <input type="text" id="add-name" autocomplete="off" maxlength="100" />
           </label>
           <button type="submit" id="add-submit" class="button">Add person</button>
@@ -134,32 +134,6 @@ import SignInGate from '../../components/SignInGate.astro';
     margin: 0;
   }
 
-
-  .inline-form {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 12px;
-  }
-
-  .inline-form label {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: var(--text-sm);
-    color: var(--tvc-ink-soft);
-  }
-
-  .inline-form input,
-  .inline-form select {
-    font: inherit;
-    font-size: var(--text-md);
-    padding: 8px 10px;
-    border: 1px solid var(--tvc-line-strong);
-    border-radius: var(--radius-field);
-    background: var(--tvc-white);
-    color: var(--tvc-ink);
-  }
 
   .tabs {
     display: flex;
