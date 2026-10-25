@@ -4032,7 +4032,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     dlg.append(
       h('h3', '', 'Your details'),
       h('p', '', `Signed in as ${me!.email ?? 'your Google account'}. To change your name, email or unit, ask the core team.`),
-      hinted('WhatsApp number', phone, 'We use this number to message you on WhatsApp about stays and farm updates.', 'a number with WhatsApp'),
+      hinted('WhatsApp number', phone, 'We use this number to message you on WhatsApp about stays and farm updates.', 'a number with WhatsApp. Outside India, start with + and the country code'),
       h('label', 'check', undefined, dir, h('span', '', 'List me in the member directory')),
       msg,
       h('div', 'modal-actions', undefined, cancel, save),
@@ -4097,7 +4097,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         : 'They can see your unit and the member directory and, soon, book stays. They cannot edit your story, land documents or who is in your unit.'),
       h('label', '', undefined, h('span', 'field-label', 'Name'), name),
       hinted('Google email', email, GOOGLE_HINT, 'Gmail or any Google account'),
-      hinted('WhatsApp number (optional)', phone, WHATSAPP_HINT, 'a number with WhatsApp'),
+      hinted('WhatsApp number (optional)', phone, WHATSAPP_HINT, 'a number with WhatsApp. Outside India, start with + and the country code'),
       msg,
       h('div', 'modal-actions', undefined, cancel, save),
     );
@@ -4172,7 +4172,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       h('p', '', 'Leave a field blank to keep what is on file.'),
       h('label', '', undefined, h('span', 'field-label', 'Name'), name),
       hinted('Google email', email, GOOGLE_HINT, 'Gmail or any Google account'),
-      hinted('WhatsApp number', phone, WHATSAPP_HINT, 'a number with WhatsApp'),
+      hinted('WhatsApp number', phone, WHATSAPP_HINT, 'a number with WhatsApp. Outside India, start with + and the country code'),
       msg,
       h('div', 'modal-actions', undefined, remove, cancel, save),
     );
