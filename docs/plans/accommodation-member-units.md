@@ -33,8 +33,10 @@ manage their own unit afterwards, all on the data model step 2 put in place. Two
    unit type) and the member's payout; the member reads it in **My rental** and uploads the signed copy; the
    admin records the dates and Linger's references. (Step 3c, migration `0069`, table `member_unit_contracts`.)
    Digital signing may replace the upload later. TVC collects the money and pays Linger and the member (a member's
-   payout may be set against maintenance); a stay counts in the settlement cycle it ends in. Bank, UPI and tax
-   details are not stored yet.
+   payout may be set against maintenance); a stay counts in the settlement cycle it ends in. The member enters their payout
+   account in My rental (step 3d, migration `0070`): encrypted, shown back only as "ending 4821", PAN required for
+   every payout, verified by a small test transfer and with TDS recorded by a super admin before any payment.
+   Linger sends its own invoices.
 3. **Enable** (only once the signed copy is in). The super admin sees the offer in **Units → Pipeline**, confirms the type (1 bedroom, 1 BHK,
    2 BHK, 3 BHK) and whether TVC manages it, and enables it. That creates the unit (status `rentable`, request mode
    **auto-reject**) and marks the offer `enabled`. Only now can it be allocated.

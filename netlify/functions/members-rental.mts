@@ -22,6 +22,8 @@ import { validateOffer, validateSettings, validateBlock, canRemoveBlock, rentalS
 import { recordPartnerEvent, sendOfferNotice } from './lib/linger-notify';
 import { checkFile, contractForMember, documentKey } from '../../scripts/lib/member-contract.mjs';
 import { getContractDocument, putContractDocument } from './lib/contract-storage';
+import { needsPayout, payoutForMember, validatePayout } from '../../scripts/lib/member-payout.mjs';
+import { encryptPayoutText } from './lib/staff-mfa-crypto';
 
 const OWNERS_ONLY = 'Only the owners of a unit can offer it to guests.';
 const todayInIst = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
@@ -113,8 +115,11 @@ async function handleGet(req: Request): Promise<Response> {
   // A farm-wide closure only matters to a unit that does not stay open through it.
   const blocks = shaped.blocks.filter((b: { farm: boolean }) => !(b.farm && unit?.ignores_farm_closure));
   const contract = offer?.status === 'interested' ? await openContract(offer.id) : null;
+  const [live_contract] = (await select('member_unit_contracts', `household_id=eq.${householdId}&status=in.(shared,signed,active)&select=member_payout,status&limit=1`)) as { member_payout: string; status: string }[];
+  const [account] = (await select('member_payout_accounts', `household_id=eq.${householdId}&select=household_id,payee_name,method,details_last4,pan_last4,status,updated_at`)) as any[];
   return jsonResponse({
     contract: contractForMember(contract),
+    payout: { needed: needsPayout(live_contract), maintenance: live_contract?.member_payout === 'maintenance_adjustment', account: payoutForMember(account) },
     enabled: true,
     eligible: true,
     farmUnit: household.farm_unit,
@@ -201,6 +206,39 @@ async function handleContractSigned(req: Request): Promise<Response> {
   return jsonResponse({ ok: true });
 }
 
+// Where TVC pays the member. The details are encrypted before they are stored and are never sent back to a browser;
+// only "ending 4821" is. A change sends the account back for verification (a small test transfer) before any payout.
+async function handlePayout(req: Request): Promise<Response> {
+  const who = await requireOwner(req);
+  if ('error' in who) return who.error;
+  const { member, householdId } = who;
+  const [contract] = (await select('member_unit_contracts', `household_id=eq.${householdId}&status=in.(shared,signed,active)&select=member_payout,status&limit=1`)) as { member_payout: string; status: string }[];
+  if (!needsPayout(contract)) return jsonResponse({ error: 'Your contract does not pay you by transfer, so there is nothing to enter.' }, 409);
+  const checked = validatePayout(await readJson(req));
+  if ('error' in checked) return jsonResponse({ error: checked.error }, 400);
+  const p = checked.payout;
+  if (!(await logChange(member.personId, 'member.rental.payout_details', { householdId, method: p.method }))) return jsonResponse({ error: 'Could not record the change, so nothing was saved. Try again.' }, 500);
+  const row = {
+    payee_name: p.payeeName,
+    method: p.method,
+    details_enc: encryptPayoutText(JSON.stringify(p.details)),
+    details_last4: p.detailsLast4,
+    pan_enc: encryptPayoutText(p.pan),
+    pan_last4: p.panLast4,
+    status: 'submitted',
+    tds_applies: null,
+    tds_rate: null,
+    verified_by: null,
+    verified_at: null,
+    entered_by: member.personId,
+    updated_at: new Date().toISOString(),
+  };
+  const existing = await select('member_payout_accounts', `household_id=eq.${householdId}&select=id`);
+  const done = existing.length ? await write('PATCH', `member_payout_accounts?household_id=eq.${householdId}`, row) : await write('POST', 'member_payout_accounts', { household_id: householdId, ...row });
+  if (!done.ok) return jsonResponse({ error: 'Server error' }, 500);
+  return jsonResponse({ ok: true });
+}
+
 async function handleSettings(req: Request): Promise<Response> {
   const who = await requireOwner(req);
   if ('error' in who) return who.error;
@@ -263,6 +301,7 @@ export default async (req: Request): Promise<Response> => {
     '/api/members-me/rental/blocks': handleBlockAdd,
     '/api/members-me/rental/blocks/remove': handleBlockRemove,
     '/api/members-me/rental/contract/signed': handleContractSigned,
+    '/api/members-me/rental/payout': handlePayout,
   };
   const write = m === 'POST' ? routes[p] : undefined;
   const read = m === 'GET' ? (p === '/api/members-me/rental' ? handleGet : p === '/api/members-me/rental/contract' ? handleContractGet : undefined) : undefined;
@@ -278,5 +317,5 @@ export default async (req: Request): Promise<Response> => {
 };
 
 export const config = {
-  path: ['/api/members-me/rental', '/api/members-me/rental/offer', '/api/members-me/rental/withdraw', '/api/members-me/rental/settings', '/api/members-me/rental/blocks', '/api/members-me/rental/blocks/remove', '/api/members-me/rental/contract', '/api/members-me/rental/contract/signed'],
+  path: ['/api/members-me/rental', '/api/members-me/rental/offer', '/api/members-me/rental/withdraw', '/api/members-me/rental/settings', '/api/members-me/rental/blocks', '/api/members-me/rental/blocks/remove', '/api/members-me/rental/contract', '/api/members-me/rental/contract/signed', '/api/members-me/rental/payout'],
 };

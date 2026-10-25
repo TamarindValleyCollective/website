@@ -25,6 +25,7 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
       <div class="tabs" role="tablist" aria-label="Units sections">
         <button type="button" role="tab" id="tab-pipeline" aria-selected="true" aria-controls="pane-pipeline" class="tab">Pipeline <span id="pipeline-count" class="tab-count"></span></button>
         <button type="button" role="tab" id="tab-all" aria-selected="false" aria-controls="pane-all" class="tab">All units</button>
+        <button type="button" role="tab" id="tab-payouts" aria-selected="false" aria-controls="pane-payouts" class="tab">Payouts <span id="payouts-count" class="tab-count"></span></button>
       </div>
 
       <section id="pane-pipeline" role="tabpanel" aria-labelledby="tab-pipeline">
@@ -48,6 +49,11 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
         </div>
         <p id="unit-count" class="note"></p>
         <div id="unit-groups"></div>
+      </section>
+
+      <section id="pane-payouts" role="tabpanel" aria-labelledby="tab-payouts" hidden>
+        <p class="note">Where TVC pays members. Details are encrypted and shown only as "ending 4821". Reveal one only to make a payment: it needs your second factor and is logged. Verify an account after a small test transfer, and record whether TDS is deducted.</p>
+        <div id="payouts" class="offers"></div>
       </section>
 
       <dialog id="unit-sheet" class="sheet sheet--unit" aria-labelledby="unit-title"></dialog>
@@ -255,6 +261,20 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
     types: { id: string; label: string; ownerType: string }[];
     units: UnitRow[];
     offers: OfferRow[];
+    payouts: PayoutRow[];
+  }
+  interface PayoutRow {
+    householdId: string;
+    farmUnit: string;
+    payeeName: string;
+    method: 'bank' | 'upi';
+    shown: string;
+    panShown: string;
+    status: 'submitted' | 'verified';
+    tdsApplies: boolean | null;
+    tdsRate: number | null;
+    verifiedAt: string | null;
+    updatedAt: string;
   }
 
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -268,6 +288,8 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
   const tabAll = $('tab-all');
   const panePipeline = $('pane-pipeline');
   const paneAll = $('pane-all');
+  const tabPayouts = $('tab-payouts');
+  const panePayouts = $('pane-payouts');
   const offersEl = $('offers');
   const unitGroups = $('unit-groups');
   const unitSearch = $<HTMLInputElement>('unit-search');
@@ -394,6 +416,7 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
     if (!data) return;
     lock.render();
     renderPipeline();
+    renderPayouts();
     renderAll();
     if (unitSheet.open && unitSheet.dataset.unit) openUnit(unitSheet.dataset.unit);
   }
@@ -527,6 +550,48 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
     );
   }
 
+  // ---- payout accounts: masked; reveal and verify are separate, step-up calls
+  async function reveal(row: PayoutRow, into: HTMLElement) {
+    if (!mayChange()) return;
+    try {
+      const { status, data: out } = await call('/api/units-admin/payouts/reveal', { method: 'POST', body: { householdId: row.householdId } });
+      if (status === 200) {
+        const lines = out.method === 'bank' ? [`Account ${out.details.account}`, `IFSC ${out.details.ifsc}`] : [`UPI ${out.details.upi}`];
+        into.replaceChildren(h('p', { class: 'offer-meta', text: `${out.payeeName} · ${lines.join(' · ')} · PAN ${out.pan}` }));
+        // Shown briefly, then gone from the page.
+        setTimeout(() => into.replaceChildren(), 30_000);
+      } else if (out?.code === 'STEP_UP_REQUIRED') lock.open();
+      else showToast(out?.error ?? 'Could not show that.');
+    } catch (err) {
+      if (!handled(err)) showToast('Could not reach the server.');
+    }
+  }
+
+  function renderPayouts() {
+    const rows = data!.payouts ?? [];
+    const waiting = rows.filter((r) => r.status === 'submitted').length;
+    $('payouts-count').textContent = waiting ? String(waiting) : '';
+    $('payouts').replaceChildren(
+      ...(rows.length
+        ? rows.map((r) => {
+            const shown = h('div');
+            const tds = h('input', { attrs: { type: 'checkbox', 'aria-label': 'TDS is deducted', ...(r.tdsApplies ? { checked: '' } : {}) } });
+            const rate = textInput('TDS rate (%)', r.tdsRate === null ? '' : String(r.tdsRate), 'number');
+            const verify = h('button', { class: 'button', text: r.status === 'verified' ? 'Save TDS' : 'Mark verified', attrs: { type: 'button' }, on: { click: () => void change('/api/units-admin/payouts/verify', { householdId: r.householdId, tdsApplies: tds.checked, tdsRate: rate.value }, 'Saved.') } });
+            return h(
+              'div',
+              { class: 'card offer' },
+              h('h2', { text: `Home ${r.farmUnit}` }),
+              h('p', { class: 'offer-meta', text: `${r.payeeName} · ${r.method === 'bank' ? 'Bank account' : 'UPI'} ${r.shown} · PAN ${r.panShown} · ${r.status === 'verified' ? 'Verified' : 'Waiting for verification'}` }),
+              shown,
+              h('div', { class: 'stack-form' }, h('label', {}, tds, h('span', { text: 'TDS is deducted' })), field('TDS rate (%)', rate)),
+              h('div', { class: 'offer-actions' }, h('button', { class: 'button button--outline', text: 'Reveal details', attrs: { type: 'button' }, on: { click: () => void reveal(r, shown) } }), verify),
+            );
+          })
+        : [h('p', { class: 'empty', text: 'No payout details yet. Members enter them in the portal once their contract is shared.' })]),
+    );
+  }
+
   function matches(u: UnitRow): boolean {
     if (u.status === 'offboarded' && !query) return false;
     if (typeFilter && u.type !== typeFilter) return false;
@@ -644,14 +709,17 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
   });
 
   // ---- tabs and filters
-  function selectTab(which: 'pipeline' | 'all') {
+  function selectTab(which: 'pipeline' | 'all' | 'payouts') {
     tabPipeline.setAttribute('aria-selected', String(which === 'pipeline'));
     tabAll.setAttribute('aria-selected', String(which === 'all'));
+    tabPayouts.setAttribute('aria-selected', String(which === 'payouts'));
     panePipeline.hidden = which !== 'pipeline';
     paneAll.hidden = which !== 'all';
+    panePayouts.hidden = which !== 'payouts';
   }
   tabPipeline.addEventListener('click', () => selectTab('pipeline'));
   tabAll.addEventListener('click', () => selectTab('all'));
+  tabPayouts.addEventListener('click', () => selectTab('payouts'));
   unitSearch.addEventListener('input', () => {
     query = unitSearch.value.trim().toLowerCase();
     renderAll();
