@@ -105,6 +105,21 @@ owner and manager at the time, and an audit trail.
    mocked yet.
 7. The **Day view** stays as it is.
 
+## Where it lives: menus by person
+
+The new screens are extra menu items in the portals people already use.
+
+| Person | Portal | Menu change |
+|---|---|---|
+| A member | Member Portal | New **My rental**: offer a unit, track it with Linger, then request mode, blocked dates, requests, guests and their own statement. |
+| Madhavan | Admin Portal | **Accommodation** replaces "Accommodation calendar": Availability by type, Arrivals, and the unchanged Day view. |
+| Super admin | Admin Portal | New **Units** under Admin: the onboarding pipeline and a table of all units, with pause and offboard. Offboarding is blocked while a unit has future bookings. |
+| Finance manager | Admin Portal | **Revenue** replaces "Event payments": Overview, Events (today's screen, unchanged), Stays (collected, fees, net and each party's share) and Settlements (what is due to Linger and to each member). |
+
+Revenue and Settlements record, per stay, whether the unit was TVC's or a member's and the terms that
+applied when it was confirmed, so a later change to terms does not rewrite history. Finance sees money,
+not guest details. A private mockup of all four views exists; this plan is the record.
+
 ## What has to change in the data
 
 - **Units come from the database, not code.** The calendar still reads `ACCOMMODATION_UNITS` and
