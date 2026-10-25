@@ -234,6 +234,7 @@ function demoMe(kind: string) {
       ? []
       : [
           { label: 'Access', path: '/internal/access/', description: 'Who can do what' },
+          { label: 'Units', path: '/internal/units/', description: 'Onboard and manage the units Linger can sell' },
           { label: 'Security', path: '/internal/security/', description: 'Your second factors' },
         ],
   };
