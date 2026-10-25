@@ -124,7 +124,8 @@ reaches at the origin). Facts worth knowing:
   (`whatsapp-admin`, `whatsapp-suggest`, `members-admin`, `accommodation-admin`,
   `event-payments-admin`, `usage-admin`, `units-admin`, `photo-pool`, `staff-admin`, `staff-mfa`, `staff-me`) pass
   through; anything else redirects to the admin home. **A new admin page, function or asset path must
-  be added to that list** or the catch-all swallows it. The old `admin.tvc.farm/internal/*` redirects
+  be added to that list** or the catch-all swallows it (the `Admin host routes` check, `scripts/lib/admin-host-routes.test.mjs`,
+  fails a PR that forgets a page or an admin function; an asset path is still on you). The old `admin.tvc.farm/internal/*` redirects
   (302) to the short form, and `tvc.farm/internal/*`, `www.tvc.farm/internal/*` and
   `members.tvc.farm/internal/*` redirect (302) straight to `admin.tvc.farm/*`. `StaffLayout.astro`
   shortens in-page `/internal/...` links on this host only (previews and `netlify dev` still serve the
