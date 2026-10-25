@@ -119,10 +119,10 @@ reaches at the origin). Facts worth knowing:
 - **Routing** (`netlify.toml`, rules for `https://admin.tvc.farm/...` only): the pages are served
   **without the `/internal` prefix** (the files still live under `src/pages/internal/`). `/` shows the
   admin home; `/usage/`, `/access/`, `/security/`, `/photo-pool/`, `/whatsapp/`, `/event-payments/`,
-  `/accommodation-calendar/`, `/members/` and `/test-event/` are each a rewrite to the same path under
+  `/accommodation-calendar/`, `/members/`, `/units/` and `/test-event/` are each a rewrite to the same path under
   `/internal/`. `/_astro/*`, `/fonts/*`, `/images/brand/*`, the tab icons and the admin functions
   (`whatsapp-admin`, `whatsapp-suggest`, `members-admin`, `accommodation-admin`,
-  `event-payments-admin`, `usage-admin`, `photo-pool`, `staff-admin`, `staff-mfa`, `staff-me`) pass
+  `event-payments-admin`, `usage-admin`, `units-admin`, `photo-pool`, `staff-admin`, `staff-mfa`, `staff-me`) pass
   through; anything else redirects to the admin home. **A new admin page, function or asset path must
   be added to that list** or the catch-all swallows it. The old `admin.tvc.farm/internal/*` redirects
   (302) to the short form, and `tvc.farm/internal/*`, `www.tvc.farm/internal/*` and

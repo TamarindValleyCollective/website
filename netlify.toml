@@ -184,6 +184,12 @@
   status = 200
   force = true
 
+[[redirects]]
+  from = "https://admin.tvc.farm/units/*"
+  to = "/internal/units/:splat"
+  status = 200
+  force = true
+
 # the old long form still works for bookmarks and emails already sent: send it to the short one
 [[redirects]]
   from = "https://admin.tvc.farm/internal/*"
@@ -243,6 +249,12 @@
 [[redirects]]
   from = "https://admin.tvc.farm/api/usage-admin/*"
   to = "/api/usage-admin/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/api/units-admin/*"
+  to = "/api/units-admin/:splat"
   status = 200
   force = true
 
