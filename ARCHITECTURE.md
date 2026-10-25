@@ -354,7 +354,10 @@ outside both the local machine and Netlify (the member-update-email workflow).
   Same Google Sign-In shell pattern as `photo-pool.astro`/`whatsapp.astro`, backing the farm
   manager's tent-booking dashboard (see `netlify/functions/accommodation-admin.mts` below): a
   day/week/month calendar (day view redesigned 2026-08-30 into a wide, name-visible list per
-  tent rather than a cramped single-column table), tapping a grid cell opens a booking dialog
+  tent rather than a cramped single-column table; the week and month grids redesigned 2026-10 into
+  availability by type: a row per type from `ACCOMMODATION_TYPES` with how many of its units are free
+  each night, opened to show its units with each booking as one bar across its nights; Today and a
+  jump-to-date field; plan in `docs/plans/accommodation-calendar.md`), tapping a free cell or a bar opens a booking dialog
   pre-filled with that tent/date, a guest directory with name/mobile-number typeahead, and a
   full create/update/delete audit log. Built alongside a public, aggregate-only availability
   view (`AvailabilityView.astro` + `/visit/availability`) that was **deliberately not shipped**

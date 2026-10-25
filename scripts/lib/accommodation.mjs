@@ -62,21 +62,30 @@
 // existing group-rendering (booking form's Tents picker, and the calendar's
 // day/week/month views once that grouping was extended there) picks these
 // up automatically - no new UI code needed for this, just data.
+// What the farm sells, by type: a row per type in the calendar, with the units inside it a click away. The
+// types are what Linger will book (see docs/plans/accommodation-calendar.md); a unit's `group` above stays a
+// display-only cluster inside the booking form's picker.
+export const ACCOMMODATION_TYPES = [
+  { id: 'tent', label: 'Tents' },
+  { id: 'hut', label: 'Bamboo huts' },
+  { id: 'byot', label: 'Bring your own tent' },
+];
+
 export const ACCOMMODATION_UNITS = [
-  { id: 'Tent01', label: 'Malabar Hut Fixed Tent (N)', shortLabel: 'Fixed Tent (N)', capacity: 3, kind: 'fixed', group: 'Malabar Hut' },
-  { id: 'Tent02', label: 'Malabar Hut Fixed Tent (S)', shortLabel: 'Fixed Tent (S)', capacity: 3, kind: 'fixed', group: 'Malabar Hut' },
-  { id: 'Tent03', label: 'Malabar Hut Portable Tent', shortLabel: 'Portable Tent', capacity: 2, kind: 'removable', group: 'Malabar Hut' },
-  { id: 'Tent04', label: 'Banyan Hut Fixed Tent', shortLabel: 'Fixed Tent', capacity: 3, kind: 'fixed', group: 'Banyan Hut' },
-  { id: 'Tent05', label: 'Banyan Hut Portable Tent', shortLabel: 'Portable Tent', capacity: 2, kind: 'removable', group: 'Banyan Hut' },
-  { id: 'Tent06', label: 'Upper Bamboo Hut', shortLabel: 'Upper Hut', capacity: 2, kind: 'fixed', group: 'Bamboo Huts' },
-  { id: 'Tent07', label: 'Lower Bamboo Hut', shortLabel: 'Lower Hut', capacity: 2, kind: 'fixed', group: 'Bamboo Huts' },
-  { id: 'Tent08', label: 'Large Portable Tent', shortLabel: 'Large Tent', capacity: 3, kind: 'removable', group: 'Portable Tents' },
-  { id: 'Tent09', label: 'Medium Portable Tent', shortLabel: 'Medium Tent', capacity: 2, kind: 'removable', group: 'Portable Tents' },
-  { id: 'BYOT01', label: 'Bring Your Own Tent 1', shortLabel: 'Tent 1', capacity: 3, kind: 'byot', group: 'Bring Your Own Tent' },
-  { id: 'BYOT02', label: 'Bring Your Own Tent 2', shortLabel: 'Tent 2', capacity: 3, kind: 'byot', group: 'Bring Your Own Tent' },
-  { id: 'BYOT03', label: 'Bring Your Own Tent 3', shortLabel: 'Tent 3', capacity: 3, kind: 'byot', group: 'Bring Your Own Tent' },
-  { id: 'BYOT04', label: 'Bring Your Own Tent 4', shortLabel: 'Tent 4', capacity: 3, kind: 'byot', group: 'Bring Your Own Tent' },
-  { id: 'BYOT05', label: 'Bring Your Own Tent 5', shortLabel: 'Tent 5', capacity: 3, kind: 'byot', group: 'Bring Your Own Tent' },
+  { id: 'Tent01', label: 'Malabar Hut Fixed Tent (N)', shortLabel: 'Fixed Tent (N)', capacity: 3, kind: 'fixed', group: 'Malabar Hut', type: 'tent' },
+  { id: 'Tent02', label: 'Malabar Hut Fixed Tent (S)', shortLabel: 'Fixed Tent (S)', capacity: 3, kind: 'fixed', group: 'Malabar Hut', type: 'tent' },
+  { id: 'Tent03', label: 'Malabar Hut Portable Tent', shortLabel: 'Portable Tent', capacity: 2, kind: 'removable', group: 'Malabar Hut', type: 'tent' },
+  { id: 'Tent04', label: 'Banyan Hut Fixed Tent', shortLabel: 'Fixed Tent', capacity: 3, kind: 'fixed', group: 'Banyan Hut', type: 'tent' },
+  { id: 'Tent05', label: 'Banyan Hut Portable Tent', shortLabel: 'Portable Tent', capacity: 2, kind: 'removable', group: 'Banyan Hut', type: 'tent' },
+  { id: 'Tent06', label: 'Upper Bamboo Hut', shortLabel: 'Upper Hut', capacity: 2, kind: 'fixed', group: 'Bamboo Huts', type: 'hut' },
+  { id: 'Tent07', label: 'Lower Bamboo Hut', shortLabel: 'Lower Hut', capacity: 2, kind: 'fixed', group: 'Bamboo Huts', type: 'hut' },
+  { id: 'Tent08', label: 'Large Portable Tent', shortLabel: 'Large Tent', capacity: 3, kind: 'removable', group: 'Portable Tents', type: 'tent' },
+  { id: 'Tent09', label: 'Medium Portable Tent', shortLabel: 'Medium Tent', capacity: 2, kind: 'removable', group: 'Portable Tents', type: 'tent' },
+  { id: 'BYOT01', label: 'Bring Your Own Tent 1', shortLabel: 'Tent 1', capacity: 3, kind: 'byot', group: 'Bring Your Own Tent', type: 'byot' },
+  { id: 'BYOT02', label: 'Bring Your Own Tent 2', shortLabel: 'Tent 2', capacity: 3, kind: 'byot', group: 'Bring Your Own Tent', type: 'byot' },
+  { id: 'BYOT03', label: 'Bring Your Own Tent 3', shortLabel: 'Tent 3', capacity: 3, kind: 'byot', group: 'Bring Your Own Tent', type: 'byot' },
+  { id: 'BYOT04', label: 'Bring Your Own Tent 4', shortLabel: 'Tent 4', capacity: 3, kind: 'byot', group: 'Bring Your Own Tent', type: 'byot' },
+  { id: 'BYOT05', label: 'Bring Your Own Tent 5', shortLabel: 'Tent 5', capacity: 3, kind: 'byot', group: 'Bring Your Own Tent', type: 'byot' },
 ];
 
 // The farm's own physical rooms only - BYOT slots aren't a structure the

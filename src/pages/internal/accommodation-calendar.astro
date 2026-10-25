@@ -11,7 +11,7 @@
 import StaffLayout from '../../layouts/StaffLayout.astro';
 import SignInGate from '../../components/SignInGate.astro';
 import { getCollection } from 'astro:content';
-import { ACCOMMODATION_UNITS } from '../../../scripts/lib/accommodation.mjs';
+import { ACCOMMODATION_UNITS, ACCOMMODATION_TYPES } from '../../../scripts/lib/accommodation.mjs';
 import { durationDays } from '../../utils/events';
 import { members } from '../../data/members';
 
@@ -57,6 +57,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         <button type="button" id="prev-month" class="button">← Prev</button>
         <h2 id="month-label"></h2>
         <button type="button" id="next-month" class="button">Next →</button>
+        <button type="button" id="today-btn" class="button">Today</button>
+        <label class="jump-date"><span class="visually-hidden">Jump to a date</span><input type="date" id="jump-date" /></label>
         <div class="view-toggle segmented" role="group" aria-label="Calendar view">
           <button type="button" class="view-toggle-btn" data-view="day" aria-pressed="false">Day</button>
           <button type="button" class="view-toggle-btn view-toggle-btn--active" data-view="week" aria-pressed="true">Week</button>
@@ -68,6 +70,14 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
       <div class="grid-scroll">
         <table id="grid" class="grid-table" data-tour="grid"></table>
+      </div>
+
+      <div id="grid-legend" class="grid-legend" aria-label="Key">
+        <span><i class="lg lg--free"></i>Free (number of units)</span>
+        <span><i class="lg lg--stay"></i>Guest stay</span>
+        <span><i class="lg lg--event"></i>Event</span>
+        <span><i class="lg lg--visit"></i>Member visit</span>
+        <span><i class="lg lg--closed"></i>Closed</span>
       </div>
 
       <div id="day-view" class="day-view" hidden></div>
@@ -178,6 +188,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
 <script type="application/json" id="events-data" set:html={JSON.stringify(allEvents)} />
 <script type="application/json" id="units-data" set:html={JSON.stringify(ACCOMMODATION_UNITS)} />
+<script type="application/json" id="types-data" set:html={JSON.stringify(ACCOMMODATION_TYPES)} />
 <script type="application/json" id="members-data" set:html={JSON.stringify(memberNames)} />
 
 <style>
@@ -503,6 +514,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     font-size: var(--text-xs);
   }
 
+  .grid-table th.unit-col {
+    width: 14rem;
+    min-width: 11rem;
+  }
+
   .grid-table th.unit-col,
   .grid-table td.unit-col {
     text-align: left;
@@ -512,62 +528,193 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     font-weight: 600;
   }
 
-  /* Same grouping the booking form's Tents picker uses, extended to the
-     week/month grid (Sharath's feedback, 2026-09-10) - a solid-green band
-     reads clearly against every row state's own background (free/occupied/
-     closed all use tints, not solid color, of their own - see .day-row's
-     own comment on that same clash). */
-  .group-row td.group-row-label {
-    background: var(--tvc-green);
-    color: var(--tvc-white);
-    font-weight: 700;
-    font-size: var(--text-xs);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+  /* One row per type (Tents, Bamboo huts, ...) with how many of its units are free each night; open a type to see
+     its units, with each booking as one bar across its nights. A bar is a table cell spanning those nights. */
+  .sku-row td {
+    background: color-mix(in srgb, var(--tvc-ink) 4%, var(--tvc-white));
   }
 
-  .group-row td.group-row-fill {
-    background: var(--tvc-green);
-    border-color: var(--tvc-green);
+  .grid-table td.unit-col.sku-label {
+    padding: 0;
+  }
+
+  .sku-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 10px;
+    border: 0;
+    background: transparent;
+    color: var(--tvc-ink);
+    font: inherit;
+    font-weight: 700;
+    font-size: var(--text-sm);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .sku-toggle small {
+    display: block;
+    font-weight: 400;
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+  }
+
+  .sku-toggle svg {
+    flex: none;
+    width: 12px;
+    height: 12px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2.4;
+    transition: transform 120ms ease-out;
+    transform: rotate(-90deg);
+  }
+
+  .sku-row.is-open .sku-toggle svg {
+    transform: none;
+  }
+
+  .grid-table td.sku-count {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    font-size: var(--text-sm);
+    background-image: linear-gradient(color-mix(in srgb, var(--tvc-green) var(--fill, 0%), transparent), color-mix(in srgb, var(--tvc-green) var(--fill, 0%), transparent));
+  }
+
+  .grid-table td.sku-count--none {
+    color: var(--tvc-orange-text);
+  }
+
+  .grid-table td.sku-count--past {
+    background-image: none;
+  }
+
+  .sku-count small {
+    display: block;
+    font-size: var(--text-xs);
+    font-weight: 400;
+    color: var(--tvc-ink-soft);
+  }
+
+  .farm-row td {
+    background: color-mix(in srgb, var(--tvc-ink) 4%, var(--tvc-white));
+  }
+
+  .grid-table td.cell--bar {
+    max-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+    padding: 4px 8px;
+    font-weight: 600;
+    border-left: 3px solid var(--tvc-ink-soft);
+    cursor: pointer;
+  }
+
+  .cell--bar .bar-count {
+    margin-left: 6px;
+    font-weight: 500;
+    color: var(--tvc-ink-soft);
+  }
+
+  .grid-table td.bar--stay {
+    background-color: color-mix(in srgb, var(--tvc-orange) 26%, var(--tvc-white));
+    border-left-color: var(--tvc-orange);
+  }
+
+  .grid-table td.bar--event {
+    background-color: color-mix(in srgb, var(--tvc-green) 28%, var(--tvc-white));
+    border-left-color: var(--tvc-green);
+  }
+
+  .grid-table td.bar--visit {
+    background-color: color-mix(in srgb, var(--tvc-ink) 15%, var(--tvc-white));
+  }
+
+  .grid-table td.bar--closure,
+  .grid-table td.cell--closed {
+    background-color: color-mix(in srgb, var(--tvc-ink) 12%, var(--tvc-white));
+    background-image: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--tvc-ink) 14%, transparent) 6px 12px);
+  }
+
+  .grid-table td.cell--closed {
+    cursor: pointer;
+  }
+
+  .grid-table td.bar--cl {
+    border-left-width: 1px;
+  }
+
+  /* Today: an orange edge down the column, so "now" is findable in a week of past and future. */
+  .grid-table th.col--today,
+  .grid-table td.col--today {
+    box-shadow: inset 2px 0 0 var(--tvc-orange), inset -2px 0 0 var(--tvc-orange);
+  }
+
+  .day-today {
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--tvc-orange-text);
   }
 
   .cell--free {
-    background: var(--tvc-green-tint);
+    background: transparent;
   }
 
-  /* Past free cells (no data-tent-id - see renderGrid) can't be booked, so
-     the green "bookable" tint above would be actively misleading here -
-     matches the header's own col--past shading rather than inventing a
-     second grey. */
+  /* Past free cells (no data-tent-id - see renderGrid) can't be booked, so they stay plain and faint. */
   .cell--free:not([data-tent-id]) {
-    background: color-mix(in srgb, var(--tvc-ink) 16%, var(--tvc-white));
+    background: color-mix(in srgb, var(--tvc-ink) 6%, var(--tvc-white));
   }
 
-  .cell--occupied {
-    background: var(--tvc-orange-tint);
-  }
-
-  .cell--closed {
-    background: color-mix(in srgb, var(--tvc-ink) 10%, var(--tvc-white));
-  }
-
-  .cell--occupied,
-  .cell--closed,
   .cell--free[data-tent-id] {
     cursor: pointer;
   }
 
-  /* A free cell for today or later opens a pre-filled new-booking dialog
-     (see startNewBookingAt) - this outline is the only hint that tapping it
-     does something, so it needs to read as clickable the same way the
-     occupied/closed cells already do via their tint. A free cell in the
-     past has no data-tent-id (renderGrid) and gets neither the pointer
-     cursor above nor this hover outline, since a new booking can never
-     start in the past - it must read as inert, not clickable. */
-  .cell--free[data-tent-id]:hover {
-    outline: 2px solid var(--tvc-green);
-    outline-offset: -2px;
+  .cell--free[data-tent-id]:hover::after {
+    content: '+';
+    color: var(--tvc-green-dark);
+    font-weight: 700;
   }
+
+  .jump-date input {
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-sm);
+  }
+
+  .grid-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    margin: 8px 0 18px;
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+  }
+
+  .grid-legend .lg {
+    display: inline-block;
+    width: 18px;
+    height: 10px;
+    margin-right: 6px;
+    border-radius: 3px;
+    vertical-align: -1px;
+  }
+
+  .lg--free { background: color-mix(in srgb, var(--tvc-green) 30%, transparent); }
+  .lg--stay { background: color-mix(in srgb, var(--tvc-orange) 40%, var(--tvc-white)); border-left: 3px solid var(--tvc-orange); }
+  .lg--event { background: color-mix(in srgb, var(--tvc-green) 40%, var(--tvc-white)); border-left: 3px solid var(--tvc-green); }
+  .lg--visit { background: color-mix(in srgb, var(--tvc-ink) 20%, var(--tvc-white)); border-left: 3px solid var(--tvc-ink-soft); }
+  .lg--closed { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--tvc-ink) 25%, var(--tvc-white)) 0 4px, color-mix(in srgb, var(--tvc-ink) 10%, var(--tvc-white)) 4px 8px); }
 
   /* Day view: one wide row per tent instead of the table's one-column
      squeeze (see renderDayView). Same status colors as the grid cells
@@ -1345,6 +1492,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     capacity: number;
     kind: 'fixed' | 'removable' | 'byot';
     group: string;
+    type: string;
   }
 
   interface Guest {
@@ -1447,6 +1595,21 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   const viewToggleButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.view-toggle-btn'));
   const gridTable = document.getElementById('grid') as HTMLTableElement;
   const gridScroll = document.querySelector('.grid-scroll') as HTMLElement;
+  const jumpInput = document.getElementById('jump-date') as HTMLInputElement;
+  const TYPES: { id: string; label: string }[] = JSON.parse(document.getElementById('types-data')!.textContent!);
+  // Which types are open in the grid is a per-viewer convenience, remembered in this browser.
+  const OPEN_KEY = 'tvc-accommodation-open-types';
+  const openTypes = new Set<string>(
+    (() => {
+      try {
+        const saved = JSON.parse(localStorage.getItem(OPEN_KEY) ?? 'null');
+        if (Array.isArray(saved)) return saved.filter((x) => typeof x === 'string');
+      } catch {
+        // not remembered
+      }
+      return ['tent', 'hut'];
+    })(),
+  );
   const dayView = document.getElementById('day-view') as HTMLElement;
   const bookingListHeading = document.getElementById('booking-list-heading') as HTMLElement;
   const bookingList = document.getElementById('booking-list') as HTMLElement;
@@ -2949,47 +3112,85 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     // being visibly inert.
     const today = new Date().toLocaleDateString('en-CA');
     const nightsByBookingId = new Map(currentBookings.map((b) => [b.id, new Set(nightsForBooking(b))]));
+    const firstDate = dates[0];
     // Month's 31 narrow columns only have room for the day-of-month number;
     // day/week have space to also spell out which weekday each column is.
     const headerLabel = (d: string) =>
-      viewMode === 'month' ? d.slice(-2) : `<div class="day-letter">${weekdayLetter(d)}</div><div class="day-date">${formatDateLabel(d, { day: 'numeric', month: 'short' })}</div>`;
+      viewMode === 'month'
+        ? d.slice(-2)
+        : `<div class="day-letter">${weekdayLetter(d)}</div><div class="day-date">${formatDateLabel(d, { day: 'numeric', month: 'short' })}</div>${d === today ? '<div class="day-today">Today</div>' : ''}`;
+    const headerColClass = (d: string) => [d < today ? 'col--past' : '', isWeekend(d) ? 'col--weekend' : '', d === today ? 'col--today' : ''].filter(Boolean).join(' ');
+    const colClass = (d: string) => [isWeekend(d) ? 'col--weekend' : '', d === today ? 'col--today' : ''].filter(Boolean).join(' ');
+    const barKind = (t: BookingType) => (t === 'casual-stay' ? 'stay' : t === 'public-event' || t === 'private-event' ? 'event' : t === 'member-stay' ? 'visit' : 'closure');
 
-    const headerColClass = (d: string) => [d < today ? 'col--past' : '', isWeekend(d) ? 'col--weekend' : ''].filter(Boolean).join(' ');
-    let headHtml =
-      '<tr><th class="unit-col">Tent</th>' + dates.map((d) => `<th class="${headerColClass(d)}">${headerLabel(d)}</th>`).join('') + '</tr>';
-    let bodyHtml = '';
-    let lastGroup: string | null = null;
-    for (const unit of UNITS) {
-      // Same grouping/shortLabel reasoning as renderDayView() above - a
-      // full-width row (the table equivalent of a heading, since a table
-      // row can't sit "above" a set of other rows any other way) spanning
-      // every date column. The label cell reuses .unit-col so it stays
-      // pinned (position: sticky) during month view's horizontal scroll,
-      // same as the real unit-name column below it - a single colspan cell
-      // would scroll the label itself out of view along with the dates.
-      if (unit.group !== lastGroup) {
-        bodyHtml += `<tr class="group-row"><td class="unit-col group-row-label">${escapeAttr(unit.group)}</td>${'<td class="group-row-fill"></td>'.repeat(dates.length)}</tr>`;
-        lastGroup = unit.group;
-      }
-      bodyHtml += `<tr><td class="unit-col">${unit.shortLabel}</td>`;
-      for (const date of dates) {
-        const weekendClass = isWeekend(date) ? ' col--weekend' : '';
-        const farmClosure = currentBookings.find((b) => b.type === 'farm-closure' && nightsByBookingId.get(b.id)!.has(date));
-        const occupying = currentBookings.find((b) => b.type !== 'farm-closure' && b.tents.some((t) => t.tentId === unit.id) && nightsByBookingId.get(b.id)!.has(date));
-        if (farmClosure) {
-          const label = cellTooltip(farmClosure, unit.id).replace(/\n/g, ' — ');
-          bodyHtml += `<td class="cell--closed${weekendClass}" data-booking-id="${farmClosure.id}" data-tent-id="${unit.id}" title="${escapeAttr(cellTooltip(farmClosure, unit.id))}" tabindex="0" role="button" aria-label="${escapeAttr(label)}">✕</td>`;
-        } else if (occupying) {
-          const label = cellTooltip(occupying, unit.id).replace(/\n/g, ' — ');
-          bodyHtml += `<td class="cell--occupied${weekendClass}" data-booking-id="${occupying.id}" data-tent-id="${unit.id}" title="${escapeAttr(cellTooltip(occupying, unit.id))}" tabindex="0" role="button" aria-label="${escapeAttr(label)}">●</td>`;
-        } else if (date < today) {
-          bodyHtml += `<td class="cell--free${weekendClass}">·</td>`;
-        } else {
-          const label = `${unit.label}, ${formatDateLabel(date, { day: 'numeric', month: 'long' })} — free, tap to book`;
-          bodyHtml += `<td class="cell--free${weekendClass}" data-tent-id="${unit.id}" data-date="${date}" tabindex="0" role="button" aria-label="${escapeAttr(label)}">·</td>`;
+    const farmClosureOn = (d: string) => currentBookings.find((b) => b.type === 'farm-closure' && nightsByBookingId.get(b.id)!.has(d));
+    const occupyingOn = (unitId: string, d: string) => currentBookings.find((b) => b.type !== 'farm-closure' && b.tents.some((t) => t.tentId === unitId) && nightsByBookingId.get(b.id)!.has(d));
+
+    const headHtml = '<tr><th class="unit-col">Type</th>' + dates.map((d) => `<th class="${headerColClass(d)}">${headerLabel(d)}</th>`).join('') + '</tr>';
+
+    // One bar per booking: the run of consecutive visible nights that share a booking becomes a single cell
+    // spanning them, so back-to-back stays on one unit stay visibly separate.
+    const rowCells = (unit: Unit | null, find: (d: string) => Booking | undefined) => {
+      let html = '';
+      for (let i = 0; i < dates.length; ) {
+        const d = dates[i];
+        const b = find(d);
+        if (!b) {
+          if (unit && d >= today) {
+            const label = `${unit.label}, ${formatDateLabel(d, { day: 'numeric', month: 'long' })} — free, tap to book`;
+            html += `<td class="cell--free ${colClass(d)}" data-tent-id="${unit.id}" data-date="${d}" tabindex="0" role="button" aria-label="${escapeAttr(label)}"></td>`;
+          } else {
+            html += `<td class="cell--free ${colClass(d)}"></td>`;
+          }
+          i++;
+          continue;
         }
+        let j = i;
+        while (j + 1 < dates.length && find(dates[j + 1])?.id === b.id) j++;
+        const span = j - i + 1;
+        const tentId = unit?.id ?? '';
+        const tip = cellTooltip(b, tentId);
+        const label = tip.replace(/\n/g, ' — ');
+        const cl = nightsForBooking(b)[0] < firstDate ? ' bar--cl' : '';
+        if (b.type === 'farm-closure') {
+          const text = unit ? '' : escapeAttr(typeDisplayLabel(b.type));
+          html += `<td class="${unit ? 'cell--closed' : 'cell--bar bar--closure'}${cl} ${colClass(d)}" colspan="${span}" data-booking-id="${b.id}" data-tent-id="${tentId}" title="${escapeAttr(tip)}" tabindex="0" role="button" aria-label="${escapeAttr(label)}">${text}</td>`;
+        } else {
+          const title = b.label ?? b.eventTitle ?? typeDisplayLabel(b.type);
+          const guests = b.tents.find((t) => t.tentId === tentId)?.guests.length ?? 0;
+          html += `<td class="cell--bar bar--${barKind(b.type)}${cl}" colspan="${span}" data-booking-id="${b.id}" data-tent-id="${tentId}" title="${escapeAttr(tip)}" tabindex="0" role="button" aria-label="${escapeAttr(label)}">${escapeAttr(title)}${guests ? `<span class="bar-count">${guests}</span>` : ''}</td>`;
+        }
+        i = j + 1;
       }
-      bodyHtml += '</tr>';
+      return html;
+    };
+
+    let bodyHtml = '';
+    // A whole-farm closure is one banner row, not a mark in every cell.
+    const farmClosures = currentBookings.filter((b) => b.type === 'farm-closure');
+    if (farmClosures.some((b) => dates.some((d) => nightsByBookingId.get(b.id)!.has(d)))) {
+      bodyHtml += `<tr class="farm-row"><td class="unit-col">Whole farm</td>${rowCells(null, farmClosureOn)}</tr>`;
+    }
+    const chevron = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+    for (const type of TYPES) {
+      const unitsOfType = UNITS.filter((u) => u.type === type.id);
+      if (!unitsOfType.length) continue;
+      const open = openTypes.has(type.id);
+      let counts = '';
+      for (const d of dates) {
+        if (d < today) {
+          counts += `<td class="sku-count sku-count--past ${colClass(d)}"></td>`;
+          continue;
+        }
+        const free = farmClosureOn(d) ? 0 : unitsOfType.filter((u) => !occupyingOn(u.id, d)).length;
+        const fill = Math.round((free / unitsOfType.length) * 32);
+        counts += `<td class="sku-count${free === 0 ? ' sku-count--none' : ''} ${colClass(d)}" style="--fill:${fill}%" title="${free} of ${unitsOfType.length} free">${free}${viewMode === 'week' ? `<small>of ${unitsOfType.length}</small>` : ''}</td>`;
+      }
+      bodyHtml += `<tr class="sku-row${open ? ' is-open' : ''}"><td class="unit-col sku-label"><button type="button" class="sku-toggle" data-type="${type.id}" aria-expanded="${open}">${chevron}<span>${escapeAttr(type.label)}<small>${unitsOfType.length} ${unitsOfType.length === 1 ? 'unit' : 'units'}</small></span></button></td>${counts}</tr>`;
+      if (!open) continue;
+      for (const unit of unitsOfType) {
+        bodyHtml += `<tr><td class="unit-col">${escapeAttr(unit.label)}</td>${rowCells(unit, (d) => farmClosureOn(d) ?? occupyingOn(unit.id, d))}</tr>`;
+      }
     }
     gridTable.innerHTML = headHtml + bodyHtml;
   }
@@ -3023,6 +3224,20 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   // the keydown listener below is what actually makes that markup mean
   // something rather than just describing intent.
   gridTable.addEventListener('click', (ev) => {
+    const toggle = (ev.target as HTMLElement).closest('.sku-toggle') as HTMLElement | null;
+    if (toggle) {
+      const id = toggle.dataset.type!;
+      if (openTypes.has(id)) openTypes.delete(id);
+      else openTypes.add(id);
+      try {
+        localStorage.setItem(OPEN_KEY, JSON.stringify([...openTypes]));
+      } catch {
+        // not remembered
+      }
+      renderGrid();
+      gridTable.querySelector<HTMLElement>(`.sku-toggle[data-type="${id}"]`)?.focus();
+      return;
+    }
     const cell = (ev.target as HTMLElement).closest('td[data-booking-id], td.cell--free[data-tent-id]') as HTMLElement | null;
     if (cell) activateCell(cell);
   });
@@ -3501,6 +3716,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     app.hidden = false;
     const { start, end } = visibleRange();
     monthLabel.textContent = viewRangeLabel(start, end);
+    jumpInput.value = anchorDate;
     showStatus('Loading…');
 
     try {
@@ -3548,6 +3764,15 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   document.getElementById('prev-month')!.addEventListener('click', () => shiftView(-1));
   document.getElementById('next-month')!.addEventListener('click', () => shiftView(1));
+  document.getElementById('today-btn')!.addEventListener('click', () => {
+    anchorDate = new Date().toLocaleDateString('en-CA');
+    loadView();
+  });
+  jumpInput.addEventListener('change', () => {
+    if (!jumpInput.value) return;
+    anchorDate = jumpInput.value;
+    loadView();
+  });
 
   for (const btn of viewToggleButtons) {
     btn.addEventListener('click', () => {

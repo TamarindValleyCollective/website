@@ -178,7 +178,7 @@ export const TOURS = {
       target: 'month-nav',
       tag: 'Stays',
       title: 'Move through the calendar',
-      text: 'Step by month, and switch between Day, Week and Month to see more or less at once.',
+      text: 'Step by week or month, jump to today or to any date, and switch between Day, Week and Month to see more or less at once.',
     },
     {
       id: 'grid',
@@ -186,8 +186,8 @@ export const TOURS = {
       audience: 'all',
       target: 'grid',
       tag: 'Stays',
-      title: 'Tents by date',
-      text: 'Each row is a tent and each column a day. Click a free cell to start a booking there, or click a booked one to open it. The public site only shows how many tents are free, never who is in them.',
+      title: 'Availability by type',
+      text: 'Each row is a type (tents, bamboo huts) showing how many of its units are free each night. Open a type to see its units, with each booking as a bar across its nights. Click a free cell to start a booking there, or a bar to open it.',
     },
     {
       id: 'new',
