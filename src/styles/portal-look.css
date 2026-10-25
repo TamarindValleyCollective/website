@@ -263,3 +263,9 @@ main .row .chev {
   stroke-linejoin: round;
   opacity: 0.7;
 }
+
+/* Google's sign-in button is a light-scheme iframe; inside a dark page the browser paints it an opaque white backing.
+   Declaring the same scheme on its container keeps the iframe transparent, so the dark button sits on the dark card. */
+#g_id_signin {
+  color-scheme: light;
+}
