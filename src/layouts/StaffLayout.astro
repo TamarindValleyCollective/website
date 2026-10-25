@@ -65,6 +65,12 @@ const adminItems = [
           var theme = localStorage.getItem('tvc-staff-theme');
           if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
         } catch (e) {}
+        // Google's sign-in button is white by default, a bright slab on the dark card; pages pass this as its theme.
+        window.tvcGsiTheme = function () {
+          var t = document.documentElement.getAttribute('data-theme');
+          var dark = t ? t === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          return dark ? 'filled_black' : 'outline';
+        };
         document.documentElement.setAttribute('data-nav', collapsed ? 'collapsed' : 'expanded');
       })();
     </script>

@@ -3621,7 +3621,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   function renderSignInButton() {
     if (typeof google === 'undefined') return;
     google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
-    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: 'outline', size: 'large' });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: (window as any).tvcGsiTheme?.() ?? 'outline', size: 'large' });
   }
 
   useDifferentAccountBtn.addEventListener('click', () => {
