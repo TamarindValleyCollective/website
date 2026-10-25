@@ -833,7 +833,17 @@ outside both the local machine and Netlify (the member-update-email workflow).
   land documents under `contracts/<household>/<contract>-(contract|signed).<ext>` (`lib/contract-storage.ts`);
   admins open them through a 60-second presigned link behind the step-up and an audit entry. The rules are in
   `scripts/lib/member-contract.mjs`. TVC collects the money and pays Linger and the member; a stay counts in the
-  settlement cycle it ends in (check-out). Bank, UPI and tax details are not stored yet.
+  settlement cycle it ends in (check-out). Linger sends its own invoices, so TVC holds nothing of Linger's bank details.
+  **Payout accounts (step 3d, migration `0070`, `member_payout_accounts`):** where TVC pays a member whose contract
+  pays by transfer (not set against maintenance). The member enters a name, bank account + IFSC or a UPI id, and a PAN
+  (required for every payout) in My rental. These are encrypted (AES-256-GCM, a key derived from `STAFF_MFA_KEY` for the
+  purpose `payout`: `encryptPayoutText` in `lib/staff-mfa-crypto.ts`) before they are stored, only the last four
+  characters are kept in the clear, and no response to a browser ever carries a full value. Any change sends the account
+  back to `submitted`; a super admin marks it `verified` after a small test transfer and records whether TDS is deducted
+  and at what rate (Units → Payouts). A super admin can reveal one account to make a payment: behind the step-up, audited
+  (`units.payout_revealed`, household only), shown for 30 seconds. Rules in `scripts/lib/member-payout.mjs`. Rotating
+  `STAFF_MFA_KEY` makes stored payout details unreadable until members re-enter them. There is no finance role yet, so
+  this is super-admin only.
 - **`netlify/functions/staff-admin.mts` + `lib/staff-admin-guard.ts`** — the API behind the
   Access module (issue #89): who is in the system, who holds which module role, an activity feed,
   and the changes themselves. **Super admins only.** Reading (`GET /api/staff-admin/people`,

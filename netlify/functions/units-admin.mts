@@ -15,6 +15,8 @@ import { mfaSummary, rest } from './lib/staff-mfa-store';
 import { enablePlan, offboardProblem, offerProblem, editPatch, statusChange } from '../../scripts/lib/member-units.mjs';
 import { validateShare, validateRecord, enableProblem, contractForAdmin, documentKey } from '../../scripts/lib/member-contract.mjs';
 import { putContractDocument, signedContractUrl } from './lib/contract-storage';
+import { payoutForAdmin, validateVerification } from '../../scripts/lib/member-payout.mjs';
+import { decryptPayoutText } from './lib/staff-mfa-crypto';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const OFFBOARD_REASONS = ['member_withdrew', 'contract_ended', 'not_suitable', 'other'];
@@ -114,6 +116,11 @@ async function handleOverview(req: Request, admin: SuperAdmin): Promise<Response
   const contracts = offerIds.length ? ((await (await rest(`/member_unit_contracts?offer_id=${inList(offerIds)}&select=${CONTRACT_SELECT}`)).json()) as ContractRow[]) : [];
   const contractOf = new Map(contracts.map((c) => [c.offer_id, c]));
 
+  // Payout accounts: masked ("ending 4821") and never decrypted here; revealing one is its own audited, step-up call.
+  const payoutRows = (await (await rest('/member_payout_accounts?select=household_id,payee_name,method,details_last4,pan_last4,status,tds_applies,tds_rate,verified_at,updated_at&order=updated_at.desc')).json()) as any[];
+  const payoutHouseholds = payoutRows.length ? ((await (await rest(`/member_households?id=${inList(payoutRows.map((r) => r.household_id))}&select=id,farm_unit`)).json()) as { id: string; farm_unit: string }[]) : [];
+  const farmUnitOf = new Map(payoutHouseholds.map((h) => [h.id, h.farm_unit]));
+
   let stepUpValid = false;
   try {
     stepUpValid = stepUpIsValid(req, admin.id);
@@ -125,6 +132,7 @@ async function handleOverview(req: Request, admin: SuperAdmin): Promise<Response
   return jsonResponse({
     me: { id: admin.id, ready: mfa.ready, hasPasskey: mfa.passkey, stepUpValid },
     types: pools.map((p) => ({ id: p.id, label: p.name, ownerType: p.owner_type })),
+    payouts: payoutRows.map((r) => ({ ...payoutForAdmin(r), farmUnit: farmUnitOf.get(r.household_id) ?? '' })),
     units: units.map((u) => ({
       id: u.id,
       name: u.name,
@@ -300,6 +308,32 @@ async function handleDecline(req: Request, admin: SuperAdmin): Promise<Response>
   return jsonResponse({ ok: true });
 }
 
+const payoutRowFor = async (householdId: string) => ((await (await rest(`/member_payout_accounts?household_id=eq.${householdId}&select=*`)).json()) as any[])[0] ?? null;
+
+// Marks a payout account verified (after a small test transfer to it) and records whether TDS is deducted.
+async function handlePayoutVerify(req: Request, admin: SuperAdmin): Promise<Response> {
+  const body = await readJson<Record<string, unknown> & { householdId?: string }>(req);
+  if (!body || !UUID.test(body.householdId ?? '')) return jsonResponse({ error: 'householdId must be a UUID' }, 400);
+  const row = await payoutRowFor(body.householdId!);
+  if (!row) return jsonResponse({ error: 'No payout details for that household.' }, 404);
+  const checked = validateVerification(body);
+  if ('error' in checked) return jsonResponse({ error: checked.error }, 400);
+  if (!(await audit(admin, 'units.payout_verified', { householdId: row.household_id, tdsApplies: checked.verification.tds_applies }))) return jsonResponse({ error: 'Could not write the audit log; nothing was changed.' }, 500);
+  await rest(`/member_payout_accounts?household_id=eq.${row.household_id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ...checked.verification, status: 'verified', verified_by: admin.id, verified_at: new Date().toISOString(), updated_at: new Date().toISOString() }) });
+  return jsonResponse({ ok: true });
+}
+
+// Decrypts one payout account for a super admin who has to make the payment. Behind the step-up; audited with the
+// household and the fact of the reveal, never the values. The response is not cached.
+async function handlePayoutReveal(req: Request, admin: SuperAdmin): Promise<Response> {
+  const body = await readJson<{ householdId?: string }>(req);
+  if (!body || !UUID.test(body.householdId ?? '')) return jsonResponse({ error: 'householdId must be a UUID' }, 400);
+  const row = await payoutRowFor(body.householdId!);
+  if (!row) return jsonResponse({ error: 'No payout details for that household.' }, 404);
+  if (!(await audit(admin, 'units.payout_revealed', { householdId: row.household_id }))) return jsonResponse({ error: 'Could not write the audit log; nothing was shown.' }, 500);
+  return jsonResponse({ payeeName: row.payee_name, method: row.method, details: JSON.parse(decryptPayoutText(row.details_enc)), pan: decryptPayoutText(row.pan_enc) });
+}
+
 async function handleStatus(req: Request, admin: SuperAdmin): Promise<Response> {
   const body = await readJson<{ unitId?: string; status?: string }>(req);
   if (!body || typeof body.unitId !== 'string' || !body.unitId) return jsonResponse({ error: 'unitId is required' }, 400);
@@ -348,6 +382,8 @@ export default async (req: Request): Promise<Response> => {
     '/api/units-admin/contracts/share': handleContractShare,
     '/api/units-admin/contracts/record': handleContractRecord,
     '/api/units-admin/contracts/link': handleContractLink,
+    '/api/units-admin/payouts/verify': handlePayoutVerify,
+    '/api/units-admin/payouts/reveal': handlePayoutReveal,
     '/api/units-admin/units/status': handleStatus,
     '/api/units-admin/units/offboard': handleOffboard,
     '/api/units-admin/units/edit': handleEdit,
@@ -383,6 +419,8 @@ export const config = {
     '/api/units-admin/contracts/share',
     '/api/units-admin/contracts/record',
     '/api/units-admin/contracts/link',
+    '/api/units-admin/payouts/verify',
+    '/api/units-admin/payouts/reveal',
     '/api/units-admin/units/status',
     '/api/units-admin/units/offboard',
     '/api/units-admin/units/edit',

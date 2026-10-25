@@ -4848,6 +4848,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     unit?: { shape: string; typeId: string; manager: 'tvc' | 'member'; status: string; requestMode: string; ignoresFarmClosure: boolean } | null;
     stays?: { id: string; startDate: string; nights: number; label: string | null; guests: { name: string; ageGroup: string; gender?: string; preferences: string }[] }[];
     blocks?: { id: string; startDate: string; nights: number; mine: boolean; farm: boolean }[];
+    payout?: { needed: boolean; maintenance: boolean; account: { payeeName: string; method: 'bank' | 'upi'; shown: string; panShown: string; status: 'submitted' | 'verified' } | null };
     contract?: { stage: 'sign' | 'review'; termsVersion: string; sharedAt: string; canUpload: boolean; hasSigned: boolean } | null;
   };
 
@@ -4927,6 +4928,74 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           toast(err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : 'Could not reach the server.');
           return false;
         }
+      };
+
+      // Where TVC pays the member. Entered once, encrypted on the server, and only ever shown back as "ending 4821".
+      const payoutCard = (): HTMLElement | null => {
+        const pay = d.payout;
+        if (!pay) return null;
+        if (pay.maintenance) return card('How you are paid', say('Your contract sets your share against your maintenance, so there is nothing to enter.'));
+        if (!pay.needed) return null;
+        const a = pay.account;
+        let editing = !a;
+        const box = h('div');
+        const paint2 = () => {
+          if (!editing && a) {
+            const change = h('button', 'btn', 'Change details') as HTMLButtonElement;
+            change.type = 'button';
+            change.addEventListener('click', () => {
+              editing = true;
+              paint2();
+            });
+            return box.replaceChildren(
+              say(`${a.payeeName} · ${a.method === 'bank' ? 'bank account' : 'UPI'} ${a.shown} · PAN ${a.panShown}`),
+              say(a.status === 'verified' ? 'Verified. TVC pays your share here.' : 'Saved. TVC will make a small test transfer to check it before paying you.'),
+              change,
+            );
+          }
+          const inp = (label: string, type = 'text', ph = '') => {
+            const i = h('input') as HTMLInputElement;
+            i.type = type;
+            i.placeholder = ph;
+            i.autocomplete = 'off';
+            i.setAttribute('aria-label', label);
+            return i;
+          };
+          const name = inp('Name on the account');
+          const method = h('select') as HTMLSelectElement;
+          for (const [v, l] of [['bank', 'Bank account'], ['upi', 'UPI']]) method.append(Object.assign(document.createElement('option'), { value: v, textContent: l }));
+          const account = inp('Account number', 'text', '');
+          account.inputMode = 'numeric';
+          const ifsc = inp('IFSC code', 'text', 'HDFC0001234');
+          const upi = inp('UPI id', 'text', 'name@bank');
+          const pan = inp('PAN', 'text', 'ABCDE1234F');
+          pan.maxLength = 10;
+          const bankRows = h('div', 'rent-more', undefined, h('label', 'rent-field', undefined, h('span', 'field-label', 'Account number'), account), h('label', 'rent-field', undefined, h('span', 'field-label', 'IFSC code'), ifsc));
+          const upiRows = h('div', 'rent-more', undefined, h('label', 'rent-field', undefined, h('span', 'field-label', 'UPI id'), upi));
+          upiRows.hidden = true;
+          method.addEventListener('change', () => {
+            bankRows.hidden = method.value !== 'bank';
+            upiRows.hidden = method.value !== 'upi';
+          });
+          const save = h('button', 'btn btn--solid', 'Save payout details') as HTMLButtonElement;
+          save.type = 'button';
+          save.addEventListener('click', async () => {
+            save.disabled = true;
+            const ok = await act('/api/members-me/rental/payout', { payeeName: name.value, method: method.value, account: account.value, ifsc: ifsc.value, upi: upi.value, pan: pan.value }, 'Saved. TVC will check it before paying you.');
+            if (!ok) save.disabled = false;
+          });
+          box.replaceChildren(
+            say('TVC collects the guests’ payments and pays your share. We keep these details encrypted and show them back only as the last four characters. A PAN is needed for every payout.'),
+            h('label', 'rent-field', undefined, h('span', 'field-label', 'Name on the account'), name),
+            h('label', 'rent-field', undefined, h('span', 'field-label', 'Pay me by'), method),
+            bankRows,
+            upiRows,
+            h('label', 'rent-field', undefined, h('span', 'field-label', 'PAN'), pan),
+            save,
+          );
+        };
+        paint2();
+        return card('How you are paid', box);
       };
 
       if (d.state === 'none') {
@@ -5009,6 +5078,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           say(`Linger has been told and will get in touch to agree terms. Once the contract is signed, the core team enables your unit and it appears here with its settings. Offered as ${d.offer?.shape === 'room' ? '1 bedroom (a single room)' : `${label} (whole unit)${d.offer?.delegateToTvc ? ', managed by TVC' : ''}`}.`),
           withdraw));
         if (contractCard) sections.unshift(contractCard);
+        const pc = payoutCard();
+        if (pc) sections.push(pc);
       } else if (d.unit) {
         const u = d.unit;
         const label = d.types?.find((t) => t.id === u.typeId)?.label ?? '';
@@ -5075,6 +5146,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
                 h('ul', 'rent-guests', undefined, ...st.guests.map((g) => h('li', '', `${g.name} · ${g.ageGroup}${g.gender ? `, ${g.gender.toLowerCase()}` : ''}${g.preferences ? ` · ${g.preferences}` : ''}`))))))
             : say('No stays yet.'),
           say('You see each guest’s name, age group, gender and preferences, and nothing else: TVC looks after the guests and talks to them.')));
+        const pc2 = payoutCard();
+        if (pc2) sections.push(pc2);
       }
       body.replaceChildren(...sections);
     };

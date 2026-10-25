@@ -18,7 +18,7 @@ export class MfaNotConfiguredError extends Error {
   }
 }
 
-function derivedKey(purpose: 'enc' | 'sign' | 'recovery'): Buffer {
+function derivedKey(purpose: 'enc' | 'sign' | 'recovery' | 'payout'): Buffer {
   const raw = process.env.STAFF_MFA_KEY;
   const master = raw ? Buffer.from(raw, 'base64') : Buffer.alloc(0);
   if (master.length < 32) throw new MfaNotConfiguredError();
@@ -128,6 +128,24 @@ export function decryptSecret(blob: string): Buffer {
   const decipher = createDecipheriv('aes-256-gcm', derivedKey('enc'), Buffer.from(iv, 'base64url'));
   decipher.setAuthTag(Buffer.from(tag, 'base64url'));
   return Buffer.concat([decipher.update(Buffer.from(ct, 'base64url')), decipher.final()]);
+}
+
+// Members' payout details (bank, UPI, PAN; migration 0070): the same cipher under its own derived key, so a leak of
+// one purpose's key is not the other's. Rotating STAFF_MFA_KEY makes stored payout details unreadable until they are
+// re-entered, exactly as it does for the TOTP secrets.
+export function encryptPayoutText(plain: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', derivedKey('payout'), iv);
+  const ct = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
+  return ['v1', iv.toString('base64url'), cipher.getAuthTag().toString('base64url'), ct.toString('base64url')].join('.');
+}
+
+export function decryptPayoutText(blob: string): string {
+  const [version, iv, tag, ct] = blob.split('.');
+  if (version !== 'v1' || !iv || !tag || !ct) throw new Error('Unrecognized secret format');
+  const decipher = createDecipheriv('aes-256-gcm', derivedKey('payout'), Buffer.from(iv, 'base64url'));
+  decipher.setAuthTag(Buffer.from(tag, 'base64url'));
+  return Buffer.concat([decipher.update(Buffer.from(ct, 'base64url')), decipher.final()]).toString('utf8');
 }
 
 // ------------------------------------------------------- recovery codes
