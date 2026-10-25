@@ -12,12 +12,11 @@ export const featureIds = () => Object.keys(FEATURES);
 // `everyone` is the flag's value; `granted` is whether the household has a row for this feature.
 export const featureOn = (everyone, granted) => everyone === 'true' || granted === true;
 
-// What a super admin may send to add or remove a household. Looked up by farm unit, which is how admins name a home.
+// What a super admin may send to add or remove a household: chosen from the member list, so it arrives as the household's id.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function validateAccess(body) {
-  const raw = typeof body?.farmUnit === 'string' ? body.farmUnit.trim().toUpperCase() : '';
-  const farmUnit = /^F[0-9]{2}$/.test(raw) ? `F-${raw.slice(1)}` : raw;
-  if (!/^F-[0-9]{2}$/.test(farmUnit)) return { error: 'Enter the farm unit, for example F-12.' };
+  if (!UUID.test(body?.householdId ?? '')) return { error: 'Choose a member from the list.' };
   if (!FEATURES[body?.feature]) return { error: 'Choose a feature.' };
   if (typeof body?.enabled !== 'boolean') return { error: 'Say whether to turn it on or off.' };
-  return { access: { farmUnit, feature: body.feature, enabled: body.enabled } };
+  return { access: { householdId: body.householdId, feature: body.feature, enabled: body.enabled } };
 }
