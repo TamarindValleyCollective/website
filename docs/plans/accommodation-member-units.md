@@ -1,6 +1,6 @@
 # Member units: offer, onboard, manage — step 3 plan
 
-Status: **plan, 2026-10-26. Step 3a is being built alongside this plan; step 3b is not started.** It is step 3 of
+Status: **2026-10-26. Step 3a is built and live (PR #479, migration `0067` applied); step 3b is not started.** It is step 3 of
 `docs/plans/accommodation-calendar.md` and builds on `docs/plans/accommodation-units-as-data.md` (step 2, live).
 This is a public repo: no commercial terms and no member or guest details belong here.
 
