@@ -296,10 +296,19 @@ async function handleSetActive(req: Request, admin: SuperAdmin): Promise<Respons
   if (person.is_super_admin) return jsonResponse({ error: 'Super admins are managed directly in the database, not here.' }, 400);
   if (person.active === body.active) return jsonResponse({ ok: true, changed: false });
 
-  if (!(await audit(admin, body.active ? 'staff.person_reactivated' : 'staff.person_deactivated', { targetId: personId }))) {
+  // Deactivating also takes every role away, so a deactivated person holds nothing; the roles are written to the audit
+  // log, and the page's Undo puts them back. Reactivating restores nothing by itself.
+  let removed: RoleRow[] = [];
+  if (!body.active) {
+    const rolesRes = await rest(`/staff_module_roles?staff_id=eq.${personId}&select=staff_id,module,role,scope`);
+    removed = (await rolesRes.json()) as RoleRow[];
+  }
+  const detail = removed.length ? { removedRoles: removed.map((r) => ({ module: r.module, role: r.role, scope: r.scope })) } : undefined;
+  if (!(await audit(admin, body.active ? 'staff.person_reactivated' : 'staff.person_deactivated', { targetId: personId, ...(detail ? { detail } : {}) }))) {
     return jsonResponse({ error: 'Could not write the audit log; nothing was changed.' }, 500);
   }
   await rest(`/staff_users?id=eq.${personId}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ active: body.active }) });
+  if (removed.length) await rest(`/staff_module_roles?staff_id=eq.${personId}`, { method: 'DELETE' });
   return jsonResponse({ ok: true, changed: true });
 }
 

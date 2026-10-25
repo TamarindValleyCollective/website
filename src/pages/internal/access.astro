@@ -1369,25 +1369,27 @@ import SignInGate from '../../components/SignInGate.astro';
       toggle.disabled = !canEdit();
       toggle.addEventListener('click', async () => {
         const was = p.active;
+        const heldRoles = p.roles.map((r) => ({ ...r })); // deactivating clears them; Undo puts them back
         toggle.disabled = true;
         if (await setActive(p, !was)) {
           announce(`${p.label} ${was ? 'deactivated' : 'reactivated'}.`);
-          showToast(`${p.label} ${was ? 'deactivated' : 'reactivated'}.`, () => void setActive(p, was));
+          showToast(`${p.label} ${was ? 'deactivated' : 'reactivated'}.`, () => void setActive(p, was, was ? heldRoles : []));
         } else {
           toggle.disabled = !canEdit();
         }
       });
       out.push(h('ul', { class: 'module-rows module-rows--solo' }, h('li', { class: 'module-row module-row--solo' }, toggle)));
-      out.push(h('p', { class: 'note detail-foot', text: p.active ? 'They lose access to every tool straight away. You can undo this.' : 'They get their old access back.' }));
+      out.push(h('p', { class: 'note detail-foot', text: p.active ? 'They lose access to every tool straight away, and their roles are removed. You can undo this for a few seconds.' : 'They come back with no tools; give them a role in each tool they need.' }));
     }
     return out;
   }
 
   // Deactivating and reactivating are reversible, so they happen at once and the page offers Undo instead of asking first.
-  async function setActive(p: Person, active: boolean): Promise<boolean> {
+  async function setActive(p: Person, active: boolean, restore: PersonRole[] = []): Promise<boolean> {
     try {
       const { status, data } = await call('/api/staff-admin/people/active', { method: 'POST', body: { personId: p.id, active } });
       if (status === 200) {
+        for (const r of restore) await call('/api/staff-admin/roles', { method: 'POST', body: { personId: p.id, module: r.module, role: r.role, ...(r.scope ? { scope: r.scope } : {}) } });
         await loadPeople();
         return true;
       }
@@ -1402,7 +1404,7 @@ import SignInGate from '../../components/SignInGate.astro';
   // The search box and the filter chips narrow the list on the left. They are static markup, built once, so
   // typing never loses the cursor; only the list and the details are redrawn.
   function matchesFilters(p: Person): boolean {
-    if (filter === 'inactive' && p.active) return false;
+    if ((filter === 'inactive') === p.active) return false; // Deactivated shows only them; every other view leaves them out
     if (filter === 'super' && !p.isSuperAdmin) return false;
     if (filter === 'tools' && p.roles.length === 0) return false;
     if (filter === 'none' && p.roles.length > 0) return false;

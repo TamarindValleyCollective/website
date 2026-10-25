@@ -802,7 +802,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   of faces and names; the details beside it are a large face, masked email and badges, a grouped list with a pop-up for each
   tool's role, and a separate "Deactivate" row. The unlock strip is now a **lock in the toolbar** (the layout's `toolbar`
   slot): "Unlock editing", "Editing unlocked · N minutes" or "Set up to edit", which opens a sheet with the code field, the
-  passkey button and "Lock now". Deactivating or reactivating someone happens at once with an **Undo** toast (no `confirm()`);
+  passkey button and "Lock now". Deactivating or reactivating someone happens at once with an **Undo** toast (no `confirm()`); deactivating also deletes all their module roles (kept in the audit entry; Undo re-grants them) and every view but "Deactivated" hides them;
   role changes still save on selection.
 - **`netlify/functions/staff-admin.mts` + `lib/staff-admin-guard.ts`** — the API behind the
   Access module (issue #89): who is in the system, who holds which module role, an activity feed,
