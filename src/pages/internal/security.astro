@@ -215,6 +215,7 @@ import SignInGate from '../../components/SignInGate.astro';
   import { buildQrSvg } from '../../../scripts/lib/qr-svg.mjs';
   // One sign-in and one step-up are shared with /internal and /internal/access.
   import { TOKEN_KEY as STORAGE_KEY, STEPUP_KEY, askSheet, passkeyStepUp, passkeysSupported, registerPasskey, wireCodeEntry } from '../../../scripts/lib/staff-client.mjs';
+  import { setBusy } from '../../../scripts/lib/busy.mjs';
 
   declare const google: any;
 
@@ -484,7 +485,7 @@ import SignInGate from '../../components/SignInGate.astro';
   passkeyForm.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     passkeyError.hidden = true;
-    passkeyAdd.disabled = true;
+    const donePasskey = setBusy(passkeyAdd);
     try {
       const result: any = await registerPasskey(api, passkeyName.value);
       if (result.cancelled) return;
@@ -498,13 +499,13 @@ import SignInGate from '../../components/SignInGate.astro';
     } catch {
       showError(passkeyError, 'Your device could not create a passkey. Try again, or use the authenticator app.');
     } finally {
-      passkeyAdd.disabled = false;
+      donePasskey();
     }
   });
 
   verifyPasskey.addEventListener('click', async () => {
     verifyError.hidden = true;
-    verifyPasskey.disabled = true;
+    const doneVerify = setBusy(verifyPasskey);
     try {
       const result: any = await passkeyStepUp(api);
       if (result.cancelled) return;
@@ -519,7 +520,7 @@ import SignInGate from '../../components/SignInGate.astro';
     } catch {
       showError(verifyError, 'Your device could not use the passkey. Try again, or enter a code.');
     } finally {
-      verifyPasskey.disabled = false;
+      doneVerify();
     }
   });
 
@@ -584,7 +585,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   totpStartBtn.addEventListener('click', async () => {
     totpError.hidden = true;
-    totpStartBtn.disabled = true;
+    const doneStart = setBusy(totpStartBtn);
     try {
       const { status, data } = await api('/api/staff-mfa/totp/start', { method: 'POST' });
       if (status === 403 && data.code === 'STEP_UP_REQUIRED') {
@@ -604,7 +605,7 @@ import SignInGate from '../../components/SignInGate.astro';
     } catch {
       // api() already showed the gate or forbidden panel
     } finally {
-      totpStartBtn.disabled = false;
+      doneStart();
     }
   });
 
@@ -635,9 +636,7 @@ import SignInGate from '../../components/SignInGate.astro';
     if (verifying) return;
     verifying = true;
     const submit = verifyForm.querySelector<HTMLButtonElement>('button[type="submit"]')!;
-    const label = submit.textContent;
-    submit.disabled = true;
-    submit.textContent = 'Checking…';
+    const doneCheck = setBusy(submit, 'Checking…');
     verifyError.hidden = true;
     try {
       const { status, data } = await api('/api/staff-mfa/verify', { method: 'POST', body: { method: verifyEntry.method(), code: verifyCode.value } });
@@ -654,8 +653,7 @@ import SignInGate from '../../components/SignInGate.astro';
       // handled by api()
     } finally {
       verifying = false;
-      submit.disabled = false;
-      submit.textContent = label;
+      doneCheck();
     }
   });
 

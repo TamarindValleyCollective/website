@@ -739,6 +739,7 @@ import SignInGate from '../../components/SignInGate.astro';
     passkeysSupported,
     wireCodeEntry,
   } from '../../../scripts/lib/staff-client.mjs';
+  import { setBusy } from '../../../scripts/lib/busy.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -970,7 +971,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   verifyPasskey.addEventListener('click', async () => {
     verifyError.hidden = true;
-    verifyPasskey.disabled = true;
+    const doneVerify = setBusy(verifyPasskey);
     try {
       const result: any = await passkeyStepUp(call);
       if (result.cancelled) return;
@@ -988,7 +989,7 @@ import SignInGate from '../../components/SignInGate.astro';
     } catch (err) {
       if (!handled(err)) show(verifyError, 'Your device could not use the passkey. Try again, or enter a code.');
     } finally {
-      verifyPasskey.disabled = false;
+      doneVerify();
     }
   });
 
@@ -1000,9 +1001,7 @@ import SignInGate from '../../components/SignInGate.astro';
     if (verifying) return;
     verifying = true;
     const submit = verifyForm.querySelector<HTMLButtonElement>('button[type="submit"]')!;
-    const label = submit.textContent;
-    submit.disabled = true;
-    submit.textContent = 'Checking…';
+    const doneCheck = setBusy(submit, 'Checking…');
     verifyError.hidden = true;
     try {
       const { status, data } = await call('/api/staff-mfa/verify', { method: 'POST', body: { method: verifyEntry.method(), code: verifyCode.value } });
@@ -1022,8 +1021,7 @@ import SignInGate from '../../components/SignInGate.astro';
       if (!handled(err)) show(verifyError, 'Could not reach the server — try again.');
     } finally {
       verifying = false;
-      submit.disabled = false;
-      submit.textContent = label;
+      doneCheck();
     }
   });
 
@@ -1156,7 +1154,7 @@ import SignInGate from '../../components/SignInGate.astro';
     save.disabled = !editable;
     save.addEventListener('click', async () => {
       const chosen = boxes.filter((b) => b.checked).map((b) => b.value);
-      save.disabled = true;
+      const doneSave = setBusy(save, 'Saving…');
       status.textContent = 'Saving…';
       try {
         const { status: code, data } = await call('/api/staff-admin/roles', {
@@ -1168,13 +1166,12 @@ import SignInGate from '../../components/SignInGate.astro';
           await loadPeople();
         } else {
           status.textContent = data.error ?? 'Could not save.';
-          save.disabled = !canEdit();
         }
       } catch (err) {
-        if (!handled(err)) {
-          status.textContent = 'Could not reach the server.';
-          save.disabled = !canEdit();
-        }
+        if (!handled(err)) status.textContent = 'Could not reach the server.';
+      } finally {
+        doneSave();
+        save.disabled = !canEdit();
       }
     });
     const limits = h(
@@ -1258,11 +1255,12 @@ import SignInGate from '../../components/SignInGate.astro';
       toggle.addEventListener('click', async () => {
         const was = p.active;
         const heldRoles = p.roles.map((r) => ({ ...r })); // deactivating clears them; Undo puts them back
-        toggle.disabled = true;
+        const doneToggle = setBusy(toggle);
         if (await setActive(p, !was)) {
           announce(`${p.label} ${was ? 'deactivated' : 'reactivated'}.`);
           showToast(`${p.label} ${was ? 'deactivated' : 'reactivated'}.`, () => void setActive(p, was, was ? heldRoles : []));
         } else {
+          doneToggle();
           toggle.disabled = !canEdit();
         }
       });
@@ -1377,7 +1375,7 @@ import SignInGate from '../../components/SignInGate.astro';
       show(peopleError, "Prove it's you above before adding someone.");
       return;
     }
-    addSubmit.disabled = true;
+    const doneAdd = setBusy(addSubmit);
     try {
       const { status, data } = await call('/api/staff-admin/people', { method: 'POST', body: { email: addEmail.value, name: addName.value } });
       if (status === 201) {
@@ -1404,7 +1402,7 @@ import SignInGate from '../../components/SignInGate.astro';
     } catch (err) {
       if (!handled(err)) show(peopleError, 'Could not reach the server — try again.');
     } finally {
-      addSubmit.disabled = false;
+      doneAdd();
     }
   });
 
@@ -1497,7 +1495,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   async function loadEvents(more: boolean) {
     eventsError.hidden = true;
-    eventsMore.disabled = true;
+    const doneMore = setBusy(eventsMore);
     try {
       const { status, data } = await call(`/api/staff-admin/activity?limit=100${more && nextBefore !== null ? `&before=${nextBefore}` : ''}`);
       if (status !== 200) throw new Error('load failed');
@@ -1509,7 +1507,7 @@ import SignInGate from '../../components/SignInGate.astro';
     } catch (err) {
       if (!handled(err)) show(eventsError, 'Could not load the activity — try again.');
     } finally {
-      eventsMore.disabled = false;
+      doneMore();
     }
   }
   eventsSearch.addEventListener('input', () => {

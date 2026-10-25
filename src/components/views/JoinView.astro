@@ -278,6 +278,11 @@ const c = content[lang];
   document.querySelector<HTMLFormElement>('form[name="membership-enquiry"]')?.addEventListener('submit', (e) => {
     const form = e.target as HTMLFormElement;
     const data = new FormData(form);
+    // The form posts natively and the page navigates once Netlify answers; on a slow connection that gap
+    // looked like a button that did nothing, so show the spinner (and ignore a second press) meanwhile.
+    form.querySelector('button[type="submit"]')?.setAttribute('aria-busy', 'true');
+    // Coming back with the browser's Back button restores this page as it was; don't leave the spinner on.
+    window.addEventListener('pageshow', () => form.querySelector('button[type="submit"]')?.removeAttribute('aria-busy'), { once: true });
     const payload = {
       formType: 'membership',
       name: data.get('name'),

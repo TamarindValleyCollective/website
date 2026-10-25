@@ -387,6 +387,43 @@ img {
   color: var(--tvc-white);
 }
 
+/* A button waiting on the server (scripts/lib/busy.mjs sets aria-busy): a spinner before the label, full opacity so
+   it reads as working rather than unavailable, and a progress cursor. */
+button[aria-busy="true"] {
+  cursor: progress;
+  pointer-events: none;
+  /* !important: each shell dims its own :disabled buttons with a more specific rule. */
+  opacity: 1 !important;
+}
+
+button[aria-busy="true"]::before {
+  content: "";
+  display: inline-block;
+  flex: none;
+  width: 1em;
+  height: 1em;
+  margin-right: 0.55em;
+  vertical-align: -0.125em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: tvc-spin 0.7s linear infinite;
+}
+
+@keyframes tvc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button[aria-busy="true"]::before {
+    animation: none;
+    border-right-color: currentColor;
+    opacity: 0.6;
+  }
+}
+
 .eyebrow {
   font-family: var(--font-body);
   font-weight: 600;

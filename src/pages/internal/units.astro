@@ -207,6 +207,7 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
 
 <script>
   import { StaffAuthError, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../scripts/lib/staff-client.mjs';
+  import { busyForPress, setBusy } from '../../../scripts/lib/busy.mjs';
   import { initStepUpLock } from '../../../scripts/lib/staff-stepup-ui.mjs';
   import { rentalStepper } from '../../../scripts/lib/rental-stepper.mjs';
   import { stageIndex } from '../../../scripts/lib/rental-stages.mjs';
@@ -389,6 +390,7 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
 
   async function change(path: string, body: unknown, done: string): Promise<{ ok: boolean; data?: any }> {
     if (!mayChange()) return { ok: false };
+    const finish = busyForPress();
     try {
       const { status, data: out } = await call(path, { method: 'POST', body });
       if (status === 200) {
@@ -405,6 +407,8 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
     } catch (err) {
       if (!handled(err)) showToast('Could not reach the server.');
       return { ok: false };
+    } finally {
+      finish();
     }
   }
 
@@ -476,9 +480,9 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
     send.addEventListener('click', async () => {
       const f = file.files?.[0];
       if (!f) return showToast('Choose the contract copy to share.');
-      send.disabled = true;
-      const ok = await change('/api/units-admin/contracts/share', { offerId: o.id, termsVersion: version.value, memberPct: member.value, tvcPct: tvc.value, lingerPct: linger.value, memberPayout: payout.value, typeId: select.value, delegateToTvc: o.shape === 'whole' && box.checked, file: { mime: f.type, base64: await readBase64(f) } }, 'Shared. The member can sign it in their portal.');
-      if (!ok.ok) send.disabled = false;
+      const finish = setBusy(send, 'Sharing…');
+      await change('/api/units-admin/contracts/share', { offerId: o.id, termsVersion: version.value, memberPct: member.value, tvcPct: tvc.value, lingerPct: linger.value, memberPayout: payout.value, typeId: select.value, delegateToTvc: o.shape === 'whole' && box.checked, file: { mime: f.type, base64: await readBase64(f) } }, 'Shared. The member can sign it in their portal.');
+      finish();
     });
     return h(
       'div',

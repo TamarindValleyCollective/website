@@ -85,6 +85,7 @@ import PageHero from '../components/PageHero.astro';
 </style>
 
 <script>
+  import { setBusy } from '../../scripts/lib/busy.mjs';
   const token = new URLSearchParams(window.location.search).get('token') ?? '';
   const $ = (id: string) => document.getElementById(id)!;
   const approveBtn = $('ab-approve') as HTMLButtonElement;
@@ -137,7 +138,9 @@ import PageHero from '../components/PageHero.astro';
   async function decide(action: 'approve' | 'decline') {
     if (action === 'decline' && !window.confirm('Decline this request? The guest will be told we can’t take the booking.')) return;
     $('ab-error').hidden = true;
-    approveBtn.disabled = declineBtn.disabled = true;
+    const [active, other] = action === 'approve' ? [approveBtn, declineBtn] : [declineBtn, approveBtn];
+    const done = setBusy(active, action === 'approve' ? 'Approving…' : 'Declining…');
+    other.disabled = true;
     try {
       const res = await fetch('/api/booking-approval', {
         method: 'POST',
@@ -150,7 +153,8 @@ import PageHero from '../components/PageHero.astro';
     } catch (err) {
       $('ab-error').textContent = err instanceof Error ? err.message : 'Something went wrong. Try again.';
       $('ab-error').hidden = false;
-      approveBtn.disabled = declineBtn.disabled = false;
+      done();
+      other.disabled = false;
     }
   }
 

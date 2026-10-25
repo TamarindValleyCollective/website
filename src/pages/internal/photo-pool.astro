@@ -222,6 +222,7 @@ import SignInGate from '../../components/SignInGate.astro';
   // scripts/lib/staff-client.mjs), so signing in once opens them all. Each tool
   // still checks its own role on the server for every request.
   import { TOKEN_KEY as STORAGE_KEY } from '../../../scripts/lib/staff-client.mjs';
+  import { setBusy } from '../../../scripts/lib/busy.mjs';
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
   interface PoolPhotoExif {
@@ -412,7 +413,7 @@ import SignInGate from '../../components/SignInGate.astro';
     });
 
     saveDescBtn.addEventListener('click', async () => {
-      saveDescBtn.disabled = true;
+      const doneSave = setBusy(saveDescBtn);
       descStatus.textContent = 'Saving…';
       try {
         const res = await authedFetch('/api/photo-pool/description', {
@@ -424,7 +425,7 @@ import SignInGate from '../../components/SignInGate.astro';
         photo.description = descInput.value;
         descStatus.textContent = 'Saved.';
       } catch {
-        saveDescBtn.disabled = false;
+        doneSave();
         descStatus.textContent = 'Failed to save — try again.';
       }
     });
@@ -443,8 +444,9 @@ import SignInGate from '../../components/SignInGate.astro';
     rejectBtn.textContent = 'Reject';
 
     async function decide(decision: 'approve' | 'reject') {
-      approveBtn.disabled = true;
-      rejectBtn.disabled = true;
+      const [active, other] = decision === 'approve' ? [approveBtn, rejectBtn] : [rejectBtn, approveBtn];
+      const done = setBusy(active);
+      other.disabled = true;
       try {
         const res = await authedFetch('/api/photo-pool', {
           method: 'POST',
@@ -455,8 +457,8 @@ import SignInGate from '../../components/SignInGate.astro';
         card.remove();
         if (!grid.children.length) showStatus('Inbox is empty.');
       } catch {
-        approveBtn.disabled = false;
-        rejectBtn.disabled = false;
+        done();
+        other.disabled = false;
         showStatus(`Failed to ${decision} "${photo.name}" — try again.`);
       }
     }

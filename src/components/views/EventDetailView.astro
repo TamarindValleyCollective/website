@@ -421,6 +421,8 @@ const brand =
 
   {!isUpcoming && !event.data.interestNote && (
   <script>
+    import { setBusy } from '../../../scripts/lib/busy.mjs';
+
     const widget = document.querySelector<HTMLElement>('.interest-widget[data-event]');
 
     if (widget) {
@@ -472,7 +474,7 @@ const brand =
 
       form?.addEventListener('submit', async (e) => {
         e.preventDefault();
-        if (submitBtn) submitBtn.disabled = true;
+        const done = submitBtn ? setBusy(submitBtn) : () => {};
         hideError();
         const email = emailInput?.value.trim() ?? '';
 
@@ -512,7 +514,7 @@ const brand =
           // Leave the form enabled so they can retry.
           showError();
         } finally {
-          if (submitBtn) submitBtn.disabled = false;
+          done();
         }
       });
     }

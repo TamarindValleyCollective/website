@@ -1483,6 +1483,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   // scripts/lib/staff-client.mjs), so signing in once opens them all. Each tool
   // still checks its own role on the server for every request.
   import { TOKEN_KEY as STORAGE_KEY, askSheet, showToast } from '../../../scripts/lib/staff-client.mjs';
+  import { setBusy } from '../../../scripts/lib/busy.mjs';
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
   interface EventOption {
@@ -3369,7 +3370,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         </div>
       `;
       card.querySelector('.edit-booking')!.addEventListener('click', () => loadIntoForm(b));
-      card.querySelector('.cancel-booking')?.addEventListener('click', () => cancelBooking(b));
+      card.querySelector('.cancel-booking')?.addEventListener('click', (e) => cancelBooking(b, e.currentTarget as HTMLButtonElement));
       card.querySelector('.notify-guests')?.addEventListener('click', (ev) => notifyGuests(b, ev.currentTarget as HTMLButtonElement));
       bookingList.appendChild(card);
     }
@@ -3395,7 +3396,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   async function notifyGuests(b: Booking, button: HTMLButtonElement) {
     const label = b.notice ? 'Send the changes to the guests affected' : 'Tell the guests their allocation is final';
     if (!(await askSheet({ title: `${label}?`, text: 'They are messaged on WhatsApp and email wherever we have a mobile or email, and the TVC team and Linger get a summary.', actions: [{ label: 'Send the message', value: true, kind: 'primary' }, { label: 'Not yet', value: false }] }))) return;
-    button.disabled = true;
+    const done = setBusy(button, 'Sending…');
     try {
       const res = await authedFetch('/api/accommodation-admin/bookings/notify', {
         method: 'POST',
@@ -3409,7 +3410,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     } catch (err) {
       const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
       if (!handled) showToast(err instanceof Error ? `Could not notify the guests: ${err.message}` : 'Could not notify the guests. Try again.');
-      button.disabled = false;
+      done();
     }
   }
 
@@ -3444,7 +3445,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     });
   }
 
-  async function cancelBooking(b: Booking) {
+  async function cancelBooking(b: Booking, button: HTMLButtonElement) {
     let reason: string | undefined;
     if (b.isPast) {
       const entered = await showReasonPrompt('This stay has already happened. Why is it being cancelled?');
@@ -3466,6 +3467,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       if (!choice) return;
       tellGuests = choice === 'notify';
     }
+    const doneCancel = setBusy(button, 'Cancelling…');
     try {
       const res = await authedFetch('/api/accommodation-admin/bookings/delete', {
         method: 'POST',
@@ -3488,6 +3490,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     } catch (err) {
       const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
       if (!handled) showToast(err instanceof Error ? `Could not cancel the booking: ${err.message}` : 'Could not cancel the booking. Try again.');
+    } finally {
+      doneCancel();
     }
   }
 
@@ -3721,6 +3725,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     if (type === 'private-event') payload.exclusive = exclusiveInput.checked;
 
     const url = editingId ? '/api/accommodation-admin/bookings/update' : '/api/accommodation-admin/bookings';
+    const doneSave = setBusy(submitBtn, 'Saving…');
     try {
       const res = await authedFetch(url, {
         method: 'POST',
@@ -3742,6 +3747,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         formError.hidden = false;
         formError.textContent = 'Failed to save — try again.';
       }
+    } finally {
+      doneSave();
     }
   });
 
