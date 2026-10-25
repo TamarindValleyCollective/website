@@ -1,0 +1,288 @@
+// Netlify Function (v2 API) behind the Units screen: the super admin's view of the units Linger can sell. Members
+// offer a unit in the member portal; here an offer is enabled once the contract is signed, a unit is paused,
+// resumed or offboarded, and its tags, cluster, capacity and private note are edited. Backs /internal/units.
+// Plan: docs/plans/accommodation-member-units.md. The rules (what an offer may contain, what enabling creates, when
+// a unit may be offboarded) are in scripts/lib/member-units.mjs and tested there.
+//
+// Who may use it: super admins only. Reading needs a signed-in super admin; every change goes through
+// requireAccessAdmin (lib/staff-admin-guard.ts), the same second-factor step-up as the Access page. Each change is
+// written to staff_audit_log *before* it is made and refused if the log can't be written. The log holds unit ids,
+// types and field names, never the farm manager's note or any member's details.
+import { requireSuperAdmin, logStaffAction, type SuperAdmin } from './lib/staff-access';
+import { requireAccessAdmin, stepUpIsValid } from './lib/staff-admin-guard';
+import { MfaNotConfiguredError } from './lib/staff-mfa-crypto';
+import { mfaSummary, rest } from './lib/staff-mfa-store';
+import { enablePlan, offboardProblem, editPatch, statusChange } from '../../scripts/lib/member-units.mjs';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const OFFBOARD_REASONS = ['member_withdrew', 'contract_ended', 'not_suitable', 'other'];
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+}
+
+async function readJson<T>(req: Request): Promise<T | null> {
+  try {
+    return (await req.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function audit(admin: SuperAdmin, action: string, detail: Record<string, unknown>): Promise<boolean> {
+  try {
+    await logStaffAction({ actorId: admin.id, action, module: 'accommodation', detail });
+    return true;
+  } catch (err) {
+    console.error('Failed to write staff audit log', err);
+    return false;
+  }
+}
+
+const inList = (values: string[]) => `in.(${values.map((v) => encodeURIComponent(v)).join(',')})`;
+const todayInIst = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+type UnitRow = {
+  id: string;
+  name: string;
+  kind: string;
+  capacity: number;
+  owner_type: string;
+  owner_farm_unit: string | null;
+  pool_id: string | null;
+  status: string;
+  manager: string;
+  listing_shape: string | null;
+  cluster: string | null;
+  tags: string[];
+  note: string | null;
+  request_mode: string;
+  ignores_farm_closure: boolean;
+  sort_order: number;
+};
+
+const UNIT_SELECT = 'id,name,kind,capacity,owner_type,owner_farm_unit,pool_id,status,manager,listing_shape,cluster,tags,note,request_mode,ignores_farm_closure,sort_order';
+
+async function getUnit(id: string): Promise<UnitRow | null> {
+  const res = await rest(`/accommodation_units?id=eq.${encodeURIComponent(id)}&select=${UNIT_SELECT}`);
+  return ((await res.json()) as UnitRow[])[0] ?? null;
+}
+
+// The bookings of a unit that have not ended: any whose stay runs past today.
+async function futureBookingsFor(unitId: string): Promise<{ id: string; label: string | null; startDate: string; nights: number }[]> {
+  const range = encodeURIComponent(`[${todayInIst()},2100-01-01)`);
+  const res = await rest(`/accommodation_tent_assignments?tent_id=eq.${encodeURIComponent(unitId)}&stay_range=ov.${range}&select=booking_id`);
+  const ids = [...new Set(((await res.json()) as { booking_id: string }[]).map((r) => r.booking_id))];
+  if (!ids.length) return [];
+  const rows = (await (await rest(`/accommodation_bookings?id=${inList(ids)}&select=id,label,event_title,start_date,nights&order=start_date.asc`)).json()) as { id: string; label: string | null; event_title: string | null; start_date: string; nights: number }[];
+  return rows.map((b) => ({ id: b.id, label: b.event_title ?? b.label, startDate: b.start_date, nights: b.nights }));
+}
+
+async function handleOverview(req: Request, admin: SuperAdmin): Promise<Response> {
+  const today = todayInIst();
+  const range = encodeURIComponent(`[${today},2100-01-01)`);
+  const [unitsRes, poolsRes, offersRes, aheadRes] = await Promise.all([
+    rest(`/accommodation_units?select=${UNIT_SELECT}&order=sort_order.asc,id.asc`),
+    rest('/accommodation_unit_pools?select=id,name,owner_type,sort_order&active=eq.true&order=sort_order.asc'),
+    rest('/member_unit_offers?status=eq.interested&select=id,household_id,requested_by,shape,type_id,delegate_to_tvc,created_at&order=created_at.asc'),
+    rest(`/accommodation_tent_assignments?stay_range=ov.${range}&select=tent_id,booking_id`),
+  ]);
+  const units = (await unitsRes.json()) as UnitRow[];
+  const pools = (await poolsRes.json()) as { id: string; name: string; owner_type: string }[];
+  const offers = (await offersRes.json()) as { id: string; household_id: string; requested_by: string | null; shape: string; type_id: string; delegate_to_tvc: boolean; created_at: string }[];
+  const ahead = (await aheadRes.json()) as { tent_id: string; booking_id: string }[];
+  const aheadCount = new Map<string, Set<string>>();
+  for (const a of ahead) aheadCount.set(a.tent_id, (aheadCount.get(a.tent_id) ?? new Set()).add(a.booking_id));
+
+  // Who owns a member unit, and who is asking: shown by name to a super admin, never by contact detail.
+  const householdIds = [...new Set(offers.map((o) => o.household_id))];
+  const farmUnits = [...new Set(units.map((u) => u.owner_farm_unit).filter((f): f is string => Boolean(f)))];
+  const [offerHouseholds, unitHouseholds] = await Promise.all([
+    householdIds.length ? rest(`/member_households?id=${inList(householdIds)}&select=id,farm_unit,cluster`).then((r) => r.json()) : [],
+    farmUnits.length ? rest(`/member_households?farm_unit=${inList(farmUnits)}&select=id,farm_unit`).then((r) => r.json()) : [],
+  ]);
+  const hhById = new Map<string, { id: string; farm_unit: string; cluster: string | null }>((offerHouseholds as any[]).map((h) => [h.id, h]));
+  const hhByFarmUnit = new Map<string, string>((unitHouseholds as any[]).map((h) => [h.farm_unit, h.id]));
+  const ownerHouseholdIds = [...hhByFarmUnit.values()];
+  const owners = ownerHouseholdIds.length ? ((await (await rest(`/member_household_members?household_id=${inList(ownerHouseholdIds)}&role=eq.owner&select=household_id,person_id`)).json()) as { household_id: string; person_id: string }[]) : [];
+  const personIds = [...new Set([...owners.map((o) => o.person_id), ...offers.map((o) => o.requested_by).filter((p): p is string => Boolean(p))])];
+  const people = personIds.length ? ((await (await rest(`/member_people?id=${inList(personIds)}&select=id,full_name`)).json()) as { id: string; full_name: string }[]) : [];
+  const nameOf = new Map(people.map((p) => [p.id, p.full_name]));
+
+  let stepUpValid = false;
+  try {
+    stepUpValid = stepUpIsValid(req, admin.id);
+  } catch (err) {
+    if (!(err instanceof MfaNotConfiguredError)) throw err;
+  }
+  const mfa = await mfaSummary(admin.id);
+
+  return jsonResponse({
+    me: { id: admin.id, ready: mfa.ready, hasPasskey: mfa.passkey, stepUpValid },
+    types: pools.map((p) => ({ id: p.id, label: p.name, ownerType: p.owner_type })),
+    units: units.map((u) => ({
+      id: u.id,
+      name: u.name,
+      type: u.pool_id ?? '',
+      kind: u.kind,
+      capacity: u.capacity,
+      ownerType: u.owner_type,
+      ownerFarmUnit: u.owner_farm_unit,
+      ownerNames: u.owner_farm_unit ? owners.filter((o) => o.household_id === hhByFarmUnit.get(u.owner_farm_unit!)).map((o) => nameOf.get(o.person_id) ?? '').filter(Boolean) : [],
+      manager: u.manager,
+      status: u.status,
+      listingShape: u.listing_shape,
+      cluster: u.cluster,
+      tags: u.tags ?? [],
+      note: u.note,
+      requestMode: u.request_mode,
+      ignoresFarmClosure: u.ignores_farm_closure,
+      bookingsAhead: aheadCount.get(u.id)?.size ?? 0,
+    })),
+    offers: offers.map((o) => ({
+      id: o.id,
+      farmUnit: hhById.get(o.household_id)?.farm_unit ?? '',
+      cluster: hhById.get(o.household_id)?.cluster ?? null,
+      memberName: o.requested_by ? (nameOf.get(o.requested_by) ?? '') : '',
+      shape: o.shape,
+      typeId: o.type_id,
+      delegateToTvc: o.delegate_to_tvc,
+      createdAt: o.created_at,
+    })),
+  });
+}
+
+type Offer = { id: string; household_id: string; shape: string; type_id: string; delegate_to_tvc: boolean; status: string };
+
+async function getOffer(id: string): Promise<Offer | null> {
+  const res = await rest(`/member_unit_offers?id=eq.${id}&select=id,household_id,shape,type_id,delegate_to_tvc,status`);
+  return ((await res.json()) as Offer[])[0] ?? null;
+}
+
+async function handleEnable(req: Request, admin: SuperAdmin): Promise<Response> {
+  const body = await readJson<{ offerId?: string; typeId?: string; delegateToTvc?: unknown }>(req);
+  if (!body || !UUID.test(body.offerId ?? '')) return jsonResponse({ error: 'offerId must be a UUID' }, 400);
+  const offer = await getOffer(body.offerId!);
+  if (!offer) return jsonResponse({ error: 'Offer not found' }, 404);
+  const hh = ((await (await rest(`/member_households?id=eq.${offer.household_id}&select=id,farm_unit,cluster`)).json()) as { id: string; farm_unit: string; cluster: string | null }[])[0];
+  const existing = hh ? await getUnit(hh.farm_unit) : null;
+  const maxRes = (await (await rest('/accommodation_units?select=sort_order&order=sort_order.desc&limit=1')).json()) as { sort_order: number }[];
+  const typeId = typeof body.typeId === 'string' ? body.typeId : offer.type_id;
+  const delegateToTvc = body.delegateToTvc === undefined ? offer.delegate_to_tvc : body.delegateToTvc === true;
+  const plan = enablePlan({ offer, household: hh, existing, typeId, delegateToTvc, nextSortOrder: (maxRes[0]?.sort_order ?? 0) + 1 });
+  if ('error' in plan) return jsonResponse({ error: plan.error }, 400);
+
+  if (!(await audit(admin, 'units.offer_enabled', { offerId: offer.id, unitId: plan.unit.id, typeId, manager: plan.unit.manager, shape: offer.shape }))) {
+    return jsonResponse({ error: 'Could not write the audit log; nothing was changed.' }, 500);
+  }
+  // Claim the offer first, so two admins enabling it at once cannot both create a unit.
+  const claimed = (await (await rest(`/member_unit_offers?id=eq.${offer.id}&status=eq.interested`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ status: 'enabled', type_id: typeId, delegate_to_tvc: delegateToTvc, decided_by: admin.id, decided_at: new Date().toISOString() }) })).json()) as unknown[];
+  if (!claimed.length) return jsonResponse({ error: 'This offer has already been dealt with.' }, 409);
+  try {
+    if (plan.reuse) {
+      await rest(`/accommodation_units?id=eq.${encodeURIComponent(plan.unit.id)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(plan.unit) });
+    } else {
+      await rest('/accommodation_units', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(plan.unit) });
+    }
+  } catch (err) {
+    // Put the offer back so it can be tried again.
+    await rest(`/member_unit_offers?id=eq.${offer.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'interested', decided_by: null, decided_at: null }) }).catch(() => {});
+    throw err;
+  }
+  return jsonResponse({ ok: true, unitId: plan.unit.id });
+}
+
+async function handleDecline(req: Request, admin: SuperAdmin): Promise<Response> {
+  const body = await readJson<{ offerId?: string }>(req);
+  if (!body || !UUID.test(body.offerId ?? '')) return jsonResponse({ error: 'offerId must be a UUID' }, 400);
+  const offer = await getOffer(body.offerId!);
+  if (!offer) return jsonResponse({ error: 'Offer not found' }, 404);
+  if (offer.status !== 'interested') return jsonResponse({ error: 'This offer has already been dealt with.' }, 409);
+  if (!(await audit(admin, 'units.offer_declined', { offerId: offer.id }))) return jsonResponse({ error: 'Could not write the audit log; nothing was changed.' }, 500);
+  const done = (await (await rest(`/member_unit_offers?id=eq.${offer.id}&status=eq.interested`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ status: 'declined', decided_by: admin.id, decided_at: new Date().toISOString() }) })).json()) as unknown[];
+  if (!done.length) return jsonResponse({ error: 'This offer has already been dealt with.' }, 409);
+  return jsonResponse({ ok: true });
+}
+
+async function handleStatus(req: Request, admin: SuperAdmin): Promise<Response> {
+  const body = await readJson<{ unitId?: string; status?: string }>(req);
+  if (!body || typeof body.unitId !== 'string' || !body.unitId) return jsonResponse({ error: 'unitId is required' }, 400);
+  const unit = await getUnit(body.unitId);
+  const change = statusChange(unit, body.status);
+  if ('error' in change) return jsonResponse({ error: change.error }, unit ? 400 : 404);
+  if (!(await audit(admin, change.status === 'paused' ? 'units.paused' : 'units.resumed', { unitId: unit!.id }))) return jsonResponse({ error: 'Could not write the audit log; nothing was changed.' }, 500);
+  await rest(`/accommodation_units?id=eq.${encodeURIComponent(unit!.id)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: change.status }) });
+  return jsonResponse({ ok: true });
+}
+
+async function handleOffboard(req: Request, admin: SuperAdmin): Promise<Response> {
+  const body = await readJson<{ unitId?: string; reason?: string }>(req);
+  if (!body || typeof body.unitId !== 'string' || !body.unitId) return jsonResponse({ error: 'unitId is required' }, 400);
+  if (!OFFBOARD_REASONS.includes(body.reason ?? '')) return jsonResponse({ error: 'Choose a reason.' }, 400);
+  const unit = await getUnit(body.unitId);
+  if (!unit) return jsonResponse({ error: 'Unit not found' }, 404);
+  if (unit.status === 'offboarded') return jsonResponse({ error: 'This unit has already been offboarded.' }, 409);
+  const future = await futureBookingsFor(unit.id);
+  const problem = offboardProblem(future);
+  if (problem) return jsonResponse({ error: problem, bookings: future }, 409);
+  if (!(await audit(admin, 'units.offboarded', { unitId: unit.id, reason: body.reason }))) return jsonResponse({ error: 'Could not write the audit log; nothing was changed.' }, 500);
+  await rest(`/accommodation_units?id=eq.${encodeURIComponent(unit.id)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'offboarded' }) });
+  return jsonResponse({ ok: true });
+}
+
+async function handleEdit(req: Request, admin: SuperAdmin): Promise<Response> {
+  const body = await readJson<Record<string, unknown> & { unitId?: string }>(req);
+  if (!body || typeof body.unitId !== 'string' || !body.unitId) return jsonResponse({ error: 'unitId is required' }, 400);
+  const unit = await getUnit(body.unitId);
+  if (!unit) return jsonResponse({ error: 'Unit not found' }, 404);
+  const { unitId: _ignored, ...fields } = body;
+  const edit = editPatch(fields);
+  if ('error' in edit) return jsonResponse({ error: edit.error }, 400);
+  if (!(await audit(admin, 'units.edited', { unitId: unit.id, fields: Object.keys(edit.patch) }))) return jsonResponse({ error: 'Could not write the audit log; nothing was changed.' }, 500);
+  await rest(`/accommodation_units?id=eq.${encodeURIComponent(unit.id)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(edit.patch) });
+  return jsonResponse({ ok: true });
+}
+
+export default async (req: Request): Promise<Response> => {
+  const p = new URL(req.url).pathname;
+  const m = req.method;
+  const writes: Record<string, (req: Request, admin: SuperAdmin) => Promise<Response>> = {
+    '/api/units-admin/offers/enable': handleEnable,
+    '/api/units-admin/offers/decline': handleDecline,
+    '/api/units-admin/units/status': handleStatus,
+    '/api/units-admin/units/offboard': handleOffboard,
+    '/api/units-admin/units/edit': handleEdit,
+  };
+  const isRead = p === '/api/units-admin/overview' && m === 'GET';
+  const write = m === 'POST' ? writes[p] : undefined;
+  if (!isRead && !write) return jsonResponse({ error: 'Not found' }, 404);
+
+  try {
+    if (isRead) {
+      const auth = await requireSuperAdmin(req);
+      if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+      return await handleOverview(req, auth.admin);
+    }
+    const auth = await requireAccessAdmin(req);
+    if (!auth.ok) return jsonResponse({ error: auth.error, ...(auth.code ? { code: auth.code } : {}) }, auth.status);
+    return await write!(req, auth.admin);
+  } catch (err) {
+    if (err instanceof MfaNotConfiguredError) {
+      console.error('Second factors are not configured:', err.message);
+      return jsonResponse({ error: 'Second-factor storage is not configured yet (STAFF_MFA_KEY).', code: 'MFA_NOT_CONFIGURED' }, 500);
+    }
+    console.error('units-admin request failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+};
+
+export const config = {
+  path: [
+    '/api/units-admin/overview',
+    '/api/units-admin/offers/enable',
+    '/api/units-admin/offers/decline',
+    '/api/units-admin/units/status',
+    '/api/units-admin/units/offboard',
+    '/api/units-admin/units/edit',
+  ],
+};

@@ -4,7 +4,7 @@
 // the first load and the seed the tests compare against.
 
 export const UNIT_SELECT =
-  'id,name,short_name,group_name,kind,capacity,owner_type,owner_farm_unit,pool_id,status,manager,listing_shape,cluster,tags,note,ignores_farm_closure,sort_order';
+  'id,name,short_name,group_name,kind,capacity,owner_type,owner_farm_unit,pool_id,status,manager,listing_shape,cluster,tags,note,ignores_farm_closure,request_mode,sort_order';
 export const TYPE_SELECT = 'id,name,owner_type,sort_order,active';
 
 // A unit row as the calendar sees it. `note` is the farm manager's private note, so it is only included for people who
@@ -25,6 +25,7 @@ export function unitFromRow(row, { includeNote = false } = {}) {
     cluster: row.cluster ?? null,
     tags: Array.isArray(row.tags) ? row.tags : [],
     ignoresFarmClosure: Boolean(row.ignores_farm_closure),
+    requestMode: row.request_mode ?? 'reject',
   };
   if (includeNote && row.note) unit.note = row.note;
   return unit;
@@ -52,6 +53,7 @@ export function unitFromSeed(seed) {
     cluster: null,
     tags: [],
     ignoresFarmClosure: false,
+    requestMode: 'reject',
   };
 }
 

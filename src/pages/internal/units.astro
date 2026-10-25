@@ -1,0 +1,555 @@
+---
+// The Units screen: what Linger can sell. A member offers a unit in the member portal; here a super admin enables it
+// once the contract is signed, pauses or resumes a unit, offboards one, and edits a unit's tags, cluster, capacity and
+// private note. Super admins only; changes need the same second-factor step-up as the Access page. Backs
+// netlify/functions/units-admin.mts. Plan: docs/plans/accommodation-member-units.md.
+import StaffLayout from '../../layouts/StaffLayout.astro';
+import SignInGate from '../../components/SignInGate.astro';
+import StepUpSheet from '../../components/StepUpSheet.astro';
+---
+
+<StaffLayout title="Units" description="Onboard and manage the units Linger can sell." current="units">
+  <button slot="toolbar" type="button" id="lock" class="lock-pill" hidden></button>
+
+  <section class="section wrapper">
+    <h1>Units</h1>
+    <p class="hint">The units Linger can sell: onboard what members offer, pause a unit, or offboard it. Only super admins can open this page.</p>
+
+    <SignInGate forbiddenWhat="this page" forbiddenHint="This page is for super admins only." copy="Sign in with your super-admin Google account." />
+
+    <p id="status" class="hint" hidden></p>
+
+    <div id="panel" hidden>
+      <StepUpSheet />
+
+      <div class="tabs" role="tablist" aria-label="Units sections">
+        <button type="button" role="tab" id="tab-pipeline" aria-selected="true" aria-controls="pane-pipeline" class="tab">Pipeline <span id="pipeline-count" class="tab-count"></span></button>
+        <button type="button" role="tab" id="tab-all" aria-selected="false" aria-controls="pane-all" class="tab">All units</button>
+      </div>
+
+      <section id="pane-pipeline" role="tabpanel" aria-labelledby="tab-pipeline">
+        <p class="note" id="pipeline-note"></p>
+        <div id="offers" class="offers"></div>
+      </section>
+
+      <section id="pane-all" role="tabpanel" aria-labelledby="tab-all" hidden>
+        <div class="units-find">
+          <label class="field" for="unit-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+            <input type="search" id="unit-search" placeholder="Search by name or farm number" autocomplete="off" aria-label="Search units" />
+          </label>
+          <label class="visually-hidden" for="unit-type">Type</label>
+          <select id="unit-type"></select>
+          <div class="segmented" id="unit-owner" role="radiogroup" aria-label="Owner">
+            <button type="button" role="radio" data-value="" aria-checked="true">All</button>
+            <button type="button" role="radio" data-value="tvc" aria-checked="false">TVC</button>
+            <button type="button" role="radio" data-value="member" aria-checked="false">Members</button>
+          </div>
+        </div>
+        <p id="unit-count" class="note"></p>
+        <div id="unit-groups"></div>
+      </section>
+
+      <dialog id="unit-sheet" class="sheet sheet--unit" aria-labelledby="unit-title"></dialog>
+    </div>
+  </section>
+</StaffLayout>
+
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style>
+  .tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--tvc-line);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab {
+    flex: none;
+    padding: 8px 14px;
+    border: none;
+    border-bottom: 3px solid transparent;
+    background: none;
+    color: var(--tvc-ink-soft);
+    font: inherit;
+    font-size: var(--text-md);
+    cursor: pointer;
+  }
+
+  .tab[aria-selected='true'] {
+    color: var(--tvc-ink);
+    font-weight: 600;
+    border-bottom-color: var(--tvc-green-dark);
+  }
+
+  .units-find {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .units-find select {
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-sm);
+  }
+
+  .tab-count {
+    margin-left: 4px;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--tvc-orange-text);
+  }
+
+  .offers {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    align-items: start;
+  }
+
+  .offers :global(.offer) {
+    display: grid;
+    gap: 10px;
+    padding: 16px;
+  }
+
+  .offers :global(.offer h2),
+  #unit-groups :global(h2) {
+    margin: 0;
+    font-size: var(--text-lg);
+  }
+
+  .offers :global(.offer-meta) {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .offers :global(.offer-actions),
+  :global(.sheet--unit .unit-actions) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  #unit-groups :global(.group) {
+    margin: 18px 0 8px;
+  }
+
+  #unit-groups :global(.list) {
+    margin: 0;
+  }
+
+  :global(.sheet--unit) {
+    width: min(520px, calc(100vw - 32px));
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+  }
+
+  :global(.sheet--unit dl) {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 4px 14px;
+    margin: 0 0 14px;
+    font-size: var(--text-sm);
+  }
+
+  :global(.sheet--unit dt) {
+    color: var(--tvc-ink-soft);
+  }
+
+  :global(.sheet--unit dd) {
+    margin: 0;
+  }
+
+  :global(.sheet--unit .unit-section) {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  :global(.sheet--unit .unit-section h3) {
+    margin: 0 0 8px;
+    font-size: var(--text-base);
+  }
+
+  :global(.sheet--unit .note) {
+    margin: 0 0 8px;
+  }
+</style>
+
+<script>
+  import { StaffAuthError, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../scripts/lib/staff-client.mjs';
+  import { initStepUpLock } from '../../../scripts/lib/staff-stepup-ui.mjs';
+
+  declare const google: any;
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+
+  interface UnitRow {
+    id: string;
+    name: string;
+    type: string;
+    capacity: number;
+    ownerType: 'tvc' | 'member';
+    ownerFarmUnit: string | null;
+    ownerNames: string[];
+    manager: 'tvc' | 'member';
+    status: 'rentable' | 'paused' | 'offboarded';
+    listingShape: 'whole' | 'room' | null;
+    cluster: string | null;
+    tags: string[];
+    note: string | null;
+    requestMode: 'reject' | 'ask' | 'auto';
+    ignoresFarmClosure: boolean;
+    bookingsAhead: number;
+  }
+  interface OfferRow {
+    id: string;
+    farmUnit: string;
+    cluster: string | null;
+    memberName: string;
+    shape: 'whole' | 'room';
+    typeId: string;
+    delegateToTvc: boolean;
+    createdAt: string;
+  }
+  interface Overview {
+    me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean };
+    types: { id: string; label: string; ownerType: string }[];
+    units: UnitRow[];
+    offers: OfferRow[];
+  }
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const gate = $('gate');
+  const gateError = $('gate-error');
+  const forbidden = $('forbidden');
+  const forbiddenEmail = $('forbidden-email');
+  const statusEl = $('status');
+  const panel = $('panel');
+  const tabPipeline = $('tab-pipeline');
+  const tabAll = $('tab-all');
+  const panePipeline = $('pane-pipeline');
+  const paneAll = $('pane-all');
+  const offersEl = $('offers');
+  const unitGroups = $('unit-groups');
+  const unitSearch = $<HTMLInputElement>('unit-search');
+  const unitType = $<HTMLSelectElement>('unit-type');
+  const unitSheet = $<HTMLDialogElement>('unit-sheet');
+
+  let data: Overview | null = null;
+  let query = '';
+  let typeFilter = '';
+  let ownerFilter = '';
+
+  const MEMBER_TYPE_IDS = ['1br', '1bhk', '2bhk', '3bhk'];
+  const REQUEST_MODE_LABELS: Record<string, string> = { reject: 'Auto-reject', ask: 'Asks the member each time', auto: 'Auto-accept' };
+  const OFFBOARD_REASONS: [string, string][] = [['member_withdrew', 'The member withdrew'], ['contract_ended', 'The contract ended'], ['not_suitable', 'The unit is no longer suitable'], ['other', 'Another reason']];
+
+  function h<K extends keyof HTMLElementTagNameMap>(tag: K, props: { class?: string; text?: string; attrs?: Record<string, string>; on?: Record<string, EventListener> } = {}, ...children: (Node | string | null)[]): HTMLElementTagNameMap[K] {
+    const node = document.createElement(tag);
+    if (props.class) node.className = props.class;
+    if (props.text !== undefined) node.textContent = props.text;
+    for (const [k, v] of Object.entries(props.attrs ?? {})) node.setAttribute(k, v);
+    for (const [k, fn] of Object.entries(props.on ?? {})) node.addEventListener(k, fn);
+    node.append(...(children.filter((c) => c !== null) as (Node | string)[]));
+    return node;
+  }
+
+  const typeLabel = (id: string) => data?.types.find((t) => t.id === id)?.label ?? id;
+  const isMember = (u: UnitRow) => u.ownerType === 'member';
+  const handled = (err: unknown) => err instanceof StaffAuthError;
+
+  // ---- sign-in
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    panel.hidden = true;
+    statusEl.hidden = true;
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+  function showForbidden(token: string) {
+    gate.hidden = true;
+    panel.hidden = true;
+    statusEl.hidden = true;
+    forbidden.hidden = false;
+    forbiddenEmail.textContent = decodeTokenEmail(token);
+  }
+  async function call(path: string, init?: { method?: string; body?: unknown }) {
+    try {
+      return await staffFetch(path, init);
+    } catch (err) {
+      if (err instanceof StaffAuthError) {
+        if (err.kind === 'unauthorized') showGate('Your session expired — sign in again.');
+        else showForbidden(getToken() ?? '');
+      }
+      throw err;
+    }
+  }
+  function handleCredentialResponse(response: { credential: string }) {
+    setToken(response.credential);
+    load();
+  }
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: (window as any).tvcGsiTheme?.() ?? 'outline', size: 'large' });
+  }
+  $('use-different-account').addEventListener('click', () => {
+    clearToken();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
+  // ---- changes need the step-up
+  const lock = initStepUpLock({ getMe: () => data?.me ?? null, onChange: () => render() });
+  // Returns true when a change may go ahead; otherwise says why and opens the unlock sheet.
+  function mayChange(): boolean {
+    if (lock.canEdit()) return true;
+    showToast(data?.me.ready ? 'Unlock editing first.' : 'Set up two second factors first (see Security).');
+    lock.open();
+    return false;
+  }
+
+  async function change(path: string, body: unknown, done: string): Promise<{ ok: boolean; data?: any }> {
+    if (!mayChange()) return { ok: false };
+    try {
+      const { status, data: out } = await call(path, { method: 'POST', body });
+      if (status === 200) {
+        showToast(done);
+        await load();
+        return { ok: true, data: out };
+      }
+      if (out?.code === 'STEP_UP_REQUIRED') {
+        lock.render();
+        showToast('Unlock editing first.');
+        lock.open();
+      } else showToast(out?.error ?? 'Could not change that.');
+      return { ok: false, data: out };
+    } catch (err) {
+      if (!handled(err)) showToast('Could not reach the server.');
+      return { ok: false };
+    }
+  }
+
+  async function load() {
+    try {
+      const { status, data: out } = await call('/api/units-admin/overview');
+      if (status !== 200) throw new Error('load failed');
+      data = out as Overview;
+      gate.hidden = true;
+      forbidden.hidden = true;
+      statusEl.hidden = true;
+      panel.hidden = false;
+      render();
+    } catch (err) {
+      if (!handled(err)) {
+        statusEl.hidden = false;
+        statusEl.textContent = 'Failed to load — try refreshing.';
+      }
+    }
+  }
+
+  // ---- views
+  function render() {
+    if (!data) return;
+    lock.render();
+    renderPipeline();
+    renderAll();
+    if (unitSheet.open && unitSheet.dataset.unit) openUnit(unitSheet.dataset.unit);
+  }
+
+  function pill(u: UnitRow): HTMLElement {
+    return h('span', { class: `pill ${u.status === 'rentable' ? 'pill--ok' : u.status === 'paused' ? 'pill--warn' : ''}`, text: u.status === 'rentable' ? 'Rentable' : u.status === 'paused' ? 'Paused' : 'Offboarded' });
+  }
+
+  function renderPipeline() {
+    const d = data!;
+    $('pipeline-count').textContent = d.offers.length ? String(d.offers.length) : '';
+    const rentable = d.units.filter((u) => isMember(u) && u.status === 'rentable').length;
+    const paused = d.units.filter((u) => isMember(u) && u.status === 'paused').length;
+    $('pipeline-note').textContent = `${d.offers.length} waiting for a contract. ${rentable} member ${rentable === 1 ? 'unit is' : 'units are'} rentable${paused ? `, ${paused} paused` : ''}. Enable an offer once Linger has the contract signed.`;
+    offersEl.replaceChildren(
+      ...(d.offers.length
+        ? d.offers.map((o) => {
+            const select = h('select', { attrs: { 'aria-label': 'Type' } }, ...d.types.filter((t) => MEMBER_TYPE_IDS.includes(t.id) && (o.shape === 'room' ? t.id === '1br' : t.id !== '1br')).map((t) => h('option', { text: t.label, attrs: { value: t.id, ...(t.id === o.typeId ? { selected: '' } : {}) } })));
+            const box = h('input', { attrs: { type: 'checkbox', ...(o.delegateToTvc ? { checked: '' } : {}) } });
+            return h(
+              'div',
+              { class: 'card offer' },
+              h('h2', { text: `Home ${o.farmUnit}` }),
+              h('p', { class: 'offer-meta', text: `${o.memberName || 'A member'} · ${o.shape === 'whole' ? 'Whole unit' : 'A single room'}${o.cluster ? ` · ${o.cluster}` : ''} · asked ${new Date(o.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` }),
+              h('div', { class: 'stack-form' }, h('label', {}, h('span', { text: 'Type' }), select), o.shape === 'whole' ? h('label', {}, box, h('span', { text: 'TVC manages it for the member' })) : h('p', { class: 'offer-meta', text: 'A room: the member accepts requests themselves. It starts on auto-reject.' })),
+              h(
+                'div',
+                { class: 'offer-actions' },
+                h('button', { class: 'button', text: 'Enable', attrs: { type: 'button' }, on: { click: () => void change('/api/units-admin/offers/enable', { offerId: o.id, typeId: select.value, delegateToTvc: o.shape === 'whole' && box.checked }, `Home ${o.farmUnit} is enabled.`) } }),
+                h('button', { class: 'button button--outline', text: 'Decline', attrs: { type: 'button' }, on: { click: () => void change('/api/units-admin/offers/decline', { offerId: o.id }, 'Offer declined.') } }),
+              ),
+            );
+          })
+        : [h('p', { class: 'empty', text: 'No offers waiting.' })]),
+    );
+  }
+
+  function matches(u: UnitRow): boolean {
+    if (u.status === 'offboarded' && !query) return false;
+    if (typeFilter && u.type !== typeFilter) return false;
+    if (ownerFilter && u.ownerType !== ownerFilter) return false;
+    return !query || `${u.name} ${u.ownerFarmUnit ?? ''} ${u.ownerNames.join(' ')}`.toLowerCase().includes(query);
+  }
+
+  function renderAll() {
+    const d = data!;
+    if (!unitType.options.length || unitType.options.length - 1 !== d.types.length) {
+      unitType.replaceChildren(h('option', { text: 'All types', attrs: { value: '' } }), ...d.types.map((t) => h('option', { text: t.label, attrs: { value: t.id } })));
+      unitType.value = typeFilter;
+    }
+    const shown = d.units.filter(matches);
+    $('unit-count').textContent = `${shown.length} of ${d.units.filter((u) => u.status !== 'offboarded').length} units${d.units.some((u) => u.status === 'offboarded') ? `, ${d.units.filter((u) => u.status === 'offboarded').length} offboarded (search to find them)` : ''}.`;
+    const groups = d.types.map((t) => ({ t, units: shown.filter((u) => u.type === t.id) })).filter((g) => g.units.length);
+    unitGroups.replaceChildren(
+      ...(groups.length
+        ? groups.map((g) =>
+            h(
+              'div',
+              { class: 'group' },
+              h('h2', { text: `${g.t.label} · ${g.units.length}` }),
+              h(
+                'ul',
+                { class: 'list' },
+                ...g.units.map((u) =>
+                  h(
+                    'li',
+                    {},
+                    h(
+                      'button',
+                      { class: 'row', attrs: { type: 'button' }, on: { click: () => openUnit(u.id) } },
+                      h('span', { class: 'grow' }, h('span', { class: 'title', text: isMember(u) ? `${u.name}${u.ownerNames.length ? ` · ${u.ownerNames[0]}` : ''}` : u.name }), h('span', { class: 'detail', text: [u.listingShape === 'room' ? 'Room' : u.listingShape === 'whole' ? 'Whole unit' : '', isMember(u) ? (u.manager === 'tvc' ? 'TVC manages' : 'Member manages') : '', u.bookingsAhead ? `${u.bookingsAhead} booking${u.bookingsAhead === 1 ? '' : 's'} ahead` : ''].filter(Boolean).join(' · ') })),
+                      pill(u),
+                      h('span', { class: 'chev', text: '›', attrs: { 'aria-hidden': 'true' } }),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          )
+        : [h('p', { class: 'empty', text: 'No unit matches.' })]),
+    );
+  }
+
+  // ---- one unit
+  function openUnit(id: string) {
+    const u = data?.units.find((x) => x.id === id);
+    if (!u) {
+      if (unitSheet.open) unitSheet.close();
+      return;
+    }
+    unitSheet.dataset.unit = id;
+    const tags = h('input', { attrs: { type: 'text', id: 'f-tags', value: u.tags.join(', '), placeholder: 'kitchen, ground floor, quiet' } });
+    const cluster = h('select', { attrs: { id: 'f-cluster' } }, ...['', 'H1-A', 'H1-B', 'H2'].map((c) => h('option', { text: c || 'None', attrs: { value: c, ...(c === (u.cluster ?? '') ? { selected: '' } : {}) } })));
+    const capacity = h('input', { attrs: { type: 'number', id: 'f-capacity', min: '1', max: '12', value: String(u.capacity) } });
+    const note = h('textarea', { attrs: { id: 'f-note', rows: '3', maxlength: '500', placeholder: 'Only you and the other admins see this. For example: road noise at night.' } });
+    note.value = u.note ?? '';
+    const offboardBox = h('div', { class: 'unit-section', attrs: { hidden: '' } });
+
+    const dl = h('dl', {}, ...(
+      [
+        ['Type', typeLabel(u.type)],
+        ['Owner', isMember(u) ? `Member${u.ownerFarmUnit ? ` · ${u.ownerFarmUnit}` : ''}${u.ownerNames.length ? ` · ${u.ownerNames.join(', ')}` : ''}` : 'TVC'],
+        ['Managed by', u.manager === 'tvc' ? (isMember(u) ? 'TVC, for the member' : 'TVC') : 'The member'],
+        ...(isMember(u) ? [['Requests', u.manager === 'member' ? (REQUEST_MODE_LABELS[u.requestMode] ?? u.requestMode) : 'Madhavan allocates directly'], ['Farm closures', u.ignoresFarmClosure ? 'Stays open when the farm is closed' : 'Closed with the farm']] : []),
+        ['Bookings ahead', String(u.bookingsAhead)],
+      ] as [string, string][]
+    ).flatMap(([k, v]) => [h('dt', { text: k }), h('dd', { text: v })]));
+
+    const save = h('button', { class: 'button', text: 'Save', attrs: { type: 'button' }, on: { click: () => void change('/api/units-admin/units/edit', { unitId: u.id, tags: tags.value.split(',').map((t) => t.trim()).filter(Boolean), cluster: cluster.value || null, capacity: Number(capacity.value), note: note.value }, 'Saved.') } });
+
+    unitSheet.replaceChildren(
+      h('h2', { text: u.name, attrs: { id: 'unit-title' } }),
+      h('p', { class: 'sheet-text' }, pill(u)),
+      dl,
+      h('div', { class: 'stack-form' }, h('label', {}, h('span', { text: 'Tags' }), tags, h('small', { text: 'Words a guest might ask for. The allocation recommendation matches them.' })), h('label', {}, h('span', { text: 'Cluster' }), cluster), h('label', {}, h('span', { text: 'Sleeps' }), capacity), h('label', {}, h('span', { text: 'Your note' }), note)),
+      h('div', { class: 'unit-actions' }, save),
+      u.status === 'offboarded'
+        ? h('p', { class: 'note', text: 'This unit has been offboarded.' })
+        : h(
+            'div',
+            { class: 'unit-section' },
+            h('h3', { text: 'Availability' }),
+            h('div', { class: 'unit-actions' },
+              h('button', { class: 'button button--outline', text: u.status === 'paused' ? 'Resume' : 'Pause', attrs: { type: 'button' }, on: { click: () => void change('/api/units-admin/units/status', { unitId: u.id, status: u.status === 'paused' ? 'rentable' : 'paused' }, u.status === 'paused' ? 'Resumed.' : 'Paused.') } }),
+              h('button', { class: 'button button--danger-outline', text: 'Offboard…', attrs: { type: 'button' }, on: { click: () => { offboardBox.hidden = !offboardBox.hidden; } } }),
+            ),
+            offboardBox,
+          ),
+      h('div', { class: 'sheet-actions' }, h('button', { class: 'button button--outline', text: 'Close', attrs: { type: 'button' }, on: { click: () => unitSheet.close() } })),
+    );
+
+    if (u.status !== 'offboarded') {
+      const reason = h('select', { attrs: { id: 'f-reason' } }, ...OFFBOARD_REASONS.map(([v, l]) => h('option', { text: l, attrs: { value: v } })));
+      const result = h('div', {});
+      offboardBox.replaceChildren(
+        h('p', { class: 'note', text: u.bookingsAhead ? `It has ${u.bookingsAhead} future booking${u.bookingsAhead === 1 ? '' : 's'}; reallocate or cancel ${u.bookingsAhead === 1 ? 'it' : 'them'} first.` : 'The unit stops being offered to Linger and leaves the calendar. Past bookings keep its name.' }),
+        u.bookingsAhead ? h('span') : h('div', { class: 'stack-form' }, h('label', {}, h('span', { text: 'Reason' }), reason), h('div', { class: 'unit-actions' }, h('button', { class: 'button button--danger-outline', text: 'Offboard this unit', attrs: { type: 'button' }, on: { click: async () => {
+          const r = await change('/api/units-admin/units/offboard', { unitId: u.id, reason: reason.value }, `${u.name} is offboarded.`);
+          if (r.ok) unitSheet.close();
+          else if (r.data?.bookings) result.textContent = r.data.error;
+        } } }))),
+        result,
+      );
+    }
+    if (!unitSheet.open) unitSheet.showModal();
+  }
+  unitSheet.addEventListener('click', (ev) => {
+    if (ev.target === unitSheet) unitSheet.close();
+  });
+  unitSheet.addEventListener('close', () => {
+    delete unitSheet.dataset.unit;
+  });
+
+  // ---- tabs and filters
+  function selectTab(which: 'pipeline' | 'all') {
+    tabPipeline.setAttribute('aria-selected', String(which === 'pipeline'));
+    tabAll.setAttribute('aria-selected', String(which === 'all'));
+    panePipeline.hidden = which !== 'pipeline';
+    paneAll.hidden = which !== 'all';
+  }
+  tabPipeline.addEventListener('click', () => selectTab('pipeline'));
+  tabAll.addEventListener('click', () => selectTab('all'));
+  unitSearch.addEventListener('input', () => {
+    query = unitSearch.value.trim().toLowerCase();
+    renderAll();
+  });
+  unitType.addEventListener('change', () => {
+    typeFilter = unitType.value;
+    renderAll();
+  });
+  for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>('#unit-owner button'))) {
+    button.addEventListener('click', () => {
+      ownerFilter = button.dataset.value ?? '';
+      for (const other of Array.from(document.querySelectorAll<HTMLButtonElement>('#unit-owner button'))) other.setAttribute('aria-checked', String(other === button));
+      renderAll();
+    });
+  }
+
+  if (getToken()) load();
+  else showGate();
+</script>

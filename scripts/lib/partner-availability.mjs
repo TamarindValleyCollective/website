@@ -12,7 +12,8 @@
 //   - an exclusive booking (a private event that has the whole farm) covers
 //     the night. The flag's exact meaning lives in the admin UI, so this
 //     errs on the side of showing less availability, never more.
-//   - the unit is paused (not being offered at the moment).
+//   - the unit is paused (not being offered at the moment);
+//   - a member manages the unit and has it on auto-reject (the default for a newly enabled unit), so it is not offered.
 // A farm closure or an exclusive booking does not apply to a unit whose owner
 // has set it to stay open (`ignores_farm_closure`): the common kitchen may be
 // closed while a member's own kitchen is not.
@@ -106,9 +107,11 @@ export function toCatalogue({ units, pools }) {
 // grants); pools: [{ id, name, units: [every active unit in the pool] }];
 // assignments: [{ tent_id, stay_range }]; blocks: [{ start, end }] ranges that
 // close every unit (farm closures, exclusive bookings).
-// A unit counts towards a pool's size and free count while it is offered: not offboarded and not paused.
+// A unit counts towards a pool's size and free count while it is offered: not offboarded, not paused, and not a member's
+// unit set to auto-reject. A unit TVC manages is unaffected by a request mode (the farm manager answers for it).
 function offered(u) {
-  return u.active && u.status !== 'paused';
+  if (!u.active || u.status === 'paused') return false;
+  return !(u.manager === 'member' && u.request_mode === 'reject');
 }
 
 export function buildAvailability({ dates, units, pools, assignments, blocks }) {
@@ -121,7 +124,7 @@ export function buildAvailability({ dates, units, pools, assignments, blocks }) 
   const allBlocks = blocks.filter((b) => b && b.start && b.end);
 
   function isFree(unit, date) {
-    if (unit.status === 'paused') return false;
+    if (!offered(unit)) return false;
     if (!unit.ignores_farm_closure && allBlocks.some((b) => covers(b, date))) return false;
     return !(busy.get(unit.id) ?? []).some((r) => covers(r, date));
   }

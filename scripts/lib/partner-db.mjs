@@ -27,7 +27,7 @@ async function restFetch(path, options = {}) {
 
 const inList = (values) => `in.(${values.map((v) => encodeURIComponent(v)).join(',')})`;
 const overlap = (from, to) => `ov.${encodeURIComponent(`[${from},${to})`)}`;
-const UNIT_FIELDS = 'id,name,short_name,group_name,kind,capacity,owner_type,owner_farm_unit,pool_id,active,status,ignores_farm_closure,sort_order';
+const UNIT_FIELDS = 'id,name,short_name,group_name,kind,capacity,owner_type,owner_farm_unit,pool_id,active,status,manager,request_mode,ignores_farm_closure,sort_order';
 
 // ---- Read path (used by the Function) ----
 

@@ -9,7 +9,7 @@ const tentRow = { id: 'Tent01', name: 'Malabar Hut Fixed Tent (N)', short_name: 
 test('a unit row becomes the shape the calendar uses', () => {
   assert.deepEqual(unitFromRow(tentRow), {
     id: 'Tent01', label: 'Malabar Hut Fixed Tent (N)', shortLabel: 'Fixed Tent (N)', capacity: 3, kind: 'fixed', group: 'Malabar Hut', type: 'tent',
-    status: 'rentable', manager: 'tvc', ownerFarmUnit: null, listingShape: null, cluster: null, tags: [], ignoresFarmClosure: false,
+    status: 'rentable', manager: 'tvc', ownerFarmUnit: null, listingShape: null, cluster: null, tags: [], ignoresFarmClosure: false, requestMode: 'reject',
   });
 });
 
@@ -42,7 +42,7 @@ test('the built-in list maps to TVC-managed, rentable units of a type', () => {
 });
 
 test('the row select names every column the mapper reads', () => {
-  for (const col of ['status', 'manager', 'listing_shape', 'cluster', 'tags', 'note', 'ignores_farm_closure', 'pool_id']) {
+  for (const col of ['status', 'manager', 'listing_shape', 'cluster', 'tags', 'note', 'ignores_farm_closure', 'request_mode', 'pool_id']) {
     assert.ok(UNIT_SELECT.split(',').includes(col), col);
   }
 });

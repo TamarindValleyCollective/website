@@ -706,7 +706,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   CHECK became a foreign key, and the booking functions take a whole-farm closure's unit list from
   `accommodation_farm_closure_unit_ids()`. The admin function refuses writes to a unit a member manages
   (the farm manager only views those). `scripts/lib/partner-units.test.mjs` still compares the original 14 ids
-  with the `0060` seed. `0060` and `0065` are applied to TVC ERP by hand (migrations are not applied on merge); plan in `docs/plans/accommodation-units-as-data.md`.
+  with the `0060` seed. `0060`, `0065` and `0066` are applied to TVC ERP by hand (`0067`, member unit offers and `request_mode`, with step 3a) (migrations are not applied on merge); plan in `docs/plans/accommodation-units-as-data.md`.
 - **`netlify/functions/lib/staff-access.ts` + `staff-registry.ts`** — the shared access layer
   for the internal admin tools (issue #89), meant to replace the per-function Sheet allow-lists
   above. `requireStaff(req, module, capability)` verifies the Google ID token (for tvc.farm /
@@ -811,6 +811,18 @@ outside both the local machine and Netlify (the member-update-email workflow).
   slot): "Unlock editing", "Editing unlocked · N minutes" or "Set up to edit", which opens a sheet with the code field, the
   passkey button and "Lock now". Deactivating or reactivating someone happens at once with an **Undo** toast (no `confirm()`); deactivating also deletes all their module roles (kept in the audit entry; Undo re-grants them) and every view but "Deactivated" hides them;
   role changes still save on selection.
+- **`netlify/functions/units-admin.mts` + `src/pages/internal/units.astro`** — the **Units** screen
+  (Admin menu, super admins only; plan `docs/plans/accommodation-member-units.md`). A member offers
+  their unit in the member portal (a row in `member_unit_offers`, migration `0067`); here a super admin
+  enables the offer once the contract is signed (creating the `accommodation_units` row, id = the
+  household's farm unit, named neutrally `Home F-12`, on auto-reject), declines it, pauses or resumes a
+  unit, offboards one (refused while it has future bookings), and edits a unit's tags, cluster, capacity
+  and the farm manager's private note. Reading needs a super admin; every change goes through
+  `requireAccessAdmin` (the same second-factor step-up as the Access page, via the shared
+  `StepUpSheet.astro` + `scripts/lib/staff-stepup-ui.mjs`) and is written to `staff_audit_log` before it is
+  made. The rules (what an offer may contain, what enabling creates, edits) are in
+  `scripts/lib/member-units.mjs`. A member's blocked dates are `unit-closure` bookings, so they reuse the
+  booking conflict check and audit. `src/lib/staff-demo.ts` fakes the Units API in `?demo` mode.
 - **`netlify/functions/staff-admin.mts` + `lib/staff-admin-guard.ts`** — the API behind the
   Access module (issue #89): who is in the system, who holds which module role, an activity feed,
   and the changes themselves. **Super admins only.** Reading (`GET /api/staff-admin/people`,

@@ -59,9 +59,71 @@ function makeAccess() {
 let accessState: ReturnType<typeof makeAccess> | null = null;
 const demoAccess = () => (accessState ??= makeAccess());
 
+// The Units page: TVC's 14 units, a few members' units, and offers waiting. Changes stick until reload.
+let unitsState: any = null;
+function demoUnits() {
+  if (unitsState) return unitsState;
+  const tvc = (id: string, name: string, type: string, capacity: number, tags: string[] = []) => ({ id, name, type, kind: 'fixed', capacity, ownerType: 'tvc', ownerFarmUnit: null, ownerNames: [], manager: 'tvc', status: 'rentable', listingShape: null, cluster: null, tags, note: null, requestMode: 'reject', ignoresFarmClosure: false, bookingsAhead: 0 });
+  const member = (farm: string, type: string, shape: string, manager: string, mode: string, cluster: string, owners: string[], extra: Record<string, unknown> = {}) => ({ id: farm, name: `Home ${farm}`, type, kind: 'member-home', capacity: ({ '1br': 2, '1bhk': 3, '2bhk': 4, '3bhk': 6 } as Record<string, number>)[type], ownerType: 'member', ownerFarmUnit: farm, ownerNames: owners, manager, status: 'rentable', listingShape: shape, cluster, tags: [], note: null, requestMode: mode, ignoresFarmClosure: false, bookingsAhead: 0, ...extra });
+  unitsState = {
+    me: { id: 'demo-1', ready: true, hasPasskey: true, stepUpValid: false },
+    types: [['tent', 'Tents', 'tvc'], ['hut', 'Bamboo huts', 'tvc'], ['byot', 'Bring your own tent', 'tvc'], ['1br', '1 bedroom', 'member'], ['1bhk', '1 BHK', 'member'], ['2bhk', '2 BHK', 'member'], ['3bhk', '3 BHK', 'member']].map(([id, label, ownerType]) => ({ id, label, ownerType })),
+    units: [
+      tvc('Tent01', 'Malabar Hut Fixed Tent (N)', 'tent', 3, ['quiet']), tvc('Tent02', 'Malabar Hut Fixed Tent (S)', 'tent', 3), tvc('Tent03', 'Malabar Hut Portable Tent', 'tent', 2),
+      tvc('Tent04', 'Banyan Hut Fixed Tent', 'tent', 3, ['near the pond']), tvc('Tent05', 'Banyan Hut Portable Tent', 'tent', 2), tvc('Tent08', 'Large Portable Tent', 'tent', 3), tvc('Tent09', 'Medium Portable Tent', 'tent', 2),
+      tvc('Tent06', 'Upper Bamboo Hut', 'hut', 2, ['view']), tvc('Tent07', 'Lower Bamboo Hut', 'hut', 2),
+      member('F-12', '2bhk', 'whole', 'tvc', 'reject', 'H1-A', ['Kiran Rao', 'Latha Rao'], { tags: ['kitchen', 'ground floor'], bookingsAhead: 1 }),
+      member('F-05', '2bhk', 'whole', 'member', 'auto', 'H1-B', ['Shobha Shetty'], { tags: ['kitchen', 'pets ok'], note: 'Road noise at night in the monsoon.' }),
+      member('F-31', '1br', 'room', 'member', 'ask', 'H2', ['Divya Menon'], { tags: ['quiet', 'host on site'] }),
+      member('F-09', '1br', 'room', 'member', 'reject', 'H1-A', ['Anil Kamath']),
+    ],
+    offers: [
+      { id: 'o1', farmUnit: 'F-02', cluster: 'H1-A', memberName: 'Suresh Reddy', shape: 'whole', typeId: '1bhk', delegateToTvc: true, createdAt: new Date(Date.now() - 2 * 86400000).toISOString() },
+      { id: 'o2', farmUnit: 'F-19', cluster: 'H2', memberName: 'Asha Kulkarni', shape: 'room', typeId: '1br', delegateToTvc: false, createdAt: new Date().toISOString() },
+      { id: 'o3', farmUnit: 'F-24', cluster: 'H1-B', memberName: 'Mohan Joshi', shape: 'whole', typeId: '2bhk', delegateToTvc: true, createdAt: new Date(Date.now() - 6 * 86400000).toISOString() },
+    ],
+  };
+  return unitsState;
+}
+
+function demoUnitsWrite(path: string, body: any): { status: number; data: unknown } | null {
+  const st = demoUnits();
+  const unit = st.units.find((u: any) => u.id === body?.unitId);
+  if (path === '/api/units-admin/offers/enable') {
+    const i = st.offers.findIndex((o: any) => o.id === body.offerId);
+    if (i < 0) return { status: 404, data: { error: 'Offer not found' } };
+    const o = st.offers[i];
+    st.offers.splice(i, 1);
+    const typeId = body.typeId ?? o.typeId;
+    st.units.push({ id: o.farmUnit, name: `Home ${o.farmUnit}`, type: typeId, kind: 'member-home', capacity: ({ '1br': 2, '1bhk': 3, '2bhk': 4, '3bhk': 6 } as Record<string, number>)[typeId], ownerType: 'member', ownerFarmUnit: o.farmUnit, ownerNames: [o.memberName], manager: o.shape === 'whole' && body.delegateToTvc ? 'tvc' : 'member', status: 'rentable', listingShape: o.shape, cluster: o.cluster, tags: [], note: null, requestMode: 'reject', ignoresFarmClosure: false, bookingsAhead: 0 });
+    return { status: 200, data: { ok: true, unitId: o.farmUnit } };
+  }
+  if (path === '/api/units-admin/offers/decline') {
+    st.offers = st.offers.filter((o: any) => o.id !== body.offerId);
+    return { status: 200, data: { ok: true } };
+  }
+  if (!unit) return path.startsWith('/api/units-admin/') ? { status: 404, data: { error: 'Unit not found' } } : null;
+  if (path === '/api/units-admin/units/status') {
+    unit.status = body.status;
+    return { status: 200, data: { ok: true } };
+  }
+  if (path === '/api/units-admin/units/offboard') {
+    if (unit.bookingsAhead) return { status: 409, data: { error: `It has ${unit.bookingsAhead} future booking. Reallocate or cancel it first.`, bookings: [] } };
+    unit.status = 'offboarded';
+    return { status: 200, data: { ok: true } };
+  }
+  if (path === '/api/units-admin/units/edit') {
+    for (const k of ['tags', 'cluster', 'capacity', 'note']) if (body[k] !== undefined) unit[k] = body[k] === '' ? null : body[k];
+    return { status: 200, data: { ok: true } };
+  }
+  return null;
+}
+
 // The writes the Access page makes. They change the demo set only; nothing leaves the page.
 function demoWrite(path: string, body: any): { status: number; data: unknown } | null {
   if (path === '/api/staff-mfa/verify') return { status: 200, data: { stepUpToken: 'demo-step-up', expiresInSeconds: 600 } };
+  const unitsDone = demoUnitsWrite(path, body);
+  if (unitsDone) return unitsDone;
   const person = demoAccess().people.find((x) => x.id === body?.personId);
   if (path === '/api/staff-admin/people/active' && person) {
     person.active = body.active === true;
@@ -194,6 +256,7 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     const reply = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } }));
     if (path === '/api/staff-me') return reply(demoMe(kind));
     if (path === '/api/staff-admin/people' && (init?.method ?? 'GET') === 'GET') return reply(demoAccess());
+    if (path === '/api/units-admin/overview') return reply(demoUnits());
     if (path === '/api/staff-admin/activity') return reply({ events: [], nextBefore: null });
     if (path === '/api/staff-mfa/status') {
       const day = 86400000;
