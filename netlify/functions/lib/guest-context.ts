@@ -14,7 +14,7 @@
 // phone number, email or any other contact detail.
 import { listRecentPaymentsForContactMatch } from '../../../scripts/lib/event-payments-db.mjs';
 import { listTemplateSendsForBookings } from '../../../scripts/lib/supabase.mjs';
-import { searchGuests, listStaysForPerson } from '../../../scripts/lib/accommodation-db.mjs';
+import { searchGuests, listStaysForPerson, getUnitLabels } from '../../../scripts/lib/accommodation-db.mjs';
 import { normalizeMobileNumber } from '../../../scripts/lib/phone.mjs';
 import { formatAmount } from './email-layout';
 import { maskName } from './staff-masking';
@@ -65,10 +65,11 @@ export async function loadGuestContext(opts: {
       const { seeNames } = opts.accommodation;
       try {
         const people = (await searchGuests({ query: '', mobileNumber: opts.e164 })).slice(0, 5);
+        const unitLabels = await getUnitLabels();
         result.stays.people = await Promise.all(
           people.map(async (p: any) => {
             const found = await listStaysForPerson(p.id);
-            return { name: seeNames ? p.name : maskName(p.name ?? ''), stays: (found?.stays ?? []).slice(0, 6).map(shapeStay) };
+            return { name: seeNames ? p.name : maskName(p.name ?? ''), stays: (found?.stays ?? []).slice(0, 6).map((s: any) => shapeStay(s, unitLabels)) };
           }),
         );
       } catch (err) {

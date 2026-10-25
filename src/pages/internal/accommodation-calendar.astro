@@ -681,6 +681,13 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     font-weight: 700;
   }
 
+  .unit-tag {
+    margin-left: 6px;
+    font-size: var(--text-xs);
+    font-weight: 500;
+    color: var(--tvc-ink-soft);
+  }
+
   .jump-date input {
     min-height: 36px;
     padding: 0 10px;
@@ -1493,6 +1500,13 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     kind: 'fixed' | 'removable' | 'byot';
     group: string;
     type: string;
+    // Added by migration 0065; the built-in list has none of these, so they default below.
+    status?: 'rentable' | 'paused' | 'offboarded';
+    manager?: 'tvc' | 'member';
+    ownerFarmUnit?: string | null;
+    listingShape?: 'whole' | 'room' | null;
+    ignoresFarmClosure?: boolean;
+    note?: string;
   }
 
   interface Guest {
@@ -1581,7 +1595,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   const EVENTS: EventOption[] = JSON.parse(document.getElementById('events-data')!.textContent!);
-  const UNITS: Unit[] = JSON.parse(document.getElementById('units-data')!.textContent!);
+  // The units and types are read from the database by the API; this built-in list only covers the moment before the
+  // first response. Both are mutated in place when the real list arrives, so everything below keeps its reference.
+  const withUnitDefaults = (u: Unit): Unit => ({ status: 'rentable', manager: 'tvc', ignoresFarmClosure: false, ...u });
+  const UNITS: Unit[] = (JSON.parse(document.getElementById('units-data')!.textContent!) as Unit[]).map(withUnitDefaults);
   const MEMBERS: string[] = JSON.parse(document.getElementById('members-data')!.textContent!);
 
   const gate = document.getElementById('gate') as HTMLElement;
@@ -1597,6 +1614,18 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   const gridScroll = document.querySelector('.grid-scroll') as HTMLElement;
   const jumpInput = document.getElementById('jump-date') as HTMLInputElement;
   const TYPES: { id: string; label: string }[] = JSON.parse(document.getElementById('types-data')!.textContent!);
+
+  // Take the real list from the API. If it differs from what the page was built with, rebuild what was made from it.
+  function applyServerUnits(units: Unit[] | undefined, types: { id: string; label: string }[] | undefined) {
+    if (!units || !types) return;
+    // A member's unit has no display group of its own; the picker and the day view group it under its type.
+    const fresh = units.map(withUnitDefaults).map((u) => (u.group ? u : { ...u, group: types.find((t) => t.id === u.type)?.label ?? 'Other' }));
+    const sig = (list: Unit[]) => JSON.stringify(list.map((u) => [u.id, u.label, u.shortLabel, u.group, u.type, u.status, u.manager, u.ignoresFarmClosure, u.capacity]));
+    if (sig(fresh) === sig(UNITS) && JSON.stringify(types) === JSON.stringify(TYPES)) return;
+    UNITS.splice(0, UNITS.length, ...fresh);
+    TYPES.splice(0, TYPES.length, ...types);
+    buildTentsFieldset();
+  }
   // Which types are open in the grid is a per-viewer convenience, remembered in this browser.
   const OPEN_KEY = 'tvc-accommodation-open-types';
   const openTypes = new Set<string>(
@@ -2538,7 +2567,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     tentsContainer.innerHTML = '';
     let lastGroup: string | null = null;
     let currentGroupBody: HTMLElement | null = null;
-    for (const unit of UNITS) {
+    // A unit a member manages, or one that is offboarded, is not something staff can book into.
+    for (const unit of UNITS.filter((u) => u.manager !== 'member' && u.status !== 'offboarded')) {
       // Each group is its own real <fieldset>/<legend> - UNITS is already
       // in a fixed, group-contiguous order (see accommodation.mjs), so a
       // new fieldset only needs starting when the group actually changes,
@@ -3031,22 +3061,23 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     const nightsByBookingId = new Map(currentBookings.map((b) => [b.id, new Set(nightsForBooking(b))]));
     const farmClosure = currentBookings.find((b) => b.type === 'farm-closure' && nightsByBookingId.get(b.id)!.has(date));
 
+    let html = '';
     if (farmClosure) {
       // Blocks the whole farm - one row, not one per tent (unlike the
       // table, which is stuck repeating it down every row since that's
-      // just how a table works).
+      // just how a table works). A unit its owner set to stay open still gets its own row below.
       const ariaLabel = cellTooltip(farmClosure, '').replace(/\n/g, ' — ');
-      dayView.innerHTML = `
+      html += `
         <div class="day-row day-row--closed" data-booking-id="${farmClosure.id}" tabindex="0" role="button" aria-label="${escapeAttr(ariaLabel)}">
           <div class="day-row-title">${escapeAttr(typeDisplayLabel(farmClosure.type))}</div>
           ${farmClosure.note ? `<div class="day-row-guests">${escapeAttr(farmClosure.note)}</div>` : ''}
         </div>`;
-      return;
     }
 
-    let html = '';
     let lastGroup: string | null = null;
     for (const unit of UNITS) {
+      // Closed with the farm (unless set to stay open), and offboarded units, have no row of their own.
+      if ((farmClosure && !unit.ignoresFarmClosure) || unit.status === 'offboarded') continue;
       // Same grouping as the booking form's Tents picker (Malabar Hut/Banyan
       // Hut/Bamboo Huts/Portable Tents), extended to the calendar's own
       // views (Sharath's feedback, 2026-09-10) - UNITS is already in a
@@ -3058,7 +3089,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       // change fixed there. aria-label keeps the full standalone `label`
       // (below) since a screen reader announcing one row in isolation has
       // no visual heading to inherit context from.
-      if (unit.group !== lastGroup) {
+      if (unit.group && unit.group !== lastGroup) {
         html += `<div class="day-group-heading">${escapeAttr(unit.group)}</div>`;
         lastGroup = unit.group;
       }
@@ -3080,7 +3111,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
               <span class="day-row-guests">${escapeAttr(guestNames)}</span>
             </div>
           </div>`;
-      } else if (date < today) {
+      } else if (date < today || unit.manager === 'member') {
         html += `
           <div class="day-row day-row--free-past">
             <div class="day-row-tent">${unit.shortLabel}</div>
@@ -3123,7 +3154,13 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     const colClass = (d: string) => [isWeekend(d) ? 'col--weekend' : '', d === today ? 'col--today' : ''].filter(Boolean).join(' ');
     const barKind = (t: BookingType) => (t === 'casual-stay' ? 'stay' : t === 'public-event' || t === 'private-event' ? 'event' : t === 'member-stay' ? 'visit' : 'closure');
 
+    // A whole-farm closure applies to a unit unless its owner set it to stay open (the common kitchen may be closed
+    // while a member's own is not). An offboarded unit only has a row while it still has bookings in view.
+    const visibleSet = new Set(dates);
+    const inView = (u: Unit) => currentBookings.some((b) => b.tents.some((t) => t.tentId === u.id) && nightsForBooking(b).some((n) => visibleSet.has(n)));
+    const shownUnits = UNITS.filter((u) => u.status !== 'offboarded' || inView(u));
     const farmClosureOn = (d: string) => currentBookings.find((b) => b.type === 'farm-closure' && nightsByBookingId.get(b.id)!.has(d));
+    const closureFor = (u: Unit, d: string) => (u.ignoresFarmClosure ? undefined : farmClosureOn(d));
     const occupyingOn = (unitId: string, d: string) => currentBookings.find((b) => b.type !== 'farm-closure' && b.tents.some((t) => t.tentId === unitId) && nightsByBookingId.get(b.id)!.has(d));
 
     const headHtml = '<tr><th class="unit-col">Type</th>' + dates.map((d) => `<th class="${headerColClass(d)}">${headerLabel(d)}</th>`).join('') + '</tr>';
@@ -3136,7 +3173,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         const d = dates[i];
         const b = find(d);
         if (!b) {
-          if (unit && d >= today) {
+          if (unit && d >= today && unit.manager !== 'member') {
             const label = `${unit.label}, ${formatDateLabel(d, { day: 'numeric', month: 'long' })} — free, tap to book`;
             html += `<td class="cell--free ${colClass(d)}" data-tent-id="${unit.id}" data-date="${d}" tabindex="0" role="button" aria-label="${escapeAttr(label)}"></td>`;
           } else {
@@ -3173,8 +3210,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     }
     const chevron = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
     for (const type of TYPES) {
-      const unitsOfType = UNITS.filter((u) => u.type === type.id);
+      const unitsOfType = shownUnits.filter((u) => u.type === type.id);
       if (!unitsOfType.length) continue;
+      // Paused units are not on offer, so they do not count in what is free.
+      const offered = unitsOfType.filter((u) => u.status !== 'paused');
       const open = openTypes.has(type.id);
       let counts = '';
       for (const d of dates) {
@@ -3182,14 +3221,15 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
           counts += `<td class="sku-count sku-count--past ${colClass(d)}"></td>`;
           continue;
         }
-        const free = farmClosureOn(d) ? 0 : unitsOfType.filter((u) => !occupyingOn(u.id, d)).length;
-        const fill = Math.round((free / unitsOfType.length) * 32);
-        counts += `<td class="sku-count${free === 0 ? ' sku-count--none' : ''} ${colClass(d)}" style="--fill:${fill}%" title="${free} of ${unitsOfType.length} free">${free}${viewMode === 'week' ? `<small>of ${unitsOfType.length}</small>` : ''}</td>`;
+        const free = offered.filter((u) => !closureFor(u, d) && !occupyingOn(u.id, d)).length;
+        const fill = offered.length ? Math.round((free / offered.length) * 32) : 0;
+        counts += `<td class="sku-count${free === 0 ? ' sku-count--none' : ''} ${colClass(d)}" style="--fill:${fill}%" title="${free} of ${offered.length} free">${free}${viewMode === 'week' ? `<small>of ${offered.length}</small>` : ''}</td>`;
       }
       bodyHtml += `<tr class="sku-row${open ? ' is-open' : ''}"><td class="unit-col sku-label"><button type="button" class="sku-toggle" data-type="${type.id}" aria-expanded="${open}">${chevron}<span>${escapeAttr(type.label)}<small>${unitsOfType.length} ${unitsOfType.length === 1 ? 'unit' : 'units'}</small></span></button></td>${counts}</tr>`;
       if (!open) continue;
       for (const unit of unitsOfType) {
-        bodyHtml += `<tr><td class="unit-col">${escapeAttr(unit.label)}</td>${rowCells(unit, (d) => farmClosureOn(d) ?? occupyingOn(unit.id, d))}</tr>`;
+        const tag = unit.manager === 'member' ? ' <span class="unit-tag">View only</span>' : unit.status === 'paused' ? ' <span class="unit-tag">Paused</span>' : '';
+        bodyHtml += `<tr><td class="unit-col">${escapeAttr(unit.label)}${tag}</td>${rowCells(unit, (d) => closureFor(unit, d) ?? occupyingOn(unit.id, d))}</tr>`;
       }
     }
     gridTable.innerHTML = headHtml + bodyHtml;
@@ -3198,6 +3238,14 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   let viewOnlyHintTimer: ReturnType<typeof setTimeout> | undefined;
 
   function activateCell(cell: HTMLElement) {
+    // A unit a member manages can be seen here but not opened for editing: only the member changes it.
+    const managed = UNITS.find((u) => u.id === cell.dataset.tentId);
+    if (managed?.manager === 'member') {
+      showStatus(`${managed.label} is managed by its member. You can see it here, but only the member can change it.`);
+      clearTimeout(viewOnlyHintTimer);
+      viewOnlyHintTimer = setTimeout(hideStatus, 4000);
+      return;
+    }
     if (cell.dataset.bookingId) {
       const booking = currentBookings.find((b) => b.id === cell.dataset.bookingId);
       if (booking) loadIntoForm(booking, cell.dataset.tentId);
@@ -3737,9 +3785,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       }
       const bodies = (await Promise.all(responses.map((res) => res.json()))) as {
         units: Unit[];
+        types: { id: string; label: string }[];
         bookings: Booking[];
         access: { role: Role; allowedTypes: string[] | null };
       }[];
+      applyServerUnits(bodies[0]?.units, bodies[0]?.types);
       // Dedupe by id - a week straddling two months fetches both, and a
       // booking touching both (e.g. a stay spanning the boundary) would
       // otherwise appear in each month's response.

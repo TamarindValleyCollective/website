@@ -33,6 +33,8 @@
 // functions the write came through. Nothing here needs to know about
 // either mechanism directly.
 import { restHeaders } from './supabase.mjs';
+import { ACCOMMODATION_UNITS, ACCOMMODATION_TYPES } from './accommodation.mjs';
+import { UNIT_SELECT, TYPE_SELECT, unitFromRow, unitFromSeed, typeFromRow } from './accommodation-units.mjs';
 
 function supabaseUrl() {
   const url = process.env.SUPABASE_URL;
@@ -64,6 +66,52 @@ async function callRpc(fnName, args) {
     throw err;
   }
   return body;
+}
+
+// ---- Units and types (migration 0065) ----
+// The bookable units live in accommodation_units; a unit's type is its pool. They change rarely (a member's unit is
+// enabled, paused or offboarded), so they are cached for a short while per server instance. If the table cannot be read
+// in the new shape (the app is deployed before migration 0065 is applied), the built-in list is used instead so the
+// calendar keeps working.
+const UNITS_TTL_MS = 30_000;
+let unitsCache = null;
+
+async function loadUnitsAndTypes() {
+  if (unitsCache && Date.now() - unitsCache.at < UNITS_TTL_MS) return unitsCache;
+  let rows, typeRows;
+  try {
+    [rows, typeRows] = await Promise.all([
+      restFetch(`/accommodation_units?select=${UNIT_SELECT}&order=sort_order.asc,id.asc`).then((r) => r.json()),
+      restFetch(`/accommodation_unit_pools?select=${TYPE_SELECT}&active=eq.true&order=sort_order.asc,id.asc`).then((r) => r.json()),
+    ]);
+  } catch (err) {
+    console.error('Could not read accommodation_units; using the built-in list', err);
+    // Remembered for only a few seconds, so the real list is picked up soon after the table becomes readable.
+    unitsCache = { at: Date.now() - UNITS_TTL_MS + 5000, rows: null, units: ACCOMMODATION_UNITS.map(unitFromSeed), types: ACCOMMODATION_TYPES.map((t) => ({ id: t.id, label: t.label, ownerType: 'tvc' })) };
+    return unitsCache;
+  }
+  unitsCache = { at: Date.now(), rows, typeRows, types: typeRows.map(typeFromRow) };
+  return unitsCache;
+}
+
+// includeNote: whether to include the farm manager's private note on each unit (never for a read-only role).
+export async function listUnits({ includeNote = false } = {}) {
+  const c = await loadUnitsAndTypes();
+  if (!c.rows) return c.units;
+  return c.rows.map((r) => unitFromRow(r, { includeNote }));
+}
+
+export async function listTypes() {
+  return (await loadUnitsAndTypes()).types;
+}
+
+// id -> label for the stay notices and the WhatsApp guest panel.
+export async function getUnitLabels() {
+  return new Map((await listUnits()).map((u) => [u.id, u.label]));
+}
+
+export function clearUnitsCache() {
+  unitsCache = null;
 }
 
 // [start, end) for a "YYYY-MM" month, as the two date strings PostgREST's

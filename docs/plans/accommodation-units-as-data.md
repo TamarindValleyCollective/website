@@ -1,6 +1,6 @@
 # Accommodation: units as data — step 2 plan
 
-Status: **plan, 2026-10-26. Nothing in this plan is built.** It is step 2 of `docs/plans/accommodation-calendar.md`.
+Status: **built 2026-10-26, migration `0065` not yet applied.** It is step 2 of `docs/plans/accommodation-calendar.md`.
 This is a public repo: no commercial terms and no member or guest details belong here.
 
 ## Goal
@@ -131,10 +131,11 @@ in the PR description.
 
 ## Decisions I need
 
-- **Does a whole-farm closure block member units?** Today "Farm on Vacation" closes every unit. With member
-  units in the table it would also close members' homes. My default is **yes, every active unit**, because TVC
-  cannot run the guest's stay while the farm is closed, and Linger would otherwise sell a stay TVC cannot serve.
-  The alternative is TVC-managed units only, with a per-unit override.
+- **Does a whole-farm closure block member units?** **Decided 2026-10-26: yes, every unit, unless the member
+  configures their unit otherwise.** The common kitchen may be closed while a member's own kitchen is not. This is
+  the `ignores_farm_closure` column (default false), which also exempts a unit from exclusive bookings. It is set by
+  the member in the member portal (step 3); this step adds the column and honours it in the booking functions, the
+  calendar and the partner API.
 - **`status` replacing `active`:** is a paused unit hidden from Linger's availability (my assumption: yes,
   shown as unavailable), and does it still count in the free-units totals in Madhavan's calendar (my
   assumption: no)? The partner API change for paused units belongs with its phase 2.

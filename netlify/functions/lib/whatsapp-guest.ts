@@ -97,11 +97,12 @@ export interface StayRow {
   eventTitle?: string;
 }
 
-export function shapeStay(s: StayRow): { startDate: string; nights: number; unit: string; kind: string; title: string | null } {
+// `labels` is the unit-name lookup from the units table; the built-in names are the fallback for a caller without it.
+export function shapeStay(s: StayRow, labels?: Map<string, string>): { startDate: string; nights: number; unit: string; kind: string; title: string | null } {
   return {
     startDate: s.startDate,
     nights: s.nights,
-    unit: UNIT_LABELS.get(s.tentId) ?? s.tentId,
+    unit: labels?.get(s.tentId) ?? UNIT_LABELS.get(s.tentId) ?? s.tentId,
     kind: STAY_KINDS[s.type] ?? 'Stay',
     title: s.eventTitle ?? s.label ?? null,
   };

@@ -30,8 +30,9 @@
 import { requireStaff, type StaffGrant } from './lib/staff-access';
 import { canSeeNames, maskName } from './lib/staff-masking';
 import { BOOKING_TYPES, type BookingType, type Capability } from './lib/staff-registry';
-import { ACCOMMODATION_UNITS, normalizeMobileNumber, isValidEmail } from '../../scripts/lib/accommodation.mjs';
-import { listBookingsForAdmin, createBooking, updateBooking, deleteBooking, searchGuests, listStaysForPerson, getBookingById, listNoticesForBookings, getNotice, saveNotice } from '../../scripts/lib/accommodation-db.mjs';
+import { normalizeMobileNumber, isValidEmail } from '../../scripts/lib/accommodation.mjs';
+import { writeProblem } from '../../scripts/lib/accommodation-units.mjs';
+import { listUnits, listTypes, listBookingsForAdmin, createBooking, updateBooking, deleteBooking, searchGuests, listStaysForPerson, getBookingById, listNoticesForBookings, getNotice, saveNotice } from '../../scripts/lib/accommodation-db.mjs';
 import { isNotifiableType, snapshotOf, hasPendingChanges } from '../../scripts/lib/stay-notice.mjs';
 import { sendStayNotices, sendStayCancellation } from './lib/stay-notify';
 
@@ -113,17 +114,25 @@ function pageAccess(staff: StaffGrant): { role: 'admin' | 'restricted' | 'viewer
 }
 
 const VALID_TYPES: readonly BookingType[] = BOOKING_TYPES;
-const UNITS_BY_ID = new Map(ACCOMMODATION_UNITS.map((u) => [u.id, u]));
+interface AdminUnit {
+  id: string;
+  label: string;
+  capacity: number;
+  kind: string;
+  manager: string;
+  status: string;
+}
+const unitMap = async (): Promise<Map<string, AdminUnit>> => new Map<string, AdminUnit>(((await listUnits()) as AdminUnit[]).map((u) => [u.id, u]));
 const VALID_AGE_GROUPS = ['Adult', 'Child'];
 const VALID_GENDERS = ['Male', 'Female', 'NA'];
 
-function validateBookingInput(input: Partial<Booking>): string | null {
+function validateBookingInput(input: Partial<Booking>, unitsById: Map<string, AdminUnit>): string | null {
   if (!input.type || !VALID_TYPES.includes(input.type)) return `type must be one of ${VALID_TYPES.join(', ')}`;
   if (!input.startDate || !/^\d{4}-\d{2}-\d{2}$/.test(input.startDate)) return 'startDate must be YYYY-MM-DD';
   if (!Number.isInteger(input.nights) || (input.nights as number) < 1) return 'nights must be a positive integer';
   if (!Array.isArray(input.tents)) return 'tents must be an array (empty for a farm-wide closure)';
   for (const t of input.tents) {
-    const unit = UNITS_BY_ID.get(t.tentId);
+    const unit = unitsById.get(t.tentId);
     if (!unit) return `Unknown tentId "${t.tentId}"`;
     // The hard cap this whole model rests on - "the same tent cannot be
     // shared across 2 different events" only means something if a tent's
@@ -193,6 +202,18 @@ function validateBookingInput(input: Partial<Booking>): string | null {
   return null;
 }
 
+// The first reason staff may not write to one of these units (a member manages it; it is offboarded), or null.
+// Cancelling a booking in an offboarded unit is allowed: a unit can be offboarded while its past bookings remain.
+function unitProblem(ids: string[], unitsById: Map<string, AdminUnit>, opts: { allowOffboarded?: boolean } = {}): { status: number; message: string } | null {
+  for (const id of ids) {
+    const problem = writeProblem(unitsById.get(id));
+    if (!problem) continue;
+    if (opts.allowOffboarded && problem.status === 400) continue;
+    return problem;
+  }
+  return null;
+}
+
 // Short, non-reversible tag that tells two same-named guests apart in the
 // page's typeahead now that their numbers are no longer shown.
 function personRef(id: string): string {
@@ -240,8 +261,11 @@ async function handleList(url: URL, staff: StaffGrant): Promise<Response> {
   // Where each notifiable booking stands with its guests: never told, told and
   // still current, or told but edited since ("pending"). Names no contact data.
   const notices = await listNoticesForBookings(bookings.filter((b: any) => isNotifiableType(b.type)).map((b: any) => b.id));
+  // The farm manager's private note on a unit is for people who run the calendar, not for a read-only role.
+  const [units, types] = await Promise.all([listUnits({ includeNote: staff.role !== 'read_only' }), listTypes()]);
   return jsonResponse({
-    units: ACCOMMODATION_UNITS,
+    units,
+    types,
     bookings: bookings.map((b: any) => ({
       ...shapeBooking(b, staff),
       ...(isNotifiableType(b.type)
@@ -265,11 +289,14 @@ async function handleCreate(req: Request, staff: StaffGrant): Promise<Response> 
     return jsonResponse({ error: 'Invalid request body' }, 400);
   }
 
-  const validationError = validateBookingInput(payload);
+  const unitsById = await unitMap();
+  const validationError = validateBookingInput(payload, unitsById);
   if (validationError) return jsonResponse({ error: validationError }, 400);
   if (!canWriteType(staff, payload.type!)) {
     return jsonResponse({ error: `You are not authorized to create a "${payload.type}" booking` }, 403);
   }
+  const blocked = unitProblem((payload.tents ?? []).map((t) => t.tentId), unitsById);
+  if (blocked) return jsonResponse({ error: blocked.message }, blocked.status);
 
   try {
     const booking = await createBooking({
@@ -306,7 +333,8 @@ async function handleUpdate(req: Request, staff: StaffGrant): Promise<Response> 
   }
 
   if (!payload.id) return jsonResponse({ error: 'id is required' }, 400);
-  const validationError = validateBookingInput(payload);
+  const unitsById = await unitMap();
+  const validationError = validateBookingInput(payload, unitsById);
   if (validationError) return jsonResponse({ error: validationError }, 400);
 
   // A restricted/viewer caller must be authorized for BOTH the booking's
@@ -319,6 +347,9 @@ async function handleUpdate(req: Request, staff: StaffGrant): Promise<Response> 
   if (!canWriteType(staff, existing.type) || !canWriteType(staff, payload.type!)) {
     return jsonResponse({ error: 'You are not authorized to edit this booking' }, 403);
   }
+  // Neither where it is now nor where it is going may be a unit a member manages.
+  const blocked = unitProblem([...existing.tents.map((t: { tentId: string }) => t.tentId), ...(payload.tents ?? []).map((t) => t.tentId)], unitsById);
+  if (blocked) return jsonResponse({ error: blocked.message }, blocked.status);
 
   try {
     const booking = await updateBooking({
@@ -395,6 +426,8 @@ async function handleDelete(req: Request, staff: StaffGrant): Promise<Response> 
   if (!canWriteType(staff, existing.type)) {
     return jsonResponse({ error: 'You are not authorized to cancel this booking' }, 403);
   }
+  const deleteBlocked = unitProblem(existing.tents.map((t: { tentId: string }) => t.tentId), await unitMap(), { allowOffboarded: true });
+  if (deleteBlocked) return jsonResponse({ error: deleteBlocked.message }, deleteBlocked.status);
 
   // Read the last notice first: it cascades away with the booking.
   const notice = payload.notifyGuests && isNotifiableType(existing.type) ? await getNotice(payload.id) : null;
