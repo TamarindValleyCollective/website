@@ -12,13 +12,16 @@ test('a feature is on for everyone only when its flag is exactly "true"; otherwi
   assert.equal(featureOn(undefined, true), true);
 });
 
-test('adding or removing a household: farm unit, a known feature, and an explicit on or off', () => {
-  assert.deepEqual(validateAccess({ farmUnit: ' f-12 ', feature: 'rental', enabled: true }).access, { farmUnit: 'F-12', feature: 'rental', enabled: true });
-  assert.equal(validateAccess({ farmUnit: 'f12', feature: 'rental', enabled: false }).access.farmUnit, 'F-12');
-  assert.match(validateAccess({ farmUnit: 'tent 3', feature: 'rental', enabled: true }).error, /farm unit/);
-  assert.match(validateAccess({ farmUnit: 'F-12', feature: 'chat', enabled: true }).error, /feature/);
-  assert.match(validateAccess({ farmUnit: 'F-12', feature: 'rental' }).error, /on or off/);
-  assert.match(validateAccess(null).error, /farm unit/);
+const ID = '3f2b6c1e-8a44-4d2e-9d57-0a1b2c3d4e5f';
+
+test('adding or removing a household: chosen from the member list, a known feature, and an explicit on or off', () => {
+  assert.deepEqual(validateAccess({ householdId: ID, feature: 'rental', enabled: true }).access, { householdId: ID, feature: 'rental', enabled: true });
+  assert.equal(validateAccess({ householdId: ID, feature: 'rental', enabled: false }).access.enabled, false);
+  assert.match(validateAccess({ householdId: 'F-12', feature: 'rental', enabled: true }).error, /member from the list/);
+  assert.match(validateAccess({ feature: 'rental', enabled: true }).error, /member from the list/);
+  assert.match(validateAccess({ householdId: ID, feature: 'chat', enabled: true }).error, /feature/);
+  assert.match(validateAccess({ householdId: ID, feature: 'rental' }).error, /on or off/);
+  assert.match(validateAccess(null).error, /member from the list/);
 });
 
 test('every feature names its flag', () => {

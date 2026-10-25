@@ -122,10 +122,15 @@ async function handleOverview(req: Request, admin: SuperAdmin): Promise<Response
   const payoutHouseholds = payoutRows.length ? ((await (await rest(`/member_households?id=${inList(payoutRows.map((r) => r.household_id))}&select=id,farm_unit`)).json()) as { id: string; farm_unit: string }[]) : [];
   const farmUnitOf = new Map(payoutHouseholds.map((h) => [h.id, h.farm_unit]));
 
-  // Early access: who may use a feature that is not on for everyone. `everyone` says the Netlify flag already is.
+  // Early access: who may use a feature that is not on for everyone. `everyone` says the Netlify flag already is. The
+  // picker lists every household by its owners' names, so a member is chosen, not a number typed.
   const accessRows = (await (await rest('/member_feature_access?select=household_id,feature,created_at&order=created_at.asc')).json()) as { household_id: string; feature: string; created_at: string }[];
-  const accessHouseholds = accessRows.length ? ((await (await rest(`/member_households?id=${inList(accessRows.map((r) => r.household_id))}&select=id,farm_unit`)).json()) as { id: string; farm_unit: string }[]) : [];
-  const accessUnitOf = new Map(accessHouseholds.map((h) => [h.id, h.farm_unit]));
+  const allHouseholds = (await (await rest('/member_households?select=id,farm_unit,cluster&order=farm_unit.asc')).json()) as { id: string; farm_unit: string; cluster: string | null }[];
+  const allOwners = (await (await rest('/member_household_members?role=eq.owner&select=household_id,person_id')).json()) as { household_id: string; person_id: string }[];
+  const ownerPeople = allOwners.length ? ((await (await rest(`/member_people?id=${inList([...new Set(allOwners.map((o) => o.person_id))])}&select=id,full_name`)).json()) as { id: string; full_name: string }[]) : [];
+  const personName = new Map(ownerPeople.map((p) => [p.id, p.full_name]));
+  const ownerNamesOf = (householdId: string) => allOwners.filter((o) => o.household_id === householdId).map((o) => personName.get(o.person_id) ?? '').filter(Boolean);
+  const householdOf = new Map(allHouseholds.map((h) => [h.id, h]));
 
   let stepUpValid = false;
   try {
@@ -140,7 +145,8 @@ async function handleOverview(req: Request, admin: SuperAdmin): Promise<Response
     types: pools.map((p) => ({ id: p.id, label: p.name, ownerType: p.owner_type })),
     access: {
       features: Object.entries(FEATURES).map(([id, f]) => ({ id, label: f.label, everyone: process.env[f.env] === 'true' })),
-      grants: accessRows.map((r) => ({ farmUnit: accessUnitOf.get(r.household_id) ?? '', feature: r.feature, since: r.created_at })),
+      members: allHouseholds.map((h) => ({ householdId: h.id, farmUnit: h.farm_unit, names: ownerNamesOf(h.id) })).filter((m) => m.names.length),
+      grants: accessRows.map((r) => ({ householdId: r.household_id, farmUnit: householdOf.get(r.household_id)?.farm_unit ?? '', names: ownerNamesOf(r.household_id), feature: r.feature, since: r.created_at })),
     },
     payouts: payoutRows.map((r) => ({ ...payoutForAdmin(r), farmUnit: farmUnitOf.get(r.household_id) ?? '' })),
     units: units.map((u) => ({
@@ -348,9 +354,9 @@ async function handlePayoutReveal(req: Request, admin: SuperAdmin): Promise<Resp
 async function handleAccess(req: Request, admin: SuperAdmin): Promise<Response> {
   const checked = validateAccess(await readJson(req));
   if ('error' in checked) return jsonResponse({ error: checked.error }, 400);
-  const { farmUnit, feature, enabled } = checked.access;
-  const hh = ((await (await rest(`/member_households?farm_unit=eq.${encodeURIComponent(farmUnit)}&select=id`)).json()) as { id: string }[])[0];
-  if (!hh) return jsonResponse({ error: `There is no home ${farmUnit}.` }, 404);
+  const { householdId, feature, enabled } = checked.access;
+  const hh = ((await (await rest(`/member_households?id=eq.${householdId}&select=id`)).json()) as { id: string }[])[0];
+  if (!hh) return jsonResponse({ error: 'That member was not found.' }, 404);
   if (!(await audit(admin, enabled ? 'units.access_granted' : 'units.access_removed', { householdId: hh.id, feature }))) return jsonResponse({ error: 'Could not write the audit log; nothing was changed.' }, 500);
   if (enabled) await rest('/member_feature_access?on_conflict=household_id,feature', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ household_id: hh.id, feature, granted_by: admin.id }) });
   else await rest(`/member_feature_access?household_id=eq.${hh.id}&feature=eq.${feature}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
