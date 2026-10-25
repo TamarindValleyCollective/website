@@ -105,7 +105,7 @@ function phone(body) {
   if (body.phone === null || (typeof body.phone === 'string' && body.phone.trim() === '')) return { value: null };
   if (typeof body.phone !== 'string') return { error: 'Phone must be text.' };
   const n = normalizeMobileNumber(body.phone);
-  return n ? { value: n } : { error: "That doesn't look like a valid mobile number." };
+  return n ? { value: n } : { error: "That doesn't look like a valid mobile number. Use 10 digits for India. From another country, start with + and the country code, like +44 7911 123456." };
 }
 
 // Collects `{ key: value }` for fields that were provided, or the first error.

@@ -25,7 +25,7 @@ export function validateFamilyAdd(body) {
   const edit = { fullName, email: body.email.trim().toLowerCase(), phone: null };
   if (body.phone !== undefined && body.phone !== null && !(typeof body.phone === 'string' && body.phone.trim() === '')) {
     const n = typeof body.phone === 'string' ? normalizeMobileNumber(body.phone) : null;
-    if (!n) return fail("That doesn't look like a valid mobile number.");
+    if (!n) return fail("That doesn't look like a valid mobile number. Use 10 digits for India. From another country, start with + and the country code, like +44 7911 123456.");
     edit.phone = n;
   }
   return { ok: true, edit };
@@ -57,7 +57,7 @@ export function validateFamilyUpdate(body) {
   }
   if ('phone' in given) {
     const n = typeof given.phone === 'string' ? normalizeMobileNumber(given.phone) : null;
-    if (!n) return fail("That doesn't look like a valid mobile number.");
+    if (!n) return fail("That doesn't look like a valid mobile number. Use 10 digits for India. From another country, start with + and the country code, like +44 7911 123456.");
     edit.phone = n;
   }
   return { ok: true, personId, edit };

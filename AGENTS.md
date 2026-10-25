@@ -87,14 +87,14 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
   Sentence case everywhere else (never uppercase an email). Every dialog on the member page goes through
   `presentSheet(dlg)` (a card that grows from its trigger; a swipe-down bottom sheet on phones; `locked` for
   one that must be read) and calls `dlg.close()` as usual: the presenter wraps `close` to play the exit.
-  Never `append` + `showModal` a dialog directly. On phones (560px and below) the main navigation is a bottom tab bar (`#tabbar`, filled by `renderNav`); fixed-bottom things (toast, story bar, `#view` padding) offset by `--tabbar-h`. A phone-only override placed before its base rule in the file loses to it; raise its specificity.
+  Forms in dialogs follow one pattern (set in `dialog.modal`): a bold `.field-label` above a 44px field, a quiet `.field-help` line below it, focus shown as an orange border with a soft halo, the error line (`.form-msg`) taking no room until it has text, and `.modal-actions` as a footer under a hairline. Never `append` + `showModal` a dialog directly. On phones (560px and below) the main navigation is a bottom tab bar (`#tabbar`, filled by `renderNav`); fixed-bottom things (toast, story bar, `#view` padding) offset by `--tabbar-h`. A phone-only override placed before its base rule in the file loses to it; raise its specificity.
 - Admin portal (`StaffLayout.astro`, `src/pages/internal/*`): the shell owns the shared primitives (`.card`,
   `.hint`, `.note`, `.error`, `.section.wrapper`, `[hidden]`, `.visually-hidden`, `.link-button`, and the button
   modifiers `--outline`, `--primary`, `--danger`, `--danger-outline`, `--small`) and the building blocks of the
   Apple-style layout: `.field` (search), `.segmented` (one choice from a few), `.list` with `.row` (a grouped list;
   `a.row` and `button.row` are tappable), `.pill` (`--ok`, `--warn`, `--crit`), `.sheet` (a modal `<dialog>`),
   `.toast` via `showToast(message, undo?)` in `staff-client.mjs`, and `.crit-row` (a destructive action as plain red
-  text in its own list). Build a new page from these rather than inventing controls. A page uses them and never
+  text in its own list). A short form in a card is `.inline-form` (labels above fields, 36px fields, focus as a border and halo). Build a new page from these rather than inventing controls. A page uses them and never
   redefines them; it may add to one (WhatsApp's `.card` sets padding and overflow) and
   `scripts/lib/admin-primitives.test.mjs` lists the few that do. Font sizes are `--text-*` tokens with
   nothing below 0.8rem (only display sizes of 1.3rem and up may be literal; Stylelint errors otherwise). A

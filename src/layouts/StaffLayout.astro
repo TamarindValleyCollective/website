@@ -65,6 +65,12 @@ const adminItems = [
           var theme = localStorage.getItem('tvc-staff-theme');
           if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
         } catch (e) {}
+        // Google's sign-in button is white by default, a bright slab on the dark card; pages pass this as its theme.
+        window.tvcGsiTheme = function () {
+          var t = document.documentElement.getAttribute('data-theme');
+          var dark = t ? t === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          return dark ? 'filled_black' : 'outline';
+        };
         document.documentElement.setAttribute('data-nav', collapsed ? 'collapsed' : 'expanded');
       })();
     </script>
@@ -471,6 +477,58 @@ const adminItems = [
   main :global(:where(a, button, summary, select, [tabindex]):focus-visible) {
     outline: 2px solid var(--tvc-orange);
     outline-offset: 2px;
+  }
+
+  /* A short form that sits in a card: labels above their fields, the button on the same baseline as the fields. */
+  main :global(.inline-form) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 14px 12px;
+  }
+
+  main :global(.inline-form label) {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-ink);
+  }
+
+  main :global(.inline-form .opt) {
+    font-weight: 400;
+    color: var(--tvc-ink-soft);
+  }
+
+  main :global(.inline-form input),
+  main :global(.inline-form select) {
+    box-sizing: border-box;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-md);
+    font-weight: 400;
+    transition: border-color 120ms ease-out, box-shadow 120ms ease-out;
+  }
+
+  /* The field itself shows focus (a border and a soft halo), not a ring floating off its edge. */
+  main :global(.inline-form input:focus),
+  main :global(.inline-form select:focus) {
+    outline: none;
+    border-color: var(--tvc-orange);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--tvc-orange) 28%, transparent);
+  }
+
+  @media (pointer: coarse) {
+    main :global(.inline-form input),
+    main :global(.inline-form select) {
+      min-height: 44px;
+    }
   }
 
   /* A sheet: a small modal <dialog> for one focused task (unlocking, a refund). */

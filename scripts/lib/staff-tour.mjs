@@ -276,8 +276,8 @@ export const TOURS = {
       audience: 'super',
       target: 'tabs',
       tag: 'Access',
-      title: 'Four views',
-      text: 'People, who can use which tool, what each role can do, and Activity, the record of changes.',
+      title: 'Two views',
+      text: 'People, where you give and take away roles, and Activity, the record of changes.',
     },
     {
       id: 'find',
@@ -286,7 +286,7 @@ export const TOURS = {
       target: 'people-find',
       tag: 'Access',
       title: 'Find someone',
-      text: 'Search by name, or narrow the list by access and status. The list shows faces and names only; pick one to see their details and their role in each tool.',
+      text: 'Search by name, or narrow the list by tool, access and status. The list shows faces and names only; pick one to see their details and their role in each tool.',
     },
     {
       id: 'add',

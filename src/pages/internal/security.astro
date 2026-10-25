@@ -60,7 +60,7 @@ import SignInGate from '../../components/SignInGate.astro';
         <ul id="passkeys" class="list"></ul>
         <form id="passkey-form" class="inline-form">
           <label>
-            Name (optional)
+            Name <span class="opt">(optional)</span>
             <input type="text" id="passkey-name" name="passkey-name" maxlength="40" placeholder="e.g. my iPhone" autocomplete="off" />
           </label>
           <button type="submit" id="passkey-add" class="button">Add a passkey</button>
@@ -202,32 +202,6 @@ import SignInGate from '../../components/SignInGate.astro';
     margin-bottom: 0;
   }
 
-
-  .inline-form {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 12px;
-  }
-
-  .inline-form label {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: var(--text-sm);
-    color: var(--tvc-ink-soft);
-  }
-
-  .inline-form input,
-  .inline-form select {
-    font: inherit;
-    font-size: var(--text-md);
-    padding: 8px 10px;
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius-field);
-    background: var(--tvc-white);
-    color: var(--tvc-ink);
-  }
 
   .field-row {
     display: flex;
@@ -742,7 +716,7 @@ import SignInGate from '../../components/SignInGate.astro';
   function renderSignInButton() {
     if (typeof google === 'undefined') return;
     google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
-    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: 'outline', size: 'large' });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: (window as any).tvcGsiTheme?.() ?? 'outline', size: 'large' });
   }
 
   $('use-different-account').addEventListener('click', () => {

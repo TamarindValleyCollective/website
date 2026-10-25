@@ -22,7 +22,7 @@ export function validateProfileEdit(body) {
     else if (typeof body.phone !== 'string') return fail('Mobile number must be text.');
     else {
       const n = normalizeMobileNumber(body.phone);
-      if (!n) return fail("That doesn't look like a valid mobile number.");
+      if (!n) return fail("That doesn't look like a valid mobile number. Use 10 digits for India. From another country, start with + and the country code, like +44 7911 123456.");
       edit.phone = n;
     }
   }
