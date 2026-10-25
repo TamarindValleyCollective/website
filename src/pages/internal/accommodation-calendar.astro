@@ -89,7 +89,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
               </svg>
             </button>
           </div>
-          <form id="booking-form" class="form">
+          <form id="booking-form" class="form stack-form">
             <fieldset class="form-group">
               <legend>What</legend>
               <label>
@@ -344,23 +344,6 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     display: flex;
     flex-direction: column;
     gap: 14px;
-  }
-
-  .form label {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: var(--text-sm);
-    font-weight: 600;
-  }
-
-  .form input,
-  .form select,
-  .form textarea {
-    font: inherit;
-    padding: 6px 10px;
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius-sm);
   }
 
   /* Applied by setFormEditable() when a role can view but not write a
@@ -1181,45 +1164,6 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     padding-left: 18px;
   }
 
-  .reason-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-  }
-
-  .reason-overlay-card {
-    background: var(--tvc-white);
-    border-radius: var(--radius);
-    padding: 20px 24px;
-    max-width: 420px;
-    width: 90%;
-  }
-
-  .reason-overlay-card p {
-    margin: 0 0 10px;
-    font-size: var(--text-sm);
-  }
-
-  .reason-overlay-card textarea {
-    width: 100%;
-    box-sizing: border-box;
-    font: inherit;
-    padding: 6px 10px;
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius-sm);
-  }
-
-  .reason-overlay-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 12px;
-  }
-
   .add-guest {
     align-self: center;
     flex-shrink: 0;
@@ -1258,7 +1202,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   /* Buttons this page builds at runtime (guest-row remove/add, booking-card
-     edit/cancel, reason-overlay actions, mobile-conflict actions) never get
+     edit/cancel, mobile-conflict actions) never get
      Astro's scoped-style attribute, so without an is:global override they
      fell through to global.css's site-wide `.button` at every state - a
      solid orange marketing-CTA background, meant for the site's hero CTA,
@@ -3202,31 +3146,33 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     }
   }
 
-  // Custom overlay instead of a native prompt() - a past booking's cancel
-  // reason needs a real multi-line field, which prompt() can't give, and a
-  // native dialog blocks all further page script until dismissed.
+  // A sheet instead of a native prompt() - a past booking's cancel reason needs a real multi-line field, which
+  // prompt() can't give, and a native prompt blocks all further page script until dismissed.
   function showReasonPrompt(message: string): Promise<string | null> {
     return new Promise((resolve) => {
-      const overlay = document.createElement('div');
-      overlay.className = 'reason-overlay';
-      overlay.innerHTML = `
-        <div class="reason-overlay-card">
-          <p>${message}</p>
-          <textarea rows="3" autofocus></textarea>
-          <div class="reason-overlay-actions">
-            <button type="button" class="button" data-action="cancel">Never mind</button>
-            <button type="button" class="button button--primary" data-action="confirm">Confirm</button>
-          </div>
+      const dialog = document.createElement('dialog');
+      dialog.className = 'sheet stack-form';
+      dialog.innerHTML = `
+        <p class="sheet-text">${message}</p>
+        <label>Reason<textarea rows="3"></textarea></label>
+        <div class="sheet-actions">
+          <button type="button" class="button button--outline" data-action="cancel">Never mind</button>
+          <button type="button" class="button button--primary" data-action="confirm">Confirm</button>
         </div>
       `;
-      const textarea = overlay.querySelector('textarea') as HTMLTextAreaElement;
-      const close = (value: string | null) => {
-        overlay.remove();
-        resolve(value);
-      };
-      overlay.querySelector('[data-action="cancel"]')!.addEventListener('click', () => close(null));
-      overlay.querySelector('[data-action="confirm"]')!.addEventListener('click', () => close(textarea.value.trim() || null));
-      document.body.appendChild(overlay);
+      const textarea = dialog.querySelector('textarea') as HTMLTextAreaElement;
+      let result: string | null = null;
+      dialog.addEventListener('close', () => {
+        dialog.remove();
+        resolve(result);
+      });
+      dialog.querySelector('[data-action="cancel"]')!.addEventListener('click', () => dialog.close());
+      dialog.querySelector('[data-action="confirm"]')!.addEventListener('click', () => {
+        result = textarea.value.trim() || null;
+        dialog.close();
+      });
+      (document.querySelector('main') ?? document.body).appendChild(dialog);
+      dialog.showModal();
       textarea.focus();
     });
   }

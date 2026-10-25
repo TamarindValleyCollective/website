@@ -15,7 +15,8 @@ interface Props {
   forbiddenHint?: string;
   /** Heading element: h1 where the gate is the whole page, h2 under a page's own h1. */
   level?: 'h1' | 'h2';
-  /** The member portal's script reveals the gate itself, so it starts hidden there. */
+  /** Starts hidden (the default): each page's script reveals the gate only when there is no sign-in to use, so a
+   * signed-in person never sees it flash while the page loads. */
   startHidden?: boolean;
 }
 
@@ -25,7 +26,7 @@ const {
   forbiddenWhat,
   forbiddenHint = 'Ask a super admin to give you a role, then sign in again.',
   level = 'h2',
-  startHidden = false,
+  startHidden = true,
 } = Astro.props;
 const Heading = level;
 ---

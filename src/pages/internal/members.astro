@@ -689,31 +689,6 @@ import SignInGate from '../../components/SignInGate.astro';
     gap: 10px 14px;
   }
 
-  .members .editfields label {
-    display: grid;
-    gap: 4px;
-    font-size: var(--text-sm);
-  }
-
-  .members .editfields label.check {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .members .editfields input:not([type='checkbox']),
-  .members .editfields select {
-    padding: 8px 10px;
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius-field);
-    background: var(--tvc-white);
-    font: inherit;
-  }
-
-  .members .editfields small {
-    color: var(--tvc-ink-soft);
-  }
-
   .members .editactions {
     display: flex;
     flex-wrap: wrap;
@@ -974,14 +949,8 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .members .story-reject textarea {
-    display: block;
     width: 100%;
-    box-sizing: border-box;
     margin-bottom: 8px;
-    padding: 8px 10px;
-    border: 1px solid var(--tvc-line-strong);
-    border-radius: var(--radius-field);
-    font: inherit;
   }
 </style>
 
@@ -1198,7 +1167,7 @@ import SignInGate from '../../components/SignInGate.astro';
     const save = h('button', { class: 'button', text: submitLabel, attrs: { type: 'submit' } }) as HTMLButtonElement;
     const cancel = h('button', { class: 'button button--outline', text: 'Cancel', attrs: { type: 'button' } });
     cancel.addEventListener('click', onCancel);
-    const form = h('form', { class: 'editform', attrs: { novalidate: '' } }, h('h4', { text: title }), h('div', { class: 'editfields' }, ...labels), msg, h('div', { class: 'editactions' }, save, cancel, extra)) as HTMLFormElement;
+    const form = h('form', { class: 'editform', attrs: { novalidate: '' } }, h('h4', { text: title }), h('div', { class: 'editfields stack-form' }, ...labels), msg, h('div', { class: 'editactions' }, save, cancel, extra)) as HTMLFormElement;
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const values: Record<string, string> = {};
@@ -2077,7 +2046,7 @@ import SignInGate from '../../components/SignInGate.astro';
         actions = h('p', { class: 'muted', text: 'An admin approves or sends back stories.' });
       } else {
         const noteBox = h('textarea', { attrs: { rows: '3', maxlength: '500', placeholder: 'What should they change? They will see this note.' } }) as HTMLTextAreaElement;
-        const form = h('div', { class: 'story-reject', attrs: { hidden: '' } }, noteBox);
+        const form = h('div', { class: 'story-reject stack-form', attrs: { hidden: '' } }, noteBox);
         const sendBack = h('button', { class: 'rowbtn rowbtn--act', text: 'Send back with this note', attrs: { type: 'button' } });
         sendBack.addEventListener('click', async () => {
           if (!noteBox.value.trim()) { msg.textContent = 'Write a note so the members know what to change.'; return; }
