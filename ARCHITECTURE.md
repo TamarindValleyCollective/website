@@ -798,7 +798,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   on Google's image hosts), and `GET /api/staff-admin/people` returns it for each person, so the Access page can show a face
   beside each name. Only that person and super admins on Access ever see it. Reads and writes are isolated from the sign-in
   queries and swallow errors, so an unapplied migration costs nothing but the faces. The Access People tab follows the
-  concept: a search field and one segmented filter (All, Super admins, Has tools, No tools, Deactivated) above one grouped list
+  concept: a search field, a Tool dropdown (who holds a role in one tool; replaced the old "Who can use what" tab) and one segmented filter (All, Super admins, Has tools, No tools, Deactivated) above one grouped list
   of faces and names; the details beside it are a large face, masked email and badges, a grouped list with a pop-up for each
   tool's role, and a separate "Deactivate" row. The unlock strip is now a **lock in the toolbar** (the layout's `toolbar`
   slot): "Unlock editing", "Editing unlocked · N minutes" or "Set up to edit", which opens a sheet with the code field, the
