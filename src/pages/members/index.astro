@@ -4092,6 +4092,28 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         dlg.append(x);
       }
     }
+    // On iOS the keyboard shrinks only the visual viewport, so a sheet docked to the layout viewport (and sized in dvh)
+    // ends up under the keyboard with its title and buttons out of reach. On a phone, follow the visual viewport.
+    const vv = window.visualViewport;
+    if (vv) {
+      const fit = () => {
+        if (!phoneSheet.matches) {
+          dlg.style.removeProperty('bottom');
+          dlg.style.removeProperty('max-height');
+          return;
+        }
+        dlg.style.bottom = `${Math.max(0, window.innerHeight - vv.offsetTop - vv.height)}px`;
+        dlg.style.maxHeight = `${Math.round(vv.height * 0.88)}px`;
+        const field = dlg.querySelector(':focus');
+        if (field instanceof HTMLElement && field.matches('input, textarea, select')) field.scrollIntoView({ block: 'nearest' });
+      };
+      vv.addEventListener('resize', fit);
+      vv.addEventListener('scroll', fit);
+      dlg.addEventListener('close', () => {
+        vv.removeEventListener('resize', fit);
+        vv.removeEventListener('scroll', fit);
+      }, { once: true });
+    }
     document.body.append(dlg);
     dlg.showModal();
     // On a wide screen the card grows out of whatever opened it (the control that has focus, unless told otherwise).
