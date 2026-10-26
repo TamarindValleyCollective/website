@@ -76,7 +76,7 @@
   status = 200
   force = true
 
-# the member data function (netlify/functions/members-me.mts)
+# the member data functions (netlify/functions/members-me.mts, plus members-home.mts for /home)
 [[redirects]]
   from = "https://members.tvc.farm/api/members-me/*"
   to = "/api/members-me/:splat"
