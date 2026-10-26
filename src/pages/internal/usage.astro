@@ -654,7 +654,7 @@ import SignInGate from '../../components/SignInGate.astro';
 </style>
 
 <script>
-  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../scripts/lib/staff-client.mjs';
+  import { StaffAuthError, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../scripts/lib/staff-client.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -861,9 +861,7 @@ import SignInGate from '../../components/SignInGate.astro';
     if (!sheet.open) sheet.showModal();
   }
   sheet.addEventListener('close', () => (openTitle = null));
-  sheet.addEventListener('click', (ev) => {
-    if (ev.target === sheet) sheet.close(); // a tap on the dimmed area outside the sheet
-  });
+  closeOnBackdrop(sheet); // a tap on the dimmed area outside the sheet
 
   // The figures a person types in are entered in the service's sheet: "Enter a new reading" opens the form right
   // there, and saving re-draws the sheet with the new figure. A second click, or Cancel, folds it.
@@ -1309,9 +1307,7 @@ import SignInGate from '../../components/SignInGate.astro';
     pricesSheet.showModal();
   });
   $('prices-cancel').addEventListener('click', () => pricesSheet.close());
-  pricesSheet.addEventListener('click', (ev) => {
-    if (ev.target === pricesSheet) pricesSheet.close();
-  });
+  closeOnBackdrop(pricesSheet);
 
   $('settings-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -1383,9 +1379,7 @@ import SignInGate from '../../components/SignInGate.astro';
   type HealthEvent = { severity: string; title: string; detail: string | null; at: string };
 
   const waSheet = $('wa-sheet') as HTMLDialogElement;
-  waSheet.addEventListener('click', (ev) => {
-    if (ev.target === waSheet) waSheet.close();
-  });
+  closeOnBackdrop(waSheet);
 
   const statePill = (kind: 'ok' | 'warn' | 'crit', text: string) => h('span', { class: `pill pill--${kind}`, text });
   const eventTime = (at: string) => `${dateText(at)}, ${new Date(at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
