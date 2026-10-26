@@ -1614,7 +1614,10 @@ never touches Netlify either.
   households and everything it shows in ONE call to the database function `member_home_bundle`
   (migration 0073, service role only) because Netlify's functions and the Supabase project (Seoul) are far apart and
   each separate read was a round trip; if that function is missing it falls back to the separate reads
-  (`requireMemberWithHome` in `lib/member-access.ts`). A member gets their own email and
+  (`requireMemberWithHome` in `lib/member-access.ts`). The browser also keeps the last `/home` answer in
+  `localStorage` (`scripts/lib/member-home-cache.mjs`, key `tvc-member-home`: per email, 24 hours, removed on
+  sign-out and on a 403 or the privacy-notice answer, never used for an expired token) so a returning member's portal
+  draws at once while the real answer is fetched and checked by the server as usual. A member gets their own email and
   mobile back in full; for everyone else in the household a masked form (`p••••@gmail.com`,
   `+91 •••••• 345`, `maskEmail`/`maskPhone`, added in `members-home.mts` because the shared
   `buildHouseholdReview` never carries the values). Members can change

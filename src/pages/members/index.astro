@@ -3584,6 +3584,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
 <script>
   import { clearMemberToken, getMemberToken, memberFetch, memberPhotoSrc, MemberAuthError, setMemberToken } from '../../../scripts/lib/member-client.mjs';
+  import { clearHomeCache, readHomeCache, writeHomeCache } from '../../../scripts/lib/member-home-cache.mjs';
   import { setBusy } from '../../../scripts/lib/busy.mjs';
   import { rentalStepper } from '../../../scripts/lib/rental-stepper.mjs';
   import { stageIndex } from '../../../scripts/lib/rental-stages.mjs';
@@ -6429,37 +6430,70 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     showBoot('We could not reach the member portal. Check your connection, then try again.', true);
   }
 
+  // Draws the portal from a /home answer: the fresh one, or (fromCache) the last one this browser kept for this member.
+  function showHome(data: { me: Me; households: any[] }, fromCache = false) {
+    me = data.me;
+    all = data.households;
+    current = Math.min(current, all.length - 1);
+    $('boot').hidden = true;
+    $('gate').hidden = true;
+    $('shell').hidden = false;
+    renderWho();
+    onRoute();
+    if (!fromCache) afterFreshHome(); // from the cache, the real answer is on its way and does this once it arrives
+  }
+
+  function afterFreshHome() {
+    void probeRental();
+    // A brand new member is walked through everything once, after the privacy notice (which came first above).
+    if (!tourAutoStarted && me!.tourSeenThrough === null) {
+      tourAutoStarted = true;
+      startTour(tourPending(), true);
+    }
+  }
+
   async function load(quiet = false) {
-    if (!me) showBoot('Opening the member portal…');
+    // A returning member sees their portal at once, from what this browser kept, while the real answer is fetched. That
+    // answer is checked by the server as always: it replaces what was drawn, or a refusal takes it away again.
+    const cached = me ? null : readHomeCache(getMemberToken());
+    let shownFromCache = false;
+    if (cached) {
+      showHome(cached, true);
+      shownFromCache = true;
+    } else if (!me) {
+      showBoot('Opening the member portal…');
+    }
     try {
       const { status, data } = await memberFetch('/api/members-me/home');
       $('boot').hidden = true;
-      if (status === 403) return showGate(data.error || 'This account has not been invited to the member portal yet.');
-      if (status !== 200) return loadFailed();
+      if (status === 403) {
+        clearHomeCache();
+        return showGate(data.error || 'This account has not been invited to the member portal yet.');
+      }
+      if (status !== 200) {
+        if (shownFromCache) return; // what is drawn is fine for now; saying "could not refresh" would only alarm
+        return loadFailed();
+      }
       if (data.privacyNoticeRequired) {
         // First sign-in (or a changed notice): read it before anything else is shown.
+        clearHomeCache();
         me = null;
         $('gate').hidden = true;
         $('shell').hidden = true;
         noticeDialog(true);
         return;
       }
-      me = data.me;
-      all = data.households;
-      current = Math.min(current, all.length - 1);
-      $('gate').hidden = true;
-      $('shell').hidden = false;
-      renderWho();
-      onRoute();
-      void probeRental();
-      // A brand new member is walked through everything once, after the privacy notice (which came first above).
-      if (!tourAutoStarted && me!.tourSeenThrough === null) {
-        tourAutoStarted = true;
-        startTour(tourPending(), true);
+      writeHomeCache(getMemberToken(), data);
+      // Drawn from the cache and nothing changed: leave the page alone (a re-render could undo what they have started doing).
+      if (shownFromCache && JSON.stringify(data.me) === JSON.stringify(cached!.me) && JSON.stringify(data.households) === JSON.stringify(cached!.households)) {
+        afterFreshHome();
+        return;
       }
+      showHome(data);
     } catch (err) {
       $('boot').hidden = true;
-      if (err instanceof MemberAuthError) return showGate(quiet ? 'Your session ended. Sign in again.' : undefined);
+      if (err instanceof MemberAuthError) return showGate(quiet || shownFromCache ? 'Your session ended. Sign in again.' : undefined);
+      if (shownFromCache) return;
       loadFailed();
     }
   }
@@ -6482,6 +6516,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
   function signOut() {
     clearMemberToken();
+    clearHomeCache();
     if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
     $('who-menu').hidden = true;
     setMenu(false);
