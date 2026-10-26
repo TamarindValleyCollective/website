@@ -4047,7 +4047,18 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       if (!opts.locked) dlg.close();
     });
     if (!opts.locked) {
-      dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+      // Only the backdrop closes it: the press and the release both outside the sheet's box. A click on the sheet's own
+      // padding or the gaps between fields also has the dialog as its target, and so does a text selection dragged out.
+      const outside = (e: MouseEvent) => {
+        const box = dlg.getBoundingClientRect();
+        return e.clientX < box.left || e.clientX > box.right || e.clientY < box.top || e.clientY > box.bottom;
+      };
+      let pressedOutside = false;
+      dlg.addEventListener('pointerdown', (e) => { pressedOutside = e.target === dlg && outside(e); });
+      dlg.addEventListener('click', (e) => {
+        if (e.target === dlg && pressedOutside && outside(e)) dlg.close();
+        pressedOutside = false;
+      });
       // On a phone the grab area at the top moves the sheet with the finger, and a flick carries it (the release
       // velocity is projected the way scrolling is, and past halfway it goes). Elsewhere it is not shown.
       const grab = h('div', 'sheet-grab');
