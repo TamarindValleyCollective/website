@@ -24,7 +24,7 @@
 // notice (scripts/lib/member-privacy.mjs), /home returns only their name and the
 // notice version: no household data is released, and /profile refuses. Every self-service change is written to
 // member_audit_log BEFORE it is applied, and refused if that write fails.
-import { requireMember, type MemberSession } from './lib/member-access';
+import { requireMember, requireMemberWithHome, type MemberSession } from './lib/member-access';
 import { maskEmail, maskPhone } from './lib/staff-masking';
 import { backfillLandShapes } from './lib/land-shape-backfill';
 import { deleteLandDocument, landShapeKey, loadLandShapes, putLandDocument, signedLandDocumentUrl } from './lib/land-doc-storage';
@@ -68,9 +68,9 @@ async function select(table: string, columns: string, filter: string): Promise<a
 const inList = (ids: string[]) => `(${ids.join(',')})`;
 
 async function handleHome(req: Request): Promise<Response> {
-  const auth = await requireMember(req);
+  const auth = await requireMemberWithHome(req);
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
-  const { member } = auth;
+  const { member, bundle } = auth;
 
   // Nothing about the household until the current notice has been acknowledged.
   if (privacyNoticeRequired(member.privacyVersion)) {
@@ -83,8 +83,15 @@ async function handleHome(req: Request): Promise<Response> {
   // Which tour steps they have seen. A separate read that may fail (migration 0056 not applied yet): the portal opens
   // anyway, and without the value the page shows no tour at all rather than the whole tour to everyone. It only needs
   // the person id, so it runs alongside the reads below instead of after them (each read to Supabase is a round trip).
-  const tourRead = select('member_people', 'tour_seen_through', `id=eq.${member.personId}`).catch(() => null);
-  try {
+  // With the bundle (migration 0073) none of these separate reads happen: it all came back in one.
+  const tourRead: Promise<any[] | null> = bundle
+    ? Promise.resolve([{ tour_seen_through: bundle.person.tour_seen_through }])
+    : select('member_people', 'tour_seen_through', `id=eq.${member.personId}`).catch(() => null);
+  if (bundle) {
+    data = { households: bundle.households, memberships: bundle.memberships, plots: bundle.plots, housePattas: bundle.house_pattas, notes: bundle.notes, people: bundle.people };
+    landDocs = bundle.docs;
+    pendingFamily = bundle.family_pending;
+  } else try {
     const hh = inList(member.householdIds);
     const [households, memberships, plots, housePattas, notes, docRows, familyRequests] = await Promise.all([
       select('member_households', 'id,farm_unit,house_no,cluster,unit_type', `id=in.${hh}`),

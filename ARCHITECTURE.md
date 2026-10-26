@@ -1607,7 +1607,11 @@ never touches Netlify either.
   least one household, otherwise the same neutral 403 whether the person is unknown, inactive or just
   not invited yet. The session is kept apart from admins' (`scripts/lib/member-client.mjs`).
   **Data**: `members-me.mts` (`GET /api/members-me/home`, `POST /api/members-me/profile`) reads only
-  the households the member can sign in for, never the register. A member gets their own email and
+  the households the member can sign in for, never the register. `/home` gets the person, their
+  households and everything it shows in ONE call to the database function `member_home_bundle`
+  (migration 0073, service role only) because Netlify's functions and the Supabase project (Seoul) are far apart and
+  each separate read was a round trip; if that function is missing it falls back to the separate reads
+  (`requireMemberWithHome` in `lib/member-access.ts`). A member gets their own email and
   mobile back in full; for everyone else in the household a masked form (`p••••@gmail.com`,
   `+91 •••••• 345`, `maskEmail`/`maskPhone`, added in `members-me.mts` because the shared
   `buildHouseholdReview` never carries the values). Members can change
