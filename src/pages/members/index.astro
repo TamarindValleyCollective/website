@@ -433,8 +433,9 @@ import SignInGate from '../../components/SignInGate.astro';
     }
   }
 
-  .boot[hidden] {
-    display: none;
+  .boot[hidden],
+  .boot [hidden] {
+    display: none; /* .btn sets its own display, which would otherwise beat `hidden` on the retry button */
   }
 
   .boot p {
