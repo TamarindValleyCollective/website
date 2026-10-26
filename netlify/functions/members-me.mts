@@ -80,6 +80,10 @@ async function handleHome(req: Request): Promise<Response> {
   let data;
   let landDocs: any[] = [];
   let pendingFamily = 0;
+  // Which tour steps they have seen. A separate read that may fail (migration 0056 not applied yet): the portal opens
+  // anyway, and without the value the page shows no tour at all rather than the whole tour to everyone. It only needs
+  // the person id, so it runs alongside the reads below instead of after them (each read to Supabase is a round trip).
+  const tourRead = select('member_people', 'tour_seen_through', `id=eq.${member.personId}`).catch(() => null);
   try {
     const hh = inList(member.householdIds);
     const [households, memberships, plots, housePattas, notes, docRows, familyRequests] = await Promise.all([
@@ -103,9 +107,7 @@ async function handleHome(req: Request): Promise<Response> {
   }
 
   const own = data.people.find((p: any) => p.id === member.personId);
-  // Which tour steps they have seen. A separate read that may fail (migration 0056 not applied yet): the portal opens
-  // anyway, and without the value the page shows no tour at all rather than the whole tour to everyone.
-  const tourRows = await select('member_people', 'tour_seen_through', `id=eq.${member.personId}`).catch(() => null);
+  const tourRows = await tourRead;
   const reviewed = buildHouseholdReview(data);
   // The others in the unit are shown with their email and mobile masked ("p••••@gmail.com", "+91 •••••• 345"); the member's
   // own come back in full under `me`. buildHouseholdReview never carries the values (the admin register shares it), so they are added here.
