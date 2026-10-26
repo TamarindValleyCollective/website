@@ -18,7 +18,7 @@ import SignInGate from '../../components/SignInGate.astro';
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>Member portal · Tamarind Valley Collective</title>
+    <title>Member Portal · Tamarind Valley Collective</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -34,7 +34,7 @@ import SignInGate from '../../components/SignInGate.astro';
     <SignInGate
       level="h1"
       startHidden
-      title="Member portal"
+      title="Member Portal"
       copy="Sign in with the Google account whose email you gave the core team. If you have not been invited yet, write to core-team@tvc.farm."
     />
 
@@ -6381,7 +6381,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     if (card && prevNext && prevNext !== card.querySelector('h2')?.textContent) card.classList.add('next--swap');
     renderNav();
     const label = NAV.find((n) => n.id === route)?.label ?? 'Home';
-    document.title = `${label} · Member portal · Tamarind Valley Collective`;
+    document.title = `${label} · Member Portal · Tamarind Valley Collective`;
     setMenu(false);
   }
 
