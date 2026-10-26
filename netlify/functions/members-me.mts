@@ -1,7 +1,7 @@
 // Netlify Function (v2 API) behind the member portal (src/pages/members/index.astro):
 // what a signed-in member sees and may change about THEIR OWN membership.
 //
-//   GET  /api/members-me/home     their household(s) and their own details
+//   (GET /api/members-me/home, their household(s) and their own details, is its own function: members-home.mts)
 //   POST /api/members-me/profile  change their mobile number / directory listing
 //   POST /api/members-me/privacy  acknowledge the first-login privacy notice
 //   POST /api/members-me/tour-seen  record that they have seen the feature tour (scripts/lib/member-tour.mjs)
@@ -24,8 +24,8 @@
 // notice (scripts/lib/member-privacy.mjs), /home returns only their name and the
 // notice version: no household data is released, and /profile refuses. Every self-service change is written to
 // member_audit_log BEFORE it is applied, and refused if that write fails.
-import { requireMember, requireMemberWithHome, type MemberSession } from './lib/member-access';
-import { maskEmail, maskPhone } from './lib/staff-masking';
+import { requireMember, type MemberSession } from './lib/member-access';
+import { maskEmail } from './lib/staff-masking';
 import { backfillLandShapes } from './lib/land-shape-backfill';
 import { deleteLandDocument, landShapeKey, loadLandShapes, putLandDocument, signedLandDocumentUrl } from './lib/land-doc-storage';
 import { readLandPdf, readLandShape } from './lib/land-doc-read';
@@ -36,7 +36,7 @@ import { validateProfileEdit, profileAuditDetail } from '../../scripts/lib/membe
 import { familyAddOutcome, validateFamilyAdd, validateFamilyRemove, validateFamilyUpdate } from '../../scripts/lib/member-family.mjs';
 import { sendEmail } from './lib/booking-notify';
 import { detailRow, detailTable, escapeHtml, renderBrandedEmail, renderStaffEmail } from './lib/email-layout';
-import { PRIVACY_NOTICE_VERSION, privacyNoticeRequired, validateAcceptance } from '../../scripts/lib/member-privacy.mjs';
+import { privacyNoticeRequired, validateAcceptance } from '../../scripts/lib/member-privacy.mjs';
 import { validateTourSeen } from '../../scripts/lib/member-tour.mjs';
 import { callAnthropic } from './lib/anthropic';
 import { checkDailyCap } from './lib/rate-limit';
@@ -46,7 +46,7 @@ import { deleteMemberPhoto, getMemberPhoto, putMemberPhoto } from './lib/member-
 import { assessUnitSubmission } from './lib/story-risk';
 import { REVIEW_SYSTEM, localChecks, parseSuggestions, reviewPrompt, validateDraft } from '../../scripts/lib/member-story.mjs';
 import { MAX_PHOTOS, addPhoto, draftColumns, draftState, mergeDraftEdit, unitPhotoAccess, unitStoryView, validateUnitSave, validateUnitSubmit } from '../../scripts/lib/member-unit-story.mjs';
-import { ALLOWED_MIME, LAND_TYPES, MAX_HOUSEHOLD_BYTES, MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_UPLOADS_PER_DAY, NOT_A_LAND_PDF, NOT_A_SKETCH, SKETCH_IS_A_PATTA, SKETCH_NOT_YOURS, WRONG_CARD, documentsReplacedBy, landDocumentLinks, landTypeMismatch, memberSummary, normalizeExtraction, normalizeSurveyNo, surveyKey, surveyOnRegister } from '../../scripts/lib/member-land-docs.mjs';
+import { ALLOWED_MIME, LAND_TYPES, MAX_HOUSEHOLD_BYTES, MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_UPLOADS_PER_DAY, NOT_A_LAND_PDF, NOT_A_SKETCH, SKETCH_IS_A_PATTA, SKETCH_NOT_YOURS, WRONG_CARD, documentsReplacedBy, landTypeMismatch, memberSummary, normalizeExtraction, normalizeSurveyNo, surveyKey, surveyOnRegister } from '../../scripts/lib/member-land-docs.mjs';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store, private' } });
@@ -66,92 +66,6 @@ async function select(table: string, columns: string, filter: string): Promise<a
 
 // PostgREST in-list for ids that came from our own database (uuids), never from the request.
 const inList = (ids: string[]) => `(${ids.join(',')})`;
-
-async function handleHome(req: Request): Promise<Response> {
-  const auth = await requireMemberWithHome(req);
-  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
-  const { member, bundle } = auth;
-
-  // Nothing about the household until the current notice has been acknowledged.
-  if (privacyNoticeRequired(member.privacyVersion)) {
-    return jsonResponse({ privacyNoticeRequired: true, privacyNoticeVersion: PRIVACY_NOTICE_VERSION, me: { name: member.name } });
-  }
-
-  let data;
-  let landDocs: any[] = [];
-  let pendingFamily = 0;
-  // Which tour steps they have seen. A separate read that may fail (migration 0056 not applied yet): the portal opens
-  // anyway, and without the value the page shows no tour at all rather than the whole tour to everyone. It only needs
-  // the person id, so it runs alongside the reads below instead of after them (each read to Supabase is a round trip).
-  // With the bundle (migration 0073) none of these separate reads happen: it all came back in one.
-  const tourRead: Promise<any[] | null> = bundle
-    ? Promise.resolve([{ tour_seen_through: bundle.person.tour_seen_through }])
-    : select('member_people', 'tour_seen_through', `id=eq.${member.personId}`).catch(() => null);
-  if (bundle) {
-    data = { households: bundle.households, memberships: bundle.memberships, plots: bundle.plots, housePattas: bundle.house_pattas, notes: bundle.notes, people: bundle.people };
-    landDocs = bundle.docs;
-    pendingFamily = bundle.family_pending;
-  } else try {
-    const hh = inList(member.householdIds);
-    const [households, memberships, plots, housePattas, notes, docRows, familyRequests] = await Promise.all([
-      select('member_households', 'id,farm_unit,house_no,cluster,unit_type', `id=in.${hh}`),
-      select('member_household_members', 'household_id,person_id,role,can_login', `household_id=in.${hh}`),
-      select('member_plots', 'id,household_id,patta_no,reference_no,survey_no,area_hectares,area_acres,settlement,verification,source_document_id', `household_id=in.${hh}`),
-      select('member_house_pattas', 'id,household_id,patta_no,reference_no,survey_no,area_sq_ft,settlement,verification,source_document_id', `household_id=in.${hh}`),
-      select('member_household_notes', 'household_id,kind', `household_id=in.${hh}`),
-      select('member_land_documents', 'id,household_id,land_type,status,extracted,created_at', `household_id=in.${hh}`),
-      // Only a count for a note on the page, so a failure here must never stop the portal opening.
-      select('member_family_requests', 'household_id', `household_id=in.${hh}&status=eq.pending`).catch(() => [] as any[]),
-    ]);
-    const personIds = [...new Set(memberships.map((m: any) => m.person_id))];
-    const people = personIds.length ? await select('member_people', 'id,full_name,email,phone,active,directory_visible,google_picture_url', `id=in.${inList(personIds)}`) : [];
-    data = { households, memberships, plots, housePattas, notes, people };
-    landDocs = docRows;
-    pendingFamily = familyRequests.length;
-  } catch (err) {
-    console.error('[members-me] failed to load', err);
-    return jsonResponse({ error: 'Server error' }, 500);
-  }
-
-  const own = data.people.find((p: any) => p.id === member.personId);
-  const tourRows = await tourRead;
-  const reviewed = buildHouseholdReview(data);
-  // The others in the unit are shown with their email and mobile masked ("p••••@gmail.com", "+91 •••••• 345"); the member's
-  // own come back in full under `me`. buildHouseholdReview never carries the values (the admin register shares it), so they are added here.
-  for (const h of reviewed) {
-    for (const person of h.people as any[]) {
-      const row = data.people.find((p: any) => p.id === person.id);
-      person.emailMasked = row?.email ? maskEmail(row.email) : null;
-      person.phoneMasked = row?.phone ? maskPhone(row.phone) : null;
-    }
-  }
-  // Each land record also says which uploaded file its patta number and its survey number open.
-  for (const h of reviewed) {
-    const docs = landDocs.filter((d: any) => d.household_id === h.id);
-    for (const [landType, rows] of [['farm', h.plots], ['house', h.housePattas]] as const) {
-      for (const row of rows as any[]) Object.assign(row, landDocumentLinks(docs, { landType, pattaNo: row.pattaNo, surveyNo: row.surveyNo }));
-    }
-  }
-  return jsonResponse({
-    privacyNoticeVersion: PRIVACY_NOTICE_VERSION,
-    me: {
-      personId: member.personId,
-      name: member.name,
-      // Their own details, shown back to them. Nobody else's email or mobile is ever sent.
-      email: own?.email ?? null,
-      phone: own?.phone ?? null,
-      directoryVisible: own?.directory_visible ?? true,
-      // owner, family or non_owner in their unit: family members get a narrower portal.
-      role: member.roles[member.householdIds[0]] ?? 'owner',
-      // Family member requests from their unit still waiting for the core team.
-      familyRequestsPending: pendingFamily,
-      ...(tourRows ? { tourSeenThrough: tourRows[0]?.tour_seen_through ?? null } : {}),
-    },
-    households: reviewed,
-    // Whether the story editor writes the unit's shared story (the cutover switch) or the person's own; off until the move is done.
-    // A failure to read the switch must not stop the portal opening, so it means off.
-  });
-}
 
 async function handleProfile(req: Request): Promise<Response> {
   const auth = await requireMember(req);
@@ -1094,7 +1008,6 @@ async function handleFamilyRemove(req: Request): Promise<Response> {
 
 export default async (req: Request): Promise<Response> => {
   const { pathname } = new URL(req.url);
-  if (pathname === '/api/members-me/home' && req.method === 'GET') return handleHome(req);
   if (pathname === '/api/members-me/profile' && req.method === 'POST') return handleProfile(req);
   if (pathname === '/api/members-me/privacy' && req.method === 'POST') return handlePrivacy(req);
   if (pathname === '/api/members-me/tour-seen' && req.method === 'POST') return handleTourSeen(req);
@@ -1115,4 +1028,4 @@ export default async (req: Request): Promise<Response> => {
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/members-me/home', '/api/members-me/profile', '/api/members-me/privacy', '/api/members-me/tour-seen', '/api/members-me/land-documents', '/api/members-me/land-document-link', '/api/members-me/land-shapes', '/api/members-me/story-review', '/api/members-me/directory', '/api/members-me/unit-story', '/api/members-me/unit-story-submit', '/api/members-me/unit-story-photo', '/api/members-me/unit-story-photo-remove', '/api/members-me/unit-photo', '/api/members-me/family-add', '/api/members-me/family-remove', '/api/members-me/family-update'] };
+export const config = { path: ['/api/members-me/profile', '/api/members-me/privacy', '/api/members-me/tour-seen', '/api/members-me/land-documents', '/api/members-me/land-document-link', '/api/members-me/land-shapes', '/api/members-me/story-review', '/api/members-me/directory', '/api/members-me/unit-story', '/api/members-me/unit-story-submit', '/api/members-me/unit-story-photo', '/api/members-me/unit-story-photo-remove', '/api/members-me/unit-photo', '/api/members-me/family-add', '/api/members-me/family-remove', '/api/members-me/family-update'] };
