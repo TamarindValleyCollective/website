@@ -2,7 +2,7 @@
 // and the sheet it opens takes an authenticator or recovery code, or a passkey, and keeps the step-up token for the
 // tab (staff-client.mjs). A page gives it `getMe` (the server's `me`: { ready, hasPasskey }) and `onChange` (redraw
 // whatever depends on whether changes are unlocked). Same flow as the Access page's own copy.
-import { clearStepUp, minutesLabel, passkeyStepUp, passkeysSupported, saveStepUp, showToast, staffFetch, StaffAuthError, stepUpExpiry, wireCodeEntry } from './staff-client.mjs';
+import { clearStepUp, closeOnBackdrop, minutesLabel, passkeyStepUp, passkeysSupported, saveStepUp, showToast, staffFetch, StaffAuthError, stepUpExpiry, wireCodeEntry } from './staff-client.mjs';
 
 const LOCK_SHUT = '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>';
 const LOCK_OPEN = '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/>';
@@ -76,9 +76,7 @@ export function initStepUpLock({ getMe, onChange }) {
 
   lockBtn.addEventListener('click', open);
   $('stepup-close').addEventListener('click', close);
-  dialog.addEventListener('click', (ev) => {
-    if (ev.target === dialog) close(); // a tap on the dimmed area outside the sheet
-  });
+  closeOnBackdrop(dialog, close); // a tap on the dimmed area outside the sheet
   lockNow.addEventListener('click', () => {
     clearStepUp();
     render();

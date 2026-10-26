@@ -206,7 +206,7 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
 </style>
 
 <script>
-  import { StaffAuthError, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../scripts/lib/staff-client.mjs';
+  import { StaffAuthError, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../scripts/lib/staff-client.mjs';
   import { busyForPress, setBusy } from '../../../scripts/lib/busy.mjs';
   import { initStepUpLock } from '../../../scripts/lib/staff-stepup-ui.mjs';
   import { rentalStepper } from '../../../scripts/lib/rental-stepper.mjs';
@@ -762,9 +762,7 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
     }
     if (!unitSheet.open) unitSheet.showModal();
   }
-  unitSheet.addEventListener('click', (ev) => {
-    if (ev.target === unitSheet) unitSheet.close();
-  });
+  closeOnBackdrop(unitSheet);
   unitSheet.addEventListener('close', () => {
     delete unitSheet.dataset.unit;
   });

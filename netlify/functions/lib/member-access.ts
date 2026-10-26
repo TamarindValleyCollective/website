@@ -62,6 +62,47 @@ async function keepPicture(person: { id: string; privacy_notice_version: number 
   }
 }
 
+// Everything /api/members-me/home shows, as the database function member_home_bundle (migration 0073) returns it.
+export type MemberHomeBundle = {
+  person: { id: string; full_name: string; privacy_notice_version: number | null; google_picture_url: string | null; tour_seen_through: number | null };
+  links: { household_id: string; role: string | null }[];
+  households: any[];
+  memberships: any[];
+  plots: any[];
+  house_pattas: any[];
+  notes: any[];
+  docs: any[];
+  family_pending: number;
+  people: any[];
+};
+
+// requireMember plus the home page's data in ONE database round trip, for the sign-in path where the wait is felt.
+// Same rules as requireMember: the same 403 for anyone not invited, and the same picture keep. If the database function
+// is missing (not applied yet) or fails, this is requireMember alone and the caller reads the data the old way.
+export async function requireMemberWithHome(req: Request): Promise<MemberAuthResult & { bundle?: MemberHomeBundle }> {
+  const verified = await verifyStaffToken(req);
+  if (!verified.ok) return verified;
+  const url = process.env.SUPABASE_URL;
+  if (!url) return requireMember(req);
+  let bundle: MemberHomeBundle | null;
+  try {
+    const res = await fetch(`${url}/rest/v1/rpc/member_home_bundle`, { method: 'POST', headers: restHeaders(), body: JSON.stringify({ p_email: verified.email }) });
+    if (!res.ok) throw new Error(`member_home_bundle failed: ${res.status}`);
+    bundle = await res.json();
+  } catch (err) {
+    console.error('[member-access] home bundle unavailable, using separate reads', err);
+    return requireMember(req);
+  }
+  if (!bundle) return { ok: false, status: 403, error: NOT_INVITED };
+  const { person, links } = bundle;
+  await keepPicture({ id: person.id, privacy_notice_version: person.privacy_notice_version, google_picture_url: person.google_picture_url }, verified.googlePicture);
+  return {
+    ok: true,
+    member: { personId: person.id, name: person.full_name, householdIds: links.map((l) => l.household_id), roles: Object.fromEntries(links.map((l) => [l.household_id, l.role ?? 'owner'])), privacyVersion: person.privacy_notice_version ?? null },
+    bundle,
+  };
+}
+
 export async function requireMember(req: Request): Promise<MemberAuthResult> {
   const verified = await verifyStaffToken(req);
   if (!verified.ok) return verified;

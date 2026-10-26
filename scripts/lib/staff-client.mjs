@@ -293,14 +293,28 @@ export function askSheet({ title, text, actions }) {
       dlg.remove();
       resolve(answer);
     });
-    dlg.addEventListener('click', (e) => {
-      if (e.target === dlg) dlg.close();
-    });
+    closeOnBackdrop(dlg);
     (document.getElementById('staff-main') ?? document.body).append(dlg);
     dlg.showModal();
     // The safe choice (the last, plain one) has focus, so an Enter or a stray tap cannot do the risky thing.
     const safe = [...row.children].reverse().find((b) => b.className.includes('button--outline')) ?? row.lastElementChild;
     safe?.focus();
+  });
+}
+
+// Close a modal <dialog> when its backdrop is clicked. Checking only `ev.target === dlg` also fires for the dialog's own
+// padding and the gaps between its children, and for a text selection dragged out of a field, so the sheet closed on
+// its own. Here the press and the release must both land outside the dialog's box.
+export function closeOnBackdrop(dlg, close = () => dlg.close()) {
+  const outside = (ev) => {
+    const box = dlg.getBoundingClientRect();
+    return ev.clientX < box.left || ev.clientX > box.right || ev.clientY < box.top || ev.clientY > box.bottom;
+  };
+  let pressedOutside = false;
+  dlg.addEventListener('pointerdown', (ev) => { pressedOutside = ev.target === dlg && outside(ev); });
+  dlg.addEventListener('click', (ev) => {
+    if (ev.target === dlg && pressedOutside && outside(ev)) close();
+    pressedOutside = false;
   });
 }
 

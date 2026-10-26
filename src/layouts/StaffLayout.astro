@@ -1219,7 +1219,7 @@ const adminItems = [
 </script>
 
 <script>
-  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, fillAvatar, getToken, staffFetch } from '../../scripts/lib/staff-client.mjs';
+  import { StaffAuthError, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, fillAvatar, getToken, staffFetch } from '../../scripts/lib/staff-client.mjs';
   import { fullTourFor } from '../../scripts/lib/staff-tour.mjs';
   import { offerTour, startTour } from '../../scripts/lib/staff-tour-ui.mjs';
 
@@ -1540,9 +1540,7 @@ const adminItems = [
     }
   });
   // a click on the dim area (the dialog element itself) closes it
-  switcher.addEventListener('click', (ev) => {
-    if (ev.target === switcher) switcher.close();
-  });
+  closeOnBackdrop(switcher);
   document.addEventListener('keydown', (ev) => {
     if ((ev.metaKey || ev.ctrlKey) && !ev.altKey && ev.key.toLowerCase() === 'k') {
       ev.preventDefault();

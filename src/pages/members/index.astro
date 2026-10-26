@@ -433,8 +433,9 @@ import SignInGate from '../../components/SignInGate.astro';
     }
   }
 
-  .boot[hidden] {
-    display: none;
+  .boot[hidden],
+  .boot [hidden] {
+    display: none; /* .btn sets its own display, which would otherwise beat `hidden` on the retry button */
   }
 
   .boot p {
@@ -4047,7 +4048,18 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       if (!opts.locked) dlg.close();
     });
     if (!opts.locked) {
-      dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+      // Only the backdrop closes it: the press and the release both outside the sheet's box. A click on the sheet's own
+      // padding or the gaps between fields also has the dialog as its target, and so does a text selection dragged out.
+      const outside = (e: MouseEvent) => {
+        const box = dlg.getBoundingClientRect();
+        return e.clientX < box.left || e.clientX > box.right || e.clientY < box.top || e.clientY > box.bottom;
+      };
+      let pressedOutside = false;
+      dlg.addEventListener('pointerdown', (e) => { pressedOutside = e.target === dlg && outside(e); });
+      dlg.addEventListener('click', (e) => {
+        if (e.target === dlg && pressedOutside && outside(e)) dlg.close();
+        pressedOutside = false;
+      });
       // On a phone the grab area at the top moves the sheet with the finger, and a flick carries it (the release
       // velocity is projected the way scrolling is, and past halfway it goes). Elsewhere it is not shown.
       const grab = h('div', 'sheet-grab');
@@ -4091,6 +4103,28 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         x.addEventListener('click', () => dlg.close());
         dlg.append(x);
       }
+    }
+    // On iOS the keyboard shrinks only the visual viewport, so a sheet docked to the layout viewport (and sized in dvh)
+    // ends up under the keyboard with its title and buttons out of reach. On a phone, follow the visual viewport.
+    const vv = window.visualViewport;
+    if (vv) {
+      const fit = () => {
+        if (!phoneSheet.matches) {
+          dlg.style.removeProperty('bottom');
+          dlg.style.removeProperty('max-height');
+          return;
+        }
+        dlg.style.bottom = `${Math.max(0, window.innerHeight - vv.offsetTop - vv.height)}px`;
+        dlg.style.maxHeight = `${Math.round(vv.height * 0.88)}px`;
+        const field = dlg.querySelector(':focus');
+        if (field instanceof HTMLElement && field.matches('input, textarea, select')) field.scrollIntoView({ block: 'nearest' });
+      };
+      vv.addEventListener('resize', fit);
+      vv.addEventListener('scroll', fit);
+      dlg.addEventListener('close', () => {
+        vv.removeEventListener('resize', fit);
+        vv.removeEventListener('scroll', fit);
+      }, { once: true });
     }
     document.body.append(dlg);
     dlg.showModal();

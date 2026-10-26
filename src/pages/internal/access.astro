@@ -738,6 +738,7 @@ import SignInGate from '../../components/SignInGate.astro';
     passkeyStepUp,
     passkeysSupported,
     wireCodeEntry,
+    closeOnBackdrop,
   } from '../../../scripts/lib/staff-client.mjs';
   import { setBusy } from '../../../scripts/lib/busy.mjs';
 
@@ -954,9 +955,7 @@ import SignInGate from '../../components/SignInGate.astro';
     if (!verifyForm.hidden) verifyCode.focus();
   });
   stepupClose.addEventListener('click', closeStepup);
-  stepupDialog.addEventListener('click', (ev) => {
-    if (ev.target === stepupDialog) closeStepup(); // a tap on the dimmed area outside the sheet
-  });
+  closeOnBackdrop(stepupDialog, closeStepup); // a tap on the dimmed area outside the sheet
   lockNow.addEventListener('click', () => {
     clearStepUp();
     renderStepUp();
