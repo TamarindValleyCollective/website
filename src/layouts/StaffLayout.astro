@@ -207,6 +207,21 @@ const adminItems = [
     min-width: 0;
   }
 
+  /* Signed out (or signed in without access): the card alone on the page, like the member portal's, instead of a menu,
+     a top bar and a page title that nobody can use yet. Keyed on the card itself, so it holds on every admin page and
+     for every way the card appears; the shell comes back as soon as a page hides the card. */
+  :global(html:has(#staff-main #gate:not([hidden]), #staff-main #forbidden:not([hidden]))) .shell {
+    grid-template-columns: 1fr;
+  }
+
+  :global(html:has(#staff-main #gate:not([hidden]), #staff-main #forbidden:not([hidden]))) :is(.sidebar, .topbar, .scrim) {
+    display: none;
+  }
+
+  :global(html:has(#staff-main #gate:not([hidden]), #staff-main #forbidden:not([hidden]))) #staff-main :global(section > :not(.signin)) {
+    display: none;
+  }
+
   /* The pages wrap themselves in the public site's .section, which paints cream. Here the stone
      backdrop (like the member portal's) should run behind them, with the cards standing out in white. */
   #staff-main :global(.section) {
