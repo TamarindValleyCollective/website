@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Site Map Portal Mockup</title>
+<style>
+/* Mockup of the Site map in the member portal and the admin portal. Buttons only show what they would do. */
+:root {
+  --bg: #f4f5f1; --card: #ffffff; --ink: #1b1e1b; --ink-soft: #596057; --line: rgba(27,30,27,.12);
+  --green: #1f7a46; --green-tint: rgba(31,122,70,.12); --warn: #b4531a; --crit: #b3261e;
+  --map: #fbfbf8; --plot: #9aa194; --blk: #dfe3d9; --blk-line: #6c7466; --pas: #c4cabc; --up: #eef0e9;
+  --sel: #9fd3b2; --me: #f0b27d; --me-line: #a65a24; --none: #eceee8; --mis: #f3c9a6;
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151715; --card: #242724; --ink: #f1f3ef; --ink-soft: #a9afa7; --line: rgba(255,255,255,.13);
+  --green: #5bc88a; --green-tint: rgba(91,200,138,.16); --warn: #f0a272; --crit: #ff8a80;
+  --map: #1b1d1b; --plot: #6f766a; --blk: #3b413a; --blk-line: #9aa294; --pas: #565d54; --up: #2b2f2a;
+  --sel: #2f7a4f; --me: #a8642f; --me-line: #f0a272; --none: #2a2d29; --mis: #7a4a22; color-scheme: dark; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 var(--font); padding: 16px max(16px, env(safe-area-inset-right)) 32px max(16px, env(safe-area-inset-left)); }
+main { max-width: 1180px; margin: 0 auto; display: grid; gap: 12px; }
+h1 { font-size: 2.125rem; line-height: 1.1; font-weight: 700; margin: 0; letter-spacing: -.02em; }
+.sub { color: var(--ink-soft); margin: 4px 0 0; font-size: .92rem; max-width: 70ch; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.seg { display: inline-flex; background: var(--line); border-radius: 10px; padding: 2px; gap: 2px; }
+.seg button { font: inherit; font-size: .9rem; font-weight: 600; border: 0; background: transparent; color: var(--ink-soft); padding: 6px 14px; border-radius: 8px; cursor: pointer; min-height: 34px; }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+select, input[type=search], .btn { font: inherit; font-size: .9rem; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; min-height: 34px; }
+input[type=search] { width: 220px; }
+.btn { cursor: pointer; font-weight: 600; }
+.btn:hover:not(:disabled) { background: var(--green-tint); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.danger { color: var(--crit); }
+label.f { display: inline-flex; align-items: center; gap: 6px; font-size: .88rem; color: var(--ink-soft); }
+:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.work { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; align-items: start; }
+@media (max-width: 900px) { .work { grid-template-columns: minmax(0, 1fr); } }
+.stage { position: relative; background: var(--map); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+#map { display: block; width: 100%; height: min(78vh, 760px); touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+.zoom { position: absolute; right: 10px; top: 10px; display: grid; gap: 6px; }
+.zoom .btn { width: 36px; padding: 0; font-size: 1.1rem; }
+:is(.plot, .blk, .pas, .up, .outline) { vector-effect: non-scaling-stroke; }
+.plot { fill: none; stroke: var(--plot); stroke-width: 1; opacity: .55; }
+.blk { fill: var(--blk); stroke: var(--blk-line); stroke-width: 1.2; }
+.pas { fill: var(--pas); stroke: var(--blk-line); stroke-width: 1; }
+.up { fill: var(--up); stroke: var(--blk-line); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.hit { fill: transparent; }
+.house { cursor: pointer; }
+.house:hover { --blk: var(--sel); }
+.house.sel { --blk: var(--sel); --blk-line: var(--green); }
+.house.mine { --blk: var(--me); --blk-line: var(--me-line); }
+.house.mine.sel { --blk-line: var(--green); }
+.house.s-none { --blk: var(--none); }
+.house.s-mis { --blk: var(--mis); --blk-line: var(--warn); }
+.house.s-none.sel, .house.s-mis.sel { --blk-line: var(--green); }
+.tag { font-weight: 700; fill: var(--ink); text-anchor: middle; paint-order: stroke; stroke: var(--map); stroke-linejoin: round; pointer-events: none; font-family: var(--font); }
+.outline { fill: none; stroke: var(--green); stroke-width: 2; stroke-dasharray: 6 3; pointer-events: none; }
+aside { display: grid; gap: 10px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; min-width: 0; }
+.card h2 { font-size: 1.125rem; margin: 0; line-height: 1.25; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; margin: 10px 0 0; font-size: .9rem; }
+.kv dt { color: var(--ink-soft); } .kv dd { margin: 0; }
+.pill { display: inline-block; font-size: .78rem; font-weight: 600; padding: 1px 9px; border-radius: 999px; background: var(--green-tint); color: var(--green); }
+.pill.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+.pill.mine { background: color-mix(in srgb, var(--me-line) 18%, transparent); color: var(--me-line); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.muted { color: var(--ink-soft); }
+.note { color: var(--ink-soft); font-size: .82rem; margin: 10px 0 0; }
+.legend { display: grid; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; font-size: .85rem; }
+.legend li { display: flex; align-items: center; gap: 8px; }
+.sw { width: 18px; height: 14px; border-radius: 4px; border: 1px solid var(--blk-line); flex: none; }
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: .9rem; max-width: min(90vw, 520px); opacity: 0; pointer-events: none; transition: opacity .2s; }
+.toast.on { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Site map</h1>
+    <p class="sub" id="sub"></p>
+  </header>
+
+  <div class="bar">
+    <div class="seg" role="group" aria-label="Portal" id="modes">
+      <button type="button" data-m="member" aria-pressed="true">Member portal</button>
+      <button type="button" data-m="admin" aria-pressed="false">Admin portal</button>
+    </div>
+    <div class="seg" role="group" aria-label="Cluster" id="tabs"></div>
+    <input type="search" id="q" placeholder="Find a home or member" aria-label="Find a home or member">
+    <label class="f" id="melabel">Viewing as <select id="me"></select></label>
+    <button class="btn" id="mine" type="button">Find my home</button>
+    <button class="btn" id="add" type="button" hidden>Add unit</button>
+  </div>
+
+  <div class="work">
+    <div class="stage">
+      <svg id="map" role="img" aria-label="Site map"></svg>
+      <div class="zoom">
+        <button class="btn" id="zin" aria-label="Zoom in">+</button>
+        <button class="btn" id="zout" aria-label="Zoom out">&minus;</button>
+        <button class="btn" id="zreset" aria-label="Fit" style="font-size:.8rem">Fit</button>
+      </div>
+    </div>
+    <aside>
+      <section class="card" aria-live="polite">
+        <h2 id="ctitle"></h2>
+        <dl class="kv" id="kv"></dl>
+        <div class="row" id="acts"></div>
+        <p class="note" id="cnote"></p>
+      </section>
+      <section class="card">
+        <h2 style="font-size:1rem" id="ltitle"></h2>
+        <ul class="legend" id="legend"></ul>
+      </section>
+    </aside>
+  </div>
+</main>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const DATA = /*DATA*/null;      // plan lines and land plots per cluster
+const LAYOUT = /*LAYOUT*/null;  // frozen layout (layout-frozen-2026-10-29.json)
+const MEMBERS = /*MEMBERS*/null; // personal data: only in the local, gitignored build
+const NS = 'http://www.w3.org/2000/svg';
+const $ = (id) => document.getElementById(id);
+const map = $('map');
+const Y0 = -0.5;
+const rect = (cls, x, y, w, h) => `<rect class="${cls}" x="${x}" y="${y}" width="${w}" height="${h}"/>`;
+const BASE = rect('blk', -17, -18, 17, 15) + rect('blk', 0, -18, 17, 15) + rect('blk', 0, -3, 17, 22);
+const EXTRA = { S: '', DF: rect('up', 3, 0, 11, 17), DG: rect('blk', -17, -40, 17, 22), DO: rect('blk', -17, -64, 17, 24) + rect('pas', -5, -40, 5, 22), TO: rect('blk', -17, -64, 17, 24) + rect('pas', -5, -40, 5, 22) + rect('up', 3, 0, 11, 17) };
+const BHK = { S: '1 BHK', DG: '2 BHK', DF: '2 BHK', DO: '2 BHK', TO: '3 BHK' };
+const CL = { H1A: 'H1-A', H1B: 'H1-B', H2: 'H2' };
+const L_BASE = [[-17, -18], [17, -18], [17, 19], [0, 19], [0, -3], [-17, -3]].map((p) => [p[0], p[1] + Y0]);
+const IDS = Object.keys(LAYOUT.homes);
+const OPTED_OUT = new Set(['H-40']); // mockup only: stands in for a member who switched the directory off
+const st = { mode: 'member', cluster: 'H1A', me: 'H-17', sel: 'H-17', vb: null };
+
+const defs = document.createElementNS(NS, 'defs');
+defs.innerHTML = Object.keys(EXTRA).map((t) => `<g id="g-${t}"><g transform="translate(0 ${Y0})"><rect class="hit" x="-17" y="-18" width="34" height="37"/>${BASE}${EXTRA[t]}</g></g>`).join('');
+const gStatic = document.createElementNS(NS, 'g'), gDyn = document.createElementNS(NS, 'g');
+map.append(defs, gStatic, gDyn);
+
+const rec = (id) => MEMBERS[id];
+const baseLetters = (t) => (t.match(/^[A-Z]+/) || [''])[0];
+const status = (id) => !rec(id) ? 'none' : baseLetters(rec(id).t) !== LAYOUT.homes[id].type ? 'mis' : 'ok';
+const who = (id) => { const m = rec(id); if (!m) return null; return st.mode === 'member' && OPTED_OUT.has(id) ? 'Private member' : m.o; };
+const fitVB = () => [...DATA.clusters[st.cluster].vb];
+const setVB = () => map.setAttribute('viewBox', st.vb.join(' '));
+const upx = () => { const r = map.getBoundingClientRect(), [, , w, h] = st.vb; return Math.max(w / r.width, h / r.height); };
+
+function draw() {
+  gStatic.innerHTML = `<path class="plot" d="${DATA.clusters[st.cluster].plot}"/>`;
+  const u = upx(); let h = '';
+  const sel = LAYOUT.homes[st.sel];
+  for (const id of IDS) {
+    const d = LAYOUT.homes[id]; if (d.cluster !== st.cluster) continue;
+    const k = LAYOUT.baseSize[d.cluster], s = status(id);
+    const cls = ['house', id === st.sel && 'sel', st.mode === 'member' && id === st.me && 'mine', st.mode === 'admin' && s !== 'ok' && 's-' + s].filter(Boolean).join(' ');
+    h += `<g class="${cls}" data-h="${id}"><g transform="translate(${d.x} ${d.y}) rotate(${d.rotation}) scale(${d.mirrorX ? -k : k} ${d.mirrorY ? -k : k})"><use href="#g-${d.type}"/></g>`
+      + `<text class="tag" x="${d.x}" y="${d.y + 4 * u}" style="font-size:${12 * u}px;stroke-width:${3 * u}px">${id.slice(2)}</text></g>`;
+  }
+  if (sel && sel.cluster === st.cluster) {
+    const k = LAYOUT.baseSize[sel.cluster], r = sel.rotation * Math.PI / 180, c = Math.cos(r), sn = Math.sin(r);
+    const pts = L_BASE.map(([x, y]) => { const X = x * (sel.mirrorX ? -k : k), Y = y * (sel.mirrorY ? -k : k); return `${(sel.x + c * X - sn * Y).toFixed(2)} ${(sel.y + sn * X + c * Y).toFixed(2)}`; });
+    h += `<path class="outline" d="M${pts.join(' L')} Z"/>`;
+  }
+  gDyn.innerHTML = h;
+}
+
+const toast = (m) => { const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 3200); };
+
+function card() {
+  const id = st.sel, d = LAYOUT.homes[id], m = rec(id), s = status(id), name = who(id);
+  const typeLabel = `${BHK[d.type]} <span class="muted">(${d.type})</span>`;
+  $('ctitle').textContent = `Home ${id.slice(2)}` + (st.mode === 'member' && id === st.me ? ' (yours)' : '');
+  let kv = `<dt>${m ? 'Owner' : 'Owner'}</dt><dd>${name ? esc(name) : '<span class="muted">No member yet</span>'}</dd><dt>Unit type</dt><dd>${typeLabel}</dd><dt>Cluster</dt><dd>${CL[d.cluster]}</dd>`;
+  if (st.mode === 'admin') {
+    kv += `<dt>Record type</dt><dd>${m ? esc(m.t) : '—'} ${s === 'mis' ? '<span class="pill warn">differs from map</span>' : ''}</dd>`
+      + `<dt>House plot</dt><dd>${m && m.a != null ? m.a.toLocaleString('en-IN', { maximumFractionDigits: 1 }) + ' sq ft' : '<span class="muted">not recorded yet</span>'}</dd>`
+      + `<dt>Placement</dt><dd class="muted">x ${d.x}, y ${d.y}, ${d.rotation}°${d.mirrorX ? ', mirrored' : ''}</dd>`;
+  }
+  $('kv').innerHTML = kv;
+  const acts = $('acts'); acts.innerHTML = '';
+  const b = (label, msg, cls, dis) => { const e = document.createElement('button'); e.type = 'button'; e.className = 'btn ' + (cls || ''); e.textContent = label; e.disabled = !!dis; e.onclick = () => toast(msg); acts.append(e); };
+  if (st.mode === 'member') {
+    b('View profile', `Opens the member page for ${id} (#/directory/F-xx) in the portal.`, '', !m || name === 'Private member');
+    $('cnote').textContent = name === 'Private member' ? 'This member keeps their details private, so there is no profile to open.' : 'Names follow the directory rule: members who opted out show as "Private member".';
+  } else {
+    b('Open member', 'Opens this household on the Members page.', '', !m);
+    b('Move or reshape…', `Opens the layout editor for ${id}: drag, rotate, mirror. Locked until you confirm; the change is audit-logged first.`);
+    b('Change type…', 'Pick S, DG, DF, DO or TO for this unit. Audit-logged.');
+    b('Renumber…', 'Change the house number. Refused while a household is attached to the old number, unless you move it too.');
+    b('Remove unit', m ? 'Refused: a household is attached to this home. Move or detach it first.' : 'Removes the unit from the map after confirmation. Audit-logged.', 'danger');
+    $('cnote').textContent = 'Layout changes are admin-only. Owner and member details stay on the Members page.';
+  }
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function legend() {
+  if (st.mode === 'member') {
+    $('ltitle').textContent = 'Unit types';
+    $('legend').innerHTML = [['S', '1 BHK'], ['DG', '2 BHK, ground floor'], ['DF', '2 BHK, first-floor bedroom'], ['DO', '2 BHK, bedroom in a second block'], ['TO', '3 BHK, two blocks']]
+      .map(([k, t]) => `<li><svg width="28" height="34" viewBox="-30 -46 60 92" aria-hidden="true"><use href="#g-${k}"/></svg><span><b>${k}</b> ${t}</span></li>`).join('')
+      + `<li><span class="sw" style="background:var(--me)"></span> Your home</li>`;
+  } else {
+    $('ltitle').textContent = 'Status';
+    const n = (s) => IDS.filter((i) => status(i) === s).length;
+    $('legend').innerHTML = `<li><span class="sw" style="background:var(--blk)"></span> Member assigned, type matches (${n('ok')})</li>`
+      + `<li><span class="sw" style="background:var(--none)"></span> No member yet (${n('none')})</li>`
+      + `<li><span class="sw" style="background:var(--mis)"></span> Type differs from member record (${n('mis')})</li>`;
+  }
+}
+
+function render() {
+  $('sub').textContent = st.mode === 'member'
+    ? 'Every home on the farm. Tap a home to see who lives there and what type it is, or search by name or house number. Read-only.'
+    : 'Same map for admins, coloured by status. Tap a home for full details and the layout actions. Layout changes are admin-only and audit-logged.';
+  document.querySelectorAll('#modes button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.m === st.mode)));
+  document.querySelectorAll('#tabs button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.c === st.cluster)));
+  $('melabel').hidden = $('mine').hidden = st.mode !== 'member'; $('add').hidden = st.mode !== 'admin';
+  draw(); card(); legend();
+}
+function select(id) { st.sel = id; const c = LAYOUT.homes[id].cluster; if (c !== st.cluster) { st.cluster = c; st.vb = fitVB(); setVB(); } render(); }
+function focusOn(id) { const d = LAYOUT.homes[id]; select(id); st.vb = [d.x - 110, d.y - 85, 220, 170]; setVB(); draw(); }
+
+$('tabs').innerHTML = Object.entries(CL).map(([k, v]) => `<button type="button" data-c="${k}" aria-pressed="false">${v}</button>`).join('');
+$('me').innerHTML = IDS.filter((i) => rec(i)).map((i) => `<option>${i}</option>`).join(''); $('me').value = st.me;
+$('modes').onclick = (e) => { const b = e.target.closest('button'); if (b) { st.mode = b.dataset.m; render(); } };
+$('tabs').onclick = (e) => { const b = e.target.closest('button'); if (b) { st.cluster = b.dataset.c; st.vb = fitVB(); setVB(); render(); } };
+$('me').onchange = (e) => { st.me = e.target.value; focusOn(st.me); };
+$('mine').onclick = () => focusOn(st.me);
+$('add').onclick = () => toast('Add unit: choose a cluster and type, drop it on the plan, set its house number. Audit-logged, admin only.');
+$('q').onkeydown = (e) => {
+  if (e.key !== 'Enter') return;
+  const q = e.target.value.trim().toLowerCase(); if (!q) return;
+  const hit = IDS.find((i) => i.toLowerCase() === q || i.slice(2) === q.replace(/^h-?/, '')) || IDS.find((i) => { const n = who(i); return n && n !== 'Private member' && n.toLowerCase().includes(q); });
+  if (hit) focusOn(hit); else toast('No home or member matches "' + e.target.value + '".');
+};
+function zoom(f, cx, cy) { const [x, y, w, h] = st.vb, nw = w / f; if (nw < 40 || nw > fitVB()[2] * 1.6) return; const nh = h / f, qx = cx ?? x + w / 2, qy = cy ?? y + h / 2; st.vb = [qx - (qx - x) / f, qy - (qy - y) / f, nw, nh]; setVB(); draw(); }
+const toUser = (e) => { const r = map.getBoundingClientRect(), [x, y, w, h] = st.vb, k = Math.max(w / r.width, h / r.height); return [x + (e.clientX - r.left - (r.width - w / k) / 2) * k, y + (e.clientY - r.top - (r.height - h / k) / 2) * k]; };
+$('zin').onclick = () => zoom(1.4); $('zout').onclick = () => zoom(1 / 1.4); $('zreset').onclick = () => { st.vb = fitVB(); setVB(); draw(); };
+map.addEventListener('wheel', (e) => { e.preventDefault(); const [ux, uy] = toUser(e); zoom(e.deltaY < 0 ? 1.15 : 1 / 1.15, ux, uy); }, { passive: false });
+let pan = null;
+map.addEventListener('pointerdown', (e) => { map.setPointerCapture(e.pointerId); pan = { x: e.clientX, y: e.clientY, moved: false, id: (e.target.closest('.house') || {}).dataset?.h }; });
+map.addEventListener('pointermove', (e) => { if (!pan) return; const dx = e.clientX - pan.x, dy = e.clientY - pan.y; if (!pan.moved && Math.hypot(dx, dy) < 4) return; pan.moved = true; const u = upx(); st.vb = [st.vb[0] - dx * u, st.vb[1] - dy * u, st.vb[2], st.vb[3]]; pan.x = e.clientX; pan.y = e.clientY; setVB(); });
+map.addEventListener('pointerup', () => { if (pan && !pan.moved && pan.id) select(pan.id); pan = null; });
+map.addEventListener('pointercancel', () => { pan = null; });
+window.addEventListener('resize', draw);
+st.cluster = LAYOUT.homes[st.sel].cluster; st.vb = fitVB(); setVB(); render();
+window.__m = { st, select, focusOn };
+</script>
+</body>
+</html>
