@@ -138,7 +138,7 @@ test('admin: a household naming a house that is not on the map is listed, and th
 
 test('admin: only the allowed fields go out (no email, phone or person ids)', () => {
   const keys = Object.keys(buildAdminSiteMap(adminData).units[0]).sort();
-  assert.deepEqual(keys, ['bhk', 'cluster', 'detail', 'farmUnit', 'gaps', 'houseNo', 'mirrorX', 'mirrorY', 'otherMembers', 'owners', 'plotSqFt', 'recordType', 'rotation', 'shape', 'status', 'x', 'y']);
+  assert.deepEqual(keys, ['bhk', 'cluster', 'detail', 'farmUnit', 'gaps', 'houseNo', 'mirrorX', 'mirrorY', 'otherMembers', 'owners', 'plotSqFt', 'recordType', 'rotation', 'shape', 'status', 'version', 'x', 'y']);
 });
 
 test('shapes and clusters', () => {

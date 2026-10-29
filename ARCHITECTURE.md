@@ -869,8 +869,15 @@ outside both the local machine and Netlify (the member-update-email workflow).
   household's `member_house_pattas.area_sq_ft`), the placement, a list of what to fix, and a link to the household in the
   member register (`/internal/members/#F-xx`). Filters: vacant, type differs, no plot size. Households that name a house
   the map does not have are listed. Shaping is `buildAdminSiteMap` in `scripts/lib/site-map.mjs` (tested); no email,
-  phone or document is selected. Editing the layout (add, remove, renumber, retype, orient; admin-only, audited) is the
-  next slice.
+  phone or document is selected. **Editing the layout** (`POST /api/site-map-admin/units`, capability `site-map` /
+  `edit`, admin role only): update a home's shape, position, rotation or mirrors, add a home, renumber one, or remove
+  one. The page has an "Edit layout" mode (off until pressed; drag the picked home or type values; nothing is saved
+  until Save). The rules are in `scripts/lib/site-map-edit.mjs` (tested): a home with a household cannot be removed or
+  renumbered (move the household on the Members page first); an update carries the row's `updated_at` and is refused
+  if the row has changed since (the write itself is guarded on it too), so two admins cannot overwrite each other. Every
+  edit is written to `staff_audit_log` (`site-map.update|add|renumber|remove`, house number and changed plan values
+  only) BEFORE it is made, and refused if the entry cannot be written. Members see the result straight away, since the
+  member map reads the same table. The cluster base sizes are not editable here.
 - **`netlify/functions/staff-admin.mts` + `lib/staff-admin-guard.ts`** — the API behind the
   Access module (issue #89): who is in the system, who holds which module role, an activity feed,
   and the changes themselves. **Super admins only.** Reading (`GET /api/staff-admin/people`,

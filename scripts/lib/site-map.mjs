@@ -122,6 +122,8 @@ export function buildAdminSiteMap(data, options = {}) {
       mirrorX: !!u.mirror_x,
       mirrorY: !!u.mirror_y,
       status: !hh ? 'vacant' : mismatch ? 'mismatch' : 'ok',
+      // The row's updated_at as loaded: an edit sends it back so a change made on a stale screen is refused.
+      version: u.updated_at ?? null,
       farmUnit: hh?.farm_unit ?? null,
       owners: ownerNames.map((n) => (seeNames ? n : maskName(n))),
       otherMembers: members.length - owners.length,

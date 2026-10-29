@@ -56,9 +56,10 @@ export const MODULES = {
     configure: ADMIN_ONLY,
   },
   // Early access: a super admin gives the module to the admins who should see it (Access), the same way as any other.
-  // Changing the layout (add, remove, renumber, retype, orient) is a later capability, admins only.
   'site-map': {
     view: ALL,
+    // Change the layout: add, remove, renumber, reshape, move or rotate a home. Every member sees the result, so admins only.
+    edit: ADMIN_ONLY,
   },
 } as const satisfies Record<string, Record<string, readonly Role[]>>;
 
@@ -134,6 +135,7 @@ export const MODULE_INFO: Record<ModuleId, { label: string; path: string; capabi
     path: '/internal/site-map/',
     capabilities: {
       view: 'See every home on the site plan with its household, unit type and plot size, and the gaps to fix',
+      edit: 'Change the layout members see: add, remove, renumber, reshape, move or rotate a home',
     },
   },
 };
