@@ -848,7 +848,19 @@ outside both the local machine and Netlify (the member-update-email workflow).
   flag is `true` (My rental: `MEMBER_RENTAL_ENABLED`), and otherwise only for the households a super admin lists on
   Units → Early access (by farm unit; step-up, audited as `units.access_granted` / `units.access_removed`). A household
   not listed gets the same 404 as when the feature does not exist. The rule is in `scripts/lib/member-features.mjs`;
-  a later feature adds its name there and to the table's check constraint, with no new table.
+  a later feature adds its name there and to the table's check constraint, with no new table. The second feature is
+  **Site map** (`site_map`, flag `MEMBER_SITE_MAP_ENABLED`; migration `0074` widens the check constraint).
+- **`netlify/functions/members-sitemap.mts`** — the member portal's **Site map** tab (`GET /api/members-me/site-map`,
+  read-only): every home drawn on the 2023 site plan, with its owner, unit type and a link to their directory profile
+  (`#/directory?unit=F-xx` opens that household's popup). Tables (migration `0074`, service role only, RLS on, no
+  anon/authenticated grants): `site_map_units` (one row per home: cluster, standard shape S/DG/DF/DO/TO, x/y of the
+  base-foundation centre, rotation, mirrors) and `site_map_clusters` (base size per cluster, view box, plot lines),
+  seeded from the layout fixed by hand on 2026-10-29 (`docs/site-map/`). The function selects only ids, names and unit
+  fields, and `scripts/lib/site-map.mjs` (tested) applies the directory's privacy rule: a person is named only when
+  active and not opted out of the directory, a household with nobody listed shows as "Private member" with no profile
+  link, a home with no household as "No member yet". Dark behind Early access (above): a household not listed gets
+  404 and the tab stays hidden. The plan is drawn client-side in `members/index.astro` (`viewSiteMap`). Admin editing
+  of the layout (add/remove/renumber/retype/orient, audit-logged, admin-only) is the next slice.
 - **`netlify/functions/staff-admin.mts` + `lib/staff-admin-guard.ts`** — the API behind the
   Access module (issue #89): who is in the system, who holds which module role, an activity feed,
   and the changes themselves. **Super admins only.** Reading (`GET /api/staff-admin/people`,
