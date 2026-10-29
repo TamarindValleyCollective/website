@@ -854,7 +854,8 @@ outside both the local machine and Netlify (the member-update-email workflow).
   read-only): every home drawn on the 2023 site plan, with its owner, unit type and a link to their directory profile
   (`#/directory?unit=F-xx` opens that household's popup). Tables (migration `0074`, service role only, RLS on, no
   anon/authenticated grants): `site_map_units` (one row per home: cluster, standard shape S/DG/DF/DO/TO, x/y of the
-  base-foundation centre, rotation, mirrors) and `site_map_clusters` (base size per cluster, view box, plot lines),
+  base-foundation centre, rotation, mirrors) and `site_map_clusters` (base size per cluster, view box, plot lines: the
+  site plan's raw lines plus, from migration `0075`, the closed outline of every home's plot),
   seeded from the layout fixed by hand on 2026-10-29 (`docs/site-map/`). The function selects only ids, names and unit
   fields, and `scripts/lib/site-map.mjs` (tested) applies the directory's privacy rule: a person is named only when
   active and not opted out of the directory, a household with nobody listed shows as "Private member" with no profile
