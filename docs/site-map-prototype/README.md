@@ -9,11 +9,11 @@ shapes https://claude.ai/artifact/69vJqjSLyUoVk5ZpMQNN4g
 
 ## Unit types (Sharath's definitions)
 K kitchen, H hall, B bedroom; in the sketch the top is the back of the house and the bottom is the road side.
-- S: 1 BHK, all ground floor (K,H row; B below H). Base of every type.
-- DG: 2 BHK, all ground floor (S + ground bedroom behind the kitchen).
-- DF: 2 BHK, 2nd bedroom on the first floor above the ground-floor bedroom (S footprint).
-- DO: 2 BHK, 2nd bedroom a separate ground-floor block at the back, joined by a passage.
-- TO: 3 BHK, DO + 3rd bedroom on the first floor above the main block's bedroom.
+- S: single bedroom, all ground floor (K,H row; B below H). Base of every type.
+- DG: double, all ground floor (S + ground bedroom behind the kitchen).
+- DF: double, 2nd bedroom on the first floor above the ground-floor bedroom (S footprint).
+- DO: double, 2nd bedroom a separate ground-floor block at the back, joined by a passage.
+- TO: triple, DO + 3rd bedroom on the first floor above the main block's bedroom.
 Every home is drawn at ONE fixed size (k = 1.78); orientation and mirror vary per home.
 
 ## Pipeline (python venv with `shapely` and `pillow`; scripts expect the working dirs they were run in)
