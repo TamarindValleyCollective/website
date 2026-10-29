@@ -55,6 +55,11 @@ export const MODULES = {
     // estimates use. Changes what the alerts say, so admins only.
     configure: ADMIN_ONLY,
   },
+  // Early access: a super admin gives the module to the admins who should see it (Access), the same way as any other.
+  // Changing the layout (add, remove, renumber, retype, orient) is a later capability, admins only.
+  'site-map': {
+    view: ALL,
+  },
 } as const satisfies Record<string, Record<string, readonly Role[]>>;
 
 export type ModuleId = keyof typeof MODULES;
@@ -122,6 +127,13 @@ export const MODULE_INFO: Record<ModuleId, { label: string; path: string; capabi
     capabilities: {
       view: 'See free-tier and credit usage, and active warnings',
       configure: 'Enter readings from provider dashboards and set prices and limits',
+    },
+  },
+  'site-map': {
+    label: 'Site map',
+    path: '/internal/site-map/',
+    capabilities: {
+      view: 'See every home on the site plan with its household, unit type and plot size, and the gaps to fix',
     },
   },
 };

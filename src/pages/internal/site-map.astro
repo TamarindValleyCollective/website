@@ -1,0 +1,460 @@
+---
+// Site map (internal): every home on the site plan, coloured by status, with the household behind it, the member record's
+// unit type, the house plot size, and the gaps to fix. Read-only for now; changing the layout is a later step.
+// Backed by netlify/functions/site-map-admin.mts (requireStaff 'site-map' view). Same shell as the other internal tools:
+// Google Sign-In gated, one sign-in per tab (scripts/lib/staff-client.mjs), unlinked, noindex. Everything the server returns
+// is placed with textContent only, never as HTML. Status is always a word as well as a colour.
+import StaffLayout from '../../layouts/StaffLayout.astro';
+import SignInGate from '../../components/SignInGate.astro';
+---
+
+<StaffLayout title="Site map" description="Every home on the site plan." current="site-map">
+  <section class="sitemap section wrapper">
+    <h1>Site map</h1>
+    <p id="intro" class="hint">Sign in to see every home on the site plan.</p>
+
+    <SignInGate forbiddenWhat="the Site map tool" />
+
+    <p id="status" class="hint" hidden></p>
+
+    <div id="content" hidden>
+      <p id="summary" class="hint" role="status"></p>
+      <div class="bar">
+        <div class="segmented" id="clusters" role="group" aria-label="Cluster"></div>
+        <div class="segmented" id="filters" role="group" aria-label="Show"></div>
+      </div>
+
+      <div class="grid">
+        <div class="stage">
+          <svg id="map" role="group" aria-label="Site plan, one button per home"></svg>
+          <div class="zoom">
+            <button type="button" class="btn" id="zin" aria-label="Zoom in">+</button>
+            <button type="button" class="btn" id="zout" aria-label="Zoom out">&minus;</button>
+            <button type="button" class="btn" id="zfit" aria-label="Show the whole cluster">Fit</button>
+          </div>
+        </div>
+        <aside>
+          <section class="card" id="card" aria-live="polite"></section>
+          <p id="notonmap" class="note" hidden></p>
+          <ul class="key" aria-label="Colours">
+            <li><span class="sw sw--ok"></span> Household assigned</li>
+            <li><span class="sw sw--vacant"></span> Vacant: no household yet</li>
+            <li><span class="sw sw--mismatch"></span> Map shape and member record differ</li>
+          </ul>
+        </aside>
+      </div>
+    </div>
+  </section>
+</StaffLayout>
+
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style is:global>
+  .sitemap .bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    margin: 12px 0;
+  }
+
+  .sitemap .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 14px;
+    align-items: start;
+  }
+
+  .sitemap .stage {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+  }
+
+  .sitemap #map {
+    display: block;
+    width: 100%;
+    height: min(74vh, 760px);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .sitemap .zoom {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: grid;
+    gap: 6px;
+  }
+
+  .sitemap .zoom .btn {
+    width: 36px;
+    padding: 0;
+    background: var(--tvc-white);
+  }
+
+  .sitemap aside {
+    display: grid;
+    gap: 12px;
+  }
+
+  .sitemap .kv {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 14px;
+    margin: 10px 0 0;
+    font-size: var(--text-sm);
+  }
+
+  .sitemap .kv dt { color: var(--tvc-ink-soft); }
+  .sitemap .kv dd { margin: 0; overflow-wrap: anywhere; }
+  .sitemap .card h2 { margin: 0; font-size: var(--text-lg); }
+  .sitemap .gaps { margin: 12px 0 0; padding-left: 18px; font-size: var(--text-sm); }
+  .sitemap .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+  .sitemap .key {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  .sitemap .key li { display: flex; align-items: center; gap: 8px; }
+
+  .sitemap .sw {
+    flex: none;
+    width: 18px;
+    height: 14px;
+    border: 1px solid var(--tvc-ink-soft);
+    border-radius: 4px;
+  }
+
+  .sitemap .sw--ok { background: var(--tvc-stone); }
+  .sitemap .sw--vacant { background: var(--tvc-cream); }
+  .sitemap .sw--mismatch { background: var(--tvc-orange-tint); border-color: var(--tvc-orange); }
+
+  .sitemap .plot {
+    fill: none;
+    stroke: var(--tvc-line-strong);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .sitemap .unit {
+    --fill: var(--tvc-stone);
+    --line: var(--tvc-ink-soft);
+    cursor: pointer;
+  }
+
+  .sitemap .unit.st-vacant { --fill: var(--tvc-cream); }
+  .sitemap .unit.st-mismatch { --fill: var(--tvc-orange-tint); --line: var(--tvc-orange); }
+  .sitemap .unit.is-sel { --fill: var(--tvc-green-tint); --line: var(--tvc-green); }
+  .sitemap .unit.is-dim { opacity: 0.25; }
+  .sitemap .unit:focus-visible { outline: none; --line: var(--tvc-green); }
+
+  /* The shapes are drawn through <use>, whose copies have no .sitemap ancestor, so these are not nested under it. */
+  .sm-blk,
+  .sm-pas,
+  .sm-up {
+    stroke: var(--line);
+    stroke-width: 1.2;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .sm-blk { fill: var(--fill); }
+  .sm-pas { fill: var(--tvc-line); }
+  .sm-up { fill: var(--tvc-white); stroke-dasharray: 4 3; }
+  .sm-hit { fill: transparent; }
+
+  .sitemap .tag {
+    fill: var(--tvc-ink);
+    font-weight: 700;
+    text-anchor: middle;
+    paint-order: stroke;
+    stroke: var(--tvc-white);
+    stroke-linejoin: round;
+    pointer-events: none;
+  }
+
+  @media (max-width: 900px) {
+    .sitemap .grid { grid-template-columns: minmax(0, 1fr); }
+    .sitemap #map { height: 56vh; }
+  }
+</style>
+
+<script>
+  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch } from '../../../scripts/lib/staff-client.mjs';
+
+  declare const google: any;
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const SVG = 'http://www.w3.org/2000/svg';
+
+  // text only, never HTML
+  type Kid = Node | string | null | undefined | false;
+  function h(tag: string, cls = '', text?: string, ...kids: Kid[]): HTMLElement {
+    const el = document.createElement(tag);
+    if (cls) el.className = cls;
+    if (text !== undefined) el.textContent = text;
+    for (const k of kids) if (k) el.append(k);
+    return el;
+  }
+
+  type Unit = {
+    houseNo: string; cluster: string; shape: string; x: number; y: number; rotation: number; mirrorX: boolean; mirrorY: boolean;
+    status: 'ok' | 'vacant' | 'mismatch'; farmUnit: string | null; owners: string[]; otherMembers: number; recordType: string | null;
+    bhk: string; detail: string; plotSqFt: number | null; gaps: string[];
+  };
+  type Cluster = { id: string; baseSize: number; viewBox: number[]; plot: string };
+  type Overview = { clusters: Cluster[]; units: Unit[]; notOnMap: { houseNo: string; farmUnit: string }[]; summary: Record<string, number>; namesMasked: boolean };
+
+  // The five standard unit shapes about the centre of the base foundation (34 x 37, scaled per cluster). Fixed constants.
+  const rect = (cls: string, x: number, y: number, w: number, ht: number) => `<rect class="${cls}" x="${x}" y="${y}" width="${w}" height="${ht}"/>`;
+  const BASE = rect('sm-blk', -17, -18, 17, 15) + rect('sm-blk', 0, -18, 17, 15) + rect('sm-blk', 0, -3, 17, 22);
+  const UP = rect('sm-up', 3, 0, 11, 17);
+  const BACK = rect('sm-blk', -17, -64, 17, 24) + rect('sm-pas', -5, -40, 5, 22);
+  const SHAPES: Record<string, string> = { S: BASE, DF: BASE + UP, DG: BASE + rect('sm-blk', -17, -40, 17, 22), DO: BASE + BACK, TO: BASE + BACK + UP };
+  const nf = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 1 });
+
+  const gate = $('gate');
+  const forbidden = $('forbidden');
+  const content = $('content');
+  const statusEl = $('status');
+  const intro = $('intro');
+  const gateError = $('gate-error');
+  const svg = $('map') as unknown as SVGSVGElement;
+
+  const FILTERS: [string, string][] = [['all', 'All'], ['vacant', 'Vacant'], ['mismatch', 'Type differs'], ['noplot', 'No plot size']];
+  let data: Overview | null = null;
+  let clusterId = '';
+  let filter = 'all';
+  let selected: Unit | null = null;
+  let vb: number[] = [];
+
+  const matches = (u: Unit) => filter === 'all' || (filter === 'vacant' && u.status === 'vacant') || (filter === 'mismatch' && u.status === 'mismatch') || (filter === 'noplot' && !!u.farmUnit && u.plotSqFt == null);
+  const clusterOf = (id: string) => data!.clusters.find((c) => c.id === id) ?? data!.clusters[0];
+  const fit = () => { vb = [...clusterOf(clusterId).viewBox]; };
+  const unitsPerPx = () => { const r = svg.getBoundingClientRect(); return Math.max(vb[2] / (r.width || 1), vb[3] / (r.height || 1)); };
+  const toUser = (e: { clientX: number; clientY: number }) => {
+    const r = svg.getBoundingClientRect();
+    const k = Math.max(vb[2] / r.width, vb[3] / r.height);
+    return [vb[0] + (e.clientX - r.left - (r.width - vb[2] / k) / 2) * k, vb[1] + (e.clientY - r.top - (r.height - vb[3] / k) / 2) * k];
+  };
+
+  // Built once per overview: the shapes, the plan lines layer, the units layer.
+  svg.innerHTML = `<defs>${Object.entries(SHAPES).map(([k, g]) => `<g id="s-${k}"><g transform="translate(0 -0.5)"><rect class="sm-hit" x="-17" y="-18" width="34" height="37"/>${g}</g></g>`).join('')}</defs>`;
+  const plotPath = document.createElementNS(SVG, 'path');
+  plotPath.setAttribute('class', 'plot');
+  const unitLayer = document.createElementNS(SVG, 'g');
+  svg.append(plotPath, unitLayer);
+
+  function unitEl(u: Unit, k: number, px: number): SVGElement {
+    const g = document.createElementNS(SVG, 'g');
+    g.setAttribute('class', `unit st-${u.status}${selected?.houseNo === u.houseNo ? ' is-sel' : ''}${matches(u) ? '' : ' is-dim'}`);
+    g.setAttribute('data-house', u.houseNo);
+    g.setAttribute('role', 'button');
+    g.setAttribute('tabindex', '0');
+    const who = u.status === 'vacant' ? 'vacant' : u.owners.join(' and ') || 'no active owner';
+    g.setAttribute('aria-label', `Home ${Number(u.houseNo.slice(2))}, ${who}, ${u.bhk}${u.status === 'mismatch' ? ', map shape and record differ' : ''}`);
+    g.innerHTML = `<g transform="translate(${u.x} ${u.y}) rotate(${u.rotation}) scale(${u.mirrorX ? -k : k} ${u.mirrorY ? -k : k})"><use href="#s-${u.shape}"/></g>`;
+    const t = document.createElementNS(SVG, 'text');
+    t.setAttribute('class', 'tag');
+    t.setAttribute('x', String(u.x));
+    t.setAttribute('y', String(u.y + 4 * px));
+    t.setAttribute('style', `font-size:${12 * px}px;stroke-width:${3 * px}px`);
+    t.textContent = String(Number(u.houseNo.slice(2)));
+    g.append(t);
+    g.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter' || (e as KeyboardEvent).key === ' ') { e.preventDefault(); pick(u); } });
+    return g;
+  }
+
+  function drawCard() {
+    const card = $('card');
+    card.replaceChildren();
+    const u = selected;
+    if (!u) { card.append(h('p', 'hint', 'Tap a home on the map.')); return; }
+    card.append(h('h2', '', `Home ${Number(u.houseNo.slice(2))}`));
+    const dl = h('dl', 'kv');
+    const row = (k: string, v: string) => dl.append(h('dt', '', k), h('dd', '', v));
+    row('Household', u.farmUnit ?? 'None yet (vacant)');
+    if (u.farmUnit) row(u.owners.length > 1 ? 'Owners' : 'Owner', u.owners.join(' & ') || 'No active owner');
+    if (u.otherMembers) row('Others', `${u.otherMembers} more on the household`);
+    row('Map shape', `${u.shape} · ${u.bhk}`);
+    if (u.farmUnit) row('Record type', u.recordType ?? 'Not set');
+    if (u.farmUnit) row('House plot', u.plotSqFt != null ? `${nf.format(u.plotSqFt)} sq ft` : 'Not recorded yet');
+    row('Cluster', u.cluster);
+    row('Placement', `x ${nf.format(u.x)}, y ${nf.format(u.y)}, ${nf.format(u.rotation)}°${u.mirrorX || u.mirrorY ? ', mirrored' : ''}`);
+    card.append(dl);
+    if (u.gaps.length) {
+      const ul = h('ul', 'gaps');
+      for (const g of u.gaps) ul.append(h('li', '', g));
+      card.append(h('p', 'hint', 'To fix'), ul);
+    }
+    if (u.farmUnit) {
+      const a = h('a', 'btn', 'Open in the member register') as HTMLAnchorElement;
+      a.href = `/internal/members/#${encodeURIComponent(u.farmUnit)}`;
+      card.append(h('div', 'actions', undefined, a));
+    }
+  }
+
+  function paint() {
+    if (!data) return;
+    document.querySelectorAll('#clusters button').forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-c') === clusterId)));
+    document.querySelectorAll('#filters button').forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-f') === filter)));
+    const c = clusterOf(clusterId);
+    svg.setAttribute('viewBox', vb.join(' '));
+    plotPath.setAttribute('d', c.plot);
+    const px = unitsPerPx();
+    unitLayer.replaceChildren(...data.units.filter((u) => u.cluster === clusterId).map((u) => unitEl(u, c.baseSize, px)));
+    drawCard();
+  }
+  function pick(u: Unit) {
+    selected = u;
+    if (u.cluster !== clusterId) { clusterId = u.cluster; fit(); }
+    paint();
+  }
+  function zoomBy(f: number, cx?: number, cy?: number) {
+    const [x, y, w, ht] = vb;
+    const nw = w / f;
+    if (nw < 40 || nw > clusterOf(clusterId).viewBox[2] * 1.6) return;
+    const qx = cx ?? x + w / 2;
+    const qy = cy ?? y + ht / 2;
+    vb = [qx - (qx - x) / f, qy - (qy - y) / f, nw, ht / f];
+    paint();
+  }
+
+  function render(d: Overview) {
+    data = d;
+    if (!clusterId || !d.clusters.some((c) => c.id === clusterId)) clusterId = d.units[0]?.cluster ?? d.clusters[0].id;
+    fit();
+    const s = d.summary;
+    $('summary').textContent = `${s.homes} homes: ${s.assigned} with a household, ${s.vacant} vacant, ${s.mismatch} where the map shape and the member record differ, ${s.noPlotSize} households with no house plot size recorded.${d.namesMasked ? ' Names are masked for your role.' : ''}`;
+    const clusters = $('clusters');
+    clusters.replaceChildren(...d.clusters.map((c) => { const b = h('button', '', c.id); b.setAttribute('type', 'button'); b.setAttribute('data-c', c.id); b.addEventListener('click', () => { clusterId = c.id; fit(); paint(); }); return b; }));
+    const filters = $('filters');
+    filters.replaceChildren(...FILTERS.map(([id, label]) => { const b = h('button', '', label); b.setAttribute('type', 'button'); b.setAttribute('data-f', id); b.addEventListener('click', () => { filter = id; paint(); }); return b; }));
+    const note = $('notonmap');
+    note.hidden = d.notOnMap.length === 0;
+    note.textContent = d.notOnMap.length ? `Not on the map: ${d.notOnMap.map((n) => `${n.houseNo} (${n.farmUnit})`).join(', ')}. A household names these houses, but they are not drawn yet.` : '';
+    paint();
+  }
+
+  // Pan by dragging, zoom with the wheel or two fingers; a touch that does not move is a tap on a home.
+  const ptrs = new Map<number, { x: number; y: number }>();
+  let dragged = false;
+  let tap: string | null = null;
+  let pinch = 0;
+  svg.addEventListener('wheel', (e) => { e.preventDefault(); const [ux, uy] = toUser(e); zoomBy(e.deltaY < 0 ? 1.15 : 1 / 1.15, ux, uy); }, { passive: false });
+  svg.addEventListener('pointerdown', (e) => {
+    svg.setPointerCapture(e.pointerId);
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.size === 1) { dragged = false; tap = (e.target as Element).closest('.unit')?.getAttribute('data-house') ?? null; } else { tap = null; pinch = 0; }
+  });
+  svg.addEventListener('pointermove', (e) => {
+    const p = ptrs.get(e.pointerId);
+    if (!p) return;
+    if (ptrs.size === 2) {
+      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const [a, b] = [...ptrs.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (pinch) { const [ux, uy] = toUser({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 }); zoomBy(d / pinch, ux, uy); }
+      pinch = d;
+      dragged = true;
+      return;
+    }
+    const dx = e.clientX - p.x;
+    const dy = e.clientY - p.y;
+    if (!dragged && Math.hypot(dx, dy) < 4) return;
+    dragged = true;
+    const px = unitsPerPx();
+    vb = [vb[0] - dx * px, vb[1] - dy * px, vb[2], vb[3]];
+    p.x = e.clientX;
+    p.y = e.clientY;
+    svg.setAttribute('viewBox', vb.join(' '));
+  });
+  const release = (e: PointerEvent) => {
+    ptrs.delete(e.pointerId);
+    if (ptrs.size) return;
+    if (!dragged && tap && data) { const u = data.units.find((x) => x.houseNo === tap); if (u) pick(u); }
+    tap = null;
+    pinch = 0;
+  };
+  svg.addEventListener('pointerup', release);
+  svg.addEventListener('pointercancel', release);
+  $('zin').addEventListener('click', () => zoomBy(1.4));
+  $('zout').addEventListener('click', () => zoomBy(1 / 1.4));
+  $('zfit').addEventListener('click', () => { fit(); paint(); });
+  window.addEventListener('resize', paint);
+
+  // ---- sign-in and loading (same flow as the other internal tools) ----
+  let firstLoad = true;
+  async function load() {
+    gate.hidden = true;
+    forbidden.hidden = true;
+    if (firstLoad) { statusEl.hidden = false; statusEl.textContent = 'Loading…'; }
+    try {
+      const { status, data: body } = await staffFetch('/api/site-map-admin/overview');
+      // staffFetch already turns a plain 403 into a StaffAuthError; a 403 that carries a step-up code comes back here.
+      if (status === 403) { showForbidden(); return; }
+      if (status !== 200) throw new Error(`the server answered ${status}`);
+      statusEl.hidden = true;
+      intro.textContent = 'Every home on the site plan, who it belongs to and what is missing. Tap a home for details.';
+      content.hidden = false;
+      render(body as Overview);
+      firstLoad = false;
+    } catch (err) {
+      if (err instanceof StaffAuthError) {
+        if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+        else showForbidden();
+      } else {
+        console.error('[site-map] load failed', err);
+        statusEl.hidden = false;
+        statusEl.textContent = `Failed to load (${err instanceof Error ? err.message : 'unknown error'}). Try refreshing.`;
+      }
+    }
+  }
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    content.hidden = true;
+    statusEl.hidden = true;
+    intro.textContent = 'Sign in to see every home on the site plan.';
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+  function showForbidden() {
+    gate.hidden = true;
+    content.hidden = true;
+    statusEl.hidden = true;
+    forbidden.hidden = false;
+    $('forbidden-email').textContent = decodeTokenEmail(getToken() ?? '');
+  }
+  function handleCredentialResponse(response: { credential: string }) {
+    setToken(response.credential);
+    load();
+  }
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: (window as any).tvcGsiTheme?.() ?? 'outline', size: 'large' });
+  }
+  function signOut() {
+    clearToken();
+    clearStepUp();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    firstLoad = true;
+    showGate();
+  }
+  $('use-different-account').addEventListener('click', signOut);
+
+  if (getToken()) load();
+  else showGate();
+</script>

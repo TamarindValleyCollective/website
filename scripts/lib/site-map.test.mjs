@@ -1,7 +1,7 @@
 // Run with: node --test scripts/lib/site-map.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSiteMap, shapeClusters, SHAPES, shapeIds, houseNumber } from './site-map.mjs';
+import { buildSiteMap, buildAdminSiteMap, shapeClusters, SHAPES, shapeIds, houseNumber } from './site-map.mjs';
 
 const unit = (house_no, extra = {}) => ({ house_no, cluster: 'H1-A', shape: 'S', x: '10.50', y: 20, rotation: '114.00', mirror_x: false, mirror_y: false, ...extra });
 const data = {
@@ -88,6 +88,57 @@ test('only the viewer\'s own home is marked yours', () => {
 test('nothing but the allowed fields goes out: no email, phone or ids', () => {
   const keys = Object.keys(buildSiteMap(data, 'h2')[0]).sort();
   assert.deepEqual(keys, ['bhk', 'cluster', 'detail', 'farmUnit', 'houseNo', 'isYours', 'mirrorX', 'mirrorY', 'names', 'rotation', 'shape', 'status', 'unitType', 'x', 'y']);
+});
+
+// ---- admin view ----
+const adminData = {
+  ...data,
+  people: [...data.people, { id: 'f', full_name: 'Opted Out Owner', directory_visible: false }],
+  memberships: [...data.memberships, { household_id: 'h5', person_id: 'f', role: 'owner' }],
+  households: [...data.households, { id: 'h53', farm_unit: 'F-53', house_no: 'H-53', unit_type: 'S1' }],
+  pattas: [{ household_id: 'h2', area_sq_ft: '2400.50' }, { household_id: 'h2', area_sq_ft: 100 }, { household_id: 'h3', area_sq_ft: null }],
+};
+
+test('admin: sees owners who opted out of the directory (the register is theirs), but never inactive people', () => {
+  const out = byHouse(buildAdminSiteMap(adminData).units);
+  assert.deepEqual(out['H-03'].owners, ['Hidden Person']);
+  assert.ok(!JSON.stringify(buildAdminSiteMap(adminData)).includes('Gone Person'));
+});
+
+test('admin: plot size adds a household\'s house pattas; none recorded stays null, never zero', () => {
+  const out = byHouse(buildAdminSiteMap(adminData).units);
+  assert.equal(out['H-02'].plotSqFt, 2500.5);
+  assert.equal(out['H-03'].plotSqFt, null);
+  assert.ok(out['H-03'].gaps.includes('House plot size not recorded'));
+  assert.equal(out['H-04'].plotSqFt, null); // vacant: nothing to record
+  assert.deepEqual(out['H-04'].gaps, []);
+});
+
+test('admin: status is vacant, ok or mismatch; a record whose type letters differ from the shape is flagged', () => {
+  const d = { ...adminData, units: adminData.units.map((u) => (u.house_no === 'H-03' ? { ...u, shape: 'DG' } : u)) };
+  const out = byHouse(buildAdminSiteMap(d).units);
+  assert.equal(out['H-04'].status, 'vacant');
+  assert.equal(out['H-02'].status, 'ok'); // TO1-V2 on a TO
+  assert.equal(out['H-03'].status, 'mismatch'); // S1 on a DG
+  assert.ok(out['H-03'].gaps.some((g) => /DG/.test(g) && /S1/.test(g)));
+  assert.equal(buildAdminSiteMap(d).summary.mismatch, 1);
+});
+
+test('admin: read-only roles get masked names, using the mask the caller passes', () => {
+  const out = byHouse(buildAdminSiteMap(adminData, { seeNames: false, maskName: (n) => n[0] + '***' }).units);
+  assert.deepEqual(out['H-02'].owners, ['A***', 'Z***']);
+});
+
+test('admin: a household naming a house that is not on the map is listed, and the summary counts add up', () => {
+  const r = buildAdminSiteMap(adminData);
+  assert.deepEqual(r.notOnMap, [{ houseNo: 'H-53', farmUnit: 'F-53' }]);
+  assert.equal(r.summary.homes, 5);
+  assert.equal(r.summary.assigned + r.summary.vacant, 5);
+});
+
+test('admin: only the allowed fields go out (no email, phone or person ids)', () => {
+  const keys = Object.keys(buildAdminSiteMap(adminData).units[0]).sort();
+  assert.deepEqual(keys, ['bhk', 'cluster', 'detail', 'farmUnit', 'gaps', 'houseNo', 'mirrorX', 'mirrorY', 'otherMembers', 'owners', 'plotSqFt', 'recordType', 'rotation', 'shape', 'status', 'x', 'y']);
 });
 
 test('shapes and clusters', () => {
