@@ -401,7 +401,9 @@ import SignInGate from '../../components/SignInGate.astro';
     if (firstLoad) { statusEl.hidden = false; statusEl.textContent = 'Loading…'; }
     try {
       const { status, data: body } = await staffFetch('/api/site-map-admin/overview');
-      if (status !== 200) throw new Error('load failed');
+      // staffFetch already turns a plain 403 into a StaffAuthError; a 403 that carries a step-up code comes back here.
+      if (status === 403) { showForbidden(); return; }
+      if (status !== 200) throw new Error(`the server answered ${status}`);
       statusEl.hidden = true;
       intro.textContent = 'Every home on the site plan, who it belongs to and what is missing. Tap a home for details.';
       content.hidden = false;
@@ -412,8 +414,9 @@ import SignInGate from '../../components/SignInGate.astro';
         if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
         else showForbidden();
       } else {
+        console.error('[site-map] load failed', err);
         statusEl.hidden = false;
-        statusEl.textContent = 'Failed to load. Try refreshing.';
+        statusEl.textContent = `Failed to load (${err instanceof Error ? err.message : 'unknown error'}). Try refreshing.`;
       }
     }
   }
