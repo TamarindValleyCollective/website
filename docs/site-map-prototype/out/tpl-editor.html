@@ -57,6 +57,7 @@ input[type=number] { width: 84px; }
 .hit { fill: transparent; }
 .rl { font: 600 5px var(--font); fill: var(--ink-soft); text-anchor: middle; dominant-baseline: middle; }
 .house { cursor: move; }
+.locked .house { cursor: pointer; }
 .house.sel { --blk: var(--sel); --blk-line: var(--green); }
 .house.done { --blk-line: var(--green); }
 .tag { font: 700 7.5px var(--font); fill: var(--ink); text-anchor: middle; paint-order: stroke; stroke: var(--map); stroke-width: 2.4px; stroke-linejoin: round; pointer-events: none; }
@@ -99,6 +100,7 @@ textarea { width: 100%; min-height: 90px; font: .75rem ui-monospace, monospace; 
     <label class="f"><input type="checkbox" id="lwall" checked> Original buildings</label>
     <label class="f"><input type="checkbox" id="lparcel" checked> Land plots</label>
     <label class="f">Unit opacity <input type="range" id="uo" min="0.15" max="1" step="0.05" value="0.8" style="min-width:90px;flex:none;width:90px"></label>
+    <button class="btn on" id="lock" type="button" title="Orientation, position, mirror, type and size are frozen while locked">Layout locked</button>
     <button class="btn" id="undo" type="button">Undo</button>
     <button class="btn" id="redo" type="button">Redo</button>
   </div>
@@ -257,14 +259,16 @@ function fromAuto(id) {
 }
 const AUTO = Object.fromEntries(IDS.map((id) => [id, fromAuto(id)]));
 // Base size is one number per cluster (the three PDF pages were drawn at different scales); `st.k` is the current cluster's.
-const st = { cluster: 'H1A', sel: 'H-17', kc: { H1A: K0, H1B: K0, H2: K0 }, get k() { return this.kc[this.cluster]; }, set k(v) { this.kc[this.cluster] = v; }, homes: JSON.parse(JSON.stringify(AUTO)), snap: true, plot: true, wall: true, parcel: true, uo: 0.8, vb: null, guides: [], angleTip: null, drag: null };
+const st = { locked: true, cluster: 'H1A', sel: 'H-17', kc: { H1A: K0, H1B: K0, H2: K0 }, get k() { return this.kc[this.cluster]; }, set k(v) { this.kc[this.cluster] = v; }, homes: JSON.parse(JSON.stringify(AUTO)), snap: true, plot: true, wall: true, parcel: true, uo: 0.8, vb: null, guides: [], angleTip: null, drag: null };
 let undo = [], redo = [], segs = [];
 
 const snapshot = () => JSON.stringify({ kc: st.kc, homes: st.homes });
 function restore(s) { const o = JSON.parse(s); st.kc = o.kc; st.homes = o.homes; save(); render(); }
 function save() { try { localStorage.setItem(KEY, snapshot()); } catch (e) { /* storage can be blocked; export is the real save */ } }
 function load() { try { const s = localStorage.getItem(KEY); if (s) { const o = JSON.parse(s); if (o.kc) st.kc = { ...st.kc, ...o.kc }; for (const id of IDS) if (o.homes[id]) st.homes[id] = { ...st.homes[id], ...o.homes[id] }; } } catch (e) { /* ignore */ } }
-function mutate(fn) { undo.push(snapshot()); if (undo.length > 150) undo.shift(); redo = []; fn(); save(); render(); }
+// The layout (orientation, position, mirror, type, size) is frozen unless the lock is released; every edit path checks this.
+const EDIT_CONTROLS = '#tsel,#mx,#my,#done,#rot,#rotr,[data-rot],#px,#py,[data-mv],#step,#kn,#kr,#kall,#snapnow,#resetone,#resetall,#imp';
+function mutate(fn) { if (st.locked) return; undo.push(snapshot()); if (undo.length > 150) undo.shift(); redo = []; fn(); save(); render(); }
 const home = () => st.homes[st.sel];
 const norm = (a) => ((a + 180) % 360 + 360) % 360 - 180;
 const r1 = (v) => Math.round(v * 10) / 10;
@@ -358,7 +362,7 @@ function drawDyn() {
   h += `<path class="outline" d="M${L_BASE.map((p) => wp(s, p[0], p[1]).map((v) => v.toFixed(2)).join(' ')).join(' L')} Z"/>`;
   for (const g of st.guides) h += `<line class="guide" x1="${g.ax}" y1="${g.ay}" x2="${g.bx}" y2="${g.by}"/>`;
   const a = wp(s, ...STALK_FROM), b = wp(s, ...HANDLE_LOCAL);
-  h += `<line class="stalk" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/><circle class="handle" data-handle="1" cx="${b[0]}" cy="${b[1]}" r="${7 * u}"/>`;
+  if (!st.locked) h += `<line class="stalk" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/><circle class="handle" data-handle="1" cx="${b[0]}" cy="${b[1]}" r="${7 * u}"/>`;
   if (st.angleTip != null) h += `<text class="angle" x="${b[0] + 9 * u}" y="${b[1] - 4 * u}" style="font-size:${12 * u}px;stroke-width:${3 * u}px">${r1(norm(s.rot)).toFixed(1)}°</text>`;
   gDyn.innerHTML = h;
   map.classList.toggle('noparcel', !st.parcel);
@@ -390,7 +394,10 @@ function render() {
   $('done').classList.toggle('on', s.done); $('done').textContent = s.done ? 'Checked ✓' : 'Mark checked';
   $('state').innerHTML = `${CL[DATA.houses[st.sel].cl]} · ${isEdited(st.sel) ? '<span class="pill">edited</span>' : '<span class="pill warn">auto-fit, not touched</span>'}`;
   $('prog').textContent = `${IDS.filter((i) => st.homes[i].done).length}/${IDS.length} checked`;
-  $('undo').disabled = !undo.length; $('redo').disabled = !redo.length;
+  document.querySelectorAll(EDIT_CONTROLS).forEach((el) => { el.disabled = st.locked; });
+  $('undo').disabled = st.locked || !undo.length; $('redo').disabled = st.locked || !redo.length;
+  $('lock').textContent = st.locked ? 'Layout locked' : 'Editing unlocked'; $('lock').classList.toggle('on', st.locked);
+  map.classList.toggle('locked', st.locked);
   drawDyn();
 }
 function select(id) {
@@ -439,6 +446,10 @@ function snapNow() {
 $('snapnow').onclick = snapNow;
 ['snap', 'lplot', 'lwall', 'lparcel'].forEach((id) => { $(id).onchange = () => { st.snap = $('snap').checked; st.plot = $('lplot').checked; st.wall = $('lwall').checked; st.parcel = $('lparcel').checked; drawStatic(); drawDyn(); }; });
 $('uo').oninput = (e) => { st.uo = parseFloat(e.target.value); map.style.setProperty('--uo', st.uo); };
+$('lock').onclick = () => {
+  if (st.locked && !confirm('Unlock the layout? Orientation, position, mirror, type and size become editable again.')) return;
+  st.locked = !st.locked; st.guides = []; render();
+};
 $('undo').onclick = () => { if (undo.length) { redo.push(snapshot()); restore(undo.pop()); } };
 $('redo').onclick = () => { if (redo.length) { undo.push(snapshot()); restore(redo.pop()); } };
 $('resetone').onclick = () => mutate(() => { st.homes[st.sel] = JSON.parse(JSON.stringify(AUTO[st.sel])); });
@@ -481,6 +492,7 @@ map.addEventListener('pointerdown', (e) => {
   if (ptrs.size > 1) { st.drag = null; return; }
   const t = e.target.closest('[data-handle], .house, .parcel'), [ux, uy] = toUser(e);
   if (t && t.dataset.handle) { const h = home(); st.drag = { mode: 'rot', pre: snapshot(), off: h.rot - (Math.atan2(uy - h.by, ux - h.bx) * 180 / Math.PI + 90) }; st.angleTip = 1; }
+  else if (t && t.classList.contains('house') && st.locked) { select(t.dataset.h); st.drag = null; }
   else if (t && t.classList.contains('house')) { select(t.dataset.h); const h = home(); st.drag = { mode: 'move', pre: snapshot(), ox: ux, oy: uy, sx: h.bx, sy: h.by, moved: false }; }
   else { st.drag = { mode: 'pan', tap: t ? t.dataset.h : null, moved: false }; }
   last = 0;
@@ -532,6 +544,7 @@ window.addEventListener('keydown', (e) => {
   const k = e.key, m = e.shiftKey ? 5 : 1;
   if ((e.metaKey || e.ctrlKey) && k.toLowerCase() === 'z') { e.preventDefault(); (e.shiftKey ? $('redo') : $('undo')).click(); return; }
   if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (st.locked) { if (k.toLowerCase() === 'n') step(1); else if (k.toLowerCase() === 'p') step(-1); return; }
   const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
   if (arrows[k]) { e.preventDefault(); nudge(arrows[k][0], arrows[k][1], m); }
   else if (k === '[') rotBy(-0.1 * (e.shiftKey ? 10 : 1)); else if (k === ']') rotBy(0.1 * (e.shiftKey ? 10 : 1));
