@@ -22,15 +22,19 @@ import SignInGate from '../../components/SignInGate.astro';
       <div class="bar">
         <div class="segmented" id="clusters" role="group" aria-label="Cluster"></div>
         <div class="segmented" id="filters" role="group" aria-label="Show"></div>
+        <div class="editbar" id="editbar" hidden>
+          <button type="button" class="button button--outline" id="edit-toggle" aria-pressed="false">Edit layout</button>
+          <button type="button" class="button button--outline" id="add-unit" hidden>Add a home</button>
+        </div>
       </div>
 
       <div class="grid">
         <div class="stage">
           <svg id="map" role="group" aria-label="Site plan, one button per home"></svg>
           <div class="zoom">
-            <button type="button" class="btn" id="zin" aria-label="Zoom in">+</button>
-            <button type="button" class="btn" id="zout" aria-label="Zoom out">&minus;</button>
-            <button type="button" class="btn" id="zfit" aria-label="Show the whole cluster">Fit</button>
+            <button type="button" class="button button--outline" id="zin" aria-label="Zoom in">+</button>
+            <button type="button" class="button button--outline" id="zout" aria-label="Zoom out">&minus;</button>
+            <button type="button" class="button button--outline" id="zfit" aria-label="Show the whole cluster">Fit</button>
           </div>
         </div>
         <aside>
@@ -91,11 +95,41 @@ import SignInGate from '../../components/SignInGate.astro';
     gap: 6px;
   }
 
-  .sitemap .zoom .btn {
+  .sitemap .zoom .button {
     width: 36px;
     padding: 0;
     background: var(--tvc-white);
   }
+
+  .sitemap .editbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .sitemap .editbar .button[aria-pressed='true'] {
+    background: var(--tvc-green-tint);
+    border-color: var(--tvc-green);
+  }
+
+  /* The edit panel inside the details card */
+  .sitemap .editor {
+    display: grid;
+    gap: 12px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .sitemap .editor h3 { margin: 0; font-size: var(--text-md); }
+  .sitemap .editor .line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+  .sitemap .editor .k { min-width: 64px; color: var(--tvc-ink-soft); font-size: var(--text-sm); }
+  .sitemap .editor input[type='number'] { width: 92px; }
+  .sitemap .editor input[type='text'] { width: 110px; }
+  .sitemap .editor .button[aria-pressed='true'] { background: var(--tvc-green-tint); border-color: var(--tvc-green); }
+  .sitemap .editor .dirty { color: var(--tvc-orange-text); font-size: var(--text-sm); margin: 0; }
+  .sitemap .unit.is-draft { --fill: var(--tvc-green-tint); --line: var(--tvc-green); }
+  .sitemap.is-editing #map { cursor: default; }
 
   .sitemap aside {
     display: grid;
@@ -190,7 +224,7 @@ import SignInGate from '../../components/SignInGate.astro';
 </style>
 
 <script>
-  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch } from '../../../scripts/lib/staff-client.mjs';
+  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../scripts/lib/staff-client.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -210,10 +244,13 @@ import SignInGate from '../../components/SignInGate.astro';
   type Unit = {
     houseNo: string; cluster: string; shape: string; x: number; y: number; rotation: number; mirrorX: boolean; mirrorY: boolean;
     status: 'ok' | 'vacant' | 'mismatch'; farmUnit: string | null; owners: string[]; otherMembers: number; recordType: string | null;
-    bhk: string; detail: string; plotSqFt: number | null; gaps: string[];
+    bhk: string; detail: string; plotSqFt: number | null; gaps: string[]; version: string | null;
   };
   type Cluster = { id: string; baseSize: number; viewBox: number[]; plot: string };
-  type Overview = { clusters: Cluster[]; units: Unit[]; notOnMap: { houseNo: string; farmUnit: string }[]; summary: Record<string, number>; namesMasked: boolean };
+  type Overview = { clusters: Cluster[]; units: Unit[]; notOnMap: { houseNo: string; farmUnit: string }[]; summary: Record<string, number>; namesMasked: boolean; canEdit: boolean };
+  type Placement = { shape: string; x: number; y: number; rotation: number; mirrorX: boolean; mirrorY: boolean };
+  // The home being edited: what is on screen (not saved until Save), and what it was when it was picked.
+  type Draft = Placement & { houseNo: string; isNew: boolean; cluster: string; version: string | null; base: Placement };
 
   // The five standard unit shapes about the centre of the base foundation (34 x 37, scaled per cluster). Fixed constants.
   const rect = (cls: string, x: number, y: number, w: number, ht: number) => `<rect class="${cls}" x="${x}" y="${y}" width="${w}" height="${ht}"/>`;
@@ -237,6 +274,21 @@ import SignInGate from '../../components/SignInGate.astro';
   let filter = 'all';
   let selected: Unit | null = null;
   let vb: number[] = [];
+  // Layout editing (admins with the edit capability): locked until "Edit layout" is pressed, and nothing is saved until Save.
+  let editing = false;
+  let draft: Draft | null = null;
+  let adding = false;
+  const FIELDS: (keyof Placement)[] = ['shape', 'x', 'y', 'rotation', 'mirrorX', 'mirrorY'];
+  const SHAPE_NAMES: Record<string, string> = { S: 'S · 1 BHK', DG: 'DG · 2 BHK', DF: 'DF · 2 BHK', DO: 'DO · 2 BHK', TO: 'TO · 3 BHK' };
+  const placementOf = (u: Placement): Placement => ({ shape: u.shape, x: u.x, y: u.y, rotation: u.rotation, mirrorX: u.mirrorX, mirrorY: u.mirrorY });
+  const makeDraft = (u: Unit): Draft => ({ ...placementOf(u), houseNo: u.houseNo, isNew: false, cluster: u.cluster, version: u.version, base: placementOf(u) });
+  const isDirty = () => !!draft && (draft.isNew || FIELDS.some((k) => draft![k] !== draft!.base[k]));
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const norm = (deg: number) => { const r = ((((deg + 180) % 360) + 360) % 360) - 180; return r2(r === -180 ? 180 : r); };
+  // The home as drawn: the saved one, with the edit in progress applied to it.
+  const shown = (u: Unit): Unit => (draft && !draft.isNew && draft.houseNo === u.houseNo ? { ...u, ...placementOf(draft) } : u);
+  // A home being added is not in the data yet; it is drawn from the draft.
+  const newUnit = (): Unit | null => (draft?.isNew ? { ...placementOf(draft), houseNo: draft.houseNo, cluster: draft.cluster, status: 'vacant', farmUnit: null, owners: [], otherMembers: 0, recordType: null, bhk: SHAPE_NAMES[draft.shape].split(' · ')[1], detail: '', plotSqFt: null, gaps: [], version: null } : null);
 
   const matches = (u: Unit) => filter === 'all' || (filter === 'vacant' && u.status === 'vacant') || (filter === 'mismatch' && u.status === 'mismatch') || (filter === 'noplot' && !!u.farmUnit && u.plotSqFt == null);
   const clusterOf = (id: string) => data!.clusters.find((c) => c.id === id) ?? data!.clusters[0];
@@ -257,7 +309,8 @@ import SignInGate from '../../components/SignInGate.astro';
 
   function unitEl(u: Unit, k: number, px: number): SVGElement {
     const g = document.createElementNS(SVG, 'g');
-    g.setAttribute('class', `unit st-${u.status}${selected?.houseNo === u.houseNo ? ' is-sel' : ''}${matches(u) ? '' : ' is-dim'}`);
+    const picked = draft?.isNew ? draft.houseNo === u.houseNo : selected?.houseNo === u.houseNo;
+    g.setAttribute('class', `unit st-${u.status}${picked ? ' is-sel' : ''}${picked && isDirty() ? ' is-draft' : ''}${matches(u) ? '' : ' is-dim'}`);
     g.setAttribute('data-house', u.houseNo);
     g.setAttribute('role', 'button');
     g.setAttribute('tabindex', '0');
@@ -275,9 +328,149 @@ import SignInGate from '../../components/SignInGate.astro';
     return g;
   }
 
+  // ---- editing ----
+  const SHAPE_KEYS = Object.keys(SHAPES);
+  const field = (label: string, ...kids: Kid[]) => h('div', 'line', undefined, h('span', 'k', label), ...kids);
+  function numberInput(value: number, label: string, onSet: (n: number) => void): HTMLInputElement {
+    const i = document.createElement('input');
+    i.type = 'number';
+    i.step = '0.1';
+    i.value = String(value);
+    i.setAttribute('aria-label', label);
+    i.addEventListener('change', () => { const n = parseFloat(i.value); if (Number.isFinite(n)) onSet(n); else i.value = String(value); });
+    return i;
+  }
+  function small(text: string, onClick: () => void, pressed?: boolean): HTMLButtonElement {
+    const b = h('button', 'button button--outline button--small', text) as HTMLButtonElement;
+    b.type = 'button';
+    if (pressed !== undefined) b.setAttribute('aria-pressed', String(pressed));
+    b.addEventListener('click', onClick);
+    return b;
+  }
+  const setDraft = (patch: Partial<Placement>) => { if (!draft) return; Object.assign(draft, patch); paint(); };
+
+  // Every change goes through here: the server writes the audit entry first, refuses a stale or invalid edit, and answers
+  // with a reason. On success the overview is loaded again so the screen shows what is saved.
+  async function send(body: Record<string, unknown>, message: string, undo?: () => void): Promise<boolean> {
+    try {
+      const { status, data: out } = await staffFetch('/api/site-map-admin/units', { method: 'POST', body });
+      if (status !== 200) { showToast(out?.error ?? 'Could not save. Try again.'); return false; }
+      showToast(message, undo);
+      await load(true);
+      return true;
+    } catch (err) {
+      if (err instanceof StaffAuthError) { if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.'); else showForbidden(); } else showToast('Could not save. Try again.');
+      return false;
+    }
+  }
+  const addBody = (houseNo: string, cluster: string, p: Placement) => ({ action: 'add', houseNo, cluster, ...p });
+
+  function saveDraft() {
+    const d = draft;
+    if (!d || !isDirty()) return;
+    const label = `Home ${Number(d.houseNo.slice(2))}`;
+    if (d.isNew) void send(addBody(d.houseNo, d.cluster, placementOf(d)), `Added ${label}.`).then((ok) => { if (ok) { draft = null; selected = data?.units.find((u) => u.houseNo === d.houseNo) ?? null; if (selected) draft = makeDraft(selected); paint(); } });
+    else void send({ action: 'update', houseNo: d.houseNo, version: d.version, ...placementOf(d) }, `Saved ${label}.`);
+  }
+  function discardDraft() {
+    if (draft?.isNew) { draft = null; selected = null; } else if (selected) draft = makeDraft(selected);
+    paint();
+  }
+
+  function addForm(): HTMLElement {
+    const box = h('div', 'editor');
+    box.append(h('h3', '', 'Add a home'));
+    const used = new Set(data!.units.map((u) => u.houseNo));
+    const next = Array.from({ length: 99 }, (_, i) => `H-${String(i + 1).padStart(2, '0')}`).find((n) => !used.has(n)) ?? 'H-';
+    const num = document.createElement('input');
+    num.type = 'text';
+    num.value = next;
+    num.setAttribute('aria-label', 'House number');
+    const shape = document.createElement('select');
+    for (const k of SHAPE_KEYS) { const o = document.createElement('option'); o.value = k; o.textContent = SHAPE_NAMES[k]; shape.append(o); }
+    box.append(field('Number', num), field('Shape', shape));
+    const place = h('button', 'button', 'Place on the map') as HTMLButtonElement;
+    place.type = 'button';
+    place.addEventListener('click', () => {
+      const houseNo = num.value.trim().toUpperCase();
+      if (!/^H-\d{2}$/.test(houseNo)) { showToast('The house number must look like H-07.'); return; }
+      if (used.has(houseNo)) { showToast(`${houseNo} is already on the map.`); return; }
+      const p: Placement = { shape: shape.value, x: r2(vb[0] + vb[2] / 2), y: r2(vb[1] + vb[3] / 2), rotation: 0, mirrorX: false, mirrorY: false };
+      draft = { ...p, houseNo, isNew: true, cluster: clusterId, version: null, base: p };
+      selected = null;
+      adding = false;
+      paint();
+    });
+    const cancel = small('Cancel', () => { adding = false; paint(); });
+    box.append(h('div', 'line', undefined, place, cancel), h('p', 'hint', 'It is placed in the middle of what you see, in the current cluster. Drag it into position, then Save.'));
+    return box;
+  }
+
+  function editorPanel(u: Unit): HTMLElement {
+    const d = draft!;
+    const box = h('div', 'editor');
+    box.append(h('h3', '', d.isNew ? `New home ${d.houseNo}` : 'Change this home'));
+    const shape = document.createElement('select');
+    shape.setAttribute('aria-label', 'Shape');
+    for (const k of SHAPE_KEYS) { const o = document.createElement('option'); o.value = k; o.textContent = SHAPE_NAMES[k]; shape.append(o); }
+    shape.value = d.shape;
+    shape.addEventListener('change', () => setDraft({ shape: shape.value }));
+    box.append(field('Shape', shape));
+    box.append(field('Rotation', numberInput(d.rotation, 'Rotation in degrees', (n) => setDraft({ rotation: norm(n) })), h('span', 'k', 'degrees')));
+    box.append(field('', ...([[-1, '−1°'], [-0.1, '−0.1°'], [0.1, '+0.1°'], [1, '+1°'], [90, '+90°']] as [number, string][]).map(([step, text]) => small(text, () => setDraft({ rotation: norm(d.rotation + step) })))));
+    box.append(field('Mirror', small('Left–right', () => setDraft({ mirrorX: !d.mirrorX }), d.mirrorX), small('Top–bottom', () => setDraft({ mirrorY: !d.mirrorY }), d.mirrorY)));
+    box.append(field('Position', h('span', 'k', 'X'), numberInput(d.x, 'X', (n) => setDraft({ x: r2(n) })), h('span', 'k', 'Y'), numberInput(d.y, 'Y', (n) => setDraft({ y: r2(n) }))));
+    const step = document.createElement('select');
+    step.setAttribute('aria-label', 'Nudge step');
+    for (const s of ['0.5', '2', '10']) { const o = document.createElement('option'); o.value = s; o.textContent = `${s} units`; step.append(o); }
+    const nudge = (dx: number, dy: number) => () => { const s = parseFloat(step.value); setDraft({ x: r2(d.x + dx * s), y: r2(d.y + dy * s) }); };
+    box.append(field('Nudge', small('←', nudge(-1, 0)), small('↑', nudge(0, -1)), small('↓', nudge(0, 1)), small('→', nudge(1, 0)), step));
+    box.append(h('p', 'hint', 'You can also drag the home on the map.'));
+    const dirty = isDirty();
+    const save = h('button', 'button button--primary', d.isNew ? 'Add to the map' : 'Save changes') as HTMLButtonElement;
+    save.type = 'button';
+    save.disabled = !dirty;
+    save.addEventListener('click', saveDraft);
+    box.append(h('div', 'line', undefined, save, small(d.isNew ? 'Cancel' : 'Discard', discardDraft)));
+    if (dirty && !d.isNew) box.append(h('p', 'dirty', 'Unsaved changes. Members see the layout as saved.'));
+    if (d.isNew) return box;
+
+    // Renumber and remove: refused while a household is attached, so say why instead of hiding them.
+    const attached = !!u.farmUnit;
+    box.append(h('h3', '', 'Renumber or remove'));
+    if (attached) box.append(h('p', 'hint', `${u.farmUnit} lives here, so this home cannot be renumbered or removed. Move the household to another house on the Members page first.`));
+    const num = document.createElement('input');
+    num.type = 'text';
+    num.placeholder = 'H-07';
+    num.setAttribute('aria-label', 'New house number');
+    num.disabled = attached || isDirty();
+    const go = h('button', 'button button--outline', 'Renumber') as HTMLButtonElement;
+    go.type = 'button';
+    go.disabled = attached || isDirty();
+    go.addEventListener('click', () => {
+      const to = num.value.trim().toUpperCase();
+      const from = u.houseNo;
+      if (!/^H-\d{2}$/.test(to)) { showToast('The new house number must look like H-07.'); return; }
+      void send({ action: 'renumber', houseNo: from, newHouseNo: to }, `${from} is now ${to}.`, () => void send({ action: 'renumber', houseNo: to, newHouseNo: from }, `${to} is ${from} again.`)).then((ok) => { if (ok) { selected = data?.units.find((x) => x.houseNo === to) ?? null; draft = selected ? makeDraft(selected) : null; paint(); } });
+    });
+    box.append(field('New number', num, go));
+    const rm = h('button', 'button button--danger-outline', 'Remove this home') as HTMLButtonElement;
+    rm.type = 'button';
+    rm.disabled = attached || isDirty();
+    rm.addEventListener('click', () => {
+      const was = placementOf(u);
+      const info = { houseNo: u.houseNo, cluster: u.cluster };
+      void send({ action: 'remove', houseNo: u.houseNo }, `Removed ${u.houseNo}.`, () => void send(addBody(info.houseNo, info.cluster, was), `Restored ${info.houseNo}.`)).then((ok) => { if (ok) { selected = null; draft = null; paint(); } });
+    });
+    box.append(h('div', 'line', undefined, rm));
+    return box;
+  }
+
   function drawCard() {
     const card = $('card');
     card.replaceChildren();
+    if (editing && adding) { card.append(addForm()); return; }
+    if (draft?.isNew) { card.append(editorPanel(newUnit()!)); return; }
     const u = selected;
     if (!u) { card.append(h('p', 'hint', 'Tap a home on the map.')); return; }
     card.append(h('h2', '', `Home ${Number(u.houseNo.slice(2))}`));
@@ -298,25 +491,47 @@ import SignInGate from '../../components/SignInGate.astro';
       card.append(h('p', 'hint', 'To fix'), ul);
     }
     if (u.farmUnit) {
-      const a = h('a', 'btn', 'Open in the member register') as HTMLAnchorElement;
+      const a = h('a', 'button button--outline', 'Open in the member register') as HTMLAnchorElement;
       a.href = `/internal/members/#${encodeURIComponent(u.farmUnit)}`;
       card.append(h('div', 'actions', undefined, a));
     }
+    if (editing && data?.canEdit && draft && draft.houseNo === u.houseNo) card.append(editorPanel(u));
   }
 
-  function paint() {
+  // The map alone (cheap enough to run on every pointer move while a home is dragged).
+  function paintMap() {
     if (!data) return;
-    document.querySelectorAll('#clusters button').forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-c') === clusterId)));
-    document.querySelectorAll('#filters button').forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-f') === filter)));
     const c = clusterOf(clusterId);
     svg.setAttribute('viewBox', vb.join(' '));
     plotPath.setAttribute('d', c.plot);
     const px = unitsPerPx();
-    unitLayer.replaceChildren(...data.units.filter((u) => u.cluster === clusterId).map((u) => unitEl(u, c.baseSize, px)));
+    const extra = newUnit();
+    const homes = [...data.units.map(shown), ...(extra ? [extra] : [])].filter((u) => u.cluster === clusterId);
+    unitLayer.replaceChildren(...homes.map((u) => unitEl(u, c.baseSize, px)));
+  }
+  function paint() {
+    if (!data) return;
+    document.querySelectorAll('#clusters button').forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-c') === clusterId)));
+    document.querySelectorAll('#filters button').forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-f') === filter)));
+    const toggle = $('edit-toggle');
+    toggle.setAttribute('aria-pressed', String(editing));
+    toggle.textContent = editing ? 'Done editing' : 'Edit layout';
+    $('add-unit').hidden = !editing;
+    $('add-unit').toggleAttribute('disabled', !!draft && isDirty());
+    document.querySelector('.sitemap')?.classList.toggle('is-editing', editing);
+    paintMap();
     drawCard();
   }
+  // Moving to another home (or leaving edit mode) while a change is unsaved would lose it: say so instead.
+  const blocked = () => {
+    if (editing && draft && isDirty()) { showToast(`Save or discard your changes to ${draft.houseNo} first.`); return true; }
+    return false;
+  };
   function pick(u: Unit) {
+    if (blocked() && draft?.houseNo !== u.houseNo) return;
     selected = u;
+    adding = false;
+    if (!(draft && !draft.isNew && draft.houseNo === u.houseNo)) draft = editing && data?.canEdit ? makeDraft(u) : null;
     if (u.cluster !== clusterId) { clusterId = u.cluster; fit(); }
     paint();
   }
@@ -330,14 +545,20 @@ import SignInGate from '../../components/SignInGate.astro';
     paint();
   }
 
-  function render(d: Overview) {
+  function render(d: Overview, keepView = false) {
+    const was = selected?.houseNo;
     data = d;
     if (!clusterId || !d.clusters.some((c) => c.id === clusterId)) clusterId = d.units[0]?.cluster ?? d.clusters[0].id;
-    fit();
+    if (!keepView) fit();
+    // After a save the same home is picked again, from what is now saved.
+    selected = was ? d.units.find((u) => u.houseNo === was) ?? null : null;
+    if (!d.canEdit) { editing = false; draft = null; adding = false; }
+    else if (editing && !draft?.isNew) draft = selected ? makeDraft(selected) : null;
+    $('editbar').hidden = !d.canEdit;
     const s = d.summary;
     $('summary').textContent = `${s.homes} homes: ${s.assigned} with a household, ${s.vacant} vacant, ${s.mismatch} where the map shape and the member record differ, ${s.noPlotSize} households with no house plot size recorded.${d.namesMasked ? ' Names are masked for your role.' : ''}`;
     const clusters = $('clusters');
-    clusters.replaceChildren(...d.clusters.map((c) => { const b = h('button', '', c.id); b.setAttribute('type', 'button'); b.setAttribute('data-c', c.id); b.addEventListener('click', () => { clusterId = c.id; fit(); paint(); }); return b; }));
+    clusters.replaceChildren(...d.clusters.map((c) => { const b = h('button', '', c.id); b.setAttribute('type', 'button'); b.setAttribute('data-c', c.id); b.addEventListener('click', () => { if (blocked()) return; clusterId = c.id; fit(); paint(); }); return b; }));
     const filters = $('filters');
     filters.replaceChildren(...FILTERS.map(([id, label]) => { const b = h('button', '', label); b.setAttribute('type', 'button'); b.setAttribute('data-f', id); b.addEventListener('click', () => { filter = id; paint(); }); return b; }));
     const note = $('notonmap');
@@ -352,14 +573,30 @@ import SignInGate from '../../components/SignInGate.astro';
   let tap: string | null = null;
   let pinch = 0;
   svg.addEventListener('wheel', (e) => { e.preventDefault(); const [ux, uy] = toUser(e); zoomBy(e.deltaY < 0 ? 1.15 : 1 / 1.15, ux, uy); }, { passive: false });
+  // While editing, dragging the picked home moves it (in the draft); dragging anywhere else pans.
+  let moving: { startUx: number; startUy: number; x0: number; y0: number } | null = null;
   svg.addEventListener('pointerdown', (e) => {
     svg.setPointerCapture(e.pointerId);
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (ptrs.size === 1) { dragged = false; tap = (e.target as Element).closest('.unit')?.getAttribute('data-house') ?? null; } else { tap = null; pinch = 0; }
+    moving = null;
+    if (ptrs.size === 1) {
+      dragged = false;
+      tap = (e.target as Element).closest('.unit')?.getAttribute('data-house') ?? null;
+      if (editing && draft && tap === draft.houseNo) { const [ux, uy] = toUser(e); moving = { startUx: ux, startUy: uy, x0: draft.x, y0: draft.y }; }
+    } else { tap = null; pinch = 0; moving = null; }
   });
   svg.addEventListener('pointermove', (e) => {
     const p = ptrs.get(e.pointerId);
     if (!p) return;
+    if (moving && draft && ptrs.size === 1) {
+      const [ux, uy] = toUser(e);
+      if (!dragged && Math.hypot(e.clientX - p.x, e.clientY - p.y) < 4) return;
+      dragged = true;
+      draft.x = r2(moving.x0 + ux - moving.startUx);
+      draft.y = r2(moving.y0 + uy - moving.startUy);
+      paintMap();
+      return;
+    }
     if (ptrs.size === 2) {
       ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
       const [a, b] = [...ptrs.values()];
@@ -382,12 +619,24 @@ import SignInGate from '../../components/SignInGate.astro';
   const release = (e: PointerEvent) => {
     ptrs.delete(e.pointerId);
     if (ptrs.size) return;
+    if (moving) { moving = null; if (dragged) { paint(); tap = null; pinch = 0; return; } }
     if (!dragged && tap && data) { const u = data.units.find((x) => x.houseNo === tap); if (u) pick(u); }
     tap = null;
     pinch = 0;
   };
   svg.addEventListener('pointerup', release);
   svg.addEventListener('pointercancel', release);
+  $('edit-toggle').addEventListener('click', () => {
+    if (editing) { if (blocked()) return; editing = false; draft = null; adding = false; } else { editing = true; draft = selected ? makeDraft(selected) : null; }
+    paint();
+  });
+  $('add-unit').addEventListener('click', () => {
+    if (blocked()) return;
+    selected = null;
+    draft = null;
+    adding = true;
+    paint();
+  });
   $('zin').addEventListener('click', () => zoomBy(1.4));
   $('zout').addEventListener('click', () => zoomBy(1 / 1.4));
   $('zfit').addEventListener('click', () => { fit(); paint(); });
@@ -395,7 +644,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   // ---- sign-in and loading (same flow as the other internal tools) ----
   let firstLoad = true;
-  async function load() {
+  async function load(keepView = false) {
     gate.hidden = true;
     forbidden.hidden = true;
     if (firstLoad) { statusEl.hidden = false; statusEl.textContent = 'Loading…'; }
@@ -407,7 +656,7 @@ import SignInGate from '../../components/SignInGate.astro';
       statusEl.hidden = true;
       intro.textContent = 'Every home on the site plan, who it belongs to and what is missing. Tap a home for details.';
       content.hidden = false;
-      render(body as Overview);
+      render(body as Overview, keepView);
       firstLoad = false;
     } catch (err) {
       if (err instanceof StaffAuthError) {
