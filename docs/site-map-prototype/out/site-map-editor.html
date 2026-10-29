@@ -216,13 +216,13 @@ const map = $('map');
 const K0 = 1.78;
 const KEY = 'tvc-sitemap-editor-v1';
 const CL = { H1A: 'H1-A', H1B: 'H1-B', H2: 'H2' };
-const TYPES = { S: 'S: single bedroom', DG: 'DG: double, ground floor', DF: 'DF: double, first floor', DO: 'DO: double, two blocks', TO: 'TO: triple, two blocks' };
+const TYPES = { S: 'S: 1 BHK', DG: 'DG: 2 BHK, ground floor', DF: 'DF: 2 BHK, first floor', DO: 'DO: 2 BHK, two blocks', TO: 'TO: 3 BHK, two blocks' };
 const IDS = Object.keys(DATA.houses);
 
 /* ---------- unit geometry (local frame: origin = centre of the base foundation, top = back, bottom = road) ---------- */
 const Y0 = -0.5; // the base's rows are drawn inside translate(0 -0.5) so the base is centred on 0
 const rect = (cls, x, y, w, h) => `<rect class="${cls}" x="${x}" y="${y}" width="${w}" height="${h}"/>`;
-const txt = (t, x, y) => `<text class="rl" x="${x}" y="${y}">${t}</text>`;
+const txt = () => ''; // room letters (K, H, B) are no longer drawn on the units
 const BASE_SVG = rect('blk', -17, -18, 17, 15) + rect('blk', 0, -18, 17, 15) + rect('blk', 0, -3, 17, 22)
   + txt('K', -8.5, -9) + txt('H', 8.5, -9) + txt('B', 8.5, 9);
 const EXTRA_SVG = {

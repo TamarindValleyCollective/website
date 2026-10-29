@@ -121,18 +121,18 @@ select, .btn { font: inherit; font-size: .9rem; color: var(--ink); background: v
 <script>
 const DATA = /*DATA*/null;
 const TYPES = {
-  S:  ['Single bedroom', 'All on the ground floor: kitchen and hall in a row, with the bedroom below the hall. The base of every other type.'],
-  DG: ['Double, ground floor', 'All on the ground floor: the S unit with a second bedroom behind the kitchen.'],
-  DF: ['Double, first floor', 'The S footprint, with the second bedroom on the first floor above the ground-floor bedroom.'],
-  DO: ['Double, two blocks', 'The S unit with a second ground-floor bedroom in a separate block, joined by a passage.'],
-  TO: ['Triple, two blocks', 'Like DO, with a third bedroom on the first floor above the main block\'s bedroom.']
+  S:  ['1 BHK', 'All on the ground floor: kitchen and hall in a row, with the bedroom below the hall. The base of every other type.'],
+  DG: ['2 BHK, ground floor', 'All on the ground floor: the S unit with a second bedroom behind the kitchen.'],
+  DF: ['2 BHK, first floor', 'The S footprint, with the second bedroom on the first floor above the ground-floor bedroom.'],
+  DO: ['2 BHK, two blocks', 'The S unit with a second ground-floor bedroom in a separate block, joined by a passage.'],
+  TO: ['3 BHK, two blocks', 'Like DO, with a third bedroom on the first floor above the main block\'s bedroom.']
 };
 const GLYPHS = {
-  S: '<g transform="translate(0 -0.5)"><rect class="blk" x="-17" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-3" width="17" height="22"/><text class="rl" x="-8.5" y="-9">K</text><text class="rl" x="8.5" y="-9">H</text><text class="rl" x="8.5" y="9">B</text></g>',
-  DG: '<g transform="translate(0 10.5)"><rect class="blk" x="-17" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-3" width="17" height="22"/><rect class="blk" x="-17" y="-40" width="17" height="22"/><text class="rl" x="-8.5" y="-9">K</text><text class="rl" x="8.5" y="-9">H</text><text class="rl" x="8.5" y="9">B</text><text class="rl" x="-8.5" y="-29">B</text></g>',
-  DF: '<g transform="translate(0 -0.5)"><rect class="blk" x="-17" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-3" width="17" height="22"/><rect class="up" x="3" y="0" width="11" height="17"/><text class="rl" x="-8.5" y="-9">K</text><text class="rl" x="8.5" y="-9">H</text><text class="rl" x="8.5" y="9">B</text></g>',
-  DO: '<g transform="translate(0 22.5)"><rect class="blk" x="-17" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-3" width="17" height="22"/><rect class="blk" x="-17" y="-64" width="17" height="24"/><rect class="pas" x="-5" y="-40" width="5" height="22"/><text class="rl" x="-8.5" y="-9">K</text><text class="rl" x="8.5" y="-9">H</text><text class="rl" x="8.5" y="9">B</text><text class="rl" x="-8.5" y="-50">B</text></g>',
-  TO: '<g transform="translate(0 22.5)"><rect class="blk" x="-17" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-3" width="17" height="22"/><rect class="blk" x="-17" y="-64" width="17" height="24"/><rect class="pas" x="-5" y="-40" width="5" height="22"/><rect class="up" x="3" y="0" width="11" height="17"/><text class="rl" x="-8.5" y="-9">K</text><text class="rl" x="8.5" y="-9">H</text><text class="rl" x="8.5" y="9">B</text><text class="rl" x="-8.5" y="-50">B</text></g>'
+  S: '<g transform="translate(0 -0.5)"><rect class="blk" x="-17" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-3" width="17" height="22"/></g>',
+  DG: '<g transform="translate(0 10.5)"><rect class="blk" x="-17" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-3" width="17" height="22"/><rect class="blk" x="-17" y="-40" width="17" height="22"/></g>',
+  DF: '<g transform="translate(0 -0.5)"><rect class="blk" x="-17" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-3" width="17" height="22"/><rect class="up" x="3" y="0" width="11" height="17"/></g>',
+  DO: '<g transform="translate(0 22.5)"><rect class="blk" x="-17" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-3" width="17" height="22"/><rect class="blk" x="-17" y="-64" width="17" height="24"/><rect class="pas" x="-5" y="-40" width="5" height="22"/></g>',
+  TO: '<g transform="translate(0 22.5)"><rect class="blk" x="-17" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-3" width="17" height="22"/><rect class="blk" x="-17" y="-64" width="17" height="24"/><rect class="pas" x="-5" y="-40" width="5" height="22"/><rect class="up" x="3" y="0" width="11" height="17"/></g>'
 };
 const NS = 'http://www.w3.org/2000/svg';
 const $ = (id) => document.getElementById(id);
