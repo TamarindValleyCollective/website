@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Site Map Editor</title>
+<style>
+/* Editor for the prototype site map: a pan/zoom plan with draggable units on the left, an inspector on the right. Tokens follow the member portal's neutral look. */
+:root {
+  --bg: #f4f5f1; --card: #ffffff; --ink: #1b1e1b; --ink-soft: #596057; --line: rgba(27,30,27,.12);
+  --green: #1f7a46; --green-tint: rgba(31,122,70,.12); --warn: #c2571a;
+  --map: #fbfbf8; --plot: #9aa194; --plot2: #6c7466; --wall: #1b1e1b;
+  --blk: #dfe3d9; --blk-line: #6c7466; --pas: #c4cabc; --up: #eef0e9;
+  --sel: #9fd3b2; --guide: #e0731f;
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151715; --card: #242724; --ink: #f1f3ef; --ink-soft: #a9afa7; --line: rgba(255,255,255,.13);
+  --green: #5bc88a; --green-tint: rgba(91,200,138,.16); --warn: #f0a272;
+  --map: #1b1d1b; --plot: #6f766a; --plot2: #98a092; --wall: #f1f3ef;
+  --blk: #3b413a; --blk-line: #9aa294; --pas: #565d54; --up: #2b2f2a;
+  --sel: #2f7a4f; --guide: #f0a272; color-scheme: dark; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 var(--font); padding: 16px max(16px, env(safe-area-inset-right)) 32px max(16px, env(safe-area-inset-left)); }
+main { max-width: 1320px; margin: 0 auto; display: grid; gap: 12px; }
+h1 { font-size: 1.75rem; line-height: 1.1; font-weight: 700; margin: 0; letter-spacing: -.02em; }
+.sub { color: var(--ink-soft); margin: 4px 0 0; font-size: .9rem; max-width: 80ch; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.seg { display: inline-flex; background: var(--line); border-radius: 10px; padding: 2px; gap: 2px; }
+.seg button { font: inherit; font-size: .9rem; font-weight: 600; border: 0; background: transparent; color: var(--ink-soft); padding: 6px 14px; border-radius: 8px; cursor: pointer; min-height: 34px; }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+label.f { display: inline-flex; align-items: center; gap: 6px; font-size: .88rem; color: var(--ink-soft); }
+select, input[type=number], .btn { font: inherit; font-size: .9rem; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px; min-height: 34px; }
+input[type=number] { width: 84px; }
+.btn { cursor: pointer; font-weight: 600; }
+.btn:hover:not(:disabled) { background: var(--green-tint); }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn.on { background: var(--green-tint); border-color: var(--green); color: var(--green); }
+:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.work { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 12px; align-items: start; }
+@media (max-width: 960px) { .work { grid-template-columns: minmax(0, 1fr); } }
+.stage { position: relative; background: var(--map); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+#map { display: block; width: 100%; height: min(82vh, 860px); touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+#map.drag { cursor: grabbing; }
+.zoom { position: absolute; right: 10px; top: 10px; display: grid; gap: 6px; }
+.zoom .btn { width: 36px; padding: 0; font-size: 1.1rem; }
+.status { position: absolute; left: 10px; bottom: 8px; font-size: .8rem; color: var(--ink-soft); background: color-mix(in srgb, var(--map) 85%, transparent); padding: 2px 8px; border-radius: 6px; pointer-events: none; }
+:is(.plot, .wall, .parcel, .blk, .pas, .up, .outline, .stalk, .guide, .handle) { vector-effect: non-scaling-stroke; } /* strokes stay the same width on screen at any zoom */
+.plot { fill: none; stroke: var(--plot); stroke-width: 1; stroke-linejoin: round; opacity: .6; }
+.wall { fill: none; stroke: var(--wall); stroke-width: 1.3; opacity: .6; pointer-events: none; }
+.parcel { fill: transparent; stroke: var(--plot2); stroke-width: 1; stroke-linejoin: round; pointer-events: all; }
+.parcel.sel { fill: var(--green-tint); stroke: var(--green); stroke-width: 2; }
+.noparcel .parcel { stroke: none; }
+.blk { fill: var(--blk); fill-opacity: var(--uo, .8); stroke: var(--blk-line); stroke-width: 1.2; }
+.pas { fill: var(--pas); fill-opacity: var(--uo, .8); stroke: var(--blk-line); stroke-width: 1; }
+.up { fill: var(--up); fill-opacity: var(--uo, .8); stroke: var(--blk-line); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.hit { fill: transparent; }
+.rl { font: 600 5px var(--font); fill: var(--ink-soft); text-anchor: middle; dominant-baseline: middle; }
+.house { cursor: move; }
+.house.sel { --blk: var(--sel); --blk-line: var(--green); }
+.house.done { --blk-line: var(--green); }
+.tag { font: 700 7.5px var(--font); fill: var(--ink); text-anchor: middle; paint-order: stroke; stroke: var(--map); stroke-width: 2.4px; stroke-linejoin: round; pointer-events: none; }
+.tag.done { fill: var(--green); }
+.outline { fill: none; stroke: var(--green); stroke-width: 2; stroke-dasharray: 6 3; pointer-events: none; }
+.stalk { stroke: var(--green); stroke-width: 1.5; pointer-events: none; }
+.handle { fill: var(--card); stroke: var(--green); stroke-width: 2.5; cursor: grab; }
+.guide { stroke: var(--guide); stroke-width: 3; stroke-linecap: round; pointer-events: none; }
+.angle { font: 700 10px var(--font); fill: var(--guide); paint-order: stroke; stroke: var(--map); stroke-width: 3px; pointer-events: none; }
+aside { display: grid; gap: 10px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; min-width: 0; }
+.card h2 { font-size: 1rem; margin: 0 0 8px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.line > span.k { color: var(--ink-soft); font-size: .85rem; min-width: 64px; }
+input[type=range] { flex: 1; min-width: 120px; accent-color: var(--green); }
+.note { color: var(--ink-soft); font-size: .82rem; margin: 8px 0 0; }
+.pill { display: inline-block; font-size: .78rem; font-weight: 600; padding: 1px 9px; border-radius: 999px; background: var(--green-tint); color: var(--green); }
+.pill.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+kbd { font: 600 .78rem var(--font); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; background: var(--bg); }
+.keys { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: .82rem; color: var(--ink-soft); margin: 0; }
+.keys dt { white-space: nowrap; } .keys dd { margin: 0; }
+textarea { width: 100%; min-height: 90px; font: .75rem ui-monospace, monospace; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Site map editor</h1>
+    <p class="sub">Drag a unit to move it, drag its round handle to rotate, or type exact values on the right. With Snap on, units click onto the plan's lines and onto neighbouring units. Hold <kbd>Alt</kbd> while dragging to turn snapping off for that move. Every unit has the same base foundation size.</p>
+  </header>
+
+  <div class="bar">
+    <div class="seg" role="group" aria-label="Cluster" id="tabs"></div>
+    <label class="f"><input type="checkbox" id="snap" checked> Snap</label>
+    <label class="f"><input type="checkbox" id="lplot" checked> Plot lines</label>
+    <label class="f"><input type="checkbox" id="lwall" checked> Original buildings</label>
+    <label class="f"><input type="checkbox" id="lparcel" checked> Land plots</label>
+    <label class="f">Unit opacity <input type="range" id="uo" min="0.15" max="1" step="0.05" value="0.8" style="min-width:90px;flex:none;width:90px"></label>
+    <button class="btn" id="undo" type="button">Undo</button>
+    <button class="btn" id="redo" type="button">Redo</button>
+  </div>
+
+  <div class="work">
+    <div class="stage" id="stage">
+      <svg id="map" role="img" aria-label="Site plan editor"></svg>
+      <div class="zoom">
+        <button class="btn" id="zin" aria-label="Zoom in">+</button>
+        <button class="btn" id="zout" aria-label="Zoom out">&minus;</button>
+        <button class="btn" id="zreset" aria-label="Fit" style="font-size:.8rem">Fit</button>
+      </div>
+      <div class="status" id="status"></div>
+    </div>
+
+    <aside>
+      <section class="card">
+        <div class="line" style="margin-top:0">
+          <button class="btn" id="prev" type="button" aria-label="Previous home">&larr;</button>
+          <select id="pick" aria-label="Home" style="flex:1"></select>
+          <button class="btn" id="next" type="button" aria-label="Next home">&rarr;</button>
+        </div>
+        <div class="line">
+          <span class="k">Unit type</span>
+          <select id="tsel" style="flex:1"></select>
+        </div>
+        <div class="line">
+          <button class="btn" id="mx" type="button" title="Mirror left-right about the base's vertical axis (H)">Mirror &harr;</button>
+          <button class="btn" id="my" type="button" title="Mirror top-bottom about the base's horizontal axis (V)">Mirror &updownarrow;</button>
+          <button class="btn" id="done" type="button" title="Mark this home as checked (D)">Mark checked</button>
+        </div>
+        <p class="note" id="state"></p>
+      </section>
+
+      <section class="card">
+        <h2>Rotate</h2>
+        <div class="line" style="margin-top:0">
+          <input type="number" id="rot" step="0.1" aria-label="Rotation in degrees"> <span class="k" style="min-width:0">degrees</span>
+        </div>
+        <div class="line">
+          <input type="range" id="rotr" min="-180" max="180" step="0.1" aria-label="Rotation slider">
+        </div>
+        <div class="line">
+          <button class="btn" data-rot="-1" type="button">&minus;1&deg;</button>
+          <button class="btn" data-rot="-0.1" type="button">&minus;0.1&deg;</button>
+          <button class="btn" data-rot="0.1" type="button">+0.1&deg;</button>
+          <button class="btn" data-rot="1" type="button">+1&deg;</button>
+          <button class="btn" data-rot="90" type="button">+90&deg;</button>
+        </div>
+        <div class="line">
+          <button class="btn" id="snapnow" type="button" title="Rotate to the nearest plan line, then slide flush against it (S)">Snap to nearest lines</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Move</h2>
+        <div class="grid2">
+          <label class="f">X <input type="number" id="px" step="0.5"></label>
+          <label class="f">Y <input type="number" id="py" step="0.5"></label>
+        </div>
+        <div class="line">
+          <button class="btn" data-mv="-1,0" type="button" aria-label="Left">&larr;</button>
+          <button class="btn" data-mv="0,-1" type="button" aria-label="Up">&uarr;</button>
+          <button class="btn" data-mv="0,1" type="button" aria-label="Down">&darr;</button>
+          <button class="btn" data-mv="1,0" type="button" aria-label="Right">&rarr;</button>
+          <label class="f">step <select id="step"><option value="0.2">0.2</option><option value="0.5" selected>0.5</option><option value="2">2</option></select></label>
+        </div>
+        <p class="note">X and Y are the centre of the unit's base foundation, in plan units (same frame as the PDF page).</p>
+      </section>
+
+      <section class="card">
+        <h2>Base foundation size <span class="pill">same for all</span></h2>
+        <div class="line" style="margin-top:0">
+          <input type="range" id="kr" min="1.2" max="2.6" step="0.01" aria-label="Base scale">
+          <input type="number" id="kn" step="0.01" style="width:72px">
+        </div>
+        <p class="note" id="size"></p>
+        <p class="note">Changing this resizes every unit at once. There is no per-unit size.</p>
+      </section>
+
+      <section class="card">
+        <h2>Save <span class="pill" id="prog"></span></h2>
+        <div class="line" style="margin-top:0">
+          <button class="btn" id="dl" type="button">Download JSON</button>
+          <button class="btn" id="cp" type="button">Copy JSON</button>
+          <button class="btn" id="imp" type="button">Import&hellip;</button>
+          <input type="file" id="file" accept="application/json,.json" hidden>
+        </div>
+        <div class="line">
+          <button class="btn" id="resetone" type="button">Reset this home</button>
+          <button class="btn" id="resetall" type="button">Reset all</button>
+        </div>
+        <p class="note">Edits are also kept in this browser automatically. The downloaded file is the safe copy; send it back and I will load it into the map.</p>
+      </section>
+
+      <section class="card">
+        <h2>Keyboard</h2>
+        <dl class="keys">
+          <dt><kbd>&larr;</kbd><kbd>&uarr;</kbd><kbd>&darr;</kbd><kbd>&rarr;</kbd></dt><dd>Move (<kbd>Shift</kbd> = 5&times;)</dd>
+          <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Rotate 0.1&deg; (<kbd>Shift</kbd> = 1&deg;)</dd>
+          <dt><kbd>H</kbd> <kbd>V</kbd></dt><dd>Mirror left-right / top-bottom</dd>
+          <dt><kbd>S</kbd></dt><dd>Snap to nearest lines</dd>
+          <dt><kbd>D</kbd></dt><dd>Mark checked and go to next</dd>
+          <dt><kbd>N</kbd> <kbd>P</kbd></dt><dd>Next / previous home</dd>
+          <dt><kbd>Ctrl/&#8984;</kbd><kbd>Z</kbd></dt><dd>Undo (<kbd>Shift</kbd> = redo)</dd>
+        </dl>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<script>
+const DATA = /*DATA*/null;
+const NS = 'http://www.w3.org/2000/svg';
+const $ = (id) => document.getElementById(id);
+const map = $('map');
+const K0 = 1.78;
+const KEY = 'tvc-sitemap-editor-v1';
+const CL = { H1A: 'H1-A', H1B: 'H1-B', H2: 'H2' };
+const TYPES = { S: 'S: 1 BHK', DG: 'DG: 2 BHK ground', DF: 'DF: 2 BHK first floor', DO: 'DO: 2 BHK two blocks', TO: 'TO: 3 BHK two blocks' };
+const IDS = Object.keys(DATA.houses);
+
+/* ---------- unit geometry (local frame: origin = centre of the base foundation, top = back, bottom = road) ---------- */
+const Y0 = -0.5; // the base's rows are drawn inside translate(0 -0.5) so the base is centred on 0
+const rect = (cls, x, y, w, h) => `<rect class="${cls}" x="${x}" y="${y}" width="${w}" height="${h}"/>`;
+const txt = (t, x, y) => `<text class="rl" x="${x}" y="${y}">${t}</text>`;
+const BASE_SVG = rect('blk', -17, -18, 17, 15) + rect('blk', 0, -18, 17, 15) + rect('blk', 0, -3, 17, 22)
+  + txt('K', -8.5, -9) + txt('H', 8.5, -9) + txt('B', 8.5, 9);
+const EXTRA_SVG = {
+  S: '', DF: rect('up', 3, 0, 11, 17),
+  DG: rect('blk', -17, -40, 17, 22) + txt('B', -8.5, -29),
+  DO: rect('blk', -17, -64, 17, 24) + rect('pas', -5, -40, 5, 22) + txt('B', -8.5, -50),
+  TO: rect('blk', -17, -64, 17, 24) + rect('pas', -5, -40, 5, 22) + rect('up', 3, 0, 11, 17) + txt('B', -8.5, -50)
+};
+const glyph = (t) => `<g transform="translate(0 ${Y0})"><rect class="hit" x="-17" y="-18" width="34" height="37"/>${BASE_SVG}${EXTRA_SVG[t]}</g>`;
+const P = (x, y) => [x, y + Y0];
+const L_BASE = [P(-17, -18), P(17, -18), P(17, 19), P(0, 19), P(0, -3), P(-17, -3)];
+const rp = (x, y, w, h) => [P(x, y), P(x + w, y), P(x + w, y + h), P(x, y + h)];
+const EXTRA_POLY = { S: [], DF: [], DG: [rp(-17, -40, 17, 22)], DO: [rp(-17, -64, 17, 24)], TO: [rp(-17, -64, 17, 24)] };
+const HANDLE_LOCAL = [8.5, 19 + Y0 + 20], STALK_FROM = [8.5, 19 + Y0];
+
+/* ---------- state ---------- */
+// Auto-fit as produced by place.py. The old glyph origin sat mid-unit, so convert to the base-centred origin.
+const OLD_TY = { S: -0.5, DF: -0.5, DG: 10.5, DO: 22.5, TO: 22.5 };
+function fromAuto(id) {
+  const d = DATA.houses[id], r = d.rot * Math.PI / 180, v = (OLD_TY[d.t] + 0.5) * d.k;
+  return { t: d.t, bx: d.x - Math.sin(r) * v, by: d.y + Math.cos(r) * v, rot: d.rot, fx: !!d.flip, fy: false, done: false };
+}
+const AUTO = Object.fromEntries(IDS.map((id) => [id, fromAuto(id)]));
+const st = { cluster: 'H1A', sel: 'H-17', k: K0, homes: JSON.parse(JSON.stringify(AUTO)), snap: true, plot: true, wall: true, parcel: true, uo: 0.8, vb: null, guides: [], angleTip: null, drag: null };
+let undo = [], redo = [], segs = [];
+
+const snapshot = () => JSON.stringify({ k: st.k, homes: st.homes });
+function restore(s) { const o = JSON.parse(s); st.k = o.k; st.homes = o.homes; save(); render(); }
+function save() { try { localStorage.setItem(KEY, snapshot()); } catch (e) { /* storage can be blocked; export is the real save */ } }
+function load() { try { const s = localStorage.getItem(KEY); if (s) { const o = JSON.parse(s); st.k = o.k || K0; for (const id of IDS) if (o.homes[id]) st.homes[id] = { ...st.homes[id], ...o.homes[id] }; } } catch (e) { /* ignore */ } }
+function mutate(fn) { undo.push(snapshot()); if (undo.length > 150) undo.shift(); redo = []; fn(); save(); render(); }
+const home = () => st.homes[st.sel];
+const norm = (a) => ((a + 180) % 360 + 360) % 360 - 180;
+const r1 = (v) => Math.round(v * 10) / 10;
+const isEdited = (id) => { const a = AUTO[id], h = st.homes[id]; return ['t', 'bx', 'by', 'rot', 'fx', 'fy'].some((f) => typeof a[f] === 'number' ? Math.abs(a[f] - h[f]) > 0.05 : a[f] !== h[f]); };
+
+/* ---------- geometry helpers ---------- */
+function wp(h, lx, ly) {
+  const sx = (h.fx ? -1 : 1) * st.k, sy = (h.fy ? -1 : 1) * st.k, r = h.rot * Math.PI / 180, c = Math.cos(r), s = Math.sin(r);
+  const X = lx * sx, Y = ly * sy; return [h.bx + c * X - s * Y, h.by + s * X + c * Y];
+}
+function mkSeg(a, b, extra) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy);
+  return { ax: a[0], ay: a[1], bx: b[0], by: b[1], len, ux: dx / len, uy: dy / len, ...extra };
+}
+// Outline edges of a unit in plan coordinates; cls 0 = along the unit's local x, 1 = along its local y.
+function unitEdges(h) {
+  const out = [];
+  const poly = (pts, skipTop) => pts.forEach((p, i) => {
+    const q = pts[(i + 1) % pts.length];
+    if (skipTop && p[1] === P(0, -18)[1] && q[1] === p[1]) return; // edge shared with the kitchen's back wall
+    out.push(mkSeg(wp(h, p[0], p[1]), wp(h, q[0], q[1]), { cls: p[1] === q[1] ? 0 : 1 }));
+  });
+  poly(L_BASE, false); EXTRA_POLY[h.t].forEach((pl) => poly(pl, h.t === 'DG'));
+  return out;
+}
+function parseSegs(d) {
+  const out = [];
+  for (const sub of d.split('M').slice(1)) {
+    const n = (sub.match(/-?[\d.]+/g) || []).map(Number);
+    for (let i = 0; i + 3 < n.length; i += 2) { const s = mkSeg([n[i], n[i + 1]], [n[i + 2], n[i + 3]], {}); if (s.len >= 6) out.push(s); }
+  }
+  return out;
+}
+function loadSegs() { const c = DATA.clusters[st.cluster]; segs = parseSegs(c.plot).concat(parseSegs(c.wall)); }
+function distToSeg(px, py, s) { const t = Math.max(0, Math.min(s.len, (px - s.ax) * s.ux + (py - s.ay) * s.uy)); return Math.hypot(px - (s.ax + s.ux * t), py - (s.ay + s.uy * t)); }
+const px1 = () => { const r = map.getBoundingClientRect(), [, , w, h] = st.vb; return Math.max(w / r.width, h / r.height); }; // plan units per screen pixel
+
+// Slide a candidate placement so its outline edges sit flush on parallel lines within reach. Returns guides for display.
+function snapMove(id, c, reach) {
+  const T = reach, edges = unitEdges(c), targets = segs.concat(...IDS.filter((o) => o !== id && st.homes[o].bx !== undefined && DATA.houses[o].cl === DATA.houses[id].cl).map((o) => unitEdges(st.homes[o])));
+  const best = [null, null];
+  for (const e of edges) {
+    const mx = (e.ax + e.bx) / 2, my = (e.ay + e.by) / 2, nx = -e.uy, ny = e.ux;
+    for (const s of targets) {
+      if (Math.abs(e.ux * s.uy - e.uy * s.ux) > 0.05) continue;
+      if (Math.min(s.ax, s.bx) > Math.max(e.ax, e.bx) + T || Math.max(s.ax, s.bx) < Math.min(e.ax, e.bx) - T || Math.min(s.ay, s.by) > Math.max(e.ay, e.by) + T || Math.max(s.ay, s.by) < Math.min(e.ay, e.by) - T) continue;
+      const p1 = (s.ax - e.ax) * e.ux + (s.ay - e.ay) * e.uy, p2 = (s.bx - e.ax) * e.ux + (s.by - e.ay) * e.uy;
+      if (Math.min(Math.max(p1, p2), e.len) - Math.max(Math.min(p1, p2), 0) < 2) continue;
+      const d = (s.ax - mx) * nx + (s.ay - my) * ny;
+      if (Math.abs(d) > T) continue;
+      if (!best[e.cls] || Math.abs(d) < Math.abs(best[e.cls].d)) best[e.cls] = { d, nx, ny, s };
+    }
+  }
+  const out = { ...c }, guides = [];
+  for (const b of best) if (b) { out.bx += b.d * b.nx; out.by += b.d * b.ny; guides.push(b.s); }
+  return { place: out, guides };
+}
+const wrap90 = (a) => ((a % 90) + 135) % 90 - 45;
+// Nearest plan-line direction (mod 90 degrees) for a rotation, among lines near the unit.
+function snapAngle(h, rot, tol) {
+  const lim = 70 * (st.k / K0); let best = null;
+  for (const s of segs) {
+    if (s.len < 12 || distToSeg(h.bx, h.by, s) > lim) continue;
+    const dl = wrap90(rot - Math.atan2(s.uy, s.ux) * 180 / Math.PI);
+    if (Math.abs(dl) < tol && (!best || Math.abs(dl) < Math.abs(best.dl))) best = { dl, s };
+  }
+  return best ? { rot: rot - best.dl, s: best.s } : null;
+}
+
+/* ---------- drawing ---------- */
+const defs = document.createElementNS(NS, 'defs');
+defs.innerHTML = Object.keys(TYPES).map((t) => `<g id="g-${t}">${glyph(t)}</g>`).join('');
+const gBelow = document.createElementNS(NS, 'g'), gDyn = document.createElementNS(NS, 'g'), gAbove = document.createElementNS(NS, 'g');
+map.append(defs, gBelow, gDyn, gAbove);
+
+function drawStatic() {
+  const c = DATA.clusters[st.cluster];
+  gBelow.innerHTML = st.plot ? `<path class="plot" d="${c.plot}"/>` : '';
+  gAbove.innerHTML = st.wall ? `<path class="wall" d="${c.wall}"/>` : '';
+}
+function drawDyn() {
+  const u = px1(); let h = '';
+  const ids = IDS.filter((id) => DATA.houses[id].cl === st.cluster);
+  for (const id of ids) h += `<path class="parcel${id === st.sel ? ' sel' : ''}" data-h="${id}" d="${DATA.houses[id].poly}"/>`;
+  for (const id of ids) {
+    const s = st.homes[id], sel = id === st.sel;
+    h += `<g class="house${sel ? ' sel' : ''}${s.done ? ' done' : ''}" data-h="${id}"><g transform="translate(${s.bx} ${s.by}) rotate(${s.rot}) scale(${s.fx ? -st.k : st.k} ${s.fy ? -st.k : st.k})"><use href="#g-${s.t}"/></g>`
+      + `<text class="tag${s.done ? ' done' : ''}" x="${s.bx}" y="${s.by + 4 * u}" style="font-size:${12 * u}px;stroke-width:${3 * u}px">${id.slice(2)}${s.done ? ' ✓' : ''}</text></g>`;
+  }
+  const s = home();
+  h += `<path class="outline" d="M${L_BASE.map((p) => wp(s, p[0], p[1]).map((v) => v.toFixed(2)).join(' ')).join(' L')} Z"/>`;
+  for (const g of st.guides) h += `<line class="guide" x1="${g.ax}" y1="${g.ay}" x2="${g.bx}" y2="${g.by}"/>`;
+  const a = wp(s, ...STALK_FROM), b = wp(s, ...HANDLE_LOCAL);
+  h += `<line class="stalk" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/><circle class="handle" data-handle="1" cx="${b[0]}" cy="${b[1]}" r="${7 * u}"/>`;
+  if (st.angleTip != null) h += `<text class="angle" x="${b[0] + 9 * u}" y="${b[1] - 4 * u}" style="font-size:${12 * u}px;stroke-width:${3 * u}px">${r1(norm(s.rot)).toFixed(1)}°</text>`;
+  gDyn.innerHTML = h;
+  map.classList.toggle('noparcel', !st.parcel);
+  map.style.setProperty('--uo', st.uo);
+}
+
+function setVB() { map.setAttribute('viewBox', st.vb.join(' ')); }
+const fitVB = () => [...DATA.clusters[st.cluster].vb];
+
+function render() {
+  const s = home();
+  document.querySelectorAll('#tabs button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.c === st.cluster)));
+  $('pick').innerHTML = IDS.map((id) => `<option value="${id}">${id}${st.homes[id].done ? '  ✓' : ''}${isEdited(id) ? '  ●' : ''}</option>`).join('');
+  $('pick').value = st.sel; $('tsel').value = s.t;
+  const set = (el, v) => { if (document.activeElement !== el) el.value = v; };
+  set($('rot'), r1(norm(s.rot))); $('rotr').value = norm(s.rot);
+  set($('px'), r1(s.bx)); set($('py'), r1(s.by));
+  set($('kn'), st.k); $('kr').value = st.k;
+  $('size').textContent = `Base L-shape: 34 × 37 × ${st.k.toFixed(2)} = ${(34 * st.k).toFixed(1)} × ${(37 * st.k).toFixed(1)} plan units.`;
+  $('mx').classList.toggle('on', s.fx); $('my').classList.toggle('on', s.fy);
+  $('done').classList.toggle('on', s.done); $('done').textContent = s.done ? 'Checked ✓' : 'Mark checked';
+  $('state').innerHTML = `${CL[DATA.houses[st.sel].cl]} · ${isEdited(st.sel) ? '<span class="pill">edited</span>' : '<span class="pill warn">auto-fit, not touched</span>'}`;
+  $('prog').textContent = `${IDS.filter((i) => st.homes[i].done).length}/${IDS.length} checked`;
+  $('undo').disabled = !undo.length; $('redo').disabled = !redo.length;
+  drawDyn();
+}
+function select(id) {
+  st.sel = id; const cl = DATA.houses[id].cl;
+  if (cl !== st.cluster) { st.cluster = cl; st.vb = fitVB(); setVB(); loadSegs(); drawStatic(); }
+  st.guides = []; render();
+}
+function status(m) { $('status').textContent = m || ''; }
+
+/* ---------- inspector ---------- */
+$('tabs').innerHTML = Object.entries(CL).map(([k, v]) => `<button type="button" data-c="${k}" aria-pressed="false">${v}</button>`).join('');
+$('tsel').innerHTML = Object.entries(TYPES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+$('tabs').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; const first = IDS.find((i) => DATA.houses[i].cl === b.dataset.c); select(first); st.vb = fitVB(); setVB(); drawDyn(); };
+$('pick').onchange = (e) => select(e.target.value);
+const step = (d) => select(IDS[(IDS.indexOf(st.sel) + d + IDS.length) % IDS.length]);
+$('prev').onclick = () => step(-1); $('next').onclick = () => step(1);
+$('tsel').onchange = (e) => mutate(() => { home().t = e.target.value; });
+const flipX = () => mutate(() => { home().fx = !home().fx; }), flipY = () => mutate(() => { home().fy = !home().fy; });
+$('mx').onclick = flipX; $('my').onclick = flipY;
+const toggleDone = (advance) => { mutate(() => { home().done = !home().done; }); if (advance && home().done) step(1); };
+$('done').onclick = () => toggleDone(false);
+const rotBy = (d) => mutate(() => { home().rot = norm(home().rot + d); });
+document.querySelectorAll('[data-rot]').forEach((b) => { b.onclick = () => rotBy(parseFloat(b.dataset.rot)); });
+$('rot').onchange = (e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) mutate(() => { home().rot = norm(v); }); };
+let sliderPre = null;
+$('rotr').addEventListener('pointerdown', () => { sliderPre = snapshot(); });
+$('rotr').addEventListener('input', (e) => { home().rot = parseFloat(e.target.value); save(); render(); });
+$('rotr').addEventListener('change', () => { if (sliderPre && sliderPre !== snapshot()) { undo.push(sliderPre); redo = []; render(); } sliderPre = null; });
+$('px').onchange = (e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) mutate(() => { home().bx = v; }); };
+$('py').onchange = (e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) mutate(() => { home().by = v; }); };
+const nudge = (dx, dy, m = 1) => { const s = parseFloat($('step').value) * m; mutate(() => { home().bx += dx * s; home().by += dy * s; }); };
+document.querySelectorAll('[data-mv]').forEach((b) => { b.onclick = () => { const [dx, dy] = b.dataset.mv.split(',').map(Number); nudge(dx, dy); }; });
+const setK = (v) => { if (v >= 1.2 && v <= 2.6) mutate(() => { st.k = v; }); };
+$('kn').onchange = (e) => setK(parseFloat(e.target.value));
+let kPre = null;
+$('kr').addEventListener('pointerdown', () => { kPre = snapshot(); });
+$('kr').addEventListener('input', (e) => { st.k = parseFloat(e.target.value); save(); render(); });
+$('kr').addEventListener('change', () => { if (kPre && kPre !== snapshot()) { undo.push(kPre); redo = []; render(); } kPre = null; });
+function snapNow() {
+  mutate(() => {
+    const h = home(), a = snapAngle(h, h.rot, 25); if (a) { h.rot = norm(a.rot); st.guides = [a.s]; }
+    const m = snapMove(st.sel, h, 14); Object.assign(h, { bx: m.place.bx, by: m.place.by }); st.guides = a ? [a.s, ...m.guides] : m.guides;
+  });
+  status(st.guides.length ? 'Snapped. Orange lines show what it snapped to.' : 'Nothing close enough to snap to.');
+}
+$('snapnow').onclick = snapNow;
+['snap', 'lplot', 'lwall', 'lparcel'].forEach((id) => { $(id).onchange = () => { st.snap = $('snap').checked; st.plot = $('lplot').checked; st.wall = $('lwall').checked; st.parcel = $('lparcel').checked; drawStatic(); drawDyn(); }; });
+$('uo').oninput = (e) => { st.uo = parseFloat(e.target.value); map.style.setProperty('--uo', st.uo); };
+$('undo').onclick = () => { if (undo.length) { redo.push(snapshot()); restore(undo.pop()); } };
+$('redo').onclick = () => { if (redo.length) { undo.push(snapshot()); restore(redo.pop()); } };
+$('resetone').onclick = () => mutate(() => { st.homes[st.sel] = JSON.parse(JSON.stringify(AUTO[st.sel])); });
+$('resetall').onclick = () => { if (confirm('Throw away every edit and go back to the automatic fit?')) mutate(() => { st.homes = JSON.parse(JSON.stringify(AUTO)); st.k = K0; }); };
+
+/* ---------- export / import ---------- */
+function exportJSON() {
+  const homes = {};
+  for (const id of IDS) { const h = st.homes[id]; homes[id] = { cluster: DATA.houses[id].cl, type: h.t, x: r1(h.bx * 10) / 10, y: r1(h.by * 10) / 10, rotation: Math.round(norm(h.rot) * 10) / 10, mirrorX: h.fx, mirrorY: h.fy, edited: isEdited(id), checked: h.done }; }
+  return JSON.stringify({ version: 1, note: 'x,y = centre of the unit base foundation in plan coordinates of its cluster page; rotation in degrees (SVG, clockwise); mirrorX = left-right about the base vertical axis, mirrorY = top-bottom about the base horizontal axis; baseSize = one scale for every unit.', baseSize: st.k, homes }, null, 1);
+}
+$('dl').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([exportJSON()], { type: 'application/json' })); a.download = 'site-map-edits.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); status('Downloaded site-map-edits.json'); };
+$('cp').onclick = async () => { try { await navigator.clipboard.writeText(exportJSON()); status('Copied to clipboard'); } catch (e) { status('Clipboard blocked: use Download instead'); } };
+$('imp').onclick = () => $('file').click();
+$('file').onchange = async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const o = JSON.parse(await f.text()); if (!o.homes) throw new Error('no homes');
+    mutate(() => { if (o.baseSize) st.k = o.baseSize; for (const [id, v] of Object.entries(o.homes)) if (st.homes[id]) Object.assign(st.homes[id], { t: v.type, bx: v.x, by: v.y, rot: v.rotation, fx: !!v.mirrorX, fy: !!v.mirrorY, done: !!v.checked }); });
+    status('Imported ' + f.name);
+  } catch (err) { status('Could not read that file'); }
+  e.target.value = '';
+};
+
+/* ---------- pan / zoom / drag ---------- */
+function zoom(f, cx, cy) {
+  const [x, y, w, h] = st.vb, nw = w / f, nh = h / f;
+  if (nw < 40 || nw > DATA.clusters[st.cluster].vb[2] * 1.6) return;
+  const qx = cx ?? x + w / 2, qy = cy ?? y + h / 2;
+  st.vb = [qx - (qx - x) / f, qy - (qy - y) / f, nw, nh]; setVB(); drawDyn();
+}
+function toUser(e) { const r = map.getBoundingClientRect(), [x, y, w, h] = st.vb, k = Math.max(w / r.width, h / r.height); return [x + (e.clientX - r.left - (r.width - w / k) / 2) * k, y + (e.clientY - r.top - (r.height - h / k) / 2) * k]; }
+$('zin').onclick = () => zoom(1.4); $('zout').onclick = () => zoom(1 / 1.4); $('zreset').onclick = () => { st.vb = fitVB(); setVB(); drawDyn(); };
+map.addEventListener('wheel', (e) => { e.preventDefault(); const [ux, uy] = toUser(e); zoom(e.deltaY < 0 ? 1.15 : 1 / 1.15, ux, uy); }, { passive: false });
+
+const ptrs = new Map(); let last = 0;
+map.addEventListener('pointerdown', (e) => {
+  map.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, e);
+  if (ptrs.size > 1) { st.drag = null; return; }
+  const t = e.target.closest('[data-handle], .house, .parcel'), [ux, uy] = toUser(e);
+  if (t && t.dataset.handle) { const h = home(); st.drag = { mode: 'rot', pre: snapshot(), off: h.rot - (Math.atan2(uy - h.by, ux - h.bx) * 180 / Math.PI + 90) }; st.angleTip = 1; }
+  else if (t && t.classList.contains('house')) { select(t.dataset.h); const h = home(); st.drag = { mode: 'move', pre: snapshot(), ox: ux, oy: uy, sx: h.bx, sy: h.by, moved: false }; }
+  else { st.drag = { mode: 'pan', tap: t ? t.dataset.h : null, moved: false }; }
+  last = 0;
+});
+map.addEventListener('pointermove', (e) => {
+  const prev = ptrs.get(e.pointerId); if (!prev) return;
+  if (ptrs.size === 2) {
+    ptrs.set(e.pointerId, e); const [a, b] = [...ptrs.values()], d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    if (last) { const [ux, uy] = toUser({ clientX: (a.clientX + b.clientX) / 2, clientY: (a.clientY + b.clientY) / 2 }); zoom(d / last, ux, uy); }
+    last = d; return;
+  }
+  const d = st.drag; if (!d) return;
+  const [ux, uy] = toUser(e), h = home(), u = px1();
+  if (d.mode === 'pan') {
+    const dx = e.clientX - prev.clientX, dy = e.clientY - prev.clientY;
+    if (!d.moved && Math.hypot(dx, dy) < 3) return;
+    if (!d.moved) { d.moved = true; map.classList.add('drag'); }
+    st.vb = [st.vb[0] - dx * u, st.vb[1] - dy * u, st.vb[2], st.vb[3]]; setVB(); ptrs.set(e.pointerId, e); return;
+  }
+  if (d.mode === 'move') {
+    if (!d.moved && Math.hypot(ux - d.ox, uy - d.oy) < 2 * u) return;
+    d.moved = true; st.guides = [];
+    let c = { ...h, bx: d.sx + ux - d.ox, by: d.sy + uy - d.oy };
+    if (st.snap && !e.altKey) { const m = snapMove(st.sel, c, 9 * u); c = m.place; st.guides = m.guides; }
+    h.bx = c.bx; h.by = c.by;
+  } else if (d.mode === 'rot') {
+    let rot = Math.atan2(uy - h.by, ux - h.bx) * 180 / Math.PI + 90 + d.off; st.guides = [];
+    if (e.shiftKey) rot = Math.round(rot / 5) * 5;
+    else if (st.snap && !e.altKey) { const a = snapAngle(h, rot, 3); if (a) { rot = a.rot; st.guides = [a.s]; } }
+    h.rot = norm(rot);
+  }
+  const mx = ptrs.get(e.pointerId); if (mx) ptrs.set(e.pointerId, e);
+  render();
+});
+function endPtr(e) {
+  ptrs.delete(e.pointerId); map.classList.remove('drag');
+  const d = st.drag; if (ptrs.size) return;
+  if (d) {
+    if (d.mode === 'pan' && !d.moved && d.tap) select(d.tap);
+    if (d.pre && d.pre !== snapshot()) { undo.push(d.pre); if (undo.length > 150) undo.shift(); redo = []; save(); }
+  }
+  st.drag = null; st.angleTip = null; setTimeout(() => { st.guides = []; drawDyn(); }, 700); render();
+}
+map.addEventListener('pointerup', endPtr); map.addEventListener('pointercancel', endPtr);
+
+window.addEventListener('keydown', (e) => {
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' && e.target.type !== 'range' && e.target.type !== 'checkbox' || tag === 'select' || tag === 'textarea') return;
+  const k = e.key, m = e.shiftKey ? 5 : 1;
+  if ((e.metaKey || e.ctrlKey) && k.toLowerCase() === 'z') { e.preventDefault(); (e.shiftKey ? $('redo') : $('undo')).click(); return; }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+  if (arrows[k]) { e.preventDefault(); nudge(arrows[k][0], arrows[k][1], m); }
+  else if (k === '[') rotBy(-0.1 * (e.shiftKey ? 10 : 1)); else if (k === ']') rotBy(0.1 * (e.shiftKey ? 10 : 1));
+  else if (k === '{') rotBy(-1); else if (k === '}') rotBy(1);
+  else if (k.toLowerCase() === 'h') flipX(); else if (k.toLowerCase() === 'v') flipY();
+  else if (k.toLowerCase() === 's') snapNow(); else if (k.toLowerCase() === 'd') toggleDone(true);
+  else if (k.toLowerCase() === 'n') step(1); else if (k.toLowerCase() === 'p') step(-1);
+});
+
+/* ---------- start ---------- */
+load();
+st.cluster = DATA.houses[st.sel].cl; st.vb = fitVB(); setVB(); loadSegs(); drawStatic(); render();
+window.addEventListener('resize', drawDyn);
+window.__editor = { st, snapMove, snapAngle, unitEdges, exportJSON };
+</script>
+</body>
+</html>
