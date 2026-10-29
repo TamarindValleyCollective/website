@@ -5,6 +5,7 @@
 // To add a feature: add it here and to the check constraint on member_feature_access, then call featureOn.
 export const FEATURES = {
   rental: { env: 'MEMBER_RENTAL_ENABLED', label: 'My rental' },
+  site_map: { env: 'MEMBER_SITE_MAP_ENABLED', label: 'Site map' },
 };
 
 export const featureIds = () => Object.keys(FEATURES);

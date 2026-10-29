@@ -2893,6 +2893,124 @@ import SignInGate from '../../components/SignInGate.astro';
     white-space: nowrap;
   }
 
+  /* Site map: the plan with every home on it, then a card for the home that is picked. */
+  .sm-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 12px;
+    margin: 0 0 12px;
+  }
+
+  .sm-stage {
+    position: relative;
+    margin-bottom: 12px;
+    overflow: hidden;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+  }
+
+  .sm-map {
+    display: block;
+    width: 100%;
+    height: min(62vh, 640px);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .sm-zoom {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: grid;
+    gap: 6px;
+  }
+
+  .sm-zoom .btn {
+    width: 36px;
+    padding: 0;
+    background: var(--tvc-white);
+  }
+
+  .sm-plot {
+    fill: none;
+    stroke: var(--tvc-line-strong);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .sm-unit {
+    --sm-fill: var(--tvc-stone);
+    --sm-line: var(--tvc-ink-soft);
+    cursor: pointer;
+  }
+
+  .sm-unit.sm-vacant { --sm-fill: var(--tvc-cream); }
+  .sm-unit.is-yours { --sm-fill: var(--tvc-orange-tint); --sm-line: var(--tvc-orange); }
+  .sm-unit.is-sel { --sm-fill: var(--tvc-green-tint); --sm-line: var(--tvc-green); }
+  .sm-unit.is-yours.is-sel { --sm-fill: var(--tvc-orange-tint); } /* your own home keeps its colour when picked; the green outline shows the pick */
+  .sm-unit:focus-visible { outline: none; --sm-line: var(--tvc-green); }
+
+  .sm-blk,
+  .sm-pas,
+  .sm-up {
+    stroke: var(--sm-line);
+    stroke-width: 1.2;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .sm-blk { fill: var(--sm-fill); }
+  .sm-pas { fill: var(--tvc-line); }
+  .sm-up { fill: var(--tvc-white); stroke-dasharray: 4 3; }
+  .sm-hit { fill: transparent; }
+
+  .sm-tag {
+    fill: var(--tvc-ink);
+    font-weight: 700;
+    text-anchor: middle;
+    paint-order: stroke;
+    stroke: var(--tvc-white);
+    stroke-linejoin: round;
+    pointer-events: none;
+  }
+
+  .sm-card {
+    padding: 16px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+  }
+
+  .sm-card h2 {
+    margin: 0 0 8px;
+    font-size: var(--text-lg);
+  }
+
+  .sm-kv {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 14px;
+    margin: 0;
+    font-size: var(--text-sm);
+  }
+
+  .sm-kv dt { color: var(--tvc-ink-soft); }
+  .sm-kv dd { margin: 0; }
+  .sm-actions { margin-top: 12px; }
+
+  .sm-note {
+    margin: 10px 0 0;
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  @media (max-width: 560px) {
+    .sm-map { height: 52vh; }
+  }
+
   .dir-skel span {
     min-height: 68px;
     background: var(--tvc-cream);
@@ -3761,6 +3879,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     dash: '<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
     unit: '<path d="M12 21s7-6 7-11a7 7 0 1 0-14 0c0 5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
     stay: '<path d="M3 18v-7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v7M3 18h18M7 9V6h10v3"/>',
+    map: '<path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>',
     rupee: '<circle cx="12" cy="12" r="9"/><path d="M9 8h6M9 11h6M9 8c4 0 4 5 0 5l4 4"/>',
     receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
     statement: '<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 16h5"/>',
@@ -3805,6 +3924,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     // Owners only, and only once the feature is switched on (MEMBER_RENTAL_ENABLED): probeRental() shows it.
     { id: 'rental', label: 'My rental', icon: IC.stay, hidden: true },
     { id: 'directory', label: 'Our members', icon: IC.book },
+    // Early access (MEMBER_SITE_MAP_ENABLED, or a household on Units -> Early access): probeSiteMap() shows it.
+    { id: 'sitemap', label: 'Site map', icon: IC.map, hidden: true },
     // Not built yet: kept out of the menu (they would only lead to a "coming soon" page) and listed
     // once, quietly, at the foot of the Home page. The routes stay so an old bookmark still lands somewhere.
     { id: 'stays', label: 'Stays', icon: IC.stay, soon: true },
@@ -3834,6 +3955,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   let all: Hh[] = [];
   let current = 0;
   let route = 'dashboard';
+  // The part of the hash after "?" (#/directory?unit=F-12), so one page can open something on arrival.
+  let routeQuery = new URLSearchParams();
   let toastTimer: number | undefined;
 
   // Long enough to read a whole sentence once, not a flash.
@@ -5998,6 +6121,256 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   type DirGroup = { people: { name: string; isYou: boolean }[]; bio: string; family: string; quotes: { name: string | null; why: string }[]; links: { name: string; url: string }[]; onPublicSite: boolean };
   type DirHousehold = { farmUnit: string; houseNo: string | null; cluster: string | null; unitType: string | null; people: DirPerson[]; groups: DirGroup[]; withoutStory: { name: string; isYou: boolean }[]; familyMembers: { name: string; isYou: boolean }[]; hasStory: boolean };
 
+  // ---- Site map (early access) ----
+  // Every home on the site plan: who it belongs to and what type it is. Read-only; the layout is changed by admins.
+  // What each home shows follows the directory (netlify/functions/members-sitemap.mts, scripts/lib/site-map.mjs).
+  type MapUnit = {
+    houseNo: string; cluster: string; shape: string; x: number; y: number; rotation: number; mirrorX: boolean; mirrorY: boolean;
+    status: 'named' | 'private' | 'vacant'; names: string[]; unitType: string | null; bhk: string; detail: string; farmUnit: string | null; isYours: boolean;
+  };
+  type MapCluster = { id: string; baseSize: number; viewBox: number[]; plot: string };
+  let siteMap: { clusters: MapCluster[]; units: MapUnit[] } | null = null;
+
+  function setSiteMapVisible(on: boolean) {
+    const item = NAV.find((n) => n.id === 'sitemap');
+    if (!item || item.hidden === !on) return;
+    item.hidden = !on;
+    renderNav();
+    if (on && location.hash.startsWith('#/sitemap')) onRoute();
+  }
+
+  async function probeSiteMap() {
+    try {
+      const { status, data } = await memberFetch('/api/members-me/site-map');
+      if (status === 200 && data.enabled) {
+        siteMap = data;
+        setSiteMapVisible(true);
+      } else setSiteMapVisible(false);
+    } catch {
+      // The page works without it.
+    }
+  }
+
+  // The five standard unit shapes about the centre of the base foundation (34 x 37, scaled per cluster): the top is the
+  // back of the house and the bottom the road side. Fixed drawing constants, never server data.
+  const smRect = (cls: string, x: number, y: number, w: number, ht: number) => `<rect class="${cls}" x="${x}" y="${y}" width="${w}" height="${ht}"/>`;
+  const SM_BASE = smRect('sm-blk', -17, -18, 17, 15) + smRect('sm-blk', 0, -18, 17, 15) + smRect('sm-blk', 0, -3, 17, 22);
+  const SM_UP = smRect('sm-up', 3, 0, 11, 17);
+  const SM_BACK = smRect('sm-blk', -17, -64, 17, 24) + smRect('sm-pas', -5, -40, 5, 22);
+  const SM_SHAPES: Record<string, string> = {
+    S: SM_BASE,
+    DF: SM_BASE + SM_UP,
+    DG: SM_BASE + smRect('sm-blk', -17, -40, 17, 22),
+    DO: SM_BASE + SM_BACK,
+    TO: SM_BASE + SM_BACK + SM_UP,
+  };
+
+  function viewSiteMap(): HTMLElement {
+    const root = h('div');
+    root.append(h('h1', 'page-title', 'Site map', h('small', '', 'Every home')), h('p', 'lede', 'Tap a home to see who it belongs to and what type it is.'));
+    const data = siteMap;
+    if (!data || !data.units.length) {
+      root.append(h('p', 'lede', 'The site map is not available right now.'));
+      return root;
+    }
+    const mine = data.units.find((u) => u.isYours) ?? null;
+    let clusterId = mine?.cluster ?? data.clusters[0].id;
+    let selected: MapUnit | null = mine;
+    let vb: number[] = [];
+    const clusterOf = (id: string) => data.clusters.find((c) => c.id === id) ?? data.clusters[0];
+    const fit = () => { vb = [...clusterOf(clusterId).viewBox]; };
+    fit();
+
+    const seg = h('div', 'segmented');
+    seg.setAttribute('role', 'group');
+    seg.setAttribute('aria-label', 'Cluster');
+    const segButtons = data.clusters.map((c) => {
+      const b = h('button', '', c.id);
+      b.setAttribute('type', 'button');
+      b.addEventListener('click', () => { clusterId = c.id; fit(); paint(); });
+      return b;
+    });
+    seg.append(...segButtons);
+
+    const search = document.createElement('input');
+    search.type = 'search';
+    search.placeholder = 'Find a home or member';
+    search.autocomplete = 'off';
+    search.setAttribute('aria-label', 'Find a home or member');
+    const field = h('label', 'field', undefined, icon('<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'), search);
+    const bar = h('div', 'sm-bar', undefined, seg, field);
+    if (mine) {
+      const b = h('button', 'btn', 'Find my home');
+      b.setAttribute('type', 'button');
+      b.addEventListener('click', () => focusOn(mine));
+      bar.append(b);
+    }
+    const msg = h('p', 'sm-note');
+    msg.setAttribute('aria-live', 'polite');
+
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', 'sm-map');
+    svg.setAttribute('role', 'group');
+    svg.setAttribute('aria-label', 'Site plan, one button per home');
+    svg.innerHTML = `<defs>${Object.entries(SM_SHAPES).map(([k, g]) => `<g id="sm-${k}"><g transform="translate(0 -0.5)"><rect class="sm-hit" x="-17" y="-18" width="34" height="37"/>${g}</g></g>`).join('')}</defs>`;
+    const plotPath = document.createElementNS(SVG_NS, 'path');
+    plotPath.setAttribute('class', 'sm-plot');
+    const unitLayer = document.createElementNS(SVG_NS, 'g');
+    svg.append(plotPath, unitLayer);
+    const zoomBtn = (label: string, text: string, fn: () => void) => {
+      const b = h('button', 'btn', text);
+      b.setAttribute('type', 'button');
+      b.setAttribute('aria-label', label);
+      b.addEventListener('click', fn);
+      return b;
+    };
+    const stage = h('div', 'sm-stage', undefined, svg, h('div', 'sm-zoom', undefined, zoomBtn('Zoom in', '+', () => zoomBy(1.4)), zoomBtn('Zoom out', '−', () => zoomBy(1 / 1.4)), zoomBtn('Show the whole cluster', 'Fit', () => { fit(); paint(); })));
+    const card = h('section', 'sm-card');
+    card.setAttribute('aria-live', 'polite');
+    root.append(bar, stage, card, msg, h('p', 'sm-note', 'Your home is highlighted. Homes with no member yet are paler. A member who keeps their details private shows as "Private member".'));
+
+    const unitsPerPx = () => { const r = svg.getBoundingClientRect(); return Math.max(vb[2] / (r.width || 1), vb[3] / (r.height || 1)); };
+    const toUser = (e: { clientX: number; clientY: number }) => {
+      const r = svg.getBoundingClientRect();
+      const k = Math.max(vb[2] / r.width, vb[3] / r.height);
+      return [vb[0] + (e.clientX - r.left - (r.width - vb[2] / k) / 2) * k, vb[1] + (e.clientY - r.top - (r.height - vb[3] / k) / 2) * k];
+    };
+
+    function unitEl(x: MapUnit, k: number, u: number): SVGElement {
+      const g = document.createElementNS(SVG_NS, 'g');
+      g.setAttribute('class', `sm-unit sm-${x.status}${x.isYours ? ' is-yours' : ''}${selected?.houseNo === x.houseNo ? ' is-sel' : ''}`);
+      g.setAttribute('data-house', x.houseNo);
+      g.setAttribute('role', 'button');
+      g.setAttribute('tabindex', '0');
+      const who = x.status === 'named' ? x.names.join(' and ') : x.status === 'private' ? 'a private member' : 'no member yet';
+      g.setAttribute('aria-label', `Home ${Number(x.houseNo.slice(2))}, ${who}, ${x.bhk}`);
+      g.innerHTML = `<g transform="translate(${x.x} ${x.y}) rotate(${x.rotation}) scale(${x.mirrorX ? -k : k} ${x.mirrorY ? -k : k})"><use href="#sm-${x.shape}"/></g>`;
+      const t = document.createElementNS(SVG_NS, 'text');
+      t.setAttribute('class', 'sm-tag');
+      t.setAttribute('x', String(x.x));
+      t.setAttribute('y', String(x.y + 4 * u));
+      t.setAttribute('style', `font-size:${12 * u}px;stroke-width:${3 * u}px`);
+      t.textContent = String(Number(x.houseNo.slice(2)));
+      g.append(t);
+      g.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(x); }
+      });
+      return g;
+    }
+
+    function drawCard() {
+      card.replaceChildren();
+      const s = selected;
+      if (!s) { card.append(h('p', 'sm-note', 'Tap a home on the map.')); return; }
+      const owner = s.status === 'named' ? s.names.join(' & ') : s.status === 'private' ? 'Private member' : 'No member yet';
+      card.append(h('h2', '', `Home ${Number(s.houseNo.slice(2))}${s.isYours ? ' (yours)' : ''}`));
+      const dl = h('dl', 'sm-kv');
+      const row = (k: string, v: string) => dl.append(h('dt', '', k), h('dd', '', v));
+      row(s.names.length > 1 ? 'Owners' : 'Owner', owner);
+      row('Unit type', s.unitType ? `${s.bhk} · ${s.unitType}` : s.bhk);
+      row('Layout', s.detail);
+      row('Cluster', s.cluster);
+      card.append(dl);
+      if (s.farmUnit) {
+        const unit = s.farmUnit;
+        const b = h('button', 'btn btn--solid', 'View profile');
+        b.setAttribute('type', 'button');
+        b.addEventListener('click', () => { location.hash = `#/directory?unit=${encodeURIComponent(unit)}`; });
+        card.append(h('div', 'sm-actions', undefined, b));
+      }
+    }
+
+    function paint() {
+      segButtons.forEach((b, i) => b.setAttribute('aria-pressed', String(data!.clusters[i].id === clusterId)));
+      const c = clusterOf(clusterId);
+      svg.setAttribute('viewBox', vb.join(' '));
+      plotPath.setAttribute('d', c.plot);
+      const u = unitsPerPx();
+      unitLayer.replaceChildren(...data!.units.filter((x) => x.cluster === clusterId).map((x) => unitEl(x, c.baseSize, u)));
+      drawCard();
+    }
+    function pick(x: MapUnit) {
+      selected = x;
+      if (x.cluster !== clusterId) { clusterId = x.cluster; fit(); }
+      msg.textContent = '';
+      paint();
+    }
+    function focusOn(x: MapUnit) {
+      selected = x;
+      clusterId = x.cluster;
+      vb = [x.x - 110, x.y - 85, 220, 170];
+      msg.textContent = '';
+      paint();
+    }
+    function zoomBy(f: number, cx?: number, cy?: number) {
+      const [x, y, w, ht] = vb;
+      const nw = w / f;
+      if (nw < 40 || nw > clusterOf(clusterId).viewBox[2] * 1.6) return;
+      const qx = cx ?? x + w / 2;
+      const qy = cy ?? y + ht / 2;
+      vb = [qx - (qx - x) / f, qy - (qy - y) / f, nw, ht / f];
+      paint();
+    }
+
+    search.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      const q = search.value.trim().toLowerCase();
+      if (!q) return;
+      const num = q.replace(/^h-?/, '');
+      const hit = data.units.find((u) => /^\d+$/.test(num) && Number(u.houseNo.slice(2)) === Number(num)) ?? data.units.find((u) => u.names.some((n) => n.toLowerCase().includes(q)));
+      if (hit) focusOn(hit);
+      else msg.textContent = `No home or member matches "${search.value.trim()}".`;
+    });
+
+    // Pan by dragging, zoom with the wheel or two fingers; a touch that does not move is a tap on a home.
+    const ptrs = new Map<number, { x: number; y: number }>();
+    let dragged = false;
+    let tap: string | null = null;
+    let pinch = 0;
+    svg.addEventListener('wheel', (e) => { e.preventDefault(); const [ux, uy] = toUser(e); zoomBy(e.deltaY < 0 ? 1.15 : 1 / 1.15, ux, uy); }, { passive: false });
+    svg.addEventListener('pointerdown', (e) => {
+      svg.setPointerCapture(e.pointerId);
+      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (ptrs.size === 1) { dragged = false; tap = (e.target as Element).closest('.sm-unit')?.getAttribute('data-house') ?? null; } else { tap = null; pinch = 0; }
+    });
+    svg.addEventListener('pointermove', (e) => {
+      const p = ptrs.get(e.pointerId);
+      if (!p) return;
+      if (ptrs.size === 2) {
+        ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        const [a, b] = [...ptrs.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinch) { const [ux, uy] = toUser({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 }); zoomBy(d / pinch, ux, uy); }
+        pinch = d;
+        dragged = true;
+        return;
+      }
+      const dx = e.clientX - p.x;
+      const dy = e.clientY - p.y;
+      if (!dragged && Math.hypot(dx, dy) < 4) return;
+      dragged = true;
+      const u = unitsPerPx();
+      vb = [vb[0] - dx * u, vb[1] - dy * u, vb[2], vb[3]];
+      p.x = e.clientX;
+      p.y = e.clientY;
+      svg.setAttribute('viewBox', vb.join(' '));
+    });
+    const release = (e: PointerEvent) => {
+      ptrs.delete(e.pointerId);
+      if (ptrs.size) return;
+      if (!dragged && tap) { const x = data.units.find((u) => u.houseNo === tap); if (x) pick(x); }
+      tap = null;
+      pinch = 0;
+    };
+    svg.addEventListener('pointerup', release);
+    svg.addEventListener('pointercancel', release);
+
+    // The plan is measured once it is on the page, so the house numbers are sized for the real width.
+    requestAnimationFrame(paint);
+    paint();
+    return root;
+  }
+
   function viewDirectory(): HTMLElement {
     const root = h('div');
     const body = h('div');
@@ -6338,6 +6711,14 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         if (status !== 200) throw new Error(data.error || 'Could not load the directory.');
         list = data.households as DirHousehold[];
         draw();
+        // Arriving from the Site map's "View profile" (#/directory?unit=F-12): open that household's profile.
+        const wanted = routeQuery.get('unit');
+        const target = wanted ? list.find((x) => x.farmUnit === wanted) : null;
+        if (target) {
+          openProfile(target);
+          routeQuery = new URLSearchParams();
+          history.replaceState(null, '', '#/directory'); // so it does not open again on the next draw
+        }
         void memberFetch('/api/members-me/unit-story').then(({ status: st, data: d }) => {
           if (st !== 200 || !d.story) return;
           mine = describeMine(d.story);
@@ -6373,7 +6754,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
   function renderView() {
     const prevNext = $('view').querySelector('.next h2')?.textContent;
-    const fn = route === 'dashboard' ? viewDashboard : route === 'unit' ? viewUnit : route === 'story' ? viewStory : route === 'rental' ? viewRental : route === 'directory' ? viewDirectory : () => viewSoon(route);
+    const fn = route === 'dashboard' ? viewDashboard : route === 'unit' ? viewUnit : route === 'story' ? viewStory : route === 'rental' ? viewRental : route === 'directory' ? viewDirectory : route === 'sitemap' ? viewSiteMap : () => viewSoon(route);
     $('view').replaceChildren(fn());
     if (shownRoute && shownRoute !== route) fadeInView();
     shownRoute = route;
@@ -6396,8 +6777,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   }
 
   function onRoute() {
-    const id = location.hash.replace(/^#\//, '') || 'dashboard';
+    const [id, query = ''] = (location.hash.replace(/^#\//, '') || 'dashboard').split('?');
+    routeQuery = new URLSearchParams(query);
     route = NAV.some((n) => n.id === id) ? id : 'dashboard';
+    if (route === 'sitemap' && NAV.find((n) => n.id === 'sitemap')?.hidden) route = 'dashboard'; // not switched on for this household
     if (route === 'story' && me && isFamily()) route = 'directory'; // the story is the owners' to edit
     if (route === 'rental' && NAV.find((n) => n.id === 'rental')?.hidden) route = 'dashboard'; // not switched on, or not an owner
     if (me) renderView();
@@ -6445,6 +6828,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
   function afterFreshHome() {
     void probeRental();
+    void probeSiteMap();
     // A brand new member is walked through everything once, after the privacy notice (which came first above).
     if (!tourAutoStarted && me!.tourSeenThrough === null) {
       tourAutoStarted = true;
