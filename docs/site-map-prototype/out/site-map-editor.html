@@ -167,13 +167,14 @@ textarea { width: 100%; min-height: 90px; font: .75rem ui-monospace, monospace; 
       </section>
 
       <section class="card">
-        <h2>Base foundation size <span class="pill">same for all</span></h2>
+        <h2><span id="ksize">Base size</span> <span class="pill">same for every unit</span></h2>
         <div class="line" style="margin-top:0">
           <input type="range" id="kr" min="1.2" max="2.6" step="0.01" aria-label="Base scale">
           <input type="number" id="kn" step="0.01" style="width:72px">
         </div>
         <p class="note" id="size"></p>
-        <p class="note">Changing this resizes every unit at once. There is no per-unit size.</p>
+        <div class="line"><button class="btn" id="kall" type="button">Use this size for all clusters</button></div>
+        <p class="note">Each cluster has its own overall size, because the plan pages were drawn at different scales. Changing it resizes every unit in the cluster, each about its own centre. There is no per-unit size.</p>
       </section>
 
       <section class="card">
@@ -245,13 +246,14 @@ function fromAuto(id) {
   return { t: d.t, bx: d.x - Math.sin(r) * v, by: d.y + Math.cos(r) * v, rot: d.rot, fx: !!d.flip, fy: false, done: false };
 }
 const AUTO = Object.fromEntries(IDS.map((id) => [id, fromAuto(id)]));
-const st = { cluster: 'H1A', sel: 'H-17', k: K0, homes: JSON.parse(JSON.stringify(AUTO)), snap: true, plot: true, wall: true, parcel: true, uo: 0.8, vb: null, guides: [], angleTip: null, drag: null };
+// Base size is one number per cluster (the three PDF pages were drawn at different scales); `st.k` is the current cluster's.
+const st = { cluster: 'H1A', sel: 'H-17', kc: { H1A: K0, H1B: K0, H2: K0 }, get k() { return this.kc[this.cluster]; }, set k(v) { this.kc[this.cluster] = v; }, homes: JSON.parse(JSON.stringify(AUTO)), snap: true, plot: true, wall: true, parcel: true, uo: 0.8, vb: null, guides: [], angleTip: null, drag: null };
 let undo = [], redo = [], segs = [];
 
-const snapshot = () => JSON.stringify({ k: st.k, homes: st.homes });
-function restore(s) { const o = JSON.parse(s); st.k = o.k; st.homes = o.homes; save(); render(); }
+const snapshot = () => JSON.stringify({ kc: st.kc, homes: st.homes });
+function restore(s) { const o = JSON.parse(s); st.kc = o.kc; st.homes = o.homes; save(); render(); }
 function save() { try { localStorage.setItem(KEY, snapshot()); } catch (e) { /* storage can be blocked; export is the real save */ } }
-function load() { try { const s = localStorage.getItem(KEY); if (s) { const o = JSON.parse(s); st.k = o.k || K0; for (const id of IDS) if (o.homes[id]) st.homes[id] = { ...st.homes[id], ...o.homes[id] }; } } catch (e) { /* ignore */ } }
+function load() { try { const s = localStorage.getItem(KEY); if (s) { const o = JSON.parse(s); if (o.kc) st.kc = { ...st.kc, ...o.kc }; for (const id of IDS) if (o.homes[id]) st.homes[id] = { ...st.homes[id], ...o.homes[id] }; } } catch (e) { /* ignore */ } }
 function mutate(fn) { undo.push(snapshot()); if (undo.length > 150) undo.shift(); redo = []; fn(); save(); render(); }
 const home = () => st.homes[st.sel];
 const norm = (a) => ((a + 180) % 360 + 360) % 360 - 180;
@@ -365,6 +367,7 @@ function render() {
   set($('rot'), r1(norm(s.rot))); $('rotr').value = norm(s.rot);
   set($('px'), r1(s.bx)); set($('py'), r1(s.by));
   set($('kn'), st.k); $('kr').value = st.k;
+  $('ksize').textContent = `${CL[st.cluster]} base size`;
   $('size').textContent = `Base L-shape: 34 × 37 × ${st.k.toFixed(2)} = ${(34 * st.k).toFixed(1)} × ${(37 * st.k).toFixed(1)} plan units.`;
   $('mx').classList.toggle('on', s.fx); $('my').classList.toggle('on', s.fy);
   $('done').classList.toggle('on', s.done); $('done').textContent = s.done ? 'Checked ✓' : 'Mark checked';
@@ -422,13 +425,14 @@ $('uo').oninput = (e) => { st.uo = parseFloat(e.target.value); map.style.setProp
 $('undo').onclick = () => { if (undo.length) { redo.push(snapshot()); restore(undo.pop()); } };
 $('redo').onclick = () => { if (redo.length) { undo.push(snapshot()); restore(redo.pop()); } };
 $('resetone').onclick = () => mutate(() => { st.homes[st.sel] = JSON.parse(JSON.stringify(AUTO[st.sel])); });
-$('resetall').onclick = () => { if (confirm('Throw away every edit and go back to the automatic fit?')) mutate(() => { st.homes = JSON.parse(JSON.stringify(AUTO)); st.k = K0; }); };
+$('resetall').onclick = () => { if (confirm('Throw away every edit and go back to the automatic fit?')) mutate(() => { st.homes = JSON.parse(JSON.stringify(AUTO)); st.kc = { H1A: K0, H1B: K0, H2: K0 }; }); };
+$('kall').onclick = () => mutate(() => { const v = st.k; for (const c of Object.keys(st.kc)) st.kc[c] = v; });
 
 /* ---------- export / import ---------- */
 function exportJSON() {
   const homes = {};
   for (const id of IDS) { const h = st.homes[id]; homes[id] = { cluster: DATA.houses[id].cl, type: h.t, x: r1(h.bx * 10) / 10, y: r1(h.by * 10) / 10, rotation: Math.round(norm(h.rot) * 10) / 10, mirrorX: h.fx, mirrorY: h.fy, edited: isEdited(id), checked: h.done }; }
-  return JSON.stringify({ version: 1, note: 'x,y = centre of the unit base foundation in plan coordinates of its cluster page; rotation in degrees (SVG, clockwise); mirrorX = left-right about the base vertical axis, mirrorY = top-bottom about the base horizontal axis; baseSize = one scale for every unit.', baseSize: st.k, homes }, null, 1);
+  return JSON.stringify({ version: 1, note: 'x,y = centre of the unit base foundation in plan coordinates of its cluster page; rotation in degrees (SVG, clockwise); mirrorX = left-right about the base vertical axis, mirrorY = top-bottom about the base horizontal axis; baseSize = one scale per cluster, applied to every unit in that cluster.', baseSize: st.kc, homes }, null, 1);
 }
 $('dl').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([exportJSON()], { type: 'application/json' })); a.download = 'site-map-edits.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); status('Downloaded site-map-edits.json'); };
 $('cp').onclick = async () => { try { await navigator.clipboard.writeText(exportJSON()); status('Copied to clipboard'); } catch (e) { status('Clipboard blocked: use Download instead'); } };
@@ -437,7 +441,7 @@ $('file').onchange = async (e) => {
   const f = e.target.files[0]; if (!f) return;
   try {
     const o = JSON.parse(await f.text()); if (!o.homes) throw new Error('no homes');
-    mutate(() => { if (o.baseSize) st.k = o.baseSize; for (const [id, v] of Object.entries(o.homes)) if (st.homes[id]) Object.assign(st.homes[id], { t: v.type, bx: v.x, by: v.y, rot: v.rotation, fx: !!v.mirrorX, fy: !!v.mirrorY, done: !!v.checked }); });
+    mutate(() => { if (o.baseSize) st.kc = { ...st.kc, ...(typeof o.baseSize === 'number' ? { H1A: o.baseSize, H1B: o.baseSize, H2: o.baseSize } : o.baseSize) }; for (const [id, v] of Object.entries(o.homes)) if (st.homes[id]) Object.assign(st.homes[id], { t: v.type, bx: v.x, by: v.y, rot: v.rotation, fx: !!v.mirrorX, fy: !!v.mirrorY, done: !!v.checked }); });
     status('Imported ' + f.name);
   } catch (err) { status('Could not read that file'); }
   e.target.value = '';
