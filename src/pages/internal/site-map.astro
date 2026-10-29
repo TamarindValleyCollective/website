@@ -315,14 +315,14 @@ import SignInGate from '../../components/SignInGate.astro';
     g.setAttribute('role', 'button');
     g.setAttribute('tabindex', '0');
     const who = u.status === 'vacant' ? 'vacant' : u.owners.join(' and ') || 'no active owner';
-    g.setAttribute('aria-label', `Home ${Number(u.houseNo.slice(2))}, ${who}, ${u.bhk}${u.status === 'mismatch' ? ', map shape and record differ' : ''}`);
+    g.setAttribute('aria-label', `Home ${u.houseNo}, ${who}, ${u.bhk}${u.status === 'mismatch' ? ', map shape and record differ' : ''}`);
     g.innerHTML = `<g transform="translate(${u.x} ${u.y}) rotate(${u.rotation}) scale(${u.mirrorX ? -k : k} ${u.mirrorY ? -k : k})"><use href="#s-${u.shape}"/></g>`;
     const t = document.createElementNS(SVG, 'text');
     t.setAttribute('class', 'tag');
     t.setAttribute('x', String(u.x));
     t.setAttribute('y', String(u.y + 4 * px));
     t.setAttribute('style', `font-size:${12 * px}px;stroke-width:${3 * px}px`);
-    t.textContent = String(Number(u.houseNo.slice(2)));
+    t.textContent = u.houseNo;
     g.append(t);
     g.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter' || (e as KeyboardEvent).key === ' ') { e.preventDefault(); pick(u); } });
     return g;
@@ -368,7 +368,7 @@ import SignInGate from '../../components/SignInGate.astro';
   function saveDraft() {
     const d = draft;
     if (!d || !isDirty()) return;
-    const label = `Home ${Number(d.houseNo.slice(2))}`;
+    const label = `Home ${d.houseNo}`;
     if (d.isNew) void send(addBody(d.houseNo, d.cluster, placementOf(d)), `Added ${label}.`).then((ok) => { if (ok) { draft = null; selected = data?.units.find((u) => u.houseNo === d.houseNo) ?? null; if (selected) draft = makeDraft(selected); paint(); } });
     else void send({ action: 'update', houseNo: d.houseNo, version: d.version, ...placementOf(d) }, `Saved ${label}.`);
   }
@@ -473,7 +473,7 @@ import SignInGate from '../../components/SignInGate.astro';
     if (draft?.isNew) { card.append(editorPanel(newUnit()!)); return; }
     const u = selected;
     if (!u) { card.append(h('p', 'hint', 'Tap a home on the map.')); return; }
-    card.append(h('h2', '', `Home ${Number(u.houseNo.slice(2))}`));
+    card.append(h('h2', '', `Home ${u.houseNo}`));
     const dl = h('dl', 'kv');
     const row = (k: string, v: string) => dl.append(h('dt', '', k), h('dd', '', v));
     row('Household', u.farmUnit ?? 'None yet (vacant)');

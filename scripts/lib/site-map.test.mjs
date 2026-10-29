@@ -90,6 +90,34 @@ test('nothing but the allowed fields goes out: no email, phone or ids', () => {
   assert.deepEqual(keys, ['bhk', 'cluster', 'detail', 'farmUnit', 'houseNo', 'isYours', 'mirrorX', 'mirrorY', 'names', 'rotation', 'shape', 'status', 'unitType', 'x', 'y']);
 });
 
+// ---- label position ----
+import { labelAnchor, plotPolygons } from './site-map.mjs';
+
+test('label: the plot a home is in is the closed outline containing its centre, and the label goes at that outline\'s centre', () => {
+  const path = 'M0 0 L100 0 L100 50 L0 50 L0 0 M200 0 L300 0 L300 100 L200 100 Z M0 0 L100 0 L100 50 L0 50 Z';
+  assert.deepEqual(labelAnchor(path, 30, 20), [50, 25]);
+  assert.deepEqual(labelAnchor(path, 250, 90), [250, 50]);
+});
+
+test('label: open lines are not plots, and a home outside every outline gets no anchor', () => {
+  const path = 'M0 0 L100 0 L100 50 L0 50 L0 0';
+  assert.equal(plotPolygons(path).length, 0);
+  assert.equal(labelAnchor(path, 30, 20), null);
+  assert.equal(labelAnchor('M0 0 L10 0 L10 10 Z', 50, 50), null);
+  assert.equal(labelAnchor('', 1, 1), null);
+});
+
+test('label: when outlines nest, the smallest one wins', () => {
+  const path = 'M0 0 L200 0 L200 200 L0 200 Z M50 50 L100 50 L100 100 L50 100 Z';
+  assert.deepEqual(labelAnchor(path, 70, 70), [75, 75]);
+  assert.deepEqual(labelAnchor(path, 150, 150), [100, 100]);
+});
+
+test('label: an L-shaped plot is centred by area, not by its corners', () => {
+  const [x, y] = labelAnchor('M0 0 L100 0 L100 20 L20 20 L20 100 L0 100 Z', 10, 10);
+  assert.ok(x > 20 && x < 40 && y > 20 && y < 40);
+});
+
 // ---- admin view ----
 const adminData = {
   ...data,

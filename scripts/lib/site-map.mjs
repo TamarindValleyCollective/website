@@ -70,6 +70,53 @@ export function shapeClusters(rows) {
   return rows.map((c) => ({ id: c.cluster, baseSize: Number(c.base_size), viewBox: c.view_box, plot: c.plot_path }));
 }
 
+// ---- Where a home's house-number label goes ----------------------------------------------------------------------
+// The label sits inside the home's land plot, not on the building. A cluster's plot_path holds the plan's raw lines and,
+// since migration 0075, one closed outline (ending in Z) per plot. The plot a home is in is the smallest closed outline
+// that contains the home's base centre; the label goes at that outline's centre. A home outside every outline (a new one
+// an admin has just dropped, or one drawn across a boundary) is labelled on the home itself.
+
+const polygonCache = new Map();
+const signedArea = (pts) => pts.reduce((sum, [x1, y1], i) => { const [x2, y2] = pts[(i + 1) % pts.length]; return sum + (x1 * y2 - x2 * y1); }, 0) / 2;
+
+/** The closed outlines (subpaths ending in Z) of a plot_path, each as { pts, area }. */
+export function plotPolygons(path) {
+  if (polygonCache.has(path)) return polygonCache.get(path);
+  const out = [];
+  for (const sub of String(path ?? '').split('M').slice(1)) {
+    if (!/Z\s*$/i.test(sub.trim())) continue;
+    const n = (sub.match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+    const pts = [];
+    for (let i = 0; i + 1 < n.length; i += 2) pts.push([n[i], n[i + 1]]);
+    if (pts.length >= 3) out.push({ pts, area: Math.abs(signedArea(pts)) });
+  }
+  polygonCache.set(path, out);
+  return out;
+}
+
+const contains = (pts, px, py) => {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+};
+
+const centroid = (pts) => {
+  const a = signedArea(pts);
+  if (Math.abs(a) < 1e-6) return [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length];
+  let cx = 0, cy = 0;
+  pts.forEach(([x1, y1], i) => { const [x2, y2] = pts[(i + 1) % pts.length]; const f = x1 * y2 - x2 * y1; cx += (x1 + x2) * f; cy += (y1 + y2) * f; });
+  return [cx / (6 * a), cy / (6 * a)];
+};
+
+/** [x, y] for a home's label: the centre of the smallest plot outline containing (x, y), or null if it is in none. */
+export function labelAnchor(plotPath, x, y) {
+  const inside = plotPolygons(plotPath).filter((p) => contains(p.pts, x, y)).sort((a, b) => a.area - b.area);
+  return inside.length ? centroid(inside[0].pts) : null;
+}
+
 // ---- Admin view -------------------------------------------------------------------------------------------------
 // What an admin sees of each home: the same placement, plus the household behind it, the member record's unit type and
 // the house plot size, and what is missing or disagrees, so the gaps are visible on the map. Admins are not bound by the
