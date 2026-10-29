@@ -859,8 +859,18 @@ outside both the local machine and Netlify (the member-update-email workflow).
   fields, and `scripts/lib/site-map.mjs` (tested) applies the directory's privacy rule: a person is named only when
   active and not opted out of the directory, a household with nobody listed shows as "Private member" with no profile
   link, a home with no household as "No member yet". Dark behind Early access (above): a household not listed gets
-  404 and the tab stays hidden. The plan is drawn client-side in `members/index.astro` (`viewSiteMap`). Admin editing
-  of the layout (add/remove/renumber/retype/orient, audit-logged, admin-only) is the next slice.
+  404 and the tab stays hidden. The plan is drawn client-side in `members/index.astro` (`viewSiteMap`).
+- **`netlify/functions/site-map-admin.mts`** + **`src/pages/internal/site-map.astro`** — the admin portal's **Site map**
+  (`GET /api/site-map-admin/overview`, read-only; redirects for `admin.tvc.farm` in `netlify.toml`). Its own admin module
+  `site-map` in `staff-registry.ts` (`view`: all roles), so a super admin chooses which admins get it on Access, like any
+  module. `requireStaff('site-map', 'view')` on every request. The same plan, coloured by status (household assigned,
+  vacant, map shape and member record differ), with a details card: household and owners (opted-out members are shown to
+  admins; names are masked for the read-only role), the member record's unit type, the house plot size (sum of the
+  household's `member_house_pattas.area_sq_ft`), the placement, a list of what to fix, and a link to the household in the
+  member register (`/internal/members/#F-xx`). Filters: vacant, type differs, no plot size. Households that name a house
+  the map does not have are listed. Shaping is `buildAdminSiteMap` in `scripts/lib/site-map.mjs` (tested); no email,
+  phone or document is selected. Editing the layout (add, remove, renumber, retype, orient; admin-only, audited) is the
+  next slice.
 - **`netlify/functions/staff-admin.mts` + `lib/staff-admin-guard.ts`** — the API behind the
   Access module (issue #89): who is in the system, who holds which module role, an activity feed,
   and the changes themselves. **Super admins only.** Reading (`GET /api/staff-admin/people`,

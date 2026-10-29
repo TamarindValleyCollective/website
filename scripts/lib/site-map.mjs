@@ -69,3 +69,77 @@ export function buildSiteMap(data, viewerHouseholdId) {
 export function shapeClusters(rows) {
   return rows.map((c) => ({ id: c.cluster, baseSize: Number(c.base_size), viewBox: c.view_box, plot: c.plot_path }));
 }
+
+// ---- Admin view -------------------------------------------------------------------------------------------------
+// What an admin sees of each home: the same placement, plus the household behind it, the member record's unit type and
+// the house plot size, and what is missing or disagrees, so the gaps are visible on the map. Admins are not bound by the
+// directory's opt-out (they run the register), but names are masked for the read-only role (the caller passes seeNames and
+// maskName; see netlify/functions/lib/staff-masking.ts) and an email or phone is never passed in.
+
+const baseLetters = (code) => (typeof code === 'string' ? (code.trim().match(/^[A-Za-z]+/) || [''])[0].toUpperCase() : '');
+
+/**
+ * @param {{
+ *   units: { house_no: string, cluster: string, shape: string, x: number | string, y: number | string, rotation: number | string, mirror_x: boolean, mirror_y: boolean }[],
+ *   households: { id: string, farm_unit: string, house_no: string | null, unit_type?: string | null }[],
+ *   people: { id: string, full_name: string, active?: boolean }[],
+ *   memberships: { household_id: string, person_id: string, role?: string }[],
+ *   pattas: { household_id: string, area_sq_ft: number | string | null }[],
+ * }} data
+ * @param {{ seeNames?: boolean, maskName?: (name: string) => string }} [options]
+ */
+export function buildAdminSiteMap(data, options = {}) {
+  const seeNames = options.seeNames !== false;
+  const maskName = options.maskName ?? ((n) => n);
+  const people = new Map(data.people.filter((p) => p.active !== false).map((p) => [p.id, p]));
+  const householdByHouse = new Map(data.households.filter((h) => h.house_no).map((h) => [h.house_no, h]));
+  const plotOf = (householdId) => {
+    const areas = data.pattas.filter((p) => p.household_id === householdId && p.area_sq_ft != null && p.area_sq_ft !== '').map((p) => Number(p.area_sq_ft));
+    return areas.length ? Math.round(areas.reduce((a, b) => a + b, 0) * 100) / 100 : null;
+  };
+
+  const units = data.units.map((u) => {
+    const hh = householdByHouse.get(u.house_no) ?? null;
+    const members = hh ? data.memberships.filter((m) => m.household_id === hh.id && people.has(m.person_id)) : [];
+    const owners = members.some((m) => (m.role ?? 'owner') === 'owner') ? members.filter((m) => (m.role ?? 'owner') === 'owner') : members;
+    const ownerNames = owners.map((m) => people.get(m.person_id).full_name).sort((a, b) => a.localeCompare(b));
+    const shape = SHAPES[u.shape] ? u.shape : 'S';
+    const recordType = hh?.unit_type ?? null;
+    const plotSqFt = hh ? plotOf(hh.id) : null;
+    const mismatch = !!recordType && baseLetters(recordType) !== shape;
+    const gaps = [];
+    if (hh && ownerNames.length === 0) gaps.push('No active owner on the household');
+    if (hh && !recordType) gaps.push('No unit type on the member record');
+    if (mismatch) gaps.push(`Map shape ${shape} but the record says ${recordType}`);
+    if (hh && plotSqFt == null) gaps.push('House plot size not recorded');
+    return {
+      houseNo: u.house_no,
+      cluster: u.cluster,
+      shape,
+      x: Number(u.x),
+      y: Number(u.y),
+      rotation: Number(u.rotation),
+      mirrorX: !!u.mirror_x,
+      mirrorY: !!u.mirror_y,
+      status: !hh ? 'vacant' : mismatch ? 'mismatch' : 'ok',
+      farmUnit: hh?.farm_unit ?? null,
+      owners: ownerNames.map((n) => (seeNames ? n : maskName(n))),
+      otherMembers: members.length - owners.length,
+      recordType,
+      bhk: bedroomsOf(recordType) ?? SHAPES[shape].bhk,
+      detail: SHAPES[shape].detail,
+      plotSqFt,
+      gaps,
+    };
+  }).sort((a, b) => houseNumber(a.houseNo) - houseNumber(b.houseNo));
+
+  // Households that name a house the map does not have (a house built but not drawn, or a number to correct).
+  const drawn = new Set(data.units.map((u) => u.house_no));
+  const notOnMap = data.households.filter((h) => h.house_no && !drawn.has(h.house_no)).map((h) => ({ houseNo: h.house_no, farmUnit: h.farm_unit })).sort((a, b) => houseNumber(a.houseNo) - houseNumber(b.houseNo));
+  const count = (s) => units.filter((u) => u.status === s).length;
+  return {
+    units,
+    notOnMap,
+    summary: { homes: units.length, assigned: units.length - count('vacant'), vacant: count('vacant'), mismatch: count('mismatch'), noPlotSize: units.filter((u) => u.farmUnit && u.plotSqFt == null).length },
+  };
+}
