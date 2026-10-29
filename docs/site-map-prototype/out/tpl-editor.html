@@ -77,6 +77,9 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--green); }
 .pill { display: inline-block; font-size: .78rem; font-weight: 600; padding: 1px 9px; border-radius: 999px; background: var(--green-tint); color: var(--green); }
 .pill.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
 kbd { font: 600 .78rem var(--font); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; background: var(--bg); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0 0; font-size: .9rem; }
+.kv dt { color: var(--ink-soft); } .kv dd { margin: 0; }
+.muted { color: var(--ink-soft); }
 .keys { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: .82rem; color: var(--ink-soft); margin: 0; }
 .keys dt { white-space: nowrap; } .keys dd { margin: 0; }
 textarea { width: 100%; min-height: 90px; font: .75rem ui-monospace, monospace; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
@@ -112,6 +115,11 @@ textarea { width: 100%; min-height: 90px; font: .75rem ui-monospace, monospace; 
     </div>
 
     <aside>
+      <section class="card" id="whocard" hidden>
+        <h2 id="whoname" style="margin:0"></h2>
+        <dl class="kv"><dt>House plot</dt><dd id="whoplot"></dd><dt>Record says</dt><dd id="whotype"></dd></dl>
+      </section>
+
       <section class="card">
         <div class="line" style="margin-top:0">
           <button class="btn" id="prev" type="button" aria-label="Previous home">&larr;</button>
@@ -210,13 +218,15 @@ textarea { width: 100%; min-height: 90px; font: .75rem ui-monospace, monospace; 
 
 <script>
 const DATA = /*DATA*/null;
+// Member names and plot sizes are personal data: they are only present in the local, gitignored build (site-map-editor.local.html).
+const MEMBERS = /*MEMBERS*/null;
 const NS = 'http://www.w3.org/2000/svg';
 const $ = (id) => document.getElementById(id);
 const map = $('map');
 const K0 = 1.78;
 const KEY = 'tvc-sitemap-editor-v1';
 const CL = { H1A: 'H1-A', H1B: 'H1-B', H2: 'H2' };
-const TYPES = { S: 'S: 1 BHK', DG: 'DG: 2 BHK, ground floor', DF: 'DF: 2 BHK, first floor', DO: 'DO: 2 BHK, two blocks', TO: 'TO: 3 BHK, two blocks' };
+const TYPES = { S: 'S: 1 BHK', DG: 'DG: 2 BHK', DF: 'DF: 2 BHK', DO: 'DO: 2 BHK', TO: 'TO: 3 BHK' };
 const IDS = Object.keys(DATA.houses);
 
 /* ---------- unit geometry (local frame: origin = centre of the base foundation, top = back, bottom = road) ---------- */
@@ -367,7 +377,14 @@ function render() {
   set($('rot'), r1(norm(s.rot))); $('rotr').value = norm(s.rot);
   set($('px'), r1(s.bx)); set($('py'), r1(s.by));
   set($('kn'), st.k); $('kr').value = st.k;
-  $('ksize').textContent = `${CL[st.cluster]} base size`;
+  if (MEMBERS) {
+    const m = MEMBERS[st.sel]; $('whocard').hidden = false;
+    $('whoname').textContent = st.sel + (m ? ' · ' + m.o : ' · no member recorded yet');
+    $('whoplot').textContent = m && m.a != null ? m.a.toLocaleString('en-IN', { maximumFractionDigits: 1 }) + ' sq ft' : 'not recorded yet';
+    $('whoplot').className = m && m.a != null ? '' : 'muted';
+    $('whotype').textContent = m ? m.t : '—';
+  }
+  $('ksize').textContent =`${CL[st.cluster]} base size`;
   $('size').textContent = `Base L-shape: 34 × 37 × ${st.k.toFixed(2)} = ${(34 * st.k).toFixed(1)} × ${(37 * st.k).toFixed(1)} plan units.`;
   $('mx').classList.toggle('on', s.fx); $('my').classList.toggle('on', s.fy);
   $('done').classList.toggle('on', s.done); $('done').textContent = s.done ? 'Checked ✓' : 'Mark checked';

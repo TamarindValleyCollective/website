@@ -35,6 +35,11 @@ cluster, because the three PDF pages were drawn at different scales; it applies 
 own centre. There is no per-unit scale. Units are anchored on the centre of the base L-shape, so mirroring or changing type never
 moves the foundation. "Mark checked" tracks which homes have been reviewed. Edits autosave in the browser; "Download JSON"
 (`site-map-edits.json`: x, y of the base centre, rotation, mirrorX, mirrorY, type, per home) is the real save.
+Member card: open `out/site-map-editor.local.html` (not the plain one) to see the selected home's owners, house plot size
+(`member_house_pattas.area_sq_ft`, recorded for only 9 homes so far) and the unit type on the member record. It is built from
+`out/member-info.local.json`, which holds personal data and is gitignored (`*.local.*`); regenerate it from the TVC ERP
+database with a read-only query joining `member_households` (house_no), `member_household_members` (role = 'owner') to
+`member_people` (full_name) and `member_house_pattas`. The plain `site-map-editor.html` has no names and is safe to commit.
 Rebuild with `python3 -I scripts/build_editor.py out` (reads the data already embedded in `site-map-mockup.html`).
 Next: load the exported JSON as overrides in `place.py`/`build.py` so the map mockup and any portal view use it.
 

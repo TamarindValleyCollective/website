@@ -122,10 +122,10 @@ select, .btn { font: inherit; font-size: .9rem; color: var(--ink); background: v
 const DATA = /*DATA*/null;
 const TYPES = {
   S:  ['1 BHK', 'All on the ground floor: kitchen and hall in a row, with the bedroom below the hall. The base of every other type.'],
-  DG: ['2 BHK, ground floor', 'All on the ground floor: the S unit with a second bedroom behind the kitchen.'],
-  DF: ['2 BHK, first floor', 'The S footprint, with the second bedroom on the first floor above the ground-floor bedroom.'],
-  DO: ['2 BHK, two blocks', 'The S unit with a second ground-floor bedroom in a separate block, joined by a passage.'],
-  TO: ['3 BHK, two blocks', 'Like DO, with a third bedroom on the first floor above the main block\'s bedroom.']
+  DG: ['2 BHK', 'All on the ground floor: the S unit with a second bedroom behind the kitchen.'],
+  DF: ['2 BHK', 'The S footprint, with the second bedroom on the first floor above the ground-floor bedroom.'],
+  DO: ['2 BHK', 'The S unit with a second ground-floor bedroom in a separate block, joined by a passage.'],
+  TO: ['3 BHK', 'Like DO, with a third bedroom on the first floor above the main block\'s bedroom.']
 };
 const GLYPHS = {
   S: '<g transform="translate(0 -0.5)"><rect class="blk" x="-17" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-18" width="17" height="15"/><rect class="blk" x="0" y="-3" width="17" height="22"/></g>',
@@ -148,7 +148,7 @@ defs.innerHTML = Object.entries(GLYPHS).map(([k, g]) => `<g id="g-${k}">${g}</g>
 map.appendChild(defs);
 $('legend').innerHTML = Object.entries(TYPES).map(([k, [n, d]]) =>
   `<li><svg viewBox="-30 -46 60 92" aria-hidden="true"><use href="#g-${k}"/></svg><div><b>${n}</b><span>${d}</span></div></li>`).join('');
-$('tsel').innerHTML = Object.entries(TYPES).map(([k, [n]]) => `<option value="${k}">${n}</option>`).join('');
+$('tsel').innerHTML = Object.entries(TYPES).map(([k, [n]]) => `<option value="${k}">${k}: ${n}</option>`).join('');
 $('me').innerHTML = names.map((h) => `<option>${h}</option>`).join('');
 $('me').value = st.me;
 $('tabs').innerHTML = Object.entries(CL).map(([k, v]) => `<button type="button" data-c="${k}" aria-pressed="false">${v}</button>`).join('');
