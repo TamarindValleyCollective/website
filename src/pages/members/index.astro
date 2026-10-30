@@ -1745,6 +1745,138 @@ import SignInGate from '../../components/SignInGate.astro';
     font-size: var(--text-sm);
   }
 
+  /* Blocked dates: a month calendar. Cells are 44px tall for a thumb; the colours say what each night is. */
+  .cal {
+    max-width: 340px;
+    margin: 0 0 8px;
+  }
+
+  .cal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0 0 6px;
+  }
+
+  .cal-nav {
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: var(--radius-field);
+    background: none;
+    color: var(--tvc-green-dark);
+    font-size: 1.5rem;
+    cursor: pointer;
+  }
+
+  .cal-nav:disabled {
+    color: var(--tvc-line-strong);
+    cursor: default;
+  }
+
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px 0;
+  }
+
+  .cal-dow {
+    padding: 4px 0;
+    text-align: center;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .cal-day {
+    height: 44px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-base);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+  }
+
+  .cal-day:hover {
+    background: var(--tvc-cream);
+  }
+
+  .cal-day--today {
+    font-weight: 700;
+    box-shadow: inset 0 0 0 1px var(--tvc-line-strong);
+  }
+
+  .cal-day--past {
+    color: var(--tvc-line-strong);
+    cursor: default;
+  }
+
+  .cal-day--past:hover {
+    background: none;
+  }
+
+  .cal-day--mine,
+  .cal-swatch--mine {
+    background: color-mix(in srgb, var(--tvc-green-dark) 18%, var(--tvc-white));
+  }
+
+  .cal-day--farm,
+  .cal-day--tvc,
+  .cal-swatch--farm {
+    background: var(--tvc-cream);
+    color: var(--tvc-ink-soft);
+    text-decoration: line-through;
+  }
+
+  .cal-day--stay,
+  .cal-swatch--stay {
+    background: color-mix(in srgb, var(--tvc-orange) 22%, var(--tvc-white));
+  }
+
+  .cal-day--mine:hover,
+  .cal-day--farm:hover,
+  .cal-day--tvc:hover,
+  .cal-day--stay:hover {
+    background: inherit;
+  }
+
+  .cal-day--in {
+    background: color-mix(in srgb, var(--tvc-green-dark) 12%, var(--tvc-white));
+    border-radius: 0;
+  }
+
+  .cal-day--edge,
+  .cal-day--edge:hover {
+    background: var(--tvc-green-dark);
+    color: var(--tvc-white);
+    font-weight: 700;
+  }
+
+  .cal-key {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    align-items: center;
+    margin: 8px 0 0;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .cal-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: 4px;
+  }
+
+  .cal-note {
+    margin: 8px 0 10px;
+  }
+
   .rent-set {
     display: grid;
     gap: 2px;
@@ -5222,18 +5354,94 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     homeLine.hidden = true;
     const body = h('div', 'rent');
     root.append(homeLine, body);
-    // The date fields live outside paint() so a repaint (after any action) does not wipe what is half typed.
-    const from = h('input') as HTMLInputElement;
-    const to = h('input') as HTMLInputElement;
-    for (const [i, id, l] of [[from, 'rent-from', 'First night'], [to, 'rent-to', 'Last night']] as [HTMLInputElement, string, string][]) {
-      i.type = 'date';
-      i.id = id;
-      i.setAttribute('aria-label', l);
-      i.min = new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10); // today, in India
-    }
-    from.addEventListener('change', () => {
-      if (from.value) to.min = from.value;
+    // ---- Blocked dates: a month calendar. It lives outside paint() so a repaint (after any action) keeps the month and the
+    // nights half chosen. Tap the first night, then the last (the same day again for one night).
+    const isoOf = (dt: Date) => dt.toISOString().slice(0, 10);
+    const todayIso = isoOf(new Date(Date.now() + 330 * 60_000)); // today, in India
+    const plusDays = (iso: string, n: number) => isoOf(new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000));
+    const MAX_BLOCK = 90; // matches MAX_BLOCK_NIGHTS on the server
+    const cal = { month: todayIso.slice(0, 7), start: '', end: '' };
+    const calEl = h('div', 'cal');
+    const calNote = h('p', 'rent-note cal-note');
+    const calBtn = h('button', 'btn btn--solid', 'Block these nights') as HTMLButtonElement;
+    calBtn.type = 'button';
+    calBtn.disabled = true;
+    let doBlock = async (_from: string, _to: string): Promise<boolean> => false; // set by paint(), which owns act()
+    calBtn.addEventListener('click', async () => {
+      if (!cal.start || !cal.end) return;
+      if (await doBlock(cal.start, cal.end)) {
+        cal.start = '';
+        cal.end = '';
+        renderCal();
+      }
     });
+    const nightsIn = (a: string, b: string) => (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000 + 1;
+    const renderCal = () => {
+      const focusKey = (document.activeElement as HTMLElement | null)?.closest('.cal') ? (document.activeElement as HTMLElement).dataset.fk : undefined;
+      const taken = new Map<string, 'mine' | 'farm' | 'tvc' | 'stay'>();
+      for (const b of rental?.blocks ?? []) for (let n = 0; n < b.nights; n++) taken.set(plusDays(b.startDate, n), b.farm ? 'farm' : b.mine ? 'mine' : 'tvc');
+      for (const st of rental?.stays ?? []) for (let n = 0; n < st.nights; n++) taken.set(plusDays(st.startDate, n), 'stay');
+      const [y, m] = cal.month.split('-').map(Number);
+      const lead = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(); // Sunday first
+      const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+      const shift = (by: number) => {
+        const next = new Date(Date.UTC(y, m - 1 + by, 1));
+        cal.month = isoOf(next).slice(0, 7);
+        renderCal();
+      };
+      const nav = (label: string, glyph: string, by: number, off: boolean, fk: string) => {
+        const b = h('button', 'cal-nav', glyph) as HTMLButtonElement;
+        b.type = 'button';
+        b.disabled = off;
+        b.dataset.fk = fk;
+        b.setAttribute('aria-label', label);
+        b.addEventListener('click', () => shift(by));
+        return b;
+      };
+      const last = plusDays(todayIso, 540).slice(0, 7); // about 18 months ahead
+      const title = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+      const cells: HTMLElement[] = [];
+      for (const w of ['S', 'M', 'T', 'W', 'T', 'F', 'S']) cells.push(h('span', 'cal-dow', w));
+      for (let n = 0; n < lead; n++) cells.push(h('span', 'cal-pad'));
+      for (let day = 1; day <= days; day++) {
+        const iso = `${cal.month}-${String(day).padStart(2, '0')}`;
+        const kind = taken.get(iso);
+        const past = iso < todayIso;
+        const edge = iso === cal.start || iso === cal.end;
+        const inside = !!cal.start && !!cal.end && iso > cal.start && iso < cal.end;
+        const cls = ['cal-day', kind ? `cal-day--${kind}` : '', past ? 'cal-day--past' : '', edge ? 'cal-day--edge' : '', inside ? 'cal-day--in' : '', iso === todayIso ? 'cal-day--today' : ''].filter(Boolean).join(' ');
+        const b = h('button', cls, String(day)) as HTMLButtonElement;
+        b.type = 'button';
+        b.dataset.fk = iso;
+        const what = kind === 'mine' ? 'blocked by you' : kind === 'farm' ? 'the farm is closed' : kind === 'tvc' ? 'unavailable' : kind === 'stay' ? 'a guest is staying' : past ? 'in the past' : 'free';
+        b.setAttribute('aria-label', `${dateLabel(iso)}, ${what}`);
+        if (edge || inside) b.setAttribute('aria-pressed', 'true');
+        b.addEventListener('click', () => {
+          if (past) return;
+          if (kind) return toast(kind === 'mine' ? 'You blocked this night. Remove it from the list.' : kind === 'stay' ? 'A guest is staying that night.' : 'This night is already closed.');
+          if (!cal.start || cal.end) {
+            cal.start = iso;
+            cal.end = '';
+          } else if (iso < cal.start) cal.start = iso;
+          else {
+            for (let d = cal.start; d <= iso; d = plusDays(d, 1)) if (taken.has(d)) return toast('Some of those nights are not free.');
+            if (nightsIn(cal.start, iso) > MAX_BLOCK) return toast(`You can block at most ${MAX_BLOCK} nights at a time.`);
+            cal.end = iso;
+          }
+          renderCal();
+        });
+        cells.push(b);
+      }
+      calEl.replaceChildren(
+        h('div', 'cal-head', undefined, nav('Earlier month', '‹', -1, cal.month <= todayIso.slice(0, 7), 'prev'), h('b', '', title), nav('Later month', '›', 1, cal.month >= last, 'next')),
+        h('div', 'cal-grid', undefined, ...cells),
+        h('p', 'cal-key', undefined, h('span', 'cal-swatch cal-swatch--mine'), 'Blocked by you', h('span', 'cal-swatch cal-swatch--farm'), 'Closed', h('span', 'cal-swatch cal-swatch--stay'), 'Guest'));
+      const n = cal.start && cal.end ? nightsIn(cal.start, cal.end) : 0;
+      calNote.textContent = !cal.start ? 'Tap the first night.' : !cal.end ? 'Tap the last night, or the same day again for one night.' : `${dateLabel(cal.start)} to ${dateLabel(cal.end)} · ${n} night${n === 1 ? '' : 's'}`;
+      calBtn.disabled = !cal.end;
+      calBtn.textContent = n ? `Block ${n} night${n === 1 ? '' : 's'}` : 'Block these nights';
+      if (focusKey) (calEl.querySelector(`[data-fk="${focusKey}"]`) as HTMLElement | null)?.focus();
+    };
     let editingSettings = false; // the Requests card shows its setting until Change is pressed
 
     const paint = () => {
@@ -5318,7 +5526,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
             await act('/api/members-me/rental/payout', { payeeName: name.value, method: method.value, account: account.value, ifsc: ifsc.value, upi: upi.value, pan: pan.value }, 'Saved. TVC will check it before paying you.', save, 'Saving…');
           });
           box.replaceChildren(
-            say('Encrypted. We show only the last four characters.'),
+            say('TVC collects the guests’ payments and pays your share here. A PAN is needed for every payout. Details are encrypted; we show only the last four characters.'),
             h('label', 'rent-field', undefined, h('span', 'field-label', 'Name on the account'), name),
             h('label', 'rent-field', undefined, h('span', 'field-label', 'Pay me by'), method),
             bankRows,
@@ -5433,7 +5641,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         const label = d.types?.find((t) => t.id === u.typeId)?.label ?? '';
         sections.push(card('Your unit',
           say(`${label} · ${u.shape === 'room' ? 'one room' : 'whole unit'} · ${u.manager === 'tvc' ? 'TVC manages it' : 'you manage it'}`),
-          d.payout?.maintenance ? say('Your share is set against your maintenance.') : null));
+          d.payout?.maintenance ? say('Your share of guest payments is set against your maintenance, so there is nothing to enter.') : null));
 
         // Set once and left alone: the card says what is set, and the choices open only after Change.
         const mode = RENTAL_MODES.find(([v]) => v === u.requestMode);
@@ -5479,15 +5687,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           sections.push(card('Taking guests', ...opts, keepOpen, settingsBtn('Done', false)));
         }
 
-        const add = h('button', 'btn', 'Block these nights') as HTMLButtonElement;
-        add.type = 'button';
-        add.addEventListener('click', async () => {
-          if (!from.value || !to.value) return toast('Choose the first and the last night.');
-          if (await act('/api/members-me/rental/blocks', { from: from.value, to: to.value }, 'Nights blocked.', add, 'Blocking…')) {
-            from.value = '';
-            to.value = '';
-          }
-        });
+        doBlock = (from, to) => act('/api/members-me/rental/blocks', { from, to }, 'Nights blocked.', calBtn, 'Blocking…');
+        renderCal();
         const blocks = d.blocks ?? [];
         sections.push(card('Blocked dates',
           blocks.length
@@ -5502,7 +5703,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
                 return li;
               }))
             : null,
-          h('div', 'rent-dates', undefined, h('label', 'rent-field', undefined, h('span', 'field-label', 'First night'), from), h('label', 'rent-field', undefined, h('span', 'field-label', 'Last night'), to), add)));
+          calEl, calNote, calBtn));
 
         const stays = d.stays ?? [];
         sections.push(card('Stays',
