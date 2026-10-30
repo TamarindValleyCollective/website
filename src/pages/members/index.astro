@@ -5243,7 +5243,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const payoutCard = (): HTMLElement | null => {
         const pay = d.payout;
         if (!pay) return null;
-        if (pay.maintenance) return card('How you are paid', say('Set against your maintenance. Nothing to enter.'));
+        if (pay.maintenance) return null; // nothing to enter: it is one line in Your rental instead of a card
         if (!pay.needed) return null;
         const a = pay.account;
         let editing = !a;
@@ -5388,7 +5388,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         const label = d.types?.find((t) => t.id === u.typeId)?.label ?? '';
         sections.push(card('Your rental',
           rentalStepper(stageIndex({ unitStatus: u.status })),
-          say(`${label} · ${u.shape === 'room' ? 'one room' : 'whole unit'} · ${u.manager === 'tvc' ? 'TVC manages it' : 'you manage it'}${d.state === 'paused' ? ' · paused by the core team' : ''}`)));
+          say(`${label} · ${u.shape === 'room' ? 'one room' : 'whole unit'} · ${u.manager === 'tvc' ? 'TVC manages it' : 'you manage it'}${d.state === 'paused' ? ' · paused by the core team' : ''}`),
+          d.payout?.maintenance ? say('Your share is set against your maintenance.') : null));
 
         // Set once and left alone: the card says what is set, and the choices open only after Change.
         const mode = RENTAL_MODES.find(([v]) => v === u.requestMode);
