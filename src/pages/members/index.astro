@@ -1884,6 +1884,25 @@ import SignInGate from '../../components/SignInGate.astro';
     border-radius: 4px;
   }
 
+  .cal-detail {
+    display: grid;
+    gap: 8px;
+    margin: 10px 0 0;
+    padding: 10px 12px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-field);
+    font-size: var(--text-sm);
+  }
+
+  .cal-detail p,
+  .cal-detail ul {
+    margin: 0;
+  }
+
+  .cal-detail .btn {
+    justify-self: start;
+  }
+
   .cal-note {
     margin: 8px 0 10px;
   }
@@ -5371,13 +5390,16 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const todayIso = isoOf(new Date(Date.now() + 330 * 60_000)); // today, in India
     const plusDays = (iso: string, n: number) => isoOf(new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000));
     const MAX_BLOCK = 90; // matches MAX_BLOCK_NIGHTS on the server
-    const cal = { month: todayIso.slice(0, 7), start: '', end: '' };
+    const cal = { month: todayIso.slice(0, 7), start: '', end: '', detail: '' }; // detail: a marked night the member tapped
     const calEl = h('div', 'cal');
+    const calDetail = h('div', 'cal-detail');
+    calDetail.hidden = true;
     const calNote = h('p', 'rent-note cal-note');
     const calBtn = h('button', 'btn btn--solid', 'Block these nights') as HTMLButtonElement;
     calBtn.type = 'button';
     calBtn.disabled = true;
     let doBlock = async (_from: string, _to: string): Promise<boolean> => false; // set by paint(), which owns act()
+    let doRemove = async (_id: string): Promise<boolean> => false;
     calBtn.addEventListener('click', async () => {
       if (!cal.start || !cal.end) return;
       if (await doBlock(cal.start, cal.end)) {
@@ -5429,7 +5451,13 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         if (edge || inside) b.setAttribute('aria-pressed', 'true');
         b.addEventListener('click', () => {
           if (past) return;
-          if (kind) return toast(kind === 'mine' ? 'You blocked this night. Remove it from the list.' : kind === 'stay' ? 'A guest is staying that night.' : 'This night is already closed.');
+          if (kind) {
+            cal.detail = iso;
+            cal.start = '';
+            cal.end = '';
+            return renderCal();
+          }
+          cal.detail = '';
           if (!cal.start || cal.end) {
             cal.start = iso;
             cal.end = '';
@@ -5443,12 +5471,51 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         });
         cells.push(b);
       }
+      // What is on the night the member tapped: a stay's guests, or a block with its Remove.
+      calDetail.replaceChildren();
+      calDetail.hidden = true;
+      if (cal.detail) {
+        const kind = taken.get(cal.detail);
+        const stay = kind === 'stay' ? (rental?.stays ?? []).find((x) => cal.detail >= x.startDate && cal.detail < plusDays(x.startDate, x.nights)) : undefined;
+        const block = kind && kind !== 'stay' ? (rental?.blocks ?? []).find((x) => cal.detail >= x.startDate && cal.detail < plusDays(x.startDate, x.nights)) : undefined;
+        if (stay) {
+          calDetail.append(
+            h('b', '', `${dateLabel(stay.startDate)} to ${endLabel(stay.startDate, stay.nights)} · ${stay.guests.length} guest${stay.guests.length === 1 ? '' : 's'}`),
+            h('ul', 'rent-guests', undefined, ...stay.guests.map((g) => h('li', '', `${g.name} · ${g.ageGroup}${g.gender ? `, ${g.gender.toLowerCase()}` : ''}${g.preferences ? ` · ${g.preferences}` : ''}`))));
+        } else if (block) {
+          const range = `${dateLabel(block.startDate)} to ${endLabel(block.startDate, block.nights)}`;
+          calDetail.append(h('p', '', block.farm ? `The farm is closed, ${range}.` : block.mine ? `Blocked by you, ${range} · ${block.nights} night${block.nights === 1 ? '' : 's'}.` : `Unavailable, set by TVC, ${range}.`));
+          if (block.mine) {
+            const rm = h('button', 'btn', 'Remove this block') as HTMLButtonElement;
+            rm.type = 'button';
+            rm.addEventListener('click', async () => {
+              if (await doRemove(block.id)) {
+                cal.detail = '';
+                renderCal();
+              }
+            });
+            calDetail.append(rm);
+          }
+        }
+        calDetail.hidden = !calDetail.childElementCount;
+      }
+      const upcoming = (rental?.stays ?? []).filter((x) => plusDays(x.startDate, x.nights) > todayIso).sort((a, b) => a.startDate.localeCompare(b.startDate))[0];
+      const nextStay = upcoming ? h('button', 'link-btn', `Next guests: ${dateLabel(upcoming.startDate)}`) as HTMLButtonElement : null;
+      nextStay?.setAttribute('type', 'button');
+      nextStay?.addEventListener('click', () => {
+        cal.detail = upcoming!.startDate < todayIso ? todayIso : upcoming!.startDate;
+        cal.month = cal.detail.slice(0, 7);
+        cal.start = '';
+        cal.end = '';
+        renderCal();
+      });
       calEl.replaceChildren(
         h('div', 'cal-head', undefined, nav('Earlier month', '‹', -1, cal.month <= todayIso.slice(0, 7), 'prev'), h('b', '', title), nav('Later month', '›', 1, cal.month >= last, 'next')),
         h('div', 'cal-grid', undefined, ...cells),
-        h('p', 'cal-key', undefined, h('span', 'cal-swatch cal-swatch--mine'), 'Blocked by you', h('span', 'cal-swatch cal-swatch--farm'), 'Closed', h('span', 'cal-swatch cal-swatch--stay'), 'Guest'));
+        h('p', 'cal-key', undefined, h('span', 'cal-swatch cal-swatch--mine'), 'Blocked by you', h('span', 'cal-swatch cal-swatch--farm'), 'Closed', h('span', 'cal-swatch cal-swatch--stay'), 'Guest'),
+        ...(nextStay ? [nextStay] : []));
       const n = cal.start && cal.end ? nightsIn(cal.start, cal.end) : 0;
-      calNote.textContent = !cal.start ? 'Tap the first night.' : !cal.end ? 'Tap the last night, or the same day again for one night.' : `${dateLabel(cal.start)} to ${dateLabel(cal.end)} · ${n} night${n === 1 ? '' : 's'}`;
+      calNote.textContent = !cal.start ? 'Tap free nights to block them. Tap a marked night for details.' : !cal.end ? 'Tap the last night, or the same day again for one night.' : `${dateLabel(cal.start)} to ${dateLabel(cal.end)} · ${n} night${n === 1 ? '' : 's'}`;
       calBtn.disabled = !cal.end;
       calBtn.textContent = n ? `Block ${n} night${n === 1 ? '' : 's'}` : 'Block these nights';
       if (focusKey) (calEl.querySelector(`[data-fk="${focusKey}"]`) as HTMLElement | null)?.focus();
@@ -5699,30 +5766,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         }
 
         doBlock = (from, to) => act('/api/members-me/rental/blocks', { from, to }, 'Nights blocked.', calBtn, 'Blocking…');
+        doRemove = (id) => act('/api/members-me/rental/blocks/remove', { id }, 'Block removed.');
         renderCal();
-        const blocks = d.blocks ?? [];
-        sections.push(card('Blocked dates',
-          blocks.length
-            ? h('ul', 'rent-list', undefined, ...blocks.map((b) => {
-                const li = h('li', '', undefined, h('span', '', b.farm ? `${dateLabel(b.startDate)} to ${endLabel(b.startDate, b.nights)}: the farm is closed` : `${dateLabel(b.startDate)} to ${endLabel(b.startDate, b.nights)} · ${b.nights} night${b.nights === 1 ? '' : 's'}${b.mine ? '' : ' · unavailable (TVC)'}`));
-                if (b.mine) {
-                  const rm = h('button', 'link-btn', 'Remove') as HTMLButtonElement;
-                  rm.type = 'button';
-                  rm.addEventListener('click', () => void act('/api/members-me/rental/blocks/remove', { id: b.id }, 'Block removed.', rm, 'Removing…'));
-                  li.append(rm);
-                }
-                return li;
-              }))
-            : null,
-          calEl, calNote, calBtn));
-
-        const stays = d.stays ?? [];
-        sections.push(card('Stays',
-          stays.length
-            ? h('ul', 'rent-list rent-stays', undefined, ...stays.map((st) => h('li', '', undefined,
-                h('b', '', `${dateLabel(st.startDate)} to ${endLabel(st.startDate, st.nights)} · ${st.guests.length} guest${st.guests.length === 1 ? '' : 's'}`),
-                h('ul', 'rent-guests', undefined, ...st.guests.map((g) => h('li', '', `${g.name} · ${g.ageGroup}${g.gender ? `, ${g.gender.toLowerCase()}` : ''}${g.preferences ? ` · ${g.preferences}` : ''}`))))))
-            : say('No stays yet.')));
+        sections.push(card('Calendar', calEl, calDetail, calNote, calBtn));
         const pc2 = payoutCard();
         if (pc2) sections.push(pc2);
       }
