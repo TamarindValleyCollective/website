@@ -1692,9 +1692,20 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   /* ---- Rent out ---- */
+  /* Two balanced columns on a wide screen, one on a phone: the cards differ a lot in height, so columns pack them without gaps. */
   .rent {
-    display: grid;
-    gap: 14px;
+    columns: 2 360px;
+    column-gap: 14px;
+  }
+
+  .rent > .unit-card {
+    break-inside: avoid;
+    margin: 0 0 14px;
+  }
+
+  .rent > .rent-alert {
+    column-span: all;
+    margin: 0 0 14px;
   }
 
   .rent-note {
