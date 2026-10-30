@@ -1777,28 +1777,33 @@ import SignInGate from '../../components/SignInGate.astro';
     margin-left: 8px;
   }
 
-  /* One month shows on a narrow card, then two, then three: each stays a comfortable 340px, never stretched. */
+  /* A flexible left pane (details and what is coming up) and a fixed right pane (two months, stacked). On a narrow card the
+     calendar comes first and shows one month. */
   .cal-months {
     display: grid;
-    grid-template-columns: minmax(0, 340px);
-    gap: 20px 40px;
+    gap: 20px;
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .cal-month--1,
-  .cal-month--2 {
+  .cal-month--1 {
     display: none;
   }
 
   .cal-layout {
     display: grid;
-    gap: 8px 40px;
+    gap: 16px 40px;
+  }
+
+  .cal {
+    order: -1;
+    max-width: 340px;
   }
 
   .cal-side {
     display: grid;
     align-content: start;
     gap: 0;
-    max-width: 340px;
+    max-width: 640px;
   }
 
   .cal-links {
@@ -1808,29 +1813,56 @@ import SignInGate from '../../components/SignInGate.astro';
     margin: 10px 0 0;
   }
 
-  @container rent (min-width: 700px) {
-    .cal-months {
-      grid-template-columns: repeat(2, minmax(0, 340px));
+  .cal-agenda {
+    display: grid;
+    gap: 2px;
+    margin: 16px 0 0;
+  }
+
+  .cal-agenda:empty {
+    display: none;
+  }
+
+  .cal-agenda-title {
+    margin: 0 0 4px;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .cal-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: var(--radius-field);
+    background: none;
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-base);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .cal-row:hover {
+    background: var(--tvc-cream);
+  }
+
+  .cal-row-what {
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  @container rent (min-width: 760px) {
+    .cal-layout {
+      grid-template-columns: minmax(0, 1fr) 340px;
+    }
+
+    .cal {
+      order: 0;
     }
 
     .cal-month--1 {
-      display: block;
-    }
-  }
-
-  @container rent (min-width: 1100px) {
-    .cal-layout {
-      grid-template-columns: auto 300px;
-      justify-content: start;
-    }
-  }
-
-  @container rent (min-width: 1480px) {
-    .cal-months {
-      grid-template-columns: repeat(3, minmax(0, 340px));
-    }
-
-    .cal-month--2 {
       display: block;
     }
   }
@@ -5482,6 +5514,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     });
     const nightsIn = (a: string, b: string) => (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000 + 1;
     const calLinks = h('p', 'cal-links');
+    const calAgenda = h('div', 'cal-agenda');
     const monthOf = (iso: string) => iso.slice(0, 7);
     const renderCal = () => {
       const focusKey = (document.activeElement as HTMLElement | null)?.closest('.cal') ? (document.activeElement as HTMLElement).dataset.fk : undefined;
@@ -5612,9 +5645,27 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       };
       calLinks.replaceChildren(...[earlier ? jump(`Last guests: ${dateLabel(earlier.startDate)}`, earlier) : null, upcoming ? jump(`Next guests: ${dateLabel(upcoming.startDate)}`, upcoming) : null].filter((x): x is HTMLButtonElement => !!x));
 
+      // Coming up: what is next on the unit, so the left pane is useful without a tap. A row jumps the calendar to it.
+      const ahead: { start: string; end: string; what: string }[] = [
+        ...(rental?.stays ?? []).map((x) => ({ start: x.startDate, end: plusDays(x.startDate, x.nights), what: `${x.guests.length} guest${x.guests.length === 1 ? '' : 's'}` })),
+        ...(rental?.blocks ?? []).map((x) => ({ start: x.startDate, end: plusDays(x.startDate, x.nights), what: x.farm ? 'Farm closed' : x.mine ? 'Blocked by you' : 'Unavailable' })),
+      ].filter((x) => x.end > todayIso).sort((a, b) => a.start.localeCompare(b.start)).slice(0, 5);
+      calAgenda.replaceChildren(...(ahead.length ? [h('b', 'cal-agenda-title', 'Coming up'), ...ahead.map((x) => {
+        const row = h('button', 'cal-row', undefined, h('span', '', `${dateLabel(x.start)} to ${dateLabel(plusDays(x.end, -1))}`), h('span', 'cal-row-what', x.what)) as HTMLButtonElement;
+        row.type = 'button';
+        row.addEventListener('click', () => {
+          cal.detail = x.start < todayIso ? todayIso : x.start;
+          cal.month = cal.detail.slice(0, 7);
+          cal.start = '';
+          cal.end = '';
+          renderCal();
+        });
+        return row;
+      })] : []));
+
       calEl.replaceChildren(
         navRow,
-        h('div', 'cal-months', undefined, monthEl(monthAt(0), 0), monthEl(monthAt(1), 1), monthEl(monthAt(2), 2)),
+        h('div', 'cal-months', undefined, monthEl(monthAt(0), 0), monthEl(monthAt(1), 1)),
         h('p', 'cal-key', undefined, h('span', 'cal-swatch cal-swatch--mine'), 'Blocked by you', h('span', 'cal-swatch cal-swatch--farm'), 'Closed', h('span', 'cal-swatch cal-swatch--stay'), 'Guests'));
       const n = cal.start && cal.end ? nightsIn(cal.start, cal.end) : 0;
       calNote.textContent = !cal.start ? 'Tap free nights to block them. Tap a marked night for details.' : !cal.end ? 'Tap the last night, or the same day again for one night.' : `${dateLabel(cal.start)} to ${dateLabel(cal.end)} · ${n} night${n === 1 ? '' : 's'}`;
@@ -5872,7 +5923,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         renderCal();
         const pc2 = payoutCard();
         if (pc2) sections.push(pc2);
-        const calCard = card('Calendar', h('div', 'cal-layout', undefined, calEl, h('div', 'cal-side', undefined, calDetail, calNote, calBtn, calLinks)));
+        const calCard = card('Calendar', h('div', 'cal-layout', undefined, h('div', 'cal-side', undefined, calDetail, calNote, calBtn, calAgenda, calLinks), calEl));
         calCard.classList.add('unit-card--cal');
         sections.push(calCard);
       }
