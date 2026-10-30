@@ -1735,6 +1735,16 @@ import SignInGate from '../../components/SignInGate.astro';
     line-height: 1.4;
   }
 
+  .rent-alert {
+    margin: 0;
+    padding: 10px 14px;
+    border: 1px solid var(--tvc-error-border);
+    border-radius: var(--radius-field);
+    background: var(--tvc-error-bg);
+    color: var(--tvc-error-text);
+    font-size: var(--text-sm);
+  }
+
   .rent-set {
     display: grid;
     gap: 2px;
@@ -1819,8 +1829,8 @@ import SignInGate from '../../components/SignInGate.astro';
   .rent-dates {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
+    gap: 8px 12px;
+    align-items: end;
   }
 
   .rent-dates input {
@@ -4039,6 +4049,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     p.setAttribute('title', 'You are among the first to try this. Tell the core team what works and what does not.');
     return p;
   };
+  const previewNote = () => h('p', 'rent-note', 'You are among the first to try this. Tell the core team what works and what does not.');
   const NAV: NavItem[] = [
     { id: 'dashboard', label: 'Home', icon: IC.dash },
     { id: 'unit', label: 'My unit', icon: IC.unit },
@@ -5206,19 +5217,33 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
   function viewRental(): HTMLElement {
     const root = h('div');
-    root.append(h('h1', 'page-title', 'Rent out', ...(rental?.preview ? [previewPill()] : [])), h('p', 'lede', 'Let guests book your unit through Linger.'));
+    root.append(h('h1', 'page-title', 'Rent out', ...(rental?.preview ? [previewPill()] : [])), h('p', 'lede', 'Let guests book your unit through Linger.'), ...(rental?.preview ? [previewNote()] : []));
     const homeLine = h('p', 'rent-note');
     homeLine.hidden = true;
     const body = h('div', 'rent');
     root.append(homeLine, body);
+    // The date fields live outside paint() so a repaint (after any action) does not wipe what is half typed.
+    const from = h('input') as HTMLInputElement;
+    const to = h('input') as HTMLInputElement;
+    for (const [i, id, l] of [[from, 'rent-from', 'First night'], [to, 'rent-to', 'Last night']] as [HTMLInputElement, string, string][]) {
+      i.type = 'date';
+      i.id = id;
+      i.setAttribute('aria-label', l);
+      i.min = new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10); // today, in India
+    }
+    from.addEventListener('change', () => {
+      if (from.value) to.min = from.value;
+    });
     let editingSettings = false; // the Requests card shows its setting until Change is pressed
 
     const paint = () => {
       const d = rental;
+      const focusKey = (document.activeElement as HTMLElement | null)?.dataset?.fk; // put focus back on the same control after the repaint
       homeLine.hidden = !d?.houseNo;
       if (d?.houseNo) homeLine.textContent = `Home ${d.houseNo}`;
       if (!d?.eligible) return body.replaceChildren(h('p', 'lede', 'This page is for the owners of a unit.'));
       const sections: HTMLElement[] = [];
+      if (d.state === 'paused') sections.push(h('p', 'rent-alert', 'Paused by the core team. Your unit is not offered to guests until it is resumed.'));
       const card = (title: string, ...kids: (HTMLElement | null)[]) => h('section', 'unit-card', undefined, h('div', 'unit-card-head', undefined, h('h2', '', title)), h('div', 'unit-card-body', undefined, ...kids));
       const say = (text: string) => h('p', 'rent-note', text);
       const act = async (path: string, payload: unknown, done: string, btn?: HTMLButtonElement, doing?: string): Promise<boolean> => {
@@ -5303,7 +5328,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           );
         };
         paint2();
-        return card('How you are paid', box);
+        const c = card('How you are paid', box);
+        c.querySelector('.unit-card-head')?.append(h('span', 'pill', !a ? 'Needed before you are paid' : a.status === 'verified' ? 'Verified' : 'Waiting for verification'));
+        return c;
       };
 
       if (d.state === 'none') {
@@ -5311,7 +5338,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         const size = h('select') as HTMLSelectElement;
         size.id = 'rent-size';
         for (const [v, l] of [['1bhk', '1 BHK'], ['2bhk', '2 BHK'], ['3bhk', '3 BHK']]) size.append(Object.assign(document.createElement('option'), { value: v, textContent: l }));
-        size.value = '2bhk';
+        // The home's own type decides the size; if it cannot be read the member chooses.
+        const own = (bedroomsOf(hhNow().unitType) ?? '').replace(' BHK', '');
+        size.prepend(Object.assign(document.createElement('option'), { value: '', textContent: 'Choose', disabled: true }));
+        size.value = ['1', '2', '3'].includes(own) ? `${own}bhk` : '';
         const delegate = h('input') as HTMLInputElement;
         delegate.type = 'checkbox';
         delegate.id = 'rent-delegate';
@@ -5328,9 +5358,20 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           b.type = 'button';
           b.setAttribute('role', 'radio');
           b.setAttribute('aria-checked', String(v === shape));
+          b.tabIndex = v === shape ? 0 : -1;
+          b.addEventListener('keydown', (ev) => {
+            if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+            ev.preventDefault();
+            const other = picks.find((o) => o !== b)!;
+            other.focus();
+            other.click();
+          });
           b.addEventListener('click', () => {
             shape = v;
-            for (const o of picks) o.setAttribute('aria-checked', String(o === b));
+            for (const o of picks) {
+              o.setAttribute('aria-checked', String(o === b));
+              o.tabIndex = o === b ? 0 : -1;
+            }
             wholeOnly.hidden = shape === 'room';
             roomOnly.hidden = shape === 'whole';
           });
@@ -5340,6 +5381,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         const send = h('button', 'btn btn--solid', 'I’m interested') as HTMLButtonElement;
         send.type = 'button';
         send.addEventListener('click', async () => {
+          if (shape === 'whole' && !size.value) return toast('Choose the size of your unit.');
           await act('/api/members-me/rental/offer', { shape, size: size.value, delegateToTvc: shape === 'whole' && delegate.checked }, 'Linger has been told. They will be in touch.', send, 'Sending…');
         });
         sections.push(card('Rent out your unit',
@@ -5367,6 +5409,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           mine.addEventListener('click', () => void openContractCopy('signed', mine));
           const up = h('button', 'btn btn--solid', k.hasSigned ? 'Replace my signed copy' : 'Upload my signed copy') as HTMLButtonElement;
           up.type = 'button';
+          up.disabled = true;
+          pick.addEventListener('change', () => (up.disabled = !pick.files?.length));
           up.addEventListener('click', async () => {
             const f = pick.files?.[0];
             if (!f) return toast('Choose your signed copy first.');
@@ -5387,9 +5431,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       } else if (d.unit) {
         const u = d.unit;
         const label = d.types?.find((t) => t.id === u.typeId)?.label ?? '';
-        sections.push(card('Your rental',
-          rentalStepper(stageIndex({ unitStatus: u.status })),
-          say(`${label} · ${u.shape === 'room' ? 'one room' : 'whole unit'} · ${u.manager === 'tvc' ? 'TVC manages it' : 'you manage it'}${d.state === 'paused' ? ' · paused by the core team' : ''}`),
+        sections.push(card('Your unit',
+          say(`${label} · ${u.shape === 'room' ? 'one room' : 'whole unit'} · ${u.manager === 'tvc' ? 'TVC manages it' : 'you manage it'}`),
           d.payout?.maintenance ? say('Your share is set against your maintenance.') : null));
 
         // Set once and left alone: the card says what is set, and the choices open only after Change.
@@ -5413,11 +5456,13 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           const open = h('input') as HTMLInputElement;
           open.type = 'checkbox';
           open.checked = u.ignoresFarmClosure;
+          open.dataset.fk = 'farm';
           open.addEventListener('change', () => void act('/api/members-me/rental/settings', { ignoresFarmClosure: open.checked }, open.checked ? 'Your unit stays open when the farm is closed.' : 'Your unit closes with the farm.'));
           const keepOpen = h('label', 'rent-check', undefined, open, h('span', '', 'Keep my unit open when the farm is closed'));
           const offerOn = h('input') as HTMLInputElement;
           offerOn.type = 'checkbox';
           offerOn.checked = u.requestMode !== 'reject';
+          offerOn.dataset.fk = 'offer';
           offerOn.addEventListener('change', () => void act('/api/members-me/rental/settings', { requestMode: offerOn.checked ? 'ask' : 'reject' }, offerOn.checked ? 'Your unit is offered to guests.' : 'Your unit is no longer offered.'));
           const offer = h('label', 'rent-check', undefined, offerOn, h('span', '', 'Offer my unit to guests'));
           const how = RENTAL_MODES.filter(([v]) => v !== 'reject').map(([v, t, text]) => {
@@ -5425,6 +5470,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
             r.type = 'radio';
             r.name = 'rent-mode';
             r.value = v;
+            r.dataset.fk = `mode-${v}`;
             r.checked = u.requestMode === v;
             r.addEventListener('change', () => void act('/api/members-me/rental/settings', { requestMode: v }, `${t}.`));
             return h('label', 'rent-opt', undefined, r, h('span', '', undefined, h('b', '', t.replace('On: ', '')), h('span', '', text)));
@@ -5433,24 +5479,20 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           sections.push(card('Taking guests', ...opts, keepOpen, settingsBtn('Done', false)));
         }
 
-        const from = h('input') as HTMLInputElement;
-        const to = h('input') as HTMLInputElement;
-        for (const [i, id, l] of [[from, 'rent-from', 'First night'], [to, 'rent-to', 'Last night']] as [HTMLInputElement, string, string][]) {
-          i.type = 'date';
-          i.id = id;
-          i.setAttribute('aria-label', l);
-        }
         const add = h('button', 'btn', 'Block these nights') as HTMLButtonElement;
         add.type = 'button';
         add.addEventListener('click', async () => {
           if (!from.value || !to.value) return toast('Choose the first and the last night.');
-          await act('/api/members-me/rental/blocks', { from: from.value, to: to.value }, 'Nights blocked.', add, 'Blocking…');
+          if (await act('/api/members-me/rental/blocks', { from: from.value, to: to.value }, 'Nights blocked.', add, 'Blocking…')) {
+            from.value = '';
+            to.value = '';
+          }
         });
         const blocks = d.blocks ?? [];
         sections.push(card('Blocked dates',
           blocks.length
             ? h('ul', 'rent-list', undefined, ...blocks.map((b) => {
-                const li = h('li', '', undefined, h('span', '', b.farm ? `${dateLabel(b.startDate)} to ${endLabel(b.startDate, b.nights)}: the farm is closed` : `${dateLabel(b.startDate)} to ${endLabel(b.startDate, b.nights)}${b.mine ? '' : ': unavailable (TVC)'}`));
+                const li = h('li', '', undefined, h('span', '', b.farm ? `${dateLabel(b.startDate)} to ${endLabel(b.startDate, b.nights)}: the farm is closed` : `${dateLabel(b.startDate)} to ${endLabel(b.startDate, b.nights)} · ${b.nights} night${b.nights === 1 ? '' : 's'}${b.mine ? '' : ' · unavailable (TVC)'}`));
                 if (b.mine) {
                   const rm = h('button', 'link-btn', 'Remove') as HTMLButtonElement;
                   rm.type = 'button';
@@ -5460,7 +5502,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
                 return li;
               }))
             : null,
-          h('div', 'rent-dates', undefined, from, to, add)));
+          h('div', 'rent-dates', undefined, h('label', 'rent-field', undefined, h('span', 'field-label', 'First night'), from), h('label', 'rent-field', undefined, h('span', 'field-label', 'Last night'), to), add)));
 
         const stays = d.stays ?? [];
         sections.push(card('Stays',
@@ -5473,14 +5515,16 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         if (pc2) sections.push(pc2);
       }
       body.replaceChildren(...sections);
+      if (focusKey) (body.querySelector(`[data-fk="${focusKey}"]`) as HTMLElement | null)?.focus();
     };
 
     const refresh = async () => {
       try {
         const { status, data } = await memberFetch('/api/members-me/rental');
         if (status === 200) rental = data;
+        else toast('Could not refresh this page. You may be seeing older details.');
       } catch {
-        // keep what is shown
+        toast('Could not refresh this page. You may be seeing older details.');
       }
       paint();
     };
@@ -6347,7 +6391,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
   function viewSiteMap(): HTMLElement {
     const root = h('div');
-    root.append(h('h1', 'page-title', 'Map', h('small', '', 'Every home'), ...(siteMap?.preview ? [previewPill()] : [])), h('p', 'lede', 'Tap a home to see who it belongs to and what type it is.'));
+    root.append(h('h1', 'page-title', 'Map', h('small', '', 'Every home'), ...(siteMap?.preview ? [previewPill()] : [])), h('p', 'lede', 'Tap a home to see who it belongs to and what type it is.'), ...(siteMap?.preview ? [previewNote()] : []));
     const data = siteMap;
     if (!data || !data.units.length) {
       root.append(h('p', 'lede', 'The site map is not available right now.'));
