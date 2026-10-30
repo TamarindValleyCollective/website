@@ -1706,10 +1706,10 @@ import SignInGate from '../../components/SignInGate.astro';
 
   .rent-opt {
     display: flex;
-    gap: 12px;
+    gap: 10px;
     align-items: flex-start;
-    margin: 0 0 10px;
-    padding: 12px;
+    margin: 0 0 8px;
+    padding: 10px 12px;
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius-field);
     cursor: pointer;
@@ -1733,6 +1733,27 @@ import SignInGate from '../../components/SignInGate.astro';
     font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
     line-height: 1.4;
+  }
+
+  .rent-pick {
+    margin: 0 0 12px;
+  }
+
+  .rent-check {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin: 0 0 12px;
+    font-size: var(--text-base);
+    cursor: pointer;
+  }
+
+  .rent-check input {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    accent-color: var(--tvc-green-dark);
   }
 
   .rent-field {
@@ -5162,16 +5183,16 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   }
 
   const RENTAL_MODES: [string, string, string][] = [
-    ['reject', 'Auto-reject (the default)', 'Your unit is not offered, so guests cannot be sent to it. Nothing for you to do.'],
-    ['ask', 'Ask me each time', 'When Madhavan allocates a guest to your unit, you accept or decline. If you do not answer within 24 hours it is declined.'],
-    ['auto', 'Auto-accept', 'A guest allocated to dates you have not blocked is accepted straight away.'],
+    ['reject', 'Auto-reject', 'Your unit is not offered to guests.'],
+    ['ask', 'Ask me each time', 'You accept or decline. No answer in 24 hours counts as declined.'],
+    ['auto', 'Auto-accept', 'Guests are accepted when the dates are free.'],
   ];
   const dateLabel = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
   const endLabel = (d: string, nights: number) => dateLabel(new Date(Date.parse(`${d}T00:00:00Z`) + nights * 86_400_000).toISOString().slice(0, 10));
 
   function viewRental(): HTMLElement {
     const root = h('div');
-    root.append(h('h1', 'page-title', 'Rent out', ...(rental?.preview ? [previewPill()] : [])), h('p', 'lede', 'Offer your unit to guests who book through Linger. TVC looks after the guests while they are here.'));
+    root.append(h('h1', 'page-title', 'Rent out', ...(rental?.preview ? [previewPill()] : [])), h('p', 'lede', 'Let guests book your unit through Linger.'));
     const homeLine = h('p', 'rent-note');
     homeLine.hidden = true;
     const body = h('div', 'rent');
@@ -5208,7 +5229,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const payoutCard = (): HTMLElement | null => {
         const pay = d.payout;
         if (!pay) return null;
-        if (pay.maintenance) return card('How you are paid', say('Your contract sets your share against your maintenance, so there is nothing to enter.'));
+        if (pay.maintenance) return card('How you are paid', say('Set against your maintenance. Nothing to enter.'));
         if (!pay.needed) return null;
         const a = pay.account;
         let editing = !a;
@@ -5223,7 +5244,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
             });
             return box.replaceChildren(
               say(`${a.payeeName} · ${a.method === 'bank' ? 'bank account' : 'UPI'} ${a.shown} · PAN ${a.panShown}`),
-              say(a.status === 'verified' ? 'Verified. TVC pays your share here.' : 'Saved. TVC will make a small test transfer to check it before paying you.'),
+              say(a.status === 'verified' ? 'Verified.' : 'Saved. TVC will make a small test transfer first.'),
               change,
             );
           }
@@ -5257,7 +5278,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
             await act('/api/members-me/rental/payout', { payeeName: name.value, method: method.value, account: account.value, ifsc: ifsc.value, upi: upi.value, pan: pan.value }, 'Saved. TVC will check it before paying you.', save, 'Saving…');
           });
           box.replaceChildren(
-            say('TVC collects the guests’ payments and pays your share. We keep these details encrypted and show them back only as the last four characters. A PAN is needed for every payout.'),
+            say('Encrypted. We show only the last four characters.'),
             h('label', 'rent-field', undefined, h('span', 'field-label', 'Name on the account'), name),
             h('label', 'rent-field', undefined, h('span', 'field-label', 'Pay me by'), method),
             bankRows,
@@ -5279,37 +5300,37 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         const delegate = h('input') as HTMLInputElement;
         delegate.type = 'checkbox';
         delegate.id = 'rent-delegate';
-        const whole = h('input') as HTMLInputElement;
-        const room = h('input') as HTMLInputElement;
-        for (const [r, v] of [[whole, 'whole'], [room, 'room']] as [HTMLInputElement, string][]) {
-          r.type = 'radio';
-          r.name = 'rent-shape';
-          r.value = v;
-        }
-        whole.checked = true;
         const wholeOnly = h('div', 'rent-more', undefined,
           h('label', 'rent-field', undefined, h('span', 'field-label', 'Size'), size),
-          h('label', 'rent-opt', undefined, delegate, h('span', '', undefined, h('b', '', 'Let TVC manage it for me'), h('span', '', 'Madhavan answers requests and looks after the stays. You see them here.'))));
-        const roomOnly = h('p', 'rent-note', 'For a room you accept or decline requests yourself. It starts on auto-reject, so nothing is offered until you choose otherwise.');
+          h('label', 'rent-check', undefined, delegate, h('span', '', 'TVC manages it for me')));
+        const roomOnly = h('p', 'rent-note', 'You answer requests for a room yourself.');
         roomOnly.hidden = true;
-        const sync = () => {
-          shape = room.checked ? 'room' : 'whole';
-          wholeOnly.hidden = shape === 'room';
-          roomOnly.hidden = shape === 'whole';
-        };
-        whole.addEventListener('change', sync);
-        room.addEventListener('change', sync);
-        const send = h('button', 'btn btn--solid', 'Tell Linger I’m interested') as HTMLButtonElement;
+        const seg = h('div', 'segmented rent-pick');
+        seg.setAttribute('role', 'radiogroup');
+        seg.setAttribute('aria-label', 'What you are offering');
+        const picks = ([['whole', 'Whole unit'], ['room', 'One room']] as ['whole' | 'room', string][]).map(([v, l]) => {
+          const b = h('button', '', l) as HTMLButtonElement;
+          b.type = 'button';
+          b.setAttribute('role', 'radio');
+          b.setAttribute('aria-checked', String(v === shape));
+          b.addEventListener('click', () => {
+            shape = v;
+            for (const o of picks) o.setAttribute('aria-checked', String(o === b));
+            wholeOnly.hidden = shape === 'room';
+            roomOnly.hidden = shape === 'whole';
+          });
+          return b;
+        });
+        seg.append(...picks);
+        const send = h('button', 'btn btn--solid', 'I’m interested') as HTMLButtonElement;
         send.type = 'button';
         send.addEventListener('click', async () => {
           await act('/api/members-me/rental/offer', { shape, size: size.value, delegateToTvc: shape === 'whole' && delegate.checked }, 'Linger has been told. They will be in touch.', send, 'Sending…');
         });
-        sections.push(card('Offer your unit',
-          say('Terms are the same for every member and depend only on the size of the unit. Linger agrees them with you before anything is offered.'),
-          h('label', 'rent-opt', undefined, whole, h('span', '', undefined, h('b', '', 'My whole unit'), h('span', '', 'Guests have the whole home to themselves.'))),
-          h('label', 'rent-opt', undefined, room, h('span', '', undefined, h('b', '', 'A single room'), h('span', '', 'You live there and rent out one room. It is booked as "1 bedroom".'))),
+        sections.push(card('Rent out your unit',
+          seg,
           wholeOnly, roomOnly,
-          say('When you press the button, TVC and Linger are told which unit you are offering, and Linger is given your name and sign-in email so they can get in touch with you.'),
+          say('Linger receives your name and email to get in touch.'),
           send));
       } else if (d.state === 'interested') {
         const label = d.types?.find((t) => t.id === d.offer?.typeId)?.label ?? '';
@@ -5337,13 +5358,13 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
             await act('/api/members-me/rental/contract/signed', { file: { mime: f.type, base64: await fileAsBase64(f) } }, 'Thank you. The core team will enable your unit.', up, 'Uploading…');
           });
           contractCard = card('Your contract',
-            say(k.hasSigned ? 'We have your signed copy. The core team will check it and enable your unit; you will see it here when they do.' : 'Read the contract. It is between you, TVC and Linger. Sign it, then upload the signed copy here (a PDF or a clear photo, up to 4 MB). Your unit is enabled once TVC has it.'),
+            say(k.hasSigned ? 'Signed copy received. The core team will enable your unit.' : 'Read it, sign it, then upload the signed copy (PDF or photo, up to 4 MB).'),
             h('div', 'rent-dates', undefined, read, k.hasSigned ? mine : null),
             k.canUpload ? h('div', 'rent-dates', undefined, pick, up) : null);
         }
-        sections.push(card('Waiting for the contract',
+        sections.push(card('Your offer',
           rentalStepper(stageIndex({ offerStatus: 'interested', contractStatus: k ? (k.stage === 'review' ? 'signed' : 'shared') : undefined })),
-          say(`Linger has been told and will get in touch to agree terms. Once the contract is signed, the core team enables your unit and it appears here with its settings. Offered as ${d.offer?.shape === 'room' ? '1 bedroom (a single room)' : `${label} (whole unit)${d.offer?.delegateToTvc ? ', managed by TVC' : ''}`}.`),
+          say(`Offered as ${d.offer?.shape === 'room' ? 'one room' : `${label}, whole unit${d.offer?.delegateToTvc ? ', managed by TVC' : ''}`}. Linger will be in touch.`),
           withdraw));
         if (contractCard) sections.unshift(contractCard);
         const pc = payoutCard();
@@ -5353,26 +5374,25 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         const label = d.types?.find((t) => t.id === u.typeId)?.label ?? '';
         sections.push(card('Your rental',
           rentalStepper(stageIndex({ unitStatus: u.status })),
-          say(`${label} · ${u.shape === 'room' ? 'a single room' : 'whole unit'} · ${u.manager === 'tvc' ? 'TVC manages it for you' : 'you manage it'}.${d.state === 'paused' ? ' The core team has paused it for now, so it is not offered.' : ''}`)));
-
-        if (u.manager === 'member') {
-          const opts = RENTAL_MODES.map(([v, t, text]) => {
-            const r = h('input') as HTMLInputElement;
-            r.type = 'radio';
-            r.name = 'rent-mode';
-            r.value = v;
-            r.checked = u.requestMode === v;
-            r.addEventListener('change', () => void act('/api/members-me/rental/settings', { requestMode: v }, `Requests: ${t.replace(' (the default)', '')}.`));
-            return h('label', 'rent-opt', undefined, r, h('span', '', undefined, h('b', '', t), h('span', '', text)));
-          });
-          sections.push(card('When Madhavan allocates a guest to your unit', ...opts));
-        } else sections.push(card('Requests', say('TVC manages your unit, so Madhavan answers requests for it. You can see the stays below.')));
+          say(`${label} · ${u.shape === 'room' ? 'one room' : 'whole unit'} · ${u.manager === 'tvc' ? 'TVC manages it' : 'you manage it'}${d.state === 'paused' ? ' · paused by the core team' : ''}`)));
 
         const open = h('input') as HTMLInputElement;
         open.type = 'checkbox';
         open.checked = u.ignoresFarmClosure;
         open.addEventListener('change', () => void act('/api/members-me/rental/settings', { ignoresFarmClosure: open.checked }, open.checked ? 'Your unit stays open when the farm is closed.' : 'Your unit closes with the farm.'));
-        sections.push(card('When the farm is closed', h('label', 'rent-opt', undefined, open, h('span', '', undefined, h('b', '', 'Keep my unit open'), h('span', '', 'The common kitchen may be closed while your own kitchen is not. Leave this off and your unit closes with the farm.')))));
+        const keepOpen = h('label', 'rent-check', undefined, open, h('span', '', 'Keep my unit open when the farm is closed'));
+        const opts = u.manager === 'member'
+          ? RENTAL_MODES.map(([v, t, text]) => {
+              const r = h('input') as HTMLInputElement;
+              r.type = 'radio';
+              r.name = 'rent-mode';
+              r.value = v;
+              r.checked = u.requestMode === v;
+              r.addEventListener('change', () => void act('/api/members-me/rental/settings', { requestMode: v }, `Requests: ${t}.`));
+              return h('label', 'rent-opt', undefined, r, h('span', '', undefined, h('b', '', t), h('span', '', text)));
+            })
+          : [say('TVC answers requests for your unit.')];
+        sections.push(card('Requests', ...opts, keepOpen));
 
         const from = h('input') as HTMLInputElement;
         const to = h('input') as HTMLInputElement;
@@ -5388,8 +5408,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           await act('/api/members-me/rental/blocks', { from: from.value, to: to.value }, 'Nights blocked.', add, 'Blocking…');
         });
         const blocks = d.blocks ?? [];
-        sections.push(card('Dates you are not available',
-          say('Block nights when you are away or have your own guests. Linger and the core team see only that the unit is unavailable, not why. A guest’s nights cannot be blocked.'),
+        sections.push(card('Blocked dates',
           blocks.length
             ? h('ul', 'rent-list', undefined, ...blocks.map((b) => {
                 const li = h('li', '', undefined, h('span', '', b.farm ? `${dateLabel(b.startDate)} to ${endLabel(b.startDate, b.nights)}: the farm is closed` : `${dateLabel(b.startDate)} to ${endLabel(b.startDate, b.nights)}${b.mine ? '' : ': unavailable (TVC)'}`));
@@ -5401,7 +5420,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
                 }
                 return li;
               }))
-            : say('Nothing blocked.'),
+            : null,
           h('div', 'rent-dates', undefined, from, to, add)));
 
         const stays = d.stays ?? [];
@@ -5410,8 +5429,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
             ? h('ul', 'rent-list rent-stays', undefined, ...stays.map((st) => h('li', '', undefined,
                 h('b', '', `${dateLabel(st.startDate)} to ${endLabel(st.startDate, st.nights)} · ${st.guests.length} guest${st.guests.length === 1 ? '' : 's'}`),
                 h('ul', 'rent-guests', undefined, ...st.guests.map((g) => h('li', '', `${g.name} · ${g.ageGroup}${g.gender ? `, ${g.gender.toLowerCase()}` : ''}${g.preferences ? ` · ${g.preferences}` : ''}`))))))
-            : say('No stays yet.'),
-          say('You see each guest’s name, age group, gender and preferences, and nothing else: TVC looks after the guests and talks to them.')));
+            : say('No stays yet.')));
         const pc2 = payoutCard();
         if (pc2) sections.push(pc2);
       }
@@ -5451,7 +5469,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       ? { title: 'Add your WhatsApp number', text: 'So the core team can message you about stays and farm updates.', actions: [(() => { const b = h('button', 'btn btn--solid', 'Add my number'); b.setAttribute('type', 'button'); b.addEventListener('click', detailsDialog); return b; })()] }
       : isFamily()
       ? { title: 'Directory', text: 'Meet your neighbours in the valley.', actions: [go('Open the directory', 'directory', true)] }
-      : { title: 'Our story', text: 'Add to it or change it whenever you like, and read what your neighbours have shared.', actions: [go('Edit your story', 'story', true), go('See our members', 'directory')] };
+      : { title: 'Our story', text: 'Add to it or change it whenever you like, and read what your neighbours have shared.', actions: [go('Edit your story', 'story', true), go('Open the directory', 'directory')] };
     // Steps added since this member last saw the tour: one dismissible card above the next step (nothing for a brand new
     // member, who is walked through the whole tour instead).
     const fresh = typeof me!.tourSeenThrough === 'number' && !whatsNewDismissed ? tourPending() : [];
