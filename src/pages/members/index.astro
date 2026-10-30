@@ -1735,6 +1735,19 @@ import SignInGate from '../../components/SignInGate.astro';
     line-height: 1.4;
   }
 
+  .rent-set {
+    display: grid;
+    gap: 2px;
+    margin: 0 0 8px;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .rent-set b {
+    font-size: var(--text-base);
+    color: var(--tvc-ink);
+  }
+
   .rent-pick {
     margin: 0 0 12px;
   }
@@ -5197,6 +5210,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     homeLine.hidden = true;
     const body = h('div', 'rent');
     root.append(homeLine, body);
+    let editingSettings = false; // the Requests card shows its setting until Change is pressed
 
     const paint = () => {
       const d = rental;
@@ -5376,23 +5390,42 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           rentalStepper(stageIndex({ unitStatus: u.status })),
           say(`${label} · ${u.shape === 'room' ? 'one room' : 'whole unit'} · ${u.manager === 'tvc' ? 'TVC manages it' : 'you manage it'}${d.state === 'paused' ? ' · paused by the core team' : ''}`)));
 
-        const open = h('input') as HTMLInputElement;
-        open.type = 'checkbox';
-        open.checked = u.ignoresFarmClosure;
-        open.addEventListener('change', () => void act('/api/members-me/rental/settings', { ignoresFarmClosure: open.checked }, open.checked ? 'Your unit stays open when the farm is closed.' : 'Your unit closes with the farm.'));
-        const keepOpen = h('label', 'rent-check', undefined, open, h('span', '', 'Keep my unit open when the farm is closed'));
-        const opts = u.manager === 'member'
-          ? RENTAL_MODES.map(([v, t, text]) => {
-              const r = h('input') as HTMLInputElement;
-              r.type = 'radio';
-              r.name = 'rent-mode';
-              r.value = v;
-              r.checked = u.requestMode === v;
-              r.addEventListener('change', () => void act('/api/members-me/rental/settings', { requestMode: v }, `Requests: ${t}.`));
-              return h('label', 'rent-opt', undefined, r, h('span', '', undefined, h('b', '', t), h('span', '', text)));
-            })
-          : [say('TVC answers requests for your unit.')];
-        sections.push(card('Requests', ...opts, keepOpen));
+        // Set once and left alone: the card says what is set, and the choices open only after Change.
+        const mode = RENTAL_MODES.find(([v]) => v === u.requestMode);
+        const closureText = u.ignoresFarmClosure ? 'Open when the farm is closed' : 'Closes with the farm';
+        const settingsBtn = (label: string, on: boolean) => {
+          const b = h('button', 'btn', label) as HTMLButtonElement;
+          b.type = 'button';
+          b.addEventListener('click', () => {
+            editingSettings = on;
+            paint();
+          });
+          return b;
+        };
+        if (!editingSettings) {
+          sections.push(card('Requests',
+            u.manager === 'member' && mode ? h('p', 'rent-set', undefined, h('b', '', mode[1]), h('span', '', mode[2])) : say('TVC answers requests for your unit.'),
+            say(closureText),
+            settingsBtn('Change', true)));
+        } else {
+          const open = h('input') as HTMLInputElement;
+          open.type = 'checkbox';
+          open.checked = u.ignoresFarmClosure;
+          open.addEventListener('change', () => void act('/api/members-me/rental/settings', { ignoresFarmClosure: open.checked }, open.checked ? 'Your unit stays open when the farm is closed.' : 'Your unit closes with the farm.'));
+          const keepOpen = h('label', 'rent-check', undefined, open, h('span', '', 'Keep my unit open when the farm is closed'));
+          const opts = u.manager === 'member'
+            ? RENTAL_MODES.map(([v, t, text]) => {
+                const r = h('input') as HTMLInputElement;
+                r.type = 'radio';
+                r.name = 'rent-mode';
+                r.value = v;
+                r.checked = u.requestMode === v;
+                r.addEventListener('change', () => void act('/api/members-me/rental/settings', { requestMode: v }, `Requests: ${t}.`));
+                return h('label', 'rent-opt', undefined, r, h('span', '', undefined, h('b', '', t), h('span', '', text)));
+              })
+            : [];
+          sections.push(card('Requests', ...opts, keepOpen, settingsBtn('Done', false)));
+        }
 
         const from = h('input') as HTMLInputElement;
         const to = h('input') as HTMLInputElement;
