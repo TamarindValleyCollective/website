@@ -913,6 +913,15 @@ import SignInGate from '../../components/SignInGate.astro';
     font-size: var(--text-sm);
   }
 
+  /* A card's contents when they are not a table or a figure of their own: padded like the heading above them. */
+  .unit-card-body {
+    padding: 10px 18px 6px;
+  }
+
+  .unit-card-body > :last-child {
+    margin-bottom: 12px;
+  }
+
   .unit-card-empty {
     margin: 0;
     padding: 0 18px 16px;
@@ -5174,7 +5183,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       if (d?.houseNo) homeLine.textContent = `Home ${d.houseNo}`;
       if (!d?.eligible) return body.replaceChildren(h('p', 'lede', 'This page is for the owners of a unit.'));
       const sections: HTMLElement[] = [];
-      const card = (title: string, ...kids: (HTMLElement | null)[]) => h('section', 'unit-card', undefined, h('div', 'unit-card-head', undefined, h('h2', '', title)), ...kids);
+      const card = (title: string, ...kids: (HTMLElement | null)[]) => h('section', 'unit-card', undefined, h('div', 'unit-card-head', undefined, h('h2', '', title)), h('div', 'unit-card-body', undefined, ...kids));
       const say = (text: string) => h('p', 'rent-note', text);
       const act = async (path: string, payload: unknown, done: string, btn?: HTMLButtonElement, doing?: string): Promise<boolean> => {
         const finish = btn ? setBusy(btn, doing) : () => {};
