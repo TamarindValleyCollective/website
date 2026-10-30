@@ -5,7 +5,7 @@
 //
 // What a member may see of each home follows the directory exactly (scripts/lib/site-map.mjs, tested there): names only for
 // people who are active and have not opted out, never an email, phone or land record. The whole feature is dark until
-// MEMBER_SITE_MAP_ENABLED=true (everyone), or for the households a super admin lists under Units -> Early access
+// MEMBER_SITE_MAP_ENABLED=true (everyone), or for the households a super admin lists under Preview features
 // (member_feature_access, feature 'site_map'): anyone else gets "Not found", so the page is not even revealed.
 import { requireMember } from './lib/member-access';
 import { privacyNoticeRequired } from '../../scripts/lib/member-privacy.mjs';

@@ -13,7 +13,7 @@
 //
 // Only an owner who can sign in may use it, and only for their own household's unit. Every change is written to
 // member_audit_log before it is made (ids and field names only, never a name or an email). The whole feature is dark until
-// MEMBER_RENTAL_ENABLED=true (everyone), or for the households a super admin lists under Units -> Early access, so it can be
+// MEMBER_RENTAL_ENABLED=true (everyone), or for the households a super admin lists under Preview features, so it can be
 // shipped, and piloted, before Linger is ready to talk to every member.
 import { requireMember, type MemberSession } from './lib/member-access';
 import { privacyNoticeRequired } from '../../scripts/lib/member-privacy.mjs';
@@ -62,7 +62,7 @@ async function write(method: 'POST' | 'PATCH' | 'DELETE', path: string, body?: u
 }
 
 // On for everyone when MEMBER_RENTAL_ENABLED is "true"; otherwise only for a household a super admin has listed under
-// Units -> Early access (member_feature_access).
+// Preview features (member_feature_access).
 async function rentalOn(householdId: string): Promise<boolean> {
   if (featureOn(process.env.MEMBER_RENTAL_ENABLED, false)) return true;
   const rows = await select('member_feature_access', `household_id=eq.${householdId}&feature=eq.rental&select=feature`);

@@ -811,8 +811,8 @@ outside both the local machine and Netlify (the member-update-email workflow).
   slot): "Unlock editing", "Editing unlocked · N minutes" or "Set up to edit", which opens a sheet with the code field, the
   passkey button and "Lock now". Deactivating or reactivating someone happens at once with an **Undo** toast (no `confirm()`); deactivating also deletes all their module roles (kept in the audit entry; Undo re-grants them) and every view but "Deactivated" hides them;
   role changes still save on selection.
-- **`netlify/functions/units-admin.mts` + `src/pages/internal/units.astro`** — the **Units** screen
-  (Admin menu, super admins only; plan `docs/plans/accommodation-member-units.md`). A member offers
+- **`netlify/functions/units-admin.mts` + `src/pages/internal/units.astro`** — the **Rent out** screen
+  (Admin menu, path `/internal/units`, super admins only; plan `docs/plans/accommodation-member-units.md`). A member offers
   their unit in the member portal (a row in `member_unit_offers`, migration `0067`); here a super admin
   enables the offer once the contract is signed (creating the `accommodation_units` row, id = the
   household's farm unit, named neutrally by its house number (`Home H-10`; its id stays the farm number `F-12`, which is the plot and never shown as a name), on auto-reject), declines it, pauses or resumes a
@@ -844,9 +844,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   (`units.payout_revealed`, household only), shown for 30 seconds. Rules in `scripts/lib/member-payout.mjs`. Rotating
   `STAFF_MFA_KEY` makes stored payout details unreadable until members re-enter them. There is no finance role yet, so
   this is super-admin only.
-  **Early access (migration `0071`, `member_feature_access`):** a member feature is on for everyone when its Netlify
+  **Preview features, formerly Early access (migration `0071`, `member_feature_access`):** a member feature is on for everyone when its Netlify
   flag is `true` (My rental: `MEMBER_RENTAL_ENABLED`), and otherwise only for the households a super admin lists on
-  Units → Early access (by farm unit; step-up, audited as `units.access_granted` / `units.access_removed`). A household
+  **Preview features** (`src/pages/internal/preview-features.astro`, Admin menu: a grid of homes by feature with a switch each, bulk select, Undo; it reads the `access` part of the same `overview` and posts one home at a time to `/api/units-admin/access`; step-up, audited as `units.access_granted` / `units.access_removed`). A household
   not listed gets the same 404 as when the feature does not exist. The rule is in `scripts/lib/member-features.mjs`;
   a later feature adds its name there and to the table's check constraint, with no new table. The second feature is
   **Site map** (`site_map`, flag `MEMBER_SITE_MAP_ENABLED`; migration `0074` widens the check constraint).
@@ -859,7 +859,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   seeded from the layout fixed by hand on 2026-10-29 (`docs/site-map/`). The function selects only ids, names and unit
   fields, and `scripts/lib/site-map.mjs` (tested) applies the directory's privacy rule: a person is named only when
   active and not opted out of the directory, a household with nobody listed shows as "Private member" with no profile
-  link, a home with no household as "No member yet". Dark behind Early access (above): a household not listed gets
+  link, a home with no household as "No member yet". Dark behind Preview features (above): a household not listed gets
   404 and the tab stays hidden. The plan is drawn client-side in `members/index.astro` (`viewSiteMap`). Each home's
   house number is a pill in the home page's style (`H-17`) at the centre of its plot, found from the closed plot outlines
   in `plot_path` (`labelAnchor` in `site-map.mjs`; no extra data). On a mouse or trackpad, hovering a home shows a

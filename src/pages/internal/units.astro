@@ -1,5 +1,5 @@
 ---
-// The Units screen: what Linger can sell. A member offers a unit in the member portal; here a super admin enables it
+// The Rent out screen (path /internal/units): what Linger can sell. A member offers a unit in the member portal; here a super admin enables it
 // once the contract is signed, pauses or resumes a unit, offboards one, and edits a unit's tags, cluster, capacity and
 // private note. Super admins only; changes need the same second-factor step-up as the Access page. Backs
 // netlify/functions/units-admin.mts. Plan: docs/plans/accommodation-member-units.md.
@@ -8,11 +8,11 @@ import SignInGate from '../../components/SignInGate.astro';
 import StepUpSheet from '../../components/StepUpSheet.astro';
 ---
 
-<StaffLayout title="Units" description="Onboard and manage the units Linger can sell." current="units">
+<StaffLayout title="Rent out" description="Onboard and manage the units members rent out through Linger." current="units">
   <button slot="toolbar" type="button" id="lock" class="lock-pill" hidden></button>
 
   <section class="section wrapper">
-    <h1>Units</h1>
+    <h1>Rent out</h1>
     <p class="hint">The units Linger can sell: onboard what members offer, pause a unit, or offboard it. Only super admins can open this page.</p>
 
     <SignInGate forbiddenWhat="this page" forbiddenHint="This page is for super admins only." copy="Sign in with your super-admin Google account." />
@@ -26,7 +26,6 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
         <button type="button" role="tab" id="tab-pipeline" aria-selected="true" aria-controls="pane-pipeline" class="tab">Pipeline <span id="pipeline-count" class="tab-count"></span></button>
         <button type="button" role="tab" id="tab-all" aria-selected="false" aria-controls="pane-all" class="tab">All units</button>
         <button type="button" role="tab" id="tab-payouts" aria-selected="false" aria-controls="pane-payouts" class="tab">Payouts <span id="payouts-count" class="tab-count"></span></button>
-        <button type="button" role="tab" id="tab-access" aria-selected="false" aria-controls="pane-access" class="tab">Early access</button>
       </div>
 
       <section id="pane-pipeline" role="tabpanel" aria-labelledby="tab-pipeline">
@@ -55,11 +54,6 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
       <section id="pane-payouts" role="tabpanel" aria-labelledby="tab-payouts" hidden>
         <p class="note">Where TVC pays members. Details are encrypted and shown only as "ending 4821". Reveal one only to make a payment: it needs your second factor and is logged. Verify an account after a small test transfer, and record whether TDS is deducted.</p>
         <div id="payouts" class="offers"></div>
-      </section>
-
-      <section id="pane-access" role="tabpanel" aria-labelledby="tab-access" hidden>
-        <p class="note" id="access-note"></p>
-        <div id="access" class="offers"></div>
       </section>
 
       <dialog id="unit-sheet" class="sheet sheet--unit" aria-labelledby="unit-title"></dialog>
@@ -272,7 +266,6 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
     units: UnitRow[];
     offers: OfferRow[];
     payouts: PayoutRow[];
-    access: { features: { id: string; label: string; everyone: boolean }[]; members: { householdId: string; farmUnit: string; houseNo: string; names: string[] }[]; grants: { householdId: string; farmUnit: string; houseNo: string | null; names: string[]; feature: string; since: string }[] };
   }
   interface PayoutRow {
     householdId: string;
@@ -301,8 +294,6 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
   const panePipeline = $('pane-pipeline');
   const paneAll = $('pane-all');
   const tabPayouts = $('tab-payouts');
-  const tabAccess = $('tab-access');
-  const paneAccess = $('pane-access');
   const panePayouts = $('pane-payouts');
   const offersEl = $('offers');
   const unitGroups = $('unit-groups');
@@ -436,7 +427,6 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
     lock.render();
     renderPipeline();
     renderPayouts();
-    renderAccess();
     renderAll();
     if (unitSheet.open && unitSheet.dataset.unit) openUnit(unitSheet.dataset.unit);
   }
@@ -613,46 +603,6 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
     );
   }
 
-  // ---- early access: which members may use a feature that is not on for everyone
-  const whoLabel = (m: { names: string[]; farmUnit: string; houseNo: string | null }) => `${m.names.join(' & ')} · ${homeLabel(m)}`;
-
-  function renderAccess() {
-    const { features, members, grants } = data!.access ?? { features: [], members: [], grants: [] };
-    const everyoneOn = features.filter((f) => f.everyone).map((f) => f.label);
-    $('access-note').textContent = `A feature the Netlify flag has not turned on for everyone is open only to the members listed here, for their home.${everyoneOn.length ? ` Already on for everyone: ${everyoneOn.join(', ')}.` : ''}`;
-    const listed = new Set(grants.map((g) => `${g.householdId}|${g.feature}`));
-    const pick = h('input', { attrs: { type: 'search', list: 'access-members', placeholder: 'Start typing a name or home number', autocomplete: 'off', 'aria-label': 'Member' } });
-    const options = h('datalist', { attrs: { id: 'access-members' } }, ...members.map((m) => h('option', { attrs: { value: whoLabel(m) } })));
-    const feature = h('select', { attrs: { 'aria-label': 'Feature' } }, ...features.map((f) => h('option', { text: f.label, attrs: { value: f.id } })));
-    const add = h('button', {
-      class: 'button',
-      text: 'Add',
-      attrs: { type: 'button' },
-      on: {
-        click: () => {
-          const m = members.find((x) => whoLabel(x).toLowerCase() === pick.value.trim().toLowerCase());
-          if (!m) return showToast('Choose a member from the list.');
-          if (listed.has(`${m.householdId}|${feature.value}`)) return showToast('They already have it.');
-          void change('/api/units-admin/access', { householdId: m.householdId, feature: feature.value, enabled: true }, `Added ${m.names[0]}.`).then((r) => r.ok && (pick.value = ''));
-        },
-      },
-    });
-    $('access').replaceChildren(
-      h('div', { class: 'card offer' }, h('h2', { text: 'Add a member' }), h('div', { class: 'stack-form' }, field('Member', pick), options, field('Feature', feature)), h('div', { class: 'offer-actions' }, add)),
-      ...(grants.length
-        ? grants.map((g) =>
-            h(
-              'div',
-              { class: 'card offer' },
-              h('h2', { text: g.names.length ? g.names.join(' & ') : homeLabel(g) }),
-              h('p', { class: 'offer-meta', text: `${homeLabel(g)} · ${features.find((f) => f.id === g.feature)?.label ?? g.feature} · since ${new Date(g.since).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` }),
-              h('div', { class: 'offer-actions' }, h('button', { class: 'button button--outline', text: 'Remove', attrs: { type: 'button' }, on: { click: () => void change('/api/units-admin/access', { householdId: g.householdId, feature: g.feature, enabled: false }, 'Removed.') } })),
-            ),
-          )
-        : [h('p', { class: 'empty', text: 'No members listed yet.' })]),
-    );
-  }
-
   function matches(u: UnitRow): boolean {
     if (u.status === 'offboarded' && !query) return false;
     if (typeFilter && u.type !== typeFilter) return false;
@@ -768,12 +718,10 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
   });
 
   // ---- tabs and filters
-  function selectTab(which: 'pipeline' | 'all' | 'payouts' | 'access') {
+  function selectTab(which: 'pipeline' | 'all' | 'payouts') {
     tabPipeline.setAttribute('aria-selected', String(which === 'pipeline'));
     tabAll.setAttribute('aria-selected', String(which === 'all'));
     tabPayouts.setAttribute('aria-selected', String(which === 'payouts'));
-    tabAccess.setAttribute('aria-selected', String(which === 'access'));
-    paneAccess.hidden = which !== 'access';
     panePipeline.hidden = which !== 'pipeline';
     paneAll.hidden = which !== 'all';
     panePayouts.hidden = which !== 'payouts';
@@ -781,7 +729,6 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
   tabPipeline.addEventListener('click', () => selectTab('pipeline'));
   tabAll.addEventListener('click', () => selectTab('all'));
   tabPayouts.addEventListener('click', () => selectTab('payouts'));
-  tabAccess.addEventListener('click', () => selectTab('access'));
   unitSearch.addEventListener('input', () => {
     query = unitSearch.value.trim().toLowerCase();
     renderAll();

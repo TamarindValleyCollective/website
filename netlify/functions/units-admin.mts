@@ -1,6 +1,6 @@
 // Netlify Function (v2 API) behind the Units screen: the super admin's view of the units Linger can sell. Members
 // offer a unit in the member portal; here an offer is enabled once the contract is signed, a unit is paused,
-// resumed or offboarded, and its tags, cluster, capacity and private note are edited. Backs /internal/units.
+// resumed or offboarded, and its tags, cluster, capacity and private note are edited. Backs /internal/units (Rent out) and /internal/preview-features.
 // Plan: docs/plans/accommodation-member-units.md. The rules (what an offer may contain, what enabling creates, when
 // a unit may be offboarded) are in scripts/lib/member-units.mjs and tested there.
 //
