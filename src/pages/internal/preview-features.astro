@@ -27,21 +27,9 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
       <div class="pf-find">
         <label class="field" for="pf-search">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
-          <input type="search" id="pf-search" placeholder="Search by name or home number" autocomplete="off" aria-label="Search homes" />
+          <input type="search" id="pf-search" placeholder="Search homes with a preview" autocomplete="off" aria-label="Search homes with a preview" />
         </label>
-        <div class="segmented" id="pf-show" role="radiogroup" aria-label="Show">
-          <button type="button" role="radio" data-value="all" aria-checked="true">All homes</button>
-          <button type="button" role="radio" data-value="some" aria-checked="false">Has a preview</button>
-          <button type="button" role="radio" data-value="none" aria-checked="false">No preview</button>
-        </div>
-      </div>
-
-      <div id="pf-bulk" class="pf-bulk" hidden>
-        <strong id="pf-bulk-count"></strong>
-        <select id="pf-bulk-feature" aria-label="Feature"></select>
-        <button type="button" id="pf-bulk-on" class="button button--small">Turn on</button>
-        <button type="button" id="pf-bulk-off" class="button button--outline button--small">Turn off</button>
-        <button type="button" id="pf-bulk-clear" class="link-button">Clear</button>
+        <button type="button" id="pf-add" class="button">Add homes</button>
       </div>
 
       <div class="card pf-card">
@@ -49,9 +37,28 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
           <thead id="pf-head"></thead>
           <tbody id="pf-rows"></tbody>
         </table>
-        <p id="pf-empty" class="empty" hidden>No homes match.</p>
+        <p id="pf-empty" class="empty" hidden></p>
       </div>
       <p id="pf-count" class="note"></p>
+
+      <dialog id="pf-sheet" class="sheet pf-sheet" aria-labelledby="pf-sheet-title">
+        <h2 id="pf-sheet-title">Add homes</h2>
+        <p class="hint">Choose the feature, then the homes that should get it.</p>
+        <div class="stack-form">
+          <label for="pf-sheet-feature"><span>Feature</span></label>
+          <select id="pf-sheet-feature"></select>
+          <label class="field" for="pf-sheet-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+            <input type="search" id="pf-sheet-search" placeholder="Search by name or home number" autocomplete="off" aria-label="Search homes" />
+          </label>
+        </div>
+        <div id="pf-sheet-list" class="list pf-pick"></div>
+        <p id="pf-sheet-empty" class="empty" hidden>Every matching home already has it.</p>
+        <div class="sheet-actions">
+          <button type="button" id="pf-sheet-cancel" class="button button--outline">Cancel</button>
+          <button type="button" id="pf-sheet-add" class="button" disabled>Add</button>
+        </div>
+      </dialog>
     </div>
   </section>
 </StaffLayout>
@@ -111,31 +118,25 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
     margin-bottom: 10px;
   }
 
-  .pf-bulk {
+  .pf-find .field {
+    flex: 1 1 240px;
+  }
+
+  .pf-pick {
+    max-height: 40vh;
+    overflow-y: auto;
+    margin: 12px 0;
+  }
+
+  .pf-pick :global(label.row) {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
+    gap: 12px;
     align-items: center;
-    margin-bottom: 10px;
-    padding: 10px 14px;
-    border-radius: var(--radius-field);
-    background: color-mix(in srgb, var(--tvc-green-dark) 12%, var(--tvc-white));
-    color: var(--tvc-green-dark);
+    cursor: pointer;
   }
 
-  .pf-bulk[hidden] {
-    display: none;
-  }
-
-  .pf-bulk select {
-    min-height: 36px;
-    padding: 0 12px;
-    border: 1px solid var(--tvc-line-strong);
-    border-radius: var(--radius-field);
-    background: var(--tvc-white);
-    color: var(--tvc-ink);
-    font: inherit;
-    font-size: var(--text-sm);
+  :global(.pf-sheet) {
+    width: min(480px, calc(100vw - 32px));
   }
 
   .pf-card {
@@ -179,10 +180,6 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
   .pf-table :global(.everyone) {
     font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
-  }
-
-  .pf-table :global(tr.picked) {
-    background: color-mix(in srgb, var(--tvc-green-dark) 10%, var(--tvc-white));
   }
 
   .pf-table :global(.switch) {
@@ -252,10 +249,6 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
       border: 0;
     }
 
-    .pf-table :global(td.pick) {
-      grid-row: 1 / 3;
-    }
-
     .pf-table :global(td.person) {
       grid-column: 2;
     }
@@ -277,7 +270,7 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
 </style>
 
 <script>
-  import { StaffAuthError, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../scripts/lib/staff-client.mjs';
+  import { StaffAuthError, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../scripts/lib/staff-client.mjs';
   import { busyForPress } from '../../../scripts/lib/busy.mjs';
   import { initStepUpLock } from '../../../scripts/lib/staff-stepup-ui.mjs';
 
@@ -308,13 +301,17 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
   const statusEl = $('status');
   const panel = $('panel');
   const search = $<HTMLInputElement>('pf-search');
-  const bulkBar = $('pf-bulk');
-  const bulkFeature = $<HTMLSelectElement>('pf-bulk-feature');
+  const sheet = $<HTMLDialogElement>('pf-sheet');
+  const sheetFeature = $<HTMLSelectElement>('pf-sheet-feature');
+  const sheetSearch = $<HTMLInputElement>('pf-sheet-search');
+  const sheetAdd = $<HTMLButtonElement>('pf-sheet-add');
 
   let data: Overview | null = null;
   let query = '';
-  let show = 'all';
-  const picked = new Set<string>();
+  // Homes shown in the grid: those with a preview when the page loaded, plus any added or switched off since, so a row
+  // does not vanish under the pointer when its last switch goes off.
+  const shown = new Set<string>();
+  const chosen = new Set<string>();
 
   function h<K extends keyof HTMLElementTagNameMap>(tag: K, props: { class?: string; text?: string; attrs?: Record<string, string>; on?: Record<string, EventListener> } = {}, ...children: (Node | string | null)[]): HTMLElementTagNameMap[K] {
     const node = document.createElement(tag);
@@ -327,7 +324,8 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
   }
 
   const handled = (err: unknown) => err instanceof StaffAuthError;
-  const homeNames = (m: Home) => (m.names.length ? m.names.join(' & ') : `Home ${m.houseNo}`);
+  const firstName = (full: string) => full.trim().split(/\s+/)[0];
+  const homeNames = (m: Home) => (m.names.length ? m.names.map(firstName).join(' & ') : `Home ${m.houseNo}`);
   const key = (householdId: string, feature: string) => `${householdId}|${feature}`;
   const listed = () => new Set((data?.access.grants ?? []).map((g) => key(g.householdId, g.feature)));
 
@@ -417,9 +415,10 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
   async function flip(feature: Feature, homeIds: string[], enabled: boolean) {
     const homes = homeIds.filter((id) => listed().has(key(id, feature.id)) !== enabled);
     if (!homes.length) return showToast(enabled ? 'They already have it.' : 'They do not have it.');
+    for (const id of homeIds) shown.add(id);
     const done = await setAccess(feature.id, homes, enabled);
     if (!done.length) return;
-    const who = done.length === 1 ? data?.access.members.find((m) => m.householdId === done[0])?.names[0] ?? 'that home' : `${done.length} homes`;
+    const who = done.length === 1 ? homeNames(data!.access.members.find((m) => m.householdId === done[0])!) : `${done.length} homes`;
     showToast(`${enabled ? 'Turned on' : 'Turned off'} ${feature.label} for ${who}.`, () => void setAccess(feature.id, done, !enabled));
   }
 
@@ -428,6 +427,7 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
       const { status, data: out } = await call('/api/units-admin/overview');
       if (status !== 200) throw new Error('load failed');
       data = out as Overview;
+      for (const g of data.access.grants) shown.add(g.householdId);
       gate.hidden = true;
       forbidden.hidden = true;
       statusEl.hidden = true;
@@ -443,14 +443,7 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
 
   // ---- views
   function shownHomes(): Home[] {
-    const on = listed();
-    const features = data!.access.features;
-    return data!.access.members.filter((m) => {
-      const any = features.some((f) => on.has(key(m.householdId, f.id)));
-      if (show === 'some' && !any) return false;
-      if (show === 'none' && any) return false;
-      return !query || `${homeNames(m)} ${m.houseNo} ${m.farmUnit}`.toLowerCase().includes(query);
-    });
+    return data!.access.members.filter((m) => shown.has(m.householdId) && (!query || `${m.names.join(" ")} ${m.houseNo} ${m.farmUnit}`.toLowerCase().includes(query)));
   }
 
   function render() {
@@ -458,7 +451,6 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
     lock.render();
     const { features, members } = data.access;
     const on = listed();
-    for (const id of [...picked]) if (!members.some((m) => m.householdId === id)) picked.delete(id);
 
     $('features').replaceChildren(
       ...features.map((f) => {
@@ -474,31 +466,14 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
       }),
     );
 
-    if (bulkFeature.options.length !== features.length) bulkFeature.replaceChildren(...features.filter((f) => !f.everyone).map((f) => h('option', { text: f.label, attrs: { value: f.id } })));
-
-    $('pf-head').replaceChildren(
-      h(
-        'tr',
-        {},
-        h('th', { attrs: { style: 'width:40px' } }, h('input', { attrs: { type: 'checkbox', id: 'pf-all', 'aria-label': 'Select every home shown' }, on: { change: (ev) => {
-          for (const m of shownHomes()) (ev.target as HTMLInputElement).checked ? picked.add(m.householdId) : picked.delete(m.householdId);
-          render();
-        } } })),
-        h('th', { text: 'Home' }),
-        ...features.map((f) => h('th', { class: 'c', text: f.label })),
-      ),
-    );
+    $('pf-head').replaceChildren(h('tr', {}, h('th', { text: 'Home' }), ...features.map((f) => h('th', { class: 'c', text: f.label }))));
 
     const rows = shownHomes();
     $('pf-rows').replaceChildren(
       ...rows.map((m) =>
         h(
           'tr',
-          { class: picked.has(m.householdId) ? 'picked' : '' },
-          h('td', { class: 'pick' }, h('input', { attrs: { type: 'checkbox', 'aria-label': `Select Home ${m.houseNo}`, ...(picked.has(m.householdId) ? { checked: '' } : {}) }, on: { change: (ev) => {
-            (ev.target as HTMLInputElement).checked ? picked.add(m.householdId) : picked.delete(m.householdId);
-            render();
-          } } })),
+          {},
           h('td', { class: 'person' }, h('div', { class: 'who', text: homeNames(m) }), h('div', { class: 'home', text: `Home ${m.houseNo}` })),
           ...features.map((f) =>
             h(
@@ -512,36 +487,63 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
         ),
       ),
     );
-    $<HTMLInputElement>('pf-all').checked = rows.length > 0 && rows.every((m) => picked.has(m.householdId));
-    $('pf-empty').hidden = rows.length > 0;
-    $('pf-count').textContent = `${rows.length} of ${members.length} homes. Only homes with a house number and an owner are listed. A switch takes effect at once; Undo reverses it.`;
-    bulkBar.hidden = picked.size === 0;
-    $('pf-bulk-count').textContent = `${picked.size} selected`;
+    const none = rows.length === 0;
+    $('pf-empty').hidden = !none;
+    $('pf-empty').textContent = shown.size ? 'No homes match.' : 'No homes have a preview yet. Choose Add homes to start.';
+    $('pf-count').textContent = `${rows.length} home${rows.length === 1 ? '' : 's'} with a preview. A switch takes effect at once; Undo reverses it.`;
   }
 
-  // ---- controls
+  // ---- add homes
+  function renderPicker() {
+    const feature = data?.access.features.find((f) => f.id === sheetFeature.value);
+    const on = listed();
+    const q = sheetSearch.value.trim().toLowerCase();
+    const homes = (data?.access.members ?? []).filter((m) => feature && !on.has(key(m.householdId, feature.id)) && (!q || `${m.names.join(" ")} ${m.houseNo}`.toLowerCase().includes(q)));
+    for (const id of [...chosen]) if (!homes.some((m) => m.householdId === id)) chosen.delete(id);
+    $('pf-sheet-list').replaceChildren(
+      ...homes.map((m) =>
+        h('label', { class: 'row' }, h('input', { attrs: { type: 'checkbox', ...(chosen.has(m.householdId) ? { checked: '' } : {}) }, on: { change: (ev) => {
+          (ev.target as HTMLInputElement).checked ? chosen.add(m.householdId) : chosen.delete(m.householdId);
+          updateAdd();
+        } } }), h('span', {}, h('strong', { text: homeNames(m) }), ` · Home ${m.houseNo}`)),
+      ),
+    );
+    $('pf-sheet-empty').hidden = homes.length > 0;
+    updateAdd();
+  }
+  function updateAdd() {
+    sheetAdd.disabled = chosen.size === 0;
+    sheetAdd.textContent = chosen.size ? `Add ${chosen.size} home${chosen.size === 1 ? '' : 's'}` : 'Add';
+  }
+  $('pf-add').addEventListener('click', () => {
+    if (!data) return;
+    const open = data.access.features.filter((f) => !f.everyone);
+    if (!open.length) return showToast('Every feature is already on for everyone.');
+    sheetFeature.replaceChildren(...open.map((f) => h('option', { text: f.label, attrs: { value: f.id } })));
+    sheetSearch.value = '';
+    chosen.clear();
+    renderPicker();
+    sheet.showModal();
+  });
+  sheetFeature.addEventListener('change', () => {
+    chosen.clear();
+    renderPicker();
+  });
+  sheetSearch.addEventListener('input', renderPicker);
+  $('pf-sheet-cancel').addEventListener('click', () => sheet.close());
+  closeOnBackdrop(sheet);
+  sheetAdd.addEventListener('click', async () => {
+    const feature = data?.access.features.find((f) => f.id === sheetFeature.value);
+    if (!feature || !chosen.size) return;
+    const ids = [...chosen];
+    sheet.close();
+    chosen.clear();
+    await flip(feature, ids, true);
+  });
+
+  // ---- search
   search.addEventListener('input', () => {
     query = search.value.trim().toLowerCase();
-    render();
-  });
-  for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>('#pf-show button'))) {
-    button.addEventListener('click', () => {
-      show = button.dataset.value ?? 'all';
-      for (const other of Array.from(document.querySelectorAll<HTMLButtonElement>('#pf-show button'))) other.setAttribute('aria-checked', String(other === button));
-      render();
-    });
-  }
-  const bulk = async (enabled: boolean) => {
-    const feature = data?.access.features.find((f) => f.id === bulkFeature.value);
-    if (!feature) return;
-    const ids = [...picked];
-    picked.clear();
-    await flip(feature, ids, enabled);
-  };
-  $('pf-bulk-on').addEventListener('click', () => void bulk(true));
-  $('pf-bulk-off').addEventListener('click', () => void bulk(false));
-  $('pf-bulk-clear').addEventListener('click', () => {
-    picked.clear();
     render();
   });
 
