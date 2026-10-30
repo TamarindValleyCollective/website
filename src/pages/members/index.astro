@@ -2038,6 +2038,13 @@ import SignInGate from '../../components/SignInGate.astro';
     cursor: default;
   }
 
+  .cal-day--locked,
+  .cal-day--locked:hover {
+    background: none;
+    color: var(--tvc-ink-soft);
+    cursor: default;
+  }
+
   .cal-day--past:hover {
     background: none;
   }
@@ -5550,6 +5557,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const lede = h('p', 'lede', 'Let guests book your unit through Linger.');
     const body = h('div', 'rent');
     root.append(h('h1', 'page-title', 'Rent out', ...(rental?.preview ? [previewPill()] : [])), lede, body);
+    // Set by paint(): while rental is off or paused nothing is offered, so there is nothing to block. The calendar still shows
+    // stays and existing blocks, and a block can still be removed.
+    let calLocked = '';
     let moreOpen = false; // the "More settings" fold stays as the member left it across repaints
 
     // ---- Calendar: every night of the unit on a month view (stays, closures, the member's own blocks). It lives outside
@@ -5608,6 +5618,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           cal.end = '';
           return renderCal();
         }
+        if (calLocked) return toast(calLocked);
         cal.detail = '';
         if (!cal.start || cal.end) {
           cal.start = iso;
@@ -5635,7 +5646,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           const past = iso < todayIso;
           const edge = iso === cal.start || iso === cal.end;
           const inside = !!cal.start && !!cal.end && iso > cal.start && iso < cal.end;
-          const cls = ['cal-day', kind ? `cal-day--${kind}` : '', past && !kind ? 'cal-day--past' : '', edge ? 'cal-day--edge' : '', inside ? 'cal-day--in' : '', iso === todayIso ? 'cal-day--today' : ''].filter(Boolean).join(' ');
+          const cls = ['cal-day', kind ? `cal-day--${kind}` : calLocked && !past ? 'cal-day--locked' : '', past && !kind ? 'cal-day--past' : '', edge ? 'cal-day--edge' : '', inside ? 'cal-day--in' : '', iso === todayIso ? 'cal-day--today' : ''].filter(Boolean).join(' ');
           const b = h('button', cls, String(day)) as HTMLButtonElement;
           b.type = 'button';
           b.dataset.fk = iso;
@@ -5715,7 +5726,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           }
         });
         bottom = h('div', 'cal-bar', undefined, h('b', '', `${dateLabel(cal.start)} to ${dateLabel(cal.end)} · ${n} night${n === 1 ? '' : 's'}`), h('span', 'cal-bar-actions', undefined, cancel, block));
-      } else bottom = h('p', 'cal-caption', cal.start ? 'Tap the last night, or the same day again for one night.' : 'Tap free nights to block them. Tap a marked night for details.');
+      } else bottom = h('p', 'cal-caption', calLocked ? `${calLocked} Tap a marked night for details.` : cal.start ? 'Tap the last night, or the same day again for one night.' : 'Tap free nights to block them. Tap a marked night for details.');
 
       calCard.replaceChildren(
         h('div', 'cal-top', undefined,
@@ -5969,6 +5980,11 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         }
         sections.push(statusCard);
 
+        calLocked = paused ? 'Paused by the core team, so nothing can be blocked.' : !isOn ? 'Rental is off. Turn it on to block dates.' : '';
+        if (calLocked) {
+          cal.start = '';
+          cal.end = '';
+        }
         doBlock = (from, to, btn) => act('/api/members-me/rental/blocks', { from, to }, 'Nights blocked.', btn, 'Blocking…');
         doRemove = (id, btn) => act('/api/members-me/rental/blocks/remove', { id }, 'Block removed.', btn, 'Removing…');
         renderCal();
