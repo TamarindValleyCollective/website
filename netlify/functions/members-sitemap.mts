@@ -5,7 +5,7 @@
 //
 // What a member may see of each home follows the directory exactly (scripts/lib/site-map.mjs, tested there): names only for
 // people who are active and have not opted out, never an email, phone or land record. The whole feature is dark until
-// MEMBER_SITE_MAP_ENABLED=true (everyone), or for the households a super admin lists under Units -> Early access
+// MEMBER_SITE_MAP_ENABLED=true (everyone), or for the households a super admin lists under Preview
 // (member_feature_access, feature 'site_map'): anyone else gets "Not found", so the page is not even revealed.
 import { requireMember } from './lib/member-access';
 import { privacyNoticeRequired } from '../../scripts/lib/member-privacy.mjs';
@@ -52,7 +52,8 @@ async function handleGet(req: Request): Promise<Response> {
     select('member_people', 'select=id,full_name,active,directory_visible'),
     select('member_household_members', 'select=household_id,person_id,role'),
   ]);
-  return jsonResponse({ enabled: true, clusters: shapeClusters(clusters), units: buildSiteMap({ units, households, people, memberships }, householdId ?? null) });
+  // `preview`: the flag is not on for everyone yet, so this household is among the first to see it.
+  return jsonResponse({ enabled: true, preview: process.env.MEMBER_SITE_MAP_ENABLED !== 'true', clusters: shapeClusters(clusters), units: buildSiteMap({ units, households, people, memberships }, householdId ?? null) });
 }
 
 export default async (req: Request): Promise<Response> => {

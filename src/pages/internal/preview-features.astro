@@ -1,0 +1,552 @@
+---
+// The Preview screen: which member features are on for which homes, before they are on for everyone. A feature
+// (Rent out, Map, ...) is on for everyone when its Netlify flag is true; otherwise only for the homes switched on
+// here. Super admins only; changes need the same second-factor step-up as the Access page. Backs the `access` part of
+// /api/units-admin/overview and POST /api/units-admin/access (netlify/functions/units-admin.mts).
+import StaffLayout from '../../layouts/StaffLayout.astro';
+import SignInGate from '../../components/SignInGate.astro';
+import StepUpSheet from '../../components/StepUpSheet.astro';
+---
+
+<StaffLayout title="Preview" description="Choose which homes get a member feature before everyone does." current="previews">
+  <button slot="toolbar" type="button" id="lock" class="lock-pill" hidden></button>
+
+  <section class="section wrapper">
+    <h1>Preview</h1>
+    <p class="hint">Try a member feature with a few homes before it is on for everyone. Only super admins can open this page.</p>
+
+    <SignInGate forbiddenWhat="this page" forbiddenHint="This page is for super admins only." copy="Sign in with your super-admin Google account." />
+
+    <p id="status" class="hint" hidden></p>
+
+    <div id="panel" hidden>
+      <StepUpSheet />
+
+      <div id="features" class="features"></div>
+
+      <div class="pf-find">
+        <label class="field" for="pf-search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <input type="search" id="pf-search" placeholder="Search homes with a preview" autocomplete="off" aria-label="Search homes with a preview" />
+        </label>
+        <button type="button" id="pf-add" class="button">Add homes</button>
+      </div>
+
+      <div class="card pf-card">
+        <table class="pf-table">
+          <thead id="pf-head"></thead>
+          <tbody id="pf-rows"></tbody>
+        </table>
+        <p id="pf-empty" class="empty" hidden></p>
+      </div>
+      <p id="pf-count" class="note"></p>
+
+      <dialog id="pf-sheet" class="sheet pf-sheet" aria-labelledby="pf-sheet-title">
+        <h2 id="pf-sheet-title">Add homes</h2>
+        <p class="hint">Choose the feature, then the homes that should get it.</p>
+        <div class="stack-form">
+          <label for="pf-sheet-feature"><span>Feature</span></label>
+          <select id="pf-sheet-feature"></select>
+          <label class="field" for="pf-sheet-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+            <input type="search" id="pf-sheet-search" placeholder="Search by name or home number" autocomplete="off" aria-label="Search homes" />
+          </label>
+        </div>
+        <div id="pf-sheet-list" class="list pf-pick"></div>
+        <p id="pf-sheet-empty" class="empty" hidden>Every matching home already has it.</p>
+        <div class="sheet-actions">
+          <button type="button" id="pf-sheet-cancel" class="button button--outline">Cancel</button>
+          <button type="button" id="pf-sheet-add" class="button" disabled>Add</button>
+        </div>
+      </dialog>
+    </div>
+  </section>
+</StaffLayout>
+
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style>
+  .features {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    margin-bottom: 16px;
+  }
+
+  .features :global(.feature) {
+    display: grid;
+    gap: 8px;
+    padding: 14px 16px;
+  }
+
+  .features :global(.feature-head) {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .features :global(h2) {
+    margin: 0;
+    font-size: var(--text-lg);
+  }
+
+  .features :global(.meter) {
+    height: 6px;
+    border-radius: 99px;
+    background: var(--tvc-line);
+    overflow: hidden;
+  }
+
+  .features :global(.meter i) {
+    display: block;
+    height: 100%;
+    background: var(--tvc-green-dark);
+  }
+
+  .features :global(.feature p) {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .pf-find {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .pf-find .field {
+    flex: 1 1 240px;
+  }
+
+  .pf-pick {
+    max-height: 40vh;
+    overflow-y: auto;
+    margin: 12px 0;
+  }
+
+  .pf-pick :global(label.row) {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    cursor: pointer;
+  }
+
+  :global(.pf-sheet) {
+    width: min(480px, calc(100vw - 32px));
+  }
+
+  .pf-card {
+    padding: 0;
+    overflow-x: auto;
+  }
+
+  .pf-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .pf-table :global(th),
+  .pf-table :global(td) {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .pf-table :global(tbody tr:last-child td) {
+    border-bottom: 0;
+  }
+
+  .pf-table :global(th) {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+    white-space: nowrap;
+  }
+
+  .pf-table :global(.c) {
+    width: 140px;
+    text-align: center;
+  }
+
+  .pf-table :global(.who) {
+    font-weight: 600;
+  }
+
+  .pf-table :global(.home),
+  .pf-table :global(.everyone) {
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .pf-table :global(.switch) {
+    position: relative;
+    display: inline-block;
+    width: 42px;
+    height: 24px;
+  }
+
+  .pf-table :global(.switch input) {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .pf-table :global(.switch span) {
+    position: absolute;
+    inset: 0;
+    border-radius: 99px;
+    background: var(--tvc-line-strong);
+    transition: background 0.15s;
+  }
+
+  .pf-table :global(.switch span::after) {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--tvc-white);
+    transition: transform 0.15s;
+  }
+
+  .pf-table :global(.switch input:checked + span) {
+    background: var(--tvc-green-dark);
+  }
+
+  .pf-table :global(.switch input:checked + span::after) {
+    transform: translateX(18px);
+  }
+
+  .pf-table :global(.switch input:focus-visible + span) {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  @media (max-width: 640px) {
+    .pf-table :global(thead) {
+      display: none;
+    }
+
+    .pf-table :global(tr) {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 6px 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--tvc-line);
+    }
+
+    .pf-table :global(td) {
+      padding: 0;
+      border: 0;
+    }
+
+    .pf-table :global(td.person) {
+      grid-column: 2;
+    }
+
+    .pf-table :global(td.c) {
+      grid-column: 2;
+      width: auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .pf-table :global(td.c::before) {
+      content: attr(data-feature);
+      font-size: var(--text-sm);
+      color: var(--tvc-ink-soft);
+    }
+  }
+</style>
+
+<script>
+  import { StaffAuthError, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../scripts/lib/staff-client.mjs';
+  import { busyForPress } from '../../../scripts/lib/busy.mjs';
+  import { initStepUpLock } from '../../../scripts/lib/staff-stepup-ui.mjs';
+
+  declare const google: any;
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+
+  interface Feature {
+    id: string;
+    label: string;
+    everyone: boolean;
+  }
+  interface Home {
+    householdId: string;
+    farmUnit: string;
+    houseNo: string;
+    names: string[];
+  }
+  interface Overview {
+    me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean };
+    access: { features: Feature[]; members: Home[]; grants: { householdId: string; feature: string }[] };
+  }
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const gate = $('gate');
+  const gateError = $('gate-error');
+  const forbidden = $('forbidden');
+  const forbiddenEmail = $('forbidden-email');
+  const statusEl = $('status');
+  const panel = $('panel');
+  const search = $<HTMLInputElement>('pf-search');
+  const sheet = $<HTMLDialogElement>('pf-sheet');
+  const sheetFeature = $<HTMLSelectElement>('pf-sheet-feature');
+  const sheetSearch = $<HTMLInputElement>('pf-sheet-search');
+  const sheetAdd = $<HTMLButtonElement>('pf-sheet-add');
+
+  let data: Overview | null = null;
+  let query = '';
+  // Homes shown in the grid: those with a preview when the page loaded, plus any added or switched off since, so a row
+  // does not vanish under the pointer when its last switch goes off.
+  const shown = new Set<string>();
+  const chosen = new Set<string>();
+
+  function h<K extends keyof HTMLElementTagNameMap>(tag: K, props: { class?: string; text?: string; attrs?: Record<string, string>; on?: Record<string, EventListener> } = {}, ...children: (Node | string | null)[]): HTMLElementTagNameMap[K] {
+    const node = document.createElement(tag);
+    if (props.class) node.className = props.class;
+    if (props.text !== undefined) node.textContent = props.text;
+    for (const [k, v] of Object.entries(props.attrs ?? {})) node.setAttribute(k, v);
+    for (const [k, fn] of Object.entries(props.on ?? {})) node.addEventListener(k, fn);
+    node.append(...(children.filter((c) => c !== null) as (Node | string)[]));
+    return node;
+  }
+
+  const handled = (err: unknown) => err instanceof StaffAuthError;
+  const firstName = (full: string) => full.trim().split(/\s+/)[0];
+  const homeNames = (m: Home) => (m.names.length ? m.names.map(firstName).join(' & ') : `Home ${m.houseNo}`);
+  const key = (householdId: string, feature: string) => `${householdId}|${feature}`;
+  const listed = () => new Set((data?.access.grants ?? []).map((g) => key(g.householdId, g.feature)));
+
+  // ---- sign-in
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    panel.hidden = true;
+    statusEl.hidden = true;
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+  function showForbidden(token: string) {
+    gate.hidden = true;
+    panel.hidden = true;
+    statusEl.hidden = true;
+    forbidden.hidden = false;
+    forbiddenEmail.textContent = decodeTokenEmail(token);
+  }
+  async function call(path: string, init?: { method?: string; body?: unknown }) {
+    try {
+      return await staffFetch(path, init);
+    } catch (err) {
+      if (err instanceof StaffAuthError) {
+        if (err.kind === 'unauthorized') showGate('Your session expired — sign in again.');
+        else showForbidden(getToken() ?? '');
+      }
+      throw err;
+    }
+  }
+  function handleCredentialResponse(response: { credential: string }) {
+    setToken(response.credential);
+    load();
+  }
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: (window as any).tvcGsiTheme?.() ?? 'outline', size: 'large' });
+  }
+  $('use-different-account').addEventListener('click', () => {
+    clearToken();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
+  // ---- changes need the step-up
+  const lock = initStepUpLock({ getMe: () => data?.me ?? null, onChange: () => render() });
+  function mayChange(): boolean {
+    if (lock.canEdit()) return true;
+    showToast(data?.me.ready ? 'Unlock editing first.' : 'Set up two second factors first (see Security).');
+    lock.open();
+    return false;
+  }
+
+  // Switches several homes for one feature, one request each (the API takes a single home). Stops at the first refusal,
+  // then reloads so the grid shows what is really saved. Returns the homes that did change, for Undo.
+  async function setAccess(feature: string, homeIds: string[], enabled: boolean): Promise<string[]> {
+    if (!mayChange()) {
+      render();
+      return [];
+    }
+    const finish = busyForPress();
+    const done: string[] = [];
+    try {
+      for (const householdId of homeIds) {
+        const { status, data: out } = await call('/api/units-admin/access', { method: 'POST', body: { householdId, feature, enabled } });
+        if (status !== 200) {
+          if (out?.code === 'STEP_UP_REQUIRED') {
+            lock.render();
+            showToast('Unlock editing first.');
+            lock.open();
+          } else showToast(out?.error ?? 'Could not change that.');
+          break;
+        }
+        done.push(householdId);
+      }
+    } catch (err) {
+      if (!handled(err)) showToast('Could not reach the server.');
+    } finally {
+      finish();
+    }
+    await load();
+    return done;
+  }
+
+  async function flip(feature: Feature, homeIds: string[], enabled: boolean) {
+    const homes = homeIds.filter((id) => listed().has(key(id, feature.id)) !== enabled);
+    if (!homes.length) return showToast(enabled ? 'They already have it.' : 'They do not have it.');
+    for (const id of homeIds) shown.add(id);
+    const done = await setAccess(feature.id, homes, enabled);
+    if (!done.length) return;
+    const who = done.length === 1 ? homeNames(data!.access.members.find((m) => m.householdId === done[0])!) : `${done.length} homes`;
+    showToast(`${enabled ? 'Turned on' : 'Turned off'} ${feature.label} for ${who}.`, () => void setAccess(feature.id, done, !enabled));
+  }
+
+  async function load() {
+    try {
+      const { status, data: out } = await call('/api/units-admin/overview');
+      if (status !== 200) throw new Error('load failed');
+      data = out as Overview;
+      for (const g of data.access.grants) shown.add(g.householdId);
+      gate.hidden = true;
+      forbidden.hidden = true;
+      statusEl.hidden = true;
+      panel.hidden = false;
+      render();
+    } catch (err) {
+      if (!handled(err)) {
+        statusEl.hidden = false;
+        statusEl.textContent = 'Failed to load — try refreshing.';
+      }
+    }
+  }
+
+  // ---- views
+  function shownHomes(): Home[] {
+    return data!.access.members.filter((m) => shown.has(m.householdId) && (!query || `${m.names.join(" ")} ${m.houseNo} ${m.farmUnit}`.toLowerCase().includes(query)));
+  }
+
+  function render() {
+    if (!data) return;
+    lock.render();
+    const { features, members } = data.access;
+    const on = listed();
+
+    $('features').replaceChildren(
+      ...features.map((f) => {
+        const n = members.filter((m) => on.has(key(m.householdId, f.id))).length;
+        const label = f.everyone ? 'Everyone' : n ? 'Preview' : 'Off';
+        return h(
+          'div',
+          { class: 'card feature' },
+          h('div', { class: 'feature-head' }, h('h2', { text: f.label }), h('span', { class: `pill ${f.everyone ? 'pill--ok' : n ? '' : 'pill--warn'}`, text: label })),
+          h('div', { class: 'meter' }, h('i', { attrs: { style: `width:${f.everyone ? 100 : members.length ? (n / members.length) * 100 : 0}%` } })),
+          h('p', { text: f.everyone ? `On for all ${members.length} homes.` : `${n} of ${members.length} homes.` }),
+        );
+      }),
+    );
+
+    $('pf-head').replaceChildren(h('tr', {}, h('th', { text: 'Home' }), ...features.map((f) => h('th', { class: 'c', text: f.label }))));
+
+    const rows = shownHomes();
+    $('pf-rows').replaceChildren(
+      ...rows.map((m) =>
+        h(
+          'tr',
+          {},
+          h('td', { class: 'person' }, h('div', { class: 'who', text: homeNames(m) }), h('div', { class: 'home', text: `Home ${m.houseNo}` })),
+          ...features.map((f) =>
+            h(
+              'td',
+              { class: 'c', attrs: { 'data-feature': f.label } },
+              f.everyone
+                ? h('span', { class: 'everyone', text: 'Everyone' })
+                : h('label', { class: 'switch' }, h('input', { attrs: { type: 'checkbox', 'aria-label': `${f.label} for Home ${m.houseNo}`, ...(on.has(key(m.householdId, f.id)) ? { checked: '' } : {}) }, on: { change: (ev) => void flip(f, [m.householdId], (ev.target as HTMLInputElement).checked) } }), h('span')),
+            ),
+          ),
+        ),
+      ),
+    );
+    const none = rows.length === 0;
+    $('pf-empty').hidden = !none;
+    $('pf-empty').textContent = shown.size ? 'No homes match.' : 'No homes have a preview yet. Choose Add homes to start.';
+    $('pf-count').textContent = `${rows.length} home${rows.length === 1 ? '' : 's'} with a preview. A switch takes effect at once; Undo reverses it.`;
+  }
+
+  // ---- add homes
+  function renderPicker() {
+    const feature = data?.access.features.find((f) => f.id === sheetFeature.value);
+    const on = listed();
+    const q = sheetSearch.value.trim().toLowerCase();
+    const homes = (data?.access.members ?? []).filter((m) => feature && !on.has(key(m.householdId, feature.id)) && (!q || `${m.names.join(" ")} ${m.houseNo}`.toLowerCase().includes(q)));
+    for (const id of [...chosen]) if (!homes.some((m) => m.householdId === id)) chosen.delete(id);
+    $('pf-sheet-list').replaceChildren(
+      ...homes.map((m) =>
+        h('label', { class: 'row' }, h('input', { attrs: { type: 'checkbox', ...(chosen.has(m.householdId) ? { checked: '' } : {}) }, on: { change: (ev) => {
+          (ev.target as HTMLInputElement).checked ? chosen.add(m.householdId) : chosen.delete(m.householdId);
+          updateAdd();
+        } } }), h('span', {}, h('strong', { text: homeNames(m) }), ` · Home ${m.houseNo}`)),
+      ),
+    );
+    $('pf-sheet-empty').hidden = homes.length > 0;
+    updateAdd();
+  }
+  function updateAdd() {
+    sheetAdd.disabled = chosen.size === 0;
+    sheetAdd.textContent = chosen.size ? `Add ${chosen.size} home${chosen.size === 1 ? '' : 's'}` : 'Add';
+  }
+  $('pf-add').addEventListener('click', () => {
+    if (!data) return;
+    const open = data.access.features.filter((f) => !f.everyone);
+    if (!open.length) return showToast('Every feature is already on for everyone.');
+    sheetFeature.replaceChildren(...open.map((f) => h('option', { text: f.label, attrs: { value: f.id } })));
+    sheetSearch.value = '';
+    chosen.clear();
+    renderPicker();
+    sheet.showModal();
+  });
+  sheetFeature.addEventListener('change', () => {
+    chosen.clear();
+    renderPicker();
+  });
+  sheetSearch.addEventListener('input', renderPicker);
+  $('pf-sheet-cancel').addEventListener('click', () => sheet.close());
+  closeOnBackdrop(sheet);
+  sheetAdd.addEventListener('click', async () => {
+    const feature = data?.access.features.find((f) => f.id === sheetFeature.value);
+    if (!feature || !chosen.size) return;
+    const ids = [...chosen];
+    sheet.close();
+    chosen.clear();
+    await flip(feature, ids, true);
+  });
+
+  // ---- search
+  search.addEventListener('input', () => {
+    query = search.value.trim().toLowerCase();
+    render();
+  });
+
+  if (getToken()) load();
+  else showGate();
+</script>
