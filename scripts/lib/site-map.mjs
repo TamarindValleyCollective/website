@@ -111,6 +111,21 @@ const centroid = (pts) => {
   return [cx / (6 * a), cy / (6 * a)];
 };
 
+/** The path data ("M... Z") of the smallest plot outline containing (x, y), or null if it is in none: the home's land plot. */
+export function plotOutline(plotPath, x, y) {
+  const inside = plotPolygons(plotPath).filter((p) => contains(p.pts, x, y)).sort((a, b) => a.area - b.area);
+  return inside.length ? `M${inside[0].pts.map(([px, py]) => `${px} ${py}`).join('L')}Z` : null;
+}
+
+/** The width and height of the smallest plot outline containing (x, y), or null: how much room the home's label has. */
+export function plotSpan(plotPath, x, y) {
+  const inside = plotPolygons(plotPath).filter((p) => contains(p.pts, x, y)).sort((a, b) => a.area - b.area);
+  if (!inside.length) return null;
+  const xs = inside[0].pts.map((q) => q[0]);
+  const ys = inside[0].pts.map((q) => q[1]);
+  return { w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+}
+
 /** [x, y] for a home's label: the centre of the smallest plot outline containing (x, y), or null if it is in none. */
 export function labelAnchor(plotPath, x, y) {
   const inside = plotPolygons(plotPath).filter((p) => contains(p.pts, x, y)).sort((a, b) => a.area - b.area);
@@ -129,7 +144,7 @@ const baseLetters = (code) => (typeof code === 'string' ? (code.trim().match(/^[
  * @param {{
  *   units: { house_no: string, cluster: string, shape: string, x: number | string, y: number | string, rotation: number | string, mirror_x: boolean, mirror_y: boolean }[],
  *   households: { id: string, farm_unit: string, house_no: string | null, unit_type?: string | null }[],
- *   people: { id: string, full_name: string, active?: boolean }[],
+ *   people: { id: string, full_name: string, active?: boolean, google_picture_url?: string | null }[],
  *   memberships: { household_id: string, person_id: string, role?: string }[],
  *   pattas: { household_id: string, area_sq_ft: number | string | null }[],
  * }} data
@@ -150,6 +165,13 @@ export function buildAdminSiteMap(data, options = {}) {
     const members = hh ? data.memberships.filter((m) => m.household_id === hh.id && people.has(m.person_id)) : [];
     const owners = members.some((m) => (m.role ?? 'owner') === 'owner') ? members.filter((m) => (m.role ?? 'owner') === 'owner') : members;
     const ownerNames = owners.map((m) => people.get(m.person_id).full_name).sort((a, b) => a.localeCompare(b));
+    // Everyone on the household, owners first: a name, the role, and the Google picture the admin register also shows
+    // (never an email or phone). Names and pictures are withheld from the read-only role.
+    const ownerIds = new Set(owners.map((m) => m.person_id));
+    const household = members
+      .map((m) => ({ name: people.get(m.person_id).full_name, role: m.role ?? 'owner', owner: ownerIds.has(m.person_id), picture: people.get(m.person_id).google_picture_url || null }))
+      .sort((a, b) => Number(b.owner) - Number(a.owner) || a.name.localeCompare(b.name))
+      .map(({ name, role, picture }) => ({ name: seeNames ? name : maskName(name), role, picture: seeNames ? picture : null }));
     const shape = SHAPES[u.shape] ? u.shape : 'S';
     const recordType = hh?.unit_type ?? null;
     const plotSqFt = hh ? plotOf(hh.id) : null;
@@ -174,6 +196,7 @@ export function buildAdminSiteMap(data, options = {}) {
       farmUnit: hh?.farm_unit ?? null,
       owners: ownerNames.map((n) => (seeNames ? n : maskName(n))),
       otherMembers: members.length - owners.length,
+      people: household,
       recordType,
       bhk: bedroomsOf(recordType) ?? SHAPES[shape].bhk,
       detail: SHAPES[shape].detail,

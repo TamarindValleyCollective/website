@@ -867,19 +867,24 @@ outside both the local machine and Netlify (the member-update-email workflow).
   card as before. The faces in the popup come from the directory (`/api/members-me/directory`, fetched once in the
   background): the photo each member chose to share there, else their initial. **A Google profile picture is never
   used on the member map**: `member-google-picture.mjs` keeps those for the core team only, as the privacy notice says.
+  **Both maps share one drawing**: `scripts/lib/site-map-draw.mjs` (shapes as footprint polygons, fills, the outline layer
+  above every home so a shared wall is one line, plot fills, house-number pills fitted to the plot's room on screen) and
+  `src/styles/site-map.css`; the details pane sits to the right of the map on wide screens in both.
 - **`netlify/functions/site-map-admin.mts`** + **`src/pages/internal/site-map.astro`** — the admin portal's **Site map**
   (`GET /api/site-map-admin/overview`, read-only; redirects for `admin.tvc.farm` in `netlify.toml`). Its own admin module
   `site-map` in `staff-registry.ts` (`view`: all roles), so a super admin chooses which admins get it on Access, like any
   module. `requireStaff('site-map', 'view')` on every request. The same plan, coloured by status (household assigned,
   vacant, map shape and member record differ), with a details card: household and owners (opted-out members are shown to
   admins; names are masked for the read-only role), the member record's unit type, the house plot size (sum of the
-  household's `member_house_pattas.area_sq_ft`), the placement, a list of what to fix, and a link to the household in the
+  household's `member_house_pattas.area_sq_ft`), everyone on the household with role and Google picture (names and pictures
+  withheld from the read-only role), a list of what to fix, and a link to the household in the
   member register (`/internal/members/#F-xx`). Filters: vacant, type differs, no plot size. Households that name a house
   the map does not have are listed. Shaping is `buildAdminSiteMap` in `scripts/lib/site-map.mjs` (tested); no email,
   phone or document is selected. **Editing the layout** (`POST /api/site-map-admin/units`, capability `site-map` /
   `edit`, admin role only): update a home's shape, position, rotation or mirrors, add a home, renumber one, or remove
   one. The page has an "Edit layout" mode (off until pressed; drag the picked home or type values; nothing is saved
-  until Save). The rules are in `scripts/lib/site-map-edit.mjs` (tested): a home with a household cannot be removed or
+  until Save; icon controls, Undo/Redo while unsaved, and dragging snaps walls to a neighbour's wall or a plot line and
+  the angle to a neighbour's, `scripts/lib/site-map-snap.mjs`, tested; Alt places freely). The rules are in `scripts/lib/site-map-edit.mjs` (tested): a home with a household cannot be removed or
   renumbered (move the household on the Members page first); an update carries the row's `updated_at` and is refused
   if the row has changed since (the write itself is guarded on it too), so two admins cannot overwrite each other. Every
   edit is written to `staff_audit_log` (`site-map.update|add|renumber|remove`, house number and changed plan values

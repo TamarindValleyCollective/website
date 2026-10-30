@@ -46,7 +46,7 @@ async function handleOverview(req: Request): Promise<Response> {
     select('site_map_clusters', 'select=cluster,base_size,view_box,plot_path&order=cluster.asc'),
     select('site_map_units', `select=${UNIT_COLUMNS}&order=house_no.asc`),
     select('member_households', 'house_no=not.is.null&select=id,farm_unit,house_no,unit_type'),
-    select('member_people', 'select=id,full_name,active'),
+    select('member_people', 'select=id,full_name,active,google_picture_url'),
     select('member_household_members', 'select=household_id,person_id,role'),
     select('member_house_pattas', 'select=household_id,area_sq_ft'),
   ]);
