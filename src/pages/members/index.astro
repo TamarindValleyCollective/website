@@ -1696,11 +1696,16 @@ import SignInGate from '../../components/SignInGate.astro';
   .rent {
     columns: 2 360px;
     column-gap: 14px;
+    container: rent / inline-size;
   }
 
   .rent > .unit-card {
     break-inside: avoid;
     margin: 0 0 14px;
+  }
+
+  .rent > .unit-card--cal {
+    column-span: all;
   }
 
   .rent > .rent-alert {
@@ -1758,8 +1763,64 @@ import SignInGate from '../../components/SignInGate.astro';
 
   /* Blocked dates: a month calendar. Cells are 44px tall for a thumb; the colours say what each night is. */
   .cal {
-    max-width: 340px;
     margin: 0 0 8px;
+  }
+
+  .cal-months {
+    display: grid;
+    gap: 16px 28px;
+  }
+
+  .cal-month--second,
+  .cal-nav-gap {
+    display: none;
+  }
+
+  .cal-nav-gap {
+    width: 44px;
+  }
+
+  .cal-layout {
+    display: grid;
+    gap: 8px 28px;
+  }
+
+  .cal-side {
+    display: grid;
+    align-content: start;
+    gap: 0;
+  }
+
+  .cal-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 16px;
+    margin: 10px 0 0;
+  }
+
+  /* Wide enough: two months side by side, then (wider still) the details beside them. */
+  @container rent (min-width: 640px) {
+    .cal-months {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .cal-month--second {
+      display: block;
+    }
+
+    .cal-nav-gap {
+      display: block;
+    }
+
+    .cal-nav--narrow {
+      display: none;
+    }
+  }
+
+  @container rent (min-width: 960px) {
+    .cal-layout {
+      grid-template-columns: minmax(0, 1fr) 280px;
+    }
   }
 
   .cal-head {
@@ -5409,21 +5470,23 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       }
     });
     const nightsIn = (a: string, b: string) => (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000 + 1;
+    const calLinks = h('p', 'cal-links');
+    const monthOf = (iso: string) => iso.slice(0, 7);
     const renderCal = () => {
       const focusKey = (document.activeElement as HTMLElement | null)?.closest('.cal') ? (document.activeElement as HTMLElement).dataset.fk : undefined;
       const taken = new Map<string, 'mine' | 'farm' | 'tvc' | 'stay'>();
       for (const b of rental?.blocks ?? []) for (let n = 0; n < b.nights; n++) taken.set(plusDays(b.startDate, n), b.farm ? 'farm' : b.mine ? 'mine' : 'tvc');
       for (const st of rental?.stays ?? []) for (let n = 0; n < st.nights; n++) taken.set(plusDays(st.startDate, n), 'stay');
-      const [y, m] = cal.month.split('-').map(Number);
-      const lead = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(); // Sunday first
-      const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+      // Back as far as the earliest night on record (past guests can be reviewed), never before this month otherwise.
+      const earliest = [todayIso, ...(rental?.stays ?? []).map((x) => x.startDate), ...(rental?.blocks ?? []).map((x) => x.startDate)].map(monthOf).sort()[0];
+      const latest = monthOf(plusDays(todayIso, 540)); // about 18 months ahead
       const shift = (by: number) => {
-        const next = new Date(Date.UTC(y, m - 1 + by, 1));
-        cal.month = isoOf(next).slice(0, 7);
+        const [y, m] = cal.month.split('-').map(Number);
+        cal.month = isoOf(new Date(Date.UTC(y, m - 1 + by, 1))).slice(0, 7);
         renderCal();
       };
-      const nav = (label: string, glyph: string, by: number, off: boolean, fk: string) => {
-        const b = h('button', 'cal-nav', glyph) as HTMLButtonElement;
+      const nav = (label: string, glyph: string, by: number, off: boolean, fk: string, cls = '') => {
+        const b = h('button', `cal-nav ${cls}`.trim(), glyph) as HTMLButtonElement;
         b.type = 'button';
         b.disabled = off;
         b.dataset.fk = fk;
@@ -5431,46 +5494,64 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         b.addEventListener('click', () => shift(by));
         return b;
       };
-      const last = plusDays(todayIso, 540).slice(0, 7); // about 18 months ahead
-      const title = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-      const cells: HTMLElement[] = [];
-      for (const w of ['S', 'M', 'T', 'W', 'T', 'F', 'S']) cells.push(h('span', 'cal-dow', w));
-      for (let n = 0; n < lead; n++) cells.push(h('span', 'cal-pad'));
-      for (let day = 1; day <= days; day++) {
-        const iso = `${cal.month}-${String(day).padStart(2, '0')}`;
-        const kind = taken.get(iso);
-        const past = iso < todayIso;
-        const edge = iso === cal.start || iso === cal.end;
-        const inside = !!cal.start && !!cal.end && iso > cal.start && iso < cal.end;
-        const cls = ['cal-day', kind ? `cal-day--${kind}` : '', past ? 'cal-day--past' : '', edge ? 'cal-day--edge' : '', inside ? 'cal-day--in' : '', iso === todayIso ? 'cal-day--today' : ''].filter(Boolean).join(' ');
-        const b = h('button', cls, String(day)) as HTMLButtonElement;
-        b.type = 'button';
-        b.dataset.fk = iso;
-        const what = kind === 'mine' ? 'blocked by you' : kind === 'farm' ? 'the farm is closed' : kind === 'tvc' ? 'unavailable' : kind === 'stay' ? 'a guest is staying' : past ? 'in the past' : 'free';
-        b.setAttribute('aria-label', `${dateLabel(iso)}, ${what}`);
-        if (edge || inside) b.setAttribute('aria-pressed', 'true');
-        b.addEventListener('click', () => {
-          if (past) return;
-          if (kind) {
-            cal.detail = iso;
-            cal.start = '';
-            cal.end = '';
-            return renderCal();
-          }
-          cal.detail = '';
-          if (!cal.start || cal.end) {
-            cal.start = iso;
-            cal.end = '';
-          } else if (iso < cal.start) cal.start = iso;
-          else {
-            for (let d = cal.start; d <= iso; d = plusDays(d, 1)) if (taken.has(d)) return toast('Some of those nights are not free.');
-            if (nightsIn(cal.start, iso) > MAX_BLOCK) return toast(`You can block at most ${MAX_BLOCK} nights at a time.`);
-            cal.end = iso;
-          }
-          renderCal();
-        });
-        cells.push(b);
-      }
+      const onDay = (iso: string, past: boolean, kind?: string) => {
+        if (past && !kind) return; // an earlier night can be looked at, not blocked
+        if (kind) {
+          cal.detail = iso;
+          cal.start = '';
+          cal.end = '';
+          return renderCal();
+        }
+        cal.detail = '';
+        if (!cal.start || cal.end) {
+          cal.start = iso;
+          cal.end = '';
+        } else if (iso < cal.start) cal.start = iso;
+        else {
+          for (let d = cal.start; d <= iso; d = plusDays(d, 1)) if (taken.has(d)) return toast('Some of those nights are not free.');
+          if (nightsIn(cal.start, iso) > MAX_BLOCK) return toast(`You can block at most ${MAX_BLOCK} nights at a time.`);
+          cal.end = iso;
+        }
+        renderCal();
+      };
+      // One month. The first carries the earlier-month arrow, the second the later-month one; on a narrow screen only the
+      // first shows, so it also carries the later-month arrow.
+      const monthEl = (ym: string, which: 'first' | 'second') => {
+        const [y, m] = ym.split('-').map(Number);
+        const lead = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(); // Sunday first
+        const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+        const title = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+        const cells: HTMLElement[] = [];
+        for (const w of ['S', 'M', 'T', 'W', 'T', 'F', 'S']) cells.push(h('span', 'cal-dow', w));
+        for (let n = 0; n < lead; n++) cells.push(h('span', 'cal-pad'));
+        for (let day = 1; day <= days; day++) {
+          const iso = `${ym}-${String(day).padStart(2, '0')}`;
+          const kind = taken.get(iso);
+          const past = iso < todayIso;
+          const edge = iso === cal.start || iso === cal.end;
+          const inside = !!cal.start && !!cal.end && iso > cal.start && iso < cal.end;
+          const cls = ['cal-day', kind ? `cal-day--${kind}` : '', past && !kind ? 'cal-day--past' : '', edge ? 'cal-day--edge' : '', inside ? 'cal-day--in' : '', iso === todayIso ? 'cal-day--today' : ''].filter(Boolean).join(' ');
+          const b = h('button', cls, String(day)) as HTMLButtonElement;
+          b.type = 'button';
+          b.dataset.fk = iso;
+          const what = kind === 'mine' ? 'blocked by you' : kind === 'farm' ? 'the farm is closed' : kind === 'tvc' ? 'unavailable' : kind === 'stay' ? 'a guest stayed or is staying' : past ? 'in the past' : 'free';
+          b.setAttribute('aria-label', `${dateLabel(iso)}, ${what}`);
+          if (edge || inside) b.setAttribute('aria-pressed', 'true');
+          b.addEventListener('click', () => onDay(iso, past, kind));
+          cells.push(b);
+        }
+        const [ny, nm] = [y, m];
+        const nextMonth = isoOf(new Date(Date.UTC(ny, nm, 1))).slice(0, 7);
+        return h('div', `cal-month cal-month--${which}`, undefined,
+          h('div', 'cal-head', undefined,
+            which === 'first' ? nav('Earlier month', '‹', -1, ym <= earliest, 'prev') : h('span', 'cal-nav-gap'),
+            h('b', '', title),
+            which === 'first' ? nav('Later month', '›', 1, ym >= latest, 'next-narrow', 'cal-nav--narrow') : nav('Later month', '›', 1, nextMonth > latest, 'next')),
+          h('div', 'cal-grid', undefined, ...cells));
+      };
+      const [fy, fm] = cal.month.split('-').map(Number);
+      const second = isoOf(new Date(Date.UTC(fy, fm, 1))).slice(0, 7);
+
       // What is on the night the member tapped: a stay's guests, or a block with its Remove.
       calDetail.replaceChildren();
       calDetail.hidden = true;
@@ -5485,7 +5566,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         } else if (block) {
           const range = `${dateLabel(block.startDate)} to ${endLabel(block.startDate, block.nights)}`;
           calDetail.append(h('p', '', block.farm ? `The farm is closed, ${range}.` : block.mine ? `Blocked by you, ${range} · ${block.nights} night${block.nights === 1 ? '' : 's'}.` : `Unavailable, set by TVC, ${range}.`));
-          if (block.mine) {
+          if (block.mine && plusDays(block.startDate, block.nights) > todayIso) {
             const rm = h('button', 'btn', 'Remove this block') as HTMLButtonElement;
             rm.type = 'button';
             rm.addEventListener('click', async () => {
@@ -5499,21 +5580,28 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         }
         calDetail.hidden = !calDetail.childElementCount;
       }
-      const upcoming = (rental?.stays ?? []).filter((x) => plusDays(x.startDate, x.nights) > todayIso).sort((a, b) => a.startDate.localeCompare(b.startDate))[0];
-      const nextStay = upcoming ? h('button', 'link-btn', `Next guests: ${dateLabel(upcoming.startDate)}`) as HTMLButtonElement : null;
-      nextStay?.setAttribute('type', 'button');
-      nextStay?.addEventListener('click', () => {
-        cal.detail = upcoming!.startDate < todayIso ? todayIso : upcoming!.startDate;
-        cal.month = cal.detail.slice(0, 7);
-        cal.start = '';
-        cal.end = '';
-        renderCal();
-      });
+
+      // Shortcuts to the guests just before and just after today.
+      const stays = (rental?.stays ?? []).slice().sort((a, b) => a.startDate.localeCompare(b.startDate));
+      const upcoming = stays.find((x) => plusDays(x.startDate, x.nights) > todayIso);
+      const earlier = stays.filter((x) => plusDays(x.startDate, x.nights) <= todayIso).pop();
+      const jump = (label: string, st: (typeof stays)[number]) => {
+        const b = h('button', 'link-btn', label) as HTMLButtonElement;
+        b.type = 'button';
+        b.addEventListener('click', () => {
+          cal.detail = st.startDate < todayIso && plusDays(st.startDate, st.nights) > todayIso ? todayIso : st.startDate;
+          cal.month = cal.detail.slice(0, 7);
+          cal.start = '';
+          cal.end = '';
+          renderCal();
+        });
+        return b;
+      };
+      calLinks.replaceChildren(...[earlier ? jump(`Last guests: ${dateLabel(earlier.startDate)}`, earlier) : null, upcoming ? jump(`Next guests: ${dateLabel(upcoming.startDate)}`, upcoming) : null].filter((x): x is HTMLButtonElement => !!x));
+
       calEl.replaceChildren(
-        h('div', 'cal-head', undefined, nav('Earlier month', '‹', -1, cal.month <= todayIso.slice(0, 7), 'prev'), h('b', '', title), nav('Later month', '›', 1, cal.month >= last, 'next')),
-        h('div', 'cal-grid', undefined, ...cells),
-        h('p', 'cal-key', undefined, h('span', 'cal-swatch cal-swatch--mine'), 'Blocked by you', h('span', 'cal-swatch cal-swatch--farm'), 'Closed', h('span', 'cal-swatch cal-swatch--stay'), 'Guest'),
-        ...(nextStay ? [nextStay] : []));
+        h('div', 'cal-months', undefined, monthEl(cal.month, 'first'), monthEl(second, 'second')),
+        h('p', 'cal-key', undefined, h('span', 'cal-swatch cal-swatch--mine'), 'Blocked by you', h('span', 'cal-swatch cal-swatch--farm'), 'Closed', h('span', 'cal-swatch cal-swatch--stay'), 'Guests'));
       const n = cal.start && cal.end ? nightsIn(cal.start, cal.end) : 0;
       calNote.textContent = !cal.start ? 'Tap free nights to block them. Tap a marked night for details.' : !cal.end ? 'Tap the last night, or the same day again for one night.' : `${dateLabel(cal.start)} to ${dateLabel(cal.end)} · ${n} night${n === 1 ? '' : 's'}`;
       calBtn.disabled = !cal.end;
@@ -5768,9 +5856,11 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         doBlock = (from, to) => act('/api/members-me/rental/blocks', { from, to }, 'Nights blocked.', calBtn, 'Blocking…');
         doRemove = (id) => act('/api/members-me/rental/blocks/remove', { id }, 'Block removed.');
         renderCal();
-        sections.push(card('Calendar', calEl, calDetail, calNote, calBtn));
         const pc2 = payoutCard();
         if (pc2) sections.push(pc2);
+        const calCard = card('Calendar', h('div', 'cal-layout', undefined, calEl, h('div', 'cal-side', undefined, calDetail, calNote, calBtn, calLinks)));
+        calCard.classList.add('unit-card--cal');
+        sections.push(calCard);
       }
       body.replaceChildren(...sections);
       if (focusKey) (body.querySelector(`[data-fk="${focusKey}"]`) as HTMLElement | null)?.focus();
