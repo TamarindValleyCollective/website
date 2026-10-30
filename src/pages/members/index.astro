@@ -2163,12 +2163,20 @@ import SignInGate from '../../components/SignInGate.astro';
       grid-template-columns: minmax(0, 1fr) 260px;
     }
 
+    /* Two months, a hairline between them so each reads as its own sheet. */
     .cal-months {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0;
+    }
+
+    .cal-month--0 {
+      padding-right: 28px;
     }
 
     .cal-month--1 {
       display: block;
+      padding-left: 28px;
+      border-left: 1px solid var(--tvc-line);
     }
   }
 
