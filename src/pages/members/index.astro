@@ -1709,16 +1709,6 @@ import SignInGate from '../../components/SignInGate.astro';
     line-height: 1.45;
   }
 
-  .rent-alert {
-    margin: 0;
-    padding: 10px 14px;
-    border: 1px solid var(--tvc-error-border);
-    border-radius: var(--radius-field);
-    background: var(--tvc-error-bg);
-    color: var(--tvc-error-text);
-    font-size: var(--text-sm);
-  }
-
   .rent-status {
     display: flex;
     flex-wrap: wrap;
@@ -1734,8 +1724,47 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   .rent-what b {
+    display: flex;
+    gap: 8px;
+    align-items: center;
     font-size: var(--text-lg);
     font-weight: 600;
+  }
+
+  .rent-dot {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  /* On is green, off is orange (it needs a decision, it is not an error), paused is red (the core team did it). */
+  .rent-card--on {
+    border-color: color-mix(in srgb, var(--tvc-green-dark) 40%, var(--tvc-white));
+    background: color-mix(in srgb, var(--tvc-green-dark) 10%, var(--tvc-white));
+  }
+
+  .rent-card--on .rent-what b {
+    color: var(--tvc-green-dark);
+  }
+
+  .rent-card--off {
+    border-color: color-mix(in srgb, var(--tvc-orange) 50%, var(--tvc-white));
+    background: color-mix(in srgb, var(--tvc-orange) 13%, var(--tvc-white));
+  }
+
+  .rent-card--off .rent-what b {
+    color: var(--tvc-orange-text);
+  }
+
+  .rent-card--paused {
+    border-color: var(--tvc-error-border);
+    background: var(--tvc-error-bg);
+  }
+
+  .rent-card--paused .rent-what b {
+    color: var(--tvc-error-text);
   }
 
   .rent-what span {
@@ -1794,6 +1823,10 @@ import SignInGate from '../../components/SignInGate.astro';
   .rent-switch input:focus-visible + i {
     outline: 2px solid var(--tvc-orange);
     outline-offset: 2px;
+  }
+
+  .rent-card .rent-modes {
+    border-top-color: color-mix(in srgb, currentColor 14%, transparent);
   }
 
   .rent-modes {
@@ -5884,7 +5917,6 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         const isOn = !mine || u.requestMode !== 'reject'; // a unit TVC manages is always offered; the member's switch is theirs
         const label = d.types?.find((t) => t.id === u.typeId)?.label ?? '';
         lede.textContent = [d.houseNo ? `Home ${d.houseNo}` : '', label, u.shape === 'room' ? 'one room' : 'whole unit', mine ? 'you manage it' : 'TVC manages it'].filter(Boolean).join(' · ');
-        if (paused) sections.push(h('p', 'rent-alert', 'Paused by the core team. Your unit is not offered to guests until it is resumed.'));
 
         // Status first: is the unit being rented out, and the one switch for it.
         const headline = paused ? 'Paused by the core team' : !isOn ? 'Rental is off' : 'Renting out';
@@ -5900,7 +5932,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           sw.addEventListener('change', () => void act('/api/members-me/rental/settings', { requestMode: sw.checked ? 'ask' : 'reject' }, sw.checked ? 'Your unit is offered to guests.' : 'Your unit is no longer offered.'));
           return h('label', 'rent-switch', undefined, sw, h('i'));
         })();
-        const statusCard = h('section', 'unit-card', undefined, h('div', 'rent-status', undefined, h('div', 'rent-what', undefined, h('b', '', headline), h('span', '', detailText)), ...(switchEl ? [switchEl] : [])));
+        const tone = paused ? 'paused' : isOn ? 'on' : 'off'; // the card's colour says it before the words do
+        const statusCard = h('section', `unit-card rent-card rent-card--${tone}`, undefined, h('div', 'rent-status', undefined, h('div', 'rent-what', undefined, h('b', '', undefined, h('i', 'rent-dot'), headline), h('span', '', detailText)), ...(switchEl ? [switchEl] : [])));
         if (isOn && !paused) {
           const seg = h('div', 'segmented');
           seg.setAttribute('role', 'radiogroup');
