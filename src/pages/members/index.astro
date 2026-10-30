@@ -3977,11 +3977,11 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   const NAV: NavItem[] = [
     { id: 'dashboard', label: 'Home', icon: IC.dash },
     { id: 'unit', label: 'My unit', icon: IC.unit },
-    // Owners only: a family member's story route lands on Our members.
-    { id: 'story', label: 'Your story', icon: IC.pen },
+    // Owners only: a family member's story route lands on the Directory.
+    { id: 'story', label: 'Our story', icon: IC.pen },
     // Owners only, and only once the feature is switched on (MEMBER_RENTAL_ENABLED): probeRental() shows it.
     { id: 'rental', label: 'My rental', icon: IC.stay, hidden: true },
-    { id: 'directory', label: 'Our members', icon: IC.book },
+    { id: 'directory', label: 'Directory', icon: IC.book },
     // Early access (MEMBER_SITE_MAP_ENABLED, or a household on Preview): probeSiteMap() shows it.
     { id: 'sitemap', label: 'Site map', icon: IC.map, hidden: true },
     // Not built yet: kept out of the menu (they would only lead to a "coming soon" page) and listed
@@ -5416,8 +5416,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const next = !me!.phone
       ? { title: 'Add your WhatsApp number', text: 'So the core team can message you about stays and farm updates.', actions: [(() => { const b = h('button', 'btn btn--solid', 'Add my number'); b.setAttribute('type', 'button'); b.addEventListener('click', detailsDialog); return b; })()] }
       : isFamily()
-      ? { title: 'Our members', text: 'Meet your neighbours in the valley.', actions: [go('See our members', 'directory', true)] }
-      : { title: 'Your story', text: 'Add to it or change it whenever you like, and read what your neighbours have shared.', actions: [go('Edit your story', 'story', true), go('See our members', 'directory')] };
+      ? { title: 'Directory', text: 'Meet your neighbours in the valley.', actions: [go('Open the directory', 'directory', true)] }
+      : { title: 'Our story', text: 'Add to it or change it whenever you like, and read what your neighbours have shared.', actions: [go('Edit your story', 'story', true), go('See our members', 'directory')] };
     // Steps added since this member last saw the tour: one dismissible card above the next step (nothing for a brand new
     // member, who is walked through the whole tour instead).
     const fresh = typeof me!.tourSeenThrough === 'number' && !whatsNewDismissed ? tourPending() : [];
@@ -5667,17 +5667,17 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
   function viewStory(): HTMLElement {
     const root = h('div');
-    const back = h('a', 'back-link', undefined, icon('<path d="M15 6l-6 6 6 6"/>'), 'Our members');
+    const back = h('a', 'back-link', undefined, icon('<path d="M15 6l-6 6 6 6"/>'), 'Directory');
     back.setAttribute('href', '#/directory');
     root.append(
       back,
-      h('h1', 'page-title', 'Your story', h('small', '', 'Your card for the collective')),
+      h('h1', 'page-title', 'Our story', h('small', '', 'Your card for the collective')),
       h('p', 'lede', 'Your unit has one story, shared by everyone in it. The core team reads it before it appears anywhere.'),
       h('details', 'story-how', undefined, h('summary', '', 'How it works'), h('ul', '', undefined,
         h('li', '', 'Either of you can edit what you do, your family and the photos. Your "why TVC" line is your own.'),
         h('li', '', 'The story needs at least one "why TVC" line from your unit before it can be submitted.'),
         h('li', '', 'To link your name to a page of yours, select it in the text and press Link.'),
-        h('li', '', 'Once approved, other members can read it under Our members. It goes on tvc.farm only if you switch on "Show on tvc.farm".'))),
+        h('li', '', 'Once approved, other members can read it in the Directory. It goes on tvc.farm only if you switch on "Show on tvc.farm".'))),
       // (not `cond ? null : el`: append(null) writes the text "null")
       ...(me!.directoryVisible ? [] : [h('p', 'lede lede--warn', 'You are not listed in the member directory, so other members cannot see your story and it will not go on tvc.farm either. You can change that in your account menu, under Your details.')]),
     );
@@ -5739,7 +5739,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         text = story.hasUnsubmittedChanges ? 'With the core team. You have newer changes that are not submitted yet.' : 'With the core team. It will show here once it is approved.';
       } else if (story?.status === 'approved') {
         cls = 'live'; title = 'Approved';
-        text = story.hasUnsubmittedChanges ? 'Your approved story stays as it is until you submit these changes.' : 'Approved. Other members can read it under Our members.';
+        text = story.hasUnsubmittedChanges ? 'Your approved story stays as it is until you submit these changes.' : 'Approved. Other members can read it in the Directory.';
       } else if (story?.status === 'rejected') {
         cls = 'review'; title = 'Changes needed';
         text = story.reviewerNote || 'The core team asked for changes. Edit and submit again.';
@@ -6551,7 +6551,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const root = h('div');
     const body = h('div');
     root.append(
-      h('h1', 'page-title', 'Our members', h('small', '', 'The collective')),
+      h('h1', 'page-title', 'Directory', h('small', '', 'The collective')),
       h('p', 'lede', 'Names, farm plots and the story each member chose to share. Contact details are never shown.'),
       body,
     );
