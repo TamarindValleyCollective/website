@@ -131,7 +131,7 @@ export const MODULE_INFO: Record<ModuleId, { label: string; path: string; capabi
     },
   },
   'site-map': {
-    label: 'Site map',
+    label: 'Map',
     path: '/internal/site-map/',
     capabilities: {
       view: 'See every home on the site plan with its household, unit type and plot size, and the gaps to fix',

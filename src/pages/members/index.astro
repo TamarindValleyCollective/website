@@ -1666,7 +1666,7 @@ import SignInGate from '../../components/SignInGate.astro';
     display: none;
   }
 
-  /* ---- My rental ---- */
+  /* ---- Rent out ---- */
   .rent {
     display: grid;
     gap: 14px;
@@ -3980,10 +3980,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     // Owners only: a family member's story route lands on the Directory.
     { id: 'story', label: 'Our story', icon: IC.pen },
     // Owners only, and only once the feature is switched on (MEMBER_RENTAL_ENABLED): probeRental() shows it.
-    { id: 'rental', label: 'My rental', icon: IC.stay, hidden: true },
+    { id: 'rental', label: 'Rent out', icon: IC.stay, hidden: true },
     { id: 'directory', label: 'Directory', icon: IC.book },
     // Early access (MEMBER_SITE_MAP_ENABLED, or a household on Preview): probeSiteMap() shows it.
-    { id: 'sitemap', label: 'Site map', icon: IC.map, hidden: true },
+    { id: 'sitemap', label: 'Map', icon: IC.map, hidden: true },
     // Not built yet: kept out of the menu (they would only lead to a "coming soon" page) and listed
     // once, quietly, at the foot of the Home page. The routes stay so an old bookmark still lands somewhere.
     { id: 'stays', label: 'Stays', icon: IC.stay, soon: true },
@@ -5064,7 +5064,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     show(0);
   }
 
-  // ---- My rental ----
+  // ---- Rent out ----
   // Offer your unit to guests who book through Linger, then manage it. The menu item stays hidden until the server says
   // the feature is on and this person is an owner (probeRental). Plan: docs/plans/accommodation-member-units.md.
   type RentalData = {
@@ -5137,7 +5137,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
   function viewRental(): HTMLElement {
     const root = h('div');
-    root.append(h('h1', 'page-title', 'My rental'), h('p', 'lede', 'Offer your unit to guests who book through Linger. TVC looks after the guests while they are here.'));
+    root.append(h('h1', 'page-title', 'Rent out'), h('p', 'lede', 'Offer your unit to guests who book through Linger. TVC looks after the guests while they are here.'));
     const homeLine = h('p', 'rent-note');
     homeLine.hidden = true;
     const body = h('div', 'rent');
@@ -6254,7 +6254,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
   function viewSiteMap(): HTMLElement {
     const root = h('div');
-    root.append(h('h1', 'page-title', 'Site map', h('small', '', 'Every home')), h('p', 'lede', 'Tap a home to see who it belongs to and what type it is.'));
+    root.append(h('h1', 'page-title', 'Map', h('small', '', 'Every home')), h('p', 'lede', 'Tap a home to see who it belongs to and what type it is.'));
     const data = siteMap;
     if (!data || !data.units.length) {
       root.append(h('p', 'lede', 'The site map is not available right now.'));
@@ -6887,7 +6887,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         if (status !== 200) throw new Error(data.error || 'Could not load the directory.');
         list = data.households as DirHousehold[];
         draw();
-        // Arriving from the Site map's "View profile" (#/directory?unit=F-12): open that household's profile.
+        // Arriving from the Map's "View profile" (#/directory?unit=F-12): open that household's profile.
         const wanted = routeQuery.get('unit');
         const target = wanted ? list.find((x) => x.farmUnit === wanted) : null;
         if (target) {

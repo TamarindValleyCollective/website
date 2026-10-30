@@ -84,7 +84,7 @@ function demoUnits() {
       { householdId: 'h-05', farmUnit: 'F-05', houseNo: 'H-27', payeeName: 'Shobha Shetty', method: 'upi', shown: 'ending hetty', panShown: 'ending 567G', status: 'verified', tdsApplies: true, tdsRate: 10, verifiedAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
     ],
     access: {
-      features: [{ id: 'rental', label: 'My rental', everyone: false }],
+      features: [{ id: 'rental', label: 'Rent out', everyone: false }],
       members: [['h-01', 'F-01', 'H-10', ['Kritika Vishwanathan', 'Rajiv Prakash']], ['h-02', 'F-02', 'H-25', ['Ramesh Agarwal', 'Sarika Agarwal']], ['h-03', 'F-03', 'H-08', ['Divya Tiwari', 'Sudhir Tiwari']], ['h-04', 'F-04', 'H-40', ['Vidya Atherya']], ['h-05', 'F-05', 'H-27', ['Srividhya Govindan', 'Swaminathan Rajamani']], ['h-29', 'F-29', 'H-17', ['Deepa Alex', 'Sharath Jeppu']]].map(([householdId, farmUnit, houseNo, names]) => ({ householdId, farmUnit, houseNo, names })),
       grants: [{ householdId: 'h-29', farmUnit: 'F-29', houseNo: 'H-17', names: ['Deepa Alex', 'Sharath Jeppu'], feature: 'rental', since: new Date().toISOString() }],
     },
