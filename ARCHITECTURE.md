@@ -846,7 +846,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   this is super-admin only.
   **Preview, formerly Early access (migration `0071`, `member_feature_access`):** a member feature is on for everyone when its Netlify
   flag is `true` (My rental: `MEMBER_RENTAL_ENABLED`), and otherwise only for the households a super admin lists on
-  **Preview** (`src/pages/internal/preview-features.astro`, Admin menu: a grid of the homes that have a preview, by feature, with a switch each, first names only, an Add homes picker and Undo; it reads the `access` part of the same `overview` and posts one home at a time to `/api/units-admin/access`; step-up, audited as `units.access_granted` / `units.access_removed`). A household
+  **Preview** (`src/pages/internal/preview-features.astro`, Admin menu: a grid of the homes that have a preview, by feature, with a switch each, first names only, an Add homes picker and Undo; it reads the `access` part of the same `overview` and posts one home at a time to `/api/units-admin/access`; step-up, audited as `units.access_granted` / `units.access_removed`). The feature's GET also returns `preview: true` while its flag is not `true`, and the member portal then shows a small Preview mark beside the menu item and the page title. A household
   not listed gets the same 404 as when the feature does not exist. The rule is in `scripts/lib/member-features.mjs`;
   a later feature adds its name there and to the table's check constraint, with no new table. The second feature is
   **Site map** (`site_map`, flag `MEMBER_SITE_MAP_ENABLED`; migration `0074` widens the check constraint).
