@@ -307,7 +307,7 @@ import StepUpSheet from '../../components/StepUpSheet.astro';
   let ownerFilter = '';
 
   const MEMBER_TYPE_IDS = ['1br', '1bhk', '2bhk', '3bhk'];
-  const REQUEST_MODE_LABELS: Record<string, string> = { reject: 'Auto-reject', ask: 'Asks the member each time', auto: 'Auto-accept' };
+  const REQUEST_MODE_LABELS: Record<string, string> = { reject: 'Off (not offered)', ask: 'Member decides each request', auto: 'Accepted automatically' };
   const OFFBOARD_REASONS: [string, string][] = [['member_withdrew', 'The member withdrew'], ['contract_ended', 'The contract ended'], ['not_suitable', 'The unit is no longer suitable'], ['other', 'Another reason']];
 
   function h<K extends keyof HTMLElementTagNameMap>(tag: K, props: { class?: string; text?: string; attrs?: Record<string, string>; on?: Record<string, EventListener> } = {}, ...children: (Node | string | null)[]): HTMLElementTagNameMap[K] {

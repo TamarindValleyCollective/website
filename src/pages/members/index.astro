@@ -5195,10 +5195,11 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     }
   }
 
+  // `reject` is the unit being switched off: nothing is offered to Linger until the owner turns it on.
   const RENTAL_MODES: [string, string, string][] = [
-    ['reject', 'Auto-reject', 'Your unit is not offered to guests.'],
-    ['ask', 'Ask me each time', 'You accept or decline. No answer in 24 hours counts as declined.'],
-    ['auto', 'Auto-accept', 'Guests are accepted when the dates are free.'],
+    ['reject', 'Rental is off', 'Your unit is not offered to guests.'],
+    ['ask', 'On: you decide each request', 'You accept or decline. No answer in 24 hours counts as declined.'],
+    ['auto', 'On: accepted automatically', 'Guests are accepted when the dates are free.'],
   ];
   const dateLabel = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
   const endLabel = (d: string, nights: number) => dateLabel(new Date(Date.parse(`${d}T00:00:00Z`) + nights * 86_400_000).toISOString().slice(0, 10));
@@ -5404,7 +5405,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           return b;
         };
         if (!editingSettings) {
-          sections.push(card('Requests',
+          sections.push(card('Taking guests',
             u.manager === 'member' && mode ? h('p', 'rent-set', undefined, h('b', '', mode[1]), h('span', '', mode[2])) : say('TVC answers requests for your unit.'),
             say(closureText),
             settingsBtn('Change', true)));
@@ -5414,18 +5415,22 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           open.checked = u.ignoresFarmClosure;
           open.addEventListener('change', () => void act('/api/members-me/rental/settings', { ignoresFarmClosure: open.checked }, open.checked ? 'Your unit stays open when the farm is closed.' : 'Your unit closes with the farm.'));
           const keepOpen = h('label', 'rent-check', undefined, open, h('span', '', 'Keep my unit open when the farm is closed'));
-          const opts = u.manager === 'member'
-            ? RENTAL_MODES.map(([v, t, text]) => {
-                const r = h('input') as HTMLInputElement;
-                r.type = 'radio';
-                r.name = 'rent-mode';
-                r.value = v;
-                r.checked = u.requestMode === v;
-                r.addEventListener('change', () => void act('/api/members-me/rental/settings', { requestMode: v }, `Requests: ${t}.`));
-                return h('label', 'rent-opt', undefined, r, h('span', '', undefined, h('b', '', t), h('span', '', text)));
-              })
-            : [];
-          sections.push(card('Requests', ...opts, keepOpen, settingsBtn('Done', false)));
+          const offerOn = h('input') as HTMLInputElement;
+          offerOn.type = 'checkbox';
+          offerOn.checked = u.requestMode !== 'reject';
+          offerOn.addEventListener('change', () => void act('/api/members-me/rental/settings', { requestMode: offerOn.checked ? 'ask' : 'reject' }, offerOn.checked ? 'Your unit is offered to guests.' : 'Your unit is no longer offered.'));
+          const offer = h('label', 'rent-check', undefined, offerOn, h('span', '', 'Offer my unit to guests'));
+          const how = RENTAL_MODES.filter(([v]) => v !== 'reject').map(([v, t, text]) => {
+            const r = h('input') as HTMLInputElement;
+            r.type = 'radio';
+            r.name = 'rent-mode';
+            r.value = v;
+            r.checked = u.requestMode === v;
+            r.addEventListener('change', () => void act('/api/members-me/rental/settings', { requestMode: v }, `${t}.`));
+            return h('label', 'rent-opt', undefined, r, h('span', '', undefined, h('b', '', t.replace('On: ', '')), h('span', '', text)));
+          });
+          const opts = u.manager === 'member' ? [offer, ...(u.requestMode === 'reject' ? [] : how)] : [];
+          sections.push(card('Taking guests', ...opts, keepOpen, settingsBtn('Done', false)));
         }
 
         const from = h('input') as HTMLInputElement;
