@@ -52,7 +52,8 @@ async function handleGet(req: Request): Promise<Response> {
     select('member_people', 'select=id,full_name,active,directory_visible'),
     select('member_household_members', 'select=household_id,person_id,role'),
   ]);
-  return jsonResponse({ enabled: true, clusters: shapeClusters(clusters), units: buildSiteMap({ units, households, people, memberships }, householdId ?? null) });
+  // `preview`: the flag is not on for everyone yet, so this household is among the first to see it.
+  return jsonResponse({ enabled: true, preview: process.env.MEMBER_SITE_MAP_ENABLED !== 'true', clusters: shapeClusters(clusters), units: buildSiteMap({ units, households, people, memberships }, householdId ?? null) });
 }
 
 export default async (req: Request): Promise<Response> => {

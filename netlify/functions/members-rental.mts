@@ -136,6 +136,8 @@ async function handleGet(req: Request): Promise<Response> {
     contract: contractForMember(contract),
     payout: { needed: needsPayout(live_contract), maintenance: live_contract?.member_payout === 'maintenance_adjustment', account: payoutForMember(account) },
     enabled: true,
+    // The flag is not on for everyone yet, so this household is among the first to see it.
+    preview: process.env.MEMBER_RENTAL_ENABLED !== 'true',
     eligible: true,
     farmUnit: household.farm_unit,
     houseNo: household.house_no,

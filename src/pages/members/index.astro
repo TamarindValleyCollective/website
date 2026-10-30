@@ -308,6 +308,22 @@ import SignInGate from '../../components/SignInGate.astro';
     flex: 1;
   }
 
+  /* Marks a feature still in preview. Takes the colour of its surroundings so it reads on the solid current item too. */
+  .beta-pill {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 0 8px;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: normal;
+    line-height: 1.6;
+    vertical-align: middle;
+    opacity: 0.75;
+  }
+
   /* One keyboard focus ring for everything in the portal, in the same orange the story and directory controls already use. */
   .shell :is(a, button, input, select, textarea, summary):focus-visible,
   .signin :is(a, button):focus-visible,
@@ -3973,7 +3989,13 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     return h('span', 'scene-wrap', undefined, s, h('span', 'sr-only', name));
   };
 
-  type NavItem = { id: string; label: string; icon: string; soon?: boolean; hidden?: boolean };
+  type NavItem = { id: string; label: string; icon: string; soon?: boolean; hidden?: boolean; preview?: boolean };
+  // Marks a feature that is not on for everyone yet; the server says so (`preview`) and the mark goes when the flag is turned on.
+  const previewPill = () => {
+    const p = h('span', 'beta-pill', 'Preview');
+    p.setAttribute('title', 'You are among the first to try this. Tell the core team what works and what does not.');
+    return p;
+  };
   const NAV: NavItem[] = [
     { id: 'dashboard', label: 'Home', icon: IC.dash },
     { id: 'unit', label: 'My unit', icon: IC.unit },
@@ -4048,7 +4070,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     // The phone's bar holds five places at most: past that the last ones go under "More", so adding a page never squeezes the rest.
     const overflow = shown.length > MAX_TABS ? shown.slice(MAX_TABS - 1) : [];
     const mk = (item: NavItem, cls: string, label: string) => {
-      const a = h('a', cls, undefined, icon(item.icon), h('span', label, item.label));
+      const a = h('a', cls, undefined, icon(item.icon), h('span', label, item.label, ...(item.preview && cls ? [previewPill()] : [])));
       a.setAttribute('href', `#/${item.id}`);
       if (item.id === route) a.setAttribute('aria-current', 'page');
       return a;
@@ -5069,6 +5091,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   // the feature is on and this person is an owner (probeRental). Plan: docs/plans/accommodation-member-units.md.
   type RentalData = {
     enabled: boolean;
+    preview?: boolean;
     eligible: boolean;
     farmUnit?: string;
     houseNo?: string | null;
@@ -5120,6 +5143,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const { status, data } = await memberFetch('/api/members-me/rental');
       if (status === 200 && data.enabled && data.eligible) {
         rental = data;
+        const item = NAV.find((n) => n.id === 'rental');
+        if (item) item.preview = !!data.preview;
         setRentalVisible(true);
       } else setRentalVisible(false);
     } catch {
@@ -5137,7 +5162,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
   function viewRental(): HTMLElement {
     const root = h('div');
-    root.append(h('h1', 'page-title', 'Rent out'), h('p', 'lede', 'Offer your unit to guests who book through Linger. TVC looks after the guests while they are here.'));
+    root.append(h('h1', 'page-title', 'Rent out', ...(rental?.preview ? [previewPill()] : [])), h('p', 'lede', 'Offer your unit to guests who book through Linger. TVC looks after the guests while they are here.'));
     const homeLine = h('p', 'rent-note');
     homeLine.hidden = true;
     const body = h('div', 'rent');
@@ -6219,7 +6244,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     status: 'named' | 'private' | 'vacant'; names: string[]; unitType: string | null; bhk: string; detail: string; farmUnit: string | null; isYours: boolean;
   };
   type MapCluster = { id: string; baseSize: number; viewBox: number[]; plot: string };
-  let siteMap: { clusters: MapCluster[]; units: MapUnit[] } | null = null;
+  let siteMap: { preview?: boolean; clusters: MapCluster[]; units: MapUnit[] } | null = null;
 
   function setSiteMapVisible(on: boolean) {
     const item = NAV.find((n) => n.id === 'sitemap');
@@ -6234,6 +6259,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const { status, data } = await memberFetch('/api/members-me/site-map');
       if (status === 200 && data.enabled) {
         siteMap = data;
+        const item = NAV.find((n) => n.id === 'sitemap');
+        if (item) item.preview = !!data.preview;
         setSiteMapVisible(true);
       } else setSiteMapVisible(false);
     } catch {
@@ -6254,7 +6281,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
   function viewSiteMap(): HTMLElement {
     const root = h('div');
-    root.append(h('h1', 'page-title', 'Map', h('small', '', 'Every home')), h('p', 'lede', 'Tap a home to see who it belongs to and what type it is.'));
+    root.append(h('h1', 'page-title', 'Map', h('small', '', 'Every home'), ...(siteMap?.preview ? [previewPill()] : [])), h('p', 'lede', 'Tap a home to see who it belongs to and what type it is.'));
     const data = siteMap;
     if (!data || !data.units.length) {
       root.append(h('p', 'lede', 'The site map is not available right now.'));
