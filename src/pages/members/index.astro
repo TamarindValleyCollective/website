@@ -1691,26 +1691,15 @@ import SignInGate from '../../components/SignInGate.astro';
     display: none;
   }
 
-  /* ---- Rent out ---- */
-  /* Two balanced columns on a wide screen, one on a phone: the cards differ a lot in height, so columns pack them without gaps. */
+  /* ---- Rent out: a status card, one calendar card, a quiet payout row ---- */
   .rent {
-    columns: 2 360px;
-    column-gap: 14px;
+    display: grid;
+    gap: 14px;
     container: rent / inline-size;
   }
 
-  .rent > .unit-card {
-    break-inside: avoid;
-    margin: 0 0 14px;
-  }
-
-  .rent > .unit-card--cal {
-    column-span: all;
-  }
-
-  .rent > .rent-alert {
-    column-span: all;
-    margin: 0 0 14px;
+  .rent--narrow {
+    max-width: 560px;
   }
 
   .rent-note {
@@ -1718,37 +1707,6 @@ import SignInGate from '../../components/SignInGate.astro';
     font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
     line-height: 1.45;
-  }
-
-  .rent-opt {
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-    margin: 0 0 8px;
-    padding: 10px 12px;
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius-field);
-    cursor: pointer;
-  }
-
-  .rent-opt input {
-    flex: none;
-    width: 20px;
-    height: 20px;
-    margin: 2px 0 0;
-    accent-color: var(--tvc-green-dark);
-  }
-
-  .rent-opt b {
-    display: block;
-    font-size: var(--text-base);
-  }
-
-  .rent-opt span span {
-    display: block;
-    font-size: var(--text-sm);
-    color: var(--tvc-ink-soft);
-    line-height: 1.4;
   }
 
   .rent-alert {
@@ -1761,267 +1719,118 @@ import SignInGate from '../../components/SignInGate.astro';
     font-size: var(--text-sm);
   }
 
-  /* Blocked dates: a month calendar. Cells are 44px tall for a thumb; the colours say what each night is. */
-  .cal {
-    margin: 0 0 8px;
-  }
-
-  .cal-nav-row {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin: 0 0 6px;
-  }
-
-  .cal-nav-row .link-btn {
-    margin-left: 8px;
-  }
-
-  /* A flexible left pane (details and what is coming up) and a fixed right pane (two months, stacked). On a narrow card the
-     calendar comes first and shows one month. */
-  .cal-months {
-    display: grid;
-    gap: 20px;
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .cal-month--1 {
-    display: none;
-  }
-
-  .cal-layout {
-    display: grid;
-    gap: 16px 40px;
-  }
-
-  .cal {
-    order: -1;
-    max-width: 340px;
-  }
-
-  .cal-side {
-    display: grid;
-    align-content: start;
-    gap: 0;
-    max-width: 640px;
-  }
-
-  .cal-links {
+  .rent-status {
     display: flex;
     flex-wrap: wrap;
-    gap: 0 16px;
-    margin: 10px 0 0;
-  }
-
-  .cal-agenda {
-    display: grid;
-    gap: 2px;
-    margin: 16px 0 0;
-  }
-
-  .cal-agenda:empty {
-    display: none;
-  }
-
-  .cal-agenda-title {
-    margin: 0 0 4px;
-    font-size: var(--text-sm);
-    color: var(--tvc-ink-soft);
-  }
-
-  .cal-row {
-    display: flex;
+    gap: 12px 20px;
+    align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    padding: 10px 12px;
-    border: 0;
-    border-radius: var(--radius-field);
-    background: none;
-    color: var(--tvc-ink);
-    font: inherit;
-    font-size: var(--text-base);
-    text-align: left;
-    cursor: pointer;
+    padding: 16px 18px;
   }
 
-  .cal-row:hover {
-    background: var(--tvc-cream);
-  }
-
-  .cal-row-what {
-    color: var(--tvc-ink-soft);
-    font-size: var(--text-sm);
-  }
-
-  @container rent (min-width: 760px) {
-    .cal-layout {
-      grid-template-columns: minmax(0, 1fr) 340px;
-    }
-
-    .cal {
-      order: 0;
-    }
-
-    .cal-month--1 {
-      display: block;
-    }
-  }
-
-  .cal-title {
-    display: block;
-    margin: 0 0 6px;
-    font-size: var(--text-md);
-  }
-
-  .cal-nav {
-    width: 44px;
-    height: 44px;
-    border: 0;
-    border-radius: var(--radius-field);
-    background: none;
-    color: var(--tvc-green-dark);
-    font-size: 1.5rem;
-    cursor: pointer;
-  }
-
-  .cal-nav:disabled {
-    color: var(--tvc-line-strong);
-    cursor: default;
-  }
-
-  .cal-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 2px 0;
-  }
-
-  .cal-dow {
-    padding: 4px 0;
-    text-align: center;
-    font-size: var(--text-xs);
-    font-weight: 600;
-    color: var(--tvc-ink-soft);
-  }
-
-  .cal-day {
-    height: 44px;
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: none;
-    color: var(--tvc-ink);
-    font: inherit;
-    font-size: var(--text-base);
-    font-variant-numeric: tabular-nums;
-    cursor: pointer;
-  }
-
-  .cal-day:hover {
-    background: var(--tvc-cream);
-  }
-
-  .cal-day--today {
-    font-weight: 700;
-    box-shadow: inset 0 0 0 1px var(--tvc-line-strong);
-  }
-
-  .cal-day--past {
-    color: var(--tvc-line-strong);
-    cursor: default;
-  }
-
-  .cal-day--past:hover {
-    background: none;
-  }
-
-  .cal-day--mine,
-  .cal-swatch--mine {
-    background: color-mix(in srgb, var(--tvc-green-dark) 18%, var(--tvc-white));
-  }
-
-  .cal-day--farm,
-  .cal-day--tvc,
-  .cal-swatch--farm {
-    background: var(--tvc-cream);
-    color: var(--tvc-ink-soft);
-    text-decoration: line-through;
-  }
-
-  .cal-day--stay,
-  .cal-swatch--stay {
-    background: color-mix(in srgb, var(--tvc-orange) 22%, var(--tvc-white));
-  }
-
-  .cal-day--mine:hover,
-  .cal-day--farm:hover,
-  .cal-day--tvc:hover,
-  .cal-day--stay:hover {
-    background: inherit;
-  }
-
-  .cal-day--in {
-    background: color-mix(in srgb, var(--tvc-green-dark) 12%, var(--tvc-white));
-    border-radius: 0;
-  }
-
-  .cal-day--edge,
-  .cal-day--edge:hover {
-    background: var(--tvc-green-dark);
-    color: var(--tvc-white);
-    font-weight: 700;
-  }
-
-  .cal-key {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 8px;
-    align-items: center;
-    margin: 8px 0 0;
-    font-size: var(--text-sm);
-    color: var(--tvc-ink-soft);
-  }
-
-  .cal-swatch {
-    display: inline-block;
-    width: 14px;
-    height: 14px;
-    border: 1px solid var(--tvc-line-strong);
-    border-radius: 4px;
-  }
-
-  .cal-detail {
-    display: grid;
-    gap: 8px;
-    margin: 10px 0 0;
-    padding: 10px 12px;
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius-field);
-    font-size: var(--text-sm);
-  }
-
-  .cal-detail p,
-  .cal-detail ul {
-    margin: 0;
-  }
-
-  .cal-detail .btn {
-    justify-self: start;
-  }
-
-  .cal-note {
-    margin: 8px 0 10px;
-  }
-
-  .rent-set {
+  .rent-what {
     display: grid;
     gap: 2px;
-    margin: 0 0 8px;
+  }
+
+  .rent-what b {
+    font-size: var(--text-lg);
+    font-weight: 600;
+  }
+
+  .rent-what span {
     font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
 
-  .rent-set b {
-    font-size: var(--text-base);
+  .rent-switch {
+    position: relative;
+    flex: none;
+    width: 52px;
+    height: 30px;
+  }
+
+  .rent-switch input {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .rent-switch i {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: var(--tvc-line-strong);
+    transition: background 0.15s;
+  }
+
+  .rent-switch i::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--tvc-white);
+    transition: transform 0.15s;
+  }
+
+  .rent-switch input:checked + i {
+    background: var(--tvc-green-dark);
+  }
+
+  .rent-switch input:checked + i::after {
+    transform: translateX(22px);
+  }
+
+  .rent-switch input:disabled + i {
+    opacity: 0.4;
+  }
+
+  .rent-switch input:focus-visible + i {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .rent-modes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    align-items: center;
+    padding: 12px 18px;
+    border-top: 1px solid var(--tvc-line);
+    font-size: var(--text-sm);
+  }
+
+  .rent-more-set {
+    margin-left: auto;
+    color: var(--tvc-ink-soft);
+  }
+
+  .rent-more-set summary {
+    cursor: pointer;
+  }
+
+  .rent-more-set .rent-check {
+    margin: 8px 0 0;
     color: var(--tvc-ink);
+  }
+
+  .rent-pay {
+    padding: 12px 18px;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .rent-pay b {
+    margin-right: 6px;
+    color: var(--tvc-ink);
+    font-size: var(--text-base);
+    font-weight: 600;
   }
 
   .rent-pick {
@@ -2064,25 +1873,11 @@ import SignInGate from '../../components/SignInGate.astro';
     font-size: var(--text-md);
   }
 
-  .rent-list {
-    margin: 0 0 12px;
-    padding: 0;
-    list-style: none;
-    font-size: var(--text-sm);
-  }
-
-  .rent-list > li {
+  .rent-dates {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px 12px;
-    align-items: baseline;
-    justify-content: space-between;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--tvc-line);
-  }
-
-  .rent-stays > li {
-    display: block;
+    gap: 8px 12px;
+    align-items: end;
   }
 
   .rent-guests {
@@ -2092,22 +1887,256 @@ import SignInGate from '../../components/SignInGate.astro';
     list-style: disc;
   }
 
-  .rent-dates {
+  /* The calendar card: nav and key on top, two months and Coming up in the body, a Block bar when nights are chosen. */
+  .cal-top {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 12px;
-    align-items: end;
+    gap: 8px 16px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px 0;
   }
 
-  .rent-dates input {
-    min-height: 44px;
-    padding: 0 12px;
-    border: 1px solid var(--tvc-line-strong);
+  .cal-nav-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .cal-nav-row .link-btn {
+    margin-left: 6px;
+  }
+
+  .cal-nav {
+    width: 44px;
+    height: 44px;
+    border: 0;
     border-radius: var(--radius-field);
-    background: var(--tvc-white);
+    background: none;
+    color: var(--tvc-green-dark);
+    font-size: 1.5rem;
+    cursor: pointer;
+  }
+
+  .cal-nav:disabled {
+    color: var(--tvc-line-strong);
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .cal-key {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    align-items: center;
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .cal-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: 4px;
+  }
+
+  .cal-body {
+    display: grid;
+    gap: 18px 32px;
+    padding: 10px 18px 16px;
+  }
+
+  .cal-months {
+    display: grid;
+    gap: 18px 28px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cal-month--1 {
+    display: none;
+  }
+
+  .cal-title {
+    display: block;
+    margin: 0 0 6px;
+    font-size: var(--text-md);
+    font-weight: 600;
+  }
+
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+  }
+
+  .cal-dow {
+    padding: 4px 0;
+    text-align: center;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .cal-day {
+    height: 44px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
     color: var(--tvc-ink);
     font: inherit;
-    font-size: var(--text-md);
+    font-size: var(--text-base);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+  }
+
+  .cal-day:hover {
+    background: var(--tvc-cream);
+  }
+
+  .cal-day--today {
+    font-weight: 700;
+    box-shadow: inset 0 0 0 1px var(--tvc-line-strong);
+  }
+
+  .cal-day--past {
+    color: var(--tvc-ink-soft);
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .cal-day--past:hover {
+    background: none;
+  }
+
+  .cal-day--mine,
+  .cal-swatch--mine {
+    background: color-mix(in srgb, var(--tvc-green-dark) 22%, var(--tvc-white));
+  }
+
+  .cal-day--farm,
+  .cal-day--tvc,
+  .cal-swatch--farm {
+    background: var(--tvc-cream);
+    color: var(--tvc-ink-soft);
+    text-decoration: line-through;
+  }
+
+  .cal-day--stay,
+  .cal-swatch--stay {
+    background: color-mix(in srgb, var(--tvc-orange) 28%, var(--tvc-white));
+  }
+
+  .cal-day--mine:hover,
+  .cal-day--farm:hover,
+  .cal-day--tvc:hover,
+  .cal-day--stay:hover {
+    background: inherit;
+  }
+
+  .cal-day--in {
+    background: var(--tvc-green-tint);
+    border-radius: 0;
+  }
+
+  .cal-day--edge,
+  .cal-day--edge:hover {
+    background: var(--tvc-green-dark);
+    color: var(--tvc-white);
+    font-weight: 700;
+  }
+
+  .cal-side {
+    display: grid;
+    align-content: start;
+    gap: 2px;
+  }
+
+  .cal-agenda-title {
+    margin: 0 0 4px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .cal-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    padding: 10px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-base);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .cal-row:hover {
+    background: var(--tvc-cream);
+  }
+
+  .cal-row-what,
+  .cal-empty {
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  .cal-empty {
+    margin: 0;
+    padding: 6px 10px;
+  }
+
+  .cal-detail {
+    display: grid;
+    gap: 6px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--tvc-line);
+    font-size: var(--text-sm);
+  }
+
+  .cal-detail ul {
+    margin: 0;
+  }
+
+  .cal-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    border-top: 1px solid var(--tvc-line);
+    background: var(--tvc-green-tint);
+  }
+
+  .cal-bar-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .cal-caption {
+    margin: 0;
+    padding: 0 18px 14px;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  @container rent (min-width: 780px) {
+    .cal-body {
+      grid-template-columns: minmax(0, 1fr) 260px;
+    }
+
+    .cal-months {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .cal-month--1 {
+      display: block;
+    }
   }
 
   /* ---- the feature tour (startTour) and the "What's new" card ---- */
@@ -5472,62 +5501,44 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     }
   }
 
-  // `reject` is the unit being switched off: nothing is offered to Linger until the owner turns it on.
-  const RENTAL_MODES: [string, string, string][] = [
-    ['reject', 'Rental is off', 'Your unit is not offered to guests.'],
-    ['ask', 'On: you decide each request', 'You accept or decline. No answer in 24 hours counts as declined.'],
-    ['auto', 'On: accepted automatically', 'Guests are accepted when the dates are free.'],
-  ];
   const dateLabel = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
   const endLabel = (d: string, nights: number) => dateLabel(new Date(Date.parse(`${d}T00:00:00Z`) + nights * 86_400_000).toISOString().slice(0, 10));
 
   function viewRental(): HTMLElement {
     const root = h('div');
-    root.append(h('h1', 'page-title', 'Rent out', ...(rental?.preview ? [previewPill()] : [])), h('p', 'lede', 'Let guests book your unit through Linger.'), ...(rental?.preview ? [previewNote()] : []));
-    const homeLine = h('p', 'rent-note');
-    homeLine.hidden = true;
+    const lede = h('p', 'lede', 'Let guests book your unit through Linger.');
     const body = h('div', 'rent');
-    root.append(homeLine, body);
-    // ---- Blocked dates: a month calendar. It lives outside paint() so a repaint (after any action) keeps the month and the
-    // nights half chosen. Tap the first night, then the last (the same day again for one night).
+    root.append(h('h1', 'page-title', 'Rent out', ...(rental?.preview ? [previewPill()] : [])), lede, body);
+    let moreOpen = false; // the "More settings" fold stays as the member left it across repaints
+
+    // ---- Calendar: every night of the unit on a month view (stays, closures, the member's own blocks). It lives outside
+    // paint() so a repaint (after any action) keeps the month and the nights half chosen. Tap the first night, then the last
+    // (the same day again for one night); tap a marked night for what is on it.
     const isoOf = (dt: Date) => dt.toISOString().slice(0, 10);
     const todayIso = isoOf(new Date(Date.now() + 330 * 60_000)); // today, in India
     const plusDays = (iso: string, n: number) => isoOf(new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000));
     const MAX_BLOCK = 90; // matches MAX_BLOCK_NIGHTS on the server
     const cal = { month: todayIso.slice(0, 7), start: '', end: '', detail: '' }; // detail: a marked night the member tapped
-    const calEl = h('div', 'cal');
-    const calDetail = h('div', 'cal-detail');
-    calDetail.hidden = true;
-    const calNote = h('p', 'rent-note cal-note');
-    const calBtn = h('button', 'btn btn--solid', 'Block these nights') as HTMLButtonElement;
-    calBtn.type = 'button';
-    calBtn.disabled = true;
-    let doBlock = async (_from: string, _to: string): Promise<boolean> => false; // set by paint(), which owns act()
-    let doRemove = async (_id: string): Promise<boolean> => false;
-    calBtn.addEventListener('click', async () => {
-      if (!cal.start || !cal.end) return;
-      if (await doBlock(cal.start, cal.end)) {
-        cal.start = '';
-        cal.end = '';
-        renderCal();
-      }
-    });
+    const calCard = h('section', 'unit-card cal-card');
+    calCard.setAttribute('aria-label', 'Calendar');
+    let doBlock = async (_from: string, _to: string, _btn: HTMLButtonElement): Promise<boolean> => false; // set by paint(), which owns act()
+    let doRemove = async (_id: string, _btn: HTMLButtonElement): Promise<boolean> => false;
     const nightsIn = (a: string, b: string) => (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000 + 1;
-    const calLinks = h('p', 'cal-links');
-    const calAgenda = h('div', 'cal-agenda');
     const monthOf = (iso: string) => iso.slice(0, 7);
     const renderCal = () => {
-      const focusKey = (document.activeElement as HTMLElement | null)?.closest('.cal') ? (document.activeElement as HTMLElement).dataset.fk : undefined;
+      const active = document.activeElement as HTMLElement | null;
+      const focusKey = active && calCard.contains(active) ? active.dataset.fk : undefined;
+      const stays = rental?.stays ?? [];
+      const blocks = rental?.blocks ?? [];
       const taken = new Map<string, 'mine' | 'farm' | 'tvc' | 'stay'>();
-      for (const b of rental?.blocks ?? []) for (let n = 0; n < b.nights; n++) taken.set(plusDays(b.startDate, n), b.farm ? 'farm' : b.mine ? 'mine' : 'tvc');
-      for (const st of rental?.stays ?? []) for (let n = 0; n < st.nights; n++) taken.set(plusDays(st.startDate, n), 'stay');
+      for (const b of blocks) for (let n = 0; n < b.nights; n++) taken.set(plusDays(b.startDate, n), b.farm ? 'farm' : b.mine ? 'mine' : 'tvc');
+      for (const st of stays) for (let n = 0; n < st.nights; n++) taken.set(plusDays(st.startDate, n), 'stay');
       // Back as far as the earliest night on record (past guests can be reviewed), never before this month otherwise.
-      const earliest = [todayIso, ...(rental?.stays ?? []).map((x) => x.startDate), ...(rental?.blocks ?? []).map((x) => x.startDate)].map(monthOf).sort()[0];
+      const earliest = [todayIso, ...stays.map((x) => x.startDate), ...blocks.map((x) => x.startDate)].map(monthOf).sort()[0];
       const latest = monthOf(plusDays(todayIso, 540)); // about 18 months ahead
-      const shift = (by: number) => {
+      const monthAt = (by: number) => {
         const [y, m] = cal.month.split('-').map(Number);
-        cal.month = isoOf(new Date(Date.UTC(y, m - 1 + by, 1))).slice(0, 7);
-        renderCal();
+        return isoOf(new Date(Date.UTC(y, m - 1 + by, 1))).slice(0, 7);
       };
       const nav = (label: string, glyph: string, by: number, off: boolean, fk: string) => {
         const b = h('button', 'cal-nav', glyph) as HTMLButtonElement;
@@ -5535,9 +5546,19 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         b.disabled = off;
         b.dataset.fk = fk;
         b.setAttribute('aria-label', label);
-        b.addEventListener('click', () => shift(by));
+        b.addEventListener('click', () => {
+          cal.month = monthAt(by);
+          renderCal();
+        });
         return b;
       };
+      const todayBtn = h('button', 'link-btn', 'Today') as HTMLButtonElement;
+      todayBtn.type = 'button';
+      todayBtn.dataset.fk = 'today';
+      todayBtn.addEventListener('click', () => {
+        cal.month = monthOf(todayIso);
+        renderCal();
+      });
       const onDay = (iso: string, past: boolean, kind?: string) => {
         if (past && !kind) return; // an earlier night can be looked at, not blocked
         if (kind) {
@@ -5558,7 +5579,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         }
         renderCal();
       };
-      // One month: a title and its days. The arrows are shared and sit above all the months.
+      // One month: a title and its days.
       const monthEl = (ym: string, which: number) => {
         const [y, m] = ym.split('-').map(Number);
         const lead = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(); // Sunday first
@@ -5585,104 +5606,93 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         }
         return h('div', `cal-month cal-month--${which}`, undefined, h('b', 'cal-title', title), h('div', 'cal-grid', undefined, ...cells));
       };
-      const monthAt = (by: number) => {
-        const [y, m] = cal.month.split('-').map(Number);
-        return isoOf(new Date(Date.UTC(y, m - 1 + by, 1))).slice(0, 7);
-      };
-      const todayBtn = h('button', 'link-btn', 'Today') as HTMLButtonElement;
-      todayBtn.type = 'button';
-      todayBtn.dataset.fk = 'today';
-      todayBtn.addEventListener('click', () => {
-        cal.month = todayIso.slice(0, 7);
-        renderCal();
-      });
-      const navRow = h('div', 'cal-nav-row', undefined, nav('Earlier month', '‹', -1, cal.month <= earliest, 'prev'), nav('Later month', '›', 1, cal.month >= latest, 'next'), todayBtn);
 
-      // What is on the night the member tapped: a stay's guests, or a block with its Remove.
-      calDetail.replaceChildren();
-      calDetail.hidden = true;
-      if (cal.detail) {
-        const kind = taken.get(cal.detail);
-        const stay = kind === 'stay' ? (rental?.stays ?? []).find((x) => cal.detail >= x.startDate && cal.detail < plusDays(x.startDate, x.nights)) : undefined;
-        const block = kind && kind !== 'stay' ? (rental?.blocks ?? []).find((x) => cal.detail >= x.startDate && cal.detail < plusDays(x.startDate, x.nights)) : undefined;
-        if (stay) {
-          calDetail.append(
-            h('b', '', `${dateLabel(stay.startDate)} to ${endLabel(stay.startDate, stay.nights)} · ${stay.guests.length} guest${stay.guests.length === 1 ? '' : 's'}`),
-            h('ul', 'rent-guests', undefined, ...stay.guests.map((g) => h('li', '', `${g.name} · ${g.ageGroup}${g.gender ? `, ${g.gender.toLowerCase()}` : ''}${g.preferences ? ` · ${g.preferences}` : ''}`))));
-        } else if (block) {
-          const range = `${dateLabel(block.startDate)} to ${endLabel(block.startDate, block.nights)}`;
-          calDetail.append(h('p', '', block.farm ? `The farm is closed, ${range}.` : block.mine ? `Blocked by you, ${range} · ${block.nights} night${block.nights === 1 ? '' : 's'}.` : `Unavailable, set by TVC, ${range}.`));
-          if (block.mine && plusDays(block.startDate, block.nights) > todayIso) {
-            const rm = h('button', 'btn', 'Remove this block') as HTMLButtonElement;
-            rm.type = 'button';
-            rm.addEventListener('click', async () => {
-              if (await doRemove(block.id)) {
-                cal.detail = '';
-                renderCal();
-              }
-            });
-            calDetail.append(rm);
-          }
-        }
-        calDetail.hidden = !calDetail.childElementCount;
-      }
-
-      // Shortcuts to the guests just before and just after today.
-      const stays = (rental?.stays ?? []).slice().sort((a, b) => a.startDate.localeCompare(b.startDate));
-      const upcoming = stays.find((x) => plusDays(x.startDate, x.nights) > todayIso);
-      const earlier = stays.filter((x) => plusDays(x.startDate, x.nights) <= todayIso).pop();
-      const jump = (label: string, st: (typeof stays)[number]) => {
-        const b = h('button', 'link-btn', label) as HTMLButtonElement;
-        b.type = 'button';
-        b.addEventListener('click', () => {
-          cal.detail = st.startDate < todayIso && plusDays(st.startDate, st.nights) > todayIso ? todayIso : st.startDate;
-          cal.month = cal.detail.slice(0, 7);
-          cal.start = '';
-          cal.end = '';
-          renderCal();
-        });
-        return b;
-      };
-      calLinks.replaceChildren(...[earlier ? jump(`Last guests: ${dateLabel(earlier.startDate)}`, earlier) : null, upcoming ? jump(`Next guests: ${dateLabel(upcoming.startDate)}`, upcoming) : null].filter((x): x is HTMLButtonElement => !!x));
-
-      // Coming up: what is next on the unit, so the left pane is useful without a tap. A row jumps the calendar to it.
+      // Coming up: what is next on the unit. A row jumps the calendar to it.
       const ahead: { start: string; end: string; what: string }[] = [
-        ...(rental?.stays ?? []).map((x) => ({ start: x.startDate, end: plusDays(x.startDate, x.nights), what: `${x.guests.length} guest${x.guests.length === 1 ? '' : 's'}` })),
-        ...(rental?.blocks ?? []).map((x) => ({ start: x.startDate, end: plusDays(x.startDate, x.nights), what: x.farm ? 'Farm closed' : x.mine ? 'Blocked by you' : 'Unavailable' })),
+        ...stays.map((x) => ({ start: x.startDate, end: plusDays(x.startDate, x.nights), what: `${x.guests.length} guest${x.guests.length === 1 ? '' : 's'}` })),
+        ...blocks.map((x) => ({ start: x.startDate, end: plusDays(x.startDate, x.nights), what: x.farm ? 'Farm closed' : x.mine ? 'Blocked by you' : 'Unavailable' })),
       ].filter((x) => x.end > todayIso).sort((a, b) => a.start.localeCompare(b.start)).slice(0, 5);
-      calAgenda.replaceChildren(...(ahead.length ? [h('b', 'cal-agenda-title', 'Coming up'), ...ahead.map((x) => {
+      const side = h('div', 'cal-side', undefined, h('b', 'cal-agenda-title', 'Coming up'), ...(ahead.length ? ahead.map((x) => {
         const row = h('button', 'cal-row', undefined, h('span', '', `${dateLabel(x.start)} to ${dateLabel(plusDays(x.end, -1))}`), h('span', 'cal-row-what', x.what)) as HTMLButtonElement;
         row.type = 'button';
         row.addEventListener('click', () => {
           cal.detail = x.start < todayIso ? todayIso : x.start;
-          cal.month = cal.detail.slice(0, 7);
+          cal.month = monthOf(cal.detail);
           cal.start = '';
           cal.end = '';
           renderCal();
         });
         return row;
-      })] : []));
+      }) : [h('p', 'cal-empty', 'Nothing coming up.')]));
 
-      calEl.replaceChildren(
-        navRow,
-        h('div', 'cal-months', undefined, monthEl(monthAt(0), 0), monthEl(monthAt(1), 1)),
-        h('p', 'cal-key', undefined, h('span', 'cal-swatch cal-swatch--mine'), 'Blocked by you', h('span', 'cal-swatch cal-swatch--farm'), 'Closed', h('span', 'cal-swatch cal-swatch--stay'), 'Guests'));
+      // What is on the night the member tapped: a stay's guests, or a block with its Remove.
+      let detail: HTMLElement | null = null;
+      if (cal.detail) {
+        const kind = taken.get(cal.detail);
+        const stay = kind === 'stay' ? stays.find((x) => cal.detail >= x.startDate && cal.detail < plusDays(x.startDate, x.nights)) : undefined;
+        const block = kind && kind !== 'stay' ? blocks.find((x) => cal.detail >= x.startDate && cal.detail < plusDays(x.startDate, x.nights)) : undefined;
+        if (stay) {
+          detail = h('div', 'cal-detail', undefined,
+            h('b', '', `${dateLabel(stay.startDate)} to ${endLabel(stay.startDate, stay.nights)} · ${stay.guests.length} guest${stay.guests.length === 1 ? '' : 's'}`),
+            h('ul', 'rent-guests', undefined, ...stay.guests.map((g) => h('li', '', `${g.name} · ${g.ageGroup}${g.gender ? `, ${g.gender.toLowerCase()}` : ''}${g.preferences ? ` · ${g.preferences}` : ''}`))));
+        } else if (block) {
+          const range = `${dateLabel(block.startDate)} to ${endLabel(block.startDate, block.nights)}`;
+          detail = h('div', 'cal-detail', undefined, h('span', '', block.farm ? `The farm is closed, ${range}.` : block.mine ? `Blocked by you, ${range} · ${block.nights} night${block.nights === 1 ? '' : 's'}.` : `Unavailable, set by TVC, ${range}.`));
+          if (block.mine && plusDays(block.startDate, block.nights) > todayIso) {
+            const rm = h('button', 'btn', 'Remove this block') as HTMLButtonElement;
+            rm.type = 'button';
+            rm.addEventListener('click', async () => {
+              if (await doRemove(block.id, rm)) {
+                cal.detail = '';
+                renderCal();
+              }
+            });
+            detail.append(h('div', '', undefined, rm));
+          }
+        }
+      }
+
+      // The Block bar appears only once nights are chosen, right under the calendar.
       const n = cal.start && cal.end ? nightsIn(cal.start, cal.end) : 0;
-      calNote.textContent = !cal.start ? 'Tap free nights to block them. Tap a marked night for details.' : !cal.end ? 'Tap the last night, or the same day again for one night.' : `${dateLabel(cal.start)} to ${dateLabel(cal.end)} · ${n} night${n === 1 ? '' : 's'}`;
-      calBtn.disabled = !cal.end;
-      calBtn.textContent = n ? `Block ${n} night${n === 1 ? '' : 's'}` : 'Block these nights';
-      if (focusKey) (calEl.querySelector(`[data-fk="${focusKey}"]`) as HTMLElement | null)?.focus();
+      let bottom: HTMLElement;
+      if (n) {
+        const cancel = h('button', 'btn', 'Cancel') as HTMLButtonElement;
+        cancel.type = 'button';
+        cancel.addEventListener('click', () => {
+          cal.start = '';
+          cal.end = '';
+          renderCal();
+        });
+        const block = h('button', 'btn btn--solid', 'Block') as HTMLButtonElement;
+        block.type = 'button';
+        block.dataset.fk = 'block';
+        block.addEventListener('click', async () => {
+          if (await doBlock(cal.start, cal.end, block)) {
+            cal.start = '';
+            cal.end = '';
+            renderCal();
+          }
+        });
+        bottom = h('div', 'cal-bar', undefined, h('b', '', `${dateLabel(cal.start)} to ${dateLabel(cal.end)} · ${n} night${n === 1 ? '' : 's'}`), h('span', 'cal-bar-actions', undefined, cancel, block));
+      } else bottom = h('p', 'cal-caption', cal.start ? 'Tap the last night, or the same day again for one night.' : 'Tap free nights to block them. Tap a marked night for details.');
+
+      calCard.replaceChildren(
+        h('div', 'cal-top', undefined,
+          h('div', 'cal-nav-row', undefined, nav('Earlier month', '‹', -1, cal.month <= earliest, 'prev'), nav('Later month', '›', 1, cal.month >= latest, 'next'), todayBtn),
+          h('p', 'cal-key', undefined, h('span', 'cal-swatch cal-swatch--mine'), 'Blocked by you', h('span', 'cal-swatch cal-swatch--farm'), 'Closed', h('span', 'cal-swatch cal-swatch--stay'), 'Guests')),
+        h('div', 'cal-body', undefined, h('div', 'cal-months', undefined, monthEl(monthAt(0), 0), monthEl(monthAt(1), 1)), side),
+        ...(detail ? [detail] : []),
+        bottom);
+      if (focusKey) (calCard.querySelector(`[data-fk="${focusKey}"]`) as HTMLElement | null)?.focus();
     };
-    let editingSettings = false; // the Requests card shows its setting until Change is pressed
 
     const paint = () => {
       const d = rental;
       const focusKey = (document.activeElement as HTMLElement | null)?.dataset?.fk; // put focus back on the same control after the repaint
-      homeLine.hidden = !d?.houseNo;
-      if (d?.houseNo) homeLine.textContent = `Home ${d.houseNo}`;
       if (!d?.eligible) return body.replaceChildren(h('p', 'lede', 'This page is for the owners of a unit.'));
+      body.className = d.state === 'none' || d.state === 'interested' ? 'rent rent--narrow' : 'rent';
+      lede.textContent = d.state === 'none' || !d.houseNo ? 'Let guests book your unit through Linger.' : `Home ${d.houseNo}`;
       const sections: HTMLElement[] = [];
-      if (d.state === 'paused') sections.push(h('p', 'rent-alert', 'Paused by the core team. Your unit is not offered to guests until it is resumed.'));
       const card = (title: string, ...kids: (HTMLElement | null)[]) => h('section', 'unit-card', undefined, h('div', 'unit-card-head', undefined, h('h2', '', title)), h('div', 'unit-card-body', undefined, ...kids));
       const say = (text: string) => h('p', 'rent-note', text);
       const act = async (path: string, payload: unknown, done: string, btn?: HTMLButtonElement, doing?: string): Promise<boolean> => {
@@ -5708,7 +5718,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const payoutCard = (): HTMLElement | null => {
         const pay = d.payout;
         if (!pay) return null;
-        if (pay.maintenance) return null; // nothing to enter: it is one line in Your rental instead of a card
+        if (pay.maintenance) return h('section', 'unit-card rent-pay', undefined, h('span', '', undefined, h('b', '', 'Payout'), ' Set against your maintenance, so there is nothing to enter.'));
         if (!pay.needed) return null;
         const a = pay.account;
         let editing = !a;
@@ -5869,63 +5879,61 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         if (pc) sections.push(pc);
       } else if (d.unit) {
         const u = d.unit;
+        const paused = d.state === 'paused';
+        const mine = u.manager === 'member';
+        const isOn = !mine || u.requestMode !== 'reject'; // a unit TVC manages is always offered; the member's switch is theirs
         const label = d.types?.find((t) => t.id === u.typeId)?.label ?? '';
-        sections.push(card('Your unit',
-          say(`${label} · ${u.shape === 'room' ? 'one room' : 'whole unit'} · ${u.manager === 'tvc' ? 'TVC manages it' : 'you manage it'}`),
-          d.payout?.maintenance ? say('Your share of guest payments is set against your maintenance, so there is nothing to enter.') : null));
+        lede.textContent = [d.houseNo ? `Home ${d.houseNo}` : '', label, u.shape === 'room' ? 'one room' : 'whole unit', mine ? 'you manage it' : 'TVC manages it'].filter(Boolean).join(' · ');
+        if (paused) sections.push(h('p', 'rent-alert', 'Paused by the core team. Your unit is not offered to guests until it is resumed.'));
 
-        // Set once and left alone: the card says what is set, and the choices open only after Change.
-        const mode = RENTAL_MODES.find(([v]) => v === u.requestMode);
-        const closureText = u.ignoresFarmClosure ? 'Open when the farm is closed' : 'Closes with the farm';
-        const settingsBtn = (label: string, on: boolean) => {
-          const b = h('button', 'btn', label) as HTMLButtonElement;
-          b.type = 'button';
-          b.addEventListener('click', () => {
-            editingSettings = on;
-            paint();
-          });
-          return b;
-        };
-        if (!editingSettings) {
-          sections.push(card('Taking guests',
-            u.manager === 'member' && mode ? h('p', 'rent-set', undefined, h('b', '', mode[1]), h('span', '', mode[2])) : say('TVC answers requests for your unit.'),
-            say(closureText),
-            settingsBtn('Change', true)));
-        } else {
+        // Status first: is the unit being rented out, and the one switch for it.
+        const headline = paused ? 'Paused by the core team' : !isOn ? 'Rental is off' : 'Renting out';
+        const detailText = paused ? 'Your unit is not offered until the core team resumes it.' : !mine ? 'TVC answers requests for your unit.' : !isOn ? 'Your unit is not offered to guests.' : u.requestMode === 'ask' ? 'You accept or decline each request.' : 'Guests are accepted when the dates are free.';
+        const switchEl = (() => {
+          if (!mine) return null;
+          const sw = h('input') as HTMLInputElement;
+          sw.type = 'checkbox';
+          sw.checked = isOn;
+          sw.disabled = paused;
+          sw.dataset.fk = 'onoff';
+          sw.setAttribute('aria-label', 'Rent out my unit');
+          sw.addEventListener('change', () => void act('/api/members-me/rental/settings', { requestMode: sw.checked ? 'ask' : 'reject' }, sw.checked ? 'Your unit is offered to guests.' : 'Your unit is no longer offered.'));
+          return h('label', 'rent-switch', undefined, sw, h('i'));
+        })();
+        const statusCard = h('section', 'unit-card', undefined, h('div', 'rent-status', undefined, h('div', 'rent-what', undefined, h('b', '', headline), h('span', '', detailText)), ...(switchEl ? [switchEl] : [])));
+        if (isOn && !paused) {
+          const seg = h('div', 'segmented');
+          seg.setAttribute('role', 'radiogroup');
+          seg.setAttribute('aria-label', 'Requests');
+          for (const [v, l] of [['ask', 'Ask me first'], ['auto', 'Accept automatically']]) {
+            const b = h('button', '', l) as HTMLButtonElement;
+            b.type = 'button';
+            b.dataset.fk = `mode-${v}`;
+            b.setAttribute('role', 'radio');
+            b.setAttribute('aria-checked', String(u.requestMode === v));
+            b.addEventListener('click', () => {
+              if (u.requestMode !== v) void act('/api/members-me/rental/settings', { requestMode: v }, `${l}.`);
+            });
+            seg.append(b);
+          }
           const open = h('input') as HTMLInputElement;
           open.type = 'checkbox';
           open.checked = u.ignoresFarmClosure;
           open.dataset.fk = 'farm';
           open.addEventListener('change', () => void act('/api/members-me/rental/settings', { ignoresFarmClosure: open.checked }, open.checked ? 'Your unit stays open when the farm is closed.' : 'Your unit closes with the farm.'));
-          const keepOpen = h('label', 'rent-check', undefined, open, h('span', '', 'Keep my unit open when the farm is closed'));
-          const offerOn = h('input') as HTMLInputElement;
-          offerOn.type = 'checkbox';
-          offerOn.checked = u.requestMode !== 'reject';
-          offerOn.dataset.fk = 'offer';
-          offerOn.addEventListener('change', () => void act('/api/members-me/rental/settings', { requestMode: offerOn.checked ? 'ask' : 'reject' }, offerOn.checked ? 'Your unit is offered to guests.' : 'Your unit is no longer offered.'));
-          const offer = h('label', 'rent-check', undefined, offerOn, h('span', '', 'Offer my unit to guests'));
-          const how = RENTAL_MODES.filter(([v]) => v !== 'reject').map(([v, t, text]) => {
-            const r = h('input') as HTMLInputElement;
-            r.type = 'radio';
-            r.name = 'rent-mode';
-            r.value = v;
-            r.dataset.fk = `mode-${v}`;
-            r.checked = u.requestMode === v;
-            r.addEventListener('change', () => void act('/api/members-me/rental/settings', { requestMode: v }, `${t}.`));
-            return h('label', 'rent-opt', undefined, r, h('span', '', undefined, h('b', '', t.replace('On: ', '')), h('span', '', text)));
-          });
-          const opts = u.manager === 'member' ? [offer, ...(u.requestMode === 'reject' ? [] : how)] : [];
-          sections.push(card('Taking guests', ...opts, keepOpen, settingsBtn('Done', false)));
+          const more = (h('details', 'rent-more-set', undefined, h('summary', '', 'More settings'), h('label', 'rent-check', undefined, open, h('span', '', 'Keep my unit open when the farm is closed')))) as HTMLDetailsElement;
+          more.open = moreOpen;
+          more.addEventListener('toggle', () => (moreOpen = more.open));
+          statusCard.append(h('div', 'rent-modes', undefined, ...(mine ? [seg] : []), more));
         }
+        sections.push(statusCard);
 
-        doBlock = (from, to) => act('/api/members-me/rental/blocks', { from, to }, 'Nights blocked.', calBtn, 'Blocking…');
-        doRemove = (id) => act('/api/members-me/rental/blocks/remove', { id }, 'Block removed.');
+        doBlock = (from, to, btn) => act('/api/members-me/rental/blocks', { from, to }, 'Nights blocked.', btn, 'Blocking…');
+        doRemove = (id, btn) => act('/api/members-me/rental/blocks/remove', { id }, 'Block removed.', btn, 'Removing…');
         renderCal();
+        sections.push(calCard);
         const pc2 = payoutCard();
         if (pc2) sections.push(pc2);
-        const calCard = card('Calendar', h('div', 'cal-layout', undefined, h('div', 'cal-side', undefined, calDetail, calNote, calBtn, calAgenda, calLinks), calEl));
-        calCard.classList.add('unit-card--cal');
-        sections.push(calCard);
       }
       body.replaceChildren(...sections);
       if (focusKey) (body.querySelector(`[data-fk="${focusKey}"]`) as HTMLElement | null)?.focus();
