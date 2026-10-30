@@ -1766,29 +1766,39 @@ import SignInGate from '../../components/SignInGate.astro';
     margin: 0 0 8px;
   }
 
+  .cal-nav-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0 0 6px;
+  }
+
+  .cal-nav-row .link-btn {
+    margin-left: 8px;
+  }
+
+  /* One month shows on a narrow card, then two, then three: each stays a comfortable 340px, never stretched. */
   .cal-months {
     display: grid;
-    gap: 16px 28px;
+    grid-template-columns: minmax(0, 340px);
+    gap: 20px 40px;
   }
 
-  .cal-month--second,
-  .cal-nav-gap {
+  .cal-month--1,
+  .cal-month--2 {
     display: none;
-  }
-
-  .cal-nav-gap {
-    width: 44px;
   }
 
   .cal-layout {
     display: grid;
-    gap: 8px 28px;
+    gap: 8px 40px;
   }
 
   .cal-side {
     display: grid;
     align-content: start;
     gap: 0;
+    max-width: 340px;
   }
 
   .cal-links {
@@ -1798,36 +1808,37 @@ import SignInGate from '../../components/SignInGate.astro';
     margin: 10px 0 0;
   }
 
-  /* Wide enough: two months side by side, then (wider still) the details beside them. */
-  @container rent (min-width: 640px) {
+  @container rent (min-width: 700px) {
     .cal-months {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 340px));
     }
 
-    .cal-month--second {
+    .cal-month--1 {
       display: block;
-    }
-
-    .cal-nav-gap {
-      display: block;
-    }
-
-    .cal-nav--narrow {
-      display: none;
     }
   }
 
-  @container rent (min-width: 960px) {
+  @container rent (min-width: 1100px) {
     .cal-layout {
-      grid-template-columns: minmax(0, 1fr) 280px;
+      grid-template-columns: auto 300px;
+      justify-content: start;
     }
   }
 
-  .cal-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+  @container rent (min-width: 1480px) {
+    .cal-months {
+      grid-template-columns: repeat(3, minmax(0, 340px));
+    }
+
+    .cal-month--2 {
+      display: block;
+    }
+  }
+
+  .cal-title {
+    display: block;
     margin: 0 0 6px;
+    font-size: var(--text-md);
   }
 
   .cal-nav {
@@ -5485,8 +5496,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         cal.month = isoOf(new Date(Date.UTC(y, m - 1 + by, 1))).slice(0, 7);
         renderCal();
       };
-      const nav = (label: string, glyph: string, by: number, off: boolean, fk: string, cls = '') => {
-        const b = h('button', `cal-nav ${cls}`.trim(), glyph) as HTMLButtonElement;
+      const nav = (label: string, glyph: string, by: number, off: boolean, fk: string) => {
+        const b = h('button', 'cal-nav', glyph) as HTMLButtonElement;
         b.type = 'button';
         b.disabled = off;
         b.dataset.fk = fk;
@@ -5514,9 +5525,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         }
         renderCal();
       };
-      // One month. The first carries the earlier-month arrow, the second the later-month one; on a narrow screen only the
-      // first shows, so it also carries the later-month arrow.
-      const monthEl = (ym: string, which: 'first' | 'second') => {
+      // One month: a title and its days. The arrows are shared and sit above all the months.
+      const monthEl = (ym: string, which: number) => {
         const [y, m] = ym.split('-').map(Number);
         const lead = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(); // Sunday first
         const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
@@ -5540,17 +5550,20 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           b.addEventListener('click', () => onDay(iso, past, kind));
           cells.push(b);
         }
-        const [ny, nm] = [y, m];
-        const nextMonth = isoOf(new Date(Date.UTC(ny, nm, 1))).slice(0, 7);
-        return h('div', `cal-month cal-month--${which}`, undefined,
-          h('div', 'cal-head', undefined,
-            which === 'first' ? nav('Earlier month', '‹', -1, ym <= earliest, 'prev') : h('span', 'cal-nav-gap'),
-            h('b', '', title),
-            which === 'first' ? nav('Later month', '›', 1, ym >= latest, 'next-narrow', 'cal-nav--narrow') : nav('Later month', '›', 1, nextMonth > latest, 'next')),
-          h('div', 'cal-grid', undefined, ...cells));
+        return h('div', `cal-month cal-month--${which}`, undefined, h('b', 'cal-title', title), h('div', 'cal-grid', undefined, ...cells));
       };
-      const [fy, fm] = cal.month.split('-').map(Number);
-      const second = isoOf(new Date(Date.UTC(fy, fm, 1))).slice(0, 7);
+      const monthAt = (by: number) => {
+        const [y, m] = cal.month.split('-').map(Number);
+        return isoOf(new Date(Date.UTC(y, m - 1 + by, 1))).slice(0, 7);
+      };
+      const todayBtn = h('button', 'link-btn', 'Today') as HTMLButtonElement;
+      todayBtn.type = 'button';
+      todayBtn.dataset.fk = 'today';
+      todayBtn.addEventListener('click', () => {
+        cal.month = todayIso.slice(0, 7);
+        renderCal();
+      });
+      const navRow = h('div', 'cal-nav-row', undefined, nav('Earlier month', '‹', -1, cal.month <= earliest, 'prev'), nav('Later month', '›', 1, cal.month >= latest, 'next'), todayBtn);
 
       // What is on the night the member tapped: a stay's guests, or a block with its Remove.
       calDetail.replaceChildren();
@@ -5600,7 +5613,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       calLinks.replaceChildren(...[earlier ? jump(`Last guests: ${dateLabel(earlier.startDate)}`, earlier) : null, upcoming ? jump(`Next guests: ${dateLabel(upcoming.startDate)}`, upcoming) : null].filter((x): x is HTMLButtonElement => !!x));
 
       calEl.replaceChildren(
-        h('div', 'cal-months', undefined, monthEl(cal.month, 'first'), monthEl(second, 'second')),
+        navRow,
+        h('div', 'cal-months', undefined, monthEl(monthAt(0), 0), monthEl(monthAt(1), 1), monthEl(monthAt(2), 2)),
         h('p', 'cal-key', undefined, h('span', 'cal-swatch cal-swatch--mine'), 'Blocked by you', h('span', 'cal-swatch cal-swatch--farm'), 'Closed', h('span', 'cal-swatch cal-swatch--stay'), 'Guests'));
       const n = cal.start && cal.end ? nightsIn(cal.start, cal.end) : 0;
       calNote.textContent = !cal.start ? 'Tap free nights to block them. Tap a marked night for details.' : !cal.end ? 'Tap the last night, or the same day again for one night.' : `${dateLabel(cal.start)} to ${dateLabel(cal.end)} · ${n} night${n === 1 ? '' : 's'}`;
