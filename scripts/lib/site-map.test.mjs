@@ -91,7 +91,7 @@ test('nothing but the allowed fields goes out: no email, phone or ids', () => {
 });
 
 // ---- label position ----
-import { labelAnchor, plotPolygons } from './site-map.mjs';
+import { labelAnchor, plotOutline, plotPolygons } from './site-map.mjs';
 
 test('label: the plot a home is in is the closed outline containing its centre, and the label goes at that outline\'s centre', () => {
   const path = 'M0 0 L100 0 L100 50 L0 50 L0 0 M200 0 L300 0 L300 100 L200 100 Z M0 0 L100 0 L100 50 L0 50 Z';
@@ -157,6 +157,27 @@ test('admin: read-only roles get masked names, using the mask the caller passes'
   assert.deepEqual(out['H-02'].owners, ['A***', 'Z***']);
 });
 
+test('admin: each home lists its people, owners first, with role and picture; the read-only role gets neither name nor picture', () => {
+  const d = {
+    ...adminData,
+    people: adminData.people.map((p) => (p.id === 'a' ? { ...p, google_picture_url: 'https://pics.example/a.jpg' } : p)),
+  };
+  const people = byHouse(buildAdminSiteMap(d).units)['H-02'].people;
+  assert.ok(people.length >= 2);
+  assert.ok(people.every((p) => ['name', 'role', 'picture'].every((k) => k in p)));
+  assert.equal(people[0].role, 'owner');
+  assert.ok(people.some((p) => p.picture === 'https://pics.example/a.jpg'));
+  const masked = byHouse(buildAdminSiteMap(d, { seeNames: false, maskName: (n) => n[0] + '***' }).units)['H-02'].people;
+  assert.ok(masked.every((p) => p.picture === null && /\*\*\*$/.test(p.name)));
+  assert.deepEqual(byHouse(buildAdminSiteMap(d).units)['H-04'].people, []); // vacant
+});
+
+test('plot outline: the smallest closed outline round a point, as path data', () => {
+  const path = 'M0 0 L200 0 L200 200 L0 200 Z M50 50 L100 50 L100 100 L50 100 Z';
+  assert.equal(plotOutline(path, 70, 70), 'M50 50L100 50L100 100L50 100Z');
+  assert.equal(plotOutline(path, 500, 500), null);
+});
+
 test('admin: a household naming a house that is not on the map is listed, and the summary counts add up', () => {
   const r = buildAdminSiteMap(adminData);
   assert.deepEqual(r.notOnMap, [{ houseNo: 'H-53', farmUnit: 'F-53' }]);
@@ -166,7 +187,7 @@ test('admin: a household naming a house that is not on the map is listed, and th
 
 test('admin: only the allowed fields go out (no email, phone or person ids)', () => {
   const keys = Object.keys(buildAdminSiteMap(adminData).units[0]).sort();
-  assert.deepEqual(keys, ['bhk', 'cluster', 'detail', 'farmUnit', 'gaps', 'houseNo', 'mirrorX', 'mirrorY', 'otherMembers', 'owners', 'plotSqFt', 'recordType', 'rotation', 'shape', 'status', 'version', 'x', 'y']);
+  assert.deepEqual(keys, ['bhk', 'cluster', 'detail', 'farmUnit', 'gaps', 'houseNo', 'mirrorX', 'mirrorY', 'otherMembers', 'owners', 'people', 'plotSqFt', 'recordType', 'rotation', 'shape', 'status', 'version', 'x', 'y']);
 });
 
 test('shapes and clusters', () => {
@@ -174,4 +195,11 @@ test('shapes and clusters', () => {
   assert.equal(SHAPES.TO.bhk, '3 BHK');
   assert.equal(houseNumber('H-07'), 7);
   assert.deepEqual(shapeClusters([{ cluster: 'H2', base_size: '1.800', view_box: [1, 2, 3, 4], plot_path: 'M0 0' }]), [{ id: 'H2', baseSize: 1.8, viewBox: [1, 2, 3, 4], plot: 'M0 0' }]);
+});
+
+test('plot span: the size of the smallest outline round a point', async () => {
+  const { plotSpan } = await import('./site-map.mjs');
+  const path = 'M0 0 L200 0 L200 100 L0 100 Z M50 10 L90 10 L90 60 L50 60 Z';
+  assert.deepEqual(plotSpan(path, 60, 20), { w: 40, h: 50 });
+  assert.equal(plotSpan(path, 500, 500), null);
 });

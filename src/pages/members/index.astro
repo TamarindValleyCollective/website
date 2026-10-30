@@ -10,6 +10,7 @@
 // chat widget or analytics, none of which belong on a page of personal data.
 import '../../styles/global.css';
 import '../../styles/portal-look.css';
+import '../../styles/site-map.css';
 import SignInGate from '../../components/SignInGate.astro';
 ---
 
@@ -1261,7 +1262,8 @@ import SignInGate from '../../components/SignInGate.astro';
   }
 
   /* The phone's main navigation: a bar in thumb reach. The hamburger stays for the account-level menu. */
-  .tabbar {
+  .tabbar,
+  .tab-menu {
     display: none;
   }
 
@@ -1286,28 +1288,78 @@ import SignInGate from '../../components/SignInGate.astro';
       backdrop-filter: blur(16px) saturate(160%);
     }
 
-    .tabbar a {
+    .tabbar a,
+    .tabbar .tab-more {
       display: grid;
       place-items: center;
       align-content: center;
       gap: 2px;
       min-width: 0;
+      padding: 0 2px;
+      border: 0;
+      background: none;
       color: var(--tvc-ink-soft);
+      font: inherit;
       font-size: var(--text-xs);
       font-weight: 600;
       text-decoration: none;
+      cursor: pointer;
     }
 
-    .tabbar a[aria-current='page'] {
+    /* One line, never wrapped: a long name is cut short rather than pushing its icon off the row. */
+    .tabbar a span,
+    .tabbar .tab-more span {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .tabbar a[aria-current='page'],
+    .tabbar .tab-more[aria-current='page'],
+    .tabbar .tab-more[aria-expanded='true'] {
       color: var(--tvc-green-dark);
     }
 
-    .tabbar a:focus-visible {
+    /* The pages that did not fit in the bar, in a card just above it. */
+    .tab-menu {
+      position: absolute;
+      right: 8px;
+      bottom: calc(100% + 8px);
+      display: grid;
+      min-width: 190px;
+      padding: 6px;
+      border: 1px solid var(--tvc-line);
+      border-radius: var(--radius);
+      background: var(--tvc-white);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .tab-menu[hidden] { display: none; }
+
+    .tab-menu a {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 44px;
+      padding: 0 12px;
+      border-radius: var(--radius-sm);
+      color: var(--tvc-ink);
+      font-size: var(--text-base);
+      font-weight: 500;
+      text-decoration: none;
+    }
+
+    .tab-menu a[aria-current='page'] { background: var(--tvc-green-tint); color: var(--tvc-green-dark); }
+
+    .tabbar a:focus-visible,
+    .tabbar .tab-more:focus-visible {
       outline: 2px solid var(--tvc-orange);
       outline-offset: -4px;
     }
 
-    .tabbar svg {
+    .tabbar svg,
+    .tab-menu svg {
       width: 22px;
       height: 22px;
       fill: none;
@@ -1939,7 +1991,8 @@ import SignInGate from '../../components/SignInGate.astro';
     }
   }
 
-  @media (prefers-reduced-motion: no-preference) {
+  /* Not on a phone: the spotlight's dimming is a huge box-shadow, and animating the size of it repaints the whole screen every frame. */
+  @media (prefers-reduced-motion: no-preference) and (min-width: 561px) {
     .tour-spot {
       transition: top 200ms ease-out, left 200ms ease-out, width 200ms ease-out, height 200ms ease-out;
     }
@@ -2902,91 +2955,18 @@ import SignInGate from '../../components/SignInGate.astro';
     margin: 0 0 12px;
   }
 
-  .sm-stage {
-    position: relative;
-    margin-bottom: 12px;
-    overflow: hidden;
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius);
-    background: var(--tvc-white);
-  }
-
-  .sm-map {
-    display: block;
-    width: 100%;
-    height: min(62vh, 640px);
-    cursor: grab;
-    touch-action: none;
-    user-select: none;
-    -webkit-user-select: none;
-  }
-
-  .sm-zoom {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    display: grid;
-    gap: 6px;
-  }
-
   .sm-zoom .btn {
     width: 36px;
     padding: 0;
     background: var(--tvc-white);
   }
 
-  .sm-plot {
-    fill: none;
-    stroke: var(--tvc-line-strong);
-    stroke-width: 1;
-    vector-effect: non-scaling-stroke;
-  }
-
-  .sm-unit {
-    --sm-fill: var(--tvc-stone);
-    --sm-line: var(--tvc-ink-soft);
-    cursor: pointer;
-  }
-
-  .sm-unit.sm-vacant { --sm-fill: var(--tvc-cream); }
-  .sm-unit.is-yours { --sm-fill: var(--tvc-orange-tint); --sm-line: var(--tvc-orange); }
-  .sm-unit.is-sel { --sm-fill: var(--tvc-green-tint); --sm-line: var(--tvc-green); }
-  .sm-unit.is-yours.is-sel { --sm-fill: var(--tvc-orange-tint); } /* your own home keeps its colour when picked; the green outline shows the pick */
-  .sm-unit:focus-visible { outline: none; --sm-line: var(--tvc-green); }
-
-  .sm-blk,
-  .sm-pas,
-  .sm-up {
-    stroke: var(--sm-line);
-    stroke-width: 1.2;
-    vector-effect: non-scaling-stroke;
-  }
-
-  .sm-blk { fill: var(--sm-fill); }
-  .sm-pas { fill: var(--tvc-line); }
-  .sm-up { fill: var(--tvc-white); stroke-dasharray: 4 3; }
-  .sm-hit { fill: transparent; }
-
-  /* The house number: the same small pill the home page uses, at the centre of the plot. */
-  .sm-badge { pointer-events: none; }
-
-  .sm-badge-bg {
-    fill: var(--tvc-white);
-    stroke: var(--tvc-line-strong);
-    stroke-width: 1;
-    vector-effect: non-scaling-stroke;
-  }
-
-  .sm-badge-text {
-    fill: var(--tvc-green-dark);
+  .sm-key-title {
+    margin: 0 0 6px;
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-sm);
     font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    text-anchor: middle;
-    dominant-baseline: central;
   }
-
-  .sm-badge.is-yours .sm-badge-bg { fill: var(--tvc-orange-tint); stroke: var(--tvc-orange); }
-  .sm-badge.is-sel .sm-badge-bg { stroke: var(--tvc-green); stroke-width: 2; }
 
   /* The hover popup */
   .sm-pop {
@@ -3085,10 +3065,6 @@ import SignInGate from '../../components/SignInGate.astro';
     margin: 10px 0 0;
     color: var(--tvc-ink-soft);
     font-size: var(--text-sm);
-  }
-
-  @media (max-width: 560px) {
-    .sm-map { height: 52vh; }
   }
 
   .dir-skel span {
@@ -3790,7 +3766,7 @@ import SignInGate from '../../components/SignInGate.astro';
   import { shapeForRecord, surveyChoices } from '../../../scripts/lib/member-land-docs.mjs';
   import { sizedPicture } from '../../../scripts/lib/member-google-picture.mjs';
   import { baseUnitType, bedroomsOf, facesToShow } from '../../../scripts/lib/member-directory.mjs';
-  import { labelAnchor } from '../../../scripts/lib/site-map.mjs';
+  import { badgeEl, outlineEl, plotFillEl, shapeDefs, unitGroup } from '../../../scripts/lib/site-map-draw.mjs';
   import { openPhoto, preparePhotoFrom } from '../../../scripts/lib/photo-prepare.mjs';
   import { MAX_ZOOM, cropRect, initialCrop, panBy, zoomTo } from '../../../scripts/lib/photo-crop.mjs';
 import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggleMark, foldProfileLink as foldProfileIntoText } from '../../../scripts/lib/member-markdown.mjs';
@@ -3971,6 +3947,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     help: '<path d="M4 5h16v11H9l-5 4z"/>',
     farm: '<path d="M5 19c0-8 5-13 14-14 0 9-5 14-13 14z"/><path d="M5 19l8-8"/>',
     people: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.5 0 4.5 2.2 4.5 5"/>',
+    more: '<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',
     house: '<path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/><path d="M10 20v-6h4v6"/>',
   };
   // A small picture standing in for a label; the name stays available to screen readers and on hover.
@@ -4060,27 +4037,52 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   const meIn = (hh: Hh): Person => hh.people.find((p) => p.id === me?.personId) ?? hh.people[0];
 
   // ---- shell ----
+  const MAX_TABS = 5;
   function renderNav() {
     const nav = $('nav');
     const bar = $('tabbar');
     nav.replaceChildren();
     bar.replaceChildren();
     const onPhone = window.matchMedia('(max-width: 560px)').matches;
-    for (const item of NAV) {
-      if (item.soon || item.hidden || (item.id === 'story' && me && isFamily())) continue;
-      const mk = (cls: string, label: string) => {
-        const a = h('a', cls, undefined, icon(item.icon), h('span', label, item.label));
-        a.setAttribute('href', `#/${item.id}`);
-        if (item.id === route) a.setAttribute('aria-current', 'page');
-        return a;
-      };
-      const a = mk('nav-item', 'nav-label');
+    const shown = NAV.filter((item) => !(item.soon || item.hidden || (item.id === 'story' && me && isFamily())));
+    // The phone's bar holds five places at most: past that the last ones go under "More", so adding a page never squeezes the rest.
+    const overflow = shown.length > MAX_TABS ? shown.slice(MAX_TABS - 1) : [];
+    const mk = (item: NavItem, cls: string, label: string) => {
+      const a = h('a', cls, undefined, icon(item.icon), h('span', label, item.label));
+      a.setAttribute('href', `#/${item.id}`);
+      if (item.id === route) a.setAttribute('aria-current', 'page');
+      return a;
+    };
+    for (const item of shown) {
+      const a = mk(item, 'nav-item', 'nav-label');
       a.title = item.label; // what the icon is, when the menu is collapsed to icons
-      const t = mk('', '');
       // The tour points at whichever of the two is on screen.
-      (onPhone ? t : a).setAttribute('data-tour', `nav-${item.id}`);
+      if (!onPhone) a.setAttribute('data-tour', `nav-${item.id}`);
       nav.append(a);
+    }
+    for (const item of overflow.length ? shown.slice(0, MAX_TABS - 1) : shown) {
+      const t = mk(item, '', '');
+      if (onPhone) t.setAttribute('data-tour', `nav-${item.id}`);
       bar.append(t);
+    }
+    if (overflow.length) {
+      const more = h('button', 'tab-more', undefined, icon(IC.more), h('span', '', 'More'));
+      more.setAttribute('type', 'button');
+      more.setAttribute('aria-haspopup', 'true');
+      more.setAttribute('aria-expanded', 'false');
+      if (overflow.some((o) => o.id === route)) more.setAttribute('aria-current', 'page');
+      const menu = h('div', 'tab-menu', undefined, ...overflow.map((o) => mk(o, '', '')));
+      menu.hidden = true;
+      const close = () => { menu.hidden = true; more.setAttribute('aria-expanded', 'false'); document.removeEventListener('click', away, true); };
+      const away = (e: Event) => { if (!bar.contains(e.target as Node)) close(); };
+      more.addEventListener('click', () => {
+        const open = menu.hidden;
+        menu.hidden = !open;
+        more.setAttribute('aria-expanded', String(open));
+        if (open) document.addEventListener('click', away, true); else close();
+      });
+      menu.addEventListener('click', close);
+      bar.append(more, menu);
     }
   }
 
@@ -4971,12 +4973,19 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       card.style.setProperty('--pointer', `${clamp(along, 28, (side === 'left' || side === 'right' ? ht : w) - 28)}px`);
     }
 
+    // A scroll fires many times a frame; place() reads layout, so do it once per frame.
+    let frame = 0;
+    const onScroll = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => { frame = 0; place(); });
+    };
+
     function finish() {
       run++;
       layer.remove();
       document.removeEventListener('keydown', onKey, true);
       window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('scroll', onScroll, true);
       if (record) {
         markTourSeen();
         renderView();
@@ -5051,7 +5060,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
     document.addEventListener('keydown', onKey, true);
     window.addEventListener('resize', place);
-    window.addEventListener('scroll', place, true);
+    window.addEventListener('scroll', onScroll, true);
     show(0);
   }
 
@@ -6232,20 +6241,6 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     }
   }
 
-  // The five standard unit shapes about the centre of the base foundation (34 x 37, scaled per cluster): the top is the
-  // back of the house and the bottom the road side. Fixed drawing constants, never server data.
-  const smRect = (cls: string, x: number, y: number, w: number, ht: number) => `<rect class="${cls}" x="${x}" y="${y}" width="${w}" height="${ht}"/>`;
-  const SM_BASE = smRect('sm-blk', -17, -18, 17, 15) + smRect('sm-blk', 0, -18, 17, 15) + smRect('sm-blk', 0, -3, 17, 22);
-  const SM_UP = smRect('sm-up', 3, 0, 11, 17);
-  const SM_BACK = smRect('sm-blk', -17, -64, 17, 24) + smRect('sm-pas', -5, -40, 5, 22);
-  const SM_SHAPES: Record<string, string> = {
-    S: SM_BASE,
-    DF: SM_BASE + SM_UP,
-    DG: SM_BASE + smRect('sm-blk', -17, -40, 17, 22),
-    DO: SM_BASE + SM_BACK,
-    TO: SM_BASE + SM_BACK + SM_UP,
-  };
-
   // The directory, keyed by farm unit, for the faces in the hover popup (the photo each member chose to share there).
   // Loaded once and kept; if it cannot be loaded the popup shows initials instead.
   let mapDirectory: Map<string, DirHousehold> | null = null;
@@ -6304,13 +6299,16 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     svg.setAttribute('class', 'sm-map');
     svg.setAttribute('role', 'group');
     svg.setAttribute('aria-label', 'Site plan, one button per home');
-    svg.innerHTML = `<defs>${Object.entries(SM_SHAPES).map(([k, g]) => `<g id="sm-${k}"><g transform="translate(0 -0.5)"><rect class="sm-hit" x="-17" y="-18" width="34" height="37"/>${g}</g></g>`).join('')}</defs>`;
+    svg.innerHTML = `<defs>${shapeDefs()}</defs>`;
     const plotPath = document.createElementNS(SVG_NS, 'path');
     plotPath.setAttribute('class', 'sm-plot');
+    const fillLayer = document.createElementNS(SVG_NS, 'g');
     const unitLayer = document.createElementNS(SVG_NS, 'g');
+    // The outlines of all the homes, above every fill (the picked one last, so it is not covered).
+    const outlineLayer = document.createElementNS(SVG_NS, 'g');
     // The house numbers sit above the homes, inside each home's plot, and never take a tap or a hover.
     const badgeLayer = document.createElementNS(SVG_NS, 'g');
-    svg.append(plotPath, unitLayer, badgeLayer);
+    svg.append(fillLayer, plotPath, unitLayer, outlineLayer, badgeLayer);
     // What members already share with each other (the directory) gives the faces for the hover popup. It is fetched once,
     // in the background: the popup works without it (initials), and the map never waits for it.
     void loadMapDirectory();
@@ -6328,7 +6326,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const stage = h('div', 'sm-stage', undefined, svg, pop, h('div', 'sm-zoom', undefined, zoomBtn('Zoom in', '+', () => zoomBy(1.4)), zoomBtn('Zoom out', '−', () => zoomBy(1 / 1.4)), zoomBtn('Show the whole cluster', 'Fit', () => { fit(); paint(); })));
     const card = h('section', 'sm-card');
     card.setAttribute('aria-live', 'polite');
-    root.append(bar, stage, card, msg, h('p', 'sm-note', 'Your home is highlighted. Homes with no member yet are paler. A member who keeps their details private shows as "Private member".'));
+    const keyItem = (cls: string, text: string) => h('li', '', undefined, h('span', `sm-sw ${cls}`), text);
+    const key = h('ul', 'sm-key', undefined, ...(mine ? [keyItem('is-yours', 'Your home')] : []), keyItem('sm-named', 'A member'), keyItem('sm-private', 'A member who keeps their details private'), keyItem('sm-vacant', 'No member yet'));
+    key.setAttribute('aria-label', 'Colours');
+    root.append(bar, h('div', 'sm-grid', undefined, stage, h('div', 'sm-aside', undefined, card, key)), msg);
 
     const unitsPerPx = () => { const r = svg.getBoundingClientRect(); return Math.max(vb[2] / (r.width || 1), vb[3] / (r.height || 1)); };
     const toUser = (e: { clientX: number; clientY: number }) => {
@@ -6337,42 +6338,13 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       return [vb[0] + (e.clientX - r.left - (r.width - vb[2] / k) / 2) * k, vb[1] + (e.clientY - r.top - (r.height - vb[3] / k) / 2) * k];
     };
 
-    function unitEl(x: MapUnit, k: number, u: number): SVGElement {
-      const g = document.createElementNS(SVG_NS, 'g');
-      g.setAttribute('class', `sm-unit sm-${x.status}${x.isYours ? ' is-yours' : ''}${selected?.houseNo === x.houseNo ? ' is-sel' : ''}`);
-      g.setAttribute('data-house', x.houseNo);
-      g.setAttribute('role', 'button');
-      g.setAttribute('tabindex', '0');
+    const classesOf = (x: MapUnit) => `sm-${x.status}${x.isYours ? ' is-yours' : ''}${selected?.houseNo === x.houseNo ? ' is-sel' : ''}`;
+    function unitEl(x: MapUnit, k: number): SVGElement {
       const who = x.status === 'named' ? x.names.join(' and ') : x.status === 'private' ? 'a private member' : 'no member yet';
-      g.setAttribute('aria-label', `Home ${x.houseNo}, ${who}, ${x.bhk}`);
-      g.innerHTML = `<g transform="translate(${x.x} ${x.y}) rotate(${x.rotation}) scale(${x.mirrorX ? -k : k} ${x.mirrorY ? -k : k})"><use href="#sm-${x.shape}"/></g>`;
-      g.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(x); }
+      const g = unitGroup(x, k, classesOf(x), `Home ${x.houseNo}, ${who}, ${x.bhk}`);
+      g.addEventListener('keydown', (e: Event) => {
+        if ((e as KeyboardEvent).key === 'Enter' || (e as KeyboardEvent).key === ' ') { e.preventDefault(); pick(x); }
       });
-      return g;
-    }
-
-    // The house number as the home page shows it (H-17, in a small pill), at the centre of the home's plot.
-    function badgeEl(x: MapUnit, plot: string, u: number): SVGElement {
-      const [bx, by] = labelAnchor(plot, x.x, x.y) ?? [x.x, x.y];
-      const w = (x.houseNo.length * 6.8 + 14) * u;
-      const ht = 18 * u;
-      const g = document.createElementNS(SVG_NS, 'g');
-      g.setAttribute('class', `sm-badge${x.isYours ? ' is-yours' : ''}${selected?.houseNo === x.houseNo ? ' is-sel' : ''}`);
-      const bg = document.createElementNS(SVG_NS, 'rect');
-      bg.setAttribute('class', 'sm-badge-bg');
-      bg.setAttribute('x', String(bx - w / 2));
-      bg.setAttribute('y', String(by - ht / 2));
-      bg.setAttribute('width', String(w));
-      bg.setAttribute('height', String(ht));
-      bg.setAttribute('rx', String(ht / 2));
-      const t = document.createElementNS(SVG_NS, 'text');
-      t.setAttribute('class', 'sm-badge-text');
-      t.setAttribute('x', String(bx));
-      t.setAttribute('y', String(by));
-      t.setAttribute('style', `font-size:${11 * u}px`);
-      t.textContent = x.houseNo;
-      g.append(bg, t);
       return g;
     }
 
@@ -6386,7 +6358,6 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const row = (k: string, v: string) => dl.append(h('dt', '', k), h('dd', '', v));
       row(s.names.length > 1 ? 'Owners' : 'Owner', owner);
       row('Unit type', s.unitType ? `${s.bhk} · ${s.unitType}` : s.bhk);
-      row('Layout', s.detail);
       row('Cluster', s.cluster);
       card.append(dl);
       if (s.farmUnit) {
@@ -6406,8 +6377,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const u = unitsPerPx();
       hidePop();
       const here = data!.units.filter((x) => x.cluster === clusterId);
-      unitLayer.replaceChildren(...here.map((x) => unitEl(x, c.baseSize, u)));
-      badgeLayer.replaceChildren(...here.map((x) => badgeEl(x, c.plot, u)));
+      fillLayer.replaceChildren(...here.map((x) => plotFillEl(c.plot, x, classesOf(x))).filter((e): e is SVGPathElement => !!e));
+      unitLayer.replaceChildren(...here.map((x) => unitEl(x, c.baseSize)));
+      outlineLayer.replaceChildren(...[...here].sort((a, b) => Number(selected?.houseNo === a.houseNo) - Number(selected?.houseNo === b.houseNo)).map((x) => outlineEl(x, c.baseSize, classesOf(x))));
+      badgeLayer.replaceChildren(...here.map((x) => badgeEl(c.plot, x, u, classesOf(x))).filter((e): e is SVGElement => !!e));
       drawCard();
     }
     function pick(x: MapUnit) {

@@ -1,0 +1,181 @@
+/* The site map's look, shared by the member portal's Site map and the admin portal's Site map so the two cannot drift
+   apart. What is drawn (shapes, plot fills, house-number pills) is built in scripts/lib/site-map-draw.mjs; this file is how it
+   looks. A page adds only what is its own (its controls, its details card). Colours are the TVC tokens, so the portals'
+   dark appearance carries over. */
+
+/* ---- the stage ---- */
+.sm-stage {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--tvc-line);
+  border-radius: var(--radius);
+  background: var(--tvc-white);
+}
+
+.sm-map {
+  display: block;
+  width: 100%;
+  height: min(70vh, 720px);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@media (max-width: 900px) {
+  .sm-map { height: 56vh; }
+}
+
+.sm-zoom {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+/* The map and, beside it on a wide screen, the details of the home that is picked. */
+.sm-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+@media (min-width: 901px) {
+  .sm-grid { grid-template-columns: minmax(0, 1fr) 340px; }
+}
+
+.sm-aside {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* ---- plan lines and plots ---- */
+.sm-plot {
+  fill: none;
+  stroke: var(--tvc-line-strong);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+/* ---- status colours: a plot, the home on it and its number pill share one set ---- */
+.sm-named {
+  --sm-plot: color-mix(in srgb, var(--tvc-green) 32%, var(--tvc-white));
+  --sm-fill: color-mix(in srgb, var(--tvc-green) 55%, var(--tvc-white));
+  --sm-line: var(--tvc-green);
+}
+
+.sm-private {
+  --sm-plot: color-mix(in srgb, var(--tvc-sky-blue) 30%, var(--tvc-white));
+  --sm-fill: color-mix(in srgb, var(--tvc-sky-blue) 55%, var(--tvc-white));
+  --sm-line: var(--tvc-sky-blue-text);
+}
+
+.sm-vacant {
+  --sm-plot: color-mix(in srgb, var(--tvc-earth-brown) 14%, var(--tvc-white));
+  --sm-fill: var(--tvc-white);
+  --sm-line: var(--tvc-line-strong);
+}
+
+.sm-mismatch,
+.is-yours {
+  --sm-plot: color-mix(in srgb, var(--tvc-orange) 34%, var(--tvc-white));
+  --sm-fill: color-mix(in srgb, var(--tvc-orange) 60%, var(--tvc-white));
+  --sm-line: var(--tvc-orange-text);
+}
+
+/* The picked home (or the one being changed) takes the green of the interface, keeping its own plot tint if it is yours. */
+.is-sel,
+.is-draft {
+  --sm-plot: color-mix(in srgb, var(--tvc-green) 50%, var(--tvc-white));
+  --sm-fill: color-mix(in srgb, var(--tvc-green) 75%, var(--tvc-white));
+  --sm-line: var(--tvc-green-dark);
+}
+
+.is-yours.is-sel {
+  --sm-plot: color-mix(in srgb, var(--tvc-orange) 34%, var(--tvc-white));
+  --sm-fill: color-mix(in srgb, var(--tvc-orange) 60%, var(--tvc-white));
+}
+
+.sm-dim { opacity: 0.25; }
+
+.sm-plotfill {
+  fill: var(--sm-plot);
+  stroke: var(--tvc-white);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.sm-plotfill.sm-alt { fill: color-mix(in srgb, var(--sm-plot) 62%, var(--tvc-white)); }
+
+/* ---- a home ----
+   Its fill is one polygon (.sm-body) and its outline another (.sm-edge) on a layer above every home's fill, so the walls
+   between a home's own blocks do not show, and where two homes share a wall the two outlines lie on the same line. */
+.sm-unit { cursor: pointer; }
+.sm-unit:focus-visible { outline: none; }
+.sm-unit:focus-visible .sm-body { stroke: var(--tvc-green-dark); stroke-width: 3; vector-effect: non-scaling-stroke; }
+
+.sm-body { fill: var(--sm-fill); stroke: none; }
+.sm-up { fill: var(--tvc-white); fill-opacity: 0.55; stroke: none; } /* the first floor: a lighter patch, not a wall */
+.sm-hit { fill: transparent; }
+
+.sm-outline { --sm-edge: 2; pointer-events: none; }
+.sm-outline.is-sel,
+.sm-outline.is-draft { --sm-edge: 3.5; }
+
+.sm-edge {
+  fill: none;
+  stroke: var(--sm-line);
+  stroke-width: var(--sm-edge);
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* ---- the house number: a small pill at the centre of the home's plot ---- */
+.sm-badge { pointer-events: none; }
+
+.sm-badge-bg {
+  fill: var(--tvc-white);
+  stroke: var(--tvc-line-strong);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.sm-badge-text {
+  fill: var(--tvc-green-dark);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.sm-badge.is-yours .sm-badge-bg,
+.sm-badge.sm-mismatch .sm-badge-bg { fill: var(--tvc-orange-tint); stroke: var(--tvc-orange); }
+.sm-badge.is-sel .sm-badge-bg,
+.sm-badge.is-draft .sm-badge-bg { stroke: var(--tvc-green-dark); stroke-width: 2; }
+
+/* ---- the key: what each colour means ---- */
+.sm-key {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--tvc-ink-soft);
+  font-size: var(--text-sm);
+}
+
+.sm-key li { display: flex; align-items: center; gap: 8px; }
+
+.sm-sw {
+  flex: none;
+  width: 22px;
+  height: 14px;
+  border: 2px solid var(--sm-line);
+  border-radius: 4px;
+  background: var(--sm-plot);
+}
