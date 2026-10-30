@@ -844,9 +844,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   (`units.payout_revealed`, household only), shown for 30 seconds. Rules in `scripts/lib/member-payout.mjs`. Rotating
   `STAFF_MFA_KEY` makes stored payout details unreadable until members re-enter them. There is no finance role yet, so
   this is super-admin only.
-  **Preview features, formerly Early access (migration `0071`, `member_feature_access`):** a member feature is on for everyone when its Netlify
+  **Preview, formerly Early access (migration `0071`, `member_feature_access`):** a member feature is on for everyone when its Netlify
   flag is `true` (My rental: `MEMBER_RENTAL_ENABLED`), and otherwise only for the households a super admin lists on
-  **Preview features** (`src/pages/internal/preview-features.astro`, Admin menu: a grid of the homes that have a preview, by feature, with a switch each, first names only, an Add homes picker and Undo; it reads the `access` part of the same `overview` and posts one home at a time to `/api/units-admin/access`; step-up, audited as `units.access_granted` / `units.access_removed`). A household
+  **Preview** (`src/pages/internal/preview-features.astro`, Admin menu: a grid of the homes that have a preview, by feature, with a switch each, first names only, an Add homes picker and Undo; it reads the `access` part of the same `overview` and posts one home at a time to `/api/units-admin/access`; step-up, audited as `units.access_granted` / `units.access_removed`). A household
   not listed gets the same 404 as when the feature does not exist. The rule is in `scripts/lib/member-features.mjs`;
   a later feature adds its name there and to the table's check constraint, with no new table. The second feature is
   **Site map** (`site_map`, flag `MEMBER_SITE_MAP_ENABLED`; migration `0074` widens the check constraint).
@@ -859,7 +859,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   seeded from the layout fixed by hand on 2026-10-29 (`docs/site-map/`). The function selects only ids, names and unit
   fields, and `scripts/lib/site-map.mjs` (tested) applies the directory's privacy rule: a person is named only when
   active and not opted out of the directory, a household with nobody listed shows as "Private member" with no profile
-  link, a home with no household as "No member yet". Dark behind Preview features (above): a household not listed gets
+  link, a home with no household as "No member yet". Dark behind Preview (above): a household not listed gets
   404 and the tab stays hidden. The plan is drawn client-side in `members/index.astro` (`viewSiteMap`). Each home's
   house number is a pill in the home page's style (`H-17`) at the centre of its plot, found from the closed plot outlines
   in `plot_path` (`labelAnchor` in `site-map.mjs`; no extra data). On a mouse or trackpad, hovering a home shows a

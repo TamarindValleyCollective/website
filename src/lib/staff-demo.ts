@@ -10,12 +10,12 @@
 // state (or its own `?demo`, as event-payments does).
 
 const TOOLS = [
-  { module: 'photo-pool', label: 'Photo pool', path: '/internal/photo-pool/' },
-  { module: 'whatsapp', label: 'WhatsApp inbox', path: '/internal/whatsapp/' },
-  { module: 'event-payments', label: 'Event payments', path: '/internal/event-payments/' },
-  { module: 'accommodation', label: 'Accommodation calendar', path: '/internal/accommodation-calendar/' },
-  { module: 'members', label: 'Member register', path: '/internal/members/' },
-  { module: 'usage', label: 'Usage & limits', path: '/internal/usage/' },
+  { module: 'photo-pool', label: 'Photos', path: '/internal/photo-pool/' },
+  { module: 'whatsapp', label: 'WhatsApp', path: '/internal/whatsapp/' },
+  { module: 'event-payments', label: 'Payments', path: '/internal/event-payments/' },
+  { module: 'accommodation', label: 'Stays', path: '/internal/accommodation-calendar/' },
+  { module: 'members', label: 'Members', path: '/internal/members/' },
+  { module: 'usage', label: 'Usage', path: '/internal/usage/' },
 ];
 
 const ROLE_LABELS: Record<string, string> = { admin: 'Admin', user: 'User', read_only: 'Read-only' };
@@ -254,7 +254,7 @@ function demoMe(kind: string) {
       : [
           { label: 'Access', path: '/internal/access/', description: 'Who can do what' },
           { label: 'Rent out', path: '/internal/units/', description: 'Onboard and manage the units members rent out' },
-          { label: 'Preview features', path: '/internal/preview-features/', description: 'Try a member feature with a few homes first' },
+          { label: 'Preview', path: '/internal/preview-features/', description: 'Try a member feature with a few homes first' },
           { label: 'Security', path: '/internal/security/', description: 'Your second factors' },
         ],
   };
@@ -302,10 +302,10 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
       if (location.search.includes('clear')) return reply({ items: [], quiet: ['No WhatsApp conversations are waiting for a reply.', 'No cancellation requests are waiting on a decision.', 'Every service is within its free tier and credits.'], failed: [] });
       return reply({
         items: [
-          { id: 'whatsapp', tool: 'WhatsApp inbox', tone: 'warn', title: '3 conversations need a reply', detail: 'WhatsApp inbox · the oldest has waited 2 hours', count: 3, href: '/internal/whatsapp/' },
-          { id: 'event-payments', tool: 'Event payments', tone: 'warn', title: '1 cancellation request to decide', detail: 'Event payments · a guest has asked for a refund', count: 1, href: '/internal/event-payments/' },
-          { id: 'members', tool: 'Member register', tone: 'warn', title: '2 unit stories to review', detail: 'Member register · also 1 family request to decide', count: 2, href: '/internal/members/' },
-          { id: 'usage', tool: 'Usage & limits', tone: 'warn', title: '1 service is nearing a limit', detail: 'Usage & limits · open it for what to do', count: 1, href: '/internal/usage/' },
+          { id: 'whatsapp', tool: 'WhatsApp', tone: 'warn', title: '3 conversations need a reply', detail: 'WhatsApp · the oldest has waited 2 hours', count: 3, href: '/internal/whatsapp/' },
+          { id: 'event-payments', tool: 'Payments', tone: 'warn', title: '1 cancellation request to decide', detail: 'Payments · a guest has asked for a refund', count: 1, href: '/internal/event-payments/' },
+          { id: 'members', tool: 'Members', tone: 'warn', title: '2 unit stories to review', detail: 'Members · also 1 family request to decide', count: 2, href: '/internal/members/' },
+          { id: 'usage', tool: 'Usage', tone: 'warn', title: '1 service is nearing a limit', detail: 'Usage · open it for what to do', count: 1, href: '/internal/usage/' },
           { id: 'security', tool: 'Security', tone: 'warn', title: '1 super admin has not set up two second factors', detail: 'Security · Rajesh Thiagarajan cannot change access yet', count: 1, href: '/internal/security/' },
         ],
         quiet: [],

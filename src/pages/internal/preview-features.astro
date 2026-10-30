@@ -1,5 +1,5 @@
 ---
-// The Preview features screen: which member features are on for which homes, before they are on for everyone. A feature
+// The Preview screen: which member features are on for which homes, before they are on for everyone. A feature
 // (My rental, Site map, ...) is on for everyone when its Netlify flag is true; otherwise only for the homes switched on
 // here. Super admins only; changes need the same second-factor step-up as the Access page. Backs the `access` part of
 // /api/units-admin/overview and POST /api/units-admin/access (netlify/functions/units-admin.mts).
@@ -8,11 +8,11 @@ import SignInGate from '../../components/SignInGate.astro';
 import StepUpSheet from '../../components/StepUpSheet.astro';
 ---
 
-<StaffLayout title="Preview features" description="Choose which homes get a member feature before everyone does." current="previews">
+<StaffLayout title="Preview" description="Choose which homes get a member feature before everyone does." current="previews">
   <button slot="toolbar" type="button" id="lock" class="lock-pill" hidden></button>
 
   <section class="section wrapper">
-    <h1>Preview features</h1>
+    <h1>Preview</h1>
     <p class="hint">Try a member feature with a few homes before it is on for everyone. Only super admins can open this page.</p>
 
     <SignInGate forbiddenWhat="this page" forbiddenHint="This page is for super admins only." copy="Sign in with your super-admin Google account." />
