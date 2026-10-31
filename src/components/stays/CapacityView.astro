@@ -1,0 +1,518 @@
+---
+// The Week and Month views of the Stays page: how many units of each type are free, night by night. Capacity only, never
+// who is in which tent (that is the Day plan). The rules (what counts as free, how full a cell is, whether a request fits)
+// are in scripts/lib/stay-capacity.mjs and tested there; this draws them.
+//
+// The host page owns the data. It draws with `root.capacity.render({ view, units, types, bookings, dates, today, canBook })`
+// (view is 'week' or 'month'; dates are the nights shown), gives the finder a way to load months it has not got with
+// `root.capacity.fetchBookings = (months) => Promise<booking[]>`, and listens on the root for
+//   capacity:plan   {date}: open the Day plan for that date
+//   capacity:book   {date, typeId}: start a new booking from that date (typeId is set when exactly one type is picked)
+// One per page.
+---
+
+<div id="cap" class="cap" data-cap hidden>
+  <section class="cap-finder card" aria-labelledby="cap-finder-t">
+    <h2 id="cap-finder-t">Can we fit a request?</h2>
+    <form class="cap-frow" data-finder>
+      <label>Type<select data-f="typeId"></select></label>
+      <label>How many<input type="number" data-f="qty" min="1" max="20" value="1" inputmode="numeric" /></label>
+      <label>From<input type="date" data-f="from" /></label>
+      <label>Nights<input type="number" data-f="nights" min="1" max="30" value="1" inputmode="numeric" /></label>
+      <button type="submit" class="button">Check</button>
+    </form>
+    <p class="cap-fout" role="status" data-fout></p>
+  </section>
+
+  <div class="cap-chips" role="group" aria-label="Accommodation type" data-chips hidden></div>
+  <div class="cap-pop" data-pop role="status" hidden></div>
+  <div class="cap-scroll"><div class="cap-body" data-body></div></div>
+  <p class="cap-key">
+    The number is how many units are free that night. The fill rises as units are taken: green, orange once three quarters are
+    taken, red when none is free. Closures and events count as taken. Who is in which tent is in the Day plan.
+  </p>
+</div>
+
+<style is:global>
+  .cap {
+    margin-bottom: 24px;
+  }
+
+  .cap-finder {
+    margin-bottom: 14px;
+    padding: 14px 16px;
+  }
+
+  .cap-finder h2 {
+    margin: 0 0 8px;
+    font-size: var(--text-lg);
+  }
+
+  .cap-frow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px;
+  }
+
+  .cap-frow label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .cap-frow input[type='number'] {
+    width: 84px;
+  }
+
+  .cap-fout {
+    margin: 10px 0 0;
+    font-size: var(--text-sm);
+  }
+
+  .cap-fout:empty {
+    display: none;
+  }
+
+  .cap-fout .ok {
+    color: var(--tvc-green-dark);
+  }
+
+  .cap-fout .no {
+    color: var(--tvc-error-text);
+  }
+
+  .cap-chips {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+
+  .cap-chip {
+    flex: none;
+    min-height: 34px;
+    padding: 5px 12px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: 999px;
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .cap-chip[aria-pressed='true'] {
+    background: var(--tvc-green-dark);
+    border-color: var(--tvc-green-dark);
+    color: var(--tvc-white);
+  }
+
+  .cap-pop {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+    margin-bottom: 10px;
+    padding: 10px 14px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--tvc-green) 8%, var(--tvc-white));
+    font-size: var(--text-sm);
+  }
+
+  .cap-pop[hidden] {
+    display: none;
+  }
+
+  .cap-pop small {
+    display: block;
+    color: var(--tvc-ink-soft);
+  }
+
+  .cap-pop-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .cap-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+  }
+
+  .cap-week {
+    --n: 7;
+    display: grid;
+    grid-template-columns: 150px repeat(var(--n), minmax(56px, 1fr));
+    min-width: max-content;
+    margin-bottom: -1px;
+  }
+
+  .cap-week > * {
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .cap-label {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 8px 12px;
+    background: var(--tvc-white);
+    font-size: var(--text-sm);
+    font-weight: 700;
+  }
+
+  .cap-label small {
+    font-weight: 400;
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+  }
+
+  .cap-dh {
+    padding: 6px 0;
+    text-align: center;
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+  }
+
+  .cap-dh b {
+    display: block;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink);
+  }
+
+  .cap-dh.is-today {
+    background: color-mix(in srgb, var(--tvc-orange) 14%, var(--tvc-white));
+  }
+
+  /* One cell: the free count on top of a fill that rises from the bottom as units are taken (green, orange once three
+     quarters are taken, red when none is free). */
+  .cap-cell {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 58px;
+    padding: 0;
+    border: 0;
+    border-left: 1px solid var(--tvc-line);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .cap-cell .fill {
+    position: absolute;
+    inset: auto 0 0;
+    height: var(--h, 0%);
+    background: color-mix(in srgb, var(--c) 38%, var(--tvc-white));
+    border-top: 2px solid var(--c);
+  }
+
+  .cap-cell--open {
+    --c: var(--tvc-green);
+  }
+
+  .cap-cell--tight {
+    --c: var(--tvc-orange);
+  }
+
+  .cap-cell--full {
+    --c: var(--tvc-error-text);
+  }
+
+  .cap-cell[style*='--h:0%'] .fill {
+    display: none;
+  }
+
+  .cap-cell .n {
+    position: relative;
+    font-size: var(--text-lg);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+
+  .cap-cell--tight .n {
+    color: var(--tvc-orange-text);
+  }
+
+  .cap-cell--full .n {
+    color: var(--tvc-error-text);
+  }
+
+  .cap-cell--past {
+    opacity: 0.55;
+  }
+
+  .cap-cell--none {
+    background: color-mix(in srgb, var(--tvc-ink) 5%, var(--tvc-white));
+    color: var(--tvc-ink-soft);
+    cursor: default;
+  }
+
+  .cap-cell.is-today {
+    box-shadow: inset 0 3px 0 var(--tvc-orange);
+  }
+
+  .cap-cell[aria-pressed='true'] {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: -2px;
+  }
+
+  .cap-month {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 4px;
+    padding: 10px;
+  }
+
+  .cap-month .cap-dh {
+    padding: 2px 0;
+  }
+
+  .cap-month .cap-cell {
+    position: relative;
+    min-height: 60px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-sm);
+  }
+
+  .cap-month .cap-cell .dn {
+    position: absolute;
+    top: 2px;
+    left: 5px;
+    z-index: 1;
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+  }
+
+  .cap-month .cap-cell .n {
+    font-size: var(--text-base, 1rem);
+  }
+
+  .cap-month .cap-cell.is-today {
+    box-shadow: inset 0 0 0 2px var(--tvc-orange);
+  }
+
+  .cap-key {
+    margin: 8px 0 0;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+</style>
+
+<script>
+  import { capacityOn, capacityRows, findSpace, isOffered, levelOf, monthCells, nightIndex, taken } from '../../../scripts/lib/stay-capacity.mjs';
+
+  interface Unit {
+    id: string;
+    type?: string;
+    status: string;
+    manager?: string;
+    requestMode?: string;
+    ignoresFarmClosure?: boolean;
+  }
+  interface Type {
+    id: string;
+    label: string;
+  }
+  interface Data {
+    view: 'week' | 'month';
+    units: Unit[];
+    types: Type[];
+    bookings: any[];
+    dates: string[];
+    today: string;
+    canBook: boolean;
+  }
+
+  function mount(root: HTMLElement) {
+    const body = root.querySelector('[data-body]') as HTMLElement;
+    const pop = root.querySelector('[data-pop]') as HTMLElement;
+    const chipsEl = root.querySelector('[data-chips]') as HTMLElement;
+    const finder = root.querySelector('[data-finder]') as HTMLFormElement;
+    const fout = root.querySelector('[data-fout]') as HTMLElement;
+
+    let data: Data | null = null;
+    let monthTypes: string[] = []; // the month calendar's type filter; empty = all types
+    let pick: { date: string; typeIds: string[] | null } | null = null;
+    let finderSeq = 0;
+
+    const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+    const parts = (d: string) => d.split('-').map(Number) as [number, number, number];
+    const fmt = (d: string, opts: Intl.DateTimeFormatOptions = { weekday: 'short', day: 'numeric', month: 'short' }) => {
+      const [y, m, day] = parts(d);
+      return new Date(Date.UTC(y, m - 1, day)).toLocaleDateString('en-IN', { ...opts, timeZone: 'UTC' });
+    };
+    const addDays = (d: string, n: number) => {
+      const [y, m, day] = parts(d);
+      return new Date(Date.UTC(y, m - 1, day + n)).toISOString().slice(0, 10);
+    };
+    const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+    const typeLabel = (id: string) => data?.types.find((t) => t.id === id)?.label ?? id;
+
+    function cell(date: string, c: { free: number; total: number }, label: string, typeIds: string[] | null, extra = '') {
+      const level = levelOf(c);
+      const past = date < data!.today;
+      const isToday = date === data!.today;
+      if (level === 'none') return `<span class="cap-cell cap-cell--none${isToday ? ' is-today' : ''}" aria-hidden="true">${extra}<span class="n">–</span></span>`;
+      const sel = pick?.date === date && JSON.stringify(pick.typeIds) === JSON.stringify(typeIds);
+      return `<button type="button" class="cap-cell cap-cell--${level}${past ? ' cap-cell--past' : ''}${isToday ? ' is-today' : ''}" style="--h:${Math.round(taken(c) * 100)}%" data-date="${date}" data-types="${esc(typeIds ? typeIds.join(',') : '')}" aria-pressed="${sel}" aria-label="${esc(`${label}, ${fmt(date)}, ${c.free} of ${c.total} free`)}">${extra}<span class="fill" aria-hidden="true"></span><span class="n">${c.free}</span></button>`;
+    }
+
+    function renderWeek(d: Data) {
+      const rows = capacityRows({ units: d.units, types: d.types, bookings: d.bookings, dates: d.dates });
+      let h = `<div class="cap-week" style="--n:${d.dates.length}"><div class="cap-label"></div>`;
+      for (const date of d.dates) h += `<div class="cap-dh${date === d.today ? ' is-today' : ''}"><b>${fmt(date, { weekday: 'short' })}</b>${fmt(date, { day: 'numeric', month: 'short' })}</div>`;
+      rows.forEach((row: any) => {
+        h += `<div class="cap-label">${esc(row.type.label)}<small>${plural(row.total, 'unit')}</small></div>`;
+        for (const c of row.cells) h += cell(c.date, c, row.type.label, [row.type.id]);
+      });
+      body.className = 'cap-body';
+      body.innerHTML = rows.length ? h + '</div>' : '<p class="hint" style="padding:14px">No units are on offer.</p>';
+    }
+
+    function renderMonth(d: Data) {
+      const offeredTypes = d.types.filter((t) => d.units.some((u) => u.type === t.id && isOffered(u)));
+      chipsEl.hidden = false;
+      chipsEl.innerHTML =
+        `<button type="button" class="cap-chip" data-chip="all" aria-pressed="${monthTypes.length === 0}">All types</button>` +
+        offeredTypes.map((t) => `<button type="button" class="cap-chip" data-chip="${esc(t.id)}" aria-pressed="${monthTypes.includes(t.id)}">${esc(t.label)}</button>`).join('');
+      const { lead, cells } = monthCells({ units: d.units, bookings: d.bookings, dates: d.dates, typeIds: monthTypes });
+      const label = monthTypes.length ? monthTypes.map(typeLabel).join(' + ') : 'All types';
+      const typeIds = monthTypes.length ? [...monthTypes] : null;
+      let h = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((n) => `<div class="cap-dh">${n}</div>`).join('') + '<span></span>'.repeat(lead);
+      for (const c of cells) h += cell(c.date, c, label, typeIds, `<span class="dn">${Number(c.date.slice(-2))}</span>`);
+      body.className = 'cap-body cap-month';
+      body.innerHTML = h;
+    }
+
+    function renderPop() {
+      if (!data || !pick) {
+        pop.hidden = true;
+        return;
+      }
+      const index = nightIndex(data.bookings);
+      const ids = pick.typeIds;
+      const c = capacityOn(data.units, index, pick.date, ids);
+      const name = ids ? ids.map(typeLabel).join(' + ') : 'All types';
+      const breakdown = ids && ids.length > 1 ? `<small>${ids.map((t) => `${esc(typeLabel(t))} ${capacityOn(data!.units, index, pick!.date, [t]).free}`).join(' · ')}</small>` : '';
+      const single = ids?.length === 1 ? ids[0] : '';
+      const book = data.canBook && pick.date >= data.today ? `<button type="button" class="button button--primary button--small" data-book ${c.free === 0 ? 'disabled' : ''}>${single ? `Book ${esc(typeLabel(single))}` : 'Book'} from this day</button>` : '';
+      pop.hidden = false;
+      pop.innerHTML = `<span><b>${fmt(pick.date)}, ${esc(name)}</b>: ${c.free} of ${c.total} free${breakdown}</span><span class="cap-pop-actions"><button type="button" class="button button--outline button--small" data-plan>Open Day plan</button>${book}</span>`;
+    }
+
+    function fillFinder(d: Data) {
+      const select = finder.querySelector('[data-f="typeId"]') as HTMLSelectElement;
+      const offered = d.types.filter((t) => d.units.some((u) => u.type === t.id && isOffered(u)));
+      const keep = select.value;
+      select.innerHTML = offered.map((t) => `<option value="${esc(t.id)}">${esc(t.label)}</option>`).join('');
+      if (offered.some((t) => t.id === keep)) select.value = keep;
+      const from = finder.querySelector('[data-f="from"]') as HTMLInputElement;
+      from.min = d.today;
+      if (!from.value) from.value = d.today;
+    }
+
+    function render(next: Data) {
+      data = next;
+      root.hidden = false;
+      if (pick && !data.dates.includes(pick.date)) pick = null;
+      chipsEl.hidden = true;
+      if (data.view === 'month') renderMonth(data);
+      else renderWeek(data);
+      renderPop();
+      fillFinder(data);
+    }
+
+    async function check() {
+      if (!data) return;
+      const val = (f: string) => (finder.querySelector(`[data-f="${f}"]`) as HTMLInputElement).value;
+      const typeId = val('typeId');
+      const qty = Math.max(1, Number(val('qty')) || 1);
+      const nights = Math.max(1, Number(val('nights')) || 1);
+      const from = val('from');
+      if (!typeId || !from) {
+        fout.innerHTML = '<span class="no">Choose a type and a start date.</span>';
+        return;
+      }
+      const mine = ++finderSeq;
+      fout.textContent = 'Checking…';
+      const lookahead = 60;
+      const months = new Set<string>();
+      for (let n = 0; n <= nights + lookahead; n += 20) months.add(addDays(from, n).slice(0, 7));
+      months.add(addDays(from, nights + lookahead).slice(0, 7));
+      let bookings = data.bookings;
+      const load = (root as any).capacity?.fetchBookings as ((m: string[]) => Promise<any[]>) | undefined;
+      if (load) {
+        try {
+          bookings = await load([...months]);
+        } catch {
+          if (mine === finderSeq) fout.innerHTML = '<span class="no">Could not load the bookings. Try again.</span>';
+          return;
+        }
+      }
+      if (mine !== finderSeq) return;
+      const name = esc(typeLabel(typeId));
+      const r = findSpace({ units: data.units, bookings, typeId, qty, from, nights, lookahead }) as any;
+      if (r.ok) {
+        fout.innerHTML = `<b class="ok">Yes.</b> ${qty} × ${name} free for ${plural(nights, 'night')} from ${fmt(from)}. At least ${r.fewest} free each night.`;
+        return;
+      }
+      fout.innerHTML = `<b class="no">Not on those dates.</b> Only ${r.free} ${name} free on ${fmt(r.shortOn)}.${r.next ? ` Next start date that fits: ${fmt(r.next)}.` : ` Nothing fits in the next ${lookahead} days.`}`;
+    }
+
+    finder.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      void check();
+    });
+
+    root.addEventListener('click', (ev) => {
+      if (!data) return;
+      const el = ev.target as HTMLElement;
+      const chip = el.closest('[data-chip]') as HTMLElement | null;
+      if (chip) {
+        const id = chip.dataset.chip!;
+        if (id === 'all') monthTypes = [];
+        else monthTypes = monthTypes.includes(id) ? monthTypes.filter((t) => t !== id) : [...monthTypes, id];
+        pick = null;
+        render(data);
+        return;
+      }
+      const c = el.closest('.cap-cell[data-date]') as HTMLElement | null;
+      if (c) {
+        const typeIds = c.dataset.types ? c.dataset.types.split(',') : null;
+        const same = pick !== null && pick.date === c.dataset.date && JSON.stringify(pick.typeIds) === JSON.stringify(typeIds);
+        pick = same ? null : { date: c.dataset.date!, typeIds };
+        render(data);
+        return;
+      }
+      if (!pick) return;
+      if (el.closest('[data-plan]')) root.dispatchEvent(new CustomEvent('capacity:plan', { bubbles: true, detail: { date: pick.date } }));
+      else if (el.closest('[data-book]')) root.dispatchEvent(new CustomEvent('capacity:book', { bubbles: true, detail: { date: pick.date, typeId: pick.typeIds?.length === 1 ? pick.typeIds[0] : undefined } }));
+    });
+
+    (root as any).capacity = {
+      render,
+      hide() {
+        root.hidden = true;
+      },
+    };
+    root.dispatchEvent(new CustomEvent('capacity:ready'));
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-cap]').forEach(mount);
+</script>

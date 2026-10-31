@@ -656,13 +656,42 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `scripts/lib/stay-day-plan.mjs` (arrivals, departures, breakfast/dinner counts, food needs, admin notes) and sends
   the `tvc_stays_daily_plan` template to each number in `WHATSAPP_DAILY_PLAN_NUMBERS`. Sends nothing on a day with
   nobody on the farm; dormant until the template is approved.
-  The Stays page's Day view (`accommodation-calendar.astro`) shows the same plan above its per-tent rows,
+  The Stays page's Day view (`accommodation-calendar.astro`) shows the same plan above its by-tent tiles,
   built by the same `buildDayPlan`, with a Copy-as-message button (`planToMessageText`); in Day view it also
   fetches the previous month so a stay that checks out on the 1st is found.
   **By tent** (below the plan in Day view) is one tile per unit, grouped, from `scripts/lib/stay-tent-states.mjs`
   (tested): arriving, staying, leaving (free tonight but to be cleaned), a same-day turnover (both stays shown), closed (a
   tent closure, or a whole-farm closure unless the unit stays open), member-run, or free; a summary line counts the
   farm's own open tents in use and the free tents and beds. A tile opens its booking, a free one starts a new booking.
+- **Tent sheet (Stays page)** — `src/components/stays/TentSheet.astro` is what a tile on the Day view (or a row in the plan,
+  or the closure banner) opens: one tent, its guests and the stay it belongs to, and four small separate changes (edit this
+  tent's guests, change the dates, move to another tent, cancel or remove the tent) instead of the whole booking form, which
+  stays as the fallback ("Open the full booking"). A turnover tent can switch between the stay leaving and the one arriving;
+  a closure has its own variant (change dates, reopen); a view-only role sees it read-only. The rules are in
+  `scripts/lib/stay-tent-sheet.mjs` (tested): a guest already in the directory is sent by `personId` alone with their name
+  locked (the browser never has their mobile or email, and a rename would change the person everywhere), a new guest needs a
+  name and a mobile, a tent's capacity and the family rule apply, and a move only offers tents free on every night. Every
+  change posts the whole booking to the existing `POST /api/accommodation-admin/bookings/update` (a stay that has already
+  happened needs a reason); cancel is the page's own flow (the reason, whether to message the guests). No new endpoint.
+- **Capacity views (Stays page)** — Week and Month are capacity only: `src/components/stays/CapacityView.astro` draws one row
+  per accommodation type (Week) or a Monday-first calendar with type filter chips (Month), each night showing how many units
+  are free, tinted green to red by how full and one block per unit (a single bar above 12 units). Tapping a cell opens a bar
+  with the free count, "Open Day plan" and "Book from this day" (it names the type when one is picked, and the New-booking flow
+  then lists only that type's tents until "Show all types"). A "Can we fit a request?" finder (type, how many, from, nights)
+  loads the months it needs through the same `GET /api/accommodation-admin/bookings?month=` and says yes or the first short
+  night and the next start date that fits. The rules (what is free: on offer, not booked, not shut by a farm closure unless set
+  to stay open; how full; whether a request fits) are in `scripts/lib/stay-capacity.mjs` (tested). Who is in which tent is
+  only in the Day plan; the per-unit table and the bookings list are gone from Week and Month. No new endpoint.
+- **New-booking flow (Stays page)** — `src/components/stays/NewBookingFlow.astro` is the dialog behind "+ New booking" and a
+  day on the capacity views (or a free tile in Day view): five steps (what, when, where, who, review) that collapse to one-line answers. Creating
+  only; opening an existing booking still uses the page's own edit form. The rules are in
+  `scripts/lib/stay-booking-flow.mjs` (tested): which tents are free (taken by another booking or tent closure,
+  or shut by a farm closure unless set to stay open; member-run and offboarded units are left out), what each step
+  needs (mirroring `validateBookingInput`: a guest's name, a mobile for a new guest, a tent's capacity, the
+  family/solo rule, nothing in the past), and the exact `POST /api/accommodation-admin/bookings` payload. It reads the
+  units, the caller's allowed booking types and the bookings of the chosen dates from the same
+  `GET /api/accommodation-admin/bookings?month=` the page uses, finds a returning guest by mobile via
+  `guests/search`, and tells the page when it saved (`stays-booking:saved`) or needs sign-in. No new endpoint.
 - **`netlify/functions/stays-day-summary.mts`** — `POST /api/stays-day-summary` (`{date}`; `view` on the
   `accommodation` module, and only for roles that may see guest names, so `read_only` gets `summary: null`),
   behind the Day view's AI summary box. Reads that day's bookings itself, turns them into **anonymous facts**
