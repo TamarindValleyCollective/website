@@ -1,0 +1,1180 @@
+---
+// The "New booking" flow for the Stays page: a short stack of steps (what, when, where, who, review) that each collapse
+// to a one-line answer once done, in place of one long form. Creating only: editing an existing booking still opens the
+// page's own form. The rules (which tents are free, what each step needs, the exact save payload) are in
+// scripts/lib/stay-booking-flow.mjs and tested there; this draws them and talks to the booking API.
+//
+// The host page places it once, opens it with `root.newBooking.open({ tentId?, date? })` (a free cell passes both) and
+// listens on it for `stays-booking:saved` (reload the view), `stays-booking:unauthorized` / `stays-booking:forbidden`
+// (its sign-in gate). One flow per page: its elements are found inside its own root.
+interface Props {
+  events: Array<{ slug: string; title: string; date: string; nights: number }>;
+  members: string[];
+}
+const { events, members } = Astro.props;
+---
+
+<div id="nbf" class="nbf" data-nbf data-events={JSON.stringify(events)} data-members={JSON.stringify(members)} hidden>
+  <div class="nbf-backdrop" data-act="close"></div>
+  <div class="card nbf-panel" role="dialog" aria-modal="true" aria-labelledby="nbf-title">
+    <div class="nbf-head">
+      <h2 id="nbf-title" tabindex="-1">New booking</h2>
+      <button type="button" class="button button--icon" data-act="close" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true" focusable="false">
+          <path d="M6 6L18 18M18 6L6 18"></path>
+        </svg>
+      </button>
+    </div>
+    <div id="nbf-steps"></div>
+  </div>
+</div>
+
+<style is:global>
+  .nbf {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  .nbf-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  .nbf-panel {
+    position: relative;
+    width: 100%;
+    max-width: 640px;
+    max-height: 92vh;
+    overflow-y: auto;
+    padding: 0;
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  @media (min-width: 640px) {
+    .nbf {
+      align-items: center;
+    }
+
+    .nbf-panel {
+      border-radius: var(--radius);
+    }
+  }
+
+  .nbf-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 20px;
+    background: var(--tvc-white);
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .nbf-head h2 {
+    margin: 0;
+    font-size: var(--text-xl);
+  }
+
+  .nbf-step + .nbf-step {
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .nbf-sum {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+  }
+
+  .nbf-num {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1px solid var(--tvc-line);
+    background: var(--tvc-cream);
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-xs);
+    font-weight: 700;
+  }
+
+  .nbf-step.is-done .nbf-num {
+    background: var(--tvc-green);
+    border-color: var(--tvc-green);
+    color: var(--tvc-white);
+  }
+
+  .nbf-step.is-open .nbf-num {
+    border-color: var(--tvc-orange);
+    background: var(--tvc-orange-tint);
+    color: var(--tvc-orange-text);
+  }
+
+  .nbf-step.is-later {
+    opacity: 0.55;
+  }
+
+  .nbf-q {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+  }
+
+  .nbf-a {
+    min-width: 0;
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-sm);
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  .nbf-body {
+    padding: 4px 20px 18px 58px;
+  }
+
+  @media (max-width: 560px) {
+    .nbf-body {
+      padding-left: 20px;
+    }
+  }
+
+  .nbf-body label.nbf-label {
+    display: block;
+    margin: 0 0 4px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .nbf-body input[type='text'],
+  .nbf-body input[type='tel'],
+  .nbf-body input[type='email'],
+  .nbf-body select,
+  .nbf-body textarea {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 40px;
+    padding: 8px 10px;
+    font: inherit;
+    color: var(--tvc-ink);
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+  }
+
+  .nbf-body input:focus,
+  .nbf-body select:focus,
+  .nbf-body textarea:focus {
+    outline: none;
+    border-color: var(--tvc-orange);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--tvc-orange) 25%, transparent);
+  }
+
+  .nbf-stack > * + * {
+    margin-top: 12px;
+  }
+
+  .nbf-grid2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  @media (max-width: 560px) {
+    .nbf-grid2 {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .nbf-choices {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  @media (max-width: 560px) {
+    .nbf-choices {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .nbf-choice {
+    padding: 12px;
+    text-align: left;
+    font: inherit;
+    color: var(--tvc-ink);
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+
+  .nbf-choice b {
+    display: block;
+  }
+
+  .nbf-choice span {
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .nbf-choice[aria-pressed='true'],
+  .nbf-choice:hover:not(:disabled) {
+    border-color: var(--tvc-green);
+    background: var(--tvc-green-tint);
+  }
+
+  .nbf-choice:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .nbf-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: var(--text-base);
+  }
+
+  .nbf-check input {
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+    accent-color: var(--tvc-green);
+  }
+
+  .nbf-cal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-weight: 700;
+  }
+
+  .nbf-cal {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    max-width: 380px;
+  }
+
+  .nbf-dow {
+    padding: 4px 0;
+    text-align: center;
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+  }
+
+  .nbf-day {
+    aspect-ratio: 1;
+    min-height: 40px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--tvc-ink);
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+  }
+
+  .nbf-day:hover:not(:disabled) {
+    background: var(--tvc-cream);
+  }
+
+  .nbf-day:disabled {
+    color: var(--tvc-line-strong);
+    cursor: not-allowed;
+  }
+
+  .nbf-day.is-in {
+    background: var(--tvc-green-tint);
+    border-radius: 0;
+  }
+
+  .nbf-day.is-edge {
+    background: var(--tvc-green);
+    color: var(--tvc-white);
+  }
+
+  .nbf-day.is-today {
+    box-shadow: inset 0 0 0 1px var(--tvc-orange);
+  }
+
+  .nbf-readback {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: var(--radius-field);
+    background: var(--tvc-cream);
+    font-weight: 600;
+  }
+
+  .nbf-readback small {
+    display: block;
+    font-weight: 400;
+    color: var(--tvc-ink-soft);
+  }
+
+  .nbf-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .nbf-group {
+    margin: 14px 0 6px;
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tvc-ink-soft);
+  }
+
+  .nbf-group:first-child {
+    margin-top: 0;
+  }
+
+  .nbf-tents {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .nbf-tent {
+    min-height: 44px;
+    padding: 8px 12px;
+    text-align: left;
+    font: inherit;
+    color: var(--tvc-ink);
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    cursor: pointer;
+  }
+
+  .nbf-tent small {
+    display: block;
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+  }
+
+  .nbf-tent[aria-pressed='true'] {
+    background: var(--tvc-green);
+    border-color: var(--tvc-green);
+    color: var(--tvc-white);
+  }
+
+  .nbf-tent[aria-pressed='true'] small {
+    color: inherit;
+    opacity: 0.85;
+  }
+
+  .nbf-tent:disabled {
+    background: var(--tvc-cream);
+    border-style: dashed;
+    border-color: var(--tvc-line);
+    color: var(--tvc-ink-soft);
+    cursor: not-allowed;
+  }
+
+  .nbf-guest {
+    padding: 12px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-cream);
+  }
+
+  .nbf-guest + .nbf-guest {
+    margin-top: 10px;
+  }
+
+  .nbf-guest-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+
+  .nbf-match {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: var(--radius-field);
+    background: var(--tvc-green-tint);
+    font-size: var(--text-sm);
+  }
+
+  .nbf-match-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .nbf-match-row + .nbf-match-row {
+    margin-top: 6px;
+  }
+
+  .nbf-review {
+    padding: 14px;
+    border-radius: var(--radius);
+    background: var(--tvc-green-tint);
+  }
+
+  .nbf-review b {
+    font-size: var(--text-md);
+  }
+
+  .nbf-review div {
+    margin-top: 2px;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .nbf-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .nbf-link {
+    padding: 4px 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-weight: 600;
+    color: var(--tvc-green-dark);
+    cursor: pointer;
+  }
+
+  .nbf-link:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .nbf-hint {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .nbf-error {
+    margin: 12px 0 0;
+    padding: 10px 12px;
+    border-radius: var(--radius-field);
+    background: var(--tvc-orange-tint);
+    font-size: var(--text-sm);
+  }
+</style>
+
+<script>
+  import { TOKEN_KEY, askSheet, showToast } from '../../../scripts/lib/staff-client.mjs';
+  import { setBusy } from '../../../scripts/lib/busy.mjs';
+  import { normalizeMobileNumber } from '../../../scripts/lib/accommodation.mjs';
+  import { allowedKinds, bookableUnits, buildPayload, nightsBetween, nightsOf, stepProblem, unitAvailability } from '../../../scripts/lib/stay-booking-flow.mjs';
+
+  interface Unit {
+    id: string;
+    label: string;
+    shortLabel?: string;
+    group?: string;
+    type?: string;
+    capacity: number;
+    kind: string;
+    manager: string;
+    status: string;
+    ignoresFarmClosure?: boolean;
+  }
+  interface EventOption {
+    slug: string;
+    title: string;
+    date: string;
+    nights: number;
+  }
+  interface Match {
+    id: string;
+    ref: string;
+    name: string;
+  }
+  interface GuestRow {
+    key: number;
+    tentId: string;
+    name: string;
+    mobileNumber: string;
+    ageGroup: string;
+    gender: string;
+    email: string;
+    preferences: string;
+    personId?: string;
+    matchedName?: string;
+    matches?: Match[];
+    moreOpen?: boolean;
+  }
+  interface Flow {
+    kind: 'guests' | 'event' | 'block' | null;
+    memberStay: boolean;
+    member: string;
+    eventMode?: 'public' | 'private';
+    eventSlug: string;
+    eventTitle: string;
+    label: string;
+    exclusive: boolean;
+    wholeFarm: boolean;
+    reason: string;
+    startDate: string;
+    nights: number;
+    tentIds: string[];
+    guests: GuestRow[];
+    family: boolean;
+    note: string;
+  }
+
+  const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+  function mount(root: HTMLElement) {
+    const events = JSON.parse(root.dataset.events ?? '[]') as EventOption[];
+    const members = JSON.parse(root.dataset.members ?? '[]') as string[];
+    const stepsEl = root.querySelector('#nbf-steps') as HTMLElement;
+    const titleEl = root.querySelector('#nbf-title') as HTMLElement;
+
+    let units: Unit[] = [];
+    let allowedTypes: string[] | null = null;
+    let role = 'admin';
+    let availability = new Map<string, null | { reason: 'booked' | 'closed'; by: string | null }>();
+    let loading = '';
+    let error = '';
+    let step = 1;
+    let calMonth = '';
+    let noteOpen = false;
+    let preselected = false; // a tent was chosen on the grid, so the Where step is skipped when it is still free
+    let guestSeq = 0;
+    let state = fresh();
+    const lookupTimers = new Map<number, ReturnType<typeof setTimeout>>();
+
+    function fresh(): Flow {
+      return { kind: null, memberStay: false, member: '', eventMode: undefined, eventSlug: '', eventTitle: '', label: '', exclusive: false, wholeFarm: false, reason: '', startDate: '', nights: 0, tentIds: [], guests: [], family: false, note: '' };
+    }
+
+    const today = () => new Date().toLocaleDateString('en-CA');
+    const ctx = () => ({ units, today: today(), allowedTypes });
+    const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+    const fmt = (d: string, opts: Intl.DateTimeFormatOptions = { weekday: 'short', day: 'numeric', month: 'short' }) => {
+      const [y, m, day] = d.split('-').map(Number);
+      return new Date(Date.UTC(y, m - 1, day)).toLocaleDateString('en-IN', { ...opts, timeZone: 'UTC' });
+    };
+    const addDays = (d: string, n: number) => {
+      const [y, m, day] = d.split('-').map(Number);
+      return new Date(Date.UTC(y, m - 1, day + n)).toISOString().slice(0, 10);
+    };
+    // Empty until a check-in day is chosen (there is nothing to add nights to).
+    const checkOut = () => (state.startDate ? addDays(state.startDate, state.nights) : '');
+    const unit = (id: string) => units.find((u) => u.id === id);
+    const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+    async function authedFetch(input: string, init: RequestInit = {}): Promise<Response> {
+      const token = sessionStorage.getItem(TOKEN_KEY);
+      const res = await fetch(input, { ...init, headers: { ...init.headers, authorization: `Bearer ${token ?? ''}` } });
+      if (res.status === 401) {
+        root.dispatchEvent(new CustomEvent('stays-booking:unauthorized', { bubbles: true }));
+        throw new Error('Unauthorized');
+      }
+      if (res.status === 403) {
+        root.dispatchEvent(new CustomEvent('stays-booking:forbidden', { bubbles: true }));
+        throw new Error('Forbidden');
+      }
+      return res;
+    }
+    const handled = (err: unknown) => err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
+
+    // The booking API answers a month at a time, with the units, their types and what this caller may do.
+    async function fetchMonths(months: string[]) {
+      const responses = await Promise.all(months.map((m) => authedFetch(`/api/accommodation-admin/bookings?month=${m}`)));
+      if (responses.some((r) => !r.ok)) throw new Error('load');
+      return (await Promise.all(responses.map((r) => r.json()))) as Array<{ units: Unit[]; types: Array<{ id: string; label: string }>; bookings: any[]; access: { role: string; allowedTypes: string[] | null } }>;
+    }
+
+    function applyServer(body: Awaited<ReturnType<typeof fetchMonths>>[number]) {
+      const types = body.types ?? [];
+      units = (body.units ?? []).map((u) => ({
+        ...u,
+        status: u.status || 'rentable',
+        manager: u.manager || 'tvc',
+        ignoresFarmClosure: u.ignoresFarmClosure ?? false,
+        group: u.group || types.find((t) => t.id === u.type)?.label || 'Other',
+      }));
+      allowedTypes = body.access?.allowedTypes ?? null;
+      role = body.access?.role ?? 'admin';
+    }
+
+    // ---- open / close ----
+
+    async function open(opts: { tentId?: string; date?: string } = {}) {
+      state = fresh();
+      step = 1;
+      error = '';
+      noteOpen = false;
+      preselected = false;
+      guestSeq = 0;
+      availability = new Map();
+      root.hidden = false;
+      loading = 'Loading…';
+      render();
+      titleEl.focus();
+      try {
+        const [first] = await fetchMonths([(opts.date ?? today()).slice(0, 7)]);
+        applyServer(first);
+      } catch (err) {
+        loading = '';
+        if (!handled(err)) error = 'Could not load the farm. Close this and try again.';
+        render();
+        return;
+      }
+      loading = '';
+      if (role === 'viewer') {
+        close(true);
+        showToast('View-only access: you cannot create bookings.');
+        return;
+      }
+      if (opts.tentId && opts.date && opts.date >= today() && allowedKinds(allowedTypes).casualStay) {
+        // A free cell on the grid: a guest stay on that tent and night. The dates are still the first thing to confirm.
+        state.kind = 'guests';
+        state.tentIds = [opts.tentId];
+        state.startDate = opts.date;
+        state.nights = 1;
+        calMonth = opts.date.slice(0, 7);
+        preselected = true;
+        step = 2;
+      }
+      render();
+    }
+
+    async function close(force = false) {
+      if (!force && state.kind && !(await askSheet({ title: 'Discard this booking?', actions: [{ label: 'Discard', value: true, kind: 'danger' }, { label: 'Keep editing', value: false }] }))) return;
+      root.hidden = true;
+      for (const t of lookupTimers.values()) clearTimeout(t);
+      lookupTimers.clear();
+    }
+
+    // ---- steps ----
+
+    const detailsTitle = () => (state.kind === 'block' ? 'Why?' : state.kind === 'event' ? 'Details' : 'Who is staying?');
+    const titles = () => ['What is this?', 'When?', 'Where?', detailsTitle(), 'Review'];
+
+    function kindLabel(): string {
+      if (state.kind === 'guests') return state.memberStay ? `Member stay${state.member ? ` · ${state.member}` : ''}` : 'Guests';
+      if (state.kind === 'event') return state.eventMode === 'public' ? state.eventTitle || 'Public event' : 'Private event';
+      return state.kind === 'block' ? 'Block out' : '';
+    }
+    const datesLabel = () => (state.startDate && state.nights ? `${fmt(state.startDate)} → ${fmt(checkOut())} · ${plural(state.nights, 'night')}` : '');
+    const whereLabel = () => {
+      if (state.kind === 'block' && state.wholeFarm) return 'Whole farm';
+      if (state.kind === 'event' && state.exclusive && !state.tentIds.length) return 'Whole farm, exclusive';
+      return state.tentIds.map((id) => unit(id)?.label ?? id).join(', ');
+    };
+    const listedGuests = () => state.guests.filter((g) => g.name.trim() || g.personId);
+    function detailsLabel(): string {
+      if (state.kind === 'block') return state.reason;
+      const g = listedGuests();
+      const lead = g[0]?.name.trim() || g[0]?.matchedName || '';
+      const who = lead ? `${lead}${g.length > 1 ? ` + ${g.length - 1} more` : ''}` : '';
+      if (state.kind === 'event') return [state.eventMode === 'private' ? state.label : '', who].filter(Boolean).join(' · ') || 'No guest details';
+      return `${who}${state.family ? ' · family' : ''}`;
+    }
+    const summaryOf = (n: number) => [kindLabel, datesLabel, whereLabel, detailsLabel][n - 1]();
+
+    function render() {
+      const q = titles();
+      stepsEl.innerHTML =
+        (loading ? `<p class="nbf-hint" style="padding:14px 20px">${esc(loading)}</p>` : '') +
+        [1, 2, 3, 4, 5]
+          .map((n) => {
+            const open = n === step && !loading;
+            const done = n < step && !loading;
+            const cls = open ? 'is-open' : done ? 'is-done' : 'is-later';
+            return `<section class="nbf-step ${cls}"><div class="nbf-sum"><span class="nbf-num">${done ? '✓' : n}</span><span class="nbf-q">${q[n - 1]}</span>${
+              done ? `<span class="nbf-a">${esc(summaryOf(n))}</span><button type="button" class="nbf-link" data-act="goto" data-step="${n}">Change</button>` : ''
+            }</div>${open ? `<div class="nbf-body">${bodyOf(n)}${error ? `<p class="nbf-error" role="alert">${esc(error)}</p>` : ''}</div>` : ''}</section>`;
+          })
+          .join('');
+    }
+
+    function bodyOf(n: number): string {
+      if (n === 1) return body1();
+      if (n === 2) return body2();
+      if (n === 3) return body3();
+      if (n === 4) return body4();
+      return body5();
+    }
+
+    // 1. What is this?
+    function body1(): string {
+      const k = allowedKinds(allowedTypes);
+      const choice = (v: string, title: string, sub: string, ok: boolean) =>
+        `<button type="button" class="nbf-choice" data-act="kind" data-v="${v}" aria-pressed="${state.kind === v}" ${ok ? '' : 'disabled title="Your role cannot add this"'}><b>${title}</b><span>${sub}</span></button>`;
+      let more = '';
+      if (state.kind === 'guests' && k.memberStay) {
+        more = `<label class="nbf-check" style="margin-top:12px"><input type="checkbox" data-act="member-toggle" ${state.memberStay ? 'checked' : ''}> This is a member stay</label>`;
+        if (state.memberStay) more += `<div style="margin-top:8px"><label class="nbf-label" for="nbf-member">Member</label><select id="nbf-member" data-bind="member"><option value="">Choose a member</option>${members.map((m) => `<option ${m === state.member ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select></div>`;
+      }
+      if (state.kind === 'event') {
+        const opts = [
+          ...(k.publicEvent ? events.map((e) => `<option value="${esc(e.slug)}" ${state.eventMode === 'public' && state.eventSlug === e.slug ? 'selected' : ''}>${fmt(e.date, { day: 'numeric', month: 'short' })} · ${esc(e.title)}</option>`) : []),
+          ...(k.privateEvent ? [`<option value="" ${state.eventMode === 'private' ? 'selected' : ''}>Private event (retreat)</option>`] : []),
+        ];
+        more = `<div style="margin-top:12px"><label class="nbf-label" for="nbf-event">Which event?</label><select id="nbf-event" data-act="event-select">${opts.join('')}</select></div>`;
+      }
+      return `<div class="nbf-choices">
+        ${choice('guests', 'Guests', 'Someone is staying with us', k.guests)}
+        ${choice('event', 'Event', 'A public or private group', k.event)}
+        ${choice('block', 'Block out', 'Repair, vacation, closed', k.block)}
+      </div>${more}<div class="nbf-actions"><button type="button" class="button button--primary" data-act="next">Continue</button></div>`;
+    }
+
+    // 2. When?
+    function body2(): string {
+      if (!calMonth) calMonth = (state.startDate || today()).slice(0, 7);
+      const [y, m] = calMonth.split('-').map(Number);
+      const first = new Date(Date.UTC(y, m - 1, 1));
+      const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+      const out = checkOut();
+      let cells = WEEKDAYS.map((d) => `<div class="nbf-dow">${d}</div>`).join('') + '<span></span>'.repeat(first.getUTCDay());
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = `${calMonth}-${String(d).padStart(2, '0')}`;
+        const edge = date === state.startDate || (state.nights > 0 && date === out);
+        const inside = state.nights > 0 && date > state.startDate && date < out;
+        cells += `<button type="button" class="nbf-day${edge ? ' is-edge' : inside ? ' is-in' : ''}${date === today() ? ' is-today' : ''}" data-act="day" data-date="${date}" ${date < today() ? 'disabled' : ''} aria-label="${fmt(date, { weekday: 'long', day: 'numeric', month: 'long' })}">${d}</button>`;
+      }
+      const prompt = !state.startDate ? 'Tap the check-in day' : state.nights === 0 ? 'Now tap the check-out day' : '';
+      const publicNote = state.kind === 'event' && state.eventMode === 'public' ? '<p class="nbf-hint" style="margin-top:8px">These are the event’s own dates. Change them only if you need to.</p>' : '';
+      return `<div class="nbf-cal-head"><button type="button" class="button button--outline button--small" data-act="month" data-d="-1" aria-label="Previous month">‹</button><span>${fmt(`${calMonth}-01`, { month: 'long', year: 'numeric' })}</span><button type="button" class="button button--outline button--small" data-act="month" data-d="1" aria-label="Next month">›</button></div>
+        <div class="nbf-cal">${cells}</div>
+        ${prompt ? `<p class="nbf-hint" style="margin-top:8px">${prompt}</p>` : ''}
+        <div class="nbf-chips"><button type="button" class="button button--outline button--small" data-act="tonight">Tonight</button><button type="button" class="button button--outline button--small" data-act="clear-dates">Clear</button></div>
+        ${state.nights > 0 ? `<div class="nbf-readback">${fmt(state.startDate)} → ${fmt(out)}<small>${plural(state.nights, 'night')} · check-out on ${fmt(out)}</small></div>` : ''}
+        ${publicNote}
+        <div class="nbf-actions"><button type="button" class="button button--primary" data-act="next">Continue</button></div>`;
+    }
+
+    // 3. Where?
+    function body3(): string {
+      const bookable = bookableUnits(units) as Unit[];
+      const groups: string[] = [];
+      for (const u of bookable) if (!groups.includes(u.group!)) groups.push(u.group!);
+      const tentsHtml = groups
+        .map((g) => {
+          const items = bookable.filter((u) => u.group === g);
+          return `<div class="nbf-group">${esc(g)}</div><div class="nbf-tents">${items
+            .map((u) => {
+              const why = availability.get(u.id) ?? null;
+              const taken = Boolean(why) || (state.kind === 'block' && state.wholeFarm);
+              const sub = why ? (why.reason === 'closed' ? `Closed${why.by ? ` · ${esc(why.by)}` : ''}` : `Taken${why.by ? ` · ${esc(why.by)}` : ''}`) : `Sleeps ${u.capacity}`;
+              return `<button type="button" class="nbf-tent" data-act="tent" data-id="${esc(u.id)}" aria-pressed="${state.tentIds.includes(u.id)}" ${taken ? 'disabled' : ''}>${esc(u.shortLabel || u.label)}<small>${sub}</small></button>`;
+            })
+            .join('')}</div>`;
+        })
+        .join('');
+      const farm =
+        state.kind === 'block'
+          ? `<label class="nbf-check" style="margin-top:14px"><input type="checkbox" data-act="whole-farm" ${state.wholeFarm ? 'checked' : ''}> Close the whole farm (Farm on Vacation)</label>`
+          : state.kind === 'event' && state.eventMode === 'private'
+            ? `<label class="nbf-check" style="margin-top:14px"><input type="checkbox" data-act="exclusive" ${state.exclusive ? 'checked' : ''}> Exclusive use: blocks the whole farm publicly, even if not every tent is chosen</label>`
+            : '';
+      return `<p class="nbf-hint" style="margin-bottom:10px">Free tents for ${fmt(state.startDate)} → ${fmt(checkOut())}. A taken tent is greyed out, so a clash cannot happen.</p>${tentsHtml}${farm}<div class="nbf-actions"><button type="button" class="button button--primary" data-act="next">Continue</button></div>`;
+    }
+
+    // 4. Who / Details / Why
+    function body4(): string {
+      if (state.kind === 'block') return `<label class="nbf-label" for="nbf-reason">Why is it closed?</label><input type="text" id="nbf-reason" data-bind="reason" value="${esc(state.reason)}" placeholder="e.g. Roof repair"><div class="nbf-actions"><button type="button" class="button button--primary" data-act="next">Continue</button></div>`;
+      const isEvent = state.kind === 'event';
+      const label = isEvent && state.eventMode === 'private' ? `<div style="margin-bottom:12px"><label class="nbf-label" for="nbf-label">Label <span class="nbf-hint">(for you only, e.g. who is coming)</span></label><input type="text" id="nbf-label" data-bind="label" value="${esc(state.label)}"></div>` : '';
+      const full = !state.tentIds.some((id) => guestsIn(id) < (unit(id)?.capacity ?? 0));
+      return `${label}${isEvent ? '<p class="nbf-hint" style="margin-bottom:8px">Guest details are optional for an event.</p>' : ''}${state.guests.map((g, i) => guestHtml(g, i)).join('')}
+        <div class="nbf-actions" style="margin-top:10px"><button type="button" class="nbf-link" data-act="add-guest" ${full || state.family ? 'disabled' : ''}>+ Add ${state.guests.length ? 'another guest' : 'a guest'}</button>
+        ${isEvent ? '' : `<label class="nbf-check" style="margin:0"><input type="checkbox" data-act="family" ${state.family ? 'checked' : ''}> Family booking</label>`}</div>
+        ${state.family ? '<p class="nbf-hint">A family booking counts one booking per tent, so only one guest is listed in each.</p>' : ''}
+        <div class="nbf-actions"><button type="button" class="button button--primary" data-act="next">Continue</button></div>`;
+    }
+
+    const guestsIn = (tentId: string) => state.guests.filter((g) => g.tentId === tentId).length;
+
+    function guestHtml(g: GuestRow, i: number): string {
+      const multi = state.tentIds.length > 1;
+      const known = g.personId
+        ? `<div class="nbf-match"><div class="nbf-match-row"><span><b>${esc(g.matchedName ?? g.name)}</b> · returning guest, number on file</span><button type="button" class="nbf-link" data-act="not-them" data-k="${g.key}">Not them</button></div></div>`
+        : '';
+      const fields = g.personId
+        ? ''
+        : `<div class="nbf-grid2"><div><label class="nbf-label" for="nbf-m-${g.key}">Mobile</label><input type="tel" inputmode="tel" id="nbf-m-${g.key}" data-guest="${g.key}" data-field="mobileNumber" value="${esc(g.mobileNumber)}" placeholder="98450 12345" autocomplete="off"></div>
+          <div><label class="nbf-label" for="nbf-n-${g.key}">Name</label><input type="text" id="nbf-n-${g.key}" data-guest="${g.key}" data-field="name" value="${esc(g.name)}" autocomplete="off"></div></div><div data-matches="${g.key}">${matchesHtml(g)}</div>`;
+      const tent = multi ? `<div style="margin-top:8px"><label class="nbf-label" for="nbf-t-${g.key}">Tent</label><select id="nbf-t-${g.key}" data-guest="${g.key}" data-field="tentId">${state.tentIds.map((id) => `<option value="${esc(id)}" ${id === g.tentId ? 'selected' : ''}>${esc(unit(id)?.label ?? id)}</option>`).join('')}</select></div>` : '';
+      const more = g.moreOpen
+        ? `<div class="nbf-grid2" style="margin-top:8px"><div><label class="nbf-label" for="nbf-a-${g.key}">Age</label><select id="nbf-a-${g.key}" data-guest="${g.key}" data-field="ageGroup"><option ${g.ageGroup === 'Adult' ? 'selected' : ''}>Adult</option><option ${g.ageGroup === 'Child' ? 'selected' : ''}>Child</option></select></div>
+          <div><label class="nbf-label" for="nbf-g-${g.key}">Gender</label><select id="nbf-g-${g.key}" data-guest="${g.key}" data-field="gender">${['NA', 'Female', 'Male'].map((v) => `<option value="${v}" ${g.gender === v ? 'selected' : ''}>${v === 'NA' ? 'Unspecified' : v}</option>`).join('')}</select></div>
+          <div><label class="nbf-label" for="nbf-e-${g.key}">Email</label><input type="email" id="nbf-e-${g.key}" data-guest="${g.key}" data-field="email" value="${esc(g.email)}" placeholder="Optional"></div>
+          <div><label class="nbf-label" for="nbf-p-${g.key}">Preferences / allergies</label><input type="text" id="nbf-p-${g.key}" data-guest="${g.key}" data-field="preferences" value="${esc(g.preferences)}"></div></div>`
+        : '';
+      return `<div class="nbf-guest"><div class="nbf-guest-head"><span>${i === 0 && state.kind === 'guests' ? 'Lead guest' : `Guest ${i + 1}`}</span>${i > 0 || state.kind === 'event' ? `<button type="button" class="nbf-link" data-act="rm-guest" data-k="${g.key}">Remove</button>` : ''}</div>${known}${fields}${tent}
+        <button type="button" class="nbf-link" style="margin-top:8px" data-act="more" data-k="${g.key}">${g.moreOpen ? '− Hide' : '+'} Age, gender, email, allergies</button>${more}</div>`;
+    }
+
+    function matchesHtml(g: GuestRow): string {
+      if (!g.matches?.length) return '';
+      return `<div class="nbf-match">${g.matches
+        .map((m) => `<div class="nbf-match-row"><span><b>${esc(m.name)}</b> already has this number${m.ref ? ` (${esc(m.ref)})` : ''}</span><button type="button" class="nbf-link" data-act="use-match" data-k="${g.key}" data-id="${esc(m.id)}" data-name="${esc(m.name)}">Use this guest</button></div>`)
+        .join('')}<div class="nbf-match-row"><span>Someone else on the same number?</span><button type="button" class="nbf-link" data-act="no-match" data-k="${g.key}">Different person</button></div></div>`;
+    }
+
+    // 5. Review
+    function body5(): string {
+      const lines = [datesLabel(), whereLabel(), detailsLabel()].filter(Boolean);
+      return `<div class="nbf-review"><b>${esc(kindLabel())}</b>${lines.map((l) => `<div>${esc(l)}</div>`).join('')}</div>
+        <div style="margin-top:12px">${noteOpen ? `<label class="nbf-label" for="nbf-note">Note <span class="nbf-hint">(admin-only, never shown publicly)</span></label><textarea id="nbf-note" rows="2" data-bind="note">${esc(state.note)}</textarea>` : '<button type="button" class="nbf-link" data-act="add-note">+ Add a note</button>'}</div>
+        <div class="nbf-actions"><button type="button" class="button button--primary" data-act="save">Save booking</button><button type="button" class="button button--outline" data-act="start-over">Start over</button></div>`;
+    }
+
+    // ---- availability (step 3) ----
+
+    async function loadAvailability(): Promise<boolean> {
+      loading = 'Checking which tents are free…';
+      render();
+      try {
+        const lastNight = nightsOf(state.startDate, state.nights).slice(-1)[0];
+        const bodies = await fetchMonths([...new Set([state.startDate.slice(0, 7), lastNight.slice(0, 7)])]);
+        applyServer(bodies[0]);
+        const byId = new Map(bodies.flatMap((b) => b.bookings).map((b) => [b.id, b]));
+        availability = unitAvailability({ units: bookableUnits(units), bookings: [...byId.values()], startDate: state.startDate, nights: state.nights });
+        const lost = state.tentIds.filter((id) => availability.get(id));
+        state.tentIds = state.tentIds.filter((id) => !availability.get(id));
+        loading = '';
+        if (lost.length) error = `${lost.map((id) => unit(id)?.label ?? id).join(', ')} ${lost.length === 1 ? 'is' : 'are'} not free for those nights.`;
+        return lost.length === 0;
+      } catch (err) {
+        loading = '';
+        if (!handled(err)) error = 'Could not check the tents. Try again.';
+        return false;
+      }
+    }
+
+    // ---- moving between steps ----
+
+    function reconcileGuests() {
+      // Guests follow their tents: one whose tent was unchosen moves to the first chosen tent.
+      for (const g of state.guests) if (!state.tentIds.includes(g.tentId)) g.tentId = state.tentIds[0] ?? '';
+      if (state.kind === 'guests' && state.guests.length === 0 && state.tentIds.length) state.guests.push(newGuest(state.tentIds[0]));
+    }
+
+    function newGuest(tentId: string): GuestRow {
+      const lead = state.guests[0];
+      // Another person in the same booking usually shares the lead's number (the directory allows that).
+      return { key: ++guestSeq, tentId, name: '', mobileNumber: lead && !lead.personId ? lead.mobileNumber : '', ageGroup: 'Adult', gender: 'NA', email: '', preferences: '' };
+    }
+
+    async function next() {
+      const problem = stepProblem(state, step as 1 | 2 | 3 | 4, ctx());
+      if (problem) {
+        error = problem;
+        render();
+        return;
+      }
+      error = '';
+      if (step === 2) {
+        const ok = await loadAvailability();
+        // A tent chosen on the grid that is still free needs no second look.
+        step = preselected && ok && state.tentIds.length ? 4 : 3;
+        if (step === 4) reconcileGuests();
+        render();
+        return;
+      }
+      if (step === 3) reconcileGuests();
+      if (step === 1 && !state.startDate) calMonth = today().slice(0, 7);
+      step += 1;
+      render();
+    }
+
+    function pickDay(date: string) {
+      error = '';
+      if (!state.startDate || state.nights > 0 || date <= state.startDate) {
+        state.startDate = date;
+        state.nights = 0;
+      } else {
+        state.nights = nightsBetween(state.startDate, date);
+      }
+      render();
+    }
+
+    function setKind(kind: Flow['kind']) {
+      const k = allowedKinds(allowedTypes);
+      state.kind = kind;
+      state.memberStay = false;
+      error = '';
+      if (kind === 'event') {
+        const firstPublic = k.publicEvent ? events[0] : undefined;
+        if (firstPublic) selectEvent(firstPublic.slug);
+        else state.eventMode = 'private';
+      }
+      render();
+    }
+
+    function selectEvent(slug: string) {
+      const ev = events.find((e) => e.slug === slug);
+      if (!ev) {
+        state.eventMode = 'private';
+        state.eventSlug = '';
+        state.eventTitle = '';
+        return;
+      }
+      state.eventMode = 'public';
+      state.eventSlug = ev.slug;
+      state.eventTitle = ev.title;
+      state.startDate = ev.date;
+      state.nights = ev.nights;
+      calMonth = ev.date.slice(0, 7);
+    }
+
+    // ---- guests: a returning guest is found by their number ----
+
+    async function lookup(g: GuestRow) {
+      const normalized = normalizeMobileNumber(g.mobileNumber);
+      if (!normalized) {
+        g.matches = [];
+        paintMatches(g);
+        return;
+      }
+      try {
+        const res = await authedFetch(`/api/accommodation-admin/guests/search?mobile=${encodeURIComponent(normalized)}`);
+        if (!res.ok) return;
+        g.matches = ((await res.json()) as { matches: Match[] }).matches;
+        paintMatches(g);
+      } catch {
+        // a failed lookup just means no suggestion; the guest is saved as new
+      }
+    }
+
+    function paintMatches(g: GuestRow) {
+      const el = stepsEl.querySelector(`[data-matches="${g.key}"]`);
+      if (el) el.innerHTML = matchesHtml(g);
+    }
+
+    // ---- save ----
+
+    async function save(button: HTMLButtonElement) {
+      for (const n of [1, 2, 3, 4] as const) {
+        const problem = stepProblem(state, n, ctx());
+        if (problem) {
+          error = problem;
+          step = n;
+          render();
+          return;
+        }
+      }
+      error = '';
+      const done = setBusy(button, 'Saving…');
+      try {
+        const res = await authedFetch('/api/accommodation-admin/bookings', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(buildPayload(state, units)) });
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) {
+          error = data.error ?? 'Could not save. Try again.';
+          // Someone else took a tent while this was open: back to the tents, with the list refreshed.
+          if (res.status === 409) {
+            step = 3;
+            await loadAvailability();
+          }
+          render();
+          return;
+        }
+        close(true);
+        showToast('Booking saved');
+        root.dispatchEvent(new CustomEvent('stays-booking:saved', { bubbles: true }));
+      } catch (err) {
+        if (!handled(err)) {
+          error = 'Could not save. Try again.';
+          render();
+        }
+      } finally {
+        done();
+      }
+    }
+
+    // ---- events ----
+
+    root.addEventListener('click', (ev) => {
+      const el = (ev.target as HTMLElement).closest<HTMLElement>('[data-act]');
+      if (!el || el instanceof HTMLInputElement || el instanceof HTMLSelectElement) return;
+      const act = el.dataset.act;
+      const key = Number(el.dataset.k);
+      const guest = state.guests.find((g) => g.key === key);
+      switch (act) {
+        case 'close':
+          void close();
+          break;
+        case 'kind':
+          setKind(el.dataset.v as Flow['kind']);
+          break;
+        case 'next':
+          void next();
+          break;
+        case 'goto':
+          step = Number(el.dataset.step);
+          error = '';
+          render();
+          break;
+        case 'day':
+          pickDay(el.dataset.date!);
+          break;
+        case 'month': {
+          const [y, m] = calMonth.split('-').map(Number);
+          calMonth = new Date(Date.UTC(y, m - 1 + Number(el.dataset.d), 1)).toISOString().slice(0, 7);
+          render();
+          break;
+        }
+        case 'tonight':
+          state.startDate = today();
+          state.nights = 1;
+          calMonth = today().slice(0, 7);
+          error = '';
+          render();
+          break;
+        case 'clear-dates':
+          state.startDate = '';
+          state.nights = 0;
+          render();
+          break;
+        case 'tent': {
+          const id = el.dataset.id!;
+          state.tentIds = state.tentIds.includes(id) ? state.tentIds.filter((t) => t !== id) : [...state.tentIds, id];
+          preselected = false;
+          error = '';
+          render();
+          break;
+        }
+        case 'add-guest': {
+          const room = state.tentIds.find((id) => guestsIn(id) < (unit(id)?.capacity ?? 0)) ?? state.tentIds[0];
+          if (room) state.guests.push(newGuest(room));
+          render();
+          break;
+        }
+        case 'rm-guest':
+          state.guests = state.guests.filter((g) => g.key !== key);
+          render();
+          break;
+        case 'more':
+          if (guest) guest.moreOpen = !guest.moreOpen;
+          render();
+          break;
+        case 'use-match':
+          if (guest) {
+            guest.personId = el.dataset.id;
+            guest.matchedName = el.dataset.name;
+            guest.name = el.dataset.name ?? guest.name;
+            // The number is already on file; sending it again would replace it.
+            guest.mobileNumber = '';
+            guest.matches = [];
+          }
+          render();
+          break;
+        case 'no-match':
+          if (guest) guest.matches = [];
+          render();
+          break;
+        case 'not-them':
+          if (guest) {
+            guest.personId = undefined;
+            guest.matchedName = undefined;
+            guest.name = '';
+          }
+          render();
+          break;
+        case 'add-note':
+          noteOpen = true;
+          render();
+          (root.querySelector('#nbf-note') as HTMLElement | null)?.focus();
+          break;
+        case 'start-over':
+          state = fresh();
+          step = 1;
+          error = '';
+          noteOpen = false;
+          preselected = false;
+          render();
+          break;
+        case 'save':
+          void save(el as HTMLButtonElement);
+          break;
+      }
+    });
+
+    // Typing updates the answers without redrawing (a redraw would lose the cursor); choices redraw.
+    root.addEventListener('input', (ev) => {
+      const el = ev.target as HTMLInputElement;
+      if (el.dataset.bind) {
+        (state as unknown as Record<string, string>)[el.dataset.bind] = el.value;
+        return;
+      }
+      if (el.dataset.guest && el.dataset.field) {
+        const g = state.guests.find((x) => x.key === Number(el.dataset.guest));
+        if (!g) return;
+        (g as unknown as Record<string, string>)[el.dataset.field] = el.value;
+        if (el.dataset.field === 'mobileNumber') {
+          clearTimeout(lookupTimers.get(g.key));
+          lookupTimers.set(g.key, setTimeout(() => void lookup(g), 450));
+        }
+      }
+    });
+
+    root.addEventListener('change', (ev) => {
+      const el = ev.target as HTMLInputElement;
+      switch (el.dataset.act) {
+        case 'member-toggle':
+          state.memberStay = el.checked;
+          if (!el.checked) state.member = '';
+          render();
+          return;
+        case 'event-select':
+          selectEvent(el.value);
+          render();
+          return;
+        case 'whole-farm':
+          state.wholeFarm = el.checked;
+          if (el.checked) state.tentIds = [];
+          render();
+          return;
+        case 'exclusive':
+          state.exclusive = el.checked;
+          render();
+          return;
+        case 'family':
+          state.family = el.checked;
+          render();
+          return;
+      }
+      if (el.dataset.guest && el.dataset.field === 'tentId') {
+        const g = state.guests.find((x) => x.key === Number(el.dataset.guest));
+        if (g) g.tentId = el.value;
+        render();
+      }
+    });
+
+    document.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape' && !root.hidden) void close();
+    });
+
+    (root as any).newBooking = { open };
+    root.dispatchEvent(new CustomEvent('stays-booking:ready'));
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-nbf]').forEach(mount);
+</script>

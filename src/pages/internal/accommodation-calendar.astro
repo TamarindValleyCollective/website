@@ -11,6 +11,7 @@
 import StaffLayout from '../../layouts/StaffLayout.astro';
 import SignInGate from '../../components/SignInGate.astro';
 import WhatsAppInbox from '../../components/whatsapp/WhatsAppInbox.astro';
+import NewBookingFlow from '../../components/stays/NewBookingFlow.astro';
 import { getCollection } from 'astro:content';
 import { ACCOMMODATION_UNITS, ACCOMMODATION_TYPES } from '../../../scripts/lib/accommodation.mjs';
 import { durationDays } from '../../utils/events';
@@ -184,6 +185,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
           </form>
         </div>
       </div>
+
+      <NewBookingFlow events={allEvents} members={memberNames} />
 
       <div id="wa-modal" class="booking-modal" hidden>
         <div id="wa-modal-backdrop" class="booking-modal-backdrop"></div>
@@ -3685,23 +3688,21 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   // never start in the past (the same rule resetForm's own `min` already
   // enforces for manual date entry); backfilling a historical booking is
   // only ever done by editing an existing one, never by creating a new one.
+  // New bookings go through the step-by-step flow (components/stays/NewBookingFlow.astro); the form below is now only
+  // for opening an existing booking to edit or cancel it.
+  const newFlow = document.querySelector('[data-nbf]') as HTMLElement;
+  const newFlowControls = () => (newFlow as any).newBooking as { open(opts?: { tentId?: string; date?: string }): Promise<void> } | undefined;
+
   function startNewBookingAt(tentId: string, date: string) {
-    resetForm();
-    startInput.value = date;
-    syncStartDateEmptyState();
-    handleDateOrNightsChange();
-    const option = tentsContainer.querySelector<HTMLElement>(`.tent-option[data-tent-id="${tentId}"]`);
-    const unit = UNITS.find((u) => u.id === tentId);
-    const checkbox = option?.querySelector<HTMLInputElement>('.tent-checkbox');
-    if (option && unit && checkbox && !checkbox.disabled) {
-      if (wantsGuestFields()) activateGuestTent(option, unit);
-      else {
-        checkbox.checked = true;
-        checkbox.dispatchEvent(new Event('change'));
-      }
-    }
-    openBookingModal();
+    void newFlowControls()?.open({ tentId, date });
   }
+
+  newFlow.addEventListener('stays-booking:saved', () => void loadView());
+  newFlow.addEventListener('stays-booking:unauthorized', () => {
+    clearToken();
+    showGate('Your session expired — sign in again.');
+  });
+  newFlow.addEventListener('stays-booking:forbidden', () => showForbidden(getToken() ?? ''));
 
   function renderBookingList() {
     bookingListHeading.textContent = bookingListHeadingLabel();
@@ -4030,10 +4031,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     closeBookingModal();
   });
 
-  newBookingBtn.addEventListener('click', () => {
-    resetForm();
-    openBookingModal();
-  });
+  newBookingBtn.addEventListener('click', () => void newFlowControls()?.open());
 
   bookingModalBackdrop.addEventListener('click', attemptCloseModal);
 

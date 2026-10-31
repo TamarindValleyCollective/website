@@ -656,13 +656,23 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `scripts/lib/stay-day-plan.mjs` (arrivals, departures, breakfast/dinner counts, food needs, admin notes) and sends
   the `tvc_stays_daily_plan` template to each number in `WHATSAPP_DAILY_PLAN_NUMBERS`. Sends nothing on a day with
   nobody on the farm; dormant until the template is approved.
-  The Stays page's Day view (`accommodation-calendar.astro`) shows the same plan above its per-tent rows,
+  The Stays page's Day view (`accommodation-calendar.astro`) shows the same plan above its by-tent tiles,
   built by the same `buildDayPlan`, with a Copy-as-message button (`planToMessageText`); in Day view it also
   fetches the previous month so a stay that checks out on the 1st is found.
   **By tent** (below the plan in Day view) is one tile per unit, grouped, from `scripts/lib/stay-tent-states.mjs`
   (tested): arriving, staying, leaving (free tonight but to be cleaned), a same-day turnover (both stays shown), closed (a
   tent closure, or a whole-farm closure unless the unit stays open), member-run, or free; a summary line counts the
   farm's own open tents in use and the free tents and beds. A tile opens its booking, a free one starts a new booking.
+- **New-booking flow (Stays page)** — `src/components/stays/NewBookingFlow.astro` is the dialog behind "+ New booking" and a
+  tap on a free grid cell: five steps (what, when, where, who, review) that collapse to one-line answers. Creating
+  only; opening an existing booking still uses the page's own edit form. The rules are in
+  `scripts/lib/stay-booking-flow.mjs` (tested): which tents are free (taken by another booking or tent closure,
+  or shut by a farm closure unless set to stay open; member-run and offboarded units are left out), what each step
+  needs (mirroring `validateBookingInput`: a guest's name, a mobile for a new guest, a tent's capacity, the
+  family/solo rule, nothing in the past), and the exact `POST /api/accommodation-admin/bookings` payload. It reads the
+  units, the caller's allowed booking types and the bookings of the chosen dates from the same
+  `GET /api/accommodation-admin/bookings?month=` the page uses, finds a returning guest by mobile via
+  `guests/search`, and tells the page when it saved (`stays-booking:saved`) or needs sign-in. No new endpoint.
 - **`netlify/functions/stays-day-summary.mts`** — `POST /api/stays-day-summary` (`{date}`; `view` on the
   `accommodation` module, and only for roles that may see guest names, so `read_only` gets `summary: null`),
   behind the Day view's AI summary box. Reads that day's bookings itself, turns them into **anonymous facts**
