@@ -350,3 +350,24 @@ Header: `Stay allocation` · Footer: `TVC website · internal alert`
 Guests with a mobile or email on file were messaged from the accommodation calendar.
 ```
 Samples: `confirmed` · `Asha Rao` · `1 Nov 2026 to 3 Nov 2026` · `Asha (Malabar Hut Fixed Tent (N)), Ravi (Banyan Hut Fixed Tent) - confirmed`
+
+## Daily stays plan (2026-10-31)
+
+One internal UTILITY template, sent every morning at 06:30 IST by `netlify/functions/whatsapp-stays-daily-plan.mts`
+to the numbers in `WHATSAPP_DAILY_PLAN_NUMBERS` (comma-separated). Add the name to `WHATSAPP_APPROVED_TEMPLATES` only
+once Meta approves it. Nothing is sent on a day with nobody on the farm. Every variable is one line (Meta rejects
+newlines inside a variable); the builder is `scripts/lib/stay-day-plan.mjs`.
+
+### `tvc_stays_daily_plan`
+Header: `Stays today` · Footer: `TVC website · internal alert`
+```
+☀️ Good morning! Here's the farm stays plan for *{{1}}*.
+
+🧳 *Arriving:* {{2}}
+👋 *Leaving:* {{3}}
+🍽️ *Meals:* {{4}}
+📝 *Food needs and notes:* {{5}}
+
+The full day plan is on the Stays page in the admin portal.
+```
+Samples: `Friday, 6 November 2026` · `Asha Rao (2 guests, Jamun)` · `Menon (2 guests, Neem)` · `Breakfast 6, dinner 6` · `Asha Rao: Nut allergy; Asha Rao: Arrives after 8 pm`

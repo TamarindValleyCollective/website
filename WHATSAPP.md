@@ -71,6 +71,13 @@ exists for calendar guests, so WhatsApp goes to any guest with a mobile on file 
 so nothing WhatsApps until the names are approved and added to `WHATSAPP_APPROVED_TEMPLATES`
 (email works regardless). Submission text in `docs/whatsapp-templates.md`.
 
+**Daily stays plan (2026-10-31).** `tvc_stays_daily_plan` is WhatsApped every morning at 06:30 IST to
+`WHATSAPP_DAILY_PLAN_NUMBERS` (Madhavan): who arrives and leaves, breakfast and dinner counts, food needs and
+admin notes, from the same bookings the Stays page shows (`whatsapp-stays-daily-plan.mts`, plan logic in
+`scripts/lib/stay-day-plan.mjs`, tested). Skipped on a day with nobody on the farm. **Status: built, not yet
+submitted to Meta**, so nothing sends until the template is approved, added to `WHATSAPP_APPROVED_TEMPLATES`, and
+the number is set. Submission text in `docs/whatsapp-templates.md`.
+
 **Booking confirmation, reminders, referral attribution, auto-reply (2026-10-10).** Built, dormant
 until configured; details and Meta submission text in `docs/whatsapp-templates.md`.
 - **Two new templates with buttons**: `tvc_booking_confirmed` (sent when a payment is recorded,

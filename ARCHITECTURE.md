@@ -143,6 +143,7 @@ flowchart TD
         APIFN16["Netlify Function: /api/usage-admin<br/>Deployed with the usage dashboard"]
         APIFN17["Netlify Function: usage-alerts<br/>Scheduled (cron, hourly), no HTTP path"]
         APIFN18["Netlify Function: whatsapp-event-reminders<br/>Scheduled (cron, daily 09:00 IST), no HTTP path —<br/>built, dormant until template approved"]
+        APIFN_PLAN["Netlify Function: whatsapp-stays-daily-plan<br/>Scheduled (cron, daily 06:30 IST), no HTTP path —<br/>built, dormant until template approved"]
         BLOBS["Netlify Blobs<br/>'event-interest' store — one JSON record per<br/>past event id, {count, emails[]}, optimistic-<br/>concurrency writes. Reset via netlify blobs:delete<br/>event-interest &lt;id&gt;.<br/>'search-ai-rate-limit' store — per-IP window +<br/>daily Anthropic-fallback budget records.<br/>'chat-rate-limit' store — per-IP window +<br/>global daily message cap for /api/chat"]
         FORMS["Netlify Forms<br/>Captures /contact membership + general<br/>enquiries, /visit/host-an-event inquiries,<br/>/visit camping·day-visit·trekking inquiries,<br/>and event-interest submissions with an email"]
     end
@@ -307,6 +308,8 @@ flowchart TD
     APIFN17 -.->|"send alert digest"| RESEND
     APIFN18 -.->|"bookings for tomorrow,<br/>claim reminder"| SUPABASE
     APIFN18 -.->|"send tvc_event_reminder<br/>template"| WAMETA
+    APIFN_PLAN -.->|"today's stays"| SUPABASE
+    APIFN_PLAN -.->|"send tvc_stays_daily_plan<br/>template"| WAMETA
 
     classDef staticStyle fill:#e8f2ea,stroke:#17723b,color:#0f5029
     classDef netlifyStyle fill:#fdead3,stroke:#f78520,color:#9a5310
@@ -316,7 +319,7 @@ flowchart TD
     classDef ciStyle fill:#eef4fb,stroke:#3b6ea5,color:#1c3f5f
 
     class PAGES,INTERNALPAGE,INTERNALPAGE2,INTERNALPAGE3,INTERNALPAGE4,INTERNALPAGE5,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,STATIONCARD,CDN,POOLDASH,WHATSAPPDASH,ACCOMMODATIONDASH,EVENTPAYDASH,USAGEDASH,BOOKINGFORM,CANCELPAGE,APPROVEPAGE staticStyle
-    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_STATION,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,FUNC_SRC14,FUNC_SRC15,FUNC_SRC16,FUNC_SRC17,FUNC_SRC18,FUNC_SRC19,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN_STATION,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,APIFN14,APIFN15,APIFN16,APIFN17,APIFN18,APIFN19,APIFN20,BLOBS,FORMS,ANTHROPIC netlifyStyle
+    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_STATION,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,FUNC_SRC14,FUNC_SRC15,FUNC_SRC16,FUNC_SRC17,FUNC_SRC18,FUNC_SRC19,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN_STATION,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,APIFN14,APIFN15,APIFN16,APIFN17,APIFN18,APIFN19,APIFN20,APIFN_PLAN,BLOBS,FORMS,ANTHROPIC netlifyStyle
     class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,LINGERSYS,SUPABASE,SUPABASE_HA,HASSIST,GEMINI,TYPESAFE,RAZORPAY,RDAP externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL,SCRIPT_GSC localStyle
@@ -647,6 +650,12 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `whatsapp-webhook.mts` additionally stores Click-to-WhatsApp `referral` data on the conversation
   and, when `WHATSAPP_AUTOACK_ENABLED=true`, sends a rate-limited out-of-hours auto-reply
   (`lib/whatsapp-autoack.ts`). See `docs/whatsapp-templates.md`.
+- **`netlify/functions/whatsapp-stays-daily-plan.mts`** — scheduled function (Netlify cron,
+  `config.schedule = "0 1 * * *"`, i.e. 06:30 IST, no HTTP path). Reads today's and last month's
+  `accommodation_bookings` (TVC ERP Supabase, via `scripts/lib/accommodation-db.mjs`), builds the day plan with
+  `scripts/lib/stay-day-plan.mjs` (arrivals, departures, breakfast/dinner counts, food needs, admin notes) and sends
+  the `tvc_stays_daily_plan` template to each number in `WHATSAPP_DAILY_PLAN_NUMBERS`. Sends nothing on a day with
+  nobody on the farm; dormant until the template is approved.
 - **`netlify/functions/accommodation-admin.mts`** — backs `/internal/accommodation-calendar`.
   Same Google Sign-In auth pattern as `photo-pool.mts`/`whatsapp-admin.mts`: `requireStaff`
   checks the caller's role in the `accommodation` module — `view` to read, `edit` to write and to

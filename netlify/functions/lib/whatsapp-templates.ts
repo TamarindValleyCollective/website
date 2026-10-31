@@ -131,6 +131,14 @@ export const WHATSAPP_TEMPLATES = {
     body: '🏕️ Stay allocation *{{1}}* for *{{2}}*.\n\n📅 *Dates:* {{3}}\n👥 *Guests:* {{4}}\n\nGuests with a mobile or email on file were messaged from the accommodation calendar.',
     samples: ['confirmed', 'Asha Rao', '1 Nov 2026 to 3 Nov 2026', 'Asha (Malabar Hut Fixed Tent (N)), Ravi (Banyan Hut Fixed Tent)'],
   },
+  // Internal: the morning plan for the farm's stays, sent daily to WHATSAPP_DAILY_PLAN_NUMBERS
+  // (netlify/functions/whatsapp-stays-daily-plan.mts).
+  tvc_stays_daily_plan: {
+    header: 'Stays today',
+    footer: 'TVC website · internal alert',
+    body: "☀️ Good morning! Here's the farm stays plan for *{{1}}*.\n\n🧳 *Arriving:* {{2}}\n👋 *Leaving:* {{3}}\n🍽️ *Meals:* {{4}}\n📝 *Food needs and notes:* {{5}}\n\nThe full day plan is on the Stays page in the admin portal.",
+    samples: ['Friday, 6 November 2026', 'Asha Rao (2 guests, Jamun)', 'Menon (2 guests, Neem)', 'Breakfast 6, dinner 6', 'Asha Rao: Nut allergy; Asha Rao: Arrives after 8 pm'],
+  },
 } as const;
 
 export type WhatsAppTemplateName = keyof typeof WHATSAPP_TEMPLATES;
