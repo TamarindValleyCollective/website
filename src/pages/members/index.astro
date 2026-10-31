@@ -1159,6 +1159,21 @@ import SignInGate from '../../components/SignInGate.astro';
     opacity: 0.75;
   }
 
+  /* A small status pill beside a card's heading (e.g. the payout details' verification state). */
+  .pill {
+    margin: -4px 0 -4px auto; /* don't make the row taller than its heading */
+    padding: 2px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: 999px;
+    background: var(--tvc-white);
+    color: var(--tvc-green-dark);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+    white-space: nowrap;
+  }
+
   .docs-list {
     margin: 0 0 12px;
   }
