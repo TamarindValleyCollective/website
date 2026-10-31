@@ -1061,10 +1061,6 @@ import SignInGate from '../../components/SignInGate.astro';
     height: 40px;
   }
 
-  .person-row .detail {
-    overflow-wrap: anywhere;
-  }
-
   @media (max-width: 560px) {
     /* The survey table has to fit a phone's card without sideways scrolling: tighter cells, and the status wraps. */
     .unit-card .table-wrap th,
@@ -1089,14 +1085,6 @@ import SignInGate from '../../components/SignInGate.astro';
     .person-row {
       padding-inline: 14px;
     }
-
-    .person-row .detail .sep {
-      display: none;
-    }
-
-    .person-row .detail .tel {
-      display: block;
-    }
   }
 
   /* Land areas in a table: Inter's own equal-width digits, right-aligned, so the decimal points line up down the column. */
@@ -1117,27 +1105,42 @@ import SignInGate from '../../components/SignInGate.astro';
     margin: 0 0 0 auto;
   }
 
-  /* A longer code stretches the badge into an oval rather than being cut off. */
-  .pills .pill {
-    display: grid;
+  /* The farm number and the house number look the same wherever they appear (Home, My unit, the directory, the site
+     map, the unit switcher): a solid dark-green badge with white figures, the same green as the current menu item
+     and the primary buttons. It is a small pill in lists and a large round badge (--lg) at the head of a Home tile. A
+     longer code stretches the badge into an oval rather than being cut off. */
+  .code-badge {
+    display: inline-grid;
     place-items: center;
     box-sizing: border-box;
-    min-width: 64px;
-    height: 64px;
+    flex: none;
+    min-width: 28px;
+    min-height: 24px;
     margin: 0;
-    padding: 0 8px;
+    padding: 0 10px;
     border: 0;
-    background: var(--tvc-green-dark); /* solid, like the current menu item and the primary buttons; no shadow */
+    border-radius: 999px;
+    background: var(--tvc-green-dark);
     color: var(--tvc-white);
-    /* Set outright: the badge sits inside a Fraunces h2 on My unit and an uppercase Inter row on Home, and must look the same in both.
-       Display type is set slightly tight, and the figures are tabular so F-12 and F-08 are the same width. */
-    font-family: var(--font-display);
-    font-size: var(--text-lg);
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     line-height: 1;
-    letter-spacing: -0.01em;
+    letter-spacing: normal;
     text-transform: none;
+    white-space: nowrap;
+  }
+
+  /* Set outright: the badge sits inside a Fraunces h2 on My unit and an uppercase Inter row on Home, and must look the
+     same in both. Display type is set slightly tight, and the figures are tabular so F-12 and F-08 are the same width. */
+  .code-badge--lg {
+    min-width: 64px;
+    height: 64px;
+    padding: 0 8px;
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    letter-spacing: -0.01em;
   }
 
   /* The picture for Farm or House, beside the badge: a faint monoline drawing in the same green. */
@@ -1156,6 +1159,7 @@ import SignInGate from '../../components/SignInGate.astro';
     opacity: 0.75;
   }
 
+  /* A small status pill beside a card's heading (e.g. the payout details' verification state). */
   .pill {
     margin: -4px 0 -4px auto; /* don't make the row taller than its heading */
     padding: 2px 10px;
@@ -3367,6 +3371,49 @@ import SignInGate from '../../components/SignInGate.astro';
     margin: 0 0 12px;
   }
 
+  /* The search field and, under it, the homes that match what was typed. */
+  .sm-search {
+    position: relative;
+    flex: 1 1 220px;
+    max-width: 360px;
+  }
+  .sm-search .field { width: 100%; }
+  .sm-results {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    left: 0;
+    z-index: 6;
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+    box-shadow: var(--shadow-soft);
+  }
+  .sm-results[hidden] { display: none; }
+  .sm-results button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 44px;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: var(--text-sm);
+    text-align: left;
+    cursor: pointer;
+  }
+  .sm-results button:hover,
+  .sm-results button:focus-visible { background: var(--tvc-cream); }
+  .sm-res-sub { margin-left: auto; color: var(--tvc-ink-soft); }
+  .sm-res-more { padding: 6px 10px; color: var(--tvc-ink-soft); font-size: var(--text-sm); }
+
   .sm-zoom .btn {
     width: 36px;
     padding: 0;
@@ -3430,16 +3477,6 @@ import SignInGate from '../../components/SignInGate.astro';
     font-size: var(--text-sm);
   }
 
-  .sm-pop-code {
-    padding: 1px 9px;
-    border: 1px solid var(--tvc-line);
-    border-radius: 999px;
-    color: var(--tvc-green-dark);
-    font-size: var(--text-xs);
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-  }
-
   @media (prefers-reduced-motion: no-preference) {
     .sm-pop:not([hidden]) { animation: sm-pop-in 0.12s ease-out; }
   }
@@ -3460,6 +3497,29 @@ import SignInGate from '../../components/SignInGate.astro';
     margin: 0 0 8px;
     font-size: var(--text-lg);
   }
+
+  .sm-card-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+  /* On a phone there is no hover and the card would sit below the fold, so it slides up over the bottom of the map. */
+  .sm-card[hidden] { display: none; }
+  .sm-card.sm-sheet {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    z-index: 4;
+    padding: 14px 16px;
+    box-shadow: var(--shadow-soft);
+  }
+  .sm-sheet .sm-close {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 36px;
+    padding: 0;
+  }
+  .sm-sheet h2 { padding-right: 36px; }
+  .sm-sheet .sm-actions { margin-top: 10px; }
 
   .sm-kv {
     display: grid;
@@ -4517,7 +4577,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     if (all.length > 1) {
       menu.append(h('p', '', 'Switch unit'));
       all.forEach((o, i) => {
-        const b = h('button', '', o.farmUnit, h('span', '', o.houseNo ?? 'No house'));
+        const b = h('button', '', undefined, codeBadge(o.farmUnit, 'Farm unit'), o.houseNo ? codeBadge(o.houseNo, 'House number') : h('span', '', 'No house'));
         b.setAttribute('aria-pressed', String(i === current));
         b.addEventListener('click', () => {
           current = i;
@@ -4610,14 +4670,15 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   // The codes that name a card, as pills in its heading: the farm unit on Farm, the house number on House; the unit type sits at the foot of the House card.
   // No "Cluster"/"Type" words (the codes say it); the name is in the tooltip and the accessible name.
   // The code that names the card (farm unit, house number) is the solid pill; the descriptors are tinted.
+  const codeBadge = (text: string, title: string, large = false) => {
+    const el = h('span', `code-badge${large ? ' code-badge--lg' : ''}`, text);
+    el.title = title;
+    el.setAttribute('aria-label', `${title} ${text}`);
+    return el;
+  };
   const pillsOf = (items: [string, string | null | undefined, boolean?][]): HTMLElement | null => {
     const shown = items.filter((i): i is [string, string, boolean?] => !!i[1]);
-    return shown.length ? h('span', 'pills', undefined, ...shown.map(([label, value, key]) => {
-      const pill = h('span', key ? 'pill pill--key' : 'pill', value);
-      pill.title = label;
-      pill.setAttribute('aria-label', `${label} ${value}`);
-      return pill;
-    })) : null;
+    return shown.length ? h('span', 'pills', undefined, ...shown.map(([label, value]) => codeBadge(value, label, true))) : null;
   };
   const farmPills = (hh: Hh) => pillsOf([['Farm unit', hh.farmUnit, true]]);
   const housePills = (hh: Hh) => pillsOf([['House number', hh.houseNo, true]]);
@@ -4637,14 +4698,26 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     img.src = src;
     return img;
   };
-  // Your own email and mobile in full, everyone else's masked.
-  const contact = (p: Person, you: Person) => (p.id === you.id ? { email: me!.email, phone: me!.phone } : { email: p.emailMasked, phone: p.phoneMasked });
+  // Email and mobile numbers are not listed on the pages; they appear, masked, only in the form that edits them.
+  // Same shape as maskPhone in netlify/functions/lib/staff-masking.ts: "+919845012345" -> "+91 •••••• 345".
+  const maskPhone = (phone: string) => {
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length < 6) return '•'.repeat(6);
+    return `${phone.trim().startsWith('+91') ? '+91 ' : ''}${'•'.repeat(6)} ${digits.slice(-3)}`;
+  };
+  // A field that opens holding its masked value selects it all on focus, so typing replaces it.
+  const maskedField = (input: HTMLInputElement, masked: string | null, empty: string) => {
+    input.value = masked ?? '';
+    input.placeholder = masked ? '' : empty;
+    input.addEventListener('focus', () => input.select());
+    return () => (masked !== null && input.value === masked ? '' : input.value.trim());
+  };
   const peopleList = (hh: Hh, you: Person) =>
     h('div', '', undefined, ...peopleByRole(hh.people).flatMap((g) => [
       h('h3', 'role-head', g.label),
       h('ul', 'people', undefined, ...g.people.map((p) =>
         h('li', '', undefined, personFace(p),
-          h('div', 'who2', undefined, h('strong', '', `${p.name}${p.id === you.id ? ' (you)' : ''}`), h('span', '', `${contact(p, you).email ?? 'No email'} · ${contact(p, you).phone ?? 'No mobile'}`))))),
+          h('div', 'who2', undefined, h('strong', '', `${p.name}${p.id === you.id ? ' (you)' : ''}`))))),
     ]));
 
   // ---- dialogs ----
@@ -4772,8 +4845,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const phone = document.createElement('input');
     phone.type = 'tel';
     phone.autocomplete = 'off';
-    phone.value = me!.phone ?? '';
-    phone.placeholder = 'e.g. 98450 12345';
+    const phoneChange = maskedField(phone, me!.phone ? maskPhone(me!.phone) : null, 'e.g. 98450 12345');
     const dir = document.createElement('input');
     dir.type = 'checkbox';
     dir.checked = me!.directoryVisible;
@@ -4784,7 +4856,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const save = h('button', 'btn btn--solid', 'Save') as HTMLButtonElement;
     save.addEventListener('click', async () => {
       const body: Record<string, unknown> = {};
-      if (phone.value.trim() !== (me!.phone ?? '')) body.phone = phone.value.trim() === '' ? null : phone.value;
+      // Untouched, the field still holds the masked number: nothing to send. Emptied, the number is removed.
+      const typed = phoneChange();
+      if (typed !== '') body.phone = typed;
+      else if (me!.phone && phone.value.trim() === '') body.phone = null;
       if (dir.checked !== me!.directoryVisible) body.directoryVisible = dir.checked;
       if (Object.keys(body).length === 0) {
         msg.textContent = 'Nothing to change.';
@@ -4881,7 +4956,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
   // Edit a family member's details, or remove them. The email and mobile on file are never sent to an owner, so those
   // fields start empty and a blank one keeps what is there.
-  function editFamilyDialog(p: { id: string; name: string }) {
+  function editFamilyDialog(p: Person) {
     const dlg = document.createElement('dialog');
     dlg.className = 'modal';
     const input = (type: string, value: string, placeholder: string) => {
@@ -4893,8 +4968,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       return i;
     };
     const name = input('text', p.name, '');
-    const email = input('email', '', 'Unchanged');
-    const phone = input('tel', '', 'Unchanged');
+    const email = input('email', '', '');
+    const phone = input('tel', '', '');
+    const emailChange = maskedField(email, p.emailMasked, 'No email on file');
+    const phoneChange = maskedField(phone, p.phoneMasked, 'No mobile on file');
     const msg = h('p', 'form-msg');
     msg.setAttribute('role', 'alert');
     const fail = (err: unknown) => {
@@ -4921,8 +4998,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     save.addEventListener('click', () => {
       const changes: Record<string, string> = {};
       if (name.value.trim() !== p.name) changes.fullName = name.value;
-      if (email.value.trim()) changes.email = email.value;
-      if (phone.value.trim()) changes.phone = phone.value;
+      if (emailChange()) changes.email = emailChange();
+      if (phoneChange()) changes.phone = phoneChange();
       if (Object.keys(changes).length === 0) { msg.textContent = 'Nothing to change.'; return; }
       void run(save, '/api/members-me/family-update', { personId: p.id, ...changes }, 'Saved', 'Saving…');
     });
@@ -4943,7 +5020,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     });
     dlg.append(
       h('h3', '', `Edit ${p.name}`),
-      h('p', '', 'Leave a field blank to keep what is on file.'),
+      h('p', '', 'The email and number on file are masked. Type over one to change it; leave it as it is to keep it.'),
       h('label', '', undefined, h('span', 'field-label', 'Name'), name),
       hinted('Google email', email, GOOGLE_HINT, 'Gmail or any Google account'),
       hinted('WhatsApp number', phone, WHATSAPP_HINT, 'a number with WhatsApp. Outside India, start with + and the country code'),
@@ -6079,8 +6156,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         h('div', 'land-figure', undefined, h('b', '', o.figure), o.other ? h('span', '', o.other) : null),
         o.table ?? h('p', 'unit-card-empty', o.empty),
         o.footer);
+    // Farm and house numbers are the shared badge; the cluster and unit type are a quiet descriptor beside them.
     const codePill = (text: string, title: string, end = false) => {
-      const el = h('span', `code-pill${end ? ' code-pill--end' : ''}`, text);
+      if (!end) return codeBadge(text, title);
+      const el = h('span', 'code-pill code-pill--end', text);
       el.title = title;
       return el;
     };
@@ -6117,14 +6196,12 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const signIn = (p: Person): [string, string, string] =>
       p.picture || p.id === person.id ? ['Signed in', ' st-pill--ok', 'Has signed in to the portal'] : p.canLogin ? ['Invited', '', 'Can sign in with Google; no sign-in seen yet'] : ['No sign-in', '', 'Cannot sign in to the portal'];
     const personRow = (p: Person): HTMLElement => {
-      const c = contact(p, person);
       const [word, tone, why] = signIn(p);
       const state = h('span', `st-pill${tone}`, word);
       state.title = why;
       const body = [
         personFace(p),
-        h('span', 'grow', undefined, h('span', 'title', `${p.name}${p.id === person.id ? ' (you)' : ''}`),
-          h('span', 'detail', undefined, c.email ?? 'No email', h('span', 'sep', ' · '), h('span', 'tel', c.phone ?? 'No mobile'))),
+        h('span', 'grow', undefined, h('span', 'title', `${p.name}${p.id === person.id ? ' (you)' : ''}`)),
         state,
       ];
       if (owner && p.role === 'family') {
@@ -6880,7 +6957,17 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     let selected: MapUnit | null = mine;
     let vb: number[] = [];
     const clusterOf = (id: string) => data.clusters.find((c) => c.id === id) ?? data.clusters[0];
-    const fit = () => { vb = [...clusterOf(clusterId).viewBox]; };
+    // On a phone the whole cluster is too small to read, so a cluster opens zoomed in (on your home if it is there,
+    // else the middle); the Fit button still shows all of it.
+    const phone = window.matchMedia('(max-width: 900px)');
+    const fitAll = () => { vb = [...clusterOf(clusterId).viewBox]; };
+    const fit = () => {
+      fitAll();
+      if (!phone.matches) return;
+      const [x, y, w, ht] = vb;
+      const at = mine && mine.cluster === clusterId ? { x: mine.x, y: mine.y } : { x: x + w / 2, y: y + ht / 2 };
+      vb = [at.x - w / 4.4, at.y - ht / 4.4, w / 2.2, ht / 2.2];
+    };
     fit();
 
     const seg = h('div', 'segmented');
@@ -6900,7 +6987,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     search.autocomplete = 'off';
     search.setAttribute('aria-label', 'Find a home or member');
     const field = h('label', 'field', undefined, icon('<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'), search);
-    const bar = h('div', 'sm-bar', undefined, seg, field);
+    const results = h('ul', 'sm-results');
+    results.hidden = true;
+    const bar = h('div', 'sm-bar', undefined, seg, h('div', 'sm-search', undefined, field, results));
     if (mine) {
       const b = h('button', 'btn', 'Find my home');
       b.setAttribute('type', 'button');
@@ -6938,13 +7027,22 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       b.addEventListener('click', fn);
       return b;
     };
-    const stage = h('div', 'sm-stage', undefined, svg, pop, h('div', 'sm-zoom', undefined, zoomBtn('Zoom in', '+', () => zoomBy(1.4)), zoomBtn('Zoom out', '−', () => zoomBy(1 / 1.4)), zoomBtn('Show the whole cluster', 'Fit', () => { fit(); paint(); })));
+    const stage = h('div', 'sm-stage', undefined, svg, pop, h('div', 'sm-zoom', undefined, zoomBtn('Zoom in', '+', () => zoomBy(1.4)), zoomBtn('Zoom out', '−', () => zoomBy(1 / 1.4)), zoomBtn('Show the whole cluster', 'Fit', () => { fitAll(); paint(); })));
     const card = h('section', 'sm-card');
     card.setAttribute('aria-live', 'polite');
+    // Phone: the card is a sheet over the map, shown only once a home is tapped. Wide screens keep it beside the map.
+    let sheetOpen = false;
+    const aside = h('div', 'sm-aside');
     const keyItem = (cls: string, text: string) => h('li', '', undefined, h('span', `sm-sw ${cls}`), text);
     const key = h('ul', 'sm-key', undefined, ...(mine ? [keyItem('is-yours', 'Your home')] : []), keyItem('sm-named', 'A member'), keyItem('sm-private', 'A member who keeps their details private'), keyItem('sm-vacant', 'No member yet'));
     key.setAttribute('aria-label', 'Colours');
-    root.append(bar, h('div', 'sm-grid', undefined, stage, h('div', 'sm-aside', undefined, card, key)), msg);
+    root.append(bar, h('div', 'sm-grid', undefined, stage, aside), msg);
+    aside.append(card, key);
+    const placeCard = () => {
+      if (phone.matches) { stage.append(card); card.classList.add('sm-sheet'); } else { aside.prepend(card); card.classList.remove('sm-sheet'); }
+      card.hidden = phone.matches && !(sheetOpen && selected);
+    };
+    phone.addEventListener('change', () => { fit(); placeCard(); paint(); });
 
     const unitsPerPx = () => { const r = svg.getBoundingClientRect(); return Math.max(vb[2] / (r.width || 1), vb[3] / (r.height || 1)); };
     const toUser = (e: { clientX: number; clientY: number }) => {
@@ -6955,7 +7053,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
     const classesOf = (x: MapUnit) => `sm-${x.status}${x.isYours ? ' is-yours' : ''}${selected?.houseNo === x.houseNo ? ' is-sel' : ''}`;
     function unitEl(x: MapUnit, k: number): SVGElement {
-      const who = x.status === 'named' ? x.names.join(' and ') : x.status === 'private' ? 'a private member' : 'no member yet';
+      const who = x.status === 'named' ? x.names.map(first).join(' and ') : x.status === 'private' ? 'a private member' : 'no member yet';
       const g = unitGroup(x, k, classesOf(x), `Home ${x.houseNo}, ${who}, ${x.bhk}`);
       g.addEventListener('keydown', (e: Event) => {
         if ((e as KeyboardEvent).key === 'Enter' || (e as KeyboardEvent).key === ' ') { e.preventDefault(); pick(x); }
@@ -6965,10 +7063,18 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
     function drawCard() {
       card.replaceChildren();
+      card.hidden = phone.matches && !(sheetOpen && selected);
       const s = selected;
       if (!s) { card.append(h('p', 'sm-note', 'Tap a home on the map.')); return; }
-      const owner = s.status === 'named' ? s.names.join(' & ') : s.status === 'private' ? 'Private member' : 'No member yet';
-      card.append(h('h2', '', `Home ${s.houseNo}${s.isYours ? ' (yours)' : ''}`));
+      const owner = s.status === 'named' ? s.names.map(first).join(' & ') : s.status === 'private' ? 'Private member' : 'No member yet';
+      if (phone.matches) {
+        const x = h('button', 'btn sm-close', '×');
+        x.setAttribute('type', 'button');
+        x.setAttribute('aria-label', 'Close');
+        x.addEventListener('click', () => { sheetOpen = false; card.hidden = true; });
+        card.append(x);
+      }
+      card.append(h('h2', 'sm-card-title', undefined, 'Home ', codeBadge(s.houseNo, 'House number'), s.isYours ? ' (yours)' : ''));
       const dl = h('dl', 'sm-kv');
       const row = (k: string, v: string) => dl.append(h('dt', '', k), h('dd', '', v));
       row(s.names.length > 1 ? 'Owners' : 'Owner', owner);
@@ -6998,18 +7104,32 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       badgeLayer.replaceChildren(...here.map((x) => badgeEl(c.plot, x, u, classesOf(x))).filter((e): e is SVGElement => !!e));
       drawCard();
     }
+    // If the sheet would cover the home that was just picked, slide the map up so it stays visible above it.
+    function clearOfSheet(x: MapUnit) {
+      if (!phone.matches) return;
+      const g = svg.querySelector(`[data-house="${x.houseNo}"]`);
+      if (!g) return;
+      const s = stage.getBoundingClientRect();
+      const top = Math.min(card.offsetHeight || 150, s.height * 0.5) + 24;
+      const over = g.getBoundingClientRect().bottom - (s.bottom - top);
+      if (over > 0) { const u = unitsPerPx(); vb = [vb[0], vb[1] + over * u, vb[2], vb[3]]; paint(); }
+    }
     function pick(x: MapUnit) {
       selected = x;
+      sheetOpen = true;
       if (x.cluster !== clusterId) { clusterId = x.cluster; fit(); }
       msg.textContent = '';
       paint();
+      clearOfSheet(x);
     }
     function focusOn(x: MapUnit) {
       selected = x;
+      sheetOpen = true;
       clusterId = x.cluster;
       vb = [x.x - 110, x.y - 85, 220, 170];
       msg.textContent = '';
       paint();
+      clearOfSheet(x);
     }
     function zoomBy(f: number, cx?: number, cy?: number) {
       const [x, y, w, ht] = vb;
@@ -7021,15 +7141,50 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       paint();
     }
 
-    search.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter') return;
-      const q = search.value.trim().toLowerCase();
-      if (!q) return;
+    // Search: a house number (17 or H-17) or the start of a member's first name; what matches is listed under the field.
+    // Full names are deliberately not searched: the cards show first names only.
+    const MAX_RESULTS = 6;
+    const matchesFor = (raw: string): MapUnit[] => {
+      const q = raw.trim().toLowerCase();
+      if (!q) return [];
       const num = q.replace(/^h-?/, '');
-      const hit = data.units.find((u) => /^\d+$/.test(num) && Number(u.houseNo.slice(2)) === Number(num)) ?? data.units.find((u) => u.names.some((n) => n.toLowerCase().includes(q)));
-      if (hit) focusOn(hit);
-      else msg.textContent = `No home or member matches "${search.value.trim()}".`;
+      const byNumber = /^\d+$/.test(num) ? data.units.filter((u) => Number(u.houseNo.slice(2)) === Number(num)) : [];
+      const byName = data.units.filter((u) => u.status === 'named' && u.names.some((n) => first(n).toLowerCase().startsWith(q)));
+      return [...new Set([...byNumber, ...byName])];
+    };
+    const closeResults = () => { results.hidden = true; results.replaceChildren(); };
+    const choose = (x: MapUnit) => { closeResults(); search.value = ''; focusOn(x); };
+    function showResults() {
+      const raw = search.value;
+      const hits = matchesFor(raw);
+      msg.textContent = '';
+      results.replaceChildren();
+      if (!raw.trim()) { results.hidden = true; return; }
+      if (!hits.length) {
+        results.append(h('li', 'sm-res-more', `No home or member matches "${raw.trim()}".`));
+      } else {
+        for (const x of hits.slice(0, MAX_RESULTS)) {
+          const b = h('button', '', undefined, codeBadge(x.houseNo, 'House number'), h('span', '', x.names.map(first).join(' & ')), h('span', 'sm-res-sub', x.cluster));
+          b.setAttribute('type', 'button');
+          b.addEventListener('click', () => choose(x));
+          results.append(h('li', '', undefined, b));
+        }
+        if (hits.length > MAX_RESULTS) results.append(h('li', 'sm-res-more', `${hits.length - MAX_RESULTS} more: type more of the name to narrow it down.`));
+      }
+      results.hidden = false;
+    }
+    search.addEventListener('input', showResults);
+    search.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { closeResults(); return; }
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const hits = matchesFor(search.value);
+      if (hits.length === 1) choose(hits[0]);
+      else showResults(); // none or several: the list says which, and the member picks
     });
+    // A tap anywhere else closes the list.
+    const away = (e: Event) => { if (!root.isConnected) { document.removeEventListener('pointerdown', away); return; } if (!(e.target as Element).closest('.sm-search')) closeResults(); };
+    document.addEventListener('pointerdown', away);
 
     // Pan by dragging, zoom with the wheel or two fingers; a touch that does not move is a tap on a home.
     const ptrs = new Map<number, { x: number; y: number }>();
@@ -7098,7 +7253,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         ...(x.status === 'named' ? [h('span', 'sm-pop-faces', undefined, ...shownFaces)] : []),
         h('span', 'sm-pop-text', undefined,
           h('span', 'sm-pop-name', title),
-          h('span', 'sm-pop-meta', undefined, h('span', 'sm-pop-code', x.houseNo), h('span', '', `${x.unitType ?? x.shape} · ${x.bhk}`))),
+          h('span', 'sm-pop-meta', undefined, codeBadge(x.houseNo, 'House number'), h('span', '', `${x.unitType ?? x.shape} · ${x.bhk}`))),
       );
     }
     function popPlace(clientX: number, clientY: number) {
@@ -7158,6 +7313,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
     // The plan is measured once it is on the page, so the house numbers are sized for the real width.
     requestAnimationFrame(paint);
+    placeCard();
     paint();
     return root;
   }
@@ -7274,10 +7430,11 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         return el;
       };
       // On a card, one quiet pill ("F-12 · H-12"); the popup lists plot, house, cluster and type separately.
-      if (!withCluster) return h('span', 'dir-pills', undefined, pill('farm', hh.houseNo ? `${hh.farmUnit} · ${hh.houseNo}` : hh.farmUnit, hh.houseNo ? 'Farm plot and house' : 'Farm plot'));
+      // Farm and house numbers are the shared badge; cluster and unit type are the quiet pills.
+      if (!withCluster) return h('span', 'dir-pills', undefined, codeBadge(hh.farmUnit, 'Farm unit'), hh.houseNo ? codeBadge(hh.houseNo, 'House number') : null);
       return h('span', 'dir-pills', undefined,
-        pill('farm', hh.farmUnit, 'Farm plot'),
-        hh.houseNo ? pill('house', hh.houseNo, 'House') : null,
+        codeBadge(hh.farmUnit, 'Farm unit'),
+        hh.houseNo ? codeBadge(hh.houseNo, 'House number') : null,
         withCluster && hh.cluster ? pill('house', `Cluster ${hh.cluster}`, 'Housing cluster') : null,
         withCluster && code ? pill('house', beds ? `${beds} · ${code}` : code, 'Unit type') : null);
     }
