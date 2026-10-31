@@ -241,6 +241,12 @@
   force = true
 
 [[redirects]]
+  from = "https://admin.tvc.farm/api/stays-day-summary/*"
+  to = "/api/stays-day-summary/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "https://admin.tvc.farm/api/members-admin/*"
   to = "/api/members-admin/:splat"
   status = 200

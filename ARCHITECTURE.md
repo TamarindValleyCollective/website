@@ -656,6 +656,24 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `scripts/lib/stay-day-plan.mjs` (arrivals, departures, breakfast/dinner counts, food needs, admin notes) and sends
   the `tvc_stays_daily_plan` template to each number in `WHATSAPP_DAILY_PLAN_NUMBERS`. Sends nothing on a day with
   nobody on the farm; dormant until the template is approved.
+  The Stays page's Day view (`accommodation-calendar.astro`) shows the same plan above its per-tent rows,
+  built by the same `buildDayPlan`, with a Copy-as-message button (`planToMessageText`); in Day view it also
+  fetches the previous month so a stay that checks out on the 1st is found.
+- **`netlify/functions/stays-day-summary.mts`** — `POST /api/stays-day-summary` (`{date}`; `view` on the
+  `accommodation` module, and only for roles that may see guest names, so `read_only` gets `summary: null`),
+  behind the Day view's AI summary box. Reads that day's bookings itself, turns them into **anonymous facts**
+  (`scripts/lib/stay-day-summary.mjs`: counts, tent names, a public event's own title, notes with guest names,
+  phone numbers and emails removed) and asks Google's **free Gemini** tier (`callGemini`, `GEMINI_API_KEY`, same
+  usage meter as search and suggested replies) for a short plain-text briefing. Free Gemini may keep and review what
+  it is sent, which is why nothing identifying is sent. **When:** the page writes it by itself for today and tomorrow,
+  only on a "Write summary" press for later days (up to two months ahead), never for a past day or a day with no guests
+  (a booking with tents but no guests listed counts as nobody; checked again on the server), and "Write again"
+  (`refresh: true`) writes a new wording. Cached in Netlify Blobs (`stays-day-summary`, keyed by a hash of the facts, so
+  an unchanged day is asked once and a changed one is rewritten); limited to 20 asks per person per 10 minutes, a
+  site-wide daily cap (`STAYS_SUMMARY_DAILY_CAP`, default 60, to be kept under the free tier's own quota that search and
+  suggested replies share) and 5 "write again"s per person per hour. Any failure answers `summary: null`, so the page
+  hides the box after an automatic try and says so after one somebody asked for. Needs an
+  `admin.tvc.farm/api/stays-day-summary/*` rule in `netlify.toml`.
 - **`netlify/functions/accommodation-admin.mts`** — backs `/internal/accommodation-calendar`.
   Same Google Sign-In auth pattern as `photo-pool.mts`/`whatsapp-admin.mts`: `requireStaff`
   checks the caller's role in the `accommodation` module — `view` to read, `edit` to write and to

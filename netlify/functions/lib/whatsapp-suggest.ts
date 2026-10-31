@@ -112,7 +112,13 @@ export function sanitizeDraft(draft: string): { draft: string; removedLink: bool
 // Returns the model's text, or null on any failure (timeout, quota, a safety block)
 // so the caller can fall back or report it. Never throws. Same call and the same
 // usage counters as search-ai.mts, so the usage dashboard counts these too.
-export async function callGemini(apiKey: string, systemText: string, userText: string, maxOutputTokens: number): Promise<string | null> {
+export async function callGemini(
+  apiKey: string,
+  systemText: string,
+  userText: string,
+  maxOutputTokens: number,
+  responseMimeType: 'application/json' | 'text/plain' = 'application/json',
+): Promise<string | null> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
   try {
@@ -122,7 +128,7 @@ export async function callGemini(apiKey: string, systemText: string, userText: s
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemText }] },
         contents: [{ role: 'user', parts: [{ text: userText }] }],
-        generationConfig: { maxOutputTokens, responseMimeType: 'application/json' },
+        generationConfig: { maxOutputTokens, responseMimeType },
       }),
       signal: controller.signal,
     });

@@ -76,7 +76,13 @@ so nothing WhatsApps until the names are approved and added to `WHATSAPP_APPROVE
 admin notes, from the same bookings the Stays page shows (`whatsapp-stays-daily-plan.mts`, plan logic in
 `scripts/lib/stay-day-plan.mjs`, tested). Skipped on a day with nobody on the farm. **Status: built, not yet
 submitted to Meta**, so nothing sends until the template is approved, added to `WHATSAPP_APPROVED_TEMPLATES`, and
-the number is set. Submission text in `docs/whatsapp-templates.md`.
+the number is set. Submission text in `docs/whatsapp-templates.md`. The same plan is shown on the Stays page's Day view, with a Copy-as-message button, and above it an
+AI-written summary (`netlify/functions/stays-day-summary.mts`) from the **free Gemini tier**. Because free Gemini
+may keep and review what it is sent (see the suggested-replies note above), the summary only ever receives
+anonymised facts: no guest names, phone numbers or emails, free-text notes scrubbed of the guests' names, and a
+private booking is never named, only a public event by its own title. Decided 2026-10-31 (free Gemini, de-identified).
+It is written automatically only for today and tomorrow, on a button for later days, never for a past day or a day with
+no guests; "Write again" is limited per person. Unavailable (no key, quota, read-only role) just hides the box.
 
 **Booking confirmation, reminders, referral attribution, auto-reply (2026-10-10).** Built, dormant
 until configured; details and Meta submission text in `docs/whatsapp-templates.md`.
