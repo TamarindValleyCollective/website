@@ -17,8 +17,9 @@
 //
 // Gated like the rest of the inbox: Google sign-in + the `reply` capability of the
 // `whatsapp` module. Per-staff and daily limits cap the spend.
-import { listMessages } from '../../scripts/lib/supabase.mjs';
-import { requireStaff, logStaffAction } from './lib/staff-access';
+import { listMessages, getConversation } from '../../scripts/lib/supabase.mjs';
+import { logStaffAction } from './lib/staff-access';
+import { authorizeInbox, canReach } from './lib/whatsapp-scope';
 import { selectRelevantPages, formatPages, callAnthropic, type SitePage } from './lib/site-retrieval';
 import { checkIpRateLimit, checkDailyCap } from './lib/rate-limit';
 import { recordUsage } from './lib/usage-meter';
@@ -52,8 +53,10 @@ async function allowed(check: () => Promise<boolean>): Promise<boolean> {
 export default async (req: Request): Promise<Response> => {
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
 
-  const auth = await requireStaff(req, 'whatsapp', 'reply');
+  // Same scope rules as the inbox it serves (?scope=, lib/whatsapp-scope.ts).
+  const auth = await authorizeInbox(req, new URL(req.url).searchParams.get('scope'), 'reply');
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  const staff = auth.access.staff;
 
   let payload: { conversationId?: string };
   try {
@@ -62,8 +65,12 @@ export default async (req: Request): Promise<Response> => {
     return jsonResponse({ error: 'Invalid request body' }, 400);
   }
   if (!payload.conversationId) return jsonResponse({ error: 'conversationId is required' }, 400);
+  if (auth.access.phones) {
+    const conversation = await getConversation(payload.conversationId).catch(() => null);
+    if (!conversation || !canReach(auth.access, conversation.wa_phone)) return jsonResponse({ error: 'Conversation not found' }, 404);
+  }
 
-  if (!(await allowed(() => checkIpRateLimit(RATE_LIMIT_STORE, auth.staff.id, RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX_REQUESTS)))) {
+  if (!(await allowed(() => checkIpRateLimit(RATE_LIMIT_STORE, staff.id, RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX_REQUESTS)))) {
     return jsonResponse({ error: 'Too many suggestions in a short time. Try again in a few minutes.' }, 429);
   }
   if (!(await allowed(() => checkDailyCap(RATE_LIMIT_STORE, 'daily', DAILY_CAP)))) {
@@ -149,7 +156,7 @@ export default async (req: Request): Promise<Response> => {
     .map((p) => ({ title: p.title, url: p.url }));
 
   // Routine and best-effort: who asked, never what was said or drafted.
-  logStaffAction({ actorId: auth.staff.id, action: 'whatsapp.suggest_reply', module: 'whatsapp', detail: { conversationId: payload.conversationId } }).catch((err: unknown) =>
+  logStaffAction({ actorId: staff.id, action: 'whatsapp.suggest_reply', module: 'whatsapp', detail: { conversationId: payload.conversationId } }).catch((err: unknown) =>
     console.error('[whatsapp-suggest] Failed to write staff audit log', err),
   );
 

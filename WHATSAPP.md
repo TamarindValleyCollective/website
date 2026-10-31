@@ -49,6 +49,19 @@ payment link, after Linger approve). Submission text in `docs/whatsapp-templates
 until then the approver alert and the payment link go out by email only. The payment-link message respects the booking's
 WhatsApp consent box. See `RAZORPAY.md`.
 
+**Reusable inbox with scopes (2026-10-31).** The inbox is now a component
+(`src/components/whatsapp/WhatsAppInbox.astro`) that any internal screen can place with a `scope`; the
+WhatsApp page is its first user (`scope="all"`, nothing visible changed). A scope says which module's
+roles apply and which conversations they reach (`netlify/functions/lib/whatsapp-scope.ts`): `all` is the
+WhatsApp module as before, `stays` lets people with Stays access read (`view`) and reply (`edit`) to
+the guests in the guest directory, matched by mobile number, without seeing the rest of the inbox or
+being able to block / STOP anyone. Scoped replies are audited with their scope. Adding a screen (a
+vendor list, say) means adding a scope; the inbox itself does not change. **Stays embed:** the Stays page
+(`/internal/accommodation-calendar`) has a **Messages** button opening the inbox with `scope="stays"`. Replies there
+are always signed with the logged-in person's own account name (the "Signing as" box is hidden, and the server
+ignores any typed name outside scope `all`). **Status: built and checked against a mocked API only, not yet merged;
+not yet exercised against real sign-in and data.**
+
 **Accommodation stay notices (2026-10-12).** Four more templates: `tvc_stay_confirmed`,
 `tvc_stay_updated`, `tvc_stay_cancelled` (guests) and `tvc_stay_staff_alert` (admins, via
 `WHATSAPP_STAFF_ALERT_NUMBERS`). Sent only when admins press "Finalize & notify" / "Send update" on a
