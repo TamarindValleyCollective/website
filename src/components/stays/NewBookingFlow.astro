@@ -4,7 +4,8 @@
 // page's own form. The rules (which tents are free, what each step needs, the exact save payload) are in
 // scripts/lib/stay-booking-flow.mjs and tested there; this draws them and talks to the booking API.
 //
-// The host page places it once, opens it with `root.newBooking.open({ tentId?, date? })` (a free cell passes both) and
+// The host page places it once, opens it with `root.newBooking.open({ tentId?, date?, typeId? })` (a free cell passes tentId and date; a day on the capacity
+// views passes date and, when one type is picked, typeId) and
 // listens on it for `stays-booking:saved` (reload the view), `stays-booking:unauthorized` / `stays-booking:forbidden`
 // (its sign-in gate). One flow per page: its elements are found inside its own root.
 interface Props {
@@ -552,6 +553,7 @@ const { events, members } = Astro.props;
     const titleEl = root.querySelector('#nbf-title') as HTMLElement;
 
     let units: Unit[] = [];
+    let types: Array<{ id: string; label: string }> = [];
     let allowedTypes: string[] | null = null;
     let role = 'admin';
     let availability = new Map<string, null | { reason: 'booked' | 'closed'; by: string | null }>();
@@ -560,6 +562,7 @@ const { events, members } = Astro.props;
     let step = 1;
     let calMonth = '';
     let noteOpen = false;
+    let typeFilter = ''; // a type chosen on the capacity views: the Where step lists only its tents until "show all types"
     let preselected = false; // a tent was chosen on the grid, so the Where step is skipped when it is still free
     let guestSeq = 0;
     let state = fresh();
@@ -608,7 +611,7 @@ const { events, members } = Astro.props;
     }
 
     function applyServer(body: Awaited<ReturnType<typeof fetchMonths>>[number]) {
-      const types = body.types ?? [];
+      types = body.types ?? [];
       units = (body.units ?? []).map((u) => ({
         ...u,
         status: u.status || 'rentable',
@@ -622,8 +625,9 @@ const { events, members } = Astro.props;
 
     // ---- open / close ----
 
-    async function open(opts: { tentId?: string; date?: string } = {}) {
+    async function open(opts: { tentId?: string; date?: string; typeId?: string } = {}) {
       state = fresh();
+      typeFilter = opts.typeId ?? '';
       step = 1;
       error = '';
       noteOpen = false;
@@ -657,6 +661,13 @@ const { events, members } = Astro.props;
         state.nights = 1;
         calMonth = opts.date.slice(0, 7);
         preselected = true;
+        step = 2;
+      } else if (opts.date && opts.date >= today() && allowedKinds(allowedTypes).casualStay) {
+        // A day on the capacity views: a guest stay from that night; the tent is still to choose.
+        state.kind = 'guests';
+        state.startDate = opts.date;
+        state.nights = 1;
+        calMonth = opts.date.slice(0, 7);
         step = 2;
       }
       render();
@@ -771,7 +782,8 @@ const { events, members } = Astro.props;
 
     // 3. Where?
     function body3(): string {
-      const bookable = bookableUnits(units) as Unit[];
+      const all = bookableUnits(units) as Unit[];
+      const bookable = typeFilter ? all.filter((u) => u.type === typeFilter) : all;
       const groups: string[] = [];
       for (const u of bookable) if (!groups.includes(u.group!)) groups.push(u.group!);
       const tentsHtml = groups
@@ -793,7 +805,8 @@ const { events, members } = Astro.props;
           : state.kind === 'event' && state.eventMode === 'private'
             ? `<label class="nbf-check" style="margin-top:14px"><input type="checkbox" data-act="exclusive" ${state.exclusive ? 'checked' : ''}> Exclusive use: blocks the whole farm publicly, even if not every tent is chosen</label>`
             : '';
-      return `<p class="nbf-hint" style="margin-bottom:10px">Free tents for ${fmt(state.startDate)} → ${fmt(checkOut())}. A taken tent is greyed out, so a clash cannot happen.</p>${tentsHtml}${farm}<div class="nbf-actions"><button type="button" class="button button--primary" data-act="next">Continue</button></div>`;
+      const filterNote = typeFilter && bookable.length < all.length ? ` Showing ${esc(types.find((t) => t.id === typeFilter)?.label ?? 'one type')} only. <button type="button" class="nbf-link" data-act="all-types">Show all types</button>` : '';
+      return `<p class="nbf-hint" style="margin-bottom:10px">Free tents for ${fmt(state.startDate)} → ${fmt(checkOut())}. A taken tent is greyed out, so a clash cannot happen.${filterNote}</p>${tentsHtml}${farm}<div class="nbf-actions"><button type="button" class="button button--primary" data-act="next">Continue</button></div>`;
     }
 
     // 4. Who / Details / Why
@@ -1041,6 +1054,10 @@ const { events, members } = Astro.props;
           render();
           break;
         }
+        case 'all-types':
+          typeFilter = '';
+          render();
+          break;
         case 'tonight':
           state.startDate = today();
           state.nights = 1;

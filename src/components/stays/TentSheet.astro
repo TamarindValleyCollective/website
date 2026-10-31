@@ -1,0 +1,731 @@
+---
+// The tent sheet: what a tile on the Stays Day view opens. It shows one tent (its guests and the stay it belongs to) and
+// a few small, separate changes (edit this tent's guests, change the dates, move to another tent, cancel or remove it),
+// instead of the whole booking form. The rules (what is valid, the exact update payload, which tents a move may go to)
+// are in scripts/lib/stay-tent-sheet.mjs and tested there; this draws them and talks to the booking API.
+//
+// The host page owns the data and the rest of the flow. It opens the sheet with
+// `root.tentSheet.open({ booking, tentId, date, leaving, units, bookings, role, allowedTypes })` and listens on the root for
+//   stays-booking:saved   the booking changed: reload the view
+//   tent-sheet:cancel     {id, button, resolve}: run the page's own cancel flow, then resolve(true if it cancelled)
+//   tent-sheet:full       {id, tentId}: open the full booking form (the fallback for anything rare)
+//   stays-booking:unauthorized / :forbidden   the sign-in gate
+// One sheet per page.
+---
+
+<div id="tsheet" class="ts" data-ts hidden>
+  <div class="ts-backdrop" data-act="close"></div>
+  <div class="card ts-panel" role="dialog" aria-modal="true" aria-labelledby="ts-title">
+    <div class="ts-head">
+      <h2 id="ts-title" tabindex="-1"></h2>
+      <span id="ts-pill" class="pill"></span>
+      <button type="button" class="button button--icon" data-act="close" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true" focusable="false">
+          <path d="M6 6L18 18M18 6L6 18"></path>
+        </svg>
+      </button>
+    </div>
+    <div id="ts-body" class="ts-body"></div>
+  </div>
+</div>
+
+<style is:global>
+  .ts {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  .ts-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  .ts-panel {
+    position: relative;
+    width: 100%;
+    max-width: 520px;
+    max-height: 92vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 0;
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  @media (min-width: 640px) {
+    .ts {
+      align-items: center;
+    }
+
+    .ts-panel {
+      border-radius: var(--radius);
+    }
+  }
+
+  .ts-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    background: var(--tvc-white);
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .ts-head h2 {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font-size: var(--text-xl);
+  }
+
+  .ts-body {
+    padding: 16px 20px 20px;
+  }
+
+  .ts-switch {
+    margin-bottom: 14px;
+  }
+
+  .ts-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .ts-who {
+    font-size: var(--text-xl);
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+
+  .ts-meta {
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .ts-dates {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: var(--radius-field);
+    background: var(--tvc-cream);
+  }
+
+  .ts-dates small {
+    display: block;
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+  }
+
+  .ts-dates b {
+    font-size: var(--text-md);
+  }
+
+  .ts-nights {
+    margin-left: auto;
+    text-align: right;
+  }
+
+  .ts-nights b {
+    font-size: var(--text-2xl);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ts-sec {
+    margin: 18px 0 6px;
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tvc-ink-soft);
+  }
+
+  .ts-guest {
+    padding: 8px 0;
+    border-top: 1px solid var(--tvc-line);
+    overflow-wrap: anywhere;
+  }
+
+  /* A food or allergy note can be a long sentence typed by a guest, so it wraps under the name. */
+  .ts-notetext {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  /* A long comment starts as one line with an ellipsis; "Show more" opens it. */
+  .ts-pref.is-clamped,
+  .ts-notetext.is-clamped {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .ts-pref {
+    margin-top: 4px;
+    padding: 6px 10px;
+    border-radius: var(--radius-field);
+    background: var(--tvc-orange-tint);
+    font-size: var(--text-sm);
+  }
+
+  .ts-guest:first-of-type {
+    border-top: 0;
+  }
+
+  .ts-sub {
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .ts-chips,
+  .ts-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .ts-actions {
+    margin-top: 16px;
+  }
+
+  .ts-panelbox {
+    margin-top: 14px;
+    padding: 14px;
+    border-radius: var(--radius);
+    background: var(--tvc-cream);
+  }
+
+  .ts-panelbox label {
+    display: block;
+    margin: 0 0 4px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .ts-panelbox input[type='text'],
+  .ts-panelbox input[type='tel'],
+  .ts-panelbox input[type='date'],
+  .ts-panelbox select,
+  .ts-panelbox textarea {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 40px;
+    padding: 8px 10px;
+    font: inherit;
+    color: var(--tvc-ink);
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+  }
+
+  .ts-panelbox input:focus,
+  .ts-panelbox select:focus,
+  .ts-panelbox textarea:focus {
+    outline: none;
+    border-color: var(--tvc-orange);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--tvc-orange) 25%, transparent);
+  }
+
+  .ts-edit {
+    padding: 10px 0;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  .ts-edit:first-of-type {
+    border-top: 0;
+  }
+
+  .ts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  @media (max-width: 480px) {
+    .ts-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .ts-hint {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .ts-link {
+    padding: 4px 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-weight: 600;
+    color: var(--tvc-green-dark);
+    cursor: pointer;
+  }
+
+  .ts-error {
+    margin: 12px 0 0;
+    padding: 10px 12px;
+    border-radius: var(--radius-field);
+    background: var(--tvc-orange-tint);
+    font-size: var(--text-sm);
+  }
+
+  .ts-banner {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-radius: var(--radius-field);
+    background: var(--tvc-orange-tint);
+    font-size: var(--text-sm);
+  }
+</style>
+
+<script>
+  import { TOKEN_KEY, askSheet, showToast } from '../../../scripts/lib/staff-client.mjs';
+  import { setBusy } from '../../../scripts/lib/busy.mjs';
+  import { normalizeMobileNumber } from '../../../scripts/lib/accommodation.mjs';
+  import { checkOutDate } from '../../../scripts/lib/stay-notice.mjs';
+  import { nightsBetween, nightsOf } from '../../../scripts/lib/stay-booking-flow.mjs';
+  import { buildUpdatePayload, canWriteBooking, datesProblem, freeTentsFor, guestsProblem, otherTentIds, stayState, stayStatus, tentGuests } from '../../../scripts/lib/stay-tent-sheet.mjs';
+
+  interface Guest {
+    personId?: string;
+    name?: string;
+    ageGroup?: string;
+    gender?: string;
+    preferences?: string;
+    hasMobile?: boolean;
+  }
+  interface Booking {
+    id: string;
+    type: string;
+    label?: string;
+    eventTitle?: string;
+    startDate: string;
+    nights: number;
+    note?: string;
+    isPast: boolean;
+    tents: Array<{ tentId: string; solo?: boolean; guests: Guest[] }>;
+  }
+  interface Unit {
+    id: string;
+    label: string;
+    shortLabel?: string;
+    capacity: number;
+    kind: string;
+    manager: string;
+    status: string;
+  }
+  interface OpenCtx {
+    booking: Booking;
+    tentId?: string;
+    date: string;
+    leaving?: Booking | null;
+    units: Unit[];
+    bookings: Booking[];
+    role: string;
+    allowedTypes: string[] | null;
+  }
+  interface Draft {
+    key: number;
+    personId?: string;
+    name: string;
+    ageGroup: string;
+    gender?: string;
+    preferences: string;
+    mobileNumber: string;
+  }
+
+  function mount(root: HTMLElement) {
+    const bodyEl = root.querySelector('#ts-body') as HTMLElement;
+    const titleEl = root.querySelector('#ts-title') as HTMLElement;
+    const pillEl = root.querySelector('#ts-pill') as HTMLElement;
+
+    let ctx: OpenCtx | null = null;
+    let booking: Booking | null = null;
+    let tentId = '';
+    let panel: '' | 'guests' | 'dates' | 'move' = '';
+    let draft: Draft[] = [];
+    let draftSeq = 0;
+    let dates = { start: '', end: '' };
+    let moveTo = '';
+    let moveOptions: Unit[] | null = null; // null while the free tents are being worked out
+    let reason = '';
+    let error = '';
+    let openNotes = new Set<string>(); // which long comments are expanded; they start collapsed
+
+    const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+    const fmt = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+    const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+    const unit = (id: string) => ctx?.units.find((u) => u.id === id);
+    const isClosure = (b: Booking) => b.type === 'unit-closure' || b.type === 'farm-closure';
+    // A comment typed by a guest or an admin can be a whole paragraph: past a short length it shows as one line with a toggle.
+    const LONG_NOTE = 60;
+    const noteHtml = (key: string, text: string, cls: string) => {
+      const long = text.length > LONG_NOTE;
+      const open = openNotes.has(key);
+      return `<div class="${cls}${long && !open ? ' is-clamped' : ''}">${esc(text)}</div>${long ? `<button type="button" class="ts-link" data-act="note" data-key="${key}" aria-expanded="${open}">${open ? 'Show less' : 'Show more'}</button>` : ''}`;
+    };
+    const can = () => Boolean(ctx && booking && canWriteBooking(ctx.role, ctx.allowedTypes, booking.type));
+    const titleOf = (b: Booking) => b.label ?? b.eventTitle ?? b.tents.flatMap((t) => t.guests).find((g) => g.name)?.name ?? (isClosure(b) ? 'Closed' : 'Booking');
+
+    async function authedFetch(input: string, init: RequestInit = {}): Promise<Response> {
+      const token = sessionStorage.getItem(TOKEN_KEY);
+      const res = await fetch(input, { ...init, headers: { ...init.headers, authorization: `Bearer ${token ?? ''}` } });
+      if (res.status === 401) {
+        root.dispatchEvent(new CustomEvent('stays-booking:unauthorized', { bubbles: true }));
+        throw new Error('Unauthorized');
+      }
+      if (res.status === 403) {
+        root.dispatchEvent(new CustomEvent('stays-booking:forbidden', { bubbles: true }));
+        throw new Error('Forbidden');
+      }
+      return res;
+    }
+    const handled = (err: unknown) => err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
+
+    function open(c: OpenCtx) {
+      ctx = c;
+      booking = c.booking;
+      tentId = c.tentId ?? c.booking.tents[0]?.tentId ?? '';
+      reset();
+      root.hidden = false;
+      render();
+      titleEl.focus();
+    }
+
+    function reset() {
+      panel = '';
+      draft = [];
+      moveTo = '';
+      moveOptions = null;
+      reason = '';
+      error = '';
+      openNotes = new Set();
+    }
+
+    function close() {
+      root.hidden = true;
+    }
+
+    // ---- drawing ----
+
+    function render() {
+      if (!ctx || !booking) return;
+      const b = booking;
+      const u = unit(tentId);
+      const closure = isClosure(b);
+      titleEl.textContent = b.type === 'farm-closure' ? 'Whole farm' : (u?.label ?? tentId);
+      const out = checkOutDate(b.startDate, b.nights);
+      const st = stayState(b, ctx.date);
+      pillEl.className = `pill ${closure ? 'pill--warn' : st.k === 'leaving' ? 'pill--warn' : 'pill--ok'}`;
+      // "Today" means the real today: a past or future day is named by its date, or put in the past tense.
+      pillEl.textContent = closure ? 'Closed' : stayStatus(b, ctx.date, new Date().toLocaleDateString('en-CA'), fmt);
+
+      // A turnover tent has two stays today: the one leaving and the one arriving. Switch between them here.
+      const switchBtn = (x: Booking, word: string) => `<button type="button" ${x === b ? 'aria-pressed="true"' : 'data-act="swap" aria-pressed="false"'}>${esc(titleOf(x))} · ${word}</button>`;
+      const switcher = ctx.leaving ? `<div class="segmented ts-switch" role="group" aria-label="Which stay">${switchBtn(ctx.leaving, 'out')}${switchBtn(ctx.booking, 'in')}</div>` : '';
+      const writable = can();
+      const nights = b.nights;
+      const guests = tentGuests(b, tentId) as Guest[];
+      const shown = guests.slice(0, 6);
+      const others = otherTentIds(b, tentId) as string[];
+
+      const guestRows = shown
+        .map(
+          (g, i) =>
+            `<div class="ts-guest"><div><b>${esc(g.name ?? '')}</b> <span class="ts-sub">${esc(g.ageGroup ?? '')}${g.hasMobile ? ' · mobile on file' : ''}</span></div>${g.preferences ? noteHtml(`g${i}`, g.preferences, 'ts-pref') : ''}</div>`,
+        )
+        .join('');
+      const more = guests.length > shown.length ? `<div class="ts-sub" style="padding:8px 0">+ ${guests.length - shown.length} more guests in this tent</div>` : '';
+
+      const header = `${switcher}<div class="ts-top"><div><div class="ts-who">${esc(titleOf(b))}</div><div class="ts-meta">${closure ? 'Not bookable on these dates' : `${esc(typeLabel(b.type))} · ${plural(guests.length, 'guest')} in this tent`}</div></div></div>
+        <div class="ts-dates"><div><small>${closure ? 'Closed from' : 'Check-in'}</small><b>${fmt(b.startDate)}</b></div><span aria-hidden="true">→</span><div><small>${closure ? 'Reopens' : 'Check-out'}</small><b>${fmt(out)}</b></div><div class="ts-nights"><b>${nights}</b><small>night${nights === 1 ? '' : 's'}</small></div></div>`;
+
+      const content = closure
+        ? b.note ? `<div style="margin-top:10px">${noteHtml('note', b.note, 'ts-notetext ts-sub')}</div>` : ''
+        : `<div class="ts-sec">In this tent</div>${guestRows || '<p class="ts-hint">No guests listed.</p>'}${more}${b.note ? `<div class="ts-sec">Note</div>${noteHtml('note', b.note, 'ts-notetext')}` : ''}${
+            others.length ? `<div class="ts-sec">Also in this booking</div><div class="ts-chips">${others.map((id) => `<button type="button" class="button button--outline button--small" data-act="tent" data-id="${esc(id)}">${esc(unit(id)?.label ?? id)}</button>`).join('')}</div>` : ''
+          }`;
+
+      const actions = !writable
+        ? `<div class="ts-banner">You can look at this ${closure ? 'closure' : 'tent'} but not change it. Ask an admin for changes.</div>`
+        : closure
+          ? `<div class="ts-actions"><button type="button" class="button button--outline" data-act="panel" data-p="dates">Change dates</button><button type="button" class="button button--danger-outline" data-act="cancel">Reopen ${b.type === 'farm-closure' ? 'the farm' : 'the tent'}</button></div>`
+          : `<div class="ts-actions"><button type="button" class="button button--outline" data-act="panel" data-p="guests">Edit guests</button><button type="button" class="button button--outline" data-act="panel" data-p="dates">Change dates</button>${
+              b.tents.length ? `<button type="button" class="button button--outline" data-act="panel" data-p="move">Move tent</button>` : ''
+            }<button type="button" class="button button--danger-outline" data-act="cancel">Cancel booking</button></div>`;
+
+      bodyEl.innerHTML = `${header}${content}${actions}${writable ? panelHtml() : ''}${error ? `<p class="ts-error" role="alert">${esc(error)}</p>` : ''}${
+        writable && !closure ? `<p class="ts-hint" style="margin-top:16px">Need something else, like notifying a member? <button type="button" class="ts-link" data-act="full">Open the full booking</button></p>` : ''
+      }`;
+    }
+
+    const typeLabel = (t: string) => ({ 'casual-stay': 'Guest stay', 'member-stay': 'Member stay', 'public-event': 'Public event', 'private-event': 'Private event', 'unit-closure': 'Tent closure', 'farm-closure': 'Farm closure' })[t] ?? t;
+
+    const reasonHtml = () =>
+      booking?.isPast ? `<div style="margin-bottom:10px"><label for="ts-reason">Why? <span class="ts-sub">(required: this stay has already happened)</span></label><textarea id="ts-reason" rows="2" data-bind="reason">${esc(reason)}</textarea></div>` : '';
+
+    function panelHtml(): string {
+      if (!panel || !booking || !ctx) return '';
+      if (panel === 'guests') {
+        const u = unit(tentId);
+        const rows = draft
+          .map((g) => {
+            const known = Boolean(g.personId);
+            return `<div class="ts-edit"><div class="ts-grid">${
+              known
+                ? `<div><label>Name</label><div style="padding:9px 0"><b>${esc(g.name)}</b></div></div>`
+                : `<div><label for="ts-n-${g.key}">Name</label><input type="text" id="ts-n-${g.key}" data-gk="${g.key}" data-f="name" value="${esc(g.name)}" autocomplete="off"></div>`
+            }<div><label for="ts-p-${g.key}">Food / allergies</label><input type="text" id="ts-p-${g.key}" data-gk="${g.key}" data-f="preferences" value="${esc(g.preferences)}"></div></div>${
+              known ? '' : `<div class="ts-grid" style="margin-top:8px"><div><label for="ts-m-${g.key}">Mobile</label><input type="tel" inputmode="tel" id="ts-m-${g.key}" data-gk="${g.key}" data-f="mobileNumber" value="${esc(g.mobileNumber)}" placeholder="98450 12345"></div><div><label for="ts-a-${g.key}">Age</label><select id="ts-a-${g.key}" data-gk="${g.key}" data-f="ageGroup"><option ${g.ageGroup === 'Adult' ? 'selected' : ''}>Adult</option><option ${g.ageGroup === 'Child' ? 'selected' : ''}>Child</option></select></div></div>`
+            }<button type="button" class="ts-link" data-act="rm-guest" data-k="${g.key}">Remove ${esc(g.name || 'this guest')}</button></div>`;
+          })
+          .join('');
+        const solo = Boolean(booking.tents.find((t) => t.tentId === tentId)?.solo);
+        const full = draft.length >= (u?.capacity ?? 0) || solo;
+        return `<div class="ts-panelbox"><b>Guests in ${esc(u?.label ?? tentId)}</b>${rows || '<p class="ts-hint" style="margin-top:6px">Nobody listed.</p>'}
+          <div class="ts-actions" style="margin-top:10px"><button type="button" class="ts-link" data-act="add-guest" ${full ? 'disabled' : ''}>+ Add a guest</button></div>
+          ${solo ? '<p class="ts-hint">A family booking lists one guest.</p>' : ''}${reasonHtml()}
+          <div class="ts-actions"><button type="button" class="button button--primary" data-act="save-guests">Save guests</button><button type="button" class="button button--outline" data-act="panel" data-p="guests">Cancel</button></div></div>`;
+      }
+      if (panel === 'dates') {
+        const n = dates.start && dates.end ? nightsBetween(dates.start, dates.end) : 0;
+        return `<div class="ts-panelbox"><b>Change dates</b><div class="ts-grid" style="margin-top:8px"><div><label for="ts-in">Check-in</label><input type="date" id="ts-in" data-bind="start" value="${esc(dates.start)}"></div><div><label for="ts-out">Check-out</label><input type="date" id="ts-out" data-bind="end" value="${esc(dates.end)}"></div></div>
+          <p class="ts-hint" style="margin:8px 0 10px">${n ? plural(n, 'night') + '. ' : ''}${isClosure(booking) ? '' : 'The whole booking moves, every tent in it. '}If a tent is taken for the new dates you will be told before anything changes.</p>${reasonHtml()}
+          <div class="ts-actions"><button type="button" class="button button--primary" data-act="save-dates">Save dates</button><button type="button" class="button button--outline" data-act="panel" data-p="dates">Cancel</button></div></div>`;
+      }
+      // move
+      if (moveOptions === null) return '<div class="ts-panelbox"><p class="ts-hint">Checking which tents are free…</p></div>';
+      const chips = moveOptions.map((u) => `<button type="button" class="button ${moveTo === u.id ? 'button--primary' : 'button--outline'} button--small" data-act="pick-move" data-id="${esc(u.id)}" aria-pressed="${moveTo === u.id}">${esc(u.shortLabel || u.label)}</button>`).join('');
+      return `<div class="ts-panelbox"><b>Move to another tent</b><p class="ts-hint" style="margin:4px 0 8px">Free for ${fmt(booking.startDate)} → ${fmt(checkOutDate(booking.startDate, booking.nights))}${moveOptions.length ? ':' : '.'}</p>
+        <div class="ts-chips">${chips || '<span class="ts-hint">No tent is free for these dates that fits this tent\'s guests.</span>'}</div>${moveOptions.length ? reasonHtml() : ''}
+        ${moveTo ? `<div class="ts-actions"><button type="button" class="button button--primary" data-act="save-move">Move to ${esc(unit(moveTo)?.label ?? moveTo)}</button><button type="button" class="button button--outline" data-act="panel" data-p="move">Cancel</button></div>` : ''}</div>`;
+    }
+
+    // ---- panels ----
+
+    function openPanel(p: 'guests' | 'dates' | 'move') {
+      if (!booking) return;
+      if (panel === p) {
+        panel = '';
+        error = '';
+        render();
+        return;
+      }
+      panel = p;
+      error = '';
+      reason = '';
+      if (p === 'guests') draft = (tentGuests(booking, tentId) as Guest[]).map((g) => ({ key: ++draftSeq, personId: g.personId, name: g.name ?? '', ageGroup: g.ageGroup ?? 'Adult', gender: g.gender, preferences: g.preferences ?? '', mobileNumber: '' }));
+      if (p === 'dates') dates = { start: booking.startDate, end: checkOutDate(booking.startDate, booking.nights) };
+      if (p === 'move') {
+        moveTo = '';
+        moveOptions = null;
+        void loadMoveOptions();
+      }
+      render();
+    }
+
+    // The bookings in view may not reach every night of this stay, so ask for the months it touches.
+    async function loadMoveOptions() {
+      if (!ctx || !booking) return;
+      try {
+        const last = nightsOf(booking.startDate, booking.nights).slice(-1)[0];
+        const months = [...new Set([booking.startDate.slice(0, 7), last.slice(0, 7)])];
+        const bodies = (await Promise.all(months.map(async (m) => (await authedFetch(`/api/accommodation-admin/bookings?month=${m}`)).json()))) as Array<{ bookings: Booking[] }>;
+        const byId = new Map(bodies.flatMap((x) => x.bookings).map((x) => [x.id, x]));
+        moveOptions = freeTentsFor({ units: ctx.units, bookings: [...byId.values()], booking, tentId }) as Unit[];
+      } catch (err) {
+        moveOptions = [];
+        if (!handled(err)) error = 'Could not check which tents are free. Try again.';
+      }
+      render();
+    }
+
+    // ---- saving ----
+
+    async function send(change: Parameters<typeof buildUpdatePayload>[1], button: HTMLButtonElement) {
+      if (!ctx || !booking) return;
+      if (booking.isPast && !reason.trim()) {
+        error = 'A reason is required to change a stay that has already happened.';
+        render();
+        return;
+      }
+      const done = setBusy(button, 'Saving…');
+      try {
+        const res = await authedFetch('/api/accommodation-admin/bookings/update', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(buildUpdatePayload(booking, change, { reason, units: ctx.units })),
+        });
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) {
+          error = data.error ?? 'Could not save. Try again.';
+          render();
+          return;
+        }
+        close();
+        showToast('Saved');
+        root.dispatchEvent(new CustomEvent('stays-booking:saved', { bubbles: true }));
+      } catch (err) {
+        if (!handled(err)) {
+          error = 'Could not save. Try again.';
+          render();
+        }
+      } finally {
+        done();
+      }
+    }
+
+    function saveGuests(button: HTMLButtonElement) {
+      if (!booking) return;
+      const u = unit(tentId);
+      const solo = Boolean(booking.tents.find((t) => t.tentId === tentId)?.solo);
+      const cleaned = draft.map((g) => ({ ...g, mobileNumber: g.personId ? '' : (normalizeMobileNumber(g.mobileNumber) ?? g.mobileNumber) }));
+      const problem = guestsProblem(cleaned, { label: u?.label ?? tentId, capacity: u?.capacity ?? 0 }, solo);
+      if (problem) {
+        error = problem;
+        render();
+        return;
+      }
+      void send({ kind: 'guests', tentId, guests: cleaned }, button);
+    }
+
+    function saveDates(button: HTMLButtonElement) {
+      const nights = dates.start && dates.end ? nightsBetween(dates.start, dates.end) : 0;
+      const problem = datesProblem(dates.start, nights);
+      if (problem) {
+        error = problem;
+        render();
+        return;
+      }
+      void send({ kind: 'dates', startDate: dates.start, nights }, button);
+    }
+
+    // Cancelling is the page's own flow (the reason for a past stay, whether to message the guests): the sheet asks
+    // for it and closes once it has gone through. In a booking with several tents there is a second choice first.
+    async function cancel(button: HTMLButtonElement) {
+      if (!booking) return;
+      if (!isClosure(booking) && booking.tents.length > 1) {
+        const choice = await askSheet({
+          title: `Cancel what?`,
+          text: `This booking has ${booking.tents.length} tents.`,
+          actions: [
+            { label: `Remove just ${unit(tentId)?.label ?? 'this tent'}`, value: 'tent', kind: 'danger-outline' },
+            { label: 'Cancel the whole booking', value: 'all', kind: 'danger' },
+            { label: 'Keep it', value: null },
+          ],
+        });
+        if (!choice) return;
+        if (choice === 'tent') {
+          void send({ kind: 'removeTent', tentId }, button);
+          return;
+        }
+      }
+      const cancelled = await new Promise<boolean>((resolve) => root.dispatchEvent(new CustomEvent('tent-sheet:cancel', { detail: { id: booking!.id, button, resolve }, bubbles: true })));
+      if (cancelled) close();
+    }
+
+    // ---- events ----
+
+    root.addEventListener('click', (ev) => {
+      const el = (ev.target as HTMLElement).closest<HTMLElement>('[data-act]');
+      if (!el || !booking) return;
+      switch (el.dataset.act) {
+        case 'close':
+          close();
+          break;
+        case 'panel':
+          openPanel(el.dataset.p as 'guests' | 'dates' | 'move');
+          break;
+        case 'swap':
+          if (ctx?.leaving) {
+            const other = booking === ctx.booking ? ctx.leaving : ctx.booking;
+            booking = other;
+            tentId = other.tents.find((t) => t.tentId === tentId)?.tentId ?? other.tents[0]?.tentId ?? tentId;
+            reset();
+            render();
+          }
+          break;
+        case 'note': {
+          const key = el.dataset.key!;
+          if (openNotes.has(key)) openNotes.delete(key);
+          else openNotes.add(key);
+          render();
+          break;
+        }
+        case 'tent':
+          tentId = el.dataset.id!;
+          reset();
+          render();
+          break;
+        case 'add-guest':
+          draft.push({ key: ++draftSeq, name: '', ageGroup: 'Adult', preferences: '', mobileNumber: '' });
+          render();
+          break;
+        case 'rm-guest':
+          draft = draft.filter((g) => g.key !== Number(el.dataset.k));
+          render();
+          break;
+        case 'save-guests':
+          saveGuests(el as HTMLButtonElement);
+          break;
+        case 'save-dates':
+          saveDates(el as HTMLButtonElement);
+          break;
+        case 'pick-move':
+          moveTo = el.dataset.id!;
+          render();
+          break;
+        case 'save-move':
+          void send({ kind: 'move', from: tentId, to: moveTo }, el as HTMLButtonElement);
+          break;
+        case 'cancel':
+          void cancel(el as HTMLButtonElement);
+          break;
+        case 'full':
+          close();
+          root.dispatchEvent(new CustomEvent('tent-sheet:full', { detail: { id: booking.id, tentId }, bubbles: true }));
+          break;
+      }
+    });
+
+    // Typing updates the answers without redrawing (a redraw would lose the cursor).
+    root.addEventListener('input', (ev) => {
+      const el = ev.target as HTMLInputElement;
+      if (el.dataset.bind === 'reason') reason = el.value;
+      else if (el.dataset.bind === 'start') dates.start = el.value;
+      else if (el.dataset.bind === 'end') dates.end = el.value;
+      else if (el.dataset.gk && el.dataset.f) {
+        const g = draft.find((x) => x.key === Number(el.dataset.gk));
+        if (g) (g as unknown as Record<string, string>)[el.dataset.f] = el.value;
+      }
+    });
+
+    root.addEventListener('change', (ev) => {
+      const el = ev.target as HTMLInputElement;
+      // The nights read-back under the date fields follows the two dates.
+      if (el.dataset.bind === 'start' || el.dataset.bind === 'end') render();
+    });
+
+    document.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape' && !root.hidden) close();
+    });
+
+    (root as any).tentSheet = { open };
+    root.dispatchEvent(new CustomEvent('tent-sheet:ready'));
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-ts]').forEach(mount);
+</script>
