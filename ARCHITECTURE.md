@@ -659,6 +659,10 @@ outside both the local machine and Netlify (the member-update-email workflow).
   The Stays page's Day view (`accommodation-calendar.astro`) shows the same plan above its per-tent rows,
   built by the same `buildDayPlan`, with a Copy-as-message button (`planToMessageText`); in Day view it also
   fetches the previous month so a stay that checks out on the 1st is found.
+  **By tent** (below the plan in Day view) is one tile per unit, grouped, from `scripts/lib/stay-tent-states.mjs`
+  (tested): arriving, staying, leaving (free tonight but to be cleaned), a same-day turnover (both stays shown), closed (a
+  tent closure, or a whole-farm closure unless the unit stays open), member-run, or free; a summary line counts the
+  farm's own open tents in use and the free tents and beds. A tile opens its booking, a free one starts a new booking.
 - **`netlify/functions/stays-day-summary.mts`** — `POST /api/stays-day-summary` (`{date}`; `view` on the
   `accommodation` module, and only for roles that may see guest names, so `read_only` gets `summary: null`),
   behind the Day view's AI summary box. Reads that day's bookings itself, turns them into **anonymous facts**

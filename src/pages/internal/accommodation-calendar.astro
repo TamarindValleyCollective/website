@@ -753,11 +753,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   .lg--visit { background: color-mix(in srgb, var(--tvc-ink) 20%, var(--tvc-white)); border-left: 3px solid var(--tvc-ink-soft); }
   .lg--closed { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--tvc-ink) 25%, var(--tvc-white)) 0 4px, color-mix(in srgb, var(--tvc-ink) 10%, var(--tvc-white)) 4px 8px); }
 
-  /* Day view: one wide row per tent instead of the table's one-column
-     squeeze (see renderDayView). Same status colors as the grid cells
-     (free/occupied/closed/past) for a consistent vocabulary, but with room
-     to actually show the booking's title and guest names instead of a
-     glyph behind a hover-only tooltip. */
+  /* Day view: the plan for the day, then one tile per tent (see renderDayView), instead of the table's one-column squeeze. */
   .day-view {
     display: flex;
     flex-direction: column;
@@ -765,11 +761,6 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     margin-bottom: 32px;
   }
 
-  /* Same grouping the booking form's Tents picker uses, extended to day
-     view (Sharath's feedback, 2026-09-10). A solid pill, not a tint, since
-     every .day-row state (free/occupied/closed/past) already claims a tint
-     of its own for status - a tinted heading would read as just another row
-     state instead of a heading sitting above them. */
   /* Plan for the day, above the per-tent rows (renderDayPlan). */
   .day-plan {
     display: flex;
@@ -878,23 +869,142 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     margin: 0;
   }
 
-  .day-group-heading {
-    align-self: flex-start;
-    margin-top: 12px;
-    padding: 3px 10px;
-    font-size: var(--text-xs);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--tvc-white);
-    background: var(--tvc-green);
-    border-radius: 999px;
+  /* By tent (tentTilesHtml): one tile per unit, grouped, saying what the tent is doing tonight. The same
+     vocabulary as the grid: green is a guest in, orange is something to do (clean), grey stripes are shut. */
+  .tent-sec {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 8px;
   }
 
-  .day-group-heading:first-child {
+  .tent-summary {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: var(--radius-field);
+    background: var(--tvc-green-tint);
+    font-size: var(--text-base);
+  }
+
+  .tent-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+    gap: 8px;
+  }
+
+  .tent-group {
+    grid-column: 1 / -1;
+    margin-top: 6px;
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tvc-ink-soft);
+  }
+
+  .tent-group:first-child {
     margin-top: 0;
   }
 
+  .tent-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    box-sizing: border-box;
+    min-height: 68px;
+    padding: 8px 10px;
+    text-align: left;
+    font: inherit;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink);
+    background: var(--tvc-white);
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+  }
+
+  button.tent-tile {
+    cursor: pointer;
+  }
+
+  button.tent-tile:hover {
+    outline: 2px solid var(--tvc-green);
+    outline-offset: -2px;
+  }
+
+  .tent-tile b {
+    font-size: var(--text-sm);
+  }
+
+  .tent-tile-state,
+  .tent-tile-who {
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+    overflow-wrap: anywhere;
+  }
+
+  .tent-tile--free {
+    border-style: dashed;
+    border-color: var(--tvc-line);
+  }
+
+  .tent-tile--arriving {
+    background: var(--tvc-green);
+    border-color: var(--tvc-green);
+    color: var(--tvc-white);
+  }
+
+  .tent-tile--arriving .tent-tile-state,
+  .tent-tile--arriving .tent-tile-who {
+    color: inherit;
+    opacity: 0.9;
+  }
+
+  .tent-tile--staying {
+    background: var(--tvc-green-tint);
+    border-color: var(--tvc-green);
+  }
+
+  .tent-tile--leaving {
+    background: var(--tvc-orange-tint);
+    border-color: var(--tvc-orange);
+  }
+
+  .tent-tile--turnover {
+    background: linear-gradient(135deg, var(--tvc-orange-tint) 50%, var(--tvc-green-tint) 50%);
+    border-color: var(--tvc-orange);
+  }
+
+  .tent-tile--closed,
+  .tent-tile--member {
+    background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--tvc-ink) 12%, var(--tvc-white)) 0 5px, color-mix(in srgb, var(--tvc-ink) 22%, var(--tvc-white)) 5px 7px);
+    border-color: var(--tvc-line);
+    color: var(--tvc-ink-soft);
+  }
+
+  .tent-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    font-size: var(--text-xs);
+    color: var(--tvc-ink-soft);
+  }
+
+  .tent-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .tent-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    min-height: 0;
+    padding: 0;
+    border-radius: 4px;
+  }
+
+  /* The whole-farm closure banner above the tiles. */
   .day-row {
     display: flex;
     align-items: baseline;
@@ -903,20 +1013,6 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     padding: 12px 16px;
     border-radius: var(--radius);
     background: var(--tvc-green-tint);
-  }
-
-  .day-row-tent {
-    flex: 0 0 140px;
-    font-weight: 700;
-    font-size: var(--text-sm);
-  }
-
-  .day-row-main {
-    flex: 1 1 220px;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 4px 10px;
   }
 
   .day-row-title {
@@ -928,28 +1024,12 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     font-size: var(--text-sm);
   }
 
-  .day-row--occupied {
-    background: var(--tvc-orange-tint);
-  }
-
   .day-row--closed {
     background: color-mix(in srgb, var(--tvc-ink) 10%, var(--tvc-white));
-  }
-
-  .day-row--free-past {
-    background: color-mix(in srgb, var(--tvc-ink) 16%, var(--tvc-white));
-    color: var(--tvc-ink-soft);
-  }
-
-  .day-row--occupied,
-  .day-row--closed,
-  .day-row--free {
     cursor: pointer;
   }
 
-  .day-row--occupied:hover,
-  .day-row--closed:hover,
-  .day-row--free:hover {
+  .day-row--closed:hover {
     outline: 2px solid var(--tvc-green);
     outline-offset: -2px;
   }
@@ -1614,6 +1694,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 <script>
   import { normalizeMobileNumber, isValidEmail } from '../../../scripts/lib/accommodation.mjs';
   import { buildDayPlan, planToMessageText, tentsLabel } from '../../../scripts/lib/stay-day-plan.mjs';
+  import { unitStates, tentSummary } from '../../../scripts/lib/stay-tent-states.mjs';
 
   declare const google: any;
 
@@ -3189,86 +3270,73 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     return WEEKDAY_LETTERS[(dow + 6) % 7]; // re-index so Monday is 0
   }
 
-  // Day view gets its own wide, full-name-visible list instead of the
-  // table: with only one date column, the table's narrow, nowrap cells
-  // (built for 7-31 columns at once) had room for nothing but a single
-  // status glyph behind a hover-only tooltip - useless on a phone, where
-  // hover doesn't even exist. One flex row per tent, each free to wrap
-  // text and use the full page width, works the same way on a phone as on
-  // a desktop (see Sharath's own ask: "wide... keep mobile in mind").
+  // Day view has no table (one date column left room for nothing but a glyph behind a hover-only tooltip, useless on a
+  // phone). It shows the plan for the day (renderDayPlan), then "By tent": one tile per unit, grouped, saying what that
+  // tent is doing tonight (scripts/lib/stay-tent-states.mjs): arriving, staying, leaving (needs cleaning), a same-day
+  // turnover, closed, member-run, or free. A summary line above says how many tents are in use and what is free, so
+  // "can I fit another family?" needs no scanning; the details of each booking are in the plan above, not repeated here.
   function renderDayView() {
     const [date] = visibleDates();
     const today = new Date().toLocaleDateString('en-CA');
     const nightsByBookingId = new Map(currentBookings.map((b) => [b.id, new Set(nightsForBooking(b))]));
     const farmClosure = currentBookings.find((b) => b.type === 'farm-closure' && nightsByBookingId.get(b.id)!.has(date));
 
-    let html = '';
+    let banner = '';
     if (farmClosure) {
-      // Blocks the whole farm - one row, not one per tent (unlike the
-      // table, which is stuck repeating it down every row since that's
-      // just how a table works). A unit its owner set to stay open still gets its own row below.
+      // Blocks the whole farm: one row saying so, above the tiles (which show each affected tent as closed).
       const ariaLabel = cellTooltip(farmClosure, '').replace(/\n/g, ' — ');
-      html += `
+      banner = `
         <div class="day-row day-row--closed" data-booking-id="${farmClosure.id}" tabindex="0" role="button" aria-label="${escapeAttr(ariaLabel)}">
           <div class="day-row-title">${escapeAttr(typeDisplayLabel(farmClosure.type))}</div>
           ${farmClosure.note ? `<div class="day-row-guests">${escapeAttr(farmClosure.note)}</div>` : ''}
         </div>`;
     }
 
-    let lastGroup: string | null = null;
-    for (const unit of UNITS) {
-      // Closed with the farm (unless set to stay open), and offboarded units, have no row of their own.
-      if ((farmClosure && !unit.ignoresFarmClosure) || unit.status === 'offboarded') continue;
-      // Same grouping as the booking form's Tents picker (Malabar Hut/Banyan
-      // Hut/Bamboo Huts/Portable Tents), extended to the calendar's own
-      // views (Sharath's feedback, 2026-09-10) - UNITS is already in a
-      // fixed, group-contiguous order (see accommodation.mjs), so a heading
-      // only needs inserting when the group actually changes. The per-row
-      // name switches to shortLabel for the same reason the picker's did:
-      // the heading directly above already says "Malabar Hut," repeating it
-      // on every row underneath it would just reproduce the redundancy that
-      // change fixed there. aria-label keeps the full standalone `label`
-      // (below) since a screen reader announcing one row in isolation has
-      // no visual heading to inherit context from.
-      if (unit.group && unit.group !== lastGroup) {
-        html += `<div class="day-group-heading">${escapeAttr(unit.group)}</div>`;
-        lastGroup = unit.group;
-      }
-      const occupying = currentBookings.find((b) => b.type !== 'farm-closure' && b.tents.some((t) => t.tentId === unit.id) && nightsByBookingId.get(b.id)!.has(date));
-      if (occupying) {
-        const title = occupying.label ?? occupying.eventTitle ?? typeDisplayLabel(occupying.type);
-        const guestNames =
-          occupying.tents
-            .find((t) => t.tentId === unit.id)
-            ?.guests.map((g) => g.name)
-            .filter(Boolean)
-            .join(', ') || 'No guests listed';
-        const ariaLabel = cellTooltip(occupying, unit.id).replace(/\n/g, ' — ');
-        html += `
-          <div class="day-row day-row--occupied" data-booking-id="${occupying.id}" data-tent-id="${unit.id}" tabindex="0" role="button" aria-label="${escapeAttr(ariaLabel)}">
-            <div class="day-row-tent">${unit.shortLabel}</div>
-            <div class="day-row-main">
-              <span class="day-row-title">${escapeAttr(title)}</span>
-              <span class="day-row-guests">${escapeAttr(guestNames)}</span>
-            </div>
-          </div>`;
-      } else if (date < today || unit.manager === 'member') {
-        html += `
-          <div class="day-row day-row--free-past">
-            <div class="day-row-tent">${unit.shortLabel}</div>
-            <div class="day-row-main"><span class="day-row-title">—</span></div>
-          </div>`;
-      } else {
-        const ariaLabel = `${unit.label}, ${formatDateLabel(date, { day: 'numeric', month: 'long' })} — free, tap to book`;
-        html += `
-          <div class="day-row day-row--free" data-tent-id="${unit.id}" data-date="${date}" tabindex="0" role="button" aria-label="${escapeAttr(ariaLabel)}">
-            <div class="day-row-tent">${unit.shortLabel}</div>
-            <div class="day-row-main"><span class="day-row-title">Free — tap to book</span></div>
-          </div>`;
-      }
-    }
-    dayView.innerHTML = renderDayPlan(date) + `<h3 class="plan-heading">By tent</h3>` + html;
+    dayView.innerHTML = renderDayPlan(date) + `<section class="tent-sec" aria-label="By tent"><h3 class="plan-heading">By tent</h3>${banner}${tentTilesHtml(date, today)}</section>`;
     void loadPlanSummary(date);
+  }
+
+  function tentTilesHtml(date: string, today: string): string {
+    const states = unitStates(UNITS, currentBookings, date);
+    const bookingTitle = (b: Booking) => b.label ?? b.eventTitle ?? b.tents.flatMap((t) => t.guests).find((g) => g.name)?.name ?? typeDisplayLabel(b.type);
+    const guestsTonight = buildDayPlan(currentBookings, date, new Map(UNITS.map((u) => [u.id, u.label]))).dinner;
+    const sum = tentSummary(states);
+    const freeNames = sum.free.slice(0, 6).map(escapeHtml).join(', ') + (sum.free.length > 6 ? ` +${sum.free.length - 6} more` : '');
+    // Nothing to count when the whole farm is closed.
+    const summary = sum.total === 0 ? '<p class="tent-summary">No tents are open tonight.</p>' : `<p class="tent-summary">Tonight: <strong>${sum.inUse} of ${sum.total}</strong> tents in use · <strong>${guestsLabel(guestsTonight)}</strong>${
+      sum.free.length ? ` · Free: <strong>${sum.free.length} ${sum.free.length === 1 ? 'tent' : 'tents'}, ${sum.freeBeds} ${sum.freeBeds === 1 ? 'bed' : 'beds'}</strong> (${freeNames})` : ' · Nothing free tonight'
+    }</p>`;
+
+    let lastGroup: string | null = null;
+    let tiles = '';
+    for (const st of states) {
+      const u = st.unit as Unit;
+      const bk = st.booking as Booking | undefined;
+      const outBk = st.leaving as Booking | undefined;
+      if (u.group && u.group !== lastGroup) {
+        tiles += `<div class="tent-group">${escapeHtml(u.group)}</div>`;
+        lastGroup = u.group;
+      }
+      const name = escapeHtml(u.shortLabel || u.label);
+      const line = (state: string, detail?: string) => `<span class="tent-tile-state">${state}</span>${detail ? `<span class="tent-tile-who">${escapeHtml(detail)}</span>` : ''}`;
+      const withBooking = (cls: string, inner: string, b: Booking, aria: string) =>
+        `<button type="button" class="tent-tile tent-tile--${cls}" data-booking-id="${escapeAttr(b.id)}" data-tent-id="${escapeAttr(u.id)}" aria-label="${escapeAttr(aria)}"><b>${name}</b>${inner}</button>`;
+      const quiet = (cls: string, inner: string, aria: string) => `<div class="tent-tile tent-tile--${cls}" aria-label="${escapeAttr(aria)}"><b>${name}</b>${inner}</div>`;
+
+      if (st.k === 'arriving' && bk) tiles += withBooking('arriving', line('In', bookingTitle(bk)), bk, `${u.label}: arriving, ${bookingTitle(bk)}`);
+      else if (st.k === 'staying' && bk) tiles += withBooking('staying', line('Staying', bookingTitle(bk)), bk, `${u.label}: staying, ${bookingTitle(bk)}`);
+      else if (st.k === 'leaving' && bk) tiles += withBooking('leaving', line('Out · clean', bookingTitle(bk)), bk, `${u.label}: ${bookingTitle(bk)} leaves, needs cleaning`);
+      else if (st.k === 'turnover' && bk && outBk)
+        tiles += withBooking('turnover', `<span class="tent-tile-who">Out: ${escapeHtml(bookingTitle(outBk))}</span><span class="tent-tile-who">In: ${escapeHtml(bookingTitle(bk))}</span>`, bk, `${u.label}: ${bookingTitle(outBk)} leaves and ${bookingTitle(bk)} arrives today`);
+      else if (st.k === 'closed' && bk) tiles += withBooking('closed', line('Closed', st.why), bk, `${u.label}: closed, ${st.why ?? ''}`);
+      else if (st.k === 'closed') tiles += quiet('closed', line('Closed', st.why), `${u.label}: closed`);
+      else if (st.k === 'member') tiles += quiet('member', line('Member-run'), `${u.label}: managed by its member`);
+      // A free tent can be booked from here, unless the day has already gone.
+      else if (date < today) tiles += quiet('free', line('Free'), `${u.label}: free`);
+      else tiles += `<button type="button" class="tent-tile tent-tile--free" data-tent-id="${escapeAttr(u.id)}" data-date="${date}" aria-label="${escapeAttr(`${u.label}, ${formatDateLabel(date, { day: 'numeric', month: 'long' })}: free, tap to book`)}"><b>${name}</b>${line('Free')}</button>`;
+    }
+    const legend = ['arriving|Arriving', 'staying|Staying', 'leaving|Leaving (to clean)', 'turnover|Same-day turnover', 'closed|Closed'].map((x) => `<span><i class="tent-swatch tent-tile--${x.split('|')[0]}"></i>${x.split('|')[1]}</span>`).join('');
+    return `${summary}<div class="tent-tiles">${tiles}</div><div class="tent-legend">${legend}</div>`;
   }
 
   // ---- Plan for the day: shown above the per-tent rows in Day view. The same plan (scripts/lib/stay-day-plan.mjs) is
@@ -3596,14 +3664,14 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       }
       return;
     }
-    const row = (ev.target as HTMLElement).closest('.day-row[data-booking-id], .day-row--free[data-tent-id], .plan-row[data-booking-id]') as HTMLElement | null;
+    const row = (ev.target as HTMLElement).closest('.day-row[data-booking-id], .tent-tile[data-booking-id], .tent-tile--free[data-tent-id], .plan-row[data-booking-id]') as HTMLElement | null;
     if (row) activateCell(row);
   });
 
   dayView.addEventListener('keydown', (ev) => {
     if (ev.key !== 'Enter' && ev.key !== ' ') return;
-    // A real <button> row already turns Enter/Space into a click; only the div rows need this.
-    const row = (ev.target as HTMLElement).closest('.day-row[data-booking-id], .day-row--free[data-tent-id]') as HTMLElement | null;
+    // The tiles and plan rows are real buttons, which already turn Enter/Space into a click; only the closure banner needs this.
+    const row = (ev.target as HTMLElement).closest('.day-row[data-booking-id]') as HTMLElement | null;
     if (!row) return;
     ev.preventDefault();
     activateCell(row);
