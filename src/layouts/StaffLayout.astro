@@ -24,7 +24,7 @@ import { STAFF_ICONS as ICONS } from '../lib/staff-icons';
 interface Props {
   title: string;
   description?: string;
-  current: 'home' | ModuleId | 'access' | 'units' | 'security';
+  current: 'home' | ModuleId | 'access' | 'units' | 'previews' | 'security';
   // Start with the menu collapsed unless the person has chosen otherwise.
   collapseByDefault?: boolean;
   // 'full' (default): the content uses all the room to the right of the menu,
@@ -37,7 +37,8 @@ const { title, description = 'Internal tools for Tamarind Valley Collective.', c
 const toolIds: ModuleId[] = ['photo-pool', 'whatsapp', 'event-payments', 'accommodation', 'members', 'usage', 'site-map'];
 const adminItems = [
   { id: 'access', label: 'Access', path: '/internal/access/' },
-  { id: 'units', label: 'Units', path: '/internal/units/' },
+  { id: 'units', label: 'Rent out', path: '/internal/units/' },
+  { id: 'previews', label: 'Preview', path: '/internal/preview-features/' },
   { id: 'security', label: 'Security', path: '/internal/security/' },
 ] as const;
 ---
@@ -1400,7 +1401,7 @@ const adminItems = [
   // Offer this page's tour once, and only to someone who can actually see the page behind it.
   function canSeePage(me: Me): boolean {
     if (page === 'home') return true;
-    if (page === 'access' || page === 'units' || page === 'security') return me.isSuperAdmin;
+    if (page === 'access' || page === 'units' || page === 'previews' || page === 'security') return me.isSuperAdmin;
     return me.tools.some((t) => t.module === page);
   }
 

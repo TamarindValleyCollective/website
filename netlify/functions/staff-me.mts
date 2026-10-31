@@ -55,7 +55,8 @@ export default async (req: Request): Promise<Response> => {
       adminTools: person.isSuperAdmin
         ? [
             { label: 'Access', path: '/internal/access/', description: 'Who can do what' },
-            { label: 'Units', path: '/internal/units/', description: 'Onboard and manage the units Linger can sell' },
+            { label: 'Rent out', path: '/internal/units/', description: 'Onboard and manage the units members rent out' },
+            { label: 'Preview', path: '/internal/preview-features/', description: 'Try a member feature with a few homes first' },
             { label: 'Security', path: '/internal/security/', description: 'Your second factors' },
           ]
         : [],

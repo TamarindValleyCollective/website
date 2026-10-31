@@ -47,21 +47,21 @@ async function checkWhatsApp(): Promise<Check> {
   const oldest = Math.min(...waiting.map((c) => new Date(c.last_message_at).getTime()));
   const ms = Date.now() - oldest;
   // WhatsApp only lets us reply within 24 hours of the customer's last message, so a long wait is urgent.
-  return { item: { id: 'whatsapp', tool: 'WhatsApp inbox', tone: ms > 20 * 3_600_000 ? 'crit' : 'warn', title: `${plural(waiting.length, 'conversation needs', 'conversations need')} a reply`, detail: `WhatsApp inbox · the oldest has waited ${waited(ms)}`, count: waiting.length, href: '/internal/whatsapp/' } };
+  return { item: { id: 'whatsapp', tool: 'WhatsApp', tone: ms > 20 * 3_600_000 ? 'crit' : 'warn', title: `${plural(waiting.length, 'conversation needs', 'conversations need')} a reply`, detail: `WhatsApp · the oldest has waited ${waited(ms)}`, count: waiting.length, href: '/internal/whatsapp/' } };
 }
 
 async function checkEventPayments(): Promise<Check> {
   const res = await rest('/event_payments?select=mode,cancellation_requested_at,cancellation_declined_at,refunded_at&cancellation_requested_at=not.is.null&cancellation_declined_at=is.null&refunded_at=is.null');
   const rows = ((await res.json()) as { mode: string | null }[]).filter((r) => r.mode !== 'test');
   if (rows.length === 0) return { quiet: 'No cancellation requests are waiting on a decision.' };
-  return { item: { id: 'event-payments', tool: 'Event payments', tone: 'warn', title: `${plural(rows.length, 'cancellation request', 'cancellation requests')} to decide`, detail: 'Event payments · a guest has asked for a refund', count: rows.length, href: '/internal/event-payments/' } };
+  return { item: { id: 'event-payments', tool: 'Payments', tone: 'warn', title: `${plural(rows.length, 'cancellation request', 'cancellation requests')} to decide`, detail: 'Payments · a guest has asked for a refund', count: rows.length, href: '/internal/event-payments/' } };
 }
 
 async function checkMembers(): Promise<Check> {
   const [stories, family] = await Promise.all([count('/member_unit_stories?select=household_id&status=eq.in_review'), count('/member_family_requests?select=id&status=eq.pending')]);
   const parts = [stories ? plural(stories, 'unit story', 'unit stories') + ' to review' : null, family ? plural(family, 'family request', 'family requests') + ' to decide' : null].filter(Boolean) as string[];
   if (parts.length === 0) return { quiet: 'Nothing is waiting on you in the member register.' };
-  return { item: { id: 'members', tool: 'Member register', tone: 'warn', title: parts[0], detail: `Member register${parts.length > 1 ? ` · also ${parts[1]}` : ''}`, count: stories || family, href: '/internal/members/' } }; // the badge counts what the title names (the family requests are in the detail)
+  return { item: { id: 'members', tool: 'Members', tone: 'warn', title: parts[0], detail: `Members${parts.length > 1 ? ` · also ${parts[1]}` : ''}`, count: stories || family, href: '/internal/members/' } }; // the badge counts what the title names (the family requests are in the detail)
 }
 
 async function checkUsage(): Promise<Check> {
@@ -70,7 +70,7 @@ async function checkUsage(): Promise<Check> {
   if (rows.length === 0) return { quiet: 'Every service is within its free tier and credits.' };
   const services = new Set(rows.map((r) => r.alert_key.split('.')[0]));
   const critical = rows.some((r) => r.level === 'critical');
-  return { item: { id: 'usage', tool: 'Usage & limits', tone: critical ? 'crit' : 'warn', title: `${plural(services.size, 'service is', 'services are')} ${critical ? 'at a limit' : 'nearing a limit'}`, detail: 'Usage & limits · open it for what to do', count: services.size, href: '/internal/usage/' } };
+  return { item: { id: 'usage', tool: 'Usage', tone: critical ? 'crit' : 'warn', title: `${plural(services.size, 'service is', 'services are')} ${critical ? 'at a limit' : 'nearing a limit'}`, detail: 'Usage · open it for what to do', count: services.size, href: '/internal/usage/' } };
 }
 
 async function checkSecurity(): Promise<Check> {
@@ -100,9 +100,9 @@ export default async (req: Request): Promise<Response> => {
 
   const checks: [string, () => Promise<Check>][] = [];
   if (modules.has('whatsapp')) checks.push(['WhatsApp', checkWhatsApp]);
-  if (modules.has('event-payments')) checks.push(['Event payments', checkEventPayments]);
-  if (modules.has('members')) checks.push(['Member register', checkMembers]);
-  if (modules.has('usage')) checks.push(['Usage & limits', checkUsage]);
+  if (modules.has('event-payments')) checks.push(['Payments', checkEventPayments]);
+  if (modules.has('members')) checks.push(['Members', checkMembers]);
+  if (modules.has('usage')) checks.push(['Usage', checkUsage]);
   if (person.isSuperAdmin) checks.push(['Security', checkSecurity]);
 
   const items: Item[] = [];

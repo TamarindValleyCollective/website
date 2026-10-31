@@ -308,6 +308,22 @@ import SignInGate from '../../components/SignInGate.astro';
     flex: 1;
   }
 
+  /* Marks a feature still in preview. Takes the colour of its surroundings so it reads on the solid current item too. */
+  .beta-pill {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 0 8px;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: normal;
+    line-height: 1.6;
+    vertical-align: middle;
+    opacity: 0.75;
+  }
+
   /* One keyboard focus ring for everything in the portal, in the same orange the story and directory controls already use. */
   .shell :is(a, button, input, select, textarea, summary):focus-visible,
   .signin :is(a, button):focus-visible,
@@ -895,6 +911,15 @@ import SignInGate from '../../components/SignInGate.astro';
   .land-figure span {
     color: var(--tvc-ink-soft);
     font-size: var(--text-sm);
+  }
+
+  /* A card's contents when they are not a table or a figure of their own: padded like the heading above them. */
+  .unit-card-body {
+    padding: 10px 18px 6px;
+  }
+
+  .unit-card-body > :last-child {
+    margin-bottom: 12px;
   }
 
   .unit-card-empty {
@@ -1655,10 +1680,15 @@ import SignInGate from '../../components/SignInGate.astro';
     display: none;
   }
 
-  /* ---- My rental ---- */
+  /* ---- Rent out: a status card, one calendar card, a quiet payout row ---- */
   .rent {
     display: grid;
     gap: 14px;
+    container: rent / inline-size;
+  }
+
+  .rent--narrow {
+    max-width: 560px;
   }
 
   .rent-note {
@@ -1668,35 +1698,182 @@ import SignInGate from '../../components/SignInGate.astro';
     line-height: 1.45;
   }
 
-  .rent-opt {
+  .rent-status {
     display: flex;
-    gap: 12px;
-    align-items: flex-start;
-    margin: 0 0 10px;
-    padding: 12px;
-    border: 1px solid var(--tvc-line);
-    border-radius: var(--radius-field);
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 18px;
+  }
+
+  .rent-what {
+    display: grid;
+    gap: 2px;
+  }
+
+  .rent-what b {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: var(--text-lg);
+    font-weight: 600;
+  }
+
+  .rent-dot {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  /* On is green, off is orange (it needs a decision, it is not an error), paused is red (the core team did it). */
+  .rent-card--on {
+    border-color: color-mix(in srgb, var(--tvc-green-dark) 40%, var(--tvc-white));
+    background: color-mix(in srgb, var(--tvc-green-dark) 10%, var(--tvc-white));
+  }
+
+  .rent-card--on .rent-what b {
+    color: var(--tvc-green-dark);
+  }
+
+  .rent-card--off {
+    border-color: color-mix(in srgb, var(--tvc-orange) 50%, var(--tvc-white));
+    background: color-mix(in srgb, var(--tvc-orange) 13%, var(--tvc-white));
+  }
+
+  .rent-card--off .rent-what b {
+    color: var(--tvc-orange-text);
+  }
+
+  .rent-card--paused {
+    border-color: var(--tvc-error-border);
+    background: var(--tvc-error-bg);
+  }
+
+  .rent-card--paused .rent-what b {
+    color: var(--tvc-error-text);
+  }
+
+  .rent-what span {
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .rent-switch {
+    position: relative;
+    flex: none;
+    width: 52px;
+    height: 30px;
+  }
+
+  .rent-switch input {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    margin: 0;
+    opacity: 0;
     cursor: pointer;
   }
 
-  .rent-opt input {
+  .rent-switch i {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: var(--tvc-line-strong);
+    transition: background 0.15s;
+  }
+
+  .rent-switch i::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--tvc-white);
+    transition: transform 0.15s;
+  }
+
+  .rent-switch input:checked + i {
+    background: var(--tvc-green-dark);
+  }
+
+  .rent-switch input:checked + i::after {
+    transform: translateX(22px);
+  }
+
+  .rent-switch input:disabled + i {
+    opacity: 0.4;
+  }
+
+  .rent-switch input:focus-visible + i {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .rent-card .rent-modes {
+    border-top-color: color-mix(in srgb, currentColor 14%, transparent);
+  }
+
+  .rent-modes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    align-items: center;
+    padding: 12px 18px;
+    border-top: 1px solid var(--tvc-line);
+    font-size: var(--text-sm);
+  }
+
+  .rent-more-set {
+    margin-left: auto;
+    color: var(--tvc-ink-soft);
+  }
+
+  .rent-more-set summary {
+    cursor: pointer;
+  }
+
+  .rent-more-set .rent-check {
+    margin: 8px 0 0;
+    color: var(--tvc-ink);
+  }
+
+  .rent-pay {
+    padding: 12px 18px;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .rent-pay b {
+    margin-right: 6px;
+    color: var(--tvc-ink);
+    font-size: var(--text-base);
+    font-weight: 600;
+  }
+
+  .rent-pick {
+    margin: 0 0 12px;
+  }
+
+  .rent-check {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin: 0 0 12px;
+    font-size: var(--text-base);
+    cursor: pointer;
+  }
+
+  .rent-check input {
     flex: none;
     width: 20px;
     height: 20px;
-    margin: 2px 0 0;
+    margin: 0;
     accent-color: var(--tvc-green-dark);
-  }
-
-  .rent-opt b {
-    display: block;
-    font-size: var(--text-base);
-  }
-
-  .rent-opt span span {
-    display: block;
-    font-size: var(--text-sm);
-    color: var(--tvc-ink-soft);
-    line-height: 1.4;
   }
 
   .rent-field {
@@ -1718,25 +1895,11 @@ import SignInGate from '../../components/SignInGate.astro';
     font-size: var(--text-md);
   }
 
-  .rent-list {
-    margin: 0 0 12px;
-    padding: 0;
-    list-style: none;
-    font-size: var(--text-sm);
-  }
-
-  .rent-list > li {
+  .rent-dates {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px 12px;
-    align-items: baseline;
-    justify-content: space-between;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--tvc-line);
-  }
-
-  .rent-stays > li {
-    display: block;
+    gap: 8px 12px;
+    align-items: end;
   }
 
   .rent-guests {
@@ -1746,22 +1909,271 @@ import SignInGate from '../../components/SignInGate.astro';
     list-style: disc;
   }
 
-  .rent-dates {
+  /* The calendar card: nav and key on top, two months and Coming up in the body, a Block bar when nights are chosen. */
+  .cal-top {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 8px 16px;
     align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px 0;
   }
 
-  .rent-dates input {
-    min-height: 44px;
-    padding: 0 12px;
-    border: 1px solid var(--tvc-line-strong);
+  .cal-nav-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .cal-nav-row .link-btn {
+    margin-left: 6px;
+  }
+
+  .cal-nav {
+    width: 44px;
+    height: 44px;
+    border: 0;
     border-radius: var(--radius-field);
-    background: var(--tvc-white);
+    background: none;
+    color: var(--tvc-green-dark);
+    font-size: 1.5rem;
+    cursor: pointer;
+  }
+
+  .cal-nav:disabled {
+    color: var(--tvc-line-strong);
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .cal-key {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    align-items: center;
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .cal-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: 4px;
+  }
+
+  .cal-body {
+    display: grid;
+    gap: 18px 32px;
+    padding: 10px 18px 16px;
+  }
+
+  .cal-months {
+    display: grid;
+    gap: 18px 28px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cal-month--1 {
+    display: none;
+  }
+
+  .cal-title {
+    display: block;
+    margin: 0 0 6px;
+    font-size: var(--text-md);
+    font-weight: 600;
+  }
+
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+  }
+
+  .cal-dow {
+    padding: 4px 0;
+    text-align: center;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .cal-day {
+    height: 44px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
     color: var(--tvc-ink);
     font: inherit;
-    font-size: var(--text-md);
+    font-size: var(--text-base);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+  }
+
+  .cal-day:hover {
+    background: var(--tvc-cream);
+  }
+
+  .cal-day--today {
+    font-weight: 700;
+    box-shadow: inset 0 0 0 1px var(--tvc-line-strong);
+  }
+
+  .cal-day--past {
+    color: var(--tvc-ink-soft);
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .cal-day--locked,
+  .cal-day--locked:hover {
+    background: none;
+    color: var(--tvc-ink-soft);
+    cursor: default;
+  }
+
+  .cal-day--past:hover {
+    background: none;
+  }
+
+  .cal-day--mine,
+  .cal-swatch--mine {
+    background: color-mix(in srgb, var(--tvc-green-dark) 22%, var(--tvc-white));
+  }
+
+  .cal-day--farm,
+  .cal-day--tvc,
+  .cal-swatch--farm {
+    background: var(--tvc-cream);
+    color: var(--tvc-ink-soft);
+    text-decoration: line-through;
+  }
+
+  .cal-day--stay,
+  .cal-swatch--stay {
+    background: color-mix(in srgb, var(--tvc-orange) 28%, var(--tvc-white));
+  }
+
+  .cal-day--mine:hover,
+  .cal-day--farm:hover,
+  .cal-day--tvc:hover,
+  .cal-day--stay:hover {
+    background: inherit;
+  }
+
+  .cal-day--in {
+    background: var(--tvc-green-tint);
+    border-radius: 0;
+  }
+
+  .cal-day--edge,
+  .cal-day--edge:hover {
+    background: var(--tvc-green-dark);
+    color: var(--tvc-white);
+    font-weight: 700;
+  }
+
+  .cal-side {
+    display: grid;
+    align-content: start;
+    gap: 2px;
+  }
+
+  .cal-agenda-title {
+    margin: 0 0 4px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .cal-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    padding: 10px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--tvc-ink);
+    font: inherit;
+    font-size: var(--text-base);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .cal-row:hover {
+    background: var(--tvc-cream);
+  }
+
+  .cal-row-what,
+  .cal-empty {
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  .cal-empty {
+    margin: 0;
+    padding: 6px 10px;
+  }
+
+  .cal-detail {
+    display: grid;
+    gap: 6px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--tvc-line);
+    font-size: var(--text-sm);
+  }
+
+  .cal-detail ul {
+    margin: 0;
+  }
+
+  .cal-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    border-top: 1px solid var(--tvc-line);
+    background: var(--tvc-green-tint);
+  }
+
+  .cal-bar-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .cal-caption {
+    margin: 0;
+    padding: 0 18px 14px;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  @container rent (min-width: 780px) {
+    .cal-body {
+      grid-template-columns: minmax(0, 1fr) 260px;
+    }
+
+    /* Two months, a hairline between them so each reads as its own sheet. */
+    .cal-months {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0;
+    }
+
+    .cal-month--0 {
+      padding-right: 28px;
+    }
+
+    .cal-month--1 {
+      display: block;
+      padding-left: 28px;
+      border-left: 1px solid var(--tvc-line);
+    }
   }
 
   /* ---- the feature tour (startTour) and the "What's new" card ---- */
@@ -4018,17 +4430,24 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     return h('span', 'scene-wrap', undefined, s, h('span', 'sr-only', name));
   };
 
-  type NavItem = { id: string; label: string; icon: string; soon?: boolean; hidden?: boolean };
+  type NavItem = { id: string; label: string; icon: string; soon?: boolean; hidden?: boolean; preview?: boolean };
+  // Marks a feature that is not on for everyone yet; the server says so (`preview`) and the mark goes when the flag is turned on.
+  const previewPill = () => {
+    const p = h('span', 'beta-pill', 'Preview');
+    p.setAttribute('title', 'You are among the first to try this. Tell the core team what works and what does not.');
+    return p;
+  };
+  const previewNote = () => h('p', 'rent-note', 'You are among the first to try this. Tell the core team what works and what does not.');
   const NAV: NavItem[] = [
     { id: 'dashboard', label: 'Home', icon: IC.dash },
     { id: 'unit', label: 'My unit', icon: IC.unit },
-    // Owners only: a family member's story route lands on Our members.
-    { id: 'story', label: 'Your story', icon: IC.pen },
+    // Owners only: a family member's story route lands on the Directory.
+    { id: 'story', label: 'Our story', icon: IC.pen },
     // Owners only, and only once the feature is switched on (MEMBER_RENTAL_ENABLED): probeRental() shows it.
-    { id: 'rental', label: 'My rental', icon: IC.stay, hidden: true },
-    { id: 'directory', label: 'Our members', icon: IC.book },
-    // Early access (MEMBER_SITE_MAP_ENABLED, or a household on Units -> Early access): probeSiteMap() shows it.
-    { id: 'sitemap', label: 'Site map', icon: IC.map, hidden: true },
+    { id: 'rental', label: 'Rent out', icon: IC.stay, hidden: true },
+    { id: 'directory', label: 'Directory', icon: IC.book },
+    // Early access (MEMBER_SITE_MAP_ENABLED, or a household on Preview): probeSiteMap() shows it.
+    { id: 'sitemap', label: 'Map', icon: IC.map, hidden: true },
     // Not built yet: kept out of the menu (they would only lead to a "coming soon" page) and listed
     // once, quietly, at the foot of the Home page. The routes stay so an old bookmark still lands somewhere.
     { id: 'stays', label: 'Stays', icon: IC.stay, soon: true },
@@ -4093,7 +4512,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     // The phone's bar holds five places at most: past that the last ones go under "More", so adding a page never squeezes the rest.
     const overflow = shown.length > MAX_TABS ? shown.slice(MAX_TABS - 1) : [];
     const mk = (item: NavItem, cls: string, label: string) => {
-      const a = h('a', cls, undefined, icon(item.icon), h('span', label, item.label));
+      const a = h('a', cls, undefined, icon(item.icon), h('span', label, item.label, ...(item.preview && cls ? [previewPill()] : [])));
       a.setAttribute('href', `#/${item.id}`);
       if (item.id === route) a.setAttribute('aria-current', 'page');
       return a;
@@ -5126,11 +5545,12 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     show(0);
   }
 
-  // ---- My rental ----
+  // ---- Rent out ----
   // Offer your unit to guests who book through Linger, then manage it. The menu item stays hidden until the server says
   // the feature is on and this person is an owner (probeRental). Plan: docs/plans/accommodation-member-units.md.
   type RentalData = {
     enabled: boolean;
+    preview?: boolean;
     eligible: boolean;
     farmUnit?: string;
     houseNo?: string | null;
@@ -5182,6 +5602,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const { status, data } = await memberFetch('/api/members-me/rental');
       if (status === 200 && data.enabled && data.eligible) {
         rental = data;
+        const item = NAV.find((n) => n.id === 'rental');
+        if (item) item.preview = !!data.preview;
         setRentalVisible(true);
       } else setRentalVisible(false);
     } catch {
@@ -5189,29 +5611,203 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     }
   }
 
-  const RENTAL_MODES: [string, string, string][] = [
-    ['reject', 'Auto-reject (the default)', 'Your unit is not offered, so guests cannot be sent to it. Nothing for you to do.'],
-    ['ask', 'Ask me each time', 'When Madhavan allocates a guest to your unit, you accept or decline. If you do not answer within 24 hours it is declined.'],
-    ['auto', 'Auto-accept', 'A guest allocated to dates you have not blocked is accepted straight away.'],
-  ];
   const dateLabel = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
   const endLabel = (d: string, nights: number) => dateLabel(new Date(Date.parse(`${d}T00:00:00Z`) + nights * 86_400_000).toISOString().slice(0, 10));
 
   function viewRental(): HTMLElement {
     const root = h('div');
-    root.append(h('h1', 'page-title', 'My rental'), h('p', 'lede', 'Offer your unit to guests who book through Linger. TVC looks after the guests while they are here.'));
-    const homeLine = h('p', 'rent-note');
-    homeLine.hidden = true;
+    const lede = h('p', 'lede', 'Let guests book your unit through Linger.');
     const body = h('div', 'rent');
-    root.append(homeLine, body);
+    root.append(h('h1', 'page-title', 'Rent out', ...(rental?.preview ? [previewPill()] : [])), lede, body);
+    // Set by paint(): while rental is off or paused nothing is offered, so there is nothing to block. The calendar still shows
+    // stays and existing blocks, and a block can still be removed.
+    let calLocked = '';
+    let moreOpen = false; // the "More settings" fold stays as the member left it across repaints
+
+    // ---- Calendar: every night of the unit on a month view (stays, closures, the member's own blocks). It lives outside
+    // paint() so a repaint (after any action) keeps the month and the nights half chosen. Tap the first night, then the last
+    // (the same day again for one night); tap a marked night for what is on it.
+    const isoOf = (dt: Date) => dt.toISOString().slice(0, 10);
+    const todayIso = isoOf(new Date(Date.now() + 330 * 60_000)); // today, in India
+    const plusDays = (iso: string, n: number) => isoOf(new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000));
+    const MAX_BLOCK = 90; // matches MAX_BLOCK_NIGHTS on the server
+    const cal = { month: todayIso.slice(0, 7), start: '', end: '', detail: '' }; // detail: a marked night the member tapped
+    const calCard = h('section', 'unit-card cal-card');
+    calCard.setAttribute('aria-label', 'Calendar');
+    let doBlock = async (_from: string, _to: string, _btn: HTMLButtonElement): Promise<boolean> => false; // set by paint(), which owns act()
+    let doRemove = async (_id: string, _btn: HTMLButtonElement): Promise<boolean> => false;
+    const nightsIn = (a: string, b: string) => (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000 + 1;
+    const monthOf = (iso: string) => iso.slice(0, 7);
+    const renderCal = () => {
+      const active = document.activeElement as HTMLElement | null;
+      const focusKey = active && calCard.contains(active) ? active.dataset.fk : undefined;
+      const stays = rental?.stays ?? [];
+      const blocks = rental?.blocks ?? [];
+      const taken = new Map<string, 'mine' | 'farm' | 'tvc' | 'stay'>();
+      for (const b of blocks) for (let n = 0; n < b.nights; n++) taken.set(plusDays(b.startDate, n), b.farm ? 'farm' : b.mine ? 'mine' : 'tvc');
+      for (const st of stays) for (let n = 0; n < st.nights; n++) taken.set(plusDays(st.startDate, n), 'stay');
+      // Back as far as the earliest night on record (past guests can be reviewed), never before this month otherwise.
+      const earliest = [todayIso, ...stays.map((x) => x.startDate), ...blocks.map((x) => x.startDate)].map(monthOf).sort()[0];
+      const latest = monthOf(plusDays(todayIso, 540)); // about 18 months ahead
+      const monthAt = (by: number) => {
+        const [y, m] = cal.month.split('-').map(Number);
+        return isoOf(new Date(Date.UTC(y, m - 1 + by, 1))).slice(0, 7);
+      };
+      const nav = (label: string, glyph: string, by: number, off: boolean, fk: string) => {
+        const b = h('button', 'cal-nav', glyph) as HTMLButtonElement;
+        b.type = 'button';
+        b.disabled = off;
+        b.dataset.fk = fk;
+        b.setAttribute('aria-label', label);
+        b.addEventListener('click', () => {
+          cal.month = monthAt(by);
+          renderCal();
+        });
+        return b;
+      };
+      const todayBtn = h('button', 'link-btn', 'Today') as HTMLButtonElement;
+      todayBtn.type = 'button';
+      todayBtn.dataset.fk = 'today';
+      todayBtn.addEventListener('click', () => {
+        cal.month = monthOf(todayIso);
+        renderCal();
+      });
+      const onDay = (iso: string, past: boolean, kind?: string) => {
+        if (past && !kind) return; // an earlier night can be looked at, not blocked
+        if (kind) {
+          cal.detail = iso;
+          cal.start = '';
+          cal.end = '';
+          return renderCal();
+        }
+        if (calLocked) return toast(calLocked);
+        cal.detail = '';
+        if (!cal.start || cal.end) {
+          cal.start = iso;
+          cal.end = '';
+        } else if (iso < cal.start) cal.start = iso;
+        else {
+          for (let d = cal.start; d <= iso; d = plusDays(d, 1)) if (taken.has(d)) return toast('Some of those nights are not free.');
+          if (nightsIn(cal.start, iso) > MAX_BLOCK) return toast(`You can block at most ${MAX_BLOCK} nights at a time.`);
+          cal.end = iso;
+        }
+        renderCal();
+      };
+      // One month: a title and its days.
+      const monthEl = (ym: string, which: number) => {
+        const [y, m] = ym.split('-').map(Number);
+        const lead = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(); // Sunday first
+        const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+        const title = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+        const cells: HTMLElement[] = [];
+        for (const w of ['S', 'M', 'T', 'W', 'T', 'F', 'S']) cells.push(h('span', 'cal-dow', w));
+        for (let n = 0; n < lead; n++) cells.push(h('span', 'cal-pad'));
+        for (let day = 1; day <= days; day++) {
+          const iso = `${ym}-${String(day).padStart(2, '0')}`;
+          const kind = taken.get(iso);
+          const past = iso < todayIso;
+          const edge = iso === cal.start || iso === cal.end;
+          const inside = !!cal.start && !!cal.end && iso > cal.start && iso < cal.end;
+          const cls = ['cal-day', kind ? `cal-day--${kind}` : calLocked && !past ? 'cal-day--locked' : '', past && !kind ? 'cal-day--past' : '', edge ? 'cal-day--edge' : '', inside ? 'cal-day--in' : '', iso === todayIso ? 'cal-day--today' : ''].filter(Boolean).join(' ');
+          const b = h('button', cls, String(day)) as HTMLButtonElement;
+          b.type = 'button';
+          b.dataset.fk = iso;
+          const what = kind === 'mine' ? 'blocked by you' : kind === 'farm' ? 'the farm is closed' : kind === 'tvc' ? 'unavailable' : kind === 'stay' ? 'a guest stayed or is staying' : past ? 'in the past' : 'free';
+          b.setAttribute('aria-label', `${dateLabel(iso)}, ${what}`);
+          if (edge || inside) b.setAttribute('aria-pressed', 'true');
+          b.addEventListener('click', () => onDay(iso, past, kind));
+          cells.push(b);
+        }
+        return h('div', `cal-month cal-month--${which}`, undefined, h('b', 'cal-title', title), h('div', 'cal-grid', undefined, ...cells));
+      };
+
+      // Coming up: what is next on the unit. A row jumps the calendar to it.
+      const ahead: { start: string; end: string; what: string }[] = [
+        ...stays.map((x) => ({ start: x.startDate, end: plusDays(x.startDate, x.nights), what: `${x.guests.length} guest${x.guests.length === 1 ? '' : 's'}` })),
+        ...blocks.map((x) => ({ start: x.startDate, end: plusDays(x.startDate, x.nights), what: x.farm ? 'Farm closed' : x.mine ? 'Blocked by you' : 'Unavailable' })),
+      ].filter((x) => x.end > todayIso).sort((a, b) => a.start.localeCompare(b.start)).slice(0, 5);
+      const side = h('div', 'cal-side', undefined, h('b', 'cal-agenda-title', 'Coming up'), ...(ahead.length ? ahead.map((x) => {
+        const row = h('button', 'cal-row', undefined, h('span', '', `${dateLabel(x.start)} to ${dateLabel(plusDays(x.end, -1))}`), h('span', 'cal-row-what', x.what)) as HTMLButtonElement;
+        row.type = 'button';
+        row.addEventListener('click', () => {
+          cal.detail = x.start < todayIso ? todayIso : x.start;
+          cal.month = monthOf(cal.detail);
+          cal.start = '';
+          cal.end = '';
+          renderCal();
+        });
+        return row;
+      }) : [h('p', 'cal-empty', 'Nothing coming up.')]));
+
+      // What is on the night the member tapped: a stay's guests, or a block with its Remove.
+      let detail: HTMLElement | null = null;
+      if (cal.detail) {
+        const kind = taken.get(cal.detail);
+        const stay = kind === 'stay' ? stays.find((x) => cal.detail >= x.startDate && cal.detail < plusDays(x.startDate, x.nights)) : undefined;
+        const block = kind && kind !== 'stay' ? blocks.find((x) => cal.detail >= x.startDate && cal.detail < plusDays(x.startDate, x.nights)) : undefined;
+        if (stay) {
+          detail = h('div', 'cal-detail', undefined,
+            h('b', '', `${dateLabel(stay.startDate)} to ${endLabel(stay.startDate, stay.nights)} · ${stay.guests.length} guest${stay.guests.length === 1 ? '' : 's'}`),
+            h('ul', 'rent-guests', undefined, ...stay.guests.map((g) => h('li', '', `${g.name} · ${g.ageGroup}${g.gender ? `, ${g.gender.toLowerCase()}` : ''}${g.preferences ? ` · ${g.preferences}` : ''}`))));
+        } else if (block) {
+          const range = `${dateLabel(block.startDate)} to ${endLabel(block.startDate, block.nights)}`;
+          detail = h('div', 'cal-detail', undefined, h('span', '', block.farm ? `The farm is closed, ${range}.` : block.mine ? `Blocked by you, ${range} · ${block.nights} night${block.nights === 1 ? '' : 's'}.` : `Unavailable, set by TVC, ${range}.`));
+          if (block.mine && plusDays(block.startDate, block.nights) > todayIso) {
+            const rm = h('button', 'btn', 'Remove this block') as HTMLButtonElement;
+            rm.type = 'button';
+            rm.addEventListener('click', async () => {
+              if (await doRemove(block.id, rm)) {
+                cal.detail = '';
+                renderCal();
+              }
+            });
+            detail.append(h('div', '', undefined, rm));
+          }
+        }
+      }
+
+      // The Block bar appears only once nights are chosen, right under the calendar.
+      const n = cal.start && cal.end ? nightsIn(cal.start, cal.end) : 0;
+      let bottom: HTMLElement;
+      if (n) {
+        const cancel = h('button', 'btn', 'Cancel') as HTMLButtonElement;
+        cancel.type = 'button';
+        cancel.addEventListener('click', () => {
+          cal.start = '';
+          cal.end = '';
+          renderCal();
+        });
+        const block = h('button', 'btn btn--solid', 'Block') as HTMLButtonElement;
+        block.type = 'button';
+        block.dataset.fk = 'block';
+        block.addEventListener('click', async () => {
+          if (await doBlock(cal.start, cal.end, block)) {
+            cal.start = '';
+            cal.end = '';
+            renderCal();
+          }
+        });
+        bottom = h('div', 'cal-bar', undefined, h('b', '', `${dateLabel(cal.start)} to ${dateLabel(cal.end)} · ${n} night${n === 1 ? '' : 's'}`), h('span', 'cal-bar-actions', undefined, cancel, block));
+      } else bottom = h('p', 'cal-caption', calLocked ? `${calLocked} Tap a marked night for details.` : cal.start ? 'Tap the last night, or the same day again for one night.' : 'Tap free nights to block them. Tap a marked night for details.');
+
+      calCard.replaceChildren(
+        h('div', 'cal-top', undefined,
+          h('div', 'cal-nav-row', undefined, nav('Earlier month', '‹', -1, cal.month <= earliest, 'prev'), nav('Later month', '›', 1, cal.month >= latest, 'next'), todayBtn),
+          h('p', 'cal-key', undefined, h('span', 'cal-swatch cal-swatch--mine'), 'Blocked by you', h('span', 'cal-swatch cal-swatch--farm'), 'Closed', h('span', 'cal-swatch cal-swatch--stay'), 'Guests')),
+        h('div', 'cal-body', undefined, h('div', 'cal-months', undefined, monthEl(monthAt(0), 0), monthEl(monthAt(1), 1)), side),
+        ...(detail ? [detail] : []),
+        bottom);
+      if (focusKey) (calCard.querySelector(`[data-fk="${focusKey}"]`) as HTMLElement | null)?.focus();
+    };
 
     const paint = () => {
       const d = rental;
-      homeLine.hidden = !d?.houseNo;
-      if (d?.houseNo) homeLine.textContent = `Home ${d.houseNo}`;
+      const focusKey = (document.activeElement as HTMLElement | null)?.dataset?.fk; // put focus back on the same control after the repaint
       if (!d?.eligible) return body.replaceChildren(h('p', 'lede', 'This page is for the owners of a unit.'));
+      body.className = d.state === 'none' || d.state === 'interested' ? 'rent rent--narrow' : 'rent';
+      lede.textContent = d.state === 'none' || !d.houseNo ? 'Let guests book your unit through Linger.' : `Home ${d.houseNo}`;
       const sections: HTMLElement[] = [];
-      const card = (title: string, ...kids: (HTMLElement | null)[]) => h('section', 'unit-card', undefined, h('div', 'unit-card-head', undefined, h('h2', '', title)), ...kids);
+      const card = (title: string, ...kids: (HTMLElement | null)[]) => h('section', 'unit-card', undefined, h('div', 'unit-card-head', undefined, h('h2', '', title)), h('div', 'unit-card-body', undefined, ...kids));
       const say = (text: string) => h('p', 'rent-note', text);
       const act = async (path: string, payload: unknown, done: string, btn?: HTMLButtonElement, doing?: string): Promise<boolean> => {
         const finish = btn ? setBusy(btn, doing) : () => {};
@@ -5236,7 +5832,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const payoutCard = (): HTMLElement | null => {
         const pay = d.payout;
         if (!pay) return null;
-        if (pay.maintenance) return card('How you are paid', say('Your contract sets your share against your maintenance, so there is nothing to enter.'));
+        if (pay.maintenance) return h('section', 'unit-card rent-pay', undefined, h('span', '', undefined, h('b', '', 'Payout'), ' Set against your maintenance, so there is nothing to enter.'));
         if (!pay.needed) return null;
         const a = pay.account;
         let editing = !a;
@@ -5251,7 +5847,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
             });
             return box.replaceChildren(
               say(`${a.payeeName} · ${a.method === 'bank' ? 'bank account' : 'UPI'} ${a.shown} · PAN ${a.panShown}`),
-              say(a.status === 'verified' ? 'Verified. TVC pays your share here.' : 'Saved. TVC will make a small test transfer to check it before paying you.'),
+              say(a.status === 'verified' ? 'Verified.' : 'Saved. TVC will make a small test transfer first.'),
               change,
             );
           }
@@ -5285,7 +5881,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
             await act('/api/members-me/rental/payout', { payeeName: name.value, method: method.value, account: account.value, ifsc: ifsc.value, upi: upi.value, pan: pan.value }, 'Saved. TVC will check it before paying you.', save, 'Saving…');
           });
           box.replaceChildren(
-            say('TVC collects the guests’ payments and pays your share. We keep these details encrypted and show them back only as the last four characters. A PAN is needed for every payout.'),
+            say('TVC collects the guests’ payments and pays your share here. A PAN is needed for every payout. Details are encrypted; we show only the last four characters.'),
             h('label', 'rent-field', undefined, h('span', 'field-label', 'Name on the account'), name),
             h('label', 'rent-field', undefined, h('span', 'field-label', 'Pay me by'), method),
             bankRows,
@@ -5295,7 +5891,9 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           );
         };
         paint2();
-        return card('How you are paid', box);
+        const c = card('How you are paid', box);
+        c.querySelector('.unit-card-head')?.append(h('span', 'pill', !a ? 'Needed before you are paid' : a.status === 'verified' ? 'Verified' : 'Waiting for verification'));
+        return c;
       };
 
       if (d.state === 'none') {
@@ -5303,41 +5901,56 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         const size = h('select') as HTMLSelectElement;
         size.id = 'rent-size';
         for (const [v, l] of [['1bhk', '1 BHK'], ['2bhk', '2 BHK'], ['3bhk', '3 BHK']]) size.append(Object.assign(document.createElement('option'), { value: v, textContent: l }));
-        size.value = '2bhk';
+        // The home's own type decides the size; if it cannot be read the member chooses.
+        const own = (bedroomsOf(hhNow().unitType) ?? '').replace(' BHK', '');
+        size.prepend(Object.assign(document.createElement('option'), { value: '', textContent: 'Choose', disabled: true }));
+        size.value = ['1', '2', '3'].includes(own) ? `${own}bhk` : '';
         const delegate = h('input') as HTMLInputElement;
         delegate.type = 'checkbox';
         delegate.id = 'rent-delegate';
-        const whole = h('input') as HTMLInputElement;
-        const room = h('input') as HTMLInputElement;
-        for (const [r, v] of [[whole, 'whole'], [room, 'room']] as [HTMLInputElement, string][]) {
-          r.type = 'radio';
-          r.name = 'rent-shape';
-          r.value = v;
-        }
-        whole.checked = true;
         const wholeOnly = h('div', 'rent-more', undefined,
           h('label', 'rent-field', undefined, h('span', 'field-label', 'Size'), size),
-          h('label', 'rent-opt', undefined, delegate, h('span', '', undefined, h('b', '', 'Let TVC manage it for me'), h('span', '', 'Madhavan answers requests and looks after the stays. You see them here.'))));
-        const roomOnly = h('p', 'rent-note', 'For a room you accept or decline requests yourself. It starts on auto-reject, so nothing is offered until you choose otherwise.');
+          h('label', 'rent-check', undefined, delegate, h('span', '', 'TVC manages it for me')));
+        const roomOnly = h('p', 'rent-note', 'You answer requests for a room yourself.');
         roomOnly.hidden = true;
-        const sync = () => {
-          shape = room.checked ? 'room' : 'whole';
-          wholeOnly.hidden = shape === 'room';
-          roomOnly.hidden = shape === 'whole';
-        };
-        whole.addEventListener('change', sync);
-        room.addEventListener('change', sync);
-        const send = h('button', 'btn btn--solid', 'Tell Linger I’m interested') as HTMLButtonElement;
+        const seg = h('div', 'segmented rent-pick');
+        seg.setAttribute('role', 'radiogroup');
+        seg.setAttribute('aria-label', 'What you are offering');
+        const picks = ([['whole', 'Whole unit'], ['room', 'One room']] as ['whole' | 'room', string][]).map(([v, l]) => {
+          const b = h('button', '', l) as HTMLButtonElement;
+          b.type = 'button';
+          b.setAttribute('role', 'radio');
+          b.setAttribute('aria-checked', String(v === shape));
+          b.tabIndex = v === shape ? 0 : -1;
+          b.addEventListener('keydown', (ev) => {
+            if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+            ev.preventDefault();
+            const other = picks.find((o) => o !== b)!;
+            other.focus();
+            other.click();
+          });
+          b.addEventListener('click', () => {
+            shape = v;
+            for (const o of picks) {
+              o.setAttribute('aria-checked', String(o === b));
+              o.tabIndex = o === b ? 0 : -1;
+            }
+            wholeOnly.hidden = shape === 'room';
+            roomOnly.hidden = shape === 'whole';
+          });
+          return b;
+        });
+        seg.append(...picks);
+        const send = h('button', 'btn btn--solid', 'I’m interested') as HTMLButtonElement;
         send.type = 'button';
         send.addEventListener('click', async () => {
+          if (shape === 'whole' && !size.value) return toast('Choose the size of your unit.');
           await act('/api/members-me/rental/offer', { shape, size: size.value, delegateToTvc: shape === 'whole' && delegate.checked }, 'Linger has been told. They will be in touch.', send, 'Sending…');
         });
-        sections.push(card('Offer your unit',
-          say('Terms are the same for every member and depend only on the size of the unit. Linger agrees them with you before anything is offered.'),
-          h('label', 'rent-opt', undefined, whole, h('span', '', undefined, h('b', '', 'My whole unit'), h('span', '', 'Guests have the whole home to themselves.'))),
-          h('label', 'rent-opt', undefined, room, h('span', '', undefined, h('b', '', 'A single room'), h('span', '', 'You live there and rent out one room. It is booked as "1 bedroom".'))),
+        sections.push(card('Rent out your unit',
+          seg,
           wholeOnly, roomOnly,
-          say('When you press the button, TVC and Linger are told which unit you are offering, and Linger is given your name and sign-in email so they can get in touch with you.'),
+          say('Linger receives your name and email to get in touch.'),
           send));
       } else if (d.state === 'interested') {
         const label = d.types?.find((t) => t.id === d.offer?.typeId)?.label ?? '';
@@ -5359,99 +5972,99 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           mine.addEventListener('click', () => void openContractCopy('signed', mine));
           const up = h('button', 'btn btn--solid', k.hasSigned ? 'Replace my signed copy' : 'Upload my signed copy') as HTMLButtonElement;
           up.type = 'button';
+          up.disabled = true;
+          pick.addEventListener('change', () => (up.disabled = !pick.files?.length));
           up.addEventListener('click', async () => {
             const f = pick.files?.[0];
             if (!f) return toast('Choose your signed copy first.');
             await act('/api/members-me/rental/contract/signed', { file: { mime: f.type, base64: await fileAsBase64(f) } }, 'Thank you. The core team will enable your unit.', up, 'Uploading…');
           });
           contractCard = card('Your contract',
-            say(k.hasSigned ? 'We have your signed copy. The core team will check it and enable your unit; you will see it here when they do.' : 'Read the contract. It is between you, TVC and Linger. Sign it, then upload the signed copy here (a PDF or a clear photo, up to 4 MB). Your unit is enabled once TVC has it.'),
+            say(k.hasSigned ? 'Signed copy received. The core team will enable your unit.' : 'Read it, sign it, then upload the signed copy (PDF or photo, up to 4 MB).'),
             h('div', 'rent-dates', undefined, read, k.hasSigned ? mine : null),
             k.canUpload ? h('div', 'rent-dates', undefined, pick, up) : null);
         }
-        sections.push(card('Waiting for the contract',
+        sections.push(card('Your offer',
           rentalStepper(stageIndex({ offerStatus: 'interested', contractStatus: k ? (k.stage === 'review' ? 'signed' : 'shared') : undefined })),
-          say(`Linger has been told and will get in touch to agree terms. Once the contract is signed, the core team enables your unit and it appears here with its settings. Offered as ${d.offer?.shape === 'room' ? '1 bedroom (a single room)' : `${label} (whole unit)${d.offer?.delegateToTvc ? ', managed by TVC' : ''}`}.`),
+          say(`Offered as ${d.offer?.shape === 'room' ? 'one room' : `${label}, whole unit${d.offer?.delegateToTvc ? ', managed by TVC' : ''}`}. Linger will be in touch.`),
           withdraw));
         if (contractCard) sections.unshift(contractCard);
         const pc = payoutCard();
         if (pc) sections.push(pc);
       } else if (d.unit) {
         const u = d.unit;
+        const paused = d.state === 'paused';
+        const mine = u.manager === 'member';
+        const isOn = !mine || u.requestMode !== 'reject'; // a unit TVC manages is always offered; the member's switch is theirs
         const label = d.types?.find((t) => t.id === u.typeId)?.label ?? '';
-        sections.push(card('Your rental',
-          rentalStepper(stageIndex({ unitStatus: u.status })),
-          say(`${label} · ${u.shape === 'room' ? 'a single room' : 'whole unit'} · ${u.manager === 'tvc' ? 'TVC manages it for you' : 'you manage it'}.${d.state === 'paused' ? ' The core team has paused it for now, so it is not offered.' : ''}`)));
+        lede.textContent = [d.houseNo ? `Home ${d.houseNo}` : '', label, u.shape === 'room' ? 'one room' : 'whole unit', mine ? 'you manage it' : 'TVC manages it'].filter(Boolean).join(' · ');
 
-        if (u.manager === 'member') {
-          const opts = RENTAL_MODES.map(([v, t, text]) => {
-            const r = h('input') as HTMLInputElement;
-            r.type = 'radio';
-            r.name = 'rent-mode';
-            r.value = v;
-            r.checked = u.requestMode === v;
-            r.addEventListener('change', () => void act('/api/members-me/rental/settings', { requestMode: v }, `Requests: ${t.replace(' (the default)', '')}.`));
-            return h('label', 'rent-opt', undefined, r, h('span', '', undefined, h('b', '', t), h('span', '', text)));
-          });
-          sections.push(card('When Madhavan allocates a guest to your unit', ...opts));
-        } else sections.push(card('Requests', say('TVC manages your unit, so Madhavan answers requests for it. You can see the stays below.')));
-
-        const open = h('input') as HTMLInputElement;
-        open.type = 'checkbox';
-        open.checked = u.ignoresFarmClosure;
-        open.addEventListener('change', () => void act('/api/members-me/rental/settings', { ignoresFarmClosure: open.checked }, open.checked ? 'Your unit stays open when the farm is closed.' : 'Your unit closes with the farm.'));
-        sections.push(card('When the farm is closed', h('label', 'rent-opt', undefined, open, h('span', '', undefined, h('b', '', 'Keep my unit open'), h('span', '', 'The common kitchen may be closed while your own kitchen is not. Leave this off and your unit closes with the farm.')))));
-
-        const from = h('input') as HTMLInputElement;
-        const to = h('input') as HTMLInputElement;
-        for (const [i, id, l] of [[from, 'rent-from', 'First night'], [to, 'rent-to', 'Last night']] as [HTMLInputElement, string, string][]) {
-          i.type = 'date';
-          i.id = id;
-          i.setAttribute('aria-label', l);
+        // Status first: is the unit being rented out, and the one switch for it.
+        const headline = paused ? 'Paused by the core team' : !isOn ? 'Rental is off' : 'Renting out';
+        const detailText = paused ? 'Your unit is not offered until the core team resumes it.' : !mine ? 'TVC answers requests for your unit.' : !isOn ? 'Your unit is not offered to guests.' : u.requestMode === 'ask' ? 'You accept or decline each request.' : 'Guests are accepted when the dates are free.';
+        const switchEl = (() => {
+          if (!mine) return null;
+          const sw = h('input') as HTMLInputElement;
+          sw.type = 'checkbox';
+          sw.checked = isOn;
+          sw.disabled = paused;
+          sw.dataset.fk = 'onoff';
+          sw.setAttribute('aria-label', 'Rent out my unit');
+          sw.addEventListener('change', () => void act('/api/members-me/rental/settings', { requestMode: sw.checked ? 'ask' : 'reject' }, sw.checked ? 'Your unit is offered to guests.' : 'Your unit is no longer offered.'));
+          return h('label', 'rent-switch', undefined, sw, h('i'));
+        })();
+        const tone = paused ? 'paused' : isOn ? 'on' : 'off'; // the card's colour says it before the words do
+        const statusCard = h('section', `unit-card rent-card rent-card--${tone}`, undefined, h('div', 'rent-status', undefined, h('div', 'rent-what', undefined, h('b', '', undefined, h('i', 'rent-dot'), headline), h('span', '', detailText)), ...(switchEl ? [switchEl] : [])));
+        if (isOn && !paused) {
+          const seg = h('div', 'segmented');
+          seg.setAttribute('role', 'radiogroup');
+          seg.setAttribute('aria-label', 'Requests');
+          for (const [v, l] of [['ask', 'Ask me first'], ['auto', 'Accept automatically']]) {
+            const b = h('button', '', l) as HTMLButtonElement;
+            b.type = 'button';
+            b.dataset.fk = `mode-${v}`;
+            b.setAttribute('role', 'radio');
+            b.setAttribute('aria-checked', String(u.requestMode === v));
+            b.addEventListener('click', () => {
+              if (u.requestMode !== v) void act('/api/members-me/rental/settings', { requestMode: v }, `${l}.`);
+            });
+            seg.append(b);
+          }
+          const open = h('input') as HTMLInputElement;
+          open.type = 'checkbox';
+          open.checked = u.ignoresFarmClosure;
+          open.dataset.fk = 'farm';
+          open.addEventListener('change', () => void act('/api/members-me/rental/settings', { ignoresFarmClosure: open.checked }, open.checked ? 'Your unit stays open when the farm is closed.' : 'Your unit closes with the farm.'));
+          const more = (h('details', 'rent-more-set', undefined, h('summary', '', 'More settings'), h('label', 'rent-check', undefined, open, h('span', '', 'Keep my unit open when the farm is closed')))) as HTMLDetailsElement;
+          more.open = moreOpen;
+          more.addEventListener('toggle', () => (moreOpen = more.open));
+          statusCard.append(h('div', 'rent-modes', undefined, ...(mine ? [seg] : []), more));
         }
-        const add = h('button', 'btn', 'Block these nights') as HTMLButtonElement;
-        add.type = 'button';
-        add.addEventListener('click', async () => {
-          if (!from.value || !to.value) return toast('Choose the first and the last night.');
-          await act('/api/members-me/rental/blocks', { from: from.value, to: to.value }, 'Nights blocked.', add, 'Blocking…');
-        });
-        const blocks = d.blocks ?? [];
-        sections.push(card('Dates you are not available',
-          say('Block nights when you are away or have your own guests. Linger and the core team see only that the unit is unavailable, not why. A guest’s nights cannot be blocked.'),
-          blocks.length
-            ? h('ul', 'rent-list', undefined, ...blocks.map((b) => {
-                const li = h('li', '', undefined, h('span', '', b.farm ? `${dateLabel(b.startDate)} to ${endLabel(b.startDate, b.nights)}: the farm is closed` : `${dateLabel(b.startDate)} to ${endLabel(b.startDate, b.nights)}${b.mine ? '' : ': unavailable (TVC)'}`));
-                if (b.mine) {
-                  const rm = h('button', 'link-btn', 'Remove') as HTMLButtonElement;
-                  rm.type = 'button';
-                  rm.addEventListener('click', () => void act('/api/members-me/rental/blocks/remove', { id: b.id }, 'Block removed.', rm, 'Removing…'));
-                  li.append(rm);
-                }
-                return li;
-              }))
-            : say('Nothing blocked.'),
-          h('div', 'rent-dates', undefined, from, to, add)));
+        sections.push(statusCard);
 
-        const stays = d.stays ?? [];
-        sections.push(card('Stays',
-          stays.length
-            ? h('ul', 'rent-list rent-stays', undefined, ...stays.map((st) => h('li', '', undefined,
-                h('b', '', `${dateLabel(st.startDate)} to ${endLabel(st.startDate, st.nights)} · ${st.guests.length} guest${st.guests.length === 1 ? '' : 's'}`),
-                h('ul', 'rent-guests', undefined, ...st.guests.map((g) => h('li', '', `${g.name} · ${g.ageGroup}${g.gender ? `, ${g.gender.toLowerCase()}` : ''}${g.preferences ? ` · ${g.preferences}` : ''}`))))))
-            : say('No stays yet.'),
-          say('You see each guest’s name, age group, gender and preferences, and nothing else: TVC looks after the guests and talks to them.')));
+        calLocked = paused ? 'Paused by the core team, so nothing can be blocked.' : !isOn ? 'Rental is off. Turn it on to block dates.' : '';
+        if (calLocked) {
+          cal.start = '';
+          cal.end = '';
+        }
+        doBlock = (from, to, btn) => act('/api/members-me/rental/blocks', { from, to }, 'Nights blocked.', btn, 'Blocking…');
+        doRemove = (id, btn) => act('/api/members-me/rental/blocks/remove', { id }, 'Block removed.', btn, 'Removing…');
+        renderCal();
+        sections.push(calCard);
         const pc2 = payoutCard();
         if (pc2) sections.push(pc2);
       }
       body.replaceChildren(...sections);
+      if (focusKey) (body.querySelector(`[data-fk="${focusKey}"]`) as HTMLElement | null)?.focus();
     };
 
     const refresh = async () => {
       try {
         const { status, data } = await memberFetch('/api/members-me/rental');
         if (status === 200) rental = data;
+        else toast('Could not refresh this page. You may be seeing older details.');
       } catch {
-        // keep what is shown
+        toast('Could not refresh this page. You may be seeing older details.');
       }
       paint();
     };
@@ -5478,8 +6091,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const next = !me!.phone
       ? { title: 'Add your WhatsApp number', text: 'So the core team can message you about stays and farm updates.', actions: [(() => { const b = h('button', 'btn btn--solid', 'Add my number'); b.setAttribute('type', 'button'); b.addEventListener('click', detailsDialog); return b; })()] }
       : isFamily()
-      ? { title: 'Our members', text: 'Meet your neighbours in the valley.', actions: [go('See our members', 'directory', true)] }
-      : { title: 'Your story', text: 'Add to it or change it whenever you like, and read what your neighbours have shared.', actions: [go('Edit your story', 'story', true), go('See our members', 'directory')] };
+      ? { title: 'Directory', text: 'Meet your neighbours in the valley.', actions: [go('Open the directory', 'directory', true)] }
+      : { title: 'Our story', text: 'Add to it or change it whenever you like, and read what your neighbours have shared.', actions: [go('Edit your story', 'story', true), go('Open the directory', 'directory')] };
     // Steps added since this member last saw the tour: one dismissible card above the next step (nothing for a brand new
     // member, who is walked through the whole tour instead).
     const fresh = typeof me!.tourSeenThrough === 'number' && !whatsNewDismissed ? tourPending() : [];
@@ -5729,17 +6342,17 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
   function viewStory(): HTMLElement {
     const root = h('div');
-    const back = h('a', 'back-link', undefined, icon('<path d="M15 6l-6 6 6 6"/>'), 'Our members');
+    const back = h('a', 'back-link', undefined, icon('<path d="M15 6l-6 6 6 6"/>'), 'Directory');
     back.setAttribute('href', '#/directory');
     root.append(
       back,
-      h('h1', 'page-title', 'Your story', h('small', '', 'Your card for the collective')),
+      h('h1', 'page-title', 'Our story', h('small', '', 'Your card for the collective')),
       h('p', 'lede', 'Your unit has one story, shared by everyone in it. The core team reads it before it appears anywhere.'),
       h('details', 'story-how', undefined, h('summary', '', 'How it works'), h('ul', '', undefined,
         h('li', '', 'Either of you can edit what you do, your family and the photos. Your "why TVC" line is your own.'),
         h('li', '', 'The story needs at least one "why TVC" line from your unit before it can be submitted.'),
         h('li', '', 'To link your name to a page of yours, select it in the text and press Link.'),
-        h('li', '', 'Once approved, other members can read it under Our members. It goes on tvc.farm only if you switch on "Show on tvc.farm".'))),
+        h('li', '', 'Once approved, other members can read it in the Directory. It goes on tvc.farm only if you switch on "Show on tvc.farm".'))),
       // (not `cond ? null : el`: append(null) writes the text "null")
       ...(me!.directoryVisible ? [] : [h('p', 'lede lede--warn', 'You are not listed in the member directory, so other members cannot see your story and it will not go on tvc.farm either. You can change that in your account menu, under Your details.')]),
     );
@@ -5801,7 +6414,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         text = story.hasUnsubmittedChanges ? 'With the core team. You have newer changes that are not submitted yet.' : 'With the core team. It will show here once it is approved.';
       } else if (story?.status === 'approved') {
         cls = 'live'; title = 'Approved';
-        text = story.hasUnsubmittedChanges ? 'Your approved story stays as it is until you submit these changes.' : 'Approved. Other members can read it under Our members.';
+        text = story.hasUnsubmittedChanges ? 'Your approved story stays as it is until you submit these changes.' : 'Approved. Other members can read it in the Directory.';
       } else if (story?.status === 'rejected') {
         cls = 'review'; title = 'Changes needed';
         text = story.reviewerNote || 'The core team asked for changes. Edit and submit again.';
@@ -6281,7 +6894,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     status: 'named' | 'private' | 'vacant'; names: string[]; unitType: string | null; bhk: string; detail: string; farmUnit: string | null; isYours: boolean;
   };
   type MapCluster = { id: string; baseSize: number; viewBox: number[]; plot: string };
-  let siteMap: { clusters: MapCluster[]; units: MapUnit[] } | null = null;
+  let siteMap: { preview?: boolean; clusters: MapCluster[]; units: MapUnit[] } | null = null;
 
   function setSiteMapVisible(on: boolean) {
     const item = NAV.find((n) => n.id === 'sitemap');
@@ -6296,6 +6909,8 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const { status, data } = await memberFetch('/api/members-me/site-map');
       if (status === 200 && data.enabled) {
         siteMap = data;
+        const item = NAV.find((n) => n.id === 'sitemap');
+        if (item) item.preview = !!data.preview;
         setSiteMapVisible(true);
       } else setSiteMapVisible(false);
     } catch {
@@ -6316,7 +6931,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
   function viewSiteMap(): HTMLElement {
     const root = h('div');
-    root.append(h('h1', 'page-title', 'Site map', h('small', '', 'Every home')), h('p', 'lede', 'Tap a home to see who it belongs to and what type it is.'));
+    root.append(h('h1', 'page-title', 'Map', h('small', '', 'Every home'), ...(siteMap?.preview ? [previewPill()] : [])), h('p', 'lede', 'Tap a home to see who it belongs to and what type it is.'), ...(siteMap?.preview ? [previewNote()] : []));
     const data = siteMap;
     if (!data || !data.units.length) {
       root.append(h('p', 'lede', 'The site map is not available right now.'));
@@ -6692,7 +7307,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const root = h('div');
     const body = h('div');
     root.append(
-      h('h1', 'page-title', 'Our members', h('small', '', 'The collective')),
+      h('h1', 'page-title', 'Directory', h('small', '', 'The collective')),
       h('p', 'lede', 'Names, farm plots and the story each member chose to share. Contact details are never shown.'),
       body,
     );
@@ -7029,7 +7644,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         if (status !== 200) throw new Error(data.error || 'Could not load the directory.');
         list = data.households as DirHousehold[];
         draw();
-        // Arriving from the Site map's "View profile" (#/directory?unit=F-12): open that household's profile.
+        // Arriving from the Map's "View profile" (#/directory?unit=F-12): open that household's profile.
         const wanted = routeQuery.get('unit');
         const target = wanted ? list.find((x) => x.farmUnit === wanted) : null;
         if (target) {

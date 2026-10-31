@@ -80,7 +80,7 @@ export const ROLES: readonly Role[] = ['admin', 'user', 'read_only'];
 // capability's own name rather than hiding the module.
 export const MODULE_INFO: Record<ModuleId, { label: string; path: string; capabilities: Record<string, string> }> = {
   'photo-pool': {
-    label: 'Photo pool',
+    label: 'Photos',
     path: '/internal/photo-pool/',
     capabilities: {
       view: 'See the photo inbox',
@@ -88,7 +88,7 @@ export const MODULE_INFO: Record<ModuleId, { label: string; path: string; capabi
     },
   },
   whatsapp: {
-    label: 'WhatsApp inbox',
+    label: 'WhatsApp',
     path: '/internal/whatsapp/',
     capabilities: {
       view: 'Read conversations',
@@ -97,7 +97,7 @@ export const MODULE_INFO: Record<ModuleId, { label: string; path: string; capabi
     },
   },
   'event-payments': {
-    label: 'Event payments',
+    label: 'Payments',
     path: '/internal/event-payments/',
     capabilities: {
       view: 'See bookings and totals',
@@ -105,7 +105,7 @@ export const MODULE_INFO: Record<ModuleId, { label: string; path: string; capabi
     },
   },
   accommodation: {
-    label: 'Accommodation calendar',
+    label: 'Stays',
     path: '/internal/accommodation-calendar/',
     capabilities: {
       view: 'See the calendar and guests',
@@ -114,7 +114,7 @@ export const MODULE_INFO: Record<ModuleId, { label: string; path: string; capabi
     },
   },
   members: {
-    label: 'Member register',
+    label: 'Members',
     path: '/internal/members/',
     capabilities: {
       view: 'Review households, people and patta details, and the data gaps to fix',
@@ -123,7 +123,7 @@ export const MODULE_INFO: Record<ModuleId, { label: string; path: string; capabi
     },
   },
   usage: {
-    label: 'Usage & limits',
+    label: 'Usage',
     path: '/internal/usage/',
     capabilities: {
       view: 'See free-tier and credit usage, and active warnings',
@@ -131,7 +131,7 @@ export const MODULE_INFO: Record<ModuleId, { label: string; path: string; capabi
     },
   },
   'site-map': {
-    label: 'Site map',
+    label: 'Map',
     path: '/internal/site-map/',
     capabilities: {
       view: 'See every home on the site plan with its household, unit type and plot size, and the gaps to fix',

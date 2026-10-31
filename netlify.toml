@@ -196,6 +196,12 @@
   status = 200
   force = true
 
+[[redirects]]
+  from = "https://admin.tvc.farm/preview-features/*"
+  to = "/internal/preview-features/:splat"
+  status = 200
+  force = true
+
 # the old long form still works for bookmarks and emails already sent: send it to the short one
 [[redirects]]
   from = "https://admin.tvc.farm/internal/*"
