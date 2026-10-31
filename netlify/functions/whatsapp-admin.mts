@@ -37,7 +37,8 @@ import { needsReply } from './lib/whatsapp-guest';
 import { baseMime, mediaResponseHeaders, MAX_MEDIA_BYTES } from './lib/whatsapp-media';
 import { requireStaff, logStaffAction, type StaffGrant } from './lib/staff-access';
 import { canSeeNames, maskEmail, maskName, maskPhone } from './lib/staff-masking';
-import { roleHasCapability, type Capability } from './lib/staff-registry';
+import { authorizeInbox, canReach, type InboxAccess, type InboxNeed } from './lib/whatsapp-scope';
+import { filterToScope } from '../../scripts/lib/whatsapp-scope.mjs';
 
 const WHATSAPP_GRAPH_API_VERSION = 'v21.0';
 
@@ -56,24 +57,39 @@ function contactLabel(conversationId: string): string {
 
 // Routine actions are logged after they succeed; a failed audit write is
 // reported but doesn't undo a message Meta already delivered.
-async function auditBestEffort(staff: StaffGrant, action: string, conversationId: string): Promise<void> {
+async function auditBestEffort(staff: StaffGrant, action: string, conversationId: string, scope: string): Promise<void> {
   try {
-    await logStaffAction({ actorId: staff.id, action, module: 'whatsapp', detail: { conversationId } });
+    await logStaffAction({ actorId: staff.id, action, module: 'whatsapp', detail: { conversationId, scope } });
   } catch (err) {
     console.error('Failed to write staff audit log', err);
   }
 }
 
-async function handleConversations(url: URL, staff: StaffGrant): Promise<Response> {
+// A scoped screen only ever gets the conversations its module may reach, so the list is read wide and cut down in
+// code (the filter has to run before the page size is applied, or a busy inbox would hide the scope's own threads).
+const SCOPED_FETCH_LIMIT = 1000;
+
+// A conversation id from the browser, checked against the caller's scope. Anything outside it answers exactly like a
+// conversation that does not exist, so a scoped caller cannot probe the rest of the inbox.
+async function inScope(access: InboxAccess, conversationId: string): Promise<boolean> {
+  if (access.phones === null) return true;
+  const conversation = await getConversation(conversationId);
+  return conversation !== null && canReach(access, conversation.wa_phone);
+}
+
+async function handleConversations(url: URL, access: InboxAccess): Promise<Response> {
+  const staff = access.staff;
   const limitParam = Number(url.searchParams.get('limit'));
   const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : undefined;
   const search = url.searchParams.get('search')?.trim();
   const namesVisible = canSeeNames(staff.role);
 
   try {
-    const conversations = search
-      ? await searchConversations(search, { ...(limit ? { limit } : {}), matchNames: namesVisible })
-      : await listConversations(limit ? { limit } : {});
+    const fetchLimit = access.phones ? SCOPED_FETCH_LIMIT : limit;
+    const found = search
+      ? await searchConversations(search, { ...(fetchLimit ? { limit: fetchLimit } : {}), matchNames: namesVisible })
+      : await listConversations(fetchLimit ? { limit: fetchLimit } : {});
+    const conversations = access.phones ? filterToScope(found, access.phones).slice(0, limit ?? 100) : found;
     // Which of these numbers asked us to stop WhatsApp messages (STOP reply, or
     // an admin opt-out below). Best-effort: if the list can't be read the inbox
     // still loads, it just can't show the state.
@@ -96,8 +112,8 @@ async function handleConversations(url: URL, staff: StaffGrant): Promise<Respons
       // nobody retypes it on a new browser or device. Only ever the caller's own name.
       signerDefault: staff.name || staff.googleName || null,
       capabilities: {
-        reply: roleHasCapability('whatsapp', staff.role, 'reply'),
-        manage: roleHasCapability('whatsapp', staff.role, 'manage'),
+        reply: access.canReply,
+        manage: access.canManage,
       },
       conversations: conversations.map((c: any) => {
         const lastMessage = c.whatsapp_messages?.[0];
@@ -131,11 +147,12 @@ async function handleConversations(url: URL, staff: StaffGrant): Promise<Respons
   }
 }
 
-async function handleMessages(url: URL): Promise<Response> {
+async function handleMessages(url: URL, access: InboxAccess): Promise<Response> {
   const conversationId = url.searchParams.get('conversationId');
   if (!conversationId) return jsonResponse({ error: 'conversationId is required' }, 400);
 
   try {
+    if (!(await inScope(access, conversationId))) return jsonResponse({ error: 'Conversation not found' }, 404);
     const messages = await listMessages(conversationId);
     // Best-effort: opening a thread marks it read for every admin,
     // but a failure here shouldn't block the messages the caller asked for.
@@ -158,7 +175,8 @@ async function handleMessages(url: URL): Promise<Response> {
   }
 }
 
-async function handleReply(req: Request, staff: StaffGrant): Promise<Response> {
+async function handleReply(req: Request, access: InboxAccess): Promise<Response> {
+  const staff = access.staff;
   let payload: { conversationId?: string; body?: string; responderName?: string };
   try {
     payload = await req.json();
@@ -181,7 +199,10 @@ async function handleReply(req: Request, staff: StaffGrant): Promise<Response> {
   // their address — never the full email. The signature is part of the actual
   // text sent to the customer, not just internal metadata, so it's included
   // in what's stored too, to keep the thread showing exactly what was sent.
-  const signerLabel = responderName?.trim() || staff.name || staff.googleName || maskEmail(staff.email);
+  // Outside the WhatsApp module itself (a screen with its own scope) the signature is always the caller's own
+  // account name, whatever the page sent: a message can't be sent as someone else.
+  const typedName = access.scope === 'all' ? responderName?.trim() : '';
+  const signerLabel = typedName || staff.name || staff.googleName || maskEmail(staff.email);
   const signedBody = signerLabel ? `${body}\n\n- ${signerLabel}` : body;
 
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
@@ -198,7 +219,7 @@ async function handleReply(req: Request, staff: StaffGrant): Promise<Response> {
     console.error('Failed to look up conversation', err);
     return jsonResponse({ error: 'Failed to reach the message store' }, 502);
   }
-  if (!conversation) return jsonResponse({ error: 'Conversation not found' }, 404);
+  if (!conversation || !canReach(access, conversation.wa_phone)) return jsonResponse({ error: 'Conversation not found' }, 404);
 
   let metaRes: Response;
   let metaData: any;
@@ -237,14 +258,14 @@ async function handleReply(req: Request, staff: StaffGrant): Promise<Response> {
   const waMessageId = metaData?.messages?.[0]?.id;
   try {
     const saved = await insertMessage({ conversationId, direction: 'outbound', body: signedBody, waMessageId, status: 'sent' });
-    await auditBestEffort(staff, 'whatsapp.reply', conversationId);
+    await auditBestEffort(staff, 'whatsapp.reply', conversationId, access.scope);
     return jsonResponse({ ok: true, message: saved });
   } catch (err) {
     // The WhatsApp send itself succeeded — Meta already delivered it — a
     // failure here only means our own copy wasn't recorded; still report
     // success to the caller since a "failed" state would be misleading.
     console.error('Send succeeded but failed to record the outbound message', err);
-    await auditBestEffort(staff, 'whatsapp.reply', conversationId);
+    await auditBestEffort(staff, 'whatsapp.reply', conversationId, access.scope);
     return jsonResponse({ ok: true, message: null });
   }
 }
@@ -258,7 +279,8 @@ async function handleReply(req: Request, staff: StaffGrant): Promise<Response> {
 // the source of truth, so a failed Supabase write after a successful Meta
 // call still leaves the block in effect, just unreflected in the badge
 // until the next successful toggle.
-async function handleBlock(req: Request, staff: StaffGrant): Promise<Response> {
+async function handleBlock(req: Request, access: InboxAccess): Promise<Response> {
+  const staff = access.staff;
   let payload: { conversationId?: string; blocked?: boolean };
   try {
     payload = await req.json();
@@ -285,7 +307,7 @@ async function handleBlock(req: Request, staff: StaffGrant): Promise<Response> {
     console.error('Failed to look up conversation', err);
     return jsonResponse({ error: 'Failed to reach the message store' }, 502);
   }
-  if (!conversation) return jsonResponse({ error: 'Conversation not found' }, 404);
+  if (!conversation || !canReach(access, conversation.wa_phone)) return jsonResponse({ error: 'Conversation not found' }, 404);
 
   // Blocking cuts a person off from the number, so it's logged *before* it
   // happens and refused if the log can't be written — unlike routine replies.
@@ -342,7 +364,7 @@ async function handleBlock(req: Request, staff: StaffGrant): Promise<Response> {
 // the server. Each section is gated by the viewer's role in THAT module (a
 // whatsapp-only person is told it is limited rather than shown nothing), and names
 // are masked for read-only roles like in the accommodation tool.
-async function handleGuest(req: Request, url: URL): Promise<Response> {
+async function handleGuest(req: Request, url: URL, access: InboxAccess): Promise<Response> {
   const conversationId = url.searchParams.get('conversationId');
   if (!conversationId) return jsonResponse({ error: 'conversationId is required' }, 400);
 
@@ -353,7 +375,7 @@ async function handleGuest(req: Request, url: URL): Promise<Response> {
     console.error('Failed to look up conversation', err);
     return jsonResponse({ error: 'Failed to reach the message store' }, 502);
   }
-  if (!conversation) return jsonResponse({ error: 'Conversation not found' }, 404);
+  if (!conversation || !canReach(access, conversation.wa_phone)) return jsonResponse({ error: 'Conversation not found' }, 404);
   const e164 = `+${conversation.wa_phone}`;
 
   const [payments, accommodation] = await Promise.all([requireStaff(req, 'event-payments', 'view'), requireStaff(req, 'accommodation', 'view')]);
@@ -372,7 +394,7 @@ async function handleGuest(req: Request, url: URL): Promise<Response> {
 // then fetch that URL with the access token and pass the bytes through. Capped
 // at what a Netlify Function can return. Served with headers that stop a crafted
 // file from running anything in this origin (see lib/whatsapp-media.ts).
-async function handleMedia(url: URL): Promise<Response> {
+async function handleMedia(url: URL, access: InboxAccess): Promise<Response> {
   const messageId = url.searchParams.get('messageId');
   if (!messageId) return jsonResponse({ error: 'messageId is required' }, 400);
 
@@ -382,9 +404,10 @@ async function handleMedia(url: URL): Promise<Response> {
     return jsonResponse({ error: 'Server misconfigured' }, 500);
   }
 
-  let message: { media_id: string | null; media_mime: string | null; media_filename: string | null } | null;
+  let message: { conversation_id: string; media_id: string | null; media_mime: string | null; media_filename: string | null } | null;
   try {
     message = await getMessage(messageId);
+    if (message && !(await inScope(access, message.conversation_id))) message = null;
   } catch (err) {
     console.error('Failed to look up message', err);
     return jsonResponse({ error: 'Failed to reach the message store' }, 502);
@@ -434,7 +457,8 @@ async function handleMedia(url: URL): Promise<Response> {
 // to the guest. Logged BEFORE it happens and refused if the log can't be
 // written, like blocking: switching someone's messages back on is only right
 // if THEY asked.
-async function handleOptOut(req: Request, staff: StaffGrant): Promise<Response> {
+async function handleOptOut(req: Request, access: InboxAccess): Promise<Response> {
+  const staff = access.staff;
   let payload: { conversationId?: string; optedOut?: boolean };
   try {
     payload = await req.json();
@@ -453,7 +477,7 @@ async function handleOptOut(req: Request, staff: StaffGrant): Promise<Response> 
     console.error('Failed to look up conversation', err);
     return jsonResponse({ error: 'Failed to reach the message store' }, 502);
   }
-  if (!conversation) return jsonResponse({ error: 'Conversation not found' }, 404);
+  if (!conversation || !canReach(access, conversation.wa_phone)) return jsonResponse({ error: 'Conversation not found' }, 404);
 
   try {
     await logStaffAction({
@@ -484,7 +508,7 @@ async function handleOptOut(req: Request, staff: StaffGrant): Promise<Response> 
 // Best-effort by design: the inbox page calls this opportunistically, and a
 // failure (no inbound message, outside the 24h window, Meta hiccup) must never
 // surface as an error to admins, so it always answers 200 with `ok`.
-async function handleSeen(req: Request): Promise<Response> {
+async function handleSeen(req: Request, access: InboxAccess): Promise<Response> {
   let payload: { conversationId?: string; typing?: boolean };
   try {
     payload = await req.json();
@@ -498,6 +522,7 @@ async function handleSeen(req: Request): Promise<Response> {
   if (!phoneNumberId || !accessToken) return jsonResponse({ ok: false });
 
   try {
+    if (!(await inScope(access, payload.conversationId))) return jsonResponse({ ok: false });
     const waMessageId = await getLatestInboundWaMessageId(payload.conversationId);
     if (!waMessageId) return jsonResponse({ ok: false });
     const res = await fetch(`https://graph.facebook.com/${WHATSAPP_GRAPH_API_VERSION}/${phoneNumberId}/messages`, {
@@ -521,32 +546,28 @@ async function handleSeen(req: Request): Promise<Response> {
 export default async (req: Request): Promise<Response> => {
   const url = new URL(req.url);
 
-  // Pick the route first so each one is gated by the capability it needs:
-  // reading is `view`, sending is `reply`, blocking is `manage`.
-  type Route = { capability: Capability<'whatsapp'>; run: (staff: StaffGrant) => Promise<Response> };
+  // Pick the route first so each one is gated by the capability it needs: reading is `view`, sending is
+  // `reply`, blocking is `manage`. Who holds those, and for which conversations, depends on the ?scope= the
+  // calling screen names (lib/whatsapp-scope.ts); no scope is the whole WhatsApp module, as before.
+  type Route = { need: InboxNeed; run: (access: InboxAccess) => Promise<Response> };
+  const { pathname } = url;
+  const get = req.method === 'GET';
+  const post = req.method === 'POST';
   const route: Route | null =
-    url.pathname === '/api/whatsapp-admin/conversations' && req.method === 'GET'
-      ? { capability: 'view', run: (staff) => handleConversations(url, staff) }
-      : url.pathname === '/api/whatsapp-admin/messages' && req.method === 'GET'
-        ? { capability: 'view', run: () => handleMessages(url) }
-        : url.pathname === '/api/whatsapp-admin/guest' && req.method === 'GET'
-          ? { capability: 'view', run: () => handleGuest(req, url) }
-          : url.pathname === '/api/whatsapp-admin/media' && req.method === 'GET'
-          ? { capability: 'view', run: () => handleMedia(url) }
-          : url.pathname === '/api/whatsapp-admin/reply' && req.method === 'POST'
-          ? { capability: 'reply', run: (staff) => handleReply(req, staff) }
-          : url.pathname === '/api/whatsapp-admin/block' && req.method === 'POST'
-            ? { capability: 'manage', run: (staff) => handleBlock(req, staff) }
-            : url.pathname === '/api/whatsapp-admin/opt-out' && req.method === 'POST'
-              ? { capability: 'manage', run: (staff) => handleOptOut(req, staff) }
-              : url.pathname === '/api/whatsapp-admin/seen' && req.method === 'POST'
-                ? { capability: 'reply', run: () => handleSeen(req) }
-                : null;
+    get && pathname === '/api/whatsapp-admin/conversations' ? { need: 'view', run: (a) => handleConversations(url, a) }
+    : get && pathname === '/api/whatsapp-admin/messages' ? { need: 'view', run: (a) => handleMessages(url, a) }
+    : get && pathname === '/api/whatsapp-admin/guest' ? { need: 'view', run: (a) => handleGuest(req, url, a) }
+    : get && pathname === '/api/whatsapp-admin/media' ? { need: 'view', run: (a) => handleMedia(url, a) }
+    : post && pathname === '/api/whatsapp-admin/reply' ? { need: 'reply', run: (a) => handleReply(req, a) }
+    : post && pathname === '/api/whatsapp-admin/block' ? { need: 'manage', run: (a) => handleBlock(req, a) }
+    : post && pathname === '/api/whatsapp-admin/opt-out' ? { need: 'manage', run: (a) => handleOptOut(req, a) }
+    : post && pathname === '/api/whatsapp-admin/seen' ? { need: 'reply', run: (a) => handleSeen(req, a) }
+    : null;
   if (!route) return jsonResponse({ error: 'Not found' }, 404);
 
-  const auth = await requireStaff(req, 'whatsapp', route.capability);
+  const auth = await authorizeInbox(req, url.searchParams.get('scope'), route.need);
   if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
-  return route.run(auth.staff);
+  return route.run(auth.access);
 };
 
 export const config = {

@@ -74,7 +74,8 @@ test('every step target exists in the page (or the shell) it points at', () => {
   };
   assert.deepEqual(Object.keys(files).sort(), [...TOUR_PAGES].sort(), 'a page with a tour has no file listed here');
   for (const page of TOUR_PAGES) {
-    const source = read(files[page]);
+    // The WhatsApp page is the thin host of the reusable inbox, which carries most of its tour targets.
+    const source = [files[page], ...(page === 'whatsapp' ? ['src/components/whatsapp/WhatsAppInbox.astro'] : [])].map(read).join('\n');
     for (const step of TOURS[page]) {
       const marker = `data-tour="${step.target}"`;
       assert.ok(source.includes(marker) || shell.includes(marker), `${page}/${step.id}: no element with ${marker}`);

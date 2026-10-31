@@ -543,6 +543,20 @@ outside both the local machine and Netlify (the member-update-email workflow).
   WhatsApp message on 2026-08-19. Used to also email `core-team@tvc.farm` on every message —
   removed 2026-08-20 in favor of `whatsapp-stale-alert.mts`'s digest below, once per-message
   emails turned out to be more clutter than signal.
+- **Reusable WhatsApp inbox (2026-10-31)** — the inbox UI is now the component
+  `src/components/whatsapp/WhatsAppInbox.astro` (markup, styles and the whole client script as a
+  `mount(root)`), placed by `/internal/whatsapp` with `scope="all"`; the page keeps only the header and
+  the Google sign-in gate, and starts/stops the inbox through `root.waInbox` and its
+  `wa-inbox:unauthorized` / `wa-inbox:forbidden` events. Every request carries `?scope=`, resolved on the
+  server by `netlify/functions/lib/whatsapp-scope.ts` (`authorizeInbox`): `all` is the `whatsapp` module's
+  roles as before; `stays` is the `accommodation` module's roles (`view` reads, `edit` replies, no block /
+  STOP) limited to conversations whose number is in the guest directory
+  (`scripts/lib/whatsapp-scope.mjs`, `listGuestMobileNumbers`). `whatsapp-admin.mts` and
+  `whatsapp-suggest.mts` check every conversation id against the scope (outside it answers 404, like a
+  missing one). A new screen (or a vendor list) adds a scope there; nothing else in the inbox changes.
+  The Stays page embeds it in a dialog (`#wa-modal`, opened by its Messages button) with `scope="stays"` and
+  `lockSigner`, so replies there are always signed with the caller's own account name (enforced in
+  `handleReply`, not just hidden in the page).
 - **`netlify/functions/whatsapp-admin.mts`** — backs `/internal/whatsapp`, the WhatsApp reply
   dashboard (2026-08-20). Same Google Sign-In auth pattern as `photo-pool.mts` (verifies the ID
   token, then `requireStaff` checks the caller's role in the `whatsapp` module: `view` to read,

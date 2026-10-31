@@ -10,6 +10,7 @@
 // accommodation-admin.mts's header comment for why it isn't shared).
 import StaffLayout from '../../layouts/StaffLayout.astro';
 import SignInGate from '../../components/SignInGate.astro';
+import WhatsAppInbox from '../../components/whatsapp/WhatsAppInbox.astro';
 import { getCollection } from 'astro:content';
 import { ACCOMMODATION_UNITS, ACCOMMODATION_TYPES } from '../../../scripts/lib/accommodation.mjs';
 import { durationDays } from '../../utils/events';
@@ -84,7 +85,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
       <div class="booking-list-header">
         <h2 id="booking-list-heading">Bookings this month</h2>
-        <button type="button" id="new-booking-btn" class="button button--primary" data-tour="new-booking">+ New booking</button>
+        <div class="booking-list-actions">
+          <button type="button" id="messages-btn" class="button">Messages</button>
+          <button type="button" id="new-booking-btn" class="button button--primary" data-tour="new-booking">+ New booking</button>
+        </div>
       </div>
       <div id="booking-list" class="booking-list"></div>
 
@@ -178,6 +182,21 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
               <button type="button" id="f-cancel-edit" class="button" hidden>Cancel edit</button>
             </div>
           </form>
+        </div>
+      </div>
+
+      <div id="wa-modal" class="booking-modal" hidden>
+        <div id="wa-modal-backdrop" class="booking-modal-backdrop"></div>
+        <div class="card booking-modal-panel wa-panel" role="dialog" aria-modal="true" aria-labelledby="wa-heading">
+          <div class="booking-modal-panel-head">
+            <h2 id="wa-heading">Guest messages</h2>
+            <button type="button" id="wa-modal-close" class="button button--icon" aria-label="Close">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true" focusable="false">
+                <path d="M6 6L18 18M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+          <WhatsAppInbox scope="stays" lockSigner />
         </div>
       </div>
     </div>
@@ -274,6 +293,17 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     justify-content: space-between;
     gap: 12px;
     margin-bottom: 12px;
+  }
+
+  .booking-list-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  /* The WhatsApp inbox needs room for its list, thread and guest panel side by side. */
+  .booking-modal-panel.wa-panel {
+    max-width: min(1180px, 96vw);
+    overflow: hidden;
   }
 
   .booking-list-header h2 {
@@ -3676,6 +3706,40 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   bookingModalBackdrop.addEventListener('click', attemptCloseModal);
 
   bookingModalClose.addEventListener('click', attemptCloseModal);
+
+  // ---- Guest messages: the reusable WhatsApp inbox, limited to the guests on stays (scope "stays") ----
+  const messagesBtn = document.getElementById('messages-btn') as HTMLButtonElement;
+  const waModal = document.getElementById('wa-modal') as HTMLElement;
+  const waInbox = waModal.querySelector('[data-wa-inbox]') as HTMLElement;
+  const inboxControls = () => (waInbox as any).waInbox as { start(): Promise<void>; stop(): void } | undefined;
+
+  function openMessages() {
+    waModal.hidden = false;
+    waInbox.hidden = false;
+    inboxControls()?.start();
+  }
+
+  function closeMessages() {
+    waModal.hidden = true;
+    inboxControls()?.stop();
+  }
+
+  messagesBtn.addEventListener('click', openMessages);
+  document.getElementById('wa-modal-backdrop')!.addEventListener('click', closeMessages);
+  document.getElementById('wa-modal-close')!.addEventListener('click', closeMessages);
+  // Capture, so this sees the inbox's guest panel still open: Escape closes that first, the dialog next.
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && !waModal.hidden && !waInbox.classList.contains('guest-open')) closeMessages();
+  }, true);
+  waInbox.addEventListener('wa-inbox:unauthorized', () => {
+    closeMessages();
+    clearToken();
+    showGate('Your session expired — sign in again.');
+  });
+  waInbox.addEventListener('wa-inbox:forbidden', () => {
+    closeMessages();
+    showForbidden(getToken() ?? '');
+  });
 
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape' && !bookingModal.hidden) {

@@ -16,7 +16,7 @@ const SHARED = ['.card', '.hint', '.note', '.error', '.section.wrapper', '[hidde
 
 // A page may add to a shared rule; this lists the only ones that do, and what they may set.
 const ADDITIONS = {
-  'whatsapp.astro': { '.card': ['padding', 'overflow'] },
+  'WhatsAppInbox.astro': { '.card': ['padding', 'overflow'] },
   'members.astro': { '.link-button': ['padding'] },
   'usage.astro': { '.link-button': ['padding'] },
 };
@@ -47,10 +47,13 @@ test('the shell defines every shared primitive', () => {
   }
 });
 
+// The WhatsApp inbox is a component shared by several screens, so it is held to the same rule as a page.
+const components = [['WhatsAppInbox.astro', new URL('../../src/components/whatsapp/WhatsAppInbox.astro', import.meta.url)]];
+
 test('no page redefines a shared primitive', () => {
-  for (const page of pages) {
+  for (const [page, url] of [...pages.map((f) => [f, new URL(f, pagesDir)]), ...components]) {
     const allowed = ADDITIONS[page] ?? {};
-    for (const rule of topLevelRules(readFileSync(new URL(page, pagesDir), 'utf8'))) {
+    for (const rule of topLevelRules(readFileSync(url, 'utf8'))) {
       if (!SHARED.includes(rule.selector)) continue;
       const extra = allowed[rule.selector];
       assert.ok(extra && rule.props.every((p) => extra.includes(p)), `${page} redefines ${rule.selector} (${rule.props.join(', ')}); it lives in StaffLayout.astro`);

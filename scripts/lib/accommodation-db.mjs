@@ -340,6 +340,13 @@ export async function saveNotice(bookingId, snapshot, notifiedBy) {
 
 // Contact details for notifying people who may no longer be on the booking
 // (e.g. a guest swapped out after being told). Server-side only.
+// Every mobile number in the guest directory (accommodation_people only ever holds people who were put on a stay), as
+// stored. The WhatsApp inbox's "stays" scope uses it to decide which conversations a Stays user may read.
+export async function listGuestMobileNumbers() {
+  const res = await restFetch('/accommodation_people?mobile_number=not.is.null&select=mobile_number&limit=10000');
+  return (await res.json()).map((p) => p.mobile_number);
+}
+
 export async function getPeopleByIds(ids) {
   if (ids.length === 0) return new Map();
   const res = await restFetch(`/accommodation_people?id=in.(${ids.join(',')})&select=${PERSON_FIELDS}`);
