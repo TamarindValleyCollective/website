@@ -1691,6 +1691,10 @@ import SignInGate from '../../components/SignInGate.astro';
     font-size: var(--text-sm);
   }
 
+  dialog.modal .reauth {
+    margin: 4px 0 8px;
+  }
+
   dialog.modal .form-msg:empty {
     display: none;
   }
@@ -2619,6 +2623,34 @@ import SignInGate from '../../components/SignInGate.astro';
     to { opacity: 0; }
   }
 
+  .rent-msg {
+    margin: 0 0 12px;
+    color: var(--tvc-error-text);
+    font-size: var(--text-sm);
+  }
+
+  .rent-msg:empty {
+    display: none;
+  }
+
+  .toast .toast-undo {
+    min-height: 36px;
+    margin: -6px -10px -6px 12px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--tvc-orange-light);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .toast .toast-undo:focus-visible {
+    outline: 2px solid var(--tvc-orange-light);
+    outline-offset: 1px;
+  }
+
   .toast {
     position: fixed;
     left: 50%;
@@ -2682,6 +2714,13 @@ import SignInGate from '../../components/SignInGate.astro';
 
     .menu-btn {
       display: grid;
+    }
+
+    /* Where the tab bar is (560px and below) it is the main navigation: a second menu with the same pages is noise. */
+    @media (max-width: 560px) {
+      .topbar .menu-btn {
+        display: none;
+      }
     }
 
     .topbar-title {
@@ -4458,9 +4497,11 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     { id: 'unit', label: 'My unit', icon: IC.unit },
     // Owners only: a family member's story route lands on the Directory.
     { id: 'story', label: 'Our story', icon: IC.pen },
+    // Directory before the early-access pages: on a phone the bar holds four places and More, and the neighbours are
+    // what every member opens, so the feature that is not on for everyone must not push them under More.
+    { id: 'directory', label: 'Directory', icon: IC.book },
     // Owners only, and only once the feature is switched on (MEMBER_RENTAL_ENABLED): probeRental() shows it.
     { id: 'rental', label: 'Rent out', icon: IC.stay, hidden: true },
-    { id: 'directory', label: 'Directory', icon: IC.book },
     // Early access (MEMBER_SITE_MAP_ENABLED, or a household on Preview): probeSiteMap() shows it.
     { id: 'sitemap', label: 'Map', icon: IC.map, hidden: true },
     // Not built yet: kept out of the menu (they would only lead to a "coming soon" page) and listed
@@ -4497,9 +4538,21 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
   let toastTimer: number | undefined;
 
   // Long enough to read a whole sentence once, not a flash.
-  function toast(msg: string) {
+  // With an undo, the toast carries an Undo button and stays long enough to be reached (8 seconds); the change it
+  // undoes has already happened, as in the admin portal, so a reversible action never needs a confirm box.
+  function toast(msg: string, undo?: () => void) {
     const t = $('toast');
     t.textContent = msg;
+    if (undo) {
+      const b = h('button', 'toast-undo', 'Undo');
+      b.setAttribute('type', 'button');
+      b.addEventListener('click', () => {
+        clearTimeout(toastTimer);
+        t.hidden = true;
+        undo();
+      });
+      t.append(b);
+    }
     t.classList.remove('out');
     t.hidden = false;
     clearTimeout(toastTimer);
@@ -4509,7 +4562,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         t.hidden = true;
         t.classList.remove('out');
       }, 120);
-    }, Math.max(4000, msg.length * 70));
+    }, undo ? 8000 : Math.max(4000, msg.length * 70));
   }
 
   const hhNow = (): Hh => all[Math.min(current, all.length - 1)];
@@ -4558,9 +4611,17 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         const open = menu.hidden;
         menu.hidden = !open;
         more.setAttribute('aria-expanded', String(open));
-        if (open) document.addEventListener('click', away, true); else close();
+        if (open) {
+          document.addEventListener('click', away, true);
+          menu.querySelector<HTMLElement>('a')?.focus(); // a keyboard or screen-reader user lands inside the menu they opened
+        } else close();
       });
       menu.addEventListener('click', close);
+      bar.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' || menu.hidden) return;
+        close();
+        more.focus();
+      });
       bar.append(more, menu);
     }
   }
@@ -4742,9 +4803,25 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       dlg.addEventListener('animationend', (e) => { if (e.target === dlg) done(); });
       window.setTimeout(done, 400); // in case no animation runs
     };
+    // Typed input is not thrown away by a stray tap on the backdrop (the top strip of a phone's sheet is all backdrop) or
+    // an Esc: the sheet nudges instead. A second Esc within three seconds, Cancel, or the sheet's own close still leave.
+    let dirty = false;
+    let escArmed = false;
+    dlg.addEventListener('input', () => { dirty = true; });
+    const nudge = () => {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      dlg.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-6px)' }, { transform: 'translateX(5px)' }, { transform: 'translateX(0)' }], { duration: 220, easing: 'ease-out' });
+    };
     dlg.addEventListener('cancel', (e) => {
       e.preventDefault();
-      if (!opts.locked) dlg.close();
+      if (opts.locked) return;
+      if (dirty && !escArmed) {
+        escArmed = true;
+        window.setTimeout(() => { escArmed = false; }, 3000);
+        nudge();
+        return;
+      }
+      dlg.close();
     });
     if (!opts.locked) {
       // Only the backdrop closes it: the press and the release both outside the sheet's box. A click on the sheet's own
@@ -4756,7 +4833,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       let pressedOutside = false;
       dlg.addEventListener('pointerdown', (e) => { pressedOutside = e.target === dlg && outside(e); });
       dlg.addEventListener('click', (e) => {
-        if (e.target === dlg && pressedOutside && outside(e)) dlg.close();
+        if (e.target === dlg && pressedOutside && outside(e)) { if (dirty) nudge(); else dlg.close(); }
         pressedOutside = false;
       });
       // On a phone the grab area at the top moves the sheet with the finger, and a flick carries it (the release
@@ -4838,6 +4915,30 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     }
   }
 
+  // A session that ended while a form is open: say so and offer Google's button right there, so signing in again keeps
+  // what was typed (the form is still on the page). After it, the member presses the form's own button again.
+  function showFail(msg: HTMLElement, err: unknown, fallback = 'Something went wrong.') {
+    msg.parentElement?.querySelector('.reauth')?.remove();
+    if (!(err instanceof MemberAuthError)) {
+      msg.textContent = err instanceof Error ? err.message : fallback;
+      return;
+    }
+    msg.textContent = 'Your session ended. Sign in again and what you typed will still be here.';
+    if (typeof google === 'undefined') return;
+    const slot = h('div', 'reauth');
+    msg.after(slot);
+    google.accounts.id.initialize({
+      client_id: CLIENT_ID,
+      callback: (response: { credential: string }) => {
+        setMemberToken(response.credential);
+        slot.remove();
+        msg.textContent = 'Signed in again. Press the button to carry on.';
+        google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+      },
+    });
+    google.accounts.id.renderButton(slot, { theme: isDark() ? 'filled_black' : 'outline', size: 'large' });
+  }
+
   // ---- editing my own details ----
   function detailsDialog() {
     const dlg = document.createElement('dialog');
@@ -4875,7 +4976,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         toast('Your details are saved');
       } catch (err) {
         done();
-        msg.textContent = err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : err instanceof Error ? err.message : 'Something went wrong.';
+        showFail(msg, err);
       }
     });
     dlg.append(
@@ -4936,7 +5037,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         toast(data.requested ? 'Sent to the core team. They will let you know.' : 'Added. They can sign in now.');
       } catch (err) {
         done();
-        msg.textContent = err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : err instanceof Error ? err.message : 'Something went wrong.';
+        showFail(msg, err);
       }
     });
     dlg.append(
@@ -4975,7 +5076,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     const msg = h('p', 'form-msg');
     msg.setAttribute('role', 'alert');
     const fail = (err: unknown) => {
-      msg.textContent = err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : err instanceof Error ? err.message : 'Something went wrong.';
+      showFail(msg, err);
     };
     const cancel = h('button', 'btn', 'Cancel');
     cancel.addEventListener('click', () => dlg.close());
@@ -5235,7 +5336,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         toast(data.replaced ? 'Uploaded. It replaces your earlier upload, and we are reading it now' : 'Uploaded. We are reading it now');
       } catch (err) {
         finish();
-        msg.textContent = err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : err instanceof Error ? err.message : 'Something went wrong.';
+        showFail(msg, err);
       }
     });
     dlg.append(
@@ -5302,7 +5403,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         toast(data.replaced ? `Sketch added for survey no. ${survey.value}. It replaces your earlier one` : `Sketch added for survey no. ${survey.value}`);
       } catch (err) {
         finish();
-        msg.textContent = err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : err instanceof Error ? err.message : 'Something went wrong.';
+        showFail(msg, err);
       }
     });
     dlg.append(
@@ -5346,7 +5447,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           await load();
         } catch (err) {
           done();
-          msg.textContent = err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : err instanceof Error ? err.message : 'Something went wrong.';
+          showFail(msg, err);
         }
       });
       actions.append(out, ok);
@@ -5824,19 +5925,23 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
       const sections: HTMLElement[] = [];
       const card = (title: string, ...kids: (HTMLElement | null)[]) => h('section', 'unit-card', undefined, h('div', 'unit-card-head', undefined, h('h2', '', title)), h('div', 'unit-card-body', undefined, ...kids));
       const say = (text: string) => h('p', 'rent-note', text);
-      const act = async (path: string, payload: unknown, done: string, btn?: HTMLButtonElement, doing?: string): Promise<boolean> => {
+      // `undo` puts the change back (a toast with an Undo button). `inline` is a line next to the form that errors go in,
+      // so a failed payout form says what is wrong where the member is looking, not in a toast that leaves after 4 seconds.
+      const act = async (path: string, payload: unknown, done: string, btn?: HTMLButtonElement, doing?: string, undo?: () => void, inline?: HTMLElement): Promise<boolean> => {
         const finish = btn ? setBusy(btn, doing) : () => {};
+        const fail = (text: string) => { if (inline) inline.textContent = text; else toast(text); };
+        if (inline) inline.textContent = '';
         try {
           const { status, data } = await memberFetch(path, { method: 'POST', body: payload });
           if (status !== 200) {
-            toast(data.error || 'Something went wrong. Try again.');
+            fail(data.error || 'Something went wrong. Try again.');
             return false;
           }
-          toast(done);
+          toast(done, undo);
           await refresh();
           return true;
         } catch (err) {
-          toast(err instanceof MemberAuthError ? 'Your session ended. Sign in again.' : 'Could not reach the server.');
+          fail(err instanceof MemberAuthError ? 'Your session ended. Reload the page and sign in again; nothing you typed here was saved.' : 'Could not reach the server. Check your connection and try again.');
           return false;
         } finally {
           finish();
@@ -5892,8 +5997,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           });
           const save = h('button', 'btn btn--solid', 'Save payout details') as HTMLButtonElement;
           save.type = 'button';
+          const payMsg = h('p', 'rent-msg');
+          payMsg.setAttribute('role', 'alert');
           save.addEventListener('click', async () => {
-            await act('/api/members-me/rental/payout', { payeeName: name.value, method: method.value, account: account.value, ifsc: ifsc.value, upi: upi.value, pan: pan.value }, 'Saved. TVC will check it before paying you.', save, 'Saving…');
+            await act('/api/members-me/rental/payout', { payeeName: name.value, method: method.value, account: account.value, ifsc: ifsc.value, upi: upi.value, pan: pan.value }, 'Saved. TVC will check it before paying you.', save, 'Saving…', undefined, payMsg);
           });
           box.replaceChildren(
             say('TVC collects the guests’ payments and pays your share here. A PAN is needed for every payout. Details are encrypted; we show only the last four characters.'),
@@ -5902,6 +6009,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
             bankRows,
             upiRows,
             h('label', 'rent-field', undefined, h('span', 'field-label', 'PAN'), pan),
+            payMsg,
             save,
           );
         };
@@ -5958,20 +6066,48 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
         seg.append(...picks);
         const send = h('button', 'btn btn--solid', 'I’m interested') as HTMLButtonElement;
         send.type = 'button';
+        // The first press says exactly what Linger will receive; the second sends it. Changing a choice goes back.
+        const review = h('p', 'rent-note');
+        review.setAttribute('aria-live', 'polite');
+        let reviewing = false;
+        const unreview = () => { reviewing = false; review.textContent = ''; send.textContent = 'I’m interested'; };
+        seg.addEventListener('click', unreview);
+        size.addEventListener('change', unreview);
         send.addEventListener('click', async () => {
           if (shape === 'whole' && !size.value) return toast('Choose the size of your unit.');
+          if (!reviewing) {
+            reviewing = true;
+            const what = shape === 'whole' ? `your whole unit (${size.selectedOptions[0]?.textContent ?? ''})` : 'one room of your unit';
+            review.textContent = `Linger will receive your name and email, and that you want to rent out ${what}${shape === 'whole' && delegate.checked ? ', with TVC managing it' : ''}. Nothing is booked yet.`;
+            send.textContent = 'Yes, tell Linger';
+            return;
+          }
           await act('/api/members-me/rental/offer', { shape, size: size.value, delegateToTvc: shape === 'whole' && delegate.checked }, 'Linger has been told. They will be in touch.', send, 'Sending…');
         });
         sections.push(card('Rent out your unit',
           seg,
           wholeOnly, roomOnly,
           say('Linger receives your name and email to get in touch.'),
+          review,
           send));
       } else if (d.state === 'interested') {
         const label = d.types?.find((t) => t.id === d.offer?.typeId)?.label ?? '';
         const withdraw = h('button', 'btn', 'Withdraw') as HTMLButtonElement;
         withdraw.type = 'button';
-        withdraw.addEventListener('click', () => void act('/api/members-me/rental/withdraw', {}, 'Withdrawn.', withdraw, 'Withdrawing…'));
+        // Not undoable (Linger has already been told), so a second press confirms, in place, after a short pause so a
+        // double tap cannot confirm it. Anything else on the page puts it back.
+        let sure = false;
+        withdraw.addEventListener('click', () => {
+          if (!sure) {
+            sure = true;
+            withdraw.textContent = 'Yes, withdraw';
+            withdraw.disabled = true;
+            window.setTimeout(() => { withdraw.disabled = false; }, 900);
+            window.setTimeout(() => { if (withdraw.isConnected && !withdraw.disabled) { sure = false; withdraw.textContent = 'Withdraw'; } }, 6000);
+            return;
+          }
+          void act('/api/members-me/rental/withdraw', {}, 'Withdrawn.', withdraw, 'Withdrawing…');
+        });
         const k = d.contract;
         let contractCard: HTMLElement | null = null;
         if (k) {
@@ -6025,7 +6161,13 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
           sw.disabled = paused;
           sw.dataset.fk = 'onoff';
           sw.setAttribute('aria-label', 'Rent out my unit');
-          sw.addEventListener('change', () => void act('/api/members-me/rental/settings', { requestMode: sw.checked ? 'ask' : 'reject' }, sw.checked ? 'Your unit is offered to guests.' : 'Your unit is no longer offered.'));
+          sw.addEventListener('change', () => {
+            // Reversible, so it happens at once and Undo puts back the mode it had (switching on starts at "Ask me first").
+            const was = u.requestMode;
+            const to = sw.checked ? 'ask' : 'reject';
+            void act('/api/members-me/rental/settings', { requestMode: to }, sw.checked ? 'Your unit is offered to guests.' : 'Your unit is no longer offered.', undefined, undefined,
+              () => void act('/api/members-me/rental/settings', { requestMode: was }, sw.checked ? 'Your unit is no longer offered.' : 'Your unit is offered to guests again.'));
+          });
           return h('label', 'rent-switch', undefined, sw, h('i'));
         })();
         const tone = paused ? 'paused' : isOn ? 'on' : 'off'; // the card's colour says it before the words do
@@ -7861,8 +8003,10 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
 
   // On a phone the menu is a drawer. Closed, it must also be out of the tab order (inert), and it
   // closes on Escape, on a tap outside it, and after choosing a page.
+  const tabbarWidth = window.matchMedia('(max-width: 560px)');
   function setMenu(open: boolean, returnFocus = false) {
-    const opening = open && phoneWidth.matches;
+    // Where the tab bar is, the drawer is not offered at all (its button is hidden), so it can never open.
+    const opening = open && phoneWidth.matches && !tabbarWidth.matches;
     shell.classList.toggle('open', opening);
     $('menu').setAttribute('aria-expanded', String(opening));
     ($('side') as HTMLElement).inert = phoneWidth.matches && !opening;
@@ -7870,6 +8014,7 @@ import { linkAt, normalizeUrl, removeLink, renderBlocks, setLink, toPlain, toggl
     else if (returnFocus) $('menu').focus();
   }
   phoneWidth.addEventListener('change', () => setMenu(false));
+  tabbarWidth.addEventListener('change', () => setMenu(false));
   setMenu(false);
 
   let whoTimer: number | undefined;
