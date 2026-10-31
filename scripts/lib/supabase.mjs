@@ -410,7 +410,7 @@ export async function getLatestInboundWaMessageId(conversationId) {
 // message carries before fetching it from Meta for an admin.
 /** @param {string} messageId */
 export async function getMessage(messageId) {
-  const res = await restFetch(`/whatsapp_messages?id=eq.${encodeURIComponent(messageId)}&select=id,media_id,media_kind,media_mime,media_filename&limit=1`);
+  const res = await restFetch(`/whatsapp_messages?id=eq.${encodeURIComponent(messageId)}&select=id,conversation_id,media_id,media_kind,media_mime,media_filename&limit=1`);
   const rows = await res.json();
   return rows[0] ?? null;
 }
