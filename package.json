@@ -21,6 +21,7 @@
     "astro": "^7.1.3",
     "aws4fetch": "^1.0.20",
     "cheerio": "^1.2.0",
+    "fflate": "^0.8.3",
     "leaflet": "^1.9.4",
     "libphonenumber-js": "^1.13.14",
     "qrcode-generator": "^2.0.4",

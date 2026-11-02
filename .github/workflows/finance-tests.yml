@@ -10,6 +10,7 @@ on:
   pull_request:
     paths:
       - 'netlify/functions/**'
+      - 'package.json'
       - 'scripts/lib/finance-*'
       - 'scripts/import-fin-parties.mjs'
       - 'docs/finance/**'
@@ -30,5 +31,5 @@ jobs:
 
       - run: npm ci
 
-      - name: Finance access rules, parties, import and endpoints
+      - name: Finance rules, parties, importers and endpoints
         run: node --test scripts/lib/finance-*.test.mjs

@@ -1,0 +1,434 @@
+---
+// Finance (internal), session 03: import bank statements and the Paytm UPI export. Backed by netlify/functions/finance-admin.mts
+// (/imports/preview, /imports/commit, /imports, /bank-accounts). Drop one or several files, see what each would do, then
+// confirm: nothing is stored until then. A bank statement arrives as one file per year; they may be dropped together or
+// one at a time, in any order, and each year is checked against its neighbours (docs/finance/sessions/03-statement-import.md).
+//
+// Same shell as the other internal tools: Google Sign-In gated, unlinked, noindex. Everything the server returns is
+// placed with textContent only, never as HTML.
+import StaffLayout from '../../../layouts/StaffLayout.astro';
+import SignInGate from '../../../components/SignInGate.astro';
+---
+
+<StaffLayout title="Import statements" description="Import bank statements." current="finance">
+  <section class="finance finance-import section wrapper">
+    <p class="hint"><a href="/internal/finance/">Finance</a></p>
+    <h1>Import statements</h1>
+    <p id="intro" class="hint">Sign in to import statements.</p>
+
+    <SignInGate forbiddenWhat="finance" />
+
+    <p id="status" class="hint" hidden></p>
+
+    <div id="content" hidden>
+      <div class="card" id="upload-card">
+        <h2>Add files</h2>
+        <p class="hint">
+          Bank statement: the Excel download from the bank. It comes as one file per year, so choose several at once or one at a time, in any order. Paytm: the UPI export (Excel).
+          Choosing files only checks them; nothing is stored until you confirm.
+        </p>
+        <form id="upload-form" class="inline-form">
+          <label>Files <input id="files" type="file" accept=".xlsx" multiple required /></label>
+          <button class="button" type="submit" id="check">Check files</button>
+        </form>
+        <p class="hint" id="upload-msg" hidden></p>
+      </div>
+
+      <div id="results" hidden>
+        <h2 class="list-title" id="results-title">What would happen</h2>
+        <ul class="list" id="file-list"></ul>
+        <h2 class="list-title">Statements held after this</h2>
+        <div id="coverage-after"></div>
+        <div class="card" id="confirm-card">
+          <p class="hint" id="confirm-text"></p>
+          <button class="button" type="button" id="confirm">Import</button>
+        </div>
+        <div id="after" hidden></div>
+      </div>
+
+      <h2 class="list-title">Imported so far</h2>
+      <div id="coverage"></div>
+      <ul class="list" id="batches"></ul>
+      <p class="hint" id="batches-empty" hidden>Nothing imported yet.</p>
+
+      <h2 class="list-title">Bank accounts</h2>
+      <ul class="list" id="accounts"></ul>
+      <div class="card" id="account-card" hidden>
+        <h3>Add a bank account</h3>
+        <p class="hint">Only the last four digits are kept. The Paytm label is the text Paytm shows for the account (for example "Bank name - 99"); without it every Paytm row is ignored.</p>
+        <form id="account-form" class="inline-form">
+          <label>Name <input id="acc-label" type="text" maxlength="60" required /></label>
+          <label>Last four digits <input id="acc-last4" type="text" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required /></label>
+          <label>Paytm label <input id="acc-upi" type="text" maxlength="60" /></label>
+          <button class="button" type="submit">Add account</button>
+        </form>
+        <p class="hint" id="account-msg" hidden></p>
+      </div>
+    </div>
+  </section>
+</StaffLayout>
+
+<script>
+  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
+
+  declare const google: any;
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const gate = $('gate');
+  const gateError = $('gate-error');
+  const forbidden = $('forbidden');
+  const statusEl = $('status');
+  const content = $('content');
+  const intro = $('intro');
+
+  const rupees = (paise: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(paise / 100);
+  const day = (iso: string | null) => (iso ? new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '—');
+  const range = (a: string, b: string) => (a === b ? day(a) : `${day(a)} to ${day(b)}`);
+  const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+  type Result = any;
+  let chosen: File[] = [];
+  let lastPreview: { files: Result[] } | null = null;
+  let canImport = false;
+
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    content.hidden = true;
+    statusEl.hidden = true;
+    intro.textContent = 'Sign in to import statements.';
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+
+  function showForbidden() {
+    gate.hidden = true;
+    content.hidden = true;
+    statusEl.hidden = true;
+    forbidden.hidden = false;
+    $('forbidden-email').textContent = decodeTokenEmail(getToken() ?? '');
+  }
+
+  function fail(err: unknown) {
+    if (err instanceof StaffAuthError) {
+      if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+      else showForbidden();
+      return true;
+    }
+    return false;
+  }
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
+    const e = document.createElement(tag);
+    if (className) e.className = className;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function row(title: string, details: string[], pill?: { text: string; kind: 'ok' | 'warn' | 'crit' }): HTMLElement {
+    const li = el('li');
+    const r = el('div', 'row');
+    const grow = el('span', 'grow');
+    grow.append(el('span', 'title', title));
+    for (const d of details) grow.append(el('span', 'detail', d));
+    r.append(grow);
+    if (pill) r.append(el('span', `pill pill--${pill.kind}`, pill.text));
+    li.append(r);
+    return li;
+  }
+
+  // Plain-language lines for what the server found, never the raw error object.
+  function describeError(e: any): string {
+    switch (e.type) {
+      case 'chain_break':
+        return `The balance does not add up at line ${e.seq} (${day(e.date)}): it should be ${rupees(e.expectedPaise)} but the file says ${rupees(e.foundPaise)}. Nothing from this file is imported.`;
+      case 'boundary_mismatch':
+        return `This ${e.side === 'before' ? 'period opens' : 'period closes'} at ${rupees(e.foundPaise)}, but the ${e.side === 'before' ? 'previous' : 'next'} period you already hold (${range(e.with.from, e.with.to)}) ${e.side === 'before' ? 'closes' : 'opens'} at ${rupees(e.expectedPaise)}. One of the two files is wrong or incomplete.`;
+      case 'overlap_conflict':
+        return `This file overlaps dates you already hold but does not agree with them${e.missingHeld ? ` (${plural(e.missingHeld, 'held line is', 'held lines are')} missing from it)` : ''}${e.nonContiguous ? ' (its lines are in a different order or have extras in between)' : ''}${e.backdated ? ` (${plural(e.backdated, 'line')} dated inside the period already held)` : ''}. Nothing from this file is imported.`;
+      case 'footer_mismatch':
+        return 'The totals at the foot of the statement do not match its lines. Nothing from this file is imported.';
+      case 'out_of_period':
+        return `Line ${e.seq} is dated ${day(e.date)}, outside the period the statement says it covers.`;
+      case 'not_in_date_order':
+        return `Line ${e.seq} is out of date order.`;
+      case 'no_registered_rows':
+        return `None of the rows in this file is on a registered bank account, so nothing would be kept. The account labels in the file are: ${(e.labelsInFile ?? []).join(', ') || 'none'}. Register the bank account with its Paytm label (spelled exactly like one of these) below, then check the file again.`;
+      case 'account_not_registered':
+        return e.last4 ? `No bank account is registered ending ${e.last4}. Add it below first.` : 'The statement does not say which account it is for.';
+      default:
+        return 'This file has a problem and cannot be imported.';
+    }
+  }
+
+  function describeBoundary(b: any): string | null {
+    if (b.type === 'chain_ok') return `Balance meets the ${b.side === 'before' ? 'previous' : 'next'} period (${range(b.with.from, b.with.to)}).`;
+    if (b.type === 'gap') return `Missing: no statement is held for ${range(b.from, b.to)}.`;
+    if (b.type === 'overlap') return `Overlaps dates already held (${range(b.from, b.to)}); ${plural(b.alreadyHeld, 'line')} already there are skipped.`;
+    return null;
+  }
+
+  function fileRow(f: Result): HTMLElement {
+    const details: string[] = [];
+    let pill: { text: string; kind: 'ok' | 'warn' | 'crit' };
+    if (f.status === 'unreadable') {
+      pill = { text: 'Cannot read', kind: 'crit' };
+      details.push(f.message ?? 'This file could not be read.');
+    } else if (f.status === 'duplicate_file') {
+      pill = { text: 'Already imported', kind: 'warn' };
+      details.push('This exact file was imported before. Nothing to do.');
+    } else if (f.status === 'blocked') {
+      pill = { text: 'Blocked', kind: 'crit' };
+      if (f.message && !f.errors?.length) details.push(f.message);
+      for (const e of f.errors ?? []) details.push(describeError(e));
+    } else {
+      const c = f.counts ?? {};
+      pill = f.stored ? { text: 'Imported', kind: 'ok' } : c.new === 0 && !c.ignored ? { text: 'Nothing new', kind: 'warn' } : { text: 'Ready', kind: 'ok' };
+      if (f.kind === 'axis_statement') {
+        details.push(`${f.accountLabel ?? 'Bank statement'}: ${plural(c.new, 'new line')}, ${c.alreadyHeld} already held${f.firstDate ? ` · lines from ${range(f.firstDate, f.lastDate)}` : ''}`);
+      } else {
+        details.push(`Paytm export: ${plural(c.new, 'new row')}, ${c.alreadyHeld} already held${f.firstDate ? ` · ${range(f.firstDate, f.lastDate)}` : ''}`);
+        if (f.ignored?.count) {
+          details.push(`${plural(f.ignored.count, 'row')} ignored, not on our account (${rupees(f.ignored.totalPaise)} in all): ${f.ignored.byAccount.map((a: any) => `${a.label} ${a.count}`).join(', ')}`);
+        }
+        if (typeof f.wouldLink === 'number') details.push(`${plural(f.wouldLink, 'row')} match a bank line already imported.`);
+        if (f.failed?.length) {
+          pill = { text: 'Check rows', kind: 'warn' };
+          details.push(`${plural(f.failed.length, 'row')} could not be used: ${f.failed.slice(0, 5).map((x: any) => `row ${x.row} (${x.reason})`).join('; ')}${f.failed.length > 5 ? '…' : ''}`);
+        }
+        if (f.message) details.push(f.message);
+      }
+    }
+    for (const b of f.boundaries ?? []) {
+      const text = describeBoundary(b);
+      if (text) details.push(text);
+    }
+    return row(f.name, details, pill);
+  }
+
+  function renderCoverage(target: HTMLElement, coverage: any[]) {
+    target.replaceChildren();
+    if (!coverage?.length) return;
+    const ul = el('ul', 'list');
+    for (const c of coverage) {
+      const details = [`Held: ${c.intervals.map((i: any) => range(i.from, i.to)).join('; ') || 'nothing'}`];
+      for (const g of c.gaps) details.push(`Gap: ${range(g.from, g.to)} has no statement.`);
+      ul.append(row(c.label, details, c.gaps.length ? { text: `${plural(c.gaps.length, 'gap')}`, kind: 'warn' } : { text: 'No gaps', kind: 'ok' }));
+    }
+    target.append(ul);
+  }
+
+  function renderReconciliation(target: HTMLElement, r: any) {
+    if (!r) return;
+    const lines: string[] = [];
+    if (typeof r.linkedNow === 'number') lines.push(`${plural(r.linkedNow, 'Paytm row')} matched to bank lines just now.`);
+    if (r.awaitingBank.count) lines.push(`${plural(r.awaitingBank.count, 'Paytm payment')} (${rupees(r.awaitingBank.totalPaise)}) dated on or after the last bank line: waiting for the next statement.`);
+    if (r.unmatchedInStatement.count) lines.push(`${plural(r.unmatchedInStatement.count, 'Paytm payment')} (${rupees(r.unmatchedInStatement.totalPaise)}) inside the statement period with no matching bank line: worth a look.`);
+    if (r.bankWithoutUpi.predatesExport) lines.push(`${plural(r.bankWithoutUpi.predatesExport, 'bank UPI payment')} from before Paytm was in use have only the bank narration; no Paytm row will ever exist for them.`);
+    if (r.bankWithoutUpi.inExportPeriod) lines.push(`${plural(r.bankWithoutUpi.inExportPeriod, 'bank UPI payment')} since Paytm was in use have no Paytm row (paid from another app, or missing from the export).`);
+    if (!lines.length) return;
+    const ul = el('ul', 'list');
+    ul.append(row('Paytm and bank statement', lines));
+    target.append(ul);
+  }
+
+  function renderList(data: any) {
+    canImport = data.canImport;
+    $('upload-card').hidden = !data.canImport;
+    $('account-card').hidden = !data.canConfigure;
+    const accounts = $('accounts');
+    accounts.replaceChildren();
+    for (const a of data.accounts) accounts.append(row(a.label, [`Ends ${a.last4 ?? '—'}`, a.hasUpiLabel ? 'Paytm label set' : 'No Paytm label yet'], a.hasUpiLabel ? undefined : { text: 'Set a Paytm label', kind: 'warn' }));
+    if (!data.accounts.length) accounts.append(row('No bank account registered', [data.canConfigure ? 'Add one below before importing a statement.' : 'A director needs to register the account first.']));
+    renderCoverage($('coverage'), data.coverage);
+    renderReconciliation($('coverage'), data.reconciliation);
+    const list = $('batches');
+    list.replaceChildren();
+    for (const b of data.batches) {
+      const what = b.source === 'axis_statement' ? 'Bank statement' : 'Paytm export';
+      const counts = b.source === 'axis_statement' ? `${b.inserted_count} new, ${b.duplicate_count} already held` : `${b.inserted_count} new, ${b.ignored_count} ignored, ${b.failed_count} failed`;
+      list.append(row(b.file_name, [`${what} · ${range(b.period_from, b.period_to)}`, counts, `Imported ${new Date(b.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`]));
+    }
+    $('batches-empty').hidden = data.batches.length > 0;
+  }
+
+  async function load() {
+    gate.hidden = true;
+    forbidden.hidden = true;
+    statusEl.hidden = false;
+    statusEl.textContent = 'Loading…';
+    try {
+      const { status, data } = await staffFetch('/api/finance-admin/imports');
+      if (status !== 200) throw new Error('load failed');
+      statusEl.hidden = true;
+      intro.textContent = 'Bank statements and the Paytm UPI export.';
+      renderList(data);
+      content.hidden = false;
+    } catch (err) {
+      if (fail(err)) return;
+      statusEl.hidden = false;
+      statusEl.textContent = 'Failed to load. Try refreshing.';
+    }
+  }
+
+  // Multipart upload; staffFetch is JSON-only, so this adds the same bearer token itself and maps 401/403 the same way.
+  async function send(mode: 'preview' | 'commit', files: File[]) {
+    const form = new FormData();
+    for (const f of files) form.append('files', f);
+    const res = await fetch(`/api/finance-admin/imports/${mode}`, { method: 'POST', headers: { authorization: `Bearer ${getToken() ?? ''}` }, body: form });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) {
+      clearToken();
+      throw new StaffAuthError('unauthorized');
+    }
+    if (res.status === 403) throw new StaffAuthError('forbidden');
+    return { status: res.status, data };
+  }
+
+  function showPreview(data: any) {
+    lastPreview = data;
+    $('after').hidden = true;
+    $('results').hidden = false;
+    $('results-title').textContent = 'What would happen';
+    $('file-list').replaceChildren(...data.files.map(fileRow));
+    renderCoverage($('coverage-after'), data.coverage);
+    const ready = data.files.filter((f: Result) => f.status === 'ok');
+    const blocked = data.files.filter((f: Result) => f.status === 'blocked' || f.status === 'unreadable').length;
+    const confirm = $<HTMLButtonElement>('confirm');
+    $('confirm-card').hidden = false;
+    confirm.hidden = ready.length === 0;
+    confirm.disabled = false;
+    confirm.textContent = ready.length === 1 ? 'Import this file' : `Import ${ready.length} files`;
+    $('confirm-text').textContent = ready.length
+      ? `${plural(ready.length, 'file')} will be stored${blocked ? `; ${plural(blocked, 'file')} cannot be imported and will be skipped` : ''}. Imported lines cannot be edited or deleted.`
+      : 'Nothing can be imported from these files.';
+  }
+
+  $('upload-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    chosen = Array.from($<HTMLInputElement>('files').files ?? []);
+    const msg = $('upload-msg');
+    msg.hidden = true;
+    if (!chosen.length) return;
+    const btn = $<HTMLButtonElement>('check');
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    try {
+      const { status, data } = await send('preview', chosen);
+      if (status !== 200) throw new Error(data.error ?? 'failed');
+      showPreview(data);
+    } catch (err) {
+      if (fail(err)) return;
+      msg.hidden = false;
+      msg.textContent = err instanceof Error && err.message !== 'failed' ? err.message : 'Could not check the files. Try again.';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Check files';
+    }
+  });
+
+  $('confirm').addEventListener('click', async () => {
+    if (!chosen.length || !lastPreview) return;
+    const btn = $<HTMLButtonElement>('confirm');
+    btn.disabled = true;
+    btn.textContent = 'Importing…';
+    try {
+      const { status, data } = await send('commit', chosen);
+      if (status !== 200) throw new Error(data.error ?? 'failed');
+      $('results-title').textContent = 'Imported';
+      $('file-list').replaceChildren(...data.files.map(fileRow));
+      renderCoverage($('coverage-after'), data.coverage);
+      $('confirm-card').hidden = true;
+      const after = $('after');
+      after.replaceChildren();
+      renderReconciliation(after, data.reconciliation);
+      after.hidden = false;
+      $<HTMLInputElement>('files').value = '';
+      chosen = [];
+      lastPreview = null;
+      const { status: s2, data: list } = await staffFetch('/api/finance-admin/imports');
+      if (s2 === 200) renderList(list);
+    } catch (err) {
+      if (fail(err)) return;
+      $('confirm-text').textContent = err instanceof Error && err.message !== 'failed' ? err.message : 'The import failed. Nothing was half-saved; check the list below and try again.';
+      btn.disabled = false;
+      btn.textContent = 'Try again';
+    }
+  });
+
+  $('account-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const msg = $('account-msg');
+    msg.hidden = false;
+    msg.textContent = 'Adding…';
+    try {
+      const { status, data } = await staffFetch('/api/finance-admin/bank-accounts', {
+        method: 'POST',
+        body: { label: $<HTMLInputElement>('acc-label').value, last4: $<HTMLInputElement>('acc-last4').value, upiLabel: $<HTMLInputElement>('acc-upi').value },
+      });
+      if (status !== 201) throw new Error(data.error ?? 'failed');
+      ($('account-form') as HTMLFormElement).reset();
+      msg.textContent = 'Account added.';
+      await load();
+    } catch (err) {
+      if (fail(err)) return;
+      msg.textContent = err instanceof Error && err.message !== 'failed' ? err.message : 'Could not add the account.';
+    }
+  });
+
+  function handleCredentialResponse(response: { credential: string }) {
+    setToken(response.credential);
+    load();
+  }
+
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: (window as any).tvcGsiTheme?.() ?? 'outline', size: 'large' });
+  }
+
+  $('use-different-account').addEventListener('click', () => {
+    clearToken();
+    clearStepUp();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
+  if (getToken()) load();
+  else showGate();
+</script>
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style is:global>
+  .finance.section.wrapper {
+    padding-top: 32px;
+    padding-bottom: 48px;
+  }
+
+  .finance h2 {
+    margin: 0 0 6px;
+    font-size: var(--text-lg);
+  }
+
+  .finance h3 {
+    margin: 0 0 6px;
+    font-size: var(--text-base);
+  }
+
+  .finance .list-title {
+    margin: 26px 0 8px 14px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .finance-import .card {
+    margin-top: 14px;
+  }
+
+  .finance-import .row .detail {
+    display: block;
+  }
+</style>

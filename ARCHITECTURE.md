@@ -109,7 +109,7 @@ flowchart TD
         FUNC_SRC14["netlify/functions/event-payments-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>per-event registrations/cancellations/money<br/>collected from Supabase, issues real Razorpay<br/>refunds (tier-suggested, admin-confirmed)"]
         FUNC_SRC15["netlify/functions/usage-collect.mts<br/>Scheduled function (cron, every 6 hours) — appends<br/>the Supabase database size, open connections + biggest tables, Netlify's plan<br/>credits + billing cycle and Resend's email quota to usage_snapshots for<br/>the free-tier usage dashboard. Optional secrets:<br/>NETLIFY_ACCESS_TOKEN, RESEND_USAGE_API_KEY,<br/>CLOUDFLARE_ANALYTICS_TOKEN"]
         FUNC_SRC16["netlify/functions/usage-admin.mts<br/>Serverless function, Google Sign-In gated (usage module) —<br/>overview of free-tier/credit usage, live domain<br/>expiry lookups, typed-in provider readings and<br/>price/limit settings (admins only, audit-logged)"]
-        FUNC_SRC20["netlify/functions/finance-admin.mts<br/>Serverless function, Google Sign-In gated (finance module) —<br/>session 01: an overview only (counts of accounts, categories,<br/>open months); auditor visits are written to fin_audit_log"]
+        FUNC_SRC20["netlify/functions/finance-admin.mts<br/>Serverless function, Google Sign-In gated (finance module) —<br/>session 01: overview (counts, access); session 03: statement import<br/>(Axis yearly Excel files, Paytm UPI export) and bank account setup;<br/>auditor visits and imports are written to fin_audit_log"]
         FUNC_SRC17["netlify/functions/usage-alerts.mts<br/>Scheduled function (cron, hourly) — evaluates the<br/>usage rules and emails core-team@tvc.farm one digest<br/>per new or worsened warning; remembers what it sent"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
     end
@@ -189,7 +189,7 @@ flowchart TD
         ANTHROPIC["Anthropic Claude API<br/>(chat.mts server-side,<br/>search-ai.mts's fallback,<br/>members-me.mts's story check,<br/>and caption-photos.mjs locally)"]
         GEMINI["Google Gemini API (free tier)<br/>search-ai.mts server-side —<br/>site search's AI answer, tried first"]
         TYPESAFE["TypeSafe API (Jev model)<br/>whatsapp-webhook.mts server-side —<br/>shadow-mode read of each inbound WhatsApp<br/>message; off unless TYPESAFE_WHATSAPP_SHADOW=true"]
-        R2["Cloudflare R2<br/>media.tvc.farm — curated photo storage,<br/>served directly to the browser"]
+        R2["Cloudflare R2<br/>media.tvc.farm — curated photo storage,<br/>served directly to the browser;<br/>private prefix finance/imports/ for raw statement files"]
         GTAG["Google Analytics<br/>googletagmanager.com/gtag/js"]
         CLARITYEXT["Microsoft Clarity<br/>www.clarity.ms tag → scripts.clarity.ms<br/>bundle → *.clarity.ms/collect (subdomain<br/>varies, load-balanced)"]
         METEO["Open-Meteo API<br/>Free, no key required"]
@@ -218,6 +218,7 @@ flowchart TD
     APIFN10 -.->|"tried first"| GEMINI
     APIFN10 -.->|"fallback"| ANTHROPIC
     PHOTOS -.-> R2
+    APIFN21 -.->|"raw statement files (private)"| R2
     GA -.-> GTAG
     WEATHER -.-> METEO
     RAINFALL --> APIFN5
@@ -305,7 +306,7 @@ flowchart TD
     APIFN16 -.->|"live domain expiry"| RDAP
     APIFN16 -.->|"check admin role"| SUPABASE
     APIFN16 -.->|"verify admin ID token"| GIDTOKEN
-    APIFN21 -.->|"check finance role + expiry; read fin_* tables;<br/>append fin_audit_log"| SUPABASE
+    APIFN21 -.->|"check finance role + expiry; read fin_* tables;<br/>append fin_audit_log; store statement imports<br/>(fin_store_* functions)"| SUPABASE
     APIFN21 -.->|"verify admin ID token"| GIDTOKEN
     USAGEDASH -.->|"Sign in with Google"| GIDTOKEN
     APIFN17 -.->|"read usage data, remember<br/>alerts already sent"| SUPABASE
@@ -453,8 +454,14 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `0077_finance_foundation.sql`) ends a grant on a date; `requireStaff`, `staff-me` and `staff-today`
   refuse or hide an expired grant, and the Access screen sets it on read-only grants. The migration also adds
   the reference tables `fin_entities`, `fin_bank_accounts`, `fin_categories`, `fin_periods` and the append-only
-  `fin_audit_log`, all service-role only (RLS on, no policies). `finance-admin.mts` currently serves one read,
-  the overview ("No data yet"); an auditor's visit is written to `fin_audit_log` and refused if it cannot be.
+  `fin_audit_log`, all service-role only (RLS on, no policies). `finance-admin.mts` serves the overview; an auditor's visit is written to `fin_audit_log` and refused if it cannot be.
+  **Session 03 (statement import, migration `0080`, applied 2026-11-02)** adds `/internal/finance/import/` and the routes
+  `/imports`, `/imports/preview`, `/imports/commit`, `/bank-accounts`: yearly Axis statement Excel files (any number, any
+  order, balance chain checked across years) and the Paytm UPI export are parsed (`scripts/lib/finance-xlsx.mjs` on
+  `fflate`, `finance-axis-statement.mjs`, `finance-paytm.mjs`), planned (`finance-import-plan.mjs`, `finance-upi-plan.mjs`:
+  dedupe, chain, gaps, overlaps, linking by UPI reference) and stored by `fin_store_*` database functions, one
+  transaction per file; the raw files go to the private R2 bucket under `finance/imports/`. Tables `fin_import_batches`,
+  `fin_bank_lines`, `fin_upi_lines`.
   Pure rules (expiry, maker-is-not-checker, finance field masking) are in `finance-access.mjs` with tests.
   **Parties and payees (session 04, migration `0079_finance_parties.sql`):** `finance-admin.mts` also serves the
   directory (`/api/finance-admin/parties`, `/accounts/:id/reveal|verify`; code in `lib/finance-parties.ts`, page
