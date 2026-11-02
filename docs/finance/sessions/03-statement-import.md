@@ -44,8 +44,13 @@ upload function and page; `FINANCE.md` section.
   line (bank lines are immutable facts, and one balance chain from the first line is the strongest integrity
   check there is), but the history load (session 06) only allocates FY 2024-25 onward. The importer must
   handle thousands of rows within a function's time limit (batch the inserts) and show the first and last date.
-  Decide with Sharath if the upload should accept a later, overlapping download and skip lines already held
-  (the `dedupe_key` rule already requires this).
+  **Confirmed: the upload accepts a later, overlapping download** (a fresh statement each month) and adds only the
+  lines not already held, using the `dedupe_key` rule. The summary says how many were new and how many were already there.
+- **A bank API integration was planned but has not progressed**, so statement files are the path for now. Keep the
+  door open: split the work into (1) parsing a file into plain normalised lines and (2) a source-independent step
+  that dedupes, checks the balance chain and stores them, with the source (`axis_statement`, later perhaps
+  `axis_api`) recorded on the batch. A future API feed would then call step 2 and reuse everything else. Do not
+  build any API client or speculative code for it.
 - **The Paytm export covers this financial year only**, because the company account has been used only
   since 31 Aug 2026. Earlier UPI debits (April to August 2026) have only the bank narration, so their UPI
   lines never exist and must not be reported as "awaiting bank" forever: say so on the summary.
