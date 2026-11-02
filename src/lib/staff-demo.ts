@@ -262,7 +262,7 @@ function demoMe(kind: string) {
 
 // The Stays page: a few bookings placed around today (one arriving today, one tomorrow, one leaving today), so the
 // Day view's plan has something to show. Read-only: saving a booking in the demo still reaches the real fetch.
-function demoBookings() {
+function demoBookings(canApprove = true) {
   const day = (n: number) => new Date(Date.now() + n * 86_400_000).toLocaleDateString('en-CA');
   const guest = (name: string, preferences?: string) => ({ personId: name, name, ageGroup: 'Adult', preferences });
   const stay = (id: string, startDate: string, nights: number, tentId: string, guests: unknown[], extra: Record<string, unknown> = {}) => ({
@@ -274,7 +274,7 @@ function demoBookings() {
       stay('demo-b', day(1), 2, 'Tent03', [guest('Meera Nair'), guest('Kiran Nair'), guest('Ila', 'Vegan')], { label: 'Nair party' }),
       stay('demo-c', day(-2), 2, 'Tent05', [guest('Menon'), guest('Mrs Menon')], { label: 'Menon' }),
     ],
-    access: { role: 'admin', allowedTypes: null, canApprove: true },
+    access: { role: 'admin', allowedTypes: null, canApprove },
   };
 }
 
@@ -310,7 +310,7 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     const reply = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } }));
     if (path === '/api/staff-me') return reply(demoMe(kind));
     if (path === '/api/staff-admin/people' && (init?.method ?? 'GET') === 'GET') return reply(demoAccess());
-    if (path === '/api/accommodation-admin/bookings' && (init?.method ?? 'GET') === 'GET') return reply(demoBookings());
+    if (path === '/api/accommodation-admin/bookings' && (init?.method ?? 'GET') === 'GET') return reply(demoBookings(kind !== 'limited'));
     if (path === '/api/accommodation-admin/change-requests' && (init?.method ?? 'GET') === 'GET') return reply(demoChangeRequests());
     if (path === '/api/accommodation-admin/change-requests/decide') return reply({ ok: true });
     if (path === '/api/units-admin/overview') return reply(demoUnits());

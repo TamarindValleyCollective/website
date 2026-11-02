@@ -1604,7 +1604,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   // sign-in as /internal, /internal/access and /internal/security (see
   // scripts/lib/staff-client.mjs), so signing in once opens them all. Each tool
   // still checks its own role on the server for every request.
-  import { TOKEN_KEY as STORAGE_KEY, askSheet, showToast } from '../../../scripts/lib/staff-client.mjs';
+  import { TOKEN_KEY as STORAGE_KEY, askPastChangeReason, askSheet, showToast } from '../../../scripts/lib/staff-client.mjs';
   import { setBusy } from '../../../scripts/lib/busy.mjs';
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
@@ -3643,7 +3643,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   async function cancelBooking(b: Booking, button: HTMLButtonElement): Promise<boolean> {
     let reason: string | undefined;
     if (b.isPast) {
-      const entered = await showReasonPrompt(myCanApprove ? 'This stay has already happened. Why is it being cancelled?' : 'This stay has already happened. Why should it be cancelled? A super admin approves it before it is removed.');
+      const entered = myCanApprove ? await showReasonPrompt('This stay has already happened. Why is it being cancelled?') : await askPastChangeReason({ what: 'cancel a stay that has already happened' });
       if (!entered) return false; // either "Never mind" or an empty reason - both abort
       reason = entered;
     }
@@ -3760,7 +3760,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     formHeading.textContent = canEdit ? 'Edit booking' : 'View booking';
     cancelEditBtn.hidden = false;
     cancelEditBtn.textContent = canEdit ? 'Cancel edit' : 'Close';
-    reasonWrap.hidden = !b.isPast;
+    // Only a super admin gets the inline reason box; anyone else is warned and asked in a popup when they save.
+    reasonWrap.hidden = !b.isPast || !myCanApprove;
     document.getElementById('f-reason-hint')!.textContent = myCanApprove ? '(required — this stay has already happened)' : '(required — this stay has already happened; a super admin approves it before it changes)';
     reasonInput.value = '';
     // An existing public-event booking must stay viewable/editable even if
@@ -3929,6 +3930,14 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       return;
     }
 
+    // Editing a past stay without the right to approve it: warn, and ask why, before it is sent for approval.
+    let popupReason: string | undefined;
+    if (editingId && !myCanApprove && currentBookings.find((x) => x.id === editingId)?.isPast) {
+      const why = await askPastChangeReason({ what: 'change a stay that has already happened' });
+      if (!why) return;
+      popupReason = why;
+    }
+
     const type = (isFarmClosure() ? 'farm-closure' : typeSelect.value) as BookingType;
     const payload: Partial<Booking> & { id?: string; reason?: string } = {
       id: editingId ?? undefined,
@@ -3937,7 +3946,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       nights: Number(nightsInput.value),
       tents: collectTents(),
       note: noteInput.value.trim() || undefined,
-      reason: reasonWrap.hidden ? undefined : reasonInput.value.trim(),
+      reason: popupReason ?? (reasonWrap.hidden ? undefined : reasonInput.value.trim()),
     };
     if (type === 'public-event') {
       // Read the slug straight from the select rather than only trusting a

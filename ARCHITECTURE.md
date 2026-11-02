@@ -704,8 +704,9 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `POST /api/accommodation-admin/bookings/update` (an edit), `POST .../bookings/delete` (a cancel) or `POST .../bookings` (a new
   past stay) answers
   `202 {pending}` and stores it in `accommodation_change_requests` (migration 0076, service-role only, `kind` update,
-  create or delete) instead of writing, so the calendar is untouched. The New booking flow lets anyone pick past days; its review
-  step asks for the justification and says the stay waits for a super admin, while a super admin saves at once.
+  create or delete) instead of writing, so the calendar is untouched. The New booking flow lets anyone pick past days. Anyone who cannot
+  approve it gets a warning popup (`askPastChangeReason` in `staff-client.mjs`: "This changes the past", it waits for a super
+  admin) that captures the justification before they send an edit, a cancel or a backfill; a super admin saves at once.
   `GET /change-requests` lists pending requests (a super admin sees all, anyone else their own) and
   `POST /change-requests/decide` (super admin only, checked in the function) approves, which applies the stored payload
   through the normal `accommodation_update_booking`, `accommodation_create_booking` or `accommodation_delete_booking` (conflict checks as for any edit; an
