@@ -90,7 +90,7 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   number. `fin_audit_log.detail` is checked before writing and a number, UPI id or IFSC makes the write fail. Revealing is
   written to the audit log first; if that fails nothing is returned. Audit actions: `finance.party_created`,
   `party_updated`, `payee_added`, `payee_changed`, `payee_revealed`, `payee_verified`, `parties_imported`.
-- **Merging (migration `0081_finance_party_merge.sql`).** Two parties that are really one payee (often a bank merger: an old
+- **Merging (migration `0081_finance_party_merge.sql`, applied to TVC ERP on 2026-11-02).** Two parties that are really one payee (often a bank merger: an old
   and a new account) are merged by a director with the step-up: `POST /parties/:id/merge {into}`. Nothing is moved or deleted,
   because account rows are immutable: the duplicate gets `merged_into = main party`, is hidden from the list, and the main party
   shows, and is reviewed over, both sets of accounts (so an old and a new bank account are flagged together until the old one is
