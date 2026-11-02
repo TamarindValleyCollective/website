@@ -70,7 +70,7 @@ clean. `astro build` passes. **Not verified:** the pages in a browser with a rea
 date control. Migration 0077 was applied to TVC ERP after Sharath's go-ahead and checked (1 entity, 23 categories, RLS on, no anon grants, `expires_at` null on all grants).
 
 **Follow-up 2026-11-02 (after reading the sheet's structure with Sharath):** the 23 placeholder categories were not
-from the sheet. `0078` (written, **not applied**) replaces them with 29 heads shaped like the sheet's budget (Opex,
+from the sheet. `0078` (applied 2026-11-02) replaces them with 29 heads shaped like the sheet's budget (Opex,
 Capex, revenue streams, member maintenance, taxes, movements), makes projects and events first-class
 (`fin_projects`, `fin_project_lines`), and drops `project` as a category type. Equity dropped for now. Decisions:
 owner is just a name; events are profit-and-loss only; revenue is projected in the budget with maintenance as the

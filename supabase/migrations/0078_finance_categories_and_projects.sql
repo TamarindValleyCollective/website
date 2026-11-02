@@ -12,13 +12,14 @@
 --     profit-and-loss view only (receipts against costs) with no approval or breakdown.
 --   * Equity is deliberately not here (decided later, once the data is imported).
 
+-- Nothing references fin_categories yet (no allocations exist), so the draft seed can be replaced outright. This comes
+-- first because the old seed has a row of type 'project', which the stricter check below would reject.
+delete from fin_categories;
+
 -- 'project' is no longer a category type (a project is its own record).
 alter table fin_categories drop constraint fin_categories_type_check;
 alter table fin_categories add constraint fin_categories_type_check
   check (type in ('opex', 'capex', 'revenue', 'member_contribution', 'sinking_fund', 'interest', 'tax', 'reimbursement', 'transfer'));
-
--- Nothing references fin_categories yet (no allocations exist), so the draft seed can be replaced outright.
-delete from fin_categories;
 
 insert into fin_categories (entity_id, name, type, budget_head)
 select e.id, c.name, c.type, c.budget_head
