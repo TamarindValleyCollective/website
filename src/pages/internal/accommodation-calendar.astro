@@ -1590,7 +1590,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   import { normalizeMobileNumber, isValidEmail } from '../../../scripts/lib/accommodation.mjs';
   import { capacityOn, levelOf, nightIndex, taken } from '../../../scripts/lib/stay-capacity.mjs';
   import { buildDayPlan, planToMessageText, tentsLabel } from '../../../scripts/lib/stay-day-plan.mjs';
-  import { describeChange, describeNew } from '../../../scripts/lib/stay-change-request.mjs';
+  import { describeCancel, describeChange, describeNew } from '../../../scripts/lib/stay-change-request.mjs';
   import { unitStates, tentSummary } from '../../../scripts/lib/stay-tent-states.mjs';
 
   declare const google: any;
@@ -3638,7 +3638,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   async function cancelBooking(b: Booking, button: HTMLButtonElement): Promise<boolean> {
     let reason: string | undefined;
     if (b.isPast) {
-      const entered = await showReasonPrompt('This stay has already happened. Why is it being cancelled?');
+      const entered = await showReasonPrompt(myCanApprove ? 'This stay has already happened. Why is it being cancelled?' : 'This stay has already happened. Why should it be cancelled? A super admin approves it before it is removed.');
       if (!entered) return false; // either "Never mind" or an empty reason - both abort
       reason = entered;
     }
@@ -3674,6 +3674,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         throw new Error(data.error ?? `Request failed (${res.status})`);
       }
       const result = await res.json().catch(() => ({}));
+      if (res.status === 202) {
+        showToast(result.message ?? 'Sent to the super admins for approval.');
+        await loadView();
+        return true; // submitted: the sheet or dialog that asked can close, though the stay stays until a super admin approves
+      }
       if (result.outcomes?.length) await askSheet({ title: 'Booking cancelled', text: describeOutcomes(result.outcomes), actions: [{ label: 'OK', value: true, kind: 'primary' }] });
       else showToast('Booking cancelled.');
       await loadView();
@@ -4101,7 +4106,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   // ---- Changes to past stays. An admin of the tool changes a past stay directly; anyone else submits the change with a
   // reason and it waits here. Admins decide each one; the person who asked sees theirs as waiting.
-  type ChangeRequest = { id: string; kind: 'update' | 'create'; reason: string; requestedBy: string; requestedAt: string; mine: boolean; proposed: any; booking: Booking | null };
+  type ChangeRequest = { id: string; kind: 'update' | 'create' | 'delete'; reason: string; requestedBy: string; requestedAt: string; mine: boolean; proposed: any; booking: Booking | null };
   const requestsBtn = document.getElementById('requests-btn') as HTMLButtonElement;
   const requestsDialog = document.getElementById('requests-dialog') as HTMLDialogElement;
   const requestsList = document.getElementById('requests-list') as HTMLElement;
@@ -4123,18 +4128,18 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   function renderRequests() {
     document.getElementById('requests-intro')!.textContent = myCanApprove
-      ? 'Editing a past stay, or adding one that began before today, rewrites history, so only super admins approve it. Each request has the justification its sender gave: approve to apply the change, or reject to leave the stay as it is.'
+      ? 'Editing or cancelling a past stay, or adding one that began before today, rewrites history, so only super admins approve it. Each request has the justification its sender gave: approve to apply the change, or reject to leave the stay as it is.'
       : 'These changes are waiting for a super admin. The stays stay as they are until then.';
     const labels = new Map(UNITS.map((u) => [u.id, u.label]));
     requestsList.innerHTML = changeRequests
       .map((r) => {
         const isNew = r.kind === 'create' || !r.booking;
         const stay = (r.booking ?? r.proposed) as Booking;
-        const lines = (isNew ? describeNew(r.proposed, labels) : describeChange(r.booking, r.proposed, labels)) as string[];
+        const lines = (isNew ? describeNew(r.proposed, labels) : r.kind === 'delete' ? describeCancel(r.booking, labels) : describeChange(r.booking, r.proposed, labels)) as string[];
         const title = stay.eventTitle ?? stay.label ?? stay.tents.flatMap((t) => t.guests).find((g) => g.name)?.name ?? typeDisplayLabel(stay.type);
         const when = new Date(r.requestedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
         return `<section class="card req-card" data-request="${escapeAttr(r.id)}">
-          <h3>${escapeHtml(title)} <span class="hint">${isNew ? 'New past stay · ' : ''}${escapeHtml(stay.startDate)} · ${stay.nights} ${stay.nights === 1 ? 'night' : 'nights'}</span></h3>
+          <h3>${escapeHtml(title)} <span class="hint">${isNew ? 'New past stay · ' : r.kind === 'delete' ? 'Cancel · ' : ''}${escapeHtml(stay.startDate)} · ${stay.nights} ${stay.nights === 1 ? 'night' : 'nights'}</span></h3>
           <p class="hint">Asked by ${escapeHtml(r.mine ? 'you' : r.requestedBy)} on ${escapeHtml(when)}</p>
           <p><strong>Justification:</strong> ${escapeHtml(r.reason)}</p>
           ${lines.length ? `<ul class="req-changes">${lines.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>` : '<p class="hint">No change a person would see.</p>'}

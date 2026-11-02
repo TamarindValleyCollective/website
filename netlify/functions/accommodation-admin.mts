@@ -36,7 +36,7 @@ import { listUnits, listTypes, getUnitLabels, listBookingsForAdmin, createBookin
 import { isNotifiableType, snapshotOf, hasPendingChanges } from '../../scripts/lib/stay-notice.mjs';
 import { sendStayNotices, sendStayCancellation } from './lib/stay-notify';
 import { sendChangeRequestEmail } from './lib/change-request-email';
-import { describeChange, describeNew } from '../../scripts/lib/stay-change-request.mjs';
+import { describeCancel, describeChange, describeNew } from '../../scripts/lib/stay-change-request.mjs';
 
 
 interface Guest {
@@ -341,7 +341,7 @@ async function handleCreate(req: Request, staff: StaffGrant): Promise<Response> 
 // function can be frozen once it answers) but best effort: the request is already saved, so a mail failure never fails it.
 async function queueChange(
   staff: StaffGrant,
-  input: { kind: 'update' | 'create'; bookingId?: string; proposed: Record<string, unknown>; reason?: string; existing?: any },
+  input: { kind: 'update' | 'create' | 'delete'; bookingId?: string; proposed: Record<string, unknown>; reason?: string; existing?: any },
 ): Promise<Response> {
   if (!input.reason?.trim()) {
     return jsonResponse({ error: 'A justification is required for a change to the past.', code: 'PAST_BOOKING_REASON_REQUIRED' }, 422);
@@ -370,7 +370,7 @@ async function queueChange(
       booking: booking?.eventTitle ?? booking?.label ?? proposed.eventTitle ?? proposed.label ?? proposed.tents?.[0]?.guests?.[0]?.name ?? 'A booking',
       stay: `${(booking ?? proposed).startDate}, ${(booking ?? proposed).nights} ${(booking ?? proposed).nights === 1 ? 'night' : 'nights'}`,
       reason,
-      changes: (input.kind === 'create' ? describeNew(proposed, labels) : describeChange(input.existing, proposed, labels)) as string[],
+      changes: (input.kind === 'create' ? describeNew(proposed, labels) : input.kind === 'delete' ? describeCancel(input.existing, labels) : describeChange(input.existing, proposed, labels)) as string[],
     });
   } catch (err) {
     console.error('[accommodation-admin] change-request email failed', err);
@@ -484,17 +484,21 @@ async function handleDecide(req: Request, staff: StaffGrant): Promise<Response> 
   }
 
   const isCreate = request.kind === 'create';
+  const isDelete = request.kind === 'delete';
   const existing = isCreate ? null : await getBookingById(request.booking_id);
   if (!isCreate && !existing) return jsonResponse({ error: 'That booking no longer exists' }, 404);
   const p = request.payload as Partial<Booking>;
   const unitsById = await unitMap();
-  const validationError = validateBookingInput(p, unitsById);
+  const validationError = isDelete ? null : validateBookingInput(p, unitsById);
   if (validationError) return jsonResponse({ error: validationError }, 400);
-  const blocked = unitProblem([...(existing?.tents ?? []).map((t: { tentId: string }) => t.tentId), ...(p.tents ?? []).map((t) => t.tentId)], unitsById);
+  // A cancel may be approved for a unit that has since been offboarded, like any other cancel.
+  const blocked = unitProblem([...(existing?.tents ?? []).map((t: { tentId: string }) => t.tentId), ...(p.tents ?? []).map((t) => t.tentId)], unitsById, isDelete ? { allowOffboarded: true } : undefined);
   if (blocked) return jsonResponse({ error: blocked.message }, blocked.status);
 
   try {
-    if (isCreate) {
+    if (isDelete) {
+      await deleteBooking(request.booking_id, { deletedBy: staff.id, reason: `Requested by ${request.requested_by_name ?? request.requested_by}: ${request.reason}` });
+    } else if (isCreate) {
       await createBooking({
         type: p.type!,
         eventSlug: p.eventSlug,
@@ -581,6 +585,12 @@ async function handleDelete(req: Request, staff: StaffGrant): Promise<Response> 
   }
   const deleteBlocked = unitProblem(existing.tents.map((t: { tentId: string }) => t.tentId), await unitMap(), { allowOffboarded: true });
   if (deleteBlocked) return jsonResponse({ error: deleteBlocked.message }, deleteBlocked.status);
+
+  // Cancelling a stay that has already ended is as retrospective as editing it: a super admin does it directly, anyone
+  // else sends it with a justification for a super admin to approve.
+  if (existing.isPast && !staff.isSuperAdmin) {
+    return queueChange(staff, { kind: 'delete', bookingId: payload.id, proposed: {}, reason: payload.reason, existing });
+  }
 
   // Read the last notice first: it cascades away with the booking.
   const notice = payload.notifyGuests && isNotifiableType(existing.type) ? await getNotice(payload.id) : null;

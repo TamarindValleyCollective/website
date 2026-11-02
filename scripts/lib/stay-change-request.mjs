@@ -64,3 +64,13 @@ export function describeNew(proposed, labels = new Map()) {
   if (proposed.note) lines.push(`Note: "${proposed.note}"`);
   return lines;
 }
+
+/**
+ * A past stay somebody wants cancelled, as lines an admin can read before approving it.
+ * @param {any} booking the stay as it is
+ * @param {Map<string, string>} labels unit id -> display name
+ * @returns {string[]}
+ */
+export function describeCancel(booking, labels = new Map()) {
+  return ['Cancel the whole stay', ...describeNew(booking, labels)];
+}

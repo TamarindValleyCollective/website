@@ -287,6 +287,7 @@ function demoChangeRequests() {
   return {
     requests: [
       { id: 'demo-req-1', kind: 'update', reason: 'They stayed an extra night and a relative joined; the front desk missed it.', requestedBy: 'Linger front desk', requestedAt: now, mine: false, proposed, booking: base },
+      { id: 'demo-req-3', kind: 'delete', reason: 'Entered twice by mistake; the other entry is the real one.', requestedBy: 'Linger front desk', requestedAt: now, mine: false, proposed: {}, booking: demoBookings().bookings[0] },
       { id: 'demo-req-2', kind: 'create', reason: 'Booked by phone on 11 Oct and never entered; payment was received then.', requestedBy: 'Linger front desk', requestedAt: now, mine: false, proposed: backfill, booking: null },
     ],
   };

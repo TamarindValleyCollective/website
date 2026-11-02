@@ -1,7 +1,7 @@
 // Run with: node --test scripts/lib/stay-change-request.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { describeChange, describeNew } from './stay-change-request.mjs';
+import { describeCancel, describeChange, describeNew } from './stay-change-request.mjs';
 
 const labels = new Map([['T1', 'Banyan'], ['T2', 'Neem']]);
 const g = (name, extra = {}) => ({ personId: name, name, ageGroup: 'Adult', ...extra });
@@ -45,4 +45,8 @@ test('a backfilled stay is spelled out', () => {
     'Label: "Rao"',
     'Note: "Paid in cash"',
   ]);
+});
+
+test('a cancellation says so, then shows the stay', () => {
+  assert.deepEqual(describeCancel(stay(), labels), ['Cancel the whole stay', 'Dates: 2026-10-05 to 2026-10-08 (3 nights)', 'Tent: Banyan', 'Guests: Asha, Dev', 'Label: "Rao"']);
 });
