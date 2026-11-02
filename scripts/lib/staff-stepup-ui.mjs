@@ -26,11 +26,17 @@ export function initStepUpLock({ getMe, onChange }) {
     error.textContent = message;
   };
 
-  function setPill(kind, label) {
+  // `shortLabel` is what a phone shows, where the full sentence would wrap the top bar onto two lines.
+  function setPill(kind, label, shortLabel = label) {
     lockBtn.hidden = false;
     lockBtn.dataset.state = kind;
     lockBtn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${kind === 'open' ? LOCK_OPEN : LOCK_SHUT}</svg>`;
-    lockBtn.append(label); // a text node, so the label is never read as markup
+    for (const [cls, text] of [['lock-full', label], ['lock-short', shortLabel]]) {
+      const span = document.createElement('span');
+      span.className = cls;
+      span.textContent = text; // text, never read as markup
+      lockBtn.append(span);
+    }
     lockBtn.setAttribute('aria-label', kind === 'open' ? `${label}. Open for details or to lock again.` : kind === 'setup' ? 'Editing is locked until you set up two second factors. Open for details.' : 'Editing is locked. Open to unlock it.');
   }
 
@@ -41,17 +47,17 @@ export function initStepUpLock({ getMe, onChange }) {
     error.hidden = true;
     lockNow.hidden = !(me.ready && exp);
     if (!me.ready) {
-      setPill('setup', 'Set up to edit');
+      setPill('setup', 'Set up to edit', 'Set up');
       text.textContent = 'You need two different second-factor methods set up before you can change anything. You can look around in the meantime.';
       form.hidden = true;
       link.hidden = false;
     } else if (exp) {
-      setPill('open', `Editing unlocked · ${minutesLabel(exp - Date.now())}`);
+      setPill('open', `Editing unlocked · ${minutesLabel(exp - Date.now())}`, `${Math.max(1, Math.ceil((exp - Date.now()) / 60000))} min`);
       text.textContent = `Changes are unlocked for about ${minutesLabel(exp - Date.now())}.`;
       form.hidden = true;
       link.hidden = true;
     } else {
-      setPill('locked', 'Unlock editing');
+      setPill('locked', 'Unlock editing', 'Unlock');
       text.textContent = 'Viewing only. Enter the code from your authenticator app to make changes.';
       form.hidden = false;
       passkeyBtn.hidden = !(me.hasPasskey && passkeysSupported());

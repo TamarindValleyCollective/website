@@ -1,21 +1,18 @@
 ---
-// The shell around every internal admin page (issue #89): a left menu listing
-// the tools the signed-in person holds a role in, with their name and Sign out
-// at the bottom. It replaces the public website's header, footer, cookie banner,
-// chat widget and analytics on these pages, none of which belong on a tool that
-// shows guest and payment data.
+// The shell around every internal admin page (issue #89). It replaces the public website's header, footer, cookie banner,
+// chat widget and analytics on these pages, none of which belong on a tool that shows guest and payment data.
 //
-// The menu items are rendered here from the same registry the server uses for
-// permissions (labels and paths: MODULE_INFO), but start hidden. A small script
-// asks /api/staff-me which tools this person has a role in and reveals just
-// those; the current page's item is always shown. Showing or hiding an item is
-// only a convenience — every tool checks the person's role on the server for
-// every request.
+// Navigation is by BLOCKS (Operations, Community, Finance, Settings), each holding pages: scripts/lib/admin-nav.mjs is the
+// model (tested against the permission registry, so no tool can be missing). Desktop: a narrow rail of Today and the blocks
+// the person may open (icon over label), beside a panel listing only the current block's pages; the round button hides the
+// panel and the rail stays (the choice is remembered on this device; WhatsApp and the accommodation calendar start with the
+// panel hidden because they need the width). Phone: the rail becomes a bottom tab bar and the block's pages a row of tabs
+// under the top bar; the search button (or Command/Ctrl+K) jumps to any page.
 //
-// Desktop: a sticky left menu that collapses to an icon strip (the choice is
-// remembered on this device; WhatsApp and the accommodation calendar start
-// collapsed because they need the width). Phone: a top bar with a menu button
-// that slides the list over the page.
+// Everything starts hidden except Today and the current block. A small script asks /api/staff-me which modules this person
+// holds a role in and reveals just those pages; the current page is always shown. Showing or hiding is only a convenience:
+// every tool checks the person's role on the server for every request. A page that is one of several in a block passes
+// `currentPage` (Finance: 'finance-parties'); `current` stays the module id the tours and permissions use.
 import '../styles/global.css';
 import '../styles/portal-look.css';
 import { type ModuleId } from '../../netlify/functions/lib/staff-registry';
@@ -1178,6 +1175,7 @@ const hasPanel = Boolean(currentBlock && currentBlock.pages.length > 1);
       font-family: var(--font-wordmark);
       font-weight: 700;
       color: var(--tvc-green-dark);
+      white-space: nowrap;
     }
 
     /* The name and role would crowd the title on a phone; the initial still opens the menu. */

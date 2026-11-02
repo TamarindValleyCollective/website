@@ -463,6 +463,10 @@ outside both the local machine and Netlify (the member-update-email workflow).
   transaction per file; the raw files go to the private R2 bucket under `finance/imports/`. Tables `fin_import_batches`,
   `fin_bank_lines`, `fin_upi_lines`.
   Pure rules (expiry, maker-is-not-checker, finance field masking) are in `finance-access.mjs` with tests.
+  **Design-review changes (PR #528):** the Overview answers "what needs me?" from `/overview`'s `attention` (counts only,
+  `scripts/lib/finance-attention.mjs`); verifying records how the details were checked (migration `0082_finance_verification_evidence.sql`,
+  which must be applied before the code that sends it is deployed); the Finance pages share loading, failure and empty states
+  (`scripts/lib/staff-states.mjs`).
   **Parties and payees (session 04, migration `0079_finance_parties.sql`):** `finance-admin.mts` also serves the
   directory (`/api/finance-admin/parties`, `/accounts/:id/reveal|verify`; code in `lib/finance-parties.ts`, page
   `/internal/finance/parties/`). `fin_parties` and `fin_party_accounts` hold bank and UPI details encrypted with
@@ -895,8 +899,10 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `otpauth://` link as fallbacks; the secret and QR are wiped from the page when setup finishes
   or the session ends.
 - **Admin host**: the admin tools are served from **`admin.tvc.farm`**, a domain alias on the same Netlify project (proxied Cloudflare CNAME to `tvc-farm.netlify.app`), like `members.tvc.farm`. `netlify.toml` rules that match only that host show `/internal/` at `/`, serve each admin page without the `/internal` prefix (`admin.tvc.farm/usage/` is a rewrite to `/internal/usage/`; `StaffLayout.astro` shortens in-page links on that host only), pass through the assets and the admin functions (`/api/*-admin`, `staff-mfa`, `staff-me`, `staff-today`, `photo-pool`, `whatsapp-suggest`), and send everything else back to the admin home; `/internal/*` on that host, `tvc.farm`, `www.tvc.farm` and `members.tvc.farm` redirect (302) to the short form. Passkeys are bound to `admin.tvc.farm` (`relyingParty()` in `lib/staff-webauthn.ts`, plus `localhost` for dev), so they only work there; alert emails link to it. See `DOMAINS.md`.
-- **Admin portal shell, tours and local demo**: `StaffLayout.astro` is titled "Admin Portal" and is laid out like the member
-  portal: a white side menu with a round collapse button, a sticky translucent top bar, and the signed-in user as a pill at its
+- **Admin portal shell, tours and local demo**: `StaffLayout.astro` is titled "Admin Portal" and navigates by blocks (Operations,
+  Community, Finance, Settings; model and tests in `scripts/lib/admin-nav.mjs`): a rail of blocks beside a panel of the current
+  block's pages on desktop, a bottom tab bar plus a row of page tabs on phones, and a "Go to a page" switcher (Command/Ctrl+K or the
+  search button) over the same model. It is laid out like the member portal: a sticky translucent top bar, and the signed-in user as a pill at its
   right (initial, name, "Super admin" or "Admin") that opens a menu with the masked email, "Take the tour of this page" and
   "Sign out" (the older account block at the foot of the menu is gone). Home and every tool have a guided tour like the member
   portal's: steps and who sees which in `scripts/lib/staff-tour.mjs` (tested, including that every step's `data-tour` target

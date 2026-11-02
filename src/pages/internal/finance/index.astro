@@ -1,6 +1,7 @@
 ---
-// Finance (internal), session 01: the secured, empty module. Backed by netlify/functions/finance-admin.mts. It
-// shows who you are in finance and what exists so far; there is no data yet (docs/finance/DESIGN.md).
+// Finance (internal): the overview. Backed by netlify/functions/finance-admin.mts (/overview). It answers "what needs me?"
+// first (payees to verify, payees to review, statement gaps, Paytm payments waiting), then where things stand, then what
+// the signed-in person may do, in plain words. The pages inside Finance (Parties, Import, ...) are in the left pane.
 //
 // Same shell as the other internal tools: Google Sign-In gated, one sign-in per tab (scripts/lib/staff-client.mjs),
 // unlinked, noindex. Everything the server returns is placed with textContent only, never as HTML.
@@ -15,49 +16,45 @@ import SignInGate from '../../../components/SignInGate.astro';
 
     <SignInGate forbiddenWhat="finance" />
 
-    <p id="status" class="hint" hidden></p>
+    <div id="status" aria-live="polite" class="hint" hidden></div>
 
     <div id="content" hidden>
-      <div class="card empty">
-        <h2>No data yet</h2>
-        <p class="hint">Bank statements, the ledger, payment requests and payroll are being built in stages. What exists so far is the access rules and the lists they will use.</p>
-      </div>
+      <h2 class="list-title">Needs you</h2>
+      <ul class="list" id="needs"></ul>
 
-      <h2 class="list-title">Directory</h2>
-      <ul class="list">
-        <li><a class="row" href="/internal/finance/parties/"><span class="grow"><span class="title">Parties</span><span class="detail">Everyone TVC pays or receives from, and their verified payee details</span></span></a></li>
-      </ul>
+      <h2 class="list-title">Where things stand</h2>
+      <ul class="list" id="stand"></ul>
 
-      <h2 class="list-title">Set up so far</h2>
-      <ul class="list" id="counts"></ul>
-
-      <h2 class="list-title">Statements</h2>
-      <ul class="list">
-        <li>
-          <a class="row" href="/internal/finance/import/">
-            <span class="grow"><span class="title">Import statements</span><span class="detail">Bank statement files and the Paytm UPI export</span></span>
-          </a>
-        </li>
-      </ul>
-
-      <h2 class="list-title">Your access</h2>
-      <ul class="list">
-        <li><div class="row"><span class="grow"><span class="title">Role</span></span><span id="role" class="pill"></span></div></li>
-        <li><div class="row"><span class="grow"><span class="title">Can do</span><span class="detail" id="caps"></span></span></div></li>
-        <li><div class="row"><span class="grow"><span class="title">Payee bank details</span><span class="detail" id="payee"></span></span></div></li>
-      </ul>
+      <details class="access" id="access">
+        <summary><span id="access-title">Your access</span></summary>
+        <p id="access-text" class="hint"></p>
+      </details>
     </div>
   </section>
 </StaffLayout>
 
 <script>
   import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
+  import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   const ROLE_LABELS: Record<string, string> = { admin: 'Admin', user: 'User', read_only: 'Read-only' };
+  // What each capability lets a person do, in plain words (the registry's own names are for the Access screen).
+  const CAPABILITY_WORDS: Record<string, string> = {
+    view: 'see finance',
+    import: 'import statements',
+    allocate: 'categorise entries',
+    request: 'raise payment requests',
+    approve: 'approve payments',
+    'approve-payroll': 'approve salary batches',
+    'verify-payee': 'verify payees',
+    'close-period': 'close months',
+    configure: 'set up categories and budgets',
+    export: 'export data',
+  };
 
   const gate = $('gate');
   const gateError = $('gate-error');
@@ -66,11 +63,17 @@ import SignInGate from '../../../components/SignInGate.astro';
   const content = $('content');
   const intro = $('intro');
 
+  const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+  const rupees = (paise: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(paise / 100);
+  const day = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  const listWords = (items: string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`);
+
   function showGate(message?: string) {
     gate.hidden = false;
     forbidden.hidden = true;
     content.hidden = true;
-    statusEl.hidden = true;
+    clearState(statusEl);
+    intro.hidden = false;
     intro.textContent = 'Sign in to open finance.';
     gateError.hidden = !message;
     if (message) gateError.textContent = message;
@@ -80,52 +83,108 @@ import SignInGate from '../../../components/SignInGate.astro';
   function showForbidden() {
     gate.hidden = true;
     content.hidden = true;
-    statusEl.hidden = true;
+    clearState(statusEl);
     forbidden.hidden = false;
     $('forbidden-email').textContent = decodeTokenEmail(getToken() ?? '');
   }
 
-  function countRow(label: string, n: number): HTMLElement {
-    const li = document.createElement('li');
-    const row = document.createElement('div');
-    row.className = 'row';
-    const grow = document.createElement('span');
-    grow.className = 'grow';
-    const title = document.createElement('span');
-    title.className = 'title';
-    title.textContent = label;
-    grow.append(title);
-    const value = document.createElement('span');
-    value.className = 'muted';
-    value.textContent = String(n);
-    row.append(grow, value);
+  function el(tag: string, className?: string, text?: string): HTMLElement {
+    const e = document.createElement(tag);
+    if (className) e.className = className;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  const chevron = () => {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', width: '18', height: '18', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', focusable: 'false', class: 'chev' })) svg.setAttribute(k, v);
+    const path = document.createElementNS(ns, 'path');
+    path.setAttribute('d', 'M10 7l5 5-5 5');
+    svg.append(path);
+    return svg;
+  };
+
+  // One line of the "Needs you" list: a number, what it counts, a sentence of why, and where to go (when there is a page for it).
+  function needRow(o: { count?: number; crit?: boolean; title: string; detail: string; href?: string }): HTMLElement {
+    const li = el('li');
+    const row = el(o.href ? 'a' : 'div', 'row need');
+    if (o.href) (row as HTMLAnchorElement).href = o.href;
+    row.append(el('span', `count${o.crit ? ' count--crit' : ''}`, o.count === undefined ? '' : String(o.count)));
+    const grow = el('span', 'grow');
+    grow.append(el('span', 'title', o.title), el('span', 'detail', o.detail));
+    row.append(grow);
+    if (o.href) row.append(chevron());
     li.append(row);
     return li;
+  }
+
+  function standRow(title: string, detail: string, href?: string): HTMLElement {
+    const li = el('li');
+    const row = el(href ? 'a' : 'div', 'row');
+    if (href) (row as HTMLAnchorElement).href = href;
+    const grow = el('span', 'grow');
+    grow.append(el('span', 'title', title), el('span', 'detail', detail));
+    row.append(grow);
+    if (href) row.append(chevron());
+    li.append(row);
+    return li;
+  }
+
+  function render(data: any) {
+    const a = data.attention;
+    const parties = '/internal/finance/parties/';
+    const imports = '/internal/finance/import/';
+    const needs: HTMLElement[] = [];
+    if (!data.hasData) {
+      needs.push(needRow({ title: 'Load your payees', detail: 'Add parties by hand, or load an existing list with the import script.', href: parties }));
+      needs.push(needRow({ title: 'Import a bank statement', detail: 'The Excel download from the bank, one file per year.', href: imports }));
+    } else {
+      if (a.toVerify > 0) needs.push(needRow({ count: a.toVerify, title: a.toVerify === 1 ? 'payee to verify' : 'payees to verify', detail: 'Check each one against its bank details', href: `${parties}?filter=unverified` }));
+      if (a.needsReview > 0) needs.push(needRow({ count: a.needsReview, crit: true, title: a.needsReview === 1 ? 'payee needs review' : 'payees need review', detail: 'Two bank accounts in use, a missing IFSC, or an account shared with another payee', href: `${parties}?filter=review` }));
+      if (a.statementGaps.length > 0) {
+        const g = a.statementGaps[0];
+        const more = a.statementGaps.length > 1 ? ` and ${a.statementGaps.length - 1} more` : '';
+        needs.push(needRow({ count: a.statementGaps.length, title: a.statementGaps.length === 1 ? 'statement gap' : 'statement gaps', detail: `${g.label} has no statement from ${day(g.from)} to ${day(g.to)}${more}`, href: imports }));
+      }
+      if (a.paytmToCheck.count > 0) needs.push(needRow({ count: a.paytmToCheck.count, crit: true, title: a.paytmToCheck.count === 1 ? 'Paytm payment with no bank line' : 'Paytm payments with no bank line', detail: `${rupees(a.paytmToCheck.totalPaise)} in all, inside a statement we hold. Worth a look.`, href: imports }));
+      if (a.paytmWaiting.count > 0) needs.push(needRow({ count: a.paytmWaiting.count, title: a.paytmWaiting.count === 1 ? 'Paytm payment waiting for a bank line' : 'Paytm payments waiting for a bank line', detail: `${rupees(a.paytmWaiting.totalPaise)} in all. They match themselves when the next statement is imported.` }));
+    }
+    if (!needs.length) needs.push(standRow('Nothing needs you right now', 'Payees are verified and the statements are up to date.'));
+    $('needs').replaceChildren(...needs);
+
+    $('stand').replaceChildren(
+      standRow('Parties', `${plural(a.parties, 'payee or customer', 'payees and customers')}${a.merged ? `, ${plural(a.merged, 'merged duplicate')}` : ''}`, parties),
+      standRow('Statements', a.lastImportAt ? `Last import ${day(a.lastImportAt)}.` : 'Nothing imported yet.', imports),
+      standRow('Bank accounts', `${a.bankAccounts} registered`),
+    );
+
+    const words = (data.capabilities as string[]).map((c) => CAPABILITY_WORDS[c]).filter(Boolean);
+    $('access-title').textContent = `Your access: ${ROLE_LABELS[data.role] ?? data.role}`;
+    $('access-text').textContent = `You can ${listWords(words)}. ${data.visibility.payeeBankDetails ? 'You can see payees\' bank details in full when you verify or export them.' : 'You see only the last four digits of payees\' bank details.'}`;
   }
 
   async function load() {
     gate.hidden = true;
     forbidden.hidden = true;
-    statusEl.hidden = false;
-    statusEl.textContent = 'Loading…';
+    showLoading(statusEl);
     try {
       const { status, data } = await staffFetch('/api/finance-admin/overview');
       if (status !== 200) throw new Error('load failed');
-      statusEl.hidden = true;
+      clearState(statusEl);
       intro.textContent = data.entity ?? '';
-      $('counts').replaceChildren(countRow('Bank accounts', data.counts.bankAccounts), countRow('Categories', data.counts.categories), countRow('Open months', data.counts.openPeriods));
-      $('role').textContent = ROLE_LABELS[data.role] ?? data.role;
-      $('caps').textContent = data.capabilities.join(', ');
-      $('payee').textContent = data.visibility.payeeBankDetails ? 'Shown in full where you verify or export' : 'Hidden; names are visible';
+      intro.hidden = !data.entity;
+      render(data);
       content.hidden = false;
     } catch (err) {
       if (err instanceof StaffAuthError) {
         if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
         else showForbidden();
-      } else {
-        statusEl.hidden = false;
-        statusEl.textContent = 'Failed to load. Try refreshing.';
+        return;
       }
+      content.hidden = true;
+      intro.hidden = true;
+      showFailure(statusEl, { title: "Couldn't load finance", text: "The server didn't answer. Nothing was changed. Check your connection and try again; if it keeps failing, tell a super admin.", onRetry: load });
     }
   }
 
@@ -158,10 +217,6 @@ import SignInGate from '../../../components/SignInGate.astro';
     padding-bottom: 48px;
   }
 
-  .finance .muted {
-    color: var(--tvc-ink-soft);
-  }
-
   .finance h2 {
     margin: 0 0 6px;
     font-size: var(--text-lg);
@@ -174,7 +229,50 @@ import SignInGate from '../../../components/SignInGate.astro';
     color: var(--tvc-ink-soft);
   }
 
-  .finance .empty {
-    padding: 20px;
+  .finance .list-title:first-child {
+    margin-top: 6px;
+  }
+
+  /* A line of "Needs you": the number it counts, then what it is. */
+  .finance .need {
+    gap: 14px;
+  }
+
+  .finance .count {
+    min-width: 3.4rem;
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .finance .count:empty {
+    min-width: 0;
+  }
+
+  .finance .count--crit {
+    color: var(--tvc-error-text);
+  }
+
+  .finance .chev {
+    flex: none;
+    color: var(--tvc-ink-soft);
+  }
+
+  .finance .access {
+    margin-top: 14px;
+    padding: 12px 16px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+  }
+
+  .finance .access summary {
+    cursor: pointer;
+    font-weight: 500;
+  }
+
+  .finance .access .hint {
+    margin: 8px 0 0;
   }
 </style>
