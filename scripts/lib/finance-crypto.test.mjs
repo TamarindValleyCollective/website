@@ -41,3 +41,52 @@ test('without the key, nothing is encrypted or fingerprinted', () => {
   assert.throws(() => c.encryptFinanceText('x'), c.MfaNotConfiguredError);
   assert.throws(() => c.fingerprintFinanceText('x'), c.MfaNotConfiguredError);
 });
+
+// ---- a dedicated key for payee details (FINANCE_PAYEE_KEY), falling back to STAFF_MFA_KEY
+const newKey = () => randomBytes(32).toString('base64');
+const withKeys = (staff, finance) => {
+  if (staff === undefined) delete process.env.STAFF_MFA_KEY;
+  else process.env.STAFF_MFA_KEY = staff;
+  if (finance === undefined) delete process.env.FINANCE_PAYEE_KEY;
+  else process.env.FINANCE_PAYEE_KEY = finance;
+};
+
+test('payee details use FINANCE_PAYEE_KEY when it is set, independent of STAFF_MFA_KEY', () => {
+  const finance = newKey();
+  withKeys(newKey(), finance);
+  const blob = c.encryptFinanceText('secret');
+  const print = c.fingerprintFinanceText('100000000001');
+  withKeys(newKey(), finance); // the MFA key changes; the finance key does not
+  assert.equal(c.decryptFinanceText(blob), 'secret');
+  assert.equal(c.fingerprintFinanceText('100000000001'), print);
+});
+
+test('FINANCE_PAYEE_KEY alone is enough: finance works without STAFF_MFA_KEY', () => {
+  withKeys(undefined, newKey());
+  assert.equal(c.decryptFinanceText(c.encryptFinanceText('x')), 'x');
+});
+
+test('with no FINANCE_PAYEE_KEY the old behaviour holds: STAFF_MFA_KEY is used', () => {
+  const staff = newKey();
+  withKeys(staff, undefined);
+  const blob = c.encryptFinanceText('x');
+  withKeys(staff, undefined);
+  assert.equal(c.decryptFinanceText(blob), 'x');
+});
+
+test('a FINANCE_PAYEE_KEY that is set but too short is refused, never silently replaced by the other key', () => {
+  withKeys(newKey(), Buffer.from('too-short').toString('base64'));
+  assert.throws(() => c.encryptFinanceText('x'), c.MfaNotConfiguredError);
+  assert.throws(() => c.fingerprintFinanceText('x'), c.MfaNotConfiguredError);
+});
+
+test('the finance key touches only finance: TOTP and member-payout encryption still use STAFF_MFA_KEY', () => {
+  const staff = newKey();
+  withKeys(staff, newKey());
+  const totp = c.encryptSecret(Buffer.from('totp'));
+  const payout = c.encryptPayoutText('payout');
+  withKeys(staff, newKey()); // a different finance key
+  assert.equal(c.decryptSecret(totp).toString(), 'totp');
+  assert.equal(c.decryptPayoutText(payout), 'payout');
+  assert.throws(() => c.decryptFinanceText(c.encryptFinanceText('x') + 'zz')); // sanity: tampering still fails
+});

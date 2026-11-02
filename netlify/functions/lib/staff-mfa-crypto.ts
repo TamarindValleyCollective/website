@@ -14,12 +14,15 @@ import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes, ra
 
 export class MfaNotConfiguredError extends Error {
   constructor() {
-    super('STAFF_MFA_KEY is missing or shorter than 32 bytes');
+    super('STAFF_MFA_KEY (or FINANCE_PAYEE_KEY for payee details) is missing or shorter than 32 bytes');
   }
 }
 
 function derivedKey(purpose: 'enc' | 'sign' | 'recovery' | 'payout' | 'finance' | 'finance-fp'): Buffer {
-  const raw = process.env.STAFF_MFA_KEY;
+  // Payee details (finance) use their own key when FINANCE_PAYEE_KEY is set, so rotating one key never breaks the other.
+  // A FINANCE_PAYEE_KEY that is set but too short is an error, never a silent fall back to the other key.
+  const finance = purpose === 'finance' || purpose === 'finance-fp';
+  const raw = (finance && process.env.FINANCE_PAYEE_KEY) || process.env.STAFF_MFA_KEY;
   const master = raw ? Buffer.from(raw, 'base64') : Buffer.alloc(0);
   if (master.length < 32) throw new MfaNotConfiguredError();
   return Buffer.from(hkdfSync('sha256', master, Buffer.alloc(0), `tvc-staff-mfa:${purpose}`, 32));

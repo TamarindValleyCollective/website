@@ -76,7 +76,7 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
 ## Parties and payees (session 04, migration `0079_finance_parties.sql`)
 
 - **Tables.** `fin_parties` (kind, name, optional household for a member, active) and `fin_party_accounts` (bank or UPI
-  details). Details are AES-256-GCM encrypted (`details_enc`, own key derived from `STAFF_MFA_KEY`); the clear columns
+  details). Details are AES-256-GCM encrypted (`details_enc`, own key derived from `FINANCE_PAYEE_KEY`, or from `STAFF_MFA_KEY` if that is not set; see "Keys" below); the clear columns
   are the last four characters and a keyed fingerprint used to find two parties sharing one account. A trigger refuses to
   edit or delete a row's details; only the status may move forward (unverified, verified, superseded).
 - **Change = new row.** Entering different details adds a new `unverified` row and marks the party's live row of the same
@@ -90,6 +90,13 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   number. `fin_audit_log.detail` is checked before writing and a number, UPI id or IFSC makes the write fail. Revealing is
   written to the audit log first; if that fails nothing is returned. Audit actions: `finance.party_created`,
   `party_updated`, `payee_added`, `payee_changed`, `payee_revealed`, `payee_verified`, `parties_imported`.
+- **Keys.** Payee details are encrypted under `FINANCE_PAYEE_KEY` (32+ random bytes, base64) when it is set, otherwise under
+  `STAFF_MFA_KEY`. The finance key is separate on purpose: Netlify secrets can be set but never read back, so a key you did not
+  keep a copy of cannot be reused by a script, and rotating the MFA key would lock every TOTP secret and member payout detail.
+  Generate it once (`openssl rand -base64 32`), keep it in the team's password manager, and set it in Netlify as a secret for
+  all scopes including Functions; the import script needs the same value in the shell (`read -s FINANCE_PAYEE_KEY; export
+  FINANCE_PAYEE_KEY`). **Losing it makes stored payee details unreadable** (they must be re-entered). A value that is set but too
+  short is refused, never replaced by the other key. Do not change it once payees are imported.
 - **Shared accounts** are flagged on both parties ("Shared account") and never blocked.
 - **Retiring accounts (why this exists).** Money was once sent to an old account that never reached the payee and never came
   back. So an account has two dates: `valid_from` (first day it may be paid) and `retired_on` (first day it must **not** be

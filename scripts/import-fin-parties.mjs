@@ -17,7 +17,7 @@
 // The dry run and the apply summary print counts and line numbers only: never a name, account number or UPI id. Re-running
 // is safe: parties are matched on name + kind and accounts on their keyed fingerprint, so nothing is added twice.
 //
-// --apply needs SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and STAFF_MFA_KEY (the payee encryption key), and migration
+// --apply needs SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and FINANCE_PAYEE_KEY (the payee encryption key; STAFF_MFA_KEY is used if it is not set), and migration
 // 0079 applied. Needs Node 22.18+ (it imports the TypeScript crypto helper directly).
 import { getSheetValues } from './lib/google-drive.mjs';
 import { readBeneficiaries, mergeSources, planImport, summarizeImport, findDuplicateCandidates, duplicateReviewCsv } from './lib/finance-party-import.mjs';
@@ -63,8 +63,8 @@ const { records, stats } = mergeSources(lists);
 console.log(`Read ${stats.records} rows from ${stats.sources} source(s); ${stats.merged} matched an earlier source by account number (${stats.nameDiffers} under a different name).`);
 
 // Keys are needed even for the dry run: the shared-account check compares fingerprints.
-if (!process.env.STAFF_MFA_KEY) {
-  console.error('Set STAFF_MFA_KEY (the payee encryption key) so accounts can be fingerprinted.');
+if (!process.env.FINANCE_PAYEE_KEY && !process.env.STAFF_MFA_KEY) {
+  console.error('Set FINANCE_PAYEE_KEY (the payee encryption key, 32+ random bytes in base64) so accounts can be fingerprinted and encrypted.');
   process.exit(2);
 }
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
