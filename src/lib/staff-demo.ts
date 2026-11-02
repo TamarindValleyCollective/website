@@ -9,6 +9,8 @@
 // only; every other /api call falls through to the real fetch, so a tool page still shows its own
 // state (or its own `?demo`, as event-payments does).
 
+import { ACCOMMODATION_UNITS, ACCOMMODATION_TYPES } from '../../scripts/lib/accommodation.mjs';
+
 const TOOLS = [
   { module: 'photo-pool', label: 'Photos', path: '/internal/photo-pool/' },
   { module: 'whatsapp', label: 'WhatsApp', path: '/internal/whatsapp/' },
@@ -276,6 +278,9 @@ function demoBookings(canApprove = true) {
       // A stay that has already ended (open the Day plan for 10 days ago to edit or cancel it).
       stay('demo-d', day(-10), 2, 'Tent04', [guest('Rekha Pillai'), guest('Suresh Pillai')], { label: 'Pillai', isPast: true }),
     ],
+    // The New booking flow lists its tents from these, as the real API does.
+    units: ACCOMMODATION_UNITS,
+    types: ACCOMMODATION_TYPES,
     access: { role: 'admin', allowedTypes: null, canApprove },
   };
 }
