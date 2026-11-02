@@ -278,24 +278,28 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     const dlg = $<HTMLDialogElement>('detail-sheet');
     const accounts = p.accounts.map((a) => {
       const retired = isRetired(a);
+      // "two bank accounts in use" is about the payee, not one account: it is shown once, above the list.
       const notes = [
         retired ? `Retired from ${niceDate(a.retiredOn!)}. Do not pay this account.` : a.retiredOn ? `Retires on ${niceDate(a.retiredOn)}; payable until the day before.` : null,
         a.validFrom && a.validFrom > todayIST() ? `Starts on ${niceDate(a.validFrom)}.` : null,
-        ...(retired ? [] : a.review.map((r) => REVIEW_TEXT[r] ?? r)),
+        ...(retired ? [] : a.review.filter((r) => r !== 'multiple_live_accounts').map((r) => REVIEW_TEXT[r] ?? r)),
       ].filter((t): t is string => Boolean(t));
+      const status = retired ? pill('Retired', 'crit') : a.retiredOn ? pill('Retiring', 'warn') : a.status === 'verified' ? pill('Verified', 'ok') : pill('Unverified', 'warn');
+      const verify = a.status === 'unverified' && !retired && data?.canVerify ? button('Verify…', () => openVerify(p, a)) : null;
+      const retire = !retired && data?.canVerify ? button(a.retiredOn ? 'Move date…' : 'Retire…', () => openRetire(a)) : null;
       return h(
         'li',
         {},
         h(
           'div',
-          { class: 'row' },
-          h('span', { class: 'grow' }, h('span', { class: 'title', text: `${a.method === 'bank' ? 'Bank account' : 'UPI'} ${a.shown}` }), ...notes.map((t) => h('span', { class: 'detail', text: t }))),
-          retired ? pill('Retired', 'crit') : a.retiredOn ? pill('Retiring', 'warn') : a.status === 'verified' ? pill('Verified', 'ok') : pill('Unverified', 'warn'),
-          a.status === 'unverified' && !retired && data?.canVerify ? button('Verify…', () => openVerify(p, a)) : null,
-          !retired && data?.canVerify ? button(a.retiredOn ? 'Move date…' : 'Retire…', () => openRetire(a)) : null,
+          { class: 'acct' },
+          h('div', { class: 'acct-head' }, h('span', { class: 'title', text: `${a.method === 'bank' ? 'Bank account' : 'UPI'} ${a.shown}` }), status),
+          ...notes.map((t) => h('span', { class: 'detail', text: t })),
+          verify || retire ? h('div', { class: 'acct-actions' }, verify, retire) : null,
         ),
       );
     });
+    const twoLive = p.accounts.some((a) => !isRetired(a) && a.review.includes('multiple_live_accounts'));
     const actions: Node[] = [closeBtn(dlg)];
     if (data?.canVerify) actions.unshift(button('Merge into…', () => openMerge(p)));
     if (data?.canVerify && p.accounts.some((a) => a.review.includes('multiple_live_accounts'))) actions.unshift(button('Keep both: reviewed', () => keepBoth(p, dlg)));
@@ -306,7 +310,8 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       dlg,
       h('h2', { text: p.name, attrs: { id: 'detail-title' } }),
       h('p', { class: 'sheet-text', text: `${KIND_LABELS[p.kind] ?? p.kind}${p.active ? '' : ' · inactive'}` }),
-      h('ul', { class: 'list' }, ...(accounts.length ? accounts : [h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow detail', text: 'No payment details yet.' })))])),
+      twoLive ? h('p', { class: 'note', text: REVIEW_TEXT.multiple_live_accounts }) : null,
+      h('ul', { class: 'list' }, ...(accounts.length ? accounts : [h('li', {}, h('div', { class: 'acct' }, h('span', { class: 'detail', text: 'No payment details yet.' })))])),
       p.mergedCount ? h('p', { class: 'hint', text: `Includes the accounts of ${p.mergedCount} duplicate ${p.mergedCount === 1 ? 'party' : 'parties'} merged into this one.` }) : null,
       p.earlierAccounts ? h('p', { class: 'hint', text: `${p.earlierAccounts} earlier set${p.earlierAccounts === 1 ? '' : 's'} of details kept on record.` }) : null,
       h('div', { class: 'sheet-actions' }, ...actions),
@@ -499,5 +504,59 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
 
   .parties .bar .field {
     flex: 1;
+  }
+
+  /* The shared sheet is 420px; this one carries accounts and several actions, so it gets more room. */
+  /* The layout styles .sheet with a scoped selector, so these carry extra specificity to win. */
+  .parties.section dialog.sheet {
+    width: min(560px, calc(100vw - 32px));
+    max-height: calc(100dvh - 48px);
+    overflow-y: auto;
+  }
+
+  /* One account: name and status on a line, notes beneath at full width, then its buttons. */
+  .parties .acct {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 12px 14px;
+  }
+
+  .parties .acct-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+  }
+
+  .parties .acct-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .parties .sheet .detail {
+    display: block;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  /* Several actions at the foot of a sheet: let them wrap instead of running off the edge. */
+  .parties.section dialog.sheet .sheet-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .parties.section dialog.sheet .hint,
+  .parties.section dialog.sheet .note {
+    margin: 12px 0;
+  }
+
+  @media (max-width: 560px) {
+    .parties.section dialog.sheet .sheet-actions .button {
+      flex: 1 1 auto;
+    }
   }
 </style>
