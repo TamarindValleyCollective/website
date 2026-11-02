@@ -218,6 +218,7 @@ flowchart TD
     APIFN10 -.->|"tried first"| GEMINI
     APIFN10 -.->|"fallback"| ANTHROPIC
     PHOTOS -.-> R2
+    APIFN21 -.->|"raw statement files (private)"| R2
     GA -.-> GTAG
     WEATHER -.-> METEO
     RAINFALL --> APIFN5
