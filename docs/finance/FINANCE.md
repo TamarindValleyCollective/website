@@ -103,7 +103,8 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   beneficiary export are all recognised). Parties match on name + kind and accounts on fingerprint, so re-running adds
   nothing. Everything lands unverified. Rows with no kind column become kind `other` for review; member parties link by
   farm unit (`F-07`).
-- **No IFSC.** Some lists have none. Such accounts import with an empty IFSC, are reported as `missing_ifsc`, and **cannot be
+- **No IFSC.** Some lists have none, and some have one that is not a valid IFSC (reported as `invalid_ifsc`, then treated as
+  missing; a wrong account number is still refused). Such accounts import with an empty IFSC, are reported as `missing_ifsc`, and **cannot be
   verified** until someone enters the account again with its IFSC ("Add or change details"; the same number with a new IFSC
   counts as a change, and the old row is kept).
 - **Not built yet:** linking an existing party to a household after the fact, merging duplicate parties, and the farm

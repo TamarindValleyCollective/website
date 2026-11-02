@@ -135,7 +135,16 @@ export function planImport(records, { households, existing, fingerprint }) {
     if (rec.account || rec.ifsc) entered.push({ method: 'bank', account: rec.account, ifsc: rec.ifsc });
     if (rec.upi) entered.push({ method: 'upi', upi: rec.upi });
     for (const input of entered) {
-      const checked = validatePayeeDetails(input, { allowMissingIfsc: true });
+      let checked = validatePayeeDetails(input, { allowMissingIfsc: true });
+      // A wrong IFSC alone must not stop the account importing: drop it, note it, and it stays unverifiable until a
+      // person enters the right one. A wrong account number is still refused.
+      if (checked.error && input.method === 'bank' && input.ifsc) {
+        const retry = validatePayeeDetails({ ...input, ifsc: '' }, { allowMissingIfsc: true });
+        if (!retry.error) {
+          anomalies.push({ kind: 'invalid_ifsc', line: rec.line });
+          checked = retry;
+        }
+      }
       if (checked.error) {
         anomalies.push({ kind: 'bad_details', line: rec.line });
         continue;
