@@ -1,22 +1,23 @@
 ---
-// Landing page for the internal tools (issue #89): sign in once with Google
-// and see the tools you hold a role in, each with the role you hold there.
+// Landing page for the admin portal (issue #89): sign in once with Google
+// and see what needs you, then the pages you can open, grouped in the same blocks as the left pane
+// (scripts/lib/admin-nav.mjs), each with the role you hold there.
 // Backed by netlify/functions/staff-me.mts, which answers only about the
 // caller. The list is a convenience, not access control — every tool still
 // checks the capability it needs on every request. Super admins also see the
 // Access and Security pages.
 //
 // Every internal page shares one sign-in for the tab (scripts/lib/staff-client.mjs),
-// including the four tools, so opening a tool from here doesn't ask again.
+// including every page, so opening one from here doesn't ask again.
 // Deliberately unlinked from the site nav and noindex.
 import StaffLayout from '../../layouts/StaffLayout.astro';
 import SignInGate from '../../components/SignInGate.astro';
 ---
 
-<StaffLayout title="Today" description="What needs you today, and your admin tools." current="home">
+<StaffLayout title="Today" description="What needs you today, and the pages you can open." current="home">
   <section class="section wrapper">
     <h1>Today</h1>
-    <p id="welcome" class="hint">Sign in to see the tools you can use.</p>
+    <p id="welcome" class="hint">Sign in to see what you can open.</p>
     <div id="whats-new"></div>
 
     <SignInGate forbiddenWhat="the admin portal" />
@@ -35,16 +36,8 @@ import SignInGate from '../../components/SignInGate.astro';
       </div>
     </div>
 
-    <div id="tools-section" data-tour="tools" hidden>
-      <h2>Your tools</h2>
-      <ul id="tools" class="list tools"></ul>
-      <p id="no-tools" class="note" hidden>You're signed in, but you don't have access to any tool yet. Ask a super admin.</p>
-    </div>
-
-    <div id="admin-section" data-tour="admin-tools" hidden>
-      <h2>Administration</h2>
-      <ul id="admin-tools" class="list tools"></ul>
-    </div>
+    <div id="blocks" data-tour="blocks" hidden></div>
+    <p id="no-pages" class="note" hidden>You're signed in, but you don't have access to any page yet. Ask a super admin.</p>
 
   </section>
 </StaffLayout>
@@ -55,7 +48,8 @@ import SignInGate from '../../components/SignInGate.astro';
 
 
 
-  h2 {
+  h2,
+  #blocks :global(h2) {
     margin: 26px 0 8px 14px;
     font-family: var(--font-body);
     font-size: var(--text-sm);
@@ -79,7 +73,7 @@ import SignInGate from '../../components/SignInGate.astro';
     font-weight: 400;
   }
 
-  .tools :global(.dot),
+  #blocks :global(.dot),
   .summary :global(.dot),
   #needs-list :global(.dot) {
     flex: none;
@@ -103,9 +97,9 @@ import SignInGate from '../../components/SignInGate.astro';
     font-variant-numeric: tabular-nums;
   }
 
-  /* The tools are one grouped list (shared .list and .row). The rows are built by the script, so what is
+  /* Each block is one grouped list (shared .list and .row). The rows are built by the script, so what is
      specific to Home needs :global(): the icon badge on the left. */
-  .tools :global(.tool-icon) {
+  #blocks :global(.tool-icon) {
     display: inline-flex;
     flex: none;
     align-items: center;
@@ -117,15 +111,12 @@ import SignInGate from '../../components/SignInGate.astro';
     color: var(--tvc-icon);
   }
 
-  .tools :global(.tool-icon--admin) {
-    background: var(--tvc-green-dark);
-    color: var(--tvc-white);
-  }
 
 </style>
 
 <script>
   import { STAFF_ICONS } from '../../lib/staff-icons';
+  import { visibleNav } from '../../../scripts/lib/admin-nav.mjs';
   import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch } from '../../../scripts/lib/staff-client.mjs';
 
   declare const google: any;
@@ -146,14 +137,11 @@ import SignInGate from '../../components/SignInGate.astro';
   const forbidden = $('forbidden');
   const forbiddenEmail = $('forbidden-email');
   const statusEl = $('status');
-  const toolsSection = $('tools-section');
   const attention = $('attention');
-  const toolsList = $('tools');
-  const noTools = $('no-tools');
-  const adminSection = $('admin-section');
-  const adminList = $('admin-tools');
+  const blocksEl = $('blocks');
+  const noPages = $('no-pages');
 
-  // What each tool is for, shown on its tile. Admin tiles bring their own text.
+  // What each page is for, shown on its row; keyed by page id, falling back to its module.
   const DESCRIPTIONS: Record<string, string> = {
     'photo-pool': 'Review and describe photos sent in for the website',
     whatsapp: 'Read and reply to WhatsApp conversations',
@@ -163,6 +151,13 @@ import SignInGate from '../../components/SignInGate.astro';
     usage: 'Free-tier and credit usage, and warnings',
     finance: 'Bank accounts, categories and the finance ledger (being built)',
     'finance-requests': 'Raise payment requests and add bills (being built)',
+    'finance-parties': 'Payees and customers, their bank details and who verified them',
+    'finance-import': 'Bank and Paytm statements, and what is missing',
+    'site-map': 'The farm map and where each unit sits',
+    access: 'Who can do what',
+    units: 'Onboard and manage the units members rent out',
+    previews: 'Try a member feature with a few homes first',
+    security: 'Your second factors',
   };
 
   const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -192,17 +187,16 @@ import SignInGate from '../../components/SignInGate.astro';
     return el;
   }
 
-  function card(tool: Tool, kind: 'tool' | 'admin'): HTMLElement {
-    const key = tool.module ?? tool.label.toLowerCase();
+  function card(tool: Tool, key: string, iconKey: string): HTMLElement {
     const link = document.createElement('a');
     link.className = 'row';
     link.href = tool.path;
 
-    const badge = span(kind === 'admin' ? 'tool-icon tool-icon--admin' : 'tool-icon');
-    badge.append(icon(STAFF_ICONS[key] ?? STAFF_ICONS.home, 20, 'tool-icon-svg'));
+    const badge = span('tool-icon');
+    badge.append(icon(STAFF_ICONS[iconKey] ?? STAFF_ICONS.home, 20, 'tool-icon-svg'));
 
     const text = span('grow');
-    text.append(span('title', tool.label), span('detail', tool.description ?? DESCRIPTIONS[key] ?? ''));
+    text.append(span('title', tool.label), span('detail', DESCRIPTIONS[key] ?? ''));
 
     link.append(badge, text);
     if (tool.roleLabel) link.append(span('pill pill--ok', tool.roleLabel));
@@ -216,11 +210,11 @@ import SignInGate from '../../components/SignInGate.astro';
   function showGate(message?: string) {
     gate.hidden = false;
     forbidden.hidden = true;
-    toolsSection.hidden = true;
+    blocksEl.hidden = true;
+    noPages.hidden = true;
     attention.hidden = true;
-    adminSection.hidden = true;
     statusEl.hidden = true;
-    welcome.textContent = 'Sign in to see the tools you can use.';
+    welcome.textContent = 'Sign in to see what you can open.';
     gateError.hidden = !message;
     if (message) gateError.textContent = message;
     renderSignInButton();
@@ -228,9 +222,9 @@ import SignInGate from '../../components/SignInGate.astro';
 
   function showForbidden() {
     gate.hidden = true;
-    toolsSection.hidden = true;
+    blocksEl.hidden = true;
+    noPages.hidden = true;
     attention.hidden = true;
-    adminSection.hidden = true;
     statusEl.hidden = true;
     forbidden.hidden = false;
     forbiddenEmail.textContent = decodeTokenEmail(getToken() ?? '');
@@ -255,7 +249,7 @@ import SignInGate from '../../components/SignInGate.astro';
   function renderToday(data: { items: TodayItem[]; quiet: string[]; failed: string[] }) {
     const { items, quiet, failed } = data;
     const nothingChecked = items.length === 0 && quiet.length === 0 && failed.length === 0;
-    attention.hidden = nothingChecked; // someone whose tools have no checks (the photo pool alone) just sees their tools
+    attention.hidden = nothingChecked; // someone whose tools have no checks (the photo pool alone) just sees their pages
     if (nothingChecked) return;
 
     const summary = $('today-summary');
@@ -297,7 +291,30 @@ import SignInGate from '../../components/SignInGate.astro';
     );
   }
 
-  // Runs beside the tool list and never blocks it: if the check fails the page says so rather than "all clear".
+  // The pages this person can open, grouped as in the left pane. The role label is their grant in the page's module.
+  function renderBlocks(me: any) {
+    const roleOf = new Map<string, string>((me.tools as Tool[]).map((t) => [t.module as string, t.roleLabel as string]));
+    const sections = visibleNav(me, null).map((block: any) => {
+      const section = document.createElement('div');
+      const heading = document.createElement('h2');
+      heading.textContent = block.label;
+      const list = document.createElement('ul');
+      list.className = 'list';
+      list.replaceChildren(
+        ...block.pages.map((p: any) => {
+          const key = DESCRIPTIONS[p.id] !== undefined ? p.id : (p.module ?? p.id);
+          return card({ ...p, roleLabel: p.module ? roleOf.get(p.module) : undefined }, key, p.module ?? p.id);
+        }),
+      );
+      section.append(heading, list);
+      return section;
+    });
+    blocksEl.replaceChildren(...sections);
+    blocksEl.hidden = sections.length === 0;
+    noPages.hidden = sections.length > 0;
+  }
+
+  // Runs beside the page list and never blocks it: if the check fails the page says so rather than "all clear".
   async function loadToday() {
     try {
       const { status, data } = await staffFetch('/api/staff-today');
@@ -305,7 +322,7 @@ import SignInGate from '../../components/SignInGate.astro';
       renderToday(data);
       attention.hidden = attention.hidden; // renderToday decides
     } catch (err) {
-      if (err instanceof StaffAuthError) return; // the tool list already handled the session
+      if (err instanceof StaffAuthError) return; // the page list already handled the session
       attention.hidden = false;
       $('today-summary').replaceChildren(span('muted', "Couldn't check what needs you just now. Try refreshing."));
       $('today-needs').hidden = true;
@@ -322,13 +339,7 @@ import SignInGate from '../../components/SignInGate.astro';
       if (status !== 200) throw new Error('load failed');
       statusEl.hidden = true;
       welcome.textContent = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
-      toolsList.replaceChildren(...(data.tools as Tool[]).map((t) => card(t, 'tool')));
-      const hasTools = data.tools.length > 0;
-      const hasAdmin = data.adminTools.length > 0;
-      toolsSection.hidden = !hasTools && hasAdmin; // a super admin with no tool roles sees just Administration
-      noTools.hidden = hasTools || hasAdmin;
-      adminList.replaceChildren(...(data.adminTools as Tool[]).map((t) => card(t, 'admin')));
-      adminSection.hidden = data.adminTools.length === 0;
+      renderBlocks(data);
       void loadToday();
     } catch (err) {
       if (err instanceof StaffAuthError) {
