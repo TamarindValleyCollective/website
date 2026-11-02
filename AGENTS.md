@@ -48,6 +48,15 @@ emails — what is measured vs typed in, the thresholds, the setup steps, and ho
 **Update it in the same change** whenever that changes — a new service tracked, a changed
 threshold, a new typed-in meter, a new alert rule.
 
+## Finance module documentation
+
+`docs/finance/` holds the design for the finance module (bank and UPI imports, ledger, payment
+requests, payroll, budget and dashboards, auditor access) and the numbered session briefs it is
+built from. Start at `docs/finance/README.md`. **Update the status table there, and the session's
+"Done" section, in the same change** whenever a session lands, and keep `docs/finance/FINANCE.md`
+(created by the first session) current. This is a public repo: no names, account numbers, UPI IDs,
+salaries or amounts in finance code, tests, fixtures or docs; use invented data.
+
 ## Terminology: admin and staff
 
 "Admin" is anyone who runs the internal tools under `/internal`: the core team (community members), plus
