@@ -48,4 +48,28 @@ Who gets `finance` (directors), who is the requester, whether the category list 
 > Read `docs/finance/README.md`, `DESIGN.md` and `sessions/01-foundation-and-access.md`, then build session 01 in a new worktree and open a draft PR. Follow the README rules. Ask me before applying any migration.
 
 ## Done
-_Fill in at the end of the session._
+**Built (2026-11-02, branch `finance-01-foundation`, draft PR):**
+- `finance` and `finance-requests` in `MODULES`/`MODULE_INFO` with the DESIGN.md capabilities. Admin-only: `approve`,
+  `approve-payroll`, `verify-payee`, `close-period`, `configure`, `export`. `export` is admin-only because the
+  design table gives `read_only` `view` only, though the auditor section mentions taking a CA export (open point).
+- Migration `0077_finance_foundation.sql`: `staff_module_roles.expires_at`; `fin_entities`, `fin_bank_accounts`,
+  `fin_categories`, `fin_periods`, `fin_audit_log` (append-only trigger), RLS on and no policies, anon/authenticated
+  revoked; one entity and a **draft** list of 23 generic categories.
+- `requireStaff`, `staff-me`, `staff-today` honour `expires_at` (checked per request, not cached). Access screen
+  shows and sets the end date on read-only grants (`expiresOn` on `POST /api/staff-admin/roles`, audited).
+- `finance-admin.mts` (`GET /api/finance-admin/overview`), `/internal/finance/`, a placeholder `/internal/finance-requests`,
+  `netlify.toml` and `DOMAINS.md` entries, icons. Auditor visits are written to `fin_audit_log`, and refused if the
+  log fails.
+- `scripts/lib/finance-access.mjs`: expiry, `parseExpiry`, `makerIsNotChecker`, `payeeFieldVisibility`, masks.
+- `docs/finance/FINANCE.md`, `CONTEXT.md` glossary, `ARCHITECTURE.md`, a `Finance tests` workflow.
+
+**Verified:** 21 unit/endpoint tests pass (`node --test scripts/lib/finance-*.test.mjs`), including: a `finance-requests`
+holder gets 403 from the finance endpoint, an expired auditor grant gets 403, a deactivated person gets 403, an
+auditor visit is logged and refused if the log fails. `scripts/lib/admin-host-routes.test.mjs` 30/30. `npm run lint:css`
+clean. `astro build` passes. **Not verified:** the pages in a browser with a real sign-in, the Access screen's new
+date control, and migration 0077 against a real database (not applied; needs Sharath's go-ahead).
+
+**Left / decisions for Sharath:** who gets `finance` (directors) and who is the requester; confirm or edit the draft
+category list (I did not read the private tracker); whether auditors should get `export`; the category seed lives in
+the migration, so edits before applying are free. Real-money rules for later sessions are ready to import:
+`makerIsNotChecker`, `payeeFieldVisibility`. Next: sessions 03 and 04 (can run in parallel).

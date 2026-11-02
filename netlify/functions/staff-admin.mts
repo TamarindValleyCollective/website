@@ -22,6 +22,7 @@ import { requireAccessAdmin, stepUpIsValid } from './lib/staff-admin-guard';
 import { MfaNotConfiguredError } from './lib/staff-mfa-crypto';
 import { mfaSummary, rest } from './lib/staff-mfa-store';
 import { loadStaffPictures } from './lib/staff-picture';
+import { grantIsExpired, parseExpiry } from '../../scripts/lib/finance-access.mjs';
 import {
   BOOKING_TYPES,
   MODULES,
@@ -39,7 +40,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type RoleScope = { allowedTypes?: string[] } | null;
 type PersonRow = { id: string; name: string | null; email?: string | null; active: boolean; is_super_admin: boolean };
-type RoleRow = { staff_id: string; module: string; role: Role; scope: RoleScope };
+type RoleRow = { staff_id: string; module: string; role: Role; scope: RoleScope; expires_at: string | null };
 
 function jsonResponse(body: unknown, status = 200): Response {
   // Never cached: these responses describe who can do what right now.
@@ -102,7 +103,7 @@ async function handleList(req: Request, admin: SuperAdmin): Promise<Response> {
   // The address is selected only so an unnamed person can be shown masked (labelFor); it is not sent.
   const [peopleRes, rolesRes] = await Promise.all([
     rest('/staff_users?select=id,name,email,active,is_super_admin&order=created_at.asc'),
-    rest('/staff_module_roles?select=staff_id,module,role,scope'),
+    rest('/staff_module_roles?select=staff_id,module,role,scope,expires_at'),
   ]);
   const people = (await peopleRes.json()) as PersonRow[];
   const roles = (await rolesRes.json()) as RoleRow[];
@@ -149,6 +150,9 @@ async function handleList(req: Request, admin: SuperAdmin): Promise<Response> {
           module: r.module,
           role: r.role,
           scope: r.scope,
+          // When an auditor's access ends (null = no end), and whether it already has.
+          expiresAt: r.expires_at,
+          expired: grantIsExpired(r.expires_at),
           capabilities: capabilitiesForRole(r.module as ModuleId, r.role),
         })),
     })),
@@ -240,7 +244,7 @@ function normalizeScope(module: ModuleId, role: Role, scope: unknown): { ok: tru
 }
 
 async function handleSetRole(req: Request, admin: SuperAdmin): Promise<Response> {
-  const body = await readJson<{ personId?: string; module?: string; role?: string | null; scope?: unknown }>(req);
+  const body = await readJson<{ personId?: string; module?: string; role?: string | null; scope?: unknown; expiresOn?: unknown }>(req);
   if (!body) return jsonResponse({ error: 'Invalid request body' }, 400);
   if (!UUID.test(body.personId ?? '')) return jsonResponse({ error: 'personId must be a UUID' }, 400);
   if (!isModuleId(body.module)) return jsonResponse({ error: 'Unknown module.' }, 400);
@@ -251,12 +255,12 @@ async function handleSetRole(req: Request, admin: SuperAdmin): Promise<Response>
   const person = await getPerson(personId);
   if (!person) return jsonResponse({ error: 'Person not found' }, 404);
 
-  const existingRes = await rest(`/staff_module_roles?staff_id=eq.${personId}&module=eq.${module}&select=staff_id,module,role,scope`);
+  const existingRes = await rest(`/staff_module_roles?staff_id=eq.${personId}&module=eq.${module}&select=staff_id,module,role,scope,expires_at`);
   const existing = ((await existingRes.json()) as RoleRow[])[0] ?? null;
 
   if (body.role === null) {
     if (!existing) return jsonResponse({ ok: true, changed: false });
-    if (!(await audit(admin, 'staff.role_removed', { module, targetId: personId, detail: { previousRole: existing.role, previousScope: existing.scope } }))) {
+    if (!(await audit(admin, 'staff.role_removed', { module, targetId: personId, detail: { previousRole: existing.role, previousScope: existing.scope, previousExpiresAt: existing.expires_at } }))) {
       return jsonResponse({ error: 'Could not write the audit log; nothing was changed.' }, 500);
     }
     await rest(`/staff_module_roles?staff_id=eq.${personId}&module=eq.${module}`, { method: 'DELETE' });
@@ -267,16 +271,31 @@ async function handleSetRole(req: Request, admin: SuperAdmin): Promise<Response>
   const scope = normalizeScope(module, role, body.scope);
   if (!scope.ok) return jsonResponse({ error: scope.error }, 400);
 
-  if (existing && existing.role === role && JSON.stringify(existing.scope ?? null) === JSON.stringify(scope.scope)) {
+
+  // An end date belongs to a read-only (auditor) grant. Left out of the request it is kept while the role stays
+  // read-only; null clears it; any other role never carries one.
+  let expiresAt: string | null = null;
+  if (role === 'read_only') {
+    if (body.expiresOn === undefined) expiresAt = existing?.role === 'read_only' ? existing.expires_at : null;
+    else {
+      const parsed = parseExpiry(body.expiresOn);
+      if (!parsed.ok) return jsonResponse({ error: parsed.error }, 400);
+      expiresAt = parsed.value;
+    }
+  } else if (body.expiresOn !== undefined && body.expiresOn !== null) {
+    return jsonResponse({ error: 'An end date can only be set on a read-only role.' }, 400);
+  }
+
+  if (existing && existing.role === role && JSON.stringify(existing.scope ?? null) === JSON.stringify(scope.scope) && (existing.expires_at ?? null) === expiresAt) {
     return jsonResponse({ ok: true, changed: false });
   }
-  if (!(await audit(admin, 'staff.role_set', { module, targetId: personId, detail: { role, scope: scope.scope, previousRole: existing?.role ?? null, previousScope: existing?.scope ?? null } }))) {
+  if (!(await audit(admin, 'staff.role_set', { module, targetId: personId, detail: { role, scope: scope.scope, expiresAt, previousRole: existing?.role ?? null, previousScope: existing?.scope ?? null, previousExpiresAt: existing?.expires_at ?? null } }))) {
     return jsonResponse({ error: 'Could not write the audit log; nothing was changed.' }, 500);
   }
   await rest('/staff_module_roles?on_conflict=staff_id,module', {
     method: 'POST',
     headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify({ staff_id: personId, module, role, scope: scope.scope, granted_by: admin.id, granted_at: new Date().toISOString() }),
+    body: JSON.stringify({ staff_id: personId, module, role, scope: scope.scope, expires_at: expiresAt, granted_by: admin.id, granted_at: new Date().toISOString() }),
   });
   return jsonResponse({ ok: true, changed: true });
 }
@@ -300,10 +319,10 @@ async function handleSetActive(req: Request, admin: SuperAdmin): Promise<Respons
   // log, and the page's Undo puts them back. Reactivating restores nothing by itself.
   let removed: RoleRow[] = [];
   if (!body.active) {
-    const rolesRes = await rest(`/staff_module_roles?staff_id=eq.${personId}&select=staff_id,module,role,scope`);
+    const rolesRes = await rest(`/staff_module_roles?staff_id=eq.${personId}&select=staff_id,module,role,scope,expires_at`);
     removed = (await rolesRes.json()) as RoleRow[];
   }
-  const detail = removed.length ? { removedRoles: removed.map((r) => ({ module: r.module, role: r.role, scope: r.scope })) } : undefined;
+  const detail = removed.length ? { removedRoles: removed.map((r) => ({ module: r.module, role: r.role, scope: r.scope, expiresAt: r.expires_at })) } : undefined;
   if (!(await audit(admin, body.active ? 'staff.person_reactivated' : 'staff.person_deactivated', { targetId: personId, ...(detail ? { detail } : {}) }))) {
     return jsonResponse({ error: 'Could not write the audit log; nothing was changed.' }, 500);
   }

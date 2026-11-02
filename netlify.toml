@@ -185,6 +185,18 @@
   force = true
 
 [[redirects]]
+  from = "https://admin.tvc.farm/finance/*"
+  to = "/internal/finance/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/finance-requests/*"
+  to = "/internal/finance-requests/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "https://admin.tvc.farm/test-event/*"
   to = "/internal/test-event/:splat"
   status = 200
@@ -273,6 +285,12 @@
 [[redirects]]
   from = "https://admin.tvc.farm/api/site-map-admin/*"
   to = "/api/site-map-admin/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "https://admin.tvc.farm/api/finance-admin/*"
+  to = "/api/finance-admin/:splat"
   status = 200
   force = true
 

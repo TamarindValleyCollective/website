@@ -10,6 +10,7 @@
 // address is returned only masked ("p••••@tvc.farm"), so the sidebar can show
 // which account is signed in when someone holds two; the full address is never
 // sent.
+import { grantIsExpired } from '../../scripts/lib/finance-access.mjs';
 import { requireActivePerson } from './lib/staff-access';
 import { maskEmail } from './lib/staff-masking';
 import { rest } from './lib/staff-mfa-store';
@@ -35,8 +36,9 @@ export default async (req: Request): Promise<Response> => {
   await keepStaffPicture(person.id, person.googlePicture);
 
   try {
-    const res = await rest(`/staff_module_roles?staff_id=eq.${person.id}&select=module,role`);
-    const roles = (await res.json()) as { module: string; role: string }[];
+    const res = await rest(`/staff_module_roles?staff_id=eq.${person.id}&select=module,role,expires_at`);
+    // A grant that has ended is no longer a tool the person holds.
+    const roles = ((await res.json()) as { module: string; role: string; expires_at: string | null }[]).filter((r) => !grantIsExpired(r.expires_at));
     return jsonResponse({
       name: person.name ?? person.googleName ?? null,
       maskedEmail: person.email ? maskEmail(person.email) : null,

@@ -61,6 +61,28 @@ export const MODULES = {
     // Change the layout: add, remove, renumber, reshape, move or rotate a home. Every member sees the result, so admins only.
     edit: ADMIN_ONLY,
   },
+  // Finance (docs/finance/DESIGN.md). Granted per person, never to every admin. `admin` = the directors (approvers);
+  // `user` = the finance operators they choose; `read_only` = viewers, and auditors (whose grant carries an expires_at).
+  finance: {
+    view: ALL,
+    import: WRITERS,
+    allocate: WRITERS,
+    request: WRITERS,
+    approve: ADMIN_ONLY, // approve a payment. Whoever raised the request can never approve it (finance-access.mjs)
+    'approve-payroll': ADMIN_ONLY, // the second director; never the person who prepared the batch
+    'verify-payee': ADMIN_ONLY, // confirm new or changed bank details; also sees them unmasked
+    'close-period': ADMIN_ONLY,
+    configure: ADMIN_ONLY, // categories, budget, rules, the circle tag
+    export: ADMIN_ONLY,
+  },
+  // The farm manager's view of finance: raise requests and enter inputs, with no ledger access at all. A separate
+  // module so holding it grants nothing in `finance`.
+  'finance-requests': {
+    raise: WRITERS,
+    'add-vendor': WRITERS,
+    'scan-bill': WRITERS,
+    'payroll-input': WRITERS,
+  },
 } as const satisfies Record<string, Record<string, readonly Role[]>>;
 
 export type ModuleId = keyof typeof MODULES;
@@ -136,6 +158,32 @@ export const MODULE_INFO: Record<ModuleId, { label: string; path: string; capabi
     capabilities: {
       view: 'See every home on the site plan with its household, unit type and plot size, and the gaps to fix',
       edit: 'Change the layout members see: add, remove, renumber, reshape, move or rotate a home',
+    },
+  },
+  finance: {
+    label: 'Finance',
+    path: '/internal/finance/',
+    capabilities: {
+      view: 'See the ledger, dashboards and payee names (never payee bank details)',
+      import: 'Upload bank and UPI statements',
+      allocate: 'Split, categorise and review ledger entries',
+      request: 'Raise payment requests',
+      approve: 'Approve payments (not ones you raised)',
+      'approve-payroll': 'Approve a salary batch as the second director (not one you prepared)',
+      'verify-payee': 'Confirm new or changed payee bank details, and see them in full',
+      'close-period': 'Close a month, and change entries in a closed month with a reason',
+      configure: 'Set categories, budget, rules and the UPI circle tag',
+      export: 'Export the ledger and payment files',
+    },
+  },
+  'finance-requests': {
+    label: 'Finance requests',
+    path: '/internal/finance-requests/',
+    capabilities: {
+      raise: 'Raise payment requests',
+      'add-vendor': 'Add a new vendor and their bank or UPI details',
+      'scan-bill': 'Scan and attach a bill',
+      'payroll-input': "Enter the month's attendance and adjustments",
     },
   },
 };
