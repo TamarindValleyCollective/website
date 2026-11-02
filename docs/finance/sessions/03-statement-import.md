@@ -110,5 +110,11 @@ Tried first on a throwaway local Postgres, then checked after applying: three ta
 **Checked on the real files** (read in place, never copied; counts only): five yearly files, 1,376 lines, every balance chain
 holds inside each file and across all four year boundaries, bank footer totals agree, no gaps; shuffled upload, re-upload
 and one-year-at-a-time all behave. Paytm: 72 rows, 66 on our account all link to a bank line by reference, 6 ignored.
-**Not done:** registering the real account and the real import into TVC ERP (after this is merged and deployed);
-the real R2 write was not exercised (stubbed in tests).
+**Real import done 2026-11-02** through the page: the account registered, then five yearly statements (166 + 255 + 267 +
+325 + 363 = 1,376 lines) and the Paytm export (66 kept, 6 ignored). Checked in TVC ERP afterwards: each year's opening plus its
+lines equals its closing, all four year boundaries meet, 1,376 distinct keys, 66 of 66 Paytm rows linked with matching amount
+and direction, one Paytm batch. A first Paytm upload made before the account existed was stored all-ignored; PR #526 now blocks
+that, and the mistaken batch was deleted (triggers off for the one delete, then back on).
+**Left for later sessions:** within one day the database does not keep the bank's line order (all lines of a file share one
+`created_at`); session 05 should add a line-sequence column before building ledger screens. The history load (06) allocates FY
+2024-25 onward from these lines.
