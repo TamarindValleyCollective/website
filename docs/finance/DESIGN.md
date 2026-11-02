@@ -35,7 +35,7 @@ broke, so statement files are the primary path); paying money directly from the 
 | Area | Decision | Why |
 |---|---|---|
 | Statutory books | The CA keeps them; the module exports to them. | Avoids rebuilding accounting, GST and TDS. |
-| Bank link | Upload statement files; no dependency on a live feed. | Odoo's feed broke and the tool was dropped. |
+| Bank link | Upload statement files (Excel), a fresh download each month adding only new lines; no dependency on a live feed. A bank API integration is planned but has not progressed; the importer keeps parsing separate from storing so a feed could reuse it. | Odoo's feed broke and the tool was dropped. |
 | Ledger shape | One immutable **bank line** has one or more **allocations**. | A bulk salary debit must split into per-person entries without editing the bank record. |
 | Accounting basis | Cash ledger plus an **accounting period** on each allocation. | Auditors ask for cut-off (March salary paid in April). |
 | Nature of expense | Every allocation carries a plain-language **nature**. | Auditors ask for it on listed payments. |
