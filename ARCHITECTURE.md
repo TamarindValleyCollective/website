@@ -656,9 +656,13 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `scripts/lib/stay-day-plan.mjs` (arrivals, departures, breakfast/dinner counts, food needs, admin notes) and sends
   the `tvc_stays_daily_plan` template to each number in `WHATSAPP_DAILY_PLAN_NUMBERS`. Sends nothing on a day with
   nobody on the farm; dormant until the template is approved.
-  The Stays page's Day view (`accommodation-calendar.astro`) shows the same plan above its by-tent tiles,
-  built by the same `buildDayPlan`, with a Copy-as-message button (`planToMessageText`); in Day view it also
-  fetches the previous month so a stay that checks out on the 1st is found.
+  The Stays page opens on a two-choice switch, **Day plan** and **Availability** (Week and Month sit inside it),
+  with a date button that is also the date picker and a Today | Tomorrow switch. The Day plan
+  (`accommodation-calendar.astro`) is built by the same `buildDayPlan`: a one-line summary strip, a fullness chip per
+  accommodation type (same `levelOf` colours as Week and Month), Arriving, Leaving and Staying through (hidden when
+  empty), Food needs and a Copy-as-message button (`planToMessageText`). The AI summary is a collapsed line that is only
+  requested when opened, and the by-tent tiles are collapsed too. In Day view it also fetches the previous month so a stay
+  that checks out on the 1st is found.
   **By tent** (below the plan in Day view) is one tile per unit, grouped, from `scripts/lib/stay-tent-states.mjs`
   (tested): arriving, staying, leaving (free tonight but to be cleaned), a same-day turnover (both stays shown), closed (a
   tent closure, or a whole-farm closure unless the unit stays open), member-run, or free; a summary line counts the

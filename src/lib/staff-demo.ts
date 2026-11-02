@@ -260,6 +260,24 @@ function demoMe(kind: string) {
   };
 }
 
+// The Stays page: a few bookings placed around today (one arriving today, one tomorrow, one leaving today), so the
+// Day view's plan has something to show. Read-only: saving a booking in the demo still reaches the real fetch.
+function demoBookings() {
+  const day = (n: number) => new Date(Date.now() + n * 86_400_000).toLocaleDateString('en-CA');
+  const guest = (name: string, preferences?: string) => ({ personId: name, name, ageGroup: 'Adult', preferences });
+  const stay = (id: string, startDate: string, nights: number, tentId: string, guests: unknown[], extra: Record<string, unknown> = {}) => ({
+    id, type: 'casual-stay', startDate, nights, tents: [{ tentId, guests }], isPast: false, createdBy: 'demo@tvc.farm', createdAt: '', updatedAt: '', ...extra,
+  });
+  return {
+    bookings: [
+      stay('demo-a', day(0), 3, 'Tent01', [guest('Asha Rao', 'Nut allergy'), guest('Dev Rao')], { label: 'Rao family', note: 'Arrives after 8 pm' }),
+      stay('demo-b', day(1), 2, 'Tent03', [guest('Meera Nair'), guest('Kiran Nair'), guest('Ila', 'Vegan')], { label: 'Nair party' }),
+      stay('demo-c', day(-2), 2, 'Tent05', [guest('Menon'), guest('Mrs Menon')], { label: 'Menon' }),
+    ],
+    access: { role: 'admin', allowedTypes: null },
+  };
+}
+
 export function installStaffDemo(tokenKey: string, kind: string): void {
   // A token that only decodeTokenEmail() reads; the server never sees it because /api/staff-me is faked.
   const token = `${b64url({ alg: 'none' })}.${b64url({ email: 'demo@tvc.farm' })}.demo`;
@@ -277,6 +295,7 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     const reply = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } }));
     if (path === '/api/staff-me') return reply(demoMe(kind));
     if (path === '/api/staff-admin/people' && (init?.method ?? 'GET') === 'GET') return reply(demoAccess());
+    if (path === '/api/accommodation-admin/bookings' && (init?.method ?? 'GET') === 'GET') return reply(demoBookings());
     if (path === '/api/units-admin/overview') return reply(demoUnits());
     if (path === '/api/staff-admin/activity') return reply({ events: [], nextBefore: null });
     if (path === '/api/staff-mfa/status') {

@@ -52,7 +52,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 <StaffLayout title="Stays" description="Internal accommodation booking tool." current="accommodation" collapseByDefault>
   <section class="section wrapper">
     <h1>Stays</h1>
-    <p class="hint">Record who's in which tent, for how long. The public site only ever shows aggregate availability derived from this.</p>
+    <p class="hint">Plan the day for the farm, or check how many units are free.</p>
 
     <SignInGate forbiddenWhat="the accommodation calendar" />
 
@@ -64,14 +64,25 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         <button type="button" id="new-booking-btn" class="button button--primary" data-tour="new-booking">+ New booking</button>
       </div>
 
-      <div class="month-nav" data-tour="month-nav">
-        <button type="button" id="prev-month" class="button">← Prev</button>
-        <h2 id="month-label"></h2>
-        <button type="button" id="next-month" class="button">Next →</button>
-        <button type="button" id="today-btn" class="button">Today</button>
-        <label class="jump-date"><span class="visually-hidden">Jump to a date</span><input type="date" id="jump-date" /></label>
-        <div class="view-toggle segmented" role="group" aria-label="Calendar view">
-          <button type="button" class="view-toggle-btn" data-view="day" aria-pressed="false">Day</button>
+      <!-- Two things people come here to do, named by what they are for. Week and Month live inside Availability. -->
+      <div class="stays-modes" id="stays-modes" role="group" aria-label="Stays view" data-tour="month-nav">
+        <button type="button" data-mode="day" aria-pressed="true"><b>Day plan</b><span>Who arrives, what to prepare</span></button>
+        <button type="button" data-mode="avail" aria-pressed="false"><b>Availability</b><span>How many units are free</span></button>
+      </div>
+
+      <div class="month-nav">
+        <button type="button" id="prev-month" class="button" aria-label="Previous">←</button>
+        <label class="datebtn" id="datebtn">
+          <span id="month-label"></span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M8 3v4M16 3v4M3 10h18" /></svg>
+          <input type="date" id="jump-date" class="datebtn-input" aria-label="Pick a date" />
+        </label>
+        <button type="button" id="next-month" class="button" aria-label="Next">→</button>
+        <div class="segmented day-jump" role="group" aria-label="Jump to">
+          <button type="button" id="today-btn" aria-pressed="false">Today</button>
+          <button type="button" id="tomorrow-btn" aria-pressed="false">Tomorrow</button>
+        </div>
+        <div class="view-toggle segmented" id="avail-toggle" role="group" aria-label="Availability range" hidden>
           <button type="button" class="view-toggle-btn view-toggle-btn--active" data-view="week" aria-pressed="true">Week</button>
           <button type="button" class="view-toggle-btn" data-view="month" aria-pressed="false">Month</button>
         </div>
@@ -253,10 +264,71 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     flex-wrap: wrap;
   }
 
-  .month-nav h2 {
-    margin: 0;
-    min-width: 180px;
-    text-align: center;
+  .stays-modes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    padding: 4px;
+    margin-bottom: 14px;
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--tvc-ink) 7%, var(--tvc-white));
+  }
+
+  .stays-modes button {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    min-height: 56px;
+    padding: 8px 14px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--tvc-ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .stays-modes button b {
+    font-size: var(--text-base);
+  }
+
+  .stays-modes button span {
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .stays-modes button[aria-pressed='true'] {
+    background: var(--tvc-white);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .stays-modes button[aria-pressed='true'] b {
+    color: var(--tvc-green);
+  }
+
+  /* The date is the heading and the picker in one: the real date input sits invisibly over it. */
+  .datebtn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 0 14px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-field);
+    background: var(--tvc-white);
+    font-size: var(--text-xl);
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .datebtn-input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
   }
 
   /* The shared segmented control does the look; this only pushes it to the right of the month. */
@@ -269,9 +341,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
      toggle onto its own centered row rather than letting the wrap point
      land wherever it happens to (which read as broken, not tidy). */
   @media (max-width: 480px) {
-    .month-nav h2 {
-      min-width: 0;
+    .datebtn {
       flex: 1 1 auto;
+      justify-content: center;
+      font-size: var(--text-lg);
     }
 
     .view-toggle {
@@ -508,19 +581,53 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   .plan-summary {
-    padding: 14px 16px;
+    padding: 4px 14px;
     border-radius: var(--radius);
     background: var(--tvc-white);
     box-shadow: 0 0 0 1px var(--tvc-line) inset;
   }
 
-  .plan-summary h3 {
-    margin: 0 0 6px;
+  .plan-summary > summary,
+  .fold > summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .plan-summary > summary::-webkit-details-marker,
+  .fold > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .plan-summary > summary::before,
+  .fold > summary::before {
+    content: '›';
     font-size: var(--text-lg);
+    transition: transform 150ms ease;
+  }
+
+  .plan-summary[open] > summary::before,
+  .fold[open] > summary::before {
+    transform: rotate(90deg);
+  }
+
+  .plan-summary > summary .hint,
+  .fold > summary .hint {
+    margin: 0;
+  }
+
+  .plan-summary > summary b {
+    font-size: var(--text-xs);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tvc-green);
   }
 
   .plan-summary-text {
-    margin: 0 0 8px;
+    margin: 4px 0 8px;
     font-size: var(--text-base);
     white-space: pre-line;
   }
@@ -535,35 +642,22 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     align-items: center;
     justify-content: space-between;
     gap: 8px 12px;
+    padding-bottom: 10px;
   }
 
-  .plan-tiles {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    gap: 10px;
-  }
-
-  .plan-tile {
+  .plan-strip {
     display: flex;
-    flex-direction: column;
-    padding: 12px 14px;
-    border-radius: var(--radius);
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    padding: 10px 14px;
+    border-radius: var(--radius-field);
     background: var(--tvc-green-tint);
   }
 
-  .plan-tile strong {
-    font-size: 1.75rem;
-    line-height: 1.15;
-    font-variant-numeric: tabular-nums;
+  .plan-strip strong {
+    font-size: var(--text-lg);
   }
 
-  .plan-tile-label,
-  .plan-tile-sub {
-    font-size: var(--text-sm);
-    color: var(--tvc-ink-soft);
-  }
-
-  .plan-section h3,
   .plan-heading {
     margin: 0 0 8px;
     font-size: var(--text-lg);
@@ -623,6 +717,47 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     background: var(--tvc-green-tint);
     font-size: var(--text-base);
   }
+
+  /* How full each type is on the viewed night: the same green / orange / red as Week and Month's capacity cells. */
+  .fullness-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 8px;
+    margin: 10px 0 14px;
+  }
+
+  .fullness {
+    --c: var(--tvc-green);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    border-radius: var(--radius-field);
+    background: color-mix(in srgb, var(--c) 10%, var(--tvc-white));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 30%, transparent) inset;
+    font-size: var(--text-sm);
+  }
+
+  .fullness--tight { --c: var(--tvc-orange); }
+  .fullness--full { --c: var(--tvc-error-text); }
+  .fullness-name { font-weight: 600; }
+
+  .fullness-bar {
+    height: 6px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--c) 18%, transparent);
+    overflow: hidden;
+  }
+
+  .fullness-bar i {
+    display: block;
+    width: var(--h, 0%);
+    height: 100%;
+    background: var(--c);
+  }
+
+  .fullness--tight .fullness-n { color: var(--tvc-orange-text); }
+  .fullness--full .fullness-n { color: var(--tvc-error-text); }
 
   .tent-tiles {
     display: grid;
@@ -1431,6 +1566,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
 <script>
   import { normalizeMobileNumber, isValidEmail } from '../../../scripts/lib/accommodation.mjs';
+  import { capacityOn, levelOf, nightIndex, taken } from '../../../scripts/lib/stay-capacity.mjs';
   import { buildDayPlan, planToMessageText, tentsLabel } from '../../../scripts/lib/stay-day-plan.mjs';
   import { unitStates, tentSummary } from '../../../scripts/lib/stay-tent-states.mjs';
 
@@ -1570,6 +1706,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   const statusEl = document.getElementById('status') as HTMLElement;
   const monthLabel = document.getElementById('month-label') as HTMLElement;
   const viewToggleButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.view-toggle-btn'));
+  const modeButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('#stays-modes button'));
+  const availToggle = document.getElementById('avail-toggle') as HTMLElement;
+  const todayBtn = document.getElementById('today-btn') as HTMLButtonElement;
+  const tomorrowBtn = document.getElementById('tomorrow-btn') as HTMLButtonElement;
   const jumpInput = document.getElementById('jump-date') as HTMLInputElement;
   const TYPES: { id: string; label: string }[] = JSON.parse(document.getElementById('types-data')!.textContent!);
 
@@ -1619,7 +1759,8 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   const submitBtn = document.getElementById('f-submit') as HTMLButtonElement;
 
   type ViewMode = 'day' | 'week' | 'month';
-  let viewMode: ViewMode = 'week';
+  let viewMode: ViewMode = 'day';
+  let lastAvail: ViewMode = 'week'; // which of Week and Month Availability returns to
   let anchorDate = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD, local
   let currentBookings: Booking[] = [];
   let editingId: string | null = null;
@@ -2997,8 +3138,18 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         </div>`;
     }
 
-    dayView.innerHTML = renderDayPlan(date) + `<section class="tent-sec" aria-label="By tent"><h3 class="plan-heading">By tent</h3>${banner}${tentTilesHtml(date, today)}</section>`;
-    void loadPlanSummary(date);
+    const tentSum = tentSummary(unitStates(UNITS, currentBookings, date));
+    dayView.innerHTML = renderDayPlan(date) + `<details class="tent-sec fold" aria-label="By tent"><summary><span class="plan-heading">By tent</span><span class="hint">${tentSum.total ? `${tentSum.inUse} of ${tentSum.total} in use` : 'Closed'}</span></summary>${banner}${tentTilesHtml(date, today)}</details>`;
+  }
+
+  // How full each accommodation type is that night, coloured exactly like Week and Month (levelOf: open, tight, full).
+  function fullnessHtml(date: string): string {
+    const index = nightIndex(currentBookings);
+    const chips = TYPES.map((t) => ({ t, c: capacityOn(UNITS, index, date, [t.id]) }))
+      .filter(({ c }) => levelOf(c) !== 'none')
+      .map(({ t, c }) => `<div class="fullness fullness--${levelOf(c)}" style="--h:${Math.round(taken(c) * 100)}%" aria-label="${escapeAttr(`${t.label}: ${c.free} of ${c.total} free`)}"><span class="fullness-name">${escapeHtml(t.label)}</span><span class="fullness-bar" aria-hidden="true"><i></i></span><span class="fullness-n"><strong>${c.free}</strong> of ${c.total} free</span></div>`)
+      .join('');
+    return chips ? `<div class="fullness-row">${chips}</div>` : '';
   }
 
   function tentTilesHtml(date: string, today: string): string {
@@ -3065,17 +3216,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       `<li><button type="button" class="row plan-row" data-booking-id="${escapeAttr(e.id)}"><span class="plan-tent">${escapeHtml(tentsLabel(e.tents))}</span><span class="grow"><span class="title">${escapeHtml(e.who)}${e.guests ? ` · ${guestsLabel(e.guests)}` : ''}</span>${detail ? `<span class="detail">${escapeHtml(detail)}</span>` : ''}</span>${chev}</button></li>`;
     const section = (title: string, items: string[], empty: string) =>
       `<section class="plan-section"><h3>${title}</h3>${items.length ? `<ul class="list">${items.join('')}</ul>` : `<p class="hint">${empty}</p>`}</section>`;
-    const tile = (label: string, value: number, sub: string) => `<div class="plan-tile"><span class="plan-tile-label">${label}</span><strong>${value}</strong><span class="plan-tile-sub">${sub}</span></div>`;
     const sumGuests = (l: Entry[]) => l.reduce((n, e) => n + e.guests, 0);
     // The AI summary is only for a day that has guests (a booking with no guests listed counts as nobody), is not in the
     // past, and for a role that may see guest details. Quiet days never get here at all.
     const hasSummarySlot = myRole !== 'viewer' && summaryMode(date) !== 'none' && sumGuests([...plan.arriving, ...plan.leaving, ...plan.staying]) > 0;
-    const tents = (l: Entry[]) => l.flatMap((e) => e.tents).join(', ');
 
-    const prepare = [
-      plan.arriving.length ? `<p class="plan-line"><strong>Ready before check-in:</strong> ${escapeHtml(tents(plan.arriving))}</p>` : '',
-      plan.leaving.length ? `<p class="plan-line"><strong>Clean after check-out:</strong> ${escapeHtml(tents(plan.leaving))}</p>` : '',
-    ].filter(Boolean);
     // The server withholds preferences from a view-only role, so say why the list is empty rather than imply no one has any.
     const food =
       myRole === 'viewer'
@@ -3084,18 +3229,16 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
           ? `<ul class="list">${plan.food.map((f) => `<li><div class="row"><span class="grow"><span class="title">${escapeHtml(f.who)}</span><span class="detail">${escapeHtml(f.need)}</span></span></div></li>`).join('')}</ul>`
           : `<p class="hint">No special food needs.</p>`;
 
+    const strip = `<div class="plan-strip"><span><strong>${plan.arriving.length}</strong> arriving</span><span><strong>${plan.leaving.length}</strong> leaving</span><span>Breakfast <strong>${plan.breakfast}</strong></span><span>Dinner <strong>${plan.dinner}</strong></span></div>`;
+    // The summary is one collapsed line: nothing is asked of the writer until someone opens it (see the toggle listener).
+    const summaryBox = hasSummarySlot ? `<details id="plan-summary" class="plan-summary" data-date="${date}"><summary><b>Summary</b><span class="hint">Tap to read</span></summary><div id="plan-summary-body" aria-live="polite"></div></details>` : '';
     return `<section class="day-plan" aria-label="Plan for the day">
-      ${hasSummarySlot ? '<section id="plan-summary" class="plan-summary" aria-live="polite" hidden></section>' : ''}
-      <div class="plan-tiles">
-        ${tile('Check-ins', plan.arriving.length, guestsLabel(sumGuests(plan.arriving)))}
-        ${tile('Check-outs', plan.leaving.length, guestsLabel(sumGuests(plan.leaving)))}
-        ${tile('Breakfast', plan.breakfast, 'people')}
-        ${tile('Dinner', plan.dinner, 'people')}
-      </div>
-      ${section('Arriving', plan.arriving.map((e) => row(e, e.note)), 'Nobody is arriving.')}
-      ${section('Leaving', plan.leaving.map((e) => row(e, ['Clean the tent after check-out', e.note].filter(Boolean).join(' · '))), 'Nobody is leaving.')}
-      ${section('Staying through', plan.staying.map((e) => row(e, ['Until ' + formatDateLabel(e.until, { weekday: 'short', day: 'numeric', month: 'short' }), e.note].filter(Boolean).join(' · '))), 'No one else is on the farm.')}
-      ${prepare.length ? `<section class="plan-section"><h3>Tents to prepare</h3>${prepare.join('')}</section>` : ''}
+      ${summaryBox}
+      ${strip}
+      ${fullnessHtml(date)}
+      ${section('Arriving', plan.arriving.map((e) => row(e, ['Ready before check-in', e.note].filter(Boolean).join(' · '))), 'Nobody is arriving.')}
+      ${plan.leaving.length ? section('Leaving', plan.leaving.map((e) => row(e, ['Clean the tent after check-out', e.note].filter(Boolean).join(' · '))), '') : ''}
+      ${plan.staying.length ? section('Staying through', plan.staying.map((e) => row(e, ['Until ' + formatDateLabel(e.until, { weekday: 'short', day: 'numeric', month: 'short' }), e.note].filter(Boolean).join(' · '))), '') : ''}
       <section class="plan-section"><h3>Food needs</h3>${food}</section>
       <div class="plan-share"><button type="button" class="button button--outline" data-copy-plan>Copy as message</button><span class="hint">Paste it into WhatsApp for anyone who needs the day's plan.</span></div>
     </section>`;
@@ -3119,18 +3262,16 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   }
 
   async function loadPlanSummary(date: string, ask: 'auto' | 'write' | 'again' = 'auto') {
-    const box = document.getElementById('plan-summary');
+    const box = document.getElementById('plan-summary-body');
     if (!box) return;
     const mode = summaryMode(date);
     const key = `${date}|${planText}`;
     const note = 'Written by AI from anonymised details: no names or contacts are sent. Check the lists below.';
     const show = (text: string) => {
-      box.hidden = false;
-      box.innerHTML = `<h3>Summary</h3><p class="plan-summary-text">${escapeHtml(text)}</p><div class="plan-summary-foot"><span class="hint">${note}</span><button type="button" class="button button--outline button--small" data-summary-again>Write again</button></div>`;
+      box.innerHTML = `<p class="plan-summary-text">${escapeHtml(text)}</p><div class="plan-summary-foot"><span class="hint">${note}</span><button type="button" class="button button--outline button--small" data-summary-again>Write again</button></div>`;
     };
     const offer = (message = note) => {
-      box.hidden = false;
-      box.innerHTML = `<h3>Summary</h3><p class="hint">${escapeHtml(message)}</p><button type="button" class="button button--outline button--small" data-summary-write>Write summary</button>`;
+      box.innerHTML = `<p class="hint">${escapeHtml(message)}</p><button type="button" class="button button--outline button--small" data-summary-write>Write summary</button>`;
     };
 
     const known = ask === 'again' ? undefined : summaryCache.get(key);
@@ -3149,7 +3290,6 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     if (previous && ask === 'again') {
       box.querySelectorAll('button').forEach((b) => ((b as HTMLButtonElement).disabled = true));
     } else {
-      box.hidden = false;
       box.innerHTML = '<p class="hint">Writing the summary…</p>';
     }
     try {
@@ -3166,7 +3306,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         return;
       }
       // No summary. Quietly nothing for the automatic try; say so when somebody asked.
-      if (ask === 'auto') box.hidden = true;
+      if (ask === 'auto') box.innerHTML = '<p class="hint">The summary is not available right now.</p>';
       else {
         const why = data.reason === 'limit' ? 'That was asked for a lot just now. Try again a little later.' : 'The summary is not available right now.';
         if (previous) {
@@ -3177,7 +3317,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     } catch {
       if (mine !== summaryRequest) return;
       if (previous) show(previous);
-      else if (ask === 'auto') box.hidden = true;
+      else if (ask === 'auto') box.innerHTML = '<p class="hint">The summary is not available right now.</p>';
       else offer('The summary is not available right now.');
     }
   }
@@ -3228,6 +3368,18 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   // Same activateCell, same delegation reasoning, just against day view's
   // own row markup (a div, not a td) instead of the table's cells.
+  // `toggle` does not bubble, so listen in the capture phase: the summary is only written once somebody opens it.
+  dayView.addEventListener(
+    'toggle',
+    (ev) => {
+      const box = ev.target as HTMLDetailsElement;
+      if (box.id !== 'plan-summary' || !box.open) return;
+      const body = document.getElementById('plan-summary-body')!;
+      if (!body.childElementCount) void loadPlanSummary(box.dataset.date ?? anchorDate);
+    },
+    true,
+  );
+
   dayView.addEventListener('click', async (ev) => {
     if ((ev.target as HTMLElement).closest('[data-summary-write]')) {
       void loadPlanSummary(anchorDate, 'write');
@@ -3329,7 +3481,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   // Week and Month capacity views: a picked day opens that day's plan, or starts a booking from it (for the one type picked).
   capacity.addEventListener('capacity:plan', (ev) => {
     anchorDate = (ev as CustomEvent<{ date: string }>).detail.date;
-    document.querySelector<HTMLElement>('.view-toggle-btn[data-view="day"]')?.click();
+    setView('day');
   });
   capacity.addEventListener('capacity:book', (ev) => {
     const { date, typeId } = (ev as CustomEvent<{ date: string; typeId?: string }>).detail;
@@ -3351,8 +3503,10 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   function renderBookingList() {
     // Week and Month are capacity only: who is booked where is the Day plan's job.
-    bookingListHeading.parentElement!.hidden = viewMode !== 'day';
-    bookingList.hidden = viewMode !== 'day';
+    // The Day plan's rows and the by-tent tiles open every booking (the tent sheet edits or cancels it), so a second list of
+    // the same bookings is no longer shown.
+    bookingListHeading.parentElement!.hidden = true;
+    bookingList.hidden = true;
     bookingListHeading.textContent = bookingListHeadingLabel();
     const dates = new Set(visibleDates());
     const relevant = currentBookings.filter((b) => nightsForBooking(b).some((n) => dates.has(n)));
@@ -3818,6 +3972,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     const { start, end } = visibleRange();
     monthLabel.textContent = viewRangeLabel(start, end);
     jumpInput.value = anchorDate;
+    syncControls();
     showStatus('Loading…');
 
     try {
@@ -3879,18 +4034,41 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     loadView();
   });
 
-  for (const btn of viewToggleButtons) {
-    btn.addEventListener('click', () => {
-      const mode = btn.dataset.view as ViewMode;
-      if (mode === viewMode) return;
-      viewMode = mode;
-      for (const b of viewToggleButtons) {
-        b.classList.toggle('view-toggle-btn--active', b === btn);
-        b.setAttribute('aria-pressed', String(b === btn));
-      }
-      loadView();
-    });
+  // Day plan, or Availability (Week or Month). The controls follow viewMode, never the other way round.
+  function syncControls() {
+    const day = viewMode === 'day';
+    for (const b of modeButtons) b.setAttribute('aria-pressed', String((b.dataset.mode === 'day') === day));
+    availToggle.hidden = day;
+    tomorrowBtn.hidden = !day;
+    for (const b of viewToggleButtons) {
+      b.classList.toggle('view-toggle-btn--active', b.dataset.view === viewMode);
+      b.setAttribute('aria-pressed', String(b.dataset.view === viewMode));
+    }
+    const today = new Date().toLocaleDateString('en-CA');
+    todayBtn.setAttribute('aria-pressed', String(day && anchorDate === today));
+    tomorrowBtn.setAttribute('aria-pressed', String(day && anchorDate === addDaysToDateStr(today, 1)));
   }
+
+  function setView(mode: ViewMode) {
+    if (mode === viewMode) return;
+    viewMode = mode;
+    if (mode !== 'day') lastAvail = mode;
+    loadView();
+  }
+
+  for (const btn of modeButtons) btn.addEventListener('click', () => setView(btn.dataset.mode === 'day' ? 'day' : lastAvail));
+  for (const btn of viewToggleButtons) btn.addEventListener('click', () => setView(btn.dataset.view as ViewMode));
+  tomorrowBtn.addEventListener('click', () => {
+    anchorDate = addDaysToDateStr(new Date().toLocaleDateString('en-CA'), 1);
+    loadView();
+  });
+  document.getElementById('datebtn')!.addEventListener('click', () => {
+    try {
+      jumpInput.showPicker();
+    } catch {
+      jumpInput.focus();
+    }
+  });
 
   function handleCredentialResponse(response: { credential: string }) {
     sessionStorage.setItem(STORAGE_KEY, response.credential);
