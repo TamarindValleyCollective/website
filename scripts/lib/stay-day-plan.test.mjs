@@ -1,7 +1,7 @@
 // Run with: node --test scripts/lib/stay-day-plan.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDayPlan, planToTemplateParams, planToMessageText, tentsLabel } from './stay-day-plan.mjs';
+import { shiftDate, buildDayPlan, planToTemplateParams, planToMessageText, tentsLabel } from './stay-day-plan.mjs';
 
 const labels = new Map([['T1', 'Banyan'], ['T2', 'Neem'], ['T3', 'Jamun']]);
 const guest = (name, preferences) => ({ personId: name, name, ageGroup: 'Adult', preferences });
@@ -112,4 +112,10 @@ test('the same guest with the same food note on two tents is listed once', () =>
     { who: 'Arthi', need: '2 kids above 10' },
     { who: 'Arthi', need: 'Vegan' },
   ]);
+});
+
+test('shiftDate crosses month and year ends', () => {
+  assert.equal(shiftDate('2026-11-30', 1), '2026-12-01');
+  assert.equal(shiftDate('2026-12-31', 1), '2027-01-01');
+  assert.equal(shiftDate('2026-11-01', -1), '2026-10-31');
 });

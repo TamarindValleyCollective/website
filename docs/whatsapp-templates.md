@@ -355,7 +355,7 @@ Samples: `confirmed` · `Asha Rao` · `1 Nov 2026 to 3 Nov 2026` · `Asha (Malab
 
 One internal UTILITY template, sent every morning at 06:30 IST by `netlify/functions/whatsapp-stays-daily-plan.mts`
 to the numbers in `WHATSAPP_DAILY_PLAN_NUMBERS` (comma-separated). Add the name to `WHATSAPP_APPROVED_TEMPLATES` only
-once Meta approves it. Nothing is sent on a day with nobody on the farm. Every variable is one line (Meta rejects
+once Meta approves it. Nothing is sent on a day with nobody on the farm. The same template is sent a day early when a party arrives tomorrow (the date in {{1}} is tomorrow's), so no new template is needed. Every variable is one line (Meta rejects
 newlines inside a variable); the builder is `scripts/lib/stay-day-plan.mjs`.
 
 ### `tvc_stays_daily_plan`
