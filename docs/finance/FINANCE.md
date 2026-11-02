@@ -86,6 +86,8 @@ See `CONTEXT.md` at the repo root (bank line, allocation, period, nature, party,
 
 ## Statement import (session 03)
 
+**Live.** Real data imported 2026-11-02: 1,376 bank lines (2022 to 2 Nov 2026, chain verified) and 66 Paytm rows, all linked. Known gap for session 05: same-day line order is not stored.
+
 Page `/internal/finance/import/`; routes in `finance-admin.mts` (`GET /imports`, `POST /imports/preview`, `POST /imports/commit`,
 `POST /bank-accounts`). Needs `import` (finance user or admin) to upload and `configure` (admin) to register an account.
 
