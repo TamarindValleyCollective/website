@@ -26,7 +26,7 @@ from fin_entities e
 cross join (values
   -- Opex: regular running costs, including small items set aside for in the yearly calculation
   ('Salaries',                       'opex',                true),
-  ('Groceries and milk',             'opex',                true),
+  ('Groceries',                      'opex',                true),
   ('Petty cash',                     'opex',                true),
   ('Materials and supplies',         'opex',                true),
   ('Tools and small equipment',      'opex',                true),
