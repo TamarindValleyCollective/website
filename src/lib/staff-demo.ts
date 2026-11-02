@@ -260,6 +260,39 @@ function demoMe(kind: string) {
   };
 }
 
+// The Stays page: a few bookings placed around today (one arriving today, one tomorrow, one leaving today), so the
+// Day view's plan has something to show. Read-only: saving a booking in the demo still reaches the real fetch.
+function demoBookings() {
+  const day = (n: number) => new Date(Date.now() + n * 86_400_000).toLocaleDateString('en-CA');
+  const guest = (name: string, preferences?: string) => ({ personId: name, name, ageGroup: 'Adult', preferences });
+  const stay = (id: string, startDate: string, nights: number, tentId: string, guests: unknown[], extra: Record<string, unknown> = {}) => ({
+    id, type: 'casual-stay', startDate, nights, tents: [{ tentId, guests }], isPast: false, createdBy: 'demo@tvc.farm', createdAt: '', updatedAt: '', ...extra,
+  });
+  return {
+    bookings: [
+      stay('demo-a', day(0), 3, 'Tent01', [guest('Asha Rao', 'Nut allergy'), guest('Dev Rao')], { label: 'Rao family', note: 'Arrives after 8 pm' }),
+      stay('demo-b', day(1), 2, 'Tent03', [guest('Meera Nair'), guest('Kiran Nair'), guest('Ila', 'Vegan')], { label: 'Nair party' }),
+      stay('demo-c', day(-2), 2, 'Tent05', [guest('Menon'), guest('Mrs Menon')], { label: 'Menon' }),
+    ],
+    access: { role: 'admin', allowedTypes: null, canApprove: true },
+  };
+}
+
+// One waiting change to a past stay, as the Linger team would submit it, so the "Changes to approve" list has something to show.
+function demoChangeRequests() {
+  const base = demoBookings().bookings[2];
+  const proposed = { ...base, nights: 3, label: 'Menon family', tents: [{ tentId: 'Tent05', guests: [...base.tents[0].guests, { name: 'Anil Menon', ageGroup: 'Adult' }] }] };
+  const backfill = { type: 'casual-stay', label: 'Iyer couple', startDate: '2026-10-12', nights: 2, tents: [{ tentId: 'Tent02', guests: [{ name: 'Ravi Iyer', ageGroup: 'Adult' }, { name: 'Lata Iyer', ageGroup: 'Adult' }] }] };
+  const now = new Date().toISOString();
+  return {
+    requests: [
+      { id: 'demo-req-1', kind: 'update', reason: 'They stayed an extra night and a relative joined; the front desk missed it.', requestedBy: 'Linger front desk', requestedAt: now, mine: false, proposed, booking: base },
+      { id: 'demo-req-3', kind: 'delete', reason: 'Entered twice by mistake; the other entry is the real one.', requestedBy: 'Linger front desk', requestedAt: now, mine: false, proposed: {}, booking: demoBookings().bookings[0] },
+      { id: 'demo-req-2', kind: 'create', reason: 'Booked by phone on 11 Oct and never entered; payment was received then.', requestedBy: 'Linger front desk', requestedAt: now, mine: false, proposed: backfill, booking: null },
+    ],
+  };
+}
+
 export function installStaffDemo(tokenKey: string, kind: string): void {
   // A token that only decodeTokenEmail() reads; the server never sees it because /api/staff-me is faked.
   const token = `${b64url({ alg: 'none' })}.${b64url({ email: 'demo@tvc.farm' })}.demo`;
@@ -277,6 +310,9 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     const reply = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } }));
     if (path === '/api/staff-me') return reply(demoMe(kind));
     if (path === '/api/staff-admin/people' && (init?.method ?? 'GET') === 'GET') return reply(demoAccess());
+    if (path === '/api/accommodation-admin/bookings' && (init?.method ?? 'GET') === 'GET') return reply(demoBookings());
+    if (path === '/api/accommodation-admin/change-requests' && (init?.method ?? 'GET') === 'GET') return reply(demoChangeRequests());
+    if (path === '/api/accommodation-admin/change-requests/decide') return reply({ ok: true });
     if (path === '/api/units-admin/overview') return reply(demoUnits());
     if (path === '/api/staff-admin/activity') return reply({ events: [], nextBefore: null });
     if (path === '/api/staff-mfa/status') {

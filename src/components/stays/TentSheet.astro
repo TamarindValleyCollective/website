@@ -336,6 +336,7 @@
     bookings: Booking[];
     role: string;
     allowedTypes: string[] | null;
+    canApprove?: boolean;
   }
   interface Draft {
     key: number;
@@ -475,7 +476,7 @@
     const typeLabel = (t: string) => ({ 'casual-stay': 'Guest stay', 'member-stay': 'Member stay', 'public-event': 'Public event', 'private-event': 'Private event', 'unit-closure': 'Tent closure', 'farm-closure': 'Farm closure' })[t] ?? t;
 
     const reasonHtml = () =>
-      booking?.isPast ? `<div style="margin-bottom:10px"><label for="ts-reason">Why? <span class="ts-sub">(required: this stay has already happened)</span></label><textarea id="ts-reason" rows="2" data-bind="reason">${esc(reason)}</textarea></div>` : '';
+      booking?.isPast ? `<div style="margin-bottom:10px"><label for="ts-reason">Why? <span class="ts-sub">(required: this stay has already happened${ctx?.canApprove ? '' : '; a super admin approves it before it changes'})</span></label><textarea id="ts-reason" rows="2" data-bind="reason">${esc(reason)}</textarea></div>` : '';
 
     function panelHtml(): string {
       if (!panel || !booking || !ctx) return '';
@@ -576,7 +577,7 @@
           return;
         }
         close();
-        showToast('Saved');
+        showToast(res.status === 202 ? 'Sent to the super admins for approval' : 'Saved');
         root.dispatchEvent(new CustomEvent('stays-booking:saved', { bubbles: true }));
       } catch (err) {
         if (!handled(err)) {

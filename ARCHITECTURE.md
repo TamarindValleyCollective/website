@@ -308,7 +308,8 @@ flowchart TD
     APIFN17 -.->|"send alert digest"| RESEND
     APIFN18 -.->|"bookings for tomorrow,<br/>claim reminder"| SUPABASE
     APIFN18 -.->|"send tvc_event_reminder<br/>template"| WAMETA
-    APIFN_PLAN -.->|"today's stays"| SUPABASE
+    APIFN_PLAN -.->|"today's and tomorrow's stays"| SUPABASE
+    APIFN_PLAN -.->|"arrival plan email"| RESEND
     APIFN_PLAN -.->|"send tvc_stays_daily_plan<br/>template"| WAMETA
 
     classDef staticStyle fill:#e8f2ea,stroke:#17723b,color:#0f5029
@@ -655,10 +656,15 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `accommodation_bookings` (TVC ERP Supabase, via `scripts/lib/accommodation-db.mjs`), builds the day plan with
   `scripts/lib/stay-day-plan.mjs` (arrivals, departures, breakfast/dinner counts, food needs, admin notes) and sends
   the `tvc_stays_daily_plan` template to each number in `WHATSAPP_DAILY_PLAN_NUMBERS`. Sends nothing on a day with
-  nobody on the farm; dormant until the template is approved.
-  The Stays page's Day view (`accommodation-calendar.astro`) shows the same plan above its by-tent tiles,
-  built by the same `buildDayPlan`, with a Copy-as-message button (`planToMessageText`); in Day view it also
-  fetches the previous month so a stay that checks out on the 1st is found.
+  nobody on the farm. Also sends tomorrow's plan when a party arrives tomorrow, and emails the plan via Resend
+  (`lib/stay-plan-email.ts`) to `core-team@tvc.farm` the day before and the day of an arrival.
+  The Stays page opens on a two-choice switch, **Day plan** and **Availability** (Week and Month sit inside it),
+  with a date button that is also the date picker and a Today | Tomorrow switch. The Day plan
+  (`accommodation-calendar.astro`) is built by the same `buildDayPlan`: a one-line summary strip, a fullness chip per
+  accommodation type (same `levelOf` colours as Week and Month), Arriving, Leaving and Staying through (hidden when
+  empty), Food needs and a Copy-as-message button (`planToMessageText`). The AI summary is a collapsed line that is only
+  requested when opened, and the by-tent tiles are collapsed too. In Day view it also fetches the previous month so a stay
+  that checks out on the 1st is found.
   **By tent** (below the plan in Day view) is one tile per unit, grouped, from `scripts/lib/stay-tent-states.mjs`
   (tested): arriving, staying, leaving (free tonight but to be cleaned), a same-day turnover (both stays shown), closed (a
   tent closure, or a whole-farm closure unless the unit stays open), member-run, or free; a summary line counts the
@@ -692,6 +698,23 @@ outside both the local machine and Netlify (the member-update-email workflow).
   units, the caller's allowed booking types and the bookings of the chosen dates from the same
   `GET /api/accommodation-admin/bookings?month=` the page uses, finds a returning guest by mobile via
   `guests/search`, and tells the page when it saved (`stays-booking:saved`) or needs sign-in. No new endpoint.
+- **Changes to the past need a super admin (Stays page)** — editing or cancelling a stay that has already ended, or adding
+  one that begins before today (a backfill), is a retrospective change, so only a **super admin** does it directly. Anyone else who
+  may write that booking type (the Linger team, and module admins too) submits it with a justification:
+  `POST /api/accommodation-admin/bookings/update` (an edit), `POST .../bookings/delete` (a cancel) or `POST .../bookings` (a new
+  past stay) answers
+  `202 {pending}` and stores it in `accommodation_change_requests` (migration 0076, service-role only, `kind` update,
+  create or delete) instead of writing, so the calendar is untouched. The New booking flow lets anyone pick past days; its review
+  step asks for the justification and says the stay waits for a super admin, while a super admin saves at once.
+  `GET /change-requests` lists pending requests (a super admin sees all, anyone else their own) and
+  `POST /change-requests/decide` (super admin only, checked in the function) approves, which applies the stored payload
+  through the normal `accommodation_update_booking`, `accommodation_create_booking` or `accommodation_delete_booking` (conflict checks as for any edit; an
+  edit's audit-log reason keeps who asked, a backfill's request row keeps the justification), or rejects. A clash on
+  approval leaves the request pending. Submitting also emails `core-team@tvc.farm` through Resend
+  (`lib/change-request-email.ts`, best effort, needs `RESEND_API_KEY`). The page shows "Changes to approve (n)" to super
+  admins and "Waiting for approval (n)" to the requester, each opening a list that spells out what would change
+  (`scripts/lib/stay-change-request.mjs`, tested). An approved cancel removes the booking, so the request row keeps the
+  record (its `booking_id` goes null).
 - **`netlify/functions/stays-day-summary.mts`** — `POST /api/stays-day-summary` (`{date}`; `view` on the
   `accommodation` module, and only for roles that may see guest names, so `read_only` gets `summary: null`),
   behind the Day view's AI summary box. Reads that day's bookings itself, turns them into **anonymous facts**

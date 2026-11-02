@@ -12,7 +12,11 @@
 ---
 
 <div id="cap" class="cap" data-cap hidden>
-  <section class="cap-finder card" aria-labelledby="cap-finder-t">
+  <div class="cap-tools">
+    <button type="button" class="button button--outline" data-find-toggle aria-expanded="false">Check a request…</button>
+    <span class="hint">Tap a night to open its day plan.</span>
+  </div>
+  <section class="cap-finder card" aria-labelledby="cap-finder-t" data-finder-box hidden>
     <h2 id="cap-finder-t">Can we fit a request?</h2>
     <form class="cap-frow" data-finder>
       <label>Type<select data-f="typeId"></select></label>
@@ -28,8 +32,11 @@
   <div class="cap-pop" data-pop role="status" hidden></div>
   <div class="cap-scroll"><div class="cap-body" data-body></div></div>
   <p class="cap-key">
-    The number is how many units are free that night. The fill rises as units are taken: green, orange once three quarters are
-    taken, red when none is free. Closures and events count as taken. Who is in which tent is in the Day plan.
+    <span>Number = units free that night</span>
+    <span class="cap-key-open"><i></i>Open</span>
+    <span class="cap-key-tight"><i></i>Three quarters taken</span>
+    <span class="cap-key-full"><i></i>Full</span>
+    <span>Closures and events count as taken.</span>
   </p>
 </div>
 
@@ -307,11 +314,38 @@
     box-shadow: inset 0 0 0 2px var(--tvc-orange);
   }
 
+  .cap-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-bottom: 12px;
+  }
+
   .cap-key {
-    margin: 8px 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 16px;
+    margin: 10px 0 0;
     font-size: var(--text-sm);
     color: var(--tvc-ink-soft);
   }
+
+  .cap-key i {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 5px;
+    border-radius: 4px;
+    vertical-align: -2px;
+    background: color-mix(in srgb, var(--c) 38%, var(--tvc-white));
+    border-bottom: 3px solid var(--c);
+  }
+
+  .cap-key-open { --c: var(--tvc-green); }
+  .cap-key-tight { --c: var(--tvc-orange); }
+  .cap-key-full { --c: var(--tvc-error-text); }
 </style>
 
 <script>
@@ -474,6 +508,14 @@
       }
       fout.innerHTML = `<b class="no">Not on those dates.</b> Only ${r.free} ${name} free on ${fmt(r.shortOn)}.${r.next ? ` Next start date that fits: ${fmt(r.next)}.` : ` Nothing fits in the next ${lookahead} days.`}`;
     }
+
+    // The finder is a rare task, so it opens from a button instead of sitting above the grid every time.
+    const finderBox = root.querySelector('[data-finder-box]') as HTMLElement;
+    const finderToggle = root.querySelector('[data-find-toggle]') as HTMLButtonElement;
+    finderToggle.addEventListener('click', () => {
+      finderBox.hidden = !finderBox.hidden;
+      finderToggle.setAttribute('aria-expanded', String(!finderBox.hidden));
+    });
 
     finder.addEventListener('submit', (ev) => {
       ev.preventDefault();
