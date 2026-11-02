@@ -295,3 +295,133 @@ test('bank details loaded without an IFSC cannot be verified until one is added'
   assert.equal((await api(op, '/parties/p100/accounts', { method: 'POST', body: { method: 'bank', account: ACCOUNT, ifsc: IFSC } })).status, 201);
   assert.deepEqual(db.fin_party_accounts.map((a) => a.status), ['superseded', 'unverified']);
 });
+
+// ---- retiring accounts, review flags, and dated changes
+const day = (offset) => new Date(Date.now() + offset * 86_400_000 + 5.5 * 3_600_000).toISOString().slice(0, 10);
+const seedParty = () => db.fin_parties.push({ id: 'p200', name: 'Test Traders', kind: 'vendor', active: true, household_id: null });
+const seedAccount = (over = {}) => {
+  const row = { id: `a${++n}`, party_id: 'p200', entity_id: 'e1', method: 'bank', last4: '0001', fingerprint: `fp${n}`, status: 'verified', created_by: 'u1', created_at: '2026-01-01T00:00:00Z', verified_by: 'u9', verified_at: '2026-01-02T00:00:00Z', has_ifsc: true, valid_from: null, retired_on: null, details_enc: encryptFinanceText(JSON.stringify({ method: 'bank', account: ACCOUNT, ifsc: IFSC })), ...over };
+  db.fin_party_accounts.push(row);
+  return row;
+};
+
+test('retiring an account needs verify-payee and the step-up, records who and why, and logs only the date', async () => {
+  reset();
+  seedParty();
+  const acct = seedAccount();
+  const op = sign('u1', 'user');
+  const director = sign('u2', 'admin');
+  const body = { on: day(-1), reason: 'Bank merged; the old number no longer works' };
+
+  assert.equal((await api(op, `/accounts/${acct.id}/retire`, { method: 'POST', body, stepUp: 'u1' })).status, 403); // no verify-payee
+  const noStep = await api(director, `/accounts/${acct.id}/retire`, { method: 'POST', body });
+  assert.equal((await noStep.json()).code, 'STEP_UP_REQUIRED');
+  assert.equal(acct.retired_on, null);
+
+  const ok = await api(director, `/accounts/${acct.id}/retire`, { method: 'POST', body, stepUp: 'u2' });
+  assert.equal(ok.status, 200);
+  assert.equal(acct.retired_on, body.on);
+  assert.equal(acct.retired_by, 'u2');
+  assert.equal(acct.retire_reason, body.reason);
+  const row = db.audit.at(-1);
+  assert.equal(row.action, 'finance.payee_retired');
+  assert.deepEqual(row.detail, { partyId: 'p200', on: body.on });
+  assert.ok(!JSON.stringify(row).includes('merged'), 'the free-text reason stays out of the audit log');
+  assert.ok(auditDetailIsSafe(row.detail));
+
+  // From the retirement day the list shows it as retired and not payable.
+  const list = await (await api(director, '/parties')).json();
+  const shown = list.parties[0].accounts[0];
+  assert.equal(shown.retiredOn, body.on);
+  assert.equal(shown.payableNow, false);
+});
+
+test('a retirement can be moved earlier but not later, and a replaced account cannot be retired', async () => {
+  reset();
+  seedParty();
+  const acct = seedAccount({ retired_on: day(10), retired_at: 'x', retired_by: 'u2', retire_reason: 'merger' });
+  const gone = seedAccount({ status: 'superseded', superseded_at: '2026-02-01T00:00:00Z' });
+  const director = sign('u2', 'admin');
+  const retire = (id, on) => api(director, `/accounts/${id}/retire`, { method: 'POST', body: { on, reason: 'merger date moved' }, stepUp: 'u2' });
+  assert.equal((await retire(acct.id, day(20))).status, 400);
+  assert.equal(acct.retired_on, day(10));
+  assert.equal((await retire(acct.id, day(5))).status, 200);
+  assert.equal(acct.retired_on, day(5));
+  assert.equal((await retire(gone.id, day(5))).status, 400);
+});
+
+test('a payee with two live bank accounts is flagged for review; confirming "keep both" clears it and is logged', async () => {
+  reset();
+  seedParty();
+  seedAccount({ created_at: '2026-01-01T00:00:00Z' });
+  seedAccount({ created_at: '2026-03-01T00:00:00Z' });
+  const director = sign('u2', 'admin');
+  const before = await (await api(director, '/parties')).json();
+  assert.equal(before.parties[0].needsReview, true);
+  assert.equal(before.needsReviewCount, 1);
+  assert.deepEqual(before.parties[0].accounts.map((a) => a.review), [['multiple_live_accounts'], ['multiple_live_accounts']]);
+
+  assert.equal((await (await api(director, '/parties/p200/review', { method: 'POST' })).json()).code, 'STEP_UP_REQUIRED');
+  const res = await api(director, '/parties/p200/review', { method: 'POST', stepUp: 'u2' });
+  assert.equal(res.status, 200);
+  assert.equal(db.audit.at(-1).action, 'finance.party_reviewed');
+  const after = await (await api(director, '/parties')).json();
+  assert.equal(after.parties[0].needsReview, false);
+});
+
+test('retiring one of two live accounts, from today, clears the flag on the other', async () => {
+  reset();
+  seedParty();
+  const old = seedAccount({ created_at: '2026-01-01T00:00:00Z' });
+  seedAccount({ created_at: '2026-03-01T00:00:00Z' });
+  const director = sign('u2', 'admin');
+  await api(director, `/accounts/${old.id}/retire`, { method: 'POST', body: { on: day(0), reason: 'old number closed' }, stepUp: 'u2' });
+  const list = await (await api(director, '/parties')).json();
+  assert.equal(list.parties[0].needsReview, false);
+});
+
+test('a change with an effective date keeps the old account payable until then and starts the new one on that day', async () => {
+  reset();
+  seedParty();
+  const old = seedAccount();
+  const director = sign('u2', 'admin');
+  const on = day(30);
+  const res = await api(director, '/parties/p200/accounts', { method: 'POST', body: { method: 'bank', account: ACCOUNT_2, ifsc: IFSC, effectiveOn: on }, stepUp: 'u2' });
+  assert.equal(res.status, 201);
+  assert.equal(old.status, 'verified'); // not superseded
+  assert.equal(old.retired_on, on);
+  const fresh = db.fin_party_accounts.at(-1);
+  assert.equal(fresh.status, 'unverified');
+  assert.equal(fresh.valid_from, on);
+  assert.equal(fresh.has_ifsc, true);
+  const list = await (await api(director, '/parties')).json();
+  const [oldShown, freshShown] = list.parties[0].accounts;
+  assert.equal(oldShown.payableNow, true); // still fine today
+  assert.equal(freshShown.payableNow, false); // unverified, and not started
+});
+
+test('entering details with an effective date needs verify-payee and the step-up', async () => {
+  reset();
+  seedParty();
+  seedAccount();
+  const op = sign('u1', 'user');
+  const director = sign('u2', 'admin');
+  const body = { method: 'bank', account: ACCOUNT_2, ifsc: IFSC, effectiveOn: day(30) };
+  assert.equal((await api(op, '/parties/p200/accounts', { method: 'POST', body })).status, 403);
+  assert.equal((await (await api(director, '/parties/p200/accounts', { method: 'POST', body })).json()).code, 'STEP_UP_REQUIRED');
+  assert.equal(db.fin_party_accounts.length, 1);
+});
+
+test('details entered without an IFSC-less import flag are marked has_ifsc, and an already retired account cannot be verified', async () => {
+  reset();
+  seedParty();
+  const director = sign('u2', 'admin');
+  const op = sign('u1', 'user');
+  await api(op, '/parties/p200/accounts', { method: 'POST', body: { method: 'upi', upi: 'test.vendor@okbank' } });
+  assert.equal(db.fin_party_accounts.at(-1).has_ifsc, true); // UPI has no IFSC to miss
+  const stale = seedAccount({ status: 'unverified', created_by: 'u1', verified_by: null, verified_at: null, retired_on: day(-3), retired_at: 'x', retired_by: 'u2', retire_reason: 'closed' });
+  const res = await api(director, `/accounts/${stale.id}/verify`, { method: 'POST', stepUp: 'u2' });
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).error, /retired/i);
+  assert.equal(stale.status, 'unverified');
+});

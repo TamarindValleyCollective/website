@@ -6,6 +6,11 @@
 --     the old one of that method becomes `superseded`. The full details are AES-256-GCM encrypted (account_enc, keyed
 --     separately from the TOTP and member-payout keys); only the last four characters are kept in the clear, plus a
 --     keyed fingerprint so two parties sharing one account can be flagged without decrypting anything.
+--   * Dates on an account: valid_from (first day it may be paid) and retired_on (first day it must NOT be paid). Banks
+--     merge and account numbers change; money once went to an old account that never reached the payee. An account is
+--     payable only when verified, started and not retired (scripts/lib/finance-parties.mjs, accountPayableOn). A
+--     retirement can be moved earlier but never later or cleared. reviewed_* records that a person looked at a payee with
+--     two live accounts and decided to keep both.
 --
 -- Same posture as the other fin_ tables (0077): RLS on with no policies, anon/authenticated revoked, service role only.
 -- Public repository: nothing here is a real name, number or UPI id.
@@ -44,6 +49,18 @@ create table fin_party_accounts (
   verified_by uuid references staff_users (id),
   verified_at timestamptz,
   superseded_at timestamptz,
+  -- Whether the bank details carry an IFSC (some imported lists have none); bank details without one cannot be verified.
+  has_ifsc boolean not null default true,
+  -- First day the account may be paid (null = from the start) and first day it must NOT be paid (null = not retiring).
+  valid_from date,
+  retired_on date,
+  retired_by uuid references staff_users (id),
+  retired_at timestamptz,
+  retire_reason text check (retire_reason is null or length(retire_reason) between 3 and 200),
+  reviewed_by uuid references staff_users (id),
+  reviewed_at timestamptz,
+  check ((retired_on is null) = (retired_at is null and retire_reason is null and retired_by is null)
+         or (retired_on is not null and retired_at is not null and retire_reason is not null and retired_by is not null)),
   check ((status = 'verified') = (verified_at is not null and verified_by is not null) or status = 'superseded'),
   check ((status = 'superseded') = (superseded_at is not null))
 );
@@ -51,7 +68,8 @@ create index fin_party_accounts_party_idx on fin_party_accounts (party_id);
 create index fin_party_accounts_fingerprint_idx on fin_party_accounts (fingerprint) where status <> 'superseded';
 
 -- Details are never overwritten and rows are never deleted: only the status may move forward
--- (unverified -> verified -> superseded, or unverified -> superseded), with its timestamp and who.
+-- (unverified -> verified -> superseded, or unverified -> superseded), with its timestamp and who. A retirement date may
+-- be set, or moved earlier, but never later or cleared; a superseded account cannot be retired; the start date is fixed.
 create function fin_party_accounts_guard() returns trigger
 language plpgsql
 set search_path = ''
@@ -67,8 +85,16 @@ begin
      or new.last4 is distinct from old.last4
      or new.fingerprint is distinct from old.fingerprint
      or new.created_by is distinct from old.created_by
-     or new.created_at is distinct from old.created_at then
+     or new.created_at is distinct from old.created_at
+     or new.has_ifsc is distinct from old.has_ifsc
+     or new.valid_from is distinct from old.valid_from then
     raise exception 'payee details are never overwritten; add a new row';
+  end if;
+  if old.retired_on is not null and (new.retired_on is null or new.retired_on > old.retired_on) then
+    raise exception 'a retirement can only be moved earlier, never later or cleared';
+  end if;
+  if new.retired_on is distinct from old.retired_on and old.status = 'superseded' then
+    raise exception 'a replaced account cannot be retired';
   end if;
   if old.status = 'superseded' and new.status <> 'superseded' then
     raise exception 'a superseded account cannot be brought back';

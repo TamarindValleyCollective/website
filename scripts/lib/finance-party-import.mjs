@@ -30,12 +30,19 @@ export function readBeneficiaries(rows) {
   const at = Object.fromEntries(Object.entries(HEADERS).map(([field, names]) => [field, header.findIndex((h) => names.includes(h))]));
   if (at.name < 0) return { records: [], problems: ['No name column found (expected a header such as "Beneficiary Name" or "Name").'] };
   const cell = (r, field) => (at[field] >= 0 ? (r[at[field]] ?? '').trim() : '');
+  // Some older accounts are 8 digits. The import pads those with one leading zero to the 9-digit minimum (the
+  // directory form still requires 9 to 18). Done here, before lists are merged, so the same account in two lists still
+  // matches; the row is marked so the plan can note it.
+  const padAccount = (raw) => {
+    const digits = raw.replace(/[\s-]/g, '');
+    return /^[0-9]{8}$/.test(digits) ? { account: `0${digits}`, padded: true } : { account: raw, padded: false };
+  };
   const records = rows.slice(1).map((r, i) => ({
     line: i + 2,
     name: cell(r, 'name').replace(/\s+/g, ' '),
     kind: cell(r, 'kind').toLowerCase() || null,
     farmUnit: cell(r, 'farmUnit') || null,
-    account: cell(r, 'account'),
+    ...padAccount(cell(r, 'account')),
     ifsc: cell(r, 'ifsc'),
     upi: cell(r, 'upi'),
   }));
@@ -149,6 +156,7 @@ export function planImport(records, { households, existing, fingerprint }) {
       parties.set(key, party);
     }
 
+    if (rec.padded) anomalies.push({ kind: 'padded_account', line: rec.line });
     const entered = [];
     if (rec.account || rec.ifsc) entered.push({ method: 'bank', account: rec.account, ifsc: rec.ifsc });
     if (rec.upi) entered.push({ method: 'upi', upi: rec.upi });

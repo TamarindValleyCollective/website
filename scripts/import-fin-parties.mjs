@@ -113,6 +113,7 @@ const insertAccount = (partyId, account) =>
       details_enc: encryptFinanceText(JSON.stringify(account.details)),
       last4: account.last4,
       fingerprint: account.fingerprint,
+      has_ifsc: account.details.method === 'bank' ? Boolean(account.details.ifsc) : true,
     }),
   });
 

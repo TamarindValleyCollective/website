@@ -46,6 +46,11 @@ Review of the imported party list and which of the shared-account cases are inte
   `netlify/functions/lib/finance-parties.ts` (routes), `encryptFinanceText`/`fingerprintFinanceText` in `staff-mfa-crypto.ts`,
   the `/internal/finance/parties/` page, and the operator script `scripts/import-fin-parties.mjs`. Details in [FINANCE.md](../FINANCE.md).
 
+**Added later in the session:** retiring accounts from a date, dated changes (`effectiveOn`), review flags and a "Needs review"
+filter, name de-duplication with a review file, merging several partial lists, and padding 8-digit accounts. The rule that
+later sessions MUST use before paying anyone is `accountPayableOn` (see FINANCE.md, "Retiring accounts"). Session 08 (payment
+requests), 09 (payroll) and any bulk-file generation have to call it, and have to refuse a party that has no payable account.
+
 **Verified:** unit tests for the rules, the planner and the encryption; an endpoint test driving the real function through
 `requireStaff` (changed details keep the old row, no number in responses or audit rows, reveal and verify need the step-up,
 a reveal that cannot be logged returns nothing, the enterer cannot verify, shared accounts flagged). The migration's guard

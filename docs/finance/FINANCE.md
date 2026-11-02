@@ -91,8 +91,28 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   written to the audit log first; if that fails nothing is returned. Audit actions: `finance.party_created`,
   `party_updated`, `payee_added`, `payee_changed`, `payee_revealed`, `payee_verified`, `parties_imported`.
 - **Shared accounts** are flagged on both parties ("Shared account") and never blocked.
+- **Retiring accounts (why this exists).** Money was once sent to an old account that never reached the payee and never came
+  back. So an account has two dates: `valid_from` (first day it may be paid) and `retired_on` (first day it must **not** be
+  paid). **`accountPayableOn(account, day)` in `scripts/lib/finance-parties.mjs` is the one rule: payable only when
+  verified, started and not retired. Every payment path (requests in session 08, payroll in 09, any bulk file) must call it
+  and refuse otherwise.** `todayIST()` gives today's date in India.
+  - *Retire* (`POST /accounts/:id/retire {on, reason}`): `verify-payee` + the step-up. A past date is allowed (it stopped
+    working before anyone knew). A retirement can be moved **earlier, never later or cleared** (also enforced by a database
+    trigger), and a replaced account cannot be retired. The audit log gets the date only; the free-text reason stays on
+    the row.
+  - *Change on a date* (`POST /parties/:id/accounts` with `effectiveOn`): `verify-payee` + the step-up. The old account stays
+    payable until that day and is retired from it; the new one is unverified and starts that day. Without a date the old
+    details are replaced at once (anyone who may enter details can do this), so nothing is paid to that payee until the new
+    details are verified.
+  - A retired or soon-to-retire account is shown as such, and an already retired account cannot be verified.
+- **Needs review.** Computed by `reviewFlags` and shown as a "Needs review" pill, a filter ("Needs review (n)") and a plain
+  sentence per account: `multiple_live_accounts` (two or more bank accounts in use: what a bank merger looks like; retire the
+  old one, or "Keep both: reviewed", which holds until a newer account is added), `missing_ifsc`, `shared_account`, and
+  `no_replacement` (a retirement is set but no other account of that kind is left). Superseded accounts are history and never
+  flagged; a UPI id is not a second bank account. Recording "keep both" is `POST /parties/:id/review` (`verify-payee` +
+  step-up, audited as `finance.party_reviewed`).
 - **Endpoints.** `GET/POST /api/finance-admin/parties`, `PATCH /parties/:id`, `POST /parties/:id/accounts`,
-  `POST /accounts/:id/reveal`, `POST /accounts/:id/verify`. Page: `/internal/finance/parties/`.
+  `POST /parties/:id/review`, `POST /accounts/:id/reveal`, `/verify`, `/retire`. Page: `/internal/finance/parties/`.
 - **Import.** `scripts/import-fin-parties.mjs --source <sheetId>::<range> [--source ...] [--apply]` reads the existing
   payee lists from Google Sheets shared with the Drive service account (ids and ranges are arguments, never in the repo).
   The details are spread over several partial lists, so several sources are given and **merged by account number**: the
@@ -111,6 +131,9 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   names: they are counted in the summary (`duplicateCandidates`) and `--review-out <path>` writes them, with names, bank code and
   last four, to a private file outside the repo (the script refuses a path inside it). Merging two parties after import is not
   built yet.
+- **8-digit accounts.** Older accounts can be 8 digits. The import pads those with one leading zero to the 9-digit minimum
+  (before lists are merged, so the same account in two lists still matches) and reports each as `padded_account`. The
+  directory form still requires 9 to 18 digits. A padded number is a guess about the bank's format: check these when verifying.
 - **No IFSC.** Some lists have none, and some have one that is not a valid IFSC (reported as `invalid_ifsc`, then treated as
   missing; a wrong account number is still refused). Such accounts import with an empty IFSC, are reported as `missing_ifsc`, and **cannot be
   verified** until someone enters the account again with its IFSC ("Add or change details"; the same number with a new IFSC

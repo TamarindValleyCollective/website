@@ -20,6 +20,9 @@ import {
   validatePartyChange,
   validateParty,
   validatePayeeDetails,
+  validateRetirement,
+  validateEffectiveOn,
+  todayIST,
 } from '../../../scripts/lib/finance-parties.mjs';
 import { fingerprintText } from '../../../scripts/lib/finance-party-import.mjs';
 
@@ -54,10 +57,10 @@ async function entityId(): Promise<string> {
   return e[0].id as string;
 }
 
-const ACCOUNT_COLUMNS = 'id,party_id,method,last4,status,fingerprint,created_by,created_at,verified_at';
+const ACCOUNT_COLUMNS = 'id,party_id,method,last4,status,fingerprint,created_by,created_at,verified_at,valid_from,retired_on,has_ifsc,reviewed_at';
 
 // Encrypts and stores new details as an unverified row. `existing` are the party's current account rows.
-async function addAccount(partyId: string, entity: string, actorId: string, payee: Json, existing: Json[]) {
+async function addAccount(partyId: string, entity: string, actorId: string, payee: Json, existing: Json[], effectiveOn: string | null = null) {
   const checked = validatePayeeDetails(payee);
   if (checked.error || !checked.details) return { error: (checked.error ?? 'Enter the details.') as string };
   const details = checked.details;
@@ -67,13 +70,21 @@ async function addAccount(partyId: string, entity: string, actorId: string, paye
     const old = JSON.parse(decryptFinanceText(row.details_enc));
     return old.account === details.account && (old.ifsc ?? '') === (details.ifsc ?? '') && old.upi === details.upi;
   };
-  const plan = planDetailsChange(existing, details.method, fingerprint, sameDetails);
+  const plan: Json = planDetailsChange(existing, details.method, fingerprint, sameDetails, effectiveOn);
   if (plan.action === 'unchanged') return { unchanged: true as const };
+  const retireIds: string[] = plan.retireIds ?? [];
   // Supersede first: if the insert then fails, the party is left with no usable account (safe), never two.
   if (plan.supersedeIds.length) {
     await rest(`/fin_party_accounts?id=in.(${plan.supersedeIds.join(',')})`, {
       method: 'PATCH',
       body: JSON.stringify({ status: 'superseded', superseded_at: new Date().toISOString() }),
+    });
+  }
+  // With an effective date the old account stays payable until that day (it is retired from it); the new one starts then.
+  if (retireIds.length) {
+    await rest(`/fin_party_accounts?id=in.(${retireIds.join(',')})`, {
+      method: 'PATCH',
+      body: JSON.stringify({ retired_on: effectiveOn, retired_at: new Date().toISOString(), retired_by: actorId, retire_reason: `Replaced by new details from ${effectiveOn}` }),
     });
   }
   const res = await rest('/fin_party_accounts', {
@@ -82,6 +93,8 @@ async function addAccount(partyId: string, entity: string, actorId: string, paye
     body: JSON.stringify({
       entity_id: entity,
       party_id: partyId,
+      has_ifsc: details.method === 'bank' ? Boolean(details.ifsc) : true,
+      valid_from: plan.validFrom ?? null,
       method: details.method,
       details_enc: encryptFinanceText(JSON.stringify(details)),
       last4: checked.last4,
@@ -90,7 +103,7 @@ async function addAccount(partyId: string, entity: string, actorId: string, paye
     }),
   });
   const [created] = (await res.json()) as Json[];
-  return { created, superseded: plan.supersedeIds.length, method: details.method as string };
+  return { created, superseded: plan.supersedeIds.length as number, retiring: retireIds.length, method: details.method as string };
 }
 
 function serverError(err: unknown, what: string): Response {
@@ -116,12 +129,14 @@ export async function listParties(req: Request): Promise<Response> {
       const mfa = await mfaSummary(staff.id);
       me = { id: staff.id, ready: mfa.ready, hasPasskey: mfa.passkey, stepUpValid: stepUpIsValid(req, staff.id) };
     }
+    const shown = parties.map((p) => partyForResponse(p, accounts.filter((a) => a.party_id === p.id), flags));
     return jsonResponse({
       kinds: PARTY_KINDS,
       canEdit: capabilities.includes('allocate'),
       canVerify,
       me,
-      parties: parties.map((p) => partyForResponse(p, accounts.filter((a) => a.party_id === p.id), flags)),
+      parties: shown,
+      needsReviewCount: shown.filter((p) => p.needsReview).length,
     });
   } catch (err) {
     return serverError(err, 'list parties');
@@ -191,21 +206,36 @@ export async function updateParty(req: Request, id: string): Promise<Response> {
 
 // ---------------------------------------------------- new/changed details
 export async function addPayeeAccount(req: Request, partyId: string): Promise<Response> {
-  const auth = await requireStaff(req, 'finance', 'allocate');
-  if (!auth.ok) return fail(auth.error, auth.status);
-  const { staff } = auth;
   const body = await readBody(req);
   if (!body) return fail('Send the details as JSON.');
+  // Changing an account on a date retires the old one on that date, which is a verifier's decision (verify-payee and the
+  // step-up). Without a date the old details are replaced at once, which anyone who can enter details may do: that only
+  // stops the old account being paid until the new one is verified.
+  const dated = body.effectiveOn !== undefined && body.effectiveOn !== null && body.effectiveOn !== '';
+  let actorId: string;
+  let effectiveOn: string | null = null;
+  if (dated) {
+    const gate = await requireVerifier(req);
+    if (!gate.staff) return gate.response;
+    actorId = gate.staff.id;
+    const checked = validateEffectiveOn(body.effectiveOn);
+    if (checked.error || !checked.effectiveOn) return fail(checked.error ?? 'Enter the date as a real date.');
+    effectiveOn = checked.effectiveOn;
+  } else {
+    const auth = await requireStaff(req, 'finance', 'allocate');
+    if (!auth.ok) return fail(auth.error, auth.status);
+    actorId = auth.staff.id;
+  }
   try {
     const [party] = await rows(`/fin_parties?id=eq.${partyId}&select=id`);
     if (!party) return fail('Not found', 404);
     const existing = await rows(`/fin_party_accounts?party_id=eq.${partyId}&select=${ACCOUNT_COLUMNS},details_enc`);
     const entity = await entityId();
-    const result = await addAccount(partyId, entity, staff.id, body, existing);
+    const result = await addAccount(partyId, entity, actorId, body, existing, effectiveOn);
     if ('error' in result) return fail(result.error ?? 'Enter the details.');
     if ('unchanged' in result) return jsonResponse({ unchanged: true });
-    await audit(staff.id, entity, 'finance.payee_changed', result.created.id, { partyId, method: result.method, superseded: result.superseded });
-    return jsonResponse({ ok: true, status: 'unverified', superseded: result.superseded }, 201);
+    await audit(actorId, entity, 'finance.payee_changed', result.created.id, { partyId, method: result.method, superseded: result.superseded, retiring: result.retiring, ...(effectiveOn ? { effectiveOn } : {}) });
+    return jsonResponse({ ok: true, status: 'unverified', superseded: result.superseded, retiring: result.retiring }, 201);
   } catch (err) {
     return serverError(err, 'add payee account');
   }
@@ -245,9 +275,10 @@ export async function verifyPayeeAccount(req: Request, accountId: string): Promi
   if (!gate.staff) return gate.response;
   const { staff } = gate;
   try {
-    const [account] = await rows(`/fin_party_accounts?id=eq.${accountId}&select=id,party_id,status,created_by,entity_id,details_enc`);
+    const [account] = await rows(`/fin_party_accounts?id=eq.${accountId}&select=id,party_id,status,created_by,entity_id,details_enc,retired_on`);
     if (!account) return fail('Not found', 404);
     if (account.status !== 'unverified') return fail('Only unverified details can be verified.');
+    if (account.retired_on && account.retired_on <= todayIST()) return fail('This account is already retired and cannot be verified.');
     const stored = JSON.parse(decryptFinanceText(account.details_enc));
     if (stored.method === 'bank' && !stored.ifsc) return fail('These bank details have no IFSC code. Add it with "Add or change details" first.');
     const verdict = canVerifyAccount(account, staff.id);
@@ -260,6 +291,51 @@ export async function verifyPayeeAccount(req: Request, accountId: string): Promi
     return jsonResponse({ ok: true });
   } catch (err) {
     return serverError(err, 'verify payee account');
+  }
+}
+
+// Retire an account from a date, with a reason (verify-payee + step-up). From that day the account must not be paid
+// (accountPayableOn). The free-text reason is kept on the row for the verifiers; the audit log gets the date only.
+export async function retirePayeeAccount(req: Request, accountId: string): Promise<Response> {
+  const gate = await requireVerifier(req);
+  if (!gate.staff) return gate.response;
+  const { staff } = gate;
+  const body = await readBody(req);
+  if (!body) return fail('Send the date and reason as JSON.');
+  try {
+    const [account] = await rows(`/fin_party_accounts?id=eq.${accountId}&select=id,party_id,status,retired_on,entity_id`);
+    if (!account) return fail('Not found', 404);
+    const checked = validateRetirement(body, account);
+    if (checked.error || !checked.retiredOn) return fail(checked.error ?? 'Enter the date.');
+    await rest(`/fin_party_accounts?id=eq.${accountId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ retired_on: checked.retiredOn, retired_at: new Date().toISOString(), retired_by: staff.id, retire_reason: checked.reason }),
+    });
+    await audit(staff.id, account.entity_id, 'finance.payee_retired', account.id, { partyId: account.party_id, on: checked.retiredOn });
+    return jsonResponse({ ok: true, retiredOn: checked.retiredOn });
+  } catch (err) {
+    return serverError(err, 'retire payee account');
+  }
+}
+
+// "I looked, keeping both accounts is intended" (verify-payee + step-up). It holds until a NEWER account is added.
+export async function reviewParty(req: Request, partyId: string): Promise<Response> {
+  const gate = await requireVerifier(req);
+  if (!gate.staff) return gate.response;
+  const { staff } = gate;
+  try {
+    const [party] = await rows(`/fin_parties?id=eq.${partyId}&select=id`);
+    if (!party) return fail('Not found', 404);
+    const live = await rows(`/fin_party_accounts?party_id=eq.${partyId}&status=neq.superseded&select=id,entity_id`);
+    if (!live.length) return fail('This party has no payment details to review.');
+    await rest(`/fin_party_accounts?party_id=eq.${partyId}&status=neq.superseded`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reviewed_by: staff.id, reviewed_at: new Date().toISOString() }),
+    });
+    await audit(staff.id, live[0].entity_id, 'finance.party_reviewed', partyId, { accounts: live.length });
+    return jsonResponse({ ok: true });
+  } catch (err) {
+    return serverError(err, 'review party');
   }
 }
 

@@ -69,11 +69,17 @@ export function validatePayeeDetails(body, { allowMissingIfsc = false } = {}) {
 // cannot be paid until someone verifies it.
 // The fingerprint covers the account number or UPI id only, so `sameDetails(row)` decides whether a row with that
 // fingerprint is truly identical (the IFSC too); without it a corrected IFSC would be dropped as "unchanged".
-export function planDetailsChange(existing, method, fingerprint, sameDetails = (/** @type {any} */ _row) => true) {
+export function planDetailsChange(existing, method, fingerprint, sameDetails = (/** @type {any} */ _row) => true, effectiveOn = /** @type {string | null} */ (null)) {
   const live = existing.filter((a) => a.status !== 'superseded');
   const same = live.find((a) => a.method === method && a.fingerprint === fingerprint && sameDetails(a));
   if (same) return { action: 'unchanged', accountId: same.id };
-  return { action: 'replace', supersedeIds: live.filter((a) => a.method === method).map((a) => a.id) };
+  const ofMethod = live.filter((a) => a.method === method);
+  // With an effective date the old account stays payable until that day and the new one starts on it (a bank merger on
+  // a known date). A retirement already set for an earlier day is left alone; a later one is pulled forward.
+  if (effectiveOn) {
+    return { action: 'replace', supersedeIds: [], retireIds: ofMethod.filter((a) => !a.retired_on || a.retired_on > effectiveOn).map((a) => a.id), validFrom: effectiveOn };
+  }
+  return { action: 'replace', supersedeIds: ofMethod.map((a) => a.id) };
 }
 
 // Two different parties holding the same account are flagged on both (not blocked: a joint account or a shop with
@@ -94,30 +100,104 @@ export function sharedAccountFlags(accounts) {
   return flags;
 }
 
+const IST_OFFSET_MS = 5.5 * 3_600_000;
+// Today's date in India (YYYY-MM-DD). Dates on accounts are calendar days, compared as text.
+export function todayIST(now = new Date()) {
+  return new Date(now.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+// THE rule for whether money may go to an account on a day. Every payment path (requests, payroll, bulk files) must use
+// it: an account is payable only when verified, started, and not retired. A retirement date is the first day the account
+// must NOT be paid. (An old account once received money that never reached the payee and never came back.)
+export function accountPayableOn(account, onDate) {
+  if (account.status === 'superseded') return { payable: false, reason: 'superseded' };
+  if (account.status !== 'verified') return { payable: false, reason: 'not_verified' };
+  if (account.valid_from && onDate < account.valid_from) return { payable: false, reason: 'not_yet_valid' };
+  if (account.retired_on && onDate >= account.retired_on) return { payable: false, reason: 'retired' };
+  return { payable: true, reason: null };
+}
+
+// The date a changed account takes effect: a real calendar day, within about 13 months either side of today (a bank
+// merger can be announced ahead of time, or discovered after the fact).
+export function validateEffectiveOn(on, now = new Date()) {
+  const m = typeof on === 'string' ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(on) : null;
+  const probe = m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null;
+  if (!probe || probe.getUTCFullYear() !== +m[1] || probe.getUTCMonth() !== +m[2] - 1 || probe.getUTCDate() !== +m[3]) return { error: 'Enter the date as a real date.' };
+  if (Math.abs(probe.getTime() - Date.parse(`${todayIST(now)}T00:00:00Z`)) > 400 * 86_400_000) return { error: 'Choose a date within 13 months of today.' };
+  return { effectiveOn: on };
+}
+
+// Retiring an account from a date, with a reason. A past date is allowed (it stopped working before we found out); a
+// retirement can be moved earlier but never later or cleared, so a retired account cannot quietly come back.
+export function validateRetirement(body, account, now = new Date()) {
+  const on = typeof body?.on === 'string' ? body.on : '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(on);
+  const probe = m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null;
+  if (!probe || probe.getUTCFullYear() !== +m[1] || probe.getUTCMonth() !== +m[2] - 1 || probe.getUTCDate() !== +m[3]) return { error: 'Enter the date as a real date.' };
+  const reason = typeof body?.reason === 'string' ? body.reason.trim().replace(/\s+/g, ' ') : '';
+  if (reason.length < 3 || reason.length > 200) return { error: 'Give a short reason (3 to 200 characters).' };
+  if (account.status === 'superseded') return { error: 'These details were already replaced.' };
+  if (probe.getTime() - Date.parse(`${todayIST(now)}T00:00:00Z`) > 400 * 86_400_000) return { error: 'Choose a date within the next 13 months.' };
+  if (account.retired_on && on >= account.retired_on) return { error: 'A retirement can only be moved earlier, never later.' };
+  return { retiredOn: on, reason };
+}
+
+// Why an account needs a person to look at it. `accounts` are ONE party's rows; `shared` is sharedAccountFlags().
+//  multiple_live_accounts  the payee has two or more bank accounts in use (a bank merger looks like this): retire the old
+//                          one, or record that keeping both is intended (that holds until a newer account is added)
+//  missing_ifsc            bank details without an IFSC cannot be verified
+//  shared_account          another party holds the same account
+//  no_replacement          a retirement is set but no other account of that kind is left to pay
+export function reviewFlags(accounts, shared, today) {
+  const flags = new Map();
+  const add = (id, reason) => flags.set(id, [...(flags.get(id) ?? []), reason]);
+  const history = accounts.filter((a) => a.status !== 'superseded');
+  const isLive = (a) => !(a.retired_on && a.retired_on <= today);
+  const liveBank = history.filter((a) => isLive(a) && a.method === 'bank');
+  if (liveBank.length >= 2) {
+    const newest = liveBank.map((a) => a.created_at).sort().at(-1);
+    const reviewed = liveBank.map((a) => a.reviewed_at).filter(Boolean).sort().at(-1);
+    if (!(reviewed && reviewed >= newest)) for (const a of liveBank) add(a.id, 'multiple_live_accounts');
+  }
+  for (const a of history) {
+    if (isLive(a) && a.method === 'bank' && a.has_ifsc === false) add(a.id, 'missing_ifsc');
+    if (isLive(a) && (shared.get(a.id) ?? []).length) add(a.id, 'shared_account');
+    if (a.retired_on && !history.some((b) => b.id !== a.id && b.method === a.method && !b.retired_on)) add(a.id, 'no_replacement');
+  }
+  return flags;
+}
+
 // The only shape of an account that goes into a list response. Built field by field, so a new column on the row
 // can never leak by accident.
-export function accountForResponse(row, sharedWith = []) {
+export function accountForResponse(row, sharedWith = [], extra = {}) {
+  const today = extra.today ?? todayIST();
   return {
     id: row.id,
     method: row.method,
     shown: `ending ${row.last4}`,
     status: row.status,
     shared: sharedWith.length > 0,
+    validFrom: row.valid_from ?? null,
+    retiredOn: row.retired_on ?? null,
+    payableNow: accountPayableOn(row, today).payable,
+    review: extra.review ?? [],
     createdAt: row.created_at ?? null,
     verifiedAt: row.verified_at ?? null,
   };
 }
 
-export function partyForResponse(party, accounts, flags) {
+export function partyForResponse(party, accounts, flags, today = todayIST()) {
   const live = accounts.filter((a) => a.status !== 'superseded');
+  const review = reviewFlags(accounts, flags, today);
   return {
     id: party.id,
     name: party.name,
     kind: party.kind,
     active: party.active,
     householdId: party.household_id ?? null,
-    accounts: live.map((a) => accountForResponse(a, flags.get(a.id) ?? [])),
+    accounts: live.map((a) => accountForResponse(a, flags.get(a.id) ?? [], { today, review: review.get(a.id) ?? [] })),
     earlierAccounts: accounts.length - live.length,
+    needsReview: [...review.values()].some((r) => r.length > 0),
   };
 }
 

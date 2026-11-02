@@ -18,7 +18,7 @@ test('headers are matched by common names, in any order and case', () => {
     parseCsv(`Beneficiary Name,IFSC Code,Account No,Type,Farm Unit\nTest Traders,abcd0123456,${A1},Vendor,\n`),
   );
   assert.deepEqual(problems, []);
-  assert.deepEqual(records[0], { line: 2, name: 'Test Traders', kind: 'vendor', farmUnit: null, account: A1, ifsc: 'abcd0123456', upi: '' });
+  assert.deepEqual(records[0], { line: 2, name: 'Test Traders', kind: 'vendor', farmUnit: null, account: A1, padded: false, ifsc: 'abcd0123456', upi: '' });
 });
 
 test('a file without a name column is refused with a clear message', () => {
