@@ -97,6 +97,10 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   all scopes including Functions; the import script needs the same value in the shell (`read -s FINANCE_PAYEE_KEY; export
   FINANCE_PAYEE_KEY`). **Losing it makes stored payee details unreadable** (they must be re-entered). A value that is set but too
   short is refused, never replaced by the other key. Do not change it once payees are imported.
+  To confirm a key can open what is stored, run `netlify dev:exec -- node scripts/check-fin-parties-decrypt.mjs` with the key
+  in the shell: it decrypts every account and compares the last four and the fingerprint with what is stored, printing counts only
+  (exit 1 on any mismatch). The page's reveal and verify need the MFA step-up, which only works on the deployed site (its
+  signing key is a Netlify secret that is not available locally).
 - **Shared accounts** are flagged on both parties ("Shared account") and never blocked.
 - **Retiring accounts (why this exists).** Money was once sent to an old account that never reached the payee and never came
   back. So an account has two dates: `valid_from` (first day it may be paid) and `retired_on` (first day it must **not** be
