@@ -272,6 +272,11 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     flex-wrap: wrap;
   }
 
+  /* .stack-form sets a display value, which beats the browser's hidden-until-open rule for a <dialog>. */
+  #requests-dialog:not([open]) {
+    display: none;
+  }
+
   .req-card {
     margin-bottom: 12px;
   }
