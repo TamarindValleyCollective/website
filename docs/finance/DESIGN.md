@@ -40,6 +40,11 @@ broke, so statement files are the primary path); paying money directly from the 
 | Accounting basis | Cash ledger plus an **accounting period** on each allocation. | Auditors ask for cut-off (March salary paid in April). |
 | Nature of expense | Every allocation carries a plain-language **nature**. | Auditors ask for it on listed payments. |
 | Category type | The type (opex, capex, ...) belongs to the **category**, not the row. | Today "Farm Expenses" appears as Opex, Capex and blank. |
+| Budget buckets | An allocation is in one bucket: **Project** if it names a project, else its category's type (Opex, Capex, revenue ...). | Matches how the yearly budget is built: Capex, Opex and approved Projects, reported against budget. |
+| Projects | A project is its own record: an owner (a name only), approval date, financial year and a **breakdown** of planned amounts, each under a category. Several per year. | Projects are planned, presented to the community and approved before the budget; actuals are reported per project and per component. |
+| Events | Tracked for **profit and loss only** (receipts against costs); no owner, approval or breakdown. | Confirmed by Sharath. |
+| Revenue projections | Each revenue stream is budgeted with a projected amount, and the year ends with actual vs projected. Maintenance is the plug: planned spend minus projected non-maintenance income = maintenance to collect. | Maintenance collections fill the gap between earnings and spending. |
+| Equity | Not a category for now. | The 2022 joining contributions are archive; revisit once the data is imported. |
 | Bills | Captured when the money is spent, with an in-app scanner. | Auditors ask for invoices the farm manager holds. |
 | UPI circle | The Paytm export is a third import; its UPI reference number joins it to the bank line. | Matched 58 of 59 rows in a real sample; the one miss was a ₹1 mandate row. |
 | Circle cap | ₹15,000 per **calendar month**, counted from the "Pocket Money" tag. | Confirmed by Sharath; the tag is the only circle signal in the export. |
@@ -134,8 +139,13 @@ migration sessions finalise columns.
 - `fin_bank_accounts`: label (for example "Axis current"), `upi_label` (the text the Paytm export
   uses for that account), last four digits only, `kind` (`bank`, `fd_parent`, `cash`).
   A `cash` account has lines entered by hand and never imported, so cash needs no special case.
-- `fin_categories`: name, `type` (`opex`, `capex`, `project`, `revenue`, `member_contribution`,
-  `sinking_fund`, `interest`, `tax`, `reimbursement`, `transfer`), `budget_head` flag, `active`.
+- `fin_categories`: name, `type` (`opex`, `capex`, `revenue`, `member_contribution`, `sinking_fund`,
+  `interest`, `tax`, `reimbursement`, `transfer`), `budget_head` flag, `active`. A category says what the
+  money was for; the bucket is Project when the allocation names a project. Small items not budgeted one by
+  one (a sickle, fence poles) are Opex by using an Opex category such as "Tools and small equipment".
+- `fin_projects`: `kind` (`project` or `event`), name, financial year, `owner_name` (a name, not an account),
+  `approved_on`, status. `fin_project_lines`: the planned breakdown, each line a planned amount under a
+  category. Events carry no owner, approval or lines.
 - `fin_parties`: `kind` (`member`, `vendor`, `employee`, `customer`, `bank`, `government`,
   `director`, `other`), display name, optional link to a member household, `active`.
 - `fin_party_accounts`: bank (account, IFSC) or UPI (VPA) details, `status` (`unverified`,
@@ -186,8 +196,11 @@ migration sessions finalise columns.
   `fin_payroll_lines`: run, employee, a **snapshot** of the payee account used, days worked, rate,
   gross, advance deduction, other adjustments, net, and the bank reference
   (`YYYY-Mon-Employee-NNN`) that ties the line to the bank file.
-- `fin_budget_years`, `fin_budget_lines`: per financial year, category, annual amount and optional
-  monthly phasing; each approved revision is a new version.
+- `fin_budget_years`, `fin_budget_lines`: per financial year, a line per Opex category, per Capex category,
+  per **revenue stream** (the projection) and per approved project component; annual amount and optional
+  monthly phasing; each approved revision is a new version, so the year-end can be compared with the original
+  projection. A computed line shows the maintenance needed (planned spend minus projected other income) against
+  maintenance actually collected.
 - `fin_obligations`: recurring bills (BSNL lines, power, domains, Workspace): payee, cadence, expected
   amount, next due, last paid allocation.
 - `fin_accruals`: running payables, for example the hospitality partner's share (25% of receipts,

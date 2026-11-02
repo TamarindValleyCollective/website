@@ -11,6 +11,7 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 | Session | State |
 |---|---|
 | 01 Foundation & access | Built on branch `finance-01-foundation` (draft PR). Migration `0077` **applied to TVC ERP on 2026-11-02**. |
+| 01 follow-up | `0078_finance_categories_and_projects.sql` written, **not applied** (awaiting review). |
 | 02-13 | Not started |
 
 ## Access
@@ -50,6 +51,13 @@ like any other, per person. A super admin has no implicit finance access.
 policies and `anon`/`authenticated` revoked: only the Netlify Functions, using the service role, can touch them.
 Seeded: one entity and a **draft** category list (23 generic heads) for the directors to confirm.
 Also adds `staff_module_roles.expires_at`.
+
+## Migration 0078 (written, not applied)
+
+Replaces the placeholder categories with the list in the file (29 generic heads, from the structure of the sheet's
+"Lists" tab), drops `project` as a category type, and adds `fin_projects` and `fin_project_lines`. See DESIGN.md,
+"Budget buckets" and "Projects". Equity is deliberately left out. Nothing references the placeholder categories yet,
+so replacing them is safe; apply with the project's migration process once reviewed.
 
 ## Endpoints and pages
 

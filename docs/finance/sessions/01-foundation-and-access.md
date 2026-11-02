@@ -69,7 +69,14 @@ auditor visit is logged and refused if the log fails. `scripts/lib/admin-host-ro
 clean. `astro build` passes. **Not verified:** the pages in a browser with a real sign-in, the Access screen's new
 date control. Migration 0077 was applied to TVC ERP after Sharath's go-ahead and checked (1 entity, 23 categories, RLS on, no anon grants, `expires_at` null on all grants).
 
-**Left / decisions for Sharath:** who gets `finance` (directors) and who is the requester; confirm or edit the draft
+**Follow-up 2026-11-02 (after reading the sheet's structure with Sharath):** the 23 placeholder categories were not
+from the sheet. `0078` (written, **not applied**) replaces them with 29 heads shaped like the sheet's budget (Opex,
+Capex, revenue streams, member maintenance, taxes, movements), makes projects and events first-class
+(`fin_projects`, `fin_project_lines`), and drops `project` as a category type. Equity dropped for now. Decisions:
+owner is just a name; events are profit-and-loss only; revenue is projected in the budget with maintenance as the
+plug. Still open: the 2024-27 tracker file, to be shared at import.
+
+**Left / decisions for Sharath (as first written):** who gets `finance` (directors) and who is the requester; confirm or edit the draft
 category list (I did not read the private tracker); whether auditors should get `export`; the category seed lives in
 the migration, so edits before applying are free. Real-money rules for later sessions are ready to import:
 `makerIsNotChecker`, `payeeFieldVisibility`. Next: sessions 03 and 04 (can run in parallel).

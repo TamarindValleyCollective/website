@@ -31,6 +31,18 @@ The head an allocation is filed under. It carries the type (opex, capex, project
 type is never a property of a single row.
 _Avoid_: account, head.
 
+**Bucket**
+Which budget a spend belongs to: Project if the allocation names a project, otherwise the type of its category
+(Opex, Capex, revenue ...). Budget vs actual is reported per bucket.
+
+**Project**
+An explicit, community-approved plan with an owner (a name) and a breakdown of planned amounts, outside regular Opex
+and one-off Capex. Reported on budget vs actual per project and per component.
+_Avoid_: event (events are profit-and-loss only).
+
+**Event**
+A paid event tracked for profit and loss only: receipts against costs, with no approval or breakdown.
+
 **Party**
 Anyone money moves to or from: a member, vendor, employee, customer, bank, government body or director.
 Its bank or UPI details are separate records that stay unverified until an approver confirms them.
