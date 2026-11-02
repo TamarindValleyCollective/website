@@ -91,6 +91,26 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   number. `fin_audit_log.detail` is checked before writing and a number, UPI id or IFSC makes the write fail. Revealing is
   written to the audit log first; if that fails nothing is returned. Audit actions: `finance.party_created`,
   `party_updated`, `payee_added`, `payee_changed`, `payee_revealed`, `payee_verified`, `parties_imported`.
+- **Comparing a payee's accounts.** A bank merger leaves a payee with an old and a new number, and a one-digit difference is easy
+  to miss. In a payee's sheet, the last four digits of accounts of the same kind are compared and **the characters that differ
+  are shown in red** (needs no extra access). "Compare full numbers" (`verify-payee` + the unlock) reveals every account of that
+  payee at once, one audit entry each, and shows the full numbers and IFSC codes right-aligned (so different lengths line up at
+  the end) with the differences in red, for 30 seconds. The comparison itself is `markDiff` in `scripts/lib/finance-diff.mjs`.
+  The list and the sheet still never carry a full number unless a verifier asks for it.
+- **Verifying: how it was checked (migration `0082_finance_verification_evidence.sql`).** `POST /accounts/:id/verify {method, note}` needs
+  a method (cancelled cheque or bank letter, a small test transfer that arrived, an invoice or bill, or other with a note) and
+  records it with who and when. The database refuses a verification without a method and any later change to the evidence; the
+  note may not carry an account number, UPI id or IFSC (the same filter as the audit log), and only the method goes in
+  `fin_audit_log`. The account then shows "Verified by X on date · method". Details verified before this migration show
+  "Method not recorded". The sheet shows "3 of 118 to verify" and **Verify and open next**. **Migration 0082 must be applied
+  before the code that sends the method is deployed.**
+- **The Overview ("Needs you").** `GET /overview` returns `attention`: payees to verify (parties with an unverified live account),
+  payees needing review, statement gaps, Paytm payments with no bank line and Paytm payments waiting, the last import date and
+  counts of parties and bank accounts. Counts and labels only: no names, numbers or fingerprints. Each row links into the
+  filtered Parties list (`?filter=unverified|review|verified`) or Import.
+- **The Parties list.** Status chips with counts (All / Needs review / Unverified / Verified) filter the list; a quiet dot shows each
+  payee's state so "Needs review" is the one loud signal; the kind is changed in place (the list also has it on phones, in the
+  sheet). Add party defaults to Vendor.
 - **Merging (migration `0081_finance_party_merge.sql`, applied to TVC ERP on 2026-11-02).** Two parties that are really one payee (often a bank merger: an old
   and a new account) are merged by a director with the step-up: `POST /parties/:id/merge {into}`. Nothing is moved or deleted,
   because account rows are immutable: the duplicate gets `merged_into = main party`, is hidden from the list, and the main party

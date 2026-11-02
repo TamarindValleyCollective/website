@@ -184,10 +184,11 @@ export function accountForResponse(row, sharedWith = [], extra = {}) {
     review: extra.review ?? [],
     createdAt: row.created_at ?? null,
     verifiedAt: row.verified_at ?? null,
+    verification: verificationForResponse(row, extra.names ?? new Map()),
   };
 }
 
-export function partyForResponse(party, accounts, flags, today = todayIST(), mergedCount = 0) {
+export function partyForResponse(party, accounts, flags, today = todayIST(), mergedCount = 0, names = new Map()) {
   const live = accounts.filter((a) => a.status !== 'superseded');
   const review = reviewFlags(accounts, flags, today);
   return {
@@ -196,7 +197,7 @@ export function partyForResponse(party, accounts, flags, today = todayIST(), mer
     kind: party.kind,
     active: party.active,
     householdId: party.household_id ?? null,
-    accounts: live.map((a) => accountForResponse(a, flags.get(a.id) ?? [], { today, review: review.get(a.id) ?? [] })),
+    accounts: live.map((a) => accountForResponse(a, flags.get(a.id) ?? [], { today, review: review.get(a.id) ?? [], names })),
     earlierAccounts: accounts.length - live.length,
     needsReview: [...review.values()].some((r) => r.length > 0),
     mergedCount,
@@ -231,6 +232,32 @@ export function foldMerged(parties, accounts) {
     mergedCount: (/** @type {string} */ id) => merged.get(id) ?? 0,
     canonicalOf,
   };
+}
+
+// How a verifier checked the details. Recorded with who and when, so an auditor can see what "verified" rests on. The
+// note is free text, so it may not carry the very thing this module keeps out of logs: no account number, UPI id or IFSC.
+export const VERIFY_METHODS = [
+  { id: 'cancelled_cheque', label: 'Cancelled cheque or bank letter' },
+  { id: 'test_transfer', label: 'Small test transfer that arrived' },
+  { id: 'invoice', label: 'Invoice or bill from the payee' },
+  { id: 'other', label: 'Other, with a note' },
+];
+
+export function validateVerification(body) {
+  const method = VERIFY_METHODS.find((m) => m.id === body?.method);
+  if (!method) return { error: 'Say how you checked these details.' };
+  const note = typeof body?.note === 'string' ? body.note.trim().replace(/\s+/g, ' ') : '';
+  if (note.length > 200) return { error: 'Keep the note under 200 characters.' };
+  if (note && !auditDetailIsSafe(note)) return { error: "Don't type an account number, UPI id or IFSC code in the note." };
+  if (method.id === 'other' && note.length < 3) return { error: 'Say what you did to check them.' };
+  return { method: method.id, note: note || null };
+}
+
+// What is shown of a verification: who, when, how, and the note. `names` maps staff ids to names.
+export function verificationForResponse(row, names) {
+  if (row.status !== 'verified') return null;
+  const m = VERIFY_METHODS.find((x) => x.id === row.verification_method);
+  return { at: row.verified_at ?? null, by: names.get(row.verified_by) ?? null, method: m?.id ?? null, methodLabel: m?.label ?? 'Method not recorded', note: row.verification_note ?? null };
 }
 
 // Verification rules the server enforces: only unverified details, and not by whoever entered them. A row entered by

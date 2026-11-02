@@ -10,34 +10,33 @@ import StaffLayout from '../../../layouts/StaffLayout.astro';
 import SignInGate from '../../../components/SignInGate.astro';
 ---
 
-<StaffLayout title="Import statements" description="Import bank statements." current="finance">
+<StaffLayout title="Import statements" description="Import bank statements." current="finance" currentPage="finance-import">
   <section class="finance finance-import section wrapper">
-    <p class="hint"><a href="/internal/finance/">Finance</a></p>
     <h1>Import statements</h1>
     <p id="intro" class="hint">Sign in to import statements.</p>
 
     <SignInGate forbiddenWhat="finance" />
 
-    <p id="status" class="hint" hidden></p>
+    <div id="status" aria-live="polite" class="hint" hidden></div>
 
     <div id="content" hidden>
-      <div class="card" id="upload-card">
-        <h2>Add files</h2>
-        <p class="hint">
-          Bank statement: the Excel download from the bank. It comes as one file per year, so choose several at once or one at a time, in any order. Paytm: the UPI export (Excel).
-          Choosing files only checks them; nothing is stored until you confirm.
-        </p>
-        <form id="upload-form" class="inline-form">
-          <label>Files <input id="files" type="file" accept=".xlsx" multiple required /></label>
-          <button class="button" type="submit" id="check">Check files</button>
+      <div id="upload-card">
+        <form id="upload-form" class="upload">
+          <input id="files" class="visually-hidden" type="file" accept=".xlsx" multiple />
+          <label class="dropzone" id="dropzone" for="files">
+            <span class="title">Drop the bank's Excel files or the Paytm export here</span>
+            <span class="detail">The bank's statement comes as one file per year: several at once is fine, in any order. Choosing files only checks them; nothing is stored until you confirm.</span>
+            <span class="button button--outline dz-button">Choose files</span>
+          </label>
+          <ul class="list" id="chosen" hidden></ul>
+          <div><button class="button button--primary" type="submit" id="check" disabled>Check files</button></div>
+          <p class="hint" id="upload-msg" hidden></p>
         </form>
-        <p class="hint" id="upload-msg" hidden></p>
       </div>
 
       <div id="results" hidden>
         <h2 class="list-title" id="results-title">What would happen</h2>
         <ul class="list" id="file-list"></ul>
-        <h2 class="list-title">Statements held after this</h2>
         <div id="coverage-after"></div>
         <div class="card" id="confirm-card">
           <p class="hint" id="confirm-text"></p>
@@ -46,10 +45,21 @@ import SignInGate from '../../../components/SignInGate.astro';
         <div id="after" hidden></div>
       </div>
 
-      <h2 class="list-title">Imported so far</h2>
-      <div id="coverage"></div>
-      <ul class="list" id="batches"></ul>
-      <p class="hint" id="batches-empty" hidden>Nothing imported yet.</p>
+      <div id="coverage-section">
+        <h2 class="list-title">Statements held, by account</h2>
+        <div id="coverage"></div>
+      </div>
+
+      <div id="reconcile-section" hidden>
+        <h2 class="list-title">Paytm payments and the bank statement</h2>
+        <div id="reconcile"></div>
+      </div>
+
+      <div id="batches-section">
+        <h2 class="list-title">Files imported</h2>
+        <ul class="list" id="batches"></ul>
+        <p class="hint" id="batches-empty" hidden>Nothing imported yet.</p>
+      </div>
 
       <h2 class="list-title">Bank accounts</h2>
       <ul class="list" id="accounts"></ul>
@@ -69,6 +79,7 @@ import SignInGate from '../../../components/SignInGate.astro';
 </StaffLayout>
 
 <script>
+  import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
   import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
 
   declare const google: any;
@@ -96,7 +107,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     gate.hidden = false;
     forbidden.hidden = true;
     content.hidden = true;
-    statusEl.hidden = true;
+    clearState(statusEl);
+    intro.hidden = false;
     intro.textContent = 'Sign in to import statements.';
     gateError.hidden = !message;
     if (message) gateError.textContent = message;
@@ -106,7 +118,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   function showForbidden() {
     gate.hidden = true;
     content.hidden = true;
-    statusEl.hidden = true;
+    clearState(statusEl);
     forbidden.hidden = false;
     $('forbidden-email').textContent = decodeTokenEmail(getToken() ?? '');
   }
@@ -222,15 +234,23 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   function renderReconciliation(target: HTMLElement, r: any) {
     if (!r) return;
-    const lines: string[] = [];
-    if (typeof r.linkedNow === 'number') lines.push(`${plural(r.linkedNow, 'Paytm row')} matched to bank lines just now.`);
-    if (r.awaitingBank.count) lines.push(`${plural(r.awaitingBank.count, 'Paytm payment')} (${rupees(r.awaitingBank.totalPaise)}) dated on or after the last bank line: waiting for the next statement.`);
-    if (r.unmatchedInStatement.count) lines.push(`${plural(r.unmatchedInStatement.count, 'Paytm payment')} (${rupees(r.unmatchedInStatement.totalPaise)}) inside the statement period with no matching bank line: worth a look.`);
-    if (r.bankWithoutUpi.predatesExport) lines.push(`${plural(r.bankWithoutUpi.predatesExport, 'bank UPI payment')} from before Paytm was in use have only the bank narration; no Paytm row will ever exist for them.`);
-    if (r.bankWithoutUpi.inExportPeriod) lines.push(`${plural(r.bankWithoutUpi.inExportPeriod, 'bank UPI payment')} since Paytm was in use have no Paytm row (paid from another app, or missing from the export).`);
-    if (!lines.length) return;
+    const rows: HTMLElement[] = [];
+    if (typeof r.linkedNow === 'number' && r.linkedNow > 0) rows.push(row(`${plural(r.linkedNow, 'Paytm row')} matched to bank lines just now`, []));
+    if (r.unmatchedInStatement.count) {
+      rows.push(row(`${plural(r.unmatchedInStatement.count, 'payment')} (${rupees(r.unmatchedInStatement.totalPaise)}) ${r.unmatchedInStatement.count === 1 ? 'has' : 'have'} no matching bank line`, ['It falls inside a statement we hold. Worth a look.'], { text: 'Check', kind: 'crit' }));
+    }
+    if (r.awaitingBank.count) {
+      rows.push(row(`${plural(r.awaitingBank.count, 'payment')} (${rupees(r.awaitingBank.totalPaise)}) ${r.awaitingBank.count === 1 ? 'is' : 'are'} newer than the last statement`, ['They match themselves when the next statement is imported.']));
+    }
+    if (r.bankWithoutUpi.inExportPeriod) {
+      rows.push(row(`${plural(r.bankWithoutUpi.inExportPeriod, 'bank UPI payment')} with no Paytm row`, ['Paid from another app, or missing from the Paytm export.']));
+    }
+    if (r.bankWithoutUpi.predatesExport) {
+      rows.push(row(`${plural(r.bankWithoutUpi.predatesExport, 'older bank UPI payment')}`, ["Before Paytm was used, so only the bank's narration exists. Nothing to do."]));
+    }
+    if (!rows.length) return;
     const ul = el('ul', 'list');
-    ul.append(row('Paytm and bank statement', lines));
+    ul.append(...rows);
     target.append(ul);
   }
 
@@ -243,7 +263,11 @@ import SignInGate from '../../../components/SignInGate.astro';
     for (const a of data.accounts) accounts.append(row(a.label, [`Ends ${a.last4 ?? '—'}`, a.hasUpiLabel ? 'Paytm label set' : 'No Paytm label yet'], a.hasUpiLabel ? undefined : { text: 'Set a Paytm label', kind: 'warn' }));
     if (!data.accounts.length) accounts.append(row('No bank account registered', [data.canConfigure ? 'Add one below before importing a statement.' : 'A director needs to register the account first.']));
     renderCoverage($('coverage'), data.coverage);
-    renderReconciliation($('coverage'), data.reconciliation);
+    $('coverage-section').hidden = !data.coverage?.length;
+    const reconcile = $('reconcile');
+    reconcile.replaceChildren();
+    renderReconciliation(reconcile, data.reconciliation);
+    $('reconcile-section').hidden = reconcile.children.length === 0;
     const list = $('batches');
     list.replaceChildren();
     for (const b of data.batches) {
@@ -252,24 +276,26 @@ import SignInGate from '../../../components/SignInGate.astro';
       list.append(row(b.file_name, [`${what} · ${range(b.period_from, b.period_to)}`, counts, `Imported ${new Date(b.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`]));
     }
     $('batches-empty').hidden = data.batches.length > 0;
+    $('batches-section').hidden = false;
   }
 
   async function load() {
     gate.hidden = true;
     forbidden.hidden = true;
-    statusEl.hidden = false;
-    statusEl.textContent = 'Loading…';
+    showLoading(statusEl);
     try {
       const { status, data } = await staffFetch('/api/finance-admin/imports');
       if (status !== 200) throw new Error('load failed');
-      statusEl.hidden = true;
+      clearState(statusEl);
+      intro.hidden = false;
       intro.textContent = 'Bank statements and the Paytm UPI export.';
       renderList(data);
       content.hidden = false;
     } catch (err) {
       if (fail(err)) return;
-      statusEl.hidden = false;
-      statusEl.textContent = 'Failed to load. Try refreshing.';
+      content.hidden = true;
+      intro.hidden = true;
+      showFailure(statusEl, { title: "Couldn't load the imports", text: "The server didn't answer. Nothing was changed. Check your connection and try again; if it keeps failing, tell a super admin.", onRetry: load });
     }
   }
 
@@ -306,6 +332,33 @@ import SignInGate from '../../../components/SignInGate.astro';
       : 'Nothing can be imported from these files.';
   }
 
+  // ---- choosing files: the real input stays (it is what the browser and keyboard use); a drop fills it
+  const filesInput = $<HTMLInputElement>('files');
+  const dropzone = $('dropzone');
+  const bytes = (n: number) => (n >= 1_048_576 ? `${(n / 1_048_576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+  function showChosen() {
+    const files = Array.from(filesInput.files ?? []);
+    const list = $('chosen');
+    list.hidden = files.length === 0;
+    list.replaceChildren(...files.map((f) => row(f.name, [bytes(f.size)])));
+    $<HTMLButtonElement>('check').disabled = files.length === 0;
+  }
+  filesInput.addEventListener('change', showChosen);
+  for (const name of ['dragenter', 'dragover']) {
+    dropzone.addEventListener(name, (ev) => {
+      ev.preventDefault();
+      dropzone.dataset.over = 'true';
+    });
+  }
+  for (const name of ['dragleave', 'drop']) dropzone.addEventListener(name, () => delete dropzone.dataset.over);
+  dropzone.addEventListener('drop', (ev) => {
+    ev.preventDefault();
+    const dropped = (ev as DragEvent).dataTransfer?.files;
+    if (!dropped?.length) return;
+    filesInput.files = dropped;
+    showChosen();
+  });
+
   $('upload-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     chosen = Array.from($<HTMLInputElement>('files').files ?? []);
@@ -324,7 +377,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       msg.hidden = false;
       msg.textContent = err instanceof Error && err.message !== 'failed' ? err.message : 'Could not check the files. Try again.';
     } finally {
-      btn.disabled = false;
+      btn.disabled = (filesInput.files?.length ?? 0) === 0;
       btn.textContent = 'Check files';
     }
   });
@@ -346,6 +399,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       renderReconciliation(after, data.reconciliation);
       after.hidden = false;
       $<HTMLInputElement>('files').value = '';
+      showChosen();
       chosen = [];
       lastPreview = null;
       const { status: s2, data: list } = await staffFetch('/api/finance-admin/imports');
@@ -426,6 +480,56 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   .finance-import .card {
     margin-top: 14px;
+  }
+
+  .finance-import .upload {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .finance-import .dropzone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 28px 24px;
+    border: 2px dashed var(--tvc-line-strong);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+    text-align: center;
+    cursor: pointer;
+  }
+
+  .finance-import .dropzone .title {
+    font-size: var(--text-md);
+    font-weight: 600;
+  }
+
+  .finance-import .dropzone .detail {
+    max-width: 52ch;
+  }
+
+  .finance #status .card {
+    margin-top: 14px;
+  }
+
+  .finance-import .dropzone[data-over='true'],
+  .finance-import #files:focus-visible + .dropzone {
+    border-color: var(--tvc-green-dark);
+  }
+
+  .finance-import .dropzone[data-over='true'] {
+    background: var(--tvc-green-tint);
+  }
+
+  .finance-import #files:focus-visible + .dropzone {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+  }
+
+  .finance-import .dz-button {
+    pointer-events: none;
   }
 
   .finance-import .row .detail {

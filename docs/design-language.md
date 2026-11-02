@@ -31,6 +31,13 @@ disagree `global.css` wins. In any `.astro` or `.css` file:
   `presentSheet(dlg)` (a card that grows from its trigger; a swipe-down bottom sheet on phones; `locked` for
   one that must be read) and calls `dlg.close()` as usual: the presenter wraps `close` to play the exit.
   Forms in dialogs follow one pattern (set in `dialog.modal`): a bold `.field-label` above a 44px field, a quiet `.field-help` line below it, focus shown as an orange border with a soft halo, the error line (`.form-msg`) taking no room until it has text, and `.modal-actions` as a footer under a hairline. Never `append` + `showModal` a dialog directly. On phones (560px and below) the main navigation is a bottom tab bar (`#tabbar`, filled by `renderNav`); fixed-bottom things (toast, story bar, `#view` padding) offset by `--tabbar-h`. A phone-only override placed before its base rule in the file loses to it; raise its specificity.
+- Admin navigation is by blocks (Operations, Community, Finance, Settings), defined once in `scripts/lib/admin-nav.mjs`: a
+  new page is one line there, and the test fails if a registered tool has no page. A page that is one of several in a block
+  passes `currentPage` to `StaffLayout`. On phones the rail is a bottom tab bar (`--tabbar-h`: anything fixed to the bottom keeps
+  clear of it) and a block's pages are a row of tabs. Never call the sections "tools" in user-facing copy.
+- A page that loads data says what happened and what to do: use `scripts/lib/staff-states.mjs` (`showLoading`, `showFailure` with a
+  Try again button, `showEmpty` with its next step) in a polite live region, never a bare grey line. Anything the script builds at
+  run time needs `:global()` styles, since Astro's scoped CSS never reaches it.
 - Admin portal (`StaffLayout.astro`, `src/pages/internal/*`): the shell owns the shared primitives (`.card`,
   `.hint`, `.note`, `.error`, `.section.wrapper`, `[hidden]`, `.visually-hidden`, `.link-button`, and the button
   modifiers `--outline`, `--primary`, `--danger`, `--danger-outline`, `--small`) and the building blocks of the

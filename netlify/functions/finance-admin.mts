@@ -15,6 +15,8 @@ import { rest } from './lib/staff-mfa-store';
 import { capabilitiesForRole } from './lib/staff-registry';
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { payeeFieldVisibility } from '../../scripts/lib/finance-access.mjs';
+import { todayIST } from '../../scripts/lib/finance-parties.mjs';
+import { attentionOf } from '../../scripts/lib/finance-attention.mjs';
 import { PARTY_ID, addPayeeAccount, createParty, listParties, mergeParty, retirePayeeAccount, revealPayeeAccount, reviewParty, unmergeParty, updateParty, verifyPayeeAccount } from './lib/finance-parties';
 import { heldCoverage, reconciliationOf, runImport } from './lib/finance-import';
 import { supabaseImportStore } from './lib/finance-import-store';
@@ -46,13 +48,25 @@ async function handleOverview(req: Request): Promise<Response> {
       countRows('fin_periods', '&status=eq.open'),
     ]);
     const capabilities = capabilitiesForRole('finance', staff.role);
+    // What is waiting for a person: counts and labels only (scripts/lib/finance-attention.mjs).
+    const rows = async (path: string) => (await (await rest(path)).json()) as Record<string, any>[];
+    const store = supabaseImportStore();
+    const [parties, accounts, batches, coverage, reconciliation] = await Promise.all([
+      rows('/fin_parties?select=id,merged_into'),
+      rows('/fin_party_accounts?select=id,party_id,method,status,fingerprint,created_at,retired_on,valid_from,has_ifsc,reviewed_at'),
+      rows('/fin_import_batches?select=created_at&order=created_at.desc&limit=1'),
+      heldCoverage(store),
+      reconciliationOf(store),
+    ]);
+    const attention = attentionOf({ parties, accounts, coverage, reconciliation, batches, bankAccountCount: bankAccounts, today: todayIST() });
     return jsonResponse({
       entity: entities[0]?.name ?? null,
       role: staff.role,
       capabilities,
       visibility: payeeFieldVisibility(capabilities),
       counts: { bankAccounts, categories, openPeriods },
-      hasData: false, // nothing is imported yet; later sessions replace this with real figures
+      attention,
+      hasData: attention.parties > 0 || batches.length > 0,
     });
   } catch (err) {
     console.error('[finance-admin] overview failed', err);
