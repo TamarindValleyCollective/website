@@ -58,7 +58,11 @@ globalThis.fetch = async (url, init = {}) => {
   const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
   const table = u.pathname.replace('/rest/v1/', '');
   const method = init.method ?? 'GET';
-  if (table === 'staff_users') return json(db.users.filter((x) => u.searchParams.get('email') === `eq.${x.email}`));
+  if (table === 'staff_users') {
+    const ids = u.searchParams.get('id');
+    if (ids?.startsWith('in.')) return json(db.users.filter((x) => ids.slice(4, -1).split(',').includes(x.id)).map((x) => ({ id: x.id, name: x.name })));
+    return json(db.users.filter((x) => u.searchParams.get('email') === `eq.${x.email}`));
+  }
   if (table === 'staff_module_roles') {
     const id = u.searchParams.get('staff_id')?.slice(3);
     const mod = u.searchParams.get('module')?.slice(3);
@@ -86,6 +90,7 @@ globalThis.fetch = async (url, init = {}) => {
       return json(hit);
     }
   }
+  if (table.startsWith('fin_')) return json([], 200, { 'content-range': '0-0/0' });
   throw new Error(`unexpected fetch ${method} ${url}`);
 };
 
@@ -252,17 +257,17 @@ test('verifying needs the step-up, and not by whoever entered the details', asyn
   const acctId = db.fin_party_accounts[0].id;
   const director2 = sign('u2', 'admin');
 
-  assert.equal((await (await api(director2, `/accounts/${acctId}/verify`, { method: 'POST' })).json()).code, 'STEP_UP_REQUIRED');
-  const self = await api(director1, `/accounts/${acctId}/verify`, { method: 'POST', stepUp: 'u1' });
+  assert.equal((await (await api(director2, `/accounts/${acctId}/verify`, { method: 'POST', body: { method: 'cancelled_cheque' } })).json()).code, 'STEP_UP_REQUIRED');
+  const self = await api(director1, `/accounts/${acctId}/verify`, { method: 'POST', body: { method: 'cancelled_cheque' }, stepUp: 'u1' });
   assert.equal(self.status, 403);
   assert.equal(db.fin_party_accounts[0].status, 'unverified');
 
-  const ok = await api(director2, `/accounts/${acctId}/verify`, { method: 'POST', stepUp: 'u2' });
+  const ok = await api(director2, `/accounts/${acctId}/verify`, { method: 'POST', body: { method: 'cancelled_cheque' }, stepUp: 'u2' });
   assert.equal(ok.status, 200);
   assert.equal(db.fin_party_accounts[0].status, 'verified');
   assert.equal(db.fin_party_accounts[0].verified_by, 'u2');
   assert.equal(db.audit.at(-1).action, 'finance.payee_verified');
-  assert.equal((await api(director2, `/accounts/${acctId}/verify`, { method: 'POST', stepUp: 'u2' })).status, 400); // already verified
+  assert.equal((await api(director2, `/accounts/${acctId}/verify`, { method: 'POST', body: { method: 'cancelled_cheque' }, stepUp: 'u2' })).status, 400); // already verified
 });
 
 test('a finance-requests holder cannot read the directory', async () => {
@@ -286,7 +291,7 @@ test('bank details loaded without an IFSC cannot be verified until one is added'
   const director = sign('u2', 'admin');
   db.fin_parties.push({ id: 'p100', name: 'Test Traders', kind: 'vendor', active: true, household_id: null });
   db.fin_party_accounts.push({ id: 'a100', party_id: 'p100', entity_id: 'e1', method: 'bank', last4: '0001', fingerprint: 'x', status: 'unverified', created_by: null, details_enc: encryptFinanceText(JSON.stringify({ method: 'bank', account: ACCOUNT, ifsc: '' })) });
-  const res = await api(director, '/accounts/a100/verify', { method: 'POST', stepUp: 'u2' });
+  const res = await api(director, '/accounts/a100/verify', { method: 'POST', body: { method: 'cancelled_cheque' }, stepUp: 'u2' });
   assert.equal(res.status, 400);
   assert.match((await res.json()).error, /IFSC/);
   assert.equal(db.fin_party_accounts[0].status, 'unverified');
@@ -420,7 +425,7 @@ test('details entered without an IFSC-less import flag are marked has_ifsc, and 
   await api(op, '/parties/p200/accounts', { method: 'POST', body: { method: 'upi', upi: 'test.vendor@okbank' } });
   assert.equal(db.fin_party_accounts.at(-1).has_ifsc, true); // UPI has no IFSC to miss
   const stale = seedAccount({ status: 'unverified', created_by: 'u1', verified_by: null, verified_at: null, retired_on: day(-3), retired_at: 'x', retired_by: 'u2', retire_reason: 'closed' });
-  const res = await api(director, `/accounts/${stale.id}/verify`, { method: 'POST', stepUp: 'u2' });
+  const res = await api(director, `/accounts/${stale.id}/verify`, { method: 'POST', body: { method: 'cancelled_cheque' }, stepUp: 'u2' });
   assert.equal(res.status, 400);
   assert.match((await res.json()).error, /retired/i);
   assert.equal(stale.status, 'unverified');
@@ -518,4 +523,56 @@ test('entering details the merged-in party already holds adds nothing', async ()
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { unchanged: true });
   assert.equal(db.fin_party_accounts.length, 2);
+});
+
+// ---- how the details were checked, and the Overview's summary
+const verifyBody = (over = {}) => ({ method: 'cancelled_cheque', ...over });
+
+test('verifying needs a method; "Other" needs a note; the note may not carry an account number', async () => {
+  reset();
+  seedParty();
+  const acct = seedAccount({ status: 'unverified', created_by: 'u1', verified_by: null, verified_at: null });
+  const director = sign('u2', 'admin');
+  const verify = (body) => api(director, `/accounts/${acct.id}/verify`, { method: 'POST', body, stepUp: 'u2' });
+  assert.equal((await verify({})).status, 400);
+  assert.equal((await verify({ method: 'guess' })).status, 400);
+  assert.equal((await verify(verifyBody({ method: 'other' }))).status, 400);
+  assert.equal((await verify(verifyBody({ note: 'acct 100000000001' }))).status, 400);
+  assert.equal(acct.status, 'unverified');
+});
+
+test('a verification records how, with the note kept on the row and only the method in the audit log', async () => {
+  reset();
+  seedParty();
+  const acct = seedAccount({ status: 'unverified', created_by: 'u1', verified_by: null, verified_at: null });
+  const director = sign('u2', 'admin');
+  const res = await api(director, `/accounts/${acct.id}/verify`, { method: 'POST', body: verifyBody({ method: 'test_transfer', note: 'Rs 1 arrived on 2 Nov' }), stepUp: 'u2' });
+  assert.equal(res.status, 200);
+  assert.equal(acct.verification_method, 'test_transfer');
+  assert.equal(acct.verification_note, 'Rs 1 arrived on 2 Nov');
+  const row = db.audit.at(-1);
+  assert.deepEqual(row.detail, { partyId: 'p200', method: 'test_transfer' });
+  assert.ok(!JSON.stringify(row).includes('arrived'));
+  const list = await (await api(director, '/parties')).json();
+  assert.deepEqual(list.parties[0].accounts[0].verification.method, 'test_transfer');
+  assert.equal(list.parties[0].accounts[0].verification.by, 'u2'); // the verifier's name
+  assert.equal(list.parties[0].accounts[0].verification.note, 'Rs 1 arrived on 2 Nov');
+});
+
+test('the overview carries a "needs you" summary: payees to verify, those needing review, and no names or numbers', async () => {
+  reset();
+  seedParty();
+  seedAccount({ status: 'unverified', created_by: 'u1', verified_by: null, verified_at: null });
+  db.fin_parties.push({ id: 'p201', name: 'Second Vendor', kind: 'vendor', active: true, household_id: null, merged_into: null });
+  seedAccount({ party_id: 'p201', status: 'unverified', created_by: 'u1', verified_by: null, verified_at: null, has_ifsc: false });
+  const viewer = sign('u3', 'read_only');
+  const res = await handler(new Request('https://x.test/api/finance-admin/overview', { headers: { authorization: `Bearer ${viewer}` } }));
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.attention.parties, 2);
+  assert.equal(body.attention.toVerify, 2);
+  assert.equal(body.attention.needsReview, 1); // the one missing an IFSC
+  assert.equal(body.hasData, true);
+  const text = JSON.stringify(body.attention);
+  assert.ok(!text.includes('Second Vendor') && !text.includes(ACCOUNT));
 });

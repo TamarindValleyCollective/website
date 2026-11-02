@@ -21,6 +21,7 @@ import {
   validateParty,
   validatePayeeDetails,
   validateRetirement,
+  validateVerification,
   validateMerge,
   foldMerged,
   validateEffectiveOn,
@@ -59,7 +60,7 @@ async function entityId(): Promise<string> {
   return e[0].id as string;
 }
 
-const ACCOUNT_COLUMNS = 'id,party_id,method,last4,status,fingerprint,created_by,created_at,verified_at,valid_from,retired_on,has_ifsc,reviewed_at';
+const ACCOUNT_COLUMNS = 'id,party_id,method,last4,status,fingerprint,created_by,created_at,verified_at,verified_by,verification_method,verification_note,valid_from,retired_on,has_ifsc,reviewed_at';
 
 // Encrypts and stores new details as an unverified row. `existing` are the party's current account rows.
 async function addAccount(partyId: string, entity: string, actorId: string, payee: Json, existing: Json[], effectiveOn: string | null = null) {
@@ -126,6 +127,12 @@ export async function listParties(req: Request): Promise<Response> {
     const accounts = await rows(`/fin_party_accounts?select=${ACCOUNT_COLUMNS}&order=created_at.asc`);
     const { visible, accountsOf, mergedCount, canonicalOf } = foldMerged(allParties, accounts);
     const flags = sharedAccountFlags(accounts, canonicalOf);
+    // Who verified what: names for the verifiers' ids (a name, never an email).
+    const verifierIds = [...new Set(accounts.map((a) => a.verified_by as string).filter(Boolean))];
+    const names = new Map<string, string>();
+    if (verifierIds.length) {
+      for (const u of await rows(`/staff_users?id=in.(${verifierIds.join(',')})&select=id,name`)) if (u.name) names.set(u.id as string, u.name as string);
+    }
     const capabilities = capabilitiesForRole('finance', staff.role) as string[];
     const canVerify = capabilities.includes('verify-payee');
     let me: Json | null = null;
@@ -135,7 +142,7 @@ export async function listParties(req: Request): Promise<Response> {
     }
     const shown = visible
       .filter((p: Json) => !q || p.name.toLowerCase().includes(q))
-      .map((p: Json) => partyForResponse(p, accountsOf(p.id), flags, todayIST(), mergedCount(p.id)));
+      .map((p: Json) => partyForResponse(p, accountsOf(p.id), flags, todayIST(), mergedCount(p.id), names));
     return jsonResponse({
       kinds: PARTY_KINDS,
       canEdit: capabilities.includes('allocate'),
@@ -291,11 +298,15 @@ export async function verifyPayeeAccount(req: Request, accountId: string): Promi
     if (stored.method === 'bank' && !stored.ifsc) return fail('These bank details have no IFSC code. Add it with "Add or change details" first.');
     const verdict = canVerifyAccount(account, staff.id);
     if (!verdict.ok) return fail(verdict.error ?? 'Not allowed.', 403);
+    // How it was checked is recorded with who and when (the database refuses a verification without it).
+    const how = validateVerification((await readBody(req)) ?? {});
+    if (how.error || !how.method) return fail(how.error ?? 'Say how you checked these details.');
     await rest(`/fin_party_accounts?id=eq.${accountId}&status=eq.unverified`, {
       method: 'PATCH',
-      body: JSON.stringify({ status: 'verified', verified_by: staff.id, verified_at: new Date().toISOString() }),
+      body: JSON.stringify({ status: 'verified', verified_by: staff.id, verified_at: new Date().toISOString(), verification_method: how.method, verification_note: how.note }),
     });
-    await audit(staff.id, account.entity_id, 'finance.payee_verified', account.id, { partyId: account.party_id });
+    // The method goes in the audit log; the free-text note stays on the row.
+    await audit(staff.id, account.entity_id, 'finance.payee_verified', account.id, { partyId: account.party_id, method: how.method });
     return jsonResponse({ ok: true });
   } catch (err) {
     return serverError(err, 'verify payee account');
