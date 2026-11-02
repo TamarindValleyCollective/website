@@ -274,8 +274,15 @@ function demoBookings() {
       stay('demo-b', day(1), 2, 'Tent03', [guest('Meera Nair'), guest('Kiran Nair'), guest('Ila', 'Vegan')], { label: 'Nair party' }),
       stay('demo-c', day(-2), 2, 'Tent05', [guest('Menon'), guest('Mrs Menon')], { label: 'Menon' }),
     ],
-    access: { role: 'admin', allowedTypes: null },
+    access: { role: 'admin', allowedTypes: null, canApprove: true },
   };
+}
+
+// One waiting change to a past stay, as the Linger team would submit it, so the "Changes to approve" list has something to show.
+function demoChangeRequests() {
+  const base = demoBookings().bookings[2];
+  const proposed = { ...base, nights: 3, label: 'Menon family', tents: [{ tentId: 'Tent05', guests: [...base.tents[0].guests, { name: 'Anil Menon', ageGroup: 'Adult' }] }] };
+  return { requests: [{ id: 'demo-req-1', reason: 'They stayed an extra night and a relative joined; the front desk missed it.', requestedBy: 'Linger front desk', requestedAt: new Date().toISOString(), mine: false, proposed, booking: base }] };
 }
 
 export function installStaffDemo(tokenKey: string, kind: string): void {
@@ -296,6 +303,8 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     if (path === '/api/staff-me') return reply(demoMe(kind));
     if (path === '/api/staff-admin/people' && (init?.method ?? 'GET') === 'GET') return reply(demoAccess());
     if (path === '/api/accommodation-admin/bookings' && (init?.method ?? 'GET') === 'GET') return reply(demoBookings());
+    if (path === '/api/accommodation-admin/change-requests' && (init?.method ?? 'GET') === 'GET') return reply(demoChangeRequests());
+    if (path === '/api/accommodation-admin/change-requests/decide') return reply({ ok: true });
     if (path === '/api/units-admin/overview') return reply(demoUnits());
     if (path === '/api/staff-admin/activity') return reply({ events: [], nextBefore: null });
     if (path === '/api/staff-mfa/status') {

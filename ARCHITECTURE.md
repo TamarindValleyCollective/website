@@ -696,6 +696,16 @@ outside both the local machine and Netlify (the member-update-email workflow).
   units, the caller's allowed booking types and the bookings of the chosen dates from the same
   `GET /api/accommodation-admin/bookings?month=` the page uses, finds a returning guest by mobile via
   `guests/search`, and tells the page when it saved (`stays-booking:saved`) or needs sign-in. No new endpoint.
+- **Changes to past stays need an admin (Stays page)** — a stay that has already ended is changed directly only by an
+  `admin` of the `accommodation` module. Anyone else who may edit that booking type (the Linger team) submits the same
+  change from the tent sheet or the booking form with a reason: `POST /api/accommodation-admin/bookings/update` answers
+  `202 {pending}` and stores it in `accommodation_change_requests` (migration 0076, service-role only) instead of
+  writing, so the booking is untouched. `GET /change-requests` lists pending requests (an admin sees all, anyone else
+  their own) and `POST /change-requests/decide` (admin only) approves, which applies the stored payload through the normal
+  `accommodation_update_booking` (conflict checks and the audit log as for any edit, the reason keeping who asked), or
+  rejects. A clash on approval leaves the request pending. The page shows "Changes to approve (n)" to admins and
+  "Waiting for approval (n)" to the requester, each opening a list that spells out what would change
+  (`scripts/lib/stay-change-request.mjs`, tested). Cancelling a past stay is unchanged (a reason, no approval).
 - **`netlify/functions/stays-day-summary.mts`** — `POST /api/stays-day-summary` (`{date}`; `view` on the
   `accommodation` module, and only for roles that may see guest names, so `read_only` gets `summary: null`),
   behind the Day view's AI summary box. Reads that day's bookings itself, turns them into **anonymous facts**

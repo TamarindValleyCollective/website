@@ -32,7 +32,7 @@ import { canSeeNames, maskName } from './lib/staff-masking';
 import { BOOKING_TYPES, type BookingType, type Capability } from './lib/staff-registry';
 import { normalizeMobileNumber, isValidEmail } from '../../scripts/lib/accommodation.mjs';
 import { writeProblem } from '../../scripts/lib/accommodation-units.mjs';
-import { listUnits, listTypes, listBookingsForAdmin, createBooking, updateBooking, deleteBooking, searchGuests, listStaysForPerson, getBookingById, listNoticesForBookings, getNotice, saveNotice } from '../../scripts/lib/accommodation-db.mjs';
+import { listUnits, listTypes, listBookingsForAdmin, createBooking, updateBooking, deleteBooking, searchGuests, listStaysForPerson, getBookingById, listNoticesForBookings, getNotice, saveNotice, createChangeRequest, listPendingChangeRequests, getChangeRequest, decideChangeRequest } from '../../scripts/lib/accommodation-db.mjs';
 import { isNotifiableType, snapshotOf, hasPendingChanges } from '../../scripts/lib/stay-notice.mjs';
 import { sendStayNotices, sendStayCancellation } from './lib/stay-notify';
 
@@ -105,12 +105,15 @@ function canWriteType(staff: StaffGrant, type: BookingType): boolean {
 // 'restricted', one without is indistinguishable from 'admin' for the page's
 // purposes (writes everything). The server-side canWriteType above is the
 // real gate either way.
-function pageAccess(staff: StaffGrant): { role: 'admin' | 'restricted' | 'viewer'; allowedTypes: BookingType[] | null } {
-  if (staff.role === 'read_only') return { role: 'viewer', allowedTypes: null };
+// `canApprove` is who may decide a change request to a past stay: the admins of the tool (the page cannot tell them from a
+// `user` without a type scope otherwise, since both read as 'admin' above).
+function pageAccess(staff: StaffGrant): { role: 'admin' | 'restricted' | 'viewer'; allowedTypes: BookingType[] | null; canApprove: boolean } {
+  const canApprove = staff.role === 'admin';
+  if (staff.role === 'read_only') return { role: 'viewer', allowedTypes: null, canApprove };
   if (staff.role === 'user' && staff.scope?.allowedTypes) {
-    return { role: 'restricted', allowedTypes: staff.scope.allowedTypes as BookingType[] };
+    return { role: 'restricted', allowedTypes: staff.scope.allowedTypes as BookingType[], canApprove };
   }
-  return { role: 'admin', allowedTypes: null };
+  return { role: 'admin', allowedTypes: null, canApprove };
 }
 
 const VALID_TYPES: readonly BookingType[] = BOOKING_TYPES;
@@ -351,6 +354,28 @@ async function handleUpdate(req: Request, staff: StaffGrant): Promise<Response> 
   const blocked = unitProblem([...existing.tents.map((t: { tentId: string }) => t.tentId), ...(payload.tents ?? []).map((t) => t.tentId)], unitsById);
   if (blocked) return jsonResponse({ error: blocked.message }, blocked.status);
 
+  // A stay that has already ended is changed by an admin only. Anyone else who may edit it submits the change with a
+  // reason, and it waits as a request (migration 0076) until an admin approves it.
+  if (existing.isPast && staff.role !== 'admin') {
+    if (!payload.reason?.trim()) {
+      return jsonResponse({ error: 'A reason is required to change a stay that has already happened.', code: 'PAST_BOOKING_REASON_REQUIRED' }, 422);
+    }
+    try {
+      const { reason, id: _id, ...proposed } = payload;
+      await createChangeRequest({
+        bookingId: payload.id,
+        payload: proposed,
+        reason: reason.trim(),
+        requestedBy: staff.id,
+        requestedByName: staff.name ?? staff.googleName ?? staff.email,
+      });
+      return jsonResponse({ pending: true, message: 'Sent to the admins for approval. The stay stays as it is until then.' }, 202);
+    } catch (err) {
+      console.error('Failed to save the change request', err);
+      return jsonResponse({ error: 'Failed to send the change for approval' }, 500);
+    }
+  }
+
   try {
     const booking = await updateBooking({
       id: payload.id,
@@ -379,6 +404,82 @@ async function handleUpdate(req: Request, staff: StaffGrant): Promise<Response> 
     console.error('Failed to update booking', err);
     return jsonResponse({ error: 'Failed to save the booking' }, 500);
   }
+}
+
+// Change requests to past stays: admins see every pending one and decide; anyone else sees only their own.
+async function handleChangeRequests(staff: StaffGrant): Promise<Response> {
+  const rows = await listPendingChangeRequests(staff.role === 'admin' ? {} : { requestedBy: staff.id });
+  const requests = [];
+  for (const r of rows) {
+    const booking = await getBookingById(r.booking_id);
+    if (!booking) continue;
+    requests.push({
+      id: r.id,
+      reason: r.reason,
+      requestedBy: r.requested_by_name ?? 'Someone',
+      requestedAt: r.requested_at,
+      mine: r.requested_by === staff.id,
+      proposed: r.payload,
+      booking: shapeBooking(booking, staff),
+    });
+  }
+  return jsonResponse({ requests });
+}
+
+async function handleDecide(req: Request, staff: StaffGrant): Promise<Response> {
+  if (staff.role !== 'admin') return jsonResponse({ error: 'Only admins can approve or reject a change' }, 403);
+  let payload: { id?: string; decision?: string; note?: string };
+  try {
+    payload = await req.json();
+  } catch {
+    return jsonResponse({ error: 'Invalid request body' }, 400);
+  }
+  if (!payload.id || (payload.decision !== 'approve' && payload.decision !== 'reject')) return jsonResponse({ error: 'id and decision (approve or reject) are required' }, 400);
+
+  const request = await getChangeRequest(payload.id);
+  if (!request) return jsonResponse({ error: 'Request not found' }, 404);
+  if (request.status !== 'pending') return jsonResponse({ error: 'Somebody has already decided this request' }, 409);
+
+  if (payload.decision === 'reject') {
+    const closed = await decideChangeRequest(request.id, { status: 'rejected', decidedBy: staff.id, note: payload.note?.trim() });
+    return closed ? jsonResponse({ ok: true, status: 'rejected' }) : jsonResponse({ error: 'Somebody has already decided this request' }, 409);
+  }
+
+  const existing = await getBookingById(request.booking_id);
+  if (!existing) return jsonResponse({ error: 'That booking no longer exists' }, 404);
+  const p = request.payload as Partial<Booking>;
+  const unitsById = await unitMap();
+  const validationError = validateBookingInput(p, unitsById);
+  if (validationError) return jsonResponse({ error: validationError }, 400);
+  const blocked = unitProblem([...existing.tents.map((t: { tentId: string }) => t.tentId), ...(p.tents ?? []).map((t) => t.tentId)], unitsById);
+  if (blocked) return jsonResponse({ error: blocked.message }, blocked.status);
+
+  try {
+    await updateBooking({
+      id: request.booking_id,
+      type: p.type!,
+      eventSlug: p.eventSlug,
+      eventTitle: p.eventTitle,
+      label: p.label,
+      exclusive: p.type === 'private-event' ? Boolean(p.exclusive) : undefined,
+      startDate: p.startDate!,
+      nights: p.nights!,
+      tents: p.tents ?? [],
+      note: p.note,
+      updatedBy: staff.id,
+      // The audit log records who approved; the reason keeps who asked and why.
+      reason: `Requested by ${request.requested_by_name ?? request.requested_by}: ${request.reason}`,
+    });
+  } catch (err) {
+    const status = (err as { status?: number }).status;
+    // A conflict leaves the request pending: the admin can fix the clash and approve again, or reject it.
+    if (status === 409) return jsonResponse({ error: (err as Error).message }, 409);
+    if (status === 404) return jsonResponse({ error: 'That booking no longer exists' }, 404);
+    console.error('Failed to apply an approved change', err);
+    return jsonResponse({ error: 'Failed to apply the change' }, 500);
+  }
+  await decideChangeRequest(request.id, { status: 'approved', decidedBy: staff.id, note: payload.note?.trim() });
+  return jsonResponse({ ok: true, status: 'approved' });
 }
 
 // "Finalize & notify" (and "Send update"): admin-triggered, never automatic.
@@ -481,6 +582,10 @@ export default async (req: Request): Promise<Response> => {
             ? { capability: 'edit', run: (staff) => handleDelete(req, staff) }
             : url.pathname === '/api/accommodation-admin/bookings/notify' && req.method === 'POST'
               ? { capability: 'edit', run: (staff) => handleNotify(req, staff) }
+            : url.pathname === '/api/accommodation-admin/change-requests' && req.method === 'GET'
+              ? { capability: 'edit', run: (staff) => handleChangeRequests(staff) }
+            : url.pathname === '/api/accommodation-admin/change-requests/decide' && req.method === 'POST'
+              ? { capability: 'edit', run: (staff) => handleDecide(req, staff) }
             : url.pathname === '/api/accommodation-admin/guests/search' && req.method === 'GET'
               ? { capability: 'edit', run: (staff) => handleGuestSearch(url, staff) }
               : staysMatch && req.method === 'GET'
@@ -499,6 +604,8 @@ export const config = {
     '/api/accommodation-admin/bookings/update',
     '/api/accommodation-admin/bookings/delete',
     '/api/accommodation-admin/bookings/notify',
+    '/api/accommodation-admin/change-requests',
+    '/api/accommodation-admin/change-requests/decide',
     '/api/accommodation-admin/guests/search',
     '/api/accommodation-admin/guests/:id/stays',
   ],

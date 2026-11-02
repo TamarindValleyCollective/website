@@ -60,6 +60,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       <!-- At the top, not under the bookings list: the Day view is long (plan, then tents), and a primary action that
            needs a scroll to find is not one. -->
       <div class="stays-actions">
+        <button type="button" id="requests-btn" class="button" hidden></button>
         <button type="button" id="messages-btn" class="button">Messages</button>
         <button type="button" id="new-booking-btn" class="button button--primary" data-tour="new-booking">+ New booking</button>
       </div>
@@ -98,6 +99,13 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         <h2 id="booking-list-heading">Bookings this month</h2>
       </div>
       <div id="booking-list" class="booking-list"></div>
+
+      <dialog id="requests-dialog" class="sheet stack-form" aria-labelledby="requests-title">
+        <h2 id="requests-title">Changes to past stays</h2>
+        <p id="requests-intro" class="hint"></p>
+        <div id="requests-list"></div>
+        <div class="sheet-actions"><button type="button" class="button button--outline" id="requests-close">Close</button></div>
+      </dialog>
 
       <div id="booking-modal" class="booking-modal" hidden>
         <div id="booking-modal-backdrop" class="booking-modal-backdrop"></div>
@@ -177,7 +185,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
               </label>
 
               <label id="f-reason-wrap" hidden>
-                Reason for this change <span class="hint-inline">(required — this stay has already happened)</span>
+                Reason for this change <span class="hint-inline" id="f-reason-hint">(required — this stay has already happened)</span>
                 <textarea id="f-reason" rows="2"></textarea>
               </label>
             </fieldset>
@@ -262,6 +270,20 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
        (588px) exceeded the viewport (485px) and the Day/Week/Month buttons
        were hidden off-screen with no way to reach them. */
     flex-wrap: wrap;
+  }
+
+  .req-card {
+    margin-bottom: 12px;
+  }
+
+  .req-card h3 {
+    margin: 0 0 4px;
+    font-size: var(--text-lg);
+  }
+
+  .req-changes {
+    margin: 6px 0 10px;
+    padding-left: 18px;
   }
 
   .stays-modes {
@@ -1568,6 +1590,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
   import { normalizeMobileNumber, isValidEmail } from '../../../scripts/lib/accommodation.mjs';
   import { capacityOn, levelOf, nightIndex, taken } from '../../../scripts/lib/stay-capacity.mjs';
   import { buildDayPlan, planToMessageText, tentsLabel } from '../../../scripts/lib/stay-day-plan.mjs';
+  import { describeChange } from '../../../scripts/lib/stay-change-request.mjs';
   import { unitStates, tentSummary } from '../../../scripts/lib/stay-tent-states.mjs';
 
   declare const google: any;
@@ -1760,6 +1783,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
 
   type ViewMode = 'day' | 'week' | 'month';
   let viewMode: ViewMode = 'day';
+  let myCanApprove = false; // may decide change requests to past stays (the tool's admins)
   let lastAvail: ViewMode = 'week'; // which of Week and Month Availability returns to
   let anchorDate = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD, local
   let currentBookings: Booking[] = [];
@@ -3451,7 +3475,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     const leaving = el.dataset.leavingId ? currentBookings.find((b) => b.id === el.dataset.leavingId) : undefined;
     // The sheet is as of the day shown in Day view, the only place it opens from.
     const date = anchorDate;
-    tentSheetControls()?.open({ booking, tentId, date, leaving, units: UNITS, bookings: currentBookings, role: myRole, allowedTypes: myAllowedTypes });
+    tentSheetControls()?.open({ booking, tentId, date, leaving, units: UNITS, bookings: currentBookings, role: myRole, allowedTypes: myAllowedTypes, canApprove: myCanApprove });
   }
 
   tentSheet.addEventListener('tent-sheet:cancel', async (ev) => {
@@ -3727,6 +3751,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
     cancelEditBtn.hidden = false;
     cancelEditBtn.textContent = canEdit ? 'Cancel edit' : 'Close';
     reasonWrap.hidden = !b.isPast;
+    document.getElementById('f-reason-hint')!.textContent = myCanApprove ? '(required — this stay has already happened)' : '(required — this stay has already happened; an admin reviews it before it changes)';
     reasonInput.value = '';
     // An existing public-event booking must stay viewable/editable even if
     // its event no longer has any upcoming overnight dates to offer a *new*
@@ -3937,6 +3962,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         formError.textContent = data.error ?? 'Failed to save — try again.';
         return;
       }
+      if (res.status === 202) showToast(data.message ?? 'Sent to the admins for approval.');
       resetForm();
       closeBookingModal();
       await loadView();
@@ -3997,7 +4023,7 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
         units: Unit[];
         types: { id: string; label: string }[];
         bookings: Booking[];
-        access: { role: Role; allowedTypes: string[] | null };
+        access: { role: Role; allowedTypes: string[] | null; canApprove: boolean };
       }[];
       applyServerUnits(bodies[0]?.units, bodies[0]?.types);
       // Dedupe by id - a week straddling two months fetches both, and a
@@ -4010,12 +4036,14 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       if (bodies[0]?.access) {
         myRole = bodies[0].access.role;
         myAllowedTypes = bodies[0].access.allowedTypes;
+        myCanApprove = Boolean(bodies[0].access.canApprove);
       }
       newBookingBtn.hidden = myRole === 'viewer';
       hideStatus();
       renderGrid();
       renderBookingList();
       markOccupiedTents();
+      void loadRequests();
     } catch (err) {
       const handled = err instanceof Error && (err.message === 'Unauthorized' || err.message === 'Forbidden');
       if (!handled) showStatus('Failed to load bookings — try refreshing.');
@@ -4067,6 +4095,87 @@ const allEvents = (await getCollection('events', (e) => !e.data.draft && !e.id.s
       jumpInput.showPicker();
     } catch {
       jumpInput.focus();
+    }
+  });
+
+  // ---- Changes to past stays. An admin of the tool changes a past stay directly; anyone else submits the change with a
+  // reason and it waits here. Admins decide each one; the person who asked sees theirs as waiting.
+  type ChangeRequest = { id: string; reason: string; requestedBy: string; requestedAt: string; mine: boolean; proposed: any; booking: Booking };
+  const requestsBtn = document.getElementById('requests-btn') as HTMLButtonElement;
+  const requestsDialog = document.getElementById('requests-dialog') as HTMLDialogElement;
+  const requestsList = document.getElementById('requests-list') as HTMLElement;
+  let changeRequests: ChangeRequest[] = [];
+
+  async function loadRequests() {
+    try {
+      const res = await authedFetch('/api/accommodation-admin/change-requests');
+      if (!res.ok) return;
+      changeRequests = ((await res.json()) as { requests: ChangeRequest[] }).requests;
+    } catch {
+      return;
+    }
+    const n = changeRequests.length;
+    requestsBtn.hidden = n === 0;
+    requestsBtn.textContent = myCanApprove ? `Changes to approve (${n})` : `Waiting for approval (${n})`;
+    if (requestsDialog.open) renderRequests();
+  }
+
+  function renderRequests() {
+    document.getElementById('requests-intro')!.textContent = myCanApprove
+      ? 'Past stays can only be changed by an admin. These were proposed by people without that right: approve to apply the change, or reject to leave the stay as it is.'
+      : 'These changes are waiting for an admin. The stays stay as they are until then.';
+    const labels = new Map(UNITS.map((u) => [u.id, u.label]));
+    requestsList.innerHTML = changeRequests
+      .map((r) => {
+        const lines = describeChange(r.booking, r.proposed, labels) as string[];
+        const title = r.booking.eventTitle ?? r.booking.label ?? r.booking.tents.flatMap((t) => t.guests).find((g) => g.name)?.name ?? typeDisplayLabel(r.booking.type);
+        const when = new Date(r.requestedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+        return `<section class="card req-card" data-request="${escapeAttr(r.id)}">
+          <h3>${escapeHtml(title)} <span class="hint">${escapeHtml(r.booking.startDate)} · ${r.booking.nights} ${r.booking.nights === 1 ? 'night' : 'nights'}</span></h3>
+          <p class="hint">Asked by ${escapeHtml(r.mine ? 'you' : r.requestedBy)} on ${escapeHtml(when)}</p>
+          <p><strong>Why:</strong> ${escapeHtml(r.reason)}</p>
+          ${lines.length ? `<ul class="req-changes">${lines.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>` : '<p class="hint">No change a person would see.</p>'}
+          ${
+            myCanApprove
+              ? `<label>Note (optional)<input type="text" data-note /></label>
+                 <p class="form-msg" data-err role="alert"></p>
+                 <div class="sheet-actions"><button type="button" class="button button--outline" data-decide="reject">Reject</button><button type="button" class="button button--primary" data-decide="approve">Approve</button></div>`
+              : '<p class="hint">Waiting for an admin.</p>'
+          }
+        </section>`;
+      })
+      .join('');
+  }
+
+  requestsBtn.addEventListener('click', () => {
+    renderRequests();
+    requestsDialog.showModal();
+  });
+  document.getElementById('requests-close')!.addEventListener('click', () => requestsDialog.close());
+  requestsList.addEventListener('click', async (ev) => {
+    const btn = (ev.target as HTMLElement).closest('[data-decide]') as HTMLButtonElement | null;
+    if (!btn) return;
+    const card = btn.closest('[data-request]') as HTMLElement;
+    const err = card.querySelector('[data-err]') as HTMLElement;
+    const done = setBusy(btn, btn.dataset.decide === 'approve' ? 'Applying…' : 'Rejecting…');
+    err.textContent = '';
+    try {
+      const res = await authedFetch('/api/accommodation-admin/change-requests/decide', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: card.dataset.request, decision: btn.dataset.decide, note: (card.querySelector('[data-note]') as HTMLInputElement).value }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        err.textContent = data.error ?? 'Could not save that decision. Try again.';
+        return;
+      }
+      showToast(btn.dataset.decide === 'approve' ? 'Change applied' : 'Change rejected');
+      await loadView();
+    } catch {
+      /* authedFetch already sent a signed-out admin back to the gate */
+    } finally {
+      done();
     }
   });
 

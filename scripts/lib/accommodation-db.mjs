@@ -235,6 +235,39 @@ export async function deleteBooking(id, { deletedBy, reason }) {
   await callRpc('accommodation_delete_booking', { p_id: id, p_deleted_by: deletedBy, p_reason: reason || null });
 }
 
+// Changes to a past stay proposed by someone who may not make them (see supabase/migrations/0076). The booking itself
+// is untouched until an admin approves the request.
+export async function createChangeRequest({ bookingId, payload, reason, requestedBy, requestedByName }) {
+  const res = await restFetch('/accommodation_change_requests', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify({ booking_id: bookingId, payload, reason, requested_by: requestedBy, requested_by_name: requestedByName ?? null }),
+  });
+  return (await res.json())[0];
+}
+
+/** Pending requests, oldest first; `requestedBy` narrows them to one person's own. */
+export async function listPendingChangeRequests({ requestedBy } = {}) {
+  const who = requestedBy ? `&requested_by=eq.${encodeURIComponent(requestedBy)}` : '';
+  const res = await restFetch(`/accommodation_change_requests?status=eq.pending${who}&order=requested_at.asc`);
+  return res.json();
+}
+
+export async function getChangeRequest(id) {
+  const res = await restFetch(`/accommodation_change_requests?id=eq.${encodeURIComponent(id)}`);
+  return (await res.json())[0] ?? null;
+}
+
+/** Closes a pending request. Returns null when it was no longer pending (somebody else decided first). */
+export async function decideChangeRequest(id, { status, decidedBy, note }) {
+  const res = await restFetch(`/accommodation_change_requests?id=eq.${encodeURIComponent(id)}&status=eq.pending`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify({ status, decided_by: decidedBy, decided_at: new Date().toISOString(), decision_note: note ?? null }),
+  });
+  return (await res.json())[0] ?? null;
+}
+
 // The bookings on one unit from `fromDate` on, for the unit's owner (the member portal). No contact details are read:
 // a guest comes back with a name, age group, gender and preferences only. Whole-farm closures hold no tent rows, so they
 // are read separately. Shaped like rowToBooking's output so member-rental.mjs can work on it.
