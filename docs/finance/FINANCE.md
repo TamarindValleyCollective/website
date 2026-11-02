@@ -12,7 +12,8 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 |---|---|
 | 01 Foundation & access | Built on branch `finance-01-foundation` (draft PR). Migration `0077` **applied to TVC ERP on 2026-11-02**. |
 | 01 follow-up | `0078_finance_categories_and_projects.sql` **applied to TVC ERP on 2026-11-02**. |
-| 02-13 | Not started |
+| 03 Statement import | Built on branch `finance-03-statement-import` (draft PR). Migration `0080` **applied to TVC ERP on 2026-11-02**. |
+| 02, 04-13 | Not started |
 
 ## Access
 
@@ -82,3 +83,27 @@ existing grant. `requireStaff` selects `expires_at`, so the column has to exist 
 ## Vocabulary
 
 See `CONTEXT.md` at the repo root (bank line, allocation, period, nature, party, voucher, circle).
+
+## Statement import (session 03)
+
+Page `/internal/finance/import/`; routes in `finance-admin.mts` (`GET /imports`, `POST /imports/preview`, `POST /imports/commit`,
+`POST /bank-accounts`). Needs `import` (finance user or admin) to upload and `configure` (admin) to register an account.
+
+- **Files.** The Axis statement is one Excel file per calendar year from the start of the account; upload several at once or one
+  at a time, in any order. The Paytm UPI export is one Excel file. Each file is its own batch (`fin_import_batches`, unique file
+  hash, raw file kept in private R2). The same file is never imported twice.
+- **Per-year checks.** Each file's balance chain must hold from its opening balance, and the bank's own footer totals must agree.
+  Across years, one year's closing balance must equal the next year's opening balance (a mismatch blocks the file). A gap between
+  years is shown with its dates and closes when the missing year arrives; nothing is guessed.
+- **Overlap.** A later download of a period already held adds only lines not held (`dedupe_key`: account, date, narration,
+  direction, amount, running balance, order among exact repeats). It must agree with what is held, or it is blocked.
+- **Paytm.** Only rows whose account label equals a bank account's `upi_label` are kept; the rest are ignored but counted with
+  their total. `is_circle` = a payment out whose tag matches `fin_entities.circle_tag` ("Pocket Money"). Rows join bank lines by
+  the 12-digit UPI reference when amount and direction agree; a Paytm row after the last bank line waits for the next statement.
+  Bank UPI debits before `fin_entities.paytm_since` have no Paytm row and are reported as such.
+- **Tables (migration `0080`, applied 2026-11-02).** `fin_import_batches`, `fin_bank_lines` (append-only), `fin_upi_lines` (only
+  `bank_line_id` may change), functions `fin_store_bank_batch`, `fin_store_upi_batch`, `fin_link_upi_lines` (service role only),
+  and `circle_tag` / `paytm_since` on `fin_entities`.
+- **Code.** Parsing and planning are pure and separate (`scripts/lib/finance-*.mjs`); storing goes through an `ImportStore`.
+  A bank API would feed the same planning/storing step; none is built.
+- **Audit.** `finance.import_committed` (counts only) is written before anything is stored; `finance.bank_account_added`.

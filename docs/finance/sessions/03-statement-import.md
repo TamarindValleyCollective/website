@@ -40,6 +40,14 @@ upload function and page; `FINANCE.md` section.
   (a maintained reader, or a small reader of the file format) and say why in the PR; keep it server-side only.
   Excel dates may arrive as serial numbers or as text, and amounts as numbers or text with commas: handle each
   and test them on invented fixtures.
+- **The Axis statement comes as one Excel file per calendar year, from the start of the account** (2022 onward; the
+  current year's file runs to the download date). The importer accepts **several files at once or one at a time, in
+  any order**, and treats **each year as its own batch** (own period, opening and closing balance, file hash). It
+  checks the balance chain **across year boundaries**: one year's closing balance must equal the next year's opening
+  balance, and a mismatch blocks the file being imported. It **reports any gap or overlap between years** (with the
+  dates) **instead of guessing**: a gap is shown and closes when the missing year arrives; an overlap is only accepted
+  when it agrees exactly with what is held. It still **skips lines already held** (`dedupe_key`), and the same file is
+  never imported twice.
 - **The Axis statement covers the whole life of the account (from inception)**, so it is large. Import every
   line (bank lines are immutable facts, and one balance chain from the first line is the strongest integrity
   check there is), but the history load (session 06) only allocates FY 2024-25 onward. The importer must
@@ -66,4 +74,41 @@ This is the main blocker. Also confirm the registered account label text the Pay
 > Read `docs/finance/README.md`, `DESIGN.md` and `sessions/03-statement-import.md`. I will give you a real Axis statement file and a Paytm export; copy them into an empty folder outside the repo, never commit them, and build only invented fixtures. Build session 03 test-first.
 
 ## Done
-_Fill in at the end of the session._
+Built 2026-11-02 on branch `finance-03-statement-import` (draft PR). **Migration `0080_finance_statement_import.sql` was
+applied to TVC ERP on 2026-11-02** (0079 belongs to the open session-04 PR; the two touch different tables and apply in either order).
+Tried first on a throwaway local Postgres, then checked after applying: three tables and three functions present, RLS on, no `anon`/`authenticated` grants (functions execute for `service_role` only), both triggers present, `circle_tag` = Pocket Money, `paytm_since` = 2026-08-31, all three tables empty.
+
+**What exists**
+- Step 1, parsing (pure, `scripts/lib/`): `finance-xlsx.mjs` (a small `.xlsx` reader on `fflate`: maintained, zero
+  dependencies, server-side only; chosen over SheetJS, whose npm release is stale with known advisories),
+  `finance-cells.mjs` (amounts and dates as text or numbers, never floats), `finance-axis-statement.mjs`,
+  `finance-paytm.mjs`.
+- Step 2, storing (pure, source-independent): `finance-import-plan.mjs` (per-year batches, the balance chain inside a file
+  and across years, gaps, overlaps, dedupe) and `finance-upi-plan.mjs` (registered-account filter, ignored rows counted,
+  circle flag, linking by reference, the awaiting / unmatched / predates-Paytm summary). A bank API would call step 2.
+- `netlify/functions/lib/finance-import.ts` (orchestrates behind an `ImportStore`), `finance-import-store.ts` (Supabase),
+  `finance-storage.ts` (private R2, `finance/imports/<batch>.xlsx`), routes in `finance-admin.mts`, page
+  `/internal/finance/import/`.
+- Tests (`node --test scripts/lib/finance-*.test.mjs`, run by the Finance tests Action): reader, cells, both parsers, the
+  plan, the UPI plan, the full flow on an in-memory store, and the endpoint (access, preview writes nothing, audit before
+  store). All fixtures are invented, built in the real layouts by `finance-fixtures.mjs`.
+
+**Rules as built**
+- Preview then confirm; commit re-plans from the database, so a stale preview cannot store anything the plan would refuse.
+- A blocked file is skipped; the rest of the upload goes through. Blocked: unreadable, own chain broken (line reported),
+  bank's footer totals disagree, year does not meet its neighbour, overlap that disagrees with what is held, account not
+  registered. Reported but allowed: a gap between years.
+- Overlap rule: every held line in the period must appear in the file as one run; a line not held may only be new if dated
+  on or after the last day held.
+- Each file is stored by one database function in one transaction (whole file or nothing); bank lines are immutable; a UPI
+  row only ever gains its `bank_line_id`.
+- Paytm rows on accounts other than a registered `upi_label` are ignored but counted with their total; ones with a
+  reference are stored flagged, ones without are counted only. Bank UPI debits before `fin_entities.paytm_since`
+  (seeded 2026-08-31) are reported as "will never have a Paytm row", not as missing.
+- Needs a bank account registered first (last four digits plus the Paytm label): a director adds it on the import page.
+
+**Checked on the real files** (read in place, never copied; counts only): five yearly files, 1,376 lines, every balance chain
+holds inside each file and across all four year boundaries, bank footer totals agree, no gaps; shuffled upload, re-upload
+and one-year-at-a-time all behave. Paytm: 72 rows, 66 on our account all link to a bank line by reference, 6 ignored.
+**Not done:** registering the real account and the real import into TVC ERP (after this is merged and deployed);
+the real R2 write was not exercised (stubbed in tests).
