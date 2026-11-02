@@ -9,6 +9,7 @@ on:
   pull_request:
     paths:
       - 'netlify/functions/**'
+      - 'package.json'
       - 'scripts/lib/finance-*'
       - 'docs/finance/**'
       - '.github/workflows/finance-tests.yml'
@@ -28,5 +29,5 @@ jobs:
 
       - run: npm ci
 
-      - name: Finance access rules and endpoint
-        run: node --test scripts/lib/finance-access.test.mjs scripts/lib/finance-endpoint.test.mjs
+      - name: Finance rules, importers and endpoints
+        run: node --test scripts/lib/finance-*.test.mjs
