@@ -273,6 +273,8 @@ function demoBookings(canApprove = true) {
       stay('demo-a', day(0), 3, 'Tent01', [guest('Asha Rao', 'Nut allergy'), guest('Dev Rao')], { label: 'Rao family', note: 'Arrives after 8 pm' }),
       stay('demo-b', day(1), 2, 'Tent03', [guest('Meera Nair'), guest('Kiran Nair'), guest('Ila', 'Vegan')], { label: 'Nair party' }),
       stay('demo-c', day(-2), 2, 'Tent05', [guest('Menon'), guest('Mrs Menon')], { label: 'Menon' }),
+      // A stay that has already ended (open the Day plan for 10 days ago to edit or cancel it).
+      stay('demo-d', day(-10), 2, 'Tent04', [guest('Rekha Pillai'), guest('Suresh Pillai')], { label: 'Pillai', isPast: true }),
     ],
     access: { role: 'admin', allowedTypes: null, canApprove },
   };
@@ -311,6 +313,13 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     if (path === '/api/staff-me') return reply(demoMe(kind));
     if (path === '/api/staff-admin/people' && (init?.method ?? 'GET') === 'GET') return reply(demoAccess());
     if (path === '/api/accommodation-admin/bookings' && (init?.method ?? 'GET') === 'GET') return reply(demoBookings(kind !== 'limited'));
+    // Saving, updating and cancelling reach nothing: a non-approver's change to the past is answered the way the server does
+    // (202, waiting for a super admin), anything else just succeeds. Nothing is kept.
+    if (/^\/api\/accommodation-admin\/bookings(\/update|\/delete)?$/.test(path) && (init?.method ?? 'GET') === 'POST') {
+      const waiting = kind === 'limited';
+      const body = waiting ? { pending: true, message: 'Sent to the super admins for approval. Nothing changes until they approve it.' } : { ok: true, booking: {} };
+      return Promise.resolve(new Response(JSON.stringify(body), { status: waiting ? 202 : 200, headers: { 'content-type': 'application/json' } }));
+    }
     if (path === '/api/accommodation-admin/change-requests' && (init?.method ?? 'GET') === 'GET') return reply(demoChangeRequests());
     if (path === '/api/accommodation-admin/change-requests/decide') return reply({ ok: true });
     if (path === '/api/units-admin/overview') return reply(demoUnits());
