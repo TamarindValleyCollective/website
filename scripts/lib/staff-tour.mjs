@@ -49,7 +49,7 @@ export const TOURS = {
       target: 'menu',
       tag: 'Menu',
       title: 'The menu',
-      text: 'The same tools, a click away from every page. A tool only shows up if you hold a role in it.',
+      text: 'Your sections (Operations, Community, Finance, Settings), a click away from every page. A section only shows up if you hold a role in one of its pages, and the list beside it shows that section\'s pages.',
     },
     {
       id: 'collapse',
@@ -58,7 +58,7 @@ export const TOURS = {
       target: 'collapse',
       tag: 'Menu',
       title: 'More room',
-      text: 'Fold the menu away to give a wide page more space. It remembers your choice on this device.',
+      text: 'Hide the page list to give a wide page more space; the sections stay. It remembers your choice on this device.',
     },
     {
       id: 'account',
