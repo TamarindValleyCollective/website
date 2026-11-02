@@ -65,10 +65,16 @@ gave 123 parties and 118 accounts (114 bank accounts with an IFSC, 3 without), 1
 case, and 102 accounts that appear under different names in different lists (the first list's name wins). Nothing was
 written; the numbers came from reading the sheets with a read-only key and printing counts only.
 
-**Not verified:** the page has not been rendered in a browser or tried signed in; the import script's `--apply` path and its
-reading of the real sheet have not been run (no credentials or real sheet here, and the real column layout has not been
-seen: the loose header matching is an assumption); migration `0079` was applied to TVC ERP on 2026-11-02 and checked (tables empty, RLS on, no anon grants, trigger present) but not exercised with data; nothing was tested
-with a real step-up token from a browser.
+**Import run (2026-11-02):** `scripts/import-fin-parties.mjs --apply` ran against TVC ERP from the four sheets: **122 parties and
+126 accounts written, all unverified, 0 failed** (counts matched the dry run and a row count afterwards). Anomalies reported:
+8 accounts with no IFSC, 4 with an invalid IFSC (dropped), 4 payees with two bank accounts, 1 shared account, 1 padded 8-digit
+account, 1 refused row (one payee's account number, lost to scientific notation in the source; the party imported without an
+account). Re-running adds nothing twice. The payee key for this import is `FINANCE_PAYEE_KEY`, held in the team's password
+manager and set as a Netlify secret; see FINANCE.md, "Keys".
+
+**Not verified:** the page was rendered and signed in locally, but reveal/verify with real data and a real step-up has not been
+tried; the Netlify `FINANCE_PAYEE_KEY` secret has not been checked against the value used for the import (do that with one payee
+reveal on the deployed site after merge); nothing has been verified yet (all 126 accounts are unverified).
 
 **Left for Sharath / next steps:** share the beneficiary sheet with the service account and run the dry run, then review the
 shared-account cases and the party list; apply `0079` before merging; try the page locally with `netlify dev --port 8888`;
