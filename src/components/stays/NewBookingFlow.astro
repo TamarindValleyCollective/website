@@ -780,7 +780,7 @@ const { events, members } = Astro.props;
         <div class="nbf-chips"><button type="button" class="button button--outline button--small" data-act="tonight">Tonight</button><button type="button" class="button button--outline button--small" data-act="clear-dates">Clear</button></div>
         ${state.nights > 0 ? `<div class="nbf-readback">${fmt(state.startDate)} → ${fmt(out)}<small>${plural(state.nights, 'night')} · check-out on ${fmt(out)}</small></div>` : ''}
         ${publicNote}
-        ${isBackfill(state, today()) ? `<p class="nbf-hint" style="margin-top:8px"><b>This starts in the past.</b> ${canApprove() ? 'It is saved straight away.' : 'It is sent to a super admin to approve, and you will be asked why at the end.'}</p>` : ''}
+        ${isBackfill(state, today()) ? `<p class="nbf-hint" style="margin-top:8px"><b>This starts in the past.</b> ${canApprove() ? 'It is saved straight away.' : 'It is sent to a super admin to approve, and you will be asked why when you continue.'}</p>` : ''}
         <div class="nbf-actions"><button type="button" class="button button--primary" data-act="next">Continue</button></div>`;
     }
 
@@ -861,7 +861,7 @@ const { events, members } = Astro.props;
       const backfill = isBackfill(state, today());
       return `<div class="nbf-review"><b>${esc(kindLabel())}</b>${lines.map((l) => `<div>${esc(l)}</div>`).join('')}</div>
         <div style="margin-top:12px">${noteOpen ? `<label class="nbf-label" for="nbf-note">Note <span class="nbf-hint">(admin-only, never shown publicly)</span></label><textarea id="nbf-note" rows="2" data-bind="note">${esc(state.note)}</textarea>` : '<button type="button" class="nbf-link" data-act="add-note">+ Add a note</button>'}</div>
-        ${backfill ? `<p class="nbf-hint" style="margin-top:8px">${canApprove() ? 'This stay is in the past. It is saved straight away.' : 'This stay is in the past, so it is not recorded until a super admin approves it. You will be asked why when you send it.'}</p>` : ''}
+        ${backfill ? `<p class="nbf-hint" style="margin-top:8px">${canApprove() ? 'This stay is in the past. It is saved straight away.' : 'This stay is in the past, so it is not recorded until a super admin approves it.'}${!canApprove() && state.justification.trim() ? ` <b>Your reason:</b> ${esc(state.justification.trim())} <button type="button" class="nbf-link" data-act="edit-reason">Change</button>` : ''}</p>` : ''}
         <div class="nbf-actions"><button type="button" class="button button--primary" data-act="save">${backfill && !canApprove() ? 'Send for approval' : 'Save booking'}</button><button type="button" class="button button--outline" data-act="start-over">Start over</button></div>`;
     }
 
@@ -911,6 +911,13 @@ const { events, members } = Astro.props;
       }
       error = '';
       if (step === 2) {
+        // A past start is a retrospective change. Warn as soon as the dates are chosen, not after the tents and guests are
+        // filled in, and capture why now; backing out leaves them on the dates to change them.
+        if (isBackfill(state, today()) && !canApprove() && !state.justification.trim()) {
+          const why = await askPastChangeReason({ what: 'add a stay that began in the past', confirmLabel: 'Continue' });
+          if (!why) return;
+          state.justification = why;
+        }
         const ok = await loadAvailability();
         // A tent chosen on the grid that is still free needs no second look.
         step = preselected && ok && state.tentIds.length ? 4 : 3;
@@ -1000,8 +1007,9 @@ const { events, members } = Astro.props;
           return;
         }
       }
-      // Anyone who cannot approve it gets a warning and is asked why, before it is sent for a super admin to approve.
-      if (isBackfill(state, today()) && !canApprove()) {
+      // Normally the reason was captured when they chose the dates; this covers a flow that skipped that step (a free tile
+      // on a past day opens it with the dates already set).
+      if (isBackfill(state, today()) && !canApprove() && !state.justification.trim()) {
         const why = await askPastChangeReason({ what: 'add a stay that began in the past' });
         if (!why) return;
         state.justification = why;
@@ -1060,6 +1068,13 @@ const { events, members } = Astro.props;
           break;
         case 'next':
           void next();
+          break;
+        case 'edit-reason':
+          // Back to the dates: pressing Continue there asks for the reason again.
+          state.justification = '';
+          step = 2;
+          error = '';
+          render();
           break;
         case 'goto':
           step = Number(el.dataset.step);

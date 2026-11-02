@@ -255,10 +255,11 @@ let toastTimer;
  * The warning shown before anyone who cannot approve it changes the past (edits, cancels or adds a stay that has already
  * happened): it says the change is retrospective and will wait for a super admin, and captures why it is being made now.
  * Resolves with the justification (at least 10 characters), or null when they back out.
- * @param {{ what: string }} options what they are about to do, e.g. "change a stay that has already happened"
+ * @param {{ what: string, confirmLabel?: string }} options what they are about to do, e.g. "change a stay that has already happened"; the
+ *   button says "Send for approval" unless nothing is sent yet (then pass e.g. "Continue")
  * @returns {Promise<string | null>}
  */
-export function askPastChangeReason({ what }) {
+export function askPastChangeReason({ what, confirmLabel = 'Send for approval' }) {
   return new Promise((resolve) => {
     const dlg = document.createElement('dialog');
     dlg.className = 'sheet stack-form';
@@ -291,7 +292,7 @@ export function askPastChangeReason({ what }) {
     const send = document.createElement('button');
     send.type = 'button';
     send.className = 'button button--primary';
-    send.textContent = 'Send for approval';
+    send.textContent = confirmLabel;
     send.addEventListener('click', () => {
       const text = area.value.trim();
       if (text.length < 10) {
