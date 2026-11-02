@@ -237,11 +237,11 @@ export async function deleteBooking(id, { deletedBy, reason }) {
 
 // Changes to a past stay proposed by someone who may not make them (see supabase/migrations/0076). The booking itself
 // is untouched until an admin approves the request.
-export async function createChangeRequest({ bookingId, payload, reason, requestedBy, requestedByName }) {
+export async function createChangeRequest({ kind = 'update', bookingId, payload, reason, requestedBy, requestedByName }) {
   const res = await restFetch('/accommodation_change_requests', {
     method: 'POST',
     headers: { 'content-type': 'application/json', Prefer: 'return=representation' },
-    body: JSON.stringify({ booking_id: bookingId, payload, reason, requested_by: requestedBy, requested_by_name: requestedByName ?? null }),
+    body: JSON.stringify({ kind, booking_id: bookingId ?? null, payload, reason, requested_by: requestedBy, requested_by_name: requestedByName ?? null }),
   });
   return (await res.json())[0];
 }

@@ -96,7 +96,6 @@ export function stepProblem(state, step, ctx) {
   if (step === 2) {
     if (!state.startDate) return 'Choose the check-in day.';
     if (!(state.nights >= 1)) return 'Choose the check-out day, after check-in.';
-    if (state.startDate < ctx.today) return 'A new booking cannot start in the past.';
     return null;
   }
   if (step === 3) {
@@ -127,6 +126,20 @@ export function stepProblem(state, step, ctx) {
     return null;
   }
   return null;
+}
+
+/** A booking that starts before today rewrites the past: a super admin saves it, anyone else sends it for approval. */
+export const isBackfill = (state, today) => Boolean(state.startDate) && state.startDate < today;
+
+/**
+ * What is missing before a past stay can be sent for approval: the justification. A super admin needs none.
+ * @param {any} state
+ * @param {{ today: string, canApprove?: boolean }} ctx
+ * @returns {string | null}
+ */
+export function justificationProblem(state, ctx) {
+  if (!isBackfill(state, ctx.today) || ctx.canApprove) return null;
+  return (state.justification ?? '').trim().length >= 10 ? null : 'Say why this past stay is being added (a sentence is enough). A super admin reads it before approving.';
 }
 
 /** The API's save payload (POST /api/accommodation-admin/bookings) for a complete flow. */

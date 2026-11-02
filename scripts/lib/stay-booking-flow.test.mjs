@@ -1,7 +1,7 @@
 // Run with: node --test scripts/lib/stay-booking-flow.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { nightsOf, nightsBetween, bookableUnits, bookingType, allowedKinds, unitAvailability, stepProblem, buildPayload } from './stay-booking-flow.mjs';
+import { isBackfill, justificationProblem, nightsOf, nightsBetween, bookableUnits, bookingType, allowedKinds, unitAvailability, stepProblem, buildPayload } from './stay-booking-flow.mjs';
 
 const units = [
   { id: 'T1', label: 'Banyan', capacity: 3, kind: 'fixed', manager: 'tvc', status: 'rentable' },
@@ -71,10 +71,10 @@ test('step 1: what it is', () => {
   assert.match(stepProblem(base(), 1, { ...ctx, allowedTypes: ['public-event'] }), /not allowed/);
 });
 
-test('step 2: dates, never in the past', () => {
+test('step 2: dates (a past start is allowed here; it needs a justification at the end)', () => {
   assert.equal(stepProblem({ ...base(), startDate: '' }, 2, ctx), 'Choose the check-in day.');
   assert.match(stepProblem({ ...base(), nights: 0 }, 2, ctx), /check-out/);
-  assert.match(stepProblem({ ...base(), startDate: '2026-10-30' }, 2, ctx), /past/);
+  assert.equal(stepProblem({ ...base(), startDate: '2026-10-30' }, 2, ctx), null);
   assert.equal(stepProblem(base(), 2, ctx), null);
   assert.equal(stepProblem({ ...base(), startDate: '2026-11-01' }, 2, ctx), null); // today is fine
 });
@@ -155,4 +155,15 @@ test('payload: a public event carries its slug and title, a private one its labe
 test('payload: closures', () => {
   assert.deepEqual(buildPayload({ ...base(), kind: 'block', reason: 'Roof repair', guests: [] }, units), { type: 'unit-closure', startDate: '2026-11-06', nights: 3, label: 'Roof repair', note: undefined, tents: [{ tentId: 'T1', solo: false, guests: [] }] });
   assert.deepEqual(buildPayload({ ...base(), kind: 'block', wholeFarm: true, reason: 'Farm on Vacation', tentIds: [] }, units), { type: 'farm-closure', startDate: '2026-11-06', nights: 3, tents: [], label: 'Farm on Vacation', note: 'Farm on Vacation' });
+});
+
+test('a stay that starts before today is a backfill and needs a justification unless a super admin adds it', () => {
+  const past = { ...base(), startDate: '2026-10-30' };
+  assert.equal(isBackfill(past, ctx.today), true);
+  assert.equal(isBackfill(base(), ctx.today), false);
+  assert.match(justificationProblem(past, ctx), /why/);
+  assert.match(justificationProblem({ ...past, justification: 'too short' }, ctx), /why/);
+  assert.equal(justificationProblem({ ...past, justification: 'Linger forgot to log the Menon stay' }, ctx), null);
+  assert.equal(justificationProblem(past, { ...ctx, canApprove: true }), null);
+  assert.equal(justificationProblem(base(), ctx), null);
 });

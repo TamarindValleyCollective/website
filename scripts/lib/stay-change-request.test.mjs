@@ -1,7 +1,7 @@
 // Run with: node --test scripts/lib/stay-change-request.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { describeChange } from './stay-change-request.mjs';
+import { describeChange, describeNew } from './stay-change-request.mjs';
 
 const labels = new Map([['T1', 'Banyan'], ['T2', 'Neem']]);
 const g = (name, extra = {}) => ({ personId: name, name, ageGroup: 'Adult', ...extra });
@@ -35,4 +35,14 @@ test('food needs are only compared when both sides carry them', () => {
 
 test('label and note changes show', () => {
   assert.deepEqual(describeChange(stay(), stay({ label: 'Rao family', note: 'Late' }), labels), ['Label: "Rao" → "Rao family"', 'Note: "" → "Late"']);
+});
+
+test('a backfilled stay is spelled out', () => {
+  assert.deepEqual(describeNew(stay({ note: 'Paid in cash' }), labels), [
+    'Dates: 2026-10-05 to 2026-10-08 (3 nights)',
+    'Tent: Banyan',
+    'Guests: Asha, Dev',
+    'Label: "Rao"',
+    'Note: "Paid in cash"',
+  ]);
 });

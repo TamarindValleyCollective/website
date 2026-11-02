@@ -47,3 +47,20 @@ export function describeChange(current, proposed, labels = new Map()) {
   if (current.type !== proposed.type) lines.push(`Type: ${current.type} → ${proposed.type}`);
   return lines;
 }
+
+/**
+ * A past stay somebody wants to add (a backfill), as lines an admin can read before approving it.
+ * @param {any} proposed the requested booking (type, label, note, startDate, nights, tents with guests)
+ * @param {Map<string, string>} labels unit id -> display name
+ * @returns {string[]}
+ */
+export function describeNew(proposed, labels = new Map()) {
+  const lines = [`Dates: ${proposed.startDate} to ${checkOutDate(proposed.startDate, proposed.nights)} (${plural(proposed.nights, 'night')})`];
+  const tents = [...new Set((proposed.tents ?? []).map((t) => labels.get(t.tentId) ?? t.tentId))];
+  if (tents.length) lines.push(`Tent: ${tents.join(', ')}`);
+  const guests = names(proposed.tents ?? []).map((g) => g.name).filter(Boolean);
+  if (guests.length) lines.push(`Guests: ${guests.join(', ')}`);
+  if (proposed.label) lines.push(`Label: "${proposed.label}"`);
+  if (proposed.note) lines.push(`Note: "${proposed.note}"`);
+  return lines;
+}

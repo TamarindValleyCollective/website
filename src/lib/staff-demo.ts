@@ -282,7 +282,14 @@ function demoBookings() {
 function demoChangeRequests() {
   const base = demoBookings().bookings[2];
   const proposed = { ...base, nights: 3, label: 'Menon family', tents: [{ tentId: 'Tent05', guests: [...base.tents[0].guests, { name: 'Anil Menon', ageGroup: 'Adult' }] }] };
-  return { requests: [{ id: 'demo-req-1', reason: 'They stayed an extra night and a relative joined; the front desk missed it.', requestedBy: 'Linger front desk', requestedAt: new Date().toISOString(), mine: false, proposed, booking: base }] };
+  const backfill = { type: 'casual-stay', label: 'Iyer couple', startDate: '2026-10-12', nights: 2, tents: [{ tentId: 'Tent02', guests: [{ name: 'Ravi Iyer', ageGroup: 'Adult' }, { name: 'Lata Iyer', ageGroup: 'Adult' }] }] };
+  const now = new Date().toISOString();
+  return {
+    requests: [
+      { id: 'demo-req-1', kind: 'update', reason: 'They stayed an extra night and a relative joined; the front desk missed it.', requestedBy: 'Linger front desk', requestedAt: now, mine: false, proposed, booking: base },
+      { id: 'demo-req-2', kind: 'create', reason: 'Booked by phone on 11 Oct and never entered; payment was received then.', requestedBy: 'Linger front desk', requestedAt: now, mine: false, proposed: backfill, booking: null },
+    ],
+  };
 }
 
 export function installStaffDemo(tokenKey: string, kind: string): void {
