@@ -154,6 +154,8 @@ import SignInGate from '../../../components/SignInGate.astro';
         return `Line ${e.seq} is dated ${day(e.date)}, outside the period the statement says it covers.`;
       case 'not_in_date_order':
         return `Line ${e.seq} is out of date order.`;
+      case 'no_registered_rows':
+        return `None of the rows in this file is on a registered bank account, so nothing would be kept. The account labels in the file are: ${(e.labelsInFile ?? []).join(', ') || 'none'}. Register the bank account with its Paytm label (spelled exactly like one of these) below, then check the file again.`;
       case 'account_not_registered':
         return e.last4 ? `No bank account is registered ending ${e.last4}. Add it below first.` : 'The statement does not say which account it is for.';
       default:

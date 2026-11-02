@@ -27,6 +27,22 @@ test('rows of the registered account are kept; other banks and cards are ignored
   assert.deepEqual(r.newLines.filter((l) => l.ignored).map((l) => [l.upiRef, l.ignoredReason, l.accountId]), [['600000000002', 'account_not_registered', null], ['600000000003', 'account_not_registered', null]]);
 });
 
+test('a file where no row is on a registered account is blocked, not quietly ignored (no account, or a wrong label)', () => {
+  const lines = [line({ upiRef: '600000000001' }), line({ upiRef: '600000000002' })];
+  for (const accts of [[], [{ id: 'axis', upiLabel: 'Some Other Label' }], [{ id: 'axis', upiLabel: null }]]) {
+    const r = plan(lines, { accounts: accts });
+    assert.equal(r.status, 'blocked');
+    assert.equal(r.errors[0].type, 'no_registered_rows');
+    assert.deepEqual(r.errors[0].labelsInFile, ['Axis Bank - 99']);
+    assert.equal(r.newLines.length, 0);
+  }
+});
+
+test('a file whose rows are all already held is still fine (the account matched)', () => {
+  const r = plan([line({ upiRef: '600000000001' })], { held: { fileHashes: [], refs: ['600000000001'] } });
+  assert.equal(r.status, 'ok');
+});
+
 test('account labels match ignoring case and spacing', () => {
   const r = plan([line({ accountLabel: '  axis  BANK - 99 ' })]);
   assert.equal(r.counts.ignored, 0);

@@ -101,6 +101,7 @@ Page `/internal/finance/import/`; routes in `finance-admin.mts` (`GET /imports`,
   their total. `is_circle` = a payment out whose tag matches `fin_entities.circle_tag` ("Pocket Money"). Rows join bank lines by
   the 12-digit UPI reference when amount and direction agree; a Paytm row after the last bank line waits for the next statement.
   Bank UPI debits before `fin_entities.paytm_since` have no Paytm row and are reported as such.
+  A Paytm file where **no row** is on a registered account (no account yet, or a wrong label) is **blocked**, not stored as all-ignored; register the account with its Paytm label first.
 - **Tables (migration `0080`, applied 2026-11-02).** `fin_import_batches`, `fin_bank_lines` (append-only), `fin_upi_lines` (only
   `bank_line_id` may change), functions `fin_store_bank_batch`, `fin_store_upi_batch`, `fin_link_upi_lines` (service role only),
   and `circle_tag` / `paytm_since` on `fin_entities`.

@@ -20,13 +20,20 @@ export function planUpiImport({ file, accounts, circleTag, held }) {
     period: { from: parsed.from, to: parsed.to },
     counts: { total: parsed.lines.length + parsed.failed.length, new: 0, alreadyHeld: 0, ignored: 0, failed: 0 },
     ignored: { count: 0, totalPaise: 0, byAccount: [] },
-    failed: [...parsed.failed], newLines: [], firstDate: null, lastDate: null,
+    failed: [...parsed.failed], errors: [], newLines: [], firstDate: null, lastDate: null,
   };
   if (held.fileHashes.includes(file.fileHash)) {
     result.status = 'duplicate_file';
     return result;
   }
-  const byLabel = new Map(accounts.map((a) => [labelKey(a.upiLabel), a]));
+  const byLabel = new Map(accounts.filter((a) => a.upiLabel).map((a) => [labelKey(a.upiLabel), a]));
+  // If no row is on a registered account, the file is almost certainly being imported before the account (or its Paytm
+  // label) was set up, and storing it would record every row as "not ours" for good. Refuse; nothing is stored.
+  if (parsed.lines.length > 0 && !parsed.lines.some((l) => byLabel.has(labelKey(l.accountLabel)))) {
+    result.status = 'blocked';
+    result.errors = [{ type: 'no_registered_rows', labelsInFile: [...new Set(parsed.lines.map((l) => l.accountLabel))] }];
+    return result;
+  }
   const heldRefs = new Set(held.refs);
   const seen = new Set();
   const groups = new Map();
