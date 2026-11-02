@@ -486,7 +486,7 @@ const { events, members } = Astro.props;
   import { TOKEN_KEY, askSheet, showToast } from '../../../scripts/lib/staff-client.mjs';
   import { setBusy } from '../../../scripts/lib/busy.mjs';
   import { normalizeMobileNumber } from '../../../scripts/lib/accommodation.mjs';
-  import { allowedKinds, bookableUnits, buildPayload, nightsBetween, nightsOf, stepProblem, unitAvailability } from '../../../scripts/lib/stay-booking-flow.mjs';
+  import { allowedKinds, bookableUnits, buildPayload, isBackfill, justificationProblem, nightsBetween, nightsOf, stepProblem, unitAvailability } from '../../../scripts/lib/stay-booking-flow.mjs';
 
   interface Unit {
     id: string;
@@ -542,6 +542,7 @@ const { events, members } = Astro.props;
     guests: GuestRow[];
     family: boolean;
     note: string;
+    justification: string;
   }
 
   const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -569,11 +570,13 @@ const { events, members } = Astro.props;
     const lookupTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
     function fresh(): Flow {
-      return { kind: null, memberStay: false, member: '', eventMode: undefined, eventSlug: '', eventTitle: '', label: '', exclusive: false, wholeFarm: false, reason: '', startDate: '', nights: 0, tentIds: [], guests: [], family: false, note: '' };
+      return { kind: null, memberStay: false, member: '', eventMode: undefined, eventSlug: '', eventTitle: '', label: '', exclusive: false, wholeFarm: false, reason: '', startDate: '', nights: 0, tentIds: [], guests: [], family: false, note: '', justification: '' };
     }
 
     const today = () => new Date().toLocaleDateString('en-CA');
-    const ctx = () => ({ units, today: today(), allowedTypes });
+    // A super admin (the page sets data-can-approve) saves a past stay straight away; anyone else sends it for approval.
+    const canApprove = () => root.dataset.canApprove === '1';
+    const ctx = () => ({ units, today: today(), allowedTypes, canApprove: canApprove() });
     const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
     const fmt = (d: string, opts: Intl.DateTimeFormatOptions = { weekday: 'short', day: 'numeric', month: 'short' }) => {
       const [y, m, day] = d.split('-').map(Number);
@@ -767,7 +770,7 @@ const { events, members } = Astro.props;
         const date = `${calMonth}-${String(d).padStart(2, '0')}`;
         const edge = date === state.startDate || (state.nights > 0 && date === out);
         const inside = state.nights > 0 && date > state.startDate && date < out;
-        cells += `<button type="button" class="nbf-day${edge ? ' is-edge' : inside ? ' is-in' : ''}${date === today() ? ' is-today' : ''}" data-act="day" data-date="${date}" ${date < today() ? 'disabled' : ''} aria-label="${fmt(date, { weekday: 'long', day: 'numeric', month: 'long' })}">${d}</button>`;
+        cells += `<button type="button" class="nbf-day${edge ? ' is-edge' : inside ? ' is-in' : ''}${date === today() ? ' is-today' : ''}" data-act="day" data-date="${date}" aria-label="${fmt(date, { weekday: 'long', day: 'numeric', month: 'long' })}">${d}</button>`;
       }
       const prompt = !state.startDate ? 'Tap the check-in day' : state.nights === 0 ? 'Now tap the check-out day' : '';
       const publicNote = state.kind === 'event' && state.eventMode === 'public' ? '<p class="nbf-hint" style="margin-top:8px">These are the event’s own dates. Change them only if you need to.</p>' : '';
@@ -777,6 +780,7 @@ const { events, members } = Astro.props;
         <div class="nbf-chips"><button type="button" class="button button--outline button--small" data-act="tonight">Tonight</button><button type="button" class="button button--outline button--small" data-act="clear-dates">Clear</button></div>
         ${state.nights > 0 ? `<div class="nbf-readback">${fmt(state.startDate)} → ${fmt(out)}<small>${plural(state.nights, 'night')} · check-out on ${fmt(out)}</small></div>` : ''}
         ${publicNote}
+        ${isBackfill(state, today()) ? `<p class="nbf-hint" style="margin-top:8px"><b>This starts in the past.</b> ${canApprove() ? 'It is saved straight away.' : 'It is sent to a super admin to approve, and you will be asked why at the end.'}</p>` : ''}
         <div class="nbf-actions"><button type="button" class="button button--primary" data-act="next">Continue</button></div>`;
     }
 
@@ -854,9 +858,12 @@ const { events, members } = Astro.props;
     // 5. Review
     function body5(): string {
       const lines = [datesLabel(), whereLabel(), detailsLabel()].filter(Boolean);
+      const backfill = isBackfill(state, today());
       return `<div class="nbf-review"><b>${esc(kindLabel())}</b>${lines.map((l) => `<div>${esc(l)}</div>`).join('')}</div>
         <div style="margin-top:12px">${noteOpen ? `<label class="nbf-label" for="nbf-note">Note <span class="nbf-hint">(admin-only, never shown publicly)</span></label><textarea id="nbf-note" rows="2" data-bind="note">${esc(state.note)}</textarea>` : '<button type="button" class="nbf-link" data-act="add-note">+ Add a note</button>'}</div>
-        <div class="nbf-actions"><button type="button" class="button button--primary" data-act="save">Save booking</button><button type="button" class="button button--outline" data-act="start-over">Start over</button></div>`;
+        ${backfill && !canApprove() ? `<div style="margin-top:12px"><label class="nbf-label" for="nbf-just">Why is this past stay being added? <span class="nbf-hint">(required: a super admin reads this before approving)</span></label><textarea id="nbf-just" rows="3" data-bind="justification">${esc(state.justification)}</textarea></div>` : ''}
+        ${backfill ? `<p class="nbf-hint" style="margin-top:8px">${canApprove() ? 'This stay is in the past. It is saved straight away.' : 'This stay is in the past, so it is not recorded until a super admin approves it.'}</p>` : ''}
+        <div class="nbf-actions"><button type="button" class="button button--primary" data-act="save">${backfill && !canApprove() ? 'Send for approval' : 'Save booking'}</button><button type="button" class="button button--outline" data-act="start-over">Start over</button></div>`;
     }
 
     // ---- availability (step 3) ----
@@ -994,10 +1001,19 @@ const { events, members } = Astro.props;
           return;
         }
       }
+      const missing = justificationProblem(state, ctx());
+      if (missing) {
+        error = missing;
+        step = 5 as typeof step;
+        render();
+        return;
+      }
       error = '';
       const done = setBusy(button, 'Saving…');
       try {
-        const res = await authedFetch('/api/accommodation-admin/bookings', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(buildPayload(state, units)) });
+        // A past stay carries its justification; the server stores it as a request unless a super admin is saving it.
+        const body = isBackfill(state, today()) && !canApprove() ? { ...buildPayload(state, units), reason: state.justification.trim() } : buildPayload(state, units);
+        const res = await authedFetch('/api/accommodation-admin/bookings', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         if (!res.ok) {
           error = data.error ?? 'Could not save. Try again.';
@@ -1010,7 +1026,7 @@ const { events, members } = Astro.props;
           return;
         }
         close(true);
-        showToast('Booking saved');
+        showToast(res.status === 202 ? 'Sent to the super admins for approval' : 'Booking saved');
         root.dispatchEvent(new CustomEvent('stays-booking:saved', { bubbles: true }));
       } catch (err) {
         if (!handled(err)) {
