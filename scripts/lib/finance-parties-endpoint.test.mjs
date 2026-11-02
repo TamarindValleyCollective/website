@@ -19,7 +19,7 @@ process.env.SUPABASE_URL = 'https://db.test';
 process.env.PUBLIC_GOOGLE_CLIENT_ID = 'client';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'service';
 process.env.STAFF_MFA_KEY = randomBytes(32).toString('base64');
-const { signStepUp } = await import('../../netlify/functions/lib/staff-mfa-crypto.ts');
+const { signStepUp, encryptFinanceText } = await import('../../netlify/functions/lib/staff-mfa-crypto.ts');
 
 const stubGoogle = {
   name: 'stub-google',
@@ -279,4 +279,19 @@ test('a member party links to a household; a vendor cannot', async () => {
   assert.equal((await api(op, '/parties', { method: 'POST', body: { name: 'Member One', kind: 'member', householdId: 'h1' } })).status, 201);
   assert.equal(db.fin_parties[0].household_id, 'h1');
   assert.equal((await api(op, '/parties', { method: 'POST', body: { name: 'Shop Two', kind: 'vendor', householdId: 'h1' } })).status, 400);
+});
+
+test('bank details loaded without an IFSC cannot be verified until one is added', async () => {
+  reset();
+  const director = sign('u2', 'admin');
+  db.fin_parties.push({ id: 'p100', name: 'Test Traders', kind: 'vendor', active: true, household_id: null });
+  db.fin_party_accounts.push({ id: 'a100', party_id: 'p100', entity_id: 'e1', method: 'bank', last4: '0001', fingerprint: 'x', status: 'unverified', created_by: null, details_enc: encryptFinanceText(JSON.stringify({ method: 'bank', account: ACCOUNT, ifsc: '' })) });
+  const res = await api(director, '/accounts/a100/verify', { method: 'POST', stepUp: 'u2' });
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).error, /IFSC/);
+  assert.equal(db.fin_party_accounts[0].status, 'unverified');
+  // adding the IFSC (new details) replaces the row, and that one can be verified by someone else
+  const op = sign('u1', 'user');
+  assert.equal((await api(op, '/parties/p100/accounts', { method: 'POST', body: { method: 'bank', account: ACCOUNT, ifsc: IFSC } })).status, 201);
+  assert.deepEqual(db.fin_party_accounts.map((a) => a.status), ['superseded', 'unverified']);
 });

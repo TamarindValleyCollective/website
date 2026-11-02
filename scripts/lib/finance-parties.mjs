@@ -45,12 +45,14 @@ export function validatePartyChange(party, body) {
 
 // What a person enters for a payee. Returns what is to be stored (the caller encrypts `details`) and the last four
 // characters, the only part ever shown without the step-up.
-export function validatePayeeDetails(body) {
+// `allowMissingIfsc` is for the operator import only: the existing list has no IFSC column. Such details cannot be
+// verified until a person adds the IFSC (verification refuses them), and a wrong IFSC is still refused.
+export function validatePayeeDetails(body, { allowMissingIfsc = false } = {}) {
   if (body?.method === 'bank') {
     const account = squash(body.account);
     const ifsc = squash(body.ifsc).toUpperCase();
     if (!ACCOUNT.test(account)) return { error: 'The account number should be 9 to 18 digits.' };
-    if (!IFSC.test(ifsc)) return { error: 'The IFSC code should look like ABCD0123456.' };
+    if (!(allowMissingIfsc && ifsc === '') && !IFSC.test(ifsc)) return { error: 'The IFSC code should look like ABCD0123456.' };
     return { details: { method: 'bank', account, ifsc }, last4: account.slice(-4) };
   }
   if (body?.method === 'upi') {
@@ -65,9 +67,11 @@ export function validatePayeeDetails(body) {
 // `existing` are this party's account rows. Same details again: nothing to do. Otherwise a new unverified row is
 // added and the party's live rows of the same method are superseded (kept, never edited), so a changed account
 // cannot be paid until someone verifies it.
-export function planDetailsChange(existing, method, fingerprint) {
+// The fingerprint covers the account number or UPI id only, so `sameDetails(row)` decides whether a row with that
+// fingerprint is truly identical (the IFSC too); without it a corrected IFSC would be dropped as "unchanged".
+export function planDetailsChange(existing, method, fingerprint, sameDetails = (/** @type {any} */ _row) => true) {
   const live = existing.filter((a) => a.status !== 'superseded');
-  const same = live.find((a) => a.method === method && a.fingerprint === fingerprint);
+  const same = live.find((a) => a.method === method && a.fingerprint === fingerprint && sameDetails(a));
   if (same) return { action: 'unchanged', accountId: same.id };
   return { action: 'replace', supersedeIds: live.filter((a) => a.method === method).map((a) => a.id) };
 }

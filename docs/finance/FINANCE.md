@@ -93,11 +93,19 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
 - **Shared accounts** are flagged on both parties ("Shared account") and never blocked.
 - **Endpoints.** `GET/POST /api/finance-admin/parties`, `PATCH /parties/:id`, `POST /parties/:id/accounts`,
   `POST /accounts/:id/reveal`, `POST /accounts/:id/verify`. Page: `/internal/finance/parties/`.
-- **Import.** `scripts/import-fin-parties.mjs --sheet-id <id> --range "'Tab'!A:H" [--apply]` reads the existing list from a
-  Google Sheet shared with the Drive service account (id and range are arguments, never in the repo). Dry run by default;
-  it prints counts and line numbers only. Needs a name column; kind, account number, IFSC, UPI id and farm unit are used
-  when present, matched by loose header names. Parties match on name + kind and accounts on fingerprint, so re-running adds
-  nothing. Everything lands unverified. Member parties link by farm unit (`F-07`); employees are kind `employee`.
+- **Import.** `scripts/import-fin-parties.mjs --source <sheetId>::<range> [--source ...] [--apply]` reads the existing
+  payee lists from Google Sheets shared with the Drive service account (ids and ranges are arguments, never in the repo).
+  The details are spread over several partial lists, so several sources are given and **merged by account number**: the
+  first source's name wins and blanks (IFSC, UPI id) are filled from later ones; two entries for one account inside the
+  same list are kept apart so the shared-account flag still sees them. Dry run by default; it prints counts and line numbers
+  only. A name column is required; kind, account number, IFSC, UPI id and farm unit are used when present, matched by loose
+  header names (the layouts of the registered-accounts tab, the accounts tab, the funds-transfer requests and the bank's own
+  beneficiary export are all recognised). Parties match on name + kind and accounts on fingerprint, so re-running adds
+  nothing. Everything lands unverified. Rows with no kind column become kind `other` for review; member parties link by
+  farm unit (`F-07`).
+- **No IFSC.** Some lists have none. Such accounts import with an empty IFSC, are reported as `missing_ifsc`, and **cannot be
+  verified** until someone enters the account again with its IFSC ("Add or change details"; the same number with a new IFSC
+  counts as a change, and the old row is kept).
 - **Not built yet:** linking an existing party to a household after the fact, merging duplicate parties, and the farm
   manager's add-vendor screen (`finance-requests`, session 08).
 

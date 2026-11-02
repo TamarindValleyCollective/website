@@ -52,6 +52,14 @@ a reveal that cannot be logged returns nothing, the enterer cannot verify, share
 trigger and constraints were exercised in a throwaway local Postgres (overwrite, delete, un-verify, revive and double
 household link are all refused). `npm run lint:css` and `astro check` are clean for the new files.
 
+**Real lists (dry run, 2026-11-02):** the existing details are in four partial places: the `Axis Bank Registered Accounts` tab
+(no IFSC), the `Accounts (2022-23)` tab, the `Fund Transfer Request` tab of the Funds Transfer Requests workbook, and
+`Axis Bank Beneficiaries.xlsx` (the bank's own export, with IFSC and enabled/disabled status; an .xlsx, so it has to be
+saved as a Google Sheet before the Sheets API can read it, and it is **not yet included**). A local dry run of the planner
+on the first three, merged, gave 102 parties and 97 accounts (64 bank accounts with an IFSC, 32 without), 8 rows with bad
+details, 5 shared-account cases, and 38 accounts that appear under different names in different lists. Nothing was
+written; the numbers came from reading the sheets with a read-only key and printing counts only.
+
 **Not verified:** the page has not been rendered in a browser or tried signed in; the import script's `--apply` path and its
 reading of the real sheet have not been run (no credentials or real sheet here, and the real column layout has not been
 seen: the loose header matching is an assumption); migration `0079` has not been applied to TVC ERP; nothing was tested

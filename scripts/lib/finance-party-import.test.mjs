@@ -94,3 +94,14 @@ test('the summary has counts and line numbers only: no names, numbers or UPI ids
   for (const secret of [A1, 'Test Traders', 'Other Shop', 'Upi Person', 'secret.person', 'ABCD0123456']) assert.ok(!text.includes(secret), `leaked ${secret}`);
   assert.match(text, /"newParties":3/);
 });
+
+test('a sheet with "Account Name" and "Account Number" and no IFSC still imports; each row is noted as missing its IFSC', () => {
+  const rows = [['#', 'Account Name', 'Account Number', 'Bank Name', 'Branch Name', 'Mapping'], ['1', 'Test Traders', A1, 'Some Bank', 'Town', 'TT'], ['2', 'Other Shop', '12345', 'Some Bank', 'Town', 'OS']];
+  const { records, problems } = readBeneficiaries(rows);
+  assert.deepEqual(problems, []);
+  const p = planImport(records, { households, existing: [], fingerprint });
+  assert.equal(p.parties.length, 2);
+  assert.equal(p.parties[0].accounts.length, 1);
+  assert.equal(p.parties[0].accounts[0].details.ifsc, '');
+  assert.deepEqual(p.anomalies.map((a) => [a.kind, a.line]), [['missing_ifsc', 2], ['bad_details', 3]]);
+});

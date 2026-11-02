@@ -123,3 +123,17 @@ test('editing a party: only fields that really change are patched and named; a m
   assert.ok(validatePartyChange(party, { active: 'yes' }).error);
   assert.ok(validatePartyChange({ ...party, kind: 'member', household_id: 'h1' }, { kind: 'vendor' }).error);
 });
+
+test('the import may leave the IFSC out (the sheet has none); the directory form may not', () => {
+  const body = { method: 'bank', account: ACCOUNT, ifsc: '' };
+  assert.ok(validatePayeeDetails(body).error);
+  const ok = validatePayeeDetails(body, { allowMissingIfsc: true });
+  assert.deepEqual(ok.details, { method: 'bank', account: ACCOUNT, ifsc: '' });
+  assert.ok(validatePayeeDetails({ ...body, ifsc: 'nope' }, { allowMissingIfsc: true }).error); // a wrong IFSC is still refused
+});
+
+test('same account number but a different IFSC is a change, not "unchanged"', () => {
+  const plan = planDetailsChange([row()], 'bank', fp(ACCOUNT), () => false);
+  assert.deepEqual(plan, { action: 'replace', supersedeIds: ['a1'] });
+  assert.deepEqual(planDetailsChange([row()], 'bank', fp(ACCOUNT), () => true), { action: 'unchanged', accountId: 'a1' });
+});

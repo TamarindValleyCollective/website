@@ -1,8 +1,12 @@
 // Operator script: loads the existing beneficiary / account list from a Google Sheet into the finance directory
 // (fin_parties, fin_party_accounts; docs/finance/sessions/04-parties-and-payees.md).
 //
-//   node scripts/import-fin-parties.mjs --sheet-id <id> --range "'Beneficiaries'!A:H"           # dry run (default)
-//   node scripts/import-fin-parties.mjs --sheet-id <id> --range "'Beneficiaries'!A:H" --apply   # write
+//   node scripts/import-fin-parties.mjs --source <sheetId>::<range> [--source ...]           # dry run (default)
+//   node scripts/import-fin-parties.mjs --source <sheetId>::<range> [--source ...] --apply   # write
+//
+// Each --source is a spreadsheet id and a range, e.g. --source abc123::"'Registered'!A:F". The existing payees are
+// spread over several partial lists, so give them all: records are merged by account number (the first source's name
+// wins; blanks such as the IFSC are filled from later ones). --sheet-id/--range remain as shorthand for one source.
 //
 // The sheet's id and range are passed in (or FIN_PARTIES_SHEET_ID / FIN_PARTIES_RANGE), never kept in this public repo,
 // and the sheet must be shared with the Drive service account (GDRIVE_SERVICE_ACCOUNT_EMAIL / _PRIVATE_KEY, as for
@@ -16,17 +20,24 @@
 // --apply needs SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and STAFF_MFA_KEY (the payee encryption key), and migration
 // 0079 applied. Needs Node 22.18+ (it imports the TypeScript crypto helper directly).
 import { getSheetValues } from './lib/google-drive.mjs';
-import { readBeneficiaries, planImport, summarizeImport } from './lib/finance-party-import.mjs';
+import { readBeneficiaries, mergeSources, planImport, summarizeImport } from './lib/finance-party-import.mjs';
 import { restHeaders } from './lib/supabase.mjs';
 import { encryptFinanceText, fingerprintFinanceText } from '../netlify/functions/lib/staff-mfa-crypto.ts';
 
 const args = process.argv.slice(2);
 const arg = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
-const sheetId = arg('--sheet-id') ?? process.env.FIN_PARTIES_SHEET_ID;
-const range = arg('--range') ?? process.env.FIN_PARTIES_RANGE;
+const sources = args
+  .flatMap((a, i) => (a === '--source' ? [args[i + 1] ?? ''] : []))
+  .map((s) => {
+    const at = s.indexOf('::');
+    return at > 0 ? { sheetId: s.slice(0, at), range: s.slice(at + 2) } : null;
+  });
+const single = arg('--sheet-id') ?? process.env.FIN_PARTIES_SHEET_ID;
+const singleRange = arg('--range') ?? process.env.FIN_PARTIES_RANGE;
+if (single && singleRange) sources.push({ sheetId: single, range: singleRange });
 const apply = args.includes('--apply');
-if (!sheetId || !range) {
-  console.error('Usage: node scripts/import-fin-parties.mjs --sheet-id <id> --range "\'Tab name\'!A:H" [--apply]');
+if (!sources.length || sources.includes(null)) {
+  console.error('Usage: node scripts/import-fin-parties.mjs --source <sheetId>::<range> [--source ...] [--apply]');
   process.exit(2);
 }
 
@@ -36,11 +47,17 @@ async function rest(path, init = {}) {
   return res;
 }
 
-const { records, problems } = readBeneficiaries(await getSheetValues(sheetId, range));
-if (problems.length) {
-  console.error(problems.join('\n'));
-  process.exit(1);
+const lists = [];
+for (const [i, { sheetId, range }] of sources.entries()) {
+  const read = readBeneficiaries(await getSheetValues(sheetId, range));
+  if (read.problems.length) {
+    console.error(`Source ${i + 1}: ${read.problems.join(' ')}`);
+    process.exit(1);
+  }
+  lists.push(read.records);
 }
+const { records, stats } = mergeSources(lists);
+console.log(`Read ${stats.records} rows from ${stats.sources} source(s); ${stats.merged} matched an earlier source by account number (${stats.nameDiffers} under a different name).`);
 
 // Keys are needed even for the dry run: the shared-account check compares fingerprints.
 if (!process.env.STAFF_MFA_KEY) {

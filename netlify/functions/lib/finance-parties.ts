@@ -62,7 +62,12 @@ async function addAccount(partyId: string, entity: string, actorId: string, paye
   if (checked.error || !checked.details) return { error: (checked.error ?? 'Enter the details.') as string };
   const details = checked.details;
   const fingerprint = fingerprintFinanceText(fingerprintText(details));
-  const plan = planDetailsChange(existing, details.method, fingerprint);
+  const sameDetails = (row: Json) => {
+    if (!row.details_enc) return true;
+    const old = JSON.parse(decryptFinanceText(row.details_enc));
+    return old.account === details.account && (old.ifsc ?? '') === (details.ifsc ?? '') && old.upi === details.upi;
+  };
+  const plan = planDetailsChange(existing, details.method, fingerprint, sameDetails);
   if (plan.action === 'unchanged') return { unchanged: true as const };
   // Supersede first: if the insert then fails, the party is left with no usable account (safe), never two.
   if (plan.supersedeIds.length) {
@@ -194,7 +199,7 @@ export async function addPayeeAccount(req: Request, partyId: string): Promise<Re
   try {
     const [party] = await rows(`/fin_parties?id=eq.${partyId}&select=id`);
     if (!party) return fail('Not found', 404);
-    const existing = await rows(`/fin_party_accounts?party_id=eq.${partyId}&select=${ACCOUNT_COLUMNS}`);
+    const existing = await rows(`/fin_party_accounts?party_id=eq.${partyId}&select=${ACCOUNT_COLUMNS},details_enc`);
     const entity = await entityId();
     const result = await addAccount(partyId, entity, staff.id, body, existing);
     if ('error' in result) return fail(result.error ?? 'Enter the details.');
@@ -240,9 +245,11 @@ export async function verifyPayeeAccount(req: Request, accountId: string): Promi
   if (!gate.staff) return gate.response;
   const { staff } = gate;
   try {
-    const [account] = await rows(`/fin_party_accounts?id=eq.${accountId}&select=id,party_id,status,created_by,entity_id`);
+    const [account] = await rows(`/fin_party_accounts?id=eq.${accountId}&select=id,party_id,status,created_by,entity_id,details_enc`);
     if (!account) return fail('Not found', 404);
     if (account.status !== 'unverified') return fail('Only unverified details can be verified.');
+    const stored = JSON.parse(decryptFinanceText(account.details_enc));
+    if (stored.method === 'bank' && !stored.ifsc) return fail('These bank details have no IFSC code. Add it with "Add or change details" first.');
     const verdict = canVerifyAccount(account, staff.id);
     if (!verdict.ok) return fail(verdict.error ?? 'Not allowed.', 403);
     await rest(`/fin_party_accounts?id=eq.${accountId}&status=eq.unverified`, {

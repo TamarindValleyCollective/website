@@ -9,10 +9,10 @@
 import { PARTY_KINDS, validatePayeeDetails } from './finance-parties.mjs';
 
 const HEADERS = {
-  name: ['name', 'beneficiaryname', 'payeename', 'payee', 'party', 'partyname', 'accountholder'],
+  name: ['name', 'beneficiaryname', 'payeename', 'payee', 'party', 'partyname', 'accountholder', 'accountname', 'beneficiaryaccountname'],
   kind: ['kind', 'type', 'partytype', 'category'],
   account: ['account', 'accountno', 'accountnumber', 'acno', 'beneficiaryaccount', 'beneficiaryaccountnumber'],
-  ifsc: ['ifsc', 'ifsccode'],
+  ifsc: ['ifsc', 'ifsccode', 'beneficiaryifsccode'],
   upi: ['upi', 'upiid', 'vpa'],
   farmUnit: ['farmunit', 'unit', 'plot', 'farm'],
 };
@@ -40,6 +40,41 @@ export function readBeneficiaries(rows) {
     upi: cell(r, 'upi'),
   }));
   return { records: records.filter((r) => r.name), problems: [] };
+}
+
+const digitsOf = (account) => String(account ?? '').replace(/[\s-]/g, '');
+const sameName = (a, b) => a.toLowerCase().replace(/\s+/g, ' ') === b.toLowerCase().replace(/\s+/g, ' ');
+
+// Several partial lists describe the same payees. A record in a later list whose account number matches one from an
+// EARLIER list is folded into it: the first list's name wins, and blanks (IFSC, UPI id, kind, farm unit) are filled
+// from the later one. Two records for one account inside the same list are left apart, so the shared-account check
+// still sees them. Records without a usable account number never merge. `lists` is an array of readBeneficiaries()
+// records; `line` keeps pointing at the first list's row.
+export function mergeSources(lists) {
+  const out = [];
+  const byAccount = new Map(); // digits -> { record, source }
+  const stats = { sources: lists.length, records: 0, merged: 0, nameDiffers: 0 };
+  lists.forEach((list, source) => {
+    const seenHere = new Map();
+    for (const rec of list) {
+      stats.records++;
+      const digits = digitsOf(rec.account);
+      const usable = /^[0-9]{9,18}$/.test(digits);
+      const earlier = usable ? byAccount.get(digits) : undefined;
+      if (earlier && earlier.source !== source) {
+        const keep = earlier.record;
+        stats.merged++;
+        if (!sameName(keep.name, rec.name)) stats.nameDiffers++;
+        for (const field of ['ifsc', 'upi', 'kind', 'farmUnit']) if (!keep[field] && rec[field]) keep[field] = rec[field];
+        continue;
+      }
+      const copy = { ...rec };
+      out.push(copy);
+      if (usable && !seenHere.has(digits)) seenHere.set(digits, { record: copy, source });
+    }
+    for (const [digits, entry] of seenHere) if (!byAccount.has(digits)) byAccount.set(digits, entry);
+  });
+  return { records: out, stats };
 }
 
 const KIND_WORDS = {
@@ -100,11 +135,12 @@ export function planImport(records, { households, existing, fingerprint }) {
     if (rec.account || rec.ifsc) entered.push({ method: 'bank', account: rec.account, ifsc: rec.ifsc });
     if (rec.upi) entered.push({ method: 'upi', upi: rec.upi });
     for (const input of entered) {
-      const checked = validatePayeeDetails(input);
+      const checked = validatePayeeDetails(input, { allowMissingIfsc: true });
       if (checked.error) {
         anomalies.push({ kind: 'bad_details', line: rec.line });
         continue;
       }
+      if (checked.details.method === 'bank' && checked.details.ifsc === '') anomalies.push({ kind: 'missing_ifsc', line: rec.line });
       const fp = fingerprint(fingerprintText(checked.details));
       const seen = seenFingerprints.get(fp) ?? { keys: new Set(), lines: new Set() };
       seen.keys.add(key);

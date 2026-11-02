@@ -330,7 +330,8 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       return;
     }
     const d = out.details as { method: string; account?: string; ifsc?: string; upi?: string };
-    const lines = d.method === 'bank' ? [['Account number', d.account], ['IFSC code', d.ifsc]] : [['UPI id', d.upi]];
+    const noIfsc = d.method === 'bank' && !d.ifsc;
+    const lines = d.method === 'bank' ? [['Account number', d.account], ['IFSC code', d.ifsc || 'Missing: add it first']] : [['UPI id', d.upi]];
     const msg = h('p', { class: 'error', attrs: { hidden: '' } });
     const confirm = button('These match the source, verify', async () => {
       const res = await call(`/api/finance-admin/accounts/${a.id}/verify`, 'POST');
@@ -344,6 +345,11 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
         msg.textContent = res.data?.error ?? 'Could not verify.';
       }
     }, 'button button--primary');
+    if (noIfsc) {
+      confirm.setAttribute('disabled', '');
+      msg.hidden = false;
+      msg.textContent = 'These details have no IFSC code yet. Close this, choose "Add or change details", and enter the account again with its IFSC.';
+    }
     // Shown here only, and gone from the page when the sheet closes.
     dlg.addEventListener('close', () => dlg.replaceChildren(), { once: true });
     present(
