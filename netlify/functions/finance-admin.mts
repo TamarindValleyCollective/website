@@ -1,6 +1,7 @@
-// Netlify Function (v2 API) behind the finance module (docs/finance/DESIGN.md). Session 01 ships only the
-// skeleton: an overview that proves the access rules and reports what exists (no data yet). Imports, the ledger,
-// requests and payroll arrive in later sessions as further routes here.
+// Netlify Function (v2 API) behind the finance module (docs/finance/DESIGN.md). Session 01 shipped the skeleton: an
+// overview that proves the access rules. Session 03 adds statement import (bank statement files, one per year, and the
+// Paytm UPI export): preview and commit, the imports list, and registering a bank account. The ledger, requests and
+// payroll arrive in later sessions as further routes here.
 //
 // Auth: Google Sign-In client-side; requireStaff (lib/staff-access.ts) on every request. Holding `finance-requests`
 // grants nothing here: requireStaff looks up the role in the `finance` module only, and an auditor's grant stops
@@ -12,7 +13,10 @@ import { requireStaff } from './lib/staff-access';
 import { logFinanceAction } from './lib/finance-audit';
 import { rest } from './lib/staff-mfa-store';
 import { capabilitiesForRole } from './lib/staff-registry';
+import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { payeeFieldVisibility } from '../../scripts/lib/finance-access.mjs';
+import { heldCoverage, reconciliationOf, runImport } from './lib/finance-import';
+import { supabaseImportStore } from './lib/finance-import-store';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -55,10 +59,105 @@ async function handleOverview(req: Request): Promise<Response> {
   }
 }
 
+// Statement files are small (a year of an account is tens of KB), and a Netlify Function request is capped near 6 MB.
+const MAX_FILES = 12;
+const MAX_FILE_BYTES = 3 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 5 * 1024 * 1024;
+
+async function handleImportList(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'finance', 'view');
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  try {
+    const store = supabaseImportStore();
+    const capabilities = capabilitiesForRole('finance', auth.staff.role);
+    const accounts = (await (await rest('/fin_bank_accounts?select=id,label,last4,upi_label&active=eq.true&kind=eq.bank&order=created_at.asc')).json()) as { id: string; label: string; last4: string | null; upi_label: string | null }[];
+    const batches = await (
+      await rest('/fin_import_batches?select=id,source,file_name,period_from,period_to,first_line_date,last_line_date,inserted_count,duplicate_count,ignored_count,failed_count,created_at&order=created_at.desc&limit=60')
+    ).json();
+    return jsonResponse({
+      canImport: capabilities.includes('import'),
+      canConfigure: capabilities.includes('configure'),
+      accounts: accounts.map((a) => ({ id: a.id, label: a.label, last4: a.last4, hasUpiLabel: Boolean(a.upi_label) })),
+      batches,
+      coverage: await heldCoverage(store),
+      reconciliation: await reconciliationOf(store),
+    });
+  } catch (err) {
+    console.error('[finance-admin] imports list failed', err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
+async function handleImport(req: Request, commit: boolean): Promise<Response> {
+  const auth = await requireStaff(req, 'finance', 'import');
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  let form: FormData;
+  try {
+    form = await req.formData();
+  } catch {
+    return jsonResponse({ error: 'Send the files as a form upload.' }, 400);
+  }
+  const uploads = form.getAll('files').filter((f): f is File => typeof f !== 'string');
+  if (uploads.length === 0) return jsonResponse({ error: 'Choose at least one file.' }, 400);
+  if (uploads.length > MAX_FILES) return jsonResponse({ error: `Upload at most ${MAX_FILES} files at a time.` }, 400);
+  if (uploads.some((f) => f.size > MAX_FILE_BYTES) || uploads.reduce((n, f) => n + f.size, 0) > MAX_TOTAL_BYTES) {
+    return jsonResponse({ error: 'These files are too large to upload together. Upload fewer at a time.' }, 413);
+  }
+  try {
+    const files = await Promise.all(uploads.map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })));
+    return jsonResponse(await runImport({ store: supabaseImportStore(), files, commit, actorId: auth.staff.id }));
+  } catch (err) {
+    console.error('[finance-admin] import failed', err instanceof Error ? err.message : err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
+// Registering a bank account is a configuration act (directors only). Only the last four digits are ever stored, and
+// `upiLabel` is the text the Paytm export uses for the account (for example "Bank name - 99").
+async function handleAddBankAccount(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'finance', 'configure');
+  if (!auth.ok) return jsonResponse({ error: auth.error }, auth.status);
+  let body: { label?: unknown; last4?: unknown; upiLabel?: unknown };
+  try {
+    body = await req.json();
+  } catch {
+    return jsonResponse({ error: 'Invalid request' }, 400);
+  }
+  const label = typeof body.label === 'string' ? body.label.trim() : '';
+  const last4 = typeof body.last4 === 'string' ? body.last4.trim() : '';
+  const upiLabel = typeof body.upiLabel === 'string' && body.upiLabel.trim() ? body.upiLabel.trim() : null;
+  if (!label || label.length > 60) return jsonResponse({ error: 'Give the account a short name.' }, 400);
+  if (!/^\d{4}$/.test(last4)) return jsonResponse({ error: 'Enter the last four digits of the account number, and no more.' }, 400);
+  if (upiLabel && upiLabel.length > 60) return jsonResponse({ error: 'The Paytm account label is too long.' }, 400);
+  try {
+    const entities = (await (await rest('/fin_entities?select=id&order=created_at.asc&limit=1')).json()) as { id: string }[];
+    if (!entities[0]) return jsonResponse({ error: 'Server error' }, 500);
+    const res = await fetch(`${process.env.SUPABASE_URL}/rest/v1/fin_bank_accounts`, {
+      method: 'POST',
+      headers: restHeaders({ Prefer: 'return=representation' }),
+      body: JSON.stringify({ entity_id: entities[0].id, label, last4, upi_label: upiLabel, kind: 'bank' }),
+    });
+    if (res.status === 409) return jsonResponse({ error: 'An account with that name already exists.' }, 409);
+    if (!res.ok) throw new Error(`insert failed: ${res.status}`);
+    const [created] = (await res.json()) as { id: string }[];
+    await logFinanceAction({ actorId: auth.staff.id, action: 'finance.bank_account_added', entityId: entities[0].id, target: created.id });
+    return jsonResponse({ id: created.id }, 201);
+  } catch (err) {
+    console.error('[finance-admin] add bank account failed', err instanceof Error ? err.message : err);
+    return jsonResponse({ error: 'Server error' }, 500);
+  }
+}
+
 export default async (req: Request): Promise<Response> => {
   const { pathname } = new URL(req.url);
   if (pathname === '/api/finance-admin/overview' && req.method === 'GET') return handleOverview(req);
+  if (pathname === '/api/finance-admin/imports' && req.method === 'GET') return handleImportList(req);
+  if (pathname === '/api/finance-admin/imports/preview' && req.method === 'POST') return handleImport(req, false);
+  if (pathname === '/api/finance-admin/imports/commit' && req.method === 'POST') return handleImport(req, true);
+  if (pathname === '/api/finance-admin/bank-accounts' && req.method === 'POST') return handleAddBankAccount(req);
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
-export const config = { path: ['/api/finance-admin/overview'] };
+export const config = {
+  path: ['/api/finance-admin/overview', '/api/finance-admin/imports', '/api/finance-admin/imports/preview', '/api/finance-admin/imports/commit', '/api/finance-admin/bank-accounts'],
+};
