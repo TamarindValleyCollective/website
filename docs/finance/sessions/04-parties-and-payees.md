@@ -40,4 +40,42 @@ Review of the imported party list and which of the shared-account cases are inte
 > Read `docs/finance/README.md`, `DESIGN.md` and `sessions/04-parties-and-payees.md`. Build session 04 test-first. Do not put any real account numbers in the repo; the import script takes real files from outside the repo.
 
 ## Done
-_Fill in at the end of the session._
+**Built 2026-11-02** on branch `finance-04-parties` (test-first; 63 finance tests pass).
+
+- Migration `0079_finance_parties.sql`, `scripts/lib/finance-parties.mjs` (rules), `finance-party-import.mjs` (import planner),
+  `netlify/functions/lib/finance-parties.ts` (routes), `encryptFinanceText`/`fingerprintFinanceText` in `staff-mfa-crypto.ts`,
+  the `/internal/finance/parties/` page, and the operator script `scripts/import-fin-parties.mjs`. Details in [FINANCE.md](../FINANCE.md).
+
+**Added later in the session:** retiring accounts from a date, dated changes (`effectiveOn`), review flags and a "Needs review"
+filter, name de-duplication with a review file, merging several partial lists, and padding 8-digit accounts. The rule that
+later sessions MUST use before paying anyone is `accountPayableOn` (see FINANCE.md, "Retiring accounts"). Session 08 (payment
+requests), 09 (payroll) and any bulk-file generation have to call it, and have to refuse a party that has no payable account.
+
+**Verified:** unit tests for the rules, the planner and the encryption; an endpoint test driving the real function through
+`requireStaff` (changed details keep the old row, no number in responses or audit rows, reveal and verify need the step-up,
+a reveal that cannot be logged returns nothing, the enterer cannot verify, shared accounts flagged). The migration's guard
+trigger and constraints were exercised in a throwaway local Postgres (overwrite, delete, un-verify, revive and double
+household link are all refused). `npm run lint:css` and `astro check` are clean for the new files.
+
+**Real lists (dry run, 2026-11-02):** the existing details are in four partial places: the `Axis Bank Registered Accounts` tab
+(no IFSC), the `Accounts (2022-23)` tab, the `Fund Transfer Request` tab of the Funds Transfer Requests workbook, and
+`Axis Bank Beneficiaries.xlsx` (the bank's own export, with IFSC; read from a copy saved as a Google Sheet, which turned a
+few long account numbers into scientific notation). A local dry run of the planner on all four, merged in that order,
+gave 123 parties and 118 accounts (114 bank accounts with an IFSC, 3 without), 12 rows with bad details, 1 shared-account
+case, and 102 accounts that appear under different names in different lists (the first list's name wins). Nothing was
+written; the numbers came from reading the sheets with a read-only key and printing counts only.
+
+**Import run (2026-11-02):** `scripts/import-fin-parties.mjs --apply` ran against TVC ERP from the four sheets: **122 parties and
+126 accounts written, all unverified, 0 failed** (counts matched the dry run and a row count afterwards). Anomalies reported:
+8 accounts with no IFSC, 4 with an invalid IFSC (dropped), 4 payees with two bank accounts, 1 shared account, 1 padded 8-digit
+account, 1 refused row (one payee's account number, lost to scientific notation in the source; the party imported without an
+account). Re-running adds nothing twice. The payee key for this import is `FINANCE_PAYEE_KEY`, held in the team's password
+manager and set as a Netlify secret; see FINANCE.md, "Keys".
+
+**Not verified:** the page was rendered and signed in locally, but reveal/verify with real data and a real step-up has not been
+tried; the Netlify `FINANCE_PAYEE_KEY` secret has not been checked against the value used for the import (do that with one payee
+reveal on the deployed site after merge); nothing has been verified yet (all 126 accounts are unverified).
+
+**Left for Sharath / next steps:** share the beneficiary sheet with the service account and run the dry run, then review the
+shared-account cases and the party list; apply `0079` before merging; try the page locally with `netlify dev --port 8888`;
+the farm manager's add-vendor screen is session 08.

@@ -463,6 +463,15 @@ outside both the local machine and Netlify (the member-update-email workflow).
   transaction per file; the raw files go to the private R2 bucket under `finance/imports/`. Tables `fin_import_batches`,
   `fin_bank_lines`, `fin_upi_lines`.
   Pure rules (expiry, maker-is-not-checker, finance field masking) are in `finance-access.mjs` with tests.
+  **Parties and payees (session 04, migration `0079_finance_parties.sql`):** `finance-admin.mts` also serves the
+  directory (`/api/finance-admin/parties`, `/accounts/:id/reveal|verify`; code in `lib/finance-parties.ts`, page
+  `/internal/finance/parties/`). `fin_parties` and `fin_party_accounts` hold bank and UPI details encrypted with
+  AES-256-GCM under their own key derived from `FINANCE_PAYEE_KEY` (falling back to `STAFF_MFA_KEY`) (`encryptFinanceText` in `staff-mfa-crypto.ts`), with
+  a keyed fingerprint for shared-account detection; a trigger stops details being edited or deleted. Revealing and
+  verifying need `verify-payee` plus the MFA step-up, and the reveal is logged before anything is returned. The
+  existing beneficiary list is loaded by the operator script `scripts/import-fin-parties.mjs`, which reads a Google
+  Sheet (shared with the Drive service account) and runs against Supabase; it is not deployed. Rotating
+  `FINANCE_PAYEE_KEY` (or the key in use) makes stored payee details unreadable until re-entered; it is separate from `STAFF_MFA_KEY`, so rotating one never breaks the other.
 - **`netlify/functions/lib/site-retrieval.ts`** — shared retrieval + Anthropic-call plumbing
   factored out of `chat.mts` so it and `search-ai.mts` below can't drift apart:
   `selectRelevantPages()`, `matchMembers()`, `formatPages()`/`formatMembers()`, the

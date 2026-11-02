@@ -15,6 +15,7 @@ import { rest } from './lib/staff-mfa-store';
 import { capabilitiesForRole } from './lib/staff-registry';
 import { restHeaders } from '../../scripts/lib/supabase.mjs';
 import { payeeFieldVisibility } from '../../scripts/lib/finance-access.mjs';
+import { PARTY_ID, addPayeeAccount, createParty, listParties, mergeParty, retirePayeeAccount, revealPayeeAccount, reviewParty, unmergeParty, updateParty, verifyPayeeAccount } from './lib/finance-parties';
 import { heldCoverage, reconciliationOf, runImport } from './lib/finance-import';
 import { supabaseImportStore } from './lib/finance-import-store';
 
@@ -150,14 +151,42 @@ async function handleAddBankAccount(req: Request): Promise<Response> {
 
 export default async (req: Request): Promise<Response> => {
   const { pathname } = new URL(req.url);
-  if (pathname === '/api/finance-admin/overview' && req.method === 'GET') return handleOverview(req);
-  if (pathname === '/api/finance-admin/imports' && req.method === 'GET') return handleImportList(req);
-  if (pathname === '/api/finance-admin/imports/preview' && req.method === 'POST') return handleImport(req, false);
-  if (pathname === '/api/finance-admin/imports/commit' && req.method === 'POST') return handleImport(req, true);
-  if (pathname === '/api/finance-admin/bank-accounts' && req.method === 'POST') return handleAddBankAccount(req);
+  const route = pathname.replace('/api/finance-admin', '');
+  if (route === '/overview' && req.method === 'GET') return handleOverview(req);
+  // Statement import and bank accounts (session 03)
+  if (route === '/imports' && req.method === 'GET') return handleImportList(req);
+  if (route === '/imports/preview' && req.method === 'POST') return handleImport(req, false);
+  if (route === '/imports/commit' && req.method === 'POST') return handleImport(req, true);
+  if (route === '/bank-accounts' && req.method === 'POST') return handleAddBankAccount(req);
+  // Parties and payee accounts (session 04)
+  if (route === '/parties' && req.method === 'GET') return listParties(req);
+  if (route === '/parties' && req.method === 'POST') return createParty(req);
+  const party = /^\/parties\/([^/]+)(\/accounts|\/review|\/merge|\/unmerge)?$/.exec(route);
+  if (party && PARTY_ID.test(party[1])) {
+    if (!party[2] && req.method === 'PATCH') return updateParty(req, party[1]);
+    if (party[2] === '/accounts' && req.method === 'POST') return addPayeeAccount(req, party[1]);
+    if (party[2] === '/review' && req.method === 'POST') return reviewParty(req, party[1]);
+    if (party[2] === '/merge' && req.method === 'POST') return mergeParty(req, party[1]);
+    if (party[2] === '/unmerge' && req.method === 'POST') return unmergeParty(req, party[1]);
+  }
+  const account = /^\/accounts\/([^/]+)\/(reveal|verify|retire)$/.exec(route);
+  if (account && PARTY_ID.test(account[1]) && req.method === 'POST') {
+    if (account[2] === 'reveal') return revealPayeeAccount(req, account[1]);
+    if (account[2] === 'retire') return retirePayeeAccount(req, account[1]);
+    return verifyPayeeAccount(req, account[1]);
+  }
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
 export const config = {
-  path: ['/api/finance-admin/overview', '/api/finance-admin/imports', '/api/finance-admin/imports/preview', '/api/finance-admin/imports/commit', '/api/finance-admin/bank-accounts'],
+  path: [
+    '/api/finance-admin/overview',
+    '/api/finance-admin/imports',
+    '/api/finance-admin/imports/preview',
+    '/api/finance-admin/imports/commit',
+    '/api/finance-admin/bank-accounts',
+    '/api/finance-admin/parties',
+    '/api/finance-admin/parties/*',
+    '/api/finance-admin/accounts/*',
+  ],
 };

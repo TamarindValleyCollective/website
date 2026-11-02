@@ -13,7 +13,8 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 | 01 Foundation & access | Built on branch `finance-01-foundation` (draft PR). Migration `0077` **applied to TVC ERP on 2026-11-02**. |
 | 01 follow-up | `0078_finance_categories_and_projects.sql` **applied to TVC ERP on 2026-11-02**. |
 | 03 Statement import | Built on branch `finance-03-statement-import` (draft PR). Migration `0080` **applied to TVC ERP on 2026-11-02**. |
-| 02, 04-13 | Not started |
+| 04 Parties & payees | Built on branch `finance-04-parties` (draft PR). Migration `0079` **applied to TVC ERP on 2026-11-02** (recorded as `finance_parties`); checked afterwards: both tables empty, RLS on, no anon/authenticated grants, guard trigger present. |
+| 02, 05-13 | Not started |
 
 ## Access
 
@@ -69,10 +70,96 @@ so replacing them was safe. Checked after applying: 29 categories (opex 13, cape
 
 ## Tests
 
-`node --test scripts/lib/finance-access.test.mjs scripts/lib/finance-endpoint.test.mjs` (also run by the
-`Finance tests` GitHub Action). The first covers expiry, the capability matrix, masking and maker-is-not-checker;
+`node --test scripts/lib/finance-*.test.mjs` (also run by the `Finance tests` GitHub Action). The first covers expiry, the capability matrix, masking and maker-is-not-checker;
 the second drives the real function through `requireStaff` with Google and Supabase stubbed (needs `npm ci`
 for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly).
+
+## Parties and payees (session 04, migration `0079_finance_parties.sql`)
+
+- **Tables.** `fin_parties` (kind, name, optional household for a member, active) and `fin_party_accounts` (bank or UPI
+  details). Details are AES-256-GCM encrypted (`details_enc`, own key derived from `FINANCE_PAYEE_KEY`, or from `STAFF_MFA_KEY` if that is not set; see "Keys" below); the clear columns
+  are the last four characters and a keyed fingerprint used to find two parties sharing one account. A trigger refuses to
+  edit or delete a row's details; only the status may move forward (unverified, verified, superseded).
+- **Change = new row.** Entering different details adds a new `unverified` row and marks the party's live row of the same
+  method `superseded` (kept, still decryptable for investigation). The same details again change nothing. Until a director
+  verifies the new row, the party has no verified account of that method, so later sessions cannot pay it.
+- **Who can do what.** `view` reads the directory (names, kind, "ending 0123", status, shared flag). `allocate` adds and
+  edits parties and enters details. `verify-payee` (directors) reveals full details and verifies them, both behind the MFA
+  step-up (the "Unlock editing" on the page); the person who entered details cannot verify them (details loaded by the
+  import script have no creator, so any verifier may confirm those).
+- **Never in responses, logs or audit.** List responses are built field by field and carry no ciphertext, fingerprint or
+  number. `fin_audit_log.detail` is checked before writing and a number, UPI id or IFSC makes the write fail. Revealing is
+  written to the audit log first; if that fails nothing is returned. Audit actions: `finance.party_created`,
+  `party_updated`, `payee_added`, `payee_changed`, `payee_revealed`, `payee_verified`, `parties_imported`.
+- **Merging (migration `0081_finance_party_merge.sql`, applied to TVC ERP on 2026-11-02).** Two parties that are really one payee (often a bank merger: an old
+  and a new account) are merged by a director with the step-up: `POST /parties/:id/merge {into}`. Nothing is moved or deleted,
+  because account rows are immutable: the duplicate gets `merged_into = main party`, is hidden from the list, and the main party
+  shows, and is reviewed over, both sets of accounts (so an old and a new bank account are flagged together until the old one is
+  retired). Rules (also enforced by a database trigger): no chains, not into itself, a party others were merged into cannot be
+  merged away, and a member linked to a household cannot be merged away. `POST /parties/:id/unmerge` undoes it (no screen yet).
+  Entering details on a main party sees the accounts of its merged duplicates. **Later sessions must treat a merged party as its
+  main party** (`foldMerged` / `merged_into`) when matching payments, requests and payroll to a payee.
+- **Keys.** Payee details are encrypted under `FINANCE_PAYEE_KEY` (32+ random bytes, base64) when it is set, otherwise under
+  `STAFF_MFA_KEY`. The finance key is separate on purpose: Netlify secrets can be set but never read back, so a key you did not
+  keep a copy of cannot be reused by a script, and rotating the MFA key would lock every TOTP secret and member payout detail.
+  Generate it once (`openssl rand -base64 32`), keep it in the team's password manager, and set it in Netlify as a secret for
+  all scopes including Functions; the import script needs the same value in the shell (`read -s FINANCE_PAYEE_KEY; export
+  FINANCE_PAYEE_KEY`). **Losing it makes stored payee details unreadable** (they must be re-entered). A value that is set but too
+  short is refused, never replaced by the other key. Do not change it once payees are imported.
+  To confirm a key can open what is stored, run `netlify dev:exec -- node scripts/check-fin-parties-decrypt.mjs` with the key
+  in the shell: it decrypts every account and compares the last four and the fingerprint with what is stored, printing counts only
+  (exit 1 on any mismatch). The page's reveal and verify need the MFA step-up, which only works on the deployed site (its
+  signing key is a Netlify secret that is not available locally).
+- **Shared accounts** are flagged on both parties ("Shared account") and never blocked.
+- **Retiring accounts (why this exists).** Money was once sent to an old account that never reached the payee and never came
+  back. So an account has two dates: `valid_from` (first day it may be paid) and `retired_on` (first day it must **not** be
+  paid). **`accountPayableOn(account, day)` in `scripts/lib/finance-parties.mjs` is the one rule: payable only when
+  verified, started and not retired. Every payment path (requests in session 08, payroll in 09, any bulk file) must call it
+  and refuse otherwise.** `todayIST()` gives today's date in India.
+  - *Retire* (`POST /accounts/:id/retire {on, reason}`): `verify-payee` + the step-up. A past date is allowed (it stopped
+    working before anyone knew). A retirement can be moved **earlier, never later or cleared** (also enforced by a database
+    trigger), and a replaced account cannot be retired. The audit log gets the date only; the free-text reason stays on
+    the row.
+  - *Change on a date* (`POST /parties/:id/accounts` with `effectiveOn`): `verify-payee` + the step-up. The old account stays
+    payable until that day and is retired from it; the new one is unverified and starts that day. Without a date the old
+    details are replaced at once (anyone who may enter details can do this), so nothing is paid to that payee until the new
+    details are verified.
+  - A retired or soon-to-retire account is shown as such, and an already retired account cannot be verified.
+- **Needs review.** Computed by `reviewFlags` and shown as a "Needs review" pill, a filter ("Needs review (n)") and a plain
+  sentence per account: `multiple_live_accounts` (two or more bank accounts in use: what a bank merger looks like; retire the
+  old one, or "Keep both: reviewed", which holds until a newer account is added), `missing_ifsc`, `shared_account`, and
+  `no_replacement` (a retirement is set but no other account of that kind is left). Superseded accounts are history and never
+  flagged; a UPI id is not a second bank account. Recording "keep both" is `POST /parties/:id/review` (`verify-payee` +
+  step-up, audited as `finance.party_reviewed`).
+- **Endpoints.** `GET/POST /api/finance-admin/parties`, `PATCH /parties/:id`, `POST /parties/:id/accounts`,
+  `POST /parties/:id/review`, `/merge`, `/unmerge`, `POST /accounts/:id/reveal`, `/verify`, `/retire`. Page: `/internal/finance/parties/`.
+- **Import.** `scripts/import-fin-parties.mjs --source <sheetId>::<range> [--source ...] [--apply]` reads the existing
+  payee lists from Google Sheets shared with the Drive service account (ids and ranges are arguments, never in the repo).
+  The details are spread over several partial lists, so several sources are given and **merged by account number**: the
+  first source's name wins and blanks (IFSC, UPI id) are filled from later ones; two entries for one account inside the
+  same list are kept apart so the shared-account flag still sees them. Dry run by default; it prints counts and line numbers
+  only. A name column is required; kind, account number, IFSC, UPI id and farm unit are used when present, matched by loose
+  header names (the layouts of the registered-accounts tab, the accounts tab, the funds-transfer requests and the bank's own
+  beneficiary export are all recognised). Parties match on name + kind and accounts on fingerprint, so re-running adds
+  nothing. Everything lands unverified. Rows with no kind column become kind `other` for review; member parties link by
+  farm unit (`F-07`).
+- **Name de-duplication.** Banks have merged, so one payee can appear with an old and a new account number, which the
+  account-number merge cannot see. Names that are equal after normalising (case, accents, punctuation, a leading honorific,
+  "&", "Private Limited" vs "Pvt Ltd") are the same party and keep all their accounts; a party with two or more bank accounts is
+  reported as `multiple_accounts` (verify the current one). Looser matches (same words in another order, one name contained in
+  another, a one-letter spelling slip) are **never merged automatically**, since two workers or relatives can have near-identical
+  names: they are counted in the summary (`duplicateCandidates`) and `--review-out <path>` writes them, with names, bank code and
+  last four, to a private file outside the repo (the script refuses a path inside it). Merging two parties after import is not
+  built yet.
+- **8-digit accounts.** Older accounts can be 8 digits. The import pads those with one leading zero to the 9-digit minimum
+  (before lists are merged, so the same account in two lists still matches) and reports each as `padded_account`. The
+  directory form still requires 9 to 18 digits. A padded number is a guess about the bank's format: check these when verifying.
+- **No IFSC.** Some lists have none, and some have one that is not a valid IFSC (reported as `invalid_ifsc`, then treated as
+  missing; a wrong account number is still refused). Such accounts import with an empty IFSC, are reported as `missing_ifsc`, and **cannot be
+  verified** until someone enters the account again with its IFSC ("Add or change details"; the same number with a new IFSC
+  counts as a change, and the old row is kept).
+- **Not built yet:** linking an existing party to a household after the fact, merging duplicate parties, and the farm
+  manager's add-vendor screen (`finance-requests`, session 08).
 
 ## Migration 0077
 
