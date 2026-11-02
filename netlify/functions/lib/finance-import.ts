@@ -154,11 +154,11 @@ export async function runImport(args: { store: ImportStore; files: UploadedFile[
       lastDate: plan.lastDate,
       ignored: plan.ignored,
       failed: plan.failed,
+      errors: plan.errors,
     });
     if (plan.status === 'ok') {
       hashHeld.add(p.fileHash);
       storedUpi.push({ index: p.index, plan, batchId: randomUUID() });
-      if (accountsWithUpi.length === 0) results[p.index].message = 'No bank account has a Paytm account label yet, so every row would be ignored. Set the label on the account first.';
     }
   }
 

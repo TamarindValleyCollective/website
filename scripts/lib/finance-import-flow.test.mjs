@@ -173,6 +173,15 @@ test('Paytm: rows are kept or ignored, linked to the bank by reference, and a la
   assert.equal(again.files[0].status, 'duplicate_file');
 });
 
+test('Paytm with no registered account is refused and stores nothing, so it can be redone once the account exists', async () => {
+  const s = fakeStore({ accounts: [] });
+  const paytm = paytmExport({ rows: [{ date: '2022-07-01', amount: -120000, ref: '400000000001' }] });
+  const r = await run(s, [up('paytm.xlsx', paytm)]);
+  assert.equal(r.files[0].status, 'blocked');
+  assert.equal(r.files[0].errors[0].type, 'no_registered_rows');
+  assert.equal(s.db.upi.length + s.db.batches.length + s.db.raw.size + s.db.audit.length, 0);
+});
+
 test('Paytm preview says how many rows would link right now', async () => {
   const s = fakeStore();
   await run(s, [up('2022.xlsx', years().y22.bytes)]);
