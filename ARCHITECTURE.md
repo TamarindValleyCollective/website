@@ -703,7 +703,8 @@ outside both the local machine and Netlify (the member-update-email workflow).
   writing, so the booking is untouched. `GET /change-requests` lists pending requests (an admin sees all, anyone else
   their own) and `POST /change-requests/decide` (admin only) approves, which applies the stored payload through the normal
   `accommodation_update_booking` (conflict checks and the audit log as for any edit, the reason keeping who asked), or
-  rejects. A clash on approval leaves the request pending. The page shows "Changes to approve (n)" to admins and
+  rejects. A clash on approval leaves the request pending. Submitting also emails `core-team@tvc.farm` through Resend
+  (`lib/change-request-email.ts`, best effort, needs `RESEND_API_KEY`). The page shows "Changes to approve (n)" to admins and
   "Waiting for approval (n)" to the requester, each opening a list that spells out what would change
   (`scripts/lib/stay-change-request.mjs`, tested). Cancelling a past stay is unchanged (a reason, no approval).
 - **`netlify/functions/stays-day-summary.mts`** — `POST /api/stays-day-summary` (`{date}`; `view` on the

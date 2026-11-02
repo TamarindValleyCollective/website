@@ -32,9 +32,11 @@ import { canSeeNames, maskName } from './lib/staff-masking';
 import { BOOKING_TYPES, type BookingType, type Capability } from './lib/staff-registry';
 import { normalizeMobileNumber, isValidEmail } from '../../scripts/lib/accommodation.mjs';
 import { writeProblem } from '../../scripts/lib/accommodation-units.mjs';
-import { listUnits, listTypes, listBookingsForAdmin, createBooking, updateBooking, deleteBooking, searchGuests, listStaysForPerson, getBookingById, listNoticesForBookings, getNotice, saveNotice, createChangeRequest, listPendingChangeRequests, getChangeRequest, decideChangeRequest } from '../../scripts/lib/accommodation-db.mjs';
+import { listUnits, listTypes, getUnitLabels, listBookingsForAdmin, createBooking, updateBooking, deleteBooking, searchGuests, listStaysForPerson, getBookingById, listNoticesForBookings, getNotice, saveNotice, createChangeRequest, listPendingChangeRequests, getChangeRequest, decideChangeRequest } from '../../scripts/lib/accommodation-db.mjs';
 import { isNotifiableType, snapshotOf, hasPendingChanges } from '../../scripts/lib/stay-notice.mjs';
 import { sendStayNotices, sendStayCancellation } from './lib/stay-notify';
+import { sendChangeRequestEmail } from './lib/change-request-email';
+import { describeChange } from '../../scripts/lib/stay-change-request.mjs';
 
 
 interface Guest {
@@ -369,6 +371,21 @@ async function handleUpdate(req: Request, staff: StaffGrant): Promise<Response> 
         requestedBy: staff.id,
         requestedByName: staff.name ?? staff.googleName ?? staff.email,
       });
+      // Tell the core team, so a request is not waiting unseen. Awaited (a serverless function can be frozen once it
+      // answers) but best effort: the request is already saved, so a mail failure never fails the submit.
+      try {
+        const labels = (await getUnitLabels()) as Map<string, string>;
+        const booking = existing as any;
+        await sendChangeRequestEmail({
+          requestedBy: staff.name ?? staff.googleName ?? staff.email,
+          booking: booking.eventTitle ?? booking.label ?? 'A booking',
+          stay: `${existing.startDate}, ${existing.nights} ${existing.nights === 1 ? 'night' : 'nights'}`,
+          reason: reason.trim(),
+          changes: describeChange(existing, proposed, labels) as string[],
+        });
+      } catch (err) {
+        console.error('[accommodation-admin] change-request email failed', err);
+      }
       return jsonResponse({ pending: true, message: 'Sent to the admins for approval. The stay stays as it is until then.' }, 202);
     } catch (err) {
       console.error('Failed to save the change request', err);
