@@ -455,7 +455,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   refuse or hide an expired grant, and the Access screen sets it on read-only grants. The migration also adds
   the reference tables `fin_entities`, `fin_bank_accounts`, `fin_categories`, `fin_periods` and the append-only
   `fin_audit_log`, all service-role only (RLS on, no policies). `finance-admin.mts` serves the overview; an auditor's visit is written to `fin_audit_log` and refused if it cannot be.
-  **Session 03 (statement import, migration `0080`, not yet applied)** adds `/internal/finance/import/` and the routes
+  **Session 03 (statement import, migration `0080`, applied 2026-11-02)** adds `/internal/finance/import/` and the routes
   `/imports`, `/imports/preview`, `/imports/commit`, `/bank-accounts`: yearly Axis statement Excel files (any number, any
   order, balance chain checked across years) and the Paytm UPI export are parsed (`scripts/lib/finance-xlsx.mjs` on
   `fflate`, `finance-axis-statement.mjs`, `finance-paytm.mjs`), planned (`finance-import-plan.mjs`, `finance-upi-plan.mjs`:

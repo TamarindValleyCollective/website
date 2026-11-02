@@ -1,6 +1,6 @@
 -- Finance module, session 03: statement import (docs/finance/sessions/03-statement-import.md).
 --
--- NOT APPLIED when written. Number note: 0079 is taken by the open session-04 PR (finance parties), so this is 0080;
+-- Applied to TVC ERP on 2026-11-02 (recorded as finance_statement_import). Number note: 0079 is taken by the open session-04 PR (finance parties), so this is 0080;
 -- the two touch different tables and can be applied in either order.
 --
 --   * fin_import_batches: one row per imported FILE. A bank statement comes as one file per year, and each year is its

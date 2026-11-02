@@ -74,9 +74,9 @@ This is the main blocker. Also confirm the registered account label text the Pay
 > Read `docs/finance/README.md`, `DESIGN.md` and `sessions/03-statement-import.md`. I will give you a real Axis statement file and a Paytm export; copy them into an empty folder outside the repo, never commit them, and build only invented fixtures. Build session 03 test-first.
 
 ## Done
-Built 2026-11-02 on branch `finance-03-statement-import` (draft PR). **Migration `0080_finance_statement_import.sql` is
-written and NOT applied** (0079 belongs to the open session-04 PR; the two touch different tables and apply in either order).
-Verified on a throwaway local Postgres only, never on TVC ERP.
+Built 2026-11-02 on branch `finance-03-statement-import` (draft PR). **Migration `0080_finance_statement_import.sql` was
+applied to TVC ERP on 2026-11-02** (0079 belongs to the open session-04 PR; the two touch different tables and apply in either order).
+Tried first on a throwaway local Postgres, then checked after applying: three tables and three functions present, RLS on, no `anon`/`authenticated` grants (functions execute for `service_role` only), both triggers present, `circle_tag` = Pocket Money, `paytm_since` = 2026-08-31, all three tables empty.
 
 **What exists**
 - Step 1, parsing (pure, `scripts/lib/`): `finance-xlsx.mjs` (a small `.xlsx` reader on `fflate`: maintained, zero
@@ -110,5 +110,5 @@ Verified on a throwaway local Postgres only, never on TVC ERP.
 **Checked on the real files** (read in place, never copied; counts only): five yearly files, 1,376 lines, every balance chain
 holds inside each file and across all four year boundaries, bank footer totals agree, no gaps; shuffled upload, re-upload
 and one-year-at-a-time all behave. Paytm: 72 rows, 66 on our account all link to a bank line by reference, 6 ignored.
-**Not done:** applying the migration, registering the real account, and the real import into TVC ERP (waiting for the go-ahead);
+**Not done:** registering the real account and the real import into TVC ERP (after this is merged and deployed);
 the real R2 write was not exercised (stubbed in tests).

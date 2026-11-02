@@ -12,7 +12,7 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 |---|---|
 | 01 Foundation & access | Built on branch `finance-01-foundation` (draft PR). Migration `0077` **applied to TVC ERP on 2026-11-02**. |
 | 01 follow-up | `0078_finance_categories_and_projects.sql` **applied to TVC ERP on 2026-11-02**. |
-| 03 Statement import | Built on branch `finance-03-statement-import` (draft PR). Migration `0080` written, **not applied**. |
+| 03 Statement import | Built on branch `finance-03-statement-import` (draft PR). Migration `0080` **applied to TVC ERP on 2026-11-02**. |
 | 02, 04-13 | Not started |
 
 ## Access
@@ -101,7 +101,7 @@ Page `/internal/finance/import/`; routes in `finance-admin.mts` (`GET /imports`,
   their total. `is_circle` = a payment out whose tag matches `fin_entities.circle_tag` ("Pocket Money"). Rows join bank lines by
   the 12-digit UPI reference when amount and direction agree; a Paytm row after the last bank line waits for the next statement.
   Bank UPI debits before `fin_entities.paytm_since` have no Paytm row and are reported as such.
-- **Tables (migration `0080`, not applied).** `fin_import_batches`, `fin_bank_lines` (append-only), `fin_upi_lines` (only
+- **Tables (migration `0080`, applied 2026-11-02).** `fin_import_batches`, `fin_bank_lines` (append-only), `fin_upi_lines` (only
   `bank_line_id` may change), functions `fin_store_bank_batch`, `fin_store_upi_batch`, `fin_link_upi_lines` (service role only),
   and `circle_tag` / `paytm_since` on `fin_entities`.
 - **Code.** Parsing and planning are pure and separate (`scripts/lib/finance-*.mjs`); storing goes through an `ImportStore`.

@@ -67,5 +67,5 @@ run at any time. Run 13 last.
 |---|---|---|
 | 00 | Design written 2026-11-02 | `DESIGN.md` and these briefs |
 | 01 | Built 2026-11-02, draft PR (`finance-01-foundation`) | Registry modules, grant expiry, reference tables, overview endpoint and page. Migration `0077` applied 2026-11-02. See [FINANCE.md](FINANCE.md). |
-| 03 | Built 2026-11-02, draft PR (`finance-03-statement-import`) | Yearly Axis files (any number, any order, chain checked across years) and the Paytm export; preview then confirm. Migration `0080` written, **not applied**. See [FINANCE.md](FINANCE.md). |
+| 03 | Built 2026-11-02, draft PR (`finance-03-statement-import`) | Yearly Axis files (any number, any order, chain checked across years) and the Paytm export; preview then confirm. Migration `0080` applied 2026-11-02. See [FINANCE.md](FINANCE.md). |
 | 02, 04-13 | Not started (04 has its own draft PR) | |
