@@ -308,7 +308,8 @@ flowchart TD
     APIFN17 -.->|"send alert digest"| RESEND
     APIFN18 -.->|"bookings for tomorrow,<br/>claim reminder"| SUPABASE
     APIFN18 -.->|"send tvc_event_reminder<br/>template"| WAMETA
-    APIFN_PLAN -.->|"today's stays"| SUPABASE
+    APIFN_PLAN -.->|"today's and tomorrow's stays"| SUPABASE
+    APIFN_PLAN -.->|"arrival plan email"| RESEND
     APIFN_PLAN -.->|"send tvc_stays_daily_plan<br/>template"| WAMETA
 
     classDef staticStyle fill:#e8f2ea,stroke:#17723b,color:#0f5029
@@ -655,7 +656,8 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `accommodation_bookings` (TVC ERP Supabase, via `scripts/lib/accommodation-db.mjs`), builds the day plan with
   `scripts/lib/stay-day-plan.mjs` (arrivals, departures, breakfast/dinner counts, food needs, admin notes) and sends
   the `tvc_stays_daily_plan` template to each number in `WHATSAPP_DAILY_PLAN_NUMBERS`. Sends nothing on a day with
-  nobody on the farm; dormant until the template is approved.
+  nobody on the farm. Also sends tomorrow's plan when a party arrives tomorrow, and emails the plan via Resend
+  (`lib/stay-plan-email.ts`) to `core-team@tvc.farm` the day before and the day of an arrival.
   The Stays page opens on a two-choice switch, **Day plan** and **Availability** (Week and Month sit inside it),
   with a date button that is also the date picker and a Today | Tomorrow switch. The Day plan
   (`accommodation-calendar.astro`) is built by the same `buildDayPlan`: a one-line summary strip, a fullness chip per
