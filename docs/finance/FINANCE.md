@@ -12,7 +12,7 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 |---|---|
 | 01 Foundation & access | Built on branch `finance-01-foundation` (draft PR). Migration `0077` **applied to TVC ERP on 2026-11-02**. |
 | 01 follow-up | `0078_finance_categories_and_projects.sql` **applied to TVC ERP on 2026-11-02**. |
-| 04 Parties & payees | Built on branch `finance-04-parties` (draft PR). Migration `0079` **not yet applied**; apply it before merging. |
+| 04 Parties & payees | Built on branch `finance-04-parties` (draft PR). Migration `0079` **applied to TVC ERP on 2026-11-02** (recorded as `finance_parties`); checked afterwards: both tables empty, RLS on, no anon/authenticated grants, guard trigger present. |
 | 02, 03, 05-13 | Not started |
 
 ## Access

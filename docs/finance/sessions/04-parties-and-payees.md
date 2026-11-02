@@ -67,7 +67,7 @@ written; the numbers came from reading the sheets with a read-only key and print
 
 **Not verified:** the page has not been rendered in a browser or tried signed in; the import script's `--apply` path and its
 reading of the real sheet have not been run (no credentials or real sheet here, and the real column layout has not been
-seen: the loose header matching is an assumption); migration `0079` has not been applied to TVC ERP; nothing was tested
+seen: the loose header matching is an assumption); migration `0079` was applied to TVC ERP on 2026-11-02 and checked (tables empty, RLS on, no anon grants, trigger present) but not exercised with data; nothing was tested
 with a real step-up token from a browser.
 
 **Left for Sharath / next steps:** share the beneficiary sheet with the service account and run the dry run, then review the
