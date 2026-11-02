@@ -16,6 +16,7 @@
 import { restHeaders } from '../../../scripts/lib/supabase.mjs';
 import { verifyGoogleIdToken } from '../../../scripts/lib/google-id-token.mjs';
 import { safeGooglePicture } from '../../../scripts/lib/member-google-picture.mjs';
+import { grantIsExpired } from '../../../scripts/lib/finance-access.mjs';
 import { roleHasCapability, type Capability, type ModuleId, type Role } from './staff-registry';
 
 // Addresses on these domains belong to a Google Workspace we administer, so
@@ -54,7 +55,7 @@ type StaffRow = {
   name: string | null;
   active: boolean;
   is_super_admin: boolean;
-  staff_module_roles: { role: Role; scope: RoleScope }[];
+  staff_module_roles: { role: Role; scope: RoleScope; expires_at: string | null }[];
 };
 
 const cache = new Map<string, { row: StaffRow | null; expiresAt: number }>();
@@ -84,7 +85,7 @@ async function lookupStaff(email: string, module: ModuleId): Promise<StaffRow | 
     // requireStaff turns into the same 403 as an unknown user.
     const roleRes = await fetch(
       `${supabaseUrl}/rest/v1/staff_module_roles?staff_id=eq.${user.id}` +
-        `&module=eq.${encodeURIComponent(module)}&select=role,scope`,
+        `&module=eq.${encodeURIComponent(module)}&select=role,scope,expires_at`,
       { headers: restHeaders() },
     );
     if (!roleRes.ok) throw new Error(`staff_module_roles lookup failed: ${roleRes.status}`);
@@ -176,7 +177,10 @@ export async function requireStaff<M extends ModuleId>(
 
   // Same message for "unknown", "deactivated", "no role here" and "role lacks
   // this capability" — the response shouldn't reveal which people exist.
-  const grant = row?.active ? row.staff_module_roles[0] : undefined;
+  // A grant with an end date (an auditor's) is refused once it passes. Checked here on every request, not when the
+  // row is cached, so it ends on time whatever the cache holds.
+  const found = row?.active ? row.staff_module_roles[0] : undefined;
+  const grant = found && !grantIsExpired(found.expires_at) ? found : undefined;
   if (!row || !grant || !roleHasCapability(module, grant.role, capability)) {
     return { ok: false, status: 403, error: 'Not authorized' };
   }

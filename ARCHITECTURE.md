@@ -109,6 +109,7 @@ flowchart TD
         FUNC_SRC14["netlify/functions/event-payments-admin.mts<br/>Serverless function, Google Sign-In gated —<br/>per-event registrations/cancellations/money<br/>collected from Supabase, issues real Razorpay<br/>refunds (tier-suggested, admin-confirmed)"]
         FUNC_SRC15["netlify/functions/usage-collect.mts<br/>Scheduled function (cron, every 6 hours) — appends<br/>the Supabase database size, open connections + biggest tables, Netlify's plan<br/>credits + billing cycle and Resend's email quota to usage_snapshots for<br/>the free-tier usage dashboard. Optional secrets:<br/>NETLIFY_ACCESS_TOKEN, RESEND_USAGE_API_KEY,<br/>CLOUDFLARE_ANALYTICS_TOKEN"]
         FUNC_SRC16["netlify/functions/usage-admin.mts<br/>Serverless function, Google Sign-In gated (usage module) —<br/>overview of free-tier/credit usage, live domain<br/>expiry lookups, typed-in provider readings and<br/>price/limit settings (admins only, audit-logged)"]
+        FUNC_SRC20["netlify/functions/finance-admin.mts<br/>Serverless function, Google Sign-In gated (finance module) —<br/>session 01: an overview only (counts of accounts, categories,<br/>open months); auditor visits are written to fin_audit_log"]
         FUNC_SRC17["netlify/functions/usage-alerts.mts<br/>Scheduled function (cron, hourly) — evaluates the<br/>usage rules and emails core-team@tvc.farm one digest<br/>per new or worsened warning; remembers what it sent"]
         SCRIPT_SRC["scripts/build-chat-context.mjs<br/>Strips nav/footer from built HTML →<br/>content corpus for the chatbot"]
     end
@@ -141,6 +142,7 @@ flowchart TD
         APIFN14["Netlify Function: /api/event-payments-admin<br/>Deployed and live — backs /internal/event-payments,<br/>issues real refunds via Razorpay's API"]
         APIFN15["Netlify Function: usage-collect<br/>Scheduled (cron), no HTTP path"]
         APIFN16["Netlify Function: /api/usage-admin<br/>Deployed with the usage dashboard"]
+        APIFN21["Netlify Function: /api/finance-admin<br/>Deployed with the finance module (skeleton)"]
         APIFN17["Netlify Function: usage-alerts<br/>Scheduled (cron, hourly), no HTTP path"]
         APIFN18["Netlify Function: whatsapp-event-reminders<br/>Scheduled (cron, daily 09:00 IST), no HTTP path —<br/>built, dormant until template approved"]
         APIFN_PLAN["Netlify Function: whatsapp-stays-daily-plan<br/>Scheduled (cron, daily 06:30 IST), no HTTP path —<br/>built, dormant until template approved"]
@@ -303,6 +305,8 @@ flowchart TD
     APIFN16 -.->|"live domain expiry"| RDAP
     APIFN16 -.->|"check admin role"| SUPABASE
     APIFN16 -.->|"verify admin ID token"| GIDTOKEN
+    APIFN21 -.->|"check finance role + expiry; read fin_* tables;<br/>append fin_audit_log"| SUPABASE
+    APIFN21 -.->|"verify admin ID token"| GIDTOKEN
     USAGEDASH -.->|"Sign in with Google"| GIDTOKEN
     APIFN17 -.->|"read usage data, remember<br/>alerts already sent"| SUPABASE
     APIFN17 -.->|"send alert digest"| RESEND
@@ -320,7 +324,7 @@ flowchart TD
     classDef ciStyle fill:#eef4fb,stroke:#3b6ea5,color:#1c3f5f
 
     class PAGES,INTERNALPAGE,INTERNALPAGE2,INTERNALPAGE3,INTERNALPAGE4,INTERNALPAGE5,COMPONENTS,CONTENT,CHATW,SEARCH,FRIENDS,MEMBERFORM,GENERALFORM,HOSTFORM,BOOKING,INTEREST,BIODIV,PHOTOS,TIMELINE,GA,WEATHER,RAINFALL,STATIONCARD,CDN,POOLDASH,WHATSAPPDASH,ACCOMMODATIONDASH,EVENTPAYDASH,USAGEDASH,BOOKINGFORM,CANCELPAGE,APPROVEPAGE staticStyle
-    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_STATION,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,FUNC_SRC14,FUNC_SRC15,FUNC_SRC16,FUNC_SRC17,FUNC_SRC18,FUNC_SRC19,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN_STATION,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,APIFN14,APIFN15,APIFN16,APIFN17,APIFN18,APIFN19,APIFN20,APIFN_PLAN,BLOBS,FORMS,ANTHROPIC netlifyStyle
+    class FUNC_SRC,FUNC_SRC2,FUNC_SRC3,FUNC_SRC4,FUNC_SRC5,FUNC_STATION,FUNC_SRC6,FUNC_SRC7,FUNC_SRC8,FUNC_SRC9,FUNC_SRC10,FUNC_SRC11,FUNC_SRC12,FUNC_SRC13,FUNC_SRC14,FUNC_SRC15,FUNC_SRC16,FUNC_SRC17,FUNC_SRC18,FUNC_SRC19,FUNC_SRC20,SCRIPT_SRC,SCRIPT_SRC2,APIFN,APIFN2,APIFN3,APIFN4,APIFN5,APIFN_STATION,APIFN6,APIFN7,APIFN8,APIFN9,APIFN10,APIFN11,APIFN12,APIFN13,APIFN14,APIFN15,APIFN16,APIFN17,APIFN18,APIFN19,APIFN20,APIFN21,APIFN_PLAN,BLOBS,FORMS,ANTHROPIC netlifyStyle
     class INAT,GMAPS,YT,R2,GTAG,METEO,GDRIVE,GSHEET,GIDTOKEN,GSC,RESEND,WAMETA,LINGERSYS,SUPABASE,SUPABASE_HA,HASSIST,GEMINI,TYPESAFE,RAZORPAY,RDAP externalStyle
     class CF cfStyle
     class SCRIPT_CURATE,SCRIPT_CAPTION,SCRIPT_PULL,SCRIPT_GSC localStyle
@@ -442,6 +446,16 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `usage-rules.mjs`, pure functions with unit tests. Tables from migration `0031_usage_dashboard.sql`.
   Typed-in services (the Netlify balance, the Anthropic balance, and the fallbacks for Resend and Cloudflare R2) are typed in on purpose:
   holding an API credential for each would add a secret broader than a usage reading is worth.
+- **`netlify/functions/finance-admin.mts` + `/internal/finance/` + `/internal/finance-requests` +
+  `scripts/lib/finance-access.mjs`** — the finance module's foundation (see `docs/finance/FINANCE.md`).
+  Two new registry modules: `finance` (directors, finance operators, viewers and auditors) and
+  `finance-requests` (the requester, with no ledger access). `staff_module_roles.expires_at` (migration
+  `0077_finance_foundation.sql`) ends a grant on a date; `requireStaff`, `staff-me` and `staff-today`
+  refuse or hide an expired grant, and the Access screen sets it on read-only grants. The migration also adds
+  the reference tables `fin_entities`, `fin_bank_accounts`, `fin_categories`, `fin_periods` and the append-only
+  `fin_audit_log`, all service-role only (RLS on, no policies). `finance-admin.mts` currently serves one read,
+  the overview ("No data yet"); an auditor's visit is written to `fin_audit_log` and refused if it cannot be.
+  Pure rules (expiry, maker-is-not-checker, finance field masking) are in `finance-access.mjs` with tests.
 - **`netlify/functions/lib/site-retrieval.ts`** — shared retrieval + Anthropic-call plumbing
   factored out of `chat.mts` so it and `search-ai.mts` below can't drift apart:
   `selectRelevantPages()`, `matchMembers()`, `formatPages()`/`formatMembers()`, the

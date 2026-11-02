@@ -1,0 +1,32 @@
+name: Finance tests
+
+# Unit tests for the finance module's access rules (expiry, capability matrix, masking, maker-is-not-checker) and
+# an end-to-end check of the finance-admin Function through requireStaff with Google and Supabase stubbed.
+# Needs no secrets. The endpoint test bundles the function with esbuild (installed by npm ci) and imports the
+# registry's .ts directly, which needs Node 22.18 or newer.
+
+on:
+  pull_request:
+    paths:
+      - 'netlify/functions/**'
+      - 'scripts/lib/finance-*'
+      - 'docs/finance/**'
+      - '.github/workflows/finance-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm ci
+
+      - name: Finance access rules and endpoint
+        run: node --test scripts/lib/finance-access.test.mjs scripts/lib/finance-endpoint.test.mjs

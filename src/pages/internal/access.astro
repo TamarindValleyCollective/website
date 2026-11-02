@@ -759,6 +759,8 @@ import SignInGate from '../../components/SignInGate.astro';
     module: string;
     role: string;
     scope: { allowedTypes?: string[] } | null;
+    expiresAt?: string | null; // when a read-only (auditor) grant ends
+    expired?: boolean;
   }
   interface Person {
     id: string;
@@ -835,6 +837,7 @@ import SignInGate from '../../components/SignInGate.astro';
 
   let state: PeopleResponse | null = null;
   const openLimits = new Set<string>(); // people whose booking-type limits are expanded
+  const openExpiry = new Set<string>(); // people whose access-end date is expanded (`person|module`)
   let query = ''; // the search box, lower-cased
   let toolFilter = ''; // a module id, or '' for every tool
   let filter = 'all'; // all, super, tools, none or inactive
@@ -1131,6 +1134,22 @@ import SignInGate from '../../components/SignInGate.astro';
       control.append(button);
     }
 
+    // A read-only grant can end on a date (auditors).
+    if (current?.role === 'read_only') {
+      const key = `${p.id}|${module.id}`;
+      const button = h('button', {
+        class: 'limit-button',
+        text: current.expired ? `Ended ${shortDate(current.expiresAt!)}` : current.expiresAt ? `Ends ${shortDate(current.expiresAt)}` : 'No end date',
+        attrs: { type: 'button', 'aria-expanded': String(openExpiry.has(key)) },
+      });
+      button.addEventListener('click', () => {
+        if (openExpiry.has(key)) openExpiry.delete(key);
+        else openExpiry.add(key);
+        renderPeople();
+      });
+      control.append(button);
+    }
+
     select.addEventListener('change', () => {
       select.dataset.role = select.value;
       syncBlurb(select, module);
@@ -1182,6 +1201,49 @@ import SignInGate from '../../components/SignInGate.astro';
       status,
     );
     return h('li', { class: 'limits-row' }, limits);
+  }
+
+  // The India-time calendar date a grant ends on, as YYYY-MM-DD (the server stores the close of that day).
+  const endDay = (iso: string) => new Date(new Date(iso).getTime() + 5.5 * 3_600_000).toISOString().slice(0, 10);
+  const shortDate = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+
+  // A read-only grant (an auditor's) can end on a date; after it the person is refused like anyone without a role.
+  function expiryRow(p: Person, module: ModuleInfo): HTMLElement {
+    const current = p.roles.find((r) => r.module === module.id);
+    const editable = canEdit();
+    const input = h('input', { attrs: { type: 'date', 'aria-label': `Last day of ${module.label} access for ${p.label}` } }) as HTMLInputElement;
+    if (current?.expiresAt) input.value = endDay(current.expiresAt);
+    input.disabled = !editable;
+    const status = h('span', { class: 'cell-note' });
+    const send = async (expiresOn: string | null, button: HTMLButtonElement, busyText: string) => {
+      const done = setBusy(button, busyText);
+      status.textContent = 'Saving…';
+      try {
+        const { status: code, data } = await call('/api/staff-admin/roles', { method: 'POST', body: { personId: p.id, module: module.id, role: 'read_only', expiresOn } });
+        if (code === 200) {
+          announce(expiresOn ? `${p.label}'s ${module.label} access ends on ${shortDate(expiresOn + 'T12:00:00+05:30')}.` : `${p.label}'s ${module.label} access has no end date.`);
+          await loadPeople();
+        } else status.textContent = data.error ?? 'Could not save.';
+      } catch (err) {
+        if (!handled(err)) status.textContent = 'Could not reach the server.';
+      } finally {
+        done();
+        button.disabled = !canEdit();
+      }
+    };
+    const save = h('button', { class: 'row-action', text: 'Save end date', attrs: { type: 'button' } }) as HTMLButtonElement;
+    save.disabled = !editable;
+    save.addEventListener('click', () => {
+      if (!input.value) {
+        status.textContent = 'Pick a date, or use No end date.';
+        return;
+      }
+      void send(input.value, save, 'Saving…');
+    });
+    const clear = h('button', { class: 'row-action', text: 'No end date', attrs: { type: 'button' } }) as HTMLButtonElement;
+    clear.disabled = !editable || !current?.expiresAt;
+    clear.addEventListener('click', () => void send(null, clear, 'Saving…'));
+    return h('li', { class: 'limits-row' }, h('div', { class: 'limits' }, h('p', { class: 'limits-title', text: `Last day ${p.label} may use ${module.label.toLowerCase()} (for an auditor; after it they are refused):` }), input, save, clear, status));
   }
 
   function personBadges(p: Person): HTMLElement {
@@ -1246,6 +1308,7 @@ import SignInGate from '../../components/SignInGate.astro';
     for (const module of state!.modules) {
       rows.append(moduleRow(p, module));
       if (module.scopeTypes && openLimits.has(p.id) && p.roles.find((r) => r.module === module.id)?.role === 'user') rows.append(limitsRow(p, module));
+      if (openExpiry.has(`${p.id}|${module.id}`) && p.roles.find((r) => r.module === module.id)?.role === 'read_only') rows.append(expiryRow(p, module));
     }
     const out: HTMLElement[] = [head, rows];
     if (!p.isSuperAdmin && !p.isMe) {
@@ -1274,7 +1337,7 @@ import SignInGate from '../../components/SignInGate.astro';
     try {
       const { status, data } = await call('/api/staff-admin/people/active', { method: 'POST', body: { personId: p.id, active } });
       if (status === 200) {
-        for (const r of restore) await call('/api/staff-admin/roles', { method: 'POST', body: { personId: p.id, module: r.module, role: r.role, ...(r.scope ? { scope: r.scope } : {}) } });
+        for (const r of restore) await call('/api/staff-admin/roles', { method: 'POST', body: { personId: p.id, module: r.module, role: r.role, ...(r.scope ? { scope: r.scope } : {}), ...(r.expiresAt && !r.expired ? { expiresOn: endDay(r.expiresAt) } : {}) } });
         await loadPeople();
         return true;
       }

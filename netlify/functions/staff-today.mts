@@ -10,6 +10,7 @@
 //   Member register  unit stories waiting for review, and family-member requests waiting for a decision
 //   Usage & limits   services with a warning or critical alert (usage_alert_state, kept by the hourly check)
 //   Security         super admins who do not yet have two different second factors (super admins only)
+import { grantIsExpired } from '../../scripts/lib/finance-access.mjs';
 import { requireActivePerson } from './lib/staff-access';
 import { mfaSummary, rest } from './lib/staff-mfa-store';
 import { needsReply } from './lib/whatsapp-guest';
@@ -91,8 +92,8 @@ export default async (req: Request): Promise<Response> => {
 
   let modules = new Set<string>();
   try {
-    const res = await rest(`/staff_module_roles?staff_id=eq.${person.id}&select=module`);
-    modules = new Set(((await res.json()) as { module: string }[]).map((r) => r.module).filter(isModuleId));
+    const res = await rest(`/staff_module_roles?staff_id=eq.${person.id}&select=module,expires_at`);
+    modules = new Set(((await res.json()) as { module: string; expires_at: string | null }[]).filter((r) => !grantIsExpired(r.expires_at)).map((r) => r.module).filter(isModuleId));
   } catch (err) {
     console.error('staff-today could not read the roles', err);
     return jsonResponse({ error: 'Server error' }, 500);

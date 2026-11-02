@@ -119,10 +119,10 @@ reaches at the origin). Facts worth knowing:
 - **Routing** (`netlify.toml`, rules for `https://admin.tvc.farm/...` only): the pages are served
   **without the `/internal` prefix** (the files still live under `src/pages/internal/`). `/` shows the
   admin home; `/usage/`, `/access/`, `/security/`, `/photo-pool/`, `/whatsapp/`, `/event-payments/`,
-  `/accommodation-calendar/`, `/members/`, `/units/`, `/preview-features/` and `/test-event/` are each a rewrite to the same path under
+  `/accommodation-calendar/`, `/members/`, `/finance/`, `/finance-requests/`, `/units/`, `/preview-features/` and `/test-event/` are each a rewrite to the same path under
   `/internal/`. `/_astro/*`, `/fonts/*`, `/images/brand/*`, the tab icons and the admin functions
   (`whatsapp-admin`, `whatsapp-suggest`, `stays-day-summary`, `members-admin`, `accommodation-admin`,
-  `event-payments-admin`, `usage-admin`, `units-admin`, `photo-pool`, `staff-admin`, `staff-mfa`, `staff-me`) pass
+  `event-payments-admin`, `usage-admin`, `finance-admin`, `units-admin`, `photo-pool`, `staff-admin`, `staff-mfa`, `staff-me`) pass
   through; anything else redirects to the admin home. **A new admin page, function or asset path must
   be added to that list** or the catch-all swallows it (the `Admin host routes` check, `scripts/lib/admin-host-routes.test.mjs`,
   fails a PR that forgets a page or an admin function; an asset path is still on you). The old `admin.tvc.farm/internal/*` redirects

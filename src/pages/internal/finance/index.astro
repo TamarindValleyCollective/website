@@ -1,0 +1,166 @@
+---
+// Finance (internal), session 01: the secured, empty module. Backed by netlify/functions/finance-admin.mts. It
+// shows who you are in finance and what exists so far; there is no data yet (docs/finance/DESIGN.md).
+//
+// Same shell as the other internal tools: Google Sign-In gated, one sign-in per tab (scripts/lib/staff-client.mjs),
+// unlinked, noindex. Everything the server returns is placed with textContent only, never as HTML.
+import StaffLayout from '../../../layouts/StaffLayout.astro';
+import SignInGate from '../../../components/SignInGate.astro';
+---
+
+<StaffLayout title="Finance" description="Finance." current="finance">
+  <section class="finance section wrapper">
+    <h1>Finance</h1>
+    <p id="intro" class="hint">Sign in to open finance.</p>
+
+    <SignInGate forbiddenWhat="finance" />
+
+    <p id="status" class="hint" hidden></p>
+
+    <div id="content" hidden>
+      <div class="card empty">
+        <h2>No data yet</h2>
+        <p class="hint">Bank statements, the ledger, payment requests and payroll are being built in stages. What exists so far is the access rules and the lists they will use.</p>
+      </div>
+
+      <h2 class="list-title">Set up so far</h2>
+      <ul class="list" id="counts"></ul>
+
+      <h2 class="list-title">Your access</h2>
+      <ul class="list">
+        <li><div class="row"><span class="grow"><span class="title">Role</span></span><span id="role" class="pill"></span></div></li>
+        <li><div class="row"><span class="grow"><span class="title">Can do</span><span class="detail" id="caps"></span></span></div></li>
+        <li><div class="row"><span class="grow"><span class="title">Payee bank details</span><span class="detail" id="payee"></span></span></div></li>
+      </ul>
+    </div>
+  </section>
+</StaffLayout>
+
+<script>
+  import { StaffAuthError, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
+
+  declare const google: any;
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const ROLE_LABELS: Record<string, string> = { admin: 'Admin', user: 'User', read_only: 'Read-only' };
+
+  const gate = $('gate');
+  const gateError = $('gate-error');
+  const forbidden = $('forbidden');
+  const statusEl = $('status');
+  const content = $('content');
+  const intro = $('intro');
+
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    content.hidden = true;
+    statusEl.hidden = true;
+    intro.textContent = 'Sign in to open finance.';
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+
+  function showForbidden() {
+    gate.hidden = true;
+    content.hidden = true;
+    statusEl.hidden = true;
+    forbidden.hidden = false;
+    $('forbidden-email').textContent = decodeTokenEmail(getToken() ?? '');
+  }
+
+  function countRow(label: string, n: number): HTMLElement {
+    const li = document.createElement('li');
+    const row = document.createElement('div');
+    row.className = 'row';
+    const grow = document.createElement('span');
+    grow.className = 'grow';
+    const title = document.createElement('span');
+    title.className = 'title';
+    title.textContent = label;
+    grow.append(title);
+    const value = document.createElement('span');
+    value.className = 'muted';
+    value.textContent = String(n);
+    row.append(grow, value);
+    li.append(row);
+    return li;
+  }
+
+  async function load() {
+    gate.hidden = true;
+    forbidden.hidden = true;
+    statusEl.hidden = false;
+    statusEl.textContent = 'Loading…';
+    try {
+      const { status, data } = await staffFetch('/api/finance-admin/overview');
+      if (status !== 200) throw new Error('load failed');
+      statusEl.hidden = true;
+      intro.textContent = data.entity ?? '';
+      $('counts').replaceChildren(countRow('Bank accounts', data.counts.bankAccounts), countRow('Categories', data.counts.categories), countRow('Open months', data.counts.openPeriods));
+      $('role').textContent = ROLE_LABELS[data.role] ?? data.role;
+      $('caps').textContent = data.capabilities.join(', ');
+      $('payee').textContent = data.visibility.payeeBankDetails ? 'Shown in full where you verify or export' : 'Hidden; names are visible';
+      content.hidden = false;
+    } catch (err) {
+      if (err instanceof StaffAuthError) {
+        if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+        else showForbidden();
+      } else {
+        statusEl.hidden = false;
+        statusEl.textContent = 'Failed to load. Try refreshing.';
+      }
+    }
+  }
+
+  function handleCredentialResponse(response: { credential: string }) {
+    setToken(response.credential);
+    load();
+  }
+
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: (window as any).tvcGsiTheme?.() ?? 'outline', size: 'large' });
+  }
+
+  $('use-different-account').addEventListener('click', () => {
+    clearToken();
+    clearStepUp();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
+  if (getToken()) load();
+  else showGate();
+</script>
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style is:global>
+  .finance.section.wrapper {
+    padding-top: 32px;
+    padding-bottom: 48px;
+  }
+
+  .finance .muted {
+    color: var(--tvc-ink-soft);
+  }
+
+  .finance h2 {
+    margin: 0 0 6px;
+    font-size: var(--text-lg);
+  }
+
+  .finance .list-title {
+    margin: 26px 0 8px 14px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .finance .empty {
+    padding: 20px;
+  }
+</style>
