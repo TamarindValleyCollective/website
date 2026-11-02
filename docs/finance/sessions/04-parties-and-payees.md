@@ -40,4 +40,23 @@ Review of the imported party list and which of the shared-account cases are inte
 > Read `docs/finance/README.md`, `DESIGN.md` and `sessions/04-parties-and-payees.md`. Build session 04 test-first. Do not put any real account numbers in the repo; the import script takes real files from outside the repo.
 
 ## Done
-_Fill in at the end of the session._
+**Built 2026-11-02** on branch `finance-04-parties` (test-first; 63 finance tests pass).
+
+- Migration `0079_finance_parties.sql`, `scripts/lib/finance-parties.mjs` (rules), `finance-party-import.mjs` (import planner),
+  `netlify/functions/lib/finance-parties.ts` (routes), `encryptFinanceText`/`fingerprintFinanceText` in `staff-mfa-crypto.ts`,
+  the `/internal/finance/parties/` page, and the operator script `scripts/import-fin-parties.mjs`. Details in [FINANCE.md](../FINANCE.md).
+
+**Verified:** unit tests for the rules, the planner and the encryption; an endpoint test driving the real function through
+`requireStaff` (changed details keep the old row, no number in responses or audit rows, reveal and verify need the step-up,
+a reveal that cannot be logged returns nothing, the enterer cannot verify, shared accounts flagged). The migration's guard
+trigger and constraints were exercised in a throwaway local Postgres (overwrite, delete, un-verify, revive and double
+household link are all refused). `npm run lint:css` and `astro check` are clean for the new files.
+
+**Not verified:** the page has not been rendered in a browser or tried signed in; the import script's `--apply` path and its
+reading of the real sheet have not been run (no credentials or real sheet here, and the real column layout has not been
+seen: the loose header matching is an assumption); migration `0079` has not been applied to TVC ERP; nothing was tested
+with a real step-up token from a browser.
+
+**Left for Sharath / next steps:** share the beneficiary sheet with the service account and run the dry run, then review the
+shared-account cases and the party list; apply `0079` before merging; try the page locally with `netlify dev --port 8888`;
+the farm manager's add-vendor screen is session 08.

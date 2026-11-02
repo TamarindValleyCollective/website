@@ -12,7 +12,8 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 |---|---|
 | 01 Foundation & access | Built on branch `finance-01-foundation` (draft PR). Migration `0077` **applied to TVC ERP on 2026-11-02**. |
 | 01 follow-up | `0078_finance_categories_and_projects.sql` **applied to TVC ERP on 2026-11-02**. |
-| 02-13 | Not started |
+| 04 Parties & payees | Built on branch `finance-04-parties` (draft PR). Migration `0079` **not yet applied**; apply it before merging. |
+| 02, 03, 05-13 | Not started |
 
 ## Access
 
@@ -68,10 +69,37 @@ so replacing them was safe. Checked after applying: 29 categories (opex 13, cape
 
 ## Tests
 
-`node --test scripts/lib/finance-access.test.mjs scripts/lib/finance-endpoint.test.mjs` (also run by the
-`Finance tests` GitHub Action). The first covers expiry, the capability matrix, masking and maker-is-not-checker;
+`node --test scripts/lib/finance-*.test.mjs` (also run by the `Finance tests` GitHub Action). The first covers expiry, the capability matrix, masking and maker-is-not-checker;
 the second drives the real function through `requireStaff` with Google and Supabase stubbed (needs `npm ci`
 for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly).
+
+## Parties and payees (session 04, migration `0079_finance_parties.sql`)
+
+- **Tables.** `fin_parties` (kind, name, optional household for a member, active) and `fin_party_accounts` (bank or UPI
+  details). Details are AES-256-GCM encrypted (`details_enc`, own key derived from `STAFF_MFA_KEY`); the clear columns
+  are the last four characters and a keyed fingerprint used to find two parties sharing one account. A trigger refuses to
+  edit or delete a row's details; only the status may move forward (unverified, verified, superseded).
+- **Change = new row.** Entering different details adds a new `unverified` row and marks the party's live row of the same
+  method `superseded` (kept, still decryptable for investigation). The same details again change nothing. Until a director
+  verifies the new row, the party has no verified account of that method, so later sessions cannot pay it.
+- **Who can do what.** `view` reads the directory (names, kind, "ending 0123", status, shared flag). `allocate` adds and
+  edits parties and enters details. `verify-payee` (directors) reveals full details and verifies them, both behind the MFA
+  step-up (the "Unlock editing" on the page); the person who entered details cannot verify them (details loaded by the
+  import script have no creator, so any verifier may confirm those).
+- **Never in responses, logs or audit.** List responses are built field by field and carry no ciphertext, fingerprint or
+  number. `fin_audit_log.detail` is checked before writing and a number, UPI id or IFSC makes the write fail. Revealing is
+  written to the audit log first; if that fails nothing is returned. Audit actions: `finance.party_created`,
+  `party_updated`, `payee_added`, `payee_changed`, `payee_revealed`, `payee_verified`, `parties_imported`.
+- **Shared accounts** are flagged on both parties ("Shared account") and never blocked.
+- **Endpoints.** `GET/POST /api/finance-admin/parties`, `PATCH /parties/:id`, `POST /parties/:id/accounts`,
+  `POST /accounts/:id/reveal`, `POST /accounts/:id/verify`. Page: `/internal/finance/parties/`.
+- **Import.** `scripts/import-fin-parties.mjs --sheet-id <id> --range "'Tab'!A:H" [--apply]` reads the existing list from a
+  Google Sheet shared with the Drive service account (id and range are arguments, never in the repo). Dry run by default;
+  it prints counts and line numbers only. Needs a name column; kind, account number, IFSC, UPI id and farm unit are used
+  when present, matched by loose header names. Parties match on name + kind and accounts on fingerprint, so re-running adds
+  nothing. Everything lands unverified. Member parties link by farm unit (`F-07`); employees are kind `employee`.
+- **Not built yet:** linking an existing party to a household after the fact, merging duplicate parties, and the farm
+  manager's add-vendor screen (`finance-requests`, session 08).
 
 ## Migration 0077
 

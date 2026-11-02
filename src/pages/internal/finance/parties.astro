@@ -1,0 +1,380 @@
+---
+// Finance (internal), session 04: the parties directory. Backed by netlify/functions/finance-admin.mts
+// (lib/finance-parties.ts). Everyone TVC pays or receives from, with bank or UPI details that are verified, never
+// overwritten and never casually visible: the list shows "ending 0123" only. Revealing the full details and verifying
+// them is for `verify-payee` holders behind the same unlock (MFA step-up) as the Access page.
+//
+// Same shell as the other internal tools: Google Sign-In gated, unlinked, noindex. Everything the server returns is
+// placed with textContent only, never as HTML.
+import StaffLayout from '../../../layouts/StaffLayout.astro';
+import SignInGate from '../../../components/SignInGate.astro';
+import StepUpSheet from '../../../components/StepUpSheet.astro';
+---
+
+<StaffLayout title="Finance parties" description="Finance parties." current="finance">
+  <button slot="toolbar" type="button" id="lock" class="lock-pill" hidden></button>
+
+  <section class="parties section wrapper">
+    <h1>Parties</h1>
+    <p id="intro" class="hint">Sign in to open the directory.</p>
+
+    <SignInGate forbiddenWhat="finance" />
+
+    <p id="status" class="hint" hidden></p>
+
+    <div id="content" hidden>
+      <div class="bar">
+        <label class="field">
+          <span class="visually-hidden">Search parties</span>
+          <input id="q" type="search" placeholder="Search by name" autocomplete="off" />
+        </label>
+        <button type="button" id="add" class="button button--primary" hidden>Add party</button>
+      </div>
+      <ul class="list" id="list"></ul>
+      <p id="empty" class="hint" hidden>No parties yet.</p>
+    </div>
+
+    <dialog id="party-sheet" class="sheet" aria-labelledby="party-title"></dialog>
+    <dialog id="detail-sheet" class="sheet" aria-labelledby="detail-title"></dialog>
+    <dialog id="account-sheet" class="sheet" aria-labelledby="account-title"></dialog>
+    <dialog id="verify-sheet" class="sheet" aria-labelledby="verify-title"></dialog>
+    <StepUpSheet />
+  </section>
+</StaffLayout>
+
+<script>
+  import { StaffAuthError, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
+  import { initStepUpLock } from '../../../../scripts/lib/staff-stepup-ui.mjs';
+
+  declare const google: any;
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+
+  type Account = { id: string; method: 'bank' | 'upi'; shown: string; status: 'unverified' | 'verified'; shared: boolean };
+  type Party = { id: string; name: string; kind: string; active: boolean; householdId: string | null; accounts: Account[]; earlierAccounts: number };
+  type Data = { kinds: string[]; canEdit: boolean; canVerify: boolean; me: { id: string; ready: boolean; hasPasskey: boolean; stepUpValid: boolean } | null; parties: Party[] };
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const KIND_LABELS: Record<string, string> = { member: 'Member', vendor: 'Vendor', employee: 'Employee', customer: 'Customer', bank: 'Bank', government: 'Government', director: 'Director', other: 'Other' };
+  const gate = $('gate');
+  const gateError = $('gate-error');
+  const forbidden = $('forbidden');
+  const statusEl = $('status');
+  const content = $('content');
+  const intro = $('intro');
+  let data: Data | null = null;
+  let query = '';
+
+  function h(tag: string, props: { class?: string; text?: string; attrs?: Record<string, string>; on?: Record<string, (e: Event) => void> } = {}, ...kids: (Node | null)[]): HTMLElement {
+    const el = document.createElement(tag);
+    if (props.class) el.className = props.class;
+    if (props.text !== undefined) el.textContent = props.text;
+    for (const [k, v] of Object.entries(props.attrs ?? {})) el.setAttribute(k, v);
+    for (const [k, v] of Object.entries(props.on ?? {})) el.addEventListener(k, v);
+    el.append(...kids.filter((k): k is Node => k !== null));
+    return el;
+  }
+  const pill = (text: string, kind?: 'ok' | 'warn' | 'crit') => h('span', { class: `pill${kind ? ` pill--${kind}` : ''}`, text });
+  const button = (text: string, onClick: () => void, cls = 'button button--outline') => h('button', { class: cls, text, attrs: { type: 'button' }, on: { click: onClick } });
+
+  // ---- sign-in
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    content.hidden = true;
+    statusEl.hidden = true;
+    intro.textContent = 'Sign in to open the directory.';
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+  function showForbidden() {
+    gate.hidden = true;
+    content.hidden = true;
+    statusEl.hidden = true;
+    forbidden.hidden = false;
+    $('forbidden-email').textContent = decodeTokenEmail(getToken() ?? '');
+  }
+  function handleCredentialResponse(response: { credential: string }) {
+    setToken(response.credential);
+    load();
+  }
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: (window as any).tvcGsiTheme?.() ?? 'outline', size: 'large' });
+  }
+  $('use-different-account').addEventListener('click', () => {
+    clearToken();
+    clearStepUp();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
+  // ---- the unlock for revealing and verifying
+  const lock = initStepUpLock({ getMe: () => data?.me ?? null, onChange: () => {} });
+  function mayVerify(): boolean {
+    if (lock.canEdit()) return true;
+    showToast(data?.me?.ready ? 'Unlock editing first.' : 'Set up two second factors first (see Security).');
+    lock.open();
+    return false;
+  }
+
+  // ---- calls
+  async function call(path: string, method = 'GET', body?: unknown) {
+    try {
+      return await staffFetch(path, { method, body });
+    } catch (err) {
+      if (err instanceof StaffAuthError) {
+        if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+        else showForbidden();
+      }
+      throw err;
+    }
+  }
+
+  async function load() {
+    gate.hidden = true;
+    forbidden.hidden = true;
+    statusEl.hidden = false;
+    statusEl.textContent = 'Loading…';
+    try {
+      const { status, data: out } = await call(`/api/finance-admin/parties${query ? `?q=${encodeURIComponent(query)}` : ''}`);
+      if (status !== 200) throw new Error('load failed');
+      data = out as Data;
+      statusEl.hidden = true;
+      intro.textContent = 'Everyone TVC pays or receives from. Bank and UPI details show only their last four characters here.';
+      $('add').hidden = !data.canEdit;
+      lock.render();
+      render();
+      content.hidden = false;
+    } catch (err) {
+      if (!(err instanceof StaffAuthError)) {
+        statusEl.hidden = false;
+        statusEl.textContent = 'Failed to load. Try refreshing.';
+      }
+    }
+  }
+
+  // ---- list
+  function render() {
+    const parties = data?.parties ?? [];
+    $('empty').hidden = parties.length > 0;
+    $('empty').textContent = query ? 'No party matches that search.' : 'No parties yet.';
+    $('list').replaceChildren(
+      ...parties.map((p) => {
+        const waiting = p.accounts.filter((a) => a.status === 'unverified').length;
+        const sharedAny = p.accounts.some((a) => a.shared);
+        const meta = [KIND_LABELS[p.kind] ?? p.kind, p.accounts.length ? p.accounts.map((a) => `${a.method === 'bank' ? 'Bank' : 'UPI'} ${a.shown}`).join(' · ') : 'No payment details'].join(' · ');
+        return h(
+          'li',
+          {},
+          h(
+            'button',
+            { class: 'row', attrs: { type: 'button' }, on: { click: () => openDetail(p.id) } },
+            h('span', { class: 'grow' }, h('span', { class: 'title', text: p.name }), h('span', { class: 'detail', text: meta })),
+            p.active ? null : pill('Inactive'),
+            sharedAny ? pill('Shared account', 'warn') : null,
+            waiting ? pill('Unverified', 'warn') : null,
+          ),
+        );
+      }),
+    );
+  }
+  let searchTimer: number | undefined;
+  $<HTMLInputElement>('q').addEventListener('input', (e) => {
+    query = (e.target as HTMLInputElement).value.trim();
+    clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(load, 250);
+  });
+
+  // ---- sheets
+  function present(dlg: HTMLDialogElement, ...kids: (Node | null)[]) {
+    dlg.replaceChildren(...kids.filter((k): k is Node => k !== null));
+    if (!dlg.open) dlg.showModal();
+    closeOnBackdrop(dlg);
+  }
+  const closeBtn = (dlg: HTMLDialogElement, label = 'Close') => button(label, () => dlg.close());
+  function labelled(label: string, input: HTMLElement) {
+    return h('label', {}, h('span', { text: label }), input);
+  }
+  const input = (name: string, attrs: Record<string, string> = {}) => h('input', { attrs: { name, autocomplete: 'off', ...attrs } }) as HTMLInputElement;
+
+  function payeeFields() {
+    const method = h('select', { attrs: { name: 'method' } }, h('option', { text: 'Bank transfer', attrs: { value: 'bank' } }), h('option', { text: 'UPI', attrs: { value: 'upi' } })) as HTMLSelectElement;
+    const account = input('account', { inputmode: 'numeric' });
+    const ifsc = input('ifsc');
+    const upi = input('upi', { placeholder: 'name@bank' });
+    const bank = h('div', { class: 'stack-form' }, labelled('Account number', account), labelled('IFSC code', ifsc));
+    const upiBox = h('div', { class: 'stack-form', attrs: { hidden: '' } }, labelled('UPI id', upi));
+    method.addEventListener('change', () => {
+      bank.hidden = method.value !== 'bank';
+      upiBox.hidden = method.value !== 'upi';
+    });
+    return {
+      nodes: [labelled('How we pay them', method), bank, upiBox],
+      value: () => (method.value === 'bank' ? { method: 'bank', account: account.value, ifsc: ifsc.value } : { method: 'upi', upi: upi.value }),
+    };
+  }
+
+  function openAddParty() {
+    const dlg = $<HTMLDialogElement>('party-sheet');
+    const name = input('name');
+    const kind = h('select', { attrs: { name: 'kind' } }, ...(data?.kinds ?? []).map((k) => h('option', { text: KIND_LABELS[k] ?? k, attrs: { value: k } }))) as HTMLSelectElement;
+    const withPayee = h('input', { attrs: { type: 'checkbox' } }) as HTMLInputElement;
+    const payee = payeeFields();
+    const payeeBox = h('div', { class: 'stack-form', attrs: { hidden: '' } }, ...payee.nodes);
+    withPayee.addEventListener('change', () => (payeeBox.hidden = !withPayee.checked));
+    const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    const form = h(
+      'form',
+      { class: 'stack-form' },
+      labelled('Name', name),
+      labelled('Kind', kind),
+      h('label', {}, withPayee, h('span', { text: 'Add bank or UPI details now (they stay unverified until a director confirms)' })),
+      payeeBox,
+      msg,
+      h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), h('button', { class: 'button button--primary', text: 'Add party', attrs: { type: 'submit' } })),
+    );
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const { status, data: out } = await call('/api/finance-admin/parties', 'POST', { name: name.value, kind: kind.value, ...(withPayee.checked ? { payee: payee.value() } : {}) });
+      if (status === 201) {
+        dlg.close();
+        showToast('Party added.');
+        load();
+      } else {
+        msg.hidden = false;
+        msg.textContent = out?.error ?? 'Could not add that.';
+      }
+    });
+    present(dlg, h('h2', { text: 'Add party', attrs: { id: 'party-title' } }), form);
+  }
+  $('add').addEventListener('click', openAddParty);
+
+  function openDetail(id: string) {
+    const p = data?.parties.find((x) => x.id === id);
+    if (!p) return;
+    const dlg = $<HTMLDialogElement>('detail-sheet');
+    const accounts = p.accounts.map((a) =>
+      h(
+        'li',
+        {},
+        h(
+          'div',
+          { class: 'row' },
+          h('span', { class: 'grow' }, h('span', { class: 'title', text: `${a.method === 'bank' ? 'Bank account' : 'UPI'} ${a.shown}` }), a.shared ? h('span', { class: 'detail', text: 'Another party uses the same account. Check this is intended.' }) : null),
+          a.status === 'verified' ? pill('Verified', 'ok') : pill('Unverified', 'warn'),
+          a.status === 'unverified' && data?.canVerify ? button('Verify…', () => openVerify(p, a)) : null,
+        ),
+      ),
+    );
+    const actions: Node[] = [closeBtn(dlg)];
+    if (data?.canEdit) {
+      actions.unshift(button('Add or change details', () => openAccount(p)), button(p.active ? 'Mark inactive' : 'Mark active', () => setActive(p, dlg)));
+    }
+    present(
+      dlg,
+      h('h2', { text: p.name, attrs: { id: 'detail-title' } }),
+      h('p', { class: 'sheet-text', text: `${KIND_LABELS[p.kind] ?? p.kind}${p.active ? '' : ' · inactive'}` }),
+      h('ul', { class: 'list' }, ...(accounts.length ? accounts : [h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow detail', text: 'No payment details yet.' })))])),
+      p.earlierAccounts ? h('p', { class: 'hint', text: `${p.earlierAccounts} earlier set${p.earlierAccounts === 1 ? '' : 's'} of details kept on record.` }) : null,
+      h('div', { class: 'sheet-actions' }, ...actions),
+    );
+  }
+
+  async function setActive(p: Party, dlg: HTMLDialogElement) {
+    const { status, data: out } = await call(`/api/finance-admin/parties/${p.id}`, 'PATCH', { active: !p.active });
+    if (status === 200) {
+      dlg.close();
+      showToast(p.active ? 'Marked inactive.' : 'Marked active.');
+      load();
+    } else showToast(out?.error ?? 'Could not change that.');
+  }
+
+  function openAccount(p: Party) {
+    $<HTMLDialogElement>('detail-sheet').close();
+    const dlg = $<HTMLDialogElement>('account-sheet');
+    const payee = payeeFields();
+    const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    const form = h(
+      'form',
+      { class: 'stack-form' },
+      ...payee.nodes,
+      h('p', { class: 'hint', text: 'New or changed details start unverified and replace the current ones of that kind until a director confirms them. The old details are kept.' }),
+      msg,
+      h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), h('button', { class: 'button button--primary', text: 'Save details', attrs: { type: 'submit' } })),
+    );
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const { status, data: out } = await call(`/api/finance-admin/parties/${p.id}/accounts`, 'POST', payee.value());
+      if (status === 200 || status === 201) {
+        dlg.close();
+        showToast(out?.unchanged ? 'Those details are already on record.' : 'Saved. A director needs to verify them.');
+        load();
+      } else {
+        msg.hidden = false;
+        msg.textContent = out?.error ?? 'Could not save that.';
+      }
+    });
+    present(dlg, h('h2', { text: `Details for ${p.name}`, attrs: { id: 'account-title' } }), form);
+  }
+
+  // The verification screen: shows the full details once, to confirm against the source, then verifies.
+  async function openVerify(p: Party, a: Account) {
+    if (!mayVerify()) return;
+    const dlg = $<HTMLDialogElement>('verify-sheet');
+    const { status, data: out } = await call(`/api/finance-admin/accounts/${a.id}/reveal`, 'POST');
+    if (status !== 200) {
+      if (out?.code === 'STEP_UP_REQUIRED') lock.open();
+      else showToast(out?.error ?? 'Could not show those details.');
+      return;
+    }
+    const d = out.details as { method: string; account?: string; ifsc?: string; upi?: string };
+    const lines = d.method === 'bank' ? [['Account number', d.account], ['IFSC code', d.ifsc]] : [['UPI id', d.upi]];
+    const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    const confirm = button('These match the source, verify', async () => {
+      const res = await call(`/api/finance-admin/accounts/${a.id}/verify`, 'POST');
+      if (res.status === 200) {
+        dlg.close();
+        showToast('Verified.');
+        load();
+      } else if (res.data?.code === 'STEP_UP_REQUIRED') lock.open();
+      else {
+        msg.hidden = false;
+        msg.textContent = res.data?.error ?? 'Could not verify.';
+      }
+    }, 'button button--primary');
+    // Shown here only, and gone from the page when the sheet closes.
+    dlg.addEventListener('close', () => dlg.replaceChildren(), { once: true });
+    present(
+      dlg,
+      h('h2', { text: `Verify ${p.name}`, attrs: { id: 'verify-title' } }),
+      h('p', { class: 'sheet-text', text: 'Check these against the invoice, cancelled cheque or what the person told you, ideally with a small test transfer. Showing them is logged.' }),
+      h('ul', { class: 'list' }, ...lines.map(([k, v]) => h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow' }, h('span', { class: 'detail', text: k }), h('span', { class: 'title', text: v ?? '' })))))),
+      msg,
+      h('div', { class: 'sheet-actions' }, closeBtn(dlg, 'Cancel'), confirm),
+    );
+  }
+
+  if (getToken()) load();
+  else showGate();
+</script>
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style is:global>
+  .parties.section.wrapper {
+    padding-top: 32px;
+    padding-bottom: 48px;
+  }
+
+  .parties .bar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .parties .bar .field {
+    flex: 1;
+  }
+</style>

@@ -18,7 +18,7 @@ export class MfaNotConfiguredError extends Error {
   }
 }
 
-function derivedKey(purpose: 'enc' | 'sign' | 'recovery' | 'payout'): Buffer {
+function derivedKey(purpose: 'enc' | 'sign' | 'recovery' | 'payout' | 'finance' | 'finance-fp'): Buffer {
   const raw = process.env.STAFF_MFA_KEY;
   const master = raw ? Buffer.from(raw, 'base64') : Buffer.alloc(0);
   if (master.length < 32) throw new MfaNotConfiguredError();
@@ -146,6 +146,28 @@ export function decryptPayoutText(blob: string): string {
   const decipher = createDecipheriv('aes-256-gcm', derivedKey('payout'), Buffer.from(iv, 'base64url'));
   decipher.setAuthTag(Buffer.from(tag, 'base64url'));
   return Buffer.concat([decipher.update(Buffer.from(ct, 'base64url')), decipher.final()]).toString('utf8');
+}
+
+// Finance payees' bank and UPI details (fin_party_accounts, migration 0079): again the same cipher under its own
+// derived key. The fingerprint is a keyed HMAC of the account number or UPI id, stored beside the ciphertext so two
+// parties sharing one account can be found without decrypting anything; it is never returned by any endpoint.
+export function encryptFinanceText(plain: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', derivedKey('finance'), iv);
+  const ct = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
+  return ['v1', iv.toString('base64url'), cipher.getAuthTag().toString('base64url'), ct.toString('base64url')].join('.');
+}
+
+export function decryptFinanceText(blob: string): string {
+  const [version, iv, tag, ct] = blob.split('.');
+  if (version !== 'v1' || !iv || !tag || !ct) throw new Error('Unrecognized secret format');
+  const decipher = createDecipheriv('aes-256-gcm', derivedKey('finance'), Buffer.from(iv, 'base64url'));
+  decipher.setAuthTag(Buffer.from(tag, 'base64url'));
+  return Buffer.concat([decipher.update(Buffer.from(ct, 'base64url')), decipher.final()]).toString('utf8');
+}
+
+export function fingerprintFinanceText(text: string): string {
+  return createHmac('sha256', derivedKey('finance-fp')).update(text).digest('hex');
 }
 
 // ------------------------------------------------------- recovery codes
