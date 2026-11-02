@@ -103,6 +103,14 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   beneficiary export are all recognised). Parties match on name + kind and accounts on fingerprint, so re-running adds
   nothing. Everything lands unverified. Rows with no kind column become kind `other` for review; member parties link by
   farm unit (`F-07`).
+- **Name de-duplication.** Banks have merged, so one payee can appear with an old and a new account number, which the
+  account-number merge cannot see. Names that are equal after normalising (case, accents, punctuation, a leading honorific,
+  "&", "Private Limited" vs "Pvt Ltd") are the same party and keep all their accounts; a party with two or more bank accounts is
+  reported as `multiple_accounts` (verify the current one). Looser matches (same words in another order, one name contained in
+  another, a one-letter spelling slip) are **never merged automatically**, since two workers or relatives can have near-identical
+  names: they are counted in the summary (`duplicateCandidates`) and `--review-out <path>` writes them, with names, bank code and
+  last four, to a private file outside the repo (the script refuses a path inside it). Merging two parties after import is not
+  built yet.
 - **No IFSC.** Some lists have none, and some have one that is not a valid IFSC (reported as `invalid_ifsc`, then treated as
   missing; a wrong account number is still refused). Such accounts import with an empty IFSC, are reported as `missing_ifsc`, and **cannot be
   verified** until someone enters the account again with its IFSC ("Add or change details"; the same number with a new IFSC

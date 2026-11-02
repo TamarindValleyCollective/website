@@ -88,7 +88,25 @@ const KIND_WORDS = {
   other: 'other',
 };
 
-const partyKey = (name, kind) => `${name.toLowerCase()}|${kind}`;
+// Names compared ignoring case, accents, punctuation, a leading honorific, "&" and the spelling of company suffixes.
+// This is what decides that two rows are the SAME party (a bank merger gives one payee an old and a new account).
+const HONORIFICS = new Set(['ms', 'mr', 'mrs', 'miss', 'shri', 'sri', 'smt', 'dr']);
+const SUFFIX = { private: 'pvt', limited: 'ltd' };
+export function normalizeName(name) {
+  const tokens = String(name)
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean);
+  if (tokens[0] === 'm' && tokens[1] === 's') tokens.splice(0, 2); // M/s
+  else if (HONORIFICS.has(tokens[0]) && tokens.length > 1) tokens.shift();
+  return tokens.map((t) => SUFFIX[t] ?? t).join(' ');
+}
+const partyKey = (name, kind) => `${normalizeName(name)}|${kind}`;
 
 // What goes into the shared-account check and the stored fingerprint: the account number alone (an IFSC difference
 // should not hide a shared account) or the UPI id.
@@ -165,6 +183,12 @@ export function planImport(records, { households, existing, fingerprint }) {
     }
   }
 
+  // One party with several bank accounts is what a bank merger looks like (old and new number): note it for review.
+  for (const party of parties.values()) {
+    const bank = party.accounts.filter((a) => a.details.method === 'bank');
+    if (bank.length > 1) anomalies.push({ kind: 'multiple_accounts', lines: bank.map((a) => a.line).sort((a, b) => a - b) });
+  }
+
   // Existing accounts count towards "shared" too, but only when this file touches the same account.
   for (const p of existing) for (const fp of p.fingerprints) seenFingerprints.get(fp)?.keys.add(partyKey(p.name, p.kind));
   for (const { keys, lines } of seenFingerprints.values()) {
@@ -179,6 +203,54 @@ export function planImport(records, { households, existing, fingerprint }) {
   };
 }
 
+function editDistance(a, b) {
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j++) row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = row;
+  }
+  return prev[b.length];
+}
+
+// Pairs of DIFFERENT parties whose names are alike enough that a person should look: the same words in another order,
+// one name contained in the other, or a small spelling difference. Never merged automatically (two relatives or two
+// workers can have near-identical names). Returns [{ a, b, reason }] with indexes into `parties`, in file order.
+export function findDuplicateCandidates(parties) {
+  const norm = parties.map((p) => normalizeName(p.name));
+  const words = norm.map((n) => n.split(' '));
+  const out = [];
+  for (let a = 0; a < parties.length; a++) {
+    for (let b = a + 1; b < parties.length; b++) {
+      if (norm[a] === norm[b]) continue;
+      const [small, large] = words[a].length <= words[b].length ? [words[a], words[b]] : [words[b], words[a]];
+      let reason = null;
+      if ([...words[a]].sort().join(' ') === [...words[b]].sort().join(' ')) reason = 'same_words';
+      else if (small.every((w) => large.includes(w)) && (small.length >= 2 || (small[0].length >= 6 && large.length <= 3))) reason = 'name_contained';
+      else {
+        const limit = Math.min(norm[a].length, norm[b].length) < 12 ? 1 : 2;
+        if (Math.min(norm[a].length, norm[b].length) >= 8 && editDistance(norm[a], norm[b]) <= limit) reason = 'close_spelling';
+      }
+      if (reason) out.push({ a, b, reason });
+    }
+  }
+  return out;
+}
+
+const csvField = (v) => `"${String(v).replace(/"/g, '""')}"`;
+const describeAccounts = (party) =>
+  party.accounts.length
+    ? party.accounts.map((acc) => (acc.details.method === 'bank' ? `${acc.details.ifsc ? acc.details.ifsc.slice(0, 4) : 'bank'} ending ${acc.last4}` : `UPI ending ${acc.last4}`)).join('; ')
+    : 'no details';
+
+// The file a person reads to decide which candidates are really the same payee. It has NAMES, so the script only writes
+// it where the operator says, outside the repo. Account numbers appear as bank code + last four only.
+export function duplicateReviewCsv(parties, candidates) {
+  const rows = [['Pair', 'Name A', 'Name B', 'Why', 'Accounts A', 'Accounts B', 'Same payee? (yes/no)']];
+  candidates.forEach((c, i) => rows.push([i + 1, parties[c.a].name, parties[c.b].name, c.reason, describeAccounts(parties[c.a]), describeAccounts(parties[c.b]), '']));
+  return rows.map((r) => r.map(csvField).join(',')).join('\n') + '\n';
+}
+
 // Safe to print: counts and line numbers, never a name, number or UPI id.
 export function summarizeImport(plan) {
   const byKind = {};
@@ -189,6 +261,11 @@ export function summarizeImport(plan) {
     accountsForExistingParties: plan.addToExisting.length,
     unchanged: plan.unchanged,
     anomalies: byKind,
+    duplicateCandidates: Object.fromEntries(
+      Object.entries(
+        findDuplicateCandidates(plan.parties).reduce((acc, c) => ({ ...acc, [c.reason]: (acc[c.reason] ?? 0) + 1 }), {}),
+      ),
+    ),
     anomalyLines: plan.anomalies.map((a) => ({ kind: a.kind, ...(a.line ? { line: a.line } : { lines: a.lines }) })),
   };
 }

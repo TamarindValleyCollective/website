@@ -20,7 +20,10 @@
 // --apply needs SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and STAFF_MFA_KEY (the payee encryption key), and migration
 // 0079 applied. Needs Node 22.18+ (it imports the TypeScript crypto helper directly).
 import { getSheetValues } from './lib/google-drive.mjs';
-import { readBeneficiaries, mergeSources, planImport, summarizeImport } from './lib/finance-party-import.mjs';
+import { readBeneficiaries, mergeSources, planImport, summarizeImport, findDuplicateCandidates, duplicateReviewCsv } from './lib/finance-party-import.mjs';
+import { writeFileSync } from 'node:fs';
+import { dirname, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { restHeaders } from './lib/supabase.mjs';
 import { encryptFinanceText, fingerprintFinanceText } from '../netlify/functions/lib/staff-mfa-crypto.ts';
 
@@ -76,6 +79,20 @@ const existing = existingParties.map((p) => ({ ...p, fingerprints: existingAccou
 
 const plan = planImport(records, { households, existing, fingerprint: fingerprintFinanceText });
 console.log(JSON.stringify(summarizeImport(plan), null, 2));
+
+// Optional: a file of look-alike names for a person to review. It holds NAMES (and bank code + last four), so it is
+// written only where asked, mode 600, and never inside this repository.
+const reviewOut = arg('--review-out');
+if (reviewOut) {
+  const target = resolve(reviewOut);
+  if (target.startsWith(resolve(dirname(fileURLToPath(import.meta.url)), '..') + sep)) {
+    console.error('Refusing to write the review file inside the repository: it contains names. Choose a path outside it.');
+    process.exit(2);
+  }
+  const candidates = findDuplicateCandidates(plan.parties);
+  writeFileSync(target, duplicateReviewCsv(plan.parties, candidates), { mode: 0o600 });
+  console.log(`\nWrote ${candidates.length} look-alike pairs to the review file.`);
+}
 
 if (!apply) {
   console.log('\nDry run: nothing written. Add --apply to write.');
