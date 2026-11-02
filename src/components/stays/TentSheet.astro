@@ -292,7 +292,7 @@
 </style>
 
 <script>
-  import { TOKEN_KEY, askSheet, showToast } from '../../../scripts/lib/staff-client.mjs';
+  import { TOKEN_KEY, askPastChangeReason, askSheet, showToast } from '../../../scripts/lib/staff-client.mjs';
   import { setBusy } from '../../../scripts/lib/busy.mjs';
   import { normalizeMobileNumber } from '../../../scripts/lib/accommodation.mjs';
   import { checkOutDate } from '../../../scripts/lib/stay-notice.mjs';
@@ -476,7 +476,9 @@
     const typeLabel = (t: string) => ({ 'casual-stay': 'Guest stay', 'member-stay': 'Member stay', 'public-event': 'Public event', 'private-event': 'Private event', 'unit-closure': 'Tent closure', 'farm-closure': 'Farm closure' })[t] ?? t;
 
     const reasonHtml = () =>
-      booking?.isPast ? `<div style="margin-bottom:10px"><label for="ts-reason">Why? <span class="ts-sub">(required: this stay has already happened${ctx?.canApprove ? '' : '; a super admin approves it before it changes'})</span></label><textarea id="ts-reason" rows="2" data-bind="reason">${esc(reason)}</textarea></div>` : '';
+      // Only a super admin gets the inline box (the server asks them for a reason too); anyone else is warned and asked in a
+      // popup when they save, because for them it becomes a request.
+      booking?.isPast && ctx?.canApprove ? `<div style="margin-bottom:10px"><label for="ts-reason">Why? <span class="ts-sub">(required: this stay has already happened)</span></label><textarea id="ts-reason" rows="2" data-bind="reason">${esc(reason)}</textarea></div>` : '';
 
     function panelHtml(): string {
       if (!panel || !booking || !ctx) return '';
@@ -558,10 +560,15 @@
 
     async function send(change: Parameters<typeof buildUpdatePayload>[1], button: HTMLButtonElement) {
       if (!ctx || !booking) return;
-      if (booking.isPast && !reason.trim()) {
+      if (booking.isPast && ctx.canApprove && !reason.trim()) {
         error = 'A reason is required to change a stay that has already happened.';
         render();
         return;
+      }
+      if (booking.isPast && !ctx.canApprove) {
+        const why = await askPastChangeReason({ what: 'change a stay that has already happened' });
+        if (!why) return;
+        reason = why;
       }
       const done = setBusy(button, 'Saving…');
       try {

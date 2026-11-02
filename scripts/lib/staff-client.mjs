@@ -252,6 +252,71 @@ export async function passkeyStepUp(api) {
 let toastTimer;
 /** @param {string} message @param {() => void} [undo] */
 /**
+ * The warning shown before anyone who cannot approve it changes the past (edits, cancels or adds a stay that has already
+ * happened): it says the change is retrospective and will wait for a super admin, and captures why it is being made now.
+ * Resolves with the justification (at least 10 characters), or null when they back out.
+ * @param {{ what: string, confirmLabel?: string }} options what they are about to do, e.g. "change a stay that has already happened"; the
+ *   button says "Send for approval" unless nothing is sent yet (then pass e.g. "Continue")
+ * @returns {Promise<string | null>}
+ */
+export function askPastChangeReason({ what, confirmLabel = 'Send for approval' }) {
+  return new Promise((resolve) => {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'sheet stack-form';
+    dlg.setAttribute('aria-labelledby', 'past-change-title');
+    const h2 = document.createElement('h2');
+    h2.id = 'past-change-title';
+    h2.textContent = 'This changes the past';
+    const warn = document.createElement('p');
+    warn.className = 'sheet-text';
+    warn.textContent = `You are about to ${what}. That is a retrospective change, so it is not applied straight away: it is sent to a super admin, who approves or rejects it. Nothing changes until they approve.`;
+    const label = document.createElement('label');
+    label.textContent = 'Why is it being changed now?';
+    const area = document.createElement('textarea');
+    area.rows = 3;
+    label.append(area);
+    const help = document.createElement('p');
+    help.className = 'hint';
+    help.textContent = 'A super admin reads this before deciding. A sentence is enough.';
+    const err = document.createElement('p');
+    err.className = 'form-msg';
+    err.setAttribute('role', 'alert');
+    const row = document.createElement('div');
+    row.className = 'sheet-actions';
+    let answer = null;
+    const never = document.createElement('button');
+    never.type = 'button';
+    never.className = 'button button--outline';
+    never.textContent = 'Never mind';
+    never.addEventListener('click', () => dlg.close());
+    const send = document.createElement('button');
+    send.type = 'button';
+    send.className = 'button button--primary';
+    send.textContent = confirmLabel;
+    send.addEventListener('click', () => {
+      const text = area.value.trim();
+      if (text.length < 10) {
+        err.textContent = 'Say why this is being changed now, so the super admin can decide.';
+        area.focus();
+        return;
+      }
+      answer = text;
+      dlg.close();
+    });
+    row.append(never, send);
+    dlg.append(h2, warn, label, help, err, row);
+    dlg.addEventListener('close', () => {
+      dlg.remove();
+      resolve(answer);
+    });
+    closeOnBackdrop(dlg);
+    (document.getElementById('staff-main') ?? document.body).append(dlg);
+    dlg.showModal();
+    area.focus();
+  });
+}
+
+/**
  * A question in the page's own sheet instead of the browser's confirm()/alert(): labelled buttons that say what each
  * one does, so there is no "OK means cancel" to misread. Resolves with the chosen action's `value`, or null when the
  * sheet is dismissed (Esc, a click outside). One action makes it a plain notice.

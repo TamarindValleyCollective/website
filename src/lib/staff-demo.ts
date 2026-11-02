@@ -9,6 +9,8 @@
 // only; every other /api call falls through to the real fetch, so a tool page still shows its own
 // state (or its own `?demo`, as event-payments does).
 
+import { ACCOMMODATION_UNITS, ACCOMMODATION_TYPES } from '../../scripts/lib/accommodation.mjs';
+
 const TOOLS = [
   { module: 'photo-pool', label: 'Photos', path: '/internal/photo-pool/' },
   { module: 'whatsapp', label: 'WhatsApp', path: '/internal/whatsapp/' },
@@ -262,7 +264,7 @@ function demoMe(kind: string) {
 
 // The Stays page: a few bookings placed around today (one arriving today, one tomorrow, one leaving today), so the
 // Day view's plan has something to show. Read-only: saving a booking in the demo still reaches the real fetch.
-function demoBookings() {
+function demoBookings(canApprove = true) {
   const day = (n: number) => new Date(Date.now() + n * 86_400_000).toLocaleDateString('en-CA');
   const guest = (name: string, preferences?: string) => ({ personId: name, name, ageGroup: 'Adult', preferences });
   const stay = (id: string, startDate: string, nights: number, tentId: string, guests: unknown[], extra: Record<string, unknown> = {}) => ({
@@ -273,8 +275,13 @@ function demoBookings() {
       stay('demo-a', day(0), 3, 'Tent01', [guest('Asha Rao', 'Nut allergy'), guest('Dev Rao')], { label: 'Rao family', note: 'Arrives after 8 pm' }),
       stay('demo-b', day(1), 2, 'Tent03', [guest('Meera Nair'), guest('Kiran Nair'), guest('Ila', 'Vegan')], { label: 'Nair party' }),
       stay('demo-c', day(-2), 2, 'Tent05', [guest('Menon'), guest('Mrs Menon')], { label: 'Menon' }),
+      // A stay that has already ended (open the Day plan for 10 days ago to edit or cancel it).
+      stay('demo-d', day(-10), 2, 'Tent04', [guest('Rekha Pillai'), guest('Suresh Pillai')], { label: 'Pillai', isPast: true }),
     ],
-    access: { role: 'admin', allowedTypes: null, canApprove: true },
+    // The New booking flow lists its tents from these, as the real API does.
+    units: ACCOMMODATION_UNITS,
+    types: ACCOMMODATION_TYPES,
+    access: { role: 'admin', allowedTypes: null, canApprove },
   };
 }
 
@@ -310,7 +317,14 @@ export function installStaffDemo(tokenKey: string, kind: string): void {
     const reply = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } }));
     if (path === '/api/staff-me') return reply(demoMe(kind));
     if (path === '/api/staff-admin/people' && (init?.method ?? 'GET') === 'GET') return reply(demoAccess());
-    if (path === '/api/accommodation-admin/bookings' && (init?.method ?? 'GET') === 'GET') return reply(demoBookings());
+    if (path === '/api/accommodation-admin/bookings' && (init?.method ?? 'GET') === 'GET') return reply(demoBookings(kind !== 'limited'));
+    // Saving, updating and cancelling reach nothing: a non-approver's change to the past is answered the way the server does
+    // (202, waiting for a super admin), anything else just succeeds. Nothing is kept.
+    if (/^\/api\/accommodation-admin\/bookings(\/update|\/delete)?$/.test(path) && (init?.method ?? 'GET') === 'POST') {
+      const waiting = kind === 'limited';
+      const body = waiting ? { pending: true, message: 'Sent to the super admins for approval. Nothing changes until they approve it.' } : { ok: true, booking: {} };
+      return Promise.resolve(new Response(JSON.stringify(body), { status: waiting ? 202 : 200, headers: { 'content-type': 'application/json' } }));
+    }
     if (path === '/api/accommodation-admin/change-requests' && (init?.method ?? 'GET') === 'GET') return reply(demoChangeRequests());
     if (path === '/api/accommodation-admin/change-requests/decide') return reply({ ok: true });
     if (path === '/api/units-admin/overview') return reply(demoUnits());
