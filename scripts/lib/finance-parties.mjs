@@ -84,7 +84,8 @@ export function planDetailsChange(existing, method, fingerprint, sameDetails = (
 
 // Two different parties holding the same account are flagged on both (not blocked: a joint account or a shop with
 // two owners can be intended). Returns Map(accountId -> [other partyIds]). Superseded rows are history.
-export function sharedAccountFlags(accounts) {
+export function sharedAccountFlags(accounts, canonicalOf = new Map()) {
+  const canon = (/** @type {string} */ id) => canonicalOf.get(id) ?? id;
   const byPrint = new Map();
   for (const a of accounts) {
     if (a.status === 'superseded' || !a.fingerprint) continue;
@@ -93,7 +94,7 @@ export function sharedAccountFlags(accounts) {
   const flags = new Map();
   for (const group of byPrint.values()) {
     for (const a of group) {
-      const others = [...new Set(group.filter((b) => b.party_id !== a.party_id).map((b) => b.party_id))];
+      const others = [...new Set(group.filter((b) => canon(b.party_id) !== canon(a.party_id)).map((b) => canon(b.party_id)))];
       if (others.length) flags.set(a.id, others);
     }
   }
@@ -186,7 +187,7 @@ export function accountForResponse(row, sharedWith = [], extra = {}) {
   };
 }
 
-export function partyForResponse(party, accounts, flags, today = todayIST()) {
+export function partyForResponse(party, accounts, flags, today = todayIST(), mergedCount = 0) {
   const live = accounts.filter((a) => a.status !== 'superseded');
   const review = reviewFlags(accounts, flags, today);
   return {
@@ -198,6 +199,37 @@ export function partyForResponse(party, accounts, flags, today = todayIST()) {
     accounts: live.map((a) => accountForResponse(a, flags.get(a.id) ?? [], { today, review: review.get(a.id) ?? [] })),
     earlierAccounts: accounts.length - live.length,
     needsReview: [...review.values()].some((r) => r.length > 0),
+    mergedCount,
+  };
+}
+
+// Two parties that are really one payee. Account rows are immutable and keep the party they were entered under, so a
+// merge marks the duplicate as `merged_into` the main party instead of moving anything: the main party then shows (and is
+// reviewed over) both sets of accounts, and nothing is deleted. No chains, and a member linked to a household stays put.
+export function validateMerge(source, target, { sourceHasMergedIn = false } = {}) {
+  if (source.id === target.id) return { error: 'Choose a different party to merge into.' };
+  if (source.merged_into) return { error: 'This party is already merged.' };
+  if (target.merged_into) return { error: 'That party was itself merged into another; choose the main one.' };
+  if (sourceHasMergedIn) return { error: 'Other parties were merged into this one. Merge it the other way round, or undo those first.' };
+  if (source.household_id) return { error: 'A member linked to a household cannot be merged into another party.' };
+  return { ok: true };
+}
+
+// Hides merged parties and gives each main party the accounts of itself and of the parties merged into it.
+export function foldMerged(parties, accounts) {
+  const canonicalOf = new Map(parties.filter((p) => p.merged_into).map((p) => [p.id, p.merged_into]));
+  const byParty = new Map();
+  for (const a of accounts) {
+    const id = canonicalOf.get(a.party_id) ?? a.party_id;
+    byParty.set(id, [...(byParty.get(id) ?? []), a]);
+  }
+  const merged = new Map();
+  for (const target of canonicalOf.values()) merged.set(target, (merged.get(target) ?? 0) + 1);
+  return {
+    visible: parties.filter((p) => !p.merged_into),
+    accountsOf: (/** @type {string} */ id) => byParty.get(id) ?? [],
+    mergedCount: (/** @type {string} */ id) => merged.get(id) ?? 0,
+    canonicalOf,
   };
 }
 

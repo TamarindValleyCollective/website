@@ -90,6 +90,14 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   number. `fin_audit_log.detail` is checked before writing and a number, UPI id or IFSC makes the write fail. Revealing is
   written to the audit log first; if that fails nothing is returned. Audit actions: `finance.party_created`,
   `party_updated`, `payee_added`, `payee_changed`, `payee_revealed`, `payee_verified`, `parties_imported`.
+- **Merging (migration `0081_finance_party_merge.sql`).** Two parties that are really one payee (often a bank merger: an old
+  and a new account) are merged by a director with the step-up: `POST /parties/:id/merge {into}`. Nothing is moved or deleted,
+  because account rows are immutable: the duplicate gets `merged_into = main party`, is hidden from the list, and the main party
+  shows, and is reviewed over, both sets of accounts (so an old and a new bank account are flagged together until the old one is
+  retired). Rules (also enforced by a database trigger): no chains, not into itself, a party others were merged into cannot be
+  merged away, and a member linked to a household cannot be merged away. `POST /parties/:id/unmerge` undoes it (no screen yet).
+  Entering details on a main party sees the accounts of its merged duplicates. **Later sessions must treat a merged party as its
+  main party** (`foldMerged` / `merged_into`) when matching payments, requests and payroll to a payee.
 - **Keys.** Payee details are encrypted under `FINANCE_PAYEE_KEY` (32+ random bytes, base64) when it is set, otherwise under
   `STAFF_MFA_KEY`. The finance key is separate on purpose: Netlify secrets can be set but never read back, so a key you did not
   keep a copy of cannot be reused by a script, and rotating the MFA key would lock every TOTP secret and member payout detail.
@@ -123,7 +131,7 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   flagged; a UPI id is not a second bank account. Recording "keep both" is `POST /parties/:id/review` (`verify-payee` +
   step-up, audited as `finance.party_reviewed`).
 - **Endpoints.** `GET/POST /api/finance-admin/parties`, `PATCH /parties/:id`, `POST /parties/:id/accounts`,
-  `POST /parties/:id/review`, `POST /accounts/:id/reveal`, `/verify`, `/retire`. Page: `/internal/finance/parties/`.
+  `POST /parties/:id/review`, `/merge`, `/unmerge`, `POST /accounts/:id/reveal`, `/verify`, `/retire`. Page: `/internal/finance/parties/`.
 - **Import.** `scripts/import-fin-parties.mjs --source <sheetId>::<range> [--source ...] [--apply]` reads the existing
   payee lists from Google Sheets shared with the Drive service account (ids and ranges are arguments, never in the repo).
   The details are spread over several partial lists, so several sources are given and **merged by account number**: the

@@ -19,7 +19,7 @@ process.env.SUPABASE_URL = 'https://db.test';
 process.env.PUBLIC_GOOGLE_CLIENT_ID = 'client';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'service';
 process.env.STAFF_MFA_KEY = randomBytes(32).toString('base64');
-const { signStepUp, encryptFinanceText } = await import('../../netlify/functions/lib/staff-mfa-crypto.ts');
+const { signStepUp, encryptFinanceText, fingerprintFinanceText } = await import('../../netlify/functions/lib/staff-mfa-crypto.ts');
 
 const stubGoogle = {
   name: 'stub-google',
@@ -424,4 +424,98 @@ test('details entered without an IFSC-less import flag are marked has_ifsc, and 
   assert.equal(res.status, 400);
   assert.match((await res.json()).error, /retired/i);
   assert.equal(stale.status, 'unverified');
+});
+
+// ---- merging duplicate parties
+const seedTwoParties = () => {
+  db.fin_parties.push({ id: 'pa', name: 'Test Traders', kind: 'vendor', active: true, household_id: null, merged_into: null });
+  db.fin_parties.push({ id: 'pb', name: 'Test Traders Old', kind: 'vendor', active: true, household_id: null, merged_into: null });
+  const mainAcct = seedAccount({ party_id: 'pa', created_at: '2026-03-01T00:00:00Z' });
+  const oldAcct = seedAccount({ party_id: 'pb', created_at: '2026-01-01T00:00:00Z' });
+  return { mainAcct, oldAcct };
+};
+
+test('merging two parties needs verify-payee and the step-up, hides the duplicate, and logs ids only', async () => {
+  reset();
+  seedTwoParties();
+  const op = sign('u1', 'user');
+  const director = sign('u2', 'admin');
+  assert.equal((await api(op, '/parties/pb/merge', { method: 'POST', body: { into: 'pa' }, stepUp: 'u1' })).status, 403);
+  assert.equal((await (await api(director, '/parties/pb/merge', { method: 'POST', body: { into: 'pa' } })).json()).code, 'STEP_UP_REQUIRED');
+  assert.equal(db.fin_parties[1].merged_into, null);
+
+  const ok = await api(director, '/parties/pb/merge', { method: 'POST', body: { into: 'pa' }, stepUp: 'u2' });
+  assert.equal(ok.status, 200);
+  assert.equal(db.fin_parties[1].merged_into, 'pa');
+  const row = db.audit.at(-1);
+  assert.equal(row.action, 'finance.party_merged');
+  assert.deepEqual(row.detail, { into: 'pa', accounts: 1 });
+  assert.equal(db.fin_party_accounts.length, 2); // nothing moved or deleted
+});
+
+test('after a merge the list shows one party holding both sets of accounts, flagged for review', async () => {
+  reset();
+  seedTwoParties();
+  const director = sign('u2', 'admin');
+  await api(director, '/parties/pb/merge', { method: 'POST', body: { into: 'pa' }, stepUp: 'u2' });
+  const list = await (await api(director, '/parties')).json();
+  assert.equal(list.parties.length, 1);
+  assert.equal(list.parties[0].name, 'Test Traders');
+  assert.equal(list.parties[0].mergedCount, 1);
+  assert.equal(list.parties[0].accounts.length, 2);
+  assert.equal(list.parties[0].needsReview, true); // the old and the new bank account
+});
+
+test('merge is refused into itself, into an already merged party, and for a party others were merged into', async () => {
+  reset();
+  seedTwoParties();
+  db.fin_parties.push({ id: 'pc', name: 'Third Party', kind: 'vendor', active: true, household_id: null, merged_into: null });
+  const director = sign('u2', 'admin');
+  const merge = (from, into) => api(director, `/parties/${from}/merge`, { method: 'POST', body: { into }, stepUp: 'u2' });
+  assert.equal((await merge('pa', 'pa')).status, 400);
+  assert.equal((await merge('pb', 'pa')).status, 200);
+  assert.equal((await merge('pc', 'pb')).status, 400); // pb is itself merged
+  assert.equal((await merge('pa', 'pc')).status, 400); // pb was merged into pa
+  assert.equal((await merge('pb', 'pc')).status, 400); // already merged
+  assert.equal((await merge('pa', 'missing')).status, 404);
+});
+
+test('undoing a merge brings the duplicate back, with its own accounts', async () => {
+  reset();
+  seedTwoParties();
+  const director = sign('u2', 'admin');
+  await api(director, '/parties/pb/merge', { method: 'POST', body: { into: 'pa' }, stepUp: 'u2' });
+  assert.equal((await api(director, '/parties/pb/unmerge', { method: 'POST' })).status, 403); // needs the step-up too
+  assert.equal((await api(director, '/parties/pb/unmerge', { method: 'POST', stepUp: 'u2' })).status, 200);
+  assert.equal(db.audit.at(-1).action, 'finance.party_unmerged');
+  const list = await (await api(director, '/parties')).json();
+  assert.equal(list.parties.length, 2);
+});
+
+test('changing details on the main party replaces the live bank accounts of both; the new row belongs to the main party', async () => {
+  reset();
+  seedTwoParties();
+  const director = sign('u2', 'admin');
+  const op = sign('u1', 'user');
+  await api(director, '/parties/pb/merge', { method: 'POST', body: { into: 'pa' }, stepUp: 'u2' });
+  const before = db.fin_party_accounts.length;
+  const res = await api(op, '/parties/pa/accounts', { method: 'POST', body: { method: 'bank', account: ACCOUNT_2, ifsc: IFSC } });
+  assert.equal(res.status, 201);
+  // the new row belongs to the main party and the main party's existing bank accounts (both of them) were superseded
+  assert.equal(db.fin_party_accounts.length, before + 1);
+  assert.equal(db.fin_party_accounts.at(-1).party_id, 'pa');
+  assert.deepEqual(db.fin_party_accounts.slice(0, 2).map((a) => a.status), ['superseded', 'superseded']);
+});
+
+test('entering details the merged-in party already holds adds nothing', async () => {
+  reset();
+  seedTwoParties();
+  db.fin_party_accounts[1].fingerprint = fingerprintFinanceText(ACCOUNT); // the old party really holds ACCOUNT + IFSC
+  const director = sign('u2', 'admin');
+  const op = sign('u1', 'user');
+  await api(director, '/parties/pb/merge', { method: 'POST', body: { into: 'pa' }, stepUp: 'u2' });
+  const res = await api(op, '/parties/pa/accounts', { method: 'POST', body: { method: 'bank', account: ACCOUNT, ifsc: IFSC } });
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { unchanged: true });
+  assert.equal(db.fin_party_accounts.length, 2);
 });

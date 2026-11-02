@@ -21,6 +21,8 @@ import {
   validateParty,
   validatePayeeDetails,
   validateRetirement,
+  validateMerge,
+  foldMerged,
   validateEffectiveOn,
   todayIST,
 } from '../../../scripts/lib/finance-parties.mjs';
@@ -118,10 +120,12 @@ export async function listParties(req: Request): Promise<Response> {
   if (!auth.ok) return fail(auth.error, auth.status);
   const { staff } = auth;
   try {
-    const q = (new URL(req.url).searchParams.get('q') ?? '').replace(/[*,()%]/g, ' ').trim().slice(0, 60);
-    const parties = await rows(`/fin_parties?select=id,name,kind,active,household_id&order=name.asc${q ? `&name=ilike.*${encodeURIComponent(q)}*` : ''}`);
+    const q = (new URL(req.url).searchParams.get('q') ?? '').replace(/[*,()%]/g, ' ').trim().slice(0, 60).toLowerCase();
+    // Every party is read so that a party merged into another folds into it, whatever the search text matches.
+    const allParties = await rows('/fin_parties?select=id,name,kind,active,household_id,merged_into&order=name.asc');
     const accounts = await rows(`/fin_party_accounts?select=${ACCOUNT_COLUMNS}&order=created_at.asc`);
-    const flags = sharedAccountFlags(accounts);
+    const { visible, accountsOf, mergedCount, canonicalOf } = foldMerged(allParties, accounts);
+    const flags = sharedAccountFlags(accounts, canonicalOf);
     const capabilities = capabilitiesForRole('finance', staff.role) as string[];
     const canVerify = capabilities.includes('verify-payee');
     let me: Json | null = null;
@@ -129,14 +133,16 @@ export async function listParties(req: Request): Promise<Response> {
       const mfa = await mfaSummary(staff.id);
       me = { id: staff.id, ready: mfa.ready, hasPasskey: mfa.passkey, stepUpValid: stepUpIsValid(req, staff.id) };
     }
-    const shown = parties.map((p) => partyForResponse(p, accounts.filter((a) => a.party_id === p.id), flags));
+    const shown = visible
+      .filter((p: Json) => !q || p.name.toLowerCase().includes(q))
+      .map((p: Json) => partyForResponse(p, accountsOf(p.id), flags, todayIST(), mergedCount(p.id)));
     return jsonResponse({
       kinds: PARTY_KINDS,
       canEdit: capabilities.includes('allocate'),
       canVerify,
       me,
       parties: shown,
-      needsReviewCount: shown.filter((p) => p.needsReview).length,
+      needsReviewCount: shown.filter((p: Json) => p.needsReview).length,
     });
   } catch (err) {
     return serverError(err, 'list parties');
@@ -227,9 +233,11 @@ export async function addPayeeAccount(req: Request, partyId: string): Promise<Re
     actorId = auth.staff.id;
   }
   try {
-    const [party] = await rows(`/fin_parties?id=eq.${partyId}&select=id`);
+    const [party] = await rows(`/fin_parties?id=eq.${partyId}&select=id,merged_into`);
     if (!party) return fail('Not found', 404);
-    const existing = await rows(`/fin_party_accounts?party_id=eq.${partyId}&select=${ACCOUNT_COLUMNS},details_enc`);
+    if (party.merged_into) return fail('This party was merged into another. Add the details to the main party.');
+    const mergedIn = (await rows(`/fin_parties?merged_into=eq.${partyId}&select=id`)).map((p) => p.id as string);
+    const existing = await rows(`/fin_party_accounts?party_id=in.(${[partyId, ...mergedIn].join(',')})&select=${ACCOUNT_COLUMNS},details_enc`);
     const entity = await entityId();
     const result = await addAccount(partyId, entity, actorId, body, existing, effectiveOn);
     if ('error' in result) return fail(result.error ?? 'Enter the details.');
@@ -336,6 +344,47 @@ export async function reviewParty(req: Request, partyId: string): Promise<Respon
     return jsonResponse({ ok: true });
   } catch (err) {
     return serverError(err, 'review party');
+  }
+}
+
+// Two parties that are really one payee (verify-payee + step-up). Nothing is moved or deleted: the duplicate is marked
+// merged into the main party, whose view then holds both sets of accounts and is reviewed as one.
+export async function mergeParty(req: Request, sourceId: string): Promise<Response> {
+  const gate = await requireVerifier(req);
+  if (!gate.staff) return gate.response;
+  const { staff } = gate;
+  const body = await readBody(req);
+  const intoId = typeof body?.into === 'string' ? body.into : '';
+  if (!ID.test(intoId)) return fail('Choose the party to merge into.');
+  try {
+    const [source] = await rows(`/fin_parties?id=eq.${sourceId}&select=id,merged_into,household_id,entity_id`);
+    const [target] = await rows(`/fin_parties?id=eq.${intoId}&select=id,merged_into`);
+    if (!source || !target) return fail('Not found', 404);
+    const mergedIn = await rows(`/fin_parties?merged_into=eq.${sourceId}&select=id`);
+    const verdict = validateMerge(source, target, { sourceHasMergedIn: mergedIn.length > 0 });
+    if (!verdict.ok) return fail(verdict.error ?? 'Cannot merge these.');
+    const accounts = await rows(`/fin_party_accounts?party_id=eq.${sourceId}&select=id`);
+    await rest(`/fin_parties?id=eq.${sourceId}`, { method: 'PATCH', body: JSON.stringify({ merged_into: intoId, updated_at: new Date().toISOString() }) });
+    await audit(staff.id, source.entity_id, 'finance.party_merged', sourceId, { into: intoId, accounts: accounts.length });
+    return jsonResponse({ ok: true });
+  } catch (err) {
+    return serverError(err, 'merge party');
+  }
+}
+
+export async function unmergeParty(req: Request, sourceId: string): Promise<Response> {
+  const gate = await requireVerifier(req);
+  if (!gate.staff) return gate.response;
+  const { staff } = gate;
+  try {
+    const [source] = await rows(`/fin_parties?id=eq.${sourceId}&select=id,merged_into,entity_id`);
+    if (!source) return fail('Not found', 404);
+    if (!source.merged_into) return fail('This party is not merged.');
+    await rest(`/fin_parties?id=eq.${sourceId}`, { method: 'PATCH', body: JSON.stringify({ merged_into: null, updated_at: new Date().toISOString() }) });
+    await audit(staff.id, source.entity_id, 'finance.party_unmerged', sourceId, { from: source.merged_into });
+    return jsonResponse({ ok: true });
+  } catch (err) {
+    return serverError(err, 'unmerge party');
   }
 }
 

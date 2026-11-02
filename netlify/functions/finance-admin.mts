@@ -13,7 +13,7 @@ import { logFinanceAction } from './lib/finance-audit';
 import { rest } from './lib/staff-mfa-store';
 import { capabilitiesForRole } from './lib/staff-registry';
 import { payeeFieldVisibility } from '../../scripts/lib/finance-access.mjs';
-import { PARTY_ID, addPayeeAccount, createParty, listParties, retirePayeeAccount, revealPayeeAccount, reviewParty, updateParty, verifyPayeeAccount } from './lib/finance-parties';
+import { PARTY_ID, addPayeeAccount, createParty, listParties, mergeParty, retirePayeeAccount, revealPayeeAccount, reviewParty, unmergeParty, updateParty, verifyPayeeAccount } from './lib/finance-parties';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -62,11 +62,13 @@ export default async (req: Request): Promise<Response> => {
   if (route === '/overview' && req.method === 'GET') return handleOverview(req);
   if (route === '/parties' && req.method === 'GET') return listParties(req);
   if (route === '/parties' && req.method === 'POST') return createParty(req);
-  const party = /^\/parties\/([^/]+)(\/accounts|\/review)?$/.exec(route);
+  const party = /^\/parties\/([^/]+)(\/accounts|\/review|\/merge|\/unmerge)?$/.exec(route);
   if (party && PARTY_ID.test(party[1])) {
     if (!party[2] && req.method === 'PATCH') return updateParty(req, party[1]);
     if (party[2] === '/accounts' && req.method === 'POST') return addPayeeAccount(req, party[1]);
     if (party[2] === '/review' && req.method === 'POST') return reviewParty(req, party[1]);
+    if (party[2] === '/merge' && req.method === 'POST') return mergeParty(req, party[1]);
+    if (party[2] === '/unmerge' && req.method === 'POST') return unmergeParty(req, party[1]);
   }
   const account = /^\/accounts\/([^/]+)\/(reveal|verify|retire)$/.exec(route);
   if (account && PARTY_ID.test(account[1]) && req.method === 'POST') {
