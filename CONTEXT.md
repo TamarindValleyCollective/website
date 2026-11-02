@@ -27,7 +27,7 @@ because auditors ask for it on listed payments.
 _Avoid_: description, memo.
 
 **Category**
-The head an allocation is filed under. It carries the type (opex, capex, project, revenue, and so on), so the
+The head an allocation is filed under. It carries the type (opex, capex, revenue, and so on), so the
 type is never a property of a single row.
 _Avoid_: account, head.
 
