@@ -91,6 +91,12 @@ for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly
   number. `fin_audit_log.detail` is checked before writing and a number, UPI id or IFSC makes the write fail. Revealing is
   written to the audit log first; if that fails nothing is returned. Audit actions: `finance.party_created`,
   `party_updated`, `payee_added`, `payee_changed`, `payee_revealed`, `payee_verified`, `parties_imported`.
+- **Comparing a payee's accounts.** A bank merger leaves a payee with an old and a new number, and a one-digit difference is easy
+  to miss. In a payee's sheet, the last four digits of accounts of the same kind are compared and **the characters that differ
+  are shown in red** (needs no extra access). "Compare full numbers" (`verify-payee` + the unlock) reveals every account of that
+  payee at once, one audit entry each, and shows the full numbers and IFSC codes right-aligned (so different lengths line up at
+  the end) with the differences in red, for 30 seconds. The comparison itself is `markDiff` in `scripts/lib/finance-diff.mjs`.
+  The list and the sheet still never carry a full number unless a verifier asks for it.
 - **Merging (migration `0081_finance_party_merge.sql`, applied to TVC ERP on 2026-11-02).** Two parties that are really one payee (often a bank merger: an old
   and a new account) are merged by a director with the step-up: `POST /parties/:id/merge {into}`. Nothing is moved or deleted,
   because account rows are immutable: the duplicate gets `merged_into = main party`, is hidden from the list, and the main party

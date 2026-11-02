@@ -46,6 +46,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
 <script>
   import { StaffAuthError, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { initStepUpLock } from '../../../../scripts/lib/staff-stepup-ui.mjs';
+  import { markDiff, groupFromRight } from '../../../../scripts/lib/finance-diff.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -272,12 +273,79 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   }
   $('add').addEventListener('click', openAddParty);
 
+  // ---- comparing the accounts of one payee: the characters that differ are shown in red
+  type Marked = { ch: string; differs: boolean }[];
+  const last4Of = (a: Account) => a.shown.replace(/^ending /, '');
+  const diffSpan = (m: { ch: string; differs: boolean }) => h('span', { class: m.differs ? 'diff' : '', text: m.ch });
+
+  // A long number in groups of four from the right (for reading), as separate spans so copying it keeps no spaces.
+  function numberNode(marks: Marked, grouped = true): HTMLElement {
+    const sizes = grouped ? groupFromRight(marks.map((m) => m.ch).join('')).map((g) => g.length) : [marks.length];
+    const out: HTMLElement[] = [];
+    let at = 0;
+    for (const size of sizes) {
+      out.push(h('span', { class: 'grp' }, ...marks.slice(at, at + size).map(diffSpan)));
+      at += size;
+    }
+    return h('span', { class: 'num' }, ...out);
+  }
+
+  // Reveal every account of this party at once (verify-payee + the unlock; each reveal is audited) and show the full
+  // numbers lined up from the right with the differences in red. They disappear again after 30 seconds.
+  async function showFullNumbers(p: Party, boxes: Map<string, HTMLElement>, dlg: HTMLDialogElement, note: HTMLElement) {
+    if (!mayVerify()) return;
+    const revealed = await Promise.all(p.accounts.map((a) => call(`/api/finance-admin/accounts/${a.id}/reveal`, 'POST')));
+    const failed = revealed.find((r) => r.status !== 200);
+    if (failed) {
+      if (failed.data?.code === 'STEP_UP_REQUIRED') lock.open();
+      else showToast(failed.data?.error ?? 'Could not show those details.');
+      return;
+    }
+    const details = revealed.map((r) => r.data.details as { method: string; account?: string; ifsc?: string; upi?: string });
+    const lines = new Map<string, HTMLElement[]>();
+    const add = (id: string, label: string, node: HTMLElement) => lines.set(id, [...(lines.get(id) ?? []), h('div', { class: 'full-line' }, h('span', { class: 'full-label', text: label }), node)]);
+    for (const method of ['bank', 'upi']) {
+      const idx = details.map((d, i) => (d.method === method ? i : -1)).filter((i) => i >= 0);
+      if (!idx.length) continue;
+      if (method === 'bank') {
+        const numbers = markDiff(idx.map((i) => details[i].account ?? ''));
+        const ifscs = markDiff(idx.map((i) => details[i].ifsc ?? ''));
+        idx.forEach((i, k) => {
+          add(p.accounts[i].id, 'Account number', numberNode(numbers[k]));
+          add(p.accounts[i].id, 'IFSC code', details[i].ifsc ? numberNode(ifscs[k], false) : h('span', { class: 'diff', text: 'Missing' }));
+        });
+      } else {
+        const ids = markDiff(idx.map((i) => details[i].upi ?? ''));
+        idx.forEach((i, k) => add(p.accounts[i].id, 'UPI id', numberNode(ids[k], false)));
+      }
+    }
+    const hide = () => {
+      boxes.forEach((box) => {
+        box.replaceChildren();
+        box.hidden = true;
+      });
+      note.hidden = true;
+    };
+    boxes.forEach((box, id) => {
+      box.replaceChildren(...(lines.get(id) ?? []));
+      box.hidden = false;
+    });
+    note.hidden = false;
+    const timer = window.setTimeout(hide, 30_000);
+    dlg.addEventListener('close', () => { clearTimeout(timer); hide(); }, { once: true });
+  }
+
   function openDetail(id: string) {
     const p = data?.parties.find((x) => x.id === id);
     if (!p) return;
     const dlg = $<HTMLDialogElement>('detail-sheet');
+    const boxes = new Map<string, HTMLElement>();
     const accounts = p.accounts.map((a) => {
       const retired = isRetired(a);
+      const peers = p.accounts.filter((x) => x.method === a.method);
+      const ending = markDiff(peers.map(last4Of))[peers.indexOf(a)];
+      const full = h('div', { class: 'acct-full', attrs: { hidden: '' } });
+      boxes.set(a.id, full);
       // "two bank accounts in use" is about the payee, not one account: it is shown once, above the list.
       const notes = [
         retired ? `Retired from ${niceDate(a.retiredOn!)}. Do not pay this account.` : a.retiredOn ? `Retires on ${niceDate(a.retiredOn)}; payable until the day before.` : null,
@@ -293,15 +361,18 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
         h(
           'div',
           { class: 'acct' },
-          h('div', { class: 'acct-head' }, h('span', { class: 'title', text: `${a.method === 'bank' ? 'Bank account' : 'UPI'} ${a.shown}` }), status),
+          h('div', { class: 'acct-head' }, h('span', { class: 'title' }, document.createTextNode(`${a.method === 'bank' ? 'Bank account' : 'UPI'} ending `), ...ending.map(diffSpan)), status),
+          full,
           ...notes.map((t) => h('span', { class: 'detail', text: t })),
           verify || retire ? h('div', { class: 'acct-actions' }, verify, retire) : null,
         ),
       );
     });
+    const fullNote = h('p', { class: 'hint', text: 'Shown for 30 seconds. Showing them is logged. Red marks what differs between the accounts.', attrs: { hidden: '' } });
     const twoLive = p.accounts.some((a) => !isRetired(a) && a.review.includes('multiple_live_accounts'));
     const actions: Node[] = [closeBtn(dlg)];
     if (data?.canVerify) actions.unshift(button('Merge into…', () => openMerge(p)));
+    if (data?.canVerify && p.accounts.length > 1) actions.unshift(button('Compare full numbers', () => void showFullNumbers(p, boxes, dlg, fullNote)));
     if (data?.canVerify && p.accounts.some((a) => a.review.includes('multiple_live_accounts'))) actions.unshift(button('Keep both: reviewed', () => keepBoth(p, dlg)));
     if (data?.canEdit) {
       actions.unshift(button('Add or change details', () => openAccount(p)), button(p.active ? 'Mark inactive' : 'Mark active', () => setActive(p, dlg)));
@@ -311,6 +382,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
       h('h2', { text: p.name, attrs: { id: 'detail-title' } }),
       h('p', { class: 'sheet-text', text: `${KIND_LABELS[p.kind] ?? p.kind}${p.active ? '' : ' · inactive'}` }),
       twoLive ? h('p', { class: 'note', text: REVIEW_TEXT.multiple_live_accounts }) : null,
+      fullNote,
       h('ul', { class: 'list' }, ...(accounts.length ? accounts : [h('li', {}, h('div', { class: 'acct' }, h('span', { class: 'detail', text: 'No payment details yet.' })))])),
       p.mergedCount ? h('p', { class: 'hint', text: `Includes the accounts of ${p.mergedCount} duplicate ${p.mergedCount === 1 ? 'party' : 'parties'} merged into this one.` }) : null,
       p.earlierAccounts ? h('p', { class: 'hint', text: `${p.earlierAccounts} earlier set${p.earlierAccounts === 1 ? '' : 's'} of details kept on record.` }) : null,
@@ -543,6 +615,52 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
     color: var(--tvc-ink-soft);
   }
 
+  /* What differs between a payee's accounts: red, bold, on a soft red ground so it survives dark mode and colour-blindness. */
+  .parties .diff {
+    color: var(--tvc-error-text);
+    background: var(--tvc-error-bg);
+    border-radius: 3px;
+    font-weight: 700;
+  }
+
+  .parties .acct-full {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-sm);
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .parties .full-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 2px 12px;
+  }
+
+  .parties .full-label {
+    min-width: 7.5em;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .parties .num {
+    margin-left: auto;
+    text-align: right;
+    font-size: var(--text-lg);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.03em;
+    overflow-wrap: anywhere;
+  }
+
+  .parties .num .grp + .grp {
+    margin-left: 0.55em;
+  }
+
   /* Several actions at the foot of a sheet: let them wrap instead of running off the edge. */
   .parties.section dialog.sheet .sheet-actions {
     flex-wrap: wrap;
@@ -552,6 +670,7 @@ import StepUpSheet from '../../../components/StepUpSheet.astro';
   .parties.section dialog.sheet .hint,
   .parties.section dialog.sheet .note {
     margin: 12px 0;
+    font-size: var(--text-sm);
   }
 
   @media (max-width: 560px) {
