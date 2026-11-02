@@ -10,7 +10,7 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 
 | Session | State |
 |---|---|
-| 01 Foundation & access | Built on branch `finance-01-foundation` (draft PR). Migration `0077` **not applied yet**. |
+| 01 Foundation & access | Built on branch `finance-01-foundation` (draft PR). Migration `0077` **applied to TVC ERP on 2026-11-02**. |
 | 02-13 | Not started |
 
 ## Access
@@ -65,11 +65,11 @@ Also adds `staff_module_roles.expires_at`.
 the second drives the real function through `requireStaff` with Google and Supabase stubbed (needs `npm ci`
 for esbuild, and Node 22.18+ or newer, which imports the registry `.ts` directly).
 
-## Applying migration 0077
+## Migration 0077
 
-Migrations are not auto-applied. **Apply `0077` before this branch is merged**: `requireStaff` now selects
-`expires_at`, so on a database without the column every admin page would answer 500. Run it in the Supabase SQL
-editor for the TVC ERP project, then confirm `select expires_at from staff_module_roles limit 1` works.
+Applied to TVC ERP on 2026-11-02 (recorded as `finance_foundation`). Checked afterwards: 1 entity, 23 categories,
+RLS on for all five `fin_*` tables, no `anon`/`authenticated` grants, `expires_at` present and null on every
+existing grant. `requireStaff` selects `expires_at`, so the column has to exist before this code is deployed.
 
 ## Vocabulary
 

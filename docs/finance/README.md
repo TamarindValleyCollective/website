@@ -66,5 +66,5 @@ run at any time. Run 13 last.
 | # | State | Notes |
 |---|---|---|
 | 00 | Design written 2026-11-02 | `DESIGN.md` and these briefs |
-| 01 | Built 2026-11-02, draft PR (`finance-01-foundation`) | Registry modules, grant expiry, reference tables, overview endpoint and page. **Migration `0077` not applied yet; apply before merge.** See [FINANCE.md](FINANCE.md). |
+| 01 | Built 2026-11-02, draft PR (`finance-01-foundation`) | Registry modules, grant expiry, reference tables, overview endpoint and page. Migration `0077` applied 2026-11-02. See [FINANCE.md](FINANCE.md). |
 | 02-13 | Not started | |

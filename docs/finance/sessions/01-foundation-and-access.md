@@ -67,7 +67,7 @@ Who gets `finance` (directors), who is the requester, whether the category list 
 holder gets 403 from the finance endpoint, an expired auditor grant gets 403, a deactivated person gets 403, an
 auditor visit is logged and refused if the log fails. `scripts/lib/admin-host-routes.test.mjs` 30/30. `npm run lint:css`
 clean. `astro build` passes. **Not verified:** the pages in a browser with a real sign-in, the Access screen's new
-date control, and migration 0077 against a real database (not applied; needs Sharath's go-ahead).
+date control. Migration 0077 was applied to TVC ERP after Sharath's go-ahead and checked (1 entity, 23 categories, RLS on, no anon grants, `expires_at` null on all grants).
 
 **Left / decisions for Sharath:** who gets `finance` (directors) and who is the requester; confirm or edit the draft
 category list (I did not read the private tracker); whether auditors should get `export`; the category seed lives in
