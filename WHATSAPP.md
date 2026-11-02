@@ -74,9 +74,12 @@ so nothing WhatsApps until the names are approved and added to `WHATSAPP_APPROVE
 **Daily stays plan (2026-10-31).** `tvc_stays_daily_plan` is WhatsApped every morning at 06:30 IST to
 `WHATSAPP_DAILY_PLAN_NUMBERS` (Madhavan): who arrives and leaves, breakfast and dinner counts, food needs and
 admin notes, from the same bookings the Stays page shows (`whatsapp-stays-daily-plan.mts`, plan logic in
-`scripts/lib/stay-day-plan.mjs`, tested). Skipped on a day with nobody on the farm. **Status: built, not yet
-submitted to Meta**, so nothing sends until the template is approved, added to `WHATSAPP_APPROVED_TEMPLATES`, and
-the number is set. Submission text in `docs/whatsapp-templates.md`. The same plan is shown on the Stays page's Day view, with a Copy-as-message button, and above it an
+`scripts/lib/stay-day-plan.mjs`, tested). Skipped on a day with nobody on the farm. **Arrival heads-up (2026-11-02):** when a
+party arrives the next day, the same template is also sent a day early (dated tomorrow) to plan the grocery purchase,
+and an email of the plan goes to `core-team@tvc.farm` on both days, the day before and the day of arrival
+(`lib/stay-plan-email.ts`; needs `RESEND_API_KEY`, no other setting). **Status: approved by Meta (2026-11-02)**, so
+nothing sends until it is added to `WHATSAPP_APPROVED_TEMPLATES` and the number is set in
+`WHATSAPP_DAILY_PLAN_NUMBERS`. Submission text in `docs/whatsapp-templates.md`. The same plan is shown on the Stays page's Day view, with a Copy-as-message button, and above it an
 AI-written summary (`netlify/functions/stays-day-summary.mts`) from the **free Gemini tier**. Because free Gemini
 may keep and review what it is sent (see the suggested-replies note above), the summary only ever receives
 anonymised facts: no guest names, phone numbers or emails, free-text notes scrubbed of the guests' names, and a

@@ -12,6 +12,12 @@ import { checkOutDate } from './stay-notice.mjs';
 // Closures hold a tent empty; nobody is arriving, eating or sleeping there.
 const GUEST_TYPES = new Set(['casual-stay', 'public-event', 'private-event', 'member-stay']);
 
+/** The farm day `days` after `date` (both YYYY-MM-DD). */
+export function shiftDate(date, days) {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** One or two tents by name; a booking over more (a whole-farm event) is just a count. */
@@ -28,7 +34,7 @@ function guestCount(booking) {
   return booking.tents.reduce((sum, t) => sum + t.guests.length, 0);
 }
 
-/** @typedef {{ id: string, who: string, guests: number, tents: string[], note: string }} PlanEntry */
+/** @typedef {{ id: string, who: string, guests: number, tents: string[], note: string, checkOut: string }} PlanEntry */
 /** @typedef {PlanEntry & { until: string }} StayingEntry */
 /** @typedef {{ date: string, arriving: PlanEntry[], leaving: PlanEntry[], staying: StayingEntry[], breakfast: number, dinner: number, food: { who: string, need: string }[], notes: { who: string, note: string }[], quiet: boolean }} DayPlan */
 
@@ -48,6 +54,7 @@ export function buildDayPlan(bookings, date, labels = new Map()) {
     guests: guestCount(booking),
     tents: [...new Set(booking.tents.map((t) => labels.get(t.tentId) ?? t.tentId))],
     note: booking.note?.trim() ?? '',
+    checkOut: checkOutDate(booking.startDate, booking.nights),
   });
 
   const arriving = rows.filter((r) => r.booking.startDate === date).map(describe);
