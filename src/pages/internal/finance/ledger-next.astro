@@ -3,8 +3,9 @@
 // TanStack Virtual (only the rows on screen exist in the page), against the same /api/finance-admin/ledger endpoint as ledger.astro.
 // What it tries out: edits that change one cell instead of rebuilding the row, a stable progress line, a status that says what a line
 // still needs, row-specific control names, a themed action bar that says why Post is disabled, Ctrl+Enter to accept a row's
-// suggestions and move to the next, and a card layout on a phone. Not here yet: splitting and refunds (open a line in the real
-// ledger), adding a party, months and close, the "apply to the other N" prompt.
+// suggestions and move to the next, and a card layout on a phone. It also adds a party from the cell, shows the months with Close
+// month, and keeps a post failure on screen until dismissed. Not here yet: splitting and refunds (the narration opens the real
+// ledger), the "apply to the other N" prompt.
 import StaffLayout from '../../../layouts/StaffLayout.astro';
 import SignInGate from '../../../components/SignInGate.astro';
 ---
@@ -25,8 +26,21 @@ import SignInGate from '../../../components/SignInGate.astro';
           <input id="q" type="search" placeholder="Search the bank's narration" autocomplete="off" />
         </label>
         <div class="segmented" id="chips" role="group" aria-label="Show"></div>
+        <label class="sortpick">
+          <span>Sort</span>
+          <select id="sortpick" aria-label="Sort the lines">
+            <option value="date:desc">Newest first</option>
+            <option value="date:asc">Oldest first</option>
+            <option value="amount:desc">Largest first</option>
+            <option value="amount:asc">Smallest first</option>
+            <option value="narration:asc">Narration A to Z</option>
+            <option value="category:asc">Category</option>
+            <option value="party:asc">Party</option>
+          </select>
+        </label>
         <button type="button" id="accept-all" class="button button--outline" hidden>Fill in the suggestions</button>
       </div>
+      <div id="postnote" class="postnote" role="alert" hidden></div>
       <p id="progress" class="progress" aria-live="polite"></p>
 
       <div class="grid" id="grid" role="table" aria-label="Bank lines">
@@ -37,18 +51,21 @@ import SignInGate from '../../../components/SignInGate.astro';
         </div>
       </div>
       <div id="empty" class="hint" aria-live="polite" hidden></div>
+      <h2 class="list-title">Months</h2>
+      <ul class="list" id="months"></ul>
       <p class="hint">Click a heading to sort, type under one to search that column. Tab moves through the cells; Ctrl+Enter on a line accepts its suggestions and moves to the next.</p>
     </div>
     <div id="actionbar" class="abar" role="region" aria-label="Selected lines" hidden></div>
+    <dialog id="party-sheet" class="sheet" aria-labelledby="party-title"></dialog>
   </section>
 </StaffLayout>
 
 <script>
   import { createTable, getCoreRowModel } from '@tanstack/table-core';
   import { Virtualizer, elementScroll, observeElementOffset, observeElementRect } from '@tanstack/virtual-core';
-  import { StaffAuthError, askSheet, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
+  import { StaffAuthError, askSheet, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
-  import { button, categorySelect, h, partySelect, pill, rupees } from '../../../../scripts/lib/finance-ui.mjs';
+  import { button, categorySelect, h, input, labelled, niceMonth, partySelect, pill, present, rupees } from '../../../../scripts/lib/finance-ui.mjs';
   import { compareRows, describeCondition, matchAmount, matchDate, matchText, parseAmount, parseDate, parseText } from '../../../../scripts/lib/finance-columns.mjs';
 
   declare const google: any;
@@ -265,6 +282,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       intro.textContent = 'Every line the bank has told us about, and what it was for.';
       content.hidden = false;
       applyView();
+      void loadMonths();
     } catch (err) {
       if (err instanceof StaffAuthError) return;
       content.hidden = true;
@@ -272,6 +290,30 @@ import SignInGate from '../../../components/SignInGate.astro';
     } finally {
       setBusy(false);
     }
+  }
+
+  // ---- months: what is left in each, and closing one once everything in it is posted and checked
+  type Month = { month: string; status: 'open' | 'closed'; unallocated: number; review: number };
+  let readyMonths: string[] = [];
+  async function loadMonths() {
+    const { status, data: out } = await call('/api/finance-admin/periods');
+    if (status !== 200) return;
+    const canClose = Boolean(out.canClose);
+    const months = out.months as Month[];
+    readyMonths = months.filter((m) => m.status === 'open' && m.unallocated === 0 && m.review === 0).map((m) => niceMonth(m.month));
+    renderProgress();
+    $('months').replaceChildren(
+      ...months.map((m) => {
+        const ready = m.unallocated === 0 && m.review === 0;
+        const detail = m.status === 'closed' ? 'Closed' : ready ? 'Everything is posted and checked.' : [m.unallocated ? `${m.unallocated} to allocate` : '', m.review ? `${m.review} to review` : ''].filter(Boolean).join(' · ');
+        const close = canClose && m.status === 'open' && ready ? button('Close month', async () => {
+          const res = await call(`/api/finance-admin/periods/${m.month}/close`, 'POST');
+          showToast(res.status === 200 ? `${niceMonth(m.month)} closed.` : res.data?.error ?? 'Could not close it.');
+          void loadMonths();
+        }) : null;
+        return h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow' }, h('span', { class: 'title', text: niceMonth(m.month) }), h('span', { class: 'detail', text: detail })), m.status === 'closed' ? pill('Closed', 'ok') : null, close));
+      }),
+    );
   }
 
   // The chip, the narration search and the column conditions, then the sort, over every line already here (same rules as the server's:
@@ -345,7 +387,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     if (!data) return;
     const c = counts;
     const errs = Object.entries(filterErrors).map(([col, why]) => `Can't read the ${COLUMN_LABELS[col]} search: ${why}`);
-    $('progress').textContent = [`Showing ${lines.length} of ${all.length}`, `${c.unallocated} left to allocate`, `${c.review} to review`, c.noparty ? `${c.noparty} posted without a party` : '', postedThisSitting ? `${postedThisSitting} posted this sitting` : '', crumbs.length ? `Searching: ${crumbs.join(', ')}` : '', ...errs].filter(Boolean).join(' · ');
+    $('progress').textContent = [`Showing ${lines.length} of ${all.length}`, `${c.unallocated} left to allocate`, `${c.review} to review`, c.noparty ? `${c.noparty} posted without a party` : '', postedThisSitting ? `${postedThisSitting} posted this sitting` : '', readyMonths.length ? `${readyMonths.join(', ')} ready to close (see Months below)` : '', crumbs.length ? `Searching: ${crumbs.join(', ')}` : '', ...errs].filter(Boolean).join(' · ');
   }
   const SORTABLE = new Set(['date', 'narration', 'amount', 'category', 'party', 'nature']);
   function renderHead() {
@@ -388,6 +430,11 @@ import SignInGate from '../../../components/SignInGate.astro';
     );
   }
   renderFilterRow();
+  // On a phone the headings are hidden, so sorting is a pick list; it drives the same table state as the headings.
+  $<HTMLSelectElement>('sortpick').addEventListener('change', (e) => {
+    const [id, dir] = (e.target as HTMLSelectElement).value.split(':');
+    table.setSorting([{ id, desc: dir === 'desc' }]);
+  });
   let qTimer: ReturnType<typeof setTimeout>;
   $<HTMLInputElement>('q').addEventListener('input', (e) => {
     clearTimeout(qTimer);
@@ -427,8 +474,19 @@ import SignInGate from '../../../components/SignInGate.astro';
     const party = partySelect(lk.parties, { selected: '', blank: 'No one in particular' }) as HTMLSelectElement;
     party.classList.add('cellfield');
     party.setAttribute('aria-label', `Party for ${who}`);
-    party.addEventListener('change', () => edit(l, 'partyId', party.value));
-    const partyTick = tick(`Accept the suggested party for ${who}`, () => edit(l, 'partyId', ghostOf(l, 'partyId')));
+    party.append(h('option', { text: 'Add a new party…', attrs: { value: NEW_PARTY } }));
+    party.addEventListener('change', () => {
+      if (party.value !== NEW_PARTY) return edit(l, 'partyId', party.value);
+      party.value = draftOf(l.id).partyId;
+      openAddParty(strangerOf(l), kindFor(l), (id) => afterPartyAdded(l, id));
+    });
+    const partyTick = tick(`Accept the suggested party for ${who}`, async () => {
+      const gp = ghostOf(l, 'partyId');
+      if (gp) return edit(l, 'partyId', gp);
+      const stranger = strangerOf(l);
+      const id = stranger ? await createParty(stranger, kindFor(l)) : null;
+      if (id) afterPartyAdded(l, id);
+    });
     const partyText = h('span', { class: 'lcell-text' });
 
     const nature = h('input', { class: 'cellfield', attrs: { type: 'text', 'aria-label': `What it was for: ${who}`, placeholder: 'What it was for', autocomplete: 'off' } }) as HTMLInputElement;
@@ -512,7 +570,10 @@ import SignInGate from '../../../components/SignInGate.astro';
       r.party.value = d.partyId;
       r.party.options[0].text = gp ? nameOf(lk.parties, gp) : stranger ? `New: ${stranger}` : 'No one in particular';
       r.party.classList.toggle('ghost', Boolean(gp || stranger));
-      r.partyTick.hidden = !gp;
+      r.partyTick.hidden = !(gp || stranger);
+      const tickLabel = gp ? `Accept the suggested party for ${l.narration.slice(0, 40)}` : `Add ${stranger} to the register and use them`;
+      r.partyTick.setAttribute('aria-label', tickLabel);
+      r.partyTick.title = tickLabel;
       const gn = ghostOf(l, 'nature');
       if (r.nature.value !== d.nature && document.activeElement !== r.nature) r.nature.value = d.nature;
       r.nature.placeholder = gn || 'What it was for';
@@ -537,6 +598,65 @@ import SignInGate from '../../../components/SignInGate.astro';
     setDraft(l.id, { [field]: value } as Partial<Draft>);
     syncRow(l);
   }
+  // ---- adding a party that is not in the register, from the cell or the suggestion
+  const NEW_PARTY = '__new_party__';
+  const PARTY_KINDS: Record<string, string> = { vendor: 'Vendor', customer: 'Customer', member: 'Member', employee: 'Employee', bank: 'Bank', government: 'Government', director: 'Director', other: 'Other' };
+  const kindFor = (l: Line) => (l.direction === 'credit' ? 'customer' : 'vendor');
+  async function createParty(name: string, kind: string): Promise<string | null> {
+    const typed = name.trim().replace(/\s+/g, ' ');
+    const twin = data!.lookups.parties.find((x) => x.name.toLowerCase() === typed.toLowerCase());
+    if (twin) return twin.id;
+    const { status, data: out } = await call('/api/finance-admin/parties', 'POST', { name: typed, kind });
+    if (status !== 201) {
+      showToast(out?.error ?? 'Could not add that party.');
+      return null;
+    }
+    const lk = data!.lookups;
+    lk.parties.push({ id: out.party.id, name: out.party.name, kind: out.party.kind });
+    lk.parties.sort((a, b) => a.name.localeCompare(b.name));
+    showToast(`${out.party.name} added to the register. Add their bank details on the Parties page.`);
+    return out.party.id as string;
+  }
+  function openAddParty(name: string, kind: string, onAdded: (id: string) => void) {
+    const dlg = $<HTMLDialogElement>('party-sheet');
+    const nameInput = input('newPartyName', { placeholder: 'Name as it should appear in the register' }) as HTMLInputElement;
+    nameInput.value = name;
+    const kindSel = h('select', { attrs: { name: 'newPartyKind' } }, ...Object.entries(PARTY_KINDS).map(([k, label]) => h('option', { text: label, attrs: { value: k } }))) as HTMLSelectElement;
+    kindSel.value = kind;
+    const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    const form = h(
+      'form',
+      { class: 'stack-form' },
+      h('p', { class: 'hint', text: 'Bank details are added and verified later, on the Parties page.' }),
+      labelled('Name', nameInput),
+      labelled('What kind of party', kindSel),
+      msg,
+      h('div', { class: 'sheet-actions' }, button('Cancel', () => dlg.close()), h('button', { class: 'button button--primary', text: 'Add to register', attrs: { type: 'submit' } })),
+    );
+    form.addEventListener('submit', async (e: Event) => {
+      e.preventDefault();
+      if (nameInput.value.trim().length < 2) {
+        msg.hidden = false;
+        msg.textContent = 'Enter the name.';
+        return;
+      }
+      const id = await createParty(nameInput.value, kindSel.value);
+      if (!id) return;
+      dlg.close();
+      onAdded(id);
+    });
+    dlg.addEventListener('close', () => dlg.replaceChildren(), { once: true });
+    present(dlg, closeOnBackdrop, h('h2', { text: 'Add a party', attrs: { id: 'party-title' } }), form);
+  }
+  // The new party must be in every row's list: rows are made again (they are cheap), and the line takes the party.
+  function afterPartyAdded(l: Line, id: string) {
+    setDraft(l.id, { partyId: id });
+    for (const el of mounted.values()) el.remove();
+    mounted.clear();
+    paint();
+    renderBar();
+  }
+
   function acceptRow(l: Line) {
     if (!editable(l)) return;
     const patch: Partial<Draft> = {};
@@ -712,7 +832,13 @@ import SignInGate from '../../../components/SignInGate.astro';
     rowErrors.clear();
     for (const f of failed) rowErrors.set(f.lineId, f.error);
     postedThisSitting += posted;
-    showToast([`${posted} posted`, flagged ? `${flagged} sent to review` : '', failed.length ? `${failed.length} could not be posted (see the red notes)` : ''].filter(Boolean).join(', ') + '.');
+    const summary = [`${posted} posted`, flagged ? `${flagged} sent to review` : '', failed.length ? `${failed.length} could not be posted (see the red notes on those lines)` : ''].filter(Boolean).join(', ') + '.';
+    showToast(summary);
+    if (failed.length || flagged) {
+      const note = $('postnote');
+      note.replaceChildren(h('span', { text: summary }), button('Dismiss', () => (note.hidden = true), 'button button--outline button--small'));
+      note.hidden = false;
+    }
     await load();
   }
 
@@ -793,6 +919,47 @@ import SignInGate from '../../../components/SignInGate.astro';
     }
   }
 
+  .lnext .list-title {
+    margin: 26px 0 8px 14px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .lnext .sortpick {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--text-sm);
+  }
+
+  .lnext .sortpick select {
+    min-height: 36px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: 6px;
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font: inherit;
+    padding: 4px 8px;
+  }
+
+  .lnext .postnote {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 10px;
+    padding: 10px 14px;
+    border: 1px solid var(--tvc-error-border);
+    border-radius: var(--radius);
+    background: var(--tvc-error-bg);
+    color: var(--tvc-error-text);
+  }
+
+  .lnext .postnote[hidden] {
+    display: none;
+  }
+
   .lnext .colfilter[aria-invalid='true'] {
     border-color: var(--tvc-error-border);
   }
@@ -801,7 +968,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   .lnext .gfilter,
   .lnext .lrow {
     display: grid;
-    grid-template-columns: 34px 66px minmax(170px, 1.3fr) 104px minmax(130px, 1fr) minmax(130px, 1fr) minmax(150px, 1.1fr) 112px;
+    grid-template-columns: 34px 66px minmax(170px, 1.3fr) 128px minmax(130px, 1fr) minmax(130px, 1fr) minmax(150px, 1.1fr) 112px;
     align-items: center;
     gap: 8px;
     padding: 6px 12px;
@@ -810,7 +977,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   .lnext .ghead,
   .lnext .gfilter,
   .lnext .gscroll {
-    min-width: 1000px;
+    min-width: 1024px;
   }
 
   .lnext .ghead {
@@ -1061,6 +1228,10 @@ import SignInGate from '../../../components/SignInGate.astro';
     .lnext .ghead,
     .lnext .gfilter {
       display: none;
+    }
+
+    .lnext .sortpick {
+      display: inline-flex;
     }
 
     .lnext .gscroll {
