@@ -14,7 +14,8 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 | 01 follow-up | `0078_finance_categories_and_projects.sql` **applied to TVC ERP on 2026-11-02**. |
 | 03 Statement import | Built on branch `finance-03-statement-import` (draft PR). Migration `0080` **applied to TVC ERP on 2026-11-02**. |
 | 04 Parties & payees | Built on branch `finance-04-parties` (draft PR). Migration `0079` **applied to TVC ERP on 2026-11-02** (recorded as `finance_parties`); checked afterwards: both tables empty, RLS on, no anon/authenticated grants, guard trigger present. |
-| 02, 05-13 | Not started |
+| 05 Ledger & review | **Built, draft PR #529** (branch `worktree-finance-05-ledger`): posting rules, rules engine, ledger and rules screens, period close. Migration `0083` **applied to TVC ERP on 2026-11-05** (recorded as `finance_ledger`). Running locally against the real database; nothing allocated yet. |
+| 02, 06-13 | Not started |
 
 ## Access
 
@@ -217,3 +218,133 @@ Page `/internal/finance/import/`; routes in `finance-admin.mts` (`GET /imports`,
 - **Code.** Parsing and planning are pure and separate (`scripts/lib/finance-*.mjs`); storing goes through an `ImportStore`.
   A bank API would feed the same planning/storing step; none is built.
 - **Audit.** `finance.import_committed` (counts only) is written before anything is stored; `finance.bank_account_added`.
+
+## Ledger (session 05, migration `0083_finance_ledger.sql`, applied 2026-11-05)
+
+Pages `/internal/finance/ledger/` (the Ledger, with the review queue and the months) and `/internal/finance/rules/` (rules,
+categories, the requester); routes in `lib/finance-ledger.ts`. `0083` is applied (checked afterwards: three tables empty, RLS on, no
+`anon`/`authenticated` grants, four functions service-role only, three guard triggers, existing data unchanged: 1,376 bank lines,
+122 parties, 29 categories). The pages need it, so a deploy of this code is safe now. Not yet tried by a person on the real lines.
+
+- **Posting rule** (`scripts/lib/finance-allocation.mjs`, repeated in the database). A bank line has one or more allocations; each
+  amount is positive whole paise and its direction is the line's. A line is *unallocated*, *partly allocated* or *allocated*. Saved
+  rows are drafts (`posted_at` null) until they add up to the line exactly, then every row is posted in one step. Posted rows are
+  frozen except their review fields; a line already posted is corrected by a reversal, never by editing.
+- **Refunds and corrections.** A reversal is a row on a line that moves money the other way, with `reverses_allocation_id` and a
+  reason. It must reverse a posted, non-reversal allocation and never more than is left of it, and it takes its category and party
+  from the original. Reports net by direction.
+- **Periods.** `period` is the first day of a month and defaults to the line's month; a salary paid in May can sit in April. A
+  closed month refuses a save unless the person holds `close-period` and gives a reason (`periodWriteDecision`); the database
+  refuses unless the app passes `p_override`. A month closes (`close-period`) only when every line dated in it is posted and no
+  allocation in it waits for review; otherwise the answer says how many.
+- **Rules** (`finance-rules.mjs`, table `fin_rules`, page Rules). A matcher is a set of conditions that must all hold (narration
+  text, any of some remark keywords, direction, amount range); one with no condition never matches. Lowest priority number wins, ties
+  go to the older rule. A rule gives party, category, a nature template (`{counterparty}`, `{remark}`) and `needs_review`. With no
+  rule, the farm manager's own UPI remark seeds the nature, and a payment to the requester's own party is a reimbursement. The party
+  of a line is guessed only from an exact name match (Paytm counterparty, then the UPI narration); two parties with one name give none.
+  A UPI-id condition is in the engine but not offered: the Paytm import keeps no UPI id.
+- **Review flags** (`reviewReasons`): nothing explains the line; a circle payment to the requester's own party; a payment to a party
+  whose live account is unverified (a party with no account on record is not flagged); a reimbursement with no bill (there is no
+  bill capture yet, so every reimbursement is flagged until session 08); a rule marked always-review. Flags are worked out by the
+  server when rows are saved, from the same rules the screen showed. The person who entered a flagged row cannot mark it checked
+  (a director can).
+- **The requester** is `fin_entities.requester_party_id`, set on the Rules page by a director.
+- **Categories can be merged or split later.** Rename, add and retire work at any time. `fin_merge_category` moves every allocation,
+  rule and project line to another category of the **same type** (so no budget figure changes) and retires the old one.
+  `fin_recategorise_allocations` moves chosen allocations (splitting a category); changing type asks for confirmation. These two
+  are the only way a posted allocation's category changes (a session setting the guard trigger looks for), and both are audited.
+  The merge is on the Rules page; recategorising has a route (`POST /categories/recategorise`) but no screen yet.
+- **The Ledger is a table** (docs/finance/FINANCE.md, "The table", below). Filter chips (To allocate, To review, All) with counts and a
+  search; a checkbox on every line, shift-click for a range; category, party and wording are cells you edit in place; a bar for what
+  to do to the selected lines; posting is a separate, confirmed step. A line that needs splitting, a refund or a review decision opens
+  in a sheet (click its narration). Months close at the bottom. Verified in a browser (desktop, dark appearance) with invented data; not
+  yet with real data, the light appearance or a phone.
+- **Audit.** Every save, review decision, rule and category change, period close and recategorisation is written to `fin_audit_log`
+  first, with ids and counts only (never a name, narration or amount); if it cannot be written nothing changes.
+- **Scale, and the 1,000-row cap.** Supabase's API returns at most 1,000 rows per request whatever `limit` is asked for. The first
+  version asked for 10,000 and silently showed only 1,000 of the 1,376 lines (found the first time it was opened on real data). Every
+  read of lines or allocations now goes through `rowsAll` in `lib/finance-ledger.ts`, which pages 1,000 at a time in a stable order;
+  never use `limit=` above 1000 there. The endpoint test's fake database enforces the same cap, with tests at 1,376 lines and 1,200
+  posted allocations. The list still works each line's state out in the function (a few thousand lines is fine); move it into SQL
+  before the ledger reaches tens of thousands of rows.
+- **Database guards** (checked on a throwaway local Postgres, 2026-11-05): a short sum cannot be posted, an over-sum cannot be
+  saved, a split posts, a posted row cannot be changed or deleted, a reversal needs the opposite direction and cannot exceed what is
+  left or be reversed itself, a closed month refuses without the override, a merge refuses across types, and the functions run for
+  `service_role` only.
+- **Tables and functions** (`0083`): `fin_rules`, `fin_allocations`, `fin_vouchers` (table only; capture is session 08),
+  `fin_entities.requester_party_id`, `fin_save_allocations`, `fin_close_period`, `fin_merge_category`, `fin_recategorise_allocations`.
+- **Tests:** `finance-allocation`, `finance-rules`, `finance-ui` (pure) and `finance-ledger-endpoint` (the real function through
+  `requireStaff` with Supabase stubbed: posting, splits, closed months, flags, maker-is-not-checker, refunds, period close, batch posting,
+  rules, categories, the requester).
+
+## Suggestions (session 05 follow-up: a category, a party and "what it was for" for every line)
+
+`scripts/lib/finance-suggest.mjs` (pure, tested in `finance-suggest.test.mjs` with invented narrations in the real statement's
+shapes), used by `lib/finance-ledger.ts`. It only proposes; a person posts, and nothing is created or posted without a click.
+
+- **Where the clues come from, strongest first:** (1) a rule a director wrote; (2) what was posted before for the same party or the
+  same name in the same direction (3 or more earlier postings, 80% or more to one category, is confident; fewer is fairly sure or a
+  guess; a coin toss suggests no category); (3) the bank's own entries, matched to a category by name (service charges and the tax on
+  them to Bank charges, interest to Interest income, ATM cash to Petty cash; a renamed or retired category is simply not suggested);
+  (4) the narration: the counterparty's name and the remark the payer typed (the Paytm remark when there is one).
+- **Reading a narration** (`parseNarration`): UPI (name is the 4th part, payer's remark the 6th), net-banking NEFT and RTGS (the payee is
+  the part after the transaction reference), IMPS, internal transfers, card payments (merchant), and the bank's own entries. A remark is
+  ignored if it looks like a bank name, an IFSC, a generic word or fewer than three characters.
+- **Party:** an exact match to the register (case, punctuation and "Pvt Ltd" ignored), or the shortened form a bank prints (every word
+  is the start of a distinct word of exactly one party's name). Two parties that fit, or one short word, match no one.
+- **A name that is not in the register** is offered as a **new party** (vendor for a payment out, customer for money in). In the editor
+  the add-party form opens by itself, pre-filled; "Add a new party…" in any party picker does the same. It uses the existing create-party
+  route (needs `allocate`), warns if the name is already there, and adds the party to every picker in the sheet. Bank details are added
+  and verified later on the Parties page.
+- **In the table** each unallocated line shows its suggestion as an italic ghost value in the cell, with a tick to accept it ("Fill in the
+  suggestions on this page" and "Accept suggestions" fill every empty cell at once; nothing is posted). A suggested NEW party is never
+  added in bulk: the tick in that Party cell adds them to the register. The line's sheet explains the suggestion in plain words
+  ("4 earlier payments like this were all Materials and supplies").
+- **It improves as you post:** each posted line teaches the next. Loading the sheet's history (session 06) will teach it far more at once.
+- **Not done:** suggestions are not yet turned into rules with one click; the amount (a repeating figure such as a rent or a salary) is
+  not a clue yet; merchants on cards are only matched to the register by name.
+
+## The table (the Ledger's list view, session 05 follow-up)
+
+Modelled on how ServiceNow lists work, because the sheet's convenience was selecting many lines and giving them details at once.
+
+- **Rows and cells.** One row per bank line: date, narration (click it to open the line), amount, **category**, **party**, **what it was
+  for**, status. Those three cells are editable in place on an unallocated line; a posted line shows what it was allocated to, read-only.
+  Status: *Needs details*, *Suggested* (an empty cell has a suggestion), *Ready* (category and wording filled), *To review*, *Partly*,
+  *Allocated*.
+- **Drafts.** What you type is a draft that lives in the page only; a warning appears if you try to leave with unposted drafts. Posting
+  is the second step: **"Post N ready"** (the bar) asks first, then posts the ready lines, each in full. Two steps by decision: filling
+  cells is reversible, posting is not.
+- **Selecting.** A checkbox on every editable line; the header checkbox selects the page; shift-click selects the run between two
+  lines. Lines that cannot be edited here (already posted, partly allocated, waiting for review) cannot be ticked.
+- **The bar** appears under the table when lines are selected and sticks to the bottom of the screen: *Set category*, *Set party*, *Set
+  wording* (to all selected), *Accept suggestions*, *Fill from first* (copy the first selected line's three cells to the others, the
+  sheet's fill-down), *Post N ready*, *Clear*.
+- **Apply to the others.** Change a cell on a line that is one of several selected and the bar asks "Apply this to the other N
+  selected lines too?" (Apply to all / Only this line).
+- **Keyboard.** Enter in a wording cell moves to the next line's wording cell.
+- **Posting many.** `POST /api/finance-admin/ledger/post` takes up to 15 lines, each `{ lineId, categoryId, partyId, nature }`; the amount
+  is always the line's. It reads the lookups, rules and accounts once for the batch, writes an audit row before each save, and returns
+  `{ posted, flagged, failed: [{ lineId, error }] }`: a line that cannot be posted (already posted, a closed month, a retired category,
+  a party not in the register) is reported and does not stop the others. The page sends 10 at a time and shows progress; failed lines
+  keep their draft, stay selected, and show the reason in red. This replaced the earlier one-category "bulk" sheet and the server-side
+  "post the confident suggestions" route.
+- **Sorting.** Click any heading to sort the whole ledger by it (not just the rows on screen); click again to flip. A first click sorts date
+  and amount newest and biggest first, the text columns A to Z. Empty cells always go last, so sorting by Category brings the filled ones
+  to the top. Status sorts in working order: to review, to allocate, partly, allocated. Ties break by newest date then id, so paging a
+  sorted list never repeats or skips a line.
+- **Search under each heading** (date, narration, amount, category, party, wording), applied by the server to every line, combined with
+  the chips and the narration search box, and shown as a breadcrumb of removable conditions ("To allocate > Category != Bank charges").
+  What can be typed (`scripts/lib/finance-columns.mjs`, hover a box for the same list):
+  - text columns: `word` contains; `=word` exactly; `!=word` is not; `^word` starts with; `!word` does not contain; `=` alone is empty;
+    `!=` alone is not empty. Any case.
+  - amount, in rupees: `2500`, `>2500`, `>=`, `<`, `<=`, `!=2500`, `1000..3000`.
+  - date: `2026-10` or `oct` (matches the ISO date or the day-and-month label), `>2026-10-15` (also `>=`, `<`, `<=`, `=`),
+    `2026-10-01..2026-10-31`.
+  - Category, party and wording match what a posted line was allocated to or, while it is unposted, what is suggested for it. So
+    `Category = Bank charges` finds the lines that look like bank charges, and they can be selected and filled in together; `Category =`
+    finds the lines with nothing suggested.
+  - A condition that cannot be understood is not applied: the box turns red and the reason shows in the breadcrumb row (nothing is
+    quietly ignored). The chips' counts are for the lines that remain after the conditions, so they say how many of THESE still need you.
+- **Not done:** column chooser, grouping by month, saved filters, a Status search box (the chips cover it); drafts are not saved on the
+  server (the earlier `Save draft` of the sheet still is).

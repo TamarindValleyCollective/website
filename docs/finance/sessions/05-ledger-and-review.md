@@ -41,4 +41,21 @@ Sign-off on the category list and on which rule results should always be reviewe
 > Read `docs/finance/README.md`, `DESIGN.md` and `sessions/05-ledger-and-review.md`, plus the notes in sessions 03 and 04. Build session 05 test-first with the tdd skill, starting from the posting trigger and the rules engine.
 
 ## Done
-_Fill in at the end of the session._
+**Built 2026-11-05** on branch `worktree-finance-05-ledger` (draft PR #529). Migration `0083_finance_ledger.sql` was **applied to TVC ERP on 2026-11-05**.
+
+What exists: `finance-allocation.mjs` and `finance-rules.mjs` (pure, tested); `lib/finance-ledger.ts` with its routes in
+`finance-admin.mts`; the Ledger page (to allocate, to review, all; split editor; refunds; bulk apply; months and close) and the Rules
+page (rules, categories with merge, the requester); the Overview's "Needs you" counts. Details in [FINANCE.md](../FINANCE.md), "Ledger".
+
+Verified: unit tests, an endpoint test through the real function, the migration's guards on a throwaway Postgres, and the pages in a
+browser against invented data. **Not verified:** a person working real lines through the screens, the light appearance, or a phone. Running locally against the real database with real sign-in since 2026-11-05.
+
+Deviations from the brief: `fin_vouchers` is a table only, so "reimbursement without a bill" flags every reimbursement until session 08;
+a UPI-id rule condition is not offered (the Paytm import keeps no UPI id); recategorising a category's entries has a route but no screen.
+
+The Ledger's list is now a table with in-place cells, selection and a bulk bar (see FINANCE.md, "The table"); posting stays a separate confirmed step.
+
+Added after the first look at real data: suggestions for every line (category, party, wording) from the narration, the register and what was posted before, one-click "post the confident ones", and adding a new party from the editor. See FINANCE.md, "Suggestions".
+
+Needs from Sharath: which rule results should always be reviewed (today only the five flags, plus a per-rule switch), and a trial run on
+one real month before 06 loads history.

@@ -1,0 +1,452 @@
+---
+// Finance (internal), session 05: rules and categories. Backed by netlify/functions/finance-admin.mts (lib/finance-ledger.ts).
+// A rule says "when a bank line looks like this, suggest this category, party and wording"; the lowest priority number wins.
+// Categories can be renamed, retired, and merged into another of the same type (the old one's history moves across).
+// The requester is the person whose circle payments are always sent to review.
+//
+// Same shell as the other internal tools: Google Sign-In gated, unlinked, noindex. Everything the server returns is placed
+// with textContent only, never as HTML. Viewing is for anyone with finance access; changing needs a director.
+import StaffLayout from '../../../layouts/StaffLayout.astro';
+import SignInGate from '../../../components/SignInGate.astro';
+---
+
+<StaffLayout title="Finance rules" description="Finance rules." current="finance" currentPage="finance-rules">
+  <section class="rules section wrapper">
+    <h1>Rules</h1>
+    <p id="intro" class="hint">Sign in to open the rules.</p>
+
+    <SignInGate forbiddenWhat="finance" />
+
+    <div id="status" aria-live="polite" class="hint" hidden></div>
+
+    <div id="content" hidden>
+      <div class="head-row">
+        <h2 class="list-title">Rules for suggesting a category</h2>
+        <button type="button" id="add-rule" class="button button--primary" hidden>Add rule</button>
+      </div>
+      <ul class="list" id="rules"></ul>
+      <div id="rules-empty" aria-live="polite" hidden></div>
+
+      <div class="head-row">
+        <h2 class="list-title">Categories</h2>
+        <button type="button" id="add-category" class="button button--outline" hidden>Add category</button>
+      </div>
+      <ul class="list" id="categories"></ul>
+
+      <div class="head-row">
+        <h2 class="list-title">Who raises payment requests</h2>
+      </div>
+      <div class="card" id="requester-card"></div>
+    </div>
+
+    <dialog id="rule-sheet" class="sheet" aria-labelledby="rule-title"></dialog>
+    <dialog id="category-sheet" class="sheet" aria-labelledby="category-title"></dialog>
+  </section>
+</StaffLayout>
+
+<script>
+  import { StaffAuthError, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
+  import { clearState, showEmpty, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
+  import { button, categorySelect, h, input, labelled, parseRupees, partySelect, pill, present, rupees, typeLabel } from '../../../../scripts/lib/finance-ui.mjs';
+
+  declare const google: any;
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+
+  type Category = { id: string; name: string; type: string; active: boolean };
+  type Party = { id: string; name: string; kind: string };
+  type Lookups = { categories: Category[]; parties: Party[]; requesterPartyId: string | null };
+  type Matcher = { narrationContains?: string; remarkKeywords?: string[]; direction?: 'debit' | 'credit'; minPaise?: number; maxPaise?: number };
+  type Rule = { id: string; priority: number; matcher: Matcher; partyId: string | null; categoryId: string; natureTemplate: string; needsReview: boolean; hitCount: number; active: boolean };
+  type Data = { canConfigure: boolean; rules: Rule[]; lookups: Lookups };
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const gate = $('gate');
+  const gateError = $('gate-error');
+  const forbidden = $('forbidden');
+  const statusEl = $('status');
+  const content = $('content');
+  const intro = $('intro');
+  let data: Data | null = null;
+
+  // ---- sign-in
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    content.hidden = true;
+    statusEl.hidden = true;
+    intro.textContent = 'Sign in to open the rules.';
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+  function showForbidden() {
+    gate.hidden = true;
+    content.hidden = true;
+    statusEl.hidden = true;
+    forbidden.hidden = false;
+    $('forbidden-email').textContent = decodeTokenEmail(getToken() ?? '');
+  }
+  function handleCredentialResponse(response: { credential: string }) {
+    setToken(response.credential);
+    load();
+  }
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: (window as any).tvcGsiTheme?.() ?? 'outline', size: 'large' });
+  }
+  $('use-different-account').addEventListener('click', () => {
+    clearToken();
+    clearStepUp();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
+  async function call(path: string, method = 'GET', body?: unknown) {
+    try {
+      return await staffFetch(path, { method, body });
+    } catch (err) {
+      if (err instanceof StaffAuthError) {
+        if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+        else showForbidden();
+      }
+      throw err;
+    }
+  }
+
+  async function load() {
+    gate.hidden = true;
+    forbidden.hidden = true;
+    if (!data) showLoading(statusEl);
+    try {
+      const { status, data: out } = await call('/api/finance-admin/rules');
+      if (status !== 200) throw new Error('load failed');
+      data = out as Data;
+      clearState(statusEl);
+      intro.hidden = false;
+      intro.textContent = data.canConfigure ? 'Rules suggest a category when a bank line looks familiar. A person still posts it.' : 'Rules suggest a category when a bank line looks familiar. Only a director can change them.';
+      render();
+      content.hidden = false;
+    } catch (err) {
+      if (err instanceof StaffAuthError) return;
+      content.hidden = true;
+      intro.hidden = true;
+      showFailure(statusEl, { title: "Couldn't load the rules", text: "The server didn't answer. Nothing was changed. Check your connection and try again; if it keeps failing, tell a super admin.", onRetry: load });
+    }
+  }
+
+  const nameOf = (list: { id: string; name: string }[], id: string | null) => list.find((x) => x.id === id)?.name ?? '';
+
+  // A rule in plain words: "When the narration has "gas agency" and it is a payment out → Utility bills".
+  function describe(r: Rule): string {
+    const m = r.matcher;
+    const when = [
+      m.narrationContains ? `the narration has "${m.narrationContains}"` : '',
+      m.remarkKeywords?.length ? `the UPI remark has ${m.remarkKeywords.map((k) => `"${k}"`).join(' or ')}` : '',
+      m.direction ? (m.direction === 'debit' ? 'it is a payment out' : 'it is money in') : '',
+      m.minPaise != null ? `at least ${rupees(m.minPaise)}` : '',
+      m.maxPaise != null ? `at most ${rupees(m.maxPaise)}` : '',
+    ].filter(Boolean);
+    return `When ${when.join(' and ')}`;
+  }
+
+  function render() {
+    if (!data) return;
+    const { canConfigure, rules, lookups } = data;
+    $('add-rule').hidden = !canConfigure;
+    $('add-category').hidden = !canConfigure;
+    if (!rules.length) {
+      $('rules').replaceChildren();
+      $('rules-empty').hidden = false;
+      showEmpty($('rules-empty'), { title: 'No rules yet', text: 'Without rules every line is allocated by hand, using the farm manager\'s UPI remark as a starting point. Add one for anything that repeats: the gas agency, the bank\'s own charges.' });
+    } else {
+      clearState($('rules-empty'));
+      $('rules-empty').hidden = true;
+      $('rules').replaceChildren(
+        ...rules.map((r) => {
+          const toggle = canConfigure
+            ? button(r.active ? 'Turn off' : 'Turn on', async () => {
+                const { status, data: out } = await call(`/api/finance-admin/rules/${r.id}`, 'PATCH', { active: !r.active });
+                if (status === 200) void load();
+                else showToast(out?.error ?? 'Could not change that.');
+              }, 'button button--outline button--small')
+            : null;
+          const main = h(
+            canConfigure ? 'button' : 'div',
+            { class: 'rule-main', attrs: canConfigure ? { type: 'button' } : {} },
+            h('span', { class: 'title', text: `${describe(r)}, suggest ${nameOf(lookups.categories, r.categoryId)}` }),
+            h('span', { class: 'detail', text: [r.partyId ? `for ${nameOf(lookups.parties, r.partyId)}` : '', r.natureTemplate ? `wording "${r.natureTemplate}"` : 'wording from the UPI remark', `priority ${r.priority}`, r.hitCount ? `used ${r.hitCount} time${r.hitCount === 1 ? '' : 's'}` : 'not used yet'].filter(Boolean).join(' · ') }),
+          );
+          if (canConfigure) main.addEventListener('click', () => openRule(r));
+          return h('li', {}, h('div', { class: `row${r.active ? '' : ' is-off'}` }, main, r.needsReview ? pill('Always reviewed', 'warn') : null, r.active ? null : pill('Off'), toggle));
+        }),
+      );
+    }
+
+    $('categories').replaceChildren(
+      ...lookups.categories.map((c) =>
+        h(
+          'li',
+          {},
+          h(
+            'div',
+            { class: `row${c.active ? '' : ' is-off'}` },
+            h('span', { class: 'grow' }, h('span', { class: 'title', text: c.name }), h('span', { class: 'detail', text: typeLabel(c.type) })),
+            c.active ? null : pill('Retired'),
+            canConfigure ? button('Change', () => openCategory(c), 'button button--outline button--small') : null,
+          ),
+        ),
+      ),
+    );
+
+    const card = $('requester-card');
+    if (!canConfigure) {
+      card.replaceChildren(h('p', { class: 'hint', text: lookups.requesterPartyId ? `${nameOf(lookups.parties, lookups.requesterPartyId)}. Circle payments to them always go to review.` : 'Nobody is set yet.' }));
+    } else {
+      const party = partySelect(lookups.parties, { selected: lookups.requesterPartyId ?? '', blank: 'Nobody' });
+      party.addEventListener('change', async () => {
+        const { status, data: out } = await call('/api/finance-admin/settings/requester', 'POST', { partyId: party.value || null });
+        showToast(status === 200 ? 'Saved.' : out?.error ?? 'Could not save that.');
+        void load();
+      });
+      card.replaceChildren(h('p', { class: 'hint', text: 'The farm manager, usually. A circle payment to this person is always sent to review, so someone else looks at it.' }), h('div', { class: 'stack-form' }, labelled('Party', party)));
+    }
+  }
+
+  // ---- add or change a rule
+  function openRule(existing?: Rule) {
+    if (!data) return;
+    const dlg = $<HTMLDialogElement>('rule-sheet');
+    const lk = data.lookups;
+    const m = existing?.matcher ?? {};
+    const narration = input('narration', { placeholder: 'Text the bank puts in the narration' }) as HTMLInputElement;
+    narration.value = m.narrationContains ?? '';
+    const keywords = input('keywords', { placeholder: 'onion, gas (any of these)' }) as HTMLInputElement;
+    keywords.value = (m.remarkKeywords ?? []).join(', ');
+    const direction = h('select', { attrs: { name: 'direction' } }, h('option', { text: 'Either way', attrs: { value: '' } }), h('option', { text: 'Payments out', attrs: { value: 'debit' } }), h('option', { text: 'Money in', attrs: { value: 'credit' } })) as HTMLSelectElement;
+    direction.value = m.direction ?? '';
+    const min = input('min', { inputmode: 'decimal', placeholder: 'No lower limit' }) as HTMLInputElement;
+    min.value = m.minPaise != null ? (m.minPaise / 100).toFixed(2) : '';
+    const max = input('max', { inputmode: 'decimal', placeholder: 'No upper limit' }) as HTMLInputElement;
+    max.value = m.maxPaise != null ? (m.maxPaise / 100).toFixed(2) : '';
+    const category = categorySelect(lk.categories, { selected: existing?.categoryId ?? '' });
+    const party = partySelect(lk.parties, { selected: existing?.partyId ?? '', blank: 'Leave it to the person' });
+    const nature = input('nature', { placeholder: 'e.g. Cooking gas {remark}' }) as HTMLInputElement;
+    nature.value = existing?.natureTemplate ?? '';
+    const priority = input('priority', { inputmode: 'numeric' }) as HTMLInputElement;
+    priority.value = String(existing?.priority ?? 100);
+    const review = h('input', { attrs: { type: 'checkbox' } }) as HTMLInputElement;
+    review.checked = existing?.needsReview ?? false;
+    const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    const form = h(
+      'form',
+      { class: 'stack-form' },
+      h('p', { class: 'hint', text: 'A line must match everything you fill in. Leave a box empty to ignore it.' }),
+      labelled('The narration contains', narration),
+      labelled('The UPI remark contains any of', keywords),
+      labelled('Direction', direction),
+      labelled('Smallest amount (₹)', min),
+      labelled('Largest amount (₹)', max),
+      labelled('Then suggest the category', category),
+      labelled('and the party', party),
+      labelled('and the wording (you can use {counterparty} and {remark})', nature),
+      labelled('Priority (1 goes first)', priority),
+      h('label', {}, review, h('span', { text: 'Always send lines this rule explains to review' })),
+      msg,
+      h('div', { class: 'sheet-actions' }, button('Cancel', () => dlg.close()), h('button', { class: 'button button--primary', text: existing ? 'Save rule' : 'Add rule', attrs: { type: 'submit' } })),
+    );
+    form.addEventListener('submit', async (e: Event) => {
+      e.preventDefault();
+      const bad = (text: string) => {
+        msg.hidden = false;
+        msg.textContent = text;
+      };
+      const lo = min.value.trim() ? parseRupees(min.value) : null;
+      const hi = max.value.trim() ? parseRupees(max.value) : null;
+      if ((min.value.trim() && lo === null) || (max.value.trim() && hi === null)) return bad('Enter amounts in rupees, like 1500 or 1500.50.');
+      const body = {
+        matcher: { narrationContains: narration.value, remarkKeywords: keywords.value.split(',').map((k) => k.trim()).filter(Boolean), direction: direction.value || undefined, minPaise: lo ?? undefined, maxPaise: hi ?? undefined },
+        categoryId: category.value,
+        partyId: party.value || null,
+        natureTemplate: nature.value,
+        needsReview: review.checked,
+        priority: Number(priority.value),
+      };
+      const { status, data: out } = existing ? await call(`/api/finance-admin/rules/${existing.id}`, 'PATCH', body) : await call('/api/finance-admin/rules', 'POST', body);
+      if (status === 200 || status === 201) {
+        dlg.close();
+        showToast(existing ? 'Rule saved.' : 'Rule added.');
+        void load();
+      } else bad(out?.error ?? 'Could not save that.');
+    });
+    dlg.addEventListener('close', () => dlg.replaceChildren(), { once: true });
+    present(dlg, closeOnBackdrop, h('h2', { text: existing ? 'Change rule' : 'Add rule', attrs: { id: 'rule-title' } }), form);
+  }
+  $('add-rule').addEventListener('click', () => openRule());
+
+  // ---- add, rename, retire or merge a category
+  function openCategory(existing?: Category) {
+    if (!data) return;
+    const dlg = $<HTMLDialogElement>('category-sheet');
+    const lk = data.lookups;
+    const name = input('name') as HTMLInputElement;
+    name.value = existing?.name ?? '';
+    const type = h('select', { attrs: { name: 'type' } }, ...['opex', 'capex', 'revenue', 'member_contribution', 'tax', 'sinking_fund', 'interest', 'reimbursement', 'transfer'].map((t) => h('option', { text: typeLabel(t), attrs: { value: t } }))) as HTMLSelectElement;
+    const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    const finish = (text: string) => {
+      dlg.close();
+      showToast(text);
+      void load();
+    };
+    const failed = (out: any) => {
+      msg.hidden = false;
+      msg.textContent = out?.error ?? 'Could not do that.';
+    };
+    const kids: (Node | null)[] = [];
+    if (!existing) {
+      const form = h('form', { class: 'stack-form' }, labelled('Name', name), labelled('What kind', type), msg, h('div', { class: 'sheet-actions' }, button('Cancel', () => dlg.close()), h('button', { class: 'button button--primary', text: 'Add category', attrs: { type: 'submit' } })));
+      form.addEventListener('submit', async (e: Event) => {
+        e.preventDefault();
+        const { status, data: out } = await call('/api/finance-admin/categories', 'POST', { name: name.value, type: type.value });
+        if (status === 201) finish('Category added.');
+        else failed(out);
+      });
+      kids.push(h('h2', { text: 'Add category', attrs: { id: 'category-title' } }), form);
+    } else {
+      const same = lk.categories.filter((c) => c.type === existing.type && c.id !== existing.id && c.active);
+      const target = categorySelect(same, { blank: same.length ? 'Choose where it goes' : 'No other category of this type' });
+      const rename = h('form', { class: 'stack-form' }, labelled('Name', name), h('div', { class: 'sheet-actions' }, h('button', { class: 'button button--primary', text: 'Save name', attrs: { type: 'submit' } })));
+      rename.addEventListener('submit', async (e: Event) => {
+        e.preventDefault();
+        const { status, data: out } = await call(`/api/finance-admin/categories/${existing.id}`, 'PATCH', { name: name.value });
+        if (status === 200) finish('Renamed.');
+        else failed(out);
+      });
+      const merge = h(
+        'div',
+        { class: 'stack-form' },
+        h('p', { class: 'hint', text: `Merging moves every entry, rule and project line from "${existing.name}" into the category you choose, then retires "${existing.name}". It can only go into one of the same kind (${typeLabel(existing.type).toLowerCase()}), so no budget figure changes.` }),
+        labelled('Merge into', target),
+        button('Merge', async () => {
+          if (!target.value) return failed({ error: 'Choose the category to merge into.' });
+          const { status, data: out } = await call(`/api/finance-admin/categories/${existing.id}/merge`, 'POST', { into: target.value });
+          if (status === 200) finish(`${out.moved} entr${out.moved === 1 ? 'y' : 'ies'} moved.`);
+          else failed(out);
+        }),
+      );
+      const toggle = button(existing.active ? 'Retire this category' : 'Bring it back', async () => {
+        const { status, data: out } = await call(`/api/finance-admin/categories/${existing.id}`, 'PATCH', { active: !existing.active });
+        if (status === 200) finish(existing.active ? 'Retired. Past entries keep it.' : 'Back in use.');
+        else failed(out);
+      }, existing.active ? 'button button--danger-outline' : 'button button--outline');
+      kids.push(h('h2', { text: existing.name, attrs: { id: 'category-title' } }), rename, h('hr'), merge, h('hr'), h('p', { class: 'hint', text: existing.active ? 'Retiring stops it being offered for new entries. Everything already under it stays.' : 'It is not offered for new entries right now.' }), toggle, msg, h('div', { class: 'sheet-actions' }, button('Close', () => dlg.close())));
+    }
+    dlg.addEventListener('close', () => dlg.replaceChildren(), { once: true });
+    present(dlg, closeOnBackdrop, ...kids);
+  }
+  $('add-category').addEventListener('click', () => openCategory());
+
+  if (getToken()) load();
+  else showGate();
+</script>
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style is:global>
+  .rules.section.wrapper {
+    padding-top: 32px;
+    padding-bottom: 48px;
+  }
+
+  .rules .head-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 26px 0 8px;
+  }
+
+  .rules .head-row:first-child {
+    margin-top: 6px;
+  }
+
+  .rules .list-title {
+    margin: 0 0 0 14px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+  .rules .row {
+    gap: 12px;
+  }
+
+  .rules .row.is-off .title {
+    color: var(--tvc-ink-soft);
+  }
+
+  .rules .rule-main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+  }
+
+  .rules button.rule-main {
+    cursor: pointer;
+  }
+
+  .rules .rule-main:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  .rules .detail {
+    display: block;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .rules .card {
+    padding: 14px 16px;
+  }
+
+  .rules .card .hint {
+    margin: 0 0 10px;
+  }
+
+  .rules.section dialog.sheet {
+    width: min(560px, calc(100vw - 32px));
+    max-height: calc(100dvh - 48px);
+    overflow-y: auto;
+  }
+
+  .rules.section dialog.sheet .sheet-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .rules .sheet .hint {
+    margin: 10px 0;
+    font-size: var(--text-sm);
+  }
+
+  .rules .sheet hr {
+    margin: 18px 0;
+    border: 0;
+    border-top: 1px solid var(--tvc-line);
+  }
+
+  @media (max-width: 560px) {
+    .rules.section dialog.sheet .sheet-actions .button {
+      flex: 1 1 auto;
+    }
+  }
+</style>

@@ -142,6 +142,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     } else {
       if (a.toVerify > 0) needs.push(needRow({ count: a.toVerify, title: a.toVerify === 1 ? 'payee to verify' : 'payees to verify', detail: 'Check each one against its bank details', href: `${parties}?filter=unverified` }));
       if (a.needsReview > 0) needs.push(needRow({ count: a.needsReview, crit: true, title: a.needsReview === 1 ? 'payee needs review' : 'payees need review', detail: 'Two bank accounts in use, a missing IFSC, or an account shared with another payee', href: `${parties}?filter=review` }));
+      if (a.toReview > 0) needs.push(needRow({ count: a.toReview, crit: true, title: a.toReview === 1 ? 'ledger entry to review' : 'ledger entries to review', detail: 'Flagged for a second look: an unverified payee, a circle payment to the requester, or a reimbursement with no bill', href: '/internal/finance/ledger/?filter=review' }));
+      if (a.toAllocate > 0) needs.push(needRow({ count: a.toAllocate, title: a.toAllocate === 1 ? 'bank line to allocate' : 'bank lines to allocate', detail: 'Say what each one was for, splitting it where it covers more than one thing', href: '/internal/finance/ledger/' }));
       if (a.statementGaps.length > 0) {
         const g = a.statementGaps[0];
         const more = a.statementGaps.length > 1 ? ` and ${a.statementGaps.length - 1} more` : '';
@@ -155,6 +157,7 @@ import SignInGate from '../../../components/SignInGate.astro';
 
     $('stand').replaceChildren(
       standRow('Parties', `${plural(a.parties, 'payee or customer', 'payees and customers')}${a.merged ? `, ${plural(a.merged, 'merged duplicate')}` : ''}`, parties),
+      standRow('Ledger', a.toAllocate || a.toReview ? `${plural(a.toAllocate, 'line')} to allocate, ${a.toReview} to review` : 'Every line is allocated.', '/internal/finance/ledger/'),
       standRow('Statements', a.lastImportAt ? `Last import ${day(a.lastImportAt)}.` : 'Nothing imported yet.', imports),
       standRow('Bank accounts', `${a.bankAccounts} registered`),
     );

@@ -1,0 +1,1601 @@
+---
+// Finance (internal), session 05: the ledger. Backed by netlify/functions/finance-admin.mts (lib/finance-ledger.ts).
+// Bank lines come first, the ones nothing explains yet at the top. Opening a line shows what the bank said and what the farm
+// manager's UPI remark said, with a suggestion from the rules; the allocation editor splits a line into rows until nothing
+// is left, then posts it. Lines that need a second pair of eyes sit under "To review". Months are closed at the bottom.
+//
+// Same shell as the other internal tools: Google Sign-In gated, unlinked, noindex. Everything the server returns is placed
+// with textContent only, never as HTML.
+import StaffLayout from '../../../layouts/StaffLayout.astro';
+import SignInGate from '../../../components/SignInGate.astro';
+---
+
+<StaffLayout title="Finance ledger" description="Finance ledger." current="finance" currentPage="finance-ledger">
+  <section class="ledger section wrapper">
+    <h1>Ledger</h1>
+    <p id="intro" class="hint">Sign in to open the ledger.</p>
+
+    <SignInGate forbiddenWhat="finance" />
+
+    <div id="status" aria-live="polite" class="hint" hidden></div>
+
+    <div id="content" hidden>
+      <div class="bar">
+        <label class="field">
+          <span class="visually-hidden">Search the narration</span>
+          <input id="q" type="search" placeholder="Search the bank's narration" autocomplete="off" />
+        </label>
+        <div class="segmented chips" id="chips" role="group" aria-label="Show"></div>
+        <span class="grow"></span>
+        <button type="button" id="accept-all" class="button button--outline" hidden>Fill in the suggestions on this page</button>
+      </div>
+
+      <div id="crumbs" class="crumbs" aria-label="Active conditions" hidden></div>
+
+      <div class="tablewrap">
+        <div class="ltable" role="table" aria-label="Bank lines">
+          <div class="lrow lhead" role="row">
+            <span class="lcell lcell--check" role="columnheader"><input type="checkbox" id="head-check" aria-label="Select every line on this page" /></span>
+            <span class="lcell" role="columnheader" data-colhead="date"><button type="button" class="sorthead" data-sort="date">Date<span class="sortmark" aria-hidden="true"></span></button></span>
+            <span class="lcell" role="columnheader" data-colhead="narration"><button type="button" class="sorthead" data-sort="narration">Bank narration<span class="sortmark" aria-hidden="true"></span></button></span>
+            <span class="lcell lcell--amount" role="columnheader" data-colhead="amount"><button type="button" class="sorthead" data-sort="amount">Amount<span class="sortmark" aria-hidden="true"></span></button></span>
+            <span class="lcell" role="columnheader" data-colhead="category"><button type="button" class="sorthead" data-sort="category">Category<span class="sortmark" aria-hidden="true"></span></button></span>
+            <span class="lcell" role="columnheader" data-colhead="party"><button type="button" class="sorthead" data-sort="party">Party<span class="sortmark" aria-hidden="true"></span></button></span>
+            <span class="lcell" role="columnheader" data-colhead="nature"><button type="button" class="sorthead" data-sort="nature">What it was for<span class="sortmark" aria-hidden="true"></span></button></span>
+            <span class="lcell" role="columnheader" data-colhead="status"><button type="button" class="sorthead" data-sort="status">Status<span class="sortmark" aria-hidden="true"></span></button></span>
+          </div>
+          <div class="lrow lfilter" role="row">
+            <span class="lcell lcell--check" role="cell"><button type="button" id="clear-filters" class="clearx" aria-label="Clear every condition" title="Clear every condition" hidden>×</button></span>
+            <span class="lcell" role="cell"><input type="search" class="colfilter" data-col="date" placeholder="Search" aria-label="Search the Date column" title="Try: 2026-10, oct, >2026-10-15, 2026-10-01..2026-10-31" autocomplete="off" /></span>
+            <span class="lcell" role="cell"><input type="search" class="colfilter" data-col="narration" placeholder="Search" aria-label="Search the Bank narration column" title="Words match anywhere. = exact, != not, ^ starts with, ! does not contain, = alone for empty" autocomplete="off" /></span>
+            <span class="lcell" role="cell"><input type="search" class="colfilter" data-col="amount" placeholder="Search" aria-label="Search the Amount column" title="In rupees. Try: 2500, >1000, <=500, 1000..3000, !=295" autocomplete="off" /></span>
+            <span class="lcell" role="cell"><input type="search" class="colfilter" data-col="category" placeholder="Search" aria-label="Search the Category column" title="Words match anywhere. = exact, != not, ^ starts with, ! does not contain, = alone for empty. Matches what a line was posted to, or is suggested" autocomplete="off" /></span>
+            <span class="lcell" role="cell"><input type="search" class="colfilter" data-col="party" placeholder="Search" aria-label="Search the Party column" title="Words match anywhere. = exact, != not, ^ starts with, ! does not contain, = alone for empty" autocomplete="off" /></span>
+            <span class="lcell" role="cell"><input type="search" class="colfilter" data-col="nature" placeholder="Search" aria-label="Search the What it was for column" title="Words match anywhere. = exact, != not, ^ starts with, ! does not contain, = alone for empty" autocomplete="off" /></span>
+            <span class="lcell" role="cell"></span>
+          </div>
+          <div id="tbody" role="rowgroup"></div>
+        </div>
+      </div>
+      <div id="actionbar" class="actionbar" role="region" aria-label="Selected lines" hidden></div>
+      <div id="empty" aria-live="polite" hidden></div>
+      <div class="foot">
+        <span id="range" class="hint"></span>
+        <button type="button" id="more" class="button button--outline" hidden>Show more</button>
+      </div>
+      <p class="hint tips">Tick a checkbox (shift-click for a range) to change many lines at once. Change a cell in place, or tick an italic suggestion to accept it. Click a narration to open the line (to split it or refund it). Click a heading to sort; type under a heading to search that column (hover a box for the operators). Nothing is posted until you press Post.</p>
+
+      <h2 class="list-title">Months</h2>
+      <ul class="list" id="months"></ul>
+    </div>
+
+    <dialog id="line-sheet" class="sheet" aria-labelledby="line-title"></dialog>
+    <dialog id="party-sheet" class="sheet" aria-labelledby="party-title"></dialog>
+  </section>
+</StaffLayout>
+
+<script>
+  import { StaffAuthError, askSheet, clearStepUp, clearToken, closeOnBackdrop, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
+  import { clearState, showEmpty, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
+  import { button, categorySelect, h, input, labelled, niceDate, niceMonth, parseRupees, partySelect, pill, present, rupees } from '../../../../scripts/lib/finance-ui.mjs';
+
+  declare const google: any;
+  const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
+
+  type Line = { id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null; isCircle: boolean; allocatedPaise: number; state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean; suggestion: Suggestion | null; allocation: { categoryId: string; partyId: string | null; nature: string; count: number } | null };
+  type Suggestion = { categoryId: string | null; partyId: string | null; nature: string; confidence: 'high' | 'medium' | 'low' | 'none'; newPartyName: string | null };
+  type Category = { id: string; name: string; type: string; active: boolean };
+  type Party = { id: string; name: string; kind: string };
+  type Project = { id: string; name: string; kind: string; financial_year: number; status: string };
+  type Lookups = { categories: Category[]; parties: Party[]; projects: Project[]; requesterPartyId: string | null; closedMonths: string[] };
+  type Filter = 'unallocated' | 'review' | 'all';
+  type ListData = { canAllocate: boolean; canClose: boolean; counts: Record<Filter, number>; total: number; offset: number; lines: Line[]; lookups: Lookups; reasons: Record<string, string>; sort: { key: string; dir: 'asc' | 'desc' }; breadcrumb: { column: string; text: string }[]; filterErrors: Record<string, string> };
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const gate = $('gate');
+  const gateError = $('gate-error');
+  const forbidden = $('forbidden');
+  const statusEl = $('status');
+  const content = $('content');
+  const intro = $('intro');
+
+  let data: ListData | null = null;
+  let lines: Line[] = [];
+  let filter: Filter = (['unallocated', 'review', 'all'] as const).find((f) => f === new URLSearchParams(location.search).get('filter')) ?? 'unallocated';
+  let query = '';
+  // Click a heading to sort; type under one to search that column (the server applies both to every line, not just this page).
+  let sort: { key: string; dir: 'asc' | 'desc' } = { key: 'date', dir: 'desc' };
+  const colFilters: Record<string, string> = {};
+  let loadSeq = 0;
+  const selected = new Set<string>();
+
+  // ---- sign-in
+  function showGate(message?: string) {
+    gate.hidden = false;
+    forbidden.hidden = true;
+    content.hidden = true;
+    statusEl.hidden = true;
+    intro.textContent = 'Sign in to open the ledger.';
+    gateError.hidden = !message;
+    if (message) gateError.textContent = message;
+    renderSignInButton();
+  }
+  function showForbidden() {
+    gate.hidden = true;
+    content.hidden = true;
+    statusEl.hidden = true;
+    forbidden.hidden = false;
+    $('forbidden-email').textContent = decodeTokenEmail(getToken() ?? '');
+  }
+  function handleCredentialResponse(response: { credential: string }) {
+    setToken(response.credential);
+    load();
+  }
+  function renderSignInButton() {
+    if (typeof google === 'undefined') return;
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse });
+    google.accounts.id.renderButton(document.getElementById('g_id_signin'), { theme: (window as any).tvcGsiTheme?.() ?? 'outline', size: 'large' });
+  }
+  $('use-different-account').addEventListener('click', () => {
+    clearToken();
+    clearStepUp();
+    if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+    showGate();
+  });
+
+  async function call(path: string, method = 'GET', body?: unknown) {
+    try {
+      return await staffFetch(path, { method, body });
+    } catch (err) {
+      if (err instanceof StaffAuthError) {
+        if (err.kind === 'unauthorized') showGate('Your session expired. Sign in again.');
+        else showForbidden();
+      }
+      throw err;
+    }
+  }
+
+  // ---- loading the list
+  async function load(more = false) {
+    gate.hidden = true;
+    forbidden.hidden = true;
+    if (!data) showLoading(statusEl);
+    try {
+      const seq = ++loadSeq;
+      const offset = more ? lines.length : 0;
+      const params = new URLSearchParams({ filter, offset: String(offset), sort: sort.key, dir: sort.dir });
+      if (query) params.set('q', query);
+      for (const [col, text] of Object.entries(colFilters)) if (text.trim()) params.set(`f_${col}`, text.trim());
+      const { status, data: out } = await call(`/api/finance-admin/ledger?${params}`);
+      if (seq !== loadSeq) return;
+      if (status !== 200) throw new Error('load failed');
+      data = out as ListData;
+      lines = more ? [...lines, ...data.lines] : data.lines;
+      clearState(statusEl);
+      intro.hidden = false;
+      intro.textContent = 'Every line the bank has told us about, and what it was for.';
+      render();
+      content.hidden = false;
+      void loadMonths();
+    } catch (err) {
+      if (err instanceof StaffAuthError) return;
+      content.hidden = true;
+      intro.hidden = true;
+      showFailure(statusEl, { title: "Couldn't load the ledger", text: "The server didn't answer. Nothing was changed. Check your connection and try again; if it keeps failing, tell a super admin.", onRetry: () => load() });
+    }
+  }
+
+  // ---- drafts: what you have typed into the table but not posted yet. They live in this page only; posting is a separate step.
+  type Field = 'categoryId' | 'partyId' | 'nature';
+  type Draft = Record<Field, string>;
+  const drafts = new Map<string, Draft>();
+  const rowErrors = new Map<string, string>();
+  const rowEls = new Map<string, HTMLElement>();
+  let lastPicked: string | null = null;
+  let pending: { field: Field; value: string; label: string; ids: string[] } | null = null;
+  let barRefs: { post?: HTMLButtonElement; count?: HTMLElement } = {};
+
+  const CONFIDENCE_WORDS: Record<string, string> = { high: 'confident', medium: 'fairly sure', low: 'a guess' };
+  const draftOf = (id: string): Draft => drafts.get(id) ?? { categoryId: '', partyId: '', nature: '' };
+  const setDraft = (id: string, patch: Partial<Draft>) => {
+    drafts.set(id, { ...draftOf(id), ...patch });
+    rowErrors.delete(id);
+  };
+  const editable = (l: Line) => Boolean(data?.canAllocate) && l.state === 'unallocated' && !l.review;
+  const isReady = (l: Line) => {
+    const d = draftOf(l.id);
+    return Boolean(d.categoryId && d.nature.trim());
+  };
+  const kindFor = (l: Line) => (l.direction === 'credit' ? 'customer' : 'vendor');
+  // The suggestion's value for a field while the cell is still empty (shown in italics, accepted with the tick).
+  const ghostOf = (l: Line, f: Field): string => {
+    const s = l.suggestion;
+    if (!s || draftOf(l.id)[f]) return '';
+    return f === 'categoryId' ? s.categoryId ?? '' : f === 'partyId' ? s.partyId ?? '' : s.nature ?? '';
+  };
+  const newPartyOf = (l: Line): string => (!draftOf(l.id).partyId && !l.suggestion?.partyId ? l.suggestion?.newPartyName ?? '' : '');
+  const hasGhost = (l: Line) => Boolean(ghostOf(l, 'categoryId') || ghostOf(l, 'partyId') || ghostOf(l, 'nature') || newPartyOf(l));
+  const selectedRows = () => lines.filter((l) => selected.has(l.id) && editable(l));
+  const hasUnposted = () => [...drafts.values()].some((d) => d.categoryId || d.partyId || d.nature);
+  window.addEventListener('beforeunload', (e) => {
+    if (hasUnposted()) e.preventDefault();
+  });
+
+  // ---- the table
+  const FILTERS: [Filter, string][] = [['unallocated', 'To allocate'], ['review', 'To review'], ['all', 'All']];
+  function renderChips() {
+    $('chips').replaceChildren(
+      ...FILTERS.map(([f, label]) => {
+        const count = data?.counts[f] ?? 0;
+        const b = h('button', { attrs: { type: 'button', 'aria-pressed': String(f === filter) } }, h('span', { text: label }), h('span', { class: `chip-count${f === 'review' && count > 0 ? ' chip-count--crit' : ''}`, text: String(count) }));
+        b.addEventListener('click', () => {
+          filter = f;
+          selected.clear();
+          pending = null;
+          void load();
+        });
+        return b;
+      }),
+    );
+  }
+
+  // "9 Oct", or "9 Oct 25" when it is not this year.
+  const shortDate = (iso: string) => {
+    const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
+    const text = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    return d.getFullYear() === new Date().getFullYear() ? text : `${text} ${String(d.getFullYear()).slice(2)}`;
+  };
+  const tick = (label: string, onClick: () => void) => h('button', { class: 'tick', text: '✓', attrs: { type: 'button', 'aria-label': label, title: label }, on: { click: onClick } });
+  const cell = (cls: string, ...kids: (Node | string | null)[]) => h('span', { class: `lcell ${cls}`, attrs: { role: 'cell' } }, ...kids);
+
+  function statusPill(l: Line): HTMLElement {
+    if (l.review) return pill('To review', 'crit');
+    if (l.state === 'allocated') return pill('Allocated', 'ok');
+    if (l.state === 'partly_allocated') return pill('Partly', 'warn');
+    if (!editable(l)) return pill('To allocate');
+    return isReady(l) ? pill('Ready', 'ok') : hasGhost(l) ? pill('Suggested', 'warn') : pill('Needs details');
+  }
+  function updateStatus(l: Line) {
+    const slot = rowEls.get(l.id)?.querySelector('.pillslot');
+    slot?.replaceChildren(statusPill(l));
+    renderBarCounts();
+  }
+
+  function rowFor(l: Line): HTMLElement {
+    const lk = data!.lookups;
+    const can = editable(l);
+    const d = draftOf(l.id);
+    const checkbox = h('input', { attrs: { type: 'checkbox', 'aria-label': `Select ${l.narration}`, ...(selected.has(l.id) ? { checked: '' } : {}), ...(can ? {} : { disabled: '' }) } }) as HTMLInputElement;
+    checkbox.addEventListener('click', (e) => pick(l.id, (e as MouseEvent).shiftKey));
+
+    let catCell: HTMLElement;
+    let partyCell: HTMLElement;
+    let natureCell: HTMLElement;
+    if (can) {
+      const ghostCat = ghostOf(l, 'categoryId');
+      const cat = categorySelect(lk.categories, { selected: d.categoryId, blank: ghostCat ? nameOf(lk.categories, ghostCat) : 'Choose…' });
+      cat.className = `cellfield${ghostCat ? ' ghost' : ''}`;
+      cat.setAttribute('aria-label', 'Category');
+      cat.addEventListener('change', () => setField(l, 'categoryId', cat.value, nameOf(lk.categories, cat.value)));
+      catCell = cell('lcell--edit', cat, ghostCat ? tick('Accept the suggested category', () => setField(l, 'categoryId', ghostCat, nameOf(lk.categories, ghostCat))) : null);
+
+      const ghostParty = ghostOf(l, 'partyId');
+      const stranger = newPartyOf(l);
+      const party = partySelect(lk.parties, { selected: d.partyId, blank: ghostParty ? nameOf(lk.parties, ghostParty) : stranger ? `+ New: ${stranger}` : 'No one in particular' });
+      party.append(h('option', { text: 'Add a new party…', attrs: { value: NEW_PARTY } }));
+      party.className = `cellfield${ghostParty || stranger ? ' ghost' : ''}`;
+      party.setAttribute('aria-label', 'Party');
+      party.addEventListener('change', () => {
+        if (party.value !== NEW_PARTY) return setField(l, 'partyId', party.value, nameOf(lk.parties, party.value));
+        party.value = d.partyId;
+        openAddParty(stranger, kindFor(l), (id) => setField(l, 'partyId', id, nameOf(data!.lookups.parties, id)));
+      });
+      partyCell = cell(
+        'lcell--edit',
+        party,
+        ghostParty
+          ? tick('Accept the suggested party', () => setField(l, 'partyId', ghostParty, nameOf(lk.parties, ghostParty)))
+          : stranger
+            ? tick(`Add ${stranger} to the register and use them`, async () => {
+                const id = await createParty(stranger, kindFor(l));
+                if (id) setField(l, 'partyId', id, stranger);
+              })
+            : null,
+      );
+
+      const ghostNature = ghostOf(l, 'nature');
+      const nature = h('input', { class: `cellfield${ghostNature ? ' ghost' : ''}`, attrs: { type: 'text', 'aria-label': 'What it was for', placeholder: ghostNature || 'What it was for', value: d.nature, autocomplete: 'off' } }) as HTMLInputElement;
+      nature.addEventListener('input', () => {
+        setDraft(l.id, { nature: nature.value });
+        updateStatus(l);
+      });
+      nature.addEventListener('change', () => offerToOthers(l, 'nature', nature.value, nature.value));
+      nature.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const all = [...document.querySelectorAll<HTMLInputElement>('#tbody input[aria-label="What it was for"]:not(:disabled)')];
+        all[all.indexOf(nature) + 1]?.focus();
+      });
+      natureCell = cell('lcell--edit', nature, ghostNature ? tick('Accept the suggested wording', () => setField(l, 'nature', ghostNature)) : null);
+    } else {
+      const a = l.allocation;
+      const lk2 = data!.lookups;
+      catCell = cell('lcell--text', a ? `${nameOf(lk2.categories, a.categoryId)}${a.count > 1 ? ` +${a.count - 1} more` : ''}` : '');
+      partyCell = cell('lcell--text', a?.partyId ? nameOf(lk2.parties, a.partyId) : '');
+      natureCell = cell('lcell--text', a?.nature ?? '');
+    }
+
+    const error = rowErrors.get(l.id);
+    const hint = [l.account, l.remark ? `Remark: ${l.remark}` : ''].filter(Boolean).join(' · ');
+    return h(
+      'div',
+      { class: `lrow${selected.has(l.id) ? ' is-selected' : ''}${can ? '' : ' is-locked'}`, attrs: { role: 'row' } },
+      cell('lcell--check', checkbox),
+      cell('lcell--date', shortDate(l.date)),
+      cell('lcell--narr', h('button', { class: 'narr narr--link', text: l.narration, attrs: { type: 'button', title: `${l.narration}\nOpen this line to split it or see its history` }, on: { click: () => void openLine(l.id) } }), h('span', { class: `detail${error ? ' detail--warn' : ''}`, text: error ?? hint })),
+      cell(`lcell--amount amount--${l.direction}`, `${l.direction === 'debit' ? '−' : '+'}${rupees(l.amountPaise)}`),
+      catCell,
+      partyCell,
+      natureCell,
+      cell('lcell--status pillslot', statusPill(l)),
+    );
+  }
+
+  function refreshRow(id: string) {
+    const l = lines.find((x) => x.id === id);
+    const old = rowEls.get(id);
+    if (!l || !old) return;
+    const next = rowFor(l);
+    old.replaceWith(next);
+    rowEls.set(id, next);
+  }
+
+  function render() {
+    if (!data) return;
+    for (const id of [...selected]) if (!lines.some((l) => l.id === id && editable(l))) selected.delete(id);
+    renderChips();
+    renderHeadings();
+    renderCrumbs();
+    $('accept-all').hidden = !(data.canAllocate && filter === 'unallocated' && lines.some((l) => editable(l) && hasGhost(l)));
+    rowEls.clear();
+    $('tbody').replaceChildren(
+      ...lines.map((l) => {
+        const el = rowFor(l);
+        rowEls.set(l.id, el);
+        return el;
+      }),
+    );
+    $('more').hidden = lines.length >= data.total;
+    $('range').textContent = data.total ? `1 to ${lines.length} of ${data.total}` : '';
+    const empty = $('empty');
+    if (lines.length === 0) {
+      empty.hidden = false;
+      showEmpty(empty, {
+        title: filter === 'unallocated' ? 'Everything is allocated' : filter === 'review' ? 'Nothing waiting for review' : 'No lines found',
+        text: query || data.breadcrumb.length ? 'Nothing matches those conditions.' : filter === 'all' ? 'Import a bank statement to start.' : 'Nothing needs you here right now.',
+      });
+    } else {
+      clearState(empty);
+      empty.hidden = true;
+    }
+    chrome();
+  }
+
+  // The header checkbox and the bar under the table.
+  function chrome() {
+    const pickable = lines.filter(editable);
+    const head = $<HTMLInputElement>('head-check');
+    const n = pickable.filter((l) => selected.has(l.id)).length;
+    head.checked = pickable.length > 0 && n === pickable.length;
+    head.indeterminate = n > 0 && n < pickable.length;
+    head.disabled = pickable.length === 0;
+    renderBar();
+  }
+  $('head-check').addEventListener('click', () => {
+    const pickable = lines.filter(editable);
+    const all = pickable.length > 0 && pickable.every((l) => selected.has(l.id));
+    for (const l of pickable) {
+      if (all) selected.delete(l.id);
+      else selected.add(l.id);
+    }
+    pending = null;
+    for (const l of pickable) refreshRow(l.id);
+    chrome();
+  });
+
+  // Click selects or clears one line; shift-click selects the run between this line and the last one clicked.
+  function pick(id: string, shift: boolean) {
+    const order = lines.filter(editable).map((l) => l.id);
+    const touched = [id];
+    if (shift && lastPicked && order.includes(lastPicked) && order.includes(id)) {
+      const [a, b] = [order.indexOf(lastPicked), order.indexOf(id)].sort((x, y) => x - y);
+      for (const i of order.slice(a, b + 1)) {
+        selected.add(i);
+        touched.push(i);
+      }
+    } else if (selected.has(id)) selected.delete(id);
+    else selected.add(id);
+    lastPicked = id;
+    pending = null;
+    for (const t of touched) refreshRow(t);
+    chrome();
+  }
+
+  // ---- editing: a cell changes one line; if that line is one of several selected, offer to change the rest too (like ServiceNow)
+  function setField(l: Line, field: Field, value: string, label?: string) {
+    setDraft(l.id, { [field]: value });
+    refreshRow(l.id);
+    offerToOthers(l, field, value, label ?? value);
+    chrome();
+  }
+  function offerToOthers(l: Line, field: Field, value: string, label: string) {
+    if (!value.trim() || !selected.has(l.id)) return;
+    const others = selectedRows().filter((x) => x.id !== l.id);
+    if (!others.length) return;
+    pending = { field, value, label, ids: others.map((x) => x.id) };
+    renderBar();
+  }
+  function applyPending() {
+    if (!pending) return;
+    const p = pending;
+    pending = null;
+    for (const id of p.ids) {
+      setDraft(id, { [p.field]: p.value });
+      refreshRow(id);
+    }
+    showToast(`Applied to ${p.ids.length + 1} lines.`);
+    chrome();
+  }
+  function bulkSet(field: Field, value: string, what: string) {
+    const rows = selectedRows();
+    for (const l of rows) {
+      setDraft(l.id, { [field]: value });
+      refreshRow(l.id);
+    }
+    pending = null;
+    showToast(`${what} set on ${rows.length} ${rows.length === 1 ? 'line' : 'lines'}.`);
+    chrome();
+  }
+  // Fill the empty cells from the suggestions. A suggested NEW party is never added for you in bulk: that is a click per party.
+  function acceptFor(rows: Line[]) {
+    let needParty = 0;
+    for (const l of rows) {
+      const patch: Partial<Draft> = {};
+      const d = draftOf(l.id);
+      if (!d.categoryId && l.suggestion?.categoryId) patch.categoryId = l.suggestion.categoryId;
+      if (!d.partyId && l.suggestion?.partyId) patch.partyId = l.suggestion.partyId;
+      if (!d.nature && l.suggestion?.nature) patch.nature = l.suggestion.nature;
+      if (!d.partyId && !l.suggestion?.partyId && l.suggestion?.newPartyName) needParty++;
+      setDraft(l.id, patch);
+      refreshRow(l.id);
+    }
+    pending = null;
+    showToast(`Suggestions filled in on ${rows.length} ${rows.length === 1 ? 'line' : 'lines'}. Nothing is posted yet.${needParty ? ` ${needParty} need a new party added: use the tick in their Party cell.` : ''}`);
+    chrome();
+  }
+  $('accept-all').addEventListener('click', () => acceptFor(lines.filter(editable)));
+  function fillFromFirst() {
+    const rows = selectedRows();
+    const first = rows[0];
+    if (!first || rows.length < 2) return;
+    const d = draftOf(first.id);
+    for (const l of rows.slice(1)) {
+      setDraft(l.id, { ...d });
+      refreshRow(l.id);
+    }
+    pending = null;
+    showToast(`Copied from the first line to ${rows.length - 1} more.`);
+    chrome();
+  }
+
+  // ---- adding a party that is not in the register
+  async function createParty(name: string, kind: string): Promise<string | null> {
+    const typed = name.trim().replace(/\s+/g, ' ');
+    const twin = data!.lookups.parties.find((x) => x.name.toLowerCase() === typed.toLowerCase());
+    if (twin) return twin.id;
+    const { status, data: out } = await call('/api/finance-admin/parties', 'POST', { name: typed, kind });
+    if (status !== 201) {
+      showToast(out?.error ?? 'Could not add that party.');
+      return null;
+    }
+    const lk = data!.lookups;
+    lk.parties.push({ id: out.party.id, name: out.party.name, kind: out.party.kind });
+    lk.parties.sort((a, b) => a.name.localeCompare(b.name));
+    showToast(`${out.party.name} added to the register. Add their bank details on the Parties page.`);
+    return out.party.id as string;
+  }
+  function openAddParty(name: string, kind: string, onAdded: (id: string) => void) {
+    const dlg = $<HTMLDialogElement>('party-sheet');
+    const nameInput = input('newPartyName', { placeholder: 'Name as it should appear in the register' }) as HTMLInputElement;
+    nameInput.value = name;
+    const kindSel = h('select', { attrs: { name: 'newPartyKind' } }, ...Object.entries(PARTY_KINDS).map(([k, label]) => h('option', { text: label, attrs: { value: k } }))) as HTMLSelectElement;
+    kindSel.value = kind;
+    const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    const form = h(
+      'form',
+      { class: 'stack-form' },
+      h('p', { class: 'hint', text: 'Bank details are added and verified later, on the Parties page.' }),
+      labelled('Name', nameInput),
+      labelled('What kind of party', kindSel),
+      msg,
+      h('div', { class: 'sheet-actions' }, button('Cancel', () => dlg.close()), h('button', { class: 'button button--primary', text: 'Add to register', attrs: { type: 'submit' } })),
+    );
+    form.addEventListener('submit', async (e: Event) => {
+      e.preventDefault();
+      if (nameInput.value.trim().length < 2) {
+        msg.hidden = false;
+        msg.textContent = 'Enter the name.';
+        return;
+      }
+      const id = await createParty(nameInput.value, kindSel.value);
+      if (!id) return;
+      dlg.close();
+      onAdded(id);
+    });
+    dlg.addEventListener('close', () => dlg.replaceChildren(), { once: true });
+    present(dlg, closeOnBackdrop, h('h2', { text: 'Add a party', attrs: { id: 'party-title' } }), form);
+  }
+
+  // ---- the bar under the table: what you can do to the lines you have selected
+  const readyCount = () => selectedRows().filter(isReady).length;
+  function renderBarCounts() {
+    if (barRefs.count) barRefs.count.textContent = `${selectedRows().length} selected`;
+    if (barRefs.post) {
+      const n = readyCount();
+      barRefs.post.textContent = `Post ${n} ready`;
+      barRefs.post.disabled = n === 0;
+    }
+  }
+  function renderBar() {
+    const bar = $('actionbar');
+    const rows = selectedRows();
+    if (!data || !rows.length) {
+      bar.hidden = true;
+      bar.replaceChildren();
+      barRefs = {};
+      return;
+    }
+    const lk = data.lookups;
+    const stack: HTMLElement[] = [];
+    if (pending) {
+      const n = pending.ids.length;
+      stack.push(
+        h(
+          'div',
+          { class: 'prompt', attrs: { role: 'status' } },
+          h('span', { class: 'grow', text: `Apply “${pending.label}” to the other ${n} selected ${n === 1 ? 'line' : 'lines'} too?` }),
+          button('Apply to all', applyPending, 'button button--primary button--small'),
+          button('Only this line', () => {
+            pending = null;
+            renderBar();
+          }, 'button button--outline button--small'),
+        ),
+      );
+    }
+    const cat = categorySelect(lk.categories, { blank: 'Set category…' });
+    cat.className = 'barfield';
+    cat.setAttribute('aria-label', 'Set the category on the selected lines');
+    cat.addEventListener('change', () => cat.value && bulkSet('categoryId', cat.value, nameOf(lk.categories, cat.value)));
+    const party = partySelect(lk.parties, { blank: 'Set party…' });
+    party.className = 'barfield';
+    party.setAttribute('aria-label', 'Set the party on the selected lines');
+    party.addEventListener('change', () => party.value && bulkSet('partyId', party.value, nameOf(lk.parties, party.value)));
+    const words = input('bulkWording', { placeholder: 'Set wording…', 'aria-label': 'Set the wording on the selected lines' }) as HTMLInputElement;
+    words.className = 'barfield';
+    const applyWords = () => {
+      if (!words.value.trim()) return;
+      bulkSet('nature', words.value.trim(), 'Wording');
+      words.value = '';
+    };
+    words.addEventListener('keydown', (e) => e.key === 'Enter' && (e.preventDefault(), applyWords()));
+    const count = h('span', { class: 'barcount', text: `${rows.length} selected` });
+    const post = button(`Post ${readyCount()} ready`, () => void postReady(), 'button barpost') as HTMLButtonElement;
+    post.disabled = readyCount() === 0;
+    barRefs = { post, count };
+    const fill = button('Fill from first', fillFromFirst, 'button button--outline button--small') as HTMLButtonElement;
+    fill.disabled = rows.length < 2;
+    fill.title = "Copy the first selected line's category, party and wording to the others";
+    stack.push(
+      h(
+        'div',
+        { class: 'barrow' },
+        count,
+        cat,
+        party,
+        words,
+        button('Apply', applyWords, 'button button--outline button--small'),
+        button('Accept suggestions', () => acceptFor(rows), 'button button--outline button--small'),
+        fill,
+        h('span', { class: 'grow' }),
+        post,
+        button('Clear', () => {
+          selected.clear();
+          pending = null;
+          for (const l of rows) refreshRow(l.id);
+          chrome();
+        }, 'button button--outline button--small'),
+      ),
+    );
+    bar.replaceChildren(...stack);
+    bar.hidden = false;
+  }
+
+  // ---- posting: the second step. Asks first, because a posted line is only ever refunded or reversed.
+  async function postReady() {
+    const ready = selectedRows().filter(isReady);
+    if (!ready.length) return;
+    const lk = data!.lookups;
+    const sample = ready.slice(0, 3).map((l) => `${niceDate(l.date)}: ${nameOf(lk.categories, draftOf(l.id).categoryId)}${draftOf(l.id).partyId ? `, ${nameOf(lk.parties, draftOf(l.id).partyId)}` : ''}`).join('\n');
+    const ok = await askSheet({
+      title: `Post ${ready.length} ${ready.length === 1 ? 'line' : 'lines'}?`,
+      text: `Each line is allocated in full to what you chose. Posted lines cannot be edited, only refunded or reversed.\n\nFor example:\n${sample}`,
+      actions: [{ label: 'Post them', value: true, kind: 'primary' }, { label: 'Cancel', value: false }],
+    });
+    if (!ok) return;
+    let posted = 0;
+    let flagged = 0;
+    const failed: { lineId: string; error: string }[] = [];
+    // The server takes a few at a time, so a long run shows its progress and cannot run out of time.
+    for (let i = 0; i < ready.length; i += 10) {
+      const chunk = ready.slice(i, i + 10);
+      showToast(`Posting ${Math.min(i + 10, ready.length)} of ${ready.length}…`);
+      const items = chunk.map((l) => ({ lineId: l.id, categoryId: draftOf(l.id).categoryId, partyId: draftOf(l.id).partyId || null, nature: draftOf(l.id).nature.trim() }));
+      const { status, data: out } = await call('/api/finance-admin/ledger/post', 'POST', { items });
+      if (status !== 200) {
+        for (const l of chunk) failed.push({ lineId: l.id, error: out?.error ?? 'Could not post this line.' });
+        continue;
+      }
+      posted += out.posted;
+      flagged += out.flagged;
+      failed.push(...(out.failed as { lineId: string; error: string }[]));
+    }
+    const failedIds = new Set(failed.map((f) => f.lineId));
+    for (const l of ready) {
+      if (failedIds.has(l.id)) continue;
+      drafts.delete(l.id);
+      selected.delete(l.id);
+    }
+    rowErrors.clear();
+    for (const f of failed) rowErrors.set(f.lineId, f.error);
+    pending = null;
+    showToast([`${posted} posted`, flagged ? `${flagged} sent to review` : '', failed.length ? `${failed.length} could not be posted (see the red notes)` : ''].filter(Boolean).join(', ') + '.');
+    await load();
+  }
+
+  // ---- sorting and column search
+  const COL_LABELS: Record<string, string> = { date: 'Date', narration: 'Narration', amount: 'Amount', category: 'Category', party: 'Party', nature: 'Wording' };
+  // A first click sorts a date or amount newest/biggest first and text A to Z; a second click flips it.
+  for (const btn of document.querySelectorAll<HTMLButtonElement>('.sorthead')) {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.sort!;
+      sort = sort.key === key ? { key, dir: sort.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'date' || key === 'amount' ? 'desc' : 'asc' };
+      void load();
+    });
+  }
+  function renderHeadings() {
+    for (const head of document.querySelectorAll<HTMLElement>('[data-colhead]')) {
+      const on = head.dataset.colhead === sort.key;
+      head.setAttribute('aria-sort', on ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
+      const mark = head.querySelector('.sortmark');
+      if (mark) mark.textContent = on ? (sort.dir === 'asc' ? '▲' : '▼') : '';
+    }
+  }
+  const filterInput = (col: string) => document.querySelector<HTMLInputElement>(`.colfilter[data-col="${col}"]`)!;
+  let filterTimer: ReturnType<typeof setTimeout> | undefined;
+  // Applying reads every box, so values typed into two boxes within the debounce are both kept.
+  const applyFilters = () => {
+    for (const box of document.querySelectorAll<HTMLInputElement>('.colfilter')) colFilters[box.dataset.col!] = box.value;
+    void load();
+  };
+  for (const input of document.querySelectorAll<HTMLInputElement>('.colfilter')) {
+    const apply = applyFilters;
+    input.addEventListener('input', () => {
+      clearTimeout(filterTimer);
+      filterTimer = setTimeout(apply, 300);
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      clearTimeout(filterTimer);
+      apply();
+    });
+  }
+  function clearColumn(col: string) {
+    colFilters[col] = '';
+    filterInput(col).value = '';
+  }
+  $('clear-filters').addEventListener('click', () => {
+    for (const col of Object.keys(COL_LABELS)) clearColumn(col);
+    void load();
+  });
+  // "To allocate > Category != Bank charges  ×": what is narrowing the table, each removable (like ServiceNow's filter breadcrumb).
+  function renderCrumbs() {
+    const box = $('crumbs');
+    const items = data?.breadcrumb ?? [];
+    const errors = Object.entries(data?.filterErrors ?? {});
+    for (const input of document.querySelectorAll<HTMLInputElement>('.colfilter')) {
+      const bad = Boolean(data?.filterErrors?.[input.dataset.col!]);
+      input.classList.toggle('is-invalid', bad);
+      input.setAttribute('aria-invalid', String(bad));
+    }
+    $('clear-filters').hidden = items.length === 0 && errors.length === 0;
+    if (!items.length && !errors.length) {
+      box.hidden = true;
+      box.replaceChildren();
+      return;
+    }
+    box.hidden = false;
+    box.replaceChildren(
+      h('span', { class: 'crumb crumb--root', text: FILTERS.find(([f]) => f === filter)?.[1] ?? 'All' }),
+      ...items.map((c) =>
+        h(
+          'span',
+          { class: 'crumb' },
+          h('span', { text: c.text }),
+          h('button', { class: 'crumb-x', text: '×', attrs: { type: 'button', 'aria-label': `Remove: ${c.text}` }, on: { click: () => (clearColumn(c.column), void load()) } }),
+        ),
+      ),
+      ...errors.map(([col, msg]) => h('span', { class: 'crumb crumb--bad', text: `${COL_LABELS[col] ?? col}: ${msg}` })),
+    );
+  }
+
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
+  $('q').addEventListener('input', (e) => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      query = (e.target as HTMLInputElement).value.trim();
+      void load();
+    }, 250);
+  });
+  $('more').addEventListener('click', () => void load(true));
+
+  // ---- one line: what it says, and the allocation editor
+  type Alloc = { id: string; partyId: string | null; categoryId: string; projectId: string | null; amountPaise: number; period: string; nature: string; remarks: string | null; source: string; reviewState: string; reviewReason: string | null; reversesAllocationId: string | null; reversalReason: string | null; posted: boolean };
+  type Reversible = { id: string; date: string; partyId: string | null; categoryId: string; nature: string; remainingPaise: number };
+  type Detail = {
+    canAllocate: boolean;
+    line: { id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number };
+    upi: { counterparty: string | null; remark: string | null; isCircle: boolean } | null;
+    state: string;
+    allocations: Alloc[];
+    proposal: { categoryId: string | null; partyId: string | null; nature: string; amountPaise: number; period: string; source: string; ruleId: string | null } | null;
+    suggestion: (Suggestion & { reasons: string[]; newParty: { name: string; kind: string } | null }) | null;
+    reasons: string[];
+    reversible: Reversible[];
+    lookups: Lookups;
+    reasonLabels: Record<string, string>;
+  };
+
+  const monthOf = (iso: string) => iso.slice(0, 7);
+  const nameOf = (list: { id: string; name: string }[], id: string | null) => list.find((x) => x.id === id)?.name ?? '';
+
+  async function openLine(id: string) {
+    const dlg = $<HTMLDialogElement>('line-sheet');
+    const { status, data: d } = await call(`/api/finance-admin/ledger/${id}`);
+    if (status !== 200) {
+      showToast(d?.error ?? 'Could not open that line.');
+      return;
+    }
+    const detail = d as Detail;
+    const { line, upi } = detail;
+    const head = [
+      h('h2', { text: `${line.direction === 'debit' ? 'Paid' : 'Received'} ${rupees(line.amountPaise)}`, attrs: { id: 'line-title' } }),
+      h('p', { class: 'sheet-text', text: `${niceDate(line.date)} · ${line.narration}` }),
+      upi?.remark || upi?.counterparty ? h('p', { class: 'hint', text: [upi.counterparty ? `Paytm says: ${upi.counterparty}` : '', upi.remark ? `remark "${upi.remark}"` : '', upi.isCircle ? 'a circle payment' : ''].filter(Boolean).join(', ') }) : null,
+    ];
+    const posted = detail.allocations.some((a) => a.posted);
+    dlg.addEventListener('close', () => dlg.replaceChildren(), { once: true });
+    if (posted || !detail.canAllocate) present(dlg, closeOnBackdrop, ...head, postedView(dlg, detail), h('div', { class: 'sheet-actions' }, button('Close', () => dlg.close())));
+    else present(dlg, closeOnBackdrop, ...head, editor(dlg, detail));
+  }
+
+  // A posted line: what explains it, with review decisions for anything flagged.
+  function postedView(dlg: HTMLDialogElement, d: Detail): HTMLElement {
+    const lk = d.lookups;
+    if (!d.allocations.length) return h('p', { class: 'note', text: 'Nothing explains this line yet.' });
+    return h(
+      'ul',
+      { class: 'list' },
+      ...d.allocations.map((a) => {
+        const reasons = (a.reviewReason ?? '').split(',').filter(Boolean).map((r) => d.reasonLabels[r] ?? r);
+        const actions: HTMLElement[] = [];
+        if (d.canAllocate && a.reviewState !== 'ok') {
+          actions.push(
+            button('Mark as checked', async () => {
+              const { status, data: out } = await call(`/api/finance-admin/allocations/${a.id}/review`, 'POST', { action: 'resolve' });
+              if (status === 200) {
+                dlg.close();
+                showToast('Marked as checked.');
+                void load();
+              } else showToast(out?.error ?? 'Could not do that.');
+            }),
+          );
+        } else if (d.canAllocate && a.posted) {
+          actions.push(
+            button('Flag for review', async () => {
+              const { status, data: out } = await call(`/api/finance-admin/allocations/${a.id}/review`, 'POST', { action: 'flag' });
+              if (status === 200) {
+                dlg.close();
+                showToast('Flagged for review.');
+                void load();
+              } else showToast(out?.error ?? 'Could not do that.');
+            }, 'button button--outline button--small'),
+          );
+        }
+        return h(
+          'li',
+          {},
+          h(
+            'div',
+            { class: 'row alloc-row' },
+            h(
+              'span',
+              { class: 'grow' },
+              h('span', { class: 'title', text: a.reversesAllocationId ? `Refund: ${a.nature}` : a.nature }),
+              h('span', { class: 'detail', text: [nameOf(lk.categories, a.categoryId), nameOf(lk.parties, a.partyId), niceMonth(a.period)].filter(Boolean).join(' · ') }),
+              reasons.length ? h('span', { class: 'detail detail--warn', text: reasons.join('. ') }) : null,
+            ),
+            h('span', { class: 'amount', text: rupees(a.amountPaise) }),
+            ...actions,
+          ),
+        );
+      }),
+    );
+  }
+
+  const NEW_PARTY = '__new_party__';
+  const PARTY_KINDS: Record<string, string> = { vendor: 'Vendor', customer: 'Customer', member: 'Member', employee: 'Employee', bank: 'Bank', government: 'Government', director: 'Director', other: 'Other' };
+
+  // Why the form is filled in the way it is, in plain words. Nothing here is posted until a person presses Post.
+  function suggestionNote(d: Detail): HTMLElement | null {
+    const sg = d.suggestion;
+    if (!sg || !sg.reasons.length) return null;
+    return h('div', { class: 'suggest-note' }, h('p', { class: 'field-label', text: `Why this suggestion (${CONFIDENCE_WORDS[sg.confidence] ?? 'a guess'})` }), h('ul', { class: 'why' }, ...sg.reasons.map((r) => h('li', { text: r }))));
+  }
+
+  // ---- the editor: rows that add up to the line
+  function editor(dlg: HTMLDialogElement, d: Detail): HTMLElement {
+    const lk = d.lookups;
+    const line = d.line;
+    type RowUi = { el: HTMLElement; amount: HTMLInputElement; category: HTMLSelectElement; party: HTMLSelectElement; nature: HTMLInputElement; period: HTMLInputElement; project: HTMLSelectElement | null; reverses: HTMLSelectElement | null; reason: HTMLInputElement; ruleId: string | null; source: string };
+    const rowsUi: RowUi[] = [];
+    const rowsBox = h('div', { class: 'alloc-rows' });
+    const remainingEl = h('p', { class: 'remaining', attrs: { 'aria-live': 'polite' } });
+    const msg = h('p', { class: 'error', attrs: { hidden: '' } });
+    const closedReason = input('closedReason', { placeholder: 'Why is a closed month being changed?' }) as HTMLInputElement;
+    const closedBox = h('div', { class: 'stack-form', attrs: { hidden: '' } }, labelled('Reason for changing a closed month', closedReason));
+
+    // Every party picker in this sheet, so a party added in one row is available in all of them.
+    const partySelects: HTMLSelectElement[] = [];
+    function addPartyEverywhere(p: Party) {
+      lk.parties.push(p);
+      for (const sel of partySelects) {
+        const opt = h('option', { text: p.name, attrs: { value: p.id } });
+        sel.insertBefore(opt, sel.querySelector(`option[value="${NEW_PARTY}"]`));
+      }
+    }
+    // Add a party that is not in the register yet, right here. Bank details are added later on the Parties page and verified there.
+    function openNewParty(box: HTMLElement, name: string, kind: string, onAdded: (id: string) => void) {
+      const nameInput = input('newPartyName', { placeholder: 'Name as it should appear in the register' }) as HTMLInputElement;
+      nameInput.value = name;
+      const kindSel = h('select', { attrs: { name: 'newPartyKind' } }, ...Object.entries(PARTY_KINDS).map(([k, label]) => h('option', { text: label, attrs: { value: k } }))) as HTMLSelectElement;
+      kindSel.value = kind;
+      const note = h('p', { class: 'error', attrs: { hidden: '' } });
+      const add = button('Add to register', async () => {
+        const typed = nameInput.value.trim().replace(/\s+/g, ' ');
+        const twin = lk.parties.find((x) => x.name.toLowerCase() === typed.toLowerCase());
+        if (twin) {
+          note.hidden = false;
+          note.textContent = `${twin.name} is already in the register. Choose them from the list.`;
+          return;
+        }
+        const { status, data: out } = await call('/api/finance-admin/parties', 'POST', { name: typed, kind: kindSel.value });
+        if (status !== 201) {
+          note.hidden = false;
+          note.textContent = out?.error ?? 'Could not add that.';
+          return;
+        }
+        addPartyEverywhere({ id: out.party.id, name: out.party.name, kind: out.party.kind });
+        box.hidden = true;
+        onAdded(out.party.id);
+        showToast(`${out.party.name} added to the register. Add their bank details on the Parties page.`);
+      }, 'button button--primary button--small');
+      box.replaceChildren(labelled('Name', nameInput), labelled('What kind of party', kindSel), note, h('div', { class: 'sheet-actions' }, add, button('Cancel', () => (box.hidden = true), 'button button--outline button--small')));
+      box.hidden = false;
+      nameInput.focus();
+    }
+
+    const sumPaise = () => rowsUi.reduce((n, r) => n + (parseRupees(r.amount.value) ?? 0), 0);
+    function refresh() {
+      const left = line.amountPaise - sumPaise();
+      remainingEl.textContent = left === 0 ? 'Adds up to the line. Ready to post.' : left > 0 ? `${rupees(left)} still to allocate.` : `${rupees(-left)} more than the line.`;
+      remainingEl.className = `remaining${left === 0 ? ' remaining--ok' : left < 0 ? ' remaining--over' : ''}`;
+      const closedUsed = rowsUi.some((r) => lk.closedMonths.some((m) => m.slice(0, 7) === r.period.value));
+      closedBox.hidden = !closedUsed;
+    }
+
+    function addRow(init: Partial<{ amountPaise: number; categoryId: string; partyId: string; nature: string; period: string; ruleId: string | null; source: string }> = {}) {
+      const amount = input('amount', { inputmode: 'decimal', placeholder: '0.00', 'aria-label': 'Amount' }) as HTMLInputElement;
+      amount.value = init.amountPaise ? (init.amountPaise / 100).toFixed(2) : '';
+      const category = categorySelect(lk.categories, { selected: init.categoryId ?? '' });
+      const party = partySelect(lk.parties, { selected: init.partyId ?? '' });
+      party.append(h('option', { text: 'Add a new party…', attrs: { value: NEW_PARTY } }));
+      const newBox = h('div', { class: 'stack-form new-party', attrs: { hidden: '' } });
+      party.addEventListener('change', () => {
+        if (party.value !== NEW_PARTY) {
+          newBox.hidden = true;
+          return;
+        }
+        party.value = '';
+        openNewParty(newBox, d.suggestion?.newParty?.name ?? '', d.suggestion?.newParty?.kind ?? (line.direction === 'credit' ? 'customer' : 'vendor'), (id) => {
+          party.value = id;
+          refresh();
+        });
+      });
+      partySelects.push(party);
+      const nature = input('nature', { placeholder: 'What it was for, in plain words' }) as HTMLInputElement;
+      nature.value = init.nature ?? '';
+      const period = input('period', { type: 'month', 'aria-label': 'Month it belongs to' }) as HTMLInputElement;
+      period.value = monthOf(init.period ?? line.date);
+      const project = lk.projects.length ? (h('select', { attrs: { name: 'project' } }, h('option', { text: 'Not part of a project', attrs: { value: '' } }), ...lk.projects.map((p) => h('option', { text: `${p.name} (${p.financial_year})`, attrs: { value: p.id } }))) as HTMLSelectElement) : null;
+      const reverses = d.reversible.length
+        ? (h('select', { attrs: { name: 'reverses' } }, h('option', { text: 'This is not a refund', attrs: { value: '' } }), ...d.reversible.map((r) => h('option', { text: `${niceDate(r.date)} · ${r.nature} · ${rupees(r.remainingPaise)} left`, attrs: { value: r.id } }))) as HTMLSelectElement)
+        : null;
+      const reason = input('reason', { placeholder: 'Why is it being refunded?' }) as HTMLInputElement;
+      const reasonBox = labelled('Reason', reason);
+      reasonBox.hidden = true;
+      const normal = h('div', { class: 'stack-form' }, labelled('Category', category), labelled('Party', party), newBox, labelled('What it was for', nature), project ? labelled('Project', project) : null);
+      const el = h('fieldset', { class: 'alloc-edit' });
+      const ui: RowUi = { el, amount, category, party, nature, period, project, reverses, reason, ruleId: init.ruleId ?? null, source: init.source ?? 'manual' };
+      reverses?.addEventListener('change', () => {
+        const refund = Boolean(reverses.value);
+        normal.hidden = refund;
+        reasonBox.hidden = !refund;
+        if (refund) {
+          const target = d.reversible.find((r) => r.id === reverses.value);
+          if (target && !parseRupees(amount.value)) amount.value = (Math.min(target.remainingPaise, line.amountPaise) / 100).toFixed(2);
+          refresh();
+        }
+      });
+      for (const f of [amount, period]) f.addEventListener('input', refresh);
+      el.append(
+        ...[
+        h('div', { class: 'stack-form alloc-top' }, labelled('Amount (₹)', amount), labelled('Month', period), rowsUi.length ? button('Remove', () => { rowsUi.splice(rowsUi.indexOf(ui), 1); el.remove(); refresh(); }, 'button button--outline button--small') : h('span')),
+        reverses ? h('div', { class: 'stack-form' }, labelled('Refund of', reverses)) : null,
+        h('div', { class: 'stack-form' }, reasonBox),
+        normal,
+        ].filter((n): n is HTMLElement => n !== null),
+      );
+      rowsUi.push(ui);
+      rowsBox.append(el);
+      refresh();
+      return ui;
+    }
+
+    // Start from the rule's suggestion when there is one, otherwise a blank row for the whole line.
+    const p = d.proposal;
+    addRow({ amountPaise: line.amountPaise, categoryId: p?.categoryId ?? '', partyId: p?.partyId ?? '', nature: p?.nature ?? '', ruleId: p?.ruleId ?? null, source: p?.source === 'rule' ? 'rule' : p?.source === 'upi_remark' ? 'upi_remark' : 'manual' });
+    // A name in the narration that is not in the register: open the add-party form for the first row, ready to confirm.
+    if (d.suggestion?.newParty && !p?.partyId) {
+      const first = rowsUi[0].party;
+      first.value = NEW_PARTY;
+      first.dispatchEvent(new Event('change'));
+    }
+    const why = d.reasons.map((r) => d.reasonLabels[r]).filter(Boolean);
+
+    async function submit(post: boolean) {
+      msg.hidden = true;
+      const payload = rowsUi.map((r) => ({
+        amountPaise: parseRupees(r.amount.value) ?? 0,
+        period: r.period.value ? `${r.period.value}-01` : undefined,
+        ...(r.reverses?.value ? { reversesAllocationId: r.reverses.value, reversalReason: r.reason.value, nature: r.nature.value } : { categoryId: r.category.value, partyId: r.party.value || null, projectId: r.project?.value || null, nature: r.nature.value, ruleId: r.ruleId, source: r.source }),
+      }));
+      const { status, data: out } = await call(`/api/finance-admin/ledger/${line.id}/allocations`, 'POST', { rows: payload, post, overrideReason: closedReason.value });
+      if (status === 200) {
+        dlg.close();
+        showToast(post ? 'Posted.' : 'Draft saved.');
+        void load();
+      } else {
+        msg.hidden = false;
+        msg.textContent = out?.error ?? 'Could not save that.';
+      }
+    }
+
+    const wrap = h(
+      'div',
+      { class: 'editor' },
+      suggestionNote(d),
+      why.length ? h('p', { class: 'note', text: `${why.join('. ')}.` }) : null,
+      rowsBox,
+      h('div', { class: 'editor-tools' }, button('Add another row', () => { const left = line.amountPaise - sumPaise(); addRow({ amountPaise: left > 0 ? left : undefined }); })),
+      remainingEl,
+      closedBox,
+      msg,
+      h('div', { class: 'sheet-actions' }, button('Cancel', () => dlg.close()), button('Save draft', () => void submit(false)), button('Post', () => void submit(true), 'button button--primary')),
+    );
+    refresh();
+    return wrap;
+  }
+
+  // ---- months: close one when everything in it is posted and checked
+  type Month = { month: string; financialYear: number; status: 'open' | 'closed'; unallocated: number; review: number };
+  async function loadMonths() {
+    const { status, data: out } = await call('/api/finance-admin/periods');
+    if (status !== 200) return;
+    const canClose = Boolean(out.canClose);
+    $('months').replaceChildren(
+      ...(out.months as Month[]).map((m) => {
+        const ready = m.unallocated === 0 && m.review === 0;
+        const detail = m.status === 'closed' ? 'Closed' : ready ? 'Everything is posted and checked.' : [m.unallocated ? `${m.unallocated} to allocate` : '', m.review ? `${m.review} to review` : ''].filter(Boolean).join(' · ');
+        const close = canClose && m.status === 'open' && ready ? button('Close month', async () => {
+          const res = await call(`/api/finance-admin/periods/${m.month}/close`, 'POST');
+          showToast(res.status === 200 ? `${niceMonth(m.month)} closed.` : res.data?.error ?? 'Could not close it.');
+          void loadMonths();
+        }) : null;
+        return h('li', {}, h('div', { class: 'row' }, h('span', { class: 'grow' }, h('span', { class: 'title', text: niceMonth(m.month) }), h('span', { class: 'detail', text: detail })), m.status === 'closed' ? pill('Closed', 'ok') : null, close));
+      }),
+    );
+  }
+
+  if (getToken()) load();
+  else showGate();
+</script>
+<script is:inline src="https://accounts.google.com/gsi/client"></script>
+
+<style is:global>
+  .ledger.section.wrapper {
+    padding-top: 32px;
+    padding-bottom: 48px;
+  }
+
+  .ledger .bar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .ledger .bar .field {
+    flex: 1;
+  }
+
+  .ledger .chips {
+    align-self: flex-start;
+    flex-wrap: nowrap;
+    max-width: 100%;
+    margin: 10px 0 12px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .ledger .chips button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .ledger .chip-count {
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--tvc-line);
+    color: var(--tvc-ink);
+    font-size: var(--text-xs);
+    font-weight: 650;
+  }
+
+  .ledger .chip-count--crit {
+    background: var(--tvc-error-bg);
+    color: var(--tvc-error-text);
+  }
+
+  .ledger .bar .grow {
+    flex: 1;
+  }
+
+  .ledger .foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 10px;
+  }
+
+  .ledger .foot .hint,
+  .ledger .tips {
+    margin: 0;
+  }
+
+  .ledger .tips {
+    margin-top: 10px;
+  }
+
+  /* The table: a grid of rows that scrolls sideways on a phone, a spreadsheet's shape for working through many lines. */
+  .ledger .tablewrap {
+    overflow-x: auto;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius);
+    background: var(--tvc-white);
+  }
+
+  .ledger .ltable {
+    min-width: 1030px;
+  }
+
+  .ledger .lrow {
+    display: grid;
+    grid-template-columns: 40px 86px minmax(170px, 1.3fr) 104px minmax(150px, 1fr) minmax(140px, 1fr) minmax(160px, 1.1fr) 96px;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--tvc-line);
+  }
+
+  .ledger .lrow:last-child {
+    border-bottom: 0;
+  }
+
+  .ledger .lhead {
+    padding-top: 9px;
+    padding-bottom: 9px;
+    background: color-mix(in srgb, var(--tvc-line) 45%, var(--tvc-white));
+    font-size: var(--text-sm);
+    font-weight: 650;
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger .sorthead {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 650;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .ledger .sorthead:hover {
+    color: var(--tvc-ink);
+  }
+
+  .ledger .sorthead:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  .ledger .lcell--amount .sorthead {
+    margin-left: auto;
+  }
+
+  .ledger .sortmark {
+    font-size: var(--text-xs);
+  }
+
+  /* The search row under the headings: one box per column. */
+  .ledger .lfilter {
+    padding-top: 6px;
+    padding-bottom: 6px;
+    background: color-mix(in srgb, var(--tvc-line) 22%, var(--tvc-white));
+  }
+
+  .ledger .colfilter {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    min-height: 32px;
+    padding: 3px 8px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--tvc-white);
+    color: inherit;
+    font: inherit;
+    font-size: var(--text-sm);
+  }
+
+  .ledger .colfilter:focus {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 0;
+  }
+
+  .ledger .colfilter.is-invalid {
+    border-color: var(--tvc-error-text);
+  }
+
+  .ledger .clearx,
+  .ledger .crumb-x {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-lg);
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .ledger .clearx:hover,
+  .ledger .crumb-x:hover {
+    background: var(--tvc-line);
+    color: var(--tvc-ink);
+  }
+
+  .ledger .crumbs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 10px;
+    font-size: var(--text-sm);
+  }
+
+  .ledger .crumb {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 4px 2px 10px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: 999px;
+    background: var(--tvc-white);
+  }
+
+  .ledger .crumb--root {
+    padding-right: 10px;
+    border-style: dashed;
+    font-weight: 600;
+  }
+
+  .ledger .crumb--bad {
+    padding-right: 10px;
+    border-color: var(--tvc-error-text);
+    color: var(--tvc-error-text);
+  }
+
+  .ledger #tbody .lrow:hover {
+    background: color-mix(in srgb, var(--tvc-line) 30%, transparent);
+  }
+
+  .ledger #tbody .lrow.is-selected {
+    background: color-mix(in srgb, var(--tvc-green) 12%, transparent);
+  }
+
+  .ledger #tbody .lrow.is-locked .lcell--narr,
+  .ledger #tbody .lrow.is-locked .lcell--date {
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger .lcell {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .ledger .lcell--edit {
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .ledger .lcell--date {
+    color: var(--tvc-ink-soft);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ledger .lcell--amount {
+    text-align: right;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ledger .lcell--amount.amount--credit {
+    color: var(--tvc-green);
+  }
+
+  .ledger .lcell--text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ledger .lcell--check input {
+    width: 18px;
+    height: 18px;
+  }
+
+  .ledger .narr--link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 550;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .ledger .narr--link:hover {
+    text-decoration: underline;
+  }
+
+  .ledger .narr--link:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  .ledger .narr {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 550;
+  }
+
+  .ledger .detail {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* A cell you edit in place: it looks like text until you point at it. */
+  .ledger .cellfield {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    min-height: 34px;
+    padding: 4px 8px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+  }
+
+  .ledger .cellfield:hover {
+    border-color: var(--tvc-line-strong);
+    background: var(--tvc-white);
+  }
+
+  .ledger .cellfield:focus {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 0;
+    background: var(--tvc-white);
+  }
+
+  .ledger .cellfield.ghost,
+  .ledger .cellfield.ghost::placeholder {
+    font-style: italic;
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger .tick {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--tvc-green);
+    border-radius: var(--radius-sm);
+    background: var(--tvc-white);
+    color: var(--tvc-green);
+    cursor: pointer;
+  }
+
+  .ledger .tick:hover {
+    background: color-mix(in srgb, var(--tvc-green) 14%, var(--tvc-white));
+  }
+
+  /* The bar for the lines you have selected: under the table, sticking to the bottom of the screen while you scroll, inverted so it cannot be missed. */
+  .ledger .actionbar {
+    position: sticky;
+    bottom: 16px;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .ledger .actionbar[hidden] {
+    display: none;
+  }
+
+  .ledger .barrow,
+  .ledger .prompt {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .ledger .barrow {
+    background: var(--tvc-ink);
+    color: var(--tvc-white);
+  }
+
+  .ledger .prompt {
+    border: 1px solid var(--tvc-line-strong);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+  }
+
+  .ledger .prompt .grow,
+  .ledger .barrow .grow {
+    flex: 1 1 120px;
+  }
+
+  .ledger .barcount {
+    margin-right: 4px;
+    font-weight: 650;
+  }
+
+  .ledger .barfield {
+    min-height: 36px;
+    max-width: 190px;
+    padding: 4px 10px;
+    border: 1px solid color-mix(in srgb, var(--tvc-white) 45%, transparent);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--tvc-white) 12%, transparent);
+    color: inherit;
+  }
+
+  .ledger .barfield option,
+  .ledger .barfield optgroup {
+    color: var(--tvc-ink);
+    background: var(--tvc-white);
+  }
+
+  .ledger .barrow .button--outline {
+    border-color: color-mix(in srgb, var(--tvc-white) 45%, transparent);
+    background: transparent;
+    color: inherit;
+  }
+
+  .ledger .barrow .barpost {
+    min-height: 36px;
+    padding: 4px 16px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: var(--tvc-white);
+    color: var(--tvc-ink);
+    font-weight: 700;
+  }
+
+  .ledger .barrow .barpost:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  @media (max-width: 800px) {
+    /* Above the phone's bottom tab bar. */
+    .ledger .actionbar {
+      bottom: 76px;
+    }
+  }
+
+  .ledger .list-title {
+    margin: 26px 0 8px 14px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--tvc-ink-soft);
+  }
+
+
+
+  /* A line: the narration and its small print, then the amount and where it stands. */
+
+
+
+  .ledger .detail {
+    display: block;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger .detail--warn {
+    color: var(--tvc-error-text);
+  }
+
+
+  .ledger.section dialog.sheet {
+    width: min(620px, calc(100vw - 32px));
+    max-height: calc(100dvh - 48px);
+    overflow-y: auto;
+  }
+
+  .ledger.section dialog.sheet .sheet-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .ledger .sheet .hint,
+  .ledger .sheet .note {
+    margin: 10px 0;
+    font-size: var(--text-sm);
+  }
+
+
+  .ledger .suggest-note {
+    margin: 10px 0;
+  }
+
+  .ledger .suggest-note .field-label {
+    margin: 0 0 4px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .ledger .why {
+    margin: 0;
+    padding-left: 1.2em;
+    font-size: var(--text-sm);
+    color: var(--tvc-ink-soft);
+  }
+
+  .ledger .new-party {
+    padding: 10px 12px;
+    border: 1px dashed var(--tvc-line-strong);
+    border-radius: var(--radius-sm);
+  }
+
+  .ledger .alloc-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .ledger .alloc-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--tvc-line);
+    border-radius: var(--radius-sm);
+  }
+
+  .ledger .alloc-edit .alloc-top.stack-form {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px;
+  }
+
+  .ledger .alloc-edit .alloc-top.stack-form > label {
+    flex: 1 1 9rem;
+  }
+
+  .ledger .editor-tools {
+    margin: 12px 0 0;
+  }
+
+  .ledger .remaining {
+    margin: 12px 0 0;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ledger .remaining--ok {
+    color: var(--tvc-green);
+  }
+
+  .ledger .remaining--over {
+    color: var(--tvc-error-text);
+  }
+
+  @media (max-width: 560px) {
+    .ledger.section dialog.sheet .sheet-actions .button {
+      flex: 1 1 auto;
+    }
+  }
+</style>

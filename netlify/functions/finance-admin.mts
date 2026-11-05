@@ -1,7 +1,8 @@
 // Netlify Function (v2 API) behind the finance module (docs/finance/DESIGN.md). Session 01 shipped the skeleton: an
 // overview that proves the access rules. Session 03 adds statement import (bank statement files, one per year, and the
 // Paytm UPI export): preview and commit, the imports list, and registering a bank account. The ledger, requests and
-// payroll arrive in later sessions as further routes here.
+// payroll arrive in later sessions as further routes here. Session 05 adds the ledger: lines and their allocations, the
+// review queue, rules, categories and period close (lib/finance-ledger.ts).
 //
 // Auth: Google Sign-In client-side; requireStaff (lib/staff-access.ts) on every request. Holding `finance-requests`
 // grants nothing here: requireStaff looks up the role in the `finance` module only, and an auditor's grant stops
@@ -20,6 +21,7 @@ import { attentionOf } from '../../scripts/lib/finance-attention.mjs';
 import { PARTY_ID, addPayeeAccount, createParty, listParties, mergeParty, retirePayeeAccount, revealPayeeAccount, reviewParty, unmergeParty, updateParty, verifyPayeeAccount } from './lib/finance-parties';
 import { heldCoverage, reconciliationOf, runImport } from './lib/finance-import';
 import { supabaseImportStore } from './lib/finance-import-store';
+import { LEDGER_ID, closePeriod, ledgerCounts, ledgerLine, listLedger, listPeriods, listRules, postBatch, recategorise, reviewAllocation, saveAllocations, saveCategory, saveRule, setRequester } from './lib/finance-ledger';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -58,7 +60,8 @@ async function handleOverview(req: Request): Promise<Response> {
       heldCoverage(store),
       reconciliationOf(store),
     ]);
-    const attention = attentionOf({ parties, accounts, coverage, reconciliation, batches, bankAccountCount: bankAccounts, today: todayIST() });
+    const ledger = await ledgerCounts().catch(() => ({ unallocated: 0, review: 0 }));
+    const attention = { ...attentionOf({ parties, accounts, coverage, reconciliation, batches, bankAccountCount: bankAccounts, today: todayIST() }), toAllocate: ledger.unallocated, toReview: ledger.review };
     return jsonResponse({
       entity: entities[0]?.name ?? null,
       role: staff.role,
@@ -189,6 +192,31 @@ export default async (req: Request): Promise<Response> => {
     if (account[2] === 'retire') return retirePayeeAccount(req, account[1]);
     return verifyPayeeAccount(req, account[1]);
   }
+  // Ledger and review (session 05)
+  if (route === '/ledger' && req.method === 'GET') return listLedger(req);
+  if (route === '/ledger/post' && req.method === 'POST') return postBatch(req);
+  const line = /^\/ledger\/([^/]+)(\/allocations)?$/.exec(route);
+  if (line && LEDGER_ID.test(line[1])) {
+    if (!line[2] && req.method === 'GET') return ledgerLine(req, line[1]);
+    if (line[2] && req.method === 'POST') return saveAllocations(req, line[1]);
+  }
+  const review = /^\/allocations\/([^/]+)\/review$/.exec(route);
+  if (review && LEDGER_ID.test(review[1]) && req.method === 'POST') return reviewAllocation(req, review[1]);
+  if (route === '/rules' && req.method === 'GET') return listRules(req);
+  if (route === '/rules' && req.method === 'POST') return saveRule(req, null);
+  const rule = /^\/rules\/([^/]+)$/.exec(route);
+  if (rule && LEDGER_ID.test(rule[1]) && req.method === 'PATCH') return saveRule(req, rule[1]);
+  if (route === '/categories' && req.method === 'POST') return saveCategory(req, null, null);
+  if (route === '/categories/recategorise' && req.method === 'POST') return recategorise(req);
+  const category = /^\/categories\/([^/]+)(\/merge)?$/.exec(route);
+  if (category && LEDGER_ID.test(category[1])) {
+    if (!category[2] && req.method === 'PATCH') return saveCategory(req, category[1], null);
+    if (category[2] && req.method === 'POST') return saveCategory(req, category[1], 'merge');
+  }
+  if (route === '/settings/requester' && req.method === 'POST') return setRequester(req);
+  if (route === '/periods' && req.method === 'GET') return listPeriods(req);
+  const period = /^\/periods\/(\d{4}-\d{2}-\d{2})\/close$/.exec(route);
+  if (period && req.method === 'POST') return closePeriod(req, period[1]);
   return jsonResponse({ error: 'Not found' }, 404);
 };
 
@@ -202,5 +230,15 @@ export const config = {
     '/api/finance-admin/parties',
     '/api/finance-admin/parties/*',
     '/api/finance-admin/accounts/*',
+    '/api/finance-admin/ledger',
+    '/api/finance-admin/ledger/*',
+    '/api/finance-admin/allocations/*',
+    '/api/finance-admin/rules',
+    '/api/finance-admin/rules/*',
+    '/api/finance-admin/categories',
+    '/api/finance-admin/categories/*',
+    '/api/finance-admin/settings/*',
+    '/api/finance-admin/periods',
+    '/api/finance-admin/periods/*',
   ],
 };
