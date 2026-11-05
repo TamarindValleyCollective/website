@@ -110,6 +110,24 @@ const events = defineCollection({
     // Prototype as of 2026-09 - proven out on one event before any other
     // uses it; see RAZORPAY.md.
     razorpayReferenceId: z.string().optional(),
+    // For an event sold in more than one option at different per-person prices
+    // (e.g. a day visit and an overnight stay). Each option is its own base
+    // Payment Link, set up exactly as for razorpayReferenceId above, with its
+    // own reference_id and its own notes.event (put the option in the title so
+    // alerts, receipts and the payments dashboard say which one was booked).
+    // EventBookingForm shows a picker and sends the chosen referenceId; the
+    // server side is unchanged. Keep each referenceId to 26 characters or
+    // fewer and make the options differ early: Razorpay caps reference_ids at
+    // 40, and booking-link.ts builds each guest's own link id from only the
+    // first 26-30 characters of this one plus an email hash, so options that
+    // share a long prefix would collide for a guest booking both.
+    // `amount` is display only, as `price` is. Set
+    // this instead of razorpayReferenceId, not as well.
+    razorpayOptions: z.array(z.object({
+      referenceId: z.string(),
+      label: z.string(),
+      amount: z.string(),
+    })).optional(),
   }),
 });
 

@@ -331,13 +331,14 @@ const brand =
               event. An event using this should NOT also put its own
               hand-authored `#cta` block in the markdown body - this is the
               one #cta the sidebar's "Request to book" link jumps to. */}
-          {isUpcoming && event.data.razorpayReferenceId && (
+          {isUpcoming && (event.data.razorpayReferenceId || event.data.razorpayOptions?.length) && (
             <div id="cta">
               <EventBookingForm
                 heading="Request a spot"
-                referenceId={event.data.razorpayReferenceId}
-                unitAmount={event.data.price![0].amount}
-                unitLabel={event.data.price![0].label}
+                referenceId={event.data.razorpayOptions?.[0]?.referenceId ?? event.data.razorpayReferenceId!}
+                options={event.data.razorpayOptions}
+                unitAmount={event.data.razorpayOptions?.[0]?.amount ?? event.data.price![0].amount}
+                unitLabel={event.data.razorpayOptions ? 'per person' : event.data.price![0].label}
                 eventDate={event.data.date.toISOString().slice(0, 10)}
               />
             </div>
@@ -907,6 +908,11 @@ const brand =
     width: 100%;
     max-width: 360px;
     margin: 16px auto 32px;
+  }
+
+  /* For a text-heavy poster that has to stay readable at page width. */
+  .prose :global(.poster--large) {
+    max-width: 560px;
   }
 
   .prose :global(.poster img) {

@@ -41,6 +41,21 @@ for the full technical writeup and diagram).
    actually paying) — confirms the price lookup and per-booking Payment Link creation work
    before relying on it for a real event.
 
+**An event sold in more than one option (2026-11-05).** When one event has several per-person
+prices (a day visit and an overnight stay), make one base Payment Link per option and list them
+in the event's `razorpayOptions` frontmatter (`referenceId`, `label`, `amount`) instead of
+`razorpayReferenceId`. `EventBookingForm` shows a "Choose one" picker and submits the chosen
+`referenceId`, so the server side, approval flow, receipts and reminders are unchanged; each option
+is simply its own event as far as `event_payments` and `/internal/event-payments` (one dropdown row
+per option) are concerned. Name each option in the link's `notes.event` so alerts and receipts say
+which was booked. Rules for the `reference_id`s: at most 40 characters (Razorpay's cap), but keep
+them to 26 or fewer and make the options differ early, because `booking-link.ts` builds each
+guest's own link id from only the first 26-30 characters plus an email hash, and options sharing
+a long prefix would collide for a guest booking both. Keep the date in the id, so a later edition
+doesn't share records, duplicate warnings or "Cancel event" with this one. First use: Foraging
+Trails & Tales, 28–29 Nov 2026 (`ftt-day-2026-11-28` at ₹2,500, `ftt-overnight-2026-11-28` at
+₹4,500). A group wanting a mix sends one request per option.
+
 **Approval-gated booking (2026-10-11).** Guests no longer pay straight from the site: a guest
 booked Foraging Day believing the farm was in Bengaluru and had to be refunded. Now
 `EventBookingForm` ("Request a spot", shows the price and where the farm is, says no charge until

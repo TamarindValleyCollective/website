@@ -16,17 +16,19 @@ import { getCollection } from 'astro:content';
 // here — an event using the inquiry-first BookingInquiry flow has no
 // event_payments rows at all. English-only (kn/ta sibling entries share the
 // same razorpayReferenceId and would just duplicate the dropdown).
-const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/') && !e.id.startsWith('ta/') && Boolean(e.data.razorpayReferenceId)))
+const paidEvents = (await getCollection('events', (e) => !e.id.startsWith('kn/') && !e.id.startsWith('ta/') && Boolean(e.data.razorpayReferenceId || e.data.razorpayOptions?.length)))
   .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
-  .map((e) => ({
-    referenceId: e.data.razorpayReferenceId as string,
-    title: e.data.title,
+  // An event sold in options (razorpayOptions) is one entry per option, each
+  // its own payment link, so each gets its own row in the dropdown.
+  .flatMap((e) => (e.data.razorpayOptions ?? [{ referenceId: e.data.razorpayReferenceId as string, label: '' }]).map((o) => ({
+    referenceId: o.referenceId,
+    title: o.label ? `${e.data.title} — ${o.label}` : e.data.title,
     // yyyy-mm-dd only — the /refund-policy tiers key off the event's own
     // start date, and a plain date (no time-of-day) is all that's on the
     // content file anyway.
     date: e.data.date.toISOString().slice(0, 10),
     draft: e.data.draft ?? false,
-  }));
+  })));
 ---
 
 <StaffLayout title="Payments" description="Internal event payment tracking and refunds." current="event-payments">
