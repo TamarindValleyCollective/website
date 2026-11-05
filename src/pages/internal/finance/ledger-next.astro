@@ -49,6 +49,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   import { StaffAuthError, askSheet, clearStepUp, clearToken, decodeTokenEmail, getToken, setToken, showToast, staffFetch } from '../../../../scripts/lib/staff-client.mjs';
   import { clearState, showFailure, showLoading } from '../../../../scripts/lib/staff-states.mjs';
   import { button, categorySelect, h, partySelect, pill, rupees } from '../../../../scripts/lib/finance-ui.mjs';
+  import { compareRows, describeCondition, matchAmount, matchDate, matchText, parseAmount, parseDate, parseText } from '../../../../scripts/lib/finance-columns.mjs';
 
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
@@ -58,12 +59,13 @@ import SignInGate from '../../../components/SignInGate.astro';
     id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null;
     state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean; missingParty: boolean; suggestion: Suggestion | null;
     allocation: { categoryId: string; partyId: string | null; nature: string; count: number; householdLabel: string | null; maintenanceYear: string | null } | null;
+    effective: { category: string; party: string; nature: string }; // what it was posted to, or is suggested: what the column searches read
   };
   type Category = { id: string; name: string; type: string; active: boolean };
   type Party = { id: string; name: string; kind: string };
   type Lookups = { categories: Category[]; parties: Party[] };
   type Filter = 'unallocated' | 'review' | 'noparty' | 'all';
-  type ListData = { canAllocate: boolean; counts: Record<Filter, number>; total: number; lines: Line[]; lookups: Lookups };
+  type ListData = { canAllocate: boolean; lines: Line[]; lookups: Lookups };
   type Field = 'categoryId' | 'partyId' | 'nature';
   type Draft = Record<Field, string>;
 
@@ -78,12 +80,14 @@ import SignInGate from '../../../components/SignInGate.astro';
   const spacer = $('gspacer');
 
   let data: ListData | null = null;
-  let lines: Line[] = [];
+  let all: Line[] = []; // every bank line, fetched once
+  let lines: Line[] = []; // the ones the chip, search and column conditions leave, in sort order
+  let counts: Record<Filter, number> = { unallocated: 0, review: 0, noparty: 0, all: 0 };
+  let filterErrors: Record<string, string> = {};
   let filter: Filter = 'unallocated';
   let query = '';
   const colFilters: Record<string, string> = {};
   let loadSeq = 0;
-  let loadingMore = false;
   let postedThisSitting = 0;
 
   // ---- sign-in (same as the real ledger)
@@ -192,8 +196,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       onSortingChange: (updater: any) => {
         tstate = { ...tstate, sorting: typeof updater === 'function' ? updater(tstate.sorting) : updater };
         syncTable();
-        renderHead();
-        void load();
+        applyView(true);
       },
       onRowSelectionChange: (updater: any) => {
         tstate = { ...tstate, rowSelection: typeof updater === 'function' ? updater(tstate.rowSelection) : updater };
@@ -238,51 +241,90 @@ import SignInGate from '../../../components/SignInGate.astro';
     paint();
   }
 
-  // ---- loading
-  async function load(more = false) {
+  // ---- loading: every line comes down once (about two seconds); sorting, searching and the chips then happen here, instantly.
+  const setBusy = (on: boolean, message = '') => {
+    $('grid').classList.toggle('is-loading', on);
+    $('grid').setAttribute('aria-busy', String(on));
+    if (on) $('progress').textContent = message;
+  };
+  async function load() {
     gate.hidden = true;
     forbidden.hidden = true;
     if (!data) showLoading(statusEl);
+    else setBusy(true, 'Refreshing from the bank records…');
     try {
       const seq = ++loadSeq;
-      const sort = sortOf();
-      const params = new URLSearchParams({ filter, offset: String(more ? lines.length : 0), sort: sort.key, dir: sort.dir });
-      if (wantFresh) {
-        params.set('fresh', '1');
-        wantFresh = false;
-      }
-      if (query) params.set('q', query);
-      for (const [col, text] of Object.entries(colFilters)) if (text.trim()) params.set(`f_${col}`, text.trim());
-      const { status, data: out } = await call(`/api/finance-admin/ledger?${params}`);
+      const { status, data: out } = await call(`/api/finance-admin/ledger/all${wantFresh ? '?fresh=1' : ''}`);
+      wantFresh = false;
       if (seq !== loadSeq) return;
       if (status !== 200) throw new Error('load failed');
       data = out as ListData;
-      lines = more ? [...lines, ...data.lines] : data.lines;
-      if (!more) {
-        tstate = { ...tstate, rowSelection: {} };
-        scrollEl.scrollTop = 0;
-        for (const el of mounted.values()) el.remove();
-        mounted.clear();
-      }
+      all = data.lines;
       clearState(statusEl);
       intro.hidden = false;
       intro.textContent = 'Every line the bank has told us about, and what it was for.';
       content.hidden = false;
-      renderChips();
-      renderHead();
-      renderProgress();
-      setCount();
-      refreshSelection();
-      $('accept-all').hidden = !(data.canAllocate && filter === 'unallocated' && lines.some((l) => editable(l) && hasGhost(l)));
-      $('empty').hidden = lines.length > 0;
-      if (!lines.length) $('empty').textContent = query || Object.values(colFilters).some((t) => t.trim()) ? 'Nothing matches those conditions.' : filter === 'unallocated' ? 'Everything is allocated.' : 'Nothing here right now.';
+      applyView();
     } catch (err) {
       if (err instanceof StaffAuthError) return;
       content.hidden = true;
       showFailure(statusEl, { title: "Couldn't load the ledger", text: "The server didn't answer. Nothing was changed. Check your connection and try again.", onRetry: () => load() });
     } finally {
-      loadingMore = false;
+      setBusy(false);
     }
+  }
+
+  // The chip, the narration search and the column conditions, then the sort, over every line already here (same rules as the server's:
+  // scripts/lib/finance-columns.mjs). Nothing is fetched.
+  const dateLabel = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  const COLUMN_LABELS: Record<string, string> = { date: 'Date', narration: 'Narration', amount: 'Amount', category: 'Category', party: 'Party', nature: 'Wording' };
+  const PARSERS: Record<string, (raw: string) => any> = { date: parseDate, narration: parseText, amount: parseAmount, category: parseText, party: parseText, nature: parseText };
+  function applyView(toTop = false) {
+    if (!data) return;
+    const conds: Record<string, any> = {};
+    filterErrors = {};
+    for (const col of Object.keys(PARSERS)) {
+      const parsed = PARSERS[col]((colFilters[col] ?? '').slice(0, 80));
+      if (!parsed) continue;
+      if (parsed.error) filterErrors[col] = parsed.error;
+      else conds[col] = parsed;
+    }
+    const base = all.filter(
+      (l) =>
+        matchDate(conds.date, l.date, dateLabel(l.date)) &&
+        matchText(conds.narration, l.narration) &&
+        matchAmount(conds.amount, l.amountPaise) &&
+        matchText(conds.category, l.effective.category) &&
+        matchText(conds.party, l.effective.party) &&
+        matchText(conds.nature, l.effective.nature) &&
+        (!query || l.narration.toLowerCase().includes(query)),
+    );
+    counts = { unallocated: 0, review: 0, noparty: 0, all: base.length };
+    for (const l of base) {
+      if (l.state !== 'allocated') counts.unallocated++;
+      if (l.review) counts.review++;
+      if (l.missingParty) counts.noparty++;
+    }
+    const shown = base.filter((l) => (filter === 'all' ? true : filter === 'unallocated' ? l.state !== 'allocated' : filter === 'noparty' ? l.missingParty : l.review));
+    const sort = sortOf();
+    const compare = compareRows(sort.key, sort.dir as 'asc' | 'desc');
+    const row = (l: Line) => ({ id: l.id, date: l.date, narration: l.narration, amount: l.amountPaise, category: l.effective.category, party: l.effective.party, nature: l.effective.nature, status: l.review ? 'review' : l.state });
+    lines = shown.map((l) => ({ l, r: row(l) })).sort((a, b) => compare(a.r, b.r)).map((x) => x.l);
+    const crumbs = Object.keys(conds).map((c) => describeCondition(COLUMN_LABELS[c], conds[c]));
+    for (const box of document.querySelectorAll<HTMLInputElement>('.colfilter')) {
+      const bad = Boolean(filterErrors[box.dataset.col!]);
+      box.setAttribute('aria-invalid', String(bad));
+      box.title = filterErrors[box.dataset.col!] ?? '';
+    }
+    if (toTop) scrollEl.scrollTop = 0;
+    renderChips();
+    renderHead();
+    renderProgress(crumbs);
+    setCount();
+    refreshSelection();
+    $('accept-all').hidden = !(data.canAllocate && filter === 'unallocated' && lines.some((l) => editable(l) && hasGhost(l)));
+    $('empty').hidden = lines.length > 0;
+    if (!lines.length) $('empty').textContent = crumbs.length || query ? 'Nothing matches those conditions.' : filter === 'unallocated' ? 'Everything is allocated.' : 'Nothing here right now.';
   }
 
   // ---- toolbar, progress and headings
@@ -290,19 +332,20 @@ import SignInGate from '../../../components/SignInGate.astro';
   function renderChips() {
     $('chips').replaceChildren(
       ...CHIPS.map(([f, label]) => {
-        const b = h('button', { attrs: { type: 'button', 'aria-pressed': String(f === filter) } }, h('span', { text: `${label} ${data?.counts[f] ?? 0}` }));
+        const b = h('button', { attrs: { type: 'button', 'aria-pressed': String(f === filter) } }, h('span', { text: `${label} ${counts[f]}` }));
         b.addEventListener('click', () => {
           filter = f;
-          void load();
+          applyView(true);
         });
         return b;
       }),
     );
   }
-  function renderProgress() {
+  function renderProgress(crumbs: string[] = []) {
     if (!data) return;
-    const c = data.counts;
-    $('progress').textContent = [`${c.unallocated} left to allocate`, `${c.review} to review`, c.noparty ? `${c.noparty} posted without a party` : '', postedThisSitting ? `${postedThisSitting} posted this sitting` : ''].filter(Boolean).join(' · ');
+    const c = counts;
+    const errs = Object.entries(filterErrors).map(([col, why]) => `Can't read the ${COLUMN_LABELS[col]} search: ${why}`);
+    $('progress').textContent = [`Showing ${lines.length} of ${all.length}`, `${c.unallocated} left to allocate`, `${c.review} to review`, c.noparty ? `${c.noparty} posted without a party` : '', postedThisSitting ? `${postedThisSitting} posted this sitting` : '', crumbs.length ? `Searching: ${crumbs.join(', ')}` : '', ...errs].filter(Boolean).join(' · ');
   }
   const SORTABLE = new Set(['date', 'narration', 'amount', 'category', 'party', 'nature']);
   function renderHead() {
@@ -329,14 +372,14 @@ import SignInGate from '../../../components/SignInGate.astro';
         const id = header.column.id;
         const cellEl = h('span', { class: `gcell gcell--${id}`, attrs: { role: 'cell' } });
         if (SORTABLE.has(id)) {
-          const box = h('input', { class: 'colfilter', attrs: { type: 'search', placeholder: 'Search', 'aria-label': `Search the ${String(header.column.columnDef.header)} column`, autocomplete: 'off' } }) as HTMLInputElement;
+          const box = h('input', { class: 'colfilter', attrs: { 'data-col': id, type: 'search', placeholder: 'Search', 'aria-label': `Search the ${String(header.column.columnDef.header)} column`, autocomplete: 'off' } }) as HTMLInputElement;
           let timer: ReturnType<typeof setTimeout>;
           box.addEventListener('input', () => {
             clearTimeout(timer);
             timer = setTimeout(() => {
               colFilters[id] = box.value;
-              void load();
-            }, 300);
+              applyView(true);
+            }, 150);
           });
           cellEl.append(box);
         }
@@ -350,8 +393,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     clearTimeout(qTimer);
     qTimer = setTimeout(() => {
       query = (e.target as HTMLInputElement).value.trim().toLowerCase();
-      void load();
-    }, 300);
+      applyView(true);
+    }, 150);
   });
 
   // ---- rows. Built once when they scroll into view; an edit changes the cells in place (fill), never the row element.
@@ -545,7 +588,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       }
       // Keep the page's order the same as the table's, so Tab and a screen reader go down the lines in order (never while focus is inside).
       if (!spacer.contains(document.activeElement) && inOrder.some((el, i) => spacer.children[i] !== el)) spacer.append(...inOrder);
-      $('grid').setAttribute('aria-rowcount', String((data?.total ?? 0) + 2));
+      $('grid').setAttribute('aria-rowcount', String(lines.length + 2));
       if (pendingFocus) {
         const l = lines[pendingFocus.index];
         const el = l && mounted.get(l.id);
@@ -554,12 +597,6 @@ import SignInGate from '../../../components/SignInGate.astro';
           (pendingFocus.field === 'nature' ? r.nature : pendingFocus.field === 'partyId' ? r.party : r.cat).focus();
           pendingFocus = null;
         }
-      }
-      const items = virtualizer.getVirtualItems();
-      const last = items[items.length - 1];
-      if (data && last && last.index >= lines.length - 15 && lines.length < data.total && !loadingMore) {
-        loadingMore = true;
-        void load(true);
       }
     } finally {
       painting = false;
@@ -715,6 +752,49 @@ import SignInGate from '../../../components/SignInGate.astro';
     border: 1px solid var(--tvc-line);
     border-radius: var(--radius);
     background: var(--tvc-white);
+  }
+
+  /* Working: the table dims and a bar runs along its top while the lines are fetched. */
+  .lnext .grid {
+    position: relative;
+  }
+
+  .lnext .grid.is-loading .gscroll {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .lnext .grid.is-loading::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 3;
+    height: 3px;
+    width: 40%;
+    background: var(--tvc-green);
+    animation: lnext-slide 1.1s ease-in-out infinite;
+  }
+
+  @keyframes lnext-slide {
+    from {
+      left: -40%;
+    }
+
+    to {
+      left: 100%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lnext .grid.is-loading::before {
+      animation: none;
+      width: 100%;
+    }
+  }
+
+  .lnext .colfilter[aria-invalid='true'] {
+    border-color: var(--tvc-error-border);
   }
 
   .lnext .ghead,

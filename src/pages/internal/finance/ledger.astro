@@ -26,6 +26,7 @@ import SignInGate from '../../../components/SignInGate.astro';
           <input id="q" type="search" placeholder="Search the bank's narration" autocomplete="off" />
         </label>
         <div class="segmented chips" id="chips" role="group" aria-label="Show"></div>
+        <span id="busy" class="busy" role="status" hidden>Updating…</span>
         <span class="grow"></span>
         <button type="button" id="accept-all" class="button button--outline" hidden>Fill in the suggestions on this page</button>
       </div>
@@ -163,6 +164,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     gate.hidden = true;
     forbidden.hidden = true;
     if (!data) showLoading(statusEl);
+    else setBusy(true);
     try {
       const seq = ++loadSeq;
       const offset = more ? lines.length : 0;
@@ -189,7 +191,14 @@ import SignInGate from '../../../components/SignInGate.astro';
       content.hidden = true;
       intro.hidden = true;
       showFailure(statusEl, { title: "Couldn't load the ledger", text: "The server didn't answer. Nothing was changed. Check your connection and try again; if it keeps failing, tell a super admin.", onRetry: () => load() });
+    } finally {
+      setBusy(false);
     }
+  }
+  // Something is on its way: the table dims and "Updating…" shows beside the chips until the answer arrives.
+  function setBusy(on: boolean) {
+    $('busy').hidden = !on;
+    document.querySelector('.ledger')?.classList.toggle('is-busy', on);
   }
 
   // ---- drafts: what you have typed into the table but not posted yet. They live in this page only; posting is a separate step.
@@ -1099,6 +1108,15 @@ import SignInGate from '../../../components/SignInGate.astro';
   .ledger .chip-count--crit {
     background: var(--tvc-error-bg);
     color: var(--tvc-error-text);
+  }
+
+  .ledger .busy {
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-sm);
+  }
+
+  .ledger.is-busy .tablewrap {
+    opacity: 0.5;
   }
 
   .ledger .bar .grow {

@@ -266,6 +266,63 @@ export async function listLedger(req: Request): Promise<Response> {
   }
 }
 
+// Every line in one response, with what each was posted to or is suggested, for pages that sort and search in the browser (the
+// prototype ledger). One wave of reads, no filtering or paging: the browser does that instantly with scripts/lib/finance-columns.mjs.
+export async function ledgerAll(req: Request): Promise<Response> {
+  const auth = await requireStaff(req, 'finance', 'view');
+  if (!auth.ok) return fail(auth.error, auth.status);
+  try {
+    const [{ lines, byLine }, ctx, accounts, households, upis] = await Promise.all([
+      loadLedger(null, null),
+      lookups(),
+      cached('bank-accounts', () => rows('/fin_bank_accounts?select=id,label')),
+      cached('households', () => rowsAll('/member_households?select=id,farm_unit,house_no&order=id.asc')),
+      cached('upi-linked', () => rowsAll('/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle&bank_line_id=not.is.null&order=id.asc')),
+      reviewRef(), // started now so the suggestion context below does not wait for it
+    ]);
+    const sc = await suggestionContext(lines, byLine, ctx);
+    const upiOf = new Map(upis.map((u) => [u.bank_line_id as string, u]));
+    const categoryById = new Map(ctx.categories.map((c) => [c.id as string, c]));
+    const partyName = new Map(ctx.parties.map((x) => [x.id as string, x.name as string]));
+    const householdLabel = new Map(households.map((x) => [x.id as string, [x.farm_unit, x.house_no].filter(Boolean).join(' · ')]));
+    const accountLabel = new Map(accounts.map((a) => [a.id as string, a.label as string]));
+    const capabilities = capabilitiesForRole('finance', auth.staff.role) as string[];
+    const out = lines.map((l) => {
+      const allocs = byLine.get(l.id) ?? [];
+      const posted = allocs.some((a) => a.posted_at);
+      const state = posted ? 'allocated' : lineState(l, allocs);
+      const missingParty = allocs.some((a) => a.posted_at && !a.reverses_allocation_id && !a.party_id && partyNeeded(categoryById.get(a.category_id)));
+      const upi = upiOf.get(l.id) ?? null;
+      const summary = postedSummary(allocs);
+      const sg = posted ? null : suggestFor(l, upi, ctx, sc);
+      const effective = summary
+        ? { category: categoryById.get(summary.categoryId)?.name ?? '', party: summary.partyId ? partyName.get(summary.partyId) ?? '' : '', nature: summary.nature ?? '' }
+        : { category: sg?.categoryId ? categoryById.get(sg.categoryId)?.name ?? '' : '', party: sg?.partyId ? partyName.get(sg.partyId) ?? '' : sg?.newParty?.name ?? '', nature: sg?.nature ?? '' };
+      return {
+        id: l.id,
+        date: l.tran_date,
+        narration: l.narration,
+        direction: l.direction,
+        amountPaise: l.amount_paise,
+        account: accountLabel.get(l.bank_account_id) ?? '',
+        remark: upi?.remarks ?? null,
+        counterparty: upi?.counterparty ?? null,
+        isCircle: Boolean(upi?.is_circle),
+        allocatedPaise: allocs.reduce((n, a) => n + a.amount_paise, 0),
+        state,
+        review: allocs.some((a) => a.review_state !== 'ok'),
+        missingParty,
+        suggestion: sg ? compactSuggestion(sg) : null,
+        allocation: summary ? { ...summary, householdLabel: summary.householdId ? householdLabel.get(summary.householdId as string) ?? null : null } : null,
+        effective,
+      };
+    });
+    return jsonResponse({ canAllocate: capabilities.includes('allocate'), canClose: capabilities.includes('close-period'), lines: out, lookups: ctx });
+  } catch (err) {
+    return serverError(err, 'ledger all');
+  }
+}
+
 // ---------------------------------------------------------------- one line
 // Posted allocations on lines going the other way, with how much of each is still unreversed: what a refund can undo.
 async function reversibleFor(line: Json): Promise<Json[]> {
@@ -312,13 +369,15 @@ const compactSuggestion = (x: Json) =>
     ? { categoryId: x.categoryId, partyId: x.partyId, nature: x.nature, confidence: x.confidence, newPartyName: x.newParty?.name ?? null }
     : null;
 
-async function reviewContext(ctx: Awaited<ReturnType<typeof lookups>>) {
-  const [rules, allAccounts] = await cached('review-ref', () =>
+const reviewRef = () =>
+  cached('review-ref', () =>
     Promise.all([
       rows('/fin_rules?select=id,priority,matcher,party_id,category_id,nature_template,needs_review,active&active=eq.true'),
       rowsAll('/fin_party_accounts?select=party_id,status,retired_on&status=neq.superseded&order=id.asc'),
     ]),
   );
+async function reviewContext(ctx: Awaited<ReturnType<typeof lookups>>) {
+  const [rules, allAccounts] = await reviewRef();
   const today = new Date().toISOString().slice(0, 10);
   const stateOfParty = (partyId: string | null): 'verified' | 'unverified' | 'none' => {
     if (!partyId) return 'none';

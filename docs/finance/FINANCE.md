@@ -369,6 +369,12 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   (or after a write) pays the full 1-2 s. Any write through `/api/finance-admin` drops the cache, and the pages add `fresh=1` to the first
   list read after a write, because another warm instance may not have seen it. Anything that writes behind the function's back (the
   history load, a script) shows up within 10 s.
+  **That cache is not reliable under `netlify dev`**, which does not keep a Function's memory between requests: every list call was still
+  about 3 s there. So the prototype page (`/internal/finance/ledger-next/`) does not ask the server to search at all: `GET
+  /api/finance-admin/ledger/all` returns every line once (about 2 s cold, 0.8 MB), with what each was posted to or is suggested
+  (`effective`), and the chips, narration search, column conditions and sort run in the browser over them with the same
+  `scripts/lib/finance-columns.mjs` (a search is about 150 ms, most of it the typing delay). Both pages now show "Updating…" and dim the
+  table while a request is in flight, and the prototype's progress line names what is being searched and any condition it cannot read.
 
 ## History load (session 06, in progress)
 

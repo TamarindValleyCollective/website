@@ -608,6 +608,19 @@ test('the list is served from a short cache, and fresh=1 or any write drops it',
   assert.equal(afterWrite.total, first.total, 'a write drops the cache');
 });
 
+// ---- every line at once, for pages that sort and search in the browser
+test('/ledger/all returns every line with what it was posted to or is suggested, and no paging', async () => {
+  reset();
+  db.fin_bank_lines.push(...bulkLines(1200, '2026-07', 100));
+  const op = sign('u1', 'user');
+  const out = await (await api(op, '/ledger/all')).json();
+  assert.equal(out.lines.length, db.fin_bank_lines.length, 'more than the 1,000 rows the database returns per request');
+  const line = out.lines.find((l) => l.id === L_DEBIT);
+  assert.equal(line.effective.party, 'Green Nursery', 'a suggestion fills what the column searches read');
+  assert.equal(line.state, 'unallocated');
+  assert.ok(out.lookups.categories.length > 0);
+});
+
 // ---- missing parties, households and the Paytm line (what a posted line shows)
 test('a posted line with no party is found under "No party", unless its category needs none; maintenance shows its unit and year', async () => {
   reset();
