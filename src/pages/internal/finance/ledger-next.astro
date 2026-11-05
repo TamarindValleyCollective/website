@@ -805,6 +805,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   }
   function renderProgress(crumbs: string[] = []) {
     if (!data) return;
+    renderMoreLabel();
     const c = counts;
     const errs = Object.entries(filterErrors).map(([col, why]) => `Can't read the ${COLUMN_LABELS[col]} search: ${why}`);
     $('progress').textContent = [`Showing ${lines.length} of ${all.length}`, `${c.unallocated} left to allocate`, `${c.review} to review`, c.noparty ? `${c.noparty} posted without a party` : '', postedThisSitting ? `${postedThisSitting} posted this sitting` : '', crumbs.length ? `Searching: ${crumbs.join(', ')}` : '', ...errs].filter(Boolean).join(' · ');
@@ -862,8 +863,13 @@ import SignInGate from '../../../components/SignInGate.astro';
     const open = !document.querySelector('.lnext')!.classList.contains('show-tools');
     document.querySelector('.lnext')!.classList.toggle('show-tools', open);
     $('more-tools').setAttribute('aria-expanded', String(open));
-    $('more-tools').textContent = open ? 'Less' : 'More';
+    renderMoreLabel();
   });
+  // On a phone the progress line is behind More, so the button carries the one number that matters.
+  function renderMoreLabel() {
+    const open = document.querySelector('.lnext')!.classList.contains('show-tools');
+    $('more-tools').textContent = open ? 'Less' : `More · ${counts.unallocated} left`;
+  }
   $('tips-toggle').addEventListener('click', () => {
     const open = $('tips').hidden;
     $('tips').hidden = !open;
@@ -1100,9 +1106,10 @@ import SignInGate from '../../../components/SignInGate.astro';
     const undo = () => {
       if (lastUndo?.run === undo) lastUndo = null;
       for (const [id, d] of before) {
+        const l = byId.get(id);
+        if (l && !editable(l)) continue; // already posted since: leave it alone
         if (d) drafts.set(id, d);
         else drafts.delete(id);
-        const l = byId.get(id);
         if (l) syncRow(l);
       }
       persistDrafts();
@@ -1365,7 +1372,9 @@ import SignInGate from '../../../components/SignInGate.astro';
   });
 
   // ---- posting: the second step, confirmed first
+  let posting = false;
   async function postReady() {
+    if (posting) return;
     const ready = selectedLines().filter(isReady);
     if (!ready.length) return;
     const lk = data!.lookups;
@@ -1381,21 +1390,40 @@ import SignInGate from '../../../components/SignInGate.astro';
       actions: [{ label: 'Post them', value: true, kind: 'primary' }, { label: 'Cancel', value: false }],
     });
     if (!ok) return;
+    posting = true; // a second press while this runs would send the same lines again
+    lastUndo = null; // an earlier undo must not touch lines that are about to be posted
+    const postButton = document.querySelector<HTMLButtonElement>('#actionbar .abar-post');
+    if (postButton) postButton.disabled = true;
     let posted = 0;
     let flagged = 0;
+    let dropped = false;
     const failed: { lineId: string; error: string }[] = [];
-    for (let i = 0; i < ready.length; i += 10) {
-      const chunk = ready.slice(i, i + 10);
-      showToast(`Posting ${Math.min(i + 10, ready.length)} of ${ready.length}…`);
-      const items = chunk.map((l) => ({ lineId: l.id, categoryId: draftOf(l.id).categoryId, partyId: draftOf(l.id).partyId || null, nature: draftOf(l.id).nature.trim() }));
-      const { status, data: out } = await call('/api/finance-admin/ledger/post', 'POST', { items });
-      if (status !== 200) {
-        for (const l of chunk) failed.push({ lineId: l.id, error: out?.error ?? 'Could not post this line.' });
-        continue;
+    try {
+      for (let i = 0; i < ready.length; i += 10) {
+        const chunk = ready.slice(i, i + 10);
+        showToast(`Posting ${Math.min(i + 10, ready.length)} of ${ready.length}…`);
+        const items = chunk.map((l) => ({ lineId: l.id, categoryId: draftOf(l.id).categoryId, partyId: draftOf(l.id).partyId || null, nature: draftOf(l.id).nature.trim() }));
+        let res: { status: number; data: any };
+        try {
+          res = await call('/api/finance-admin/ledger/post', 'POST', { items });
+        } catch {
+          // The connection dropped or the session ended. Whether this batch reached the server is not known, so these lines are not marked
+          // posted here; the refresh below shows what the server holds. Nothing after this batch is sent.
+          dropped = true;
+          for (const l of ready.slice(i)) failed.push({ lineId: l.id, error: 'Not confirmed: the connection dropped. The list is being checked against the server.' });
+          break;
+        }
+        const { status, data: out } = res;
+        if (status !== 200) {
+          for (const l of chunk) failed.push({ lineId: l.id, error: out?.error ?? 'Could not post this line.' });
+          continue;
+        }
+        posted += out.posted;
+        flagged += out.flagged;
+        failed.push(...(out.failed as { lineId: string; error: string }[]));
       }
-      posted += out.posted;
-      flagged += out.flagged;
-      failed.push(...(out.failed as { lineId: string; error: string }[]));
+    } finally {
+      posting = false;
     }
     const failedIds = new Set(failed.map((f) => f.lineId));
     const resumeAt = Math.max(0, Math.min(...ready.filter((l) => !failedIds.has(l.id)).map((l) => lines.indexOf(l)).filter((i) => i >= 0), lines.length));
@@ -1417,7 +1445,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     rowErrors.clear();
     for (const f of failed) rowErrors.set(f.lineId, f.error);
     postedThisSitting += posted;
-    const summary = [`${posted} posted`, flagged ? `${flagged} sent to review` : '', failed.length ? `${failed.length} could not be posted (see the red notes on those lines)` : ''].filter(Boolean).join(', ') + '.';
+    const summary = [`${posted} posted`, flagged ? `${flagged} sent to review` : '', failed.length ? (dropped ? `${failed.length} not confirmed because the connection dropped: check them in the refreshed list before posting again` : `${failed.length} could not be posted (see the red notes on those lines)`) : ''].filter(Boolean).join(', ') + '.';
     showToast(summary);
     if (failed.length || flagged) {
       const note = $('postnote');
@@ -2095,6 +2123,19 @@ import SignInGate from '../../../components/SignInGate.astro';
     .lnext .tick,
     .lnext .lrow input[type='checkbox'] {
       min-width: 44px;
+      min-height: 44px;
+    }
+  }
+
+  /* Touch screens of any width get finger-sized targets (the shell's own small-button rule is beaten on purpose: main .button--small). */
+  @media (pointer: coarse) {
+    .lnext .tick,
+    .lnext .lrow input[type='checkbox'] {
+      min-width: 44px;
+      min-height: 44px;
+    }
+
+    main .lnext.section .button--small {
       min-height: 44px;
     }
   }

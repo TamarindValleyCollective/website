@@ -388,6 +388,10 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   line starts about 170px higher); "Fill in the confident suggestions" fills only high and medium confidence, a weak one shows as "A guess" and is left
   for a person; after a post keyboard focus goes to the line that took the posted one's place; Ctrl+Z (Cmd+Z) undoes the last bulk change for two
   minutes, so undo no longer depends on a toast.
+  **Closing round:** a post that loses its connection sends nothing more, marks nothing posted, says how many were not confirmed and refreshes from the
+  server; Post cannot be pressed twice while it runs; Undo skips lines posted since; on a phone the More button carries the "N left" count; touch screens of
+  any width get 44px targets; the Rules page's small buttons are now really 44px on a phone (the shell's `main .button--small` rule has one more specificity
+  point than a plain `.rules .button--small`, so page rules for it must be `main .<page>.section .button--small`).
   The prototype also asks "Also set category X on the other N selected lines?" when a ticked line's cell is changed, and Alt+Up / Alt+Down
   move to the same cell on the line above or below.
   **The unit and year of maintenance can now be set.** `fin_allocations.household_id` and `maintenance_year` (migration 0084) were read
