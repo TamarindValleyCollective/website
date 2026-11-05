@@ -14,7 +14,7 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 | 01 follow-up | `0078_finance_categories_and_projects.sql` **applied to TVC ERP on 2026-11-02**. |
 | 03 Statement import | Built on branch `finance-03-statement-import` (draft PR). Migration `0080` **applied to TVC ERP on 2026-11-02**. |
 | 04 Parties & payees | Built on branch `finance-04-parties` (draft PR). Migration `0079` **applied to TVC ERP on 2026-11-02** (recorded as `finance_parties`); checked afterwards: both tables empty, RLS on, no anon/authenticated grants, guard trigger present. |
-| 05 Ledger & review | **Built, draft PR #529** (branch `worktree-finance-05-ledger`): posting rules, rules engine, ledger and rules screens, period close. Migration `0083` **NOT yet applied**; apply it before this merges. Not yet tried against real data. |
+| 05 Ledger & review | **Built, draft PR #529** (branch `worktree-finance-05-ledger`): posting rules, rules engine, ledger and rules screens, period close. Migration `0083` **applied to TVC ERP on 2026-11-05** (recorded as `finance_ledger`). Running locally against the real database; nothing allocated yet. |
 | 02, 06-13 | Not started |
 
 ## Access
@@ -219,11 +219,12 @@ Page `/internal/finance/import/`; routes in `finance-admin.mts` (`GET /imports`,
   A bank API would feed the same planning/storing step; none is built.
 - **Audit.** `finance.import_committed` (counts only) is written before anything is stored; `finance.bank_account_added`.
 
-## Ledger (session 05, migration `0083_finance_ledger.sql`, NOT yet applied)
+## Ledger (session 05, migration `0083_finance_ledger.sql`, applied 2026-11-05)
 
 Pages `/internal/finance/ledger/` (the Ledger, with the review queue and the months) and `/internal/finance/rules/` (rules,
-categories, the requester); routes in `lib/finance-ledger.ts`. **Apply `0083` before this merges**; the pages and routes
-read `fin_allocations`, `fin_rules` and `fin_periods` and fail without it. Not yet tried against the real statement.
+categories, the requester); routes in `lib/finance-ledger.ts`. `0083` is applied (checked afterwards: three tables empty, RLS on, no
+`anon`/`authenticated` grants, four functions service-role only, three guard triggers, existing data unchanged: 1,376 bank lines,
+122 parties, 29 categories). The pages need it, so a deploy of this code is safe now. Not yet tried by a person on the real lines.
 
 - **Posting rule** (`scripts/lib/finance-allocation.mjs`, repeated in the database). A bank line has one or more allocations; each
   amount is positive whole paise and its direction is the line's. A line is *unallocated*, *partly allocated* or *allocated*. Saved

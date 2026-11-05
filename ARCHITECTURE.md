@@ -476,7 +476,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   existing beneficiary list is loaded by the operator script `scripts/import-fin-parties.mjs`, which reads a Google
   Sheet (shared with the Drive service account) and runs against Supabase; it is not deployed. Rotating
   `FINANCE_PAYEE_KEY` (or the key in use) makes stored payee details unreadable until re-entered; it is separate from `STAFF_MFA_KEY`, so rotating one never breaks the other.
-  **Ledger (session 05, migration `0083_finance_ledger.sql`, applied separately):** `finance-admin.mts` also serves the ledger
+  **Ledger (session 05, migration `0083_finance_ledger.sql`, applied 2026-11-05):** `finance-admin.mts` also serves the ledger
   (`/api/finance-admin/ledger`, `/allocations/:id/review`, `/rules`, `/categories`, `/periods`; code in `lib/finance-ledger.ts`,
   pages `/internal/finance/ledger/` and `/internal/finance/rules/`). `fin_allocations` explains each bank line (a line posts only
   when its allocations add up to it exactly; posted rows are frozen; a refund is a reversing row), `fin_rules` suggests a

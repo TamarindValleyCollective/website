@@ -1,4 +1,6 @@
--- Finance module, session 05: the ledger (docs/finance/sessions/05-ledger-and-review.md). NOT yet applied to TVC ERP.
+-- Finance module, session 05: the ledger (docs/finance/sessions/05-ledger-and-review.md).
+-- Applied to TVC ERP on 2026-11-05 (recorded as finance_ledger); checked afterwards: three tables empty, RLS on, no anon/authenticated
+-- grants, four functions service-role only, three guard triggers present, existing data unchanged.
 --
 --   * fin_allocations: explain a bank line. A line has one or more; their amounts are always positive and the direction is
 --     the line's. A line is posted when its allocations add up to it exactly; until then they are drafts that the same
