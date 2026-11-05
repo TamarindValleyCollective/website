@@ -3,7 +3,7 @@
 // Every name, narration and amount here is invented.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyPlans, mapLabels, memberNamesFromMaster, parseHouseholdOverrides, planAllocations } from './finance-history.mjs';
+import { applyPlans, mapLabels, memberNamesFromMaster, parseHouseholdOverrides, pickCanary, planAllocations } from './finance-history.mjs';
 
 test('the sheet\'s labels map to categories', () => {
   const cat = (details, type = '') => mapLabels(details, type).categoryName;
@@ -279,4 +279,29 @@ test('an answer from a person wins over the automatic matching, whatever the nam
   const out = planAllocations(match([{ row: r, line: { ...line('L1'), direction: 'credit' }, how: 'exact' }]), { categories, parties, people, householdOverrides: overrides });
   assert.equal(out.plans[0].rows[0].household_id, 'h-given');
   assert.equal(out.counts.maintenanceWithoutHousehold, 0);
+});
+
+// ---- the canary: one line of each kind first, so the first real write exercises every path
+const plain = (id) => ({ lineId: id, rows: [{ category_id: 'c', amount_paise: 1, review_state: 'ok' }] });
+
+test('the canary takes the first line of each kind: plain, salary-style group, maintenance with a household, project, approximate', () => {
+  const plans = [
+    plain('p1'), plain('p2'),
+    { lineId: 'g1', rows: [{ amount_paise: 1 }, { amount_paise: 2 }] },
+    { lineId: 'm0', rows: [{ maintenance_year: '2024-25', household_id: null }] }, // maintenance without a household is not the kind we want to prove
+    { lineId: 'm1', rows: [{ maintenance_year: '2024-25', household_id: 'h' }] },
+    { lineId: 'm2', rows: [{ maintenance_year: '2025-26', household_id: 'h' }] },
+    { lineId: 'j1', rows: [{ projectFy: 2025 }] },
+    { lineId: 'a1', rows: [{ review_state: 'needs_review' }] },
+  ];
+  const { picked, kinds, missing } = pickCanary(plans);
+  assert.deepEqual(picked.map((p) => p.lineId), ['p1', 'g1', 'm1', 'j1', 'a1']);
+  assert.deepEqual(kinds, ['plain', 'group', 'maintenance with household', 'project', 'approximate']);
+  assert.deepEqual(missing, []);
+});
+
+test('the canary says which kinds there were none of, and never picks a line twice', () => {
+  const { picked, missing } = pickCanary([{ lineId: 'x', rows: [{ projectFy: 2025, review_state: 'needs_review' }] }]);
+  assert.deepEqual(picked.map((p) => p.lineId), ['x']);
+  assert.deepEqual(missing, ['plain', 'group', 'maintenance with household', 'approximate'], 'the one line served as the project, so none is left for "approximate"');
 });

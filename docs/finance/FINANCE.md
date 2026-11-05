@@ -385,7 +385,15 @@ pure rules in `scripts/lib/finance-history.mjs` (tested on invented rows). Count
   Services rows; about half the lines are payments newer than the tracker). A party was found in the register for 440 allocations (the rest have none).
 - **Applying.** `--apply` needs migration `0084` (applied 2026-11-05; the script checks, and refuses otherwise). It saves one bank line at a time through
   `fin_save_allocations` (posted, source `import`, no actor), skips any line that already has allocations (so a re-run changes nothing), carries on past a
-  failure, and writes one counts-only audit row (`finance.history_loaded`). **Not yet run.**
+  failure, and writes one counts-only audit row (`finance.history_loaded`). **`--canary` first:** it loads only the first line of each kind (a plain line, a
+  salary-style group, a maintenance payment with a household, a Farm Project line, an approximate match), so the first real write exercises every path and can
+  be checked in the ledger before the rest; the full run then skips those lines. **Not yet run.** Posted allocations cannot be deleted, so a wrong load can only be
+  corrected by reversals: that is why the canary comes first, and why a purpose-built, audited "unload imports" function (import-sourced allocations only) was
+  proposed to Sharath.
+- **Pre-load audit (5 Nov 2026, counts only):** every planned line adds up to its bank line; the tracker's total equals loaded + unlabeled + no-bank-line
+  exactly; all 845 one-to-one matches have agreeing narrations; every allocation's month is within one month of its bank date; every category exists and is
+  active. Refunds load as ordinary allocations the other way (20 money-out lines under income-like categories, 21 money-in under cost categories), not as
+  reversals, so reports must net by direction.
 - **Not built:** the reconciliation of module totals against the sheet's own summary tabs by month and category; rules are not seeded (the hidden
   "Lookups" tab holds only payment-mode keywords, and the suggestion engine learns from the loaded history instead); the 2023-24 tracker tab and the
   older years (the ledger holds 476 bank lines before April 2024; the same script takes `--tab` and `--since`).

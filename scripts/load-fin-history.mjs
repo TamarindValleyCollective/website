@@ -7,6 +7,9 @@
 //   netlify dev:exec -- node scripts/load-fin-history.mjs --sheet <spreadsheetId> [--tab "<tab name>"] [--since 2024-04-01] [--out review.csv]
 //   netlify dev:exec -- node scripts/load-fin-history.mjs --sheet <spreadsheetId> [--tab ...] [--since ...] [--households answers.csv] --apply
 //
+// --canary loads only the first line of each kind (plain, salary-style group, maintenance with a household, project, approximate), so the first real
+// write can be checked by eye; the full run afterwards skips them (a line that already has allocations is never touched).
+//
 // --households reads the worklist of payers whose household could not be found, with the farm unit a person has filled in against each name.
 //
 // The sheet id is passed in (or FIN_HISTORY_SHEET_ID), never kept in this public repo, and the sheet must be shared with the Drive
@@ -17,7 +20,7 @@ import { writeFileSync } from 'node:fs';
 import { getSheetValues } from './lib/google-drive.mjs';
 import { restHeaders } from './lib/supabase.mjs';
 import { readFileSync } from 'node:fs';
-import { applyPlans, matchTracker, memberNamesFromMaster, parseHouseholdOverrides, parseTracker, planAllocations } from './lib/finance-history.mjs';
+import { applyPlans, matchTracker, memberNamesFromMaster, parseHouseholdOverrides, parseTracker, pickCanary, planAllocations } from './lib/finance-history.mjs';
 
 const args = process.argv.slice(2);
 const arg = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
@@ -127,8 +130,14 @@ if (apply) {
       await call('/rpc/fin_save_allocations', { method: 'POST', body: JSON.stringify({ p_line_id: lineId, p_rows: rows, p_actor: null, p_post: true, p_override: false }) });
     },
   };
-  console.log('\nApplying...');
-  const result = await applyPlans(plan.plans, store);
+  let toApply = plan.plans;
+  if (args.includes('--canary')) {
+    const canary = pickCanary(plan.plans);
+    toApply = canary.picked;
+    console.log(`\nCanary: ${canary.picked.length} lines (${canary.kinds.join(', ')})${canary.missing.length ? `; none of: ${canary.missing.join(', ')}` : ''}.`);
+  }
+  console.log(`\nApplying ${toApply.length} lines...`);
+  const result = await applyPlans(toApply, store);
   console.log(`Saved ${result.saved} lines; skipped ${result.skippedExisting} that already had allocations; ${result.failed.length} failed.`);
   if (result.failed.length) console.log(`Failed lines (bank line ids): ${result.failed.map((f) => `${f.lineId} (${f.error})`).join('; ')}`);
   await call('/fin_audit_log', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ entity_id: entity, actor_id: null, action: 'finance.history_loaded', target: tab, detail: { since, saved: result.saved, skippedExisting: result.skippedExisting, failed: result.failed.length, allocations: plan.counts.allocations, leftUnallocated: plan.skipped.length } }) });

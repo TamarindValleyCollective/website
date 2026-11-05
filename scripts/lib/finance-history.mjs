@@ -422,3 +422,29 @@ export function parseHouseholdOverrides(csvText, households) {
   }
   return { overrides, unknownUnits };
 }
+
+/**
+ * A small first load: the first planned line of each kind (plain, salary-style group, maintenance with a household, project, approximate), so the first
+ * real write exercises every path and can be checked by eye before the rest. Returns { picked, kinds, missing }: the lines, which kind each is, and the
+ * kinds there was none of. A line is picked once, for the first kind it fits.
+ */
+export function pickCanary(plans) {
+  const kinds = [
+    ['plain', (p) => p.rows.length === 1 && !p.rows[0].maintenance_year && p.rows[0].projectFy == null && p.rows[0].review_state === 'ok'],
+    ['group', (p) => p.rows.length > 1],
+    ['maintenance with household', (p) => p.rows.some((r) => r.maintenance_year && r.household_id)],
+    ['project', (p) => p.rows.some((r) => r.projectFy != null)],
+    ['approximate', (p) => p.rows.some((r) => r.review_state === 'needs_review')],
+  ];
+  const picked = [];
+  const found = [];
+  const missing = [];
+  for (const [kind, fits] of kinds) {
+    const hit = plans.find((p) => fits(p) && !picked.includes(p));
+    if (hit) {
+      picked.push(hit);
+      found.push(kind);
+    } else missing.push(kind);
+  }
+  return { picked, kinds: found, missing };
+}
