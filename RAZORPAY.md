@@ -56,6 +56,12 @@ doesn't share records, duplicate warnings or "Cancel event" with this one. First
 Trails & Tales, 28–29 Nov 2026 (`ftt-day-2026-11-28` at ₹2,500, `ftt-overnight-2026-11-28` at
 ₹4,500). A group wanting a mix sends one request per option.
 
+**Dry runs on the live site.** A request whose name starts with the word "TEST" (e.g. "TEST
+Sharath") emails core-team only, not stay@linger.in (`isDryRunRequest()` in
+`netlify/functions/lib/booking-notify.ts`); the WhatsApp alert still goes to
+`WHATSAPP_BOOKING_APPROVER_NUMBERS`. Use your own phone and email, approve it, and don't pay: the
+payment link expires after 48 hours.
+
 **Approval-gated booking (2026-10-11).** Guests no longer pay straight from the site: a guest
 booked Foraging Day believing the farm was in Bengaluru and had to be refunded. Now
 `EventBookingForm` ("Request a spot", shows the price and where the farm is, says no charge until
