@@ -351,22 +351,40 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   server (the earlier `Save draft` of the sheet still is).
 ## History load (session 06, in progress)
 
-Operator script `scripts/load-fin-history.mjs` (dry run only so far; run with `netlify dev:exec -- node scripts/load-fin-history.mjs --sheet <id>`),
-pure rules in `scripts/lib/finance-history.mjs` (tested on invented rows). Counts only are ever printed.
+Operator script `scripts/load-fin-history.mjs` (a dry run unless `--apply`; run with `netlify dev:exec -- node scripts/load-fin-history.mjs --sheet <id>`),
+pure rules in `scripts/lib/finance-history.mjs` (tested on invented rows). Counts only are ever printed. **Nothing has been written to the ledger yet.**
 
 - **Source.** The workbook "TVC Spend Summary" (the sheet id is passed in, never kept here). The tab "Funds Transfer Tracker (2024-27)" has one row
   per payment: date, to, from, mode, amount, the bank's narration copied in ("Transaction Particulars"), DR/CR, and the labels **Details**
   and **Type**, **Remarks**, and the sheet's own Year and Month (the month the cost belongs to, used as the allocation's period). The yearly
   "TVC 20xx-20xx" workbooks owned by the stay partner are that partner's own operating books, not the ledger's source.
-- **The bank lines already exist** (statement import, session 03), so the load creates **allocations on existing lines**, never lines. The
-  job is to find the line each tracker row describes.
+- **The bank lines already exist** (statement import, session 03), so the load creates **allocations on existing lines**, never lines.
 - **Matching, four passes over what the earlier ones left:** (1) same date, direction and amount, identical candidates paired by how alike their
   narrations are; (2) rows split by hand (a salary batch) whose day's total equals one bank line; (3) the bank's 12-digit reference on another
-  date; (4) same direction and amount within 5 days (reported as approximate). A line is never used twice.
-- **Dry run on the real tracker (2 Nov 2026):** 1,178 usable rows from April 2024 (one row has no amount). **1,123 (95.3%) matched**: 837 one-to-one,
-  278 rows folded into 30 salary-style bank lines, 3 by reference, 5 by nearby date. 875 of the 900 bank lines in that period get a label. Left over:
-  55 tracker rows (39 Salary, 15 Online Services, 1 with no Details), all payments out, and 25 bank lines (about half are payments newer than the
-  tracker's last update). The labels are few: 30 distinct "Details" values; 92 matched rows have no Details and 139 have no Type.
-- **Still to decide before anything is written** (see the session brief): the mapping of Details and Type to the 29 categories, what to do with the
-  blank-label rows, whether to load FY 2023-24 and earlier (the ledger holds 476 older bank lines the sheet's 2024-27 tab does not cover), and how
-  "Farm Project" rows name a project (no project records exist yet).
+  date; (4) same direction and amount within 5 days. Approximate matches (3 and 4) are loaded but sent to review. A line is never used twice.
+- **Label mapping** (decided 2026-11-05): Salary → Salaries; Farm Expenses, Event Expense, Miscelleaneous, Parking Charges → Operational and
+  miscellaneous; Groceries, Bank Charges, Petty Cash, Insurance → same-named; Telecom Charges, Power → Utility bills; Online Services → Software and
+  subscriptions; Visit/Camp Revenue → Hospitality receipts; Event Revenue → Event receipts; Taxes, Land Tax → Land and local taxes; **CBDT Tax and Tax
+  Refund → Income tax (CBDT taxes are direct taxes)**; Interest Earned → Interest income; FD Investment → Sinking fund deposits; CS and CA/CS Charges →
+  Professional fees; Donations → Other income; **Farm Capex → Structures and infrastructure (a default, counted and flagged)**. A row with no Details
+  is left unallocated for a person (92 of them), as is any label the load does not know.
+- **Member maintenance keeps the year it is FOR.** "Maintenance (24-25)" becomes category Member maintenance with `maintenance_year` 2024-25 (migration
+  `0084`), while `period` stays the month the money moved. A member sometimes pays an earlier year late (13 payments in the first dry run), and the
+  year is what lets it be set against that year's outstanding. The payer's **household** is found from the "From" name against the members' names:
+  a full name or the shortened form the bank prints, or a couple written "First & First" (the one household that has both). A name that fits two
+  households finds none. 113 of 178 found a household in the first dry run; the other 65 are loaded without one and listed by sheet row in the review
+  file for a person to attribute (session 10, the maintenance dues, builds on this).
+- **Farm Project → the Project bucket.** Each such row names a placeholder project for its financial year, "Farm projects (details to add)", status
+  proposed, created by `--apply`, under the category Structures and infrastructure. **TODO (Sharath asked to be reminded): record the real projects
+  (owner, approval date, planned breakdown) and move these allocations onto them.** Allocations are frozen once posted, so moving one is a reversal and a
+  new allocation, or a purpose-built re-attribution; decide which when the projects exist.
+- **Salary batches** become one allocation per person on the one bank line, the party found from the "To" name against the register.
+- **Dry run on the real tracker (5 Nov 2026):** 1,178 usable rows from April 2024 (one row has no amount); 1,123 (95.3%) matched; **783 bank lines would
+  get 1,031 allocations**; 92 matched lines have no label and stay unallocated; 55 tracker rows and 25 bank lines have no match (39 Salary, 15 Online
+  Services rows; about half the lines are payments newer than the tracker). A party was found in the register for 440 allocations (the rest have none).
+- **Applying.** `--apply` needs migration `0084` applied first (it checks, and refuses otherwise). It saves one bank line at a time through
+  `fin_save_allocations` (posted, source `import`, no actor), skips any line that already has allocations (so a re-run changes nothing), carries on past a
+  failure, and writes one counts-only audit row (`finance.history_loaded`). **Not yet run.**
+- **Not built:** the reconciliation of module totals against the sheet's own summary tabs by month and category; rules are not seeded (the hidden
+  "Lookups" tab holds only payment-mode keywords, and the suggestion engine learns from the loaded history instead); the 2023-24 tracker tab and the
+  older years (the ledger holds 476 bank lines before April 2024; the same script takes `--tab` and `--since`).

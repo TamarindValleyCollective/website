@@ -5,6 +5,7 @@
 // transfer tracker carries what the statements do not: what each payment was for. So the job is to find, for every tracker row, the
 // bank line it describes, and only then to turn the row's labels into an allocation on that line.
 import { parsePaise } from './finance-cells.mjs';
+import { matchParty, normaliseName } from './finance-suggest.mjs';
 
 const REQUIRED = ['date', 'amount', 'transaction particulars', 'dr/cr'];
 const text = (v) => String(v ?? '').trim();
@@ -156,4 +157,189 @@ export function matchTracker(trackerRows, bankLines, { nearDays = 5 } = {}) {
     unmatchedLines,
     counts: { exact: howCount('exact'), grouped: groups.length, groupedRows: groups.reduce((n, g) => n + g.rows.length, 0), reference: howCount('reference'), nearDate: howCount('near date'), ambiguous, unmatchedRows: unmatchedRows.length, unmatchedLines: unmatchedLines.length },
   };
+}
+
+// ---- from the sheet's labels to ledger categories
+const norm = (s) => text(s).toLowerCase().replace(/\s+/g, ' ');
+const SIMPLE = {
+  salary: 'Salaries',
+  'farm expenses': 'Operational and miscellaneous',
+  groceries: 'Groceries',
+  'bank charges': 'Bank charges',
+  'petty cash': 'Petty cash',
+  'telecom charges': 'Utility bills',
+  power: 'Utility bills',
+  'online services': 'Software and subscriptions',
+  'visit/camp revenue': 'Hospitality receipts',
+  'event revenue': 'Event receipts',
+  'event expense': 'Operational and miscellaneous',
+  miscelleaneous: 'Operational and miscellaneous',
+  miscellaneous: 'Operational and miscellaneous',
+  'parking charges': 'Operational and miscellaneous',
+  taxes: 'Land and local taxes',
+  'land tax': 'Land and local taxes',
+  // CBDT (the Central Board of Direct Taxes) taxes are direct taxes: income tax.
+  'cbdt tax': 'Income tax',
+  'tax refund': 'Income tax',
+  'interest earned': 'Interest income',
+  'fd investment': 'Sinking fund deposits',
+  'cs charges': 'Professional fees',
+  'ca/cs charges': 'Professional fees',
+  insurance: 'Insurance',
+  donations: 'Other income',
+};
+const PROJECT_CATEGORY = 'Structures and infrastructure';
+
+/**
+ * What a tracker row's Details and Type mean for the ledger. Returns { status: 'mapped' | 'blank' | 'unmapped', categoryName?, project?, maintenanceYear?,
+ * defaulted? }. `maintenanceYear` is the year a "Maintenance (24-25)" label names, which can be earlier than the year it was paid in. `project` marks a
+ * Farm Project row (the Project bucket). `defaulted` marks a label whose category was a default choice, not a certainty (Farm Capex).
+ */
+export function mapLabels(details, type) {
+  const d = norm(details);
+  const t = norm(type);
+  if (d === 'farm project' || (d === '' && t === 'project')) return { status: 'mapped', categoryName: PROJECT_CATEGORY, project: true };
+  const maintenance = /^maintenance \((\d{2})-(\d{2})\)$/.exec(d);
+  if (maintenance) {
+    const [a, b] = [Number(maintenance[1]), Number(maintenance[2])];
+    if ((a + 1) % 100 !== b) return { status: 'unmapped' };
+    return { status: 'mapped', categoryName: 'Member maintenance', maintenanceYear: `${a >= 50 ? 19 : 20}${maintenance[1]}-${maintenance[2]}` };
+  }
+  if (d === 'farm capex') return { status: 'mapped', categoryName: PROJECT_CATEGORY, defaulted: true };
+  if (d === '') return { status: 'blank' };
+  return SIMPLE[d] ? { status: 'mapped', categoryName: SIMPLE[d] } : { status: 'unmapped' };
+}
+
+// ---- the plan: allocations to create
+const fyStart = (s) => {
+  const m = /^(\d{4})/.exec(text(s));
+  return m ? Number(m[1]) : null;
+};
+const fyOfDate = (iso) => (Number(iso.slice(5, 7)) >= 4 ? Number(iso.slice(0, 4)) : Number(iso.slice(0, 4)) - 1);
+
+/**
+ * Turn matches into allocations. `matches` is the result of matchTracker; `categories` and `parties` come from the ledger (parties: { id, name, kind });
+ * `people` are the members' names with their households ({ id, name, household_id }, one row per person and household), used to find the household
+ * a maintenance payment is against. Returns { plans: [{ lineId, rows }], skipped, counts }. A line is planned only when EVERY row that describes
+ * it can be labelled (the allocations of a line must add up to it); otherwise it is left whole, unallocated, and listed in `skipped` with the
+ * sheet row number and why. An approximate match is planned but sent to review. `householdWanted` lists the maintenance rows loaded without a
+ * household (by sheet row), for a person to attribute.
+ */
+export function planAllocations(matches, { categories, parties, people = [] }) {
+  // A person can be found by name; they count only if that name leads to exactly one household.
+  const personEntries = [...new Map(people.map((p) => [p.id, { id: p.id, name: p.name }])).values()];
+  const householdsOf = new Map();
+  for (const p of people) householdsOf.set(p.id, new Set([...(householdsOf.get(p.id) ?? []), p.household_id]));
+  // Members' first names by household, for a couple written "Rahul & Priya".
+  const firstNames = new Map();
+  for (const p of people) firstNames.set(p.household_id, new Set([...(firstNames.get(p.household_id) ?? []), normaliseName(p.name).split(' ')[0]]));
+  const householdFor = (name) => {
+    if (!name) return null;
+    const parts = String(name).split(/\s*(?:&|,|\band\b)\s*/i).map((x) => normaliseName(x).split(' ')[0]).filter(Boolean);
+    if (parts.length >= 2) {
+      // Two or more people named: the one household that has all of them.
+      const found = [...firstNames].filter(([, set]) => parts.every((first) => set.has(first))).map(([household]) => household);
+      return found.length === 1 ? found[0] : null;
+    }
+    const hit = matchParty(name, personEntries);
+    const set = hit ? householdsOf.get(hit.partyId) : null;
+    return set && set.size === 1 ? [...set][0] : null;
+  };
+  const categoryId = new Map(categories.filter((c) => c.active).map((c) => [c.name.toLowerCase(), c.id]));
+  const plans = [];
+  const skipped = [];
+  const householdWanted = [];
+  const counts = { allocations: 0, byCategory: {}, maintenanceArrears: 0, maintenanceWithoutHousehold: 0, partyMatched: 0, partyNotMatched: 0, defaulted: 0, projectRows: 0 };
+
+  // One row's allocation, or the reason it cannot be made.
+  function build(row, paise, how) {
+    const m = mapLabels(row.details, row.type);
+    if (m.status === 'blank') return { skip: { kind: 'blank', reason: 'No label (Details and Type are blank).' } };
+    if (m.status === 'unmapped') return { skip: { kind: 'unmapped', reason: 'The label is not one the load knows.' } };
+    const id = categoryId.get(m.categoryName.toLowerCase());
+    if (!id) return { skip: { kind: 'no category', reason: `The ledger has no active category "${m.categoryName}".` } };
+    const name = row.direction === 'debit' ? row.toName : row.fromName;
+    const hit = name ? matchParty(name, parties) : null;
+    const party = hit ? parties.find((p) => p.id === hit.partyId) : null;
+    const approximate = how === 'reference' || how === 'near date';
+    const alloc = {
+      category_id: id,
+      party_id: party?.id ?? null,
+      amount_paise: paise,
+      period: row.period,
+      nature: (text(row.remarks) || text(row.details) || m.categoryName).replace(/\s+/g, ' ').slice(0, 200),
+      source: 'import',
+      review_state: approximate ? 'needs_review' : 'ok',
+      review_reason: approximate ? 'import_approximate' : null,
+      maintenance_year: m.maintenanceYear ?? null,
+      household_id: m.maintenanceYear ? householdFor(name) : null,
+    };
+    if (m.project) alloc.projectFy = fyStart(row.financialYear) ?? fyOfDate(row.date);
+    return { alloc, m, party, sheetRow: row.sheetRow };
+  }
+  const count = (b) => {
+    counts.allocations++;
+    counts.byCategory[b.m.categoryName] = (counts.byCategory[b.m.categoryName] ?? 0) + 1;
+    if (b.m.defaulted) counts.defaulted++;
+    if (b.m.project) counts.projectRows++;
+    if (b.party) counts.partyMatched++;
+    else counts.partyNotMatched++;
+    if (b.m.maintenanceYear) {
+      if (!b.alloc.household_id) {
+        counts.maintenanceWithoutHousehold++;
+        householdWanted.push({ sheetRow: b.sheetRow, maintenanceYear: b.m.maintenanceYear });
+      }
+      if (fyStart(b.m.maintenanceYear) < fyOfDate(b.alloc.period)) counts.maintenanceArrears++;
+    }
+  };
+
+  for (const { row, line, how } of matches.pairs) {
+    const b = build(row, line.amount_paise, how);
+    if (b.skip) skipped.push({ sheetRow: row.sheetRow, label: row.details, ...b.skip });
+    else {
+      plans.push({ lineId: line.id, rows: [b.alloc] });
+      count(b);
+    }
+  }
+  for (const { rows, line } of matches.groups) {
+    const built = rows.map((r) => build(r, r.amountPaise, 'group'));
+    const bad = built.find((b) => b.skip);
+    if (bad) {
+      const why = { blank: 'that has no label', unmapped: 'whose label is not known', 'no category': 'whose category is missing' }[bad.skip.kind];
+      skipped.push({ sheetRow: rows[0].sheetRow, label: rows[0].details, kind: 'group', reason: `Part of a group with a row ${why}.`, rows: rows.length });
+      continue;
+    }
+    plans.push({ lineId: line.id, rows: built.map((b) => b.alloc) });
+    built.forEach(count);
+  }
+  return { plans, skipped, counts, householdWanted };
+}
+
+/**
+ * Save the plans through a store (the database in the script, a fake in the tests). Each planned line is saved once, in its own call, so a
+ * failure leaves only that line unallocated and the rest carry on; lines that already have allocations are skipped, so running it again changes
+ * nothing. A placeholder project is resolved once per financial year and its id replaces the year.
+ */
+export async function applyPlans(plans, store) {
+  const already = await store.allocatedLineIds();
+  const projects = new Map();
+  const result = { saved: 0, skippedExisting: 0, failed: [] };
+  for (const plan of plans) {
+    if (already.has(plan.lineId)) {
+      result.skippedExisting++;
+      continue;
+    }
+    try {
+      const rows = [];
+      for (const { projectFy, ...rest } of plan.rows) {
+        if (projectFy != null && !projects.has(projectFy)) projects.set(projectFy, await store.projectFor(projectFy));
+        rows.push(projectFy != null ? { ...rest, project_id: projects.get(projectFy) } : rest);
+      }
+      await store.save(plan.lineId, rows);
+      result.saved++;
+    } catch (err) {
+      result.failed.push({ lineId: plan.lineId, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  return result;
 }

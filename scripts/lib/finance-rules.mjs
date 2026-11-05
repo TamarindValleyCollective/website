@@ -115,6 +115,7 @@ export const REVIEW_REASONS = {
   new_payee_account: 'Paid to an account that is new, changed or not yet verified',
   reimbursement_without_bill: 'A reimbursement with no bill attached',
   rule_requires_review: 'A rule that is always reviewed',
+  import_approximate: 'Matched to the bank line approximately when the history was loaded: check the date and amount',
 };
 
 /**
