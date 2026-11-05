@@ -587,3 +587,115 @@ test('a batch reads the lookups once, not once per line', async () => {
   assert.ok((db.calls.fin_rules ?? 0) <= 1);
   assert.ok((db.calls.fin_party_accounts ?? 0) <= 1);
 });
+
+// ---- column search and sort (docs/finance/FINANCE.md, "The table")
+const listOf = async (email, qs = '') => (await api(email, `/ledger?filter=all${qs ? `&${qs}` : ''}`)).json();
+const idsOf = (out) => out.lines.map((l) => l.id);
+const q = (obj) => Object.entries(obj).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+const fixture = () => {
+  reset();
+  addBankCategory();
+  addLines();
+  return sign('u1', 'user');
+};
+
+test('the list sorts by any column, newest date by default, and says how', async () => {
+  const op = fixture();
+  const byDate = await listOf(op);
+  assert.deepEqual(byDate.sort, { key: 'date', dir: 'desc' });
+  assert.deepEqual(idsOf(byDate), [L_REFUND, L_DEBIT, L_CIRCLE, L_STRANGER, L_CHRG, L_SEP]);
+  const asc = (await listOf(op, q({ sort: 'amount', dir: 'asc' }))).lines.map((l) => l.amountPaise);
+  assert.deepEqual(asc, [...asc].sort((a, b) => a - b));
+  const desc = (await listOf(op, q({ sort: 'amount', dir: 'desc' }))).lines.map((l) => l.amountPaise);
+  assert.deepEqual(desc, [...desc].sort((a, b) => b - a));
+  const narr = (await listOf(op, q({ sort: 'narration', dir: 'asc' }))).lines.map((l) => l.narration.toLowerCase());
+  assert.deepEqual(narr, [...narr].sort());
+  assert.deepEqual((await listOf(op, q({ sort: 'nonsense' }))).sort, { key: 'date', dir: 'desc' });
+});
+
+test('sorting by category brings the lines that have one to the top, either way round', async () => {
+  const op = fixture();
+  // Two lines have a suggested category: the bank charge (Bank charges) and the payment to the requester (Reimbursements).
+  assert.deepEqual(idsOf(await listOf(op, q({ sort: 'category', dir: 'asc' }))).slice(0, 2), [L_CHRG, L_CIRCLE]);
+  assert.deepEqual(idsOf(await listOf(op, q({ sort: 'category', dir: 'desc' }))).slice(0, 2), [L_CIRCLE, L_CHRG]);
+});
+
+test('a sorted list pages without repeating or skipping a line', async () => {
+  reset();
+  db.fin_bank_lines = bulkLines(230, '2026-07', 1000).map((l, i) => ({ ...l, amount_paise: 1000 + (i % 7) * 100 }));
+  const op = sign('u1', 'user');
+  const seen = [];
+  for (const offset of [0, 100, 200]) seen.push(...idsOf(await listOf(op, q({ sort: 'amount', dir: 'desc', offset }))));
+  assert.equal(seen.length, 230);
+  assert.equal(new Set(seen).size, 230);
+});
+
+test('narration search: contains, exact, not, starts with, does not contain', async () => {
+  const op = fixture();
+  assert.deepEqual(idsOf(await listOf(op, q({ f_narration: 'nursery', sort: 'amount', dir: 'asc' }))), [L_REFUND, L_DEBIT]);
+  assert.equal((await listOf(op, q({ f_narration: '=Monthly Service Chrgs' }))).total, 1);
+  assert.equal((await listOf(op, q({ f_narration: '!=Monthly Service Chrgs' }))).total, 5);
+  assert.equal((await listOf(op, q({ f_narration: '^UPI' }))).total, 3);
+  assert.equal((await listOf(op, q({ f_narration: '!UPI' }))).total, 3);
+});
+
+test('amount search takes rupees: a number, a comparison, a range', async () => {
+  const op = fixture();
+  assert.deepEqual(idsOf(await listOf(op, q({ f_amount: '>=800' }))).sort(), [L_DEBIT, L_STRANGER].sort());
+  assert.deepEqual(idsOf(await listOf(op, q({ f_amount: '295' }))), [L_CHRG]);
+  assert.deepEqual(idsOf(await listOf(op, q({ f_amount: '200..400', sort: 'amount', dir: 'asc' }))), [L_SEP, L_CHRG, L_REFUND, L_CIRCLE]);
+  assert.equal((await listOf(op, q({ f_amount: '!=295' }))).total, 5);
+});
+
+test('date search: by month text, by name of the month, by comparison and by range', async () => {
+  const op = fixture();
+  assert.equal((await listOf(op, q({ f_date: '2026-10' }))).total, 4);
+  assert.equal((await listOf(op, q({ f_date: 'Sep' }))).total, 1);
+  assert.deepEqual(idsOf(await listOf(op, q({ f_date: '>2026-10-30' }))).sort(), [L_DEBIT, L_REFUND].sort());
+  assert.equal((await listOf(op, q({ f_date: '2026-10-05..2026-10-06' }))).total, 2);
+});
+
+test('category, party and wording search what a line was posted to, or is suggested', async () => {
+  const op = fixture();
+  assert.deepEqual(idsOf(await listOf(op, q({ f_category: 'Bank charges' }))), [L_CHRG], 'suggested');
+  assert.equal((await listOf(op, q({ f_category: '!=Bank charges' }))).total, 5);
+  assert.deepEqual(idsOf(await listOf(op, q({ f_party: 'brand' }))), [L_STRANGER], 'a suggested new party counts');
+  assert.deepEqual(idsOf(await listOf(op, q({ f_nature: 'fertil' }))), [L_STRANGER]);
+  assert.equal((await listOf(op, q({ f_category: '=' }))).total, 4, 'empty means nothing suggested or posted (the bank charge and the payment to the requester have one)');
+  // After posting, it is what was posted that is searched.
+  await postBatch(op, [batchItem(L_DEBIT, { categoryId: CAT_BANK, nature: 'Seedlings' })]);
+  assert.deepEqual(idsOf(await listOf(op, q({ f_category: 'Bank charges', sort: 'amount', dir: 'asc' }))), [L_CHRG, L_DEBIT]);
+  assert.deepEqual(idsOf(await listOf(op, q({ f_nature: '=Seedlings' }))), [L_DEBIT]);
+});
+
+test('conditions combine, show as a breadcrumb, and the chips count what is left', async () => {
+  const op = fixture();
+  const out = await listOf(op, q({ f_narration: 'nursery', f_amount: '>999', f_category: '!=Bank charges' }));
+  assert.deepEqual(out.breadcrumb.map((b) => b.text), ['Narration contains nursery', 'Amount > 999', 'Category != Bank charges']);
+  assert.deepEqual(idsOf(out), [L_DEBIT]);
+  assert.equal(out.counts.all, 1);
+  // The chip narrows further.
+  const mixed = await (await api(op, `/ledger?${q({ filter: 'review', f_narration: 'nursery' })}`)).json();
+  assert.equal(mixed.total, 0);
+  assert.equal(mixed.counts.all, 2);
+});
+
+test('a condition that cannot be understood is reported, not applied and not silently ignored', async () => {
+  const op = fixture();
+  const out = await listOf(op, q({ f_amount: 'lots', f_date: '>last week' }));
+  assert.match(out.filterErrors.amount, /number/i);
+  assert.match(out.filterErrors.date, /date/i);
+  assert.equal(out.total, 6, 'nothing was filtered by the bad conditions');
+  assert.deepEqual(out.breadcrumb, []);
+});
+
+test('a column search over 1,376 lines is quick and sees every line', async () => {
+  reset();
+  addBankCategory();
+  db.fin_bank_lines = bulkLines(1376, '2026-07', 1000);
+  const op = sign('u1', 'user');
+  const started = Date.now();
+  const out = await listOf(op, q({ f_category: '=', sort: 'party', dir: 'asc' }));
+  assert.equal(out.total, 1376);
+  assert.ok(Date.now() - started < 5000, `took ${Date.now() - started} ms`);
+});

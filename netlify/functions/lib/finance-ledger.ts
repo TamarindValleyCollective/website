@@ -12,6 +12,7 @@ import { logFinanceAction } from './finance-audit';
 import { financialYearOf, lineState, periodOf, periodWriteDecision, planPosting, planReversal } from '../../../scripts/lib/finance-allocation.mjs';
 import { REVIEW_REASONS, reviewReasons, validateRule } from '../../../scripts/lib/finance-rules.mjs';
 import { buildHistory, suggest } from '../../../scripts/lib/finance-suggest.mjs';
+import { SORT_KEYS, compareRows, describeCondition, matchAmount, matchDate, matchText, parseAmount, parseDate, parseText } from '../../../scripts/lib/finance-columns.mjs';
 
 type Json = Record<string, any>;
 export const LEDGER_ID = /^[0-9a-f-]{36}$/i;
@@ -90,6 +91,15 @@ async function loadLedger(from: string | null, to: string | null) {
   return { lines, byLine };
 }
 
+// What can be searched under a column header, and how each is read (scripts/lib/finance-columns.mjs).
+const COLUMNS = { date: 'Date', narration: 'Narration', amount: 'Amount', category: 'Category', party: 'Party', nature: 'Wording' } as const;
+type Column = keyof typeof COLUMNS;
+const PARSERS: Record<Column, (raw: string) => Json | null> = { date: parseDate, narration: parseText, amount: parseAmount, category: parseText, party: parseText, nature: parseText };
+const dateLabel = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+// The list: every line, narrowed by the chip (to allocate, to review, all), the search box and a condition per column, then sorted,
+// then one page of it. Category, party and wording match what a posted line was allocated to, or, while it is unposted, what is
+// suggested for it, so "Category = Bank charges" finds the lines that look like bank charges and can be filled in together.
 export async function listLedger(req: Request): Promise<Response> {
   const auth = await requireStaff(req, 'finance', 'view');
   if (!auth.ok) return fail(auth.error, auth.status);
@@ -99,31 +109,89 @@ export async function listLedger(req: Request): Promise<Response> {
     const iso = (k: string) => (/^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get(k) ?? '') ? url.searchParams.get(k) : null);
     const q = (url.searchParams.get('q') ?? '').toLowerCase().trim().slice(0, 60);
     const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0);
-    const { lines, byLine } = await loadLedger(iso('from'), iso('to'));
+    const sortKey = SORT_KEYS.includes(url.searchParams.get('sort') ?? '') ? url.searchParams.get('sort')! : 'date';
+    const dir = url.searchParams.get('dir') === 'asc' ? 'asc' : 'desc';
 
+    // Conditions typed under the headers. One that cannot be understood is reported and left out, never silently ignored.
+    const conds: Partial<Record<Column, Json>> = {};
+    const filterErrors: Record<string, string> = {};
+    const breadcrumb: { column: Column; text: string }[] = [];
+    for (const col of Object.keys(COLUMNS) as Column[]) {
+      const parsed = PARSERS[col]((url.searchParams.get(`f_${col}`) ?? '').slice(0, 80));
+      if (!parsed) continue;
+      if (parsed.error) filterErrors[col] = parsed.error as string;
+      else {
+        conds[col] = parsed;
+        breadcrumb.push({ column: col, text: describeCondition(COLUMNS[col], parsed) });
+      }
+    }
+
+    const { lines, byLine } = await loadLedger(iso('from'), iso('to'));
+    const ctx = await lookups();
+    const sc = await suggestionContext(lines, byLine, ctx);
     const summarise = (l: LineRow) => {
       const allocs = byLine.get(l.id) ?? [];
       const posted = allocs.some((a) => a.posted_at);
       return { state: posted ? 'allocated' : lineState(l, allocs), review: allocs.some((a) => a.review_state !== 'ok') };
     };
-    const counts = { unallocated: 0, review: 0, all: lines.length };
-    for (const l of lines) {
-      const s = summarise(l);
-      if (s.state !== 'allocated') counts.unallocated++;
-      if (s.review) counts.review++;
+
+    // The cheap conditions first (they need only the line itself).
+    const cheap = lines.filter(
+      (l) => matchDate(conds.date, l.tran_date, dateLabel(l.tran_date)) && matchText(conds.narration, l.narration) && matchAmount(conds.amount, l.amount_paise) && (!q || l.narration.toLowerCase().includes(q)),
+    );
+
+    // Category, party and wording need what each line was posted to, or is suggested: only worked out for all lines when a condition or the
+    // sort needs it; otherwise just for the page being shown.
+    const categoryName = new Map(ctx.categories.map((c) => [c.id as string, c.name as string]));
+    const partyName = new Map(ctx.parties.map((x) => [x.id as string, x.name as string]));
+    const needsEffective = Boolean(conds.category || conds.party || conds.nature) || ['category', 'party', 'nature'].includes(sortKey);
+    const upiOf = new Map<string, Json>();
+    const fetchUpi = async (ids?: string[]) => {
+      const found = ids ? (ids.length ? await rows(`/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle&bank_line_id=in.(${ids.join(',')})`) : []) : await rowsAll('/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle&bank_line_id=not.is.null&order=id.asc');
+      for (const u of found) upiOf.set(u.bank_line_id as string, u);
+    };
+    const effective = new Map<string, { category: string; party: string; nature: string }>();
+    if (needsEffective) {
+      await fetchUpi();
+      for (const l of cheap) {
+        const posted = postedSummary(byLine.get(l.id) ?? []);
+        if (posted) effective.set(l.id, { category: categoryName.get(posted.categoryId) ?? '', party: posted.partyId ? partyName.get(posted.partyId) ?? '' : '', nature: posted.nature ?? '' });
+        else {
+          const sg = suggestFor(l, upiOf.get(l.id) ?? null, ctx, sc);
+          effective.set(l.id, { category: sg.categoryId ? categoryName.get(sg.categoryId) ?? '' : '', party: sg.partyId ? partyName.get(sg.partyId) ?? '' : sg.newParty?.name ?? '', nature: sg.nature ?? '' });
+        }
+      }
     }
-    const matched = lines.filter((l) => {
-      const s = summarise(l);
-      if (filter === 'unallocated' && s.state === 'allocated') return false;
-      if (filter === 'review' && !s.review) return false;
-      return !q || l.narration.toLowerCase().includes(q);
-    });
+    const base = needsEffective
+      ? cheap.filter((l) => {
+          const e = effective.get(l.id)!;
+          return matchText(conds.category, e.category) && matchText(conds.party, e.party) && matchText(conds.nature, e.nature);
+        })
+      : cheap;
+
+    // The chips count what is left after the column conditions, so they say how many of THESE lines still need you.
+    const counts = { unallocated: 0, review: 0, all: base.length };
+    for (const l of base) {
+      const st = summarise(l);
+      if (st.state !== 'allocated') counts.unallocated++;
+      if (st.review) counts.review++;
+    }
+    const keyed = base
+      .filter((l) => {
+        const st = summarise(l);
+        return filter === 'all' || (filter === 'unallocated' ? st.state !== 'allocated' : st.review);
+      })
+      .map((l) => {
+        const e = effective.get(l.id);
+        const st = summarise(l);
+        return { l, r: { id: l.id, date: l.tran_date, narration: l.narration, amount: l.amount_paise, category: e?.category ?? '', party: e?.party ?? '', nature: e?.nature ?? '', status: st.review ? 'review' : st.state } };
+      });
+    const compare = compareRows(sortKey, dir);
+    keyed.sort((x, y) => compare(x.r, y.r));
+    const matched = keyed.map((k) => k.l);
+
     const page = matched.slice(offset, offset + PAGE);
-    const ids = page.map((l) => l.id);
-    const ctx = await lookups();
-    const sc = await suggestionContext(lines, byLine, ctx);
-    const upi = ids.length ? await rows(`/fin_upi_lines?select=bank_line_id,counterparty,remarks,is_circle&bank_line_id=in.(${ids.join(',')})`) : [];
-    const upiOf = new Map(upi.map((u) => [u.bank_line_id as string, u]));
+    if (!needsEffective) await fetchUpi(page.map((l) => l.id));
     const accounts = await rows('/fin_bank_accounts?select=id,label');
     const accountLabel = new Map(accounts.map((a) => [a.id as string, a.label as string]));
     const capabilities = capabilitiesForRole('finance', auth.staff.role) as string[];
@@ -133,6 +201,9 @@ export async function listLedger(req: Request): Promise<Response> {
       counts,
       total: matched.length,
       offset,
+      sort: { key: sortKey, dir },
+      breadcrumb,
+      filterErrors,
       lines: page.map((l) => ({
         id: l.id,
         date: l.tran_date,

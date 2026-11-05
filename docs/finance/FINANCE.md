@@ -329,5 +329,22 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   a party not in the register) is reported and does not stop the others. The page sends 10 at a time and shows progress; failed lines
   keep their draft, stay selected, and show the reason in red. This replaced the earlier one-category "bulk" sheet and the server-side
   "post the confident suggestions" route.
-- **Not done:** column chooser, sorting by other columns, group by month, saved filters, a date filter; drafts are not saved on the
+- **Sorting.** Click any heading to sort the whole ledger by it (not just the rows on screen); click again to flip. A first click sorts date
+  and amount newest and biggest first, the text columns A to Z. Empty cells always go last, so sorting by Category brings the filled ones
+  to the top. Status sorts in working order: to review, to allocate, partly, allocated. Ties break by newest date then id, so paging a
+  sorted list never repeats or skips a line.
+- **Search under each heading** (date, narration, amount, category, party, wording), applied by the server to every line, combined with
+  the chips and the narration search box, and shown as a breadcrumb of removable conditions ("To allocate > Category != Bank charges").
+  What can be typed (`scripts/lib/finance-columns.mjs`, hover a box for the same list):
+  - text columns: `word` contains; `=word` exactly; `!=word` is not; `^word` starts with; `!word` does not contain; `=` alone is empty;
+    `!=` alone is not empty. Any case.
+  - amount, in rupees: `2500`, `>2500`, `>=`, `<`, `<=`, `!=2500`, `1000..3000`.
+  - date: `2026-10` or `oct` (matches the ISO date or the day-and-month label), `>2026-10-15` (also `>=`, `<`, `<=`, `=`),
+    `2026-10-01..2026-10-31`.
+  - Category, party and wording match what a posted line was allocated to or, while it is unposted, what is suggested for it. So
+    `Category = Bank charges` finds the lines that look like bank charges, and they can be selected and filled in together; `Category =`
+    finds the lines with nothing suggested.
+  - A condition that cannot be understood is not applied: the box turns red and the reason shows in the breadcrumb row (nothing is
+    quietly ignored). The chips' counts are for the lines that remain after the conditions, so they say how many of THESE still need you.
+- **Not done:** column chooser, grouping by month, saved filters, a Status search box (the chips cover it); drafts are not saved on the
   server (the earlier `Save draft` of the sheet still is).

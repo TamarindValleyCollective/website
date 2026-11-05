@@ -30,17 +30,29 @@ import SignInGate from '../../../components/SignInGate.astro';
         <button type="button" id="accept-all" class="button button--outline" hidden>Fill in the suggestions on this page</button>
       </div>
 
+      <div id="crumbs" class="crumbs" aria-label="Active conditions" hidden></div>
+
       <div class="tablewrap">
         <div class="ltable" role="table" aria-label="Bank lines">
           <div class="lrow lhead" role="row">
             <span class="lcell lcell--check" role="columnheader"><input type="checkbox" id="head-check" aria-label="Select every line on this page" /></span>
-            <span class="lcell" role="columnheader">Date</span>
-            <span class="lcell" role="columnheader">Bank narration</span>
-            <span class="lcell lcell--amount" role="columnheader">Amount</span>
-            <span class="lcell" role="columnheader">Category</span>
-            <span class="lcell" role="columnheader">Party</span>
-            <span class="lcell" role="columnheader">What it was for</span>
-            <span class="lcell" role="columnheader">Status</span>
+            <span class="lcell" role="columnheader" data-colhead="date"><button type="button" class="sorthead" data-sort="date">Date<span class="sortmark" aria-hidden="true"></span></button></span>
+            <span class="lcell" role="columnheader" data-colhead="narration"><button type="button" class="sorthead" data-sort="narration">Bank narration<span class="sortmark" aria-hidden="true"></span></button></span>
+            <span class="lcell lcell--amount" role="columnheader" data-colhead="amount"><button type="button" class="sorthead" data-sort="amount">Amount<span class="sortmark" aria-hidden="true"></span></button></span>
+            <span class="lcell" role="columnheader" data-colhead="category"><button type="button" class="sorthead" data-sort="category">Category<span class="sortmark" aria-hidden="true"></span></button></span>
+            <span class="lcell" role="columnheader" data-colhead="party"><button type="button" class="sorthead" data-sort="party">Party<span class="sortmark" aria-hidden="true"></span></button></span>
+            <span class="lcell" role="columnheader" data-colhead="nature"><button type="button" class="sorthead" data-sort="nature">What it was for<span class="sortmark" aria-hidden="true"></span></button></span>
+            <span class="lcell" role="columnheader" data-colhead="status"><button type="button" class="sorthead" data-sort="status">Status<span class="sortmark" aria-hidden="true"></span></button></span>
+          </div>
+          <div class="lrow lfilter" role="row">
+            <span class="lcell lcell--check" role="cell"><button type="button" id="clear-filters" class="clearx" aria-label="Clear every condition" title="Clear every condition" hidden>×</button></span>
+            <span class="lcell" role="cell"><input type="search" class="colfilter" data-col="date" placeholder="Search" aria-label="Search the Date column" title="Try: 2026-10, oct, >2026-10-15, 2026-10-01..2026-10-31" autocomplete="off" /></span>
+            <span class="lcell" role="cell"><input type="search" class="colfilter" data-col="narration" placeholder="Search" aria-label="Search the Bank narration column" title="Words match anywhere. = exact, != not, ^ starts with, ! does not contain, = alone for empty" autocomplete="off" /></span>
+            <span class="lcell" role="cell"><input type="search" class="colfilter" data-col="amount" placeholder="Search" aria-label="Search the Amount column" title="In rupees. Try: 2500, >1000, <=500, 1000..3000, !=295" autocomplete="off" /></span>
+            <span class="lcell" role="cell"><input type="search" class="colfilter" data-col="category" placeholder="Search" aria-label="Search the Category column" title="Words match anywhere. = exact, != not, ^ starts with, ! does not contain, = alone for empty. Matches what a line was posted to, or is suggested" autocomplete="off" /></span>
+            <span class="lcell" role="cell"><input type="search" class="colfilter" data-col="party" placeholder="Search" aria-label="Search the Party column" title="Words match anywhere. = exact, != not, ^ starts with, ! does not contain, = alone for empty" autocomplete="off" /></span>
+            <span class="lcell" role="cell"><input type="search" class="colfilter" data-col="nature" placeholder="Search" aria-label="Search the What it was for column" title="Words match anywhere. = exact, != not, ^ starts with, ! does not contain, = alone for empty" autocomplete="off" /></span>
+            <span class="lcell" role="cell"></span>
           </div>
           <div id="tbody" role="rowgroup"></div>
         </div>
@@ -51,7 +63,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         <span id="range" class="hint"></span>
         <button type="button" id="more" class="button button--outline" hidden>Show more</button>
       </div>
-      <p class="hint tips">Tick a checkbox (shift-click for a range) to change many lines at once. Change a cell in place, or tick an italic suggestion to accept it. Click a narration to open the line (to split it or refund it). Nothing is posted until you press Post.</p>
+      <p class="hint tips">Tick a checkbox (shift-click for a range) to change many lines at once. Change a cell in place, or tick an italic suggestion to accept it. Click a narration to open the line (to split it or refund it). Click a heading to sort; type under a heading to search that column (hover a box for the operators). Nothing is posted until you press Post.</p>
 
       <h2 class="list-title">Months</h2>
       <ul class="list" id="months"></ul>
@@ -77,7 +89,7 @@ import SignInGate from '../../../components/SignInGate.astro';
   type Project = { id: string; name: string; kind: string; financial_year: number; status: string };
   type Lookups = { categories: Category[]; parties: Party[]; projects: Project[]; requesterPartyId: string | null; closedMonths: string[] };
   type Filter = 'unallocated' | 'review' | 'all';
-  type ListData = { canAllocate: boolean; canClose: boolean; counts: Record<Filter, number>; total: number; offset: number; lines: Line[]; lookups: Lookups; reasons: Record<string, string> };
+  type ListData = { canAllocate: boolean; canClose: boolean; counts: Record<Filter, number>; total: number; offset: number; lines: Line[]; lookups: Lookups; reasons: Record<string, string>; sort: { key: string; dir: 'asc' | 'desc' }; breadcrumb: { column: string; text: string }[]; filterErrors: Record<string, string> };
 
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   const gate = $('gate');
@@ -91,6 +103,10 @@ import SignInGate from '../../../components/SignInGate.astro';
   let lines: Line[] = [];
   let filter: Filter = (['unallocated', 'review', 'all'] as const).find((f) => f === new URLSearchParams(location.search).get('filter')) ?? 'unallocated';
   let query = '';
+  // Click a heading to sort; type under one to search that column (the server applies both to every line, not just this page).
+  let sort: { key: string; dir: 'asc' | 'desc' } = { key: 'date', dir: 'desc' };
+  const colFilters: Record<string, string> = {};
+  let loadSeq = 0;
   const selected = new Set<string>();
 
   // ---- sign-in
@@ -145,10 +161,13 @@ import SignInGate from '../../../components/SignInGate.astro';
     forbidden.hidden = true;
     if (!data) showLoading(statusEl);
     try {
+      const seq = ++loadSeq;
       const offset = more ? lines.length : 0;
-      const params = new URLSearchParams({ filter, offset: String(offset) });
+      const params = new URLSearchParams({ filter, offset: String(offset), sort: sort.key, dir: sort.dir });
       if (query) params.set('q', query);
+      for (const [col, text] of Object.entries(colFilters)) if (text.trim()) params.set(`f_${col}`, text.trim());
       const { status, data: out } = await call(`/api/finance-admin/ledger?${params}`);
+      if (seq !== loadSeq) return;
       if (status !== 200) throw new Error('load failed');
       data = out as ListData;
       lines = more ? [...lines, ...data.lines] : data.lines;
@@ -335,6 +354,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     if (!data) return;
     for (const id of [...selected]) if (!lines.some((l) => l.id === id && editable(l))) selected.delete(id);
     renderChips();
+    renderHeadings();
+    renderCrumbs();
     $('accept-all').hidden = !(data.canAllocate && filter === 'unallocated' && lines.some((l) => editable(l) && hasGhost(l)));
     rowEls.clear();
     $('tbody').replaceChildren(
@@ -351,7 +372,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       empty.hidden = false;
       showEmpty(empty, {
         title: filter === 'unallocated' ? 'Everything is allocated' : filter === 'review' ? 'Nothing waiting for review' : 'No lines found',
-        text: query ? 'Nothing matches that search.' : filter === 'all' ? 'Import a bank statement to start.' : 'Nothing needs you here right now.',
+        text: query || data.breadcrumb.length ? 'Nothing matches those conditions.' : filter === 'all' ? 'Import a bank statement to start.' : 'Nothing needs you here right now.',
       });
     } else {
       clearState(empty);
@@ -639,6 +660,83 @@ import SignInGate from '../../../components/SignInGate.astro';
     pending = null;
     showToast([`${posted} posted`, flagged ? `${flagged} sent to review` : '', failed.length ? `${failed.length} could not be posted (see the red notes)` : ''].filter(Boolean).join(', ') + '.');
     await load();
+  }
+
+  // ---- sorting and column search
+  const COL_LABELS: Record<string, string> = { date: 'Date', narration: 'Narration', amount: 'Amount', category: 'Category', party: 'Party', nature: 'Wording' };
+  // A first click sorts a date or amount newest/biggest first and text A to Z; a second click flips it.
+  for (const btn of document.querySelectorAll<HTMLButtonElement>('.sorthead')) {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.sort!;
+      sort = sort.key === key ? { key, dir: sort.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'date' || key === 'amount' ? 'desc' : 'asc' };
+      void load();
+    });
+  }
+  function renderHeadings() {
+    for (const head of document.querySelectorAll<HTMLElement>('[data-colhead]')) {
+      const on = head.dataset.colhead === sort.key;
+      head.setAttribute('aria-sort', on ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
+      const mark = head.querySelector('.sortmark');
+      if (mark) mark.textContent = on ? (sort.dir === 'asc' ? '▲' : '▼') : '';
+    }
+  }
+  const filterInput = (col: string) => document.querySelector<HTMLInputElement>(`.colfilter[data-col="${col}"]`)!;
+  let filterTimer: ReturnType<typeof setTimeout> | undefined;
+  // Applying reads every box, so values typed into two boxes within the debounce are both kept.
+  const applyFilters = () => {
+    for (const box of document.querySelectorAll<HTMLInputElement>('.colfilter')) colFilters[box.dataset.col!] = box.value;
+    void load();
+  };
+  for (const input of document.querySelectorAll<HTMLInputElement>('.colfilter')) {
+    const apply = applyFilters;
+    input.addEventListener('input', () => {
+      clearTimeout(filterTimer);
+      filterTimer = setTimeout(apply, 300);
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      clearTimeout(filterTimer);
+      apply();
+    });
+  }
+  function clearColumn(col: string) {
+    colFilters[col] = '';
+    filterInput(col).value = '';
+  }
+  $('clear-filters').addEventListener('click', () => {
+    for (const col of Object.keys(COL_LABELS)) clearColumn(col);
+    void load();
+  });
+  // "To allocate > Category != Bank charges  ×": what is narrowing the table, each removable (like ServiceNow's filter breadcrumb).
+  function renderCrumbs() {
+    const box = $('crumbs');
+    const items = data?.breadcrumb ?? [];
+    const errors = Object.entries(data?.filterErrors ?? {});
+    for (const input of document.querySelectorAll<HTMLInputElement>('.colfilter')) {
+      const bad = Boolean(data?.filterErrors?.[input.dataset.col!]);
+      input.classList.toggle('is-invalid', bad);
+      input.setAttribute('aria-invalid', String(bad));
+    }
+    $('clear-filters').hidden = items.length === 0 && errors.length === 0;
+    if (!items.length && !errors.length) {
+      box.hidden = true;
+      box.replaceChildren();
+      return;
+    }
+    box.hidden = false;
+    box.replaceChildren(
+      h('span', { class: 'crumb crumb--root', text: FILTERS.find(([f]) => f === filter)?.[1] ?? 'All' }),
+      ...items.map((c) =>
+        h(
+          'span',
+          { class: 'crumb' },
+          h('span', { text: c.text }),
+          h('button', { class: 'crumb-x', text: '×', attrs: { type: 'button', 'aria-label': `Remove: ${c.text}` }, on: { click: () => (clearColumn(c.column), void load()) } }),
+        ),
+      ),
+      ...errors.map(([col, msg]) => h('span', { class: 'crumb crumb--bad', text: `${COL_LABELS[col] ?? col}: ${msg}` })),
+    );
   }
 
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -1021,12 +1119,12 @@ import SignInGate from '../../../components/SignInGate.astro';
   }
 
   .ledger .ltable {
-    min-width: 1010px;
+    min-width: 1030px;
   }
 
   .ledger .lrow {
     display: grid;
-    grid-template-columns: 40px 64px minmax(170px, 1.3fr) 104px minmax(150px, 1fr) minmax(140px, 1fr) minmax(160px, 1.1fr) 96px;
+    grid-template-columns: 40px 86px minmax(170px, 1.3fr) 104px minmax(150px, 1fr) minmax(140px, 1fr) minmax(160px, 1.1fr) 96px;
     align-items: center;
     gap: 8px;
     padding: 6px 12px;
@@ -1044,6 +1142,119 @@ import SignInGate from '../../../components/SignInGate.astro';
     font-size: var(--text-sm);
     font-weight: 650;
     color: var(--tvc-ink-soft);
+  }
+
+  .ledger .sorthead {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 650;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .ledger .sorthead:hover {
+    color: var(--tvc-ink);
+  }
+
+  .ledger .sorthead:focus-visible {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  .ledger .lcell--amount .sorthead {
+    margin-left: auto;
+  }
+
+  .ledger .sortmark {
+    font-size: var(--text-xs);
+  }
+
+  /* The search row under the headings: one box per column. */
+  .ledger .lfilter {
+    padding-top: 6px;
+    padding-bottom: 6px;
+    background: color-mix(in srgb, var(--tvc-line) 22%, var(--tvc-white));
+  }
+
+  .ledger .colfilter {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    min-height: 32px;
+    padding: 3px 8px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--tvc-white);
+    color: inherit;
+    font: inherit;
+    font-size: var(--text-sm);
+  }
+
+  .ledger .colfilter:focus {
+    outline: 2px solid var(--tvc-orange);
+    outline-offset: 0;
+  }
+
+  .ledger .colfilter.is-invalid {
+    border-color: var(--tvc-error-text);
+  }
+
+  .ledger .clearx,
+  .ledger .crumb-x {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--tvc-ink-soft);
+    font-size: var(--text-lg);
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .ledger .clearx:hover,
+  .ledger .crumb-x:hover {
+    background: var(--tvc-line);
+    color: var(--tvc-ink);
+  }
+
+  .ledger .crumbs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 10px;
+    font-size: var(--text-sm);
+  }
+
+  .ledger .crumb {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 4px 2px 10px;
+    border: 1px solid var(--tvc-line-strong);
+    border-radius: 999px;
+    background: var(--tvc-white);
+  }
+
+  .ledger .crumb--root {
+    padding-right: 10px;
+    border-style: dashed;
+    font-weight: 600;
+  }
+
+  .ledger .crumb--bad {
+    padding-right: 10px;
+    border-color: var(--tvc-error-text);
+    color: var(--tvc-error-text);
   }
 
   .ledger #tbody .lrow:hover {
