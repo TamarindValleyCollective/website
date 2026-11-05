@@ -15,7 +15,8 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 | 03 Statement import | Built on branch `finance-03-statement-import` (draft PR). Migration `0080` **applied to TVC ERP on 2026-11-02**. |
 | 04 Parties & payees | Built on branch `finance-04-parties` (draft PR). Migration `0079` **applied to TVC ERP on 2026-11-02** (recorded as `finance_parties`); checked afterwards: both tables empty, RLS on, no anon/authenticated grants, guard trigger present. |
 | 05 Ledger & review | **Built, draft PR #529** (branch `worktree-finance-05-ledger`): posting rules, rules engine, ledger and rules screens, period close. Migration `0083` **applied to TVC ERP on 2026-11-05** (recorded as `finance_ledger`). Running locally against the real database; nothing allocated yet. |
-| 02, 06-13 | Not started |
+| 06 History load | **In progress** on branch `worktree-finance-06-history`: the tracker is read and matched to the bank lines (dry run only); nothing is written. |
+| 02, 07-13 | Not started |
 
 ## Access
 
@@ -348,3 +349,60 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
     quietly ignored). The chips' counts are for the lines that remain after the conditions, so they say how many of THESE still need you.
 - **Not done:** column chooser, grouping by month, saved filters, a Status search box (the chips cover it); drafts are not saved on the
   server (the earlier `Save draft` of the sheet still is).
+## History load (session 06, in progress)
+
+Operator script `scripts/load-fin-history.mjs` (a dry run unless `--apply`; run with `netlify dev:exec -- node scripts/load-fin-history.mjs --sheet <id>`),
+pure rules in `scripts/lib/finance-history.mjs` (tested on invented rows). Counts only are ever printed. **Nothing has been written to the ledger yet.**
+
+- **Source.** The workbook "TVC Spend Summary" (the sheet id is passed in, never kept here). The tab "Funds Transfer Tracker (2024-27)" has one row
+  per payment: date, to, from, mode, amount, the bank's narration copied in ("Transaction Particulars"), DR/CR, and the labels **Details**
+  and **Type**, **Remarks**, and the sheet's own Year and Month (the month the cost belongs to, used as the allocation's period). The yearly
+  "TVC 20xx-20xx" workbooks owned by the stay partner are that partner's own operating books, not the ledger's source.
+- **The bank lines already exist** (statement import, session 03), so the load creates **allocations on existing lines**, never lines.
+- **Matching, four passes over what the earlier ones left:** (1) same date, direction and amount, identical candidates paired by how alike their
+  narrations are; (2) rows split by hand (a salary batch) whose day's total equals one bank line; (3) the bank's 12-digit reference on another
+  date; (4) same direction and amount within 5 days. Approximate matches (3 and 4) are loaded but sent to review. A line is never used twice.
+- **Label mapping** (decided 2026-11-05): Salary → Salaries; Farm Expenses, Event Expense, Miscelleaneous, Parking Charges → Operational and
+  miscellaneous; Groceries, Bank Charges, Petty Cash, Insurance → same-named; Telecom Charges, Power → Utility bills; Online Services → Software and
+  subscriptions; Visit/Camp Revenue → Hospitality receipts; Event Revenue → Event receipts; Taxes, Land Tax → Land and local taxes; **CBDT Tax and Tax
+  Refund → Income tax (CBDT taxes are direct taxes)**; Interest Earned → Interest income; FD Investment → Sinking fund deposits; CS and CA/CS Charges →
+  Professional fees; Donations → Operational and miscellaneous when paid out (Other income only if received); **Farm Capex → Structures and infrastructure (a default, counted and flagged)**. A row with no Details
+  is left unallocated for a person (92 of them), as is any label the load does not know.
+- **Member maintenance keeps the year it is FOR.** "Maintenance (24-25)" becomes category Member maintenance with `maintenance_year` 2024-25 (migration
+  `0084`, **applied 2026-11-05**), while `period` stays the month the money moved. A member sometimes pays an earlier year late (13 payments in the first dry run), and the
+  year is what lets it be set against that year's outstanding. The payer's **household** is found from the "From" name against member names, taken from the member records AND the sheet's *Member Master*
+  tab (name and Farm Unit #, tied to a household by farm unit; the sheet lists spouses the records do not): a full name or the shortened form the bank
+  prints, or a couple written "First & First" (the one household that has the most of them; a tie finds none). 137 of 178 found a household; the other
+  41 come from only 14 distinct names. They are loaded without a household and listed in a worklist file (one line per name, with candidate farm
+  units); `--households answers.csv` reads back the farm unit a person fills in, and an answer beats any guess. Session 10 (the dues) builds on this.
+- **Farm Project → the Project bucket.** Each such row names a placeholder project for its financial year, "Farm projects (details to add)", status
+  proposed, created by `--apply`, under the category Structures and infrastructure. **TODO (Sharath asked to be reminded): record the real projects
+  (owner, approval date, planned breakdown) and move these allocations onto them.** Allocations are frozen once posted, so moving one is a reversal and a
+  new allocation, or a purpose-built re-attribution; decide which when the projects exist.
+- **Salary batches** become one allocation per person on the one bank line, the party found from the "To" name against the register.
+- **Dry run on the real tracker (5 Nov 2026):** 1,178 usable rows from April 2024 (one row has no amount); 1,123 (95.3%) matched; **783 bank lines would
+  get 1,031 allocations**; 92 matched lines have no label and stay unallocated; 55 tracker rows and 25 bank lines have no match (39 Salary, 15 Online
+  Services rows; about half the lines are payments newer than the tracker). A party was found in the register for 440 allocations (the rest have none).
+- **Applying.** `--apply` needs migration `0084` (applied 2026-11-05; the script checks, and refuses otherwise). It saves one bank line at a time through
+  `fin_save_allocations` (posted, source `import`, no actor), skips any line that already has allocations (so a re-run changes nothing), carries on past a
+  failure, and writes one counts-only audit row (`finance.history_loaded`). **`--canary` first:** it loads only the first line of each kind (a plain line, a
+  salary-style group, a maintenance payment with a household, a Farm Project line, an approximate match), so the first real write exercises every path and can
+  be checked in the ledger before the rest; the full run then skips those lines. **Canary run 2026-11-05: 5 bank lines, 14 allocations, no failures.** Checked afterwards in
+  TVC ERP: all posted, source `import`, no actor; every line adds up to its bank line; a salary batch became 10 allocations on one line; a maintenance payment for 2023-24
+  carried its year and a household; the Farm Project line created the placeholder project for FY 2024 (status proposed); one approximate match was sent to review;
+  every period is the first of a month and within one month of the bank date; one counts-only audit row was written (its detail shows the whole plan's counts, not
+  just the canary's). **Full load run 2026-11-05: 778 more lines, 0 failed.** In total **1,031 allocations on 783 bank lines**, all posted (source `import`), every line adding up to its
+  bank line, ₹2,34,94,151 loaded; 178 maintenance rows each with a year and a household (2023-24: 12, 2024-25: 64, 2025-26: 55, 2026-27: 47); 21 Farm Project rows on placeholder
+  projects for FY 2024, 2025 and 2026; 8 sent to review; 440 with a party in the register. 117 bank lines since April 2024 are still unallocated (92 with no label in the tracker,
+  25 the tracker does not mention). Per category the counts equal the plan's. **Corrected the same day:** the 3 "Donations" rows were payments OUT (₹30,000) that the load had filed under Other
+  income; they were moved to Operational and miscellaneous with `fin_recategorise_allocations` (one audit row, `finance.allocations_recategorised`), and the mapping now
+  files a paid-out donation as an expense. Posted allocations cannot be deleted, so a wrong load can only be
+  corrected by reversals: that is why the canary comes first, and why a purpose-built, audited "unload imports" function (import-sourced allocations only) was
+  proposed to Sharath.
+- **Pre-load audit (5 Nov 2026, counts only):** every planned line adds up to its bank line; the tracker's total equals loaded + unlabeled + no-bank-line
+  exactly; all 845 one-to-one matches have agreeing narrations; every allocation's month is within one month of its bank date; every category exists and is
+  active. Refunds load as ordinary allocations the other way (20 money-out lines under income-like categories, 21 money-in under cost categories), not as
+  reversals, so reports must net by direction.
+- **Not built:** the reconciliation of module totals against the sheet's own summary tabs by month and category; rules are not seeded (the hidden
+  "Lookups" tab holds only payment-mode keywords, and the suggestion engine learns from the loaded history instead); the 2023-24 tracker tab and the
+  older years (the ledger holds 476 bank lines before April 2024; the same script takes `--tab` and `--since`).
