@@ -483,7 +483,8 @@ outside both the local machine and Netlify (the member-update-email workflow).
   category, `scripts/lib/finance-suggest.mjs` proposes a category, party and wording for each line from the narration, the register and earlier postings, and `fin_vouchers` is the table for bills (no screen yet). `fin_save_allocations`, `fin_close_period`,
   `fin_merge_category` and `fin_recategorise_allocations` run in one transaction each, service role only, and three triggers
   repeat the money rules in the database. Every change is written to `fin_audit_log` first, with ids and counts only. No new
-  external service.
+  external service. The ledger list reads reference data (categories, parties, projects, rules, households) through a 10-second
+  per-instance cache that any write to `/api/finance-admin` clears, and asks big tables for their first three pages together.
 - **`netlify/functions/lib/site-retrieval.ts`** — shared retrieval + Anthropic-call plumbing
   factored out of `chat.mts` so it and `search-ai.mts` below can't drift apart:
   `selectRelevantPages()`, `matchMembers()`, `formatPages()`/`formatMembers()`, the

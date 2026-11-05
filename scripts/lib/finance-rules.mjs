@@ -116,7 +116,19 @@ export const REVIEW_REASONS = {
   reimbursement_without_bill: 'A reimbursement with no bill attached',
   rule_requires_review: 'A rule that is always reviewed',
   import_approximate: 'Matched to the bank line approximately when the history was loaded: check the date and amount',
+  no_party: 'No party: say who paid or was paid',
 };
+
+/**
+ * Whether an allocation in this category should name a party. Bank charges, interest and transfers legitimately have none;
+ * everything else (maintenance, salaries, bills, receipts) is somebody's money and needs the payer or payee named.
+ * Maintenance in particular is paid by anybody and allocated to a unit: the party is the payer, the household is the unit.
+ */
+export function partyNeeded(category) {
+  if (!category) return true;
+  if (['interest', 'transfer'].includes(category.type)) return false;
+  return !/bank charges/i.test(category.name ?? '');
+}
 
 /**
  * Why a proposed or posted allocation needs a person. Empty = fine to post.
@@ -131,6 +143,7 @@ export function reviewReasons(ctx) {
   if (line.direction === 'debit' && proposal.partyId && ctx.partyAccountState === 'unverified') reasons.push('new_payee_account');
   if (ctx.categoryType === 'reimbursement' && !ctx.hasVoucher) reasons.push('reimbursement_without_bill');
   if (proposal.needsReview) reasons.push('rule_requires_review');
+  if (!proposal.partyId && ctx.partyNeeded === true) reasons.push('no_party');
   return reasons;
 }
 

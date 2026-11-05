@@ -349,6 +349,23 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
     quietly ignored). The chips' counts are for the lines that remain after the conditions, so they say how many of THESE still need you.
 - **Not done:** column chooser, grouping by month, saved filters, a Status search box (the chips cover it); drafts are not saved on the
   server (the earlier `Save draft` of the sheet still is).
+
+### After the first UX audit (2026-11-05)
+- **Paytm under the narration.** What the UPI report says about a payment (who, and the remark typed) shows as a second line under the
+  narration, so nobody opens the line to see it; a UPI-looking narration with no match says "No Paytm record for this payment". The report
+  only starts on 2026-04-26, so older lines have none. Of the 156 UPI-style bank lines since then, 90 had no match in the first look: not yet explained.
+- **Who paid, and which unit.** The party is the payer or payee (maintenance can be paid by anybody, for example another organisation);
+  the household (shown as `F-01 · H-10`) and the maintenance year show under the category of a posted line, and are what the unit's
+  outstanding is worked from. A posted line whose category should name a party but has none shows a red "No party" and is counted by the
+  **No party** chip. Bank charges, interest and transfers need none (`partyNeeded`, `scripts/lib/finance-rules.mjs`). New saves with no party
+  go to review (`no_party`). Nothing was changed in the posted history: the 591 allocations the history load left without a party are
+  found through the chip, not flagged in bulk.
+- **Speed.** A list load made about 13 database requests of 200-500 ms each, one after another (2-4 s). Pages of a big table are now asked
+  for together, independent reads start together, and the reference data (categories, parties, projects, rules, account states, bank
+  accounts, households) is kept for 10 s per instance and dropped on any write through `/api/finance-admin`
+  (`cached` / `clearLedgerCache`, `netlify/functions/lib/finance-ledger.ts`). Measured against the real database: about 2.0 s cold, 1.0 s warm.
+  The rest is the two sign-in lookups and one wave of reads; the next step would be moving the filtering into the database.
+
 ## History load (session 06, in progress)
 
 Operator script `scripts/load-fin-history.mjs` (a dry run unless `--apply`; run with `netlify dev:exec -- node scripts/load-fin-history.mjs --sheet <id>`),

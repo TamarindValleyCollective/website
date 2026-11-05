@@ -21,7 +21,7 @@ import { attentionOf } from '../../scripts/lib/finance-attention.mjs';
 import { PARTY_ID, addPayeeAccount, createParty, listParties, mergeParty, retirePayeeAccount, revealPayeeAccount, reviewParty, unmergeParty, updateParty, verifyPayeeAccount } from './lib/finance-parties';
 import { heldCoverage, reconciliationOf, runImport } from './lib/finance-import';
 import { supabaseImportStore } from './lib/finance-import-store';
-import { LEDGER_ID, closePeriod, ledgerCounts, ledgerLine, listLedger, listPeriods, listRules, postBatch, recategorise, reviewAllocation, saveAllocations, saveCategory, saveRule, setRequester } from './lib/finance-ledger';
+import { LEDGER_ID, clearLedgerCache, closePeriod, ledgerCounts, ledgerLine, listLedger, listPeriods, listRules, postBatch, recategorise, reviewAllocation, saveAllocations, saveCategory, saveRule, setRequester } from './lib/finance-ledger';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -166,7 +166,18 @@ async function handleAddBankAccount(req: Request): Promise<Response> {
   }
 }
 
+// Any write drops the ledger's short-lived reference cache (before, so the work sees fresh data; after, so the next read does).
 export default async (req: Request): Promise<Response> => {
+  const writes = req.method !== 'GET' && req.method !== 'HEAD';
+  if (writes) clearLedgerCache();
+  try {
+    return await dispatch(req);
+  } finally {
+    if (writes) clearLedgerCache();
+  }
+};
+
+const dispatch = async (req: Request): Promise<Response> => {
   const { pathname } = new URL(req.url);
   const route = pathname.replace('/api/finance-admin', '');
   if (route === '/overview' && req.method === 'GET') return handleOverview(req);

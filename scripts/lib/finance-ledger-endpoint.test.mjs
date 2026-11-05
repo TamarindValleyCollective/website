@@ -35,6 +35,7 @@ const CAT_OPEX = ID(11);
 const CAT_OPEX_2 = ID(12);
 const CAT_CAPEX = ID(13);
 const CAT_REIMB = ID(14);
+const CAT_MAINT = ID(60);
 const P_NURSERY = ID(21);
 const P_MANAGER = ID(22);
 const L_DEBIT = ID(31); // 1,000.00 debit, 31 Oct 2026
@@ -112,7 +113,7 @@ globalThis.fetch = async (url, init = {}) => {
     db.rpc.push({ name: 'merge', body });
     return json(7);
   }
-  if (table.startsWith('fin_')) {
+  if (table.startsWith('fin_') || table === 'member_households') {
     const rows = db[table] ?? [];
     if (method === 'GET') {
       db.calls[table] = (db.calls[table] ?? 0) + 1;
@@ -145,10 +146,12 @@ const reset = () => {
       { id: CAT_OPEX_2, name: 'Tools and small equipment', type: 'opex', active: true },
       { id: CAT_CAPEX, name: 'Equipment and machinery', type: 'capex', active: true },
       { id: CAT_REIMB, name: 'Reimbursements', type: 'reimbursement', active: true },
+      { id: CAT_MAINT, name: 'Member maintenance', type: 'member_contribution', active: true },
     ],
     fin_parties: [{ id: P_NURSERY, name: 'Green Nursery', kind: 'vendor', active: true, merged_into: null }, { id: P_MANAGER, name: 'Test Manager', kind: 'employee', active: true, merged_into: null }],
     fin_party_accounts: [{ party_id: P_NURSERY, status: 'verified', retired_on: null }, { party_id: P_MANAGER, status: 'unverified', retired_on: null }],
     fin_projects: [],
+    member_households: [{ id: ID(90), farm_unit: 'F-01', house_no: 'H-10' }],
     fin_rules: [],
     fin_periods: [{ month: '2026-09-01', status: 'closed' }],
     fin_bank_accounts: [{ id: ID(2), label: 'Test current' }],
@@ -585,7 +588,34 @@ test('a batch reads the lookups once, not once per line', async () => {
   assert.equal(out.posted, 12);
   assert.equal(db.calls.fin_categories, 1);
   assert.ok((db.calls.fin_rules ?? 0) <= 1);
-  assert.ok((db.calls.fin_party_accounts ?? 0) <= 1);
+  assert.ok((db.calls.fin_party_accounts ?? 0) <= 3, 'one read of the table, which asks for up to three pages together');
+});
+
+// ---- missing parties, households and the Paytm line (what a posted line shows)
+test('a posted line with no party is found under "No party", unless its category needs none; maintenance shows its unit and year', async () => {
+  reset();
+  addBankCategory();
+  const op = sign('u1', 'user');
+  const at = '2026-10-01T00:00:00Z';
+  db.fin_allocations.push(
+    { id: ID(201), bank_line_id: L_DEBIT, party_id: null, category_id: CAT_MAINT, amount_paise: 100000, nature: 'Maintenance', posted_at: at, review_state: 'ok', household_id: ID(90), maintenance_year: '2025-26' },
+    { id: ID(202), bank_line_id: L_CIRCLE, party_id: null, category_id: CAT_BANK, amount_paise: 40000, nature: 'Charges', posted_at: at, review_state: 'ok' },
+  );
+  const out = await (await api(op, '/ledger?filter=noparty')).json();
+  assert.equal(out.counts.noparty, 1, 'bank charges need no party');
+  assert.deepEqual(out.lines.map((l) => l.id), [L_DEBIT]);
+  assert.equal(out.lines[0].missingParty, true);
+  assert.equal(out.lines[0].allocation.householdLabel, 'F-01 · H-10');
+  assert.equal(out.lines[0].allocation.maintenanceYear, '2025-26');
+});
+
+test('saving an allocation with no party flags it for review, except where none is needed', async () => {
+  reset();
+  addBankCategory();
+  const op = sign('u1', 'user');
+  const out = await (await postBatch(op, [batchItem(L_DEBIT, { partyId: null, categoryId: CAT_OPEX, nature: 'Plants' }), batchItem(L_REFUND, { partyId: null, categoryId: CAT_BANK, nature: 'Charges' })])).json();
+  assert.equal(out.posted, 2);
+  assert.equal(out.flagged, 1, 'only the one that should name a party');
 });
 
 // ---- column search and sort (docs/finance/FINANCE.md, "The table")

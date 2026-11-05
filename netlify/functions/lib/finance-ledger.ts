@@ -10,7 +10,7 @@ import { rest } from './staff-mfa-store';
 import { capabilitiesForRole } from './staff-registry';
 import { logFinanceAction } from './finance-audit';
 import { financialYearOf, lineState, periodOf, periodWriteDecision, planPosting, planReversal } from '../../../scripts/lib/finance-allocation.mjs';
-import { REVIEW_REASONS, reviewReasons, validateRule } from '../../../scripts/lib/finance-rules.mjs';
+import { REVIEW_REASONS, partyNeeded, reviewReasons, validateRule } from '../../../scripts/lib/finance-rules.mjs';
 import { buildHistory, suggest } from '../../../scripts/lib/finance-suggest.mjs';
 import { SORT_KEYS, compareRows, describeCondition, matchAmount, matchDate, matchText, parseAmount, parseDate, parseText } from '../../../scripts/lib/finance-columns.mjs';
 
@@ -28,13 +28,36 @@ const rows = async (path: string): Promise<Json[]> => (await (await rest(path)).
 // (bank lines, allocations) is read a page at a time. `path` must carry its own `order=` ending in a unique column, or the
 // pages can overlap or skip rows. Never rely on `limit=` above 1000 in this file.
 const PAGE_SIZE = 1000;
+// The first three pages are asked for together (each round trip to the database costs 200-500 ms), so up to 3,000 rows take
+// one wait instead of three; anything beyond that is read a page at a time.
+const FIRST_PAGES = 3;
 async function rowsAll(path: string): Promise<Json[]> {
+  const first = await Promise.all(Array.from({ length: FIRST_PAGES }, (_, i) => rows(`${path}&limit=${PAGE_SIZE}&offset=${i * PAGE_SIZE}`)));
   const out: Json[] = [];
-  for (let offset = 0; ; offset += PAGE_SIZE) {
+  for (const page of first) {
+    out.push(...page);
+    if (page.length < PAGE_SIZE) return out;
+  }
+  for (let offset = FIRST_PAGES * PAGE_SIZE; ; offset += PAGE_SIZE) {
     const page = await rows(`${path}&limit=${PAGE_SIZE}&offset=${offset}`);
     out.push(...page);
     if (page.length < PAGE_SIZE) return out;
   }
+}
+
+// Reference data that changes rarely (categories, parties, projects, rules, account states, bank accounts) is kept for a few
+// seconds, so a burst of sorting, searching and paging does not re-read it every time. Any write through finance-admin clears it
+// (clearLedgerCache, called from finance-admin.mts); another warm instance may serve it for up to CACHE_MS after a write.
+const CACHE_MS = 10_000;
+const cache = new Map<string, { at: number; value: Promise<unknown> }>();
+export const clearLedgerCache = () => cache.clear();
+function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.value as Promise<T>;
+  const value = load();
+  cache.set(key, { at: Date.now(), value });
+  value.catch(() => cache.delete(key));
+  return value;
 }
 const rpc = async (name: string, body: Json) => (await rest(`/rpc/${name}`, { method: 'POST', body: JSON.stringify(body) })).json();
 
@@ -59,7 +82,8 @@ const audit = (actorId: string, entity: string, action: string, target: string |
   logFinanceAction({ actorId, entityId: entity, action, target, detail });
 
 // Everything a screen needs to fill its pickers. Names only; no bank details.
-async function lookups() {
+const lookups = () => cached('lookups', loadLookups);
+async function loadLookups() {
   const [categories, parties, projects, entities, closed] = await Promise.all([
     rows('/fin_categories?select=id,name,type,active&order=type.asc,name.asc'),
     rowsAll('/fin_parties?select=id,name,kind&active=eq.true&merged_into=is.null&order=name.asc,id.asc'),
@@ -84,7 +108,7 @@ async function loadLedger(from: string | null, to: string | null) {
   const range = `${from ? `&tran_date=gte.${from}` : ''}${to ? `&tran_date=lte.${to}` : ''}`;
   const [lines, allocations] = await Promise.all([
     rowsAll(`/fin_bank_lines?select=id,entity_id,bank_account_id,tran_date,narration,direction,amount_paise&order=tran_date.desc,created_at.desc,id.asc${range}`) as Promise<LineRow[]>,
-    rowsAll('/fin_allocations?select=bank_line_id,amount_paise,review_state,posted_at,party_id,category_id,nature,reverses_allocation_id&order=id.asc'),
+    rowsAll('/fin_allocations?select=bank_line_id,amount_paise,review_state,posted_at,party_id,category_id,nature,reverses_allocation_id,household_id,maintenance_year&order=id.asc'),
   ]);
   const byLine = new Map<string, Json[]>();
   for (const a of allocations) byLine.set(a.bank_line_id, [...(byLine.get(a.bank_line_id) ?? []), a]);
@@ -105,7 +129,7 @@ export async function listLedger(req: Request): Promise<Response> {
   if (!auth.ok) return fail(auth.error, auth.status);
   try {
     const url = new URL(req.url);
-    const filter = ['unallocated', 'review', 'all'].includes(url.searchParams.get('filter') ?? '') ? url.searchParams.get('filter')! : 'unallocated';
+    const filter = ['unallocated', 'review', 'noparty', 'all'].includes(url.searchParams.get('filter') ?? '') ? url.searchParams.get('filter')! : 'unallocated';
     const iso = (k: string) => (/^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get(k) ?? '') ? url.searchParams.get(k) : null);
     const q = (url.searchParams.get('q') ?? '').toLowerCase().trim().slice(0, 60);
     const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0);
@@ -126,13 +150,22 @@ export async function listLedger(req: Request): Promise<Response> {
       }
     }
 
-    const { lines, byLine } = await loadLedger(iso('from'), iso('to'));
-    const ctx = await lookups();
+    // The ledger, the pickers and the bank accounts are independent, so they are read together.
+    const [{ lines, byLine }, ctx, accounts, households] = await Promise.all([
+      loadLedger(iso('from'), iso('to')),
+      lookups(),
+      cached('bank-accounts', () => rows('/fin_bank_accounts?select=id,label')),
+      cached('households', () => rowsAll('/member_households?select=id,farm_unit,house_no&order=id.asc')),
+    ]);
     const sc = await suggestionContext(lines, byLine, ctx);
+    const categoryById = new Map(ctx.categories.map((c) => [c.id as string, c]));
+    const householdLabel = new Map(households.map((x) => [x.id as string, [x.farm_unit, x.house_no].filter(Boolean).join(' · ')]));
     const summarise = (l: LineRow) => {
       const allocs = byLine.get(l.id) ?? [];
       const posted = allocs.some((a) => a.posted_at);
-      return { state: posted ? 'allocated' : lineState(l, allocs), review: allocs.some((a) => a.review_state !== 'ok') };
+      // Posted, and a row that should name a party does not: the payer of maintenance, a salary's employee, a bill's vendor...
+      const missingParty = allocs.some((a) => a.posted_at && !a.reverses_allocation_id && !a.party_id && partyNeeded(categoryById.get(a.category_id)));
+      return { state: posted ? 'allocated' : lineState(l, allocs), review: allocs.some((a) => a.review_state !== 'ok'), missingParty };
     };
 
     // The cheap conditions first (they need only the line itself).
@@ -170,16 +203,17 @@ export async function listLedger(req: Request): Promise<Response> {
       : cheap;
 
     // The chips count what is left after the column conditions, so they say how many of THESE lines still need you.
-    const counts = { unallocated: 0, review: 0, all: base.length };
+    const counts = { unallocated: 0, review: 0, noparty: 0, all: base.length };
     for (const l of base) {
       const st = summarise(l);
       if (st.state !== 'allocated') counts.unallocated++;
       if (st.review) counts.review++;
+      if (st.missingParty) counts.noparty++;
     }
     const keyed = base
       .filter((l) => {
         const st = summarise(l);
-        return filter === 'all' || (filter === 'unallocated' ? st.state !== 'allocated' : st.review);
+        return filter === 'all' || (filter === 'unallocated' ? st.state !== 'allocated' : filter === 'noparty' ? st.missingParty : st.review);
       })
       .map((l) => {
         const e = effective.get(l.id);
@@ -192,7 +226,6 @@ export async function listLedger(req: Request): Promise<Response> {
 
     const page = matched.slice(offset, offset + PAGE);
     if (!needsEffective) await fetchUpi(page.map((l) => l.id));
-    const accounts = await rows('/fin_bank_accounts?select=id,label');
     const accountLabel = new Map(accounts.map((a) => [a.id as string, a.label as string]));
     const capabilities = capabilitiesForRole('finance', auth.staff.role) as string[];
     return jsonResponse({
@@ -218,7 +251,10 @@ export async function listLedger(req: Request): Promise<Response> {
         ...summarise(l),
         suggestion: summarise(l).state === 'allocated' ? null : compactSuggestion(suggestFor(l, upiOf.get(l.id) ?? null, ctx, sc)),
         // What a posted line was allocated to (the first row, and how many there are), so the table can show it.
-        allocation: postedSummary(byLine.get(l.id) ?? []),
+        allocation: (() => {
+          const a = postedSummary(byLine.get(l.id) ?? []);
+          return a ? { ...a, householdLabel: a.householdId ? householdLabel.get(a.householdId as string) ?? null : null } : null;
+        })(),
       })),
       lookups: ctx,
       reasons: REVIEW_REASONS,
@@ -266,7 +302,7 @@ const suggestFor = (line: Json, upi: Json | null, ctx: Awaited<ReturnType<typeof
 // The short form shown in the list: no reasons (the line's own sheet has those).
 const postedSummary = (allocs: Json[]) => {
   const posted = allocs.filter((a) => a.posted_at && !a.reverses_allocation_id);
-  return posted.length ? { categoryId: posted[0].category_id, partyId: posted[0].party_id, nature: posted[0].nature, count: posted.length } : null;
+  return posted.length ? { categoryId: posted[0].category_id, partyId: posted[0].party_id, nature: posted[0].nature, count: posted.length, householdId: posted[0].household_id ?? null, maintenanceYear: posted[0].maintenance_year ?? null } : null;
 };
 
 const compactSuggestion = (x: Json) =>
@@ -275,10 +311,12 @@ const compactSuggestion = (x: Json) =>
     : null;
 
 async function reviewContext(ctx: Awaited<ReturnType<typeof lookups>>) {
-  const [rules, allAccounts] = await Promise.all([
-    rows('/fin_rules?select=id,priority,matcher,party_id,category_id,nature_template,needs_review,active&active=eq.true'),
-    rowsAll('/fin_party_accounts?select=party_id,status,retired_on&status=neq.superseded&order=id.asc'),
-  ]);
+  const [rules, allAccounts] = await cached('review-ref', () =>
+    Promise.all([
+      rows('/fin_rules?select=id,priority,matcher,party_id,category_id,nature_template,needs_review,active&active=eq.true'),
+      rowsAll('/fin_party_accounts?select=party_id,status,retired_on&status=neq.superseded&order=id.asc'),
+    ]),
+  );
   const today = new Date().toISOString().slice(0, 10);
   const stateOfParty = (partyId: string | null): 'verified' | 'unverified' | 'none' => {
     if (!partyId) return 'none';
@@ -312,7 +350,7 @@ export async function ledgerLine(req: Request, lineId: string): Promise<Response
       }
       if (suggestion.categoryId) {
         const category = ctx.categories.find((c) => c.id === suggestion!.categoryId);
-        reasons = reviewReasons({ line, upi, proposal: { partyId: suggestion.partyId, categoryId: suggestion.categoryId, source: suggestion.source, needsReview: suggestion.needsReview }, requesterPartyIds: sc.requesterIds, partyAccountState: sc.rc.stateOfParty(suggestion.partyId), categoryType: category?.type, hasVoucher: false });
+        reasons = reviewReasons({ line, upi, proposal: { partyId: suggestion.partyId, categoryId: suggestion.categoryId, source: suggestion.source, needsReview: suggestion.needsReview }, requesterPartyIds: sc.requesterIds, partyAccountState: sc.rc.stateOfParty(suggestion.partyId), categoryType: category?.type, hasVoucher: false, partyNeeded: partyNeeded(category) });
       } else reasons = ['unexplained'];
     }
     const capabilities = capabilitiesForRole('finance', auth.staff.role) as string[];
@@ -426,6 +464,7 @@ async function saveLine(staff: { id: string }, capabilities: string[], lineId: s
         partyAccountState: rc.stateOfParty(r.partyId ?? null),
         categoryType: categoryById.get(r.categoryId)?.type,
         hasVoucher: false,
+        partyNeeded: partyNeeded(categoryById.get(r.categoryId)),
       });
     }
     for (const x of reasons) reasonCounts[x] = (reasonCounts[x] ?? 0) + 1;

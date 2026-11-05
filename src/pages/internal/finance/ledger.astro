@@ -82,13 +82,13 @@ import SignInGate from '../../../components/SignInGate.astro';
   declare const google: any;
   const CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID;
 
-  type Line = { id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null; isCircle: boolean; allocatedPaise: number; state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean; suggestion: Suggestion | null; allocation: { categoryId: string; partyId: string | null; nature: string; count: number } | null };
+  type Line = { id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null; isCircle: boolean; allocatedPaise: number; state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean; missingParty: boolean; suggestion: Suggestion | null; allocation: { categoryId: string; partyId: string | null; nature: string; count: number; householdLabel: string | null; maintenanceYear: string | null } | null };
   type Suggestion = { categoryId: string | null; partyId: string | null; nature: string; confidence: 'high' | 'medium' | 'low' | 'none'; newPartyName: string | null };
   type Category = { id: string; name: string; type: string; active: boolean };
   type Party = { id: string; name: string; kind: string };
   type Project = { id: string; name: string; kind: string; financial_year: number; status: string };
   type Lookups = { categories: Category[]; parties: Party[]; projects: Project[]; requesterPartyId: string | null; closedMonths: string[] };
-  type Filter = 'unallocated' | 'review' | 'all';
+  type Filter = 'unallocated' | 'review' | 'noparty' | 'all';
   type ListData = { canAllocate: boolean; canClose: boolean; counts: Record<Filter, number>; total: number; offset: number; lines: Line[]; lookups: Lookups; reasons: Record<string, string>; sort: { key: string; dir: 'asc' | 'desc' }; breadcrumb: { column: string; text: string }[]; filterErrors: Record<string, string> };
 
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -101,7 +101,7 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   let data: ListData | null = null;
   let lines: Line[] = [];
-  let filter: Filter = (['unallocated', 'review', 'all'] as const).find((f) => f === new URLSearchParams(location.search).get('filter')) ?? 'unallocated';
+  let filter: Filter = (['unallocated', 'review', 'noparty', 'all'] as const).find((f) => f === new URLSearchParams(location.search).get('filter')) ?? 'unallocated';
   let query = '';
   // Click a heading to sort; type under one to search that column (the server applies both to every line, not just this page).
   let sort: { key: string; dir: 'asc' | 'desc' } = { key: 'date', dir: 'desc' };
@@ -222,12 +222,12 @@ import SignInGate from '../../../components/SignInGate.astro';
   });
 
   // ---- the table
-  const FILTERS: [Filter, string][] = [['unallocated', 'To allocate'], ['review', 'To review'], ['all', 'All']];
+  const FILTERS: [Filter, string][] = [['unallocated', 'To allocate'], ['review', 'To review'], ['noparty', 'No party'], ['all', 'All']];
   function renderChips() {
     $('chips').replaceChildren(
       ...FILTERS.map(([f, label]) => {
         const count = data?.counts[f] ?? 0;
-        const b = h('button', { attrs: { type: 'button', 'aria-pressed': String(f === filter) } }, h('span', { text: label }), h('span', { class: `chip-count${f === 'review' && count > 0 ? ' chip-count--crit' : ''}`, text: String(count) }));
+        const b = h('button', { attrs: { type: 'button', 'aria-pressed': String(f === filter) } }, h('span', { text: label }), h('span', { class: `chip-count${(f === 'review' || f === 'noparty') && count > 0 ? ' chip-count--crit' : ''}`, text: String(count) }));
         b.addEventListener('click', () => {
           filter = f;
           selected.clear();
@@ -320,19 +320,24 @@ import SignInGate from '../../../components/SignInGate.astro';
     } else {
       const a = l.allocation;
       const lk2 = data!.lookups;
-      catCell = cell('lcell--text', a ? `${nameOf(lk2.categories, a.categoryId)}${a.count > 1 ? ` +${a.count - 1} more` : ''}` : '');
-      partyCell = cell('lcell--text', a?.partyId ? nameOf(lk2.parties, a.partyId) : '');
+      // Maintenance is paid by anybody and allocated to a unit: the party is the payer, and the unit and year go under the category.
+      const forWhom = [a?.householdLabel ? `Unit ${a.householdLabel}` : '', a?.maintenanceYear ?? ''].filter(Boolean).join(' · ');
+      catCell = cell('lcell--text', a ? `${nameOf(lk2.categories, a.categoryId)}${a.count > 1 ? ` +${a.count - 1} more` : ''}` : '', forWhom ? h('span', { class: 'detail detail--unit', text: forWhom }) : null);
+      partyCell = a?.partyId ? cell('lcell--text', nameOf(lk2.parties, a.partyId)) : cell('lcell--text', l.missingParty ? h('span', { class: 'noparty', text: 'No party', attrs: { title: 'Nobody is named as the payer or payee. Open the line to add one.' } }) : '');
       natureCell = cell('lcell--text', a?.nature ?? '');
     }
 
     const error = rowErrors.get(l.id);
-    const hint = [l.account, l.remark ? `Remark: ${l.remark}` : ''].filter(Boolean).join(' · ');
+    // What Paytm says about this payment (who, and the remark typed), shown under the narration so nobody has to open the line for it.
+    const upiSays = [l.counterparty, l.remark ? `“${l.remark}”` : ''].filter(Boolean).join(' · ');
+    const noUpi = !upiSays && /\bUPI\b/i.test(l.narration);
+    const hint = l.account;
     return h(
       'div',
       { class: `lrow${selected.has(l.id) ? ' is-selected' : ''}${can ? '' : ' is-locked'}`, attrs: { role: 'row' } },
       cell('lcell--check', checkbox),
       cell('lcell--date', shortDate(l.date)),
-      cell('lcell--narr', h('button', { class: 'narr narr--link', text: l.narration, attrs: { type: 'button', title: `${l.narration}\nOpen this line to split it or see its history` }, on: { click: () => void openLine(l.id) } }), h('span', { class: `detail${error ? ' detail--warn' : ''}`, text: error ?? hint })),
+      cell('lcell--narr', h('button', { class: 'narr narr--link', text: l.narration, attrs: { type: 'button', title: `${l.narration}\nOpen this line to split it or see its history` }, on: { click: () => void openLine(l.id) } }), h('span', { class: `detail${error ? ' detail--warn' : ''}`, text: error ?? hint }), !error && upiSays ? h('span', { class: 'detail detail--upi', text: `Paytm: ${upiSays}`, attrs: { title: 'From the Paytm UPI report' } }) : null, !error && noUpi ? h('span', { class: 'detail detail--dim', text: 'No Paytm record for this payment' }) : null),
       cell(`lcell--amount amount--${l.direction}`, `${l.direction === 'debit' ? '−' : '+'}${rupees(l.amountPaise)}`),
       catCell,
       partyCell,
@@ -1504,6 +1509,25 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   .ledger .detail--warn {
     color: var(--tvc-error-text);
+  }
+
+  /* What Paytm says (stronger than the account line), a note that there is none, the unit a payment is for, and a missing party. */
+  .ledger .detail--upi {
+    color: var(--tvc-ink);
+  }
+
+  .ledger .detail--dim {
+    font-style: italic;
+  }
+
+  .ledger .detail--unit {
+    color: var(--tvc-ink);
+    white-space: normal;
+  }
+
+  .ledger .noparty {
+    color: var(--tvc-error-text);
+    font-weight: 600;
   }
 
 
