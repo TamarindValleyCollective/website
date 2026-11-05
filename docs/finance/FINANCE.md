@@ -15,7 +15,8 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 | 03 Statement import | Built on branch `finance-03-statement-import` (draft PR). Migration `0080` **applied to TVC ERP on 2026-11-02**. |
 | 04 Parties & payees | Built on branch `finance-04-parties` (draft PR). Migration `0079` **applied to TVC ERP on 2026-11-02** (recorded as `finance_parties`); checked afterwards: both tables empty, RLS on, no anon/authenticated grants, guard trigger present. |
 | 05 Ledger & review | **Built, draft PR #529** (branch `worktree-finance-05-ledger`): posting rules, rules engine, ledger and rules screens, period close. Migration `0083` **applied to TVC ERP on 2026-11-05** (recorded as `finance_ledger`). Running locally against the real database; nothing allocated yet. |
-| 02, 06-13 | Not started |
+| 06 History load | **In progress** on branch `worktree-finance-06-history`: the tracker is read and matched to the bank lines (dry run only); nothing is written. |
+| 02, 07-13 | Not started |
 
 ## Access
 
@@ -348,3 +349,24 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
     quietly ignored). The chips' counts are for the lines that remain after the conditions, so they say how many of THESE still need you.
 - **Not done:** column chooser, grouping by month, saved filters, a Status search box (the chips cover it); drafts are not saved on the
   server (the earlier `Save draft` of the sheet still is).
+## History load (session 06, in progress)
+
+Operator script `scripts/load-fin-history.mjs` (dry run only so far; run with `netlify dev:exec -- node scripts/load-fin-history.mjs --sheet <id>`),
+pure rules in `scripts/lib/finance-history.mjs` (tested on invented rows). Counts only are ever printed.
+
+- **Source.** The workbook "TVC Spend Summary" (the sheet id is passed in, never kept here). The tab "Funds Transfer Tracker (2024-27)" has one row
+  per payment: date, to, from, mode, amount, the bank's narration copied in ("Transaction Particulars"), DR/CR, and the labels **Details**
+  and **Type**, **Remarks**, and the sheet's own Year and Month (the month the cost belongs to, used as the allocation's period). The yearly
+  "TVC 20xx-20xx" workbooks owned by the stay partner are that partner's own operating books, not the ledger's source.
+- **The bank lines already exist** (statement import, session 03), so the load creates **allocations on existing lines**, never lines. The
+  job is to find the line each tracker row describes.
+- **Matching, four passes over what the earlier ones left:** (1) same date, direction and amount, identical candidates paired by how alike their
+  narrations are; (2) rows split by hand (a salary batch) whose day's total equals one bank line; (3) the bank's 12-digit reference on another
+  date; (4) same direction and amount within 5 days (reported as approximate). A line is never used twice.
+- **Dry run on the real tracker (2 Nov 2026):** 1,178 usable rows from April 2024 (one row has no amount). **1,123 (95.3%) matched**: 837 one-to-one,
+  278 rows folded into 30 salary-style bank lines, 3 by reference, 5 by nearby date. 875 of the 900 bank lines in that period get a label. Left over:
+  55 tracker rows (39 Salary, 15 Online Services, 1 with no Details), all payments out, and 25 bank lines (about half are payments newer than the
+  tracker's last update). The labels are few: 30 distinct "Details" values; 92 matched rows have no Details and 139 have no Type.
+- **Still to decide before anything is written** (see the session brief): the mapping of Details and Type to the 29 categories, what to do with the
+  blank-label rows, whether to load FY 2023-24 and earlier (the ledger holds 476 older bank lines the sheet's 2024-27 tab does not cover), and how
+  "Farm Project" rows name a project (no project records exist yet).

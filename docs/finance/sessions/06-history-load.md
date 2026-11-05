@@ -39,4 +39,10 @@ Time to review the differences; decisions on untyped rows.
 > Read `docs/finance/README.md`, `DESIGN.md` and `sessions/06-history-load.md`. Write the history-load script as a dry run first. Never print the key file, account numbers, or the sheet contents; print counts and differences only.
 
 ## Done
-_Fill in at the end of the session._
+**In progress (started 2026-11-05, branch `worktree-finance-06-history`).** Built so far: `scripts/lib/finance-history.mjs` (tracker parser and four-pass
+matcher, tested) and the dry-run command `scripts/load-fin-history.mjs`. First dry run against the real tracker matched 95.3% of its rows. Findings and the
+open decisions are in [FINANCE.md](../FINANCE.md), "History load". Not built: the label-to-category mapping, the apply step (allocations through
+`fin_save_allocations`), seeding the rules and the reconciliation report by month and category.
+
+Deviation from the brief: it says the script creates bank lines and allocations; the bank lines were imported from the statements in session 03, so
+this load only matches the tracker to them and creates allocations.
