@@ -91,6 +91,23 @@ export function proposeAllocation(line, upi, rules, opts = {}) {
   };
 }
 
+const squash = (s) => String(s ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+/**
+ * Which party a line is to, when the name is an exact match (ignoring case and spacing). Tries the Paytm counterparty, then
+ * the name segment of a UPI narration (UPI/P2A/<ref>/<NAME>/...). Two parties with the same name, or no match, give null:
+ * a wrong guess would put money against the wrong person, so it is better to ask.
+ */
+export function guessPartyId(line, upi, parties) {
+  const candidates = [upi?.counterparty, /^UPI\/[^/]+\/\d{12}\/([^/]+)\//i.exec(line.narration ?? '')?.[1]].map(squash).filter(Boolean);
+  for (const name of candidates) {
+    const hits = parties.filter((p) => squash(p.name) === name);
+    if (hits.length === 1) return hits[0].id;
+    if (hits.length > 1) return null;
+  }
+  return null;
+}
+
 // Plain-words labels for the review queue; the keys are what is stored in fin_allocations.review_reason.
 export const REVIEW_REASONS = {
   unexplained: 'Nothing explains this line yet',
@@ -110,7 +127,7 @@ export function reviewReasons(ctx) {
   if (!proposal || !proposal.categoryId) return ['unexplained'];
   const reasons = [];
   if (upi?.is_circle && proposal.partyId && (ctx.requesterPartyIds ?? []).includes(proposal.partyId)) reasons.push('circle_to_requester');
-  if (line.direction === 'debit' && proposal.partyId && ctx.partyAccountState && ctx.partyAccountState !== 'verified') reasons.push('new_payee_account');
+  if (line.direction === 'debit' && proposal.partyId && ctx.partyAccountState === 'unverified') reasons.push('new_payee_account');
   if (ctx.categoryType === 'reimbursement' && !ctx.hasVoucher) reasons.push('reimbursement_without_bill');
   if (proposal.needsReview) reasons.push('rule_requires_review');
   return reasons;

@@ -13,6 +13,12 @@
 --     lock on the line so two people cannot post at once. A closed month needs p_override (the app has already checked
 --     `close-period` and a reason; the database only refuses a closed month with no override).
 --   * fin_close_period: marks a month closed.
+--   * fin_entities.requester_party_id: the party who raises payment requests (the farm manager); a circle payment to this
+--     party is always flagged for review.
+--   * fin_merge_category / fin_recategorise_allocations: the only way a posted allocation's category can change, so
+--     categories can be merged or split later. They move nothing else, only the category, and only inside this
+--     transaction (a session setting the guard looks for). A merge needs both categories to be the same type, so a budget
+--     bucket never changes under a past allocation; the app audits every call.
 --
 -- Same posture as the other fin_ tables (0077): RLS on with no policies, anon/authenticated revoked, service role only.
 -- Public repository: nothing here is a real name, number or amount.
@@ -88,6 +94,8 @@ create table fin_vouchers (
 );
 create index fin_vouchers_allocation_idx on fin_vouchers (allocation_id) where allocation_id is not null;
 
+alter table fin_entities add column requester_party_id uuid references fin_parties (id);
+
 -- ---- Guards -------------------------------------------------------------------------------------------------------
 
 -- A posted row is frozen apart from its review fields. A draft may be deleted (replacing a draft); a posted row never.
@@ -101,8 +109,11 @@ begin
     return old;
   end if;
   if old.posted_at is not null then
-    if (to_jsonb(new) - 'review_state' - 'review_reason' - 'reviewed_by' - 'reviewed_at')
-       is distinct from (to_jsonb(old) - 'review_state' - 'review_reason' - 'reviewed_by' - 'reviewed_at') then
+    -- Review fields always; the category only inside fin_merge_category / fin_recategorise_allocations.
+    if (to_jsonb(new) - 'review_state' - 'review_reason' - 'reviewed_by' - 'reviewed_at'
+        - case when current_setting('fin.recategorise', true) = 'on' then 'category_id' else '' end)
+       is distinct from (to_jsonb(old) - 'review_state' - 'review_reason' - 'reviewed_by' - 'reviewed_at'
+        - case when current_setting('fin.recategorise', true) = 'on' then 'category_id' else '' end) then
       raise exception 'a posted allocation cannot be changed; reverse it instead';
     end if;
   elsif new.posted_at is null and old.posted_at is not null then
@@ -248,10 +259,54 @@ begin
 end;
 $$;
 
+-- Merge one category into another of the same type: every allocation, rule and project line moves across and the old
+-- category is retired (never deleted, so the history still reads). Returns how many allocations moved.
+create function fin_merge_category(p_from uuid, p_to uuid, p_actor uuid) returns integer
+language plpgsql security definer set search_path = public as $$
+declare
+  a record;
+  b record;
+  moved integer;
+begin
+  select id, entity_id, type into a from fin_categories where id = p_from for update;
+  select id, entity_id, type into b from fin_categories where id = p_to for update;
+  if a.id is null or b.id is null then raise exception 'no such category'; end if;
+  if a.id = b.id then raise exception 'choose two different categories'; end if;
+  if a.entity_id <> b.entity_id then raise exception 'the categories belong to different entities'; end if;
+  if a.type <> b.type then raise exception 'only categories of the same type can be merged'; end if;
+  perform set_config('fin.recategorise', 'on', true);
+  update fin_allocations set category_id = p_to where category_id = p_from;
+  get diagnostics moved = row_count;
+  perform set_config('fin.recategorise', 'off', true);
+  update fin_rules set category_id = p_to where category_id = p_from;
+  update fin_project_lines set category_id = p_to where category_id = p_from;
+  update fin_categories set active = false where id = p_from;
+  return moved;
+end;
+$$;
+
+-- Move chosen allocations to another category (splitting a category: pick the ones that belong elsewhere). Changing type
+-- changes the budget bucket of those allocations, so the app asks for confirmation; the database only moves the category.
+create function fin_recategorise_allocations(p_ids uuid[], p_to uuid, p_actor uuid) returns integer
+language plpgsql security definer set search_path = public as $$
+declare
+  moved integer;
+begin
+  if not exists (select 1 from fin_categories where id = p_to and active) then raise exception 'choose an active category'; end if;
+  perform set_config('fin.recategorise', 'on', true);
+  update fin_allocations set category_id = p_to where id = any(p_ids);
+  get diagnostics moved = row_count;
+  perform set_config('fin.recategorise', 'off', true);
+  return moved;
+end;
+$$;
+
 alter table fin_rules enable row level security;
 alter table fin_allocations enable row level security;
 alter table fin_vouchers enable row level security;
 revoke all on fin_rules, fin_allocations, fin_vouchers from anon, authenticated;
 revoke all on function fin_allocations_guard(), fin_allocations_reversal_guard(), fin_allocations_sum_guard() from public, anon, authenticated;
-revoke all on function fin_save_allocations(uuid, jsonb, uuid, boolean, boolean), fin_close_period(uuid, date, uuid) from public, anon, authenticated;
-grant execute on function fin_save_allocations(uuid, jsonb, uuid, boolean, boolean), fin_close_period(uuid, date, uuid) to service_role;
+revoke all on function fin_save_allocations(uuid, jsonb, uuid, boolean, boolean), fin_close_period(uuid, date, uuid),
+  fin_merge_category(uuid, uuid, uuid), fin_recategorise_allocations(uuid[], uuid, uuid) from public, anon, authenticated;
+grant execute on function fin_save_allocations(uuid, jsonb, uuid, boolean, boolean), fin_close_period(uuid, date, uuid),
+  fin_merge_category(uuid, uuid, uuid), fin_recategorise_allocations(uuid[], uuid, uuid) to service_role;

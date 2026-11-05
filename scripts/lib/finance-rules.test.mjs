@@ -2,7 +2,7 @@
 // The categorisation rules engine and the review flags (docs/finance/DESIGN.md). Every name and amount is invented.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { REVIEW_REASONS, applyRules, matchRule, proposeAllocation, reviewReasons, validateRule } from './finance-rules.mjs';
+import { REVIEW_REASONS, applyRules, guessPartyId, matchRule, proposeAllocation, reviewReasons, validateRule } from './finance-rules.mjs';
 
 const line = { id: 'L1', direction: 'debit', amount_paise: 250000, narration: 'UPI/P2A/123456789012/Green Nursery/Okbank/Plants', tran_date: '2026-10-12' };
 const upi = { counterparty: 'Green Nursery', remarks: 'Mango saplings', is_circle: false, upi_ref: '123456789012' };
@@ -81,6 +81,8 @@ test('flags: a payment to a party whose live account is new, changed or unverifi
   const ctx = { line, proposal: { partyId: 'p1', categoryId: 'c1', source: 'rule' }, partyAccountState: 'unverified' };
   assert.ok(reviewReasons(ctx).includes('new_payee_account'));
   assert.ok(!reviewReasons({ ...ctx, partyAccountState: 'verified' }).includes('new_payee_account'));
+  // A party with no account on record (a member paid by UPI, say) is not "a new account".
+  assert.ok(!reviewReasons({ ...ctx, partyAccountState: 'none' }).includes('new_payee_account'));
   // Money coming in is not a payee risk.
   assert.ok(!reviewReasons({ ...ctx, line: { ...line, direction: 'credit' } }).includes('new_payee_account'));
 });
@@ -118,4 +120,17 @@ test('rule validation: needs a condition and a category, and rejects nonsense', 
   assert.equal(validateRule({ matcher: { narrationContains: 'ab' }, categoryId: 'c1' }).ok, false); // too short to be safe
   assert.equal(validateRule({ matcher: { minPaise: 500, maxPaise: 100 }, categoryId: 'c1' }).ok, false);
   assert.equal(validateRule({ matcher: { direction: 'sideways' }, categoryId: 'c1' }).ok, false);
+});
+
+test('the party is guessed from the counterparty name, then the narration, exactly and without case or spacing', () => {
+  const parties = [{ id: 'p1', name: 'Green  Nursery' }, { id: 'p2', name: 'Asha Rao' }];
+  assert.equal(guessPartyId(line, upi, parties), 'p1');
+  assert.equal(guessPartyId(line, { ...upi, counterparty: 'asha rao' }, parties), 'p2');
+  // No UPI row: the name segment of a UPI narration.
+  assert.equal(guessPartyId({ ...line, narration: 'UPI/P2A/123456789012/ASHA RAO/Okbank/x' }, null, parties), 'p2');
+  // Near misses and shared names are not guessed.
+  const other = { ...line, narration: 'UPI/P2A/123456789012/Green Nurseries/Okbank/x' };
+  assert.equal(guessPartyId(other, { ...upi, counterparty: 'Green Nurseries' }, parties), null);
+  assert.equal(guessPartyId(line, upi, [...parties, { id: 'p3', name: 'green nursery' }]), null); // two parties share the name
+  assert.equal(guessPartyId({ ...line, narration: 'NEFT/SOMEBODY' }, null, parties), null);
 });
