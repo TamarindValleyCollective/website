@@ -12,7 +12,7 @@ const RESEND_API_URL = 'https://api.resend.com/emails';
 const FROM = 'Tamarind Valley Collective <noreply@tvc.farm>';
 // Linger run the property and do the pre-booking conversation, so they get
 // every request; TVC core team is copied.
-const APPROVER_EMAILS = ['core-team@tvc.farm', 'stay@linger.in'];
+const APPROVER_EMAILS = ['contact@tvc.farm', 'stay@linger.in'];
 const SITE_ORIGIN = 'https://tvc.farm';
 
 // A request whose guest name starts with "TEST" is a dry run by the core team:
@@ -86,7 +86,7 @@ export async function notifyApprovers(req: BookingRequestSummary, token: string,
       }),
     ),
     sendEmail({
-      to: isDryRunRequest(req.name) ? ['core-team@tvc.farm'] : APPROVER_EMAILS,
+      to: isDryRunRequest(req.name) ? ['contact@tvc.farm'] : APPROVER_EMAILS,
       subject: `Booking request — ${req.event_title} (${req.name})`,
       replyTo: req.email,
       html: renderStaffEmail(`  <p style="margin-top:0;">A guest has asked to book <strong>${escapeHtml(req.event_title)}</strong>. Please speak to them before approving — the payment link is only sent once you approve.</p>
@@ -108,7 +108,7 @@ export async function sendRequestAcknowledgement(req: BookingRequestSummary): Pr
   await sendEmail({
     to: [req.email],
     subject: `We've received your request — ${req.event_title}`,
-    replyTo: 'core-team@tvc.farm',
+    replyTo: 'contact@tvc.farm',
     html: renderBrandedEmail(`        <p style="margin-top:0;">Hi ${escapeHtml(firstNameOf(req.name))},</p>
         <p>Thanks for your interest in <strong>${escapeHtml(req.event_title)}</strong>. We've received your request for ${peopleLabel(req.attendee_count)}.</p>
         <p><strong>Your spot isn't confirmed yet.</strong> Someone from our team will get in touch with you shortly to answer any questions and confirm the details, such as exactly where the farm is and how to get there. Once they've confirmed with you, we'll send you a payment link, and you'll only be charged after that.</p>
@@ -133,9 +133,9 @@ export async function sendPaymentLinkToGuest(
     }),
     sendEmail({
       to: [req.email],
-      cc: ['core-team@tvc.farm'],
+      cc: ['contact@tvc.farm'],
       subject: `Complete your booking — ${req.event_title}`,
-      replyTo: 'core-team@tvc.farm',
+      replyTo: 'contact@tvc.farm',
       html: renderBrandedEmail(`        <p style="margin-top:0;">Hi ${escapeHtml(firstNameOf(req.name))},</p>
         <p>Thanks for speaking with us. Your booking for <strong>${escapeHtml(req.event_title)}</strong> is approved. Pay below to confirm your spot.</p>
         ${detailTable(
@@ -156,9 +156,9 @@ export async function sendPaymentLinkToGuest(
 export async function sendDeclineToGuest(req: BookingRequestSummary): Promise<void> {
   await sendEmail({
     to: [req.email],
-    cc: ['core-team@tvc.farm'],
+    cc: ['contact@tvc.farm'],
     subject: `About your request — ${req.event_title}`,
-    replyTo: 'core-team@tvc.farm',
+    replyTo: 'contact@tvc.farm',
     html: renderBrandedEmail(`        <p style="margin-top:0;">Hi ${escapeHtml(firstNameOf(req.name))},</p>
         <p>Thanks for your interest in <strong>${escapeHtml(req.event_title)}</strong>. Unfortunately we aren't able to take this booking forward, and you haven't been charged anything.</p>
         <p style="margin-bottom:0;">If you'd like to talk it through, or hear about other dates and events, just reply to this email.</p>`),

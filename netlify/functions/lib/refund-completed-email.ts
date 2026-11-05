@@ -8,7 +8,7 @@ import { EMAIL_COLORS, emailLink, escapeHtml, renderBrandedEmail } from './email
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const FROM = 'Tamarind Valley Collective <noreply@tvc.farm>';
-const RECEIPT_CC = ['core-team@tvc.farm', 'stay@linger.in'];
+const RECEIPT_CC = ['contact@tvc.farm', 'stay@linger.in'];
 
 export async function sendRefundCompletedEmail(params: { to: string; eventTitle: string; refundAmount: number; currency: string; paymentId: string; refundId: string; isTest?: boolean }): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
@@ -21,7 +21,7 @@ export async function sendRefundCompletedEmail(params: { to: string; eventTitle:
   const html = renderBrandedEmail(`        <p style="margin-top:0;">Your refund of <strong>${formatted}</strong> for <strong>${escapeHtml(params.eventTitle)}</strong> has been processed.</p>
         <p>It has been sent to your original payment method. Depending on your bank it can take a few more business days to show up in your account.</p>
         <p style="font-size:13px; color:${EMAIL_COLORS.muted};">Payment ID ${escapeHtml(params.paymentId)} · Refund ID ${escapeHtml(params.refundId)}</p>
-        <p style="margin-bottom:0;">Questions? Reply to this email or reach us at ${emailLink('mailto:core-team@tvc.farm', 'core-team@tvc.farm')}.</p>`);
+        <p style="margin-bottom:0;">Questions? Reply to this email or reach us at ${emailLink('mailto:contact@tvc.farm', 'contact@tvc.farm')}.</p>`);
   const res = await fetch(RESEND_API_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },

@@ -10,7 +10,7 @@ import { EMAIL_COLORS, escapeHtml, formatAmount, renderStaffEmail } from './emai
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const FROM = 'Tamarind Valley Collective <noreply@tvc.farm>';
-const ALERT_TO = ['core-team@tvc.farm'];
+const ALERT_TO = ['contact@tvc.farm'];
 const ALERT_CC = ['stay@linger.in'];
 
 export interface RefundFailure {

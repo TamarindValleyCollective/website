@@ -1144,7 +1144,7 @@ outside both the local machine and Netlify (the member-update-email workflow).
   `scripts/lib/event-payments-db.mjs`'s ignore-duplicates insert on `razorpay_payment_id` — safe
   against Razorpay's documented at-least-once webhook delivery/retries) and emails a branded
   receipt (`netlify/functions/lib/payment-receipt.ts`, with the TVC logo mark) via Resend, CC'd to
-  `core-team@tvc.farm` and `stay@linger.in`. Zero per-event code: which event and how many people
+  `contact@tvc.farm` and `stay@linger.in`. Zero per-event code: which event and how many people
   travel entirely in the Payment Link's own `notes`, set either by hand on a base link paid
   directly, or by `event-booking.mts` above on a per-booking link. `payer_email`/`payer_contact`
   are read from those same `notes` (`primaryContactEmail`/`primaryContactPhone` — what the visitor
@@ -1169,10 +1169,10 @@ outside both the local machine and Netlify (the member-update-email workflow).
   flips `refund_status` to `'failed'` (`markRefundFailed()`) so a row that didn't actually go
   through reads as failed rather than silently stuck. Any refund failure — Razorpay rejecting the API call
   (e.g. insufficient balance) in `event-payments-admin.mts`, or `refund.failed` here — also emails an internal
-  alert via `netlify/functions/lib/refund-alert.ts` to `core-team@tvc.farm` (cc `stay@linger.in`, never the guest); a
+  alert via `netlify/functions/lib/refund-alert.ts` to `contact@tvc.farm` (cc `stay@linger.in`, never the guest); a
   bulk "Cancel event" sends one summary alert listing every failed booking, and first closes the event's base
   Razorpay Payment Link so no new bookings arrive. `refund.processed` also emails the payer "Refund processed". The same `lib/refund-alert.ts` `sendStaffAlert()` (to
-  `core-team@tvc.farm`, cc `stay@linger.in`) also fires on a guest cancellation request (`cancel-booking.mts`, "Action
+  `contact@tvc.farm`, cc `stay@linger.in`) also fires on a guest cancellation request (`cancel-booking.mts`, "Action
   needed") and when a payment lands after registration closed (`razorpay-webhook.mts`). The bulk cancel writes an
   `event-payments.event_cancelled` admin audit entry. Alongside those emails, `lib/whatsapp-send.ts` can send approved
   WhatsApp templates via Meta's Send Message API (event cancelled / refund initiated / processed / request declined
