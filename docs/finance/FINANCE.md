@@ -14,7 +14,8 @@ model are in [DESIGN.md](DESIGN.md); how to build it is in [README.md](README.md
 | 01 follow-up | `0078_finance_categories_and_projects.sql` **applied to TVC ERP on 2026-11-02**. |
 | 03 Statement import | Built on branch `finance-03-statement-import` (draft PR). Migration `0080` **applied to TVC ERP on 2026-11-02**. |
 | 04 Parties & payees | Built on branch `finance-04-parties` (draft PR). Migration `0079` **applied to TVC ERP on 2026-11-02** (recorded as `finance_parties`); checked afterwards: both tables empty, RLS on, no anon/authenticated grants, guard trigger present. |
-| 02, 05-13 | Not started |
+| 05 Ledger & review | **In progress** on branch `worktree-finance-05-ledger` (draft PR). Slice 1 built: posting rules, rules engine, review flags, migration `0083` (**NOT yet applied**). Endpoints and screens not built. |
+| 02, 06-13 | Not started |
 
 ## Access
 
@@ -217,3 +218,31 @@ Page `/internal/finance/import/`; routes in `finance-admin.mts` (`GET /imports`,
 - **Code.** Parsing and planning are pure and separate (`scripts/lib/finance-*.mjs`); storing goes through an `ImportStore`.
   A bank API would feed the same planning/storing step; none is built.
 - **Audit.** `finance.import_committed` (counts only) is written before anything is stored; `finance.bank_account_added`.
+
+## Ledger (session 05, slice 1: logic and migration only)
+
+**Not live.** No endpoint or screen yet; migration `0083_finance_ledger.sql` is **not applied** to TVC ERP. Apply it before
+any code that reads `fin_allocations` is merged.
+
+- **Posting rule** (`scripts/lib/finance-allocation.mjs`, mirrored in the database). A bank line has one or more allocations; each
+  amount is positive whole paise and its direction is the line's. A line is *unallocated*, *partly allocated* or *allocated*. Saved
+  rows are drafts (`posted_at` null) until they add up to the line exactly, then every row is posted in one step. Posted rows are
+  frozen except their review fields; a line already posted is corrected by a reversal, never by editing.
+- **Refunds and corrections.** A reversal is a row on a line that moves money the other way, with `reverses_allocation_id` and a
+  reason. It must reverse a posted, non-reversal allocation and never more than is left of it. Reports net by direction.
+- **Periods.** `period` is the first day of a month and defaults to the line's month; a salary paid in May can sit in April. A
+  closed month refuses a save unless the person holds `close-period` and gives a reason (`periodWriteDecision`); the database
+  refuses unless the app passes `p_override`.
+- **Rules** (`scripts/lib/finance-rules.mjs`, table `fin_rules`). A matcher is a set of conditions that must all hold (narration
+  text, UPI id, any of some remark keywords, direction, amount range); one with no condition never matches. Lowest priority number
+  wins, ties go to the older rule. A rule gives party, category, a nature template (`{counterparty}`, `{remark}`) and `needs_review`.
+  With no rule, the farm manager's own UPI remark seeds the nature, and a payment to the requester's own party is a reimbursement.
+- **Review flags** (`reviewReasons`): nothing explains the line; a circle payment to the requester's own party; a payment to an
+  account that is new, changed or unverified; a reimbursement with no bill; a rule marked always-review.
+- **Database guards** (checked on a throwaway local Postgres, 2026-11-04): a short sum cannot be posted, an over-sum cannot be
+  saved, a split posts, a posted row cannot be changed or deleted, a reversal needs the opposite direction and cannot exceed what is
+  left or be reversed itself, a closed month refuses without the override, and the functions run for `service_role` only.
+- **Tables and functions** (`0083`): `fin_rules`, `fin_allocations`, `fin_vouchers` (table only; capture is session 08),
+  `fin_save_allocations(line, rows, actor, post, override)`, `fin_close_period(entity, month, actor)`.
+- **Still to build in this session:** the store and routes in `finance-admin.mts`, the Ledger and Review screens (split editor,
+  bulk apply, rules page), reimbursement handling in the screens, period close, an endpoint test, and the `ARCHITECTURE.md` entry.

@@ -41,4 +41,10 @@ Sign-off on the category list and on which rule results should always be reviewe
 > Read `docs/finance/README.md`, `DESIGN.md` and `sessions/05-ledger-and-review.md`, plus the notes in sessions 03 and 04. Build session 05 test-first with the tdd skill, starting from the posting trigger and the rules engine.
 
 ## Done
-_Fill in at the end of the session._
+**In progress (started 2026-11-05, branch `worktree-finance-05-ledger`).**
+
+Slice 1 done: `finance-allocation.mjs`, `finance-rules.mjs` (with tests), and migration `0083_finance_ledger.sql` (not applied; its
+guards were exercised on a throwaway Postgres). Details in [FINANCE.md](../FINANCE.md), "Ledger".
+
+Next slices: the store and routes, then the Ledger and Review screens, rules page, period close, endpoint test, `ARCHITECTURE.md`.
+Needs from Sharath, before the screens are final: sign-off on the category list and on which rule results should always be reviewed.
