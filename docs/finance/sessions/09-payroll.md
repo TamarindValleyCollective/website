@@ -6,6 +6,34 @@
 Compute salaries from attendance, get them confirmed and approved by two people, generate the bank's
 bulk-payment file, and split the single bank debit automatically.
 
+## Decisions (2026-11-05, with the owner)
+- **Built in this finance module**, not in the separate ERP: it reuses parties, verified payee accounts and the ledger. The
+  ERP's employee policy and financial-operations documents remain the requirements source.
+- **Split in two.** **09a** records and pays the run: the farm manager enters each person's *net* amount for the month in the
+  app, a director reviews, the farm manager confirms, the file is generated, and the bank debit is matched. **09b** adds
+  attendance and the pay arithmetic. 09b waits for the policy gaps the employee policy lists (rounding, work on a weekly
+  off, what counts as full attendance, advances); until then the farm manager keeps working the pay out in his own sheet
+  and 09a records the result, with optional fields for agreed pay, days worked and advance deducted so nothing needs
+  re-entering later.
+- **People (roles, no names here):** the farm manager enters and confirms; the preparer (a director) reviews and generates the
+  file; a second director approves in the bank's portal and is also an approver in the app (`approve-payroll`, never the
+  preparer). Salary pages are for these three only.
+- **Today's process this replaces:** the farm manager fills a shared sheet (one tab per month, one row per person), the preparer
+  copies it into a local Excel file for the bank's bulk portal, sends a screenshot of the uploaded batch to the farm manager for
+  confirmation, then asks the second director to approve in the bank's maker-checker.
+- **Why the confirmation step exists:** a bank merger changed a payee's account while the old number stayed in the file; the money
+  left and was never credited. So the file may use only *verified* payee accounts, the confirmation lists exactly what will be
+  in the file (accounts as last four digits), and "account changed since the last run" is shown loudly.
+- **Facts to design for:** the bank settles the batch as ONE debit (the ledger already holds it as one allocation per person on
+  that line, entered by hand from the tracker); the statement narration does not say "salary", so match on the total and the
+  date window, never the text; a payment date that differs from the processing date makes the portal reject the whole batch, so
+  validate it; two people can share one bank account (two parties on one payee account); a returned payment is a refund of that
+  one person's allocation.
+- **Build order for 09a:** (1) import the existing monthly tabs as history runs, which also gives the salary allocations their
+  party; (2) the run screens and the file export; (3) settlement matching and returns.
+- **Still needed:** one real file the bank's portal accepts, or its template (the sheet has no header row; what the payment-mode
+  code and the reference code mean must come from the bank's layout).
+
 ## Read first
 `DESIGN.md` (Payroll, fin_employees and related tables, Access); the sessions 04 and 05 notes; the payroll
 workbook layout as described in `FINANCE.md`.
