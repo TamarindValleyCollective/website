@@ -41,13 +41,13 @@ Time to review the differences; decisions on untyped rows.
 ## Done
 **In progress (started 2026-11-05, branch `worktree-finance-06-history`, PR #530).** Built: `scripts/lib/finance-history.mjs` (tracker parser, four-pass
 matcher, label mapping, allocation planner, apply orchestrator, all tested), the command `scripts/load-fin-history.mjs` (dry run, `--apply`, `--out` review
-file) and migration `0084_finance_maintenance_year.sql` (maintenance year and household on allocations; **not applied**, checked on a throwaway Postgres).
+file) and migration `0084_finance_maintenance_year.sql` (maintenance year and household on allocations; **applied to TVC ERP on 2026-11-05**, checked afterwards).
 Dry run on the real tracker: 95.3% of rows matched, 783 bank lines would get 1,031 allocations. **Nothing has been written to the ledger.**
 
 Decisions (Sharath, 2026-11-05): the default label mapping, with Farm Project in the Project bucket (placeholder project per year, details to be added
 later), member maintenance keeping its year and finding the payer's household, CBDT tax as Income tax. Details in [FINANCE.md](../FINANCE.md), "History load".
 
-Still to do: apply 0084; review the dry run; run `--apply`; the month-by-category reconciliation report; load FY 2023-24 if wanted; then the
+Still to do: review the dry run; run `--apply`; the month-by-category reconciliation report; load FY 2023-24 if wanted; then the
 placeholder-project TODO and the 65 maintenance payments that need a household.
 
 Deviation from the brief: it says the script creates bank lines and allocations; the bank lines were imported from the statements in session 03, so

@@ -369,7 +369,7 @@ pure rules in `scripts/lib/finance-history.mjs` (tested on invented rows). Count
   Professional fees; Donations → Other income; **Farm Capex → Structures and infrastructure (a default, counted and flagged)**. A row with no Details
   is left unallocated for a person (92 of them), as is any label the load does not know.
 - **Member maintenance keeps the year it is FOR.** "Maintenance (24-25)" becomes category Member maintenance with `maintenance_year` 2024-25 (migration
-  `0084`), while `period` stays the month the money moved. A member sometimes pays an earlier year late (13 payments in the first dry run), and the
+  `0084`, **applied 2026-11-05**), while `period` stays the month the money moved. A member sometimes pays an earlier year late (13 payments in the first dry run), and the
   year is what lets it be set against that year's outstanding. The payer's **household** is found from the "From" name against the members' names:
   a full name or the shortened form the bank prints, or a couple written "First & First" (the one household that has both). A name that fits two
   households finds none. 113 of 178 found a household in the first dry run; the other 65 are loaded without one and listed by sheet row in the review
@@ -382,7 +382,7 @@ pure rules in `scripts/lib/finance-history.mjs` (tested on invented rows). Count
 - **Dry run on the real tracker (5 Nov 2026):** 1,178 usable rows from April 2024 (one row has no amount); 1,123 (95.3%) matched; **783 bank lines would
   get 1,031 allocations**; 92 matched lines have no label and stay unallocated; 55 tracker rows and 25 bank lines have no match (39 Salary, 15 Online
   Services rows; about half the lines are payments newer than the tracker). A party was found in the register for 440 allocations (the rest have none).
-- **Applying.** `--apply` needs migration `0084` applied first (it checks, and refuses otherwise). It saves one bank line at a time through
+- **Applying.** `--apply` needs migration `0084` (applied 2026-11-05; the script checks, and refuses otherwise). It saves one bank line at a time through
   `fin_save_allocations` (posted, source `import`, no actor), skips any line that already has allocations (so a re-run changes nothing), carries on past a
   failure, and writes one counts-only audit row (`finance.history_loaded`). **Not yet run.**
 - **Not built:** the reconciliation of module totals against the sheet's own summary tabs by month and category; rules are not seeded (the hidden

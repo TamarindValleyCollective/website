@@ -1,4 +1,6 @@
--- Finance module, session 06: what a member-maintenance payment is FOR (docs/finance/sessions/06-history-load.md). NOT yet applied to TVC ERP.
+-- Finance module, session 06: what a member-maintenance payment is FOR (docs/finance/sessions/06-history-load.md).
+-- Applied to TVC ERP on 2026-11-05 (recorded as finance_maintenance_year); checked afterwards: both columns nullable, the format check and
+-- the index present, fin_save_allocations carries the new fields and is still service-role only, existing data unchanged.
 --
 -- A maintenance payment does not always arrive in the financial year it belongs to: members sometimes pay a previous year's maintenance late.
 -- The tracker's label says which year ("Maintenance (24-25)"), and that must survive, so the payment can be set against that member's
