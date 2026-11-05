@@ -1254,6 +1254,20 @@ import SignInGate from '../../../components/SignInGate.astro';
     gap: 14px;
   }
 
+  /* A fieldset will not shrink below its widest child, and a select is as wide as its longest option ("Refund of" has long ones), which
+     pushed the whole sheet wider than a phone. Let them shrink; the select shows its text cut off. */
+  .lnext .alloc-edit {
+    min-width: 0;
+  }
+
+  .lnext .alloc-edit label,
+  .lnext .alloc-edit .stack-form,
+  .lnext .alloc-edit select,
+  .lnext .alloc-edit input {
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .lnext .alloc-edit {
     display: flex;
     flex-direction: column;
