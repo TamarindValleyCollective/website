@@ -977,11 +977,14 @@ import SignInGate from '../../../components/SignInGate.astro';
       const unitBox = h('div', { class: 'stack-form alloc-top' }, labelled('Unit', household), labelled('Maintenance year', year));
       unitBox.hidden = !isMaintenance();
       category.addEventListener('change', () => (unitBox.hidden = !isMaintenance()));
-      const normal = h('div', { class: 'stack-form' }, labelled('Category', category), labelled('Party', party), newBox, unitBox, labelled('What it was for', nature), project ? labelled('Project', project) : null);
+      const normal = h('div', { class: 'stack-form' }, labelled('Category', category), labelled(line.direction === 'debit' ? 'Paid to (party)' : 'Received from (party)', party), newBox, unitBox, labelled('What it was for', nature));
+      // Month, refund and project: needed for a refund, a line that belongs to another month, or a project, so not shown on every line.
+      const more = h('details', { class: 'more' }, h('summary', { text: reverses ? 'Refund, month or project' : 'Month or project' }), h('div', { class: 'stack-form' }, labelled('Month', period), reverses ? labelled('Refund of', reverses) : null, reasonBox, project ? labelled('Project', project) : null));
       const el = h('fieldset', { class: 'alloc-edit' });
       const ui: RowUi = { el, household, year, unitBox, amount, category, party, nature, period, project, reverses, reason, ruleId: init.ruleId ?? null, source: init.source ?? 'manual' };
       reverses?.addEventListener('change', () => {
         const refund = Boolean(reverses.value);
+        if (refund) more.open = true;
         normal.hidden = refund;
         reasonBox.hidden = !refund;
         if (refund) {
@@ -993,10 +996,9 @@ import SignInGate from '../../../components/SignInGate.astro';
       for (const f of [amount, period]) f.addEventListener('input', refresh);
       el.append(
         ...[
-        h('div', { class: 'stack-form alloc-top' }, labelled('Amount (₹)', amount), labelled('Month', period), rowsUi.length ? button('Remove', () => { rowsUi.splice(rowsUi.indexOf(ui), 1); el.remove(); refresh(); }, 'button button--outline button--small') : h('span')),
-        reverses ? h('div', { class: 'stack-form' }, labelled('Refund of', reverses)) : null,
-        h('div', { class: 'stack-form' }, reasonBox),
+        h('div', { class: 'stack-form alloc-top' }, labelled('Amount (₹)', amount), rowsUi.length ? button('Remove', () => { rowsUi.splice(rowsUi.indexOf(ui), 1); el.remove(); refresh(); }, 'button button--outline button--small') : h('span')),
         normal,
+        more,
         ].filter((n): n is HTMLElement => n !== null),
       );
       rowsUi.push(ui);
@@ -1648,6 +1650,17 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   .ledger .alloc-edit .alloc-top.stack-form > label {
     flex: 1 1 9rem;
+  }
+
+  .ledger .more summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: var(--text-sm);
+    padding: 4px 0;
+  }
+
+  .ledger .more > .stack-form {
+    margin-top: 8px;
   }
 
   .ledger .editor-tools {

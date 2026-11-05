@@ -374,6 +374,13 @@ Modelled on how ServiceNow lists work, because the sheet's convenience was selec
   a line under the progress says "a tick only fills a field in; nothing is saved until you tick the lines and press Post", and a note
   says how many lines are filled in but not posted, with a button to tick them; the previous calendar month's status (what is left, or
   Close month when it is done) sits above the table; text boxes and selects have a visible focus ring; sorting and the chips keep focus.
+  **Then the P2s:** bulk changes (Fill in the suggestions, Accept suggestions, Apply to selected, the apply-to-others prompt) can be undone from
+  the toast, and say how many lines already hold a different value before replacing it; the "Suggested" pill's hover text says what is suggested
+  and how sure the app is; the Party column reads "Paid to / from" (cards say "Paid to" or "Received from"); in the line sheet Month, Refund of
+  and Project sit behind one "Month or project" expander (refunds open it); the grid has `aria-colcount`, the selection count and the
+  "Showing X of N" result are announced from fixed live regions, not the rebuilt bar or the changing progress line; a post updates the lines at once
+  and the full list comes down quietly afterwards; the phone bar follows the shell's tab bar and phone targets are 44px; the Rules page has
+  finger-sized buttons and a 24px checkbox. Not changed: the grid still scrolls to the top when a search or sort changes (the list is a new list).
   The prototype also asks "Also set category X on the other N selected lines?" when a ticked line's cell is changed, and Alt+Up / Alt+Down
   move to the same cell on the line above or below.
   **The unit and year of maintenance can now be set.** `fin_allocations.household_id` and `maintenance_year` (migration 0084) were read

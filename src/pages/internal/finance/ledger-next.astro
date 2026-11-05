@@ -39,10 +39,11 @@ import SignInGate from '../../../components/SignInGate.astro';
             <option value="party:asc">Party</option>
           </select>
         </label>
-        <button type="button" id="tips-toggle" class="button button--outline button--small" aria-expanded="false" aria-controls="tips">Search tips</button>
+        <button type="button" id="tips-toggle" class="button button--outline button--small" aria-expanded="false" aria-controls="tips">Tips and shortcuts</button>
         <button type="button" id="accept-all" class="button button--outline" hidden>Fill in the suggestions</button>
       </div>
       <div id="tips" class="tips" hidden>
+        <p><strong>Keyboard:</strong> <code>Ctrl+Enter</code> on a line accepts its suggestions and moves to the next · <code>Alt+Up</code> / <code>Alt+Down</code> go to the same cell on the line above or below · <code>Tab</code> walks every line · <code>Shift</code>-click a tick box for a range.</p>
         <p>The box above looks in every column. Under a heading you can be exact:</p>
         <ul>
           <li><strong>Words</strong> (narration, category, party, wording): <code>fuel</code> contains · <code>=Fuel</code> exactly · <code>!=Bank charges</code> is not · <code>^UPI</code> starts with · <code>!tax</code> does not contain · <code>=</code> is empty · <code>!=</code> is not empty</li>
@@ -52,15 +53,17 @@ import SignInGate from '../../../components/SignInGate.astro';
       </div>
       <div id="postnote" class="postnote" role="alert" hidden></div>
       <div id="applyprompt" class="postnote applyprompt" role="status" hidden></div>
-      <p id="progress" class="progress" aria-live="polite"></p>
+      <p id="progress" class="progress"></p>
+      <span id="announce" class="visually-hidden" role="status"></span>
+      <span id="selcount" class="visually-hidden" role="status"></span>
       <p class="hint twostep">A tick only fills a field in. Nothing is saved until you tick the lines and press <strong>Post</strong>.</p>
       <div id="draftnote" class="postnote applyprompt" role="status" hidden></div>
       <div id="monthstrip" class="postnote applyprompt" role="status" hidden></div>
 
       <a class="skiplink" href="#months-title">Skip the table</a>
-      <div class="grid" id="grid" role="table" aria-label="Bank lines">
-        <div class="ghead" id="ghead" role="row"></div>
-        <div class="gfilter" id="gfilter" role="row"></div>
+      <div class="grid" id="grid" role="table" aria-label="Bank lines" aria-colcount="7">
+        <div class="ghead" id="ghead" role="row" aria-rowindex="1"></div>
+        <div class="gfilter" id="gfilter" role="row" aria-rowindex="2" aria-label="Column searches"></div>
         <div class="gscroll" id="gscroll">
           <div class="gspacer" id="gspacer" role="rowgroup"></div>
         </div>
@@ -92,6 +95,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     id: string; date: string; narration: string; direction: 'debit' | 'credit'; amountPaise: number; account: string; remark: string | null; counterparty: string | null;
     allocatedPaise: number; state: 'unallocated' | 'partly_allocated' | 'allocated'; review: boolean; missingParty: boolean; suggestion: Suggestion | null;
     allocation: { categoryId: string; partyId: string | null; nature: string; count: number; householdLabel: string | null; maintenanceYear: string | null } | null;
+    hay?: string; // lower-case text the search box looks in, worked out once
     effective: { category: string; party: string; nature: string }; // what it was posted to, or is suggested: what the column searches read
   };
   type Category = { id: string; name: string; type: string; active: boolean };
@@ -115,6 +119,7 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   let data: ListData | null = null;
   let all: Line[] = []; // every bank line, fetched once
+  let byId = new Map<string, Line>();
   let lines: Line[] = []; // the ones the chip, search and column conditions leave, in sort order
   let counts: Record<Filter, number> = { unallocated: 0, review: 0, noparty: 0, all: 0 };
   let filterErrors: Record<string, string> = {};
@@ -202,7 +207,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       { id: 'narration', header: 'Bank narration', accessorFn: (l: Line) => l.narration },
       { id: 'amount', header: 'Amount', accessorFn: (l: Line) => l.amountPaise },
       { id: 'category', header: 'Category', accessorFn: (l: Line) => l.allocation?.categoryId ?? '' },
-      { id: 'party', header: 'Party', accessorFn: (l: Line) => l.allocation?.partyId ?? '' },
+      { id: 'party', header: 'Paid to / from', accessorFn: (l: Line) => l.allocation?.partyId ?? '' },
       { id: 'nature', header: 'What it was for', accessorFn: (l: Line) => l.allocation?.nature ?? '' },
     ],
     getRowId: (l: Line) => l.id,
@@ -280,19 +285,20 @@ import SignInGate from '../../../components/SignInGate.astro';
     $('grid').setAttribute('aria-busy', String(on));
     if (on) $('progress').textContent = message;
   };
-  async function load() {
+  async function load(silent = false) {
     gate.hidden = true;
     forbidden.hidden = true;
     if (!data) showLoading(statusEl);
-    else setBusy(true, 'Refreshing from the bank records…');
+    else if (!silent) setBusy(true, 'Refreshing from the bank records…');
+    const seq = ++loadSeq;
     try {
-      const seq = ++loadSeq;
       const { status, data: out } = await call(`/api/finance-admin/ledger/all${wantFresh ? '?fresh=1' : ''}`);
       wantFresh = false;
       if (seq !== loadSeq) return;
       if (status !== 200) throw new Error('load failed');
       data = out as ListData;
       all = data.lines;
+      byId = new Map(all.map((l) => [l.id, l]));
       clearState(statusEl);
       intro.hidden = false;
       intro.textContent = 'Every line the bank has told us about, and what it was for.';
@@ -304,7 +310,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       content.hidden = true;
       showFailure(statusEl, { title: "Couldn't load the ledger", text: "The server didn't answer. Nothing was changed. Check your connection and try again.", onRetry: () => load() });
     } finally {
-      setBusy(false);
+      if (seq === loadSeq) setBusy(false);
     }
   }
 
@@ -513,11 +519,14 @@ import SignInGate from '../../../components/SignInGate.astro';
       const unitBox = h('div', { class: 'stack-form alloc-top' }, labelled('Unit', household), labelled('Maintenance year', year));
       unitBox.hidden = !isMaintenance();
       category.addEventListener('change', () => (unitBox.hidden = !isMaintenance()));
-      const normal = h('div', { class: 'stack-form' }, labelled('Category', category), labelled('Party', party), newBox, unitBox, labelled('What it was for', nature), project ? labelled('Project', project) : null);
+      const normal = h('div', { class: 'stack-form' }, labelled('Category', category), labelled(line.direction === 'debit' ? 'Paid to (party)' : 'Received from (party)', party), newBox, unitBox, labelled('What it was for', nature));
+      // Month, refund and project: needed for a refund, a line that belongs to another month, or a project, so not shown on every line.
+      const more = h('details', { class: 'more' }, h('summary', { text: reverses ? 'Refund, month or project' : 'Month or project' }), h('div', { class: 'stack-form' }, labelled('Month', period), reverses ? labelled('Refund of', reverses) : null, reasonBox, project ? labelled('Project', project) : null));
       const el = h('fieldset', { class: 'alloc-edit' });
       const ui: RowUi = { el, household, year, unitBox, amount, category, party, nature, period, project, reverses, reason, ruleId: init.ruleId ?? null, source: init.source ?? 'manual' };
       reverses?.addEventListener('change', () => {
         const refund = Boolean(reverses.value);
+        if (refund) more.open = true;
         normal.hidden = refund;
         reasonBox.hidden = !refund;
         if (refund) {
@@ -529,10 +538,9 @@ import SignInGate from '../../../components/SignInGate.astro';
       for (const f of [amount, period]) f.addEventListener('input', refresh);
       el.append(
         ...[
-        h('div', { class: 'stack-form alloc-top' }, labelled('Amount (₹)', amount), labelled('Month', period), rowsUi.length ? button('Remove', () => { rowsUi.splice(rowsUi.indexOf(ui), 1); el.remove(); refresh(); }, 'button button--outline button--small') : h('span')),
-        reverses ? h('div', { class: 'stack-form' }, labelled('Refund of', reverses)) : null,
-        h('div', { class: 'stack-form' }, reasonBox),
+        h('div', { class: 'stack-form alloc-top' }, labelled('Amount (₹)', amount), rowsUi.length ? button('Remove', () => { rowsUi.splice(rowsUi.indexOf(ui), 1); el.remove(); refresh(); }, 'button button--outline button--small') : h('span')),
         normal,
+        more,
         ].filter((n): n is HTMLElement => n !== null),
       );
       rowsUi.push(ui);
@@ -640,6 +648,13 @@ import SignInGate from '../../../components/SignInGate.astro';
   const dateLabel = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
   const COLUMN_LABELS: Record<string, string> = { date: 'Date', narration: 'Narration', amount: 'Amount', category: 'Category', party: 'Party', nature: 'Wording' };
   const PARSERS: Record<string, (raw: string) => any> = { date: parseDate, narration: parseText, amount: parseAmount, category: parseText, party: parseText, nature: parseText };
+  // What a screen reader hears once a search settles (the progress line itself is not a live region: it changes on every keystroke).
+  let announceTimer: ReturnType<typeof setTimeout> | undefined;
+  const announce = (message: string) => {
+    clearTimeout(announceTimer);
+    announceTimer = setTimeout(() => ($('announce').textContent = message), 600);
+  };
+  const hayOf = (l: Line) => [l.narration, l.counterparty, l.remark, l.effective.category, l.effective.party, l.effective.nature, l.allocation?.householdLabel, l.allocation?.maintenanceYear].join(' ').toLowerCase();
   function applyView(toTop = false) {
     if (!data) return;
     const conds: Record<string, any> = {};
@@ -658,7 +673,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         matchText(conds.category, l.effective.category) &&
         matchText(conds.party, l.effective.party) &&
         matchText(conds.nature, l.effective.nature) &&
-        (!query || [l.narration, l.counterparty, l.remark, l.effective.category, l.effective.party, l.effective.nature, l.allocation?.householdLabel, l.allocation?.maintenanceYear].join(' ').toLowerCase().includes(query)),
+        (!query || (l.hay ??= hayOf(l)).includes(query)),
     );
     // The chips count every line, whatever is typed in a search, so "71 left" stays 71; "Showing X of N" says what the search leaves.
     counts = { unallocated: 0, review: 0, noparty: 0, all: all.length };
@@ -680,6 +695,7 @@ import SignInGate from '../../../components/SignInGate.astro';
     }
     if (toTop) scrollEl.scrollTop = 0;
     $('applyprompt').hidden = true;
+    announce(`Showing ${lines.length} of ${all.length} lines.`);
     renderChips();
     renderHead();
     renderProgress(crumbs);
@@ -747,7 +763,7 @@ import SignInGate from '../../../components/SignInGate.astro';
         const id = header.column.id;
         const cellEl = h('span', { class: `gcell gcell--${id}`, attrs: { role: 'cell' } });
         if (SORTABLE.has(id)) {
-          const box = h('input', { class: 'colfilter', attrs: { 'data-col': id, type: 'search', title: id === 'amount' ? 'In rupees: 2500, >1000, <=500, 1000..3000, !=295' : id === 'date' ? 'Try: 2026-10, oct, >2026-10-15, 2026-10-01..2026-10-31' : 'Words match anywhere. = exact, != not, ^ starts with, ! does not contain. See Search tips.', placeholder: 'Search', 'aria-label': `Search the ${String(header.column.columnDef.header)} column`, autocomplete: 'off' } }) as HTMLInputElement;
+          const box = h('input', { class: 'colfilter', attrs: { 'data-col': id, type: 'search', title: id === 'amount' ? 'In rupees: 2500, >1000, <=500, 1000..3000, !=295' : id === 'date' ? 'Try: 2026-10, oct, >2026-10-15, 2026-10-01..2026-10-31' : 'Words match anywhere. = exact, != not, ^ starts with, ! does not contain. See Search tips.', placeholder: id === 'amount' ? 'e.g. >1000' : id === 'date' ? 'e.g. 2026-10' : 'Search', 'aria-label': `Search the ${String(header.column.columnDef.header)} column`, autocomplete: 'off' } }) as HTMLInputElement;
           let timer: ReturnType<typeof setTimeout>;
           box.addEventListener('input', () => {
             clearTimeout(timer);
@@ -845,7 +861,7 @@ import SignInGate from '../../../components/SignInGate.astro';
       cell('narration', '', narr, details),
       cell(`amount amount--${l.direction}`, '', document.createTextNode(`${l.direction === 'debit' ? '−' : '+'}${rupees(l.amountPaise)}`), pillSlot),
       cell('category', 'Category', cat, catTick, catText),
-      cell('party', 'Party', party, partyTick, partyText),
+      cell('party', l.direction === 'debit' ? 'Paid to' : 'Received from', party, partyTick, partyText),
       cell('nature', 'What it was for', nature, natureTick, natureText),
     );
     const onKey = (e: KeyboardEvent) => {
@@ -887,7 +903,14 @@ import SignInGate from '../../../components/SignInGate.astro';
     if (!editable(l)) return pill('To allocate');
     const d = draftOf(l.id);
     if (isReady(l)) return !d.partyId && partyNeeded(d.categoryId) ? pill('Ready, no party', 'warn') : pill('Ready', 'ok');
-    if (hasGhost(l)) return pill('Suggested', 'warn');
+    if (hasGhost(l)) {
+      // Says what is suggested and how sure the app is; the suggested values are the italic ones in the cells.
+      const fields = [ghostOf(l, 'categoryId') ? 'category' : '', ghostOf(l, 'partyId') || strangerOf(l) ? (l.direction === 'debit' ? 'who was paid' : 'who paid') : '', ghostOf(l, 'nature') ? 'wording' : ''].filter(Boolean);
+      const sure = CONFIDENCE_WORDS[l.suggestion?.confidence ?? ''] ?? 'a guess';
+      const p = pill('Suggested', 'warn');
+      p.title = `Suggested ${fields.join(', ')} (${sure}), shown in italics. Tick a value to accept it; nothing is saved until you tick the line and press Post.`;
+      return p;
+    }
     return pill(d.categoryId ? 'Needs wording' : 'Needs category');
   }
 
@@ -978,6 +1001,20 @@ import SignInGate from '../../../components/SignInGate.astro';
     syncRow(l);
     offerToOthers(l, field, value);
   }
+  // A bulk change can be undone: the drafts of the lines it touches are kept first, and the toast offers to put them back.
+  function withUndo(message: string, ids: string[], change: () => void) {
+    const before = new Map(ids.map((id) => [id, drafts.has(id) ? { ...drafts.get(id)! } : null]));
+    change();
+    showToast(message, () => {
+      for (const [id, d] of before) {
+        if (d) drafts.set(id, d);
+        else drafts.delete(id);
+        const l = byId.get(id);
+        if (l) syncRow(l);
+      }
+      renderDraftNote();
+    });
+  }
   // Changing a cell on a line that is ticked, with others ticked too, asks whether to set the same on all of them (never silently).
   function offerToOthers(l: Line, field: Field, value: string) {
     const box = $('applyprompt');
@@ -987,16 +1024,18 @@ import SignInGate from '../../../components/SignInGate.astro';
       return;
     }
     const lk = data!.lookups;
+    const clash = others.filter((x) => draftOf(x.id)[field] && draftOf(x.id)[field] !== value).length;
     const what = field === 'categoryId' ? `category ${nameOf(lk.categories, value)}` : field === 'partyId' ? `party ${nameOf(lk.parties, value)}` : `the wording “${value}”`;
     box.replaceChildren(
-      h('span', { text: `Also set ${what} on the other ${others.length} selected ${others.length === 1 ? 'line' : 'lines'}?` }),
+      h('span', { text: `Also set ${what} on the other ${others.length} selected ${others.length === 1 ? 'line' : 'lines'}?${clash ? ` ${clash} already ${clash === 1 ? 'has' : 'have'} a different value, which would be replaced.` : ''}` }),
       button('Apply', () => {
-        for (const x of others) {
-          setDraft(x.id, { [field]: value } as Partial<Draft>);
-          syncRow(x);
-        }
         box.hidden = true;
-        showToast(`Applied to ${others.length} ${others.length === 1 ? 'line' : 'lines'}.`);
+        withUndo(`Applied to ${others.length} ${others.length === 1 ? 'line' : 'lines'}.`, others.map((x) => x.id), () => {
+          for (const x of others) {
+            setDraft(x.id, { [field]: value } as Partial<Draft>);
+            syncRow(x);
+          }
+        });
       }, 'button button--small'),
       button('No', () => (box.hidden = true), 'button button--outline button--small'),
     );
@@ -1170,9 +1209,11 @@ import SignInGate from '../../../components/SignInGate.astro';
     if (!data || !sel.length) {
       bar.hidden = true;
       bar.replaceChildren();
+      $('selcount').textContent = '';
       return;
     }
     const ready = sel.filter(isReady).length;
+    if ($('selcount').textContent !== `${sel.length} selected, ${ready} ready to post`) $('selcount').textContent = `${sel.length} selected, ${ready} ready to post`;
     const lk = data.lookups;
     const cat = categorySelect(lk.categories, { selected: barFields.categoryId, blank: 'Category…' }) as HTMLSelectElement;
     const party = partySelect(lk.parties, { selected: barFields.partyId, blank: 'Party…' }) as HTMLSelectElement;
@@ -1184,17 +1225,29 @@ import SignInGate from '../../../components/SignInGate.astro';
     post.disabled = ready === 0;
     const why = ready === 0 ? 'Post is off until a selected line has a category and wording.' : ready < sel.length ? `${sel.length - ready} selected can't post yet: they need a category and wording.` : 'Posting asks you to confirm first.';
     bar.replaceChildren(
-      h('span', { class: 'abar-count', text: `${sel.length} selected · ${ready} ready`, attrs: { 'aria-live': 'polite' } }),
+      h('span', { class: 'abar-count', text: `${sel.length} selected · ${ready} ready` }),
       cat,
       party,
       words,
-      button('Apply to selected', () => {
-        for (const l of sel) setDraft(l.id, Object.fromEntries(Object.entries(barFields).filter(([, v]) => String(v).trim())) as Partial<Draft>);
-        for (const l of sel) syncRow(l);
+      button('Apply to selected', async () => {
+        const patch = Object.fromEntries(Object.entries(barFields).filter(([, v]) => String(v).trim())) as Partial<Draft>;
+        if (!Object.keys(patch).length) {
+          showToast('Choose a category, party or wording first.');
+          return;
+        }
+        const clash = sel.filter((l) => (Object.entries(patch) as [Field, string][]).some(([f, v]) => draftOf(l.id)[f] && draftOf(l.id)[f] !== v)).length;
+        if (clash) {
+          const ok = await askSheet({ title: `Replace what ${clash} of ${sel.length} lines already have?`, text: 'They already have a different value in a field you are applying. You can undo this afterwards.', actions: [{ label: 'Replace', value: true, kind: 'primary' }, { label: 'Cancel', value: false }] });
+          if (!ok) return;
+        }
+        withUndo(`Applied to ${sel.length} ${sel.length === 1 ? 'line' : 'lines'}.`, sel.map((l) => l.id), () => {
+          for (const l of sel) {
+            setDraft(l.id, patch);
+            syncRow(l);
+          }
+        });
       }, 'button button--outline button--small'),
-      button('Accept suggestions', () => {
-        for (const l of sel) acceptRow(l);
-      }, 'button button--outline button--small'),
+      button('Accept suggestions', () => withUndo('Suggestions accepted.', sel.map((l) => l.id), () => { for (const l of sel) acceptRow(l); }), 'button button--outline button--small'),
       post,
       button('Clear', () => table.resetRowSelection(), 'button button--outline button--small'),
       h('span', { class: 'abar-why', text: why }),
@@ -1202,9 +1255,8 @@ import SignInGate from '../../../components/SignInGate.astro';
     bar.hidden = false;
   }
   $('accept-all').addEventListener('click', () => {
-    let n = 0;
-    for (const l of lines) if (editable(l) && hasGhost(l)) (acceptRow(l), n++);
-    showToast(`Filled in ${n} ${n === 1 ? 'line' : 'lines'}. Nothing is posted yet.`);
+    const todo = lines.filter((l) => editable(l) && hasGhost(l));
+    withUndo(`Filled in ${todo.length} ${todo.length === 1 ? 'line' : 'lines'}. Nothing is posted yet.`, todo.map((l) => l.id), () => { for (const l of todo) acceptRow(l); });
   });
 
   // ---- posting: the second step, confirmed first
@@ -1241,7 +1293,20 @@ import SignInGate from '../../../components/SignInGate.astro';
       failed.push(...(out.failed as { lineId: string; error: string }[]));
     }
     const failedIds = new Set(failed.map((f) => f.lineId));
-    for (const l of ready) if (!failedIds.has(l.id)) drafts.delete(l.id);
+    const nextSelection = { ...tstate.rowSelection };
+    for (const l of ready) {
+      if (failedIds.has(l.id)) continue;
+      const d = draftOf(l.id);
+      l.state = 'allocated';
+      l.allocation = { categoryId: d.categoryId, partyId: d.partyId || null, nature: d.nature.trim(), count: 1, householdLabel: null, maintenanceYear: null };
+      l.effective = { category: nameOf(data!.lookups.categories, d.categoryId), party: d.partyId ? nameOf(data!.lookups.parties, d.partyId) : '', nature: d.nature.trim() };
+      l.missingParty = !d.partyId && partyNeeded(d.categoryId);
+      l.suggestion = null;
+      l.hay = hayOf(l);
+      delete nextSelection[l.id];
+      drafts.delete(l.id);
+    }
+    tstate = { ...tstate, rowSelection: nextSelection };
     rowErrors.clear();
     for (const f of failed) rowErrors.set(f.lineId, f.error);
     postedThisSitting += posted;
@@ -1252,7 +1317,10 @@ import SignInGate from '../../../components/SignInGate.astro';
       note.replaceChildren(h('span', { text: summary }), button('Dismiss', () => (note.hidden = true), 'button button--outline button--small'));
       note.hidden = false;
     }
-    await load();
+    for (const el of mounted.values()) el.remove();
+    mounted.clear();
+    applyView();
+    void load(true); // confirms against the server (it knows which lines went to review) without dimming the page
   }
 
   if (getToken()) void load();
@@ -1472,6 +1540,17 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   .lnext .alloc-edit .alloc-top.stack-form > label {
     flex: 1 1 9rem;
+  }
+
+  .lnext .more summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: var(--text-sm);
+    padding: 4px 0;
+  }
+
+  .lnext .more > .stack-form {
+    margin-top: 8px;
   }
 
   .lnext .editor-tools {
@@ -1890,7 +1969,13 @@ import SignInGate from '../../../components/SignInGate.astro';
 
   @media (max-width: 900px) {
     .abar {
-      bottom: 76px;
+      bottom: calc(var(--tabbar-h, 64px) + env(safe-area-inset-bottom));
+    }
+
+    .lnext .tick,
+    .lnext .lrow input[type='checkbox'] {
+      min-width: 44px;
+      min-height: 44px;
     }
   }
 </style>

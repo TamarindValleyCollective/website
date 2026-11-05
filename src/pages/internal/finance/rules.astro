@@ -386,6 +386,18 @@ import SignInGate from '../../../components/SignInGate.astro';
     margin-top: 6px;
   }
 
+  /* Tick boxes in the rule and category sheets were 12px; phones get finger-sized buttons. */
+  .rules .stack-form input[type='checkbox'] {
+    width: 24px;
+    height: 24px;
+  }
+
+  @media (max-width: 900px) {
+    .rules .button--small {
+      min-height: 44px;
+    }
+  }
+
   .rules .group-title {
     margin: 18px 0 6px 14px;
     font-size: var(--text-sm);
